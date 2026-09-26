@@ -5,8 +5,9 @@
  * aggregation and events, and teardown unwinding every child instance.
  * Isolated file so vi.mock of the MCP SDK doesn't pollute other test suites.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Context } from '@deepseek-ai/cordis'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { Context, type Fiber } from '@deepseek-ai/cordis'
+import type Settings from '@deepseek-ai/dsh-settings'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { CredentialProvider, credentialRef } from '@deepseek-ai/dsh-credentials'
@@ -30,6 +31,7 @@ const { mockConnect, mockClose, mockListTools, MockClient, instances, transportC
     onclose: (() => void) | undefined
     connect = mockConnect
     ping = (): Promise<void> => Promise.resolve()
+    getProtocolEra = () => 'legacy' as const
     close = mockClose
     // The probe pages through request(); the supervised connection lists through listTools().
     request = mockRequest
@@ -64,7 +66,7 @@ vi.mock('@modelcontextprotocol/client', async importOriginal => ({
 import { apply as applyMcpClient } from '@deepseek-ai/dsh-mcp-client'
 import McpServerManager from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 import type { Config, McpManagedServerStatus } from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
-import { MemorySettings } from './memory-settings.ts'
+import { managerProfile } from './profile-fixture.ts'
 
 /** Minimal real credential provider: reference half backed by a map. */
 class MemoryCredentials extends CredentialProvider {
@@ -129,19 +131,14 @@ async function mountWorld(options?: {
 }): Promise<{
   ctx: Context
   manager: McpServerManager
-  settings: MemorySettings | undefined
+  settings: Settings | undefined
   credentials: MemoryCredentials | undefined
   events: Array<{ name: string; status: McpManagedServerStatus }>
-  managerFiber: { dispose(): Promise<void> }
+  managerFiber: Fiber
 }> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  let settings: MemorySettings | undefined
-  if (options?.withSettings !== false) {
-    await ctx.plugin(MemorySettings, { doc: options?.settingsDoc ?? {} })
-    settings = ctx.get('settings') as MemorySettings
-  }
   let credentials: MemoryCredentials | undefined
   if (options?.withCredentials === true) {
     await ctx.plugin(MemoryCredentials)
@@ -149,10 +146,18 @@ async function mountWorld(options?: {
   }
   const events: Array<{ name: string; status: McpManagedServerStatus }> = []
   ctx.on('mcp-manager/status', (name, status) => { events.push({ name, status }) })
-  const managerFiber = ctx.plugin(McpServerManager, options?.managerConfig ?? {})
-  await managerFiber
+  let managerFiber: Fiber
+  if (options?.withSettings === false) {
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    managerFiber = ctx.plugin(McpServerManager, options.managerConfig ?? {})
+    await managerFiber.await()
+  } else {
+    const { entry } = await managerProfile(ctx, { base: options?.managerConfig, user: options?.settingsDoc?.mcp })
+    managerFiber = entry.fiber!
+  }
+  const settings = ctx.get('settings')
   const manager = ctx.get('mcpServers')!
-  return { ctx, manager, settings, credentials, events, managerFiber: managerFiber as unknown as { dispose(): Promise<void> } }
+  return { ctx, manager, settings, credentials, events, managerFiber }
 }
 
 async function waitForState(manager: McpServerManager, name: string, state: string): Promise<void> {
@@ -260,7 +265,7 @@ describe('mcp-manager', () => {
     })
     await waitForState(manager, 'doomed', 'connected')
 
-    settings!.pushExternal({ mcp: { servers: {} } })
+    await settings!.replace('mcp', {})
     await vi.waitFor(() => { expect(manager.list()).toEqual([]) })
     await vi.waitFor(() => { expect(ctx.tools.get('mcp__doomed__remote')).toBeUndefined() })
   })
@@ -351,7 +356,7 @@ describe('mcp-manager', () => {
   })
 
   it('reports a load failure when the serverName collides with a static instance', async () => {
-    const { ctx, manager } = await mountWorld({ withSettings: false, managerConfig: {} })
+    const { ctx, manager, settings } = await mountWorld()
     await applyMcpClient(ctx, {
       transport: 'stdio',
       serverName: 'dup',
@@ -364,8 +369,7 @@ describe('mcp-manager', () => {
       healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     })
-    // The manager learns about "dup" only now, through a live settings attach.
-    await ctx.plugin(MemorySettings, { doc: { mcp: { servers: { dup: stdioEntry() } } } })
+    await settings!.update('mcp', { servers: { dup: stdioEntry() } })
     await waitForState(manager, 'dup', 'failed')
     expect(manager.list()[0]!.status).toMatchObject({
       state: 'failed',
@@ -434,7 +438,7 @@ describe('mcp-manager', () => {
     await vi.waitFor(() => {
       expect(events.some(event => event.name === 'fleeting' && event.status.state === 'connecting')).toBe(true)
     })
-    settings!.pushExternal({ mcp: { servers: {} } })
+    await settings!.replace('mcp', {})
     gate.resolve()
     await vi.waitFor(() => { expect(manager.list()).toEqual([]) })
     // Nothing mounted for the removed entry: no instance, no tools.
@@ -451,8 +455,9 @@ describe('mcp-manager', () => {
     // Remove the entry, then fire a transport close BEFORE the reconcile
     // unmounts: the cell publishes, and the manager must swallow it — the
     // event contract only covers configured entries.
-    settings!.pushExternal({ mcp: { servers: {} } })
-    instances.at(-1)!.onclose?.()
+    const detach = ctx.on('loader/volatile-update', () => { instances.at(-1)!.onclose?.() }, { global: true })
+    await settings!.replace('mcp', {})
+    detach()
     await vi.waitFor(() => { expect(manager.list()).toEqual([]) })
     await vi.waitFor(() => { expect(ctx.tools.get('mcp__racy__remote')).toBeUndefined() })
     expect(events.filter(event => event.name === 'racy' && event.status.state === 'reconnecting')).toEqual([])
@@ -465,7 +470,7 @@ describe('mcp-manager', () => {
       settingsDoc: { mcp: { servers: { starting: stdioEntry() } } },
     })
     await vi.waitFor(() => { expect(instances.length).toBe(1) })
-    settings!.pushExternal({ mcp: { servers: {} } })
+    await settings!.replace('mcp', {})
     await vi.waitFor(() => { expect(manager.list()).toEqual([]) })
     gate.resolve()
     // The activation continuation finds its record gone and publishes nothing.
@@ -496,7 +501,7 @@ describe('mcp-manager', () => {
     })
     await credentials!.set(credentialRef('MCP_SPEC_VANISH'), 'rotated')
     // …and the entry is deleted while that unmount is still in flight.
-    settings!.pushExternal({ mcp: { servers: {} } })
+    await settings!.replace('mcp', {})
     closeGate.resolve()
     await vi.waitFor(() => { expect(manager.list()).toEqual([]) })
     // The rebuild found its entry gone: no client was minted after the delete.
@@ -504,7 +509,7 @@ describe('mcp-manager', () => {
   })
 
   it('contains a queued reconcile that loses to disposal, logging the operation', async () => {
-    const { ctx, manager, settings, credentials, managerFiber } = await mountWorld({
+    const { ctx, manager, settings, credentials, managerFiber, events } = await mountWorld({
       withCredentials: true,
       settingsDoc: {
         mcp: { servers: { gated: { transport: 'streamable-http', url: 'http://localhost:1', headers: { Authorization: '${credential:MCP_SPEC_GATE}' } } } },
@@ -514,9 +519,11 @@ describe('mcp-manager', () => {
     ctx.logger.error = ((message: unknown) => { errors.push(String(message)) }) as typeof ctx.logger.error
     await credentials!.set(credentialRef('MCP_SPEC_GATE'), 'value')
     await waitForState(manager, 'gated', 'connected')
+    const failures = events.filter(event => event.status.state === 'failed').length
 
     // Hold the tail open inside a restart's template resolution…
     const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    credentials!.values.delete('MCP_SPEC_GATE')
     credentials!.resolveGate = gate.promise
     const restarting = manager.restart('gated')
     // …queue a settings reconcile behind it, then dispose the manager.
@@ -525,8 +532,9 @@ describe('mcp-manager', () => {
     gate.resolve()
     await restarting
     await disposing
+    expect(events.filter(event => event.status.state === 'failed')).toHaveLength(failures)
     await vi.waitFor(() => {
-      expect(errors.some(line => line.includes('settings reconcile failed'))).toBe(true)
+      expect(errors.some(line => line.includes('config reconcile failed'))).toBe(true)
     })
   })
 })
@@ -550,7 +558,8 @@ describe('entry schema bounds', () => {
 })
 
 describe('entry validation at construction', () => {
-  const base = (servers: Record<string, unknown>): Config => ({ servers }) as Config
+  const base = (servers: Record<string, unknown>): Config =>
+    McpServerManager.Config({ servers } as Parameters<typeof McpServerManager.Config>[0])
 
   it('accepts a well-formed stdio and streamable-http pair', () => {
     expect(() => {

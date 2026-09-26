@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-07-sidebar-responsive-tab-info.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-07-sidebar-responsive-tab-info.md
-2026-09-07-sidebar-responsive-tab-info.md: 96f7f047d00a33d6cd48b026ce7762929720d9d6
-2026-09-07-sidebar-responsive-tab-info.zh.md: f020068e71777272fd15a967de547ce153884402
+/agent-note-responsive-sidebar-and-injected-tab-information:
+  en: 63ced560202cf1a3
+  zh: 1ec49cd5ae68f909
+/agent-note-responsive-sidebar-and-injected-tab-information/problem:
+  en: f9824b1d6f93d329
+  zh: 36bc474f646a1a25
+/agent-note-responsive-sidebar-and-injected-tab-information/decision:
+  en: 1a055f79cb0afcde
+  zh: 78467751791d42d1
+/agent-note-responsive-sidebar-and-injected-tab-information/alternatives-considered:
+  en: c05a3ca9a201f01a
+  zh: b1b30e134a92c8ed
+/agent-note-responsive-sidebar-and-injected-tab-information/consequences:
+  en: 852e827be572c626
+  zh: 125ac90be15a5187

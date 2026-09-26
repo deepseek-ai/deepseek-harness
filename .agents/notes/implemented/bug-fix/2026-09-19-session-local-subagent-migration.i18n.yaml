@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-19-session-local-subagent-migration.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-19-session-local-subagent-migration.md
+/agent-note-complete-parent-catalogs-without-migrating-child-catalogs:
+  en: 352c234841bc0905
+  zh: 89be7b695aec5931
+/agent-note-complete-parent-catalogs-without-migrating-child-catalogs/problem:
+  en: 5ca0c3232895a9dd
+  zh: cb89e5464d4a5f99
+/agent-note-complete-parent-catalogs-without-migrating-child-catalogs/decision:
+  en: 7a368a5ad8dc3e0c
+  zh: 11ca2af33de30d8f
+/agent-note-complete-parent-catalogs-without-migrating-child-catalogs/alternatives-considered:
+  en: 7272107ab68ceefd
+  zh: 8b8bba44c9e0c402
+/agent-note-complete-parent-catalogs-without-migrating-child-catalogs/consequences:
+  en: 7caecc8516419375
+  zh: cc966c325896737d

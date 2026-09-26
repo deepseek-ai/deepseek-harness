@@ -14,7 +14,7 @@ Session 正文中的本地媒体路径通过同源文件路由渲染。本记录
 
 `ui-primitives` 拥有 `MarkdownText` 上的 `MarkdownPathImages` 词表。与 `fileMentions` 一样，它只在消息稳定后生效，使冻结的流式块无法缓存词表处理函数。稳定渲染过程重写远程 URL 白名单之外的图片目标，并只输出绝对 `http(s)`、`blob` 或 `data` 结果。没有词表时，本地目标保留静态 alt 文本。加载失败会把图片替换为作者提供的 alt 文本；alt 为空时显示原始目标路径；不同来源仍可重新加载。
 
-`ui-chat` 通过 `AssistantMarkdown` 提供页面稳定的 `localPathMediaUrl` 词表。它把绝对 POSIX 路径映射到页面同源的 `/api/file?path=…`。相对路径、协议相对路径、Windows 风格路径，以及 Electron `file://` 等非 HTTP 页面传输保持静态回退。
+`ui-chat` 通过 `AssistantMarkdown` 提供页面稳定的 `localPathMediaUrl` 词表。它把绝对 POSIX 路径映射到相对 `document.baseURI` 解析的 `api/file?path=…`，因此请求始终停留在所服务文档来源的那个挂载之下。相对路径、协议相对路径、Windows 风格路径，以及 Electron `file://` 等非 HTTP 页面传输保持静态回退。
 
 `session-controller` 在 `SessionFileReferences` 旁拥有 `SessionMediaReferences` 贡献。它通过 `connection.fetch` 注册；该通道执行与 `/api` RPC 相同的浏览器鉴权和信任检查。固定同源端点让同步渲染器获得稳定 URL，无需异步能力协商。
 

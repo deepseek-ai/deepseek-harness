@@ -25,7 +25,7 @@ The renderer gives each level a distinct visual responsibility. The run uses a 3
 
 Navigation is derived from two current authorities rather than persisted. A member row is interactive only while its durable member state is running and the current ordinary Session list contains the same id with `origin: 'subagent'`, `parentId` equal to the displayed parent, and `running: true`. Underlined member text is the only visible affordance; keyboard focus draws a two-pixel business-primary ring around the name area, and the fixed status label remains the lifecycle word rather than an action instruction. The renderer invokes only the injected ordinary `sessions.open(id)` callback. Addressed-only, remote, wrong-parent, and terminal members remain visible but static.
 
-The [seven-state Figma reference](https://www.figma.com/design/tguwzZRmHCjbq58mfsqT0M?node-id=5-2) fixes the information hierarchy for running expanded/collapsed, completed history/expanded, failed plus cancelled, interrupted recovery, and dark narrow presentation. Repository `DisclosureRow`, `StateDot`, icons, semantic tokens, and keyed-node behavior remain the implementation authority; the reference introduces no runtime field or state owner.
+The seven-state Figma reference fixes the information hierarchy for running expanded/collapsed, completed history/expanded, failed plus cancelled, interrupted recovery, and dark narrow presentation. Repository `DisclosureRow`, `StateDot`, icons, semantic tokens, and keyed-node behavior remain the implementation authority; the reference introduces no runtime field or state owner.
 
 ## Verification
 

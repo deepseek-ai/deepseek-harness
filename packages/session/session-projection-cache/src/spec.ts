@@ -11,6 +11,8 @@
  */
 
 import { z } from 'zod'
+import { isJsonValue } from '@deepseek-ai/dsh-util-values'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
@@ -18,16 +20,17 @@ import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 /**
  * One persisted checkpoint row (the RFC's `(sessionId, key, ver, seq, val)`
  * minus the two record keys). `val` is the unit's internal state — plain
- * JSON by the unit contract; `z.json()` enforces that at the durable
- * boundary. A row is never wrong, only possibly stale: `seq` says exactly
- * how stale, and a `ver` mismatch against the live unit's `stateVersion`
+ * JSON by the unit contract. Validation uses the same lossless JSON rules as
+ * writes and preserves every state key without cloning. A row is never wrong,
+ * only possibly stale: `seq` says exactly how stale, and a `ver` mismatch
+ * against the live unit's `stateVersion`
  * discards it at read time (never a migration).
  */
 export const checkpointRow = z.object({
   ver: z.number().int().nonnegative(),
   seq: z.number().int().gte(-1).transform((value): SessionSeqCursor =>
     value === -1 ? -1 : SessionSeq(value)),
-  val: z.json(),
+  val: z.custom<JsonValue>(isJsonValue, { message: 'checkpoint state must be losslessly JSON-serializable' }),
 })
 
 /**

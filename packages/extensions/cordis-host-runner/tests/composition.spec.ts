@@ -175,6 +175,6 @@ describe('stop reaches quiescence', () => {
 
     // A second package registering the same tool name collides; the teaching
     // error points at the stop-then-run recipe rather than a bare conflict.
-    await expect(mount(harness, REVERSE_TOOL_CODE)).rejects.toThrow('first cordis_stop that package\'s id')
+    await expect(mount(harness, REVERSE_TOOL_CODE)).rejects.toThrow('first stop that package through its runner or the Cordis panel')
   })
 })

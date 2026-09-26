@@ -104,11 +104,15 @@ describe('client-resources apply', () => {
     expect(hook).toBeTypeOf('function')
   })
 
-  it('shares one address across Root and Session components without reopening on selection', async () => {
+  it('shares one address across independently bound views without reopening on rebinding', async () => {
     runtime = await boot()
     const rt = runtime
     const firstId = await rt.sessions.add({ id: 'first-session' })
-    const secondId = await rt.sessions.add({ id: 'second-session' }, { current: false })
+    const secondId = await rt.sessions.add({ id: 'second-session' })
+    const firstReference = rt.sessions.retain(firstId)
+    await firstReference.ready
+    const secondReference = rt.sessions.retain(secondId)
+    await secondReference.ready
     await rt.mount({ inject: [...inject], apply })
     const opened = Promise.withResolvers<undefined>()
     const open = vi.fn<ResourceProvider<'feed'>['open']>(async function* () {
@@ -140,20 +144,24 @@ describe('client-resources apply', () => {
       return null
     })
     rt.renderSlot('resources.probe', {})
-    rt.renderSlot('resources.sessionProbe', {})
-    rt.renderSlot('resources.sessionPeer', {})
+    const firstView = rt.renderSlot('resources.sessionProbe', {}, { session: firstReference })
+    const secondView = rt.renderSlot('resources.sessionPeer', {}, { session: secondReference })
     await act(async () => { await opened.promise })
     const snapshot = source.getSnapshot()
     expect(snapshot).toEqual({ status: 'live', value: 'shared data', failure: undefined })
     expect(seen.root).toBe(snapshot)
     expect(seen.first).toBe(snapshot)
     expect(seen.second).toBe(snapshot)
-    expect([seen.firstSession, seen.secondSession]).toEqual([firstId, firstId])
+    expect([seen.firstSession, seen.secondSession]).toEqual([firstId, secondId])
     expect(open).toHaveBeenCalledTimes(1)
     expect(open.mock.calls[0]![0]).toBe(A)
     expect(open.mock.calls[0]![1]).toStrictEqual({ signal: expect.any(AbortSignal) as AbortSignal })
 
-    await rt.sessions.setCurrent(secondId)
+    const replacement = rt.sessions.retain(secondId)
+    await replacement.ready
+    firstView.update({}, { session: replacement })
+    firstReference.release()
+    secondView.update({})
     expect([seen.firstSession, seen.secondSession]).toEqual([secondId, secondId])
     expect(rt.ctx.resources.source(A)).toBe(source)
     expect(seen.root).toBe(snapshot)

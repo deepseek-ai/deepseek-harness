@@ -117,6 +117,12 @@ export class SessionInputShell implements SessionInput {
   }
   /** The public provide-channel action face (one stable identity per session). */
   readonly actions: InputActions = {
+    captureInsertion: () => ({ ...this.caretSpan(), draftRev: this.rev }),
+    insertText: (text, span) => {
+      if (this.snapshot.phase === 'adjudicating' || this.snapshot.phase === 'submitting' || this.disposed) return false
+      if (span.draftRev !== this.rev) return false
+      return this.draftEditor.insertAsyncText(span, text)
+    },
     setDraft: (text) => { this.setDraft(text) },
     addAttachments: ids => this.addAttachments(ids),
     removeAttachment: (id) => { this.removeAttachment(id) },
@@ -210,6 +216,20 @@ export class SessionInputShell implements SessionInput {
   addAttachments(ids: readonly DraftAttachmentId[]): boolean {
     if (this.snapshot.phase === 'adjudicating' || this.snapshot.phase === 'submitting') return false
     if (ids.length === 0) return true
+    this.attachmentIds = [...this.attachmentIds, ...ids]
+    this.publish()
+    return true
+  }
+
+  /**
+   * Add validated file references and attachment ids while admission is editable.
+   * @param references - reference chips in source order.
+   * @param ids - newly allocated attachment ids.
+   * @returns false when admission is locked or the editor refuses the insertion.
+   */
+  addFiles(references: readonly ReferenceInsert[], ids: readonly DraftAttachmentId[]): boolean {
+    if (this.snapshot.phase === 'adjudicating' || this.snapshot.phase === 'submitting') return false
+    if (!this.draftEditor.insertFileReferences(references)) return false
     this.attachmentIds = [...this.attachmentIds, ...ids]
     this.publish()
     return true
@@ -450,6 +470,16 @@ export class SessionInputShell implements SessionInput {
   notify(level: 'info' | 'error', text: string): void {
     this.noticeSeq += 1
     this.notices.set({ level, text, seq: this.noticeSeq })
+  }
+
+  /**
+   * Return the keyboard to the composer with the caret it last held. Lexical's
+   * own focus restores its stored selection; a bare DOM focus on the
+   * contenteditable would land the caret at the start instead.
+   */
+  focus(): void {
+    this.editor.getRootElement()?.focus({ preventScroll: true })
+    this.editor.focus()
   }
 
   // ---- wiring-layer extras (not on the frozen SessionInput face) ----

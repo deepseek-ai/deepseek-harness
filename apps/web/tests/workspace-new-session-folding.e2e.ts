@@ -22,7 +22,7 @@ const EXPECTED_DIR = fileURLToPath(new URL('./expected/workspace-new-session-fol
 const SIDEBAR_EXPECTED = join(EXPECTED_DIR, 'sidebar.expected.md')
 const SEED = fileURLToPath(new URL('../../../snapshots/web/message-feedback-protocol/session.v3.jsonl', import.meta.url))
 const MODE = webSnapshotMode()
-const EXISTING_SESSION_COUNT = 6
+const EXISTING_SESSION_COUNT = 16
 
 describe('web e2e: blank New Session folding quota', () => {
   let scaffold: WebScaffold
@@ -71,8 +71,8 @@ describe('web e2e: blank New Session folding quota', () => {
     const sidebar = page.getByRole('tree', { name: 'Sessions' })
     await expect.poll(() => sidebar.getByRole('treeitem').count(), { timeout: 15_000 }).toBe(7)
     expect(await sidebar.getByText('New Session', { exact: true }).count()).toBe(1)
-    expect(await sidebar.getByText(basename(scaffold.workspaceCwd), { exact: true }).count()).toBe(6)
-    const showMore = sidebar.getByRole('button', { name: 'Show 1 more sessions' })
+    expect(await sidebar.getByText('Untitled', { exact: true }).count()).toBe(5)
+    const showMore = sidebar.getByRole('button', { name: 'Show 11 more sessions' })
     await showMore.waitFor({ timeout: 15_000 })
     await compareOrRefreshGolden(
       SIDEBAR_EXPECTED,
@@ -81,11 +81,20 @@ describe('web e2e: blank New Session folding quota', () => {
     )
 
     await showMore.click()
-    await expect.poll(() => sidebar.getByRole('treeitem').count(), { timeout: 10_000 }).toBe(8)
-    expect(await sidebar.getByText(basename(scaffold.workspaceCwd), { exact: true }).count()).toBe(7)
+    await expect.poll(() => sidebar.getByRole('treeitem').count(), { timeout: 10_000 }).toBe(12)
+    expect(await sidebar.getByText('Untitled', { exact: true }).count()).toBe(10)
+    await compareOrRefreshGolden(
+      join(EXPECTED_DIR, 'first-batch.expected.md'),
+      await captureStableAria(page, '[role="tree"][aria-label="Sessions"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    await sidebar.getByRole('button', { name: 'Show 6 more sessions' }).click()
+    await expect.poll(() => sidebar.getByRole('treeitem').count()).toBe(17)
+    await sidebar.getByRole('button', { name: 'Show 1 more sessions' }).click()
+    await expect.poll(() => sidebar.getByRole('treeitem').count()).toBe(18)
     await sidebar.getByRole('button', { name: 'Show less' }).click()
     await expect.poll(() => sidebar.getByRole('treeitem').count()).toBe(7)
-    await assertFixtureInventory(EXPECTED_DIR, ['sidebar.expected.md'])
+    await assertFixtureInventory(EXPECTED_DIR, ['sidebar.expected.md', 'first-batch.expected.md'])
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })

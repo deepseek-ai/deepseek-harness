@@ -1,0 +1,9 @@
+- insert:
+    - id: config-editor
+      name: cordis:editor
+    - id: settings
+      name: cordis:settings
+    - id: speech-to-text
+      name: cordis:speech
+      config:
+        defaultProvider: sensevoice-local

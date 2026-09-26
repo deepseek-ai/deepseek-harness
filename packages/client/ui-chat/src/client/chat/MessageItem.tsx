@@ -52,6 +52,9 @@ function failureMessage(
   code: unknown,
   t: ChatViewSlotProps['t'],
 ): string {
+  if (code === 'ACCOUNT_SIGNED_OUT') return t('message.failure.accountSignedOut')
+  if (code === 'ACCOUNT_SIGN_IN_REQUIRED') return t('message.failure.accountSignInRequired')
+  if (code === 'QUOTA' || code === 'ACCOUNT_QUOTA') return t('message.failure.quota')
   return code === 'AUTH' ? t('message.failure.auth') : message
 }
 
@@ -130,7 +133,7 @@ function TurnErrorItem({ node, t }: {
     <div className={css.turnErrorRow} role="status">
       <StateDot state="error" className={css.turnErrorDot} />
       <div className={css.turnErrorCopy}>
-        <span className={css.turnErrorTitle}>{t('message.turnError')}</span>
+        <span className={css.turnErrorTitle}>{node.code === 'ACCOUNT_SIGNED_OUT' ? t('message.accountStopped') : t('message.turnError')}</span>
         <span className={css.turnErrorMessage}>{failureMessage(node.message, node.code, t)}</span>
       </div>
       {node.code !== undefined && <code className={css.turnErrorCode}>{node.code}</code>}

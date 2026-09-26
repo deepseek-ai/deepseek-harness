@@ -101,7 +101,7 @@ describe('BrowserAuth', () => {
       status: 303,
       headers: {
         'cache-control': 'no-store',
-        'location': '/',
+        'location': './',
         'referrer-policy': 'no-referrer',
       },
     })
@@ -134,10 +134,33 @@ describe('BrowserAuth', () => {
       status: 303,
       headers: {
         'cache-control': 'no-store',
-        'location': '/',
+        'location': './',
         'referrer-policy': 'no-referrer',
       },
     })
+  })
+
+  it('preserves the caller authority and mount while adding only this process token', async () => {
+    const auth = await createAuth(new RecordCredentials())
+    const mounted = new URL(auth.authenticatedUrl('https://gateway.example/tools/dsh/'))
+    expect(mounted.origin).toBe('https://gateway.example')
+    expect(mounted.pathname).toBe('/tools/dsh/')
+    expect([...mounted.searchParams.keys()]).toEqual(['token'])
+
+    const loopback = new URL(auth.authenticatedUrl('http://127.0.0.1:3080/'))
+    expect(loopback.origin).toBe('http://127.0.0.1:3080')
+    expect(loopback.pathname).toBe('/')
+    expect(loopback.searchParams.get('token')).toBe(mounted.searchParams.get('token'))
+
+    // The proxy preserves the browser-facing Host and strips the mount.
+    const token = mounted.searchParams.get('token')
+    const exchanged = response()
+    expect(auth.authorizeIndex(request(`/?token=${String(token)}`, 'gateway.example'), exchanged.value)).toBe(false)
+    const setCookie = exchanged.state.headers?.['set-cookie']
+    if (setCookie === undefined) throw new Error('mount exchange did not set a cookie')
+    expect(auth.isAuthenticated(request(
+      '/', 'gateway.example', { cookie: setCookie.split(';', 1)[0]! },
+    ))).toBe(true)
   })
 
   it('accepts the cookie for index serving and gives every unauthenticated request one response', async () => {

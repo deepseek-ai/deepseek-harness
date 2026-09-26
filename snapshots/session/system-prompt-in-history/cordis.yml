@@ -3,7 +3,7 @@
 # first read, so the second step appends a `system/message` after the cached
 # history instead of replacing node 0.
 - id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   config:
     thinking: enabled
     reasoningEffort: max

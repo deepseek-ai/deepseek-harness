@@ -3,8 +3,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-md);
   padding: 0 8px;
+  padding-inline-start: calc(8px + var(--dsh-workspace-indent, 0px));
   cursor: pointer;
   user-select: none;
   color: var(--dsw-alias-label-primary);
@@ -27,7 +28,7 @@
   min-height: 48px;
   box-sizing: border-box;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-lg);
   padding: 4px 8px;
   background: transparent;
   cursor: pointer;
@@ -83,6 +84,11 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* The 40% share only protects a snippet; a snippetless match keeps the row. */
+.searchResultWorkspace:only-child {
+  max-width: 100%;
+}
+
 .searchResultSnippet {
   flex: 1;
   min-width: 0;
@@ -104,21 +110,10 @@
 .sessionRow {
   height: 32px;
   gap: 0;
-  /* Mount fade: session rows appear by unfolding a group (or the tree
-     mounting). Stable row keys keep already-visible rows from replaying it. */
-  animation: row-in 150ms var(--ds-ease-in-out);
 }
 
 .sessionRow .title {
   margin: 0 6px 0 4px;
-}
-
-.flatSessionRowWithoutStatus .title {
-  margin-left: 0;
-}
-
-@keyframes row-in {
-  from { opacity: 0; }
 }
 
 .slot {
@@ -182,14 +177,37 @@
   line-height: 20px;
   padding: 0 2px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-button-elevated-fill);
   color: inherit;
   outline: none;
 }
 
+/* Hovering a session row marquees a title wider than its cell: Rows.tsx crawls
+   it at a constant speed to its far edge while the pointer rests on the row,
+   holds it there, and returns it to the start in one step when the pointer
+   leaves. The motion is scripted frame by frame (reduced motion jumps), so no
+   scroll-behavior applies here. */
 .sessionRow .title {
   flex: 1;
+}
+
+/* While the marquee travels, both clipping edges fade in over 12px instead of
+   hard-cutting a character: the left once the title has moved off its start
+   (data-scrolled), the right while text still remains beyond the cell
+   (data-clipped) — at the far edge the right fade lifts so the final character
+   reads at full strength. The mask rides the title span itself, so the status
+   slot and every other leading cell keep their full color. */
+.sessionRow .title[data-scrolled] {
+  mask-image: linear-gradient(to right, transparent, #000 12px);
+}
+
+.sessionRow .title[data-clipped] {
+  mask-image: linear-gradient(to left, transparent, #000 12px);
+}
+
+.sessionRow .title[data-scrolled][data-clipped] {
+  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
 }
 
 .meta {
@@ -203,25 +221,31 @@
 
 .time {
   flex: none;
-  font-size: 12px;
-  line-height: 20px;
+  font-size: 10px;
+  line-height: 16px;
   color: var(--dsw-alias-label-tertiary);
 }
 
-.scheduleIndicator {
+.pinIndicator {
   display: inline-flex;
   flex: none;
   width: 16px;
   height: 20px;
   align-items: center;
   justify-content: center;
-  margin-right: 6px;
-  color: var(--dsw-alias-label-tertiary);
+  margin-left: 6px;
+  color: var(--dsw-alias-label-caption);
 }
 
-.searchScheduleIndicator {
-  margin-right: 0;
-  margin-left: 4px;
+/* Archived rows stay in place but read as inactive: titles drop to
+   the caption label step (one step above dimmed, which reads as too faint
+   over the sidebar fill). Archived search rows drop their meta line to the
+   same step so both lines read as one unit. */
+.sessionRow.archived .title,
+.searchResultRow.archived .searchResultTitle,
+.searchResultRow.archived .searchResultWorkspace,
+.searchResultRow.archived .searchResultSnippet {
+  color: var(--dsw-alias-label-caption);
 }
 
 .dot {
@@ -229,24 +253,50 @@
 }
 
 /* Trailing action buttons surface on hover only (figma 27:4668 / 27:4656):
-   bare 16px glyphs, gap 12, tertiary grey. */
+   bare 16px glyphs, tertiary grey; the figma gap 12 reads too airy beside
+   the 16px glyphs, so the buttons sit at 10. */
 .rowActions {
   flex: none;
   display: none;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .projectRow:hover .rowActions,
 .sessionRow:hover .rowActions,
+.searchResultRow:hover .rowActions,
 .projectRow.menuOpen .rowActions,
 .sessionRow.menuOpen .rowActions {
   display: inline-flex;
 }
 
+/* The search heading has no trailing time cell, so the unarchive action
+   right-aligns itself. */
+.searchResultHeading .rowActions {
+  margin-left: auto;
+}
+
 .sessionRow:hover .time,
 .sessionRow.menuOpen .time {
   display: none;
+}
+
+/* Hover swaps the trailing cell to the action buttons, which already carry
+   the pin/archive glyphs — hide the static markers so they do not double. */
+.sessionRow:hover .pinIndicator,
+.sessionRow.menuOpen .pinIndicator {
+  display: none;
+}
+
+/* The unclipped hover state drops the ellipsis, which would otherwise cover
+   the characters the marquee reached. Guarded because a touch tap
+   latches `:hover` on the row after the title has already returned: an
+   unguarded rule would strand that row without its ellipsis. */
+@media (hover: hover) {
+  .sessionRow:hover .title,
+  .sessionRow.menuOpen .title {
+    text-overflow: clip;
+  }
 }
 
 /* An open row menu pins the hover affordances (figma: the row keeps its
@@ -334,6 +384,12 @@
   color: #ADB2B8;
 }
 
+/* Archive glyph rides the status row's text color; slight inset aligns it with the 6px status dots. */
+.hoverArchived svg {
+  flex-shrink: 0;
+  margin: 0 -4px;
+}
+
 .iconButton {
   flex: none;
   display: inline-flex;
@@ -342,7 +398,7 @@
   width: 16px;
   height: 16px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-xs);
   padding: 0;
   background: transparent;
   cursor: pointer;
@@ -360,7 +416,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sessionRow,
   .arrow {
     animation: none;
     transition: none;

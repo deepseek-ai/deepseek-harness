@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-30-pre-tool-input-rewrite.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/feature/2026-06-30-pre-tool-input-rewrite.md
-2026-06-30-pre-tool-input-rewrite.md: a42b05ac7d2b4d5808807a5810b9e0c4354333a5
-2026-06-30-pre-tool-input-rewrite.zh.md: 8ef07ea7b6ca446b796c3977d5c87a1e7c49917a
+/agent-note-pre-tool-input-rewrite-a-consistent-design:
+  en: 28be5a60d0f8f70d
+  zh: 2ade899f45347755
+/agent-note-pre-tool-input-rewrite-a-consistent-design/problem:
+  en: 1e84d54d317750ed
+  zh: 5436c2f44569ab52
+/agent-note-pre-tool-input-rewrite-a-consistent-design/the-problem-three-readers-of-pre-execution-arguments:
+  en: bdc0958b87dbd888
+  zh: 0364cad8a5727306
+/agent-note-pre-tool-input-rewrite-a-consistent-design/proposal:
+  en: b08ad378beb60572
+  zh: cb6797c7a0021e9d
+/agent-note-pre-tool-input-rewrite-a-consistent-design/alternatives-considered:
+  en: 6119e2aff3b6be5a
+  zh: 76136ef5249c23eb
+/agent-note-pre-tool-input-rewrite-a-consistent-design/alternatives-considered/why-not-mutate-the-execution-object:
+  en: 4ef997690f716c9a
+  zh: f73cdc2154aa5596
+/agent-note-pre-tool-input-rewrite-a-consistent-design/acceptance-criteria:
+  en: 4e2d12fbc5ad21b3
+  zh: fe3a0dace0073283
+/agent-note-pre-tool-input-rewrite-a-consistent-design/risks:
+  en: ed597673c0102d5c
+  zh: 2c0fafaa9a093fd0
+/agent-note-pre-tool-input-rewrite-a-consistent-design/open-questions:
+  en: abf5adcd6d2effbd
+  zh: 5fdb48fefd55e2c0

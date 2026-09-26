@@ -18,7 +18,7 @@ Inbox 接受消息时会记录规范化的 `agent/inbox/spliced` 事件，但 We
 
 通用会话投影传输层是唯一 Web 传输。它发送 seq 更高的 `session/projection` 值，在每次 `session.follow` 的起始快照中包含完整 values 块，折叠已分离的冷日志，并在缓存有效时使用投影缓存。系统不存在 Host 拥有的 `queue` 投影、placement 词汇、handoff 列表、专用 queue 帧或枚举 live Agent 的重连逻辑。
 
-对已就绪 Host generation 的同步订阅会先丢弃所有保留的投影值及其水位，再刷新查询并重新打开 control stream，其中也包括进程本地 control baseline 中没有列出的冷 Session。首次 control stream 会等待 generation 就绪；baseline 不会先于旧状态清理到达，再被较晚的 Cordis `connection/reset` 通知清除。Observable face 保留自身标识及订阅。较早 generation 的 list 请求不能发布值或使当前请求结束，因此新 generation 的历史与 list 值可以建立较低的持久 seq，而不会被尚未持久化的状态挡住。同一 generation 内，所有收到的 baseline 都遵循较高 seq 优先，因此延迟到达的 control baseline 不能删除或覆盖较新的 list 或 history 值。
+对已就绪 Host generation 的同步订阅会先丢弃所有保留的投影值及其水位，再刷新查询并重新打开 control stream，其中也包括进程本地 control baseline 中没有列出的冷 Session。首次 control stream 会等待 generation 就绪；baseline 不会先于旧状态清理到达，再被较晚的 Cordis `connection/reset` 通知清除。Observable face 保留自身标识及订阅。较早 generation 的 list 请求不能发布值或使当前请求结束，因此新 generation 的历史与 list 值可以建立较低的持久 seq，而不会被尚未持久化的状态挡住。同一 generation 内，所有 Host 排序过的值都遵循较高 seq 优先，因此延迟到达的 control baseline 不能删除或覆盖较新的 history 值或活 Session 的 list 值；从 projection cache 看出来的 cached list block 则让位于该 baseline（[只读面按 lifecycle 身份匹配与 cached 行](../architecture/2026-09-19-projection-cache-listing-identity-and-cached-rows.zh.md)）。
 
 客户端 Session binding 在通用逐会话投影存储中保留 `inbox`，不会把它复制进 `SessionSnapshot`。QueueDock 直接读取 `next-turn`。ChatView 直接读取用户来源的 `next-step` 消息，并忽略注入上下文。认领操作通过持久 splice 移除待处理值；后续 `user/message` 由普通会话投影渲染。
 
@@ -49,3 +49,5 @@ Host 投影覆盖会读取包含待处理输入的已分离持久 Session，在 
 待处理 Queue 与 steering 输入可在 Host 进程重启后恢复，而无需恢复 Agent。live Inbox 读取、冷历史、重连与投影缓存使用同一份领域拥有的折叠与注册表状态。操作恢复出的行时会恢复其普通 Agent，从而保留 preset 组合与所有权检查。
 
 客户端接收原始的两列表 Inbox 值，并自行决定界面呈现哪些消息。投影的状态版本会在其序列化状态或折叠语义变化时使缓存行失效。
+
+[输入回显入档决策](2026-09-22-input-echo-admission-ownership.zh.md)负责本地 Chat/Dock 接管和迟到 Inbox 行的排除，不替换这里的恢复模型。

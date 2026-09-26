@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-17-frame-shell-leading-window-chrome-seat.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-17-frame-shell-leading-window-chrome-seat.md
+/agent-note-frame-owned-shell-leading-window-chrome-seat:
+  en: 3e2cfa57af6b53e7
+  zh: 78fe101ad11a6330
+/agent-note-frame-owned-shell-leading-window-chrome-seat/problem:
+  en: 09b5defb78287f7e
+  zh: b7333ce5077914a2
+/agent-note-frame-owned-shell-leading-window-chrome-seat/decision:
+  en: 04853eeed03a00c5
+  zh: 9542acfaa6258842
+/agent-note-frame-owned-shell-leading-window-chrome-seat/alternatives-considered:
+  en: 81e997e43d185834
+  zh: 38eda1f9a4bac318
+/agent-note-frame-owned-shell-leading-window-chrome-seat/consequences:
+  en: 7d95c4c155f8e3c3
+  zh: b3f88fe2fb7a77f0
+/agent-note-frame-owned-shell-leading-window-chrome-seat/testing:
+  en: 2fcc157c9c4f0b81
+  zh: 3b0e6135b1c10db1

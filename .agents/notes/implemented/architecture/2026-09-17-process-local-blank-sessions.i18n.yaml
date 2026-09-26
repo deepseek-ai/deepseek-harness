@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-17-process-local-blank-sessions.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-17-process-local-blank-sessions.md
+/agent-note-writer-acquisition-for-blank-session-reuse:
+  en: a78ef0f5b14debe5
+  zh: 8b7ef954fe622783
+/agent-note-writer-acquisition-for-blank-session-reuse/problem:
+  en: 837ebb0071a5611b
+  zh: 23d0f0713889ead6
+/agent-note-writer-acquisition-for-blank-session-reuse/decision:
+  en: 932bc5c0be3721de
+  zh: 000425c5f053e74e
+/agent-note-writer-acquisition-for-blank-session-reuse/alternatives-considered:
+  en: 2a67a53f7f396ba8
+  zh: 6df6ccc071fb0de2
+/agent-note-writer-acquisition-for-blank-session-reuse/consequences:
+  en: 2e1f1894337689a2
+  zh: d0cab07cc48083ee
+/agent-note-writer-acquisition-for-blank-session-reuse/verification:
+  en: 4680e845e2ab294e
+  zh: ea5890c5ffb09831

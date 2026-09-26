@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-07-deepseek-messages-adapter.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-07-deepseek-messages-adapter.md
-2026-09-07-deepseek-messages-adapter.md: 6b7aff250aacd4bb7d0af3b4e68ee5b2002c13e3
-2026-09-07-deepseek-messages-adapter.zh.md: 829e2189cb48a2acaa1ec27f7ccade0f163b58ad
+/agent-note-deepseek-through-the-anthropic-messages-protocol:
+  en: 4d1dc31d47e3e8b1
+  zh: b80687f6506860d5
+/agent-note-deepseek-through-the-anthropic-messages-protocol/problem:
+  en: 6c9d47e829752afe
+  zh: 98bd3b5300bfea8c
+/agent-note-deepseek-through-the-anthropic-messages-protocol/decision:
+  en: 3c28330671a1e6db
+  zh: 0d7ef9a8cf22c51f
+/agent-note-deepseek-through-the-anthropic-messages-protocol/alternatives-considered:
+  en: 4297bc439e8b23e4
+  zh: 2bb4dec78040d81e
+/agent-note-deepseek-through-the-anthropic-messages-protocol/consequences:
+  en: 76aa9259724323d2
+  zh: 0aac83847bbd4ab6

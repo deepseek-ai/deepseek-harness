@@ -15,7 +15,7 @@ function normalizedPath(path: string): string {
 }
 
 interface RuntimeSchema {
-  safeParse(value: unknown): { readonly success: boolean }
+  safeParse(value: unknown): { readonly success: boolean; readonly data?: unknown }
 }
 
 interface RuntimeDescriptor {
@@ -27,7 +27,14 @@ interface RuntimeDescriptor {
     readonly acceptsUndefined?: true
     readonly codec: { readonly create: () => RuntimeSchema }
   }[]
-  readonly result: { readonly create: () => RuntimeSchema }
+  readonly uplink?: {
+    readonly codec: { readonly create: () => RuntimeSchema }
+  }
+  readonly result: {
+    readonly create: () => RuntimeSchema
+    readonly decode?: (value: unknown) => unknown
+    readonly encode?: (value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown
+  }
 }
 
 interface RuntimeRemoteModule {
@@ -48,6 +55,234 @@ afterEach(() => {
 })
 
 describe('Remote model generation', { timeout: 60_000 }, () => {
+  it('projects a generic binary result without copying or freezing its bytes', async () => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/types.ts', source => `${source}\nexport type BinaryFile<Data extends Uint8Array = Uint8Array> = {\n  readonly data: Data\n} & { readonly size: number }\n`)
+    editFile(root, 'packages/remote/src/index.ts', source => `import type { BinaryFile } from './types.ts'\n${source.replace(
+      '\n}\n\nexport type {',
+      '\n  @Remote\n  bytes(): BinaryFile { return { data: new Uint8Array([0, 255]), size: 2 } }\n}\n\nexport type {',
+    )}`)
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    expect(artifact?.js).not.toContain('binaryResult')
+    expect(artifact?.remote?.dts).toContain('Promise<RemoteResult<RemoteDecoded<BinaryFile>>>')
+    const generated = await import(`data:text/javascript,${encodeURIComponent(
+      (artifact?.remote?.js ?? '').replace("from 'zod'", `from ${JSON.stringify(import.meta.resolve('zod'))}`),
+    )}`) as RuntimeRemoteModule
+    const descriptor = generated.TYPERT_REMOTE.descriptors.find(invocation => invocation.id.endsWith('/bytes'))
+    expect(descriptor?.result.decode).toBeTypeOf('function')
+    if (descriptor === undefined) throw new Error('binary descriptor missing')
+    const schema = descriptor.result.create()
+    for (const data of [new Uint8Array(), new Uint8Array([0, 128, 255]), new Uint8Array(new SharedArrayBuffer(3))]) {
+      const parsed = schema.safeParse({ data, size: data.length })
+      expect(parsed.success).toBe(true)
+      expect((parsed.data as { readonly data: Uint8Array }).data).toBe(data)
+      expect(Object.isFrozen(data)).toBe(false)
+    }
+    expect(schema.safeParse({ data: 'AP8=', size: 2 }).success).toBe(false)
+    expect(schema.safeParse({ data: [0, 255], size: 2 }).success).toBe(false)
+    expect(schema.safeParse({ data: new Uint8Array(), size: '0' }).success).toBe(false)
+    expect(schema.safeParse({ size: 0 }).success).toBe(false)
+    assertRemoteConsumerTypechecks(artifact?.remote?.dts, artifact?.remote?.dtsMap, root, `
+async function readBytes() {
+  const result = await ctx.remote.goals.bytes()
+  if (!result.ok) return
+  const data: Uint8Array<ArrayBuffer> = result.value.data
+  new Blob([data])
+  // @ts-expect-error binary results do not carry base64 strings.
+  const base64: string = result.value.data
+  // @ts-expect-error the Client bytes have ordinary ArrayBuffer backing.
+  const shared: Uint8Array<SharedArrayBuffer> = result.value.data
+  void base64
+  void shared
+}
+void readBytes
+`)
+  })
+
+  it.each([
+    ['parameter', '@Remote\n  bytes(data: Uint8Array): number { return data.length }'],
+    ['nested parameter', '@Remote\n  bytes(files: { content: Uint8Array }[]): number { return files.length }'],
+    ['binary stream', "@Remote({ mode: 'stream' })\n  async *bytes(): AsyncIterable<{ data: Uint8Array }> { throw new Error() }"],
+  ])('rejects unsupported binary %s', (_name, method) => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace(
+      '\n}\n\nexport type {', `\n  ${method}\n}\n\nexport type {`,
+    ))
+    expect(() => new WorkspaceTypertGenerator(root).generate())
+      .toThrow('Remote Uint8Array is only supported in unary results')
+  })
+
+  it.each([
+    ['undefined data', '{ data: Uint8Array | undefined }', 'Remote boundary contains non-JSON type undefined'],
+    ['unconstrained metadata', '{ data: Uint8Array; meta: unknown }', 'Remote boundary contains unconstrained unknown data'],
+  ])('rejects binary results with %s', (_name, type, message) => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace(
+      '\n}\n\nexport type {', `\n  @Remote\n  bytes(): ${type} { throw new Error() }\n}\n\nexport type {`,
+    ))
+    expect(() => new WorkspaceTypertGenerator(root).generate()).toThrow(message)
+  })
+
+  it('decodes recursive objects, arrays, tuples, unions and root bytes by their field types', async () => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/types.ts', source => `${source}
+declare const fileNameBrand: unique symbol
+export type FileName = string & { readonly [fileNameBrand]: true }
+export type LinkedBytes = { readonly content: Uint8Array } & { readonly next?: LinkedBytes }
+export interface BinaryTree {
+  readonly name: FileName
+  readonly content?: Uint8Array | null
+  readonly files: readonly BinaryTree[]
+  readonly pair: readonly [Uint8Array, { readonly raw: Uint8Array }?]
+  readonly tail: readonly [string, ...Uint8Array[]]
+  readonly choice: Uint8Array | { readonly preview: Uint8Array }
+  readonly variants: ({ readonly content: Uint8Array } & { readonly content: Uint8Array; readonly size: number })[]
+  readonly chunks: Readonly<Record<string, Uint8Array>>
+}
+`)
+    editFile(root, 'packages/remote/src/index.ts', source => `import type { BinaryTree, LinkedBytes } from './types.ts'\n${source.replace(
+      '\n}\n\nexport type {', `
+  @Remote
+  tree(): BinaryTree { throw new Error() }
+  @Remote
+  linked(): LinkedBytes { throw new Error() }
+  @Remote
+  raw(): Uint8Array { throw new Error() }
+  @Remote
+  nullable(): Uint8Array | null { throw new Error() }
+  @Remote
+  maybe(): Uint8Array | void { throw new Error() }
+  @Remote
+  array(): readonly Uint8Array[] { throw new Error() }
+  @Remote
+  envelope(): { readonly content?: Uint8Array; readonly metadata: { readonly title: string } } { throw new Error() }
+  @Remote
+  overlap(): { content: Uint8Array } | { content: Uint8Array; title: string } { throw new Error() }
+  @Remote
+  objectOrBytes(): { content: Uint8Array } | Uint8Array<SharedArrayBuffer> { throw new Error() }
+}\n\nexport type {`,
+    )}`)
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const generated = await import(`data:text/javascript,${encodeURIComponent(
+      (artifact?.remote?.js ?? '').replace("from 'zod'", `from ${JSON.stringify(import.meta.resolve('zod'))}`),
+    )}`) as RuntimeRemoteModule
+    const codec = (method: string) => {
+      const descriptor = generated.TYPERT_REMOTE.descriptors.find(item => item.id.endsWith(`/${method}`))
+      if (descriptor === undefined) throw new Error(`descriptor missing: ${method}`)
+      return descriptor.result
+    }
+    const content = new Uint8Array([128, 255])
+    const leaf = { name: 'leaf', files: [], pair: [content], tail: ['parts', content], choice: content, variants: [], chunks: {} }
+    const value = {
+      ...leaf, content, files: [{ ...leaf, content: null }], pair: [content, { raw: content }],
+      choice: { preview: content }, variants: [{ content, size: 2 }], chunks: { 'a.b/c': content },
+    }
+    expect(codec('tree').decode?.(value)).toEqual(value)
+    const parsed = codec('tree').decode?.(value) as typeof value
+    expect(parsed.content).toBe(content)
+    expect(Object.isFrozen(parsed.files)).toBe(true)
+    expect(Object.isFrozen(parsed.pair)).toBe(true)
+    expect(parsed.pair[0]).toBe(content)
+    expect(parsed.variants[0]?.content).toBe(content)
+    expect(parsed.tail[1]).toBe(content)
+    expect(Object.isFrozen(content)).toBe(false)
+    expect(codec('tree').decode?.(leaf)).toEqual(leaf)
+    expect(() => codec('tree').decode?.({ ...value, files: [{ ...leaf, content: 'base64' }] })).toThrow()
+    expect(() => codec('tree').decode?.({ ...value, variants: [{ content, size: '2' }] })).toThrow()
+    expect(codec('raw').decode?.(content)).toBe(content)
+    expect(codec('nullable').decode?.(null)).toBe(null)
+    expect(codec('nullable').decode?.(content)).toBe(content)
+    expect(codec('maybe').decode?.(undefined)).toBeUndefined()
+    expect(codec('maybe').decode?.(content)).toBe(content)
+    expect(() => codec('raw').decode?.([128, 255])).toThrow()
+    expect(codec('array').decode?.([content])).toEqual([content])
+    expect((codec('array').decode?.([content]) as Uint8Array[])[0]).toBe(content)
+    expect(codec('create').decode).toBeUndefined()
+    expect(codec('create').encode).toBeUndefined()
+    const attachments: { bytes: Uint8Array; path: readonly (string | number)[] }[] = []
+    const writeBytes = (bytes: Uint8Array, path: readonly (string | number)[]): null => {
+      attachments.push({ bytes, path })
+      return null
+    }
+    const metadata = codec('tree').encode?.(value, writeBytes) as typeof value
+    expect(attachments.map(item => item.path)).toEqual([
+      ['content'], ['files', 0, 'pair', 0], ['files', 0, 'tail', 1], ['files', 0, 'choice'],
+      ['pair', 0], ['pair', 1, 'raw'], ['tail', 1], ['choice', 'preview'],
+      ['variants', 0, 'content'], ['chunks', 'a.b/c'],
+    ])
+    expect(attachments.every(item => item.bytes === content)).toBe(true)
+    expect(metadata.content).toBeNull()
+    expect(metadata.files[0]?.content).toBeNull()
+    expect(metadata.variants[0]?.content).toBeNull()
+    expect(value.content).toBe(content)
+    attachments.length = 0
+    expect(codec('overlap').encode?.({ content, title: 'image' }, writeBytes)).toEqual({ content: null, title: 'image' })
+    expect(attachments).toEqual([{ bytes: content, path: ['content'] }])
+    attachments.length = 0
+    const augmented = Object.assign(new Uint8Array(new SharedArrayBuffer(1)).fill(127), { content })
+    expect(codec('objectOrBytes').encode?.(augmented, writeBytes)).toBeNull()
+    expect(augmented.content).toBe(content)
+    expect(attachments).toEqual([{ bytes: augmented, path: [] }])
+    attachments.length = 0
+    expect(codec('raw').encode?.(content, writeBytes)).toBeNull()
+    expect(attachments).toEqual([{ bytes: content, path: [] }])
+    expect(codec('maybe').encode?.(undefined, writeBytes)).toBeUndefined()
+    const circular: { files: unknown[] } = { ...leaf, files: [] }
+    circular.files.push(circular)
+    expect(() => codec('tree').encode?.(circular, writeBytes)).toThrow('circular object')
+    const linked: { content: Uint8Array; next?: unknown } = { content }
+    linked.next = linked
+    expect(() => codec('linked').encode?.(linked, writeBytes)).toThrow('circular object')
+    let metadataReads = 0
+    let contentReads = 0
+    const opaque = { get title() { metadataReads++; return 'image' } }
+    const optional = { get content() { contentReads++; return undefined }, metadata: opaque }
+    const absent = codec('envelope').encode?.(optional, writeBytes) as typeof optional
+    expect(absent.metadata).toBe(opaque)
+    expect(metadataReads).toBe(0)
+    expect(JSON.stringify(absent)).toBe('{"metadata":{"title":"image"}}')
+    expect(contentReads).toBe(1)
+    expect(metadataReads).toBe(1)
+    let jsonCalls = 0
+    const projected = codec('envelope').encode?.({ toJSON(key: string) {
+      jsonCalls++
+      expect(key).toBe('value')
+      return { content, metadata: { title: 'image' } }
+    } }, writeBytes)
+    expect(JSON.stringify(projected)).toBe('{"content":null,"metadata":{"title":"image"}}')
+    expect(jsonCalls).toBe(1)
+    const dictionary = codec('tree').encode?.({
+      ...leaf, chunks: Object.fromEntries([['__proto__', content]]),
+    }, writeBytes) as typeof value
+    expect(Object.hasOwn(dictionary.chunks, '__proto__')).toBe(true)
+    expect((dictionary.chunks as Record<string, unknown>)['__proto__']).toBeNull()
+    assertRemoteConsumerTypechecks(artifact?.remote?.dts, artifact?.remote?.dtsMap, root, `
+import type { BinaryTree, FileName } from '@fixture/remote/types'
+async function binaryTree() {
+  const result = await ctx.remote.goals.tree()
+  if (!result.ok) return
+  const tree: BinaryTree = result.value
+  const name: FileName = result.value.name
+  const leaf = result.value.files[0]!
+  if (leaf.content) new Blob([leaf.content])
+  const pair: readonly [Uint8Array<ArrayBuffer>, { readonly raw: Uint8Array<ArrayBuffer> }?] = leaf.pair
+  const choice: Uint8Array<ArrayBuffer> | { readonly preview: Uint8Array<ArrayBuffer> } = leaf.choice
+  const chunk: Uint8Array<ArrayBuffer> = leaf.chunks['file']!
+  // @ts-expect-error array readonly modifier is preserved.
+  result.value.files.push(leaf)
+  // @ts-expect-error property readonly modifier is preserved.
+  result.value.name = name
+  const raw = await ctx.remote.goals.raw()
+  if (raw.ok) new Blob([raw.value])
+  const maybe: Promise<RemoteResult<Uint8Array<ArrayBuffer> | void>> = ctx.remote.goals.maybe()
+  const absent = await maybe
+  if (absent.ok && absent.value !== undefined) new Blob([absent.value])
+  void tree; void pair; void choice; void chunk
+}
+void binaryTree
+`)
+  })
+
   it('discovers a Remote-only package and emits strict direct and Context descriptors', async () => {
     const generator = new WorkspaceTypertGenerator(fixtureRoot)
 
@@ -142,7 +377,7 @@ describe('Remote model generation', { timeout: 60_000 }, () => {
       "'agent:goals/rename': (request: RenameGoalRequest) => Promise<RemoteResult<RenameGoalResult>>",
     )
     expect(artifact?.remote?.dts).toContain(
-      "'goals/watch': (agentId: AgentId, signal?: AbortSignal) => AsyncIterable<CreateGoalResult>",
+      "'goals/watch': (agentId: AgentId, signal?: AbortSignal) => RemoteStreamHandle<CreateGoalResult, never>",
     )
 
     const remoteJs = artifact?.remote?.js
@@ -217,6 +452,105 @@ export type {`,
     expect(labelled?.parameters[1]?.acceptsUndefined).toBe(true)
     expect(labelled?.parameters[1]?.codec.create().safeParse(undefined).success).toBe(true)
     expect(labelled?.parameters[1]?.codec.create().safeParse(7).success).toBe(false)
+  })
+
+  it('models RemoteStream return types with an uplink boundary and renders them on consumers', async () => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source
+      .replace(
+        "import { TypertRemoteService, Remote, RemoteScope } from '@deepseek-ai/dsh-typert-protocol'",
+        "import { TypertRemoteService, Remote, RemoteScope, type RemoteStream } from '@deepseek-ai/dsh-typert-protocol'",
+      )
+      .replace(
+        "  @Remote({ mode: 'stream' })\n  async *watch",
+        `  @Remote({ mode: 'stream' })
+  async *attach(agent: Agent, signal: AbortSignal): RemoteStream<CreateGoalResult, CreateGoalRequest> {
+    signal.throwIfAborted()
+    yield { ref: agent.id }
+  }
+
+  @Remote({ mode: 'stream' })
+  async *tail(): RemoteStream<string> {
+    yield 'tail'
+  }
+
+  @Remote({ mode: 'stream' })
+  async *silent(): RemoteStream<string, never> {
+    yield 'silent'
+  }
+
+  @Remote({ mode: 'stream' })
+  async *watch`,
+      ))
+
+    const model = remotePackage(root)
+    const attach = model.invocations.find(invocation => invocation.method === 'attach')
+    expect(attach).toMatchObject({
+      id: '@fixture/remote#goals/attach',
+      mode: 'stream',
+      invocation: { kind: 'direct' },
+      scope: { context: 'agent', wire: 'agentId' },
+      parameters: [{ name: 'agent', wire: 'agentId', source: 'lookup', lookup: 'agent' }],
+      uplink: { boundary: { typeSymbol: '@fixture/remote/types#CreateGoalRequest' } },
+      cancellation: { parameter: 'signal' },
+      result: { typeSymbol: '@fixture/remote/types#CreateGoalResult' },
+    })
+    for (const method of ['tail', 'silent']) {
+      const modeled = model.invocations.find(invocation => invocation.method === method)
+      expect(modeled).toMatchObject({ mode: 'stream', parameters: [] })
+      expect(modeled?.uplink).toBeUndefined()
+      expect(modeled?.cancellation).toBeUndefined()
+    }
+
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    expect(artifact?.remote?.dts).toContain(
+      "  RemoteStreamHandle,\n  TypertRemoteContribution,\n} from '@deepseek-ai/dsh-typert-protocol'",
+    )
+    expect(artifact?.remote?.dts).toContain("declare module '@deepseek-ai/dsh-typert-protocol' {")
+    expect(artifact?.remote?.dts).toContain(
+      "'goals/attach': (agentId: AgentId, signal?: AbortSignal) => RemoteStreamHandle<CreateGoalResult, CreateGoalRequest>",
+    )
+    expect(artifact?.remote?.dts).toContain(
+      "'agent:goals/attach': (signal?: AbortSignal) => RemoteStreamHandle<CreateGoalResult, CreateGoalRequest>",
+    )
+    expect(artifact?.remote?.dts).toContain("'goals/tail': () => RemoteStreamHandle<string, never>")
+    expect(artifact?.remote?.dts).toContain("'goals/silent': () => RemoteStreamHandle<string, never>")
+
+    const remoteJs = artifact?.remote?.js
+    if (remoteJs === undefined) throw new Error('RemoteStream fixture emitted no Host-for-Client JavaScript')
+    const executable = remoteJs.replace("from 'zod'", `from ${JSON.stringify(import.meta.resolve('zod'))}`)
+    const generated = await import(`data:text/javascript,${encodeURIComponent(executable)}`) as RuntimeRemoteModule
+    const descriptor = generated.TYPERT_REMOTE.descriptors.find(candidate => candidate.id.endsWith('/attach'))
+    expect(descriptor?.mode).toBe('stream')
+    expect(descriptor?.uplink?.codec.create().safeParse({ title: 'ship' }).success).toBe(true)
+    expect(descriptor?.uplink?.codec.create().safeParse({ title: 1 }).success).toBe(false)
+    expect(descriptor?.cancellation).toEqual({ parameter: 'signal' })
+    expect(generated.TYPERT_REMOTE.descriptors.find(candidate => candidate.id.endsWith('/tail'))?.uplink).toBeUndefined()
+    assertRemoteConsumerTypechecks(artifact?.remote?.dts, artifact?.remote?.dtsMap, root)
+  })
+
+  it.each([
+    {
+      name: 'a stream method returning a Promise',
+      mode: 'stream',
+      method: 'async attach(agent: Agent, signal: AbortSignal): Promise<CreateGoalResult>',
+      message: 'stream Remote methods must return Iterable<Out>, AsyncIterable<Out>, or RemoteStream<Out, In>',
+    },
+    {
+      name: 'an unknown Remote mode',
+      mode: 'duplex',
+      method: 'async *attach(agent: Agent, signal: AbortSignal): AsyncIterable<CreateGoalResult>',
+      message: 'Remote\\(\\) options must contain exactly mode: "stream"',
+    },
+  ])('rejects $name', ({ mode, method, message }) => {
+    const root = copyFixture()
+    const decorator = mode === 'unary' ? '@Remote' : `@Remote({ mode: '${mode}' })`
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace(
+      "  @Remote({ mode: 'stream' })\n  async *watch",
+      `  ${decorator}\n  ${method} {\n    throw new Error('fixture never runs')\n  }\n\n  @Remote({ mode: 'stream' })\n  async *watch`,
+    ))
+
+    expect(() => analyzeRemote(root, false)).toThrow(new RegExp(message))
   })
 
   it('evaluates declaration-merged mapped and conditional boundaries for codecs without widening consumer types', async () => {
@@ -638,6 +972,7 @@ function assertRemoteConsumerTypechecks(
   dts: string | undefined,
   dtsMap: string | undefined,
   sourceRoot = fixtureRoot,
+  extraConsumer = '',
 ): void {
   if (dts === undefined) throw new Error('Remote fixture emitted no Host-for-Client declaration')
   if (dtsMap === undefined) throw new Error('Remote fixture emitted no Host-for-Client declaration map')
@@ -653,6 +988,7 @@ function assertRemoteConsumerTypechecks(
 import remote from '@fixture/remote/remote'
 import type {
   RemoteResult,
+  RemoteStreamHandle,
   TypertRemoteContribution,
   TypertRemoteScopeMap,
   TypertRemoteMap,
@@ -664,10 +1000,12 @@ const contribution: TypertRemoteContribution = remote
 declare const create: TypertRemoteMap['goals/create']
 declare const createScoped: TypertRemoteScopeMap['agent:goals/create']
 declare const rename: TypertRemoteScopeMap['agent:goals/rename']
+declare const watch: TypertRemoteMap['goals/watch']
 const created: Promise<RemoteResult<CreateGoalResult>> = create('agent-1', { title: 'ship' })
 const cancellable: Promise<RemoteResult<CreateGoalResult>> = create('agent-1', { title: 'ship' }, new AbortController().signal)
 const createdScoped: Promise<RemoteResult<CreateGoalResult>> = createScoped({ title: 'ship' })
 const renamed: Promise<RemoteResult<RenameGoalResult>> = rename({ ref: 'goal-1', title: 'land' })
+const watched: RemoteStreamHandle<CreateGoalResult, never> = watch('agent-1')
 declare const ctx: { remote: TypertRemoteNamespaceMap }
 const navigated: Promise<RemoteResult<CreateGoalResult>> = ctx.remote.goals.create('agent-1', { title: 'navigate' })
 void contribution
@@ -675,7 +1013,9 @@ void created
 void cancellable
 void createdScoped
 void renamed
+void watched
 void navigated
+${extraConsumer}
 `
   writeFileSync(consumerPath, consumerSource)
   const configPath = join(consumerRoot, 'tsconfig.consumer.json')

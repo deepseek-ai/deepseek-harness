@@ -66,36 +66,7 @@ interface SpillRef {
 
 ### spill 策略
 
-`dsh-spill-policy` 是一个 `tools/post-execute` 结果转换器，只提供一个配置项：
-
-```ts ignore-check
-interface Config {
-  /** Omitted means no automatic spill policy. Present means apply to oversized plain text tool results. */
-  maxInlineBytes?: number
-}
-```
-
-省略 `maxInlineBytes` 时，插件不会注册任何内容，是真正的无操作。设置该值后，它会对最终的纯文本工具结果应用默认策略：
-
-1. 让工具正常运行，通过 `next()` 委托，使下游监听器先结算结果。
-2. 仅当已接受的最终 `ContentBlock[]` 全部是纯文本时，才将其展平；含任何非文本块的结果保持不变。
-3. 如果 UTF-8 字节大小不超过 `maxInlineBytes`，保持不变。
-4. 如果超出上限，使用完整的最终文本调用 `ctx.spillStore.saveText()`。
-5. 把模型可见结果替换为保留的首尾预览和 spill 引用。
-
-预览属于策略所有的实现默认值：以 `maxInlineBytes` 为上限，使用保留库的 `TextRetainer` 进行首尾分割。只有第二个部署证明有此需求后，未来配置才会公开预览大小。
-
-替换文本刻意保持通用，因为策略只知道最终格式化的工具结果，不了解工具的内部资源：
-
-```text
-<retained preview>
-
-(Omitted N bytes. Full formatted result stored at: /.../session-.../....txt. Use read with offset/limit, or grep this path to search within it.)
-```
-
-如果 `ctx.spillStore.saveText()` 失败（权限、ENOSPC、后端不可用），或调用没有会话所有者，或未加载后端，插件会记录原因并原样返回结果。spill 失败绝不会把成功的工具调用变为 `isError` 结果，也不会隐藏内联结果。
-
-策略跳过 `read`，以避免形成 `read -> spill file -> read again` 循环。额外的选择退出配置要等确实出现第二个有此需求的工具后再引入。
+`dsh-spill-policy` 在执行后策略接受结果之后，按 `maxInlineTokens` 对文字和图片共同计量并保留首尾。完整结果仍通过 `saveText()` 保存，图片本体留在附件存储，结果文件记录可读取路径。图片投影顺序、整图省略和模型计量由[图文结果保留决策](../../implemented/bug-fix/2026-09-21-multimodal-tool-result-retention.zh.md)负责。省略配置时不安装监听器，存储失败时保留原结果；`read` 的模型可见结果跳过自动省略，避免重复读取产生循环。
 
 ## 示例：web_fetch
 
@@ -129,7 +100,7 @@ ctx.tools.register(defineTool({
 - id: spill-policy
   name: '@deepseek-ai/dsh-spill-policy'
   config:
-    maxInlineBytes: 50000
+    maxInlineTokens: 12500
 ```
 
 这项分离很重要。`web-fetch-http` 仍负责资源上限（`maxResponseBytes`、`maxBodyChars`），用来保护网络、内存和解码工作。`spill-policy` 只负责结果已经存在后针对模型上下文的上限。如果提供方已经返回 `truncated: true`，spill 文件包含的是工具返回的完整格式化结果，而不是原始网页全文；策略不会做出其他承诺。
@@ -186,11 +157,11 @@ ctx.tools.register(defineTool({
 
 **快照缺口。** 目前没有 ACP 快照场景覆盖 transcript（文本记录）可见的 `web_fetch` spill 提示。ACP 快照 harness 在无密钥环境中回放，无法访问实时 web，而 `web_fetch` spill 需要一个真实的超上限 HTTP 正文；确定性场景需要一个预置的 loopback fetch 目标，但当前回放树尚未接线（示例根本没有加载 `tool-web`）。该行为改由 `dsh-tool-web` 针对 loopback server 的集成测试覆盖。弥补该缺口属于后续工作：把 `tool-web` 和预置 fetch 目标接入 ACP 示例，然后录制 `web-fetch-spill` 场景。
 
-如果策略开始负责工具专用语义，就会膨胀得过大。它的范围保持狭窄：只处理纯文本最终结果。由工具负责的提前 spill 仍留作未来工作。
+如果策略开始负责工具专用语义，就会膨胀得过大。它处理已接受的图文序列，不解释工具专用的文字语义。由工具负责的提前 spill 仍留作未来工作。
 
 ## 考虑过的替代方案
 
-**要求每个工具通过保留声明选择加入。**不予采纳，因为目标是实现类似 Claude Code 通用工具结果持久化的默认行为。只需一个 `maxInlineBytes` 部署配置项即可验证该形态。
+**要求每个工具通过保留声明选择加入。**不予采纳，因为目标是实现类似 Claude Code 通用工具结果持久化的默认行为。只需一个 `maxInlineTokens` 部署配置项即可验证该形态。
 
 **把 `tool-results` 建成宽泛的工具结果平台。** 不予采纳：宽泛的包名会诱使系统把保留策略、结果替换、预览措辞、搜索和提前 spill 合并进一个 seam。可共享的存储部分更小：保存文本，并返回定位符与检索提示。
 

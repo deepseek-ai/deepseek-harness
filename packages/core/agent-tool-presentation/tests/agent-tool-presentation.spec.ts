@@ -105,7 +105,7 @@ describe('the tool-presentation row', () => {
 
     const { agent, row } = await mount(ctx, { mode: 'ptc' })
 
-    // Pending, not applied: `dsh-agent-presets` rejects a mount holding a row
+    // Pending, not applied: `dsh-agent-preset-registry` rejects a mount holding a row
     // that never reached a usable state, naming this id — so the preset fails
     // where the operator can act, instead of at the first request.
     expect(row.ctx.get('ptcRuntime')).toBeUndefined()

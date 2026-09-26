@@ -1,3 +1,4 @@
+import OTel from '@deepseek-ai/dsh-otel'
 /**
  * OTel backend unit tier: wire assertions against a scripted `node:http`
  * mock collector through the SDK's REAL pipeline (BatchLogRecordProcessor →
@@ -102,6 +103,7 @@ async function mockCollector(
 
 async function boot(url: string) {
   const ctx = new Context()
+  ctx.plugin(OTel)
   await ctx.plugin(SessionStore)
   const fiber = await ctx.plugin(OpenTelemetrySessionBackend, {
     mode: SessionTelemetryMode.FEEDBACK_ONLY,
@@ -187,58 +189,13 @@ describe('OpenTelemetrySessionBackend wire', () => {
     expect(end?.record.severityText).toBe('ERROR')
     const assistant = ledger.find(r =>
       r.record.attributes?.some(a => a.key === 'event.type' && a.value.stringValue === 'assistant/message'))
-    const body = assistant?.record.body as {
-      kvlistValue: { values: { key: string; value: unknown }[] }
+    const content = assistant?.record.attributes?.find(a => a.key === 'content')?.value.stringValue
+    expect(typeof content).toBe('string')
+    expect(JSON.parse(content as string)).toEqual(session.snapshotEvents().find(event => event.type === 'assistant/message'))
+    for (const { record } of ledger) {
+      expect(record).toMatchObject({ eventName: 'session-log', body: { stringValue: 'session-log' } })
+      expect(record.attributes).toContainEqual({ key: 'sessionId', value: { stringValue: session.id } })
     }
-    expect(body.kvlistValue.values.find(value => value.key === 'stream')?.value).toEqual({
-      arrayValue: {
-        values: [
-          {
-            kvlistValue: {
-              values: [
-                { key: 'type', value: { stringValue: 'text-chunks' } },
-                { key: 'time0', value: { intValue: 1_000 } },
-                { key: 'index', value: { intValue: 0 } },
-                { key: 'dt', value: { arrayValue: { values: [{ intValue: 7 }] } } },
-                {
-                  key: 'texts',
-                  value: {
-                    arrayValue: {
-                      values: [
-                        { stringValue: 'first complete chunk' },
-                        { stringValue: 'second complete chunk' },
-                      ],
-                    },
-                  },
-                },
-              ],
-            },
-          },
-          {
-            kvlistValue: {
-              values: [
-                { key: 'type', value: { stringValue: 'chunk' } },
-                { key: 'time', value: { intValue: 1_007 } },
-                {
-                  key: 'chunk',
-                  value: {
-                    kvlistValue: {
-                      values: [
-                        { key: 'type', value: { stringValue: 'finish' } },
-                        {
-                          key: 'reason',
-                          value: { kvlistValue: { values: [{ key: 'kind', value: { stringValue: 'stop' } }] } },
-                        },
-                      ],
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    })
     expect(eventTypes(captures)).not.toContain('manual')
     expect(eventTypes(captures)).toEqual(session.snapshotEvents().map(event => event.type))
     expect(ops).toHaveLength(0)
@@ -255,6 +212,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
       }
     })
     const ctx = new Context()
+    ctx.plugin(OTel)
     await ctx.plugin(SessionStore)
     const fiber = await ctx.plugin(OpenTelemetrySessionBackend, {
       mode: SessionTelemetryMode.FEEDBACK_ONLY,
@@ -280,7 +238,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
     expect(allRecords(captures).some(r => r.scope.endsWith('/ops'))).toBe(false)
   })
 
-  it('bounds the SDK forceFlush wait when an in-flight transport never settles', async () => {
+  it('stops queued sends at the shutdown deadline while observing the active transport', async () => {
     const gate = Promise.withResolvers<boolean>()
     const arrived = Promise.withResolvers<boolean>()
     const { url, captures } = await mockCollector(async (index) => {
@@ -290,6 +248,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
       }
     })
     const ctx = new Context()
+    ctx.plugin(OTel)
     await ctx.plugin(SessionStore)
     const fiber = await ctx.plugin(OpenTelemetrySessionBackend, {
       mode: SessionTelemetryMode.FEEDBACK_ONLY,
@@ -313,12 +272,14 @@ describe('OpenTelemetrySessionBackend wire', () => {
     // the real provider promise remains clean after the test has proved the
     // Cordis disposer no longer waits for it.
     gate.resolve(true)
-    await expect.poll(() => captures.length).toBeGreaterThanOrEqual(2)
+    await expect.poll(() => captures.length).toBe(1)
+    expect(JSON.stringify(captures)).not.toContain('second report')
   })
 
   it('passes exporter options beyond url and headers through to the SDK exporter', async () => {
     const { url, captures } = await mockCollector()
     const ctx = new Context()
+    ctx.plugin(OTel)
     await ctx.plugin(SessionStore)
     // `compression` is a documented SDK exporter option; the advertised
     // verbatim passthrough must hand it (and every other field) to the
@@ -360,6 +321,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
   it('replays each session suffix only at the next feedback event', async () => {
     const { url, captures } = await mockCollector()
     const ctx = new Context()
+    ctx.plugin(OTel)
     await ctx.plugin(SessionStore)
     const fiber = await ctx.plugin(OpenTelemetrySessionBackend, {
       mode: SessionTelemetryMode.FEEDBACK_ONLY,
@@ -396,6 +358,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
   it('ignores direct emits and non-canonical feedback in feedback-only mode', async () => {
     const { url, captures } = await mockCollector()
     const ctx = new Context()
+    ctx.plugin(OTel)
     await ctx.plugin(SessionStore)
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     const fiber = await ctx.plugin(OpenTelemetrySessionBackend, {
@@ -425,6 +388,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
   it('constructs no disabled transport even when exporter options are present', async () => {
     const { url, captures } = await mockCollector()
     const ctx = new Context()
+    ctx.plugin(OTel)
     await ctx.plugin(SessionStore)
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     const fiber = await ctx.plugin(OpenTelemetrySessionBackend, {
@@ -458,18 +422,24 @@ describe('OpenTelemetrySessionBackend wire', () => {
     const { url, captures } = await mockCollector()
 
     const gatedCtx = new Context()
+
+    gatedCtx.plugin(OTel)
     await gatedCtx.plugin(SessionStore)
     const gated = await gatedCtx.plugin(OpenTelemetrySessionBackend, { mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url } })
     expect(gatedCtx.sessionTelemetry.sharing).toBe('feedback-only')
     await gated.dispose()
 
     const disabledCtx = new Context()
+
+    disabledCtx.plugin(OTel)
     await disabledCtx.plugin(SessionStore)
     const disabled = await disabledCtx.plugin(OpenTelemetrySessionBackend, { mode: SessionTelemetryMode.DISABLED })
     expect(disabledCtx.sessionTelemetry.sharing).toBe('disabled')
     await disabled.dispose()
 
     const defaultCtx = new Context()
+
+    defaultCtx.plugin(OTel)
     await defaultCtx.plugin(SessionStore)
     const defaulted = await defaultCtx.plugin(OpenTelemetrySessionBackend, { exporter: { url } })
     expect(defaultCtx.sessionTelemetry.sharing).toBe('feedback-only')
@@ -482,6 +452,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
   it('defaults direct construction to feedback-only delivery', async () => {
     const { url, captures } = await mockCollector()
     const ctx = new Context()
+    ctx.plugin(OTel)
     try {
       await ctx.plugin(SessionStore)
       new OpenTelemetrySessionBackend(ctx, {
@@ -508,6 +479,7 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
   it.each(['deepseek-official', 'mock', undefined])('uploads new text feedback for %s while the host stays alive', async (provider) => {
     const { url, captures } = await mockCollector()
     const ctx = new Context()
+    ctx.plugin(OTel)
     try {
       await ctx.plugin(SessionStore)
       await ctx.plugin(OpenTelemetrySessionBackend, {
@@ -532,6 +504,7 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
   it('does not upload ordinary events, inherited feedback, new/open/resume/fork or HMR', async () => {
     const { url, captures } = await mockCollector()
     const ctx = new Context()
+    ctx.plugin(OTel)
     await ctx.plugin(SessionStore)
     const donor = Session.create(SessionId('stored-feedback'))
     recordFeedback(donor, { text: 'old feedback is not a submission' })
@@ -561,6 +534,7 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
     const { url, captures } = await mockCollector()
     const root = mkdtempSync(join(tmpdir(), 'dsh-otel-live-'))
     const ctx = new Context()
+    ctx.plugin(OTel)
     try {
       await ctx.plugin(SessionStore)
       await ctx.plugin(JsonlPersistence, { root, compression: 'none' })
@@ -571,9 +545,13 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
       const session = ctx.sessions.create(SessionId('live-ratings'))
       const handle = await ctx.sessionPersistence.create(session.header)
       try {
+        session.append('turn/start', { turn: 1 })
+        session.append('step/start', { turn: 1, step: 1 })
         if (provider !== undefined) session.append('request/header', { header: { config: { provider, model: 'm' } }, reason: 'initial' })
         const message = createAssistantMessage({ content: [{ type: 'text', text: 'answer' }], source: { provider: provider ?? 'mock', model: 'm' } })
         session.append('assistant/message', { message, stream: [], turn: 1, step: 1 }, { surfaceOp: 'append' })
+        session.append('step/end', { turn: 1, step: 1 })
+        session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
         const request = { sessionId: session.id, messageId: message.id, rating: 'positive' as const, ifVersion: null }
         const before = session.seq
         expect((await ctx.messageFeedback.put({ ...request, note: ' ' })).ok).toBe(false)
@@ -633,15 +611,20 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
     const { url, captures } = await mockCollector()
     const root = mkdtempSync(join(tmpdir(), 'dsh-otel-cold-fork-'))
     const ctx = new Context()
+    ctx.plugin(OTel)
     try {
       await ctx.plugin(SessionStore)
       await ctx.plugin(JsonlPersistence, { root, compression: 'none' })
       await ctx.plugin(MessageFeedbackService, { maxNoteBytes: 1024 })
       await ctx.plugin(OpenTelemetrySessionBackend, { mode, exporter: { url }, processor: { scheduledDelayMillis: 1 } })
       const parent = Session.create(SessionId('cold-parent'))
+      parent.append('turn/start', { turn: 1 })
+      parent.append('step/start', { turn: 1, step: 1 })
       parent.append('request/header', { header: { config: { provider: 'mock', model: 'm' } }, reason: 'initial' })
       const message = createAssistantMessage({ content: [{ type: 'text', text: 'inherited answer' }], source: { provider: 'mock', model: 'm' } })
       parent.append('assistant/message', { message, stream: [], turn: 1, step: 1 }, { surfaceOp: 'append' })
+      parent.append('step/end', { turn: 1, step: 1 })
+      parent.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
       const child = Session.create(SessionId('cold-child'), parent.snapshotEvents(), {
         ...parent.header, id: SessionId('cold-child'), parentSession: parent.id, isSeeded: true,
       }, parent.seq)
@@ -669,7 +652,8 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
       rmSync(root, { recursive: true, force: true })
     }
     expect(eventTypes(captures)).toEqual([
-      'request/header', 'assistant/message', 'session/end-seed', 'feedback/record', 'feedback/message-put',
+      'turn/start', 'step/start', 'request/header', 'assistant/message', 'step/end', 'turn/end',
+      'session/end-seed', 'feedback/record', 'feedback/message-put',
     ])
     expect(allRecords(captures).some(record => record.scope.endsWith('/ops'))).toBe(false)
   })
@@ -683,6 +667,7 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
     const { url, captures } = await mockCollector()
     const root = mkdtempSync(join(tmpdir(), 'dsh-otel-cold-'))
     const ctx = new Context()
+    ctx.plugin(OTel)
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     try {
       await ctx.plugin(SessionStore)
@@ -690,9 +675,13 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
       await ctx.plugin(MessageFeedbackService, { maxNoteBytes: 1024 })
       await ctx.plugin(OpenTelemetrySessionBackend, { mode, exporter: { url }, processor: { scheduledDelayMillis: 1 } })
       const session = Session.create(SessionId('cold-feedback'))
+      session.append('turn/start', { turn: 1 })
+      session.append('step/start', { turn: 1, step: 1 })
       if (provider !== undefined) session.append('request/header', { header: { config: { provider, model: 'm' } }, reason: 'initial' })
       const message = createAssistantMessage({ content: [{ type: 'text', text: 'answer' }], source: { provider: provider ?? 'mock', model: 'm' } })
       session.append('assistant/message', { message, stream: [], turn: 1, step: 1 }, { surfaceOp: 'append' })
+      session.append('step/end', { turn: 1, step: 1 })
+      session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
       const handle = await ctx.sessionPersistence.create(session.header)
       try {
         await handle.append(session.snapshotEvents())
@@ -762,12 +751,14 @@ describe('OpenTelemetrySessionBackend config fails loud', () => {
     [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, shutdownTimeoutMillis: Number.POSITIVE_INFINITY }, /shutdownTimeoutMillis/],
   ])('rejects %j at plugin load', async (config, message) => {
     const ctx = new Context()
+    ctx.plugin(OTel)
     await ctx.plugin(SessionStore)
     await expect(ctx.plugin(OpenTelemetrySessionBackend, config as Config)).rejects.toThrow(message)
   })
 
   it.each(['INVALID', 'FULL'])('rejects direct mode %s before reading transport config', async (mode) => {
     const ctx = new Context()
+    ctx.plugin(OTel)
     await ctx.plugin(SessionStore)
     let exporterRead = false
     const config = {
@@ -784,6 +775,7 @@ describe('OpenTelemetrySessionBackend config fails loud', () => {
 
   it('does not read any transport setting in disabled mode', async () => {
     const ctx = new Context()
+    ctx.plugin(OTel)
     await ctx.plugin(SessionStore)
     const transportRead = vi.fn(() => {
       throw new Error('transport config was read')
@@ -799,7 +791,7 @@ describe('OpenTelemetrySessionBackend config fails loud', () => {
       get shutdownTimeoutMillis() {
         return transportRead()
       },
-    } as unknown as Config
+    } as Config
 
     new OpenTelemetrySessionBackend(ctx, config)
     expect(transportRead).not.toHaveBeenCalled()
@@ -813,7 +805,7 @@ describe('dsh-session-telemetry-otel real-load-path guard', () => {
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped = loader.unwrapExports(module) as typeof OpenTelemetrySessionBackend
     expect(unwrapped).toBe(OpenTelemetrySessionBackend)
-    expect(unwrapped.inject).toEqual(['sessions'])
+    expect(unwrapped.inject).toEqual(['sessions', 'otel'])
     expect(typeof unwrapped.Config).toBe('function')
   })
 
@@ -823,9 +815,48 @@ describe('dsh-session-telemetry-otel real-load-path guard', () => {
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped = loader.unwrapExports(module) as Parameters<Context['plugin']>[0]
     const ctx = new Context()
+    ctx.plugin(OTel)
     await ctx.plugin(SessionStore)
     const fiber = await ctx.plugin(unwrapped, { mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url } })
     expect(ctx.sessionTelemetry).toBeInstanceOf(OpenTelemetrySessionBackend)
     await fiber.dispose()
   })
+})
+
+it('reports oversized records without failing feedback or exporting their contents', async () => {
+  const { url, captures } = await mockCollector()
+  const ctx = new Context()
+  ctx.plugin(OTel)
+  try {
+    await ctx.plugin(SessionStore)
+    const warn = vi.spyOn(ctx.logger, 'warn')
+    const fiber = await ctx.plugin(OpenTelemetrySessionBackend, {
+      mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url }, maxRequestBytes: 1,
+    })
+    const session = ctx.sessions.create(SessionId('oversized'))
+    expect(() => { recordFeedback(session, { text: 'feedback remains local' }) }).not.toThrow()
+    await fiber.dispose()
+    expect(captures).toEqual([])
+    expect(warn).toHaveBeenCalledWith('Session log record rejected; content was not truncated', expect.any(Error))
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})
+
+it('does not upload a record whose redaction policy removes its canonical envelope', async () => {
+  const { url, captures } = await mockCollector()
+  const { ctx, fiber } = await boot(url)
+  const warn = vi.spyOn(ctx.logger, 'warn')
+  try {
+    ctx.on('session-telemetry/record', (_record, next) => {
+      const { sourceEvent: _sourceEvent, ...redacted } = next()
+      return redacted
+    })
+    recordFeedback(ctx.sessions.create(SessionId('withheld-envelope')), { text: 'withheld' })
+    await fiber.dispose()
+    expect(captures).toEqual([])
+    expect(warn).toHaveBeenCalledWith('Session log record withheld: redaction removed sourceEvent')
+  } finally {
+    await ctx.fiber.dispose()
+  }
 })

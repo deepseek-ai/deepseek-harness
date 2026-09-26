@@ -1,6 +1,37 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-27-web-subagent-conversations.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.md
-2026-07-27-web-subagent-conversations.md: d0713731de86df639a426ee56c39857c50af6bc7
-2026-07-27-web-subagent-conversations.zh.md: 0f4f6467484ee1caa3cdf28f44e016ff674ac1dc
+/agent-note-web-subagent-catalog-and-human-continuation:
+  en: c6373db2300cb803
+  zh: 4d0589f21ec284ff
+/agent-note-web-subagent-catalog-and-human-continuation/problem:
+  en: dfdbe64d34f9e05b
+  zh: 4cb7a92a6d3dc3e3
+/agent-note-web-subagent-catalog-and-human-continuation/decision:
+  en: 8892eea7f62d45ed
+  zh: 18f64966ff53e38b
+/agent-note-web-subagent-catalog-and-human-continuation/design-context:
+  en: da3858c86cf685ff
+  zh: b13ee4f45e3dff7d
+/agent-note-web-subagent-catalog-and-human-continuation/product-contract:
+  en: 2060d607d1cd1ef3
+  zh: e7100887358625c4
+/agent-note-web-subagent-catalog-and-human-continuation/host-adapter-and-wire-contract:
+  en: e0e82599b0a8d3bf
+  zh: e671e1f0f98795b4
+/agent-note-web-subagent-catalog-and-human-continuation/client-object-layer-and-presentation:
+  en: c0c891d86b1f7e1e
+  zh: c7b8da2bee81755d
+/agent-note-web-subagent-catalog-and-human-continuation/default-web-assembly:
+  en: 6d4d8db99535aa18
+  zh: 803554b55a67acb1
+/agent-note-web-subagent-catalog-and-human-continuation/alternatives-considered:
+  en: 427f0a8ace8ad692
+  zh: 876771621858f77d
+/agent-note-web-subagent-catalog-and-human-continuation/testing:
+  en: 0c2f7f5cc473ecff
+  zh: 00b2c22e109b3429
+/agent-note-web-subagent-catalog-and-human-continuation/consequences:
+  en: 143fc76c6d09e8fb
+  zh: 01a042fb32b0d6e0

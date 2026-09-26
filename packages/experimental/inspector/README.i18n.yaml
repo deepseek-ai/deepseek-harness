@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/inspector/README.md
-README.md: 2b2986d49bbc970c70cc7bc85de38ba6fb6d9593
-README.zh.md: a24b17d3a8a88736fe5efe83b4185de9379b5903
+/:
+  en: ff4e1ec5ccd5d0b3
+  zh: d29383843e3decc8
+/deepseek-ai-dsh-experimental-inspector:
+  en: 1060bee3ef37134d
+  zh: 7a7b0096714f4279
+/deepseek-ai-dsh-experimental-inspector/summary:
+  en: 65ed8a4c21915cc0
+  zh: dcb1ae527e6bfc8c
+/deepseek-ai-dsh-experimental-inspector/table-of-contents:
+  en: 2650c2b268bf6dff
+  zh: 43a08863d2c75ad1
+/deepseek-ai-dsh-experimental-inspector/runtime-layout:
+  en: a713d2910acf48c9
+  zh: 152dcdba78e73115
+/deepseek-ai-dsh-experimental-inspector/configuration:
+  en: 95f1c9c4ea6ba8b8
+  zh: 16b56e2dd8c7408a
+/deepseek-ai-dsh-experimental-inspector/observation-api:
+  en: d32f994e6c9d0c4a
+  zh: ac2f35f5799aeae0
+/deepseek-ai-dsh-experimental-inspector/cordis-tree-inspection:
+  en: 9abe1a8cd52386fb
+  zh: a5e96ec22a503153
+/deepseek-ai-dsh-experimental-inspector/host-fetch-capture:
+  en: 187859f65acc45d7
+  zh: 606e93905c8275e6
+/deepseek-ai-dsh-experimental-inspector/security:
+  en: 2372c96aba1ce7e6
+  zh: 823ceaa99cfb1f6a
+/deepseek-ai-dsh-experimental-inspector/model-experience:
+  en: 6ac8fb2f45b3a97c
+  zh: 9162ffb1a133e11b
+/deepseek-ai-dsh-experimental-inspector/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: 64715dc7e6d02f71
+/deepseek-ai-dsh-experimental-inspector/known-limitations-and-deferred-work:
+  en: a35e1559aff5e7aa
+  zh: fbe20422dbe4a0f6
+/deepseek-ai-dsh-experimental-inspector/known-limitations-and-deferred-work/dev-note:
+  en: 59a59a4788c80163
+  zh: db23a6b9dc0880ba

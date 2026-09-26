@@ -29,7 +29,7 @@ function committedSessionFixtures(directory: string): string[] {
 function declaresFormat(text: string): boolean {
   const firstLine = text.split(/\r?\n/).find(line => line.trim().length > 0)
   if (firstLine === undefined) return false
-  const header = JSON.parse(firstLine) as unknown
+  const header: unknown = JSON.parse(firstLine)
   return header !== null && typeof header === 'object' && !Array.isArray(header)
     && Object.hasOwn(header, 'version')
 }

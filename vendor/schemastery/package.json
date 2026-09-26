@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/schemastery",
   "description": "Type driven schema validator",
-  "version": "3.18.2",
+  "version": "3.18.4",
   "publishConfig": {
     "access": "public"
   },
@@ -34,6 +34,6 @@
   "license": "MIT",
   "dependencies": {
     "@standard-schema/spec": "^1.1.0",
-    "@deepseek-ai/cosmokit": "workspace:^"
+    "@deepseek-ai/cosmokit": "workspace:~"
   }
 }

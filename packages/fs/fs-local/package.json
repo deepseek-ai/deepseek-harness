@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-fs-local",
   "description": "Local-filesystem implementation of the DeepSeek Harness filesystem seam (ctx.fs)",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -27,16 +27,17 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-fs": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/dsh-fs": "workspace:*",
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "dependencies": {
+    "chokidar": "^4.0.3",
     "koffi": "^3.1.0",
-    "@deepseek-ai/schemastery": "workspace:^"
+    "@deepseek-ai/schemastery": "workspace:~"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-fs": "workspace:^",
-    "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/dsh-fs": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/cordis": "workspace:~"
   }
 }

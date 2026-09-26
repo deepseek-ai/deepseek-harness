@@ -38,6 +38,11 @@ function atRevision(url: string, rev: string): string {
 
 const CLIENT_CHUNK = /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 
+/** The message of a thrown value: an Error's message, anything else stringified. */
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 /** Internal module-table key for one package-local chunk. */
 function chunkId(ownerId: string, fileName: string): string {
   return `${ownerId}/${fileName}`
@@ -101,6 +106,12 @@ export class ClientModuleSystem implements ClientModuleLoader {
   private readonly materializing = new Set<string>()
   private readonly graphRows = new Map<string, BootModuleRow>()
   private readonly loadBundle: (url: string) => Promise<void>
+  /** Last import or prefetch failure per graph row, cleared by a later success or invalidation. */
+  private readonly importErrors = new Map<string, Error>()
+  /** Batch URLs whose transport or execution already failed; rows still missing from them go straight to their one-resource URL. */
+  private readonly failedBundleUrls = new Set<string>()
+  /** Every URL whose script has executed once; a batch among them is never requested again. */
+  private readonly executedBundleUrls = new Set<string>()
 
   /**
    * Build the module system over the parsed boot rows.
@@ -161,25 +172,75 @@ export class ClientModuleSystem implements ClientModuleLoader {
     })
   }
 
-  /** Load one graph row so its factory is registered (idempotent per in-flight arrival). */
-  private arrive(row: BootModuleRow): Promise<void> {
-    const { id } = row
-    if (this.loadCache.has(id) || this.factories.has(id)) return Promise.resolve()
-    const reload = this.reloadTargets.get(id)
-    const url = reload?.url ?? row.initialUrl
+  /** Run one bundle transport per URL; every row waiting on the same URL shares the in-flight request. */
+  private loadShared(url: string): Promise<void> {
     let transport = this.pendingArrival.get(url)
     if (transport === undefined) {
-      transport = this.loadBundle(url).finally(() => { this.pendingArrival.delete(url) })
+      transport = this.loadBundle(url)
+        .then(() => { this.executedBundleUrls.add(url) })
+        .finally(() => { this.pendingArrival.delete(url) })
       this.pendingArrival.set(url, transport)
     }
-    return transport.then(() => {
-      if (!this.factories.has(id)) {
-        throw new Error(`client-modules: bundle ${url} loaded without registering "${id}" via __ModuleLoader__.load`)
+    return transport
+  }
+
+  /**
+   * Load one graph row so its factory is registered (idempotent per in-flight
+   * arrival). A batch script is one classic script that registers every
+   * package in sequence, and {@link register} rejects a second registration,
+   * so the two failure kinds differ: a transport failure (`error` event, nothing
+   * executed) is retried once on the same URL; a script that loaded without
+   * registering this row (a parse error registered nothing, or a runtime throw
+   * stopped it after registering others) is never re-executed, because a replay
+   * would stop again at the first duplicate registration; that holds even when
+   * the row that first imports from the batch is one it did register, because
+   * every executed batch URL is remembered. Either way the row then falls back
+   * to its own one-resource URL, which the Host serves for every package, so one
+   * failed batch costs at most three requests per missing row and never fails
+   * the rows that were registered.
+   */
+  private async arrive(row: BootModuleRow): Promise<void> {
+    const { id } = row
+    if (this.loadCache.has(id) || this.factories.has(id)) return
+    const reload = this.reloadTargets.get(id)
+    const preferred = reload?.url ?? row.initialUrl
+    const fallback = reload === undefined && row.url !== preferred ? row.url : undefined
+    const failures: string[] = []
+    const attempt = async (url: string): Promise<'registered' | 'transport-failed' | 'not-registered'> => {
+      try {
+        await this.loadShared(url)
+      } catch (error) {
+        failures.push(`${url}: ${describeError(error)}`)
+        return 'transport-failed'
       }
-      if (reload !== undefined && this.reloadTargets.get(id) === reload) {
-        this.reloadTargets.delete(id)
-      }
-    })
+      if (this.factories.has(id)) return 'registered'
+      failures.push(`${url}: loaded without registering "${id}" via __ModuleLoader__.load`)
+      return 'not-registered'
+    }
+    let outcome: Awaited<ReturnType<typeof attempt>> = 'transport-failed'
+    if (this.failedBundleUrls.has(preferred)) {
+      failures.push(`${preferred}: skipped after an earlier failure of this bundle`)
+    } else if (fallback !== undefined && this.executedBundleUrls.has(preferred)) {
+      // The batch already ran (an earlier importer was a row it did register)
+      // and this row is still missing: a replay would stop at the first
+      // duplicate registration.
+      failures.push(`${preferred}: already executed without registering "${id}"`)
+      outcome = 'not-registered'
+      this.failedBundleUrls.add(preferred)
+    } else {
+      outcome = await attempt(preferred)
+      if (outcome === 'transport-failed') outcome = await attempt(preferred)
+      // Only a batch URL is remembered: a one-resource URL has no fallback and
+      // stays retryable on the next import, as before.
+      if (outcome !== 'registered' && fallback !== undefined) this.failedBundleUrls.add(preferred)
+    }
+    if (outcome !== 'registered' && fallback !== undefined) outcome = await attempt(fallback)
+    if (outcome !== 'registered') {
+      throw new Error(`client-modules: could not load "${id}": ${failures.join('; ')}`)
+    }
+    if (reload !== undefined && this.reloadTargets.get(id) === reload) {
+      this.reloadTargets.delete(id)
+    }
   }
 
   /** Register each injected package and unresolved dynamic request before its consumer. */
@@ -202,13 +263,30 @@ export class ClientModuleSystem implements ClientModuleLoader {
       const id = stripClientSuffix(request)
       if (this.seed.has(request) || this.loadCache.has(id)) continue
       const dependency = this.graphRows.get(id)
-      if (dependency !== undefined) await this.arriveGraphRow(dependency, next, visited)
+      if (dependency !== undefined) await this.arriveDependency(row.id, dependency, next, visited)
     }
     for (const packageName of row.inject) {
       const dependency = this.graphRows.get(packageName)
-      if (dependency !== undefined) await this.arriveGraphRow(dependency, [], visited)
+      if (dependency !== undefined) await this.arriveDependency(row.id, dependency, [], visited)
     }
     await this.arrive(row)
+  }
+
+  /** Arrive one dependency, naming the consumer it failed for so a cascade reads as a chain, not as 44 unrelated failures. */
+  private async arriveDependency(
+    consumerId: string,
+    dependency: BootModuleRow,
+    open: readonly string[],
+    visited: Set<string>,
+  ): Promise<void> {
+    try {
+      await this.arriveGraphRow(dependency, open, visited)
+    } catch (error) {
+      throw new Error(
+        `client-modules: "${consumerId}" not loaded because dependency "${dependency.id}" failed: ${describeError(error)}`,
+        { cause: error },
+      )
+    }
   }
 
   /** Materialize a registered factory (synchronous; memoized in loadCache). */
@@ -298,15 +376,17 @@ export class ClientModuleSystem implements ClientModuleLoader {
     const existing = this.loadCache.get(id)
     if (existing !== undefined) return existing.exports
     const row = this.graphRows.get(id)
-    if (row !== undefined) {
-      await this.arriveGraphRow(row)
-    } else if (!this.factories.has(id)) {
+    if (row === undefined) {
+      if (this.factories.has(id)) return this.materialize(id).exports
       throw new Error(
         `client-modules: cannot resolve "${specifier}" — not a seed word, not a materialized module, `
         + 'and not a row in the boot graph (the runtime mirror of the bundle purity gate)',
       )
     }
-    return this.materialize(id).exports
+    return this.recordingImportError(id, async () => {
+      await this.arriveGraphRow(row)
+      return this.materialize(id).exports
+    })
   }
 
   async prefetch(id: string): Promise<void> {
@@ -314,7 +394,28 @@ export class ClientModuleSystem implements ClientModuleLoader {
     if (this.loadCache.has(normalized)) return
     const row = this.graphRows.get(normalized)
     if (row === undefined) throw new Error(`client-modules: prefetch("${id}") — not a graph entry`)
-    await this.arriveGraphRow(row)
+    await this.recordingImportError(normalized, () => this.arriveGraphRow(row))
+  }
+
+  importError(id: string): Error | undefined {
+    return this.importErrors.get(stripClientSuffix(id))
+  }
+
+  /**
+   * Run one graph-row operation, recording its failure for the boot audit and
+   * clearing the record on success. Arrival and materialization both run in
+   * here, so a factory that throws is recorded as well as a bundle that never
+   * arrived; the Loader only sees a missing fiber either way.
+   */
+  private async recordingImportError<T>(id: string, operation: () => Promise<T>): Promise<T> {
+    try {
+      const result = await operation()
+      this.importErrors.delete(id)
+      return result
+    } catch (error) {
+      this.importErrors.set(id, error instanceof Error ? error : new Error(describeError(error)))
+      throw error
+    }
   }
 
   /** Refresh descriptors and unowned factory revisions before any entry imports its dependencies. */
@@ -361,6 +462,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
   invalidate(id: string, rev?: string): void {
     const normalized = stripClientSuffix(id)
     if (this.bootstrapIds.has(normalized)) return
+    this.importErrors.delete(normalized)
     this.generations.set(normalized, (this.generations.get(normalized) ?? 0) + 1)
     const row = this.graphRows.get(normalized)
     if (row !== undefined) {

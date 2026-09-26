@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-05-canonical-feedback-log.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-05-canonical-feedback-log.md
-2026-09-05-canonical-feedback-log.md: ce7b705b24cb0a4f7432215e19589095a9afc719
-2026-09-05-canonical-feedback-log.zh.md: 7d970ff7aea4962ea52c764fec5b6c07e3669099
+/agent-note-canonical-feedback-log-and-request-delivery:
+  en: 7dd56e2d495370cf
+  zh: 0977ed8b2f45dbe5
+/agent-note-canonical-feedback-log-and-request-delivery/problem:
+  en: 702e5973c264ec35
+  zh: 71b095565593629c
+/agent-note-canonical-feedback-log-and-request-delivery/decision:
+  en: 7ae952bbc9193865
+  zh: f120bed1d1782470
+/agent-note-canonical-feedback-log-and-request-delivery/alternatives-considered:
+  en: 9ddfc84ac3a25f3b
+  zh: f185250a0ec512ba
+/agent-note-canonical-feedback-log-and-request-delivery/consequences:
+  en: f1f99907cd77bdef
+  zh: e97b76e4a19c5581

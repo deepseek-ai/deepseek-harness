@@ -36,7 +36,7 @@ interface SidebarRightTabDefinition {
 
 `priority` 是三个字面量档位之一，写成字符串，好让别的包的类型不需要任何运行时引入：`extension` 是来自产品之外的类型的档位也是最高档，所以什么都不声明的类型压过这里随包交付的每个查看器；`builtin` 是随包类型的常规档；`fallback` 是任何更具体的东西都应压过的纯内容位置，VS Code 的文本编辑器隐含地占据它，我们的文本预览明确地占据它。`candidates(address)` 返回 glob 命中且 `canOpen` 未否决的每个类型，按档位、再按命中的最长 pattern 长度、再按注册顺序排序。`claim(address, kind?)` 取最佳候选，或在调用方指定时取该 kind 生效的类型（不查它的 glob；点名即决定），对无人愿开的地址抛错——这是接线错误，不是用户错误。`get(kind)` 返回生效类型；`entries()` 与 `guide()` 列出生效类型及其引导入口；`subscribe` 观察变化。
 
-`title(address)`、`guide[].title()` 与可选的 `guide[].description()` 都是每次使用时重读的 thunk，语言切换无需重新注册。[引导起始页与统计 pill 的细化](../feature/2026-09-10-guide-start-page-and-stat-pill-refinements.zh.md)负责当前的描述显示与兜底图标规则。注册表本身是 `apply` 顶层提供的普通对象，**不带** `Service.tracker`：tracker 会把 `this.ctx` 重绑到调用方上下文，跨包 `register()` 就会在调用方 fiber 仍是活动作用域时往它上加 effect，浏览器启动会无声卡死。
+`title(address)`、`guide[].title()` 与可选的 `guide[].description()` 都是每次使用时重读的 thunk，语言切换无需重新注册。[Sidebar README](../../../../packages/client/ui-sidebar-right/README.zh.md#the-guide)定义描述显示与兜底图标规则。注册表本身是 `apply` 顶层提供的普通对象，**不带** `Service.tracker`：tracker 会把 `this.ctx` 重绑到调用方上下文，跨包 `register()` 就会在调用方 fiber 仍是活动作用域时往它上加 effect，浏览器启动会无声卡死。
 
 ### 正文与标题：按定义 `id` keyed 的 Slot 坑位
 
@@ -116,6 +116,5 @@ interface SidebarRightTabParamsMap {}        // key: kind — a page type declar
 ## Deferred
 
 - `sidebar://<kind>` 之外的导航协议：页内子路由、点名实现、以及面向生态的其它导航 scheme 规则。
-- 随包页类型的参数，今天未声明任何。
 - 从公开面往屏上会话之外的会话里打开；公开面只作用于已挂载的会话，而 tab 自己的动作已作用于其所在会话。
 - 从会话区打开失败时的本地化提示；目前是抛错文本本身。

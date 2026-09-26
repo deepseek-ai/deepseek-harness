@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-借助 `dsh-typert-protocol`，业务包可以向 Remote 客户端暴露 Host 方法：用 `@Remote`（作用域接收者用 `@RemoteScope`）标记方法，把服务绑定到 wire 命名空间，并通过可合并扩展的协议映射把 Host 对象与作用域 Context 关联到 wire identity。生成产物、Host Gateway 与 Client API 消费同一套调用描述符、编解码器与提供方约定，因此一套声明在每个 face 上保持一致。本包不注册任何 Cordis 服务，也不运行 TypeScript 分析；它只声明类型与装饰器标记。
+借助 `dsh-typert-protocol`，业务包可以向 Remote 客户端暴露 Host 方法：用 `@Remote`（作用域接收者用 `@RemoteScope`）标记方法，把服务绑定到 wire 命名空间，并通过可合并扩展的协议映射把 Host 对象与作用域 Context 关联到 wire identity。生成产物、Host Gateway 与 Client API 消费同一套调用描述符、编解码器与提供方约定。调用持有的值把清理责任交给 Gateway，不另增引用计数。本包不注册任何 Cordis 服务，也不运行 TypeScript 分析。
 
 ## 目录
 
@@ -44,9 +44,15 @@ export class GoalService extends TypertRemoteService {
 
 生成会把方法变为服务命名空间下的 wire 端点；Client 通过 `ctx.remote` 以类型化方法调用它（见 [API Gateway 参考](../../../docs/api-gateway.zh.md)）。方法把 `signal: AbortSignal` 声明为最后一个参数即可选择协作式取消——该信号是注入的，绝不会成为 JSON 参数或查找字段。
 
+一元方法可以直接返回 `Uint8Array`，也可以将其放在嵌套对象、数组、元组、可选字段、联合类型和递归类型中。生成器提供可选的结果 codec `encode()` 和 `decode()`：编码仅访问类型可能包含字节的子树，解码则校验还原后的值；Client 声明在每个字节位置使用 `Uint8Array<ArrayBuffer>`，同时保留其他字段类型。纯 JSON 结果不经 Host 字节识别或 Client 解析直接传递。参数、事件与流条目仍仅支持 JSON；不支持运行时对象循环。
+
+流方法（`@Remote({ mode: 'stream' })`）返回 `Iterable`、`AsyncIterable` 或 `RemoteStream<Out, In>`。`In` 声明 Client 可以在同一条逻辑流上回送的项；方法通过 `this.ctx.invocation.uplink<In>()` 读取它们，描述符携带其 codec。`RemoteInvocation` 还给出接收服务 `service`、发起调用的 `peer`（连接层接纳的一个 `PeerScope`）与载体 `signal`；非 Remote 调用派生的 Context 上 `ctx.invocation` 为 `undefined`：树中第一个 `bindTypertRemote()` 绑定（每个 `TypertRemoteService` 构造函数都会建立一个）在根上注册该 accessor。生成的 Client 流方法返回 `RemoteStreamHandle<Out, In>`：在下行迭代之外提供 `send`、`end` 与 `dispose` 的句柄。上行项在 Host 逐项校验，因为它们来自浏览器；下行项是 Host 方法产出的值，原样透传。
+
 ### 把 Host 对象与 Context 关联到 wire identity
 
 复杂的 Host 对象不能直接跨 wire 传输。业务包通过可合并扩展的 `TypertLookupMap` 与 `TypertContextMap` 声明关联。Host Context 适配器拥有稳定 wire 声明，并把 wire identity 解析为活跃 Context。Client Context 适配器需要双向映射，因为作用域调用从 Client Context 发起，而转发的 Host 事件要在 Client 侧解析其显式 wire identity。Host 组合可以覆盖其同步或异步解析器。因策略原因拒绝解析的解析器会抛出带有自身错误码的 `RemoteError`，该码原样到达调用方。
+
+Client Context 解析保持同步。`typertOwnedValue(value, release)` 把不抛异常、幂等的清理交给调用 owner；Gateway 在处理器和回复均结束后调用它。借用的 Context 不需要清理包装层。共享的 `TYPERT_OWNED_VALUE` symbol 与 `isTypertOwnedValue` 识别函数可跨独立打包的提供方与 Gateway 使用；包装层自身不会 retain 资源。
 
 ### 报告与读取 Remote 失败
 
@@ -87,7 +93,7 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 
 ### 协议映射与描述符
 
-可合并扩展的协议映射在类型系统中保留静态关联，运行时提供方则向 `ctx.typert` 注册解析；映射的名称与形状见 [`src/types.ts`](src/types.ts)。`InvocationDescriptor` 是注册表、Gateway 与 Client Remote 共同消费的共享运行时形式，涵盖直接与 Context 接收者、JSON 与查找参数、作用域投影、取消与结果编解码器。
+可合并扩展的协议映射在类型系统中保留静态关联，运行时提供方则向 `ctx.typert` 注册解析；映射的名称与形状见 [`src/types.ts`](src/types.ts)。`InvocationDescriptor` 是注册表、Gateway 与 Client Remote 共同消费的共享运行时形式，涵盖直接与 Context 接收者、JSON 与查找参数、作用域投影、上行编解码器、取消与结果编解码器。
 
 ### Wire 标识文法
 
@@ -98,8 +104,9 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 装饰器、Gateway 绑定、`remoteMethods`、段校验 |
+| [`src/json-value.ts`](src/json-value.ts) | 各载体共享的无损 JSON 校验 `isRemoteJsonValue` 与 `isRemoteUplinkItem` |
 | [`src/remote-error.ts`](src/remote-error.ts) | `RemoteError` 与结构式识别函数 `remoteErrorOf` |
-| [`src/types.ts`](src/types.ts) | 协议映射、`RemoteErrorDetailsMap`、`RemoteResult`、`InvocationDescriptor`、编解码器、提供方约定、注册表接口、`TypertClientRemote` |
+| [`src/types.ts`](src/types.ts) | 协议映射、`RemoteErrorDetailsMap`、`RemoteResult`、`RemoteStream`、`RemoteStreamHandle`、`PeerScope`、`RemoteInvocation`、`InvocationDescriptor`、编解码器、提供方约定、注册表接口、`TypertClientRemote` |
 | — | 不发布运行时不变量伴生入口；decorator 只保留私有不可变声明，binding 也是冻结值，没有可供交叉核对的独立事件流。 |
 
 </details>

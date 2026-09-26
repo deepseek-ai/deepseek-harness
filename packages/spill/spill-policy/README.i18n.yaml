@@ -1,6 +1,82 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/spill/spill-policy/README.md
-README.md: 94dd23e5c8eb278753fa8a7d325ed15669c1417a
-README.zh.md: 11ba328b85685f98ef3585a99fb06a034224c58b
+/:
+  en: 07748986630e8da3
+  zh: 4ff004a12b883fdf
+/deepseek-ai-dsh-spill-policy:
+  en: e3d75c128bb2f4b9
+  zh: 15daa9f8f3efaabd
+/deepseek-ai-dsh-spill-policy/summary:
+  en: 225c013f0f230c37
+  zh: 30634801496c205f
+/deepseek-ai-dsh-spill-policy/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-spill-policy/use-this-package:
+  en: 52e3b36ee5b98e7f
+  zh: 98380821aa7cde9d
+/deepseek-ai-dsh-spill-policy/use-this-package/minimal-configuration:
+  en: a5d85ae7f7962b9e
+  zh: 73c44a9413c3c8cf
+/deepseek-ai-dsh-spill-policy/use-this-package/what-the-model-sees:
+  en: 7cb5bba705975712
+  zh: 26adbdee1252d2bb
+/deepseek-ai-dsh-spill-policy/use-this-package/which-results-are-affected:
+  en: c419117e6b5f84f8
+  zh: 1a43afb623346603
+/deepseek-ai-dsh-spill-policy/use-this-package/best-effort-failure-behavior:
+  en: b4d94d99a8a9e52f
+  zh: d5cec6295cbf5ef6
+/deepseek-ai-dsh-spill-policy/use-this-package/the-durable-log-copy:
+  en: b72e6e88ada5a957
+  zh: 5c6167651618738a
+/deepseek-ai-dsh-spill-policy/understand-the-implementation:
+  en: bb7cedc768113c0e
+  zh: ca05828dfe63b233
+/deepseek-ai-dsh-spill-policy/understand-the-implementation/design-philosophy:
+  en: a8e0d6d0651401c0
+  zh: 0e159fc19caf9300
+/deepseek-ai-dsh-spill-policy/understand-the-implementation/the-two-arms:
+  en: a9233181feb1afb4
+  zh: e54f1498a0dea843
+/deepseek-ai-dsh-spill-policy/understand-the-implementation/shared-notice-ownership:
+  en: 916aa902ea376c42
+  zh: 51fbf25c1f1560d7
+/deepseek-ai-dsh-spill-policy/understand-the-implementation/source-map:
+  en: 9a63af71cc19194d
+  zh: 0937a72b5444cff2
+/deepseek-ai-dsh-spill-policy/understand-the-implementation/failure-modes:
+  en: 5640d59fdf0e064f
+  zh: 7f92c52a1bdf5bff
+/deepseek-ai-dsh-spill-policy/further-exploration:
+  en: 2b5860d2cc9a6523
+  zh: 006157ad7bc92891
+/deepseek-ai-dsh-spill-policy/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-spill-policy/model-experience/oversized-text-and-image-results:
+  en: 99c96010474af9cf
+  zh: 9a25fa709f21a494
+/deepseek-ai-dsh-spill-policy/model-experience/oversized-text-and-image-results/what-the-model-sees:
+  en: a701c098db84aff5
+  zh: 2b04abc792def1a2
+/deepseek-ai-dsh-spill-policy/model-experience/oversized-text-and-image-results/token-effect:
+  en: 02ec4218006ecb65
+  zh: 62f1d481ebf0c665
+/deepseek-ai-dsh-spill-policy/model-experience/oversized-text-and-image-results/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: bee82b41983a66a0
+/deepseek-ai-dsh-spill-policy/known-limitations-and-deferred-work:
+  en: bd38d2abae4cb4e6
+  zh: 29acb530988ee2bd
+/deepseek-ai-dsh-spill-policy/known-limitations-and-deferred-work/dev-note:
+  en: a63e51f03bdb279f
+  zh: 191a48d3bfc4a792
+/deepseek-ai-dsh-spill-policy/known-limitations-and-deferred-work/dev-note/future-per-tool-configuration:
+  en: 7e6c4300e87f3f07
+  zh: 7b97be5218905ecc
+/deepseek-ai-dsh-spill-policy/known-limitations-and-deferred-work/dev-note/future-earlier-spill:
+  en: dbb9f9fe93996893
+  zh: d9d3c1a46ea67595

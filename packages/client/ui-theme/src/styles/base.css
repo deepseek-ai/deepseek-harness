@@ -6,10 +6,27 @@
 :root {
   --dsw-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-family-brand: 'Montserrat', var(--dsw-font-family);
   --ds-font-family-code: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas,
     'Liberation Mono', Menlo, Courier, 'PingFang SC', 'Microsoft YaHei';
   --ds-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --ds-transition-duration: 0.2s;
   --ds-transition-duration-fast: 0.1s;
   --ds-transition-duration-slow: 0.3s;
+  --dsw-radius-xs: 4px;
+  --dsw-radius-sm: 8px;
+  --dsw-radius-md: 12px;
+  --dsw-radius-lg: 16px;
+  --dsw-radius-xl: 20px;
+  --dsw-radius-panel: 28px;
+}
+
+body {
+  --dsw-alias-settings-card-fill: var(--dsw-alias-bg-layer-2);
+  --dsw-alias-settings-card-stroke: var(--dsw-alias-border-l4);
+}
+
+[data-dsh-automatic-focus]:focus,
+[data-dsh-automatic-focus]:focus:focus-visible {
+  outline: none;
 }

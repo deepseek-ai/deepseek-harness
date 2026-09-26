@@ -1,6 +1,70 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/modules/README.md
-README.md: 5b751268430b716e7a0af24f8e25aaf2f865d079
-README.zh.md: 4152d64ca9dde60ab1aeb76c98508d8d86fcf54e
+/:
+  en: 97d39db1617684ea
+  zh: de11ba354583a044
+/deepseek-ai-dsh-client-modules:
+  en: ee2f6f3ccafafa13
+  zh: 3a37d4c4b69708dd
+/deepseek-ai-dsh-client-modules/summary:
+  en: ab7ece5891dd6289
+  zh: b9b5baab328be517
+/deepseek-ai-dsh-client-modules/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-modules/use-this-package:
+  en: 25f536f156ec0bcc
+  zh: a522355b3e0edeae
+/deepseek-ai-dsh-client-modules/use-this-package/declaring-a-client-plugin:
+  en: d4a7f865f4593724
+  zh: 4313eb8fe9cd5c98
+/deepseek-ai-dsh-client-modules/use-this-package/what-the-browser-loads:
+  en: 1383d68472b3c057
+  zh: 94dd7d9abbdbccf3
+/deepseek-ai-dsh-client-modules/use-this-package/live-plugin-composition:
+  en: 45740a56e931d094
+  zh: b3362af77c804459
+/deepseek-ai-dsh-client-modules/use-this-package/sharing-modules:
+  en: 0aaf0693db8bb203
+  zh: 9f4738cdc6b55c26
+/deepseek-ai-dsh-client-modules/use-this-package/build-requirements:
+  en: b6a4d3b901c89efe
+  zh: 615b5f3eec41f281
+/deepseek-ai-dsh-client-modules/understand-the-implementation:
+  en: 7ab11d2c2bdc6eaa
+  zh: 54c3c9091cf59711
+/deepseek-ai-dsh-client-modules/understand-the-implementation/design-concept:
+  en: 49dcadc166c2d06e
+  zh: bbf67c6dc47f4ead
+/deepseek-ai-dsh-client-modules/understand-the-implementation/lazy-cjs-model:
+  en: 6d16b74acb333e3b
+  zh: fcb3a20cc8c39e4a
+/deepseek-ai-dsh-client-modules/understand-the-implementation/incremental-composition:
+  en: 1b54c654b3f7344d
+  zh: c20d3499b51f0b4d
+/deepseek-ai-dsh-client-modules/understand-the-implementation/boot-manifest-injection:
+  en: 253d9f265cd83ed0
+  zh: 9d0f8df84d9d3ac9
+/deepseek-ai-dsh-client-modules/understand-the-implementation/entry-ownership:
+  en: ae59769034d692fa
+  zh: f71914d6f39b033a
+/deepseek-ai-dsh-client-modules/understand-the-implementation/source-map:
+  en: fabe9db8c44e2d90
+  zh: 89ca94a8161f57ed
+/deepseek-ai-dsh-client-modules/further-exploration:
+  en: 7e5b283efe4f1d16
+  zh: 79472b64a0d759fe
+/deepseek-ai-dsh-client-modules/model-experience:
+  en: abb2fc0416e1482c
+  zh: 0e8a913d424a0c28
+/deepseek-ai-dsh-client-modules/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-client-modules/known-limitations-and-deferred-work:
+  en: d0908712f037c479
+  zh: 14034e5df3c34e7f
+/deepseek-ai-dsh-client-modules/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

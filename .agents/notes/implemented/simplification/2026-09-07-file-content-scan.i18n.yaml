@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-07-file-content-scan.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-07-file-content-scan.md
-2026-09-07-file-content-scan.md: bf4f03ee5a7134b11c7cbec322b0a37a3f2a6304
-2026-09-07-file-content-scan.zh.md: 5efb1589b036f80b46752a80103c080952c82396
+/agent-note-scan-file-content-without-per-array-callbacks:
+  en: a814034fce2407dc
+  zh: 7de9ec55cbbb30ab
+/agent-note-scan-file-content-without-per-array-callbacks/problem:
+  en: cb13a0053453cf45
+  zh: ce40afb7fa03f9ed
+/agent-note-scan-file-content-without-per-array-callbacks/decision:
+  en: e3d83658869a24f7
+  zh: 44dd61458a47df6c
+/agent-note-scan-file-content-without-per-array-callbacks/measurement-evidence:
+  en: ad23fa4ee386f3cf
+  zh: 41e54e28d26b3d02
+/agent-note-scan-file-content-without-per-array-callbacks/alternatives-considered:
+  en: 0128940c217dd77c
+  zh: 9394e713dac9675d
+/agent-note-scan-file-content-without-per-array-callbacks/consequences:
+  en: dace71e8857e57b1
+  zh: 0ee88fdaa4e067ee

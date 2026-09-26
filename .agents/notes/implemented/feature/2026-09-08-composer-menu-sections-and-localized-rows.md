@@ -18,9 +18,9 @@ A menu pick fills the locale's claim token: under Chinese, picking Plan fills `/
 
 The File row is an `action` contribution: a bare invocation consumes the trigger token and runs a client callback without submitting a message. Conversation owns that registration, its live availability, and the hidden file input. The menu replaces the separate paperclip button; the `+` button's accessible name and tooltip read "Add files or run commands".
 
-`ui-input-trigger` renders the new row anatomy: `InputTriggerCandidate.label` is the title and a second search key of the shared `rankByName`, the name renders as a trailing alias when the label differs from it, `icon` accepts an icon component beside the reference glyph tokens, and the description is right-aligned. `ui-primitives` gains the Plan glyph from the design doc, a static ring for Compact, and the permission shield contour.
+`ui-input-trigger` renders the new row anatomy: `InputTriggerCandidate.label` is the title and a second search key of the shared `rankByName`, the name renders as a trailing alias when the label differs from it, `icon` accepts an icon component beside the reference glyph tokens, and the description is right-aligned. Aliases and descriptions use a font one pixel below the primary labels. `ui-primitives` gains the Plan glyph from the design doc, a static ring for Compact, and the permission shield contour.
 
-The menu uses a 400 px border-box height cap, which fits both headings and the eight built-in rows before the viewport clamp reduces it. A real overflow keeps a 10 px draggable WebKit rail around a 4 px visible thumb, insets the track from the rounded ends, and shows a bottom fade until the viewport reaches the final row; Firefox keeps its standard thin scrollbar.
+The menu uses a 400 px border-box height cap, which fits both headings and the eight built-in rows before the viewport clamp reduces it. A real overflow keeps a 6 px draggable WebKit rail around a 2 px visible thumb, insets the track from the rounded ends, and shows a bottom fade until the viewport reaches the final row; Firefox keeps its standard thin scrollbar.
 
 ## Alternatives considered
 

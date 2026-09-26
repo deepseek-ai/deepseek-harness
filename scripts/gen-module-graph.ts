@@ -8,8 +8,16 @@ import {
   graphNodeId as nodeId,
   type PackageGraphNode,
 } from './package-graph.ts'
-import { gitBlobHash, storeGitBlob } from './translation-pairing-git.ts'
-import { renderTranslationPairingRecord, translationPairPaths } from './translation-pairing-record.ts'
+import {
+  computeTranslationPairingRecord,
+  renderTranslationPairingRecord,
+  translationPairPaths,
+} from './translation-pairing-record.ts'
+import {
+  parseTranslationPairingManifest,
+  renderGeneratedRegion,
+  translationPairSourcePredicate,
+} from './translation-pairing.ts'
 
 const root = resolve(import.meta.dirname, '..')
 const SOURCE = 'docs/module-graph.md'
@@ -102,9 +110,11 @@ export function renderModuleGraph(pkgs: readonly Pkg[], locale: Locale): string 
     ...edges,
     '```',
     '',
-    chinese ? '| 包 | 分组 | Peer 依赖 |' : '| Package | Group | Peer dependencies |',
-    '| --- | --- | --- |',
-    ...rows,
+    renderGeneratedRegion('module-graph:packages', [
+      '| `package` | `group` | `peerDependencies` |',
+      '| --- | --- | --- |',
+      ...rows,
+    ].join('\n')),
     '',
   ].join('\n')
 }
@@ -122,8 +132,21 @@ export function computeModuleGraphOutputs(scanRoot: string = root): ReadonlyMap<
   ])
 }
 
+/** Render the consistency record for the two computed graph documents. */
+function moduleGraphRecord(scanRoot: string, outputs: ReadonlyMap<string, string>): string {
+  const manifest = parseTranslationPairingManifest(
+    readFileSync(resolve(scanRoot, 'scripts/translation-pairing.manifest.json'), 'utf8'),
+  )
+  return renderTranslationPairingRecord(PATHS, computeTranslationPairingRecord(
+    PATHS,
+    outputs.get(PATHS.source) ?? '',
+    outputs.get(PATHS.zh) ?? '',
+    { repoRoot: scanRoot, isTranslationPairSource: translationPairSourcePredicate(manifest) },
+  ))
+}
+
 /**
- * Write both graph documents and their recovery record.
+ * Write both graph documents and their consistency record.
  * @param scanRoot - Repository root containing packages and documentation.
  * @returns Repository-relative paths whose content changed.
  */
@@ -136,12 +159,7 @@ export function writeModuleGraph(scanRoot: string = root): string[] {
     writeFileSync(destination, content)
     changed.push(path)
   }
-  const source = Buffer.from(outputs.get(PATHS.source) ?? '')
-  const zh = Buffer.from(outputs.get(PATHS.zh) ?? '')
-  const record = renderTranslationPairingRecord(PATHS, {
-    sourceHash: storeGitBlob(scanRoot, source),
-    zhHash: storeGitBlob(scanRoot, zh),
-  })
+  const record = moduleGraphRecord(scanRoot, outputs)
   const recordPath = resolve(scanRoot, PATHS.meta)
   if (!existsSync(recordPath) || readFileSync(recordPath, 'utf8') !== record) {
     writeFileSync(recordPath, record)
@@ -153,11 +171,7 @@ export function writeModuleGraph(scanRoot: string = root): string[] {
 /** CLI entry: regenerate by default, or verify all paired outputs with `--check`. @returns Nothing. */
 export function main(): void {
   const outputs = computeModuleGraphOutputs(root)
-  const record = renderTranslationPairingRecord(PATHS, {
-    sourceHash: gitBlobHash(Buffer.from(outputs.get(PATHS.source) ?? '')),
-    zhHash: gitBlobHash(Buffer.from(outputs.get(PATHS.zh) ?? '')),
-  })
-  const expected = new Map([...outputs, [PATHS.meta, record]])
+  const expected = new Map([...outputs, [PATHS.meta, moduleGraphRecord(root, outputs)]])
   if (process.argv.includes('--check')) {
     const stale = [...expected].filter(([path, content]) => (
       !existsSync(resolve(root, path)) || readFileSync(resolve(root, path), 'utf8') !== content

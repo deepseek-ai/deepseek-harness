@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-12-ralph-off-in-shipped-defaults.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-12-ralph-off-in-shipped-defaults.md
-2026-09-12-ralph-off-in-shipped-defaults.md: 4ae434a0e9d6283c2934cdf74a562df360daa12e
-2026-09-12-ralph-off-in-shipped-defaults.zh.md: 490b33d85be411826d03c5def08b1905062ff830
+/agent-note-ship-ralph-off-in-the-default-compositions:
+  en: 59fe1293d618be67
+  zh: 0da7f1b4447f10f1
+/agent-note-ship-ralph-off-in-the-default-compositions/problem:
+  en: c8c152617cca4d5d
+  zh: 1846b119989b9e5b
+/agent-note-ship-ralph-off-in-the-default-compositions/decision:
+  en: 7d95a71842e74d38
+  zh: fc0d360ff3acc8b5
+/agent-note-ship-ralph-off-in-the-default-compositions/alternatives-considered:
+  en: 4e6ed0566a2de3a8
+  zh: c1e7ba6dd4047fa0
+/agent-note-ship-ralph-off-in-the-default-compositions/consequences:
+  en: 427242f0a8df0c66
+  zh: ca3dd1bd4cd54605
+/agent-note-ship-ralph-off-in-the-default-compositions/verification:
+  en: 2511c9dd0da7ab60
+  zh: 6d4e801f33f3d81b

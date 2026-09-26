@@ -7,7 +7,7 @@
   height: 64px;
   padding: 0 12px;
   border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.12));
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-specific-input-major, transparent);
   box-sizing: border-box;
   text-align: left;

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { createUserMessage, ToolCallId, ReasoningEffortId  } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createToolResultMessage, createUserMessage, ToolCallId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import type { PiAiProviderProfile } from '@deepseek-ai/dsh-llm-pi-ai'
-import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
+import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import { assemble, type AssembledResult } from './assemble.ts'
 
 /**
@@ -24,7 +24,6 @@ async function harness(_model: string, config: Partial<PiAiProviderProfile> = {}
     providers: {
       deepseek: {
         ...process.env.DEEPSEEK_API_KEY === undefined ? {} : { apiKey: process.env.DEEPSEEK_API_KEY },
-        baseURL: LlmDeepSeek.PUBLIC_BASE_URL,
         ...config,
       },
     },
@@ -39,7 +38,7 @@ afterEach(async () => {
 function ask(text: string): Message[] {
   return [createUserMessage({
     content: [{ type: 'text', text }],
-    source: { kind: 'plugin', plugin: 'test' },
+    source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' },
   })]
 }
 
@@ -127,13 +126,10 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-pi-ai e2e (real API)', () =>
       messages: [
         ...ask('What is the weather in Paris right now? Use the get_weather tool.'),
         first.message,
-        createUserMessage({
-          content: [{
-            type: 'tool-result',
-            toolCallId: ToolCallId(call!.id),
-            content: [{ type: 'text', text: 'Sunny, 22°C' }],
-          }],
-          source: { kind: 'plugin', plugin: 'test' },
+        createToolResultMessage({
+          callId: ToolCallId(call!.id),
+          content: [{ type: 'text', text: 'Sunny, 22°C' }],
+          isError: false,
         }),
       ],
       tools: [weatherTool],

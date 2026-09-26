@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-19-v3-incomplete-child-catalog-evidence.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-19-v3-incomplete-child-catalog-evidence.md
+/agent-note-preserve-v3-sessions-with-incomplete-child-catalog-evidence:
+  en: ff7fbd846f8edf2f
+  zh: 8f4703ea0b0d7cc9
+/agent-note-preserve-v3-sessions-with-incomplete-child-catalog-evidence/problem:
+  en: a5d524599f02e77f
+  zh: b79687f999f4024c
+/agent-note-preserve-v3-sessions-with-incomplete-child-catalog-evidence/decision:
+  en: cfd781300b663010
+  zh: 6f7865d5619a1e52
+/agent-note-preserve-v3-sessions-with-incomplete-child-catalog-evidence/alternatives-considered:
+  en: b7ce0d1b6b280d7f
+  zh: 3deeaef73a3a7856
+/agent-note-preserve-v3-sessions-with-incomplete-child-catalog-evidence/consequences:
+  en: 9f8b6446f6cdea60
+  zh: d0a07674bf8434c4

@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-10-image-offload-events.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-10-image-offload-events.md
-2026-09-10-image-offload-events.md: f540dc98cee8daf3e360b14234a2ac21d0f53aab
-2026-09-10-image-offload-events.zh.md: 868fca59ba5fc1941de752127f61b091aedb234f
+/agent-note-durable-image-offload-events:
+  en: 13b817438040d321
+  zh: 490038f3c93551c7
+/agent-note-durable-image-offload-events/problem:
+  en: 93c2241e0f40fca1
+  zh: fe3528cff00e07b3
+/agent-note-durable-image-offload-events/decision:
+  en: e1cbaf46e6a6a7be
+  zh: c3640a44c9be69af
+/agent-note-durable-image-offload-events/alternatives-considered:
+  en: f1ab95c3bf1a17f8
+  zh: 2708521190143182
+/agent-note-durable-image-offload-events/consequences:
+  en: 3a9b13af9673349b
+  zh: 7da10694e24edadc
+/agent-note-durable-image-offload-events/testing:
+  en: 6fa4e40e7666aa68
+  zh: e31ffd143463ca15

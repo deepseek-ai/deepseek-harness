@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { Readable } from 'node:stream'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execa } from 'execa'
@@ -210,7 +210,7 @@ describe.skipIf(!builtArtifactsExist)('dsh Web profile best-effort startup', () 
       : 'inject: [webProbeMissingRequiredService]'
     const diagnostic = failure === 'disabled expression'
       ? 'disabled expression failed: SyntaxError'
-      : 'pending (waiting for service: webProbeMissingRequiredService)'
+      : 'webProbeMissingRequiredService'
     writeFileSync(fixture.patch, `${readFileSync(fixture.patch, 'utf8')}- id: ${id}\n  ${patch}\n`)
     try {
       const result = await execa(process.execPath, [
@@ -238,18 +238,20 @@ describe.skipIf(!builtArtifactsExist)('dsh Web profile best-effort startup', () 
       expect(result.signal).toBeUndefined()
       expect(result.exitCode).toBe(1)
       expect(result.stdout).not.toContain('dsh web: http://')
-      expect(result.stderr).toContain('required startup failure')
-      expect(result.stderr).toContain(`${id} (@deepseek-ai/dsh-client-${id}): ${diagnostic}`)
+      expect(result.stderr).toContain('startup failed:')
+      expect(result.stderr).toContain(`${id} (required)`)
+      expect(result.stderr).toContain(diagnostic)
       expect(readFileSync(fixture.events, 'utf8')).toBe('good apply\ngood dispose\n')
     } finally {
       rmSync(fixture.root, { recursive: true, force: true })
     }
   })
 
-  it('fails the full Web profile when its required HTTP server cannot bind', async () => {
+  it.each([false, true])('fails the full Web profile when its required HTTP server cannot bind (logs blocked: %s)', async (logsBlocked) => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-web-required-bind-'))
     const home = join(root, 'home')
     mkdirSync(home)
+    if (logsBlocked) writeFileSync(join(home, 'logs'), 'blocked')
     const blocker = createServer()
     await new Promise<void>((resolve, reject) => {
       const fail = (error: Error): void => { reject(error) }
@@ -289,8 +291,36 @@ describe.skipIf(!builtArtifactsExist)('dsh Web profile best-effort startup', () 
       expect(result.signal).toBeUndefined()
       expect(result.exitCode).toBe(1)
       expect(result.stdout).not.toContain('dsh web: http://')
-      expect(result.stderr).toContain('required startup failure')
-      expect(result.stderr).toContain('EADDRINUSE')
+      expect(result.stderr).toContain('startup failed:')
+      expect(result.stderr).toContain('dsh: startup failed: 2 required plugins did not activate')
+      expect(result.stderr).toContain('Failed plugins (1):')
+      expect(result.stderr).toContain('  webserver (required)\n    Package: @deepseek-ai/dsh-host-webserver')
+      expect(result.stderr).toContain('Plugins waiting for services (')
+      expect(result.stderr).toMatch(/connection \(required\) +webRuntime/u)
+      expect(result.stderr).toContain('at Server.setupListenHandle')
+      const summary = result.stderr.split(/\n\n(?:Full diagnostics:|dsh: warning:)/u)[0]!
+      expect(summary.match(/EADDRINUSE/gu)).toHaveLength(1)
+      expect(summary).not.toMatch(/dsh: warning:|\[cause\]|at boot \(|at runCli \(|Node\.js v/u)
+      let report: string
+      if (logsBlocked) {
+        expect(result.stderr).toContain('dsh: warning: could not write startup diagnostics:')
+        expect(result.stderr).not.toMatch(/Full diagnostics: [^\r\n]/u)
+        report = result.stderr.split('Full diagnostics:\n')[1]!
+        expect(readFileSync(join(home, 'logs'), 'utf8')).toBe('blocked')
+      } else {
+        const path = /Full diagnostics: ([^\r\n]+)/u.exec(result.stderr)?.[1]
+        expect(path).toBeDefined()
+        expect(dirname(path!)).toBe(join(home, 'logs'))
+        report = readFileSync(path!, 'utf8')
+      }
+      expect(report).toContain("profile: 'web'")
+      expect(report).toContain('nodeVersion:')
+      expect(report).toContain('dshVersion:')
+      expect(report).toContain('configurationPath:')
+      expect(report).toContain("code: 'EADDRINUSE'")
+      expect(report).toContain(`port: ${String(address.port)}`)
+      expect(report).toContain("module: '@deepseek-ai/dsh-client-connection'")
+      expect(report).toContain('at auditStartupEntries')
     } finally {
       await new Promise<void>((resolve, reject) => {
         blocker.close((error) => { if (error === undefined) resolve(); else reject(error) })

@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-15-continuable-activation-capacity.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-15-continuable-activation-capacity.md
+/agent-note-shared-continuable-activation-capacity:
+  en: 56a51d29c97b2c8e
+  zh: c99085a3b2deb97c
+/agent-note-shared-continuable-activation-capacity/problem:
+  en: f940cc05cf90362d
+  zh: 1cdb4281d845c0da
+/agent-note-shared-continuable-activation-capacity/decision:
+  en: e03ae0d516885585
+  zh: bd81d197e097b1ee
+/agent-note-shared-continuable-activation-capacity/alternatives-considered:
+  en: 54aefa812e00ce1e
+  zh: 08251d541b7991df
+/agent-note-shared-continuable-activation-capacity/consequences:
+  en: 4792e84eeaac32ee
+  zh: 4c941792d03130a0
+/agent-note-shared-continuable-activation-capacity/verification:
+  en: f599edb8fb0112af
+  zh: a66f9102a79234f0

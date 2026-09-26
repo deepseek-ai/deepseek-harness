@@ -13,9 +13,9 @@
  * a string outside the grammar, `workspace-file/unknown-workspace` when the
  * address carries no Session — and ends.
  *
- * The first frame is the file's `stat`; every Host-reported write yields the
- * metadata with its reported version; a reported disappearance, or a write while the
- * last stat had failed, runs `stat` again. Failures travel as `ok: false` frames, never as thrown errors: the
+ * The first frame is the file's `stat`; subsequent invalidations run `stat`
+ * again unless their version or absence is already known. Reconnection also
+ * restats the file. Failures travel as `ok: false` frames, never as thrown errors: the
  * Remote face does not reject, and anything thrown inside the stream is a
  * programming error the resource model lets surface. A failed stat does not end
  * the stream: the next write stats again. One {@link ChangeFeed}
@@ -40,7 +40,7 @@ interface HostFile {
 /**
  * Build the `file` provider over one Remote face and one change feed.
  * @param remote - the Remote face carrying `workspaceFiles.stat`.
- * @param changes - the per-session change fan-out.
+ * @param changes - target-scoped change streams shared by file resources.
  * @returns the provider to register into `ctx.resources`.
  */
 export function createFileResourceProvider(
@@ -57,7 +57,7 @@ export function createFileResourceProvider(
       }
       const { sessionId, path } = resolved.value
       // Queue changes delivered to this Client while stat is pending.
-      const notices = changes.follow(sessionId, signal)
+      const notices = changes.follow(sessionId, path, signal)
       const stat = (): Promise<RemoteResult<WorkspaceFileStat>> => remote.workspaceFiles.stat(sessionId, path, signal)
       // Read through a call: a plain `signal.aborted` is narrowed to `false` by
       // the first check and would read as always-false after the later awaits.
@@ -66,7 +66,13 @@ export function createFileResourceProvider(
       // on the file, so a write can still bring the file live.
       let current: WorkspaceFileStat | undefined
       try {
-        if (!await notices.ready || aborted()) return
+        if (!await notices.ready) {
+          if (aborted()) return
+          const result = await stat()
+          if (!aborted()) yield result
+          return
+        }
+        if (aborted()) return
         const first = await stat()
         if (aborted()) return
         if (first.ok) {
@@ -77,6 +83,7 @@ export function createFileResourceProvider(
           yield first
         }
         for await (const notice of notices) {
+          if (aborted()) return
           if (current === undefined) {
             // Still gone: nothing new to report.
             if (notice.kind === 'absent') continue
@@ -84,9 +91,6 @@ export function createFileResourceProvider(
             // Frames report observations: holding this version already means the
             // consumer learns nothing new.
             if (notice.version === current.version) continue
-            current = { ...current, version: notice.version }
-            yield { ok: true, value: current }
-            continue
           }
           // A Host notice may mean stale content.
           const again = await stat()

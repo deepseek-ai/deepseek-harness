@@ -1,6 +1,37 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-11-dev-invariants-over-deep-readonly.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-06-11-dev-invariants-over-deep-readonly.md
-2026-06-11-dev-invariants-over-deep-readonly.md: 0784960397f4d198e136e284ef9232b4ed3e2c2c
-2026-06-11-dev-invariants-over-deep-readonly.zh.md: 7183813130560bf82426c8719570b668ba86b7e5
+/agent-note-source-owned-session-immutability-and-dev-mode-invariants:
+  en: 052aa271e87074c0
+  zh: 3ccffc50fc1a28d4
+/agent-note-source-owned-session-immutability-and-dev-mode-invariants/problem:
+  en: 6ea85a4531d5e59f
+  zh: b4b568eb347f016a
+/agent-note-source-owned-session-immutability-and-dev-mode-invariants/decision:
+  en: 6e701ec64c3bbfae
+  zh: b8ed0f1cb7a0477a
+/agent-note-source-owned-session-immutability-and-dev-mode-invariants/decision/session-owns-immutable-history:
+  en: ff47e58c377a8dc0
+  zh: 5edbe4f3642a3fe6
+/agent-note-source-owned-session-immutability-and-dev-mode-invariants/decision/derived-requests-remain-detached:
+  en: 975df574ee6e6df8
+  zh: 96d765058482835a
+/agent-note-source-owned-session-immutability-and-dev-mode-invariants/decision/package-owned-invariant-companions-check-relationships:
+  en: a88e3a896eedca91
+  zh: 03e96c7870cba932
+/agent-note-source-owned-session-immutability-and-dev-mode-invariants/alternatives-considered:
+  en: 6119e2aff3b6be5a
+  zh: 76136ef5249c23eb
+/agent-note-source-owned-session-immutability-and-dev-mode-invariants/alternatives-considered/pervasive-deep-readonly-types:
+  en: ec54af2931616616
+  zh: 5fd9bc469a6fd3a5
+/agent-note-source-owned-session-immutability-and-dev-mode-invariants/alternatives-considered/development-only-freezing:
+  en: 85591197bb62eabf
+  zh: ba69b9ccf596a6d7
+/agent-note-source-owned-session-immutability-and-dev-mode-invariants/alternatives-considered/clone-only-when-deriving-messages:
+  en: a9848dec50664b92
+  zh: 7c558550b054627b
+/agent-note-source-owned-session-immutability-and-dev-mode-invariants/consequences:
+  en: bcccf7d464a070db
+  zh: eccd442a21e2c99e

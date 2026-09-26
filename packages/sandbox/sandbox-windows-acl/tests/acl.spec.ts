@@ -9,7 +9,7 @@
  * whose per-test lock file is removed in cleanup.
  */
 
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -17,7 +17,7 @@ import koffi from 'koffi'
 
 import { buildExplicitAccess, grantWrite, lockFilePath, revokeWrite, withPathLock } from '../src/acl.ts'
 import { AclSandbox } from '../src/index.ts'
-import { createRestrictedToken } from '../src/token.ts'
+import { createRestrictedToken, makeWellKnownSid } from '../src/token.ts'
 import { allocOverlapped, allocPtrSlot, decodePtr, isInvalidHandle, isNullPtr, win32 } from '../src/ffi.ts'
 import type { NativePtr, Win32Bindings } from '../src/ffi.ts'
 import * as abi from '../src/win32-abi.ts'
@@ -104,6 +104,104 @@ function readDirectAces(api: Win32Bindings, path: string): DirectAce[] {
   }
 }
 
+/** One direct (explicit, non-inherited) label ACE of a directory's mandatory label. */
+interface DirectLabelAce {
+  sid: string
+  mask: number
+}
+
+/** The Low integrity SID every grant labels with (S-1-16-4096). */
+function lowLabelSid(api: Win32Bindings): NativePtr {
+  return makeWellKnownSid(api, abi.WinLowLabelSid)
+}
+
+/** The world SID (S-1-1-0) every grant denies the ambient delete right to. */
+function worldSid(api: Win32Bindings): NativePtr {
+  return makeWellKnownSid(api, abi.WinWorldSid)
+}
+
+/**
+ * Read the directory's mandatory label ACEs (inherited entries excluded) —
+ * same ACE layout as {@link readDirectAces}, read through the label security
+ * information class. A directory with no label returns an empty list.
+ */
+function readLabelAces(api: Win32Bindings, path: string): DirectLabelAce[] {
+  const ownerSlot = allocPtrSlot()
+  const groupSlot = allocPtrSlot()
+  const daclSlot = allocPtrSlot()
+  const saclSlot = allocPtrSlot()
+  const descriptorSlot = allocPtrSlot()
+  const readResult = api.getNamedSecurityInfoW(
+    path, abi.SE_FILE_OBJECT, abi.LABEL_SECURITY_INFORMATION,
+    ownerSlot, groupSlot, daclSlot, saclSlot, descriptorSlot,
+  )
+  if (readResult !== abi.ERROR_SUCCESS) throw new Error(`GetNamedSecurityInfoW (label) failed (${readResult}) for ${path}`)
+  const acl = decodePtr(saclSlot)
+  const descriptor = decodePtr(descriptorSlot)
+  try {
+    if (acl === null) return []
+    const aclSize = koffi.decode(acl, 2, 'uint16') as number
+    const aces: DirectLabelAce[] = []
+    for (let offset = 8; offset + 8 <= aclSize;) {
+      const type = koffi.decode(acl, offset, 'uint8') as number
+      const flags = koffi.decode(acl, offset + 1, 'uint8') as number
+      const aceSize = koffi.decode(acl, offset + 2, 'uint16') as number
+      if (type === abi.SYSTEM_MANDATORY_LABEL_ACE_TYPE && (flags & abi.INHERITED_ACE) === 0) {
+        aces.push({ sid: sidString(koffi.decode(acl, offset + 8, SID_STRUCT) as SidLayout), mask: koffi.decode(acl, offset + 4, 'uint32') as number })
+      }
+      offset += aceSize
+    }
+    return aces
+  } finally {
+    if (descriptor !== null) api.localFree(descriptor)
+  }
+}
+
+/** One ACE of a directory DACL, inherited or not. */
+interface TypedAce {
+  sid: string
+  mask: number
+  type: number
+  flags: number
+}
+
+/**
+ * Read every ACE of the object's DACL (inherited ones included) — the shape
+ * needed to observe what a grant propagated onto children.
+ */
+function readTypedAces(api: Win32Bindings, path: string): TypedAce[] {
+  const ownerSlot = allocPtrSlot()
+  const groupSlot = allocPtrSlot()
+  const daclSlot = allocPtrSlot()
+  const saclSlot = allocPtrSlot()
+  const descriptorSlot = allocPtrSlot()
+  const readResult = api.getNamedSecurityInfoW(
+    path, abi.SE_FILE_OBJECT, abi.DACL_SECURITY_INFORMATION,
+    ownerSlot, groupSlot, daclSlot, saclSlot, descriptorSlot,
+  )
+  if (readResult !== abi.ERROR_SUCCESS) throw new Error(`GetNamedSecurityInfoW failed (${readResult}) for ${path}`)
+  const acl = decodePtr(daclSlot)
+  const descriptor = decodePtr(descriptorSlot)
+  try {
+    if (acl === null) return []
+    const aclSize = koffi.decode(acl, 2, 'uint16') as number
+    const aces: TypedAce[] = []
+    for (let offset = 8; offset + 8 <= aclSize;) {
+      const aceSize = koffi.decode(acl, offset + 2, 'uint16') as number
+      aces.push({
+        sid: sidString(koffi.decode(acl, offset + 8, SID_STRUCT) as SidLayout),
+        mask: koffi.decode(acl, offset + 4, 'uint32') as number,
+        type: koffi.decode(acl, offset, 'uint8') as number,
+        flags: koffi.decode(acl, offset + 1, 'uint8') as number,
+      })
+      offset += aceSize
+    }
+    return aces
+  } finally {
+    if (descriptor !== null) api.localFree(descriptor)
+  }
+}
+
 describe.skipIf(!isWin32)('ACL editing', () => {
   const scratchDirs: string[] = []
   afterEach(() => {
@@ -116,11 +214,66 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     return dir
   }
 
+  it('the ambient-delete deny inherits to subdirectories only, never onto files', async () => {
+    // FILE_DELETE_CHILD is meaningless on a file and 0x40 is part of
+    // FILE_ALL_ACCESS, so a file-level copy would deny every FullControl open
+    // inside the granted root.
+    const api = await win32()
+    const dir = scratch()
+    const capabilitySid = sidFromString(api, 'S-1-4-4242-11')
+    const lowSid = lowLabelSid(api)
+    const world = worldSid(api)
+    const childDir = join(dir, 'child')
+    const childFile = join(dir, 'child.txt')
+    try {
+      grantWrite(api, dir, capabilitySid, lowSid, world)
+      mkdirSync(childDir)
+      writeFileSync(childFile, 'x')
+      const isWorldDeny = (ace: TypedAce): boolean =>
+        ace.type === abi.ACCESS_DENIED_ACE_TYPE && ace.sid === 'S-1-1-0' && ace.mask === abi.FILE_DELETE_CHILD
+      expect(readTypedAces(api, dir).filter(isWorldDeny)).toHaveLength(1) // explicit on the root
+      expect(readTypedAces(api, childDir).filter(isWorldDeny)).toHaveLength(1) // inherited by the container
+      expect(readTypedAces(api, childFile).filter(isWorldDeny)).toHaveLength(0) // never by the file
+      const rootDeny = readTypedAces(api, dir).find(isWorldDeny)
+      expect(rootDeny?.flags).toBe(abi.CONTAINER_INHERIT_ACE)
+    } finally {
+      if (!isNullPtr(capabilitySid)) api.localFree(capabilitySid)
+      if (!isNullPtr(lowSid)) api.localFree(lowSid)
+      if (!isNullPtr(world)) api.localFree(world)
+    }
+  })
+
+  it('revoking one of two grants on a directory keeps the shared Low label', async () => {
+    const api = await win32()
+    const dir = scratch()
+    const sidA = sidFromString(api, 'S-1-4-4242-21')
+    const sidB = sidFromString(api, 'S-1-4-4242-22')
+    const lowSid = lowLabelSid(api)
+    const world = worldSid(api)
+    try {
+      grantWrite(api, dir, sidA, lowSid, world)
+      grantWrite(api, dir, sidB, lowSid, world)
+      revokeWrite(api, dir, sidA)
+      expect(readDirectAces(api, dir).some(ace => ace.sid === 'S-1-4-4242-21')).toBe(false)
+      expect(readDirectAces(api, dir).some(ace => ace.sid === 'S-1-4-4242-22')).toBe(true)
+      expect(readLabelAces(api, dir)).toHaveLength(1) // the surviving grant still needs it
+      revokeWrite(api, dir, sidB)
+      expect(readLabelAces(api, dir)).toEqual([]) // the last revoke clears it
+    } finally {
+      if (!isNullPtr(sidA)) api.localFree(sidA)
+      if (!isNullPtr(sidB)) api.localFree(sidB)
+      if (!isNullPtr(lowSid)) api.localFree(lowSid)
+      if (!isNullPtr(world)) api.localFree(world)
+    }
+  })
+
   it('grantWrite merges into the current DACL: an explicit Users ACE survives grant+revoke', async () => {
     const api = await win32()
     const dir = scratch()
     const usersSid = sidFromString(api, 'S-1-5-32-545')
     const capabilitySid = sidFromString(api, 'S-1-4-4242-1')
+    const lowSid = lowLabelSid(api)
+    const world = worldSid(api)
     try {
       // Install one explicit ACE (Users + benign read mask) with the
       // package's own bindings, exactly like a pre-existing explicit DACL
@@ -137,37 +290,77 @@ describe.skipIf(!isWin32)('ACL editing', () => {
       expect(applyResult, `SetNamedSecurityInfoW setup (${applyResult})`).toBe(abi.ERROR_SUCCESS)
       expect(isNullPtr(freed)).toBe(true)
 
-      grantWrite(api, dir, capabilitySid)
+      grantWrite(api, dir, capabilitySid, lowSid, world)
+
+      const granted = readDirectAces(api, dir)
+      expect(granted.some(ace => ace.sid === 'S-1-5-32-545')).toBe(true) // explicit ACE preserved
+      expect(granted.some(ace => ace.sid === 'S-1-4-4242-1')).toBe(true)
+
       revokeWrite(api, dir, capabilitySid)
 
       const aces = readDirectAces(api, dir)
       expect(aces.some(ace => ace.sid === 'S-1-5-32-545')).toBe(true) // explicit ACE preserved
       expect(aces.some(ace => ace.sid === 'S-1-4-4242-1')).toBe(false) // orphan grant fully removed
+      expect(readLabelAces(api, dir)).toEqual([]) // the label went with it
     } finally {
       if (!isNullPtr(usersSid)) api.localFree(usersSid)
       if (!isNullPtr(capabilitySid)) api.localFree(capabilitySid)
+      if (!isNullPtr(lowSid)) api.localFree(lowSid)
+      if (!isNullPtr(world)) api.localFree(world)
     }
   })
 
-  it('grantWrite is idempotent: a second grant over the standing exact ACE skips the SetNamedSecurityInfoW apply (no eager full-tree re-propagation)', async () => {
+  it('grantWrite applies the Low no-write-up label and denies the ambient parent-delete right; revokeWrite clears both capability and label', async () => {
+    const api = await win32()
+    const dir = scratch()
+    const capabilitySid = sidFromString(api, 'S-1-4-4242-9')
+    const lowSid = lowLabelSid(api)
+    const world = worldSid(api)
+    try {
+      expect(readLabelAces(api, dir)).toEqual([])
+      grantWrite(api, dir, capabilitySid, lowSid, world)
+      expect(readLabelAces(api, dir)).toEqual([
+        { sid: 'S-1-16-4096', mask: abi.SYSTEM_MANDATORY_LABEL_NO_WRITE_UP },
+      ])
+      // The ambient delete route inside another granted root is what the deny
+      // removes; the capability ACE stays the only delete authority there.
+      const denied = readDirectAces(api, dir).filter(ace => ace.sid === 'S-1-1-0')
+      expect(denied).toEqual([{ sid: 'S-1-1-0', mask: abi.FILE_DELETE_CHILD }])
+      revokeWrite(api, dir, capabilitySid)
+      expect(readLabelAces(api, dir)).toEqual([])
+      expect(readDirectAces(api, dir).some(ace => ace.sid === 'S-1-4-4242-9')).toBe(false)
+    } finally {
+      if (!isNullPtr(capabilitySid)) api.localFree(capabilitySid)
+      if (!isNullPtr(lowSid)) api.localFree(lowSid)
+      if (!isNullPtr(world)) api.localFree(world)
+    }
+  })
+
+  it('grantWrite is idempotent: a second grant over the standing exact ACE, deny, and label skips the SetNamedSecurityInfoW apply (no eager full-tree re-propagation)', async () => {
     const api = await win32()
     const dir = scratch()
     const capabilitySid = sidFromString(api, 'S-1-4-4242-2')
+    const lowSid = lowLabelSid(api)
+    const world = worldSid(api)
     const apply = vi.spyOn(api, 'setNamedSecurityInfoW')
     try {
-      grantWrite(api, dir, capabilitySid)
+      grantWrite(api, dir, capabilitySid, lowSid, world)
       expect(apply).toHaveBeenCalledTimes(1)
-      // The exact ACE now stands (the per-session grant surviving from a
-      // previous server lifetime): the second grant is a DACL read only.
-      grantWrite(api, dir, capabilitySid)
+      // The exact ACE, deny, and label now stand (the per-session grant
+      // surviving from a previous server lifetime): the second grant is a read only.
+      grantWrite(api, dir, capabilitySid, lowSid, world)
       expect(apply).toHaveBeenCalledTimes(1)
       const aces = readDirectAces(api, dir)
       expect(aces.filter(ace => ace.sid === 'S-1-4-4242-2')).toHaveLength(1)
+      expect(aces.filter(ace => ace.sid === 'S-1-1-0')).toHaveLength(1)
+      expect(readLabelAces(api, dir)).toHaveLength(1)
       revokeWrite(api, dir, capabilitySid)
       expect(readDirectAces(api, dir).some(ace => ace.sid === 'S-1-4-4242-2')).toBe(false)
     } finally {
       apply.mockRestore()
       if (!isNullPtr(capabilitySid)) api.localFree(capabilitySid)
+      if (!isNullPtr(lowSid)) api.localFree(lowSid)
+      if (!isNullPtr(world)) api.localFree(world)
     }
   })
 
@@ -188,7 +381,7 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     expect(aces.some(ace => ace.sid === 'S-1-4-9000-2')).toBe(true)
   })
 
-  it('dispose revokes the revocable temp ACE and keeps the standing workspace ACE (self-managed flow)', async () => {
+  it('dispose revokes the revocable temp ACE and label and keeps the standing workspace pair (self-managed flow)', async () => {
     const api = await win32()
     const workspaceDir = scratch()
     const tempDir = scratch()
@@ -203,8 +396,12 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     sandbox.dispose()
     const workspaceAces = readDirectAces(api, workspaceDir)
     expect(workspaceAces.some(ace => ace.sid === 'S-1-4-9000-3')).toBe(true)
+    expect(readLabelAces(api, workspaceDir)).toEqual([
+      { sid: 'S-1-16-4096', mask: abi.SYSTEM_MANDATORY_LABEL_NO_WRITE_UP },
+    ])
     const tempAces = readDirectAces(api, tempDir)
     expect(tempAces.some(ace => ace.sid === 'S-1-4-9000-3-1')).toBe(false)
+    expect(readLabelAces(api, tempDir)).toEqual([])
   })
 
   it('rejects an overlapping private temp directory before applying either capability', async () => {

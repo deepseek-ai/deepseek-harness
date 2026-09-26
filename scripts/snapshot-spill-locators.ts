@@ -1,4 +1,4 @@
-/** Fixture-only logical locators over real local spill files; preview budgets retain recorded path lengths. */
+/** Fixture-only logical locators for filesystem and subprocess reads of real spill files; preview budgets retain recorded path lengths. */
 import type { Context } from '@deepseek-ai/cordis'
 import { join, relative, resolve, sep } from 'node:path'
 import type { SpillLocator } from '@deepseek-ai/dsh-spill'
@@ -28,6 +28,17 @@ export function apply(ctx: Context, config: Config): void {
   const saveText = store.saveText
   // oxlint-disable-next-line typescript/unbound-method -- preserve method identity for restoration; calls bind the receiver.
   const resolvePath = fs.resolve
+  // oxlint-disable-next-line typescript/unbound-method -- preserve method identity for restoration; calls bind the receiver.
+  const processPathFromHostPath = fs.processPathFromHostPath
+
+  const mappedPath = (path: string): string => {
+    const live = paths.get(path)
+    if (live !== undefined) return live
+    if (path.startsWith(locatorRoot + sep)) {
+      throw new Error('snapshot spill locator was not saved by this run')
+    }
+    return path
+  }
   ctx.effect(() => {
     store.saveText = async (input) => {
       const saved = await saveText.call(store, input)
@@ -40,19 +51,15 @@ export function apply(ctx: Context, config: Config): void {
       return { ...saved, locator }
     }
     fs.resolve = async (path, opts) => {
-      const live = paths.get(path)
-      if (live !== undefined) {
-        const target = await resolvePath.call(fs, live, opts)
-        return { ...target, displayPath: path }
-      }
-      if (path.startsWith(locatorRoot + sep)) {
-        throw new Error('snapshot spill locator was not saved by this run')
-      }
-      return resolvePath.call(fs, path, opts)
+      const live = mappedPath(path)
+      const target = await resolvePath.call(fs, live, opts)
+      return live === path ? target : { ...target, displayPath: path }
     }
+    fs.processPathFromHostPath = path => processPathFromHostPath.call(fs, mappedPath(path))
     return () => {
       store.saveText = saveText
       fs.resolve = resolvePath
+      fs.processPathFromHostPath = processPathFromHostPath
       paths.clear()
     }
   })

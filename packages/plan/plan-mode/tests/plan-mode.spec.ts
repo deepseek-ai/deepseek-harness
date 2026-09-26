@@ -143,7 +143,7 @@ function header(session: Session): void {
 
 function noticeTexts(session: Session): string[] {
   return session.snapshotEvents()
-    .filter(event => event.type === 'user/message' && event.data.source.kind === 'plugin')
+    .filter(event => event.type === 'user/message' && event.data.source.kind !== 'user')
     .map(event => (event.data as { content: { type: string; text?: string }[] }).content.map(block => block.text ?? '').join(''))
 }
 
@@ -1074,7 +1074,7 @@ describe('exit_plan_mode', () => {
     const { ctx, agent, asked } = await setupWithReview({ selected: ['Approve'] })
     await callExit(ctx, agent)
     const question = asked[0]?.questions[0]
-    expect(question?.intent).toEqual({ kind: 'plan-review', approve: 'Approve' })
+    expect(question?.intent).toEqual({ kind: 'plan-review', approve: 'Approve', callId: `call-exit-${callCounter}` })
     // The named label is one this same question offers, so a UI honouring the
     // intent answers a choice this tool accepts.
     expect(question?.options?.map(option => option.label)).toContain(question?.intent?.approve)

@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 0001-acp-default-export-drops-inject.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/postmortem/0001-acp-default-export-drops-inject.md
-0001-acp-default-export-drops-inject.md: d5325b3f051669111ad7c097c395744553d57c6c
-0001-acp-default-export-drops-inject.zh.md: 189c2418106dc44bde43ef7fd4d2f8ce62d1d672
+/post-mortem-0001-acp-server-crashed-on-connect-export-default-dropped-the-plugin-s-inject:
+  en: d7e3ed1019ed04b5
+  zh: 23c6df9914b95d3a
+/post-mortem-0001-acp-server-crashed-on-connect-export-default-dropped-the-plugin-s-inject/executive-summary:
+  en: 4c04bfd12a9abc10
+  zh: 65cd77656e04c2b5
+/post-mortem-0001-acp-server-crashed-on-connect-export-default-dropped-the-plugin-s-inject/summary:
+  en: 15b14cde0d25bf7e
+  zh: c392c2685acbfa0e
+/post-mortem-0001-acp-server-crashed-on-connect-export-default-dropped-the-plugin-s-inject/impact:
+  en: c0280f3cf50c52de
+  zh: c66f9d63463cbbe0
+/post-mortem-0001-acp-server-crashed-on-connect-export-default-dropped-the-plugin-s-inject/timeline:
+  en: 0a3527d26904f25b
+  zh: 2c5f309eb2ee720d
+/post-mortem-0001-acp-server-crashed-on-connect-export-default-dropped-the-plugin-s-inject/root-cause-1-export-default-apply-drops-the-plugin-s-inject-broke-session-new:
+  en: 3245b91e4b91eb30
+  zh: a9ae857171988781
+/post-mortem-0001-acp-server-crashed-on-connect-export-default-dropped-the-plugin-s-inject/root-cause-2-optional-service-read-trips-the-inject-guard-through-a-traceable-shadow-broke-session-load:
+  en: dcb8a8c88825aa15
+  zh: eabfa6213c6cd6cf
+/post-mortem-0001-acp-server-crashed-on-connect-export-default-dropped-the-plugin-s-inject/why-every-test-missed-it-the-real-failure:
+  en: ec8486bb598fea8c
+  zh: 54119c30256686ea
+/post-mortem-0001-acp-server-crashed-on-connect-export-default-dropped-the-plugin-s-inject/guardrails-added:
+  en: 485f2ebdf38b0eac
+  zh: e96a6dd64aa83229
+/post-mortem-0001-acp-server-crashed-on-connect-export-default-dropped-the-plugin-s-inject/lessons:
+  en: 0a548f66ad8f6b7d
+  zh: 4703c08852f4b063

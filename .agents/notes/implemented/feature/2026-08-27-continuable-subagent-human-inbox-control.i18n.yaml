@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-27-continuable-subagent-human-inbox-control.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-27-continuable-subagent-human-inbox-control.md
-2026-08-27-continuable-subagent-human-inbox-control.md: 6bf8ceb2b8eab7138a1e617bb97e475d5cfa8172
-2026-08-27-continuable-subagent-human-inbox-control.zh.md: 081fb84f75afcc94339ae3bf627480081bc56d89
+/agent-note-human-inbox-controls-for-continuable-subagents:
+  en: 42b7ed7255c6c527
+  zh: c3faf95870ba0e0c
+/agent-note-human-inbox-controls-for-continuable-subagents/problem:
+  en: 4241f01a3a205ff5
+  zh: 415c642ad379a53c
+/agent-note-human-inbox-controls-for-continuable-subagents/decision:
+  en: 4f8c53964ac18aff
+  zh: 31d747618ca608cc
+/agent-note-human-inbox-controls-for-continuable-subagents/alternatives-considered:
+  en: c1f10fb70c8bb500
+  zh: 4dc0ec6cac95595c
+/agent-note-human-inbox-controls-for-continuable-subagents/consequences:
+  en: 5fdc5b07eae2633c
+  zh: 1359d126d182d219

@@ -1,11 +1,11 @@
 /**
- * One Host `changes` subscription per session, fanned out to the open files of
- * that session.
+ * One Host `changes` subscription per Session and requested path, shared by
+ * that target's open resources.
  *
- * The Host reports every agent write in a session on one stream; each open file
- * wants only its own. The feed opens the session stream when the first follower
+ * The Host reports invalidations from filesystem watches and instrumented writes.
+ * The feed opens the target stream when the first follower
  * arrives, hands each frame to the followers of its path, and disposes the
- * stream when the last follower leaves. A follower buffers session changes
+ * stream when the last follower leaves. A follower buffers target changes
  * until `stat` supplies its Host absolute path, then filters queued and live
  * frames by that path, with `\\` normalized to `/`.
  */
@@ -83,7 +83,7 @@ class Follower implements AsyncIterable<WorkspaceFileNotice> {
       while (true) {
         const next = this.pending.shift()
         if (next !== undefined) {
-          if (this.hostKey === undefined || next.key === this.hostKey) yield next.notice
+          if (next.notice.kind === 'refresh' || this.hostKey === undefined || next.key === this.hostKey) yield next.notice
           continue
         }
         if (this.ended) return
@@ -96,35 +96,37 @@ class Follower implements AsyncIterable<WorkspaceFileNotice> {
   }
 }
 
-/** The stream and followers of one session. */
+/** The stream and followers of one Session and requested path. */
 class SessionFeed {
   private readonly followers = new Set<Follower>()
   private readonly stream: SupervisedStream<WorkspaceFileWatchFrame>
   private closed = false
   private started = false
+  private acknowledged = false
 
   /**
    * @param remote - the Remote face carrying `workspaceFiles.changes`.
-   * @param sessionId - the session whose writes this feed follows.
-   * @param after - the previous feed of this session still closing, if any; the stream opens once it has settled.
+   * @param sessionId - the Session whose filesystem this feed observes.
+   * @param path - target path submitted to the Host.
+   * @param after - the previous feed of this target still closing, if any; the stream opens once it has settled.
    * @param onClose - called once when the stream is gone, whatever the cause, with the dispose that is closing it.
    */
   constructor(
     remote: WorkspaceFilesRemote,
     sessionId: SessionId,
+    path: string,
     after: Promise<void> | undefined,
     private readonly onClose: (closed: Promise<void>) => void,
   ) {
     this.stream = remote.$stream<WorkspaceFileWatchFrame>({
       name: `workspace file changes of ${sessionId}`,
-      // A predecessor still closing finishes first, so one session never has
+      // A predecessor still closing finishes first, so one target never has
       // two Host streams open at once.
       open: (signal) => {
         this.started = false
-        return openAfter(after, () => remote.workspaceFiles.changes(sessionId, signal))
+        return openAfter(after, () => remote.workspaceFiles.changes(sessionId, path, signal))
       },
-      // A normal end means the Host closed the session's feed: the session is
-      // gone or the Host is shutting down, so there is nothing to reopen.
+      // A normal end means the Host closed the target's feed.
       ended: () => new Error(`workspace file changes of ${sessionId} ended`),
     })
     void this.pump()
@@ -156,7 +158,11 @@ class SessionFeed {
           case 'ready':
             item.accept()
             this.started = true
-            for (const follower of this.followers) follower.start()
+            for (const follower of this.followers) {
+              follower.start()
+              if (this.acknowledged) follower.push({ kind: 'refresh' }, '')
+            }
+            this.acknowledged = true
             break
           case 'change': {
             const key = keyOf(frame.change.absolutePath)
@@ -211,15 +217,15 @@ function assertNever(frame: never): never {
 }
 
 /**
- * Per-session fan-out of the Host's workspace file change stream.
+ * Per-target sharing of the Host's workspace file change streams.
  *
  * Owned by the provider; one instance serves every session of the Client.
  */
 export class ChangeFeed {
   /** Live feeds only: a feed removes itself when its stream closes. */
-  private readonly sessions = new Map<SessionId, SessionFeed>()
-  /** Streams still closing, by session: the session's next feed opens after its predecessor has settled. */
-  private readonly closing = new Map<SessionId, Promise<void>>()
+  private readonly sessions = new Map<string, SessionFeed>()
+  /** Streams still closing, by Session and path; a successor waits for its predecessor. */
+  private readonly closing = new Map<string, Promise<void>>()
 
   /**
    * @param remote - the Remote face carrying `$stream` and `workspaceFiles.changes`.
@@ -231,19 +237,20 @@ export class ChangeFeed {
    *
    * The follower is registered on call, not on first pull. Changes delivered
    * to this Client are queued while stat is pending. The first follower starts
-   * the session's local `changes` call. The iterable ends
-   * when `signal` aborts or when the session stream is gone; ending it early
+   * target's local `changes` call. The iterable ends
+   * when `signal` aborts or when the target stream is gone; ending it early
    * (`break`, `return`) unregisters the follower as well, and the last follower
-   * of a session disposes its stream. Await a true `ready` result before stat
+   * of a target disposes its stream. Await a true `ready` result before stat
    * so the Host subscription is active, then bind each stat's absolute path. Until binding,
-   * any session write can trigger a retry; after binding, only matching queued
+   * any target invalidation can trigger a retry; after binding, only matching queued
    * and live changes pass.
-   * @param sessionId - the session whose workspace holds the file.
+   * @param sessionId - the Session providing the file's read authority.
+   * @param path - requested file path; followers share a stream only for the same Session and path.
    * @param signal - ends the follow.
    * @returns a single-consumer subscription with Host-path binding and explicit disposal.
    */
-  follow(sessionId: SessionId, signal: AbortSignal): Follower {
-    const feed = signal.aborted ? undefined : this.feedOf(sessionId)
+  follow(sessionId: SessionId, path: string, signal: AbortSignal): Follower {
+    const feed = signal.aborted ? undefined : this.feedOf(sessionId, path)
     const leave = (): void => {
       signal.removeEventListener('abort', leave)
       follower.end()
@@ -268,18 +275,19 @@ export class ChangeFeed {
     await Promise.all(this.closing.values())
   }
 
-  private feedOf(sessionId: SessionId): SessionFeed {
-    const existing = this.sessions.get(sessionId)
+  private feedOf(sessionId: SessionId, path: string): SessionFeed {
+    const key = JSON.stringify([sessionId, path])
+    const existing = this.sessions.get(key)
     if (existing !== undefined) return existing
-    const feed = new SessionFeed(this.remote, sessionId, this.closing.get(sessionId), (closed) => {
-      this.sessions.delete(sessionId)
+    const feed = new SessionFeed(this.remote, sessionId, path, this.closing.get(key), (closed) => {
+      this.sessions.delete(key)
       // A dispose that rejects is still a settled close: nothing remains to wait for.
       const tracked: Promise<void> = closed.then(() => undefined, () => undefined).then(() => {
-        if (this.closing.get(sessionId) === tracked) this.closing.delete(sessionId)
+        if (this.closing.get(key) === tracked) this.closing.delete(key)
       })
-      this.closing.set(sessionId, tracked)
+      this.closing.set(key, tracked)
     })
-    this.sessions.set(sessionId, feed)
+    this.sessions.set(key, feed)
     return feed
   }
 }

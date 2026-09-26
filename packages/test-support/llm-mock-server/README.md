@@ -1,5 +1,5 @@
 ---
-description: "Scriptable OpenAI-compatible fault server for testing LLM adapters and recovery policy without a provider key, for test authors and demos."
+description: "Scriptable Messages-compatible fault server for testing LLM adapters and recovery policy without a provider key, for test authors and demos."
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package gives tests and demos a scriptable OpenAI-compatible HTTP/SSE endpoint, so they can exercise model-provider failures and successes without a provider key. Each accepted `/chat/completions` request consumes the next scripted behavior, including resets, stalls, malformed chunks, rate limits, server errors, completions, and tool calls. Test authors can run it with `pnpm run mock:llm` or call `startMockLlmServer`, which returns captured requests for assertions. Seeded `random` behavior supports reproducible mixed-failure stress runs.
+This package gives tests and demos a scriptable Messages-compatible HTTP/SSE endpoint, so they can exercise model-provider failures and successes without a provider key. Each accepted `/v1/messages` request consumes the next scripted behavior, including resets, stalls, malformed chunks, rate limits, server errors, completions, and tool calls. Test authors can run it with `pnpm run mock:llm` or call `startMockLlmServer`, which returns captured requests for assertions. Seeded `random` behavior supports reproducible mixed-failure stress runs.
 
 ## Table of Contents
 
@@ -39,7 +39,7 @@ pnpm run mock:llm \
   --partial-text "discard this half"
 ```
 
-Point the shipping DeepSeek adapter at the server; it appends `/chat/completions` to the configured base:
+Point the shipping DeepSeek adapter at the server; it sends requests to `/messages` beneath the server's `/v1` root:
 
 ```sh
 DEEPSEEK_BASE_URL=http://127.0.0.1:8000/v1 \
@@ -88,13 +88,13 @@ Omitting `--seed` generates one and prints it in the `ready` record. `--random-w
 
 ### Timing and content controls
 
-The CLI exposes `--success-text`, `--partial-text`, `--reasoning-text`, `--chunk-size`, `--chunk-delay-ms`, `--disconnect-delay-ms`, `--retry-after-ms`, `--request-id`, `--tool-name`, and `--tool-arguments`. Millisecond delays are bounded integers within Node's timer range; `retryAfterMs` must also be positive. The library accepts the same camel-case options. An optional exact `apiKey` validates `Authorization: Bearer <token>`; omission accepts any token.
+The CLI exposes `--success-text`, `--partial-text`, `--reasoning-text`, `--chunk-size`, `--chunk-delay-ms`, `--disconnect-delay-ms`, `--retry-after-ms`, `--request-id`, `--tool-name`, and `--tool-arguments`. Millisecond delays are bounded integers within Node's timer range; `retryAfterMs` must also be positive. The library accepts the same camel-case options. An optional exact `apiKey` validates `x-api-key: <token>`; omission accepts any token.
 
 ### What can go wrong
 
 - **The script runs out** — exhaustion returns a structured HTTP 500; set `--repeat-last` or lengthen the sequence when a run needs more requests.
 - **Random weights without a positive concrete behavior are rejected** — every entry must name an existing behavior and at least one must carry positive weight.
-- **Invalid requests do not consume the script** — wrong methods, paths, bearer tokens, and malformed JSON get ordinary 4xx responses, so a misconfigured client can burn retries without advancing the sequence.
+- **Invalid requests do not consume the script** — wrong methods, paths, API keys, and malformed JSON get ordinary 4xx responses, so a misconfigured client can burn retries without advancing the sequence.
 
 -----
 
@@ -108,7 +108,7 @@ This section explains the design of the server; the observable behavior is fully
 
 ### Design
 
-The server is built on one rule: each accepted chat-completions request consumes exactly one behavior from an arrival-ordered FIFO cursor, and the server never retries or interprets harness policy. Validation happens before the cursor advances — only a `POST` whose path ends in `/chat/completions`, with a valid bearer token when one is configured and a parseable JSON body, consumes the script; everything else receives an ordinary 4xx. `random` entries resolve at request time through a seeded PRNG over the configured weights, so a run is reproducible from its printed seed.
+The server is built on one rule: each accepted Messages request consumes exactly one behavior from an arrival-ordered FIFO cursor, and the server never retries or interprets harness policy. Validation happens before the cursor advances — only a `POST` whose path ends in `/v1/messages`, with a valid API key when one is configured and a parseable JSON body, consumes the script; everything else receives an ordinary 4xx. `random` entries resolve at request time through a seeded PRNG over the configured weights, so a run is reproducible from its printed seed.
 
 ### Source map
 

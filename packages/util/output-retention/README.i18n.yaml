@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/output-retention/README.md
-README.md: bb0902b959f298f9f7b0a64de23d48e29bfd75ad
-README.zh.md: 7d96ba4da33a98b24eba53f9dd5a2f2c98b79f39
+/:
+  en: 058416b280f64a3a
+  zh: 6dd741394b67bd30
+/deepseek-ai-dsh-output-retention:
+  en: 909b14f93584c835
+  zh: da2b6de301df901a
+/deepseek-ai-dsh-output-retention/summary:
+  en: 22e523125ade3619
+  zh: 2cf48b1a6658056f
+/deepseek-ai-dsh-output-retention/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-output-retention/use-this-package:
+  en: f62f2da3b880d972
+  zh: be8b8bea3bff9cb6
+/deepseek-ai-dsh-output-retention/use-this-package/bounding-a-list-of-items:
+  en: 4e33df2bffae04a9
+  zh: b79773e1936605bf
+/deepseek-ai-dsh-output-retention/use-this-package/bounding-a-text-stream:
+  en: c0002b8dd81f4732
+  zh: 4f8c0e9f03e4ecf9
+/deepseek-ai-dsh-output-retention/use-this-package/building-the-omission-footer:
+  en: 24a79057aea704e0
+  zh: ab6b91d0d1c3b8d7
+/deepseek-ai-dsh-output-retention/use-this-package/capping-a-character-budget-preview:
+  en: ca55f16ac7f494d4
+  zh: 181c19d0d5f0128b
+/deepseek-ai-dsh-output-retention/use-this-package/what-truncated-means:
+  en: d496be708ac637dc
+  zh: 739017ce47f08148
+/deepseek-ai-dsh-output-retention/use-this-package/how-the-current-tools-use-it:
+  en: ed4b3b343ad80143
+  zh: 65dd1f707c3ac747
+/deepseek-ai-dsh-output-retention/understand-the-implementation:
+  en: fd2a6c959bfe864e
+  zh: 25b11d28aced568c
+/deepseek-ai-dsh-output-retention/understand-the-implementation/source-map:
+  en: cb49af8772b97f13
+  zh: 23810afb65f350ee
+/deepseek-ai-dsh-output-retention/understand-the-implementation/two-retainers-two-resource-models:
+  en: 6a5dd228d9f9808b
+  zh: 9bba82c5771ee705
+/deepseek-ai-dsh-output-retention/understand-the-implementation/how-the-budget-facts-stay-honest:
+  en: 101d99e1107d91c7
+  zh: ab64a35b62938db1
+/deepseek-ai-dsh-output-retention/understand-the-implementation/the-read-render-exclusion:
+  en: f76b67fa9e940705
+  zh: e7731bfd31cc9f5c
+/deepseek-ai-dsh-output-retention/further-exploration:
+  en: 32497c10ffb10c75
+  zh: 1176c882cbed93c0
+/deepseek-ai-dsh-output-retention/model-experience:
+  en: 247cdeeae9390244
+  zh: 0720d77e0a1d1c15
+/deepseek-ai-dsh-output-retention/model-experience/kv-cache-effect:
+  en: 4487c456cf996b48
+  zh: 2c25fe4a5a53f345
+/deepseek-ai-dsh-output-retention/known-limitations-and-deferred-work:
+  en: 34e646397df5e681
+  zh: 344609df5eb0c4fa
+/deepseek-ai-dsh-output-retention/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

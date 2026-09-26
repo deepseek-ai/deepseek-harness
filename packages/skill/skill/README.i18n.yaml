@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/skill/skill/README.md
-README.md: 00857c826d5f4a1893766d0305d475866250144e
-README.zh.md: b2f150cda8c8eba94c5149a12c224582e24bc4e9
+/:
+  en: ab82ac4bcc012854
+  zh: 3e2a2326e66f4bc3
+/deepseek-ai-dsh-skill:
+  en: 083f1e1c7ffedaad
+  zh: e52812b66ea22539
+/deepseek-ai-dsh-skill/summary:
+  en: dac8069f518e183c
+  zh: 2e4f2983030f9270
+/deepseek-ai-dsh-skill/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-skill/use-this-package:
+  en: cb13ae81a3e0ae68
+  zh: e709d66f4b6b4dd5
+/deepseek-ai-dsh-skill/use-this-package/when-to-choose-it:
+  en: ce05cda6706f18b7
+  zh: 3262ebdaf645cb9a
+/deepseek-ai-dsh-skill/use-this-package/mount-and-configure:
+  en: b8f130e081d14307
+  zh: d227ad3298b20238
+/deepseek-ai-dsh-skill/use-this-package/what-the-registry-gives-you:
+  en: 0cb7936c76a84e45
+  zh: a1fb8572481af54c
+/deepseek-ai-dsh-skill/use-this-package/observable-success-and-failures:
+  en: b7331b6a9c0d5bb2
+  zh: 3ea0785c3a8c7330
+/deepseek-ai-dsh-skill/understand-the-implementation:
+  en: 89be1dad151abb04
+  zh: 9a1915c4d55bb9d2
+/deepseek-ai-dsh-skill/understand-the-implementation/design-concept:
+  en: c0fb1850f00f24b1
+  zh: 226883ab5635435d
+/deepseek-ai-dsh-skill/understand-the-implementation/source-map:
+  en: 6cfbcb24c960a60c
+  zh: 5db5bd40e76b492a
+/deepseek-ai-dsh-skill/understand-the-implementation/catalog-collection:
+  en: 58a9b57dc504b69f
+  zh: 8fe8011247bc3f2b
+/deepseek-ai-dsh-skill/understand-the-implementation/loading-and-staleness:
+  en: e855d39692737103
+  zh: 396aa887a78989ec
+/deepseek-ai-dsh-skill/understand-the-implementation/invalidation:
+  en: d73258316127f5b5
+  zh: ddc6690f88922782
+/deepseek-ai-dsh-skill/further-exploration:
+  en: 3380abc631c2bc2f
+  zh: 00eec8eb8fb425d1
+/deepseek-ai-dsh-skill/model-experience:
+  en: 84f7d6e986f88425
+  zh: 0fdc2326d8efb13e
+/deepseek-ai-dsh-skill/model-experience/kv-cache-effect:
+  en: 628a45ff9f6b0e74
+  zh: fda70b0eed2df1d7
+/deepseek-ai-dsh-skill/known-limitations-and-deferred-work:
+  en: c5456e001203fd7a
+  zh: 3cc6fa50700eec13
+/deepseek-ai-dsh-skill/known-limitations-and-deferred-work/dev-note:
+  en: 259ce6914314397d
+  zh: d500b1f988a83999

@@ -99,10 +99,10 @@ describe('SessionSkillCatalog', () => {
       description: 'Composed for this Agent.',
       invocation: { modelInvocable: false, userInvocable: true },
     }]))
-    const standingKeyFor = vi.fn()
+    const acquireScope = vi.fn()
     ctx.provide('agentPresets', {
       serviceFor: () => ({ list: scopedList }),
-      standingKeyFor,
+      acquireScope,
     } as never)
     const catalog = new SessionSkillCatalog(ctx)
 
@@ -114,7 +114,7 @@ describe('SessionSkillCatalog', () => {
       }],
     })
     expect(scopedList).toHaveBeenCalledWith({ cwd: '/live/project', scope: agent })
-    expect(standingKeyFor).not.toHaveBeenCalled()
+    expect(acquireScope).not.toHaveBeenCalled()
   })
 
   it('uses the recorded preset standing scope for a cold Session', async () => {
@@ -127,14 +127,14 @@ describe('SessionSkillCatalog', () => {
         agentPreset: 'minimal',
       })),
     } as never)
-    const standingKeyFor = vi.fn(() => Promise.resolve(scope))
-    ctx.provide('agentPresets', { standingKeyFor } as never)
+    const acquireScope = vi.fn(() => Promise.resolve({ key: scope, [Symbol.asyncDispose]: async () => {} }))
+    ctx.provide('agentPresets', { acquireScope } as never)
     const list = vi.fn(() => Promise.resolve([]))
     ctx.provide('skills', { list } as never)
     const catalog = new SessionSkillCatalog(ctx)
 
     await expect(catalog.list({ sessionId }, new AbortController().signal)).resolves.toEqual({ skills: [] })
-    expect(standingKeyFor).toHaveBeenCalledWith('minimal')
+    expect(acquireScope).toHaveBeenCalledWith('minimal')
     expect(list).toHaveBeenCalledWith({ cwd: '/cold/project', scope })
     expect(ctx.agents.list()).toEqual([])
   })
@@ -149,7 +149,7 @@ describe('SessionSkillCatalog', () => {
       })),
     } as never)
     ctx.provide('agentPresets', {
-      standingKeyFor: () => Promise.reject(new Error('unknown preset')),
+      acquireScope: () => Promise.reject(new Error('unknown preset')),
     } as never)
     const list = vi.fn(() => Promise.resolve([]))
     ctx.provide('skills', { list } as never)

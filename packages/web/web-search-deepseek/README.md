@@ -33,7 +33,7 @@ Choose this backend when a deployment wants DeepSeek's native server-side web se
 
 ### Minimal configuration
 
-Load the web service and the provider; the key resolves from `ctx.credentials` when that service is mounted, otherwise from the process environment. The auxiliary search call has its own endpoint setting and uses the Anthropic-compatible base `https://api.deepseek.com/anthropic/v1`, with `/messages` appended. It reads `$DEEPSEEK_SEARCH_BASE_URL`, independently of the conversation adapter’s `$DEEPSEEK_BASE_URL` and protocol.
+Load the web service and the provider; the key resolves from `ctx.credentials` when that service is mounted, otherwise from the process environment. The auxiliary search call has its own endpoint setting and uses the Anthropic-compatible base `https://api.deepseek.com/anthropic/v1`, with `/messages` appended. It reads `$DEEPSEEK_SEARCH_BASE_URL`, independently of the conversation adapter’s `$DEEPSEEK_BASE_URL`.
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
@@ -53,7 +53,7 @@ Load the web service and the provider; the key resolves from `ctx.credentials` w
 | `maxTokens` | `4096` | Positive-integer upper bound on generated tokens for the Messages request |
 | `maxUses` | `5` | Positive-integer maximum `web_search` server-tool uses per request |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-search-deepseek) is the exhaustive source for every accepted field and its JSDoc. The entry above is the base layer of the provider's Settings section; a user layer over it reaches the next search, because the provider projects the section per call rather than capturing it at registration.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-search-deepseek) lists every accepted field. Each search captures options from the live Config references.
 
 ### What a search returns
 
@@ -88,14 +88,14 @@ The provider is built on two commitments:
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: config schema, Settings section installation, per-search option projection |
+| [`src/index.ts`](src/index.ts) | Config schema and per-search option capture |
 | [`src/provider.ts`](src/provider.ts) | The `DeepSeekSearchProvider`: Messages request dispatch, block parsing, citation joining, credential resolution |
 | [`src/types.ts`](src/types.ts) | Anthropic wire types for the search response |
 | — | No runtime invariant companion is published; the package emits a pre-dispatch log event but owns no later authoritative dispatch event to relate it to. Exact envelope equality is pinned at the provider boundary instead. |
 
 ### Request flow
 
-Each search projects the current Settings section into provider options — endpoint, model, key reference, limits — then resolves the credential reference through `ctx.credentials` (or the environment), appends the log-only session event, and dispatches the Messages request with the native `web_search` server tool. The response's `web_search_tool_result` blocks become `sources[]`; `cited_text` entries from text blocks are joined to their URLs as snippets; results are deduplicated by URL; and the service enforces the requested source bound on the way back.
+Each search captures the current Config values into provider options — endpoint, model, key reference, limits — then resolves the credential reference through `ctx.credentials` (or the environment), appends the log-only session event, and dispatches the Messages request with the native `web_search` server tool. The response's `web_search_tool_result` blocks become `sources[]`; `cited_text` entries from text blocks are joined to their URLs as snippets; results are deduplicated by URL; and the service enforces the requested source bound on the way back.
 
 </details>
 

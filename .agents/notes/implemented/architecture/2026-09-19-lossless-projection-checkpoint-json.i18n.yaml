@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-19-lossless-projection-checkpoint-json.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-19-lossless-projection-checkpoint-json.md
+/agent-note-lossless-projection-checkpoint-json:
+  en: 2b7b5f9e5da030df
+  zh: 76d65ddc85776939
+/agent-note-lossless-projection-checkpoint-json/problem:
+  en: 26e613246f31ee5a
+  zh: e0aa1e2f63bce802
+/agent-note-lossless-projection-checkpoint-json/decision:
+  en: 01161e9c42142971
+  zh: e05e52d2af7fc4c5
+/agent-note-lossless-projection-checkpoint-json/alternatives-considered:
+  en: 1d64345d3d72ed5f
+  zh: 4c9d3410cfd815b3
+/agent-note-lossless-projection-checkpoint-json/consequences:
+  en: 94b619dc13cfff0b
+  zh: c432227d3333175f

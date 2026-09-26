@@ -1,10 +1,9 @@
 /** Web SSE transport for page-owned client entry reconciliation and rebuilt code replacement. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { PluginsEventParseResult } from '../events.ts'
-import { EVENTS_ENDPOINT, parsePluginsEventFrame } from '../events.ts'
+import { EVENTS_ROUTE, parsePluginsEventFrame } from '../events.ts'
 
 export type { PluginsEventFrame } from '../events.ts'
-export { EVENTS_ENDPOINT } from '../events.ts'
 
 /** Cordis plugin name. */
 export const name = 'client-hmr'
@@ -26,7 +25,7 @@ export function apply(ctx: Context): void {
   }
 
   ctx.effect(() => {
-    const source = new EventSource(EVENTS_ENDPOINT)
+    const source = new EventSource(EVENTS_ROUTE)
     source.addEventListener('message', (event: MessageEvent<string>) => {
       let value: unknown
       try {

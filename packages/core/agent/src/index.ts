@@ -12,6 +12,7 @@ import { isPromise } from 'node:util/types'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import type { SessionEvent, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { installTurnArchiveAdmission } from './archive-admission.ts'
 import type { Agent } from './types.ts'
 import type { AgentOptions, SessionStartSource } from './runtime-types.ts'
 
@@ -86,11 +87,10 @@ export interface CreateAgentOptions {
   /** Exact fork-inherited prefix length when the session metadata sets `isSeeded`. */
   readonly inheritedEventCount?: SessionLogOffset
   /**
-   * Initial replay/fork history. A fork supplies a balanced completed-turn
-   * prefix of the parent's log. The complete seed must be contiguous from seq
-   * 0, carry only lossless-JSON data, and contain no open turn/step or dangling
-   * tool call. The factory passes it to the session's durable
-   * validator/snapshot boundary before publication.
+   * Initial replay/fork history, contiguous from seq 0 with lossless-JSON data.
+   * A fork supplies an exact parent prefix, its inherited marker, and closers
+   * for the open tail. Previously closed steps and turns remain unchanged.
+   * The factory validates and snapshots the seed before publication.
    */
   readonly seed?: readonly SessionEvent[]
   /** Per-agent options (model, …). */
@@ -277,6 +277,9 @@ export class AgentRegistry extends Service {
       yield () => this.disposeInitiators()
       yield () => { this.closeInitiators() }
     }.bind(this), 'agents.initiatorLifecycle()')
+    // Archive admission: the Workspace registry asks what still runs for a
+    // Session before hiding it; a running turn answers here, for every Agent.
+    installTurnArchiveAdmission(ctx, sessionId => this.get(sessionId))
   }
 
   /**

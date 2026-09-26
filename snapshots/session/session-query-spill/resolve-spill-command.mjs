@@ -6,16 +6,17 @@ export const inject = ['shell', 'fs']
 export function apply(ctx) {
   const shell = ctx.shell
   const fs = ctx.fs
-  const run = shell.run
+  const execute = shell.execute
   const suffix = "; grep -Fq request/header \"$file\" && grep -Fq session_event_search \"$file\" && printf 'SPILL_CANONICAL_OK\\n'"
   ctx.effect(() => {
-    shell.run = async (spec) => {
+    shell.execute = (spec) => {
       const match = /^file="([^"]+)"/.exec(spec.command)
-      if (match === null || spec.command !== match[0] + suffix) return run.call(shell, spec)
-      const target = await fs.resolve(match[1])
-      const path = fs.processPath(target).replaceAll("'", "'\"'\"'")
-      return run.call(shell, { ...spec, command: "file='" + path + "'" + suffix })
+      if (match === null || spec.command !== match[0] + suffix) return execute.call(shell, spec)
+      const physical = fs.processPathFromHostPath(match[1])
+      if (physical === undefined) throw new Error('snapshot spill path is not readable by the shell')
+      const path = physical.replaceAll("'", "'\"'\"'")
+      return execute.call(shell, { ...spec, command: "file='" + path + "'" + suffix })
     }
-    return () => { shell.run = run }
+    return () => { shell.execute = execute }
   })
 }

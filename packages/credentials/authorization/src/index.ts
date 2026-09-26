@@ -27,7 +27,7 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
-import type { CredentialKey } from '@deepseek-ai/dsh-credentials'
+import type { CredentialKey, CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 
 import type {
@@ -92,6 +92,12 @@ export interface AuthorizationSession {
   readonly method: string
   /** Aborted when the caller withdraws or `cancel()` is called for this key. */
   readonly signal: AbortSignal
+  /**
+   * Commit a record while rejecting cancelled attempts. Once admitted, cancellation waits for completion.
+   * @param record - credential owned by this flow.
+   * @returns after the credential store commits the record.
+   */
+  commit(record: CredentialRecord): Promise<void>
   /**
    * Report progress, or tell the human what to do next. Fire-and-forget: a
    * surface that cannot render a notice must not stall the flow.
@@ -173,6 +179,7 @@ export interface AuthorizationRequest {
 /** One attempt in flight, with the handle that withdraws it. */
 interface InFlight {
   readonly controller: AbortController
+  committing: boolean
 }
 
 /**
@@ -211,7 +218,7 @@ export class AuthorizationService extends Service {
         // A flow leaving mid-attempt takes its attempt with it: the runner
         // belongs to a plugin that is going away, so letting it keep prompting
         // would outlive the fiber that can answer for it.
-        this.running.get(flow.key)?.controller.abort()
+        this.cancel(flow.key)
       }
     }.bind(this), 'authorization.registerFlow()')
     return () => void dispose()
@@ -252,7 +259,8 @@ export class AuthorizationService extends Service {
    * @param key - the credential record whose attempt should stop.
    */
   cancel(key: CredentialKey): void {
-    this.running.get(key)?.controller.abort()
+    const running = this.running.get(key)
+    if (running !== undefined && !running.committing) running.controller.abort()
   }
 
   /**
@@ -294,9 +302,12 @@ export class AuthorizationService extends Service {
     // not exist hears about it whether or not it also gave up.
     if (request.signal?.aborted === true) return { status: 'cancelled' }
     const controller = new AbortController()
-    const withdraw = (): void => { controller.abort(request.signal?.reason) }
+    const withdraw = (): void => {
+      const running = this.running.get(key)
+      if (running !== undefined && !running.committing) controller.abort(request.signal?.reason)
+    }
     request.signal?.addEventListener('abort', withdraw, { once: true })
-    this.running.set(key, { controller })
+    this.running.set(key, { controller, committing: false })
     let settlement: AuthorizationSettlement = 'failed'
     try {
       const outcome = await this.attempt(flow, method, controller.signal, request.interaction)
@@ -386,6 +397,15 @@ export class AuthorizationService extends Service {
       const running = flow.run({
         method,
         signal,
+        commit: async (record) => {
+          signal.throwIfAborted()
+          const attempt = this.running.get(flow.key)
+          if (attempt === undefined || attempt.controller.signal !== signal) {
+            throw new AuthorizationError('authorization attempt is no longer active', 'CANCELLED')
+          }
+          attempt.committing = true
+          await this.ctx.credentials.modifyRecord(flow.key, () => Promise.resolve(record))
+        },
         notify: (notice) => {
           try {
             interaction.notify(notice)

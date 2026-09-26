@@ -1,6 +1,109 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/plan/plan-mode/README.md
-README.md: 693273ab4bdfddebd6145046e8354a5a211c8b8b
-README.zh.md: 4782eed381ee3bdffab22ca162696f8711b33b47
+/:
+  en: 2d2e1f1234a40dd8
+  zh: 137e06497bc0faa4
+/deepseek-ai-dsh-plan-mode:
+  en: bec45b226b0c8de7
+  zh: 4058bc63ef4cf091
+/deepseek-ai-dsh-plan-mode/summary:
+  en: def14e1297455361
+  zh: 3208d09bbb0edc3c
+/deepseek-ai-dsh-plan-mode/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-plan-mode/use-this-package:
+  en: 97a276da34bf0e32
+  zh: 8d13a8c5ef1436d7
+/deepseek-ai-dsh-plan-mode/use-this-package/when-to-choose-it:
+  en: a239fa47a3039164
+  zh: 1181872cdf846357
+/deepseek-ai-dsh-plan-mode/use-this-package/minimal-configuration:
+  en: 30b67de3f6e97eab
+  zh: 746cc81fbf5e0ed1
+/deepseek-ai-dsh-plan-mode/use-this-package/entering-and-leaving-plan-mode:
+  en: 2d300cdb883352ec
+  zh: 5a81be005b3716d3
+/deepseek-ai-dsh-plan-mode/use-this-package/the-reviewed-exit:
+  en: ffc56477380b9411
+  zh: 17cac060f2252d78
+/deepseek-ai-dsh-plan-mode/use-this-package/observing-plan-state:
+  en: b44e92bc38406015
+  zh: ed56190bee5d71a4
+/deepseek-ai-dsh-plan-mode/understand-the-implementation:
+  en: 16370ef642feec6a
+  zh: 72aab8cf7795472e
+/deepseek-ai-dsh-plan-mode/understand-the-implementation/design-philosophy:
+  en: 0acc88b042a99380
+  zh: e4cf66b77f2fc7ae
+/deepseek-ai-dsh-plan-mode/understand-the-implementation/durable-state-and-step-boundary-appends:
+  en: ff946ab59a7b4a0f
+  zh: b1c79937770f57ad
+/deepseek-ai-dsh-plan-mode/understand-the-implementation/the-plan-command:
+  en: a7bf35c2a9da52bc
+  zh: dea9f4b3a41f1a6d
+/deepseek-ai-dsh-plan-mode/understand-the-implementation/the-exit-tool:
+  en: 56798d0f45fb5775
+  zh: 282e4a522ce6dae0
+/deepseek-ai-dsh-plan-mode/understand-the-implementation/session-projection-unit:
+  en: 74cd6bdf50af51f5
+  zh: 67609cf7202ececb
+/deepseek-ai-dsh-plan-mode/understand-the-implementation/source-map:
+  en: 4ee4cfb5fceccdf1
+  zh: 12035b72e1996a55
+/deepseek-ai-dsh-plan-mode/further-exploration:
+  en: b6f3ce071f1b7e9b
+  zh: 84b7fe88e09866d8
+/deepseek-ai-dsh-plan-mode/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-plan-mode/model-experience/plan-policy-system-prompt:
+  en: 28219e680bcadc65
+  zh: 264cddf4c1f282ab
+/deepseek-ai-dsh-plan-mode/model-experience/plan-policy-system-prompt/what-the-model-sees:
+  en: 3298c6752fd67bab
+  zh: d0132ee432a2a671
+/deepseek-ai-dsh-plan-mode/model-experience/plan-policy-system-prompt/what-the-model-sees/configuration-example:
+  en: 85ceebb0d1aae24f
+  zh: 1954f2ad3d538621
+/deepseek-ai-dsh-plan-mode/model-experience/plan-policy-system-prompt/token-effect:
+  en: 4e339015c4c0dff8
+  zh: a61e28944707f43d
+/deepseek-ai-dsh-plan-mode/model-experience/plan-policy-system-prompt/kv-cache-effect:
+  en: 1331892c04e7a2f9
+  zh: f35152173255962f
+/deepseek-ai-dsh-plan-mode/model-experience/human-command:
+  en: 4d1ec2182c2ac7ec
+  zh: 1c9c4a30d8a89075
+/deepseek-ai-dsh-plan-mode/model-experience/human-command/what-the-model-sees:
+  en: 3aa6c3e57f8e6982
+  zh: f11d289a94976e49
+/deepseek-ai-dsh-plan-mode/model-experience/human-command/token-effect:
+  en: fab2133874ee6b9a
+  zh: 835e97e46df66dc0
+/deepseek-ai-dsh-plan-mode/model-experience/human-command/kv-cache-effect:
+  en: 3fea3b0fa514c75c
+  zh: cd479f56ac1eae9d
+/deepseek-ai-dsh-plan-mode/model-experience/exit-tool-schema-and-review-exchange:
+  en: 9622e96bdc01276d
+  zh: 53801e68a49f3d1d
+/deepseek-ai-dsh-plan-mode/model-experience/exit-tool-schema-and-review-exchange/what-the-model-sees:
+  en: 3768d0189f9f13af
+  zh: 2168a9b24551b7c6
+/deepseek-ai-dsh-plan-mode/model-experience/exit-tool-schema-and-review-exchange/token-effect:
+  en: d1b1418f20ee119d
+  zh: c2b89ea3cae57175
+/deepseek-ai-dsh-plan-mode/model-experience/exit-tool-schema-and-review-exchange/kv-cache-effect:
+  en: 6b1404ea11f1e60d
+  zh: 348d0579de218652
+/deepseek-ai-dsh-plan-mode/known-limitations-and-deferred-work:
+  en: a87aabfede0087fd
+  zh: 201e9b3766980005
+/deepseek-ai-dsh-plan-mode/known-limitations-and-deferred-work/dev-note:
+  en: 7de02cd33a767bd6
+  zh: d9e54003f230f725
+/deepseek-ai-dsh-plan-mode/known-limitations-and-deferred-work/dev-note/future-a-second-collaboration-mode:
+  en: 556b49684461978b
+  zh: 9ac9f09b0aedc589

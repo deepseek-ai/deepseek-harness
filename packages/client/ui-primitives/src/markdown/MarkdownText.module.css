@@ -1,6 +1,6 @@
 /* Visual baseline: deepsuite `@deepseek/md` markdown.css, adapted to CSS
-   Modules. Cite pills, header anchors, and thinking-small variants are
-   intentionally absent (no matching DOM). Token names match that sheet. */
+   Modules. Cite pills and header anchors are absent (no matching DOM).
+   Token names match that sheet. */
 
 .markdown {
   min-width: 0;
@@ -55,7 +55,8 @@
   margin-bottom: 8px;
 }
 
-.markdown a {
+.markdown a,
+.markdown .fileLink {
   /* deepsuite markdown.css uses brand-text (blue in newDesign); this sheet
      keeps design-platform brand-text as near-black, so links use the
      dedicated link alias instead. */
@@ -80,8 +81,9 @@
   text-underline-offset: 3px;
 }
 
-.markdown a:focus-visible {
-  box-shadow: 0 0 0 2px var(--dsw-alias-state-business-primary);
+.markdown a:focus-visible,
+.fileMention:focus-visible {
+  box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
 }
 
 /* Leading link-category glyph inside anchors, file mentions, and
@@ -167,7 +169,7 @@
   font-size: 0.875em !important;
   background-color: var(--dsw-alias-markdown-inline-code);
   border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   padding: 0 5px;
 }
 
@@ -205,7 +207,7 @@
    already the hover that re-enables scrolling. */
 .tableScroll:global(.md-table-wide) {
   overflow-x: hidden;
-  padding-bottom: var(--dsh-scrollbar-width, 8px);
+  padding-bottom: var(--dsh-scrollbar-width, 5px);
 }
 
 .tableScroll:global(.md-table-wide):hover,
@@ -218,7 +220,7 @@
    the sheet's link focus color. */
 .tableScroll:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--dsw-alias-state-business-primary);
+  box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
 }
 
 /* Many-column tables (the renderer's `md-table-wide` hook) keep their
@@ -293,7 +295,7 @@
   max-width: 100%;
   height: auto;
   margin: 0;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-base);
   object-fit: contain;
 }
@@ -314,9 +316,152 @@
   cursor: pointer;
 }
 
+.fileLink {
+  max-width: 100%;
+  text-align: inherit;
+}
+
 .fileMention:hover,
 .fileMention:focus {
   outline: none;
   text-decoration: underline dotted var(--dsw-alias-link);
   text-underline-offset: 3px;
+}
+
+.compact {
+  max-width: 100%;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.compact :is(h1, h2, h3, h4, h5, h6) {
+  margin: 8px 0 4px;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+}
+
+.compact :is(p, ul, ol, blockquote) {
+  margin: 4px 0;
+}
+
+.compact li:not(:first-child) {
+  margin-top: 2px;
+}
+
+.compact li > p {
+  margin: 4px 0;
+}
+
+.compact li::marker {
+  line-height: inherit;
+  color: inherit;
+}
+
+.compact blockquote {
+  padding-left: 8px;
+}
+
+.compact hr {
+  margin: 8px 0;
+}
+
+.compact a,
+.compact .fileMention {
+  font-weight: inherit;
+  color: inherit;
+  text-decoration: underline dotted;
+}
+
+.compact a:hover,
+.compact a:focus,
+.compact .fileMention:hover,
+.compact .fileMention:focus {
+  text-decoration-color: currentColor;
+}
+
+.compact :not(pre) > code {
+  display: inline;
+  font: inherit;
+  font-family: var(--ds-font-family-code);
+  font-size: 1em !important;
+  border-radius: var(--dsw-radius-xs);
+  padding: 0 3px;
+  box-decoration-break: clone;
+}
+
+.markdown.compact :global(.md-code-block) {
+  margin: 4px 0;
+  color: inherit;
+}
+
+.compact :global(.md-code-block) > :has(> [data-code-block-banner]) {
+  position: static;
+  z-index: auto;
+}
+
+/* Shiki writes token colors inline; compact code uses the surrounding text color. */
+.compact pre,
+.compact pre :is(code, span) {
+  color: inherit !important;
+}
+
+.markdown.compact .tableScroll {
+  width: 100%;
+  max-width: 100%;
+  margin: 4px 0;
+  padding-left: 0;
+}
+
+.markdown.compact .tableScroll > table {
+  z-index: auto;
+}
+
+.compact :is(th, td) {
+  padding: 4px 8px;
+  font: inherit;
+}
+
+.compact th {
+  font-weight: 600;
+}
+
+.compact :global(.katex) {
+  font-size: 1em;
+}
+
+/* Keep KaTeX's inline baseline and scroll the containing block only when needed. */
+.compact :is(p, h1, h2, h3, h4, h5, h6, ul, ol):has(:global(.katex)) {
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* KaTeX descenders can paint one pixel below a fractional line-box edge. */
+  padding-bottom: 1px;
+}
+
+.compact :global(.katex-display) {
+  margin: 4px 0;
+}
+
+.imageButton {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  vertical-align: middle;
+  cursor: zoom-in;
+}
+.imageButton .image { max-width: min(100%, 640px); max-height: 360px; }
+.imageButton:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 3px; }
+.previewName {
+  display: block;
+  margin-top: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
 }

@@ -1,6 +1,70 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/llm/llm-retry/README.md
-README.md: ca8018e1fbfcda7b091c30370a195bfe40c5f1b2
-README.zh.md: ec3ee877ef5ddbee29bc6df6c395ed96d1c2f8da
+/:
+  en: 48b7b8ee60e92601
+  zh: 28dfac5ed11f58ce
+/deepseek-ai-dsh-llm-retry:
+  en: 3520978b6095ca72
+  zh: 6c3d4db6528f8510
+/deepseek-ai-dsh-llm-retry/summary:
+  en: 215c17e795c11707
+  zh: c9f063f79ca8b78f
+/deepseek-ai-dsh-llm-retry/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-llm-retry/use-this-package:
+  en: ecee4f255eaa53bd
+  zh: 2e7983fd7668fa00
+/deepseek-ai-dsh-llm-retry/use-this-package/when-to-choose-it:
+  en: 17f7e708d9daed6c
+  zh: 6ebf99501110948a
+/deepseek-ai-dsh-llm-retry/use-this-package/minimal-configuration:
+  en: 95b1cf09ee2c77a9
+  zh: 4d45e437db4988c7
+/deepseek-ai-dsh-llm-retry/use-this-package/what-you-can-observe:
+  en: 21267b22ad48e012
+  zh: 521bfad2c2d8e418
+/deepseek-ai-dsh-llm-retry/use-this-package/failures-and-recovery:
+  en: 730567739a21a4d2
+  zh: 3ea222c68d960948
+/deepseek-ai-dsh-llm-retry/understand-the-implementation:
+  en: cef3289094f94c25
+  zh: c7f40ff6e4e56de6
+/deepseek-ai-dsh-llm-retry/understand-the-implementation/design-philosophy:
+  en: fc4f15a14435698c
+  zh: 3c6d83f5ba04ec0e
+/deepseek-ai-dsh-llm-retry/understand-the-implementation/source-map:
+  en: f34b551859b68c88
+  zh: 813ffa32497b1d9a
+/deepseek-ai-dsh-llm-retry/understand-the-implementation/recovery-flow:
+  en: 85bace285b029101
+  zh: 6e0237450ca6ccc0
+/deepseek-ai-dsh-llm-retry/understand-the-implementation/waterfall-composition:
+  en: 388e8db333e03cb1
+  zh: 54b6446ac3584724
+/deepseek-ai-dsh-llm-retry/further-exploration:
+  en: 379f79ac2cafe26d
+  zh: e6d23a010079e41d
+/deepseek-ai-dsh-llm-retry/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-llm-retry/model-experience/model-request-recovery:
+  en: 8496b7aefbe6fa20
+  zh: ed7b60ef09380ec4
+/deepseek-ai-dsh-llm-retry/model-experience/model-request-recovery/what-the-model-sees:
+  en: 9772b77e48e70dba
+  zh: df3d4105f7b8c256
+/deepseek-ai-dsh-llm-retry/model-experience/model-request-recovery/token-effect:
+  en: f86254d7c2ed2444
+  zh: 7e0f7b9e026e0bf2
+/deepseek-ai-dsh-llm-retry/model-experience/model-request-recovery/kv-cache-effect:
+  en: 82d6bdfc0ec747ea
+  zh: 14269c9dcd086611
+/deepseek-ai-dsh-llm-retry/known-limitations-and-deferred-work:
+  en: bef1baa545592b9c
+  zh: 61984a1e10de8294
+/deepseek-ai-dsh-llm-retry/known-limitations-and-deferred-work/dev-note:
+  en: ff38027230617ebb
+  zh: 4a7913e851407b0c

@@ -69,15 +69,23 @@ export interface WorkspaceByteRange {
   readonly length?: number
 }
 
+/** Target resolution and optional byte range for one binary file read. */
+export interface WorkspaceByteReadOptions {
+  /** Byte window; omit to read the complete file under the configured `maxFileBytes` cap. */
+  readonly range?: WorkspaceByteRange
+  /** Base file, absolute or workspace-relative; resolve the relative target from its directory. */
+  readonly baseFile?: string
+}
+
 /**
  * One byte window of a workspace file as a Client reads it: raw bytes, no text
  * decoding and no binary rejection. `bytes` is the complete file's size.
  */
-export interface WorkspaceFileBytes extends WorkspaceFileStat {
+export interface WorkspaceFileBytes<Data extends Uint8Array = Uint8Array> extends WorkspaceFileStat {
   /** First byte of the window, as requested. */
   readonly offset: number
-  /** The window's bytes in base64; empty when `offset` lies at or past the file's end. */
-  readonly data: string
+  /** Native file bytes; empty at or past EOF. */
+  readonly data: Data
   /** Whether the window includes the file's last byte. */
   readonly eof: boolean
 }
@@ -115,28 +123,28 @@ export interface WorkspaceDirectoryListing {
 }
 
 /**
- * One observation of a workspace file made by an instrumented filesystem
- * operation. Frames report observations, not deltas: a consumer already
- * holding `version` learns nothing new from the frame and can ignore it.
+ * Current target metadata after a filesystem invalidation. File consumers may
+ * ignore an already known version; directory consumers relist on every frame
+ * because a child's metadata can change without changing the directory version.
  */
 export type WorkspaceFileChange =
   | {
-    /** Absolute path of the observed file, in the same form as {@link WorkspaceFileStat.absolutePath}. */
+    /** Absolute target path, in the same form as {@link WorkspaceFileStat.absolutePath}. */
     readonly absolutePath: string
-    /** Opaque freshness token after the observed operation; never parsed. */
+    /** Opaque freshness token from the current stat; never parsed. */
     readonly version: string
   }
   | {
-    /** Absolute path of the observed file, in the same form as {@link WorkspaceFileStat.absolutePath}. */
+    /** Absolute target path, in the same form as {@link WorkspaceFileStat.absolutePath}. */
     readonly absolutePath: string
-    /** The file was observed to be gone. */
+    /** The target was observed to be gone. */
     readonly absent: true
   }
 
 /**
  * One frame of a workspace file watch generation. `ready` confirms that the
- * Host is observing filesystem operations and has resolved the workspace
- * root; observations queued during that resolution follow as `change` frames.
+ * Host has initialized the target watcher; queued and live invalidations
+ * follow as `change` frames with current target metadata.
  */
 export type WorkspaceFileWatchFrame =
   | { readonly kind: 'ready' }
@@ -144,9 +152,11 @@ export type WorkspaceFileWatchFrame =
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
+    /** The filesystem provider cannot initialize a watch for this target. */
+    'workspace-file/watch-unsupported': { readonly path: string }
     /** No entry exists at that path inside the workspace. */
     'workspace-file/not-found': { readonly path: string }
-    /** The directory listing path resolves outside the session's workspace root. */
+    /** The directory listing or watch path resolves outside the Session's workspace root. */
     'workspace-file/outside-workspace': { readonly path: string }
     /** The requested page exceeds the configured byte cap; nothing is returned. */
     'workspace-file/too-large': { readonly path: string; readonly limit: number }

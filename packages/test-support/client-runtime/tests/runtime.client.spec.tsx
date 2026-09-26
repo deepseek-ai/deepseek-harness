@@ -7,18 +7,25 @@
  * stack — this suite is the fixture the migrated feature specs rely on.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { stubSettingsScope } from '../src/settings-scope.ts'
-import { cleanup } from '@testing-library/react'
-import { defineStore } from '@deepseek-ai/dsh-client-store'
+import { Context } from '@deepseek-ai/cordis'
+import { stubConfigForm } from '../src/config-form.ts'
+import { act, cleanup } from '@testing-library/react'
+import { useSyncExternalStore } from 'react'
+import { createSnapshotStore, defineStore } from '@deepseek-ai/dsh-client-store'
+import { createScope, type SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { PropsRenderSlots, SessionStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  PropsRenderSlots, SessionStandardProps, SlotRendererHost,
+} from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     'trt.panel': { kind: 'single'; scope: 'root'; owner: { label?: string } }
     'trt.chat': { kind: 'single'; scope: 'session' }
+    'trt.other-chat': { kind: 'single'; scope: 'session' }
+    'trt.maybe': { kind: 'single'; scope: 'session-maybe' }
     'trt.rows': { kind: 'list'; scope: 'root' }
     'trt.rows.hole': { kind: 'single'; scope: 'root' }
   }
@@ -26,14 +33,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 afterEach(cleanup)
 
-type FrameProps = PropsRenderSlots<'trt.panel' | 'trt.chat' | 'trt.rows'>
+type FrameProps = PropsRenderSlots<'trt.panel' | 'trt.chat' | 'trt.rows'> & { reference: SessionReference | undefined }
 
 /** Root frame declaring all three suite slots (render sites for each kind). */
-function Frame({ renderSlot, SessionProvider }: FrameProps) {
+function Frame({ renderSlot, SessionProvider, reference }: FrameProps) {
   return (
     <>
       {renderSlot('trt.panel', { label: 'from-owner' }, { fallback: <i>no panel</i> })}
-      <SessionProvider empty={() => <i>no session</i>}>
+      <SessionProvider session={reference} empty={() => <i>no session</i>}>
         {renderSlot('trt.chat', {})}
       </SessionProvider>
       {renderSlot('trt.rows', {})}
@@ -47,9 +54,14 @@ const CHILDREN = {
   'trt.rows': { kind: 'list', scope: 'root' },
 } as const
 
-async function runtimeWithFrame() {
+async function runtimeWithFrame(reference = createSnapshotStore<SessionReference | undefined>(undefined)) {
   const runtime = await SlotTestRuntime.create()
-  await runtime.root.declare(CHILDREN, Frame)
+  const subscribe = reference.subscribe.bind(reference)
+  const getSnapshot = reference.getSnapshot.bind(reference)
+  await runtime.root.declare(CHILDREN, (props) => {
+    const bound = useSyncExternalStore(subscribe, getSnapshot)
+    return <Frame {...props} reference={bound} />
+  })
   return runtime
 }
 
@@ -82,8 +94,9 @@ describe('root declaration and rendering', () => {
 })
 
 describe('sessions', () => {
-  it('drives SessionProvider: empty state, current session, switch, live snapshot updates', async () => {
-    const runtime = await runtimeWithFrame()
+  it('drives SessionProvider with explicit references and live snapshot updates', async () => {
+    const reference = createSnapshotStore<SessionReference | undefined>(undefined)
+    const runtime = await runtimeWithFrame(reference)
     runtime.slots.register({ name: 'trt.chat' }, (props: SessionStandardProps) => {
       const running = props.useSession(s => s.running)
       return <span>chat:{props.sessionId}:{String(running)}</span>
@@ -92,29 +105,36 @@ describe('sessions', () => {
     expect(view.container.textContent).toContain('no session')
 
     await runtime.sessions.add({ id: 's1' })
+    using first = runtime.sessions.retain('s1' as SessionId)
+    await first.ready
+    act(() => { reference.set(first) })
     expect(view.container.textContent).toContain('chat:s1:false')
 
     await runtime.sessions.updateSessionSnapshot('s1', (draft) => { draft.running = true })
     expect(view.container.textContent).toContain('chat:s1:true')
 
-    await runtime.sessions.add({ id: 's2' }) // becomes current by default
+    await runtime.sessions.add({ id: 's2' })
+    using second = runtime.sessions.retain('s2' as SessionId)
+    await second.ready
+    act(() => { reference.set(second) })
     expect(view.container.textContent).toContain('chat:s2:false')
 
-    await runtime.sessions.setCurrent(undefined)
+    act(() => { reference.set(undefined) })
     expect(view.container.textContent).toContain('no session')
-    await runtime.sessions.setCurrent('s1')
+    act(() => { reference.set(first) })
     expect(view.container.textContent).toContain('chat:s1:true')
     await runtime.dispose()
   })
 
-  it('add with current:false keeps the selection; unknown ids fail loud on the mutators', async () => {
+  it('adds catalog entries without retaining them and rejects unknown mutation targets', async () => {
     const runtime = await runtimeWithFrame()
     await runtime.sessions.add({ id: 's1' })
-    await runtime.sessions.add({ id: 's2' }, { current: false })
-    expect(runtime.sessions.list.getSnapshot().current).toBe('s1')
+    await runtime.sessions.add({ id: 's2' })
+    expect(runtime.sessions.binding('s1')).toBeUndefined()
+    expect(runtime.sessions.binding('s2')).toBeUndefined()
     expect(runtime.sessions.list.getSnapshot().ids).toEqual(['s1', 's2'])
     await expect(runtime.sessions.add({ id: 's1' })).rejects.toThrow(/already added/)
-    await expect(runtime.sessions.setCurrent('ghost')).rejects.toThrow(/not added/)
+    expect(() => runtime.sessions.retain('ghost' as SessionId)).toThrow(/not added/)
     await expect(runtime.sessions.updateSessionSnapshot('ghost', () => {})).rejects.toThrow(/not added/)
     await expect(runtime.sessions.remove('ghost')).rejects.toThrow(/not added/)
     expect(() => runtime.sessions.behavior('ghost')).toThrow(/not added/)
@@ -125,6 +145,9 @@ describe('sessions', () => {
     const runtime = await runtimeWithFrame()
     const prompt = vi.fn()
     await runtime.sessions.add({ id: 's1', session: { prompt } })
+    using reference = runtime.sessions.retain('s1' as SessionId)
+    await reference.ready
+    expect(reference.binding.sessionId).toBe('s1')
 
     expect(runtime.sessions.scope('ghost')).toBeUndefined()
     expect(runtime.sessions.binding('ghost')).toBeUndefined()
@@ -136,6 +159,9 @@ describe('sessions', () => {
     // sessionOf resolves the behavior face off the scope tag.
     expect(runtime.sessions.sessionOf(scope)).toBe(runtime.sessions.behavior('s1'))
     expect(runtime.sessions.sessionOf(runtime.ctx)).toBeUndefined()
+    const foreign = createScope(runtime.ctx, 's1' as SessionId)
+    expect(runtime.sessions.sessionOf(foreign.ctx)).toBeUndefined()
+    await foreign.fiber.dispose()
 
     const binding = runtime.sessions.binding('s1')!
     expect(binding.sessionId).toBe('s1')
@@ -151,43 +177,232 @@ describe('sessions', () => {
     await runtime.dispose()
   })
 
-  it('records service-face calls and retains catalog addresses only for addressed selection', async () => {
+  it('resolves loaded parent projection addresses without retaining a session', async () => {
+    const runtime = await runtimeWithFrame()
+    try {
+      const parent = 'parent' as SessionId
+      const child = 'child' as SessionId
+      runtime.sessions.list.update((draft) => {
+        draft.projectionsBySession = {
+          [parent]: { state: 'ready', error: null, values: { subagentCatalog: [{ createdAt: 1, id: child, mode: 'continuable', label: 'worker' }] } },
+        }
+      })
+      expect(runtime.sessions.subagentAddress(child)).toEqual({
+        parentSessionId: parent, childSessionId: child, mode: 'continuable',
+      })
+      expect(runtime.sessions.subagentAddress(parent)).toBeUndefined()
+      expect(runtime.sessions.binding(child)).toBeUndefined()
+      expect(runtime.sessions.binding(parent)).toBeUndefined()
+    } finally {
+      await runtime.dispose()
+    }
+  })
+
+  it('accepts explicit addresses without a catalog and keeps them independent of references', async () => {
     const runtime = await runtimeWithFrame()
     await runtime.sessions.add({ id: 's1' })
     await runtime.sessions.add({ id: 's2' })
     const address = {
-      parentSessionId: 's2' as SessionId,
-      childSessionId: 's1' as SessionId,
-      mode: 'continuable' as const,
+      parentSessionId: 's2' as SessionId, childSessionId: 's1' as SessionId, mode: 'continuable' as const,
     }
-    runtime.sessions.openSubagent(address)
-    await runtime.flush()
-    expect(runtime.sessions.list.getSnapshot()).toMatchObject({ current: 's1', currentAddress: address })
+    using reference = runtime.sessions.retain(address)
+    await reference.ready
+    expect(reference.sessionId).toBe('s1')
     expect(runtime.sessions.subagentAddress('s1' as SessionId)).toEqual(address)
     expect(runtime.sessions.subagentAddress('s2' as SessionId)).toBeUndefined()
     await runtime.sessions.updateSummary('s1', { displayTitle: 'renamed', running: true })
     expect(runtime.sessions.list.getSnapshot().byId['s1' as SessionId])
       .toMatchObject({ displayTitle: 'renamed', running: true })
-    runtime.sessions.setSubagentCatalogOpen('s2' as SessionId, true)
-    await runtime.sessions.refreshSubagents('s2' as SessionId)
-    runtime.sessions.open('s1' as SessionId)
-    await runtime.flush()
-    expect(runtime.sessions.list.getSnapshot().current).toBe('s1')
-    expect(runtime.sessions.list.getSnapshot().currentAddress).toBeUndefined()
-    runtime.sessions.clear()
-    await runtime.flush()
-    expect(runtime.sessions.list.getSnapshot().current).toBeUndefined()
+    await runtime.sessions.refreshProjections('s2' as SessionId)
+    reference.release()
+    expect(runtime.sessions.binding('s1')).toBeUndefined()
+    expect(runtime.sessions.subagentAddress('s1' as SessionId)).toEqual(address)
     await expect(runtime.sessions.fork({
       sessionId: 's1' as SessionId, atSeq: 7, increaseTitle: true,
     })).resolves.toBe('s1')
     expect(runtime.sessions.calls).toEqual([
-      { method: 'openSubagent', args: [address] },
-      { method: 'setSubagentCatalogOpen', args: ['s2', true] },
-      { method: 'refreshSubagents', args: ['s2'] },
-      { method: 'open', args: ['s1'] },
-      { method: 'clear', args: [] },
+      { method: 'refreshProjections', args: ['s2'] },
       { method: 'fork', args: [{ sessionId: 's1', atSeq: 7, increaseTitle: true }] },
     ])
+    await runtime.dispose()
+  })
+
+  it('resolves catalog addresses without retaining their parent', async () => {
+    const runtime = await runtimeWithFrame()
+    const parentId = 'parent' as SessionId
+    await runtime.sessions.add({ id: 'child' })
+    runtime.sessions.list.update((draft) => {
+      draft.projectionsBySession = {
+        [parentId]: {
+          state: 'ready', error: null,
+          values: { subagentCatalog: [
+            { createdAt: 1, id: 'other' as SessionId, mode: 'one-shot' },
+            { createdAt: 2, id: 'child' as SessionId, mode: 'continuable', label: 'Child' },
+          ] },
+        },
+      }
+    })
+
+    expect(runtime.sessions.subagentAddress('child' as SessionId)).toEqual({
+      parentSessionId: parentId, childSessionId: 'child', mode: 'continuable',
+    })
+    expect(runtime.sessions.subagentAddress('missing' as SessionId)).toBeUndefined()
+    expect(runtime.sessions.binding(parentId)).toBeUndefined()
+    expect(runtime.sessions.binding('child')).toBeUndefined()
+    await runtime.dispose()
+  })
+
+  it('tracks repeated references and releases callback and Context-owned references', async () => {
+    const runtime = await runtimeWithFrame()
+    const id = await runtime.sessions.add({ id: 'owned' })
+    const info = runtime.sessions.retainInfo(id)
+    expect(runtime.sessions.retainInfo(id)).toBe(info)
+    const first = runtime.sessions.retain(id, { source: 'testOperation' })
+    const second = runtime.sessions.retain(id, { source: 'testOperation' })
+    const scope = first.binding.ctx
+    await Promise.all([first.ready, second.ready])
+    expect(info.getSnapshot()).toEqual({ referenceCount: 2, retainedBy: { testOperation: 2 } })
+    expect(runtime.sessions.list.getSnapshot().byId[id]?.retainedBy).toEqual({ testOperation: 2 })
+    first.release()
+    expect(info.getSnapshot()).toEqual({ referenceCount: 1, retainedBy: { testOperation: 1 } })
+    second.release()
+    await scope.fiber.dispose()
+    expect(info.getSnapshot()).toEqual({ referenceCount: 0, retainedBy: {} })
+
+    await expect(runtime.sessions.using(id, { source: 'testOperation' }, reference => reference.sessionId))
+      .resolves.toBe(id)
+    const failure = new Error('operation failed')
+    await expect(runtime.sessions.using(id, { source: 'testOperation' }, () => { throw failure }))
+      .rejects.toBe(failure)
+
+    const owner = new Context()
+    const owned = runtime.sessions.retainFor(owner, id)
+    await owned.ready
+    const ownedScope = owned.binding.ctx
+    await owner.fiber.dispose()
+    await ownedScope.fiber.dispose()
+    expect(info.getSnapshot()).toEqual({ referenceCount: 0, retainedBy: {} })
+    await runtime.dispose()
+  })
+
+  it('releases a retained fixture when its Context owner rejects registration', async () => {
+    const runtime = await runtimeWithFrame()
+    const id = await runtime.sessions.add({ id: 'owner-failure' })
+    const owner = new Context()
+    const failure = new Error('owner rejected effect')
+    vi.spyOn(owner, 'effect').mockImplementation(() => { throw failure })
+
+    expect(() => runtime.sessions.retainFor(owner, id)).toThrow(failure)
+    expect(runtime.sessions.retainInfo(id).getSnapshot()).toEqual({ referenceCount: 0, retainedBy: {} })
+    await runtime.dispose()
+  })
+
+  it('releases a reference when readiness signal composition rejects it', async () => {
+    const runtime = await runtimeWithFrame()
+    const id = await runtime.sessions.add({ id: 'bad-signal' })
+    const malformed = { throwIfAborted: () => {} } as AbortSignal
+
+    expect(() => runtime.sessions.retain(id, {
+      source: 'testOperation', signal: malformed,
+    })).toThrow(TypeError)
+    expect(runtime.sessions.retainInfo(id).getSnapshot()).toEqual({
+      referenceCount: 0, retainedBy: {},
+    })
+    await runtime.dispose()
+  })
+
+  it('mirrors acquisition cancellation and generation disposal races', async () => {
+    const runtime = await runtimeWithFrame()
+    const blocked = Promise.withResolvers<undefined>()
+    const cancelledId = await runtime.sessions.add({
+      id: 'cancelled', initialOpen: () => blocked.promise,
+    })
+    const reason = new Error('cancelled while retaining')
+    const controller = new AbortController()
+    const info = runtime.sessions.retainInfo(cancelledId)
+    const off = info.subscribe(() => {
+      if (info.getSnapshot().referenceCount > 0) controller.abort(reason)
+    })
+    const cancelled = runtime.sessions.retain(cancelledId, {
+      source: 'testOperation', signal: controller.signal,
+    })
+    await expect(cancelled.ready).rejects.toBe(reason)
+    cancelled.release()
+    blocked.resolve(undefined)
+    off()
+
+    const opening = Promise.withResolvers<undefined>()
+    const disposedId = await runtime.sessions.add({ id: 'disposed', initialOpen: () => opening.promise })
+    const disposed = runtime.sessions.retain(disposedId)
+    const binding = disposed.binding
+    const scopeDisposal = binding.ctx.fiber.dispose()
+    opening.resolve(undefined)
+    await scopeDisposal
+    await expect(disposed.ready).rejects.toThrow('is released')
+    disposed.release()
+    await runtime.dispose()
+  })
+
+  it('propagates synchronous opening failures and reports scope-disposal failures', async () => {
+    const runtime = await runtimeWithFrame()
+    const openingFailure = new Error('opening failed')
+    const failedId = await runtime.sessions.add({
+      id: 'failed-open', initialOpen: () => { throw openingFailure },
+    })
+    const failed = runtime.sessions.retain(failedId)
+    const failedScope = failed.binding.ctx
+    await expect(failed.ready).rejects.toBe(openingFailure)
+    failed.release()
+    await failedScope.fiber.dispose()
+
+    const disposalId = await runtime.sessions.add({ id: 'failed-disposal' })
+    const reference = runtime.sessions.retain(disposalId)
+    await reference.ready
+    const scope = reference.binding.ctx
+    const dispose = scope.fiber.dispose.bind(scope.fiber)
+    const disposalFailure = new Error('scope disposal failed')
+    vi.spyOn(scope.fiber, 'dispose').mockRejectedValueOnce(disposalFailure)
+    const warning = vi.spyOn(runtime.ctx.logger, 'warn').mockImplementation(() => undefined)
+    reference.release()
+    await vi.waitFor(() => {
+      expect(warning).toHaveBeenCalledWith('test Session scope disposal failed:', disposalFailure)
+    })
+    await dispose()
+    await runtime.dispose()
+  })
+
+  it('invalidates live generations when the runtime Context ends', async () => {
+    const runtime = await runtimeWithFrame()
+    const id = await runtime.sessions.add({ id: 'live-at-root-disposal' })
+    const reference = runtime.sessions.retain(id)
+    await reference.ready
+    const info = runtime.sessions.retainInfo(id)
+
+    await runtime.ctx.fiber.dispose()
+
+    expect(info.getSnapshot()).toEqual({ referenceCount: 0, retainedBy: {} })
+    expect(() => reference.binding).toThrow('is released')
+    expect(() => runtime.sessions.retain(id)).toThrow('disposed')
+  })
+
+  it('keeps a same-id replacement when stale generation cleanup arrives', async () => {
+    const runtime = await runtimeWithFrame()
+    const id = await runtime.sessions.add({ id: 'replacement' })
+    const old = runtime.sessions.retain(id)
+    await old.ready
+    const oldBinding = old.binding
+    const generations = (runtime.sessions as unknown as {
+      generations: Map<SessionId, unknown>
+    }).generations
+    generations.delete(id)
+    const replacement = runtime.sessions.retain(id)
+    await replacement.ready
+
+    await oldBinding.ctx.fiber.dispose()
+
+    expect(runtime.sessions.binding(id)).toBe(replacement.binding)
+    old.release()
+    replacement.release()
     await runtime.dispose()
   })
 
@@ -222,7 +437,8 @@ describe('stores', () => {
   })
 
   it('resolves per-session instances via the host face: shared identity, isolation, action-driven re-render', async () => {
-    const runtime = await runtimeWithFrame()
+    const reference = createSnapshotStore<SessionReference | undefined>(undefined)
+    const runtime = await runtimeWithFrame(reference)
     const handle = createSuiteStore()
     runtime.slots.register(
       { name: 'trt.chat', store: handle },
@@ -230,17 +446,23 @@ describe('stores', () => {
         <span>note:{props.useStore(s => s.note)}</span>)
     const view = runtime.renderRoot()
     await runtime.sessions.add({ id: 's1' })
+    using first = runtime.sessions.retain('s1' as SessionId)
+    await first.ready
+    act(() => { reference.set(first) })
 
     expect(() => runtime.storeOf('trt.panel')).toThrow(/no registration/)
-    const store = runtime.storeOf('trt.chat', 's1')
+    const store = runtime.storeOf('trt.chat', first)
     await runtime.flush()
     ;(store.actions['setNote'] as (note: string) => void)('hello')
     await runtime.flush()
     expect(view.container.textContent).toContain('note:hello')
-    expect(runtime.storeOf('trt.chat', 's1')).toBe(store) // cached per scope key
+    expect(runtime.storeOf('trt.chat', first)).toBe(store) // cached per scope key
 
     await runtime.sessions.add({ id: 's2' })
-    const other = runtime.storeOf('trt.chat', 's2')
+    using second = runtime.sessions.retain('s2' as SessionId)
+    await second.ready
+    act(() => { reference.set(second) })
+    const other = runtime.storeOf('trt.chat', second)
     expect(other).not.toBe(store)
     expect(other.getSnapshot()).toEqual({ note: '' })
     await runtime.dispose()
@@ -253,43 +475,70 @@ describe('stores', () => {
     expect(() => runtime.storeOf('trt.panel')).toThrow(/before renderRoot/)
     runtime.renderRoot()
     expect(() => runtime.storeOf('trt.panel')).toThrow(/declares no store/)
-    expect(() => runtime.storeOf('trt.chat', 'missing')).toThrow(/no live Session binding/)
+    const host = (runtime as unknown as { host: SlotRendererHost }).host
+    const adapter = host.scope('session')!
+    const bindingSource = vi.spyOn(adapter, 'bindingSource').mockReturnValue(createSnapshotStore({
+      key: undefined, hooks: {}, keyedHooks: {}, props: {},
+    }))
+    expect(() => runtime.storeOf('trt.chat', { sessionId: 'missing' as SessionId } as SessionReference))
+      .toThrow(/no live Session binding/)
+    bindingSource.mockRestore()
+    await runtime.sessions.add({ id: 'released' })
+    const released = runtime.sessions.retain('released' as SessionId)
+    released.release()
+    expect(() => runtime.storeOf('trt.chat', released)).toThrow(/is released/)
     await runtime.dispose()
   })
 
-  it('remove() prunes the session store scope: persisted state clears, a re-added session starts fresh', async () => {
-    const runtime = await runtimeWithFrame()
+  it('removal and reference release preserve the Session Store persistence', async () => {
+    const reference = createSnapshotStore<SessionReference | undefined>(undefined)
+    const runtime = await runtimeWithFrame(reference)
     const handle = createSuiteStore()
     runtime.slots.register({ name: 'trt.chat', store: handle }, () => null)
     runtime.renderRoot()
     await runtime.sessions.add({ id: 's1' })
+    using first = runtime.sessions.retain('s1' as SessionId)
+    await first.ready
+    act(() => { reference.set(first) })
 
-    const doomed = runtime.storeOf('trt.chat', 's1')
+    const doomed = runtime.storeOf('trt.chat', first)
     ;(doomed.actions['setNote'] as (note: string) => void)('buried')
     expect(localStorage.getItem('trt.store.s1')).not.toBeNull()
 
     await runtime.sessions.remove('s1')
-    expect(localStorage.getItem('trt.store.s1')).toBeNull()
+    expect(localStorage.getItem('trt.store.s1')).not.toBeNull()
     expect(runtime.sessions.list.getSnapshot().ids).toEqual([])
+    expect(runtime.sessions.binding('s1')?.session.getSnapshot().removed).toBe(true)
+    expect(runtime.storeOf('trt.chat', first)).toBe(doomed)
+    await act(async () => { reference.set(undefined); first.release(); await runtime.flush() })
+    expect(localStorage.getItem('trt.store.s1')).not.toBeNull()
     expect(runtime.sessions.binding('s1')).toBeUndefined()
 
     await runtime.sessions.add({ id: 's1' })
-    const reborn = runtime.storeOf('trt.chat', 's1')
+    using replacement = runtime.sessions.retain('s1' as SessionId)
+    await replacement.ready
+    act(() => { reference.set(replacement) })
+    const reborn = runtime.storeOf('trt.chat', replacement)
     expect(reborn).not.toBe(doomed)
-    expect(reborn.getSnapshot()).toEqual({ note: '' })
+    expect(reborn.getSnapshot()).toEqual({ note: 'buried' })
     await runtime.dispose()
   })
 
-  it('remove() also disposes a minted scope fiber; removing a non-current session keeps the selection', async () => {
+  it('removing catalog rows preserves an explicitly retained scope until release', async () => {
     const runtime = await runtimeWithFrame()
     await runtime.sessions.add({ id: 's1' })
-    await runtime.sessions.add({ id: 's2' }, { current: false })
+    await runtime.sessions.add({ id: 's2' })
+    using reference = runtime.sessions.retain('s1' as SessionId)
+    await reference.ready
     const scope = runtime.sessions.scope('s1')!
     await runtime.sessions.remove('s2')
-    expect(runtime.sessions.list.getSnapshot().current).toBe('s1')
+    expect(runtime.sessions.binding('s1')).toBe(reference.binding)
     await runtime.sessions.remove('s1')
-    expect(scope.fiber.uid).toBeNull() // disposed fiber loses its uid
-    expect(runtime.sessions.list.getSnapshot().current).toBeUndefined()
+    expect(scope.fiber.uid).not.toBeNull()
+    expect(runtime.sessions.binding('s1')).toBe(reference.binding)
+    await act(async () => { reference.release(); await runtime.flush() })
+    expect(scope.fiber.uid).toBeNull()
+    expect(runtime.sessions.binding('s1')).toBeUndefined()
     await runtime.dispose()
   })
 })
@@ -307,6 +556,27 @@ describe('workspaces', () => {
     await runtime.workspaces.update((draft) => { draft.phase = 'pending' })
     expect(view.container.textContent).toContain('ws:pending')
     await runtime.dispose()
+  })
+  it('skips default initialization without a fixture and forwards the caller lifetime', async () => {
+    const runtime = await SlotTestRuntime.create()
+    try {
+      const signal = new AbortController().signal
+      await expect(runtime.workspaces.initializeDefault(signal)).resolves.toBeUndefined()
+      const workspace = {
+        workspaceId: 'default' as WorkspaceId, title: 'default-workspace', path: '/default', sessionIds: [],
+        createdAt: '2026-09-20T00:00:00Z', updatedAt: '2026-09-20T00:00:00Z',
+      }
+      const initialize = vi.fn(async () => workspace)
+      runtime.workspaces.stub('initializeDefault', initialize)
+      await expect(runtime.workspaces.initializeDefault(signal)).resolves.toBe(workspace)
+      expect(initialize).toHaveBeenCalledWith(signal)
+      expect(runtime.workspaces.calls).toEqual([
+        { method: 'initializeDefault', args: [signal] },
+        { method: 'initializeDefault', args: [signal] },
+      ])
+    } finally {
+      await runtime.dispose()
+    }
   })
 })
 
@@ -367,6 +637,47 @@ describe('feature mount and disposal', () => {
 })
 
 describe('single-slot mounting (declare + renderSlot)', () => {
+  it('renders an absent session-maybe slot through its empty projection', async () => {
+    const runtime = await SlotTestRuntime.create()
+    await runtime.declare({ 'trt.maybe': { kind: 'single', scope: 'session-maybe' } })
+    runtime.slots.register(
+      { name: 'trt.maybe' },
+      ({ sessionId }: { sessionId: SessionId | undefined }) => <b>{sessionId ?? 'no session'}</b>,
+    )
+
+    const slot = runtime.renderSlot('trt.maybe', {})
+
+    expect(slot.container.textContent).toBe('no session')
+    await runtime.dispose()
+  })
+
+  it('borrows separate explicit references for sibling views and updates only the supplied view', async () => {
+    const runtime = await SlotTestRuntime.create()
+    const firstId = await runtime.sessions.add({ id: 'view-first' })
+    const secondId = await runtime.sessions.add({ id: 'view-second' })
+    using first = runtime.sessions.retain(firstId)
+    await first.ready
+    using second = runtime.sessions.retain(secondId)
+    await second.ready
+    await runtime.declare({
+      'trt.chat': { kind: 'single', scope: 'session' },
+      'trt.other-chat': { kind: 'single', scope: 'session' },
+    })
+    runtime.slots.register({ name: 'trt.chat' }, ({ sessionId }: SessionStandardProps) => <b>{sessionId}</b>)
+    runtime.slots.register({ name: 'trt.other-chat' }, ({ sessionId }: SessionStandardProps) => <b>{sessionId}</b>)
+    const retain = vi.spyOn(runtime.sessions, 'retain')
+    const left = runtime.renderSlot('trt.chat', {}, { session: first })
+    const right = runtime.renderSlot('trt.other-chat', {}, { session: second })
+    expect(left.container.textContent).toBe('view-first')
+    expect(right.container.textContent).toBe('view-second')
+    left.update({}, { session: second })
+    expect(left.container.textContent).toBe('view-second')
+    expect(right.container.textContent).toBe('view-second')
+    expect(retain).not.toHaveBeenCalled()
+    expect(runtime.sessions.binding(firstId)).toBe(first.binding)
+    await runtime.dispose()
+  })
+
   it('renders one slot inside its data-slot wrapper and updates owner props in place', async () => {
     const runtime = await SlotTestRuntime.create()
     await runtime.declare({ 'trt.panel': { kind: 'single', scope: 'root' } })
@@ -441,12 +752,16 @@ describe('fixture session face', () => {
   })
 
   it('projects controller values through the real ui-session and renderer path', async () => {
-    const runtime = await runtimeWithFrame()
+    const reference = createSnapshotStore<SessionReference | undefined>(undefined)
+    const runtime = await runtimeWithFrame(reference)
     runtime.slots.register({ name: 'trt.chat' }, (props: SessionStandardProps) => (
       <span>todos:{props.useProjection('todos', value => value?.length ?? 0)}</span>
     ))
     const view = runtime.renderRoot()
     await runtime.sessions.add({ id: 's1' })
+    using bound = runtime.sessions.retain('s1' as SessionId)
+    await bound.ready
+    act(() => { reference.set(bound) })
     expect(view.container.textContent).toContain('todos:0')
 
     const session = runtime.sessions.behavior('s1')
@@ -468,9 +783,56 @@ describe('fixture session face', () => {
     session.projections.set('untouched', 1)
     await runtime.dispose()
   })
+
+  it('copies projections into a later Session generation', async () => {
+    const runtime = await runtimeWithFrame()
+    const id = await runtime.sessions.add({ id: 'seeded-projection' })
+    await runtime.sessions.setProjection(id, 'todos', [1, 2])
+
+    using reference = runtime.sessions.retain(id)
+    await reference.ready
+
+    expect(reference.binding.session.projections.faceOf('todos').getSnapshot()).toEqual([1, 2])
+    await runtime.dispose()
+  })
 })
 
 describe('workspaces action face', () => {
+  it('records pin and unpin actions, updates the ordered set, and honors stubs', async () => {
+    const runtime = await SlotTestRuntime.create()
+    try {
+      const ws = runtime.workspaces
+      const first = 'first' as SessionId
+      const second = 'second' as SessionId
+      await ws.pinSession(first)
+      await ws.pinSession(second)
+      await ws.pinSession(first)
+      expect(ws.list.getSnapshot().pinnedSessionIds).toEqual([first, second])
+      await ws.unpinSession(first)
+      expect(ws.list.getSnapshot().pinnedSessionIds).toEqual([second])
+
+      const pin = vi.fn(async () => {})
+      const unpin = vi.fn(async () => {})
+      ws.stub('pinSession', pin)
+      ws.stub('unpinSession', unpin)
+      await ws.pinSession(first)
+      await ws.unpinSession(second)
+      expect(pin).toHaveBeenCalledWith(first)
+      expect(unpin).toHaveBeenCalledWith(second)
+      expect(ws.list.getSnapshot().pinnedSessionIds).toEqual([second])
+      expect(ws.calls).toEqual([
+        { method: 'pinSession', args: [first] },
+        { method: 'pinSession', args: [second] },
+        { method: 'pinSession', args: [first] },
+        { method: 'unpinSession', args: [first] },
+        { method: 'pinSession', args: [first] },
+        { method: 'unpinSession', args: [second] },
+      ])
+    } finally {
+      await runtime.dispose()
+    }
+  })
+
   it('records every IWorkspaces verb with inert defaults and honors stubs', async () => {
     const runtime = await SlotTestRuntime.create()
     const ws = runtime.workspaces
@@ -530,9 +892,7 @@ describe('single-slot mounting edge arms', () => {
     cleanup()
     expect(() => runtime.renderSlot('trt.panel', {})).toThrow(/rendered no wrapper/)
     await runtime.dispose()
-    // After dispose the root registration is gone: the production boot-order
-    // check fires before any wrapper lookup.
-    expect(() => runtime.renderSlot('trt.panel', {})).toThrow(/'root' has no registration/)
+    expect(() => runtime.renderSlot('trt.panel', {})).toThrow(/slot renderer not installed/)
   })
 
   it('serializes childless svg untouched next to scoped classes', async () => {
@@ -551,7 +911,7 @@ describe('single-slot mounting edge arms', () => {
 
 describe('stubbed settings scope', () => {
   it('records both write kinds and publishes a Host acceptance to its listeners', async () => {
-    const host = stubSettingsScope<{ preference: string }>()
+    const host = stubConfigForm<{ preference: string }>()
     let notified = 0
     const stop = host.scope.subscribe(() => { notified += 1 })
     expect(host.listenerCount()).toBe(1)
@@ -560,7 +920,8 @@ describe('stubbed settings scope', () => {
     })
 
     await host.scope.set('preference', 'dark')
-    await host.scope.unset('preference')
+    await expect(host.scope.unset('preference')).resolves.toBe(true)
+    await expect(host.scope.mutate([{ op: 'set', path: ['preference'], value: 'dark' }])).resolves.toBe(true)
     host.publish({
       status: 'ready',
       value: { preference: 'system' },

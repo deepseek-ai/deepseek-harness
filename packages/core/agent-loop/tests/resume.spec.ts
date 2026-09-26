@@ -5,6 +5,7 @@ import { appendFile, mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionLogOffset, SessionSeq, Session, SessionId, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -16,6 +17,12 @@ import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'tool-bash': { kind: 'tool-bash' } & ContextFormed
+  }
+}
 
 const dirs: string[] = []
 afterEach(async () => { for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true }) })
@@ -943,7 +950,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     const a1 = (await ctx1.agents.create({ sessionId: SessionId('inject-sess'), meta: { cwd: '/w' }, agentOptions: { provider: 'mock', model: 'mock' } })).agent
     a1.followup(createUserMessage({ content: [{ type: 'text', text: 'q' }], source: { kind: 'user' } }))
     await waitForIdle(ctx1, a1)
-    a1.inject(createUserMessage({ content: [{ type: 'text', text: 'background job 42 finished' }], source: { kind: 'plugin', plugin: 'tool-bash' } }))
+    a1.inject(createUserMessage({ content: [{ type: 'text', text: 'background job 42 finished' }], source: { kind: 'tool-bash' } }))
     await a1.whenIdle()
     await ctx1.sessions.flush(a1.session)
     // Simulate a wedged first lifecycle: a graceful dispose would durably

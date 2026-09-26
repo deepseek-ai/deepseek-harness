@@ -29,7 +29,7 @@ const row = (client: boolean): DynamicCordisInventoryRow => ({
 describe('versioned Cordis card models', () => {
   it('reads symmetric Host and Client source fields from cordis_define', () => {
     const card = cordisDefineCard({
-      callId: 'call-1',
+      phase: 'start' as const, callId: 'call-1',
       name: 'cordis_define',
       argsRaw: JSON.stringify({
         plugin: { kind: 'new', idPrefix: 'clock' },
@@ -78,7 +78,7 @@ describe('versioned Cordis card models', () => {
 
   it('keeps the target identities while cordis_run waits for approval', () => {
     const card = cordisRunCard({
-      callId: 'call-3',
+      phase: 'start' as const, callId: 'call-3',
       name: 'cordis_run',
       argsRaw: JSON.stringify({ pluginId: PLUGIN, packageId: PACKAGE, mode: 'update' }),
       turn: 1,

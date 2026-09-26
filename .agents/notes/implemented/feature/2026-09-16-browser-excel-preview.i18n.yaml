@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-16-browser-excel-preview.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-16-browser-excel-preview.md
+/agent-note-browser-excel-preview-with-saved-formula-results:
+  en: 2437d7b03a82ed8b
+  zh: 7ca514afeba1ffde
+/agent-note-browser-excel-preview-with-saved-formula-results/problem:
+  en: 518507d82a9f15f5
+  zh: b857b75e0359ae6d
+/agent-note-browser-excel-preview-with-saved-formula-results/decision:
+  en: f962826fcf5e3949
+  zh: 8a9932d86332fb47
+/agent-note-browser-excel-preview-with-saved-formula-results/alternatives-considered:
+  en: 8d7ac06eaa3ba42c
+  zh: b6e43ae09e4df4fa
+/agent-note-browser-excel-preview-with-saved-formula-results/consequences:
+  en: 62595b9a9b948422
+  zh: 0618904d9ebfa7fc

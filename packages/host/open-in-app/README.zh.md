@@ -72,6 +72,8 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
+Linux 桌面文件字段和图标使用共享的 [native-command](../../util/native-command/README.zh.md) 工具。目录打开器来自本包的已安装应用列表，文件打开器来自操作系统的文件关联。
+
 <details>
 <summary>实现内幕——点击展开</summary>
 

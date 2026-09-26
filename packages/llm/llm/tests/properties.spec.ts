@@ -76,7 +76,7 @@ describe('BlockAssembler properties', () => {
       const a = feed(chunks)
       expect(a.blocks()).toEqual(a.blocks())
       // And message().content mirrors blocks().
-      expect(a.message().content).toEqual(a.blocks())
+      expect(a.message({ provider: 'mock', model: 'mock' }).content).toEqual(a.blocks())
     }))
   })
 

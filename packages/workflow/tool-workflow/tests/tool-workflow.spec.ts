@@ -5,12 +5,17 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { WorkflowRunId, WorkflowEngine } from '@deepseek-ai/dsh-workflow'
 import type {
   WorkflowAgentEndInfo, WorkflowAgentInfo, WorkflowResult, WorkflowRun,
   WorkflowRunId as WorkflowRunIdType, WorkflowStartRequest,
 } from '@deepseek-ai/dsh-workflow'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { JobId } from '@deepseek-ai/dsh-jobs'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
+import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
+import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import PtcWorkflowEngine from '@deepseek-ai/dsh-workflow-ptc'
 import { mountWorkflowRuntime } from '../../workflow-ptc/tests/setup.ts'
@@ -26,6 +31,7 @@ class StubEngine extends WorkflowEngine {
   cancels: string[] = []
   disposed = 0
   disposeBarrier: Promise<void> | undefined
+  disposeError: Error | undefined
   settle!: (result: WorkflowResult) => void
   readonly settlements = new Map<WorkflowRunIdType, (result: WorkflowResult) => void>()
   startError: Error | undefined
@@ -51,6 +57,7 @@ class StubEngine extends WorkflowEngine {
         this.disposed += 1
         await this.disposeBarrier
         this.settlements.delete(id)
+        if (this.disposeError) throw this.disposeError
       },
     }
   }
@@ -73,6 +80,20 @@ class StubEngine extends WorkflowEngine {
       id,
       meta: this.requests[Number(String(id).slice(4)) - 1]!.meta,
     }, agent)
+  }
+
+  phase(id: WorkflowRunIdType, title: string): void {
+    this.emitWorkflowEvent('workflow/phase', {
+      id,
+      meta: this.requests[Number(String(id).slice(4)) - 1]!.meta,
+    }, title)
+  }
+
+  logLine(id: WorkflowRunIdType, message: string): void {
+    this.emitWorkflowEvent('workflow/log', {
+      id,
+      meta: this.requests[Number(String(id).slice(4)) - 1]!.meta,
+    }, message)
   }
 }
 
@@ -119,7 +140,7 @@ describe('dsh-tool-workflow', () => {
     const result = await pending
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected workflow success')
-    expect(result.value).toEqual({ runId: 'run-1', agentsStarted: 7, result: { findings: [1, 2] } })
+    expect(result.value).toEqual({ kind: 'foreground', runId: 'run-1', agentsStarted: 7, result: { findings: [1, 2] } })
     const rendered = (result.content[0] as { text: string }).text
     expect(rendered).toContain('workflow "audit" completed (7 agents)')
     expect(rendered).toContain('"findings"')
@@ -361,7 +382,7 @@ describe('dsh-tool-workflow', () => {
     engine.settle({ value: { blob: 'x'.repeat(500) }, stopReason: 'completed', agentsStarted: 1 })
     const result = await pending
     if (result.isError) throw new Error('expected workflow success')
-    expect(result.value).toEqual({ runId: 'run-1', agentsStarted: 1, result: { blob: 'x'.repeat(500) } })
+    expect(result.value).toEqual({ kind: 'foreground', runId: 'run-1', agentsStarted: 1, result: { blob: 'x'.repeat(500) } })
     const rendered = (result.content[0] as { text: string }).text
     expect(rendered).toContain('[truncated:')
     expect(rendered.length).toBeLessThan(400)
@@ -419,6 +440,178 @@ describe('dsh-tool-workflow', () => {
     expect(typeof unwrapped.apply).toBe('function')
   })
 
+  describe('run_in_background', () => {
+    /** The stub-engine bench plus a live job registry and a registered owner. */
+    async function setupBackground(config?: { enableRunInBackground?: boolean }) {
+      const ctx = new Context()
+      onTestFinished(async () => { await ctx.fiber.dispose() })
+      await ctx.plugin(SystemPrompt)
+      await ctx.plugin(ToolRuntime)
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(LocalJobRegistry)
+      await ctx.plugin(ToolTasks)
+      await ctx.plugin(StubEngine)
+      await ctx.plugin(toolWorkflow, config ?? {})
+      const engine = ctx.workflowEngine as StubEngine
+      const session = Session.create(SessionId('caller'))
+      const parent: Agent = {
+        id: session.id, options: {}, session, inbox: unsupportedInbox(), status: 'idle', ctx,
+        send: () => {}, followup: () => {}, steer: () => {}, inject: () => {}, cancel: () => {},
+        runMaintenance: task => task(new AbortController().signal), whenIdle: () => Promise.resolve(),
+      }
+      await ctx.agents.register(parent)
+      return { ctx, engine, parent, session }
+    }
+
+    /** The ring's retained text from offset 0, read as the owner. */
+    function retained(ctx: Context, jobId: JobId, owner: Agent): string {
+      return ctx.jobs.readAt(jobId, 0, owner.id).chunks.map(chunk => chunk.text).join('')
+    }
+
+    it('registers an owned job, mirrors progress into its ring, and settles with the rendered value', async () => {
+      const { ctx, engine, parent, session } = await setupBackground()
+      const result = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      expect(result.isError).toBe(false)
+      if (result.isError) throw new Error('expected background acceptance')
+      expect(result.value).toEqual({ kind: 'background', jobId: 'workflow-1', runId: 'run-1' })
+      expect((result.content[0] as { text: string }).text)
+        .toContain('workflow "audit" started in the background as job workflow-1')
+      // The engine run carries no tool-step signal: the job owns cancellation.
+      expect(engine.requests[0]!.signal).toBeUndefined()
+
+      const jobs = ctx.jobs
+      const job = jobs.get('workflow-1' as never, parent.id)
+      expect(job).toMatchObject({ kind: 'workflow', label: 'audit', status: 'running', owner: parent.id })
+      expect(job.output.total).toBe(0)
+
+      const runId = WorkflowRunId('run-1')
+      engine.phase(runId, 'Scan')
+      engine.logLine(runId, '3/10 found')
+      engine.agentStart(runId, { seq: 1, label: 'scan a.ts', phase: 'Scan', childId: SessionId('child-1') })
+      engine.agentEnd(runId, { seq: 1, label: 'scan a.ts', phase: 'Scan', childId: SessionId('child-1'), outcome: 'completed' })
+      expect(retained(ctx, job.id, parent)).toBe('▸ Scan\n3/10 found\nagent #1 scan a.ts started\nagent #1 completed\n')
+      expect(jobs.get(job.id, parent.id).progress).toBe('Scan')
+      // Narration is observer-only: every chunk rides the log channel, so the
+      // model's job_output before settlement sees status only.
+      expect(jobs.readAt(job.id, 0, parent.id).chunks.map(chunk => chunk.channel)).toEqual(['log', 'log', 'log', 'log'])
+      const early = await ctx.tools.execute({
+        signal: testToolSignal,
+        callId: ToolCallId('call-early-read'),
+        name: 'job_output',
+        arguments: { job_id: 'workflow-1' },
+        agent: parent,
+      })
+      expect((early.content[0] as { text: string }).text).toBe('(no new output)\n[status: running, Scan]')
+
+      engine.settleRun(runId, { value: { findings: 2 }, stopReason: 'completed', agentsStarted: 4 })
+      await vi.waitFor(() => { expect(jobs.get(job.id, parent.id).status).toBe('completed') })
+      const settled = jobs.get(job.id, parent.id)
+      expect(settled.detail).toBe('4 agents')
+      expect(settled.progress).toBeUndefined()
+      const read = jobs.read(job.id, parent.id)
+      expect(read.result).toContain('workflow "audit" completed (4 agents)')
+      expect(read.result).toContain('"findings": 2')
+      expect(engine.disposed).toBe(1)
+      // The durable session record still brackets the background run.
+      expect(session.snapshotEvents().map(event => event.type)).toEqual([
+        'tool-workflow/run-start', 'tool-workflow/agent-start', 'tool-workflow/agent-end', 'tool-workflow/run-end',
+      ])
+      // A straggling event after settlement finds no tracked run and is dropped.
+      engine.phase(runId, 'Late')
+      expect(retained(ctx, job.id, parent)).not.toContain('Late')
+    })
+
+    it('a registry kill cancels the run and the reason lands in the killed detail', async () => {
+      const { ctx, engine, parent } = await setupBackground()
+      const result = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      if (result.isError) throw new Error('expected background acceptance')
+      const jobs = ctx.jobs
+      const jobId = (result.value as { jobId: string }).jobId as JobId
+      expect(jobs.kill(jobId, parent.id, 'operator stop')).toBe('requested')
+      expect(engine.cancels).toEqual(['operator stop'])
+      await vi.waitFor(() => { expect(jobs.get(jobId, parent.id).status).toBe('killed') })
+      expect(jobs.get(jobId, parent.id).detail).toBe('operator stop')
+      expect(engine.disposed).toBe(1)
+
+      // A reasonless kill falls back to the producer's default cancel reason.
+      const second = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      if (second.isError) throw new Error('expected background acceptance')
+      const secondId = (second.value as { jobId: string }).jobId as JobId
+      expect(jobs.kill(secondId, parent.id)).toBe('requested')
+      expect(engine.cancels).toEqual(['operator stop', 'background workflow job killed'])
+      await vi.waitFor(() => { expect(jobs.get(secondId, parent.id).status).toBe('killed') })
+    })
+
+    it('a run that stops with an error fails the job with the script failure', async () => {
+      const { ctx, engine, parent } = await setupBackground()
+      const result = await execute(ctx, { script: SCRIPT, meta: META, args: { files: ['a.ts'] }, run_in_background: true }, { agent: parent })
+      if (result.isError) throw new Error('expected background acceptance')
+      expect(engine.requests[0]).toMatchObject({ args: { files: ['a.ts'] } })
+      engine.settleRun(WorkflowRunId('run-1'), { value: null, stopReason: 'error', error: 'script exploded', agentsStarted: 2 })
+      const jobs = ctx.jobs
+      await vi.waitFor(() => { expect(jobs.get('workflow-1' as never, parent.id).status).toBe('failed') })
+      expect(jobs.get('workflow-1' as never, parent.id).detail).toBe('script exploded')
+
+      // A failure without a message falls back to the unknown-error detail.
+      const second = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      if (second.isError) throw new Error('expected background acceptance')
+      engine.settleRun(WorkflowRunId('run-2'), { value: null, stopReason: 'error', agentsStarted: 0 })
+      await vi.waitFor(() => { expect(jobs.get('workflow-2' as never, parent.id).status).toBe('failed') })
+      expect(jobs.get('workflow-2' as never, parent.id).detail).toBe('unknown error')
+    })
+
+    it('a nested transport call mirrors the ring but records no session events, and a dispose failure still settles', async () => {
+      const { ctx, engine, parent, session } = await setupBackground()
+      engine.disposeError = new Error('worker already gone')
+      const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+      const result = await execute(
+        ctx,
+        { script: SCRIPT, meta: META, run_in_background: true },
+        { agent: parent, parent: {} as ToolExecutionToken },
+      )
+      if (result.isError) throw new Error('expected background acceptance')
+      engine.settleRun(WorkflowRunId('run-1'), { value: 'ok', stopReason: 'completed', agentsStarted: 1 })
+      const jobs = ctx.jobs
+      await vi.waitFor(() => { expect(jobs.get('workflow-1' as never, parent.id).status).toBe('completed') })
+      expect(jobs.get('workflow-1' as never, parent.id).detail).toBe('1 agent')
+      expect(warn.mock.calls.map(args => String(args[0])).join('\n')).toContain('dispose failed')
+      expect(session.snapshotEvents()).toEqual([])
+    })
+
+    it('a synchronous engine rejection registers no job', async () => {
+      const { ctx, engine, parent } = await setupBackground()
+      engine.startError = new Error('META_INVALID: name required')
+      const result = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      expect(result.isError).toBe(true)
+      expect((result.content[0] as { text: string }).text).toContain('META_INVALID')
+      expect(ctx.jobs.list(parent.id)).toEqual([])
+    })
+
+    it('fails loud without a job registry', async () => {
+      const { ctx, parent } = await setup()
+      const result = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      expect(result.isError).toBe(true)
+      expect((result.content[0] as { text: string }).text)
+        .toContain('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
+    })
+
+    it('a disabled composition hides the parameter and rejects the call', async () => {
+      const { ctx, parent } = await setupBackground({ enableRunInBackground: false })
+      const tool = ctx.tools.get('workflow')!
+      expect(JSON.stringify(tool.parameters)).not.toContain('run_in_background')
+      expect(tool.description).not.toContain('run_in_background')
+      const result = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      expect(result.isError).toBe(true)
+      expect((result.content[0] as { text: string }).text).toContain('run_in_background is disabled')
+    })
+
+    it('advertises the background semantics in the parameter', async () => {
+      const { ctx } = await setupBackground()
+      const tool = ctx.tools.get('workflow')!
+      expect(JSON.stringify(tool.parameters)).toContain('return a job id immediately instead of waiting')
+    })
+  })
+
   describe('composition with the sandboxed PTC workflow engine', () => {
     it('an abort releases the tool even when the script parks on a promise no hook owns', async () => {
       const ctx = new Context()
@@ -451,5 +644,49 @@ describe('dsh-tool-workflow', () => {
       expect(result.isError).toBe(true)
       expect((result.content[0] as { text: string }).text).toContain('cancelled')
     })
+
+    it('a background run over the sandboxed PTC engine settles its job with the rendered return value', async () => {
+      const ctx = new Context()
+      onTestFinished(async () => { await ctx.fiber.dispose() })
+      await ctx.plugin(SystemPrompt)
+      await ctx.plugin(ToolRuntime)
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(LocalJobRegistry)
+      await ctx.plugin(ToolTasks)
+      await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(SubagentRuntime)
+      ctx.subagents.registerProvider({
+        name: 'spawn',
+        capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: true },
+        inheritsParentContext: false,
+        start: () => Promise.reject(new Error('the scriptonly fixture must not start a child')),
+      })
+      await mountWorkflowRuntime(ctx)
+      await ctx.plugin(PtcWorkflowEngine, {})
+      await ctx.plugin(toolWorkflow, {})
+      const session = Session.create(SessionId('caller'))
+      const parent: Agent = {
+        id: session.id, options: {}, session, inbox: unsupportedInbox(), status: 'idle', ctx,
+        send: () => {}, followup: () => {}, steer: () => {}, inject: () => {}, cancel: () => {},
+        runMaintenance: task => task(new AbortController().signal), whenIdle: () => Promise.resolve(),
+      }
+      await ctx.agents.register(parent)
+
+      const result = await execute(ctx, {
+        script: 'log("halfway")\nreturn { ok: true }',
+        meta: { name: 'scriptonly', description: 'returns without agents' },
+        run_in_background: true,
+      }, { agent: parent })
+      expect(result.isError).toBe(false)
+      if (result.isError) throw new Error('expected background acceptance')
+      const { jobId } = result.value as { jobId: JobId }
+      const jobs = ctx.jobs
+
+      await vi.waitFor(() => { expect(jobs.get(jobId, parent.id).status).toBe('completed') }, { timeout: 10_000 })
+      expect(jobs.get(jobId, parent.id).detail).toBe('0 agents')
+      const ring = jobs.readAt(jobId, 0, parent.id).chunks.map(chunk => chunk.text).join('')
+      expect(ring).toContain('halfway')
+      expect(jobs.read(jobId, parent.id).result).toContain('"ok": true')
+    }, 15_000)
   })
 })

@@ -16,7 +16,7 @@ Status: implemented
 
 `ptc` preset 还额外把 `workflow-ptc` 声明为禁用。该 preset 在去掉通用 `workflow` 工具之后只为 `ralph` 保留了这个引擎，因此禁用 `ralph` 使该组合中的引擎不再有消费方。
 
-每个被禁用的行都在本地注释里带上恢复方法。对基于 base 的档位，用一行 overlay 即可从 `$DSH_HOME/cordis.patch.yml` 或 `--patch` 文件重新启用。preset 文件不接受补丁（`packages/preset/agent-presets/README.md`），因此想要 `ralph` 的 Web 会话要以**新 id** 把 preset 复制到 `$DSH_HOME/.agent-presets` 并删掉 `disabled`；沿用随附 id 的副本会被随附 root 遮蔽，因为重复 id 由更靠前的 root 胜出（`packages/preset/agent-presets/src/index.ts`），而 `copy()` 也拒绝任何 root 已提供的 id。在 `ptc` 中，副本要同时删掉工具行和引擎行的 `disabled`，因为 `tool-ralph` 注入 `ctx.workflowEngine`。
+每个被禁用的行都在本地注释里带上恢复方法。对基于 base 的档位，用一行 overlay 即可从 `$DSH_HOME/cordis.patch.yml` 或 `--patch` 文件重新启用。随附 preset 是 Web bundle 补丁（`packages/bundle/web-app/cordis.patch.yml`）里的 `@deepseek-ai/dsh-agent-preset` 行，因此想要 `ralph` 的 Web 会话可以在 profile 补丁里覆盖该行的 `config.plugins`，或通过 Web 编辑器以**新 id** 保存一个 preset，声明会持久化到 `$DSH_HOME/profiles/<profile>/cordis.patch.yml`；注册表拒绝重复的 preset id（`packages/preset/agent-preset-registry/src/index.ts`）。在 `ptc` 中，覆盖要同时删掉工具行和引擎行的 `disabled`，因为 `tool-ralph` 注入 `ctx.workflowEngine`。
 
 `packages/bundle/web-app/cordis.patch.yml` 在自己的层里重述这条禁用声明。`scripts/verify-cordis-config.ts` 中的 `validatePresetPlaneSeparation` 在收集已声明的行 id 时不看 `disabled`，所以删掉这一行会让 `tool-ralph` 回到 Web 宿主平面，并与每个 preset 中的同名行冲突。
 
@@ -44,6 +44,6 @@ Status: implemented
 
 ## 验证
 
-`packages/preset/agent-presets/tests/shipped-root.spec.ts` 固定了四点：每个带 `tool-ralph` 的 preset 都禁用它；`minimal` 清单不含该行；`ptc` 禁用 `workflow-ptc`；`standard` 与 `cordis` 为各自的 `workflow` 工具保留引擎启用。`apps/cli/tests/web-agent-presets.e2e.ts` 与 `apps/web/tests/shipped-composition.e2e.ts` 固定默认与 PTC 的确切工具目录，因此某一行不再贡献会直接导致测试失败，而不是让列表悄悄变短。`scripts/verify-cordis-config.ts` 的平面隔离检查在禁用行存在的情况下继续通过。
+`apps/cli/tests/web-agent-presets.e2e.ts` 固定了四点：每个带 `tool-ralph` 的 preset 都禁用它；`minimal` 清单不含该行；`ptc` 禁用 `workflow-ptc`；`standard` 与 `cordis` 为各自的 `workflow` 工具保留引擎启用。`apps/cli/tests/web-agent-presets.e2e.ts` 与 `apps/web/tests/shipped-composition.e2e.ts` 固定默认与 PTC 的确切工具目录，因此某一行不再贡献会直接导致测试失败，而不是让列表悄悄变短。`scripts/verify-cordis-config.ts` 的平面隔离检查在禁用行存在的情况下继续通过。
 
 多数受影响的录制会话旁挂文件由 `DSH_SNAPSHOT=refresh pnpm run test:snapshot` 重新生成，并由 `pnpm run test:snapshot` 回放整个语料。另有六个旁挂文件是人工整理，因为本机没有任何一次运行会产出它们。其中四个属于 `pwsh-tool-turn` 与 `persistent-pwsh-tool-turn`：本机缺少 `pwsh`，这两个场景在本地被跳过；它们删掉的文本与刷新在别处删掉的文本逐字节相同。剩下两个是 `snapshots/web/schedule-catalog`，没有任何在执行中的测试写入或读取它们：`schedule-after.e2e.ts` 只读该目录的 `catalog.expected.md` 与 `session.v3.jsonl`，`assertFixtureInventory` 也只检查那四个文件存在，因此它 `snapshot.yml` 里的 `header.pin: true` 并未被强制执行。`snapshots/session/ralph-loop` 在它自己的组合补丁下通过，这证明这次降级把该行移出了默认组合，却没有移除对该工具的覆盖。

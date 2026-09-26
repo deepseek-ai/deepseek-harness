@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-05-pi-ai-upgrade-compatibility.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-05-pi-ai-upgrade-compatibility.md
-2026-09-05-pi-ai-upgrade-compatibility.md: e28d911facae33fcf278a6824376f889e3416d77
-2026-09-05-pi-ai-upgrade-compatibility.zh.md: 408669ddc963a505254529acaab4c19e9774c6b1
+/agent-note-pi-ai-upgrade-compatibility:
+  en: faa0207498bd36c7
+  zh: 2c6c209849dcce32
+/agent-note-pi-ai-upgrade-compatibility/problem:
+  en: 0a106a9d74115ce5
+  zh: a65945e32455944e
+/agent-note-pi-ai-upgrade-compatibility/decision:
+  en: 978b93bba58cfaf9
+  zh: 847360ba75d67abc
+/agent-note-pi-ai-upgrade-compatibility/alternatives-considered:
+  en: bcfd595bb17c3cd6
+  zh: b7d4346e9c50f95d
+/agent-note-pi-ai-upgrade-compatibility/consequences:
+  en: 0b634c9d7567aa57
+  zh: c8ae82694e5fae12

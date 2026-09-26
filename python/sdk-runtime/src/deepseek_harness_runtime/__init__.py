@@ -21,12 +21,14 @@ console command requires ``DSH_HOME`` for the same reason.
 
 from __future__ import annotations
 
+import json
 import os
 import platform
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from ._resources import validate_resources
 
 PACKAGE_METADATA_FILENAME = "deepseek-harness-runtime.json"
 
@@ -57,8 +59,10 @@ def bundled_runtime_path() -> Path:
     """Absolute path of the bundled single-file runtime executable for the current platform.
 
     Raises FileNotFoundError when the platform is unsupported, the executable
-    has not been placed into this package, the required ripgrep sidecar is
-    missing, or the required macOS spawn helper is missing; the message names
+    has not been placed into this package, the ripgrep or Office sidecar is
+    missing, the authoring resources are incomplete, or the required macOS
+    spawn helper is missing. Invalid authoring metadata or Python permissions
+    raise ValueError. Missing executable/Office messages name
     the acquisition routes (acquisition strategy is deliberately separate from
     this lookup interface, so an on-demand download can replace it without
     touching callers).
@@ -88,6 +92,22 @@ def bundled_runtime_path() -> Path:
                 f"deepseek-harness-runtime-bin is missing the node-pty spawn helper at {helper}. "
                 + _EXE_ACQUISITION_HINT
             )
+    office = path.with_name(f"{path.name.removesuffix('.exe')}-office")
+    adapter = office / "node_modules/@deepseek-ai/libreoffice-kit/package.json"
+    if not adapter.is_file():
+        raise FileNotFoundError(
+            f"deepseek-harness-runtime-bin is missing the Office sidecar at {office}. "
+            + _EXE_ACQUISITION_HINT
+        )
+    native = tag.replace("win-", "win32-").replace("macos-", "darwin-")
+    declared = json.loads(adapter.read_text(encoding="utf-8")).get("optionalDependencies", {})
+    engine = native if f"@deepseek-ai/libreoffice-kit-{native}" in declared else "wasm"
+    if not (office / "node_modules" / f"@deepseek-ai/libreoffice-kit-{engine}/prebuilds.json").is_file():
+        raise FileNotFoundError(
+            f"deepseek-harness-runtime-bin is missing the Office sidecar engine {engine} at {office}. "
+            + _EXE_ACQUISITION_HINT
+        )
+    validate_resources(path.with_name(tag), tag)
     return path
 
 

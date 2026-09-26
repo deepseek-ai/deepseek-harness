@@ -9,12 +9,12 @@
  * @module @deepseek-ai/dsh-bash-local
  */
 
+import type { Volatile } from '@deepseek-ai/cordis'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { SHELL_SETTINGS_NAMESPACE, ShellExecutor } from '@deepseek-ai/dsh-shell'
-import type { ShellExecRequest, ShellExecSpec, ShellProcess, ShellProcessRead, ShellRunResult, CollectedOutput } from '@deepseek-ai/dsh-shell'
+import { ShellExecutor } from '@deepseek-ai/dsh-shell'
+import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellProcess, ShellProcessRead, ShellRunResult, CollectedOutput } from '@deepseek-ai/dsh-shell'
 import type { SubprocessCollect, SubprocessHandle, SubprocessOutputReader, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
-import type {} from '@deepseek-ai/dsh-settings'
 import { clampTimeout, deadline, MAX_TIMER_DELAY_MS, timeoutOf } from '@deepseek-ai/dsh-timeout'
 
 /**
@@ -37,24 +37,21 @@ const DEFAULT_GRACE_MS = 3_000
 /** Default per-stream spill cap (the `maxSpillBytes` config). */
 const DEFAULT_MAX_SPILL_BYTES = 64 * 1024 * 1024
 
-/** Plugin config (all optional — `static Config` supplies the defaults). */
+/** Validated plugin configuration with live command budgets. */
 export interface Config {
   /** Default working directory for commands (default: process.cwd()). */
-  cwd?: string
+  cwd: Volatile<string | undefined>
   /** Default foreground timeout in milliseconds. */
-  timeoutMs?: number
+  timeoutMs: Volatile<number>
   /** Upper bound for per-call timeout overrides. */
-  maxTimeoutMs?: number
+  maxTimeoutMs: Volatile<number>
   /** Per-stream in-memory output cap; overflow spills to a temp file. */
-  maxOutputBytes?: number
+  maxOutputBytes: Volatile<number>
   /** Per-stream spill-file cap; larger streams retain only their in-memory tail. */
-  maxSpillBytes?: number
+  maxSpillBytes: Volatile<number>
   /** Grace period for kill escalation and inherited pipes; at most `MAX_TIMER_DELAY_MS`. */
-  graceMs?: number
+  graceMs: Volatile<number>
 }
-
-/** The shape after schemastery applied the defaults (cwd has none). */
-type ResolvedConfig = Required<Omit<Config, 'cwd'>> & Pick<Config, 'cwd'>
 
 /** Project a settled collect-mode reader into the final CollectedOutput shape. */
 function finalOutput(reader: SubprocessOutputReader): CollectedOutput {
@@ -75,19 +72,17 @@ function assertPositiveFinite(name: string, value: number): void {
 /**
  * Reject a resolved section this executor could not run with. The schema
  * expresses neither "positive and finite" nor the timer bound `graceMs` has to
- * fit, so a stored value is refused where it is written instead of failing at
- * the next command.
- * @param config - the resolved section, schema-valid by construction.
+ * fit, so a stored value that cannot be used fails at the next command.
+ * @param config - the live configuration, schema-valid by construction.
  * @throws Error naming the field that cannot be used.
  */
 export function assertServiceableBashConfig(config: Config): void {
-  const resolved = config as ResolvedConfig
-  assertPositiveFinite('timeoutMs', resolved.timeoutMs)
-  assertPositiveFinite('maxTimeoutMs', resolved.maxTimeoutMs)
-  assertPositiveFinite('maxOutputBytes', resolved.maxOutputBytes)
-  assertPositiveFinite('maxSpillBytes', resolved.maxSpillBytes)
-  assertPositiveFinite('graceMs', resolved.graceMs)
-  if (resolved.graceMs > MAX_TIMER_DELAY_MS) {
+  assertPositiveFinite('timeoutMs', config.timeoutMs.get())
+  assertPositiveFinite('maxTimeoutMs', config.maxTimeoutMs.get())
+  assertPositiveFinite('maxOutputBytes', config.maxOutputBytes.get())
+  assertPositiveFinite('maxSpillBytes', config.maxSpillBytes.get())
+  assertPositiveFinite('graceMs', config.graceMs.get())
+  if (config.graceMs.get() > MAX_TIMER_DELAY_MS) {
     throw new Error(`bash-local: graceMs must be no greater than ${MAX_TIMER_DELAY_MS}`)
   }
 }
@@ -102,62 +97,41 @@ export function assertServiceableBashConfig(config: Config): void {
 export class LocalBashExecutor extends ShellExecutor {
   static inject = ['subprocess']
 
-  static Config: z<Config> = z.object({
-    cwd: z.string(),
-    timeoutMs: z.number().default(120_000),
-    maxTimeoutMs: z.number().default(600_000),
-    maxOutputBytes: z.number().default(64_000),
-    maxSpillBytes: z.number().default(DEFAULT_MAX_SPILL_BYTES),
-    graceMs: z.number().default(DEFAULT_GRACE_MS),
+  static Config = z.object({
+    cwd: z.string().volatile(),
+    timeoutMs: z.number().default(120_000).volatile(),
+    maxTimeoutMs: z.number().default(600_000).volatile(),
+    maxOutputBytes: z.number().default(64_000).volatile(),
+    maxSpillBytes: z.number().default(DEFAULT_MAX_SPILL_BYTES).volatile(),
+    graceMs: z.number().default(DEFAULT_GRACE_MS).volatile(),
   })
 
-  /** The currently authoritative config: the settings section, or the composition entry. */
-  private source: () => ResolvedConfig
-
-  /** Validated config (schemastery applied the defaults before construction). */
-  get config(): ResolvedConfig {
-    return this.source()
-  }
-
-  constructor(ctx: Context, config: Config) {
+  constructor(ctx: Context, readonly config: Config) {
     super(ctx)
-    // Schemastery fills these fields before construction; the type does not encode that step.
-    const entry = config as ResolvedConfig
-    assertServiceableBashConfig(entry)
-    this.source = () => entry
-    ctx.inject(['settings'], (settingsCtx) => {
-      settingsCtx.settings.installSection(ctx, SHELL_SETTINGS_NAMESPACE, LocalBashExecutor.Config, entry, {
-        validate: assertServiceableBashConfig,
-        setSource: (current) => {
-          this.source = current as () => ResolvedConfig
-        },
-        // Every field is read through the getter at each command, so nothing
-        // derived from the source needs rebuilding when the document changes.
-        onChange: () => {},
-      })
-    })
   }
 
   /**
    * Resolve a request into a fully-specified spec: fill `workdir` from
    * `config.cwd` (else `process.cwd()`), and `timeoutMs` from
    * `config.timeoutMs`, capped at `config.maxTimeoutMs`. The tool layer calls
-   * this before {@link run}/{@link start}, so those methods receive explicit
-   * values and never re-default.
+   * this before {@link execute}, so it receives explicit values and never
+   * re-defaults.
    */
   resolve(request: ShellExecRequest): ShellExecSpec {
+    assertServiceableBashConfig(this.config)
     const timeoutMs = clampTimeout(
       request.timeoutMs,
-      this.config.timeoutMs,
-      this.config.maxTimeoutMs,
+      this.config.timeoutMs.get(),
+      this.config.maxTimeoutMs.get(),
       'bash-local: request.timeoutMs',
     )
-    const stdoutMaxBytes = request.stdoutMaxBytes ?? this.config.maxOutputBytes
+    const stdoutMaxBytes = request.stdoutMaxBytes ?? this.config.maxOutputBytes.get()
     assertPositiveFinite('request.stdoutMaxBytes', stdoutMaxBytes)
     return {
       command: request.command,
-      workdir: request.workdir ?? this.config.cwd ?? process.cwd(),
+      workdir: request.workdir ?? this.config.cwd.get() ?? process.cwd(),
       timeoutMs,
+      onExpiry: request.onExpiry ?? 'kill',
       stdoutMaxBytes,
       ...request.signal ? { signal: request.signal } : {},
       // Carry stdin/ordinary env/trusted dshEnv through verbatim — optional,
@@ -181,16 +155,16 @@ export class LocalBashExecutor extends ShellExecutor {
     signal: AbortSignal | undefined,
   ): SubprocessSpawnSpec {
     const collect = (maxBytes: number): SubprocessCollect =>
-      ({ maxBytes, spill: { maxBytes: this.config.maxSpillBytes } })
+      ({ maxBytes, spill: { maxBytes: this.config.maxSpillBytes.get() } })
     return {
       argv,
       cwd: spec.workdir,
       stdio: {
         stdin: spec.stdin !== undefined ? { data: spec.stdin } : 'ignore',
         stdout: collect(stdoutMaxBytes),
-        stderr: collect(this.config.maxOutputBytes),
+        stderr: collect(this.config.maxOutputBytes.get()),
       },
-      graceMs: this.config.graceMs,
+      graceMs: this.config.graceMs.get(),
       signal,
       // One explicit env map for the seam, layered so the trusted dshEnv
       // snapshot beats both the caller's env and the terminal overrides; the
@@ -210,108 +184,150 @@ export class LocalBashExecutor extends ShellExecutor {
     return { stdout, stderr }
   }
 
-  async run(spec: ShellExecSpec): Promise<ShellRunResult> {
-    return (await this.runArgv(spec, ['bash', '-c', spec.command])).result
+  async execute(spec: ShellExecSpec): Promise<ShellExecution> {
+    return this.executeArgv(spec, ['bash', '-c', spec.command])
   }
 
   /**
-   * Run an explicit argv with the foreground lifecycle, environment, output,
-   * timeout, and cancellation semantics of this executor. Subclasses use this
+   * Execute an explicit argv with the lifecycle, environment, output,
+   * deadline, and cancellation semantics of this executor. Subclasses use this
    * after replacing the public command's shell argv at an execution boundary.
    * @param spec - resolved execution settings and caller-owned command metadata.
-   * @param argvOrPrepare - exact argv, or preparation cancelled by the same deadline as execution.
-   * @returns the foreground result and whether argv reached the subprocess provider.
+   * @param argvOrPrepare - exact argv, or preparation using the execution cancellation signal.
+   * @param onStarted - installs provider facts synchronously before the handle can settle.
+   * @returns the live execution handle; spawn rejection settles the handle as
+   *   killed while `result()` carries the same failure as its rejection.
    */
-  protected async runArgv(
+  protected async executeArgv(
     spec: ShellExecSpec,
     argvOrPrepare: readonly string[] | ((signal: AbortSignal) => Promise<readonly string[]>),
-  ): Promise<{ result: ShellRunResult; spawnRequested: boolean }> {
-    using d = deadline(spec.signal, spec.timeoutMs, 'BASH_TIMEOUT')
-    let argv: readonly string[]
+    onStarted?: (process: ShellExecution) => void,
+  ): Promise<ShellExecution> {
+    // Deadline wiring by expiry policy. Each arm supplies the spawn signal,
+    // the result projection's first-cause classification, and the disarm the
+    // settlement continuation runs. `ShellExpiryPolicy` has exactly these two
+    // members, so the `else` arm is `'none'`.
+    let spawnSignal: AbortSignal | undefined
+    let classify: () => { timedOut: boolean; aborted: boolean }
+    let disarm = (): void => {}
+    if (spec.onExpiry === 'kill') {
+      // One fused deadline combines timeout and upstream cancellation; only
+      // this executor's timeout reason counts as timedOut, outer deadlines as aborts.
+      const d = deadline(spec.signal, spec.timeoutMs, 'BASH_TIMEOUT')
+      spawnSignal = d.signal
+      classify = () => {
+        const timedOut = timeoutOf(d.signal, 'BASH_TIMEOUT') !== undefined
+        return { timedOut, aborted: d.signal.aborted && !timedOut }
+      }
+      disarm = () => { d[Symbol.dispose]() }
+    } else {
+      // No deadline: callers stop the process through kill() or spec.signal.
+      spawnSignal = spec.signal
+      classify = () => ({ timedOut: false, aborted: spec.signal?.aborted === true })
+    }
+
+    let argv: readonly string[] = []
+    let preparationTimedOut = false
     if (typeof argvOrPrepare === 'function') {
+      const signal = spawnSignal ?? new AbortController().signal
       const cancelled = Promise.withResolvers<never>()
-      const abort = (): void => { cancelled.reject(d.signal.reason) }
-      d.signal.addEventListener('abort', abort, { once: true })
+      const abort = (): void => { cancelled.reject(signal.reason) }
+      signal.addEventListener('abort', abort, { once: true })
       try {
         argv = await Promise.race([
-          Promise.resolve().then(() => { d.signal.throwIfAborted(); return argvOrPrepare(d.signal) }),
+          Promise.resolve().then(() => { signal.throwIfAborted(); return argvOrPrepare(signal) }),
           cancelled.promise,
         ])
-        d.signal.throwIfAborted()
+        signal.throwIfAborted()
       } catch (error) {
-        if (timeoutOf(d.signal, 'BASH_TIMEOUT') === undefined) throw error
-        return {
-          spawnRequested: false,
-          result: {
-            exitCode: null, signal: null, timedOut: true, aborted: false, timeoutMs: spec.timeoutMs,
-            stdout: { text: '', truncated: false }, stderr: { text: '', truncated: false },
-          },
+        if (!classify().timedOut) {
+          disarm()
+          throw error
         }
-      } finally { d.signal.removeEventListener('abort', abort) }
+        preparationTimedOut = true
+      } finally { signal.removeEventListener('abort', abort) }
     } else { argv = argvOrPrepare }
-    const handle = this.ctx.subprocess.spawn(this.spawnSpec(spec, argv, spec.stdoutMaxBytes, d.signal))
-    const outcome = await handle.done
-    const collected = LocalBashExecutor.collected(handle)
-    // Only this executor's timeout reason counts as timedOut; outer deadlines count as aborts.
-    const timedOut = timeoutOf(d.signal, 'BASH_TIMEOUT') !== undefined
-    const aborted = d.signal.aborted && !timedOut
-    return {
-      spawnRequested: true,
-      result: {
-        ...outcome,
-        timedOut,
-        aborted,
-        timeoutMs: spec.timeoutMs,
-        stdout: finalOutput(collected.stdout),
-        stderr: finalOutput(collected.stderr),
-      },
+
+    // A synchronous spawn throw (pre-aborted signal, alternative subprocess
+    // implementations) is contained into the same settled-killed shape as an
+    // asynchronous spawn rejection, so execute() itself never throws for a
+    // spawn problem and result() carries the failure uniformly.
+    let running: SubprocessHandle | undefined
+    let syncSpawnError: { error: unknown } | undefined
+    try {
+      if (!preparationTimedOut) {
+        running = this.ctx.subprocess.spawn(this.spawnSpec(spec, argv, spec.stdoutMaxBytes, spawnSignal))
+      }
+    } catch (error) {
+      syncSpawnError = { error }
     }
-  }
+    const emptyReader: SubprocessOutputReader = {
+      readFrom: () => ({ text: '', lossy: false, nextOffset: 0 }),
+    }
+    const collected = running !== undefined
+      ? LocalBashExecutor.collected(running)
+      : { stdout: emptyReader, stderr: emptyReader }
+    const spawnThrow = (): unknown => (syncSpawnError as { error: unknown }).error
+    const spawned = preparationTimedOut
+      ? Promise.resolve({ exitCode: null, signal: null })
+      : running !== undefined ? running.done
+      // The original throw is preserved for callers even when it was not an Error.
+      // eslint-disable-next-line prefer-promise-reject-errors
+        : Promise.reject(spawnThrow())
 
-  async start(spec: ShellExecSpec): Promise<ShellProcess> {
-    return Promise.resolve(this.startArgv(spec, ['bash', '-c', spec.command]))
-  }
-
-  /**
-   * Start an explicit argv with the background lifecycle, environment, output,
-   * cancellation, and managed-range ownership semantics of this executor.
-   * Subclasses use this after replacing the public command's shell argv at an
-   * execution boundary.
-   * @param spec - resolved execution settings and caller-owned command metadata.
-   * @param argv - exact executable and arguments to hand to `ctx.subprocess`.
-   * @returns the live background handle; provider rejection settles it as killed.
-   */
-  protected startArgv(spec: ShellExecSpec, argv: readonly string[]): ShellProcess {
-    // Background runs ignore timeoutMs; callers stop them through kill() or spec.signal.
-    spec.signal?.throwIfAborted()
-    const running = this.ctx.subprocess.spawn(this.spawnSpec(spec, argv, this.config.maxOutputBytes, spec.signal))
-    const collected = LocalBashExecutor.collected(running)
-
-    // A provider rejection has no direct outcome to display; its stage is not
-    // public, so a neutral note is delivered once through the read path.
-    let providerFailureNote: string | undefined
+    // A provider rejection produces no process output, so the subprocess
+    // service has nothing to buffer: once the provider rejected, its
+    // stage-neutral note is the whole stderr stream for every reader. The
+    // observed reader serves it at offset 0, the consuming read folds it in
+    // exactly once, and the retained error is the result() projection's
+    // rejection.
+    let providerFailure: { error: unknown; note: string } | undefined
+    let providerFailureReported = false
     const consumeProviderFailure = (): string => {
-      const note = providerFailureNote ?? ''
-      providerFailureNote = undefined
-      return note
+      if (providerFailure === undefined || providerFailureReported) return ''
+      providerFailureReported = true
+      return providerFailure.note
+    }
+    const observedStderr: SubprocessOutputReader = {
+      readFrom: (fromByte) => {
+        if (providerFailure === undefined) return collected.stderr.readFrom(fromByte)
+        const note = Buffer.from(providerFailure.note, 'utf8')
+        return { text: note.subarray(Math.min(fromByte, note.length)).toString('utf8'), nextOffset: note.length, lossy: false }
+      },
     }
 
     let stdoutOffset = 0
     let stderrOffset = 0
-    const proc: ShellProcess = {
+    let resultPromise: Promise<ShellRunResult> | undefined
+    const proc: ShellExecution = {
       status: 'running',
       exitCode: null,
       signal: null,
-      done: running.done.then((outcome) => {
+      observed: { stdout: collected.stdout, stderr: observedStderr },
+      done: spawned.then((outcome) => {
         // Any signal termination is killed, including a command signaling itself.
         if (proc.status === 'running') {
-          proc.status = spec.signal?.aborted === true || outcome.signal !== null ? 'killed' : 'completed'
+          proc.status = spawnSignal?.aborted === true || outcome.signal !== null ? 'killed' : 'completed'
         }
         proc.exitCode = outcome.exitCode
         proc.signal = outcome.signal
         this.onProcessDone(proc, collected.stderr.readFrom(0).text, false)
+        disarm()
       }, (error: unknown) => {
-        // Background provider failures settle as killed and surface through the read path.
+        // A live handle whose rejection follows this execution's own
+        // termination — kill() or the spawn signal's abort — reports its
+        // terminal outcome: a provider that terminated the range before the
+        // target started has no exit to report and rejects with the
+        // cancellation reason instead. The result projection classifies it
+        // from the deadline wiring; nothing is a provider failure. A
+        // synchronous spawn throw never produced a handle and stays a failure.
+        if (running !== undefined && (proc.status === 'killed' || spawnSignal?.aborted === true)) {
+          proc.status = 'killed'
+          this.onProcessDone(proc, collected.stderr.readFrom(0).text, false)
+          disarm()
+          return
+        }
+        // Provider failures settle the handle as killed and surface on stderr for every reader.
         proc.status = 'killed'
         let detail = 'unprintable provider failure'
         try {
@@ -319,8 +335,9 @@ export class LocalBashExecutor extends ShellExecutor {
         } catch {
           // Provider-owned rejection values cannot make ShellProcess.done reject.
         }
-        providerFailureNote = `subprocess failed before reporting an outcome: ${detail}`
-        this.onProcessDone(proc, providerFailureNote, true, error)
+        providerFailure = { error, note: `subprocess failed before reporting an outcome: ${detail}` }
+        this.onProcessDone(proc, providerFailure.note, true, error)
+        disarm()
       }),
       readOutput: (): ShellProcessRead => {
         const out = collected.stdout.readFrom(stdoutOffset)
@@ -347,10 +364,27 @@ export class LocalBashExecutor extends ShellExecutor {
       kill: (): boolean => {
         if (proc.status !== 'running') return false
         proc.status = 'killed'
-        running.terminate()
+        running?.terminate()
         return true
       },
+      result: (): Promise<ShellRunResult> => {
+        resultPromise ??= proc.done.then(() => {
+          // Infrastructure-failure parity with the historical foreground path:
+          // a spawn that never produced a process rejects the projection.
+          if (providerFailure !== undefined) throw providerFailure.error
+          return {
+            exitCode: proc.exitCode,
+            signal: proc.signal,
+            ...classify(),
+            timeoutMs: spec.timeoutMs,
+            stdout: finalOutput(collected.stdout),
+            stderr: finalOutput(collected.stderr),
+          }
+        })
+        return resultPromise
+      },
     }
+    if (!preparationTimedOut) onStarted?.(proc)
     return proc
   }
 

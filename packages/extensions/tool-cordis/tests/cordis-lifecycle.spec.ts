@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 /**
  * Direct regressions for the vendored Cordis ownership substrate used by
- * tool-cordis's dynamic plugin tree and every other harness plugin.
+ * cordis-host-runner and cordis-client-runner and every other harness plugin.
  */
 
 describe('Cordis effect ownership', () => {

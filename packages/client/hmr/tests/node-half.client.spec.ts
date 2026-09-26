@@ -34,7 +34,7 @@ interface FakeHostOptions {
 
 function artifactBaseline(path: string): ClientArtifactBaseline {
   const bundle = statSync(path)
-  return { path, mtimeMs: bundle.mtimeMs, size: bundle.size }
+  return { path, mtimeMs: bundle.mtimeMs, ctimeMs: bundle.ctimeMs, size: bundle.size }
 }
 
 function fakeClientModuleHost(rows: Map<string, string>, options: FakeHostOptions = {}): FakeHost {
@@ -48,7 +48,7 @@ function fakeClientModuleHost(rows: Map<string, string>, options: FakeHostOption
       options.beforeGraphRead?.()
       return {
         rev: 'r',
-        entries: [...rows.keys()].map(id => ({ id, url: `/plugins/??${id}/client.js&rev=r`, rev: 'r' })),
+        entries: [...rows.keys()].map(id => ({ id, url: `plugins/??${id}/client.js&rev=r`, rev: 'r' })),
         batches: [],
       }
     },
@@ -163,7 +163,7 @@ describe('hmr node half', () => {
     await fiber.dispose()
   })
 
-  it('rehashes only a row changed between its startup snapshot and watch installation', async () => {
+  it('publishes only a row changed between its startup snapshot and watch installation', async () => {
     const bundle = join(dir, 'construction.js')
     writeFileSync(bundle, 'v1')
     let rewrite = true
@@ -184,7 +184,30 @@ describe('hmr node half', () => {
     await fiber.dispose()
   })
 
-  it('marks a vanished bundle dirty so identical metadata still re-hashes after it reappears', async () => {
+  it('publishes a ctime change when a rewrite preserves mtime and size', async () => {
+    const bundle = join(dir, 'preserved-mtime.js')
+    writeFileSync(bundle, 'seed')
+    const fixedTime = new Date(1_600_000_000_000)
+    utimesSync(bundle, fixedTime, fixedTime)
+    const baseline = statSync(bundle)
+    const clientModuleHost = fakeClientModuleHost(new Map([['pkg-a', bundle]]))
+    const fiber = await mount(clientModuleHost, fakeHttpServer([]))
+    try {
+      expect(clientModuleHost.rebuiltCalls).toEqual([])
+      // Filesystem ctime can advance more coarsely than Date.now(); the fixture needs a distinct value.
+      await expect.poll(() => {
+        writeFileSync(bundle, 'next')
+        utimesSync(bundle, fixedTime, fixedTime)
+        return statSync(bundle).ctimeMs
+      }).not.toBe(baseline.ctimeMs)
+      expect(statSync(bundle)).toMatchObject({ mtimeMs: baseline.mtimeMs, size: baseline.size })
+      await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a']) }, { timeout: 3_000 })
+    } finally {
+      await fiber.dispose()
+    }
+  })
+
+  it('publishes a reappearing bundle with restored mtime and size', async () => {
     const bundle = join(dir, 'replace.js')
     writeFileSync(bundle, 'seed')
     const fixedTime = new Date(1_600_000_000_000)
@@ -207,7 +230,7 @@ describe('hmr node half', () => {
     await fiber.dispose()
   })
 
-  it('retains a dirty baseline when a catch-up re-hash races a rename', async () => {
+  it('retains a dirty baseline when catch-up publication races a rename', async () => {
     const bundle = join(dir, 'rename.js')
     writeFileSync(bundle, 'v1')
     let first = true

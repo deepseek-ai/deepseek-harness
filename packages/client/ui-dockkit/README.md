@@ -39,6 +39,8 @@ A docking layout kit: a split tree of tabbed panes with invertible operations, a
 
 **The components** render a layout snapshot and report settled intents — one per gesture, never a drag frame. A drag previews in local state while the gesture's own facts stay in its closure; on release the net result leaves through one `DockIntents` call — a strip release reports the caret slot as drawn, the dragged chip counted, and `planPlaceTab` turns that into the reorder or the move. That is what lets an embedder record exactly one history entry per gesture. The strip follows the WAI-ARIA tabs pattern with manual activation: the selected chip is in the tab order; Left and Right (wrapping), Home, and End move focus between chips without selecting; Enter or Space selects the focused chip through the same intent as a click. A chip is a capsule carrying one control, its close; the context menu (a secondary press on the chip) carries the same close plus the embedder's items — a menu that would hold no item at all never shows — and renders in a portal positioned against the chip because the chip box clips its overflow on purpose (see below). After the chips sits the add control, which asks the embedder (`DockIntents.addTab`) to seat its seeded tab; the embedder's `canAddTab(paneId)` decides per pane whether the control is drawn at all. Copying a tab has no kit control — it is the embedder's API — and floating is the drag released clear of the surface.
 
+Tab context menus show the close action name without a shortcut hint: they act on the clicked tab, while shortcuts can target another focused pane. An unmodified Escape dismisses the foreground tab menu without closing the tab and returns focus from a menu item to its tab without drawing a focus outline. Tab and arrow navigation retain the tab’s visible focus indicator. Composition and held-key repeats do not dismiss it.
+
 <a id="embedding-it"></a>
 ## Embedding it
 
@@ -50,16 +52,20 @@ Everything host-specific arrives through props:
 | `TabRenderer` | one tab's body (`renderTab`), drawn flush to the pane's edges and the unbordered strip's bottom edge with the insets it chooses, and optionally what its chip or panel header shows as a title (`renderTabTitle`, falling back to the record's `title`); the embedder dispatches on `tab.kind` |
 | `DockIntents` | the settled results of every gesture |
 
-`DockController` satisfies `DockIntents` as written, so the simplest embedding hands the controller straight to `DockSurface`. An embedder that routes through its own store implements the same method names instead. Three props carry control policy rather than gestures: `canSplit` (surface-wide, the pane budget; disables the split control with `splitPaneDisabled`), `canAddTab(paneId)` (per pane, omits the add control; leave it out to draw one in every pane), and `canCloseTab(tabId)` (per tab, withholds the chip's close control and the menu's close item together; leave it out to keep every tab closable). Hiding the add control moves nothing else in the strip, and a withheld close moves nothing in the chip — the close control paints over the title's end rather than beside it. A pane's lone chip whose close is withheld draws quiet — no capsule, no hover fill — since there is nothing to select against and nothing to do to it. The kit adds one policy of its own, the room rule below, which disables a pane's split control with `splitPaneNarrow`; `onRoom(fits)` reports its readings so an embedder splitting programmatically can honour the same rule.
+`DockController` satisfies `DockIntents` as written, so an embedding can pass it to `DockLayout` for retained Sidebar layouts or `DockSurface` for recursive split trees. An embedder that routes through its own store implements the same method names instead. Three props carry control policy rather than gestures: `canSplit` (surface-wide, the pane budget; disables the split control with `splitPaneDisabled`), `canAddTab(paneId)` (per pane, omits the add control; leave it out to draw one in every pane), and `canCloseTab(tabId)` (per tab, withholds the chip's close control and the menu's close item together; leave it out to keep every tab closable). Hiding the add control moves nothing else in the strip, and a withheld close moves nothing in the chip — the close control paints over the title's end rather than beside it. A pane's lone chip whose close is withheld draws quiet — no capsule, no hover fill — since there is nothing to select against and nothing to do to it. The kit adds one policy of its own, the room rule below, which disables a pane's split control with `splitPaneNarrow`; `onRoom(fits)` reports its readings so an embedder splitting programmatically can honour the same rule.
 
 `dropZones="horizontal"` offers two half-pane hints; once budget or width forbids another split, the whole body accepts a move. A hint is a dashed card inset 8px inside its region, showing the zone's glyph and `labels.dropZone[zone]`; the preview layer covers all tab-body content, while the card under the pointer takes the accent and its neighbour stays a quiet outline. `minPaneFraction` sets the preview minimum, and `planResizeSplit` accepts the same minimum for the committed operation. The Sidebar uses 0.2 and enforces two panes in its own store. The generic engine retains its tree and other split directions. `hideSplitWhenBlocked` hides a blocked split control — pane budget spent or pane too narrow — instead of rendering it disabled; its default is false.
 
 A tab's `kind` is an opaque string. Seeded tabs are factories (`DockControllerOptions`), so what a fresh pane contains is the embedder's decision, not this package's. Content identity is the pair (`kind`, `contentId`): `findContentTab(state, contentId, kind?)` finds the tab showing it anywhere and `findPaneContentTab(state, paneId, contentId, kind?)` within one pane, and `planOpenContent` focuses that tab instead of opening another unless told `revealIfOpened: false`; an explicit `index` seats a new tab at a strip slot rather than at the end.
 
-`DockSurface` is the docked area. Chrome around it — a rail, a collapsed presentation, any history controls — belongs to the embedder, which reads `state.expanded` and decides; the kit ships no undo/redo control of its own. Surface-wide controls the embedder does want on the surface go through the `chrome` prop, which the kit places at the far end of the top-right pane's tab strip (the last child of every row split, the first of every column split), so a surface needs no header row of its own. `FloatLayer` owns its own gestures and positions panels in viewport coordinates, so it may be mounted anywhere, including a portal.
+`DockLayout`, used by the Sidebar, keeps each tab in a stable DOM cell across selection, pane moves and floating. It accepts one docked pane or two horizontal panes; CSS Grid resolves their widths. `keepMounted(tab)` retains visited bodies and `active` controls Session visibility without reparenting content.
+
+`DockSurface` is the docked area for the separate recursive renderer. Chrome around it — a rail, a collapsed presentation, any history controls — belongs to the embedder, which reads `state.expanded` and decides; the kit ships no undo/redo control of its own. Surface-wide controls the embedder does want on the surface go through the `chrome` prop, which the kit places at the far end of the top-right pane's tab strip (the last child of every row split, the first of every column split), so a surface needs no header row of its own. `FloatLayer` owns its own gestures and positions panels in viewport coordinates, so it may be mounted anywhere, including a portal.
 
 <a id="interaction-rules-worth-keeping"></a>
 ## Interaction rules worth keeping
+
+The split control accepts localized tooltip text, separate effective keys through `splitPaneKeys`, and an ARIA combination from its embedder. Close controls receive their keys through `closeTabKeys`. A disabled control has a keyboard-focusable wrapper that explains the pane-budget or width restriction. Docked and floating pane containers can receive programmatic focus without entering the normal tab sequence or drawing a focus outline; their controls retain their own keyboard focus indicators. Tab navigation and selection use unmodified keys and leave composition input to its owner.
 
 These are not stylistic; each one fixes a defect found in a real browser.
 
@@ -97,10 +103,14 @@ None; this package neither assembles nor sends a provider request.
 <a id="dev-note"></a>
 ### Dev Note
 
+Menus use the shared `MenuSurface` material, including the macOS backing for background blur; custom content follows the [menu rules](../../../docs/web-styling.md#component-rules).
+
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
 None.
+
+The embedder supplies effective close keycaps and ARIA combinations for tab and floating close controls. Close controls expose the same tooltip on hover and keyboard focus. Tab close tooltips stay hidden while their pane's context menu is open.
 
 </details>
 

@@ -1,0 +1,28 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "include": [
+    "src/client",
+    "src/types.ts",
+    "src/css-modules.d.ts"
+  ],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../ui-slots" },
+    { "path": "../ui-primitives" },
+    { "path": "../ui-renderer" },
+    { "path": "../ui-session" },
+    { "path": "../store" },
+    { "path": "../ui-settings/tsconfig.client.json" },
+    { "path": "../locale/tsconfig.client.json" },
+    { "path": "../connection/tsconfig.client.json" },
+    { "path": "../../api/remotes/tsconfig.client.json" },
+    { "path": "../ui-sidebar" },
+    { "path": "../shortcuts/tsconfig.client.json" }
+  ]
+}

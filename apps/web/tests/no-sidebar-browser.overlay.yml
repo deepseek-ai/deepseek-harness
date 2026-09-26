@@ -1,0 +1,3 @@
+# Exercise the settings surface without a built-in browser provider.
+- id: ui-sidebar-browser
+  disabled: true

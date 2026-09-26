@@ -164,11 +164,11 @@ describe('Session properties', () => {
       const messages = session.deriveMessages()
       const before = structuredClone(session.snapshotEvents())
       for (const m of messages) {
-        expect(['user', 'assistant', 'system']).toContain(m.role)
+        expect(['user', 'assistant', 'system', 'tool']).toContain(m.role)
         // Derived messages are frozen shared projections: mutation THROWS
         // (strict mode) instead of relying on per-call clones for isolation.
         expect(Object.isFrozen(m)).toBe(true)
-        expect(() => { m.content.push({ type: 'text', text: 'mutation' }) }).toThrow(TypeError)
+        expect(() => { (m.content as unknown as { type: string; text?: string }[]).push({ type: 'text', text: 'mutation' }) }).toThrow(TypeError)
       }
       expect(session.snapshotEvents()).toEqual(before)
     }))

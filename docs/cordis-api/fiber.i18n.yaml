@@ -1,6 +1,76 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for fiber.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cordis-api/fiber.md
-fiber.md: 3044301effde267bf580c3a5138481b10513f755
-fiber.zh.md: bee2f523f1fa2a2add2afc3a3fc322903f1ef6f0
+/:
+  en: d2c0c5bce430d1be
+  zh: 2173e2f1a2a3a13a
+/fiber:
+  en: b5b3510f4b6dd13a
+  zh: a0c70471b6d779b5
+/fiber/ctx-effect-execute-label:
+  en: ef3418fd5ffbe86d
+  zh: c98935435da8bc7e
+/fiber/ctx-fiber:
+  en: a10e38bf26b4ecfe
+  zh: 7c91817984c95c99
+/fiber/the-fiber-class:
+  en: 0e0fcb134ed44957
+  zh: 326f4232aa0e65d1
+/fiber/the-fiber-class/fiber-uid:
+  en: 2f0eb3658bb8497e
+  zh: 65d3c17ca8bd4f95
+/fiber/the-fiber-class/fiber-ctx:
+  en: 1b527d85759324f9
+  zh: 54aa40db2705b95c
+/fiber/the-fiber-class/fiber-config:
+  en: ee804c03c39e7806
+  zh: 4353ba7817ec61ec
+/fiber/the-fiber-class/fiber-state:
+  en: 999ad29dfc29661b
+  zh: 20245d11c338e3f1
+/fiber/the-fiber-class/fiber-dispose:
+  en: 29e304d183eb9104
+  zh: 9ac5023f518e06c4
+/fiber/the-fiber-class/fiber-store:
+  en: c4185e5d051136a2
+  zh: 5714d9e4f5461ca3
+/fiber/the-fiber-class/fiber-inertia:
+  en: 2a3b1d3bc37bf986
+  zh: 83bd257ee685d38b
+/fiber/the-fiber-class/fiber-name:
+  en: e5c2ecca13167a32
+  zh: 284a461f0f1cd35b
+/fiber/the-fiber-class/fiber-assertactive:
+  en: cceb503899634d09
+  zh: a8381af1a23436f3
+/fiber/the-fiber-class/fiber-effect-execute-label:
+  en: 55dcfacf295bbcf2
+  zh: 6e3ec27bb8da5a3d
+/fiber/the-fiber-class/fiber-geteffects:
+  en: 4d739a9c186fd9c2
+  zh: f80fd3b87e79b004
+/fiber/the-fiber-class/fiber-await:
+  en: 1d6258cbea61cd18
+  zh: 2f10dda8918dadc5
+/fiber/the-fiber-class/fiber-restart:
+  en: 62d68dedb20b4fa9
+  zh: 5a735ae0ff1266f4
+/fiber/the-fiber-class/fiber-update-config-nosave:
+  en: b57ce0f6260c2cb8
+  zh: 3bfb6c5bc252a2c2
+/fiber/effect:
+  en: 007d5b214e8a8610
+  zh: d74c26fbb1b8aeb6
+/fiber/disposable:
+  en: 56e4218392fa7234
+  zh: 8fea671180cacf6f
+/fiber/effectmeta:
+  en: 849aa91b8e67809f
+  zh: 4b31d7e2acd2a008
+/fiber/cordiserror:
+  en: d276771958d3c05f
+  zh: 0141656ade938d55
+/fiber/validationerror:
+  en: 178782124cc15210
+  zh: 2b226f43f48af555

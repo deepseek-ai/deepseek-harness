@@ -1,4 +1,4 @@
-/* Skill toolview: Bash-matched summary row plus a bounded instructions disclosure. */
+/* Skill toolview: ToolRow-matched summary line plus a bounded instructions disclosure. */
 
 .card {
   display: flex;
@@ -10,7 +10,7 @@
   overflow: hidden;
   display: flex;
   align-items: center;
-  height: 24px;
+  height: calc(24px + var(--dsh-content-font-delta, 0px));
   min-width: 0;
 }
 
@@ -18,7 +18,8 @@
   cursor: pointer;
 }
 
-.card[data-state='running'] .row::after {
+.card[data-state='running'] .row::after,
+.card[data-state='preparing'] .row::after {
   content: '';
   position: absolute;
   inset: 0 auto 0 0;
@@ -41,13 +42,18 @@
 .leading {
   position: relative;
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: calc(16px + var(--dsh-content-font-delta, 0px));
+  height: calc(16px + var(--dsh-content-font-delta, 0px));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin-right: 6px;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.leading svg {
+  width: calc(14px + var(--dsh-content-font-delta, 0px));
+  height: calc(14px + var(--dsh-content-font-delta, 0px));
 }
 
 .chevron {
@@ -78,8 +84,8 @@
 
 .title {
   flex: none;
-  font-size: 14px;
-  line-height: 24px;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -98,13 +104,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  line-height: 24px;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   color: var(--dsw-alias-label-tertiary);
 }
 
 .errorSummary {
   color: var(--dsw-alias-state-error-primary);
+}
+
+.stoppedSummary {
+  color: var(--dsw-alias-state-warn-label);
 }
 
 .bodyWrap {
@@ -119,7 +129,7 @@
   margin: 4px 0 4px 4px;
   overflow: hidden;
   border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-markdown-code-block);
 }
 
@@ -154,7 +164,7 @@
 .instructions::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   background-clip: padding-box;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
 }
 
 .instructions::-webkit-scrollbar-track {

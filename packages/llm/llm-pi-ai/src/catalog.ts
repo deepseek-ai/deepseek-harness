@@ -3,7 +3,7 @@
  * catalog supplies defaults keyed by model id, and a profile's own model
  * entries override them field by field, so a route naming a catalog provider
  * stays configuration-free while a route pi-ai has never heard of is fully
- * describable from `settings.yaml`.
+ * describable from `cordis.patch.yml`.
  *
  * Strict resolution rejects unserviceable models before settings writes.
  * Deferred resolution retains their diagnostics so stored catalog drift does

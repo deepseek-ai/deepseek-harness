@@ -17,11 +17,14 @@ import type { Config } from '@deepseek-ai/dsh-mcp-client'
 // vi.mock factories are hoisted above every import/const, so the mock fns and
 // class must be created inside vi.hoisted to exist when the factories run.
 const {
-  mockConnect, mockClose, mockPing, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances,
+  mockConnect, mockClose, mockPing, mockDiscover, mockProtocolEra,
+  mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances,
 } = vi.hoisted(() => {
   const mockConnect = vi.fn<() => Promise<void>>()
   const mockClose = vi.fn<() => Promise<void>>()
   const mockPing = vi.fn<() => Promise<void>>()
+  const mockDiscover = vi.fn<() => Promise<unknown>>()
+  const mockProtocolEra = vi.fn<() => 'legacy' | 'modern'>()
   const mockListTools = vi.fn<(_params?: Record<string, unknown>) => Promise<unknown>>()
   const mockCallTool = vi.fn<(
     _params?: Record<string, unknown>, _options?: unknown,
@@ -33,6 +36,8 @@ const {
     connect = mockConnect
     close = mockClose
     ping = mockPing
+    discover = mockDiscover
+    getProtocolEra = mockProtocolEra
     getServerCapabilities = () => ({ tools: {} })
     getInstructions(): string | undefined { return undefined }
     listResources = async () => ({ resources: [] })
@@ -44,7 +49,10 @@ const {
     }
   }
   const instances: MockClient[] = []
-  return { mockConnect, mockClose, mockPing, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances }
+  return {
+    mockConnect, mockClose, mockPing, mockDiscover, mockProtocolEra,
+    mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances,
+  }
 })
 
 vi.mock('@modelcontextprotocol/client', async importOriginal => ({
@@ -125,7 +133,7 @@ function nextCallId(): ToolCallId {
 
 // ---- Tests ----
 
-describe('health ping', () => {
+describe('health check', () => {
   let ctx: Context
 
   beforeEach(async () => {
@@ -133,6 +141,8 @@ describe('health ping', () => {
     instances.length = 0
     mockConnect.mockResolvedValue(undefined)
     mockPing.mockResolvedValue(undefined)
+    mockDiscover.mockResolvedValue({})
+    mockProtocolEra.mockReturnValue('legacy')
     mockClose.mockImplementation(function (this: { onclose?: () => void }) {
       this.onclose?.()
       return Promise.resolve()
@@ -152,22 +162,24 @@ describe('health ping', () => {
     return { seen, dispose: handle.dispose.bind(handle), ready: handle.ready }
   }
 
-  it('re-arms after a healthy ping and turns a failed ping into reconnect with its diagnostic', async () => {
+  it.each(['legacy', 'modern'] as const)('checks %s liveness and reconnects after a failed check', async (era) => {
     const { warns } = captureLogs(ctx)
-    mockPing.mockResolvedValueOnce(undefined)
-    mockPing.mockRejectedValueOnce(new Error('boom'))
+    mockProtocolEra.mockReturnValue(era)
+    const check = era === 'modern' ? mockDiscover : mockPing
+    check.mockResolvedValueOnce(undefined)
+    check.mockRejectedValueOnce(new Error('boom'))
     const supervisor = superviseWith({ ...stdioConfig({ initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 3 }), healthCheckIntervalMs: 20 })
     try {
       await supervisor.ready
-      // Ping 1 succeeds and re-arms; ping 2 fails and closes the generation.
-      // A floor, not equality: pings resume on the recovery generation, so the
+      // A floor, not equality: checks resume on the recovery generation, so the
       // count keeps growing and an exact-2 wait races the reconnect on slow runners.
-      await vi.waitFor(() => { expect(mockPing.mock.calls.length).toBeGreaterThanOrEqual(2) })
+      await vi.waitFor(() => { expect(check.mock.calls.length).toBeGreaterThanOrEqual(2) })
       await vi.waitFor(() => { expect(supervisor.seen.includes('reconnecting:Error: boom')).toBe(true) })
-      expect(warns.some(line => line.includes('health ping failed: Error: boom'))).toBe(true)
-      // The supervisor recovers onto a fresh generation and resumes pinging it.
+      expect(warns.some(line => line.includes('health check failed: Error: boom'))).toBe(true)
+      // The supervisor recovers onto a fresh generation and resumes checking it.
       await vi.waitFor(() => { expect(supervisor.seen.filter(state => state === 'connected').length).toBeGreaterThan(1) })
       expect(instances.length).toBeGreaterThan(1)
+      expect(era === 'modern' ? mockPing : mockDiscover).not.toHaveBeenCalled()
     } finally {
       await supervisor.dispose()
     }
@@ -180,7 +192,7 @@ describe('health ping', () => {
     try {
       await supervisor.ready
       mockClose.mockImplementation(() => Promise.reject(new Error('cannot close')))
-      await vi.waitFor(() => { expect(warns.some(line => line.includes('health ping failed: Error: gone'))).toBe(true) })
+      await vi.waitFor(() => { expect(warns.some(line => line.includes('health check failed: Error: gone'))).toBe(true) })
       await vi.waitFor(() => { expect(supervisor.seen.some(state => state.startsWith('reconnecting:'))).toBe(true) })
       // Let the recovery generation close normally again so disposal quiesces.
       mockClose.mockImplementation(function (this: { onclose?: () => void }) {
@@ -226,7 +238,7 @@ describe('health ping', () => {
       await vi.waitFor(() => { expect(supervisor.seen.includes('failed')).toBe(true) })
       gate.reject(new Error('late'))
       await sleep(60)
-      expect(warns.some(line => line.includes('health ping failed'))).toBe(false)
+      expect(warns.some(line => line.includes('health check failed'))).toBe(false)
       expect(mockPing).toHaveBeenCalledTimes(1)
     } finally {
       await supervisor.dispose()
@@ -242,6 +254,8 @@ describe('reconnect supervisor', () => {
     instances.length = 0
     mockConnect.mockResolvedValue(undefined)
     mockPing.mockResolvedValue(undefined)
+    mockDiscover.mockResolvedValue({})
+    mockProtocolEra.mockReturnValue('legacy')
     mockClose.mockImplementation(function (this: { onclose?: () => void }) {
       this.onclose?.()
       return Promise.resolve()

@@ -263,7 +263,7 @@ function win32Bindings(): Win32Bindings {
     ]),
     waitForSingleObject: bind('WaitForSingleObject', 'uint32', [PVOID, 'uint32']),
     closeHandle: bind('CloseHandle', 'int', [PVOID]),
-  } as unknown as Win32Bindings
+  } as Win32Bindings
   return cachedBindings
 }
 

@@ -146,6 +146,8 @@ interface LoaderSmokeBaseOptions {
   readonly tsconfigPath: string
   /** Boot from source via tsx (`src`) or built lib via plain Node (`lib`); defaults to the environment's mode. */
   readonly mode?: ExampleMode
+  /** Source hook selection; see {@link ExampleLaunchOptions.sourceImport}. */
+  readonly sourceImport?: 'tsx/esm'
   /** Environment overrides layered over the parent and isolated DSH homes. */
   readonly env?: Readonly<NodeJS.ProcessEnv>
   /** Process deadline override for harness tests. */
@@ -221,6 +223,7 @@ export async function runLoaderSmoke(options: LoaderSmokeOptions): Promise<Loade
       libBin: options.libBinScript,
       configArgs: options.binArgs ?? [options.configPath],
       ...options.mode !== undefined ? { mode: options.mode } : {},
+      ...options.sourceImport !== undefined ? { sourceImport: options.sourceImport } : {},
       tsconfigPath: options.tsconfigPath,
       env: {
         DSH_HOME: join(cwd, '.dsh'),

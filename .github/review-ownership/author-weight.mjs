@@ -1,20 +1,20 @@
 /** Author credit from merged pull requests in the same repository. */
-const CAP_COUNT = 150
+const CAP_COUNT = 100
 
 /**
- * Convert merged PR count to author points, capped at 0.6.
+ * Convert merged PR count to author points, capped at 1.1.
  * @param {number} mergedCount Merged PR count.
  * @returns {number} Author approval points.
  */
 export function authorCreditPoints(mergedCount) {
-  return Math.min(CAP_COUNT, mergedCount) / 250
+  return Math.min(CAP_COUNT, mergedCount) * 11 / 1000
 }
 
 /**
  * Count merged PRs by immutable author account, stopping at the credit cap.
  * @param {{repository: string, number: number, authorId: string}} pull Current pull request.
  * @param {(path: string, options: object) => Promise<unknown>} api GitHub API caller.
- * @returns {Promise<number>} Merged count, capped at 150; incomplete responses reject.
+ * @returns {Promise<number>} Merged count, capped at 100; incomplete responses reject.
  */
 export async function countMergedAuthorPulls(pull, api) {
   const [owner, name] = pull.repository.split('/')

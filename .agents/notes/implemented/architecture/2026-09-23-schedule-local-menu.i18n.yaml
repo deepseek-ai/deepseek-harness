@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-23-schedule-local-menu.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-23-schedule-local-menu.md
+/agent-note-own-the-schedule-detail-menus-inside-the-schedule-client:
+  en: a9ed8f9cf0bdfd66
+  zh: ff11822efe6b48b7
+/agent-note-own-the-schedule-detail-menus-inside-the-schedule-client/problem:
+  en: 076e6ca799bf2045
+  zh: d3f87030015cdf3c
+/agent-note-own-the-schedule-detail-menus-inside-the-schedule-client/decision:
+  en: c35ab9fa2549866d
+  zh: 01855f87b884dc93
+/agent-note-own-the-schedule-detail-menus-inside-the-schedule-client/alternatives-considered:
+  en: 3648e55bb76a4381
+  zh: 83c98e0789a6df9c
+/agent-note-own-the-schedule-detail-menus-inside-the-schedule-client/consequences:
+  en: f6380c38e35bce37
+  zh: 1379ff1763d0eb10
+/agent-note-own-the-schedule-detail-menus-inside-the-schedule-client/testing:
+  en: f1de601175678a9a
+  zh: 58fddec29a462b98

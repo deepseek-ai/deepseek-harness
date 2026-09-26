@@ -1,6 +1,6 @@
 import { memo, useState } from 'react'
 import type { ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
-import { DisclosureRow, IconBrowseOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { OpaqueBody } from './ContextBody.tsx'
 import css from './ContextInjectionRow.module.css'
 
@@ -27,7 +27,7 @@ export function SystemPromptRow({ text, update = false, t }: SystemPromptRowProp
   return (
     <DisclosureRow
       className={css.root}
-      icon={<IconBrowseOutline16 size={14} />}
+      icon={<IconBrowseOutlineRegular size={14} />}
       chevronClassName={css.chevron}
       title={t(update ? 'message.systemPromptUpdate' : 'message.systemPrompt')}
       open={open}

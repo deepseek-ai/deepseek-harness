@@ -59,12 +59,15 @@ JSONL record
   → v0-to-v1 stage
   → v1-to-v2 stage
   → v2-to-v3 stage
+  → v3-to-v4 stage
   → current event collector
 ```
 
 The chain contains no `flatMap`, spread expansion, intermediate event array, or scheduler. The final event collector expands a compact run only after every migration stage has had the opportunity to consume it directly.
 
 ### Adjacent version ownership
+
+The [V3-to-V4 specification](../../../../packages/session/session-format-v3-to-v4/README.md#v3-to-v4-specification) specifies parent catalog completion: it advances the header version, preserves admitted events and inherited cuts, and appends missing own catalog entries from child evidence. It reuses the frozen V3 codec from V2→V3. Generation-aware delivery validation prevents a historical acknowledgement from acquiring a current watermark meaning solely through the header change; earlier edges retain their own source-admission policies.
 
 The [V2-to-V3 delivery guards](../../../../packages/session/session-format-v2-to-v3/README.md#delivery-guards) prevent a marker ignored in the source generation from becoming an active upload watermark merely because the header changes. Python release smoke checks generated logs against the source `SESSION_FORMAT_VERSION` independently of generation-neutral golden comparison, so coherent filenames and headers cannot conceal an outdated writer.
 
@@ -76,7 +79,7 @@ Preset renames cover the creation header and every selection event because the l
 
 A source inherited count can be unknown before EOF: V2 derives it from seed markers, and V1→V2 can change cardinality. The chain passes that absence to the next stage instead of fabricating a count. The [V2-to-V3 inheritance rules](../../../../packages/session/session-format-v2-to-v3/README.md#sequence-references) support this case; older stages that require a header-supplied count still refuse when it is absent. This permits seeded multi-hop restoration without retaining an intermediate artifact array.
 
-The [version and release-status reference](../../../../docs/session-format-status.md) owns the published-format record and identifies the code’s writer authority. Released formats retain their semantics; committed generations remain byte-preserved during migration. A subsequent structural change requires the next adjacent edge under the [versioning rule](2026-08-10-session-log-version-mechanism.md), not an amendment to a released conversion. Ordinary event additions follow that rule’s required-event refusal mechanism rather than automatically allocating a version. A current-format file does not rerun its incoming migration; integration tests use isolated disposable homes and unchanged historical inputs.
+The [version and release-status reference](../../../../docs/session-format-status.md) owns the published-format record and identifies the code’s writer authority. Released formats retain their semantics; committed generations remain byte-preserved during migration. A breaking change to the released target format requires the next adjacent edge under the [versioning rule](2026-08-10-session-log-version-mechanism.md). Incoming-converter fixes affect later historical conversions, not existing target files; the [cookbook](../../../../docs/cookbook/adding-a-session-format-version.md) owns compatibility review and alpha support policy. Ordinary event additions follow that rule’s required-event refusal mechanism rather than automatically allocating a version. Integration tests use isolated disposable homes and unchanged historical inputs.
 
 The [committed-corpus inventory](../../../../packages/test-support/llm-replay/tests/session-format-corpus-inventory.ts) identifies deliberately unsupported historical conversions by source path, generation, and exact refusal reason. Retaining those artifacts must not force chronology-changing migration or permit a blanket skip: every listed artifact must still raise the typed migration refusal, and unlisted artifacts must restore. Native current-generation fixtures cannot be classified as unsupported, because they do not traverse an incoming edge. Headerless test-harness protocol examples remain a separate explicit class. The corpus test checks source bytes after both successful and refused restoration; it does not rewrite historical evidence to satisfy the current reader.
 
@@ -85,6 +88,8 @@ The [committed-corpus inventory](../../../../packages/test-support/llm-replay/te
 Each released codec creates a row decoder with explicit `strict` or `recoverable` recovery. The decoder validates and emits one event or one codec-owned `SessionFormatEventRun` at a time through separate context methods. v0-to-v1 and v1-to-v2 implement both `transformEvent()` and `transformRun()`, so packed Assistant chunks can reach the folding edge without first becoming millions of ordinary events.
 
 The v0-to-v1 edge preserves logical headers, sequence numbers, references, timestamps, and payloads except for bounded released-v0 normalizations. It translates the retired `steering/message` and `compact/*` event names, accepts a released `llm/retry` after its matching `step/end`, deterministically supplies a missing `llm/retry.retryId` per turn/step/provider/policy chain, and supplies one deterministic `compactionId` across a legacy compaction group that omitted it. The v1-to-v2 edge owns attempt folding and reference remapping, and emits only settled v2 events. It splits a legacy goal-sourced user message into `goal/change` plus the original model-visible message. It also inserts an interrupted `turn/end` for the bounded released restart in which an open turn with no open step is followed by a non-empty `next-turn` inbox splice and the next numbered `turn/start`.
+
+The V3-to-V4 edge applies the same bounded restart repair to logs written directly as V3. Keeping this repair in the incoming edge preserves [native V4 lifecycle validation](2026-09-17-native-v4-read-validation.md); accepting repeated starts there would admit producer corruption in new logs. Insertions require local-reference and inherited-cut remapping, while captured generations retain their original coordinates. The [format specification](../../../../packages/session/session-format-v3-to-v4/README.md#sequence-references) owns the exact evidence and fields.
 
 The catalog exposes one `createRestore()` operation for production, Worker, fixture, and replay callers. Recovery policy and final validation policy are chosen once at restore creation. Historical production uses recoverable source parsing with transformed-current validation; this validates the released current result after migration, while input that is already current receives only codec validation. Worker and fixture verification use strict parsing with full installed current restoration. A migration-stage or transformed-current validation refusal remains `SessionFormatUnsupportedMigrationError`; physical decoding failures remain corruption. Test support keeps only fixture-specific token and envelope materialization.
 
@@ -96,9 +101,13 @@ Current encoding is record based. The provider serializes about 1 MiB of plainte
 
 The shipped `lib/worker.cjs` bundles its JavaScript workspace dependencies so each fresh verifier avoids resolving and compiling their runtime module graph. This is safe because the Worker communicates through plain request/result messages and shares no service or class identity with its host. The Host build applies the existing TypeScript and Typert transforms; the Client pass skips this Node-only package instead of replacing its worker with untransformed source. Native add-ons remain external. Verification, scheduler admission, termination, and durable publication still complete before writable open returns. The built-worker smoke copies the package manifest and worker into an isolated temporary package with ambient module paths removed, accepts a valid generation, and rejects an incorrect event count.
 
+The [browser preview packer](../../../../packages/experimental/webworker-packer/README.md) prepares current successors for bundled Session data in Node, using same-root direct-child descriptors as parent catalog evidence. The browser host does not implement `node:worker_threads`, so this preparation preserves both immutable fixture generations and runtime JSONL’s Worker verification requirement.
+
 Preparation forwards cancellation through source reads and observes it at the existing approximately 500 ms Decode yield boundary. Once `publish()` starts, encode, Worker verification, and publication do not receive caller cancellation and run to settlement; write open checks its caller signal again afterward. A published generation is never rolled back.
 
 The Stage pipeline ends at one prepared current artifact. [Historical Session read preparation](2026-09-05-read-only-session-migration-preparation.md) defines how read open consumes that artifact immediately while write open performs encode, verification, and publication before returning append access.
+
+The bulk V4 migration command shares one JSONL persistence Context across a bounded job queue, retaining the backend’s two-Worker verification limit and cache for reusing recently decoded logs. A child’s concurrent publication can change its parent’s selected child generation; the ordinary revision check refuses that attempt. The command defers only this source-change error for one sequential retry after the initial queue drains, collecting fresh evidence without relaxing publication checks or retrying unrelated failures.
 
 ### Durable format and publication rules
 
@@ -121,6 +130,44 @@ Existing write handles retain the process-local claim and kernel-backed cross-pr
 | Bulk current encode builds whole strings and Buffers | Record encoder, 1 MiB input slices, 4 MiB write batches | Bounds allocation and main-thread slices |
 | Verification repeats on the main thread | At most two complete-generation Workers | Keeps verification CPU off the main thread |
 | Production and fixture migration use different APIs | Catalog `createRestore()` with explicit policies | One decoder/chain implementation |
+
+### Parent catalog prerequisites
+
+Runtime child-failure handling in this paragraph is partially superseded by [session-local catalog preparation](../bug-fix/2026-09-19-session-local-subagent-migration.md): opening the parent still completes its catalog from direct-child reads, but unreadable children do not block healthy parent history. V3→V4 completes parent child discovery from retained direct-child headers and own descriptors. Storage supplies compact descriptor evidence to the catalog assembly, which binds it into the V3→V4 stage factory; the Stage waits for the parent's final inherited cut before validating catalog payloads and deriving available own discovery facts. Nested seed markers discard inherited catalog candidates without interpreting their payloads. An existing catalog entry survives an unavailable descriptor, including a child that failed before its first step. Descriptor v1 denotes continuable mode; v2/v3 explicitly record mode. Available unambiguous discovery fields must agree with the parent; new complete entries require one supported descriptor. Missing, unsupported, or multiple descriptors preserve the logs and retain unknown-mode membership without inventing discovery fields, as recorded in [incomplete child evidence](../bug-fix/2026-09-19-v3-incomplete-child-catalog-evidence.md). JSONL rechecks related membership and source revisions when preparing, reusing, and publishing. Unreadable or unsupported headers are excluded from discovery; failures reading a recognized child preserve its header identity as unknown-mode membership. Source drift invalidates preparation; read open retries once automatically, while write open refuses publication. Diagnostics retain the offending child path and distinguish unsupported migration evidence from malformed child data. The collector reports child decoding and descriptor failures as warnings with the child path; cancellation and source-consistency checks still stop preparation. The V0–V3-only catalog avoids recursive child migration. Current V4 reads skip that scan but apply the same own-catalog field, uniqueness, and current delivery ownership checks as strict restoration. See the [format specification](../../../../packages/session/session-format-v3-to-v4/README.md).
+
+Raw parent/child migration tests retain 24 historical creation-time conflicts as rejection evidence. Detached controls align only the child creation time and prove event-preserving restoration, including a published child without a descriptor. Headless/ACP and SDK snapshot adapters validate live parent/child clocks before normalization and preserve their equality during refresh; committed predecessor generations remain unchanged.
+
+Historical public revisions combine the parent’s physical revision with a fingerprint of every selected canonical path and its filesystem revision. Parent-only tokens cannot identify catalog changes supplied by children; a root fingerprint preserves metadata-only `stat`/`list` and includes unreadable or unsupported members without a new persistent index. Unrelated changes also invalidate historical caches, and obtaining the token costs a root scan. Current tokens stay file-local. The preparation memo keeps physical parent revisions and separately validates child membership and revisions.
+
+The generic format interfaces carry only the artifact being restored. Parent-specific catalog assembly replaces the V3→V4 declaration with a closure over the collected child evidence; it reuses the generated codec, migration, and validation inventory. The assembly compiles one short migration chain per parent preparation, with independent stage state per restore. Binding at assembly keeps child evidence out of generic restore options and stage inputs without moving discovery or source revalidation into the migration. Static header and native current reads need no child evidence; an unbound historical body restore refuses rather than assuming an empty child set.
+
+<a id="catalog-scan-measurements"></a>
+### Catalog scan measurements
+
+The package-local [diagnostic](../../../../packages/session/session-persistence-jsonl/tests/catalog-migration.perf.ts) measures one raw V3 parent, four direct children with 1,000 events each, and 0/100/1,000 unrelated header-only V3 Sessions. Each sample creates its own temporary corpus and Cordis context in a fresh process, runs stat → cold read → memo read → write publication → current warm read, and disposes the context and files. It uses built workspace exports under plain Node; fixture creation is outside the measured intervals. These are filesystem-cache-warm observations after fixture creation, not disk-cold latency or a performance gate.
+
+On macOS arm64 with Node v26.0.0, all three samples per size are below in milliseconds. Read-only opens do not publish: membership scanning remains proportional to corpus size even when decoding is memoized. The 1,000-unrelated medians are 84.14 ms for stat, 237.97 ms for cold read, 110.98 ms for memo read, 268.46 ms for publication, and 0.41 ms for the same-process current read. These measurements document the cost; they establish no speedup claim or cross-host threshold.
+
+| Unrelated Sessions | Historical stat | Cold read | Memo read | Publish | Current warm read |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 5.17 | 19.00 | 1.36 | 42.88 | 0.47 |
+| 0 | 3.30 | 14.87 | 1.45 | 35.75 | 0.41 |
+| 0 | 3.18 | 16.71 | 1.50 | 34.51 | 0.47 |
+| 100 | 29.44 | 77.48 | 17.01 | 60.66 | 0.43 |
+| 100 | 12.42 | 42.71 | 13.69 | 60.19 | 0.43 |
+| 100 | 11.19 | 41.06 | 12.61 | 57.18 | 0.39 |
+| 1000 | 84.14 | 237.97 | 109.86 | 284.96 | 0.48 |
+| 1000 | 99.41 | 259.88 | 123.50 | 268.46 | 0.41 |
+| 1000 | 75.40 | 236.64 | 110.98 | 247.69 | 0.39 |
+
+Run from the repository root after building the runtime:
+
+```sh
+pnpm run build:lib:host
+cd packages/session/session-persistence-jsonl
+node --input-type=module -e 'import { build } from "tsdown"; await build({ config: false, entry: ["tests/catalog-migration.perf.ts"], outDir: ".artifacts/perf", tsconfig: false, dts: false, deps: { neverBundle: [/^@deepseek-ai\//], onlyBundle: false } })'
+node .artifacts/perf/catalog-migration.perf.mjs
+```
 
 ## Verification
 

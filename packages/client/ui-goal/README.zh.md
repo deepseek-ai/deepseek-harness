@@ -25,7 +25,7 @@ Web GUI 的 goal 界面同时显示持久 goal 状态及当前的进程本地激
 <a id="use-this-package"></a>
 ## 使用本包
 
-与 `ui-conversation` 及 goal 领域包一起挂载本插件；只要会话存在目标，条带就会作为 composer 上下文堆栈的第二张卡片出现（位于 Todo 之后、Queue 之前）。已 armed 的 active goal 提供暂停动作；active-but-disarmed 或 paused 的 goal 提供恢复；编辑重写目标文本；清除移除目标，并在投影追上之前抑制条带。
+与 `ui-conversation` 及 goal 领域包一起挂载本插件；只要会话存在目标，条带就会作为 composer 上下文堆栈的第二张卡片出现（位于 Todo 之后、Queue 之前）。Todo 与 Goal 使用相同的面板 elevation，使其位于 composer 层级之上。已 armed 的 active goal 提供暂停动作；active-but-disarmed 或 paused 的 goal 提供恢复；编辑重写目标文本；清除移除目标，并在投影追上之前抑制条带。
 
 ### 指令输入气泡
 
@@ -44,6 +44,8 @@ Web GUI 的 goal 界面同时显示持久 goal 状态及当前的进程本地激
 <summary>实现细节——点击展开</summary>
 
 持久 goal 经 `useProjection('goal')` 到达（由历史尾页播种、`session/projection` 帧更新）。注入面携带注册方私有的激活钩子源与四个变更动词。该源仅在框架钩子观察它时启动；启动后会读取 `ctx.remote.goals.get`、订阅 `goal/activation-changed`，并在 running 状态或连接重置时刷新。实时事件 epoch 会让在途读取失效，因此较旧的 HTTP 响应不能覆盖较新的 activation 变化；running 刷新会保留最后一次已知 activation，直到读取完成。条带不持有领域存储或跨插件缓存。每个变更在调用时从会话当前投影值读取 CAS ref，比较并交换（RPC 的 CAS）就是陈旧性护栏。由于 React 的 pending 渲染无法拦住同一帧内的点击，条带会同步为变更建立 single-flight 防护。指令输入投影是独立的 Conversation Definition，在通用命令结果 Node 之前构建 `command-input` Chat Node；它绝不创建 `user/message` 或模型轮次。
+
+激活状态读取持有临时的 `goalActivation` 客户端引用，仅在该会话首次历史打开成功后发送 `goals.get`。binding 已失效或打开失败时不发送 RPC。读取被拒绝时记录错误，不改变投影中的目标或最后一次已知激活状态；读取结束时释放临时引用。
 
 </details>
 

@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/schedule-bundle/README.md
+/:
+  en: 7504834d27adc717
+  zh: 464587026083c661
+/deepseek-ai-dsh-experimental-schedule-bundle:
+  en: d7b8b6126df4e3c4
+  zh: 546d528efd4edbde
+/deepseek-ai-dsh-experimental-schedule-bundle/summary:
+  en: 832752e963df6177
+  zh: 30d1d292230a17c1
+/deepseek-ai-dsh-experimental-schedule-bundle/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 364c80ee00a374ff
+/deepseek-ai-dsh-experimental-schedule-bundle/use-this-package:
+  en: d84cae0d3f3869c6
+  zh: c19c74c0671f3127
+/deepseek-ai-dsh-experimental-schedule-bundle/understand-the-implementation:
+  en: b17882af7c7eaf2c
+  zh: bfc71d0152557af5
+/deepseek-ai-dsh-experimental-schedule-bundle/further-exploration:
+  en: 99a29dddf9805540
+  zh: 13a6df3ee31abfc1
+/deepseek-ai-dsh-experimental-schedule-bundle/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-schedule-bundle/model-experience/reminder-tools-and-clock-readings:
+  en: c7fec3a37d945018
+  zh: 164346dc63d188dd
+/deepseek-ai-dsh-experimental-schedule-bundle/model-experience/reminder-tools-and-clock-readings/what-the-model-sees:
+  en: fb1906621d02c594
+  zh: 394dc933ed63b349
+/deepseek-ai-dsh-experimental-schedule-bundle/model-experience/reminder-tools-and-clock-readings/token-effect:
+  en: 7c44bfc062010b7b
+  zh: 15f431db31ad53eb
+/deepseek-ai-dsh-experimental-schedule-bundle/model-experience/reminder-tools-and-clock-readings/kv-cache-effect:
+  en: 0b01d8c40b422f5b
+  zh: 57fede4db59a62b8
+/deepseek-ai-dsh-experimental-schedule-bundle/known-limitations-and-deferred-work:
+  en: a4a2674fb3c5a101
+  zh: cb4c54ba37730708
+/deepseek-ai-dsh-experimental-schedule-bundle/known-limitations-and-deferred-work/dev-note:
+  en: 0225ba087c5266f3
+  zh: 4e706f1b2b984e63

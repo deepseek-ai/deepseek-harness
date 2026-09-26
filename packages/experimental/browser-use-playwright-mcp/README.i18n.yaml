@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/browser-use-playwright-mcp/README.md
-README.md: 6397c1f641e8c86ad9fd56886b04add1b89dfa3a
-README.zh.md: 41162e440a5a42e7a214d4fc078b8f80a786926d
+/:
+  en: 65c3ef2e9fa0bb0e
+  zh: 530a4b4ca63094e8
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp:
+  en: 9e5a4fa85c51434d
+  zh: 21a6143dff340791
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/summary:
+  en: e7e2be79affd38a3
+  zh: 77934d7769ade556
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: ea2227f28624a0e6
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/use-this-package:
+  en: 42a60bded230b697
+  zh: 2bc2efd2ba8c5e5a
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/understand-the-implementation:
+  en: 32b0f9382ebff464
+  zh: 1865ee4afa815c40
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/further-exploration:
+  en: c3adc5fd9103efab
+  zh: 4374dffa1415d2ff
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/model-experience/browser-tools-and-screenshots:
+  en: 1adc972910db543b
+  zh: 7a06e0d265f19499
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/model-experience/browser-tools-and-screenshots/what-the-model-sees:
+  en: 39b4784b86018ba7
+  zh: 0c8b06751b97520e
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/model-experience/browser-tools-and-screenshots/token-effect:
+  en: bc6d5d5db77d5fc3
+  zh: bbbd79e4ae29675f
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/model-experience/browser-tools-and-screenshots/kv-cache-effect:
+  en: 86e83cc10f829b2b
+  zh: c2e61c09531a5de2
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/known-limitations-and-deferred-work:
+  en: fa1db6bf80396681
+  zh: 132f6237d0e9383b
+/deepseek-ai-dsh-experimental-browser-use-playwright-mcp/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

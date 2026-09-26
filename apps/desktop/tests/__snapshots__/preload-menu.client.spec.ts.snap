@@ -1,0 +1,5 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`localizes caption entries and removes the menu on disposal > chinese 1`] = `"<div role="menubar" aria-label="应用菜单"><button type="button" role="menuitem" aria-haspopup="menu" aria-expanded="false" tabindex="0">应用</button><button type="button" role="menuitem" aria-haspopup="menu" aria-expanded="false" tabindex="-1">编辑</button></div>"`;
+
+exports[`localizes caption entries and removes the menu on disposal > english 1`] = `"<div role="menubar" aria-label="Application menu"><button type="button" role="menuitem" aria-haspopup="menu" aria-expanded="false" tabindex="0">Application</button><button type="button" role="menuitem" aria-haspopup="menu" aria-expanded="false" tabindex="-1">Edit</button></div>"`;

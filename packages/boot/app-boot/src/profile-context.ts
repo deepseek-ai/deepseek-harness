@@ -4,9 +4,18 @@ import { composeEntries, loadProfileDirectory, PROFILE_PATCH_FILENAME, type Prof
 import { loadOptionalPatches } from './index.ts'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 
+/** Application-owned package manager executable; environment applies only to package operations. */
+export interface ProfilePnpmInvocation {
+  readonly command: string
+  readonly args: readonly string[]
+  readonly env: Readonly<Record<string, string>>
+}
+
 /** Current profile facts; scheduling and mutation belong to their callers. */
 export interface ProfileContext {
   readonly name: string
+  /** Packaged applications supply their bundled runtime instead of a PATH executable. */
+  readonly packageManager?: ProfilePnpmInvocation
   readonly dir: string
   readonly patchPath: string
   readonly installAnchor: string

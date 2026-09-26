@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-03-user-owned-goal-pause-activation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-03-user-owned-goal-pause-activation.md
-2026-09-03-user-owned-goal-pause-activation.md: d58566938ef87ca2f25fd94d726dc28209f61b2b
-2026-09-03-user-owned-goal-pause-activation.zh.md: 675d61009f0a7d0f98c8f6d7568466d6651f2a42
+/agent-note-user-owned-goal-pause-exposes-live-activation:
+  en: 07749eb6ac180964
+  zh: b9c1165739fc45bf
+/agent-note-user-owned-goal-pause-exposes-live-activation/problem:
+  en: 9f044f22e6782773
+  zh: 6c17c53aa75280fd
+/agent-note-user-owned-goal-pause-exposes-live-activation/decision:
+  en: 2cc4ab097350a88f
+  zh: db10825a6285f3c5
+/agent-note-user-owned-goal-pause-exposes-live-activation/alternatives-considered:
+  en: 640afdb17164b06b
+  zh: 92d33c139c40b2a1
+/agent-note-user-owned-goal-pause-exposes-live-activation/consequences:
+  en: d73e412f853612ee
+  zh: 96630d28e3c431e1
+/agent-note-user-owned-goal-pause-exposes-live-activation/testing:
+  en: 9d103a90036f5d06
+  zh: df5440c8a4640e93

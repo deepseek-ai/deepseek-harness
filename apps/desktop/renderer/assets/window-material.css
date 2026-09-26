@@ -1,0 +1,11 @@
+/* Shared tint for full-window Desktop surfaces; native material owns the blur. */
+:root {
+  /* Native macOS vibrancy supplies the blur; this is only the foreground tint. */
+  --dsw-desktop-window-tint: color-mix(in srgb, rgb(255 255 255) 40%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-ds-theme-source]) { --dsw-desktop-window-tint: color-mix(in srgb, rgb(24 25 28) 50%, transparent); }
+}
+
+body[data-ds-dark-theme] { --dsw-desktop-window-tint: color-mix(in srgb, rgb(24 25 28) 50%, transparent); }

@@ -1,0 +1,32 @@
+{
+  "tool": {
+    "name": "load_workspace_dependencies",
+    "description": "Get absolute paths to bundled Python and library directories, plus bundled Python distribution versions. Node.js and pnpm paths are included when the payload provides them. Python includes numpy, pandas, python-docx, python-pptx, openpyxl, Pillow, lxml, and XlsxWriter. Use these libraries for Office files unless the user or workspace instructions select another environment. When Node.js and pnpm paths are returned, run pnpm with that Node executable and pnpm script path. This does not change PATH or package-manager settings.",
+    "input_schema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  "result": {
+    "python": "{{python}}",
+    "node": "{{node}}",
+    "nodePackages": "{{nodePackages}}",
+    "pnpm": "{{pnpm}}",
+    "pythonPackages": "{{site-packages}}",
+    "pythonDistributions": {
+      "numpy": "2.3.5",
+      "pandas": "3.0.1",
+      "python-dateutil": "2.9.0.post0",
+      "six": "1.17.0",
+      "tzdata": "2025.2",
+      "python-docx": "1.2.0",
+      "python-pptx": "1.0.2",
+      "openpyxl": "3.1.5",
+      "Pillow": "12.3.0",
+      "lxml": "6.1.3",
+      "XlsxWriter": "3.2.9",
+      "typing_extensions": "4.16.0",
+      "et_xmlfile": "2.0.0"
+    }
+  }
+}

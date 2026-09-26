@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!--
+      The document is the login window's placeholder until the first remote
+      document commits. It loads from disk before any network request, so it may
+      reach nothing: no origin, no font, no image, and no preload bridge.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+    <title></title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: Canvas;
+        color: CanvasText;
+        font: 14px/22px system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid color-mix(in srgb, CanvasText 25%, transparent);
+        border-top-color: CanvasText;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="spinner" aria-hidden="true"></div>
+    <p id="label" role="status"></p>
+    <script>
+      // The main process owns the copy; this reads the one label it passed.
+      // Wrapped so the document declares no global of its own.
+      (() => {
+        const label = new URLSearchParams(location.search).get('label')
+        if (label !== null) document.getElementById('label').textContent = label
+      })()
+    </script>
+  </body>
+</html>

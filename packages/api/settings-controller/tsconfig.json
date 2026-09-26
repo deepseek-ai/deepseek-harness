@@ -15,7 +15,7 @@
       "path": "../../../vendor/schemastery"
     },
     {
-      "path": "../../preset/agent-presets"
+      "path": "../../preset/agent-preset-registry"
     },
     {
       "path": "../../credentials/credentials"

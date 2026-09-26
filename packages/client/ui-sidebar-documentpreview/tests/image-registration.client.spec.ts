@@ -1,10 +1,13 @@
 /** Image metadata, keyed slot, dictionary, and disposal registration. */
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { ImageBody } from '../src/client/image/ImageBody.tsx'
 import { apply, BINARY_IMAGE_EXTENSIONS, IMAGE_BODY_ID, IMAGE_EXTENSIONS, imageBodyDefinition } from '../src/client/image/index.ts'
 import { en, zh } from '../src/client/image/locales.ts'
+import type { ZoomInjected, ZoomStore } from '../src/client/zoom/store.ts'
 
 let dispose: (() => Promise<void>) | undefined
 afterEach(async () => { await dispose?.(); dispose = undefined })
@@ -13,7 +16,7 @@ describe('image registration', () => {
   it('claims common image suffixes as a builtin complete-byte renderer without wrap', () => {
     const title = vi.fn(() => 'localized image')
     const definition = imageBodyDefinition(title)
-    expect(definition).toEqual({
+    expect(definition).toMatchObject({
       id: IMAGE_BODY_ID,
       extensions: IMAGE_EXTENSIONS,
       binaryExtensions: BINARY_IMAGE_EXTENSIONS,
@@ -31,9 +34,18 @@ describe('image registration', () => {
     const registry = new DocumentPreviewRegistry()
     const dictionaries = new Map<string, unknown>()
     const bodies = new Map<string, unknown>()
-    const register = vi.fn((options: { key: string }, body: unknown) => {
+    type Options = {
+      name: string
+      key: string
+      locale: string
+      store: ZoomStore
+      inject: (sessionId: SessionId, actions: ReturnType<ZoomStore['create']>['actions']) => ZoomInjected
+    }
+    const entries: Options[] = []
+    const register = vi.fn((options: Options, body: unknown) => {
       bodies.set(options.key, body)
-      return () => { bodies.delete(options.key) }
+      entries.push(options)
+      return () => { bodies.delete(options.key); entries.splice(entries.indexOf(options), 1) }
     })
     ctx.provide('documentPreviews', registry)
     ctx.provide('slots', { inject: (_key: string, callback: () => () => void) => callback(), register } as never)
@@ -52,13 +64,22 @@ describe('image registration', () => {
     }
     expect(registry.getSnapshot()[0]?.title()).toBe(en.title)
     expect(dictionaries.get('sidebarImage')).toEqual({ zh, en })
-    expect(register).toHaveBeenCalledExactlyOnceWith(
-      { name: 'sidebar.right.tab.document', key: IMAGE_BODY_ID, locale: 'sidebarImage' },
-      ImageBody,
-    )
+    expect(register).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      name: 'sidebar.right.tab.document', key: IMAGE_BODY_ID, locale: 'sidebarImage',
+    }), ImageBody)
+    expect(entries[0]?.store).toBeDefined()
+    expect(typeof entries[0]?.inject).toBe('function')
+    const instance = entries[0]!.store.create()
+    const face = entries[0]!.inject('image-session' as SessionId, instance.actions)
+    const controller = new AbortController()
+    face.retainTab('image-tab' as TabId, controller.signal)
+    instance.actions.zoom('image-tab' as TabId, { kind: 'fixed', scale: 1.5 })
+    controller.abort()
+    expect(instance.getSnapshot().byTab).toEqual({})
     await dispose()
     expect(registry.getSnapshot()).toEqual([])
     expect(bodies.size).toBe(0)
+    expect(entries).toEqual([])
     expect(dictionaries.size).toBe(0)
   })
 })

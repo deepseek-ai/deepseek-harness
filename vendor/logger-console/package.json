@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/cordis-plugin-logger-console",
   "description": "Console logger exporter for cordis",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "publishConfig": {
     "access": "public"
   },
@@ -32,11 +32,11 @@
   "author": "Shigma <shigma10826@gmail.com>",
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "dependencies": {
-    "@deepseek-ai/cosmokit": "workspace:^",
-    "@deepseek-ai/schemastery": "workspace:^",
+    "@deepseek-ai/cosmokit": "workspace:~",
+    "@deepseek-ai/schemastery": "workspace:~",
     "supports-color": "^9.4.0"
   }
 }

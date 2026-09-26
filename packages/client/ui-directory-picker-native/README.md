@@ -1,5 +1,5 @@
 ---
-description: "Native directory-picker surface: the browser half that drives the host OS chooser for workspace-directory flows; for users and maintainers choosing a picking interaction."
+description: "Native directory-picker surface: the browser half that drives the local Desktop or Host OS chooser for workspace-directory flows; for users and maintainers choosing a picking interaction."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package provides the native directory-picking surface for the Web GUI: when a workspace flow asks for a directory, a renderless browser occupant opens the operating system's own chooser on the machine running the Host and reports the single outcome — a picked path, a cancellation, or a failure. It fills the two directory-flow slots declared by `ui-workspace`, composing the client side of the native picking interaction in one `cordis.yml` row. Choose it when the browser runs on the same machine as the Host; in-process and remote-browser deployments need the [`-browse`](../ui-directory-picker-browse/README.md) surface instead.
+This package provides the native directory-picking surface for the Web GUI: when a workspace flow asks for a directory, a renderless browser occupant opens the operating system's own chooser on the local machine and reports the single outcome — a picked path, a cancellation, or a failure. It fills the two directory-flow slots declared by `ui-workspace`, composing the client side of the native picking interaction in one `cordis.yml` row. Choose it when the browser runs on the same machine as the Host; in-process and remote-browser deployments need the [`-browse`](../ui-directory-picker-browse/README.md) surface instead.
 
 ## Table of Contents
 
@@ -27,6 +27,8 @@ This package provides the native directory-picking surface for the Web GUI: when
 
 Mount this plugin alongside `ui-workspace` and the host backend [`dsh-host-directory-picker-native`](../../host/directory-picker-native/README.md); one `cordis.yml` row then composes the whole native picking interaction. When a workspace add or picker flow opens a directory request, the user sees the operating system's folder dialog; the picked path is adopted by the workspace flow, and cancelling closes the dialog.
 
+In the local Electron application, this flow uses the narrow preload directory-picker bridge. Cancellation and failure never retry through the Host chooser. Ordinary Web uses the Host call; the separate browse composition always lists Host directories.
+
 ### When to choose it
 
 Choose this surface when the browser runs on the same machine as the Host, so an OS dialog can open there. Choose the [`-browse`](../ui-directory-picker-browse/README.md) surface when the browser is remote or in-process and no local chooser exists. The two surfaces fill the same slots, so switching is a composition change, not a code change.
@@ -39,7 +41,7 @@ Choose this surface when the browser runs on the same machine as the Host, so an
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Both slot registrations install as one transactional effect through nested `ctx.slots.inject()` calls, because either declaring entry may activate later or replace its declaration. The occupant arms once per rising `open` edge, so re-renders never launch a second chooser; settlements ride a ref so the answer reaches the owner's latest handlers. An unmount (HMR replacing the occupant) discards the settlement wholesale: the wire carries no per-request abort, so the host-side chooser survives until answered and its answer lands nowhere. The node half is an empty `apply` that keeps the plugin on the host roster.
+Both slot registrations install as one transactional effect through nested `ctx.slots.inject()` calls, because either declaring entry may activate later or replace its declaration. The occupant arms once per rising `open` edge, so re-renders never launch a second chooser; settlements ride a ref so the answer reaches the owner's latest handlers. An unmount (HMR replacing the occupant) discards the settlement wholesale: the wire carries no per-request abort, so the native chooser survives until answered and its answer lands nowhere. The node half is an empty `apply` that keeps the plugin on the host roster.
 
 </details>
 
@@ -73,8 +75,9 @@ None; this package neither assembles nor sends a provider request.
 
 These limits define when the native chooser fits. They are current package constraints, not a general picker comparison or a task backlog.
 
-- **No cancellation of an open chooser** — the wire has no per-request abort, so a chooser already on the host display cannot be closed from the browser; a discarded settlement is ignored.
-- **Local Host carriers only** — an OS dialog opens on the machine running the Host, so in-process and remote-browser deployments need the `-browse` composition instead. Platform failures surface through the owner's retryable folder dialog.
+- **No cancellation of an open chooser** — the wire has no per-request abort, so a chooser already on the local display cannot be closed from the browser; a discarded settlement is ignored.
+- **Local carriers only** — the Electron dialog selects local paths; ordinary Web opens the Host chooser. Remote-browser and in-process deployments use the `-browse` composition. Platform failures surface through the owner's retryable folder dialog.
+- **Linux automatic selection** — without zenity or kdialog, the Host selects browse even in Desktop; the Electron dialog is not used.
 
 <a id="dev-note"></a>
 ### Dev Note

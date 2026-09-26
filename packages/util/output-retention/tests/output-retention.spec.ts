@@ -6,6 +6,7 @@ import {
   type Omitted,
   type RetentionNotice,
   TextRetainer,
+  truncateWithoutSplittingSurrogatePair,
 } from '@deepseek-ai/dsh-output-retention'
 
 /** Decode a RetainedText via a round-trip helper for readable UTF-8 assertions. */
@@ -372,5 +373,37 @@ describe('formatRetentionNotice', () => {
     const out = formatRetentionNotice(headTail, n =>
       typeof n.limit === 'object' ? `Kept ${n.limit.head}B head + ${n.limit.tail}B tail.` : '')
     expect(out).toBe('Omitted 500 bytes. Kept 2000B head + 2000B tail.')
+  })
+})
+
+describe('truncateWithoutSplittingSurrogatePair', () => {
+  it('caps at maxChars UTF-16 code units', () => {
+    expect(truncateWithoutSplittingSurrogatePair('abcdef', 3)).toBe('abc')
+    expect(truncateWithoutSplittingSurrogatePair('abcdef', 0)).toBe('')
+    expect(truncateWithoutSplittingSurrogatePair('abcdef', 1)).toBe('a')
+  })
+
+  it('returns text within the cap unchanged', () => {
+    expect(truncateWithoutSplittingSurrogatePair('abc', 3)).toBe('abc')
+    expect(truncateWithoutSplittingSurrogatePair('abc', 9)).toBe('abc')
+    expect(truncateWithoutSplittingSurrogatePair('', 0)).toBe('')
+  })
+
+  it('drops the unpaired half when the cap lands inside a surrogate pair', () => {
+    // '😀' is two code units, so these caps would otherwise keep its high surrogate alone.
+    expect(truncateWithoutSplittingSurrogatePair('ab😀cd', 3)).toBe('ab')
+    expect(truncateWithoutSplittingSurrogatePair('ab😀cd', 4)).toBe('ab😀')
+    expect(truncateWithoutSplittingSurrogatePair('😀😀', 1)).toBe('')
+    expect(truncateWithoutSplittingSurrogatePair('😀😀', 3)).toBe('😀')
+  })
+
+  it('never ends in a lone high surrogate at any cap', () => {
+    const text = 'a😀b😀c'
+    for (let maxChars = 0; maxChars <= text.length; maxChars++) {
+      const capped = truncateWithoutSplittingSurrogatePair(text, maxChars)
+      expect(capped.length).toBeLessThanOrEqual(maxChars)
+      expect(capped).not.toMatch(/[\uD800-\uDBFF]$/)
+      expect(capped).toBe(text.slice(0, capped.length))
+    }
   })
 })

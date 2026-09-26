@@ -1,7 +1,8 @@
 {
   "name": "@deepseek-ai/dsh-experimental-agent-team-profile",
-  "description": "Experimental profile bundle enabling Agent Teams over dsh-base",
-  "version": "0.1.6-alpha.1",
+  "description": "Agent Teams collaboration, tools, and Web UI in one experimental bundle",
+  "version": "0.1.7-rc.2",
+  "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
   },
@@ -19,10 +20,13 @@
       "default": "./lib/index.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
+    "icon.svg",
+    "locale/*.json",
     "lib/index.js",
     "cordis.patch.yml",
     "lib/types/**/*.d.ts"
@@ -34,15 +38,16 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/dsh-experimental-agent-team": "workspace:^",
-    "@deepseek-ai/dsh-experimental-tool-agent-team": "workspace:^"
+    "@deepseek-ai/dsh-experimental-agent-team": "workspace:*",
+    "@deepseek-ai/dsh-experimental-client-ui-agent-team": "workspace:*",
+    "@deepseek-ai/dsh-experimental-tool-agent-team": "workspace:*"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis-plugin-include": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cordis-plugin-include": "workspace:~",
+    "@deepseek-ai/cordis": "workspace:~",
     "js-yaml": "^4.2.0"
   }
 }

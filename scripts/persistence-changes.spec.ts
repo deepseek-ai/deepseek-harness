@@ -3,12 +3,13 @@
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, posix, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { canonicalizeSchema, schemaDigest } from './persistence-schema-model.ts'
-import type { PersistenceRoot, PersistenceSchemaInventory, SchemaNode, SchemaProperty } from './persistence-schema-model.ts'
+import type { PersistenceRoot, PersistenceSchemaInventory, SchemaNode, SchemaProperty, SourceCompatibility } from './persistence-schema-model.ts'
 import { extractPersistenceSchema } from './persistence-schema.ts'
 import { persistenceCatalogArtifacts } from './gen-persistence-catalog.ts'
+import { createPersistenceFinalizationCheckpoint, loadPersistenceFinalization } from './persistence-finalization.ts'
 import {
   classifyPersistenceChange,
   loadPersistenceHistory,
@@ -18,7 +19,7 @@ import {
   validatePersistenceHistory,
   verifyPersistenceChanges,
 } from './persistence-changes.ts'
-import type { PersistenceChangeRecord, PersistenceHistoryEntry } from './persistence-changes.ts'
+import type { PersistenceChangeRecord, PersistenceHistoryEntry, PersistenceTypeChange } from './persistence-changes.ts'
 
 function runPersistenceChanges(
   args: readonly string[], root: string, extract: (root: string) => PersistenceSchemaInventory,
@@ -159,6 +160,208 @@ describe('historical persistence snapshot parsing', () => {
   })
 })
 
+const FINALIZED_ID = '2026-09-18-finalized-v4'
+const COMPATIBLE_ID = '2026-09-19-compatible-v4'
+const FUTURE_ID = '2026-09-19-future-v5'
+
+function finalize(root: string, current = inventory({ value: 'number' }, 4)): void {
+  baseline(root)
+  runPersistenceChanges(['--record', FINALIZED_ID, '--prose', proseFile(root)], root, () => current)
+  const checkpoint = createPersistenceFinalizationCheckpoint(loadPersistenceHistory(root), current)
+  mkdirSync(join(root, 'docs/persistence-changes/finalized'))
+  writeFileSync(join(root, 'docs/persistence-changes/finalized/v4.json'), JSON.stringify(checkpoint))
+  for (const suffix of ['.md', '.zh.md']) {
+    writeFileSync(join(root, `docs/session-format-status${suffix}`), '```yaml session-format-finalization\nlatestFinalizedVersion: 4\n```\n')
+  }
+}
+
+function contents(root: string): Record<string, string> {
+  const files: Record<string, string> = {}
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(join(root, directory), { withFileTypes: true })) {
+      const path = posix.join(directory, entry.name)
+      if (entry.isDirectory()) visit(path)
+      else files[path] = readFileSync(join(root, path), 'utf8')
+    }
+  }
+  visit('')
+  return files
+}
+
+describe('accepted persistence baseline', () => {
+  it('keeps metadata-only catalog regeneration and checkpoint capture independent of publication', () => {
+    const root = fixture()
+    const current = inventory({ value: 'number' }, 4)
+    finalize(root, current)
+    const metadata = { ...current, roots: [...current.roots].reverse(), types: [{
+      ...current.roots[2]!, names: ['RenamedAlias'], sources: ['packages/example/src/types.ts:99'],
+    }].map(({ schema, digest, names, sources }) => ({ schema, digest, names, sources })) }
+    commitCurrent(root, metadata)
+    expect(runPersistenceChanges(['--check'], root, () => metadata)).toContain('roots match')
+    expect(createPersistenceFinalizationCheckpoint(loadPersistenceHistory(root), metadata))
+      .toEqual(JSON.parse(readFileSync(join(root, 'docs/persistence-changes/finalized/v4.json'), 'utf8')))
+    expect(contents(root)['docs/session-format-status.md']).not.toContain('latestReleasedVersion')
+  })
+
+  it.each(['optional field', 'ordinary event'] as const)('allows a V4 %s through a new same-version acknowledgement', (kind) => {
+    const root = fixture()
+    const current = inventory({ value: 'number' }, 4)
+    finalize(root, current)
+    const after = kind === 'ordinary event'
+      ? { ...current, roots: [...current.roots, typeRoot('event:example/new', {})] }
+      : inventory({ value: 'number', 'label?': 'string' }, 4)
+    const before = contents(root)
+    commitCurrent(root, after)
+    expect(() => verifyPersistenceChanges(root, after)).toThrow('unacknowledged persistence type changes')
+    runPersistenceChanges(['--record', COMPATIBLE_ID, '--prose', proseFile(root)], root, () => after)
+    expect(runPersistenceChanges(['--check'], root, () => after)).toContain('roots match')
+    const history = loadPersistenceHistory(root)
+    expect(history.entries.find(entry => entry.record.id === COMPATIBLE_ID)?.record.changes)
+      .toEqual([expect.objectContaining({ decision: 'same-version' })])
+    expect(loadPersistenceFinalization(root, history)?.acceptedRecords.has(COMPATIBLE_ID)).toBe(false)
+    for (const [path, value] of Object.entries(before).filter(([path]) => path.startsWith('docs/persistence-changes/'))) {
+      expect(readFileSync(join(root, path), 'utf8')).toBe(value)
+    }
+  })
+
+  it.each(['required field', 'changed type'] as const)('refuses a breaking V4 %s before rendering or writing', (kind) => {
+    const root = fixture()
+    finalize(root)
+    const after = inventory(kind === 'required field' ? { value: 'number', label: 'string' } : { value: 'boolean' }, 4)
+    const before = contents(root)
+    let rendered = false
+    const result = JSON.parse(executePersistenceChanges(['--record', FUTURE_ID, '--json'], root, () => after, () => {
+      rendered = true
+      return []
+    })) as { ok: boolean; code: string; changes: PersistenceTypeChange[] }
+    expect(result).toMatchObject({ ok: false, code: 'finalized-format-changed' })
+    expect(result.changes.length).toBeGreaterThan(0)
+    expect(result.changes.some(change => change.requiresVersionBump)).toBe(true)
+    expect(rendered).toBe(false)
+    expect(contents(root)).toEqual(before)
+    commitCurrent(root, after)
+    expect(() => verifyPersistenceChanges(root, after)).toThrow('Breaking changes relative to the accepted Session format 4 baseline')
+  })
+
+  it('allows qualified V4 attribution additions through a new same-version acknowledgement', () => {
+    const root = fixture()
+    const source = attributedRoot([EXISTING_SOURCE])
+    const current: PersistenceSchemaInventory = { ...inventory({ value: 'number' }, 4), formatVersion: 2,
+      roots: [...inventory({ value: 'number' }, 4).roots, source] }
+    finalize(root, current)
+    const added = attributedRoot([EXISTING_SOURCE, { kind: 'new-attribution' }], { policy: attributionPolicy(['new-attribution']) })
+    const after = { ...current, roots: current.roots.map(root => root.key === source.key ? added : root) }
+    expect(classifyPersistenceChange(source, added)).toEqual([expect.objectContaining({ kind: 'attribution-kind-added', requiresVersionBump: false })])
+    const before = contents(root)
+    runPersistenceChanges(['--record', COMPATIBLE_ID, '--prose', proseFile(root)], root, () => after)
+    expect(runPersistenceChanges(['--check'], root, () => after)).toContain('roots match')
+    expect(loadPersistenceHistory(root).entries.find(entry => entry.record.id === COMPATIBLE_ID)?.record.changes)
+      .toEqual([expect.objectContaining({ decision: 'same-version' })])
+    for (const [path, value] of Object.entries(before).filter(([path]) => path.startsWith('docs/persistence-changes/'))) {
+      expect(readFileSync(join(root, path), 'utf8')).toBe(value)
+    }
+  })
+
+  it('keeps later unaccepted compatible records editable and rejects a breaking successor without its own version transition', () => {
+    const root = fixture()
+    finalize(root)
+    const first = inventory({ value: 'number', 'label?': 'string' }, 4)
+    runPersistenceChanges(['--record', COMPATIBLE_ID, '--prose', proseFile(root)], root, () => first)
+    const amended = inventory({ value: 'number', 'label?': 'string', 'extra?': 'boolean' }, 4)
+    runPersistenceChanges(['--update', COMPATIBLE_ID], root, () => amended)
+    expect(runPersistenceChanges(['--check'], root, () => amended)).toContain('roots match')
+    expect(loadPersistenceFinalization(root, loadPersistenceHistory(root))?.acceptedRecords.has(COMPATIBLE_ID)).toBe(false)
+    const breaking = inventory({ value: 'number', 'label?': 'number', 'extra?': 'boolean' }, 4)
+    const accepted = inventory({ value: 'number' }, 4).roots[2]!
+    expect(classifyPersistenceChange(accepted, breaking.roots[2]!).every(change => !change.requiresVersionBump)).toBe(true)
+    const before = contents(root)
+    expect(() => runPersistenceChanges(['--record', '2026-09-20-breaking-v4', '--prose', proseFile(root)], root, () => breaking))
+      .toThrow("this record's own increasing SessionHeader.version")
+    expect(contents(root)).toEqual(before)
+  })
+
+  it.each(['compatible', 'breaking'] as const)('refuses a %s update to an accepted acknowledgement', (kind) => {
+    const root = fixture()
+    finalize(root)
+    const after = inventory(kind === 'compatible' ? { value: 'number', 'label?': 'string' } : { value: 'boolean' }, 4)
+    const before = contents(root)
+    expect(() => runPersistenceChanges(['--update', FINALIZED_ID], root, () => after))
+      .toThrow('cannot update finalized acknowledgement')
+    expect(contents(root)).toEqual(before)
+  })
+
+  it('allows a fresh V5 transition while retaining finalized history', () => {
+    const root = fixture()
+    finalize(root)
+    const before = contents(root)
+    const after = inventory({ value: 'boolean' }, 5)
+    runPersistenceChanges(['--record', FUTURE_ID, '--prose', proseFile(root)], root, () => after)
+    expect(runPersistenceChanges(['--check'], root, () => after)).toContain('roots match')
+    for (const [path, value] of Object.entries(before).filter(([path]) => path.startsWith('docs/persistence-changes/'))) {
+      expect(readFileSync(join(root, path), 'utf8')).toBe(value)
+    }
+    expect(() => runPersistenceChanges(['--update', FINALIZED_ID], root, () => after)).toThrow('cannot update finalized acknowledgement')
+    const later = inventory({ value: 'string' }, 5)
+    expect(() => runPersistenceChanges(['--record', '2026-09-20-without-version', '--prose', proseFile(root)], root, () => later))
+      .toThrow("this record's own increasing SessionHeader.version")
+  })
+
+  it.each([4, 5])('detects a consistently rewritten accepted record while the writer is V%s', (version) => {
+    const root = fixture()
+    finalize(root)
+    const current = inventory({ value: version === 4 ? 'number' : 'boolean' }, version)
+    if (version === 5) runPersistenceChanges(['--record', FUTURE_ID, '--prose', proseFile(root)], root, () => current)
+    const snapshotPath = join(root, `docs/persistence-changes/${FINALIZED_ID}.schema.json`)
+    const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8')) as PersistenceSchemaInventory
+    const replacement = typeRoot('event:example/value', { value: 'number', extra: 'string' })
+    const original = snapshot.roots.find(root => root.key === replacement.key)!
+    writeFileSync(snapshotPath, JSON.stringify({ ...snapshot,
+      roots: snapshot.roots.map(root => root.key === replacement.key ? replacement : root) }))
+    for (const suffix of ['.md', '.zh.md']) {
+      const path = join(root, `docs/persistence-changes/${FINALIZED_ID}${suffix}`)
+      writeFileSync(path, readFileSync(path, 'utf8').replace(original.digest, replacement.digest))
+    }
+    expect(() => loadPersistenceHistory(root)).not.toThrow()
+    expect(() => verifyPersistenceChanges(root, current)).toThrow(`finalized acknowledgement ${FINALIZED_ID} was removed or changed`)
+    const before = contents(root)
+    expect(() => runPersistenceChanges(['--record', '2026-09-20-later'], root, () => inventory({ value: 'string' }, 6)))
+      .toThrow('finalized acknowledgement')
+    expect(contents(root)).toEqual(before)
+  })
+
+  it.each(['missing checkpoint', 'missing status', 'unpaired status', 'duplicate status', 'invalid checkpoint', 'incomplete roots', 'future checkpoint'] as const)
+  ('rejects %s instead of silently disabling finalization', (kind) => {
+    const root = fixture()
+    finalize(root)
+    const checkpoint = join(root, 'docs/persistence-changes/finalized/v4.json')
+    const status = join(root, 'docs/session-format-status.md')
+    if (kind === 'missing checkpoint') rmSync(checkpoint)
+    else if (kind === 'missing status') {
+      rmSync(status)
+      rmSync(join(root, 'docs/session-format-status.zh.md'))
+    } else if (kind === 'unpaired status') writeFileSync(status, readFileSync(status, 'utf8').replace(': 4', ': 5'))
+    else if (kind === 'duplicate status') writeFileSync(status, readFileSync(status, 'utf8').repeat(2))
+    else if (kind === 'future checkpoint') writeFileSync(join(root, 'docs/persistence-changes/finalized/v5.json'), readFileSync(checkpoint))
+    else {
+      const data = JSON.parse(readFileSync(checkpoint, 'utf8')) as Record<string, unknown>
+      if (kind === 'invalid checkpoint') data.schemaVersion = 2
+      else data.roots = {}
+      writeFileSync(checkpoint, JSON.stringify(data))
+    }
+    const before = contents(root)
+    expect(() => runPersistenceChanges(['--check'], root, () => inventory({ value: 'number' }, 4))).toThrow(/finaliz|checkpoint/u)
+    expect(() => runPersistenceChanges(['--record', FUTURE_ID], root, () => inventory({ value: 'boolean' }, 5)))
+      .toThrow(/finaliz|checkpoint/u)
+    expect(contents(root)).toEqual(before)
+  })
+
+  it('keeps older fixture roots valid when neither finalization status nor checkpoints exist', () => {
+    const root = fixture()
+    baseline(root)
+    expect(loadPersistenceFinalization(root, loadPersistenceHistory(root))).toBeUndefined()
+  })
+})
+
 function onlyEvent(schema: PersistenceSchemaInventory): PersistenceSchemaInventory {
   return { ...schema, roots: schema.roots.filter(root => root.kind === 'event') }
 }
@@ -194,7 +397,63 @@ function unionBody(arms: readonly (readonly SchemaProperty[])[]): PersistenceRoo
   return { ...typeRoot('event:example/value', {}), schema, digest: schemaDigest(schema) }
 }
 
+function versionedEvent(variants: readonly { version: number; mode: string; extra?: boolean }[]): PersistenceRoot {
+  const nodes: SchemaNode[] = [
+    { kind: 'object', indices: [], properties: [
+      { name: 'data', type: variants.length === 1 ? 3 : 1, optional: false },
+      { name: 'type', type: 3 + variants.length * 3, optional: false },
+    ] },
+    { kind: 'union', types: variants.map((_, index) => 3 + index * 3) },
+    { kind: 'primitive', type: 'string' },
+  ]
+  for (const variant of variants) {
+    const index = nodes.length
+    nodes.push({ kind: 'object', indices: [], properties: [
+      { name: 'version', type: index + 1, optional: false },
+      { name: 'mode', type: index + 2, optional: false },
+      ...(variant.extra ? [{ name: 'extra', type: 2, optional: false }] : []),
+    ] }, { kind: 'literal', value: variant.version }, { kind: 'literal', value: variant.mode })
+  }
+  nodes.push({ kind: 'literal', value: 'example/value' })
+  const schema = canonicalizeSchema(nodes, 0)
+  return { ...typeRoot('event:example/value', {}), schema, digest: schemaDigest(schema) }
+}
+
 describe('persistence change classification', () => {
+  it.each([1, 2])('acknowledges a higher payload version while preserving %s old variant(s) and the V4 checkpoint', (count) => {
+    const root = fixture()
+    const variants = [{ version: 0, mode: 'one-shot' }, { version: 0, mode: 'continuable' }].slice(0, count)
+    const oldEvent = versionedEvent(variants)
+    const nextEvent = versionedEvent([...variants, { version: 1, mode: 'unknown', extra: true }])
+    const before = { ...inventory({}, 4), roots: [...inventory({}, 4).roots.filter(root => root.kind !== 'event'), oldEvent] }
+    finalize(root, before)
+    const after = { ...before, roots: before.roots.map(root => root.kind === 'event' ? nextEvent : root) }
+    expect(classifyPersistenceChange(oldEvent, nextEvent))
+      .toEqual([expect.objectContaining({ kind: 'payload-version-added', requiresVersionBump: false })])
+    runPersistenceChanges(['--record', COMPATIBLE_ID, '--prose', proseFile(root)], root, () => after)
+    verifyPersistenceChanges(root, after)
+  })
+
+  it('rejects changes to old payloads, missing versions, non-increasing versions, and removal of old readers', () => {
+    const variants = [{ version: 0, mode: 'one-shot' }, { version: 0, mode: 'continuable' }]
+    const before = versionedEvent(variants)
+    for (const after of [
+      versionedEvent([...variants, { version: 0, mode: 'unknown' }]),
+      versionedEvent([...variants, { version: -1, mode: 'unknown' }]),
+      versionedEvent([...variants, { version: 0.5, mode: 'unknown' }]),
+      versionedEvent([{ version: 0, mode: 'one-shot', extra: true }, variants[1]!, { version: 1, mode: 'unknown' }]),
+      versionedEvent([{ version: 1, mode: 'unknown' }]),
+    ]) expect(classifyPersistenceChange(before, after).some(change => change.requiresVersionBump)).toBe(true)
+    const expanded = versionedEvent([...variants, { version: 1, mode: 'unknown' }])
+    expect(classifyPersistenceChange(expanded, before).some(change => change.requiresVersionBump)).toBe(true)
+    expect(classifyPersistenceChange({ ...before, surface: true }, { ...expanded, surface: true })
+      .some(change => change.requiresVersionBump)).toBe(true)
+    expect(classifyPersistenceChange({ ...before, kind: 'header' }, { ...expanded, kind: 'header' })
+      .some(change => change.requiresVersionBump)).toBe(true)
+    const unversioned = unionBody([[{ name: 'mode', type: 2, optional: false }]])
+    expect(classifyPersistenceChange(unversioned, expanded).some(change => change.requiresVersionBump)).toBe(true)
+  })
+
   it('treats a new optional payload subtree as one additive change even with required descendants', () => {
     const before = typeRoot('event:example/value', { value: 'string' })
     const after = typeRoot('event:example/value', { value: 'string', 'details?': { name: 'string', count: 'number' } })
@@ -363,7 +622,7 @@ describe('persistence history verification', () => {
 
   it('rejects malformed references, unknown schema variants, digest tampering, and extra snapshot roots', () => {
     const schema = inventory()
-    const malformed = structuredClone(schema) as unknown as { roots: Array<{ schema: { nodes: unknown[] }; digest: string }> }
+    const malformed: { roots: readonly { schema: { nodes: readonly unknown[] }; digest: string }[] } = structuredClone(schema)
     malformed.roots[0]!.schema.nodes = [{ kind: 'array', element: 99 }]
     expect(() => parsePersistenceSnapshot(malformed)).toThrow('unknown schema node')
     malformed.roots[0]!.schema.nodes = [{ kind: 'future' }]
@@ -371,7 +630,7 @@ describe('persistence history verification', () => {
     const tampered = structuredClone(schema)
     Object.assign(tampered.roots[0]!, { digest: '0'.repeat(64) })
     expect(() => parsePersistenceSnapshot(tampered)).toThrow('digest mismatch')
-    expect(() => parsePersistenceSnapshot({ ...schema, formatVersion: 2 })).toThrow('normalization version')
+    expect(() => parsePersistenceSnapshot({ ...schema, formatVersion: 3 })).toThrow('normalization version')
     const next = entry(NEXT_ID, onlyEvent(inventory({ value: 'string', 'label?': 'string' })), BASE_ID)
     expect(() => validatePersistenceHistory([entry(BASE_ID, schema, null, true), { ...next, snapshot: inventory() }])).toThrow('snapshot roots')
   })
@@ -580,14 +839,16 @@ describe('persistence changes current-tree commands', () => {
     expect(authored.error).toBeUndefined()
     expect(authored.signal).toBeNull()
     expect(authored.status, String(authored.stderr)).toBe(0)
-    expect(JSON.parse(String(authored.stdout)) as unknown).toMatchObject({ ok: true, operation: 'record' })
+    const authoredResult: unknown = JSON.parse(String(authored.stdout))
+    expect(authoredResult).toMatchObject({ ok: true, operation: 'record' })
     const beforeUpdate = readFileSync(join(root, `docs/persistence-changes/${NEXT_ID}.md`), 'utf8')
     writeFileSync(join(session, 'types.ts'), optional.replace('label?: string', 'label?: string; extra?: number'))
     const updated = cli('--update', NEXT_ID, '--json')
     expect(updated.error).toBeUndefined()
     expect(updated.signal).toBeNull()
     expect(updated.status, String(updated.stderr)).toBe(0)
-    expect(JSON.parse(String(updated.stdout)) as unknown).toMatchObject({ ok: true, operation: 'update' })
+    const updatedResult: unknown = JSON.parse(String(updated.stdout))
+    expect(updatedResult).toMatchObject({ ok: true, operation: 'update' })
     expect(readFileSync(join(root, `docs/persistence-changes/${NEXT_ID}.md`), 'utf8').replace(/```yaml persistence-change[\s\S]*?```/u, ''))
       .toBe(beforeUpdate.replace(/```yaml persistence-change[\s\S]*?```/u, ''))
     const generated = extractPersistenceSchema(root)
@@ -604,8 +865,150 @@ describe('persistence changes current-tree commands', () => {
     expect(structured.error).toBeUndefined()
     expect(structured.signal).toBeNull()
     expect(structured.status).toBe(1)
-    expect(JSON.parse(String(structured.stdout)) as unknown).toMatchObject({
+    const structuredResult: unknown = JSON.parse(String(structured.stdout))
+    expect(structuredResult).toMatchObject({
       ok: false, code: 'unacknowledged-changes', changes: [expect.objectContaining({ kind: 'type-changed', requiresVersionBump: true })],
     })
+  })
+})
+
+interface SourceAlternative {
+  readonly kind: string
+  readonly value?: 'string' | 'number'
+  readonly extra?: 'required' | 'optional'
+}
+
+function attributedRoot(
+  alternatives: readonly SourceAlternative[],
+  options: { policy?: SourceCompatibility | null; role?: 'user' | 'developer'; extra?: boolean } = {},
+): PersistenceRoot {
+  const role = options.role ?? 'user'
+  const policy: SourceCompatibility | undefined = options.policy === null ? undefined : options.policy ?? {
+    version: 1, policy: 'session-source-attribution', binding: `session.${role}-message.source`,
+    discriminator: 'kind', unknownKinds: 'preserve', attributionKinds: [],
+  }
+  const nodes: SchemaNode[] = [
+    { kind: 'object', indices: [], properties: [{ name: 'type', type: 2, optional: false }, { name: 'data', type: 1, optional: false }] },
+    { kind: 'object', indices: [], properties: [
+      { name: 'role', type: 4, optional: false }, { name: 'source', type: 3, optional: false, ...(policy === undefined ? {} : { compatibility: policy }) },
+      ...(options.extra ? [{ name: 'unrelated', type: 5, optional: false }] : []),
+    ] },
+    { kind: 'literal', value: 'example/source' },
+    { kind: 'primitive', type: 'never' },
+    { kind: 'literal', value: role },
+    { kind: 'primitive', type: 'string' },
+    { kind: 'primitive', type: 'number' },
+  ]
+  const types = alternatives.map((alternative) => {
+    const index = nodes.length
+    nodes.push({ kind: 'object', indices: [], properties: [
+      { name: 'kind', type: index + 1, optional: false },
+      ...(alternative.value === undefined ? [] : [{ name: 'value', type: alternative.value === 'string' ? 5 : 6, optional: false }]),
+      ...(alternative.extra === undefined ? [] : [{ name: 'extra', type: 5, optional: alternative.extra === 'optional' }]),
+    ] }, { kind: 'literal', value: alternative.kind })
+    return index
+  })
+  nodes[3] = { kind: 'union', types }
+  const schema = canonicalizeSchema(nodes, 0)
+  return { key: 'event:example/source', kind: 'event', event: 'example/source', surface: false, schema, digest: schemaDigest(schema) }
+}
+
+function attributionPolicy(kinds: readonly string[], role: 'user' | 'developer' = 'user'): SourceCompatibility {
+  return { version: 1, policy: 'session-source-attribution', binding: `session.${role}-message.source`,
+    discriminator: 'kind', unknownKinds: 'preserve', attributionKinds: kinds }
+}
+
+const EXISTING_SOURCE: SourceAlternative = { kind: 'semantic', value: 'string' }
+const NEW_SOURCE: SourceAlternative = { kind: 'new-attribution', value: 'number' }
+
+describe('recorded source compatibility policy', () => {
+  it.each(['user', 'developer'] as const)('accepts a qualified new %s source and records its changed digest', (role) => {
+    const before = attributedRoot([EXISTING_SOURCE], { role })
+    const after = attributedRoot([EXISTING_SOURCE, NEW_SOURCE], { role, policy: attributionPolicy([NEW_SOURCE.kind], role) })
+    expect(after.digest).not.toBe(before.digest)
+    expect(classifyPersistenceChange(before, after)).toEqual([expect.objectContaining({ kind: 'attribution-kind-added', requiresVersionBump: false })])
+    const snapshot: PersistenceSchemaInventory = { formatVersion: 2, roots: [after], types: [] }
+    expect(parsePersistenceSnapshot(JSON.parse(JSON.stringify(snapshot)))).toEqual(snapshot)
+  })
+
+  it('allows ordinary optional fields in an existing group alongside a qualified addition', () => {
+    const before = attributedRoot([EXISTING_SOURCE])
+    const after = attributedRoot([{ ...EXISTING_SOURCE, extra: 'optional' }, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) })
+    const changes = classifyPersistenceChange(before, after)
+    expect(changes.map(change => change.kind).sort()).toEqual(['attribution-kind-added', 'optional-property-added'])
+    expect(changes.every(change => !change.requiresVersionBump)).toBe(true)
+  })
+
+  it.each([
+    ['unmarked addition', [EXISTING_SOURCE, NEW_SOURCE], { policy: attributionPolicy([]) }],
+    ['required existing field', [{ ...EXISTING_SOURCE, extra: 'required' }, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) }],
+    ['changed existing field', [{ ...EXISTING_SOURCE, value: 'number' }, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) }],
+    ['removed existing kind', [NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) }],
+    ['renamed existing kind', [{ ...EXISTING_SOURCE, kind: 'renamed' }, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) }],
+    ['unrelated required payload', [EXISTING_SOURCE, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]), extra: true }],
+    ['removed promise', [EXISTING_SOURCE, NEW_SOURCE], { policy: null }],
+  ] as const)('keeps %s breaking despite qualified additions', (_name, sources, options) => {
+    const changes = classifyPersistenceChange(attributedRoot([EXISTING_SOURCE]), attributedRoot(sources, options))
+    expect(changes.some(change => change.requiresVersionBump)).toBe(true)
+  })
+
+  it('keeps variants within an existing wire-kind group strict', () => {
+    const before = attributedRoot([EXISTING_SOURCE])
+    const after = attributedRoot([EXISTING_SOURCE, { ...EXISTING_SOURCE, value: 'number' }, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) })
+    expect(classifyPersistenceChange(before, after)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'union-variants-changed', requiresVersionBump: true }),
+      expect.objectContaining({ kind: 'attribution-kind-added', requiresVersionBump: false }),
+    ]))
+  })
+
+  it('treats qualification changes for an existing kind as policy changes', () => {
+    const before = attributedRoot([EXISTING_SOURCE])
+    const after = attributedRoot([EXISTING_SOURCE], { policy: attributionPolicy([EXISTING_SOURCE.kind]) })
+    expect(classifyPersistenceChange(before, after)).toEqual([expect.objectContaining({ kind: 'source-policy-changed', requiresVersionBump: true })])
+  })
+
+  it('keeps legacy source transitions strict and never infers promises from the successor', () => {
+    const before = attributedRoot([EXISTING_SOURCE], { policy: null })
+    const after = attributedRoot([EXISTING_SOURCE, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) })
+    expect(classifyPersistenceChange(before, after).some(change => change.requiresVersionBump)).toBe(true)
+    const legacyAfter = attributedRoot([EXISTING_SOURCE, NEW_SOURCE], { policy: null })
+    const snapshots = [before, legacyAfter].map(root => ({ formatVersion: 1 as const, roots: [root], types: [] }))
+    expect(() => validatePersistenceHistory([
+      entry(BASE_ID, snapshots[0]!, null, true), entry(NEXT_ID, snapshots[1]!, BASE_ID),
+    ])).toThrow('requires a format version bump')
+  })
+
+  it('validates policy-bearing history without source names or type records', () => {
+    const before: PersistenceSchemaInventory = { formatVersion: 2, types: [],
+      roots: [...inventory().roots.filter(root => root.kind !== 'event'), attributedRoot([EXISTING_SOURCE])],
+    }
+    const after: PersistenceSchemaInventory = { formatVersion: 2, types: [],
+      roots: [attributedRoot([EXISTING_SOURCE, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) })],
+    }
+    expect(validatePersistenceHistory([entry(BASE_ID, before, null, true), entry(NEXT_ID, after, BASE_ID)]).tips.get('event:example/source')?.root).toEqual(after.roots[0])
+  })
+
+  it.each(['auto-review', 'compact-basic', 'ptc-mode'])('rejects saved qualification of reserved producer kind %s', (kind) => {
+    const root = attributedRoot([EXISTING_SOURCE, { kind }], { policy: attributionPolicy([kind]) })
+    const snapshot: PersistenceSchemaInventory = { formatVersion: 2, roots: [root], types: [] }
+    expect(() => parsePersistenceSnapshot(snapshot)).toThrow('invalid source compatibility')
+  })
+
+  it('rejects old-format policy fields, policy tampering, unsupported promises and invalid bindings', () => {
+    const root = attributedRoot([EXISTING_SOURCE])
+    const snapshot: PersistenceSchemaInventory = { formatVersion: 2, roots: [root], types: [] }
+    expect(() => parsePersistenceSnapshot({ ...snapshot, formatVersion: 1 })).toThrow('unknown field compatibility')
+    for (const patch of [{ version: 2 }, { policy: 'arbitrary' }, { discriminator: 'type' }, { unknownKinds: 'discard' }]) {
+      const tampered = JSON.parse(JSON.stringify(snapshot)) as PersistenceSchemaInventory
+      const property = tampered.roots[0]!.schema.nodes.flatMap(node => node.kind === 'object' ? node.properties : []).find(property => property.compatibility !== undefined)!
+      Object.assign(property.compatibility!, patch)
+      expect(() => parsePersistenceSnapshot(tampered)).toThrow('unsupported source compatibility')
+    }
+    const wrongRole = attributedRoot([EXISTING_SOURCE], { policy: attributionPolicy([], 'developer') })
+    expect(() => parsePersistenceSnapshot({ ...snapshot, roots: [wrongRole] })).toThrow('invalid source compatibility')
+    const changedQualification = attributedRoot([EXISTING_SOURCE], { policy: attributionPolicy([EXISTING_SOURCE.kind]) })
+    expect(() => parsePersistenceSnapshot({ ...snapshot, roots: [{ ...changedQualification, digest: root.digest }] })).toThrow('digest mismatch')
+    const unknownKind = attributedRoot([EXISTING_SOURCE], { policy: attributionPolicy(['absent']) })
+    expect(() => parsePersistenceSnapshot({ ...snapshot, roots: [unknownKind] })).toThrow('invalid source compatibility')
   })
 })

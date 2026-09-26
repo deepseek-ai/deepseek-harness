@@ -1,0 +1,62 @@
+- dialog "设置":
+  - navigation:
+    - text: 设置
+    - button "通用设置"
+    - button "模型"
+    - button "内置插件"
+    - button "Agent 预设"
+  - button "打开配置文件"
+  - button "关闭"
+  - heading "模型" [level=2]
+  - paragraph: 填入各提供商的 API 密钥即可使用其模型。
+  - list:
+    - listitem:
+      - text: minimax-cn
+      - img "API 密钥已配置"
+      - button "编辑 minimax-cn": 编辑
+      - button "删除 minimax-cn": 删除
+    - listitem:
+      - text: openai
+      - button "编辑 openai": 编辑
+      - button "删除 openai": 删除
+      - text: openai API 密钥
+      - textbox "API 密钥":
+        - /placeholder: 输入 API 密钥，或留空使用环境认证
+      - group:
+        - text: 自定义设置 API 地址
+        - textbox "API 地址":
+          - /placeholder: 提供商默认
+        - region "模型目录":
+          - text: 模型目录 已自定义模型目录
+          - button "恢复默认模型"
+          - button "获取可用模型"
+          - textbox "模型 ID 1":
+            - /placeholder: 模型 ID
+            - text: gpt-6-astra
+          - textbox "显示名称 1":
+            - /placeholder: 显示名称
+            - text: GPT-6 Astra
+          - button "模型选项 1" [expanded]
+          - button "删除模型 1"
+          - text: 上下文窗口
+          - textbox "上下文窗口 1":
+            - /placeholder: 256K
+            - text: 272K
+          - text: 最大输出 token 数
+          - textbox "最大输出 token 数 1":
+            - /placeholder: 32K
+            - text: 128K
+          - group "输入类型 1":
+            - text: 输入类型
+            - checkbox "文本" [checked]
+            - text: 文本
+            - checkbox "图片" [checked]
+            - text: 图片
+          - button "添加模型"
+      - button "取消"
+      - button "保存"
+    - listitem:
+      - text: Acme 网关 自定义
+      - button "编辑 Acme 网关 (acme-gateway)": 编辑
+      - button "删除 Acme 网关 (acme-gateway)": 删除
+  - button "添加模型提供商"

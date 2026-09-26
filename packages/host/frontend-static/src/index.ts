@@ -113,13 +113,10 @@ export async function serveStatic(
 export function apply(ctx: Context, config: Config): void {
   const distIndex = config.distIndex
   const distRoot = dirname(distIndex)
-  // The dist is built with a relative base so the same files mount under any
-  // static directory; served pages also answer deep SPA-fallback paths, where
-  // relative asset URLs would resolve under the request directory, so the
-  // served form anchors them at the site root ahead of every URL-bearing tag.
+  // Insert after all index transforms so the base precedes every resource reference.
   const renderIndex = async (): Promise<string> => {
     const body = ctx.webServer.renderIndex(await readFile(distIndex, 'utf8'))
-    return body.replace(/<head(?:\s[^>]*)?>/i, open => `${open}<base href="/">`)
+    return body.replace(/<head(?:\s[^>]*)?>/i, open => `${open}<base href="./">`)
   }
   ctx.effect(() => ctx.webServer.registerFallback(async (req, res) => {
     // Non-GET/HEAD without a matching named route is 405 (fallback-only

@@ -2,7 +2,7 @@
 
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { EMPTY_CHAT_SNAPSHOT, type MessageImagesProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { EMPTY_CONVERSATION_SNAPSHOT } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -34,7 +34,7 @@ const attachment = {
   name: 'history.png',
 }
 
-type AttentionSnapshot = Parameters<Parameters<MessageImagesProps['useSessionPendingInteraction']>[0]>[0]
+type AttentionSnapshot = Parameters<Parameters<MessageImagesProps['useSessionStatus']>[0]>[0]
 type TrajectorySnapshot = Parameters<Parameters<MessageImagesProps['useTrajectory']>[0]>[0]
 
 const noAttention: AttentionSnapshot = new Map()
@@ -46,7 +46,7 @@ const emptyTrajectory: TrajectorySnapshot = {
   partial: null,
   runningCalls: [],
 }
-const useSessionPendingInteraction: MessageImagesProps['useSessionPendingInteraction'] = selector => selector(noAttention)
+const useSessionStatus: MessageImagesProps['useSessionStatus'] = selector => selector(noAttention)
 const useConversation: MessageImagesProps['useConversation'] = selector => selector(EMPTY_CONVERSATION_SNAPSHOT)
 const useChat: MessageImagesProps['useChat'] = selector => selector(EMPTY_CHAT_SNAPSHOT)
 const useTrajectory: MessageImagesProps['useTrajectory'] = selector => selector(emptyTrajectory)
@@ -144,11 +144,56 @@ describe('MessageImage', () => {
     expect(frame.getAttribute('style')).toBeNull()
   })
 
-  it('keeps the tile variant on the failed-load retry control', async () => {
+  it.each(['tile', 'thumbnail'] as const)('keeps the %s variant on the failed-load retry control', async (variant) => {
     const load = vi.fn().mockRejectedValue(new Error('offline'))
-    const view = render(<MessageImage image={{ attachment }} load={load} variant="tile" labels={labels} />)
+    const view = render(<MessageImage image={{ attachment }} load={load} variant={variant} labels={labels} />)
     const retry = await view.findByRole('button', { name: '图片加载失败，点击重试' })
-    expect(retry.getAttribute('data-variant')).toBe('tile')
+    expect(retry.getAttribute('data-variant')).toBe(variant)
+  })
+
+  it.each([
+    ['Chinese', labels],
+    ['English', { ...labels, loading: 'Loading image…', loadFailed: 'Image failed to load; click to retry' }],
+  ] as const)('labels thumbnail status icons and retries a failed read in %s', async (_locale, statusLabels) => {
+    const pending = Promise.withResolvers<string>()
+    const load = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue('blob:retry')
+    const view = render(<MessageImage image={{ attachment }} load={load} variant="thumbnail" labels={statusLabels} />)
+    const loading = view.getByRole('button', { name: statusLabels.loading })
+    expect(loading.getAttribute('title')).toBe(statusLabels.loading)
+    expect(loading.getAttribute('aria-busy')).toBe('true')
+    expect(loading.textContent).toBe('')
+    expect(loading.querySelector('svg')).not.toBeNull()
+
+    await act(async () => { pending.reject(new Error('offline')) })
+    const retry = view.getByRole('button', { name: statusLabels.loadFailed })
+    expect(retry.getAttribute('title')).toBe(statusLabels.loadFailed)
+    expect(retry.textContent).toBe('')
+    expect(retry.querySelector('svg')).not.toBeNull()
+    fireEvent.click(retry)
+    await view.findByAltText(attachment.name)
+    const opener = view.getByRole('button', { name: statusLabels.openNamed(attachment.name) })
+    expect(opener.getAttribute('aria-busy')).toBeNull()
+    expect(opener.getAttribute('title')).toBe(statusLabels.open)
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(load).toHaveBeenLastCalledWith(attachment)
+  })
+
+  it('uses the owner display name for an unnamed thumbnail and its original-image viewer', async () => {
+    const { name: _name, ...unnamed } = attachment
+    const load = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue('blob:thumbnail')
+    const view = render(<ImageGallery images={[{ attachment: unnamed, label: 'Image 2' }]} load={load} align="start" thumbnail labels={labels} />)
+    fireEvent.click(await view.findByRole('button', { name: labels.loadFailed }))
+    const image = await view.findByAltText('Image 2')
+    expect(image.closest('button')?.getAttribute('data-variant')).toBe('thumbnail')
+    const opener = view.getByRole('button', { name: 'Image 2，点击查看原图' })
+    opener.focus()
+    fireEvent.click(opener)
+    expect(view.getByRole('dialog')).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(view.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+    expect(load).toHaveBeenLastCalledWith(unnamed)
+    expect(unnamed).not.toHaveProperty('name')
   })
 
   it('ignores a load settling after unmount', async () => {
@@ -273,8 +318,8 @@ describe('ImageGallery', () => {
       sessionId: 'message-images-test' as MessageImagesProps['sessionId'],
       useSession,
       useSessions,
-      usePanelInfo, useResource,
-      useSessionPendingInteraction,
+      usePanelInfo, useSessionRetainInfo: () => undefined, useResource,
+      useSessionStatus,
       useWorkspaces,
       useProjection: () => undefined,
       useConversation,
@@ -282,6 +327,8 @@ describe('ImageGallery', () => {
       useTrajectory,
       useInput,
       inputActions: {
+        captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
+        insertText: () => false,
         setDraft: vi.fn(),
         addAttachments: vi.fn(() => true),
         removeAttachment: vi.fn(),

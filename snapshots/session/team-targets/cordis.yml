@@ -1,0 +1,15 @@
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent-report
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- insert:
+    - id: agent-team
+      name: '@deepseek-ai/dsh-experimental-agent-team'
+    - id: tool-agent-team
+      name: '@deepseek-ai/dsh-experimental-tool-agent-team'

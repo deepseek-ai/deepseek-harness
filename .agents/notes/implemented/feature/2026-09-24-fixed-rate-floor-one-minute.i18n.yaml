@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-24-fixed-rate-floor-one-minute.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-24-fixed-rate-floor-one-minute.md
+/agent-note-one-minute-fixed-rate-floor:
+  en: d74434992e0ca252
+  zh: cae88d61368d5555
+/agent-note-one-minute-fixed-rate-floor/problem:
+  en: a16373df16ee9126
+  zh: 10e86f4cfe0e9a11
+/agent-note-one-minute-fixed-rate-floor/decision:
+  en: fb49d104c6539934
+  zh: 04655695ccbb58c6
+/agent-note-one-minute-fixed-rate-floor/alternatives-considered:
+  en: 080ae22387dd35b7
+  zh: 8247747dc444d7a4
+/agent-note-one-minute-fixed-rate-floor/consequences:
+  en: c11eac4968a2a707
+  zh: c4a02ddeef3a5dff

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { absoluteFileAddress, sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { CodeBody } from '../src/client/code/CodeBody.tsx'
@@ -84,7 +84,11 @@ describe('CodeBody', () => {
     expect(view.getByText(language, { exact: true })).toBeTruthy()
     expect(element(view.container, '.shiki').textContent).toBe('const answer = 42')
     expect(view.container.querySelector('[data-line-numbers]')).not.toBeNull()
-    expect(view.getByRole('button', { name: 'Copy' })).toBeTruthy()
+    const copy = view.getByRole('button', { name: 'Copy' })
+    expect(copy.textContent).toBe('')
+    expect(view.getAllByRole('button')).toHaveLength(1)
+    fireEvent.mouseEnter(copy)
+    expect(view.getByRole('tooltip').textContent).toBe('Copy')
   })
 
   it('carries multiline grammar state across pages and preserves completed lines through settlement', () => {
@@ -155,6 +159,7 @@ describe('CodeBody', () => {
     const view = render(<CodeBody {...props(content)} />)
     const pre = element(view.container, '.shiki')
     const block = element(view.container, '.md-code-block')
+    expect(block.getAttribute('data-code-wrap')).toBe('false')
     const scrollport = element(view.container, '[data-code-block-content]')
     expect(getComputedStyle(block).marginTop).toBe('0px')
     expect(getComputedStyle(block).position).toBe('static')
@@ -165,6 +170,8 @@ describe('CodeBody', () => {
     expect(getComputedStyle(pre).overflow).toBe('visible')
     expect(getComputedStyle(pre).wordBreak).toBe('normal')
     view.rerender(<CodeBody {...props(content, { wrap: true })} />)
+    expect(block.getAttribute('data-code-wrap')).toBe('true')
+    expect(view.getAllByRole('button')).toHaveLength(1)
     expect(element(view.container, '.shiki')).toBe(pre)
     expect(element(view.container, '[data-code-block-content]')).toBe(scrollport)
     expect(getComputedStyle(pre).whiteSpace).toBe('pre-wrap')

@@ -6,7 +6,7 @@ import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 // The namespace declaration `TranslateNS<'sidebarDocumentPreview'>` resolves against.
 import type {} from '../src/client/index.ts'
-import { failureLine } from '../src/client/failure-line.ts'
+import { emptyFailureRecourse, failureLine } from '../src/client/failure-line.ts'
 
 /** Key-echoing translate that also shows its parameters, so a formatted value is visible. */
 const t: TranslateNS<'sidebarDocumentPreview'> = (key, params) =>
@@ -31,5 +31,22 @@ describe('failureLine', () => {
 
   it('passes any other failure through in its own words', () => {
     expect(failureLine(t, failure('gateway/internal', {}, 'socket closed'))).toBe('error.unavailable(message=socket closed)')
+  })
+})
+
+describe('emptyFailureRecourse', () => {
+  it('hands a readable file the preview cannot render to the Host', () => {
+    expect(emptyFailureRecourse(failure('workspace-file/not-text'))).toBe('open')
+    expect(emptyFailureRecourse(failure('workspace-file/too-large', { limit: 512 }))).toBe('open')
+  })
+
+  it('offers nothing for a path with nothing to show or open', () => {
+    expect(emptyFailureRecourse(failure('workspace-file/not-found'))).toBe('none')
+    expect(emptyFailureRecourse(failure('workspace-file/not-regular-file'))).toBe('none')
+  })
+
+  it('retries carrier and unclassified failures', () => {
+    expect(emptyFailureRecourse(failure('gateway/internal'))).toBe('retry')
+    expect(emptyFailureRecourse(failure('someday/a-new-code'))).toBe('retry')
   })
 })

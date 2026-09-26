@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-11-event-sourced-sessions.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-06-11-event-sourced-sessions.md
-2026-06-11-event-sourced-sessions.md: b6d17d2db1d9b489f3d4224683b61e62be485014
-2026-06-11-event-sourced-sessions.zh.md: 11e5740dc2636fc002ed7158167b1dfbb39a971d
+/agent-note-event-sourced-sessions-with-derived-message-history:
+  en: da3abc821101e4b3
+  zh: c206fa4830920592
+/agent-note-event-sourced-sessions-with-derived-message-history/problem:
+  en: 63b684d349a48a15
+  zh: 7603f64b445db129
+/agent-note-event-sourced-sessions-with-derived-message-history/decision:
+  en: d60f161037a10269
+  zh: 799a15fae2534ec4
+/agent-note-event-sourced-sessions-with-derived-message-history/alternatives-considered:
+  en: 73541e0833eb9559
+  zh: ddca382d54e498e5
+/agent-note-event-sourced-sessions-with-derived-message-history/consequences:
+  en: d2ea77a5c8e30949
+  zh: 19dc61cb0d29315f

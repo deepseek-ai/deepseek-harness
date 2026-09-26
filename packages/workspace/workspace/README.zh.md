@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 设置
 
-此包本身不声明任何配置；它需要会话存储、会话持久化后端，以及保存其记录的存储行。最小组合如下：
+此包需要会话存储、会话持久化后端，以及保存其记录的存储行。最小组合如下：
 
 ```yaml
 - name: '@deepseek-ai/dsh-session'
@@ -59,13 +59,22 @@ await project.setTitle('Renamed')
 ctx.workspaceRegistry.list() // shows the project, newest first
 ```
 
+<a id="first-use-workspace"></a>
+### 首次使用工作区
+
+`initializeDefault(resolveDirectory)` 初始化默认 Workspace，不创建 Session。首次创建要求 Workspace 注册表为空，且不存在运行时、持久化或已归档 Session，包括没有工作目录的 Session。注册表直接检查持久化历史；仅凭可见侧边栏为空不足以判断。
+
+目录解析器仅在允许创建时于变更队列内运行。它返回绝对路径；注册表创建缺失的父目录、规范化路径、重新检查 Session 历史，再一起提交 Workspace 和初始化标记，标题取所请求目录（而非规范路径）的最后一段，因此该路径上的符号链接不会让工作区改用链接目标的名称。已存在的目录直接复用；文件冲突或目录操作失败时拒绝初始化。[Host 控制器](../../api/workspace-controller/README.zh.md#first-use-workspace)提供 Documents 路径策略。
+
+首次成功登记会持久保存工作区身份。重复调用直接返回它，不再解析目录；改名保留该身份，删除登记也不会允许再次自动创建。目录或登记失败时，初始化状态保持未设置，可以重试。后续步骤失败前已创建的目录会保留在磁盘上。目录解析成功后，调用方取消操作不会回滚目录创建或登记。[首次使用决策](../../../.agents/notes/implemented/feature/2026-09-20-default-workspace.zh.md)说明这一生命周期。
+
 ### 将会话归入项目
 
 会话加入它运行目录所在的项目：在项目目录中创建会话，它就会出现在该项目下，新到旧排列。一个会话只能属于一个项目。目录无法校验的会话——没有记录目录，或目录被移动、删除——无法加入，保持 Ungrouped。
 
 ### 隐藏、恢复会话与移除项目
 
-当会话不应再出现在分组中时隐藏它：它会从可见列表中消失，但其会话、历史与在项目中的位置都保持不变。当被隐藏的会话应重新出现时恢复它：它会回到其项目下记录的位置；不属于任何项目时则回到 Ungrouped。项目不再需要时移除它：它离开列表，而其文件夹、文件与会话历史绝不受影响——这些会话变成 Ungrouped。之后再次添加同一目录会从空项目开始，不会带回旧会话。
+当会话不应再出现在分组中时隐藏它：它会从可见列表中消失，但其会话、历史与在项目中的位置都保持不变。仍有工作在跑的会话——它自己的回合、运行中的子代理、后台任务或活跃提醒——不会被藏在这些工作之下：注册表会拒绝并列出还在跑的内容；调用方若要求先停止这些工作，注册表会按用户自己的停止操作同样的方式停掉它们，然后再隐藏。当被隐藏的会话应重新出现时恢复它：它会回到其项目下记录的位置；不属于任何项目时则回到 Ungrouped，并从一份正常收尾的日志继续对话。项目不再需要时移除它：它离开列表，而其文件夹、文件与会话历史绝不受影响——这些会话变成 Ungrouped。之后再次添加同一目录会从空项目开始，不会带回旧会话。
 
 -----
 
@@ -85,9 +94,12 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 - **两次写入的变更带显式标记。** 创建与删除在记录/顺序对可能分叉之前先持久化 `pendingMutation` 标记，因此启动只补全被中断的操作，未标记的分叉作为损坏明确报错。
 - **串行化写入。** 注册表操作跑在同一条操作链上；实体变更通过领域写链上的 `table.update` 执行，写入 `updatedAt`，并在其所在的链位置决定成员资格。
 
+<a id="api-behavior"></a>
 ### API 行为
 
-该 API 是一个由两个所有者构成的小家族：`WorkspaceRegistry` 负责创建、排序与删除项目、管理其会话记账，以及归档或恢复单个会话；`Workspace` 实体暴露显示标题、目录状态与会话投影。各方法的精确约定在代码中，而非本 README——参见 [src/index.ts](src/index.ts) 与 [src/entity.ts](src/entity.ts)。
+该 API 由两个对象负责：`WorkspaceRegistry` 创建、排序与删除项目，管理会话记账，并置顶、取消置顶、归档或恢复会话；`Workspace` 实体暴露显示标题、目录状态与会话投影。置顶要求会话已知且未归档；归档在同一次持久化写入中清除置顶，恢复会话不会恢复置顶。各方法的精确约定见 [src/index.ts](src/index.ts) 与 [src/entity.ts](src/entity.ts)。
+
+归档准入是本包声明并派发的两个宿主事件之上的能力接缝：`workspace/session-activity`（waterfall）向已组合的提供方询问某会话还有什么在跑，`workspace/session-stop`（parallel）请它们停止这些工作。`archiveSession(sessionId)` 只询问一次活动 waterfall，对非空答案以 `WorkspaceActiveSessionError` 拒绝，其 `activity` 按族列出各项——键由各提供方自己合并进本包留空的 `SessionActivityKindMap`；`archiveSession(sessionId, { stopActivity: true })` 跳过活动检查，先写入归档，再派发停止事件，因此持久化的归档集合已经拦住停止所引发的每一次唤醒；提供方抛错只记日志，归档保留。调用在每个提供方的停止请求都已发出后返回，被停止的工作自行收敛。两种询问都在存在性检查之后进行，对已归档 id 从不发生。随附的提供方是 Agent 注册表（运行中的回合）、任务注册表接缝（所属任务）、Subagent runtime（运行中的子孙）与 Schedule 插件（活跃提醒）；没有提供方的组合可自由归档。
 
 ### 源码地图
 
@@ -102,7 +114,7 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 
 ### 持久形态
 
-注册表打开 `workspace` 领域（版本 2）：一张以 `WorkspaceId` 为键的 `workspaces` 表，加上一个持有 `workspaceIds`（权威显示顺序）、`archivedSessionIds` 与可选 `pendingMutation` 标记的全局状态。在 `archivedSessionIds` 存在之前写入的记录会通过 schema 默认值解析为空集合。归档与取消归档都只重写该全局状态，因此恢复就是对同一字段的一次过滤写入；取消归档不做会话存在性探测，因为从集合中移除 id 不可能引入未知 id，而归档会在加入前校验会话。
+注册表打开 `workspace` 领域（版本 2）：一张以 `WorkspaceId` 为键的 `workspaces` 表，加上一个持有 `workspaceIds`（权威显示顺序）、`archivedSessionIds`、`pinnedSessionIds`、可选的首次使用身份 `defaultWorkspaceId` 与可选 `pendingMutation` 标记的全局状态。归档与置顶集合存储会话 id 字符串，默认值为空，不包含逐项对象或时间戳；置顶数组把最近置顶的 id 放在前面。归档在同一次全局状态写入中清除置顶，但不改变 Workspace 成员关系。取消归档不做会话存在性探测，因为从集合中移除 id 不可能引入未知 id，而归档会在加入前校验会话。
 
 ### 生命周期
 
@@ -161,6 +173,7 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 - **只有带记录目录的会话才能加入**——只有记录中带有可解析为项目路径的目录的会话才属于项目；没有目录的会话保持 Ungrouped，来自其他目录的会话无法移入。
 - **外部变更延迟可见**——如果另一进程删除或损坏目录，项目只能在下次刷新或重启后反映出来。
 - **归档与取消归档执行不同的会话校验**——恢复只是从归档集合中移除 id，因此会话已不存在的条目仍能取消归档，也不会留下未知引用；对未归档 id 执行恢复不写盘即完成，而 `archiveSession` 会拒绝既非实时也未持久化的会话。
+- **活动检查与归档写入不是一个原子步骤**——在提供方作答与持久化写入之间开始的回合会在隐藏状态下运行，`agent/pre-step` 先于该写入的每个模型步连同其工具调用照常执行；API Session Controller 的门禁把写入之后提出的第一步以 `blocked` 收口，因此暴露面以该写入的时延为界，实际上是一个模型步。
 - **重新添加目录从空开始**——移除后再次添加同一目录会创建空会话列表的新项目；旧会话不会自动回来。
 
 <a id="dev-note"></a>

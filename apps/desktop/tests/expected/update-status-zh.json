@@ -1,0 +1,38 @@
+[
+  {
+    "phase": "idle",
+    "version": "0.1.5-rc.2",
+    "percent": 58
+  },
+  {
+    "phase": "available",
+    "version": "0.1.5-rc.2",
+    "percent": 58
+  },
+  {
+    "phase": "downloading",
+    "version": "0.1.5-rc.2",
+    "percent": 58
+  },
+  {
+    "phase": "verifying",
+    "version": "0.1.5-rc.2",
+    "percent": 58
+  },
+  {
+    "phase": "ready",
+    "version": "0.1.5-rc.2",
+    "percent": 58
+  },
+  {
+    "phase": "installing",
+    "version": "0.1.5-rc.2",
+    "percent": 58
+  },
+  {
+    "phase": "error",
+    "version": "0.1.5-rc.2",
+    "percent": 58,
+    "failure": "install"
+  }
+]

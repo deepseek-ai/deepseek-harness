@@ -138,7 +138,7 @@ function start(f: ReturnType<typeof fixture>, extra: string[] = []) {
     expect(response.status).toBe(200)
     const html = await response.text()
     expect(html).toContain('__DSH_BOOT__')
-    const bundlePath = /<script src="(\/plugins\/[^"]+)"/u.exec(html)?.[1]?.replaceAll('&amp;', '&')
+    const bundlePath = /<script src="(plugins\/[^"]+)"/u.exec(html)?.[1]?.replaceAll('&amp;', '&')
     if (!bundlePath) throw new Error('Missing bootstrap bundle URL')
     const bundle = await fetch(new URL(bundlePath, url), { headers: { cookie }, signal: AbortSignal.timeout(10_000) })
     expect(bundle.status).toBe(200)
@@ -178,7 +178,7 @@ describe.skipIf(!built)('Web process failure matrix', () => {
           const result = await app.child
           exit(result, 1)
           expect(result.stdout).not.toContain('dsh web: http://')
-          expect(result.stderr).toContain('required startup failure')
+          expect(result.stderr).toContain('startup failed:')
           expect(app.events()).toBe('witness apply 1\nwitness dispose 1\n')
         } else {
           await app.serves()
@@ -213,7 +213,7 @@ describe.skipIf(!built)('Web process failure matrix', () => {
         } else writeFileSync(f.patch, f.render(id, undefined, 2))
         await app.wait(() => app.events().includes(`target apply ${failure === 'dependency' ? 1 : 2}\n`))
         await app.serves()
-        expect(app.stderr()).not.toContain('required startup failure')
+        expect(app.stderr()).not.toContain('startup failed:')
       } finally {
         const result = await app.close()
         exit(result, 0)
@@ -288,7 +288,7 @@ describe.skipIf(!built)('Web process failure matrix', () => {
     const app = start(f)
     try {
       await app.serves()
-      expect(app.stderr()).not.toContain('required startup failure')
+      expect(app.stderr()).not.toContain('startup failed:')
       expect(app.stderr()).not.toContain('failed to import')
     } finally { exit(await app.close(), 0) }
   })
@@ -323,7 +323,7 @@ describe.skipIf(!built)('Web process failure matrix', () => {
       await app.serves()
       writeFileSync(f.patch, f.render('matrix-optional') + `- id: webserver\n  config:\n    host: 127.0.0.1\n    port: ${address.port}\n`)
       await app.wait(() => app.logs().includes('EADDRINUSE') && app.events().includes('witness apply 1\n'))
-      expect(app.stderr()).not.toContain('required startup failure')
+      expect(app.stderr()).not.toContain('startup failed:')
       expect(app.events()).not.toContain('witness dispose 1\n')
       expect(existsSync(f.serverUrl)).toBe(false)
       writeFileSync(f.patch, f.render('matrix-optional', undefined, 2))
@@ -413,7 +413,7 @@ export function apply(ctx, config) {
       writeFileSync(f.patch, pending)
       await app.wait(() => app.state(id) === FiberState.PENDING && app.events().includes('witness apply 2\n'))
       expect(app.events()).not.toContain('witness dispose 2\n')
-      expect(app.stderr()).not.toContain('required startup failure')
+      expect(app.stderr()).not.toContain('startup failed:')
       writeFileSync(f.patch, pending + `- insert: ${JSON.stringify([{
         id: 'matrix-provider', name: f.url, config: { ...f.config('provider', 3), provider: 'matrixMissingWebDependency' },
       }])}\n`)

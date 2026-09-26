@@ -7,7 +7,7 @@
  */
 import clsx from 'clsx'
 import {
-  IconDarkOutline16, IconFollowsystemOutline16, IconLightOutline16,
+  IconDarkOutlineMedium, IconFollowsystemOutlineMedium, IconLightOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ThemePreference } from '../theme-settings.ts'
@@ -28,10 +28,10 @@ export type AppearanceRowComponentProps =
   & PropsLocale<'settings.theme'> & AppearanceRowInjected
 
 /** Cube order and icons (figma 501:30015-30017: Light, Dark, System). */
-const CUBES: readonly { id: ThemePreference; labelKey: ThemeKey; Icon: typeof IconLightOutline16 }[] = [
-  { id: 'light', labelKey: 'appearance.light', Icon: IconLightOutline16 },
-  { id: 'dark', labelKey: 'appearance.dark', Icon: IconDarkOutline16 },
-  { id: 'system', labelKey: 'appearance.system', Icon: IconFollowsystemOutline16 },
+const CUBES: readonly { id: ThemePreference; labelKey: ThemeKey; Icon: typeof IconLightOutlineMedium }[] = [
+  { id: 'light', labelKey: 'appearance.light', Icon: IconLightOutlineMedium },
+  { id: 'dark', labelKey: 'appearance.dark', Icon: IconDarkOutlineMedium },
+  { id: 'system', labelKey: 'appearance.system', Icon: IconFollowsystemOutlineMedium },
 ]
 
 /**

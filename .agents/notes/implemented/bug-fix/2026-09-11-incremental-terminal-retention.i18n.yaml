@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-11-incremental-terminal-retention.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-11-incremental-terminal-retention.md
-2026-09-11-incremental-terminal-retention.md: 7e2507775bc39ed2599c2af1173f949bbf352145
-2026-09-11-incremental-terminal-retention.zh.md: 6c6fb95fa0c593ae2b7abb0007d5e7c6fc9f4e7d
+/agent-note-incremental-terminal-retention:
+  en: b00300b3ace789da
+  zh: c267be719b3c8814
+/agent-note-incremental-terminal-retention/problem:
+  en: 0c3232a4a2429315
+  zh: c6b3c6224bc9031d
+/agent-note-incremental-terminal-retention/decision:
+  en: 43bb3c2d0d561231
+  zh: 8dacb0720f28d490
+/agent-note-incremental-terminal-retention/measurement-design:
+  en: 925815f8ae326179
+  zh: 188ee3f695ece8de
+/agent-note-incremental-terminal-retention/measurement-design/local-reference-measurements:
+  en: a049c0a118648de7
+  zh: 2c31044ff11b9029
+/agent-note-incremental-terminal-retention/alternatives-considered:
+  en: 0af1fcbc28320b5b
+  zh: 8e1cfc843821dd77
+/agent-note-incremental-terminal-retention/consequences:
+  en: c60008ba652dffd2
+  zh: 3210329182096f39

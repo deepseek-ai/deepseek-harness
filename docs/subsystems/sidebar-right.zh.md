@@ -8,7 +8,7 @@
 
 ## 定位与归属
 
-每个会话恰有一个停靠面，保存在会话作用域的 slot store 里、由 `rightbar.session` 绘制。root 作用域的 `rightbar` 控制器仅在选中 Conversation 时挂载该席位；刷新页面后每个会话回到折叠的默认态，切换会话时各自的面保持原状（[状态](../../packages/client/ui-sidebar-right/README.zh.md#state)）。面的每一次变化都是 kit 纯规划器算出的一条历史记录；停靠的 pane 从不空着，根 pane 为空时会加入根据已注册引导入口选出的默认页。
+每个会话恰有一个停靠面，保存在会话作用域的 slot store 里、由 `rightbar.session` 绘制。root 作用域的 `rightbar` 控制器为选中 Session 和拥有已初始化 `keepMounted` 正文的后台 Session 保留独立席位；只有前台 Conversation 可见。刷新会恢复已保存的布局（[状态](../../packages/client/ui-sidebar-right/README.zh.md#state)）。面的每一次变化都是 kit 纯规划器算出的一条历史记录；停靠的 pane 从不空着，根 pane 为空时会加入根据已注册引导入口选出的默认页。
 
 一个 tab 类型是共用定义 `id` 的两次注册：在 `ctx.sidebarRightTabs` 里的静态定义说明其 `kind` 打开哪些地址，一次 keyed slot 注册提供它的正文。框架注入 `useTabInfo()` 以读取 Sidebar、窗格和标签的实时信息；各类型把自身状态放在 slot store 里。各包之间只以类型形式引用彼此的声明。
 
@@ -19,7 +19,7 @@
 | [`client/resources`](../../packages/client/resources/README.zh.md) | `ctx.resources`、`useResource`、协议 → 值类型的花名册 `ResourceProtocolMap` |
 | [`api/workspace-files`](../../packages/api/workspace-files/README.zh.md) | Host `ctx.workspaceFiles`、`workspaceFiles` Remote 命名空间与 Client `file` 资源提供者 |
 | [`util/workspace-path`](../../packages/util/workspace-path/README.zh.md) | 文件地址语法：`fileAddressFor`、`parseFileAddress` |
-| [`client/ui-sidebar-documentpreview`](../../packages/client/ui-sidebar-documentpreview/README.zh.md)、[`client/ui-sidebar-files`](../../packages/client/ui-sidebar-files/README.zh.md) | 内置的 `text` 与 `files` 类型 |
+| [`client/ui-sidebar-documentpreview`](../../packages/client/ui-sidebar-documentpreview/README.zh.md)、[`client/ui-sidebar-files`](../../packages/client/ui-sidebar-files/README.zh.md)、[`client/ui-sidebar-browser`](../../packages/client/ui-sidebar-browser/README.zh.md) | 内置的 `text`、`files` 与 `browser` 类型 |
 
 ## 地址
 
@@ -43,6 +43,7 @@ tab 身份是 `(kind, address)` 二元组：注册表的认领把地址原文用
 | `priority` | 三档字面量之一：`extension`（缺省且最高：产品之外的类型压过所有内置查看器）、`builtin`（随产品发布的类型）、`fallback`（任何更具体的类型都应压过的纯内容查看器）。 |
 | `canOpen(address)` | 可选的同步否决，对 glob 命中生效；每次路由决策都会调用。 |
 | `title(address)` | chip 文本，在 tab 打开时捕获进布局记录，之后不再改写。 |
+| `keepMounted` | 可选的懒保活：已访问正文跨隐藏、Session 切换与停靠切换保留，由所属 View 持有 Session reference。 |
 | `guide` | 可选的引导页入口框：`{ order, title(), description?(), icon? }`。点一框即把贡献它的类型作为页面打开；省略即不上引导页。 |
 
 路由是一次排序认领。`candidates(address)` 对模式命中且未被 `canOpen` 否决的类型排序：先按档，再按最长命中模式的长度，最后按注册顺序。`claim(address, kind?)` 取第一个候选，或直接用点名的 `kind`——跳过它的 glob，但 `canOpen` 仍生效——返回 `{ kind, contentId: address, title }`。没有任何类型认领的地址会抛错：这是接线错误，不是用户错误。
@@ -72,13 +73,14 @@ export function apply(ctx: Context): void {
 
 ## 导航：`ctx.sidebarRight`
 
-两种打开构成导航控制器，进入这一列的每条路都调用其一：`openResource(address, options?)` 打开 `dsh-resource://` 地址——会话区的文件链接、工具行的行号引用、文件树的行；`openTab(kind, options?)` 打开页面——tab 条的新增控件、引导页入口框。两者都以一条历史记录走完四步——认领（注册表为资源排候选，或点名 `kind` 的生效实现应答）；聚焦已显示同一 `(kind, address)` 的 tab；否则落一个新 tab；展开这一列——然后把导航记入 Tab 域（[服务](../../packages/client/ui-sidebar-right/README.zh.md#ctxsidebarright)）。用户看不见的内容不算打开，所以折叠的列会在同一步展开。`openResource` 对 `dsh-resource://` 之外的地址或无人认领的地址抛错；`openTab` 对无人注册的 kind 抛错：二者都是接线错误，不是用户错误。
+两种打开构成导航控制器，进入这一列的每条路都调用其一：`openResource(address, options?)` 打开 `dsh-resource://` 地址——会话区的文件链接、工具行的行号引用、文件树的行；`openTab(kind, options?)` 打开页面——tab 条的新增控件、引导页入口框或 Assistant Markdown 中的 HTTP(S) 链接。两者都以一条历史记录走完四步——认领（注册表为资源排候选，或点名 `kind` 的生效实现应答）；聚焦已显示同一 `(kind, address)` 的 tab；否则落一个新 tab；展开这一列——然后把导航记入 Tab 域（[服务](../../packages/client/ui-sidebar-right/README.zh.md#ctxsidebarright)）。用户看不见的内容不算打开，所以折叠的列会在同一步展开。`openResource` 对 `dsh-resource://` 之外的地址或无人认领的地址抛错；`openTab` 对无人注册的 kind 抛错：二者都是接线错误，不是用户错误。
 
 | 选项 | 含义 |
 |---|---|
 | `paneId` | 新 tab 落到这个 pane；缺省为活动的停靠 pane（活动的是浮窗时取第一个停靠 pane）。 |
 | `replaceTab` | 占用这个 tab 的 pane 与条上位置，并在同一步关闭它；浮窗里的 tab 让不出位置，新 tab 按未指定位置落位。 |
 | `revealIfOpened` | 缺省 `true`：已显示同一 `(kind, address)` 的 tab 被聚焦并收到 `params`。`false` 则无论如何再开一个。 |
+| `preferNewPane` | 在普通格数预算与空间规则下优先新建停靠格；不能分栏时回退到目标格。与 `replaceTab` 一起使用时忽略。 |
 | `kind`（仅 `openResource`） | 点名打开类型而不排候选；该 kind 的生效实现打开地址，它的 `canOpen` 仍生效。 |
 | `params` | 给正文的导航参数，作为 `navigation.params` 送达。`openResource` 按资源类型经声明合并表 `SidebarRightResourceParamsMap` 定型（文本预览声明 `{ line?: number }`）；`openTab<K>` 按 kind 经 `SidebarRightTabParamsMap` 定型，未声明的 kind 为 `undefined`；正文读到的是二者联合 `SidebarRightNavigationParams`。值按约定为 JSON 形状，运行时不校验。 |
 
@@ -87,6 +89,8 @@ export function apply(ctx: Context): void {
 `close(tabId)` 关闭一个 tab；`active()` 返回活动 pane 的活动 tab；`isExpanded()` 与 `toggleExpanded()` 读取与翻转这一列，翻转记入序列。无会话时读操作返回 `undefined` 或 `false`；写操作需要已挂载的会话面，没有时抛错而不是写进没人绘制的面。
 
 `focus(tabId)` 让一个 tab 成为其 pane 的活动 tab；`split(paneId?)` 分割活动的停靠 pane 或点名的 pane，返回新 pane 的 id——pane 数预算或列宽不允许时返回 `undefined` 且不记账；`float(tabId, rect?)` 把一个 tab 浮出为浮窗 pane；`dock(paneId)` 把浮窗 pane 收回停靠区。四者都走 store 既有动作、各记一条历史；目标不存在或已处于目标状态时是空操作，与 `open` 一样在没有已挂载会话面时抛错。`TabId`、`PaneId`、`TabRecord`、`FloatRect` 自本包 `/client` 入口再导出，调用方无需引 dockkit。
+
+`focusedTarget(element?)` 从实时 DOM 焦点（包括内嵌 iframe）捕获可见页面；侧栏外部或过期的侧栏标记不产生目标。`commandTarget(element?)` 还允许侧栏外部发起的打开操作使用已挂载 Session 的活动停靠窗格。`SidebarRightTarget` 捕获 Session、窗格、host、tab occurrence 和导航 revision。`isTargetCurrent(target)` 在执行前检查这些身份，因此重新打开记录或再次导航都会使已捕获的动作失效；它不会改为操作其他页面。关闭与落位结果见[控制器方法](../../packages/client/ui-sidebar-right/src/client/service.ts)。
 
 ## Slot 与 owner props
 
@@ -100,19 +104,23 @@ Sidebar 声明四个扩展 slot；其文档 tab 另行声明下表中的 keyed �
 | `sidebar.right.tab.menu.item` | list，会话作用域 | 追加在 kit 自身布局动作之后的内容级动作。执行了动作的条目必须调用 owner 的 `dismiss()`。 |
 | `sidebar.right.tab.document` | 按文档实现的 `id` keyed，会话作用域 | 文档 tab 内选中的文件渲染器；父组件拥有共享加载与工具栏控件。 |
 
-正文、标题与引导页替换项接收框架注入的 `useTabInfo()`。它返回 `{ sidebar, panel, tab }`：`sidebar` 包含 `expanded` 与 `fullscreen`，`panel.id` 标识所属窗格，`tab` 包含记录字段以及 `visible`、`navigation`、`signal` 和 `actions`。停靠正文仅在展开且活跃时可见；停靠标题只要求展开；浮窗保持可见。`signal` 在记录消失或插件卸载时中止，不因隐藏或切换 Session 而中止。`tab.actions` 提供绑定到标签所属 Session 的 `openResource`、`openTab` 与 `close`。打开位置缺省为当前所属窗格；`revealIfOpened` 缺省为 `true`，`replaceTab: true` 在同一历史项中替换本记录。菜单项保留普通的 `tab` 与 `dismiss` owner 参数。
+正文、标题与引导页替换项接收框架注入的 `useTabInfo()`。它返回 `{ sidebar, panel, tab }`：`sidebar` 包含 `expanded` 与 `fullscreen`，`panel.id` 标识所属窗格，`tab` 包含记录字段以及 `visible`、`navigation`、`signal` 和 `actions`。所有 tab 都要求 Session 位于前台。停靠正文还要求展开且选中；停靠标题要求展开；前台浮窗不随整栏收起。`signal` 在记录消失或插件卸载时中止，不因隐藏或切换 Session 而中止。`tab.actions` 提供绑定到标签所属 Session 的 `openResource`、`openTab` 与 `close`。打开位置缺省为当前所属窗格；`revealIfOpened` 缺省为 `true`，`replaceTab: true` 在同一历史项中替换本记录。菜单项保留普通的 `tab` 与 `dismiss` owner 参数。
 
 `navigation.revision` 在每次导航到该 tab 时递增，`params` 不变也递增，正文可仅凭「又被导航了」行动；按地址打开的 tab 为 `1`，没有人按地址打开的记录——种入的引导、撤销恢复的 tab——为 `0`。Tab 域为每条打开的记录保有一个 occurrence：记录出现即在资源模型里钉住，因此切换 tab 卸载正文也不丢内容；记录消失即中止并丢弃；撤销恢复的记录是新的 occurrence（[Tab 域](../../packages/client/ui-sidebar-right/README.zh.md#the-tab-domain)）。
 
+`tab.actions.bindCommands(commands)` 为已挂载正文提供 `SidebarRightTabCommands`，目前包含可选的 `refresh` 回调。省略的操作不可用；返回的 disposer 释放本次注册，不会移除较新正文的命令。标签生命周期结束时也会释放这些命令。`tab.refreshShortcut` 为页面控件提供生效的刷新目录项；没有可用条目时该字段可省略。这些字段声明在 [slot owner 类型](../../packages/client/ui-sidebar-right/src/client/contract/slots.ts)中。
+
 ## 文档渲染器
 
-`text` tab 是共享的 Document Preview 所有者。其[根注册](../../packages/client/ui-sidebar-documentpreview/src/client/index.ts)声明 `sidebar.right.tab.document` 并提供 `ctx.documentPreviews`。渲染器在自己的 effect 中注册 `DocumentPreviewDefinition` 元数据，再通过 `ctx.slots.inject('sidebar.right.tab.document', ...)` 等待 slot，以 `key: definition.id` 和自己的 locale 命名空间注册组件。切换渲染器不改变 tab 或资源地址；[扩展决议](../../.agents/notes/implemented/architecture/2026-09-08-document-preview-operations.zh.md)将预览策略与资源归属分开。
+`text` tab 是共享的 Document Preview 所有者。其[根注册](../../packages/client/ui-sidebar-documentpreview/src/client/index.ts)声明 `sidebar.right.tab.document` 并提供 `ctx.documentPreviews`。渲染器在自己的 effect 中注册 `DocumentPreviewDefinition` 元数据，再通过 `ctx.slots.inject('sidebar.right.tab.document', ...)` 等待 slot，以 `key: definition.id` 和自己的 locale 命名空间注册组件。渲染器注册自己的正文，并可通过子 slot 复用共享展示组件。切换渲染器不改变 tab 或资源地址；[扩展决议](../../.agents/notes/implemented/architecture/2026-09-08-document-preview-operations.zh.md)将预览策略与资源归属分开。
 
-[注册表](../../packages/client/ui-sidebar-documentpreview/src/client/document/registry.ts)记录唯一的 `id`、`extensions`、本地化 `title()`、`loading`，以及可选的 `priority` 和 `wrap`。后缀匹配不区分大小写，先排 `extension`（缺省值）、再排 `builtin`，随后比较后缀长度（长者优先）与注册顺序。与 tab kind 替换不同，注册表保留所有实现；工具栏列出匹配的候选，按 tab 记住选择。未知扩展名使用纯文本。`loading` 为 `text-pages` 或 `bytes-complete`；`wrap` 声明是否支持共享的源码换行控件。
+[注册表](../../packages/client/ui-sidebar-documentpreview/src/client/document/registry.ts)记录唯一的 `id`、`extensions`、本地化 `title()`、`loading`，以及可选的 `priority` 和 `wrap`。后缀匹配不区分大小写，先排 `extension`（缺省值）、再排 `builtin`，随后比较后缀长度（长者优先）与注册顺序。与 tab kind 替换不同，注册表保留所有实现；工具栏列出匹配的候选，按 tab 记住选择。未知扩展名使用纯文本。`binaryExtensions` 声明的后缀不提供纯文本备选，见[包 README](../../packages/client/ui-sidebar-documentpreview/README.zh.md#what-it-registers)。`loading` 为 `text-pages`、`bytes-complete` 或 `renderer`；`wrap` 声明是否支持共享的源码换行控件。
 
-[`DocumentPreviewProps`](../../packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts) 派生自 `PropsRuntime<'sidebar.right.tab.document'>`。owner 提供原始 `resourceAddress`、`content` 与当前 `wrap`：文本内容为 `{ kind: 'text', text, pages: [{ offset, text, lines }], eof }`，其中 `text` 为累积文本；完整字节为 `{ kind: 'bytes', data }`，其中 `data` 为 `Uint8Array<ArrayBuffer>`。这些瞬时缓冲区按只读方式借用，不得进入持久布局或 Session JSON。PDF 在转移到 Worker 前复制字节，以保留 owner 的缓冲区。子组件收到同一个框架绑定的 `useTabInfo`，以及全局共享、仅提供元数据的 `useResource`。父组件通过普通 inject 回调调用 `remote.workspaceFiles.read`/`readAll`，拥有追加分页、逐 tab 刷新与加载状态。HTML 自己的 inject 回调使用 `readRelated`；路径由 Host 代码解析。Markdown 和代码在追加期间保留同一个增量渲染器，到 EOF 完成最终解析；HTML 和 PDF 接收完整字节。
+[`DocumentPreviewProps`](../../packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts) 派生自 `PropsRuntime<'sidebar.right.tab.document'>`。owner 提供原始 `resourceAddress`、`content`、当前 `wrap`，以及声明依赖的 `addResource` / `setResources` 回调：文本内容为 `{ kind: 'text', text, pages: [{ offset, text, lines }], eof }`，其中 `text` 为累积文本；完整字节为 `{ kind: 'bytes', data }`，其中 `data` 为 `Uint8Array<ArrayBuffer>`。这些瞬时缓冲区按只读方式借用，不得进入持久布局或 Session JSON。PDF 在转移到 Worker 前复制字节，以保留 owner 的缓冲区。子组件收到同一个框架绑定的 `useTabInfo`，以及全局共享、仅提供元数据的 `useResource`。父组件通过 `remote.workspaceFiles.read` 读取文本，通过 `remote.workspaceFiles.readBytes` 读取字节，拥有追加分页、逐 tab 刷新与加载状态。HTML 向同一个字节读取方法传入 `baseFile`；路径由 Host 代码解析。Markdown 和代码在追加期间保留同一个增量渲染器，到 EOF 完成最终解析；HTML 和 PDF 接收完整字节。
 
-Preview 记录已载入版本和读取开始时的观察版本。刷新只重读当前 tab，不改变共享元数据或其他 tab 的内容。读取不具备事务性；版本是不透明的相等性令牌，不是可排序的时间戳（[资源观察与 Preview RPC](../../.agents/notes/implemented/architecture/2026-09-08-document-preview-operations.zh.md)）。
+Preview 记录已载入版本和读取开始时的观察版本。自动刷新默认开启；成员首次元数据只建立基线，后续变化才重新加载 tab。刷新只重读当前 tab，不改变共享元数据或其他 tab 的内容。读取不具备事务性；版本是不透明的相等性令牌，不是可排序的时间戳（[资源观察与 Preview RPC](../../.agents/notes/implemented/architecture/2026-09-08-document-preview-operations.zh.md)）。
+
+自行加载的渲染器接收 `{ kind: 'renderer', revision, loaded, failed, reload }`，而不是文件字节。正文调用自己的注入 face，在 revision 变化和卸载时取消请求，并通过 `loaded(version)` 报告已展示的源版本。加载失败时调用 `failed()`，使后续文件变化能够触发重试。父组件忽略过期报告，保留共享的重新加载与源文件变更控件。Office 使用此模式请求 [Host 渲染的 PDF](office-to-pdf.zh.md)；其 face 将转换字节、字体元数据和失败写入自己的 store，正文渲染嵌套 PDF 视图。`OfficeFontAction` 通过 `sidebar.right.tab.document.action` 在刷新按钮前显示缺失字体警告。[包 README](../../packages/client/ui-sidebar-documentpreview/README.zh.md#what-it-registers)定义加载生命周期。
 
 ## 资源模型
 
@@ -124,15 +132,17 @@ Preview 记录已载入版本和读取开始时的观察版本。刷新只重读
 
 ## Workspace Files
 
-Host 的 `ctx.workspaceFiles` 服务与生成的 `workspaceFiles` Remote 命名空间读取 Session 文件系统后端允许的文件：`stat(path)` 返回 `{ absolutePath, version, bytes? }`；`read(path, { offset?, limit? })` 返回一页行（`offset` 1 起，`limit` 受配置页长限制），形如 `{ …stat, offset, text, eof }`；`readBytes(path, { offset?, length? })` 返回一个原始字节窗口（`offset` 0 起，`length` 受配置字节上限限制），形如 base64 的 `{ …stat, offset, data, eof }`、不做文本解码。`list(path)` 仍限定在工作区根内，返回目录的直接子项（`name`、`type: 'file' | 'directory' | 'other'`、`size?`），按配置上限截断并置 `truncated`。`changes()` 同样限定于工作区，订阅就绪后产出 `{ kind: 'ready' }`，随后产出 `{ kind: 'change', change }` 帧，其载荷为 `{ absolutePath, version }` 或 `{ absolutePath, absent: true }`（[README](../../packages/api/workspace-files/README.zh.md#use-this-package)）。文件操作拒绝末端符号链接并执行传输上限；`read` 还要求 UTF-8 文本。失败使用 `workspace-file/*` 错误码（[失败](../../packages/api/workspace-files/README.zh.md)）。
+Host 的 `ctx.workspaceFiles` 服务与生成的 `workspaceFiles` Remote 命名空间读取 Session 文件系统后端允许的文件：`stat(path)` 返回 `{ absolutePath, version, bytes? }`；`read(path, { offset?, limit? })` 返回一页行（`offset` 1 起，`limit` 受配置页长限制），形如 `{ …stat, offset, text, eof }`；`readBytes(path, { range?, baseFile? })` 在 `maxFileBytes` 上限内返回完整文件，或在 `maxBytes` 上限内返回字节窗口，形如 `{ …stat, offset, data, eof }`，其中 `data` 为原生 `Uint8Array`。可选 `range` 使用 0 起算的 `offset` 与字节数 `length`；`baseFile` 从另一文件所在目录解析相对目标。`list(path)` 仍限定在工作区根内，返回目录的直接子项（`name`、`type: 'file' | 'directory' | 'other'`、`size?`），按配置上限截断并置 `truncated`。`changes(path)` 监听一个目标，由 Host 判断目标类型并将目录限制在工作区。订阅就绪后产出 `{ kind: 'ready' }`，随后产出 `{ kind: 'change', change }` 帧，其载荷为 `{ absolutePath, version }` 或 `{ absolutePath, absent: true }`（[README](../../packages/api/workspace-files/README.zh.md#use-this-package)）。文件读取拒绝末端符号链接并执行传输上限；`read` 还要求 UTF-8 文本。失败使用 `workspace-file/*` 错误码（[失败](../../packages/api/workspace-files/README.zh.md)）。
 
-[`dsh-api-workspace-files`](../../packages/api/workspace-files/README.zh.md) 注册 `file` 提供方，`ResourceProtocolMap.file` 直接是 `WorkspaceFileStat`。Session 地址携带授权 Session 与相对或绝对路径，Host 原样接收并解析。提供方在 stat 前等待 Host 的 `ready` 帧，并按 `stat.absolutePath` 过滤变更。裸 `absolute` 地址没有授权 Session，以 `workspace-file/unknown-workspace` 失败，不借用当前或 Tab Session。任何 UI（包括 Global）访问同一完整地址都共享观察。Preview 的普通 Remote 回调使用地址中的 Session；Host `readAll` 和 `readRelated` 保留，字节结果由 Preview 的 `rpc.ts` 解码。
+[`dsh-api-workspace-files`](../../packages/api/workspace-files/README.zh.md) 注册 `file` 提供方，`ResourceProtocolMap.file` 直接是 `WorkspaceFileStat`。Session 地址携带授权 Session 与相对或绝对路径，Host 原样接收并解析。提供方在 stat 前等待 Host 的 `ready` 帧，并按 `stat.absolutePath` 过滤变更。裸 `absolute` 地址没有授权 Session，以 `workspace-file/unknown-workspace` 失败，不借用当前或 Tab Session。任何 UI（包括 Global）访问同一完整地址都共享观察。Preview 的 Remote 回调使用地址中的 Session；`remote.workspaceFiles.readBytes` 通过 Connection 的二进制 RPC 传输返回原生字节。
 
 ## 内置类型
 
 - **`guide`**——`builtin`，以 `openTab('guide')` 打开。一枚弱化的罗盘位于各类型按 `order` 贡献的入口胶囊上方；入口较少时显示已注册的描述，未提供图标的入口统一使用内置占位符。点选胶囊即在引导 tab 的位置把贡献它的类型作为页面打开。每个 pane 最多一个引导 tab，tab 条的新增控件只在本 pane 没有引导时出现。新 pane 使用已注册的默认页：只有一个引导入口时直接使用该入口，否则使用引导页（[引导](../../packages/client/ui-sidebar-right/README.zh.md#the-guide)）。
 - **`text`**——`fallback`，`dsh-resource://file/**`，只认领 Session 地址。Document Preview 通过 `useResource<'file'>` 观察元数据，经 Remote 回调加载内容，并拥有渲染器选择、工具栏、逐 tab 刷新、滚动与源码定位；未知扩展名按纯文本渲染（[README](../../packages/client/ui-sidebar-documentpreview/README.zh.md)）。
-- **`files`**——`builtin`，以 `openTab('files')` 打开。工作区目录树，经 `list` 懒加载，用 `tab.actions.openResource(fileAddressFor(sessionId, root, path))` 在自己所在 pane 打开文件（[README](../../packages/client/ui-sidebar-files/README.zh.md)）。
+- **`files`**——`builtin`，以 `openTab('files')` 打开。工作区目录树，经 `list` 懒加载，按展开目录建立监听，用 `tab.actions.openResource(fileAddressFor(sessionId, root, path))` 在自己所在 pane 打开文件（[README](../../packages/client/ui-sidebar-files/README.zh.md)）。
+- **`browser`**——可多开的 `builtin`，以 `openTab('browser', { params: { url? } })` 打开。Chat 的[链接偏好](../../packages/client/ui-chat/README.zh.md)决定 Assistant Markdown 是否在此打开 HTTP(S) 链接。它在默认 sandbox 下接受公共与 loopback HTTP(S) 目标，本地文件改用 Document Preview，并使用应用已知的 iframe history（[README](../../packages/client/ui-sidebar-browser/README.zh.md)）。
+- **`subagentchat`**——`builtin`，`dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=<mode>`。资源提供方保留一个显式寻址的 subagent Conversation，并通过共享 Conversation Factory 渲染（[README](../../packages/client/ui-subagent/README.zh.md)）。
 
 <a id="not-built"></a>
 ## 不做
@@ -145,4 +155,4 @@ Host 的 `ctx.workspaceFiles` 服务与生成的 `workspaceFiles` Remote 命名�
 - 打开时点名某个 tab 实现：`openResource` 最多点名一个 kind；文档渲染器由文件 tab 的工具栏选择。
 - 服务上的地址查找（`find`）：调用方用 `revealIfOpened` 打开，由停靠面去重。
 - Sidebar 自身 `sidebar://<kind>` 记账之外的导航地址；其语法等导航控制器整体做时再定。
-- 面向用户的撤销、内容导航栈与 tab 图标（[暂缓](../../.agents/notes/implemented/feature/2026-09-04-right-sidebar-docking-infrastructure.zh.md#deferred)）。
+- 面向用户的撤销与跨类型通用内容导航栈（[暂缓](../../.agents/notes/implemented/feature/2026-09-04-right-sidebar-docking-infrastructure.zh.md#deferred)）；Browser 只拥有自身页面历史。

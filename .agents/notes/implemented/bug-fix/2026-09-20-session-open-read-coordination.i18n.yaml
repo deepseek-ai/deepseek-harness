@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for 2026-09-20-session-open-read-coordination.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-20-session-open-read-coordination.md
+/agent-note-session-opening-cache-identity-and-read-ordering:
+  en: 1ea618d07f8d8f28
+  zh: 25332949ef7af87e
+/agent-note-session-opening-cache-identity-and-read-ordering/problem:
+  en: 490984caf5af4323
+  zh: 273ac6284e1ff67f
+/agent-note-session-opening-cache-identity-and-read-ordering/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-session-opening-cache-identity-and-read-ordering/decision/identify-the-cache-producer-with-a-service-owned-symbol:
+  en: 56bec761deb63aad
+  zh: 8b16c2b7582aeb3f
+/agent-note-session-opening-cache-identity-and-read-ordering/decision/auxiliary-rpcs-wait-for-the-current-conversation-s-initial-open-to-succeed:
+  en: 3a09e82c1fb032e4
+  zh: c1ef33b75ab0e734
+/agent-note-session-opening-cache-identity-and-read-ordering/decision/conversations-use-follow-catalog-branches-retain-explicit-reads:
+  en: 181653d75354df80
+  zh: 7984321c5a2715d5
+/agent-note-session-opening-cache-identity-and-read-ordering/implementation-scope:
+  en: f3e37b63e2e813e3
+  zh: 1c709bd0ee6cc3ff
+/agent-note-session-opening-cache-identity-and-read-ordering/alternatives-considered:
+  en: 7d64c8151ffef2a0
+  zh: b899a22f4d070a78
+/agent-note-session-opening-cache-identity-and-read-ordering/consequences:
+  en: 51a45af1622d7e4d
+  zh: f33fecfa0f889af7
+/agent-note-session-opening-cache-identity-and-read-ordering/verification-and-known-gaps:
+  en: 13437882143e2025
+  zh: 586bcd68eaa03969
+/agent-note-session-opening-cache-identity-and-read-ordering/relationship-to-existing-records:
+  en: 8b479aee5c808180
+  zh: aa0220e664f9e9a6

@@ -1,6 +1,94 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-07-mcp-client-plugin.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-07-mcp-client-plugin.md
-2026-07-07-mcp-client-plugin.md: a4aa2cf216d9f28afedebf82f0659db70606bbf1
-2026-07-07-mcp-client-plugin.zh.md: 5903e4ef976317602527d9f335d640bc86939f72
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools:
+  en: 7d41e632fd40efe0
+  zh: 4c7f6410b74a5bd3
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/problem:
+  en: 7cef5ed5bc88fba5
+  zh: 795917e3321148ab
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/package:
+  en: 90a6e5a22fa99a36
+  zh: 4280a5feecd3e6c1
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/sdk:
+  en: f69bbd1cfca85fa0
+  zh: 9b21abc7e3eeb2fd
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/scope:
+  en: 32cd57e8d3ea1ac1
+  zh: 7c14401492f22c32
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/plugin-shape:
+  en: 3d6e4726e5c890a6
+  zh: 888123ed412544a7
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/configuration:
+  en: a244e4d7a8294424
+  zh: 4be5ed51345a660e
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/lifecycle:
+  en: b428a4e72dec4ba0
+  zh: c070db6fdd2d3c7f
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/tool-discovery-and-registration:
+  en: 75da266ca8141a90
+  zh: 078e3a969273ed9b
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/public-name-normalization:
+  en: eb0511bd6173c99c
+  zh: c5fc98231a733699
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/name-conflict-handling:
+  en: 88210585c857f934
+  zh: fc0d90d572d6ba45
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/naming-invariants:
+  en: 1e2ce84605977339
+  zh: 3b3c9d120c0262a7
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/tool-execution:
+  en: c82db842e7a6f3db
+  zh: ace9e266cd6c4203
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/subprocess-environment-stdio-transport:
+  en: d599a7db35e1f96d
+  zh: a2655e0410565c93
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/decision/disconnection-crash:
+  en: e8207a70c6511778
+  zh: aa281be51d85be13
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered:
+  en: 6119e2aff3b6be5a
+  zh: 76136ef5249c23eb
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered/mcp-server-side-expose-harness-tools-to-external-mcp-clients:
+  en: 831148b7e748eaa3
+  zh: 845172ccc64d7a65
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered/capability-seam-three-package-split-interface-impl-consumer:
+  en: caefc1146f9b2b16
+  zh: 9c4a5d55019d8002
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered/auto-reconnect-with-exponential-backoff:
+  en: e92d18530feb1ee3
+  zh: 2fecc50b4b6a96d9
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered/bridge-resources-and-prompts:
+  en: 606ee33502fa60cc
+  zh: 0c21afec01caf4c2
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered/raw-model-facing-tool-names-with-an-optional-toolprefix:
+  en: ef886d275ac5734c
+  zh: 304c578e674f50a2
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered/server-only-namespace-github-create-issue-no-mcp-marker:
+  en: d18be656bd334d18
+  zh: b7cdc2d580e9f2ab
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered/deriving-the-namespace-from-the-server-announced-serverinfo-name:
+  en: 17bc5d831e3d06a7
+  zh: 6b9e2f5cd76d12f8
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered/preserve-multiple-textblocks-in-tool-result:
+  en: 184f6d75be815400
+  zh: a284afac1e2b80e2
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered/replace-the-canonical-mcp-result-with-core-contentblock:
+  en: d5d253f8e466bab9
+  zh: 7d93b7fa1c2219ed
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered/add-a-generic-richcontent-service-or-perform-i-o-in-output-render:
+  en: 687c220df3767635
+  zh: c87dd8700edc9291
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/alternatives-considered/let-each-image-returning-tool-special-case-ptc-mode-parents:
+  en: a5fc7b17970699ce
+  zh: 2d7bd23621f62597
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/testing:
+  en: 4bb5be21c1097a57
+  zh: d12bf01bb70e1bc3
+/agent-note-mcp-client-plugin-connect-to-external-mcp-servers-and-bridge-their-tools/consequences:
+  en: ef35ec18568b38e5
+  zh: ca85076585c2b787

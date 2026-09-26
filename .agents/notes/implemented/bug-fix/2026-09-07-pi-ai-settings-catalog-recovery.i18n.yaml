@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-07-pi-ai-settings-catalog-recovery.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-07-pi-ai-settings-catalog-recovery.md
-2026-09-07-pi-ai-settings-catalog-recovery.md: 21fe532a491775ff875f6b9bcb000d917a95e13c
-2026-09-07-pi-ai-settings-catalog-recovery.zh.md: 80bd0758e13b767671f4cec52ee3832c9250651f
+/agent-note-repairable-pi-ai-settings-after-catalog-changes:
+  en: 69bf6edd0515636c
+  zh: cb5039a98dc8b736
+/agent-note-repairable-pi-ai-settings-after-catalog-changes/problem:
+  en: acc6a5afd829fde0
+  zh: a2173b59b670efe2
+/agent-note-repairable-pi-ai-settings-after-catalog-changes/decision:
+  en: 37034d76d7542f46
+  zh: a6423ba488fe272c
+/agent-note-repairable-pi-ai-settings-after-catalog-changes/alternatives-considered:
+  en: 1dcabe193953fa1b
+  zh: 02263349cdbdc843
+/agent-note-repairable-pi-ai-settings-after-catalog-changes/consequences:
+  en: d2f89ce8cec55c6e
+  zh: 20fab7854366ae05
+/agent-note-repairable-pi-ai-settings-after-catalog-changes/testing:
+  en: 30c8172b88231251
+  zh: 54aee9d1dffa8566

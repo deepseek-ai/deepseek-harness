@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-14-current-profile-plugin-management.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-14-current-profile-plugin-management.md
-2026-09-14-current-profile-plugin-management.md: a59a79022bce88dcee7b1629ec35c9759489e34a
-2026-09-14-current-profile-plugin-management.zh.md: 7c3e8d470fcf87fb32cda8d9f68dd2ffe4b7fe15
+/agent-note-current-profile-plugin-management-shares-cli-transactions:
+  en: 86224d16fc754163
+  zh: 1c9948a6f80f2544
+/agent-note-current-profile-plugin-management-shares-cli-transactions/problem:
+  en: 6bb727a659ba1503
+  zh: d2ebf5c8164a807e
+/agent-note-current-profile-plugin-management-shares-cli-transactions/decision:
+  en: 863b4369c39f3933
+  zh: 7dd44a91ccaaef8f
+/agent-note-current-profile-plugin-management-shares-cli-transactions/alternatives-considered:
+  en: 30c609de89084351
+  zh: 27f2747ad9d9b752
+/agent-note-current-profile-plugin-management-shares-cli-transactions/consequences:
+  en: a51baa71aa3fe3f4
+  zh: 291db9e4ba5723d2

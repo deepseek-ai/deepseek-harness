@@ -27,6 +27,8 @@ it('omits development artifacts while preserving executable modules, assets and 
     'node-pty/prebuilds/win32-x64/conpty.pdb',
     '@koromix/koffi-win32-x64/win32_x64/koffi.lib',
     '@mixmark-io/domino/test/entities.html',
+    '@deepseek-ai/libreoffice-kit-wasm/assets/soffice.data',
+    '@deepseek-ai/libreoffice-kit-darwin-arm64/bin/libreoffice-kit',
     '.modules.yaml', '.pnpm-workspace-state-v1.json', '.bin/tool', '.pnpm/cache',
   ]
   const retained = [
@@ -44,6 +46,9 @@ it('omits development artifacts while preserving executable modules, assets and 
     '@koromix/koffi-win32-x64/win32_x64/koffi.node',
     '@mixmark-io/domino/lib/HTMLParser.js', '@mixmark-io/domino/lib/EntityParser.js',
     '@img/sharp-win32-x64/lib/libvips-42.dll',
+    '@deepseek-ai/libreoffice-kit-win32-x64/bin/libreoffice-kit.exe',
+    '@deepseek-ai/libreoffice-kit-win32-x64/sources/core-source.json',
+    '@deepseek-ai/libreoffice-kit-win32-x64/licenses/MPL-2.0.txt',
   ]
   try {
     const runtime = runtimeFixture(source)
@@ -54,7 +59,7 @@ it('omits development artifacts while preserving executable modules, assets and 
     }
     cpSync(modules, join(output, 'node_modules'), {
       recursive: true, dereference: true,
-      filter: path => desktopRuntimeFileExclusion(relative(modules, path), windows) === undefined,
+      filter: path => desktopRuntimeFileExclusion(relative(modules, path), windows, 'win32-x64') === undefined,
     })
     for (const path of removed) expect(existsSync(join(output, 'node_modules', path)), path).toBe(false)
     for (const path of retained) expect(readFileSync(join(output, 'node_modules', path), 'utf8'), path).toBe(`payload:${path}`)
@@ -67,15 +72,28 @@ it('omits development artifacts while preserving executable modules, assets and 
 })
 
 it('applies package-specific rules inside scoped and nested dependency containers', () => {
-  expect(desktopRuntimeFileExclusion('outer/node_modules/@mixmark-io/domino/test/data.html', windows)).toBeDefined()
-  expect(desktopRuntimeFileExclusion('outer\\node_modules\\node-pty\\prebuilds\\win32-arm64\\conpty.node', windows)).toBeDefined()
-  expect(desktopRuntimeFileExclusion('outer/node_modules/unrelated/test/data.html', windows)).toBeUndefined()
-  expect(desktopRuntimeFileExclusion('outer/fs-ext/build/Release/fs_ext.lib', windows)).toBeUndefined()
+  expect(desktopRuntimeFileExclusion('outer/node_modules/@mixmark-io/domino/test/data.html', windows, 'win32-x64')).toBeDefined()
+  expect(desktopRuntimeFileExclusion('outer\\node_modules\\node-pty\\prebuilds\\win32-arm64\\conpty.node', windows, 'win32-x64')).toBeDefined()
+  expect(desktopRuntimeFileExclusion('outer/node_modules/unrelated/test/data.html', windows, 'win32-x64')).toBeUndefined()
+  expect(desktopRuntimeFileExclusion('outer/fs-ext/build/Release/fs_ext.lib', windows, 'win32-x64')).toBeUndefined()
 })
 
 it('retains native prebuilds for the selected macOS architecture', () => {
   const mac = { platform: 'darwin' as const, arch: 'arm64' }
-  expect(desktopRuntimeFileExclusion('node-pty/prebuilds/darwin-arm64/pty.node', mac)).toBeUndefined()
-  expect(desktopRuntimeFileExclusion('node-pty/prebuilds/darwin-x64/pty.node', mac)).toBeDefined()
-  expect(desktopRuntimeFileExclusion('node-pty/prebuilds/win32-x64/conpty.node', mac)).toBeDefined()
+  expect(desktopRuntimeFileExclusion('node-pty/prebuilds/darwin-arm64/pty.node', mac, 'darwin-arm64')).toBeUndefined()
+  expect(desktopRuntimeFileExclusion('node-pty/prebuilds/darwin-x64/pty.node', mac, 'darwin-arm64')).toBeDefined()
+  expect(desktopRuntimeFileExclusion('node-pty/prebuilds/win32-x64/conpty.node', mac, 'darwin-arm64')).toBeDefined()
+})
+
+it.each([
+  ['linux', 'x64', 'linux-x64'],
+  ['linux', 'arm64', 'wasm'],
+  ['freebsd', 'x64', 'wasm'],
+] as const)('retains only the selected Office engine for %s/%s', (platform, arch, engine) => {
+  for (const candidate of ['linux-x64', 'darwin-arm64', 'wasm']) {
+    const omitted = desktopRuntimeFileExclusion(
+      `@deepseek-ai/libreoffice-kit-${candidate}/prebuilds.json`, { platform, arch }, engine,
+    )
+    expect(omitted === undefined).toBe(candidate === engine)
+  }
 })

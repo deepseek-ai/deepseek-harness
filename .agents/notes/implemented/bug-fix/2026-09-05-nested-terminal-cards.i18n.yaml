@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-05-nested-terminal-cards.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-05-nested-terminal-cards.md
-2026-09-05-nested-terminal-cards.md: c5946a332f2879588cb6ee334404fdaa92a8cb28
-2026-09-05-nested-terminal-cards.zh.md: 74056014ce5b9ac38574c5551420a4e25808b9b4
+/agent-note-nested-terminal-cards:
+  en: acc1dadeee5e1aeb
+  zh: a589c28cf1aff307
+/agent-note-nested-terminal-cards/problem:
+  en: 1bd9adbd90b66871
+  zh: 0a87672dffc07bae
+/agent-note-nested-terminal-cards/decision:
+  en: 075b10a41974411e
+  zh: cc3341afff14f61b
+/agent-note-nested-terminal-cards/alternatives-considered:
+  en: c585eb14efb10514
+  zh: c5a1cc87fc4edacc
+/agent-note-nested-terminal-cards/consequences:
+  en: a7abcb5b95a020cc
+  zh: 27fe3216944de8c3
+/agent-note-nested-terminal-cards/verification:
+  en: 0133972e958fccce
+  zh: 52d4d3e29b7346e0

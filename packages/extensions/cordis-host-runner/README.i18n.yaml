@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/extensions/cordis-host-runner/README.md
-README.md: c9f573557607163103adc0ab7277f3ab569d7ab8
-README.zh.md: 10c38095ef30025a8b513e7587b1df381d6316a5
+/:
+  en: ac7eacf5f9b1e727
+  zh: 61461cb68f91fcce
+/deepseek-ai-dsh-cordis-host-runner:
+  en: ac416c2eb5e0a00f
+  zh: 924964cf4466b874
+/deepseek-ai-dsh-cordis-host-runner/summary:
+  en: 8ff708e868c265c4
+  zh: 9b727e6b7a15fa64
+/deepseek-ai-dsh-cordis-host-runner/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-cordis-host-runner/use-this-package:
+  en: bdaba8036acf80c9
+  zh: 2dd8f972c3023a8a
+/deepseek-ai-dsh-cordis-host-runner/use-this-package/minimal-configuration:
+  en: 0be8b7f1580ca751
+  zh: 984c4757e9d6e094
+/deepseek-ai-dsh-cordis-host-runner/use-this-package/what-a-run-does:
+  en: a3c86c081974a710
+  zh: 180e1b7824c070d4
+/deepseek-ai-dsh-cordis-host-runner/use-this-package/what-happens-to-definitions:
+  en: d1a8777f171d22bb
+  zh: 7f6aa4c2680557b1
+/deepseek-ai-dsh-cordis-host-runner/use-this-package/trust-stance:
+  en: 9098942013393325
+  zh: 282917313e96a2d3
+/deepseek-ai-dsh-cordis-host-runner/understand-the-implementation:
+  en: b0a536c0d00cbdb8
+  zh: 08e5d813aa6a612a
+/deepseek-ai-dsh-cordis-host-runner/understand-the-implementation/design-philosophy:
+  en: 2193b1c446b388fc
+  zh: 6173e0e3e2df6812
+/deepseek-ai-dsh-cordis-host-runner/understand-the-implementation/source-map:
+  en: f567eacc1072b96c
+  zh: 7f50499d9740f802
+/deepseek-ai-dsh-cordis-host-runner/understand-the-implementation/how-a-run-flows:
+  en: 40d63d9a75d233e6
+  zh: 96954bf346c6d9e6
+/deepseek-ai-dsh-cordis-host-runner/further-exploration:
+  en: 6f2dabcc9d095569
+  zh: 8df32d4b138ff7c7
+/deepseek-ai-dsh-cordis-host-runner/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-cordis-host-runner/model-experience/run-outcomes-refusals-and-diagnostics-relayed-to-the-owning-session:
+  en: f53130bb645f50df
+  zh: 603361c566527789
+/deepseek-ai-dsh-cordis-host-runner/model-experience/run-outcomes-refusals-and-diagnostics-relayed-to-the-owning-session/what-the-model-sees:
+  en: 743dbef78fa3a8ad
+  zh: 2aa4e404e908cf22
+/deepseek-ai-dsh-cordis-host-runner/model-experience/run-outcomes-refusals-and-diagnostics-relayed-to-the-owning-session/token-effect:
+  en: c7ef63dd8179a97e
+  zh: e66545088d00956a
+/deepseek-ai-dsh-cordis-host-runner/model-experience/run-outcomes-refusals-and-diagnostics-relayed-to-the-owning-session/kv-cache-effect:
+  en: bbc4338c3035757a
+  zh: f51f4848786d5606
+/deepseek-ai-dsh-cordis-host-runner/known-limitations-and-deferred-work:
+  en: 1f10688ae249a077
+  zh: ab2ff597e1769b81
+/deepseek-ai-dsh-cordis-host-runner/known-limitations-and-deferred-work/dev-note:
+  en: 8111315620c52980
+  zh: 261bf47eecf96bad

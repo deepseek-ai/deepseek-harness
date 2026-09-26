@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-08-desktop-welcome-window-material.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-08-desktop-welcome-window-material.md
+/agent-note-desktop-welcome-window-material:
+  en: a362add86cddc144
+  zh: c6f482e5f9a66bdf
+/agent-note-desktop-welcome-window-material/problem:
+  en: 8578b584bda3abdc
+  zh: 85dcf44aab2cfd51
+/agent-note-desktop-welcome-window-material/decision:
+  en: df7f9dc0c48769ab
+  zh: 5e667c736dd58a1c
+/agent-note-desktop-welcome-window-material/alternatives-considered:
+  en: cf42e200b1d0f00a
+  zh: de96b5647f5ffb23
+/agent-note-desktop-welcome-window-material/consequences:
+  en: fd2533d63d9a1e4e
+  zh: 5cb602962608f5de

@@ -52,7 +52,7 @@ class RemoteProcess implements SubprocessHandle {
     const collect = (name: 'stdout' | 'stderr', stream: PassThrough, mode: SubprocessOutputMode) => {
       if (mode === 'pipe') return undefined
       if (mode === 'inherit') { stream.pipe(name === 'stdout' ? process.stdout : process.stderr, { end: false }); return undefined }
-      let collector = new OutputCollector(mode.maxBytes, undefined, name, '')
+      let collector = new OutputCollector(mode.maxBytes, name, undefined)
       let base = 0
       let total = 0
       let finalized = false
@@ -62,7 +62,7 @@ class RemoteProcess implements SubprocessHandle {
         if (finalized) return
         if (snapshot.totalBytes < total) throw new Error('SSH helper rewound collected output')
         finalized = final
-        collector = new OutputCollector(mode.maxBytes, undefined, name, '')
+        collector = new OutputCollector(mode.maxBytes, name, undefined)
         collector.push(bytes)
         base = snapshot.totalBytes - bytes.length
         total = snapshot.totalBytes

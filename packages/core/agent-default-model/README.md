@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-agent-default-model` gives newly created agents a shared default provider and model when their sessions do not specify one. Use it to choose the starting model once for all supported agent entry points, including `dsh --profile headless`. When settings are available, users can override the configured selection, including reasoning effort, and saved changes apply to subsequent reads. The default is process-wide; per-session model selection remains the responsibility of the entry point that creates the agent.
+Give newly created agents a shared default provider and model when their sessions do not specify one. Provider, model, and reasoning effort are live Config fields. Saved selections update the active profile patch and apply to subsequent reads; per-session selection remains owned by the entry point.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Mount this package wherever agents are created without an explicit model route. 
 
 ### Configure the default
 
-The composition entry is the base of the default: it requires a provider and model and stays usable without any settings provider.
+The composition requires a provider and model. Consumers read the live references even when no configuration editor is mounted.
 
 ```yaml
 - name: '@deepseek-ai/dsh-agent-default-model'
@@ -43,7 +43,7 @@ The composition entry is the base of the default: it requires a provider and mod
 | `provider` | required | Registered provider route for fresh agents |
 | `model` | required | Provider-owned model id for fresh agents |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-default-model) is the exhaustive source for every accepted field. `reasoningEffort` is deliberately not a config field: it belongs to the settings layer, so a complete saved selection can clear an effort when the next selected model has none, while a composition value would be inherited again.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-default-model) lists every accepted field. `reasoningEffort` is optional; saving a selection without it removes that field from the profile’s complete config override.
 
 ### Read and change the default
 
@@ -54,7 +54,7 @@ const selection = ctx.agentDefaultModel.currentSelection()
 await ctx.agentDefaultModel.saveSelection({ provider, model, reasoningEffort: 'high' })
 ```
 
-Without a settings provider, `saveSelection()` is a no-op and the composition entry remains current. The service does not validate catalog membership: a provider route may serve an unadvertised model, and the consumer that opens a model request owns availability diagnostics.
+Without a configuration editor, `saveSelection()` is a no-op. The service does not validate catalog membership; the consumer opening a model request owns availability diagnostics.
 
 -----
 
@@ -68,18 +68,18 @@ This section explains how the service realizes the behavior above; the observabl
 
 ### Design concept
 
-The service is a composition entry with a settings-backed source. The plugin config supplies the base `{ provider, model }`; when a settings provider is mounted, the `agent-default-model` settings section becomes the live source and every consumer reads through `currentSelection()`, so a settings write needs no registration-level rebuild. `reasoningEffort` lives only in the settings schema — the config cannot carry it, because an effort cleared by a new selection must stay cleared rather than being re-inherited from composition.
+The service retains its validated Config references and samples them in `currentSelection()`. `saveSelection()` captures the submitted values and serializes profile writes in submission order, including overlapping callers. Each caller observes its own write failure; a rejected write does not prevent later saves. Session-specific selection takes precedence in the consumer.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `AgentDefaultModelConfig` service, settings section install, `currentSelection`/`saveSelection` |
-| — | No runtime invariant companion is published; settings validation owns the only mutable-value relationship. |
+| [`src/index.ts`](src/index.ts) | Live default selection and profile-backed writes |
+| — | No invariant companion is published because Config references are the only owned values. |
 
 ### Behavior notes
 
-Both public methods are thin reads and writes over that source: `currentSelection()` returns a fresh detached object so a caller can hold it without aliasing service state, and `saveSelection()` writes the whole selection through `ctx.settings` when present.
+`currentSelection()` returns a detached selection. A captured selection stays stable while later operations read updated Config references.
 
 </details>
 
@@ -114,7 +114,7 @@ Changing the default affects only agents that subsequently resolve from it. An e
 These limits define the service's scope. They are current package constraints, not a task backlog.
 
 - **One process-wide default** — the service owns a single default; per-session model selection remains the entry point's responsibility.
-- **No retention without a settings provider** — `saveSelection()` cannot keep a selection for a later agent when no settings provider is mounted.
+- **Persistence requires a profile configuration editor** — without it, saving a default does not retain the selection.
 
 <a id="dev-note"></a>
 ### Dev Note

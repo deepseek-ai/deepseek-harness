@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-14-composer-model-and-draft-editor.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-09-14-composer-model-and-draft-editor.md
-2026-09-14-composer-model-and-draft-editor.md: 3f66ab2c73da0a8f66bf43a821cbe5f85363867a
-2026-09-14-composer-model-and-draft-editor.zh.md: aa040b0fa68961d4d5884d73791c4986b8bfab50
+/agent-note-two-stage-composer-and-drafteditor-isolation:
+  en: 28f1ad8c58451112
+  zh: f54f43862019e385
+/agent-note-two-stage-composer-and-drafteditor-isolation/problem:
+  en: 6316522fcd01a9bc
+  zh: aa6e339e8b528a5b
+/agent-note-two-stage-composer-and-drafteditor-isolation/proposal:
+  en: fbd8d96d050a288c
+  zh: d312590845174596
+/agent-note-two-stage-composer-and-drafteditor-isolation/proposal/stage-one-five-mechanical-responsibility-extractions:
+  en: 3add548b95979d3c
+  zh: c6eab5274037e6b5
+/agent-note-two-stage-composer-and-drafteditor-isolation/proposal/stage-one-five-mechanical-responsibility-extractions/stage-one-invariants:
+  en: b61469dcd7c9e0fe
+  zh: 345fca4cb1dc717b
+/agent-note-two-stage-composer-and-drafteditor-isolation/proposal/stage-one-five-mechanical-responsibility-extractions/isolation-actually-achieved-in-stage-one:
+  en: e1e3c2479f2a7e0c
+  zh: be094599bb90868b
+/agent-note-two-stage-composer-and-drafteditor-isolation/proposal/stage-two-behavior-changes-only:
+  en: 15c72b9d93a8b1bc
+  zh: a565969f4ec3b00a
+/agent-note-two-stage-composer-and-drafteditor-isolation/proposal/stage-two-behavior-changes-only/final-state-ownership:
+  en: fc9cb7b515ed6fd6
+  zh: ca7ac114f93852b9
+/agent-note-two-stage-composer-and-drafteditor-isolation/proposal/stage-two-behavior-changes-only/shared-content-and-synchronization-requirements:
+  en: 60385537149da946
+  zh: 80f4aa1454efdf43
+/agent-note-two-stage-composer-and-drafteditor-isolation/alternatives-considered:
+  en: e0a41f0e65c4c94c
+  zh: fac372d2c4c2c740
+/agent-note-two-stage-composer-and-drafteditor-isolation/acceptance-criteria:
+  en: f9a42d215fc000fa
+  zh: e6f1735e6ed73279
+/agent-note-two-stage-composer-and-drafteditor-isolation/risks:
+  en: e01daa84a5d58247
+  zh: 41def722300784a8

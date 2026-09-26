@@ -7,7 +7,7 @@
   padding: 16px 20px;
   overflow-y: auto;
   border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-base);
 }
 

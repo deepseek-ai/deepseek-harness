@@ -9,9 +9,9 @@
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
-// Type-only: the ctx.settingsScope Context merge. Cross-plugin collaboration
+// Type-only: the ctx.configForms Context merge. Cross-plugin collaboration
 // goes through the service, never a value import (client bundle purity gate).
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the SlotRegistry service merge (ctx.slots).
@@ -139,6 +139,7 @@ const BUILTIN_INSPECT_TOKENS: readonly ThemeTokenInspection[] = Object.freeze([
   { name: '--dsw-alias-label-primary', description: 'Primary text color.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-label-primary' },
   { name: '--dsw-alias-label-secondary', description: 'Secondary text color.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-label-secondary' },
   { name: '--dsw-alias-state-error-primary', description: 'Primary error state color.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-state-error-primary' },
+  { name: '--dsw-alias-state-idle-primary', description: 'Primary inactive state color.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-state-idle-primary' },
   { name: '--dsw-alias-state-success-primary', description: 'Primary success state color.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-state-success-primary' },
   { name: '--dsw-alias-state-warn-primary', description: 'Primary warning state color.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-state-warn-primary' },
   { name: '--dsw-specific-sidebar-fill', description: 'Sidebar column and title-row background.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-specific-sidebar-fill' },
@@ -157,7 +158,7 @@ const BUILTIN_INSPECT_TOKENS: readonly ThemeTokenInspection[] = Object.freeze([
  */
 export class ThemeRuntime {
   private readonly ctx: ClientContext
-  private readonly host: SettingsScope<ThemeSettings>
+  private readonly host: ConfigForm<ThemeSettings>
   private themes: ThemeDefinition[] = [...BUILTIN_THEMES]
   private preference: ThemePreference
   private fontSize: number = bootstrapFontSize()
@@ -173,7 +174,7 @@ export class ThemeRuntime {
    * media-query and scope listeners are released through ctx.effect on dispose).
    * @param host - durable preference scope owned by the same plugin.
    */
-  constructor(ctx: ClientContext, host: SettingsScope<ThemeSettings>) {
+  constructor(ctx: ClientContext, host: ConfigForm<ThemeSettings>) {
     this.ctx = ctx
     this.host = host
     this.preference = DEFAULT_PREFERENCE
@@ -415,9 +416,9 @@ function dynamicToken(name: string): ThemeTokenInspection {
 /**
  * Required services: settings transport plus slots/locale for the Appearance
  * row. `remote` carries the forwarded settings invalidation that
- * `ctx.settingsScope.bind(spec)` subscribes to on this context.
+ * `ctx.configForms.get(entryId)` subscribes to on this context.
  */
-export const inject = ['slots', 'locale', 'remote', 'settingsScope']
+export const inject = ['slots', 'locale', 'remote', 'configForms']
 
 /**
  * Client plugin body: provide the theme service and register the
@@ -427,7 +428,7 @@ export const inject = ['slots', 'locale', 'remote', 'settingsScope']
  */
 export function apply(ctx: ClientContext): void {
   installThemeStyles(ctx)
-  const host = ctx.settingsScope.bind<ThemeSettings>({ namespace: THEME_SETTINGS_NAMESPACE })
+  const host = ctx.configForms.get<ThemeSettings>(THEME_SETTINGS_NAMESPACE)
   const theme = new ThemeRuntime(ctx, host)
   ctx.provide('theme', theme)
 

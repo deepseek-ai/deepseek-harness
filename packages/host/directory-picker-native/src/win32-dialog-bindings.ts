@@ -92,7 +92,7 @@ const IID_IFILE_OPEN_DIALOG = guidBytes('d57c7288-d4ad-4768-be02-9d969532d960')
  * @returns the bindings {@link runFolderDialog} sequences against.
  */
 export async function loadWin32DialogBindings(): Promise<Win32DialogBindings> {
-  const koffi = (await import('koffi')).default as unknown as Koffi
+  const koffi = (await import('koffi')).default as Koffi
   const ole32 = koffi.load('ole32.dll')
   const user32 = koffi.load('user32.dll')
   const kernel32 = koffi.load('kernel32.dll')
@@ -189,7 +189,7 @@ export async function loadWin32DialogBindings(): Promise<Win32DialogBindings> {
  * @param threadId - the dialog thread's native id (from the `showing` notice).
  */
 export async function closeThreadWindows(threadId: number): Promise<void> {
-  const koffi = (await import('koffi')).default as unknown as Koffi
+  const koffi = (await import('koffi')).default as Koffi
   const user32 = koffi.load('user32.dll')
   const enumThreadWindows = user32.func('__stdcall', 'EnumThreadWindows', 'int', ['uint32', 'void *', 'intptr'])
   const postMessageW = user32.func('__stdcall', 'PostMessageW', 'int', ['void *', 'uint32', 'uintptr', 'intptr'])

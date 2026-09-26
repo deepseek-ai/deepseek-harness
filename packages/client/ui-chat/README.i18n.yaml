@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-chat/README.md
-README.md: c7c9fb7cb2a9a149fae9b27db78e019d821dfb95
-README.zh.md: 386d7aae91b157a7b09fcd0515bfd8d075a39638
+/:
+  en: d88f75fc0178ba53
+  zh: 52bc7ae9551ab1cf
+/deepseek-ai-dsh-client-ui-chat:
+  en: a0be18d7053df6b0
+  zh: 28c76e2cc32b7494
+/deepseek-ai-dsh-client-ui-chat/summary:
+  en: fba5b2fb8080e2dd
+  zh: 32c337123b7dfbcb
+/deepseek-ai-dsh-client-ui-chat/table-of-contents:
+  en: 41cd21266011d571
+  zh: 3172d1a2acbb27b7
+/deepseek-ai-dsh-client-ui-chat/reference-previews:
+  en: 3fda3d75483ce7c1
+  zh: 4d96ba654f70c021
+/deepseek-ai-dsh-client-ui-chat/hidden-chat-rows:
+  en: 5706ae03ceacf251
+  zh: 2e59d0815351349f
+/deepseek-ai-dsh-client-ui-chat/command-and-failure-rows:
+  en: 2157fcd6b0d100b5
+  zh: 9e865ac3953ebe30
+/deepseek-ai-dsh-client-ui-chat/turn-token-usage:
+  en: 29346bd0f9a5ff51
+  zh: 54dbed55f67aeecd
+/deepseek-ai-dsh-client-ui-chat/completed-turn-footer:
+  en: b4cd36e7ab91281e
+  zh: 8ccf412b9dde61d5
+/deepseek-ai-dsh-client-ui-chat/turn-process-folding:
+  en: 0ca3e8c4eab1ca78
+  zh: 1a1c71bab151eb7d
+/deepseek-ai-dsh-client-ui-chat/grouped-rendering:
+  en: cc6718a9ff761114
+  zh: d734fc73c1b77074
+/deepseek-ai-dsh-client-ui-chat/scroll-ownership:
+  en: 69b021c5a5d8b5a7
+  zh: 091ae7986c7a8a20
+/deepseek-ai-dsh-client-ui-chat/model-experience:
+  en: c17b4dd43a61c569
+  zh: f7414309810c3a08
+/deepseek-ai-dsh-client-ui-chat/model-experience/kv-cache-effect:
+  en: 15a7151ff9268f15
+  zh: 6eae68c718be579b
+/deepseek-ai-dsh-client-ui-chat/known-limitations-and-deferred-work:
+  en: 1e7e55adf5c87246
+  zh: dd5befdf58ea084f
+/deepseek-ai-dsh-client-ui-chat/known-limitations-and-deferred-work/dev-note:
+  en: b8b7eeb4ae675d2a
+  zh: fbe7022074ba81b9

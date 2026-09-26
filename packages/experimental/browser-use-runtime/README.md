@@ -85,6 +85,7 @@ Providers remain responsible for the browser operations they supply.
 - **Attachment scope** — exclusive ownership applies to one resource manager, not separate providers, processes, or external browser clients.
 - **Cancellation** — abort signals and connection closure cannot undo browser actions already delivered. An upstream operation that ignores both can delay cleanup.
 - **Recovery** — a failed close retains ownership; this manager does not retry disposal or restore browser state from the Session log.
+- **Shared host runtimes** — a profile installs this package beside the dsh installation, so `@deepseek-ai/dsh-scope` and `@deepseek-ai/dsh-mcp-client` stay peer dependencies. A dependency edge ships a second `dsh-scope` copy whose scope tags host registries cannot read: each Agent's MCP tools would register in the global tool layer and the second Agent's creation would fail.
 
 <a id="dev-note"></a>
 ### Dev Note

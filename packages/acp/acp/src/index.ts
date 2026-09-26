@@ -200,7 +200,7 @@ export function apply(ctx: Context, config: AcpConfig): void {
       // No preset composition: the ACP bundle keeps the model-facing rows in
       // the host plane, so this agent reads them from the global layer. A
       // deployment that configures a roster has to join one here first
-      // (@deepseek-ai/dsh-agent-presets README, "Composing a child agent").
+      // (@deepseek-ai/dsh-agent-preset-registry README, "Composing a child agent").
       let record: AcpSession
       try {
         record = await AcpSession.create(ctx, {
@@ -476,7 +476,7 @@ function decodeSessionListCursor(value: string | null | undefined): SessionListC
   if (value === undefined || value === null) return undefined
   if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error('session/list cursor is invalid')
   try {
-    const decoded = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown
+    const decoded: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'))
     const createdAt: unknown = Array.isArray(decoded) ? decoded[0] : undefined
     const sessionId: unknown = Array.isArray(decoded) ? decoded[1] : undefined
     if (

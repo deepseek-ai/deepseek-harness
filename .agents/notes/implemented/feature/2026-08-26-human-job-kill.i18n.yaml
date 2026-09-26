@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-08-26-human-job-kill.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-26-human-job-kill.md
+/agent-note-human-job-kill-an-unclaimed-terminal-report-instead-of-a-second-cancellation-path:
+  en: d47dedfab1caa170
+  zh: 00bb8cd62ed79d54
+/agent-note-human-job-kill-an-unclaimed-terminal-report-instead-of-a-second-cancellation-path/problem:
+  en: 3690502ccc80b5a3
+  zh: cfd3c378e3921864
+/agent-note-human-job-kill-an-unclaimed-terminal-report-instead-of-a-second-cancellation-path/decision:
+  en: ccd3751d2ecaba5c
+  zh: f8f820f9492a9bf3
+/agent-note-human-job-kill-an-unclaimed-terminal-report-instead-of-a-second-cancellation-path/alternatives-considered:
+  en: 74a385c561d8854a
+  zh: c131a4e386d9b976
+/agent-note-human-job-kill-an-unclaimed-terminal-report-instead-of-a-second-cancellation-path/testing:
+  en: 094513090d51adfc
+  zh: b6598110da6c5793
+/agent-note-human-job-kill-an-unclaimed-terminal-report-instead-of-a-second-cancellation-path/consequences:
+  en: 0bcec15bd9c760fe
+  zh: 754269206f110f69

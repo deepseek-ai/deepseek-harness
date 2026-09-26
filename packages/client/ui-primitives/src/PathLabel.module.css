@@ -1,0 +1,28 @@
+/* Auto margin keeps fitting text at the left. On overflow it becomes zero,
+   so flex-end preserves the filename suffix at the right edge. */
+.path {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.path[data-path-clipped] {
+  mask-image: linear-gradient(to right, transparent, black 28px);
+}
+
+.text {
+  flex: none;
+  margin-right: auto;
+}
+
+.directory {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.name {
+  color: var(--dsw-alias-label-primary);
+}

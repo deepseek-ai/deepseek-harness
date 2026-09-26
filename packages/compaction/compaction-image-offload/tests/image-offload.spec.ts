@@ -10,9 +10,10 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import BasicCompactionEngine from '@deepseek-ai/dsh-compaction-basic'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import { ImageVariantId } from '@deepseek-ai/dsh-attachment'
-import { serializeRequestWithImages } from '@deepseek-ai/dsh-llm-deepseek/src/protocols/chat-completions/serialize.ts'
+import { resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
+import { inlineImages } from '@deepseek-ai/dsh-llm-deepseek/src/images.ts'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { createAssistantMessage, createToolResultMessage, createUserMessage, IMAGE_OFFLOAD_REQUIRED_CODE, LlmAdapter, LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createToolResultMessage, createUserMessage, projectOffloadedImages, offloadedImageText, IMAGE_OFFLOAD_REQUIRED_CODE, LlmAdapter, LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { isReplacementSurfaceEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -32,15 +33,15 @@ class ScriptedAdapter extends LlmAdapter {
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)
     if (this.serializeSummary && options.purpose === 'compaction') {
-      await serializeRequestWithImages(options, {
-        representation: { kind: 'base64' },
-        requestImages: new Map([image('first').attachment].map(ref => [ref.attachmentId, {
+      inlineImages(
+        projectOffloadedImages(options.messages, ref => offloadedImageText(ref)),
+        new Map([image('first').attachment].map(ref => [ref.attachmentId, {
           variantId: ImageVariantId(`sha256:${'b'.repeat(64)}`), attachment: ref,
           data: new Uint8Array(ref.bytes), mediaType: ref.mediaType, bytes: ref.bytes,
           width: ref.width, height: ref.height, depth: 'uchar', space: 'srgb', hasAlpha: false,
         }])),
-        maxRequestImageBytes: 1,
-      })
+        resolveAdapterOptions({ maxInlineRequestImageBytes: 1, inlineImageOffloadByteQuantum: 1 }),
+      )
     }
     const entry = this.script.shift()
     if (entry === undefined) throw new Error('script exhausted')
@@ -87,13 +88,11 @@ function image(name: string): Extract<ContentBlock, { type: 'image' }> {
 
 function offloadedNames(options: GenerateOptions): string[] {
   const names: string[] = []
-  const visit = (blocks: readonly ContentBlock[]): void => {
-    for (const block of blocks) {
+  for (const message of options.messages) {
+    for (const block of message.content) {
       if (block.type === 'image' && block.offloaded === true) names.push(block.attachment.name ?? '')
-      if (block.type === 'tool-result') visit(block.content)
     }
   }
-  for (const message of options.messages) visit(message.content)
   return names
 }
 
@@ -134,7 +133,7 @@ describe('summary image offload', () => {
     expect(decisions(agent.session)).toEqual([])
   })
 
-  it('recovers the real summary serializer with a tighter image budget and fresh pricing', async () => {
+  it('recovers real summary image preparation with a tighter budget and fresh pricing', async () => {
     const { compact, agent, adapter } = await summaryHarness([textResponse('answer'), textResponse('checkpoint')])
     const span = await seedImages(agent, ['first', 'second'])
     adapter.serializeSummary = true
@@ -235,7 +234,7 @@ describe('compaction-image-offload', () => {
     })
 
     agent.followup(createUserMessage({
-      content: [image('a'), { type: 'tool-result', toolCallId: ToolCallId('shot'), content: [image('b')] }, image('c')],
+      content: [image('a'), image('b'), image('c')],
       source: { kind: 'user' },
     }))
     await agent.whenIdle()
@@ -297,20 +296,36 @@ describe('compaction-image-offload', () => {
     ]])
   })
 
-  it('offloads a nested tool-result occurrence and leaves later images untouched', async () => {
+  it('offloads a tool-result image and leaves later images untouched', async () => {
     const adapter = new ScriptedAdapter([offloadRequired(1), textResponse('sent')])
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('offload-tool-result'), { provider: 'mock', model: 'mock' })
+    const emptyCallId = ToolCallId('empty')
     const callId = ToolCallId('shot')
+    const innerCallId = ToolCallId('inner')
     agent.session.append('turn/start', { turn: 0 })
     agent.session.append('assistant/message', {
       turn: 0,
       step: 1,
       message: createAssistantMessage({
-        content: [{ type: 'tool-call', id: callId, name: 'read_image', arguments: '{}' }],
+        content: [
+          { type: 'tool-call', id: emptyCallId, name: 'read_image', arguments: '{}' },
+          { type: 'tool-call', id: callId, name: 'read_image', arguments: '{}' },
+          { type: 'tool-call', id: innerCallId, name: 'read_image', arguments: '{}' },
+        ],
         source: { provider: 'mock', model: 'mock' },
       }),
       stream: [],
+    }, { surfaceOp: 'append' })
+    agent.session.append('tool/call', { turn: 0, step: 1, callId: emptyCallId, name: 'read_image', arguments: '{}' })
+    agent.session.append('tool/result', {
+      turn: 0,
+      step: 1,
+      message: createToolResultMessage({
+        callId: emptyCallId,
+        content: [{ type: 'text', text: 'no image' }],
+        isError: false,
+      }),
     }, { surfaceOp: 'append' })
     agent.session.append('tool/call', { turn: 0, step: 1, callId, name: 'read_image', arguments: '{}' })
     const result = agent.session.append('tool/result', {
@@ -318,11 +333,17 @@ describe('compaction-image-offload', () => {
       step: 1,
       message: createToolResultMessage({
         callId,
-        content: [
-          { type: 'tool-result', toolCallId: ToolCallId('empty'), content: [{ type: 'text', text: 'no image' }] },
-          image('first'),
-          { type: 'tool-result', toolCallId: ToolCallId('inner'), content: [image('second')] },
-        ],
+        content: [image('first')],
+        isError: false,
+      }),
+    }, { surfaceOp: 'append' })
+    agent.session.append('tool/call', { turn: 0, step: 1, callId: innerCallId, name: 'read_image', arguments: '{}' })
+    agent.session.append('tool/result', {
+      turn: 0,
+      step: 1,
+      message: createToolResultMessage({
+        callId: innerCallId,
+        content: [image('second')],
         isError: false,
       }),
     }, { surfaceOp: 'append' })

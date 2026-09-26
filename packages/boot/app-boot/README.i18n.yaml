@@ -1,6 +1,73 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/boot/app-boot/README.md
-README.md: cf0d67fb14633cfdf9a30754125b3e08df2d0496
-README.zh.md: dab003c581ba5744893e612eeee812b56c25f1a2
+/:
+  en: 822ef8977098c703
+  zh: c0673e854310840f
+/deepseek-ai-dsh-app-boot:
+  en: fdb73259898590a5
+  zh: aee057cd436da2e2
+/deepseek-ai-dsh-app-boot/summary:
+  en: e5db70f7cdcdbe9c
+  zh: 6852efb61109a349
+/deepseek-ai-dsh-app-boot/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-app-boot/use-this-package:
+  en: f6fa378225009c8f
+  zh: 324c0e4640bb1358
+/deepseek-ai-dsh-app-boot/use-this-package/when-to-use-it:
+  en: 2fdfe02f2ed4a258
+  zh: d748228ece579c4a
+/deepseek-ai-dsh-app-boot/use-this-package/starting-the-app:
+  en: 1099528bde0e2aee
+  zh: b68772bdb9bb7856
+/deepseek-ai-dsh-app-boot/use-this-package/profiles:
+  en: d50b0fdaf62353dd
+  zh: 0fccb6968602e5de
+/deepseek-ai-dsh-app-boot/use-this-package/previewing-the-effective-configuration:
+  en: 646a0ccdd7881ad1
+  zh: e3696acb1573dd7b
+/deepseek-ai-dsh-app-boot/use-this-package/inspecting-plugin-configuration-schemas:
+  en: c4a301652b851ce9
+  zh: 784871e19cd9db0a
+/deepseek-ai-dsh-app-boot/use-this-package/reading-plugin-display-metadata:
+  en: 480ad3a4d96112f0
+  zh: 10a92f1013aa5ac4
+/deepseek-ai-dsh-app-boot/use-this-package/startup-and-reload-failures:
+  en: 09890e218ab49c84
+  zh: e3d86597e7fb1adb
+/deepseek-ai-dsh-app-boot/use-this-package/telling-the-agent-where-the-harness-lives:
+  en: 07c459f26f4f8517
+  zh: 210f1e4894731b1a
+/deepseek-ai-dsh-app-boot/understand-the-implementation:
+  en: f4a2695cb4c8a570
+  zh: 89837235d2f376cf
+/deepseek-ai-dsh-app-boot/understand-the-implementation/design-notes:
+  en: 4ac0c33806b5a5b2
+  zh: cdb56f3adfcb4364
+/deepseek-ai-dsh-app-boot/understand-the-implementation/helper-behavior:
+  en: f7bc3a8dd4b00bdd
+  zh: 30098428aa769ad0
+/deepseek-ai-dsh-app-boot/understand-the-implementation/source-map:
+  en: 25602fd8eb9b2907
+  zh: 870a33dd34a52c32
+/deepseek-ai-dsh-app-boot/further-exploration:
+  en: ffd10e94443a10ca
+  zh: cd11495bae751bdd
+/deepseek-ai-dsh-app-boot/model-experience:
+  en: 769777f1cb1a9408
+  zh: f02b2834179df50d
+/deepseek-ai-dsh-app-boot/model-experience/kv-cache-effect:
+  en: c4d49630b68ae896
+  zh: 6f450ec6ba39bb81
+/deepseek-ai-dsh-app-boot/known-limitations-and-deferred-work:
+  en: bf1a49013cad8e9c
+  zh: 41b2b010f8650ec3
+/deepseek-ai-dsh-app-boot/known-limitations-and-deferred-work/dev-note:
+  en: d2f0d68fe29fb750
+  zh: 323d21ee73a9e3f6
+/deepseek-ai-dsh-app-boot/known-limitations-and-deferred-work/dev-note/open-yaml-config-dump-stability:
+  en: 032f14ed5cd78efa
+  zh: ecc81f819f0bc39b

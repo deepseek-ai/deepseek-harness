@@ -1,0 +1,120 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-base);
+}
+
+/* Windows Electron: the Desktop caption menu owns the window's top strip, so
+   the return bar and the native Platform view start below it. */
+:global([data-windows-titlebar]) .overlay {
+  padding-top: var(--dsh-windows-titlebar-height);
+}
+
+/* The macOS shell's drag row: on darwin this bar IS the window's top strip, and
+   ui-web base.css declares the one darwin rule over the `data-window-drag` mark.
+   Windows keeps the native caption row as its drag surface instead — this bar
+   sits below that row (see above) and declares no drag of its own. */
+.header {
+  -webkit-app-region: initial;
+  box-sizing: border-box;
+  height: 48px;
+  flex: none;
+  padding: 6px 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding-top: 5px;
+}
+
+.trafficLights {
+  display: none;
+  width: 60.667px;
+  height: 14px;
+  flex: none;
+}
+
+:global(html[data-platform="darwin"]) .trafficLights {
+  display: block;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.failure {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 14px;
+  line-height: 22px;
+  text-align: center;
+}
+
+.retry.retry {
+  box-sizing: border-box;
+  height: 32px;
+  min-width: 58px;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.spinner {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  animation: spin 1s linear infinite;
+}
+
+.spinner::before {
+  content: '';
+  position: absolute;
+  left: 1.12px;
+  top: 1.121px;
+  width: 18.572px;
+  height: 21.759px;
+  background: url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkiIGhlaWdodD0iMjIiIHZpZXdCb3g9IjAgMCAxOSAyMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGcgY2xpcC1wYXRoPSJ1cmwoI3BhaW50MF9hbmd1bGFyXzI5ODhfMzIzMjlfY2xpcF9wYXRoKSIgZGF0YS1maWdtYS1za2lwLXBhcnNlPSJ0cnVlIj48ZyB0cmFuc2Zvcm09Im1hdHJpeCgwLjAwNjk1MDQ4IDAuMDA2OTUwNDggLTAuMDA2OTUwNDggMC4wMDY5NTA0OCAxMC44Nzk3IDEwLjg3OTMpIj48Zm9yZWlnbk9iamVjdCB4PSItMTg2Ny40MiIgeT0iLTE4NjcuNDIiIHdpZHRoPSIzNzM0Ljg1IiBoZWlnaHQ9IjM3MzQuODUiPjxkaXYgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGh0bWwiIHN0eWxlPSJiYWNrZ3JvdW5kOmNvbmljLWdyYWRpZW50KGZyb20gOTBkZWcscmdiYSgyNDYsIDI0NiwgMjQ2LCAwLjk5NDMpIDBkZWcscmdiYSgwLCAwLCAwLCAwLjgzKSAyNzMuMDI3ZGVnLHJnYmEoMCwgMCwgMCwgMCkgMjg3LjY5NGRlZyxyZ2JhKDI1NSwgMjU1LCAyNTUsIDEpIDM1MC40OTdkZWcscmdiYSgyNDYsIDI0NiwgMjQ2LCAwLjk5NDMpIDM2MGRlZyk7aGVpZ2h0OjEwMCU7d2lkdGg6MTAwJTtvcGFjaXR5OjAuNSI+PC9kaXY+PC9mb3JlaWduT2JqZWN0PjwvZz48L2c+PHBhdGggZD0iTTMuMTg2MjcgMTguNTcyMkMtMS4wNjIwOSAxNC4zMjM2IC0xLjA2MjA5IDcuNDM1MDIgMy4xODYyNyAzLjE4NjM5QzcuNDM0ODggLTEuMDYyMjIgMTQuMzIzMyAtMS4wNjIwNSAxOC41NzIxIDMuMTg2MzlMMTcuMDg3OCA0LjY3MDdDMTMuNjU5MSAxLjI0MjM2IDguMTAwMTEgMS4yNDMyMiA0LjY3MTYxIDQuNjcxNzNDMS4yNDMzNSA4LjEwMDI2IDEuMjQzMzUgMTMuNjU4MyA0LjY3MTYxIDE3LjA4NjhDOC4xMDAxMSAyMC41MTUzIDEzLjY1OTEgMjAuNTE2MiAxNy4wODc4IDE3LjA4NzlMMTguNTcyMSAxOC41NzIyQzE0LjMyMzMgMjIuODIwNiA3LjQzNDg4IDIyLjgyMDggMy4xODYyNyAxOC41NzIyWiIgZGF0YS1maWdtYS1ncmFkaWVudC1maWxsPSJ7JiMzNDt0eXBlJiMzNDs6JiMzNDtHUkFESUVOVF9BTkdVTEFSJiMzNDssJiMzNDtzdG9wcyYjMzQ7Olt7JiMzNDtjb2xvciYjMzQ7OnsmIzM0O3ImIzM0OzowLjAsJiMzNDtnJiMzNDs6MC4wLCYjMzQ7YiYjMzQ7OjAuMCwmIzM0O2EmIzM0OzowLjgyOTk5OTk4MzMxMDY5OTQ2fSwmIzM0O3Bvc2l0aW9uJiMzNDs6MC43NTg0MDg3MjUyNjE2ODgyM30seyYjMzQ7Y29sb3ImIzM0Ozp7JiMzNDtyJiMzNDs6MC4wLCYjMzQ7ZyYjMzQ7OjAuMCwmIzM0O2ImIzM0OzowLjAsJiMzNDthJiMzNDs6MC4wfSwmIzM0O3Bvc2l0aW9uJiMzNDs6MC43OTkxNDk2OTIwNTg1NjMyM30seyYjMzQ7Y29sb3ImIzM0Ozp7JiMzNDtyJiMzNDs6MS4wLCYjMzQ7ZyYjMzQ7OjEuMCwmIzM0O2ImIzM0OzoxLjAsJiMzNDthJiMzNDs6MS4wfSwmIzM0O3Bvc2l0aW9uJiMzNDs6MC45NzM2MDE4MTgwODQ3MTY4MH1dLCYjMzQ7dHJhbnNmb3JtJiMzNDs6eyYjMzQ7bTAwJiMzNDs6MTMuOTAwOTUzMjkyODQ2NjgwLCYjMzQ7bTAxJiMzNDs6LTEzLjkwMDk1MzI5Mjg0NjY4MCwmIzM0O20wMiYjMzQ7OjEwLjg3OTY3Nzc3MjUyMTk3MywmIzM0O20xMCYjMzQ7OjEzLjkwMDk1NDI0NjUyMDk5NiwmIzM0O20xMSYjMzQ7OjEzLjkwMDk1NDI0NjUyMDk5NiwmIzM0O20xMiYjMzQ7Oi0zLjAyMTY2NzAwMzYzMTU5MTh9LCYjMzQ7b3BhY2l0eSYjMzQ7OjAuNTAsJiMzNDtibGVuZE1vZGUmIzM0OzomIzM0O05PUk1BTCYjMzQ7LCYjMzQ7c3RvcHNWYXImIzM0OzpbeyYjMzQ7Y29sb3ImIzM0Ozp7JiMzNDtyJiMzNDs6MC4wLCYjMzQ7ZyYjMzQ7OjAuMCwmIzM0O2ImIzM0OzowLjAsJiMzNDthJiMzNDs6MC44Mjk5OTk5ODMzMTA2OTk0Nn0sJiMzNDtwb3NpdGlvbiYjMzQ7OjAuNzU4NDA4NzI1MjYxNjg4MjN9LHsmIzM0O2NvbG9yJiMzNDs6eyYjMzQ7ciYjMzQ7OjAuMCwmIzM0O2cmIzM0OzowLjAsJiMzNDtiJiMzNDs6MC4wLCYjMzQ7YSYjMzQ7OjAuMH0sJiMzNDtwb3NpdGlvbiYjMzQ7OjAuNzk5MTQ5NjkyMDU4NTYzMjN9LHsmIzM0O2NvbG9yJiMzNDs6eyYjMzQ7ciYjMzQ7OjEuMCwmIzM0O2cmIzM0OzoxLjAsJiMzNDtiJiMzNDs6MS4wLCYjMzQ7YSYjMzQ7OjEuMH0sJiMzNDtwb3NpdGlvbiYjMzQ7OjAuOTczNjAxODE4MDg0NzE2ODB9XSwmIzM0O3Zpc2libGUmIzM0Ozp0cnVlfSIvPgo8ZGVmcz4KPGNsaXBQYXRoIGlkPSJwYWludDBfYW5ndWxhcl8yOTg4XzMyMzI5X2NsaXBfcGF0aCI+PHBhdGggZD0iTTMuMTg2MjcgMTguNTcyMkMtMS4wNjIwOSAxNC4zMjM2IC0xLjA2MjA5IDcuNDM1MDIgMy4xODYyNyAzLjE4NjM5QzcuNDM0ODggLTEuMDYyMjIgMTQuMzIzMyAtMS4wNjIwNSAxOC41NzIxIDMuMTg2MzlMMTcuMDg3OCA0LjY3MDdDMTMuNjU5MSAxLjI0MjM2IDguMTAwMTEgMS4yNDMyMiA0LjY3MTYxIDQuNjcxNzNDMS4yNDMzNSA4LjEwMDI2IDEuMjQzMzUgMTMuNjU4MyA0LjY3MTYxIDE3LjA4NjhDOC4xMDAxMSAyMC41MTUzIDEzLjY1OTEgMjAuNTE2MiAxNy4wODc4IDE3LjA4NzlMMTguNTcyMSAxOC41NzIyQzE0LjMyMzMgMjIuODIwNiA3LjQzNDg4IDIyLjgyMDggMy4xODYyNyAxOC41NzIyWiIvPjwvY2xpcFBhdGg+PC9kZWZzPgo8L3N2Zz4K") center / 100% 100% no-repeat;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

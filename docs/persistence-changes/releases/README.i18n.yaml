@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/persistence-changes/releases/README.md
-README.md: c818f28d36e3f04c610a9180c7d2d7eb34ad09c5
-README.zh.md: 92d4170717ccdcfd514e4971f03e3e1d35d58267
+/:
+  en: 813000c665a9a00b
+  zh: 7585184354024644
+/persistence-changes-across-dsh-prereleases:
+  en: 779cdacb7f259aae
+  zh: 0e180dd42e04a81b
+/persistence-changes-across-dsh-prereleases/summary:
+  en: 2fb5f2079645f85f
+  zh: 4be7bb6cec10b388
+/persistence-changes-across-dsh-prereleases/table-of-contents:
+  en: 66af6c63111e0d4f
+  zh: d2cda8c92eda8473
+/persistence-changes-across-dsh-prereleases/archived-releases:
+  en: 995581f72b7d7bf7
+  zh: 7f73f08036618bed
+/persistence-changes-across-dsh-prereleases/files-and-scope:
+  en: c7b3012355eec9c6
+  zh: c31da79dc5cf326c
+/persistence-changes-across-dsh-prereleases/extraction-and-limitations:
+  en: 2212c587e280c935
+  zh: e1e12ec7d87f9bd2
+/persistence-changes-across-dsh-prereleases/verification:
+  en: 5ae84a4b450733df
+  zh: 7bd0f834534aae4c
+/persistence-changes-across-dsh-prereleases/dev-note:
+  en: 5de1d6304e00c58f
+  zh: e58fc8dda0bea8d5

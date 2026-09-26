@@ -1,8 +1,56 @@
 diff --git a/prelude/sea-bootstrap.bundle.js b/prelude/sea-bootstrap.bundle.js
-index ac14980e953134f2285e326a5111cf52de717cf5..19465f8004dcd7f75bc7459de2055546f232fd23 100644
+index ac14980e953134f2285e326a5111cf52de717cf5..1b1c00d1274cba5f63487898a9d940e8870f4f19 100644
 --- a/prelude/sea-bootstrap.bundle.js
 +++ b/prelude/sea-bootstrap.bundle.js
-@@ -5356,6 +5356,39 @@ var require_sea_vfs_setup = __commonJS({
+@@ -63,6 +63,25 @@ var require_bootstrap_shared = __commonJS({
+           throw new Error("pkg: unknown compression codec id " + compression);
+       }
+     }
++    // Write `content` to `dest` through a same-directory temporary file and an
++    // atomic rename, so a concurrent process never observes a partially written
++    // addon: its existsSync/hash check and dlopen see either no file or a complete
++    // one. A direct writeFileSync truncates a file another process may already
++    // have mapped (SIGBUS on Linux, "Library not loaded" on macOS) and exposes the
++    // half-written bytes to that process's hash comparison.
++    function writeFileAtomic(dest, content) {
++      var tmp = dest + "." + process.pid + "." + Math.random().toString(36).slice(2) + ".tmp";
++      fs.writeFileSync(tmp, content);
++      try {
++        fs.renameSync(tmp, dest);
++      } catch (e) {
++        try {
++          fs.unlinkSync(tmp);
++        } catch (_) {
++        }
++        throw e;
++      }
++    }
+     function cpRecursive(src, dest) {
+       var st = fs.lstatSync(src);
+       if (st.isSymbolicLink()) {
+@@ -100,7 +119,7 @@ var require_bootstrap_shared = __commonJS({
+           return;
+         }
+       }
+-      fs.writeFileSync(dest, srcContent);
++      writeFileAtomic(dest, srcContent);
+     }
+     function patchDlopen(insideSnapshot) {
+       var ancestor = process.dlopen;
+@@ -134,10 +153,10 @@ var require_bootstrap_shared = __commonJS({
+               var dContent = fs.readFileSync(tmpModulePath);
+               var dHash = createHash("sha256").update(dContent).digest("hex");
+               if (hash !== dHash) {
+-                fs.writeFileSync(tmpModulePath, moduleContent);
++                writeFileAtomic(tmpModulePath, moduleContent);
+               }
+             } else {
+-              fs.writeFileSync(tmpModulePath, moduleContent);
++              writeFileAtomic(tmpModulePath, moduleContent);
+             }
+             newPath = tmpModulePath;
+           }
+@@ -5356,6 +5375,39 @@ var require_sea_vfs_setup = __commonJS({
          }
        };
      }
@@ -42,7 +90,7 @@ index ac14980e953134f2285e326a5111cf52de717cf5..19465f8004dcd7f75bc7459de2055546
      var SEAProvider = class extends MemoryProvider {
        constructor(seaManifest) {
          super();
-@@ -5465,12 +5498,21 @@ var require_sea_vfs_setup = __commonJS({
+@@ -5465,12 +5517,21 @@ var require_sea_vfs_setup = __commonJS({
          }
          return -2;
        }
@@ -67,7 +115,7 @@ index ac14980e953134f2285e326a5111cf52de717cf5..19465f8004dcd7f75bc7459de2055546
        }
        existsSync(filePath) {
          perf2.count("existsSync calls");
-@@ -5542,7 +5584,7 @@ var require_sea_vfs_setup = __commonJS({
+@@ -5542,7 +5603,7 @@ var require_sea_vfs_setup = __commonJS({
  var require_worker_bootstrap_string = __commonJS({
    "prelude/_worker-bootstrap-string.js"(exports2, module2) {
      "use strict";
@@ -76,7 +124,7 @@ index ac14980e953134f2285e326a5111cf52de717cf5..19465f8004dcd7f75bc7459de2055546
    }
  });
 
-@@ -5560,7 +5602,6 @@ var require_sea_bootstrap_core = __commonJS({
+@@ -5560,7 +5621,6 @@ var require_sea_bootstrap_core = __commonJS({
      var insideSnapshot = vfs.insideSnapshot;
      var SNAPSHOT_PREFIX = vfs.SNAPSHOT_PREFIX;
      shared.patchDlopen(insideSnapshot);

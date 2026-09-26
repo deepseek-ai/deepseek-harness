@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-19-no-unknown-casts.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-19-no-unknown-casts.md
+/agent-note-prohibit-new-assertions-to-unknown:
+  en: d05b7f323025e1b9
+  zh: fa84da1b6dbbd40a
+/agent-note-prohibit-new-assertions-to-unknown/problem:
+  en: de8fd99f06ce9378
+  zh: 627e67ac20b16e56
+/agent-note-prohibit-new-assertions-to-unknown/decision:
+  en: 426df6b19b654021
+  zh: f4d8c678f9760139
+/agent-note-prohibit-new-assertions-to-unknown/alternatives-considered:
+  en: 1080f8f62795b113
+  zh: bee2b837e7ae0de4
+/agent-note-prohibit-new-assertions-to-unknown/consequences:
+  en: ab7350f789864067
+  zh: 9867a9baaa1c6227

@@ -34,7 +34,7 @@ interface SessionReferenceInput {
 }
 ```
 
-`SessionReferenceCandidate` is host-facing discovery output. Its label uses the latest session title when present, and filtering searches that label alongside session id and cwd, never transcript text.
+`SessionReferenceCandidate` is host-facing discovery output. Its `label` uses the latest Session title when present, while its optional display text prefers a subagent's durable creation label; filtering searches both alongside Session id and cwd, never transcript text. The Remote candidate's canonical mention uses the display text when present.
 
 ```ts type-equiv
 /** One host-facing candidate from exact session metadata. */
@@ -43,6 +43,8 @@ interface SessionReferenceCandidate {
   sessionId: SessionId
   /** Latest log-backed title, falling back to the opaque session id. */
   label: string
+  /** Display and canonical-mention text, preferring a subagent's durable creation label over {@link label}. */
+  displayTitle?: string
   /** Source session working directory, when recorded. */
   cwd?: string
   /**
@@ -180,14 +182,13 @@ Exact-read consumer that prepares immutable cross-session message context.
 /**
  * List reference candidates, ranked by working-directory affinity.
  *
- * Discovery runs at keystroke rate, so a title only ever comes from a
- * projection read: see {@link SessionReferenceResolver.projectedTitle} for
- * which sessions can answer one and which fall back to their id.
+ * Discovery runs at keystroke rate, so titles and subagent labels only ever
+ * come from projection reads; sessions without either fall back to their id.
  * @param agent - target agent; self is excluded and its cwd drives ranking.
- * @param query - optional case-insensitive session-id/cwd/title substring.
+ * @param query - optional case-insensitive session-id/cwd/title/display-title substring.
  * @param limit - optional positive result cap.
  * @param signal - optional cancellation boundary for host autocomplete teardown.
- * @returns candidates labeled by latest title or, when absent, session id.
+ * @returns candidates with canonical mention labels and presentation titles.
  */
 async listCandidates( agent: Agent, query: string = '', limit: number = this.config.candidateLimit, signal?: AbortSignal, ): Promise<SessionReferenceCandidate[]>
 

@@ -2,7 +2,8 @@
 param(
   [Parameter(Mandatory)][string]$Makensis,
   [Parameter(Mandatory)][string]$SevenZip,
-  [Parameter(Mandatory)][string]$PluginDir
+  [Parameter(Mandatory)][string]$PluginDir,
+  [string]$FrameLibrary
 )
 $ErrorActionPreference = 'Stop'
 $desktopRoot = Split-Path $PSScriptRoot -Parent
@@ -15,7 +16,10 @@ function Invoke-Checked([string]$Executable, [string[]]$Arguments) {
 }
 
 try {
-  & (Join-Path $PSScriptRoot 'smoke-installer-directories.ps1') -Makensis $Makensis -SevenZip $SevenZip
+  # The prepared window-frame.dll adds the native extraction path and its failure report to the directory checks.
+  $directoryArguments = @{ Makensis = $Makensis; SevenZip = $SevenZip }
+  if ($FrameLibrary) { $directoryArguments.FrameLibrary = $FrameLibrary }
+  & (Join-Path $PSScriptRoot 'smoke-installer-directories.ps1') @directoryArguments
   $payload = Join-Path $scratch 'payload'
   New-Item -ItemType Directory -Path $payload | Out-Null
   [System.IO.File]::WriteAllText((Join-Path $payload 'locked.txt'), 'new runtime')

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-08-web-subagent-catalog-projections.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-08-web-subagent-catalog-projections.md
+/agent-note-web-subagent-catalogs-consume-shared-projections:
+  en: 90a80df3b19785a2
+  zh: 8e29073af6c61213
+/agent-note-web-subagent-catalogs-consume-shared-projections/problem:
+  en: 21600a979400fc8a
+  zh: 59ba11ed5210986e
+/agent-note-web-subagent-catalogs-consume-shared-projections/decision:
+  en: de9d755497c49716
+  zh: 872a15b960e01618
+/agent-note-web-subagent-catalogs-consume-shared-projections/alternatives-considered:
+  en: 2a1d32d867c38abd
+  zh: 1f473782ade94fa5
+/agent-note-web-subagent-catalogs-consume-shared-projections/consequences:
+  en: 44d73213900d4e43
+  zh: 2beec2c2634320e2

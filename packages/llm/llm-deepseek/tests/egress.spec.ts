@@ -38,7 +38,7 @@ import { vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
-import * as LlmDeepSeek from '../src/index.ts'
+import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 
 let home: string
 beforeAll(() => {
@@ -51,19 +51,19 @@ afterAll(() => {
   rmSync(home, { recursive: true, force: true })
 })
 
-/** Drive the shipping adapter's chat-completions request at an unresolvable endpoint. */
+/** Drive the shipping adapter's Messages request at an unresolvable endpoint. */
 async function streamOnce(): Promise<void> {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
-  await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions', baseURL: 'http://deepseek-probe.invalid/v1', models: [{ id: 'm' }] })
+  await ctx.plugin(LlmDeepSeek, { baseURL: 'http://deepseek-probe.invalid/v1', models: [{ id: 'm' }] })
   for await (const _chunk of ctx.llm.stream({ provider: 'deepseek-official', model: 'm', messages: [] })) {
     // The endpoint never answers; the proxy record is the assertion.
   }
 }
 
 describe('llm-deepseek egress', () => {
-  it('sends the chat-completions request through the proxy', async () => {
+  it('sends the Messages request through the proxy', async () => {
     const observed = await observe(streamOnce)
     expect(observed.join('|')).toContain('deepseek-probe.invalid')
   })

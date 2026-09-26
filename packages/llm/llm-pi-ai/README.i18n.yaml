@@ -1,6 +1,94 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/llm/llm-pi-ai/README.md
-README.md: ceb6c75ad22534db7af62e915e1aee1f11d55390
-README.zh.md: 3c6697fea5c5c185af29da8b7156f74ca322d339
+/:
+  en: 8a6ec0a589e6fd18
+  zh: e85fc352c9cba373
+/deepseek-ai-dsh-llm-pi-ai:
+  en: 33763dd0a848143d
+  zh: 82743942bc6df660
+/deepseek-ai-dsh-llm-pi-ai/summary:
+  en: ee82d88fee1332d6
+  zh: 3e66b494e4844f97
+/deepseek-ai-dsh-llm-pi-ai/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-llm-pi-ai/use-this-package:
+  en: 86cf1940fb8bb1dc
+  zh: 862c10b2ca45a893
+/deepseek-ai-dsh-llm-pi-ai/use-this-package/when-to-choose-it:
+  en: f3b761c7c7ecb82f
+  zh: e10d999aa348ef86
+/deepseek-ai-dsh-llm-pi-ai/use-this-package/configure-provider-routes:
+  en: c5d28300fa2cfc6f
+  zh: c162855dcb54b65b
+/deepseek-ai-dsh-llm-pi-ai/use-this-package/sign-in-to-a-provider:
+  en: c36f66438638ae08
+  zh: 066a2fc4cb97c86f
+/deepseek-ai-dsh-llm-pi-ai/use-this-package/resolve-the-model-catalog:
+  en: 376f83206858b601
+  zh: 38bb6993609c96a6
+/deepseek-ai-dsh-llm-pi-ai/use-this-package/run-with-reasoning-and-wire-compatibility:
+  en: 86b456496b54854e
+  zh: ff77ca11d39ba8d2
+/deepseek-ai-dsh-llm-pi-ai/use-this-package/change-configuration-at-runtime:
+  en: 92f554e1718614ca
+  zh: f17ed3ad3e5d28e2
+/deepseek-ai-dsh-llm-pi-ai/use-this-package/discover-models-from-endpoints:
+  en: 6619e8cfe7555c73
+  zh: b2f80c25acb81cf8
+/deepseek-ai-dsh-llm-pi-ai/use-this-package/failures-and-recovery:
+  en: 65bcc3b0db3f98e5
+  zh: 3c994e74894bea52
+/deepseek-ai-dsh-llm-pi-ai/understand-the-implementation:
+  en: 1598ac8a8bb9b6bf
+  zh: fdd089c5ae7722cd
+/deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/design-philosophy:
+  en: 280416de410744bb
+  zh: 64cbfc0902e3f436
+/deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/source-map:
+  en: 20afee7bbfb332ca
+  zh: b080cf4e97094366
+/deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/registration-and-directory:
+  en: 4da379c9be65c18a
+  zh: fd305d4bd3dfa452
+/deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/replay-and-vocabulary:
+  en: ad7f22c0eba06eb0
+  zh: 451ec5836425d7a1
+/deepseek-ai-dsh-llm-pi-ai/further-exploration:
+  en: a2a2ccdeae59d408
+  zh: c47ee091aa90ad91
+/deepseek-ai-dsh-llm-pi-ai/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai:
+  en: e7348db3f7115960
+  zh: 5fd5fb09d7d09982
+/deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai/what-the-model-sees:
+  en: 34e63beee750a3a9
+  zh: a869322d161d922f
+/deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai/token-effect:
+  en: 820221e8ae37aa61
+  zh: 7e6ff4db10067fc0
+/deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai/kv-cache-effect:
+  en: 8c1f842a95ab46fb
+  zh: d6dd124c82f1d96b
+/deepseek-ai-dsh-llm-pi-ai/model-experience/provider-response:
+  en: 802d7ff60a1d03ff
+  zh: c41c56e28f3e8680
+/deepseek-ai-dsh-llm-pi-ai/model-experience/provider-response/what-the-model-sees:
+  en: 9b7d6b95ec2c4351
+  zh: 356ac01aef9e8bed
+/deepseek-ai-dsh-llm-pi-ai/model-experience/provider-response/token-effect:
+  en: f002b21d0f4c3df0
+  zh: 388c8ed4676ed1af
+/deepseek-ai-dsh-llm-pi-ai/model-experience/provider-response/kv-cache-effect:
+  en: b6bd570c0159ba08
+  zh: 7d2d91eea6a8d830
+/deepseek-ai-dsh-llm-pi-ai/known-limitations-and-deferred-work:
+  en: b72e581a744cf2ab
+  zh: d3b0bc7c8ec716fe
+/deepseek-ai-dsh-llm-pi-ai/known-limitations-and-deferred-work/dev-note:
+  en: be67a4547256efbf
+  zh: 8c32799683ba292c

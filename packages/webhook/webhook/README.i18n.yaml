@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/webhook/webhook/README.md
-README.md: 685bf3befa1aee3af336452d771c40c01d42c70d
-README.zh.md: db0801fcbd4aa81a8f24bd706673d1ee4629ed1f
+/:
+  en: e4ac1bc2fef159c0
+  zh: a2d724d2cffb6608
+/deepseek-ai-dsh-webhook:
+  en: eb5cd36cbfde500e
+  zh: 482692e07c7aea4e
+/deepseek-ai-dsh-webhook/summary:
+  en: 406c9bffd5078cb3
+  zh: c7e732b80df254a8
+/deepseek-ai-dsh-webhook/table-of-contents:
+  en: 2c6f2175556251ee
+  zh: 753d216d980e1735
+/deepseek-ai-dsh-webhook/rule-interface:
+  en: d9674188535399ab
+  zh: c52fe9b7ebe8fe79
+/deepseek-ai-dsh-webhook/session-request:
+  en: e4d096efc8633575
+  zh: b1bf7d45fe76c380
+/deepseek-ai-dsh-webhook/composition:
+  en: 6a19f22997772945
+  zh: b92bec411e0406bc
+/deepseek-ai-dsh-webhook/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-webhook/model-experience/rule-authored-initial-prompt:
+  en: d9d6f7525ae75c28
+  zh: 981d9ea68b9e884b
+/deepseek-ai-dsh-webhook/model-experience/rule-authored-initial-prompt/what-the-model-sees:
+  en: 44859d5d877a1484
+  zh: 0f6c96ff6435167b
+/deepseek-ai-dsh-webhook/model-experience/rule-authored-initial-prompt/token-effect:
+  en: 13937f95014a6bea
+  zh: c61031459298c4ab
+/deepseek-ai-dsh-webhook/model-experience/rule-authored-initial-prompt/kv-cache-effect:
+  en: 88b78de3ce71698f
+  zh: d13964bad7485d4e
+/deepseek-ai-dsh-webhook/known-limitations-and-deferred-work:
+  en: 49d9bd7c7c327cc0
+  zh: ab94de11bbda1936
+/deepseek-ai-dsh-webhook/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

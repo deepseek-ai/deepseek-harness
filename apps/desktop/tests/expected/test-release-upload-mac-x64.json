@@ -1,0 +1,19 @@
+[
+  {
+    "key": "dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/deepseek-harness-1.2.3-mac-x64.dmg"
+  },
+  {
+    "key": "dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/deepseek-harness-1.2.3-mac-x64.zip"
+  },
+  {
+    "key": "dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/deepseek-harness-1.2.3-mac-x64.zip.blockmap"
+  },
+  {
+    "key": "dsh-desk/0123456789abcdef0123456789abcdef/feeds/mac-x64/nightly-mac.yml",
+    "contents": "version: 1.2.3\npath: >-\n  https://desktop-updates.example.com/dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/deepseek-harness-1.2.3-mac-x64.zip\nfiles:\n  - url: >-\n      https://desktop-updates.example.com/dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/deepseek-harness-1.2.3-mac-x64.zip\n    size: 24\n    sha512: >-\n      IgtiHRPFjickTxiSTW6k0ltyBNOF/gpMGj/xflzVV2iRIzUSFPY6BG45u9fR4GmAJSVtN+FMh3NZx7mddUfJLw==\n"
+  },
+  {
+    "key": "dsh-desk/0123456789abcdef0123456789abcdef/feeds/mac-x64/latest-mac.yml",
+    "contents": "version: 1.2.3\npath: >-\n  https://desktop-updates.example.com/dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/deepseek-harness-1.2.3-mac-x64.zip\nfiles:\n  - url: >-\n      https://desktop-updates.example.com/dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/deepseek-harness-1.2.3-mac-x64.zip\n    size: 24\n    sha512: >-\n      IgtiHRPFjickTxiSTW6k0ltyBNOF/gpMGj/xflzVV2iRIzUSFPY6BG45u9fR4GmAJSVtN+FMh3NZx7mddUfJLw==\n"
+  }
+]

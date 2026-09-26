@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SettingsSchemaService } from '@deepseek-ai/dsh-client-ui-settings/src/client/schema.ts'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
-import { SettingsScopeController } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-scope.ts'
+import { ConfigFormController } from '@deepseek-ai/dsh-client-ui-settings/src/client/config-form.ts'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { decodeWelcomeSection, WelcomeNoticeStore } from '../src/client/welcome-store.ts'
 import {
@@ -28,7 +28,7 @@ function namespace(value: unknown = {}, revision = 0) {
     ns: WELCOME_NOTICE_SETTINGS_NAMESPACE,
     schema: {},
     value,
-    applies: 'live' as const,
+    autoGenerate: true, applies: 'live' as const,
     secrets: [],
     revision,
   }
@@ -45,7 +45,7 @@ function buildWelcome(
 ) {
   const ctx = { remote: { settings: api } } as never
   const mirror = new SettingsDescribeMirror(ctx, persistence)
-  const scope = new SettingsScopeController(
+  const scope = new ConfigFormController(
     ctx,
     { namespace: WELCOME_NOTICE_SETTINGS_NAMESPACE, decode: decodeWelcomeSection },
     mirror,

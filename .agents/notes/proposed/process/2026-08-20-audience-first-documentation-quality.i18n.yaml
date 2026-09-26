@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-20-audience-first-documentation-quality.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/process/2026-08-20-audience-first-documentation-quality.md
-2026-08-20-audience-first-documentation-quality.md: 9e0c4a61408449100b79148a571cd740e4044040
-2026-08-20-audience-first-documentation-quality.zh.md: 0b6f1da54380f1d2d44afbe948131233def513cd
+/agent-note-audience-first-documentation-quality-criteria:
+  en: 5fd84aa1a097f80f
+  zh: 073d973331b00ca4
+/agent-note-audience-first-documentation-quality-criteria/problem:
+  en: 86ee1c395115b7d2
+  zh: 7fea995569331599
+/agent-note-audience-first-documentation-quality-criteria/problem/semantic-correctness-can-pass-without-a-current-owner:
+  en: d752be65975937fa
+  zh: f0c9a94ccff8e059
+/agent-note-audience-first-documentation-quality-criteria/problem/reader-success-is-implicit-rather-than-testable:
+  en: 9d7c94e84fdeea18
+  zh: e315ae5d470d576b
+/agent-note-audience-first-documentation-quality-criteria/problem/generated-accuracy-and-retrieval-quality-are-conflated:
+  en: ebca610981ca8519
+  zh: df367b6ad77db2bd
+/agent-note-audience-first-documentation-quality-criteria/problem/the-standard-has-no-room-for-its-next-rule:
+  en: 08014cdc897e21c2
+  zh: b3fdc5236ee7144f
+/agent-note-audience-first-documentation-quality-criteria/problem/baseline:
+  en: 43bd2079e17f92a0
+  zh: 7f0553e1417eb759
+/agent-note-audience-first-documentation-quality-criteria/proposal:
+  en: 1f28c04d5002af94
+  zh: 4d4dfea99fc6aee2
+/agent-note-audience-first-documentation-quality-criteria/proposal/prototype-rules:
+  en: 6ee5714bc0b33cda
+  zh: 587bd85f6f712868
+/agent-note-audience-first-documentation-quality-criteria/proposal/criteria-by-document-job:
+  en: 9abbe4f2d5038284
+  zh: 45d30352d9cce4b5
+/agent-note-audience-first-documentation-quality-criteria/proposal/generated-reference-entry-and-detail-layers:
+  en: 2641ca1307c3308f
+  zh: 15fd0415d40a9190
+/agent-note-audience-first-documentation-quality-criteria/proposal/enforcement-slices:
+  en: c2f6617cf8b3bab4
+  zh: b9ad3dae2fc50ddf
+/agent-note-audience-first-documentation-quality-criteria/proposal/non-goals:
+  en: e8633d73b0273bfd
+  zh: 516e6d805158d303
+/agent-note-audience-first-documentation-quality-criteria/alternatives-considered:
+  en: 5f09627b84bf112b
+  zh: b0f1845df90e5f1a
+/agent-note-audience-first-documentation-quality-criteria/acceptance-criteria:
+  en: 696ff7205b3362d0
+  zh: a62a50cf3ceadac6
+/agent-note-audience-first-documentation-quality-criteria/risks:
+  en: b920900d3ff05073
+  zh: 05b2a0271b825260

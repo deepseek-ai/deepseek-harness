@@ -70,6 +70,12 @@ describe('real Loader composition', () => {
       "- name: '@deepseek-ai/dsh-compaction-basic'",
       '  config:',
       '    thresholdRatio: 0.5',
+      '    headroomTokens: 4000',
+      '    modelPolicies:',
+      '      - provider: mock',
+      '        model: small',
+      '        headroomTokens: 0',
+      '        maxTokens: 32',
       '    retainRatio: 0.125',
       '    auto: false',
     ])
@@ -80,8 +86,10 @@ describe('real Loader composition', () => {
     expect(unloaded).toEqual([])
     expect(loaded.get('toolResultPruner')).toBeInstanceOf(ToolResultPruner)
     expect(loaded.get('compaction')).toBeInstanceOf(BasicCompactionEngine)
-    expect((loaded.compaction as unknown as BasicCompactionEngine).config).toMatchObject({
+    expect((loaded.compaction as BasicCompactionEngine).config).toMatchObject({
       thresholdRatio: 0.5,
+      headroomTokens: 4000,
+      modelPolicies: [{ provider: 'mock', model: 'small', headroomTokens: 0, maxTokens: 32 }],
       retainRatio: 0.125,
       auto: false,
     })

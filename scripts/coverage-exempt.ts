@@ -48,7 +48,6 @@ export const coverageExemptHeavySuites: readonly CoverageExemptSuite[] = [
   { filter: 'scripts/install-lefthook.spec.ts', exclude: 'scripts/install-lefthook.spec.ts' },
   { filter: 'scripts/oxlint-contract.spec.ts', exclude: 'scripts/oxlint-contract.spec.ts' },
   { filter: 'scripts/change-scope.spec.ts', exclude: 'scripts/change-scope.spec.ts' },
-  { filter: 'scripts/translation-pairing-merge.spec.ts', exclude: 'scripts/translation-pairing-merge.spec.ts' },
   // Built-artifact proof. Packer/runtime src is threshold-excluded, and the
   // suite self-skips on unbuilt checkouts; the serial-windows complete
   // reference still starts this uninstrumented gate after its build gate, so

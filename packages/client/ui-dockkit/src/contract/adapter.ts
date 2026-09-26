@@ -19,12 +19,20 @@ export interface DockLabels {
   readonly emptyPane: string
   /** The split control, while splitting is allowed. */
   readonly splitPane: string
+  /** ARIA combination from the effective binding, when bound. */
+  readonly splitPaneShortcut?: string | undefined
+  /** Effective split keys shown as separate tooltip keycaps. */
+  readonly splitPaneKeys?: readonly string[] | undefined
   /** The split control, once the pane budget is spent. */
   readonly splitPaneDisabled: string
   /** The split control, while the pane is too narrow for two working halves. */
   readonly splitPaneNarrow: string
   /** Destroy a tab: the chip's close control and the menu's close item. */
   readonly closeTab: string
+  /** Effective close combination, when bound. */
+  readonly closeTabShortcut?: string | undefined
+  /** Effective close keys shown as separate tooltip keycaps. */
+  readonly closeTabKeys?: readonly string[] | undefined
   /** The strip's add control, which seats the embedder's seeded tab. */
   readonly addTab: string
   /** Send a floating panel back into the docked tree. */

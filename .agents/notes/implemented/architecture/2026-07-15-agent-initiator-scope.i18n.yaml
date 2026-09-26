@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-15-agent-initiator-scope.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-15-agent-initiator-scope.md
-2026-07-15-agent-initiator-scope.md: ab11da116a463cd706418e797eb58f1bc4ab9b1c
-2026-07-15-agent-initiator-scope.zh.md: 343acba5f99379b6d2c3af41368e8fbe90b20611
+/agent-note-initiating-agent-scope-over-asynclocalstorage:
+  en: b0a59e3a34c41826
+  zh: 7131428a14901d14
+/agent-note-initiating-agent-scope-over-asynclocalstorage/problem:
+  en: a26991200892c735
+  zh: 04a7dfaca64e3f0c
+/agent-note-initiating-agent-scope-over-asynclocalstorage/decision:
+  en: 43a4f0c503b30d95
+  zh: a6a780584f94ed73
+/agent-note-initiating-agent-scope-over-asynclocalstorage/verification:
+  en: 312f5c4b843d515e
+  zh: a8993e3b84844fab
+/agent-note-initiating-agent-scope-over-asynclocalstorage/alternatives-considered:
+  en: fd2ae1369fb3fbc6
+  zh: e2a3d7f9331fc8ac
+/agent-note-initiating-agent-scope-over-asynclocalstorage/consequences:
+  en: 625c6afc49489e29
+  zh: ed7e5c5e56c781fb

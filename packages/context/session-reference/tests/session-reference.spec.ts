@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { agentEvents, installModelSelection, type Agent, type ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import { CompactionId, compactCheckpointSource } from '@deepseek-ai/dsh-compaction'
-import LlmRuntime, { createMessage, createSystemMessage, createToolResultMessage, createUserMessage, LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createDeveloperMessage, createMessage, createSystemMessage, createToolResultMessage, createUserMessage, LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
@@ -18,6 +19,13 @@ import SessionReferenceResolver, {
 } from '@deepseek-ai/dsh-session-reference'
 import { stringifyTagSafeJson } from '../src/serialization.ts'
 import { SpillLocator, SpillStore, type SaveTextSpill, type SpillRef } from '@deepseek-ai/dsh-spill'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'test': { kind: 'test' } & ContextFormed
+    'workspace': { kind: 'workspace' } & ContextFormed
+  }
+}
 
 class TestSessionQueryEngine extends SessionQueryEngine {
   override searchSessions(
@@ -54,11 +62,26 @@ async function harness(config: Config = {}): Promise<Context> {
  * resolver reads `cachedSnapshot` alone, and the point under test is which
  * sessions still reach a log fold.
  */
-function withProjectionCache(ctx: Context, rows: Record<string, string | null>): void {
+function withProjectionCache(
+  ctx: Context,
+  rows: Record<string, string | null | {
+    title?: string | null
+    subagent?: {
+      readonly mode: 'one-shot' | 'continuable'
+      readonly label?: string
+      readonly seq: SessionSeq
+    } | null
+  }>,
+): void {
   ctx.provide('sessionProjectionCache', {
-    cachedSnapshot: (meta: { id: SessionId }) => (
-      meta.id in rows ? { asOfSeq: SessionSeq(0), values: { title: rows[meta.id] } } : undefined
-    ),
+    cachedSnapshot: (meta: { id: SessionId }) => {
+      const row = rows[meta.id]
+      if (!(meta.id in rows)) return undefined
+      return {
+        asOfSeq: SessionSeq(0),
+        values: row !== null && typeof row === 'object' ? row : { title: row },
+      }
+    },
   })
 }
 
@@ -77,7 +100,7 @@ function checkpointSource(id: string) {
 function appendConversation(session: Session): void {
   session.append(
     'system/message',
-    { turn: 1, step: 1, message: createSystemMessage('system prompt secret', 'system-prompt') },
+    { turn: 1, step: 1, message: createSystemMessage('system prompt secret') },
     { surfaceOp: 'append' },
   )
   const oldUser = session.append(
@@ -125,7 +148,7 @@ function appendConversation(session: Session): void {
   session.append(
     'user/message',
     createUserMessage({
-      content: [{ type: 'text', text: 'workspace secret' }], source: { kind: 'plugin', plugin: 'workspace' },
+      content: [{ type: 'text', text: 'workspace secret' }], source: { kind: 'workspace' },
     }),
     { surfaceOp: 'append' },
   )
@@ -141,7 +164,7 @@ function appendConversation(session: Session): void {
     'user/message',
     createUserMessage({
       content: [{ type: 'text', text: 'plugin steer' }],
-      source: { kind: 'plugin', plugin: 'goal' },
+      source: { kind: 'test' },
     }),
     { surfaceOp: 'append' },
   )
@@ -177,7 +200,7 @@ function appendConversation(session: Session): void {
   session.append(
     'user/message',
     createUserMessage({
-      content: [{ type: 'text', text: 'plugin-generated user' }], source: { kind: 'plugin', plugin: 'goal' },
+      content: [{ type: 'text', text: 'plugin-generated user' }], source: { kind: 'test' },
     }),
     { surfaceOp: 'append' },
   )
@@ -633,16 +656,16 @@ describe('session reference discovery and preparation', () => {
     })
 
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target))).resolves.toEqual([
-      { sessionId: SessionId('same-later'), label: 'Latest title', cwd: '/same', sameWorkspace: true, createdAt: 25 },
-      { sessionId: SessionId('same'), label: 'same', cwd: '/same', sameWorkspace: true, createdAt: 20 },
-      { sessionId: SessionId('none'), label: 'none', sameWorkspace: false, createdAt: 30 },
-      { sessionId: SessionId('other'), label: 'other', cwd: '/else', sameWorkspace: false, createdAt: 40 },
+      { sessionId: SessionId('same-later'), label: 'Latest title', displayTitle: 'Latest title', cwd: '/same', sameWorkspace: true, createdAt: 25 },
+      { sessionId: SessionId('same'), label: 'same', displayTitle: 'same', cwd: '/same', sameWorkspace: true, createdAt: 20 },
+      { sessionId: SessionId('none'), label: 'none', displayTitle: 'none', sameWorkspace: false, createdAt: 30 },
+      { sessionId: SessionId('other'), label: 'other', displayTitle: 'other', cwd: '/else', sameWorkspace: false, createdAt: 40 },
     ])
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'els', 1)).resolves.toEqual([
-      { sessionId: SessionId('other'), label: 'other', cwd: '/else', sameWorkspace: false, createdAt: 40 },
+      { sessionId: SessionId('other'), label: 'other', displayTitle: 'other', cwd: '/else', sameWorkspace: false, createdAt: 40 },
     ])
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'LATEST', 1)).resolves.toEqual([
-      { sessionId: SessionId('same-later'), label: 'Latest title', cwd: '/same', sameWorkspace: true, createdAt: 25 },
+      { sessionId: SessionId('same-later'), label: 'Latest title', displayTitle: 'Latest title', cwd: '/same', sameWorkspace: true, createdAt: 25 },
     ])
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), '', 0))
       .rejects.toThrow(expectCode('SESSION_REFERENCE_INVALID_REFERENCE'))
@@ -675,7 +698,7 @@ describe('session reference discovery and preparation', () => {
 
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'renamed'))
       .resolves.toEqual([
-        { sessionId: live.id, label: 'Renamed mid turn', cwd: '/same', sameWorkspace: true, createdAt: live.header.createdAt },
+        { sessionId: live.id, label: 'Renamed mid turn', displayTitle: 'Renamed mid turn', cwd: '/same', sameWorkspace: true, createdAt: live.header.createdAt },
       ])
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'old title')).resolves.toEqual([])
     expect(readTitles).not.toHaveBeenCalled()
@@ -694,33 +717,96 @@ describe('session reference discovery and preparation', () => {
 
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'checkpoint'))
       .resolves.toEqual([
-        { sessionId: cold.id, label: 'Cold checkpoint', cwd: '/same', sameWorkspace: true, createdAt: 10 },
+        { sessionId: cold.id, label: 'Cold checkpoint', displayTitle: 'Cold checkpoint', cwd: '/same', sameWorkspace: true, createdAt: 10 },
       ])
     expect(readTitles).not.toHaveBeenCalled()
     vi.restoreAllMocks()
   })
 
-  it('labels a session no projection answers for by its id, still without a log read', async () => {
+  it('keeps the projected title as the mention label and prefers the subagent label for display', async () => {
     const ctx = await harness()
     const target = ctx.sessions.create(SessionId('target'), { meta: { cwd: '/same' } })
-    const seeded = {
+    const child = { id: SessionId('child'), createdAt: 10, cwd: '/same' }
+    withProjectionCache(ctx, {
+      child: {
+        title: 'Investigate startup',
+        subagent: { mode: 'continuable', label: 'researcher', seq: SessionSeq(2) },
+      },
+    })
+    vi.spyOn(ctx.sessionQuery, 'listSessions').mockResolvedValue([
+      { header: child, live: false, persisted: true },
+    ] as never)
+
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'researcher'))
+      .resolves.toEqual([{
+        sessionId: child.id,
+        label: 'Investigate startup',
+        displayTitle: 'researcher',
+        cwd: '/same',
+        sameWorkspace: true,
+        createdAt: 10,
+      }])
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'investigate'))
+      .resolves.toHaveLength(1)
+    await expect(ctx.sessionReferenceResolver.remoteExportCandidates(
+      fakeAgent(target), 'researcher', new AbortController().signal,
+    )).resolves.toEqual([expect.objectContaining({
+      mention: formatSessionReferenceMention({ sessionId: child.id, label: 'researcher' }),
+    })])
+  })
+
+  it('falls back to the projected title when a subagent projection has no label', async () => {
+    const ctx = await harness()
+    const target = ctx.sessions.create(SessionId('target'), { meta: { cwd: '/same' } })
+    const child = { id: SessionId('child'), createdAt: 10, cwd: '/same' }
+    withProjectionCache(ctx, {
+      child: {
+        title: 'Projected title',
+        subagent: { mode: 'continuable', seq: SessionSeq(2) },
+      },
+    })
+    vi.spyOn(ctx.sessionQuery, 'listSessions').mockResolvedValue([
+      { header: child, live: false, persisted: true },
+    ] as never)
+
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'child'))
+      .resolves.toEqual([expect.objectContaining({
+        sessionId: child.id,
+        label: 'Projected title',
+        displayTitle: 'Projected title',
+      })])
+  })
+
+  it('labels a cold seeded session from its cached title and an uncached one by id, without a log read', async () => {
+    const ctx = await harness()
+    const target = ctx.sessions.create(SessionId('target'), { meta: { cwd: '/same' } })
+    const forked = {
       version: 0,
-      id: SessionId('seeded'),
+      id: SessionId('forked'),
       createdAt: 10,
       cwd: '/same',
       isSeeded: true,
     }
-    // Persisted before the cache was composed: the title lives only in its log.
-    withProjectionCache(ctx, { seeded: 'Unsafe body-free title' })
+    const uncached = { ...forked, id: SessionId('uncached'), createdAt: 20 }
+    // The cache binds the fork's lifecycle by its header alone; the resolver
+    // needs no cut to read it. A session the cache never checkpointed keeps
+    // its title in its log only.
+    withProjectionCache(ctx, { forked: 'Forked title' })
     vi.spyOn(ctx.sessionQuery, 'listSessions').mockResolvedValue([
-      { header: seeded, live: false, persisted: true },
+      { header: forked, live: false, persisted: true },
+      { header: uncached, live: false, persisted: true },
     ] as never)
     const readTitles = vi.spyOn(ctx.sessionQuery, 'readTitleSnapshots')
 
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target))).resolves.toEqual([
-      { sessionId: seeded.id, label: seeded.id, cwd: '/same', sameWorkspace: true, createdAt: 10 },
+      { sessionId: forked.id, label: 'Forked title', displayTitle: 'Forked title', cwd: '/same', sameWorkspace: true, createdAt: 10 },
+      { sessionId: uncached.id, label: uncached.id, displayTitle: uncached.id, cwd: '/same', sameWorkspace: true, createdAt: 20 },
     ])
-    // Its own title cannot find it, and discovery still never opens the log.
+    // The cached title finds the fork; the uncached session's own title cannot
+    // find it, and discovery still never opens a log.
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'forked title')).resolves.toEqual([
+      expect.objectContaining({ sessionId: forked.id }),
+    ])
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'anything')).resolves.toEqual([])
     expect(readTitles).not.toHaveBeenCalled()
     vi.restoreAllMocks()
@@ -736,7 +822,7 @@ describe('session reference discovery and preparation', () => {
     other.append('session/title', { title: 'Unreadable', messageSeqs: [], source: { kind: 'fallback' } })
 
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target))).resolves.toEqual([
-      { sessionId: other.id, label: other.id, cwd: '/same', sameWorkspace: true, createdAt: other.header.createdAt },
+      { sessionId: other.id, label: other.id, displayTitle: other.id, cwd: '/same', sameWorkspace: true, createdAt: other.header.createdAt },
     ])
   })
 
@@ -752,11 +838,24 @@ describe('session reference discovery and preparation', () => {
     expect(candidates).toEqual([{
       sessionId: SessionId('source]'),
       label: 'source]',
+      displayTitle: 'source]',
       cwd: '/same',
       sameWorkspace: true,
       createdAt: 20,
       mention: formatSessionReferenceMention({ sessionId: SessionId('source]'), label: 'source]' }),
     }])
+
+    vi.spyOn(ctx.sessionReferenceResolver, 'listCandidates').mockResolvedValueOnce([{
+      sessionId: SessionId('fallback'),
+      label: 'Fallback title',
+      sameWorkspace: false,
+      createdAt: 30,
+    }])
+    await expect(ctx.sessionReferenceResolver.remoteExportCandidates(
+      fakeAgent(target), '', new AbortController().signal,
+    )).resolves.toEqual([expect.objectContaining({
+      mention: formatSessionReferenceMention({ sessionId: SessionId('fallback'), label: 'Fallback title' }),
+    })])
   })
 
   it('prepares direct mentions at pre-step and keeps ordinary and plugin messages unchanged', async () => {
@@ -781,7 +880,7 @@ describe('session reference discovery and preparation', () => {
     })
     const plugin = createUserMessage({
       content: [{ type: 'text', text: formatSessionReferenceMention({ sessionId: source.id, label: 'Ignored' }) }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'test' },
     })
     const signal = new AbortController().signal
 
@@ -842,7 +941,7 @@ describe('session reference discovery and preparation', () => {
     const source = ctx.sessions.create(SessionId('source'))
 
     await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'source')).resolves.toEqual([
-      { sessionId: source.id, label: source.id, sameWorkspace: false, createdAt: source.header.createdAt },
+      { sessionId: source.id, label: source.id, displayTitle: source.id, sameWorkspace: false, createdAt: source.header.createdAt },
     ])
   })
 
@@ -925,6 +1024,12 @@ describe('session reference discovery and preparation', () => {
     const ctx = await harness()
     const target = ctx.sessions.create(SessionId('target'))
     const source = ctx.sessions.create(SessionId('source'))
+    source.append('developer/message', {
+      turn: 1, step: 1,
+      message: createDeveloperMessage({
+        content: [{ type: 'tool-removal', toolName: 'private_tool' }], source: { kind: 'test' },
+      }),
+    }, { surfaceOp: 'append' })
     source.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'nested referenced snapshot must not propagate' }],
       source: {

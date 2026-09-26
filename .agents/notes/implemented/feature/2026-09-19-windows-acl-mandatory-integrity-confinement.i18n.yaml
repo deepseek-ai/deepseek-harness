@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for 2026-09-19-windows-acl-mandatory-integrity-confinement.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-19-windows-acl-mandatory-integrity-confinement.md
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny:
+  en: 2255e36ca94e90fa
+  zh: 7bfa70db175ce842
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny/problem:
+  en: adb85f1842b69545
+  zh: 42a0ebb3b8015a74
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny/decision:
+  en: 08406f9c720d66c1
+  zh: b9c81901488d73b5
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny/alternatives-considered:
+  en: 6119e2aff3b6be5a
+  zh: 4237c596c10e1ee9
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny/alternatives-considered/why-not-make-the-label-revocable-per-session:
+  en: 198f33d224035c53
+  zh: 63068271658034e7
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny/alternatives-considered/why-not-untrusted-integrity-for-read-only-mode:
+  en: 5f53545a83ccd02c
+  zh: f8fd05c1f3440e41
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny/alternatives-considered/why-not-deny-file-delete-child-with-oi-ci:
+  en: 78a36aa70395d214
+  zh: 0dd32d8ca513cb43
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny/alternatives-considered/why-not-drop-the-confinement-layer-and-document-the-escape:
+  en: 9ff963493255783c
+  zh: 41b5577792e977cd
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny/alternatives-considered/why-not-give-each-workspace-its-own-integrity-level:
+  en: c39c82f7b745d672
+  zh: 7b38d3c4b889dac6
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny/consequences:
+  en: 4930b2596686d377
+  zh: 022a62051a58181e
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny/testing:
+  en: 6c1deeacdbff418d
+  zh: 4d7c546e19da5e53
+/agent-note-windows-sandbox-delete-confinement-mandatory-integrity-plus-an-ambient-delete-deny/related:
+  en: e4b631df90dd1efa
+  zh: abc66bfbf8ea2c52

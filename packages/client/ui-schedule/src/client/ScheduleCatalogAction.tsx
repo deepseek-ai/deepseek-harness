@@ -2,110 +2,43 @@ import {
   useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import type { ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
 import {
-  IconAlarmClockOutline16,
-  IconChevronDownOutline14,
+  IconClockOutlineRegular,
+  IconTrashOutlineRegular,
   useAnchoredPosition,
   useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ScheduleId } from '@deepseek-ai/dsh-schedule/client'
+import type { CatalogInjected } from './catalog-source.ts'
 import { NS } from './locales.ts'
+import {
+  formatScheduleFrequency, nextRunParts, orderScheduleRecords, taskName,
+} from './schedule-format.ts'
 import css from './ScheduleCatalogAction.module.css'
 
 /** Full props for the Session-header Schedule catalog action. */
 export type ScheduleCatalogActionProps =
-  PropsRuntime<'conversation.session.header.actions'> & PropsLocale<typeof NS>
+  PropsRuntime<'conversation.session.header.utilities'> & PropsLocale<typeof NS> & InjectFace<CatalogInjected & {
+    /**
+     * Show one task's detail in the right Sidebar for this entry's Session.
+     * @param id - Task chosen by the Session entry.
+     */
+    readonly openTaskDetail: (id: ScheduleId) => void
+  }>
 
-type TimeUnit = 'day' | 'hour' | 'minute' | 'second'
-
-const EMPTY_RECORDS: readonly ScheduleRecord[] = []
 const SECOND_MS = 1_000
-const SECOND_UNIT = { unit: 'second', seconds: 1 } as const
 const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
-const UNIT_SECONDS: readonly { unit: TimeUnit; seconds: number }[] = [
-  { unit: 'day', seconds: 86_400 },
-  { unit: 'hour', seconds: 3_600 },
-  { unit: 'minute', seconds: 60 },
-  SECOND_UNIT,
-]
 
-/** Localized unit word for one integral magnitude. */
-function unitLabel(unit: TimeUnit, value: number, t: TranslateNS<typeof NS>): string {
-  const keys = {
-    day: ['unit.day.one', 'unit.day.other'],
-    hour: ['unit.hour.one', 'unit.hour.other'],
-    minute: ['unit.minute.one', 'unit.minute.other'],
-    second: ['unit.second.one', 'unit.second.other'],
-  } as const
-  const pair = keys[unit]
-  return t(value === 1 ? pair[0] : pair[1], { count: value })
-}
-
-/** Pick the largest exact whole unit without rounding the durable interval. */
-export function formatScheduleFrequency(
-  record: ScheduleRecord,
-  t: TranslateNS<typeof NS>,
-): string {
-  if (record.kind !== 'every') return t('frequency.once')
-  let selected: { unit: TimeUnit; seconds: number } = SECOND_UNIT
-  for (const candidate of UNIT_SECONDS) {
-    if (record.everySeconds % candidate.seconds !== 0) continue
-    selected = candidate
-    break
-  }
-  const value = record.everySeconds / selected.seconds
-  return t('frequency.every', { value, unit: unitLabel(selected.unit, value, t) })
-}
-
-/** Format the durable UTC target in the browser's current locale and time zone. */
-export function formatScheduleLocalTime(scheduledAt: string, locale?: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(Date.parse(scheduledAt))
-}
-
-/** Human relative target using the largest natural clock unit. */
-export function formatScheduleRelative(
-  scheduledAt: string,
-  now: number,
-  t: TranslateNS<typeof NS>,
-): string {
-  const difference = Date.parse(scheduledAt) - now
-  if (difference === 0) return t('relative.now')
-  const absoluteSeconds = Math.abs(difference) / SECOND_MS
-  const selected = UNIT_SECONDS.find(candidate => absoluteSeconds >= candidate.seconds)
-    ?? SECOND_UNIT
-  const value = Math.max(1, difference > 0
-    ? Math.ceil(absoluteSeconds / selected.seconds)
-    : Math.floor(absoluteSeconds / selected.seconds))
-  const unit = unitLabel(selected.unit, value, t)
-  return t(difference > 0 ? 'relative.future' : 'relative.overdue', { value, unit })
-}
-
-/** Overdue records first, then ascending target time; exact ties stay stable. */
-export function orderScheduleRecords(
-  records: readonly ScheduleRecord[],
-  now: number,
-): ScheduleRecord[] {
-  return records.map((record, index) => ({ record, index })).sort((left, right) => {
-    const leftTime = Date.parse(left.record.scheduledAt)
-    const rightTime = Date.parse(right.record.scheduledAt)
-    const leftOverdue = leftTime <= now
-    const rightOverdue = rightTime <= now
-    if (leftOverdue !== rightOverdue) return Number(rightOverdue) - Number(leftOverdue)
-    return leftTime - rightTime || left.index - right.index
-  }).map(({ record }) => record)
-}
-
-/** Read-only current-Session active reminder catalog. */
-export function ScheduleCatalogAction({ useSession, useProjection, t }: ScheduleCatalogActionProps) {
+/** Current-Session reminder catalog with durable deletion. */
+export function ScheduleCatalogAction({
+  useSession, useCatalog, onDelete, onRetry, openTaskDetail, t,
+}: ScheduleCatalogActionProps) {
   const openState = useSession(snapshot => snapshot.openState)
-  const projected = useProjection('schedule')
-  const records = projected ?? EMPTY_RECORDS
-  const visible = openState === 'open' && records.length > 0
+  const catalogState = useCatalog(value => value)
+  const { records, status, deleting } = catalogState
+  const visible = openState === 'open'
   const [open, setOpen] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const rootRef = useRef<HTMLDivElement>(null)
@@ -137,14 +70,35 @@ export function ScheduleCatalogAction({ useSession, useProjection, t }: Schedule
   const rows = useMemo(() => orderScheduleRecords(records, now), [records, now])
 
   if (!visible) return null
+  // Show the entry only once it has something to open, or a failed read to
+  // retry. An empty first read must not mount a chip that the authoritative
+  // answer then removes, which reads as a flash in the header.
+  if (records.length === 0 && status !== 'error') return null
 
-  const countKey = records.length === 1 ? 'trigger.one' : 'trigger.other'
-  const countLabel = t(countKey, { count: records.length })
+  // The entry is icon-only, so its accessible name is the only place the
+  // reminder count reaches assistive technology. A refresh republishes
+  // `loading` while retaining the rows it already lists, so the count follows
+  // the known records rather than the read state: the label may go generic only
+  // before the first successful read, when there is no count to name.
+  const known = records.length
+  const triggerLabel = known === 0
+    ? t('trigger.label')
+    : t(known === 1 ? 'trigger.one' : 'trigger.other', { count: known })
+  // One task has no list to choose from, so its entry opens the detail directly
+  // once the read settles. A refresh republishes `loading` while retaining the
+  // rows, so the entry stays expandable for that read: the popover shows the
+  // loading row above the records it already lists.
+  const soleTask = status === 'ready' && records.length === 1 ? records[0] : undefined
+  const expandable = soleTask === undefined || open
   const toggleCatalog = (): void => {
     setNow(Date.now())
     setOpen(current => !current)
   }
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+  const openTask = (id: ScheduleId): void => {
+    setOpen(false)
+    openTaskDetail(id)
+  }
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
     if (event.key !== 'Escape' || !open) return
     event.preventDefault()
     setOpen(false)
@@ -155,13 +109,19 @@ export function ScheduleCatalogAction({ useSession, useProjection, t }: Schedule
       ref={triggerRef}
       type="button"
       className={css.trigger}
-      aria-expanded={open}
-      aria-label={countLabel}
-      onClick={toggleCatalog}
+      data-schedule-reminder-entry=""
+      aria-expanded={expandable ? open : undefined}
+      aria-label={triggerLabel}
+      onClick={() => {
+        if (expandable) {
+          toggleCatalog()
+          return
+        }
+        setNow(Date.now())
+        openTask(soleTask.id)
+      }}
     >
-      <IconAlarmClockOutline16 size={14} />
-      <span className={css.count}>{countLabel}</span>
-      <IconChevronDownOutline14 className={open ? css.triggerOpen : undefined} />
+      <IconClockOutlineRegular size={16} />
     </button>
   )
   const catalog = open
@@ -171,28 +131,59 @@ export function ScheduleCatalogAction({ useSession, useProjection, t }: Schedule
         className={css.menu}
         style={catalogPosition ?? MEASURE_STYLE}
         aria-label={t('list.aria')}
+        onKeyDown={onKeyDown}
       >
+        {status === 'loading' && <li className={css.row} role="status">{t('list.loading')}</li>}
+        {status === 'error' && <li className={css.row}>
+          <span role="alert">{t('list.error')}</span>
+          <button type="button" onClick={() => { void onRetry() }}>{t('list.retry')}</button>
+        </li>}
         {rows.map((record) => {
           const overdue = Date.parse(record.scheduledAt) <= now
+          // One pair per row: both halves come from this one call.
+          const nextRun = nextRunParts(record.scheduledAt, t('time.locale'), now, t)
           return (
             <li
               key={record.id}
-              className={overdue ? `${css.row} ${css.rowOverdue}` : css.row}
+              className={overdue ? `${css.row} ${css.rowTask} ${css.rowOverdue}` : `${css.row} ${css.rowTask}`}
             >
-              <span className={css.status}>
-                <span className={css.statusDot} aria-hidden="true" />
-                <span>{t(overdue ? 'status.overdue' : 'status.scheduled')}</span>
-              </span>
-              <span className={css.prompt}>{record.prompt}</span>
-              <span className={css.metadata}>
-                <span>{formatScheduleFrequency(record, t)}</span>
-                <span aria-hidden="true">·</span>
-                <span>{formatScheduleLocalTime(record.scheduledAt, document.documentElement.lang)}</span>
-                <span aria-hidden="true">·</span>
-                <span className={overdue ? css.relativeOverdue : undefined}>
-                  {formatScheduleRelative(record.scheduledAt, now, t)}
+              <span className={css.body}>
+                <button
+                  type="button"
+                  className={css.openButton}
+                  aria-label={t('list.open', { title: taskName(record) })}
+                  onClick={() => { openTask(record.id) }}
+                >
+                  <span className={css.title}>{taskName(record)}</span>
+                </button>
+                <span
+                  className={overdue ? `${css.metadata} ${css.metadataOverdue}` : css.metadata}
+                >
+                  <span>{formatScheduleFrequency(record, t)}</span>
+                </span>
+                {/* The next target states its own line instead of trailing the
+                    frequency: one long weekday rule wraps, and the rows then keep
+                    their names and actions on the same lines. */}
+                <span className={overdue ? `${css.nextRun} ${css.metadataOverdue}` : css.nextRun}>
+                  <span>{`${t('list.nextRun')} `}</span>
+                  {/* The list rows and the detail both state the local stamp
+                      first; the popover's clock only refreshes the parenthesized
+                      distance, which ticks while it is open instead of freezing
+                      at the moment the list opened. */}
+                  <time dateTime={record.scheduledAt}>{nextRun.absolute}</time>
+                  <span className={css.nextRunRelative}>{nextRun.relative}</span>
                 </span>
               </span>
+              <button
+                type="button"
+                className={css.deleteButton}
+                aria-label={t('delete.label', { title: taskName(record) })}
+                title={t(deleting.includes(record.id) ? 'delete.pending' : 'delete.action')}
+                disabled={deleting.includes(record.id)}
+                onClick={() => { void onDelete(record.id) }}
+              >
+                <IconTrashOutlineRegular size={14} />
+              </button>
             </li>
           )
         })}

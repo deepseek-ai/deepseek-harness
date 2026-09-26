@@ -1,0 +1,3 @@
+{"type":"session","version":2,"id":"{{session:2}}","createdAt":2,"cwd":"{{cwd}}","isSeeded":false,"delegationDepth":1,"agentPreset":"code","origin":"subagent","parentSession":"{{session:1}}"}
+{"type":"subagent/descriptor","data":{"version":3,"provider":"spawn","mode":"one-shot","label":"historical child"}}
+{"type":"feedback/record","data":{"text":"Child history remains readable independently."}}

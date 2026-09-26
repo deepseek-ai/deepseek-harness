@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, ToolCallId  } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -9,6 +10,12 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import * as RepeatToolGuard from '@deepseek-ai/dsh-repeat-tool-reminder'
 import type { Config } from '@deepseek-ai/dsh-repeat-tool-reminder'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'test': { kind: 'test' } & ContextFormed
+  }
+}
 
 const testToolSignal = new AbortController().signal
 
@@ -48,8 +55,7 @@ function reminders(agent: Agent): { text: string; source: unknown }[] {
 // The reminder is a `notice`-form context; its summary names the repeated
 // call so a reader sees it without expanding the row.
 const guardSource = (tool: string, count: number) => ({
-  kind: 'plugin',
-  plugin: 'repeat-tool-reminder',
+  kind: 'repeat-tool-reminder',
   form: 'notice',
   summary: `${tool} × ${count}`,
 })
@@ -315,7 +321,7 @@ describe('fold onto the downstream decision', () => {
       kind: 'block' as const,
       feedback: [{ type: 'text' as const, text: 'nope' }],
       additionalContexts: [createUserMessage({
-        content: [{ type: 'text' as const, text: 'downstream-ctx' }], source: { kind: 'plugin' as const, plugin: 'test' },
+        content: [{ type: 'text' as const, text: 'downstream-ctx' }], source: { kind: 'test' as const },
       })],
     }))
     const adapter = new MockAdapter([
@@ -332,14 +338,14 @@ describe('fold onto the downstream decision', () => {
     expect(found).toHaveLength(3)
     // Only the repeated call adds guard context; downstream source fields survive.
     expect(found[0]!.text).toBe('downstream-ctx')
-    expect(found[0]!.source).toEqual({ kind: 'plugin', plugin: 'test' })
+    expect(found[0]!.source).toEqual({ kind: 'test' })
     expect(found[1]!.text).toContain('repeating the exact same tool call')
     expect(found[1]!.source).toEqual(guardSource('probe', 2))
-    expect(found[2]).toEqual({ text: 'downstream-ctx', source: { kind: 'plugin', plugin: 'test' } })
+    expect(found[2]).toEqual({ text: 'downstream-ctx', source: { kind: 'test' } })
     // The block's feedback reached the tool result unchanged.
     const results = agent.session.snapshotEvents().filter((e): e is SessionEvent<'tool/result'> => e.type === 'tool/result')
-    expect(results.every(r => r.data.message.content[0].isError)).toBe(true)
-    expect(results[1]!.data.message.content[0].content).toEqual([{ type: 'text', text: 'nope' }])
+    expect(results.every(r => r.data.message.isError)).toBe(true)
+    expect(results[1]!.data.message.content).toEqual([{ type: 'text', text: 'nope' }])
   })
 
   it('preserves a downstream canonical value replacement while folding', async () => {
@@ -362,7 +368,7 @@ describe('fold onto the downstream decision', () => {
     expect(found).toHaveLength(1)
     expect(found[0]!.text).toContain('repeating the exact same tool call')
     const results = agent.session.snapshotEvents().filter((e): e is SessionEvent<'tool/result'> => e.type === 'tool/result')
-    expect(results[1]!.data.message.content[0].content).toEqual([{ type: 'text', text: 'replaced' }])
+    expect(results[1]!.data.message.content).toEqual([{ type: 'text', text: 'replaced' }])
   })
 })
 

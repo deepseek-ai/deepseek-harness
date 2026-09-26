@@ -20,11 +20,11 @@ export interface Config {
 export function apply(ctx: Context, config: Config): void {
   const shell = ctx.shell
   // oxlint-disable-next-line typescript/unbound-method -- preserve method identity for restoration; calls bind the receiver.
-  const run = shell.run
+  const execute = shell.execute
   ctx.effect(() => {
-    shell.run = spec => run.call(shell, spec.command === config.command
+    shell.execute = spec => execute.call(shell, spec.command === config.command
       ? { ...spec, command: spec.command.replaceAll(config.recordedPath, "'" + config.livePath.replaceAll("'", "'\"'\"'") + "'") }
       : spec)
-    return () => { shell.run = run }
+    return () => { shell.execute = execute }
   })
 }

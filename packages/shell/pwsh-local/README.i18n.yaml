@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/shell/pwsh-local/README.md
-README.md: 1dbc90835cb95a0e171a33b10c7409a181dd98cf
-README.zh.md: f87c7d435cccb600d123cf80264e027657ef1835
+/:
+  en: 07482fe1f03de5e9
+  zh: 8ec16b9f9ac73b38
+/deepseek-ai-dsh-pwsh-local:
+  en: 15364cd289d23957
+  zh: d3e82667e954c58d
+/deepseek-ai-dsh-pwsh-local/summary:
+  en: b3d58f4bee09b7ed
+  zh: 31f5ef9ba27a4df0
+/deepseek-ai-dsh-pwsh-local/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-pwsh-local/use-this-package:
+  en: f53013bc78e9367f
+  zh: cc15b499f6a95080
+/deepseek-ai-dsh-pwsh-local/use-this-package/when-to-choose-it:
+  en: 84f220a1eec48f24
+  zh: 72cf0681212efe82
+/deepseek-ai-dsh-pwsh-local/use-this-package/minimal-configuration:
+  en: 47119e8b4e884a5d
+  zh: f9dfb155f06c4b73
+/deepseek-ai-dsh-pwsh-local/use-this-package/running-commands:
+  en: d0efd217ca8ce07d
+  zh: 76eda93aa7300f87
+/deepseek-ai-dsh-pwsh-local/use-this-package/background-processes:
+  en: 3c580842cc8452af
+  zh: 5a156670a7cacc2a
+/deepseek-ai-dsh-pwsh-local/use-this-package/adjusting-budgets-at-runtime:
+  en: 1098db4c932a48f8
+  zh: 33f78ab65dbfeb1d
+/deepseek-ai-dsh-pwsh-local/understand-the-implementation:
+  en: 05e2abe4a25886fd
+  zh: 3f7f1326dc3c1d3f
+/deepseek-ai-dsh-pwsh-local/understand-the-implementation/design-concept:
+  en: d065be99a0cea908
+  zh: 50eee843e3b6860c
+/deepseek-ai-dsh-pwsh-local/understand-the-implementation/source-map:
+  en: 299f4ffe25b4806d
+  zh: d0aced83a1950a91
+/deepseek-ai-dsh-pwsh-local/understand-the-implementation/main-flow:
+  en: 1cb78cfddb484576
+  zh: 94e16b60c9cd458b
+/deepseek-ai-dsh-pwsh-local/understand-the-implementation/invariants-and-ownership:
+  en: db6d1d14205d38ed
+  zh: 148b3764daee54e8
+/deepseek-ai-dsh-pwsh-local/further-exploration:
+  en: f88bd1a14fe62416
+  zh: a7c4a8c9ce49d374
+/deepseek-ai-dsh-pwsh-local/model-experience:
+  en: cb8a0d1c1929e4ea
+  zh: 6b1d5aa2d10c0a01
+/deepseek-ai-dsh-pwsh-local/model-experience/kv-cache-effect:
+  en: 40294c1c31b74824
+  zh: 788a4799b1d65a8b
+/deepseek-ai-dsh-pwsh-local/known-limitations-and-deferred-work:
+  en: dbe004f26cb332f2
+  zh: 83dc82454ee6a92d
+/deepseek-ai-dsh-pwsh-local/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

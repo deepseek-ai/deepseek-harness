@@ -1,11 +1,11 @@
-// Per-turn latency/throughput fold and the footer figure formatters.
+// Assistant timing readings and statistics formatting.
 
 import { describe, expect, it } from 'vitest'
 import type {
-  AssistantMessageNode, ConversationNode, UserMessageNode,
+  AssistantMessageNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { assistantStepReading, deriveTurnMetrics } from '../src/client/contract/turn-metrics.ts'
-import { formatLatencySeconds, formatTokensPerSecond } from '../src/client/chat/message-chrome.ts'
+import { assistantStepReading } from '../src/client/contract/turn-metrics.ts'
+import { formatTokensPerSecond } from '../src/client/chat/message-chrome.ts'
 import { formatCacheHitPercent } from '../src/client/chat/token-format.ts'
 
 interface StepSpec {
@@ -20,10 +20,6 @@ const assistant = ({ seq, turn, step, timing, usage }: StepSpec): AssistantMessa
   kind: 'assistant', seq, time: seq * 1_000, turn, step, blocks: [{ kind: 'text', text: `t${seq}` }],
   ...(timing === undefined ? {} : { timing }),
   ...(usage === undefined ? {} : { usage }),
-})
-
-const user = (seq: number): UserMessageNode => ({
-  kind: 'user', seq, time: seq * 1_000, content: [{ type: 'text', text: 'hi' }] as never, source: null,
 })
 
 describe('assistantStepReading', () => {
@@ -66,90 +62,9 @@ describe('assistantStepReading', () => {
   })
 })
 
-describe('deriveTurnMetrics', () => {
-  it('takes ttft from the lowest step and throughput over all sampled steps', () => {
-    const nodes: ConversationNode[] = [
-      user(1),
-      // Out of step order on purpose: the lowest step owns the ttft slot.
-      assistant({
-        seq: 4, turn: 1, step: 2,
-        timing: { stepStartTime: 10_000, firstTokenTime: 10_200, completedTime: 12_200 },
-        usage: { outputTokens: 60 },
-      }),
-      assistant({
-        seq: 2, turn: 1, step: 1,
-        timing: { stepStartTime: 1_000, firstTokenTime: 2_200, completedTime: 5_200 },
-        usage: { outputTokens: 40 },
-      }),
-    ]
-    // 100 tokens over 5s of decode.
-    expect(deriveTurnMetrics(nodes).get(1)).toEqual({ ttftMs: 1_200, tokensPerSecond: 20 })
-  })
-
-  it('emits ttft without throughput when no step carries usage', () => {
-    const nodes = [assistant({
-      seq: 2, turn: 1, step: 1,
-      timing: { stepStartTime: 1_000, firstTokenTime: 1_900, completedTime: 3_000 },
-    })]
-    expect(deriveTurnMetrics(nodes).get(1)).toEqual({ ttftMs: 900 })
-  })
-
-  it('emits throughput without ttft when only a later step is recorded', () => {
-    const nodes = [
-      assistant({ seq: 2, turn: 1, step: 1 }),
-      assistant({
-        seq: 4, turn: 1, step: 2,
-        timing: { stepStartTime: 10_000, firstTokenTime: 10_500, completedTime: 12_500 },
-        usage: { outputTokens: 30 },
-      }),
-    ]
-    expect(deriveTurnMetrics(nodes).get(1)).toEqual({ tokensPerSecond: 15 })
-  })
-
-  it('omits turns with no readings and zero-decode throughput', () => {
-    const nodes = [
-      assistant({ seq: 2, turn: 1, step: 1 }),
-      assistant({
-        seq: 4, turn: 2, step: 1,
-        timing: { stepStartTime: null, firstTokenTime: 5_000, completedTime: 5_000 },
-        usage: { outputTokens: 10 },
-      }),
-    ]
-    expect(deriveTurnMetrics(nodes).size).toBe(0)
-  })
-
-  it('keeps turns independent and ignores non-assistant nodes', () => {
-    const nodes: ConversationNode[] = [
-      user(1),
-      assistant({
-        seq: 2, turn: 1, step: 1,
-        timing: { stepStartTime: 1_000, firstTokenTime: 1_400, completedTime: 2_400 },
-        usage: { outputTokens: 10 },
-      }),
-      user(3),
-      assistant({
-        seq: 4, turn: 2, step: 1,
-        timing: { stepStartTime: 4_000, firstTokenTime: 4_100, completedTime: 6_100 },
-        usage: { outputTokens: 100 },
-      }),
-    ]
-    const metrics = deriveTurnMetrics(nodes)
-    expect(metrics.get(1)).toEqual({ ttftMs: 400, tokensPerSecond: 10 })
-    expect(metrics.get(2)).toEqual({ ttftMs: 100, tokensPerSecond: 50 })
-  })
-})
-
 describe('footer figure formatters', () => {
   it('omits a redundant decimal zero in cache-hit percentages', () => {
     expect(formatCacheHitPercent(1, 2, 1)).toBe('50')
-  })
-
-  it('formats latency with one decimal under ten seconds and whole seconds beyond', () => {
-    expect(formatLatencySeconds(840)).toBe('0.8')
-    expect(formatLatencySeconds(1_000)).toBe('1')
-    expect(formatLatencySeconds(9_949)).toBe('9.9')
-    expect(formatLatencySeconds(12_400)).toBe('12')
-    expect(formatLatencySeconds(-5)).toBe('0')
   })
 
   it('formats throughput with whole tokens from ten up and one decimal below', () => {

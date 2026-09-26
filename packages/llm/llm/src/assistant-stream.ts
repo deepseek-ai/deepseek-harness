@@ -465,7 +465,7 @@ function validateRecord(value: unknown): AssistantStreamRecord {
       const texts = stringArray(record.texts, `${record.type} texts`)
       if (texts.length === 0) throw new TypeError(`${record.type} texts must be non-empty`)
       validateRun(record, texts.length, record.type)
-      return record as unknown as AssistantStreamRecord
+      return record as AssistantStreamRecord
     }
     case 'tool-call-chunks': {
       const keys = Object.hasOwn(record, 'name')
@@ -481,7 +481,7 @@ function validateRecord(value: unknown): AssistantStreamRecord {
         throw new TypeError('tool-call-chunks name must be a non-empty string')
       }
       validateRun(record, args.length, record.type)
-      return record as unknown as AssistantStreamRecord
+      return record as AssistantStreamRecord
     }
     case 'chunk': {
       exactKeys(record, ['type', 'time', 'chunk'], 'chunk')

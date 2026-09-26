@@ -7,14 +7,20 @@
      the sides narrow with the shared width axis); the bottom gradient mask
      is owned by the chat scroller. No top pad: the composer stack's gap owns
      the space above; the status strip still carries its own margin. */
-  padding: 0 var(--dsh-composer-side-clearance) 8px;
+  padding: 0 var(--dsh-composer-side-clearance) 4px;
 }
 
-/* A mounted stats row in the composer dock (data-composer-stats, ui-chat
-   StatsPills) brings its own 4px top pad, so the root's bottom clearance
-   tightens to keep the drawn B8 rhythm. */
-.root:has([data-composer-stats]) {
-  padding-bottom: 4px;
+.dock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  max-width: 100%;
+  padding-top: 4px;
+}
+
+.hero .dock:empty {
+  display: none;
 }
 
 .hero {
@@ -29,7 +35,7 @@
   max-width: var(--dsh-composer-card-max-width);
   margin-bottom: 6px;
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
@@ -52,7 +58,7 @@
      soft elevation tier. Fill: the input surface token (elevated in dark). */
   border: 0;
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
-  border-radius: 22px;
+  border-radius: var(--dsw-radius-panel);
   background: var(--dsw-specific-input-major);
   box-shadow: var(--dsw-elevation-soft);
   /* The draft text follows the Settings font-size preference (the textarea,
@@ -70,12 +76,9 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
-/* No-workspace trigger state: dashed l4 stroke marks the card as a pick-a-
-   workspace affordance rather than a live composer; hover answers in the
-   business blue to invite the click. Native `dashed` has a fixed browser
-   pattern, so the stroke is an ::after overlay: theme-token background masked
-   by an SVG dash ring (stroke-width 2 centered on the box edge = 1px visible
-   inside), which keeps the 22px radius and both themes. */
+/* No-workspace trigger state: an inset 1px dashed outline marks the card as a
+   workspace picker rather than a live composer. Keeping the complete stroke
+   inside the rounded box prevents clipped corner pixels from reading heavier. */
 .cardWorkspaceTrigger {
   --dsw-elevation-stroke-color: transparent;
   cursor: pointer;
@@ -84,24 +87,24 @@
 .cardWorkspaceTrigger::after {
   content: '';
   position: absolute;
-  inset: -1px;
-  border-radius: 22px;
-  background: var(--dsw-alias-border-l4);
-  transition: background-color 100ms ease;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' fill='none' rx='22' ry='22' stroke='black' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' fill='none' rx='22' ry='22' stroke='black' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
+  inset: 0;
+  box-sizing: border-box;
+  border: 1px dashed currentColor;
+  border-radius: var(--dsw-radius-panel);
+  color: var(--dsw-alias-border-l4);
+  transition: color 100ms ease;
   pointer-events: none;
 }
 
 /* Disabled toolbar controls neither receive nor swallow clicks in the trigger
    state: pointer events fall through to the card's own click handler, making
-   the full capsule one pick target. */
+   the whole card one pick target. */
 .cardWorkspaceTrigger :disabled {
   pointer-events: none;
 }
 
 .cardWorkspaceTrigger:hover::after {
-  background: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-state-business-primary);
 }
 
 .accessory {
@@ -130,7 +133,7 @@
   margin-right: 4px;
 }
 
-/* The card's 22px corner arc still overlaps the scrollport's top (8px top
+/* The card's corner arc still overlaps the scrollport's top (8px top
    pad reaches only y=8): start the thumb's travel below the arc so it never
    pokes outside the capsule. WebKit-path only; Firefox's thin bar has no
    track margin, an accepted remainder. */
@@ -263,6 +266,11 @@
   container-type: inline-size;
 }
 
+.row[data-model-compact] {
+  --dsh-composer-model-text-display: none;
+  --dsh-composer-model-icon-display: block;
+}
+
 .tools,
 .modes,
 .trailing {
@@ -291,6 +299,15 @@
      wrapped line; on a single line space-between already pins it right. */
   margin-left: auto;
   gap: 12px;
+}
+
+/* Compact spacing preserves room for the fixed-width controls in narrow cards. */
+@container (max-width: 560px) {
+  .tools,
+  .modes,
+  .trailing {
+    gap: 8px;
+  }
 }
 
 /* Attach circle (figma + control): 28px, selector fill, primary glyph. */
@@ -324,7 +341,7 @@
   height: 28px;
   padding: 0 20px 0 8px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-sm);
   outline: none;
   background-color: transparent;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -386,9 +403,16 @@
   margin-left: 8px;
   padding: 1px 8px;
   border: 1px solid currentColor;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: inherit;
   font-size: 12px;
   cursor: pointer;
 }
+
+.standardControls { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.tools[hidden], .standardControls[hidden] { display: none; }
+.trailingActive { flex: 1; margin-left: 0; }
+.activity { display: flex; align-items: center; flex: none; }
+.activity:empty { display: none; }
+.activityExpanded { flex: 1; min-width: 0; }

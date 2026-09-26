@@ -9,7 +9,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // dictionaries the shipped-preset name resolution below reads.
 import type {} from '@deepseek-ai/dsh-client-ui-agent-preset/client'
 // Inline-safe shared fold: shipped ids map to dictionary keys in one home.
-import { presetDisplayText } from '@deepseek-ai/dsh-agent-presets/display'
+import { presetDisplayText } from '@deepseek-ai/dsh-agent-preset-registry/display'
 import { PluginInventorySettingsTab, type PluginInventorySettingsTabInjected } from './PluginInventorySettingsTab.tsx'
 import { en, zh, type PluginInventoryLocaleKey } from './locales.ts'
 
@@ -48,6 +48,7 @@ export function apply(ctx: ClientContext): void {
     presetDisplayText(preset, agentPresetCopy).name
   const injected = (): PluginInventorySettingsTabInjected => ({
     list, presetName,
+    resolveText: text => ctx.locale.resolveText(text),
     hooks: { clientSync: ctx.modules.entries.state },
     retryClient: () => { void ctx.modules.entries.retry().catch((error: unknown) => { ctx.logger.error(error) }) },
   })

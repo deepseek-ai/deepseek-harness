@@ -52,7 +52,10 @@ declare module '@deepseek-ai/cordis' {
 export interface WebBootEntry {
   /** Entry name == package name. */
   id: string
-  /** Revisioned single-resource combo endpoint used by HMR. */
+  /**
+   * Revisioned single-resource combo reference used by HMR. It is relative to
+   * the document, so the browser resolves it under whatever mount served the page.
+   */
   url: string
   /** Opaque plugin-artifact revision used for HMR cache busting. */
   rev: string
@@ -71,7 +74,7 @@ export type WebBootBatchPhase = 'bootstrap' | 'application'
 export interface WebBootBatch {
   /** Parser-blocking bootstrap or preloaded application scheduling. */
   phase: WebBootBatchPhase
-  /** Revisioned combo script endpoint. */
+  /** Content-addressed combo script reference, document-relative like {@link WebBootEntry.url}. */
   url: string
   /** Revision derived from the ordered entry revisions. */
   rev: string
@@ -97,9 +100,9 @@ export interface WebBootGraph {
 export interface BootModuleRow {
   /** Entry name == package name (module-table key). */
   id: string
-  /** Revisioned single-resource combo endpoint used after HMR invalidation. */
+  /** Revisioned single-resource combo reference: the fallback when the row's batch fails and the reload target after HMR invalidation. */
   url: string
-  /** Revisioned combo endpoint used before the first HMR invalidation. */
+  /** Content-addressed combo reference used before the first HMR invalidation. */
   initialUrl: string
   /** Opaque plugin-artifact revision used after HMR invalidation. */
   rev: string
@@ -409,6 +412,15 @@ export interface ClientModuleLoader {
    * @param id - graph entry name.
    */
   prefetch(id: string): Promise<void>
+  /**
+   * The last failure of {@link import} or {@link prefetch} for one graph row:
+   * transport, registration, dependency cascade, or factory execution. Cleared
+   * by a later success and by {@link invalidate}. The boot audit reads it to
+   * report why a Loader entry has no fiber.
+   * @param id - graph entry name.
+   * @returns the recorded failure, or `undefined` when the row never failed or succeeded since.
+   */
+  importError(id: string): Error | undefined
   /**
    * Full reset of one non-bootstrap package: drop its entry and chunk factories
    * and materialized records so the next prefetch/import loads its one-resource

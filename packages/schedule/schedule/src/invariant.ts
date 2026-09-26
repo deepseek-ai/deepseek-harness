@@ -27,7 +27,14 @@ function validate(events: readonly SessionEvent[], fail: InvariantFailure): void
 }
 
 /* jscpd:ignore-start -- package companions share replay and dispatch plumbing */
-/** Install replay and pre-append validation for the owned event stream. */
+/**
+ * Install replay and pre-append validation for the owned event stream.
+ *
+ * The durable task table is not asserted here: `scheduleDomain` validates every stored
+ * record through its table schema when the domain opens, and its only writer stores each
+ * task under `task.record.id`, so a check of the write payload would observe the same value
+ * the writer had just built.
+ */
 const install: InvariantInstaller = Object.assign((ctx: Context, fail: InvariantFailure) => {
   for (const session of ctx.sessions.list()) {
     // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.

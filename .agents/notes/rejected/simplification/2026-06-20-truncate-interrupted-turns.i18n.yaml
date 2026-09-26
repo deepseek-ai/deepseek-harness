@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-20-truncate-interrupted-turns.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/rejected/simplification/2026-06-20-truncate-interrupted-turns.md
-2026-06-20-truncate-interrupted-turns.md: c4b0084de537927a27829eb78990c6559bd1df7d
-2026-06-20-truncate-interrupted-turns.zh.md: ad6c85fc62077be45b1f3bb55c31cf4b4a7fd1d1
+/agent-note-truncate-interrupted-final-turns-on-load:
+  en: 71d2ea22bb13721d
+  zh: 8c215ff52de9ba0d
+/agent-note-truncate-interrupted-final-turns-on-load/problem:
+  en: d96af2be3caa1b54
+  zh: 02cb84c44916fab9
+/agent-note-truncate-interrupted-final-turns-on-load/proposal:
+  en: 764ee72b3b2b654a
+  zh: 92ea690926ff99a4
+/agent-note-truncate-interrupted-final-turns-on-load/acceptance-criteria:
+  en: 5aeb3cf919f6d9c7
+  zh: 8cc171e48d5c0761
+/agent-note-truncate-interrupted-final-turns-on-load/what-we-give-up:
+  en: 583aa8d003225c57
+  zh: 2d90befccf8be0ca
+/agent-note-truncate-interrupted-final-turns-on-load/related:
+  en: a2af11959bf10ac3
+  zh: 402cf5f0c4f019d8

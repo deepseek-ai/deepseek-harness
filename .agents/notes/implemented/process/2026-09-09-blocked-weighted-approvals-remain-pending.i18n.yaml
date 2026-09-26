@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-blocked-weighted-approvals-remain-pending.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-09-blocked-weighted-approvals-remain-pending.md
-2026-09-09-blocked-weighted-approvals-remain-pending.md: 50ab64dadc0d7ad14366950d24b4136d131f55ec
-2026-09-09-blocked-weighted-approvals-remain-pending.zh.md: 58ab10b3acb3bee92c720b622d92170a1a8bcf03
+/agent-note-blocked-weighted-approvals-remain-pending:
+  en: 6a5da25eb874aece
+  zh: 654aa967a9222501
+/agent-note-blocked-weighted-approvals-remain-pending/problem:
+  en: 0afdda30d02b666b
+  zh: 6624aa9c8c58ea0a
+/agent-note-blocked-weighted-approvals-remain-pending/decision:
+  en: cf7ac63f422b4cfb
+  zh: 250385e42d546d30
+/agent-note-blocked-weighted-approvals-remain-pending/verification:
+  en: af674f57088d303a
+  zh: b9c42f04beec9be5
+/agent-note-blocked-weighted-approvals-remain-pending/alternatives-considered:
+  en: 13d5f67070bd3396
+  zh: c75db3746d31272e
+/agent-note-blocked-weighted-approvals-remain-pending/consequences:
+  en: 284f19608b0d449f
+  zh: 1d9bd95239ba6ffa

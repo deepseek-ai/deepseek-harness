@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session-query/session-query/README.md
-README.md: 5971903ef06035e73e6db57d3f437eec7a2aa8d9
-README.zh.md: e389975f436501093785e931c246d75279e2a0b6
+/:
+  en: 3d1caf01d90c7f34
+  zh: 4fa615b905574d83
+/deepseek-ai-dsh-session-query:
+  en: 6c0fafecee38533e
+  zh: d3dfe3058d8332c3
+/deepseek-ai-dsh-session-query/summary:
+  en: 25e9ed4d6de7c4ac
+  zh: 8b57631f7207b959
+/deepseek-ai-dsh-session-query/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-session-query/use-this-package:
+  en: cc9eb8f214c57137
+  zh: 76723633d0faee5d
+/deepseek-ai-dsh-session-query/use-this-package/what-you-can-do:
+  en: 742b1358d97e56cc
+  zh: 00d75ce6e5769559
+/deepseek-ai-dsh-session-query/use-this-package/filters:
+  en: 1b95403461947ca1
+  zh: cffa21b03df9f0ad
+/deepseek-ai-dsh-session-query/use-this-package/configuration:
+  en: bec9cedaa219e297
+  zh: e9cd16c0589fab4d
+/deepseek-ai-dsh-session-query/use-this-package/failures-and-recovery:
+  en: fe410eb1234c1c45
+  zh: d2a1be75eb841be0
+/deepseek-ai-dsh-session-query/understand-the-implementation:
+  en: 6a18034f1ccc247a
+  zh: aecd49a7b846f913
+/deepseek-ai-dsh-session-query/understand-the-implementation/design-philosophy:
+  en: b34fb0d209192ff4
+  zh: 455bdb024d04f16a
+/deepseek-ai-dsh-session-query/understand-the-implementation/source-map:
+  en: 7c546162fa3f75d4
+  zh: c6910bc53ae0ff71
+/deepseek-ai-dsh-session-query/understand-the-implementation/corpus-resolution:
+  en: efa560c55a869c71
+  zh: 451eb107825856ac
+/deepseek-ai-dsh-session-query/understand-the-implementation/observation-cache:
+  en: abe122deb81566e5
+  zh: 4c4f327f2ee1144e
+/deepseek-ai-dsh-session-query/understand-the-implementation/reads-and-traces:
+  en: 48922e284adddd1b
+  zh: 9956dcc57e027d77
+/deepseek-ai-dsh-session-query/further-exploration:
+  en: 40a0579a433d568e
+  zh: c34ff46da6cbd3e5
+/deepseek-ai-dsh-session-query/model-experience:
+  en: dff12da8d1e64e66
+  zh: e054b0d54e29f899
+/deepseek-ai-dsh-session-query/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: f57cc48a1b5cbfa9
+/deepseek-ai-dsh-session-query/known-limitations-and-deferred-work:
+  en: e70a64614189c09c
+  zh: 88d2a6634385c501
+/deepseek-ai-dsh-session-query/known-limitations-and-deferred-work/dev-note:
+  en: d2f0d68fe29fb750
+  zh: 323d21ee73a9e3f6
+/deepseek-ai-dsh-session-query/known-limitations-and-deferred-work/dev-note/future-extractor-and-search-provider-registries:
+  en: 605a72e65297c6cf
+  zh: 87aa75ec62eccbde

@@ -80,6 +80,29 @@ describe('a-priori root and declaration gate', () => {
 })
 
 describe('lifecycle cascade (one axis)', () => {
+  it('publishes Factory child mutations only after every sibling declaration is installed', () => {
+    const core = new SlotCore()
+    const observed: unknown[] = []
+    core.onMutate((key) => {
+      if (key === 'test.single') observed.push(core.specDynamic('test.session'))
+    })
+    const registerFactory = core.registerFactory as (
+      options: object,
+      component: unknown,
+    ) => () => void
+
+    registerFactory({
+      name: 'test.atomic-factory',
+      scope: 'root',
+      children: {
+        'test.single': { kind: 'single', scope: 'root' },
+        'test.session': { kind: 'single', scope: 'session' },
+      },
+    }, Comp)
+
+    expect(observed).toEqual([{ kind: 'single', scope: 'session' }])
+  })
+
   it('disposing a declaring entry collapses child slots and their contributions recursively', () => {
     const core = new SlotCore()
     const disposeFrame = mountFrame(core)

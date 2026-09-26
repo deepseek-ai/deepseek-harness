@@ -1,0 +1,302 @@
+{
+  "formatVersion": 1,
+  "roots": [
+    {
+      "key": "event:schedule/change",
+      "kind": "event",
+      "event": "schedule/change",
+      "surface": false,
+      "digest": "a0a2e5c42e1c929445ecd1cd70f49be6b66441894ec72c08e8ae332821d4a3cb",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 19,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 13,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 13,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 20,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              2,
+              6,
+              8,
+              9
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "acceptedAt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "operation",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "literal",
+            "value": "dispatch"
+          },
+          {
+            "kind": "literal",
+            "value": 1
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "id",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "operation",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "delete"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "id",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "operation",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "operation",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "schedule",
+                "type": 11,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "create"
+          },
+          {
+            "kind": "union",
+            "types": [
+              12,
+              15,
+              17
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "afterSeconds",
+                "type": 13,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 14,
+                "optional": false
+              },
+              {
+                "name": "prompt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "scheduledAt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "title",
+                "type": 3,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": "after"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "everySeconds",
+                "type": 13,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 16,
+                "optional": false
+              },
+              {
+                "name": "prompt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "scheduledAt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "title",
+                "type": 3,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "every"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "id",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 18,
+                "optional": false
+              },
+              {
+                "name": "prompt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "scheduledAt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "title",
+                "type": 3,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "at"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "schedule/change"
+          }
+        ]
+      }
+    }
+  ],
+  "types": []
+}

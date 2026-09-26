@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session-query/README.md
-README.md: fe206a31aef78a73dfe3653ff75b3a666aaac24a
-README.zh.md: f8200a90082172ee11e12a3dd5c393d5363fc77d
+/:
+  en: 03834649fae34d8d
+  zh: c5faab18f14666f4
+/session-query-session-retrieval-capability-family:
+  en: 65758f8a3a8d5406
+  zh: e6f4d737bf11851a
+/session-query-session-retrieval-capability-family/summary:
+  en: 34f1f2b609594cfa
+  zh: 868a29d637dd7f8d
+/session-query-session-retrieval-capability-family/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/session-query-session-retrieval-capability-family/packages:
+  en: a4261b2c9c0fc9eb
+  zh: e1e439d5438e9542
+/session-query-session-retrieval-capability-family/related-documentation:
+  en: dae8951ca37f8c47
+  zh: 1f63549ca52ed298
+/session-query-session-retrieval-capability-family/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

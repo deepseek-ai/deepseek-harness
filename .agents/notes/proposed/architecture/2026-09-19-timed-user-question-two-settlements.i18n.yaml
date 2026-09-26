@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for 2026-09-19-timed-user-question-two-settlements.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-09-19-timed-user-question-two-settlements.md
+/agent-note-timed-user-questions-as-two-settlements:
+  en: 15c55d3b120b8fd4
+  zh: 6b86ac34f4a1e9cd
+/agent-note-timed-user-questions-as-two-settlements/problem:
+  en: f665127a9b5b8225
+  zh: b19845f62310f3a2
+/agent-note-timed-user-questions-as-two-settlements/proposal:
+  en: 56ca8c0f97976358
+  zh: 69163bb5f064e069
+/agent-note-timed-user-questions-as-two-settlements/proposal/modes-and-scope:
+  en: d23e622ee4643b48
+  zh: 3732c10c12344755
+/agent-note-timed-user-questions-as-two-settlements/proposal/ownership:
+  en: 0543678ad9d26fc5
+  zh: aa6ba207e661c567
+/agent-note-timed-user-questions-as-two-settlements/proposal/foreground-wait-and-claim-lifetime:
+  en: 447713bbdf1ab4d8
+  zh: 2757678ae47822aa
+/agent-note-timed-user-questions-as-two-settlements/proposal/durable-state-and-late-answers:
+  en: b8729d06ab7814ed
+  zh: acaa8f4174701248
+/agent-note-timed-user-questions-as-two-settlements/proposal/card-state-and-delivery-races:
+  en: 8c55b693e7a5bca4
+  zh: aea6e966ce3667e3
+/agent-note-timed-user-questions-as-two-settlements/proposal/local-countdown-and-panel-actions:
+  en: 4c0c9ec59fc51217
+  zh: 322870eeb49176c7
+/agent-note-timed-user-questions-as-two-settlements/proposal/reply-node-and-grouping:
+  en: 10323b0e0340a40b
+  zh: a17fc3a4d4d820a7
+/agent-note-timed-user-questions-as-two-settlements/alternatives-considered:
+  en: ce8ff9d5bc4b85b7
+  zh: 49024fe3a5b194b2
+/agent-note-timed-user-questions-as-two-settlements/acceptance-criteria:
+  en: 5a993484c73befe9
+  zh: 38cd3209c68178c3
+/agent-note-timed-user-questions-as-two-settlements/risks:
+  en: aae260b0cd95554f
+  zh: 3d7fbd6cbe9e2d37

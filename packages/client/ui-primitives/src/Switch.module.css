@@ -1,12 +1,7 @@
 /* The on/off appearance keys off aria-checked rather than a parallel class, so
  * the visual state cannot disagree with the state assistive technology reads.
  *
- * The track is a capsule: its radius is half its height, so the corners consume
- * the whole side and the global superellipse would square the ends off against
- * the round thumb inside it. `corner-shape: round` opts the track out, the way
- * every full-round radius does. The corner-shape spec does not catch this one —
- * it recognizes 50%, 100%, and radii at or above 99px, not a radius that is
- * full-round only relative to its own box. */
+ * The capsule track and circular thumb opt out of the global superellipse. */
 .switch {
   box-sizing: border-box;
   position: relative;
@@ -15,7 +10,7 @@
   height: 20px;
   padding: 2px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 999px;
   corner-shape: round;
   background: var(--dsw-alias-border-l3);
   cursor: pointer;
@@ -31,7 +26,7 @@
 }
 
 .switch:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 

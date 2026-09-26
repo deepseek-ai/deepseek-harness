@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-17-compact-translucent-menu-surfaces.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-17-compact-translucent-menu-surfaces.md
+/agent-note-compact-translucent-menu-surfaces:
+  en: 629cdf857a84d1f3
+  zh: 676a34bac03903be
+/agent-note-compact-translucent-menu-surfaces/problem:
+  en: f1ff5b408b409003
+  zh: 1f548352bc075cc4
+/agent-note-compact-translucent-menu-surfaces/decision:
+  en: 30cbe72206e81f96
+  zh: 21cb393871fe6420
+/agent-note-compact-translucent-menu-surfaces/alternatives-considered:
+  en: f06228674ee82029
+  zh: 385603bebcd17d5f
+/agent-note-compact-translucent-menu-surfaces/consequences:
+  en: e76746c0b95549df
+  zh: 9ff34644703d565c

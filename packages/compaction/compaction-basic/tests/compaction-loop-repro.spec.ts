@@ -165,6 +165,7 @@ async function harness(toolSteps: number): Promise<{ ctx: Context; compact: Repr
   // fires within the runaway turn after enough history can shrink.
   const compact = new ReproCompactionEngine(ctx, {
     auto: true,
+    headroomTokens: 0,
     thresholdRatio: 0.5,
     retainTokens: 50,
     maxTokens: 8192,
@@ -336,7 +337,7 @@ describe('token pressure after loop-admitted system prompts', () => {
         agent.session.append('system/message', {
           turn,
           step,
-          message: createSystemMessage('retry guidance', '@deepseek-ai/dsh-system-prompt'),
+          message: createSystemMessage('retry guidance'),
         }, { surfaceOp: { op: 'replace', startSeq: node, endSeq: node }, sourceEventSeqs: [node] })
         return { kind: 'retry' }
       })
@@ -396,6 +397,7 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
         ...await next(), provider: 'mock', model: 'mock',
       }))
       await ctx.plugin(BasicCompactionEngine, {
+        headroomTokens: 0,
         thresholdRatio: 1,
         retainTokens: 100,
         maxTokens: 64,
@@ -472,6 +474,7 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
     await ctx.plugin(TokenMeter)
     ctx.llm.registerAdapter(['mock'], adapter)
     await ctx.plugin(BasicCompactionEngine, {
+      headroomTokens: 0,
       thresholdRatio: 1,
       retainTokens: 100,
       maxTokens: 64,

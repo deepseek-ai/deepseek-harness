@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-28-identified-immutable-message-values.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-28-identified-immutable-message-values.md
-2026-07-28-identified-immutable-message-values.md: 9d2b22a5a1fc87ea7b0ff8eb24b2e8c4b86543e1
-2026-07-28-identified-immutable-message-values.zh.md: 6b36cfec0a24196ca526b0ffb21180967aa640eb
+/agent-note-create-every-message-as-an-identified-immutable-value:
+  en: 0bb4f6acecd9b6f1
+  zh: 11e17fde272119f1
+/agent-note-create-every-message-as-an-identified-immutable-value/problem:
+  en: 9334a7a325a88fda
+  zh: c21c8cee318c6a35
+/agent-note-create-every-message-as-an-identified-immutable-value/decision:
+  en: a4434de753a41d41
+  zh: f16e5cd634245f0e
+/agent-note-create-every-message-as-an-identified-immutable-value/alternatives-considered:
+  en: bf73901dd2b977ed
+  zh: 5ba5d4d05051b1da
+/agent-note-create-every-message-as-an-identified-immutable-value/consequences:
+  en: 9f2c40ccfcf03ee1
+  zh: 0e8ba6c97f2e32af
+/agent-note-create-every-message-as-an-identified-immutable-value/related:
+  en: 7c476f1a5195dff9
+  zh: c878154dbf766e82

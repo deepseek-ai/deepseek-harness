@@ -33,7 +33,8 @@ export interface UiRendererService {
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /**
-     * A slot declaration or registration set changed.
+     * An ordinary Slot declaration or entry registration set changed. Factory
+     * definitions publish through `subscribeFactory()` instead.
      * @mode emit
      * @param key - mutated SlotMap key.
      */

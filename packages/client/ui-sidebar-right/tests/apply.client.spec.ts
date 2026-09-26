@@ -8,16 +8,19 @@
  * service binding — and that every registration is gone after dispose, which
  * is what makes a reload safe. The seats' components have their own specs.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { Shortcuts, ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { apply, inject } from '../src/client/index.ts'
 import type { GuideInjected, SidebarRightInjected } from '../src/client/index.ts'
 import { apply as hostApply } from '../src/index.ts'
 import { SidebarRightController } from '../src/client/service.ts'
 import { SidebarRightTabRegistry } from '../src/client/tab-registry.ts'
 import type { createSidebarRightStore } from '../src/client/stores.ts'
+import * as sidebarStores from '../src/client/stores.ts'
 import { RightbarSeat } from '../src/client/shell/SidebarRight.tsx'
 import { RightbarRoot } from '../src/client/shell/RightbarRoot.tsx'
 import { ExpandButton } from '../src/client/shell/ExpandButton.tsx'
@@ -25,6 +28,8 @@ import { GuideBody } from '../src/client/tabs/guide/GuideBody.tsx'
 import { GuideTitle } from '../src/client/tabs/guide/GuideTitle.tsx'
 import { GUIDE_ID } from '../src/client/tabs/guide/definition.ts'
 import { en, zh } from '../src/client/locales.ts'
+
+const SHORTCUT_CATALOG: readonly never[] = []
 
 const SESSION = 's-test' as SessionId
 
@@ -38,7 +43,7 @@ interface Recorded {
   component: unknown
 }
 
-async function boot() {
+async function boot(shortcuts: Partial<Shortcuts> = {}) {
   const ctx = new Context()
   const registered: Recorded[] = []
   const slots = {
@@ -62,8 +67,12 @@ async function boot() {
   const resources = { pin: vi.fn<(address: string, signal: AbortSignal) => void>() }
   ctx.provide('slots', slots as never)
   ctx.provide('locale', locale as never)
+  ctx.provide('shortcuts', { runtime: 'web', register: () => () => {},
+    catalog: { getSnapshot: () => SHORTCUT_CATALOG, subscribe: () => () => {} }, ...shortcuts } as never)
   ctx.provide('layout', layout as never)
   ctx.provide('resources', resources as never)
+  ctx.provide('sessions', { retain: vi.fn() } as never)
+  ctx.provide('uiSession', { adapter: { current: createSnapshotStore({ key: undefined }) } } as never)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
   const seat = (name: string): Recorded => {
@@ -81,6 +90,27 @@ async function boot() {
 describe('ui-sidebar-right apply', () => {
   it('keeps the host Loader entry inert', () => {
     expect(hostApply).not.toThrow()
+  })
+
+  it('routes native close through the shortcut service and contains bridge rejections', async () => {
+    onTestFinished(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+    const closeWindow = vi.fn<() => Promise<void>>().mockResolvedValue()
+    const commands = new Map<string, ShortcutCommand>()
+    const h = await boot({ runtime: 'desktop',
+      closeWindow,
+      register: (command) => { commands.set(command.id, command); return () => { commands.delete(command.id) } },
+    })
+    onTestFinished(async () => { await h.ctx.fiber.dispose() })
+    const close = commands.get('page.close')!.resolve({ region: 'page', modal: null, target: null })
+    expect(close.status).toBe('handled')
+    if (close.status !== 'handled') throw new Error('Expected native close')
+    close.run()
+    expect(closeWindow).toHaveBeenCalledExactlyOnceWith()
+    const failure = new Error('Window unavailable')
+    closeWindow.mockRejectedValueOnce(failure)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    close.run()
+    await vi.waitFor(() => { expect(error).toHaveBeenCalledExactlyOnceWith('Window close failed', failure) })
   })
 
   it('provides both faces, and registers the guide through the same two-stage path as any other type', async () => {
@@ -137,7 +167,16 @@ describe('ui-sidebar-right apply', () => {
     const handle = seat('rightbar.session').store as ReturnType<typeof createSidebarRightStore>
     const instance = handle.create()
     instance.clearPersisted()
-    const release = injected.bindService({ sessionId: SESSION, actions: instance.actions, surfaces: {}, canSplitPane: () => true })
+    vi.stubGlobal('document', { activeElement: null })
+    onTestFinished(() => { vi.unstubAllGlobals() })
+    injected.toggleFullscreen()
+    expect(injectedOf(seat('conversation.session.header.corner'))).toHaveProperty('hooks.shortcuts')
+    const release = injected.bindService({
+      sessionId: SESSION, actions: instance.actions, surfaces: {},
+      closeWithFocus: (_paneId, close) => { close() },
+      openWithFocus: (open) => { open() },
+      canSplitPane: () => true,
+    })
     injected.openTab('guide', { revealIfOpened: false })
     const surface = instance.getSnapshot().bySession[SESSION]
     expect(surface?.layout.expanded).toBe(true)
@@ -146,6 +185,7 @@ describe('ui-sidebar-right apply', () => {
     if (surface === undefined) throw new Error('expected a surface')
     ctx.sidebarRight.tabDomain.sync(SESSION, surface.layout)
     expect(resources.pin).toHaveBeenCalledWith('sidebar://guide', expect.any(AbortSignal))
+    injected.splitPane(surface.layout.activePaneId)
     release()
     expect(() => { ctx.sidebarRight.toggleExpanded() }).toThrow('no session surface is mounted')
   })
@@ -173,6 +213,50 @@ describe('ui-sidebar-right apply', () => {
     expect(ctx.sidebarRight.openTabs.getSnapshot()).toEqual([])
   })
 
+  it('releases replaced store adoptions once and keeps the latest store for each Session', async () => {
+    const originalFactory = sidebarStores.createSidebarRightStore
+    const stops: Array<ReturnType<typeof vi.fn<() => void>>> = []
+    const factory = vi.spyOn(sidebarStores, 'createSidebarRightStore').mockImplementation((seed) => {
+      const handle = originalFactory(seed)
+      return {
+        ...handle,
+        create(scopeKey) {
+          const instance = handle.create(scopeKey)
+          return {
+            ...instance,
+            subscribe(listener) {
+              const stop = vi.fn(instance.subscribe(listener))
+              stops.push(stop)
+              return stop
+            },
+          }
+        },
+      }
+    })
+    let b: Awaited<ReturnType<typeof boot>> | undefined
+    try {
+      b = await boot()
+      const handle = b.seat('rightbar.session').store as ReturnType<typeof createSidebarRightStore>
+      const other = 's-other' as SessionId
+      handle.create(SESSION)
+      handle.create(other)
+      handle.create(SESSION)
+      handle.create(other)
+      const current = handle.create(SESSION)
+      const currentOther = handle.create(other)
+      expect(stops.map(stop => stop.mock.calls.length)).toEqual([1, 1, 1, 1, 0, 0])
+      current.actions.setExpanded(SESSION, true)
+      currentOther.actions.setExpanded(other, true)
+      expect(new Set(b.ctx.sidebarRight.openTabs.getSnapshot().map(tab => tab.sessionId)))
+        .toEqual(new Set([SESSION, other]))
+      await b.fiber.dispose()
+      expect(stops.map(stop => stop.mock.calls.length)).toEqual([1, 1, 1, 1, 1, 1])
+    } finally {
+      await b?.ctx.fiber.dispose()
+      factory.mockRestore()
+    }
+  })
+
   it('hands the guide body the registry\'s entry boxes, observable', async () => {
     const { ctx, seat, injectedOf } = await boot()
     const { hooks: { guideEntries } } = injectedOf(seat('sidebar.right.pane.tab')) as GuideInjected
@@ -195,7 +279,12 @@ describe('ui-sidebar-right apply', () => {
     const handle = seat('rightbar.session').store as ReturnType<typeof createSidebarRightStore>
     // Minted under the session key, so the instance is adopted and the teardown releases it.
     const instance = handle.create(SESSION)
-    injected.bindService({ sessionId: SESSION, actions: instance.actions, surfaces: {}, canSplitPane: () => true })
+    injected.bindService({
+      sessionId: SESSION, actions: instance.actions, surfaces: {},
+      closeWithFocus: (_paneId, close) => { close() },
+      openWithFocus: (open) => { open() },
+      canSplitPane: () => true,
+    })
     injected.openTab('guide')
     const surface = instance.getSnapshot().bySession[SESSION]
     const guide = Object.values(surface?.layout.tabs ?? {})[0]

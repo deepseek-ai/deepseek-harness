@@ -6,9 +6,9 @@
  */
 import { globSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { basename, dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { isCordisGroupEntry, loadCordisYaml } from './cordis-yaml.ts'
+import { isCordisGroupEntry, loadCordisYaml, presetDefinitions } from './cordis-yaml.ts'
 
 interface PackageManifest {
   name?: string
@@ -30,7 +30,7 @@ interface RuntimePlatform {
 
 type RuntimePlatformManifest = Record<string, RuntimePlatform>
 
-const AGENT_PRESET_GLOB = 'packages/preset/agent-presets/presets/*/agent.cordis.yml'
+const AGENT_PRESET_GLOB = 'packages/bundle/web-app/presets/*.patch.yml'
 
 export interface RuntimeClosureResult {
   failures: string[]
@@ -93,7 +93,7 @@ export async function verifyRuntimeClosure(
 
   return {
     failures,
-    presetCount: presetPaths.length,
+    presetCount: (await Promise.all(presetPaths.map(async path => presetDefinitions(loadCordisYaml(await readFile(resolve(root, path), 'utf8'))).length))).reduce((a, b) => a + b, 0),
     workspacePackageCount: queue.length,
   }
 }
@@ -130,19 +130,21 @@ async function missingPresetPlugins(
       failures.push(`${presetPath}: preset root must be a Loader entry array`)
       continue
     }
-    for (const target of targets) {
-      const processPlatform = processPlatformForTarget(target)
-      for (const plugin of activeBarePluginPackages(document, processPlatform)) {
-        const version = runtimeDependencies[plugin]
-        if (version?.startsWith('workspace:') === true) continue
-        const preset = basename(dirname(presetPath))
-        const declaration = version === undefined
-          ? ''
-          : ` [runtime dependency is ${JSON.stringify(version)}; expected workspace:]`
-        const key = `${preset} preset -> ${plugin}${declaration}`
-        const targets = missing.get(key) ?? new Set<string>()
-        targets.add(target)
-        missing.set(key, targets)
+    for (const definition of presetDefinitions(document)) {
+      for (const target of targets) {
+        const processPlatform = processPlatformForTarget(target)
+        for (const plugin of activeBarePluginPackages(definition.plugins, processPlatform)) {
+          const version = runtimeDependencies[plugin]
+          if (version?.startsWith('workspace:') === true) continue
+          const preset = definition.id
+          const declaration = version === undefined
+            ? ''
+            : ` [runtime dependency is ${JSON.stringify(version)}; expected workspace:]`
+          const key = `${preset} preset -> ${plugin}${declaration}`
+          const targets = missing.get(key) ?? new Set<string>()
+          targets.add(target)
+          missing.set(key, targets)
+        }
       }
     }
   }

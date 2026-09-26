@@ -1,6 +1,94 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/subagent/subagent/README.md
-README.md: 74cca45462f17e1de74e2fa0132c4e7dccad414b
-README.zh.md: 39e598c3e88d2f82811c85357c3b82d98eec7327
+/:
+  en: 384d01a27a111f49
+  zh: fbadc6917c3099c9
+/deepseek-ai-dsh-subagent:
+  en: 425344cec61f5c70
+  zh: 48e8f2a2e3c1f418
+/deepseek-ai-dsh-subagent/summary:
+  en: 300242b82e87aa3e
+  zh: a4a1319487072484
+/deepseek-ai-dsh-subagent/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-subagent/use-this-package:
+  en: 4651aec03a1d2e21
+  zh: 7b6d1d604bdb1bf1
+/deepseek-ai-dsh-subagent/use-this-package/enabling-delegation:
+  en: f66e74a5fa4e49b6
+  zh: 8c3a793cc29fcc1b
+/deepseek-ai-dsh-subagent/use-this-package/delegation-settings:
+  en: 86c982223fab1a3a
+  zh: 3d220d8ed84eab9a
+/deepseek-ai-dsh-subagent/use-this-package/continuable-capacity:
+  en: 8346a0de39204c1c
+  zh: 9dd1d926790e5e8c
+/deepseek-ai-dsh-subagent/use-this-package/one-shot-and-continuable-children:
+  en: 10d0a7e0513bf04b
+  zh: 0cf2c2d81e85d7a9
+/deepseek-ai-dsh-subagent/use-this-package/messaging-interrupting-and-discovering:
+  en: ff41ac0e770ed865
+  zh: 27dcf055badf217d
+/deepseek-ai-dsh-subagent/use-this-package/failure-and-recovery:
+  en: 782aaaf8639c211c
+  zh: e2a873eece366e74
+/deepseek-ai-dsh-subagent/understand-the-implementation:
+  en: 74d91b364b23f88d
+  zh: 19cc558105efe8df
+/deepseek-ai-dsh-subagent/understand-the-implementation/design-concept:
+  en: 26c4eb7592b77d14
+  zh: c166fb6ee1a1c7d8
+/deepseek-ai-dsh-subagent/understand-the-implementation/source-map:
+  en: d9afc0d9548afe58
+  zh: 0e11526b6c001dc6
+/deepseek-ai-dsh-subagent/understand-the-implementation/one-shot-flow:
+  en: 9439bd15ee2129c9
+  zh: 6c275cf484efa0cf
+/deepseek-ai-dsh-subagent/understand-the-implementation/continuable-flow:
+  en: 9703c868342826cc
+  zh: e300484cecf15835
+/deepseek-ai-dsh-subagent/understand-the-implementation/ownership-and-invariants:
+  en: 7384d01be46a2f0a
+  zh: 83373486ad10d6d5
+/deepseek-ai-dsh-subagent/further-exploration:
+  en: d1c1e87fc59ebfe5
+  zh: b7ec9b870b514911
+/deepseek-ai-dsh-subagent/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-subagent/model-experience/settlement-notice:
+  en: f7cec22ba9d3fb4f
+  zh: 67b1d40f9b136f71
+/deepseek-ai-dsh-subagent/model-experience/settlement-notice/what-the-model-sees:
+  en: 44ba290ef9896de9
+  zh: 21d207c31228c0ce
+/deepseek-ai-dsh-subagent/model-experience/settlement-notice/token-effect:
+  en: 45dc428c61f606f5
+  zh: 7e9a2587e98c8ca6
+/deepseek-ai-dsh-subagent/model-experience/settlement-notice/kv-cache-effect:
+  en: d6b1d618083da79b
+  zh: 9a28942b7d53c382
+/deepseek-ai-dsh-subagent/model-experience/child-delegation-scope-statement:
+  en: dc8544657916e194
+  zh: b0feff0764b5d903
+/deepseek-ai-dsh-subagent/model-experience/child-delegation-scope-statement/what-the-model-sees:
+  en: 61906b6a7b656eeb
+  zh: 2fa94349714efc9f
+/deepseek-ai-dsh-subagent/model-experience/child-delegation-scope-statement/what-the-model-sees/the-delegation-scope-statement:
+  en: 960e4abc8393bcd1
+  zh: e125aa2bab1570d0
+/deepseek-ai-dsh-subagent/model-experience/child-delegation-scope-statement/token-effect:
+  en: 4e0b922b186dc2a9
+  zh: 7453563417c5b9a2
+/deepseek-ai-dsh-subagent/model-experience/child-delegation-scope-statement/kv-cache-effect:
+  en: 59e848fca82a46fb
+  zh: fcd6a8a2bb58609f
+/deepseek-ai-dsh-subagent/known-limitations-and-deferred-work:
+  en: b2182809471f0780
+  zh: cfab217025442ae8
+/deepseek-ai-dsh-subagent/known-limitations-and-deferred-work/dev-note:
+  en: 25cc0909348666bb
+  zh: 95517f12de100049

@@ -25,7 +25,7 @@ The Web GUI goal surface shows both the durable goal state and its current proce
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin alongside `ui-conversation` and the goal domain package; the strip then appears as the second card in the composer-context stack (after Todo, before Queue) whenever the session has a goal. An armed active goal offers pause; an active-but-disarmed or paused goal offers resume; edit rewrites the objective; clear removes the goal and suppresses the strip until the projection catches up.
+Mount this plugin alongside `ui-conversation` and the goal domain package; the strip then appears as the second card in the composer-context stack (after Todo, before Queue) whenever the session has a goal. Todo and Goal use the same panel elevation above the composer. An armed active goal offers pause; an active-but-disarmed or paused goal offers resume; edit rewrites the objective; clear removes the goal and suppresses the strip until the projection catches up.
 
 ### The command-input bubble
 
@@ -44,6 +44,8 @@ A rejected mutation surfaces the Remote error inline on the strip; loading, abse
 <summary>Implementation internals — click to expand</summary>
 
 The durable goal arrives through `useProjection('goal')` (seeded by the history tail page and updated by `session/projection` frames). The inject face carries a registrant-private activation hook source plus the four mutation verbs. That source starts only while the framework hook observes it, reads `ctx.remote.goals.get`, subscribes to `goal/activation-changed`, and refreshes on running-state or connection resets. Live-event epochs invalidate in-flight reads, so a stale HTTP result cannot overwrite a newer activation edge; running refreshes retain the last known activation until the read resolves. The strip owns no domain store or cross-plugin cache. Each mutation reads the CAS ref from the session's current projected value at call time, and the RPC's compare-and-set is the staleness guard. The strip single-flights mutations synchronously because a pending render cannot fence same-frame clicks. The command-input projection is a separate Conversation Definition that builds a `command-input` Chat Node before the generic command result Node; it never creates `user/message` or a model turn.
+
+Activation reads hold a temporary `goalActivation` Client reference and send `goals.get` only after that Session's initial history open succeeds. A stale binding or failed open sends no RPC. Rejected reads are logged without changing the projected goal or last known activation; the temporary reference is released when the read settles.
 
 </details>
 

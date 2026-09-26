@@ -30,12 +30,14 @@ kind: "package-group"
 | [`modules/`](modules/README.zh.md) | 加载浏览器侧客户端模块 | `ctx.clientModules` / `ctx.modules` |
 | [`connection/`](connection/README.zh.md) | 维护浏览器与宿主之间的 RPC 通信与事件投递 | `ctx.connection` |
 | [`file-upload/`](file-upload/README.zh.md) | 在页面线程之外发送原始 Blob 与字节流请求体 | `ctx.fileUpload` |
+| [`shortcuts/`](shortcuts/README.zh.md) | 注册应用键盘命令 | `ctx.shortcuts` |
+| [`ui-shortcuts/`](ui-shortcuts/README.zh.md) | 展示快捷键速查 | — |
 | [`store/`](store/README.zh.md) | 提供不依赖 React 的 observable 与快照存储原语 | — |
 | [`hmr/`](hmr/README.zh.md) | 在开发期间刷新客户端插件 | — |
 | [`locale/`](locale/README.zh.md) | 提供本地化偏好与消息词典 | `ctx.locale` |
 | [`test-runtime/`](../test-support/client-runtime/README.zh.md) | 为客户端功能包提供共享的仓库测试支持 | — |
 | [`ui-renderer/`](ui-renderer/README.zh.md) | 将 slot 数据绑定到 React，并挂载组装完成的应用 | `ctx.uiRenderer` |
-| [`ui-slots/`](ui-slots/README.zh.md) | 定义 UI 功能注册与组合扩展 slot 的方式 | — |
+| [`ui-slots/`](ui-slots/README.zh.md) | 定义类型化扩展 Slots 与可复用 Component Factory | — |
 | [`ui-session/`](ui-session/README.zh.md) | 把会话控制器状态适配为标准 Slot source 与钩子 | — |
 | [`ui-theme/`](ui-theme/README.zh.md) | 应用所选颜色主题 | — |
 | [`ui-primitives/`](ui-primitives/README.zh.md) | 提供共享 React 控件、图标与内容渲染器 | — |
@@ -45,6 +47,7 @@ kind: "package-group"
 | [`ui-sidebar/`](ui-sidebar/README.zh.md) | 展示工作区与会话导航 | — |
 | [`ui-sidebar-right/`](ui-sidebar-right/README.zh.md) | 管理右侧 Sidebar 及其 tab 类型 | `ctx.sidebarRight`, `ctx.sidebarRightTabs` |
 | [`ui-sidebar-documentpreview/`](ui-sidebar-documentpreview/README.zh.md) | 在右侧 Sidebar 的 tab 中显示文档 | `ctx.documentPreviews` |
+| [`ui-sidebar-browser/`](ui-sidebar-browser/README.zh.md) | 在右侧 Sidebar tab 中浏览 sandboxed HTTP(S) 页面，包括 loopback 服务 | — |
 | [`resources/`](resources/README.zh.md) | 统一资源模型：`useResource` 会话标准钩子背后的协议提供方 | `ctx.resources` |
 | [`ui-sidebar-files/`](ui-sidebar-files/README.zh.md) | 右侧 Sidebar 的工作区文件树 tab 类型 | — |
 | [`ui-brand-official/`](ui-brand-official/README.zh.md) | 用官方名称与标记填充通用浏览器品牌 slot | — |
@@ -61,24 +64,28 @@ kind: "package-group"
 | [`ui-skill/`](ui-skill/README.zh.md) | 向内联建议添加 skill（技能）引用 | — |
 | [`ui-reference/`](ui-reference/README.zh.md) | 统一的 Web `@file` / `@session` 引用 source | — |
 | [`ui-subagent/`](ui-subagent/README.zh.md) | 提供 subagent 导航、子级 transcript（文本记录）状态与内联引用 | — |
+| [`ui-jobs/`](ui-jobs/README.zh.md) | 列出本会话的后台任务，并提供按需展开的流式输出面板 | — |
 | [`ui-schedule/`](ui-schedule/README.zh.md) | 在只读标题栏目录中列出当前会话中生效的提醒 | — |
-| [`ui-jobs/`](ui-jobs/README.zh.md) | 在会话标题栏列出当前会话的后台任务 | — |
 | [`ui-model-selection/`](ui-model-selection/README.zh.md) | 在对话界面中提供模型选择 | — |
 | [`ui-permission-presets/`](ui-permission-presets/README.zh.md) | 配置默认权限并切换当前会话的访问模式 | — |
 | [`ui-plan/`](ui-plan/README.zh.md) | 展示生效中的 plan mode 状态及其退出控件 | — |
-| [`ui-settings-plugins/`](ui-settings-plugins/README.zh.md) | 负责「插件」设置分区、其标签页扩展点与可配置的宿主平面插件卡片 | — |
+| [`ui-settings-plugins/`](ui-settings-plugins/README.zh.md) | 负责「内置插件」设置分区壳及其标签页扩展点 | — |
 | [`ui-user-questions/`](ui-user-questions/README.zh.md) | 展示 agent 请求的交互式问题 | — |
 | [`ui-agent-preset/`](ui-agent-preset/README.zh.md) | 选择会话的 agent 预设并编写预设组合 | — |
 | [`ui-settings/`](ui-settings/README.zh.md) | 承载设置界面及其扩展区域 | — |
 | [`ui-settings-general/`](ui-settings-general/README.zh.md) | 提供常规设置分区 | — |
 | [`ui-settings-models/`](ui-settings-models/README.zh.md) | 提供模型提供方配置与 DeepSeek 引导 | — |
+| [`ui-settings-shell/`](ui-settings-shell/README.zh.md) | 在插件页提供终端设置页 | — |
+| [`ui-settings-agent-loop/`](ui-settings-agent-loop/README.zh.md) | 在插件页提供 Agent 循环设置页 | — |
+| [`ui-settings-subagent/`](ui-settings-subagent/README.zh.md) | 在插件页提供子智能体设置页 | — |
+| [`ui-settings-web-search/`](ui-settings-web-search/README.zh.md) | 在插件页提供网页搜索设置页 | — |
 | [`ui-plugin-manager/`](ui-plugin-manager/README.zh.md) | 贡献侧栏的“插件”面板：安装、启用、停用、重试与组合已安装的包 | — |
 | [`ui-settings-plugin-inventory/`](ui-settings-plugin-inventory/README.zh.md) | 向「插件」设置贡献只读的 Host Loader 清单标签页 | — |
-| [`ui-deliverables/`](ui-deliverables/README.zh.md) | 生成已产出文件的轮次尾部与可点击的最终响应文件引用 | — |
-| [`ui-message-feedback/`](ui-message-feedback/README.zh.md) | 反馈界面：助手消息操作条中的逐消息赞踩，以及点赞、点踩与 `/feedback` 背后的反馈弹窗 | — |
+| [`ui-deliverables/`](ui-deliverables/README.zh.md) | 生成改动文件卡片及其对比 tab、交付文件卡片与可点击的最终响应文件引用 | — |
+| [`ui-message-feedback/`](ui-message-feedback/README.zh.md) | 提供消息赞踩，以及从赞踩、`/feedback` 或会话标题栏菜单打开的反馈弹窗 | `ctx.feedbackUi` |
 | [`ui-directory-picker-browse/`](ui-directory-picker-browse/README.zh.md) | 面向工作区目录流程的应用内目录浏览界面 | — |
-| [`ui-directory-picker-native/`](ui-directory-picker-native/README.zh.md) | 驱动宿主 OS 选择器的原生目录选择界面 | — |
-| [`ui-open-in-app/`](ui-open-in-app/README.zh.md) | 在已安装应用中打开工作区目录的会话标题栏拆分按钮 | — |
+| [`ui-directory-picker-native/`](ui-directory-picker-native/README.zh.md) | 驱动本地 Desktop 或 Host OS 选择器的原生目录选择界面 | — |
+| [`ui-open-in-app/`](ui-open-in-app/README.zh.md) | 在已安装应用中打开工作区目录的会话标题栏拆分按钮，以及文档预览里用默认应用打开单个文件的控件 | — |
 
 -----
 

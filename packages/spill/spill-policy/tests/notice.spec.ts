@@ -20,6 +20,14 @@ describe('persisted spill notice', () => {
     }
   })
 
+  it('reports whole-image omissions while recognizing historical text-only notices', () => {
+    const notice = formatSpillNotice({ kind: 'exact', count: 12 }, ref, 2)
+    expect(notice).toContain('Omitted 12 bytes. Omitted 2 images.')
+    expect(hasSpillNotice(notice)).toBe(true)
+    expect(hasSpillNotice(notice.replace('2 images', '02 images'))).toBe(false)
+    expect(hasSpillNotice(notice.replace('2 images', '9007199254740992 images'))).toBe(false)
+  })
+
   it('keeps locator and retrieval text opaque, including parentheses and newlines', () => {
     const notice = formatSpillNotice({ kind: 'exact', count: 42 }, {
       locator: SpillLocator('/spill/报告 (1).txt'), retrievalHint: 'Read it.\n\n(additional guidance)',

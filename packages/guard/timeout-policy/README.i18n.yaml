@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/guard/timeout-policy/README.md
-README.md: a9381595b25adcdbf2c4bf5e2c7034580e7813e7
-README.zh.md: 27938b1793bf75a3df809e16782857701d1b11cb
+/:
+  en: 7020f47046dc8148
+  zh: 191dea4c788f374b
+/deepseek-ai-dsh-tool-call-timeout-policy:
+  en: 0bab94e0d9903464
+  zh: 417ef898055734ba
+/deepseek-ai-dsh-tool-call-timeout-policy/summary:
+  en: 745e3c8642ed9ea9
+  zh: c8cfd6a3b0c3c9bf
+/deepseek-ai-dsh-tool-call-timeout-policy/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tool-call-timeout-policy/use-this-package:
+  en: 1235dce86c24bdd6
+  zh: d96b544b0b745766
+/deepseek-ai-dsh-tool-call-timeout-policy/use-this-package/when-to-choose-it:
+  en: 2c6495054dfaf09c
+  zh: 7f2d65c3202d75f3
+/deepseek-ai-dsh-tool-call-timeout-policy/use-this-package/setting-it-up:
+  en: 42c3fee6ddf0e952
+  zh: 6b7728300cf5bfdc
+/deepseek-ai-dsh-tool-call-timeout-policy/use-this-package/what-you-get:
+  en: 339ff1d6001f3def
+  zh: c3e378abc7c58fa4
+/deepseek-ai-dsh-tool-call-timeout-policy/understand-the-implementation:
+  en: 9bdd0f9388915825
+  zh: c101ec504869d187
+/deepseek-ai-dsh-tool-call-timeout-policy/understand-the-implementation/design-philosophy:
+  en: 39f08d20a467b458
+  zh: 61f9e8ba3a5479d2
+/deepseek-ai-dsh-tool-call-timeout-policy/understand-the-implementation/how-a-deadline-is-armed-and-mapped:
+  en: 4c2f31d760d5ad4b
+  zh: 42e5c42675c32dcc
+/deepseek-ai-dsh-tool-call-timeout-policy/understand-the-implementation/composing-with-other-wrappers:
+  en: 09fba7333cf511f6
+  zh: 965c60634d370287
+/deepseek-ai-dsh-tool-call-timeout-policy/understand-the-implementation/source-map:
+  en: 35abf9419848ba92
+  zh: 3c08b161064abdcd
+/deepseek-ai-dsh-tool-call-timeout-policy/further-exploration:
+  en: fb2426b1c4c3da4a
+  zh: ff9a7cd6a6b9f631
+/deepseek-ai-dsh-tool-call-timeout-policy/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-call-timeout-policy/model-experience/conditional-tool-result:
+  en: 7877631ca859b191
+  zh: fb6f2aa33f70b82c
+/deepseek-ai-dsh-tool-call-timeout-policy/model-experience/conditional-tool-result/what-the-model-sees:
+  en: 1fd9832261036f56
+  zh: 245b04969f3bc26d
+/deepseek-ai-dsh-tool-call-timeout-policy/model-experience/conditional-tool-result/token-effect:
+  en: 063d0485b8631d04
+  zh: 13c1a680cfa9f02b
+/deepseek-ai-dsh-tool-call-timeout-policy/model-experience/conditional-tool-result/kv-cache-effect:
+  en: 2fbf2175168e8244
+  zh: f681f89596f500f5
+/deepseek-ai-dsh-tool-call-timeout-policy/known-limitations-and-deferred-work:
+  en: 8b51b07b2fc6d1bc
+  zh: f65e3760a6ea5f2f
+/deepseek-ai-dsh-tool-call-timeout-policy/known-limitations-and-deferred-work/dev-note:
+  en: 93e2b2a5ae84f266
+  zh: 63283f6b1b2da63f

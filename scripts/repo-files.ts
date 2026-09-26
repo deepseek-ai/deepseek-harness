@@ -228,6 +228,7 @@ export function uniqueRepoFiles(
  * @param pattern - global regex matched independently against each line.
  * @param normalize - maps raw regex text to the reference the gate evaluates.
  * @param isViolation - returns true when the normalized reference is invalid.
+ * @param excludedRange - optional selector of a zero-based, end-exclusive line range to leave unscanned.
  * @returns every rejected reference in source order.
  */
 export function findReferenceViolations(
@@ -236,11 +237,15 @@ export function findReferenceViolations(
   pattern: RegExp,
   normalize: (raw: string) => string,
   isViolation: (ref: string) => boolean,
+  excludedRange?: (file: string, source: string) => readonly [number, number] | undefined,
 ): ReferenceViolation[] {
   const file = relative(root, absPath).split(sep).join('/')
   const out: ReferenceViolation[] = []
-  const lines = readFileSync(absPath, 'utf8').split('\n')
+  const source = readFileSync(absPath, 'utf8')
+  const lines = source.split('\n')
+  const excluded = excludedRange?.(file, source)
   for (let i = 0; i < lines.length; i++) {
+    if (excluded !== undefined && i >= excluded[0] && i < excluded[1]) continue
     const line = lines[i]
     if (line === undefined) continue
     for (const match of line.matchAll(pattern)) {

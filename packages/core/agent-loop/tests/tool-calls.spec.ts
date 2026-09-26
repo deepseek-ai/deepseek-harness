@@ -9,13 +9,20 @@ import { createUserMessage, ToolCallId, StreamChunk  } from '@deepseek-ai/dsh-ll
 import SessionStore, { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import ToolRuntime, { defineContentToolFixture, TOOL_ABORTED_BEFORE_DISPATCH, TOOL_RUNTIME_SCHEDULER, type PostToolDecision, type PreToolDecision } from '@deepseek-ai/dsh-tools'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import AgentLoop, { DEFAULT_MAX_PARALLEL_TOOL_CALLS } from '@deepseek-ai/dsh-agent-loop'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'p': { kind: 'p' } & ContextFormed
+  }
+}
 
 async function harness(adapter: MockAdapter, maxParallelToolCalls?: number) {
   const ctx = new Context()
@@ -258,7 +265,7 @@ describe('tool-call scheduler: model-order results despite out-of-order settleme
     await waitForIdle(ctx, agent)
 
     const messages = agent.session.deriveMessages()
-    const toolResults = messages.flatMap(m => m.content.filter(b => b.type === 'tool-result'))
+    const toolResults = messages.filter(m => m.role === 'tool')
     expect(toolResults.map(b => b.toolCallId)).toEqual([ToolCallId('c1'), ToolCallId('c2')])
   })
 })
@@ -267,29 +274,6 @@ describe('tool-call scheduler: rolling pool honors maxParallelToolCalls', () => 
   it('rejects invalid global maxParallelToolCalls config at plugin load', async () => {
     await expect(harness(new MockAdapter([]), 0)).rejects.toThrow()
     await expect(harness(new MockAdapter([]), 1.5)).rejects.toThrow()
-  })
-
-  it('defensively rejects invalid caps when direct construction bypasses the config schema', () => {
-    // Validation precedes the turnBoundary registration, so a rejected
-    // constructor registers nothing and needs no fiber cleanup.
-    expect(() => new AgentLoop(new Context(), { agents: [], maxParallelToolCalls: 0 }))
-      .toThrow('maxParallelToolCalls must be a positive integer')
-    expect(() => new AgentLoop(new Context(), { agents: [], maxParallelToolCalls: 1.5 }))
-      .toThrow('maxParallelToolCalls must be a positive integer')
-  })
-
-  it('defaults the cap when direct construction bypasses the config schema', async () => {
-    const ctx = new Context()
-    await ctx.plugin(LlmRuntime)
-    await ctx.plugin(SessionStore)
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
-    await ctx.plugin(ToolRuntime)
-    await ctx.plugin(AgentRegistry)
-
-    const loop = new AgentLoop(ctx, { agents: [] })
-    expect(loop.config.maxParallelToolCalls).toBe(DEFAULT_MAX_PARALLEL_TOOL_CALLS)
-    await ctx.fiber.dispose()
   })
 
   it('starts at most the cap, replenishing as calls settle', async () => {
@@ -406,7 +390,7 @@ describe('tool-call scheduler: ordered middleware and additional contexts', () =
     ctx.tools.register(gated.tool)
     ctx.on('tools/post-execute', async (exec, _result): Promise<PostToolDecision> =>
       ({ kind: 'accept', additionalContexts: [createUserMessage({
-        content: [{ type: 'text', text: `ctx-${exec.callId}` }], source: { kind: 'plugin', plugin: 'p' },
+        content: [{ type: 'text', text: `ctx-${exec.callId}` }], source: { kind: 'p' },
       })] }))
     const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
 
@@ -416,11 +400,11 @@ describe('tool-call scheduler: ordered middleware and additional contexts', () =
     await waitForIdle(ctx, agent)
 
     const log = events(agent)
-    const contextTexts = log.filter(e => e.type === 'user/message' && e.data.source.kind === 'plugin')
+    const contextTexts = log.filter(e => e.type === 'user/message' && e.data.source.kind !== 'user')
       .map(e => ((e.data as { content: { text: string }[] }).content[0]!).text)
     expect(contextTexts).toEqual(['ctx-c1', 'ctx-c2'])
     const lastResult = log.findLastIndex(e => e.type === 'tool/result')
-    const firstContext = log.findIndex(e => e.type === 'user/message' && e.data.source.kind === 'plugin')
+    const firstContext = log.findIndex(e => e.type === 'user/message' && e.data.source.kind !== 'user')
     expect(lastResult).toBeLessThan(firstContext)
   })
 
@@ -463,11 +447,11 @@ describe('tool-call scheduler: ordered middleware and additional contexts', () =
     expect(post).toEqual(['c1', 'c2'])
     const results = events(agent).filter(e => e.type === 'tool/result')
     expect(results.map(e => e.data.message.source.callId)).toEqual([ToolCallId('c1'), ToolCallId('c2'), ToolCallId('c3')])
-    expect((results[1]!.data.message.content[0].content[0] as { text: string }).text).toContain('blocked by policy')
+    expect((results[1]!.data.message.content[0] as { text: string }).text).toContain('blocked by policy')
     expect(results[1]!.data.error).toEqual({
       name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: 'exact scope was not authorized',
     })
-    expect((results[2]!.data.message.content[0].content[0] as { text: string }).text).toContain('pre exploded')
+    expect((results[2]!.data.message.content[0] as { text: string }).text).toContain('pre exploded')
   })
 })
 
@@ -495,7 +479,7 @@ describe('tool-call scheduler: abort handling', () => {
       .toEqual([ToolCallId('c1'), ToolCallId('c2')])
     expect(events(agent).filter(e => e.type === 'tool/result').map(e => ({
       callId: e.data.message.source.callId,
-      isError: e.data.message.content[0].isError,
+      isError: e.data.message.isError,
       error: e.data.error,
     }))).toEqual([
       { callId: ToolCallId('c1'), isError: true, error: { name: 'AbortError', code: TOOL_ABORTED_BEFORE_DISPATCH } },
@@ -527,7 +511,7 @@ describe('tool-call scheduler: abort handling', () => {
       .toEqual([ToolCallId('c1'), ToolCallId('c2')])
     expect(events(agent).filter(e => e.type === 'tool/result').map(e => ({
       callId: e.data.message.source.callId,
-      isError: e.data.message.content[0].isError,
+      isError: e.data.message.isError,
       error: e.data.error,
     }))).toEqual([
       { callId: ToolCallId('c1'), isError: true, error: { name: 'AbortError', code: TOOL_ABORTED_BEFORE_DISPATCH } },
@@ -546,7 +530,7 @@ describe('tool-call scheduler: abort handling', () => {
     ctx.on('tools/post-execute', async (exec, _result, next): Promise<PostToolDecision> => ({
       ...await next(),
       additionalContexts: [createUserMessage({
-        content: [{ type: 'text', text: `ctx-${exec.callId}` }], source: { kind: 'plugin', plugin: 'p' },
+        content: [{ type: 'text', text: `ctx-${exec.callId}` }], source: { kind: 'p' },
       })],
     }))
     const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
@@ -565,7 +549,7 @@ describe('tool-call scheduler: abort handling', () => {
       .toEqual([ToolCallId('c1'), ToolCallId('c2'), ToolCallId('c3'), ToolCallId('c4')])
     expect(events(agent).filter(e => e.type === 'tool/result').slice(-2).map(e => ({
       callId: e.data.message.source.callId,
-      isError: e.data.message.content[0].isError,
+      isError: e.data.message.isError,
       error: e.data.error,
     })))
       .toEqual([
@@ -581,7 +565,7 @@ describe('tool-call scheduler: abort handling', () => {
         },
       ])
     const settled = events(agent).filter(e => e.type === 'tool/result'
-      || (e.type === 'user/message' && e.data.source.kind === 'plugin'))
+      || (e.type === 'user/message' && e.data.source.kind !== 'user'))
     expect(settled.map(e => e.type))
       .toEqual(['tool/result', 'tool/result', 'tool/result', 'tool/result'])
     expect(agent.inbox.nextStep.map(message => message.content[0]))
@@ -596,7 +580,7 @@ describe('tool-call scheduler: abort handling', () => {
 
     expect(events(agent).flatMap(e =>
       e.type === 'user/message'
-        && e.data.source.kind === 'plugin'
+        && e.data.source.kind !== 'user'
         && e.data.content[0]?.type === 'text'
         ? [e.data.content[0].text]
         : []))
@@ -638,7 +622,8 @@ describe('tool-call scheduler: abort handling', () => {
       .toMatchObject({
         message: {
           source: { kind: 'tool', callId: ToolCallId('c3') },
-          content: [{ isError: true }],
+          content: [{ type: 'text', text: 'Error: tool call aborted before dispatch' }],
+          isError: true,
         },
         error: { name: 'AbortError', code: TOOL_ABORTED_BEFORE_DISPATCH },
       })

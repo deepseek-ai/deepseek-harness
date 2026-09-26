@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/lsp/lsp/README.md
-README.md: 2dcd3c39ab4b82403794aaaf4b4ed6a79e7658f0
-README.zh.md: 57d4660f1461cb7b2da0cd130fc335f02c685060
+/:
+  en: 1a8099ab9b557ff7
+  zh: 7054b2eab0e1fda8
+/deepseek-ai-dsh-lsp:
+  en: bb557e65ee422869
+  zh: c08d0c2e9b2ee2ef
+/deepseek-ai-dsh-lsp/summary:
+  en: bc28d928b7c91cdd
+  zh: cef56a54a4c37fb7
+/deepseek-ai-dsh-lsp/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-lsp/use-this-package:
+  en: 39ddcc57203b5a43
+  zh: ee46b6bb58434337
+/deepseek-ai-dsh-lsp/use-this-package/when-to-choose-it:
+  en: 104953d3732e7d81
+  zh: 54acd5d4742bd728
+/deepseek-ai-dsh-lsp/use-this-package/composing-a-navigation-stack:
+  en: 64b371f995cde1fa
+  zh: 7193378b7500fbc3
+/deepseek-ai-dsh-lsp/use-this-package/the-four-operations:
+  en: 201a9b2f8dfb13eb
+  zh: c9041adde15602c1
+/deepseek-ai-dsh-lsp/use-this-package/failures-and-recovery:
+  en: eeeff6f68bba6807
+  zh: a83372441c505bb6
+/deepseek-ai-dsh-lsp/understand-the-implementation:
+  en: 1e0acac55fc6c314
+  zh: fe4ebe8a86dc480f
+/deepseek-ai-dsh-lsp/understand-the-implementation/design-philosophy:
+  en: cde960c2cecb7265
+  zh: b6b2b355a68bf2e7
+/deepseek-ai-dsh-lsp/understand-the-implementation/source-map:
+  en: 25af1e58f8ab8854
+  zh: 90aec5ee2441bd96
+/deepseek-ai-dsh-lsp/understand-the-implementation/registration-and-selection-lifecycle:
+  en: 549e97f436b1570c
+  zh: df0436c58dd31175
+/deepseek-ai-dsh-lsp/further-exploration:
+  en: 68ddb41fb1af51fb
+  zh: 6a68fc24a6a06d0c
+/deepseek-ai-dsh-lsp/model-experience:
+  en: c3bcb4f1107907d4
+  zh: 961e245182fac6d7
+/deepseek-ai-dsh-lsp/model-experience/kv-cache-effect:
+  en: 64354484a5367fbc
+  zh: aec3e5c7933389b6
+/deepseek-ai-dsh-lsp/known-limitations-and-deferred-work:
+  en: e7ba99257e4da9e6
+  zh: e384e82d4c707af1
+/deepseek-ai-dsh-lsp/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

@@ -13,8 +13,10 @@
     models:
       - id: deepseek-v4-pro
         contextWindow: 128000
+        maxTokens: 8192
       - id: deepseek-v4-flash
         contextWindow: 128000
+        maxTokens: 8192
 
 - id: agent-loop
   config:

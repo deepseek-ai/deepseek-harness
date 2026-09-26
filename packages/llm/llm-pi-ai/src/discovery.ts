@@ -10,7 +10,7 @@
  *
  * Neither path is a catalog refresh. Nothing here is stored: the request
  * carries a draft the user is still editing, and the reply is candidate
- * metadata the surface offers for adoption. `settings.yaml` remains the only
+ * metadata the surface offers for adoption. `cordis.patch.yml` remains the only
  * thing that decides what a route serves.
  *
  * OpenAI-compatible and Anthropic Messages protocols are interrogated through
@@ -280,6 +280,7 @@ export async function discoverModels(
         name: model.name,
         contextWindow: model.contextWindow,
         maxTokens: model.maxTokens,
+        inputModalities: [...model.input],
       }))
     }
   }

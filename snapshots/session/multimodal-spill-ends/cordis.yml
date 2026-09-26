@@ -1,0 +1,51 @@
+# Image-scenario overlay: adds the durable attachment store the read_image tool
+# commits through. The store resolves its root from $DSH_HOME, which the
+# snapshot harness scopes per run, so the patch itself carries no attachment
+# path. The default-model row selects the shipped vision model.
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: deepseek-official
+    model: deepseek-v4-flash-vision-exp
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+- id: system-prompt
+  name: '@deepseek-ai/dsh-system-prompt'
+  config:
+    personaPrefix: |
+      You are a coding assistant powered by the {{model}} model. Your working directory is {{cwd}}. Your bash tool runs under a file sandbox — a `[sandbox: file access denied …]` result is policy, not a command bug.
+
+      Verify your work by running the code or tests. Keep answers brief and factual.
+
+- id: attachment-local
+  name: '@deepseek-ai/dsh-attachment-local'
+
+- id: spill-policy
+  name: '@deepseek-ai/dsh-spill-policy'
+  config:
+    maxInlineTokens: 1000
+
+- insert:
+    - name: './fixture.mjs'
+
+- id: spill-local
+  name: '@deepseek-ai/dsh-spill-local'
+  config:
+    root: !!js process.env.DSH_SNAPSHOT_SPILL_ROOT ?? './.spill'
+
+- insert:
+    - id: snapshot-spill-locators
+      name: ../../../scripts/snapshot-spill-locators.ts
+      config:
+        root: !!js process.env.DSH_SNAPSHOT_SPILL_ROOT
+        locatorRoot: !!js process.env.DSH_SNAPSHOT_SPILL_LOCATOR_ROOT

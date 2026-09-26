@@ -21,6 +21,7 @@ import * as stream from '../../src/node/builtin_modules/implemented/stream.ts'
 import * as vm from '../../src/node/builtin_modules/mock/vm.ts'
 import * as workerThreads from '../../src/node/builtin_modules/mock/worker_threads.ts'
 import * as nodePty from '../../src/node/external_packages/node-pty.ts'
+import * as libreofficeKit from '../../src/node/external_packages/libreoffice-kit.ts'
 import * as execa from '../../src/node/external_packages/execa.ts'
 import * as piAi from '../../src/node/external_packages/pi-ai.ts'
 import * as ripgrep from '../../src/node/external_packages/ripgrep.ts'
@@ -118,6 +119,14 @@ describe('constructible-but-inert fakes', () => {
 })
 
 describe('replaced external packages', () => {
+  it('reports Office conversion as unavailable without creating a Node worker', async () => {
+    quiet()
+    await expect(libreofficeKit.createConverter()).rejects.toMatchObject({
+      code: 'unavailable',
+      message: 'web-preview: @deepseek-ai/libreoffice-kit.createConverter is not available in the worker host',
+    })
+  })
+
   it('lists the packages the loader serves from the bundle', () => {
     expect(REPLACED_EXTERNAL_PACKAGES).not.toContain('chokidar')
     expect(REPLACED_EXTERNAL_PACKAGES).not.toContain('@deepseek-ai/node-addon-system')

@@ -181,9 +181,7 @@
           "trust": "user",
           "isDefault": false
         }
-      ],
-      "authorable": true,
-      "modeSelectionEnabled": true
+      ]
     }
   },
   "commands": {
@@ -253,18 +251,14 @@
           "updatedAt": "2026-09-13T03:02:55.884Z"
         }
       ],
-      "archivedSessionIds": []
+      "archivedSessionIds": [],
+      "pinnedSessionIds": []
     }
   },
   "control": {
     "type": "baseline",
     "value": {
       "queues": {
-        "fx-alpha": [],
-        "fx-beta": [],
-        "fx-gamma": []
-      },
-      "jobs": {
         "fx-alpha": [],
         "fx-beta": [],
         "fx-gamma": []
@@ -939,25 +933,20 @@
             "turn": 52,
             "step": 0,
             "message": {
+              "id": "e9bbfe6c-96f3-44b6-b65c-89997783be1e",
+              "role": "tool",
+              "toolCallId": "fx-call-52",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-52"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-52",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "ECHO: TURN 52"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "ECHO: TURN 52"
                 }
               ],
-              "role": "user",
-              "id": "e9bbfe6c-96f3-44b6-b65c-89997783be1e"
+              "isError": false
             }
           }
         }
@@ -1901,25 +1890,20 @@
             "turn": 57,
             "step": 0,
             "message": {
+              "id": "652931ce-6eb0-4400-8173-9735b82fdf8e",
+              "role": "tool",
+              "toolCallId": "fx-call-57",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-57"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-57",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "ECHO: TURN 57"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "ECHO: TURN 57"
                 }
               ],
-              "role": "user",
-              "id": "652931ce-6eb0-4400-8173-9735b82fdf8e"
+              "isError": false
             }
           }
         }
@@ -2559,25 +2543,20 @@
             "turn": 60,
             "step": 0,
             "message": {
+              "id": "aa4c1898-7bec-4831-8ba1-0700f4ae897e",
+              "role": "tool",
+              "toolCallId": "fx-call-60",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-60"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-60",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "total 2\ndrwxr-xr-x fixture\n-rw-r--r-- demo.txt"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "total 2\ndrwxr-xr-x fixture\n-rw-r--r-- demo.txt"
                 }
               ],
-              "role": "user",
-              "id": "aa4c1898-7bec-4831-8ba1-0700f4ae897e"
+              "isError": false
             }
           }
         }
@@ -2763,25 +2742,20 @@
             "turn": 61,
             "step": 0,
             "message": {
+              "id": "4eedd943-773b-43d3-a104-e13550015670",
+              "role": "tool",
+              "toolCallId": "fx-call-61",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-61"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-61",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "wrote notes/demo.txt"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "wrote notes/demo.txt"
                 }
               ],
-              "role": "user",
-              "id": "4eedd943-773b-43d3-a104-e13550015670"
+              "isError": false
             },
             "meta": {
               "diffs": [
@@ -2976,25 +2950,20 @@
             "turn": 62,
             "step": 0,
             "message": {
+              "id": "37d72542-2cbc-4821-8897-329da97fe462",
+              "role": "tool",
+              "toolCallId": "fx-call-62",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-62"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-62",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "已编辑"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "已编辑"
                 }
               ],
-              "role": "user",
-              "id": "37d72542-2cbc-4821-8897-329da97fe462"
+              "isError": false
             },
             "meta": {
               "diffs": [
@@ -3189,25 +3158,20 @@
             "turn": 63,
             "step": 0,
             "message": {
+              "id": "0d0c76cf-f5b2-4f77-97cb-b0b66a67d135",
+              "role": "tool",
+              "toolCallId": "fx-call-63",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-63"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-63",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "已写入"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "已写入"
                 }
               ],
-              "role": "user",
-              "id": "0d0c76cf-f5b2-4f77-97cb-b0b66a67d135"
+              "isError": false
             },
             "meta": {
               "diffs": [
@@ -3402,25 +3366,20 @@
             "turn": 64,
             "step": 0,
             "message": {
+              "id": "11a489c7-466c-45ba-a5de-228fecd455f2",
+              "role": "tool",
+              "toolCallId": "fx-call-64",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-64"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-64",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "已编辑"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "已编辑"
                 }
               ],
-              "role": "user",
-              "id": "11a489c7-466c-45ba-a5de-228fecd455f2"
+              "isError": false
             },
             "meta": {
               "diffs": [
@@ -3745,25 +3704,20 @@
             "turn": 65,
             "step": 0,
             "message": {
+              "id": "ca689e1a-ebfb-4465-b187-43c3490abb9b",
+              "role": "tool",
+              "toolCallId": "fx-call-65",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-65"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-65",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "{\"listing\":\"demo.txt\\nnew-demo.txt\",\"demo\":\"hello fixture\\n\"}"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "{\"listing\":\"demo.txt\\nnew-demo.txt\",\"demo\":\"hello fixture\\n\"}"
                 }
               ],
-              "role": "user",
-              "id": "ca689e1a-ebfb-4465-b187-43c3490abb9b"
+              "isError": false
             }
           }
         }
@@ -3949,25 +3903,20 @@
             "turn": 66,
             "step": 0,
             "message": {
+              "id": "0da2afe6-5036-4d36-b9f3-ff562585507f",
+              "role": "tool",
+              "toolCallId": "fx-call-66",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-66"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-66",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "\u001b[1mRunning 4 checks\u001b[0m\n\u001b[32m✓\u001b[0m typecheck                                          1.82s\n\u001b[32m✓\u001b[0m lint                                               0.94s\n\u001b[32m✓\u001b[0m duplication                                        2.10s\n\u001b[31m✗\u001b[0m unit                                               8.41s\n\n\u001b[90mpackages/client/ui-primitives/tests/terminal-block.client.spec.tsx\u001b[0m\n  \u001b[31mFAIL\u001b[0m caps output at the configured line budget\n    expected 16 lines, received 24\n\nNAME                        LINES    BRANCHES    FUNCTIONS    UNCOVERED\nTerminalBlock.tsx           100%     100%        100%         -\nansi.ts                     100%     100%        100%         -\nclipboard.ts                100%     100%        100%         -\nCodeBlock.tsx               98.4%    96.2%       100%         41-43\nhighlight.ts                100%     100%        100%         -\nPill.tsx                    100%     100%        100%         -\nStateDot.tsx                100%     100%        100%         -\nmarkdown/Markdown.tsx       100%     100%        100%         -\n\n\u001b[31m1 of 4 checks failed\u001b[0m\n[exit code: 1]"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "\u001b[1mRunning 4 checks\u001b[0m\n\u001b[32m✓\u001b[0m typecheck                                          1.82s\n\u001b[32m✓\u001b[0m lint                                               0.94s\n\u001b[32m✓\u001b[0m duplication                                        2.10s\n\u001b[31m✗\u001b[0m unit                                               8.41s\n\n\u001b[90mpackages/client/ui-primitives/tests/terminal-block.client.spec.tsx\u001b[0m\n  \u001b[31mFAIL\u001b[0m caps output at the configured line budget\n    expected 16 lines, received 24\n\nNAME                        LINES    BRANCHES    FUNCTIONS    UNCOVERED\nTerminalBlock.tsx           100%     100%        100%         -\nansi.ts                     100%     100%        100%         -\nclipboard.ts                100%     100%        100%         -\nCodeBlock.tsx               98.4%    96.2%       100%         41-43\nhighlight.ts                100%     100%        100%         -\nPill.tsx                    100%     100%        100%         -\nStateDot.tsx                100%     100%        100%         -\nmarkdown/Markdown.tsx       100%     100%        100%         -\n\n\u001b[31m1 of 4 checks failed\u001b[0m\n[exit code: 1]"
                 }
               ],
-              "role": "user",
-              "id": "0da2afe6-5036-4d36-b9f3-ff562585507f"
+              "isError": false
             }
           }
         }
@@ -4153,25 +4102,20 @@
             "turn": 67,
             "step": 0,
             "message": {
+              "id": "9a3df388-356c-4440-b0bf-b09e0dda0387",
+              "role": "tool",
+              "toolCallId": "fx-call-67",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-67"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-67",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "Found 9 of 42 matches\n\npackages/client/ui-primitives/src/SearchBlock.tsx\nLine 16: export const DEFAULT_SEARCH_MAX_LINES = 16\nLine 138: export function SearchBlock(props: SearchBlockProps) {\nLine 141:   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set())\npackages/client/ui-tool/src/client/tool/models/search-card-model.ts\nLine 45: export const CHAT_SEARCH_MAX_LINES = 8\nLine 130: export function searchCardModel(block: ToolCallBlock): SearchCardModel | null {\npackages/client/ui-tool/src/client/tool/toolviews/search-row.tsx\nLine 34: export function SearchRow({ toolName, block, inspect, t }: SearchRowProps) {\nLine 36:   const search = searchCardModel(block)\nLine 56:       search={search}\nLine 78:       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'grep', locale: NS }, SearchRow)\n\n(Full grep result stored at: fixture://spill/grep-66. Read it to see every match.)"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "Found 9 of 42 matches\n\npackages/client/ui-primitives/src/SearchBlock.tsx\nLine 16: export const DEFAULT_SEARCH_MAX_LINES = 16\nLine 138: export function SearchBlock(props: SearchBlockProps) {\nLine 141:   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set())\npackages/client/ui-tool/src/client/tool/models/search-card-model.ts\nLine 45: export const CHAT_SEARCH_MAX_LINES = 8\nLine 130: export function searchCardModel(block: ToolCallBlock): SearchCardModel | null {\npackages/client/ui-tool/src/client/tool/toolviews/search-row.tsx\nLine 34: export function SearchRow({ toolName, block, inspect, t }: SearchRowProps) {\nLine 36:   const search = searchCardModel(block)\nLine 56:       search={search}\nLine 78:       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'grep', locale: NS }, SearchRow)\n\n(Full grep result stored at: fixture://spill/grep-66. Read it to see every match.)"
                 }
               ],
-              "role": "user",
-              "id": "9a3df388-356c-4440-b0bf-b09e0dda0387"
+              "isError": false
             },
             "meta": {
               "shape": "matches",
@@ -4415,25 +4359,20 @@
             "turn": 68,
             "step": 0,
             "message": {
+              "id": "e6d88943-d180-472b-9c1b-d59a21a50ab9",
+              "role": "tool",
+              "toolCallId": "fx-call-68",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-68"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-68",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "packages/client/ui-primitives/src/SearchBlock.tsx\npackages/client/ui-primitives/src/SearchBlock.module.css\npackages/client/ui-tool/src/client/tool/models/search-card-model.ts\npackages/client/ui-tool/src/client/tool/toolviews/search-row.tsx\npackages/client/ui-tool/tests/search-card.client.spec.tsx\n\n(Showing 5 of 23 paths. Full sorted result stored at: fixture://spill/glob-67. Read it to see every path.)"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "packages/client/ui-primitives/src/SearchBlock.tsx\npackages/client/ui-primitives/src/SearchBlock.module.css\npackages/client/ui-tool/src/client/tool/models/search-card-model.ts\npackages/client/ui-tool/src/client/tool/toolviews/search-row.tsx\npackages/client/ui-tool/tests/search-card.client.spec.tsx\n\n(Showing 5 of 23 paths. Full sorted result stored at: fixture://spill/glob-67. Read it to see every path.)"
                 }
               ],
-              "role": "user",
-              "id": "e6d88943-d180-472b-9c1b-d59a21a50ab9"
+              "isError": false
             },
             "meta": {
               "shape": "paths",
@@ -4631,25 +4570,20 @@
             "turn": 69,
             "step": 0,
             "message": {
+              "id": "937c02dd-63d8-4106-9310-a9df2055f0e9",
+              "role": "tool",
+              "toolCallId": "fx-call-69",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-69"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-69",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "<path>packages/client/ui-primitives/src/ReadBlock.tsx</path>\n<type>file</type>\n<content>\n41: export interface ReadBlockProps {\n42:   label?: string | undefined\n43:   lines: readonly ReadBlockLine[]\n44:   totalLines: number\n45:   lang?: string | undefined\n46:   maxLines?: number | undefined\n47:   className?: string | undefined\n48: }\n49: \n50: // A windowed read keeps the file line numbers in the gutter.\n51: const marker = \"fixture read sample\"\n\n(Showing lines 41-51 of 180. Use offset=52 to continue.)\n</content>"
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "<path>packages/client/ui-primitives/src/ReadBlock.tsx</path>\n<type>file</type>\n<content>\n41: export interface ReadBlockProps {\n42:   label?: string | undefined\n43:   lines: readonly ReadBlockLine[]\n44:   totalLines: number\n45:   lang?: string | undefined\n46:   maxLines?: number | undefined\n47:   className?: string | undefined\n48: }\n49: \n50: // A windowed read keeps the file line numbers in the gutter.\n51: const marker = \"fixture read sample\"\n\n(Showing lines 41-51 of 180. Use offset=52 to continue.)\n</content>"
                 }
               ],
-              "role": "user",
-              "id": "937c02dd-63d8-4106-9310-a9df2055f0e9"
+              "isError": false
             },
             "meta": {
               "path": "packages/client/ui-primitives/src/ReadBlock.tsx",
@@ -4887,25 +4821,20 @@
             "turn": 70,
             "step": 0,
             "message": {
+              "id": "c2ddb04d-74c9-4a2f-83f6-47a48fc6fbc2",
+              "role": "tool",
+              "toolCallId": "fx-call-70",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-70"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-70",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "Search results for deepseek harness architecture."
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "Search results for deepseek harness architecture."
                 }
               ],
-              "role": "user",
-              "id": "c2ddb04d-74c9-4a2f-83f6-47a48fc6fbc2"
+              "isError": false
             },
             "meta": {
               "answer": "DeepSeek Harness is a plugin-based agent harness on vendored Cordis where **every capability is a plugin**.",
@@ -5112,25 +5041,20 @@
             "turn": 71,
             "step": 0,
             "message": {
+              "id": "57cf5cd3-3daf-4e2c-bb16-f8695bc2ab8c",
+              "role": "tool",
+              "toolCallId": "fx-call-71",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-71"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-71",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "# Harness architecture\n\nEverything is a plugin."
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "# Harness architecture\n\nEverything is a plugin."
                 }
               ],
-              "role": "user",
-              "id": "57cf5cd3-3daf-4e2c-bb16-f8695bc2ab8c"
+              "isError": false
             },
             "meta": {
               "url": "https://www.deepseek.com/blog/harness-architecture",
@@ -5701,25 +5625,20 @@
             "turn": 74,
             "step": 0,
             "message": {
+              "id": "499968fd-a83f-45ad-80fe-b1d73651ff13",
+              "role": "tool",
+              "toolCallId": "fx-call-74",
               "source": {
                 "kind": "tool",
                 "callId": "fx-call-74"
               },
               "content": [
                 {
-                  "type": "tool-result",
-                  "toolCallId": "fx-call-74",
-                  "content": [
-                    {
-                      "type": "text",
-                      "text": "Updated todo list: 1 pending, 2 in progress, 1 completed."
-                    }
-                  ],
-                  "isError": false
+                  "type": "text",
+                  "text": "Updated todo list: 1 pending, 2 in progress, 1 completed."
                 }
               ],
-              "role": "user",
-              "id": "499968fd-a83f-45ad-80fe-b1d73651ff13"
+              "isError": false
             }
           }
         }

@@ -1,0 +1,41 @@
+.limits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 16px;
+}
+
+.limit {
+  min-width: 0;
+}
+
+.limit input {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.depthTable {
+  width: 100%;
+  margin: 8px 0;
+  border-collapse: collapse;
+  border-block: 0.5px solid var(--dsw-alias-border-l2);
+  font: inherit;
+  text-align: left;
+}
+
+.depthTable th,
+.depthTable td {
+  padding: 6px 0;
+  vertical-align: top;
+}
+
+.depthTable th {
+  width: 24px;
+  padding-right: 8px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-primary);
+}
+
+.depthTable tr + tr {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}

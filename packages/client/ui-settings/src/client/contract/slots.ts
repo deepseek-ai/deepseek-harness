@@ -13,6 +13,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-slots'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    /** Optional sidebar account launcher; opens the shell-owned settings panel. */
+    'settings.launcher': { kind: 'single'; scope: 'root'; owner: SettingsLauncherOwnerProps }
+
     /**
      * The sidebar-foot trigger row content: icon + label, supplied as slot
      * content (the accessible name comes from the content — rail state
@@ -84,7 +87,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * through your own inject face and `host.call`. Declared at runtime by
      * ui-settings-general's General entry; the type lives here with every other
      * settings slot type, because this package is the settings domain's base
-     * layer and every registrant already depends on it for `ctx.settingsScope`.
+     * layer and every registrant already depends on it for `ctx.configForms`.
      */
     'settings.general.item': { kind: 'list'; scope: 'root'; owner: SettingsGeneralItemOwnerProps }
   }
@@ -129,8 +132,24 @@ export interface SettingsSectionOwnerProps {
 export interface SettingsOnboardingOwnerProps {
   /** Stable id of the step currently selected by the coordinator. */
   stepId: string
+  /** User explicitly reopened this step outside first-run onboarding. */
+  explicit?: boolean
   /** Complete or skip this step and transfer ownership to the next entry. */
   complete: () => void
   /** Open the settings panel directly on one registered section. */
   openSection: (id: string) => void
+}
+
+/** Sidebar launcher geometry and settings navigation. */
+export interface SettingsLauncherOwnerProps {
+  /** Whether the sidebar shows labels. */
+  wide: boolean
+  /** Whether the settings dialog covers the sidebar; a launcher may treat a false-to-true edge as one Settings entry. */
+  settingsOpen: boolean
+  /** Effective Settings key labels and accessible combination; omitted when unbound. */
+  settingsShortcut?: { readonly keys: readonly string[]; readonly aria?: string | undefined }
+  /** Open the settings panel. */
+  openSettings: () => void
+  /** @param id - registered onboarding editor to open explicitly. */
+  openOnboarding: (id: string) => void
 }

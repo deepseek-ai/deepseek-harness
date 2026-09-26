@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-20-device-local-shortcut-preferences.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-20-device-local-shortcut-preferences.md
+/agent-note-keep-shortcut-preferences-device-local-and-commit-before-activation:
+  en: 0f033ac1e9acec35
+  zh: 06f3bf59003446ea
+/agent-note-keep-shortcut-preferences-device-local-and-commit-before-activation/problem:
+  en: d1d3ef4f6e66e5a7
+  zh: 5691f2b106617a86
+/agent-note-keep-shortcut-preferences-device-local-and-commit-before-activation/decision:
+  en: 21f8da8d396c3f55
+  zh: 46de3df8141bcb0a
+/agent-note-keep-shortcut-preferences-device-local-and-commit-before-activation/alternatives-considered:
+  en: 202dcaddc6c9c400
+  zh: 3f8e3576c2324636
+/agent-note-keep-shortcut-preferences-device-local-and-commit-before-activation/consequences:
+  en: 9dcfdef13faa374f
+  zh: 1951198555fcc9ea

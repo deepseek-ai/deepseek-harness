@@ -17,6 +17,7 @@ import LlmRuntime, {
   GenerateOptions,
   LlmAdapter,
   StreamChunk,
+  type ToolResultMessage,
 } from '@deepseek-ai/dsh-llm'
 import {
   type Config,
@@ -61,7 +62,7 @@ const COMPACTION_ID = CompactionId('replay-compaction')
 /** Build a minimal session-JSONL string: a header line + the given events. */
 function sessionJsonl(
   events: SessionEvent[],
-  header?: { id?: string; createdAt?: number; seedLength?: number; version?: 0 | 1 | 2 | 3 },
+  header?: { id?: string; createdAt?: number; seedLength?: number; version?: 0 | 1 | 2 | 3 | 4 },
 ): string {
   const version = header?.version ?? 0
   const headerLine = JSON.stringify({
@@ -76,10 +77,29 @@ function sessionJsonl(
   return [headerLine, ...events.map(event => JSON.stringify(event))].join('\n') + '\n'
 }
 
+/**
+ * Released v2 canonical tool-result message: a user-role wrapper row.
+ * @param callId - the released tool call the result answers.
+ * @returns JSON-only wrapper shape for historical fixtures.
+ */
+function releasedV2ResultMessage(callId: ToolCallId): ToolResultMessage {
+  return {
+    id: `${callId}-result`,
+    role: 'user',
+    source: { kind: 'tool', callId },
+    content: [{
+      type: 'tool-result',
+      toolCallId: callId,
+      content: [],
+      isError: false,
+    }],
+  } as unknown as ToolResultMessage
+}
+
 /** Build a valid one-turn Session around recorded model calls. */
 function replaySessionJsonl(
   calls: readonly StreamChunk[][],
-  header?: { id?: string; createdAt?: number; seedLength?: number; version?: 0 | 1 | 2 | 3 },
+  header?: { id?: string; createdAt?: number; seedLength?: number; version?: 0 | 1 | 2 | 3 | 4 },
 ): string {
   const version = header?.version ?? SESSION_FORMAT_VERSION
   const events: SessionEvent[] = []
@@ -102,15 +122,14 @@ function replaySessionJsonl(
           name: chunk.block.name,
           arguments: chunk.block.arguments,
         })
+        const message = version >= 3
+          ? createToolResultMessage({ callId: chunk.block.id, content: [], isError: false })
+          : releasedV2ResultMessage(chunk.block.id)
         events.push({
           type: 'tool/result',
           seq: SessionSeq(seq++),
           time: 0,
-          data: {
-            turn: 1,
-            step,
-            message: createToolResultMessage({ callId: chunk.block.id, content: [], isError: false }),
-          },
+          data: { turn: 1, step, message },
           surfaceOp: 'append',
         })
       }
@@ -240,13 +259,13 @@ describe('fixture format diagnostics', () => {
       const actual = await importOriginal<typeof import('@deepseek-ai/dsh-session-format-catalog')>()
       return {
         ...actual,
-        sessionFormatCatalog: {
-          ...actual.sessionFormatCatalog,
+        createSessionFormatCatalogWithChildren: () => ({
+          ...actual.createSessionFormatCatalogWithChildren([]),
           createRestore(): never {
             const failure: unknown = 'decoder exploded'
             throw failure
           },
-        },
+        }),
       }
     })
     try {
@@ -266,8 +285,8 @@ describe('fixture format diagnostics', () => {
       const actual = await importOriginal<typeof import('@deepseek-ai/dsh-session-format-catalog')>()
       return {
         ...actual,
-        sessionFormatCatalog: {
-          ...actual.sessionFormatCatalog,
+        createSessionFormatCatalogWithChildren: () => ({
+          ...actual.createSessionFormatCatalogWithChildren([]),
           createRestore() {
             return {
               header: { version: SESSION_FORMAT_VERSION, id: 'fixture', createdAt: 0, isSeeded: false, delegationDepth: 0 },
@@ -277,7 +296,7 @@ describe('fixture format diagnostics', () => {
               },
             }
           },
-        },
+        }),
       }
     })
     try {
@@ -297,8 +316,8 @@ describe('fixture format diagnostics', () => {
       const actual = await importOriginal<typeof import('@deepseek-ai/dsh-session-format-catalog')>()
       return {
         ...actual,
-        sessionFormatCatalog: {
-          ...actual.sessionFormatCatalog,
+        createSessionFormatCatalogWithChildren: () => ({
+          ...actual.createSessionFormatCatalogWithChildren([]),
           createRestore() {
             return {
               header: { version: SESSION_FORMAT_VERSION, id: 'fixture', createdAt: 0, isSeeded: false, delegationDepth: 0 },
@@ -308,7 +327,7 @@ describe('fixture format diagnostics', () => {
               },
             }
           },
-        },
+        }),
       }
     })
     try {
@@ -329,8 +348,8 @@ describe('fixture format diagnostics', () => {
       let row = 0
       return {
         ...actual,
-        sessionFormatCatalog: {
-          ...actual.sessionFormatCatalog,
+        createSessionFormatCatalogWithChildren: () => ({
+          ...actual.createSessionFormatCatalogWithChildren([]),
           createRestore() {
             return {
               header: { version: SESSION_FORMAT_VERSION, id: 'fixture', createdAt: 0, isSeeded: false, delegationDepth: 0 },
@@ -341,7 +360,7 @@ describe('fixture format diagnostics', () => {
               finish(): never { throw new Error('unexpected finish') },
             }
           },
-        },
+        }),
       }
     })
     try {
@@ -372,8 +391,8 @@ describe('fixture format diagnostics', () => {
       const actual = await importOriginal<typeof import('@deepseek-ai/dsh-session-format-catalog')>()
       return {
         ...actual,
-        sessionFormatCatalog: {
-          ...actual.sessionFormatCatalog,
+        createSessionFormatCatalogWithChildren: () => ({
+          ...actual.createSessionFormatCatalogWithChildren([]),
           createRestore() {
             return {
               header: { version: SESSION_FORMAT_VERSION, id: 'fixture', createdAt: 0, isSeeded: false, delegationDepth: 0 },
@@ -381,7 +400,7 @@ describe('fixture format diagnostics', () => {
               finish(): never { throw new Error(message) },
             }
           },
-        },
+        }),
       }
     })
     try {
@@ -413,6 +432,13 @@ describe('parseSessionLog', () => {
       },
     },
     surfaceOp: 'append',
+  }
+  const migratedSystemHead = {
+    ...emptySystemHead,
+    data: {
+      ...emptySystemHead.data,
+      message: { ...emptySystemHead.data.message, source: { kind: 'system-prompt' } },
+    },
   }
 
   it('reports invalid JSON at its physical source line', () => {
@@ -516,7 +542,7 @@ describe('parseSessionLog', () => {
       type: 'text-chunks', seq0: 2, time0: 0,
       data: { turn: 1, step: 1, index: 0, dt: [0, 0], texts: ['a', 'b', 'c'] },
     })
-    expect(parseSessionLog(`${header}\n${turn}\n${step}\n${row}\n`).slice(2)).toEqual([emptySystemHead, {
+    expect(parseSessionLog(`${header}\n${turn}\n${step}\n${row}\n`).slice(2)).toEqual([migratedSystemHead, {
       type: 'assistant/attempt',
       seq: 3,
       time: 0,
@@ -539,7 +565,7 @@ describe('parseSessionLog', () => {
     expect(parseSessionLog(`${header}\n${ordinary}\n${step}\n${packed}\n`)).toEqual([
       { type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } },
       { type: 'step/start', seq: 1, time: 0, data: { turn: 1, step: 1 } },
-      emptySystemHead,
+      migratedSystemHead,
       {
         type: 'assistant/attempt',
         seq: 3,
@@ -568,13 +594,13 @@ describe('parseSessionLog', () => {
     ].join('\n')
 
     expect(parseSessionLog(source).slice(2)).toEqual([
-      emptySystemHead,
+      migratedSystemHead,
       {
-        ...emptySystemHead,
+        ...migratedSystemHead,
         seq: 3,
         data: {
-          ...emptySystemHead.data,
-          message: { ...emptySystemHead.data.message, content: [{ type: 'text', text: '{{system}}' }] },
+          ...migratedSystemHead.data,
+          message: { ...migratedSystemHead.data.message, content: [{ type: 'text', text: '{{system}}' }] },
         },
         surfaceOp: { op: 'replace', startSeq: 2, endSeq: 2 },
         sourceEventSeqs: [2],
@@ -694,7 +720,7 @@ describe('parseSessionLog', () => {
       }),
     ].join('\n')
 
-    expect(parseSessionLog(source).slice(2)).toEqual([emptySystemHead, {
+    expect(parseSessionLog(source).slice(2)).toEqual([migratedSystemHead, {
       type: 'assistant/attempt',
       seq: 3,
       time: 0,
@@ -1358,7 +1384,7 @@ describe('installLlmReplay (through the real LlmRuntime)', () => {
     })
 
     it('skips non-string request leaves when building the corpus', () => {
-      const messages = requestMessages.map(message => ({ ...message, seq: 7 })) as unknown as GenerateOptions['messages']
+      const messages = requestMessages.map(message => ({ ...message, seq: 7 })) as GenerateOptions['messages']
       const entry: ReplayEntry = { kind: 'chunks', chunks: scriptedCall('{"goal_id":"{{fromRequest:goal-42[a-z]+}}"}') }
       const resolved = resolveScriptedEntry(entry, messages)
       if (resolved.kind !== 'chunks') throw new Error('expected chunks entry')
@@ -1390,6 +1416,7 @@ describe('installLlmReplay (through the real LlmRuntime)', () => {
               reasoningEfforts: ['off', 'max'],
               defaultReasoningEffort: 'max',
               systemPromptUpdate: 'in-history',
+              toolUpdate: 'addition-only',
             },
             { id: 'pro', name: 'Pro', description: 'Larger model', reasoningEfforts: ['high'] },
           ],
@@ -1416,8 +1443,10 @@ describe('installLlmReplay (through the real LlmRuntime)', () => {
         defaultEffort: 'max',
       },
       systemPromptUpdate: 'in-history',
+      toolUpdate: 'addition-only',
     })
     await expect(ctx.llm.resolveModelInfo('deepseek', 'pro')).resolves.not.toHaveProperty('systemPromptUpdate')
+    await expect(ctx.llm.resolveModelInfo('deepseek', 'pro')).resolves.not.toHaveProperty('toolUpdate')
     await expect(ctx.llm.resolveModelInfo('deepseek', 'pro')).resolves.not.toHaveProperty('inputModalities')
     await expect(ctx.llm.resolveModelInfo('deepseek', 'pro')).resolves.not.toHaveProperty('context')
     // Efforts without a configured default preserve the provider's own default.
@@ -2171,7 +2200,7 @@ describe('apply (the plugin entry)', () => {
 
   it('rejects imageRequestTokens on a model without the image modality during load', () => {
     const ctx = new Context()
-    const providers = [{ id: 'm', models: [{ id: 'm', imageRequestTokens: 384 }] }] as unknown as
+    const providers = [{ id: 'm', models: [{ id: 'm', imageRequestTokens: 384 }] }] as
       NonNullable<Config['providers']>
     expect(() => { apply(ctx, { file, providers }) }).toThrow(
       'llm-replay: provider "m" model "m" imageRequestTokens requires inputModalities to include "image"',
@@ -2183,10 +2212,18 @@ describe('apply (the plugin entry)', () => {
     ['a float', 1.5],
   ])('rejects imageRequestTokens configured as %s during load', (_case, imageRequestTokens) => {
     const ctx = new Context()
-    const providers = [{ id: 'm', models: [{ id: 'm', imageRequestTokens }] }] as unknown as
+    const providers = [{ id: 'm', models: [{ id: 'm', imageRequestTokens }] }] as
       NonNullable<Config['providers']>
     expect(() => { apply(ctx, { file, providers }) }).toThrow(
       'llm-replay: provider "m" model "m" imageRequestTokens must be a positive safe integer',
+    )
+  })
+
+  it('rejects an unknown toolUpdate mode during load', () => {
+    const ctx = new Context()
+    const providers: NonNullable<Config['providers']> = [{ id: 'm', models: [{ id: 'm', toolUpdate: 'always' as never }] }]
+    expect(() => { apply(ctx, { file, providers }) }).toThrow(
+      'llm-replay: provider "m" model "m" toolUpdate must be "in-history" or "addition-only" when present',
     )
   })
 

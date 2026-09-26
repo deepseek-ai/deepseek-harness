@@ -18,7 +18,8 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { InputTriggerService } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
-import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
+import { RemoteError, TestRemote, TestSessions } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SessionFixture } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ClientSessionContext, InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { apply, inject } from '../src/client/index.ts'
@@ -60,24 +61,30 @@ function providePresentation(ctx: Context): PresentationCapture {
 }
 
 /** Boot the plugin over fake slash/connection faces; returns the captured source and its ctx. */
-async function bench(list: ListFn, addressed?: SessionId) {
+async function bench(list: ListFn, addressed?: SessionId, opening: Pick<SessionFixture, 'initialOpen' | 'snapshot'> = {}) {
   const ctx = new Context()
   const openResource = vi.fn()
   ctx.provide('sidebarRight', { openResource })
   let captured: InputTriggerSource | undefined
   ctx.provide('inputTriggers', { registerSource: (src: InputTriggerSource) => { captured = src; return () => {} } })
-  ctx.provide('sessions', {
-    list: { getSnapshot: () => ({ byId: {} }) },
-    subagentAddress: (id: SessionId) => id === addressed
-      ? { parentSessionId: sid('parent'), childSessionId: id, mode: 'continuable' as const }
-      : undefined,
+  const sessions = new TestSessions(async (action) => { await action() }, ctx)
+  ctx.provide('sessions', sessions)
+  onTestFinished(async () => {
+    await sessions.disposeScopes()
+    await ctx.fiber.dispose()
   })
+  for (const id of ['s1', 's2', 'preview', 'first', 'second', 'child']) {
+    await sessions.add({ id, ...opening })
+    sessions.retainFor(ctx, id === addressed
+      ? { parentSessionId: sid('parent'), childSessionId: addressed, mode: 'continuable' }
+      : sid(id))
+  }
   const remote = new TestRemote(ctx, { skills: { list } })
   providePresentation(ctx)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   onTestFinished(async () => { await fiber.dispose() })
   await fiber.await()
-  return { ctx, source: captured!, remote, fiber, openResource }
+  return { ctx, source: captured!, remote, fiber, openResource, sessions }
 }
 
 const CATALOG: SkillRow[] = [
@@ -125,8 +132,9 @@ describe('apply', () => {
     expect(presentation.dictionaries).toEqual([{
       namespace: 'skill', dictionaries: {
         zh: {
-          'row.title': 'Skill',
+          'row.title': '加载技能',
           'row.running': '正在加载 skill',
+          'row.preparing': '准备加载技能',
           'row.failed': 'skill 加载失败',
           'row.stopped': 'skill 加载已中止',
           'row.instructions': '说明',
@@ -136,6 +144,7 @@ describe('apply', () => {
         en: {
           'row.title': 'Skill',
           'row.running': 'Loading skill',
+          'row.preparing': 'Preparing to load a skill',
           'row.failed': 'Skill load failed',
           'row.stopped': 'Skill load stopped',
           'row.instructions': 'Instructions',
@@ -174,6 +183,60 @@ describe('apply', () => {
 })
 
 describe('candidates: sessionId addressing', () => {
+  it('waits for history and retains the Session until the shared skill RPC settles', async () => {
+    const opened = Promise.withResolvers<undefined>()
+    const response = Promise.withResolvers<ListResult>()
+    const list = vi.fn(() => response.promise)
+    const b = await bench(list, undefined, { initialOpen: () => opened.promise })
+    try {
+      const pending = b.source.candidates(proj('s1'), req(''))
+      expect(b.sessions.retainInfo(sid('s1')).getSnapshot().retainedBy.skillCatalog).toBe(1)
+      expect(list).not.toHaveBeenCalled()
+      opened.resolve(undefined)
+      await vi.waitFor(() => { expect(list).toHaveBeenCalledOnce() })
+      expect(b.sessions.retainInfo(sid('s1')).getSnapshot().referenceCount).toBe(2)
+      response.resolve({ ok: true, value: { skills: CATALOG } })
+      await pending
+      expect(b.sessions.retainInfo(sid('s1')).getSnapshot().referenceCount).toBe(1)
+    } finally {
+      opened.resolve(undefined)
+      response.resolve({ ok: true, value: { skills: CATALOG } })
+    }
+  })
+
+  it.each([true, false])('refuses an unsuccessful history open (reported error: %s)', async (reported) => {
+    const error = new RemoteError('gateway/internal', 'history unavailable', {})
+    const list = vi.fn(listOk(CATALOG))
+    const b = await bench(list, undefined, { snapshot: { openState: 'error', openError: reported ? error : null } })
+    await expect(b.source.candidates(proj('s1'), req(''))).rejects.toThrow(reported ? 'history unavailable' : 'is not open')
+    expect(list).not.toHaveBeenCalled()
+    expect(b.sessions.retainInfo(sid('s1')).getSnapshot().referenceCount).toBe(1)
+  })
+
+  it('does not reopen a released Session for skill discovery', async () => {
+    const list = vi.fn(listOk(CATALOG))
+    const b = await bench(list)
+    await b.sessions.binding(sid('s1'))!.ctx.fiber.dispose()
+    await expect(b.source.candidates(proj('s1'), req(''))).rejects.toThrow('requires a retained session')
+    expect(list).not.toHaveBeenCalled()
+    expect(b.sessions.binding(sid('s1'))).toBeUndefined()
+  })
+
+  it('releases the shared read when the plugin unloads before history is ready', async () => {
+    const opened = Promise.withResolvers<undefined>()
+    const list = vi.fn(listOk(CATALOG))
+    const b = await bench(list, undefined, { initialOpen: () => opened.promise })
+    try {
+      const pending = expect(b.source.candidates(proj('s1'), req(''))).rejects.toThrow()
+      await b.fiber.dispose()
+      await pending
+      expect(list).not.toHaveBeenCalled()
+      expect(b.sessions.retainInfo(sid('s1')).getSnapshot().referenceCount).toBe(1)
+    } finally {
+      opened.resolve(undefined)
+    }
+  })
+
   it('lists via {sessionId} and ranks case-insensitive subsequence matches with prefixes first', async () => {
     const { list, payloads } = countingList()
     const { source } = await bench(list)
@@ -406,7 +469,7 @@ describe('reference preview', () => {
     expect(source.openReference!(session, { ref: '/review' })).toBe(true)
     const candidates = source.candidates(session, req(''))
     expect(openResource).not.toHaveBeenCalled()
-    expect(list).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => { expect(list).toHaveBeenCalledTimes(1) })
     gate.resolve({ ok: true, value: { skills: rows } })
     await candidates
     expect(openResource).toHaveBeenCalledExactlyOnceWith('dsh-resource://file/session/preview//skills/review/SKILL.md')

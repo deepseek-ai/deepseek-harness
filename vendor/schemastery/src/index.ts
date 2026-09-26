@@ -1,4 +1,5 @@
 import { Binary, clone, deepEqual, filterKeys, isNullable, isPlainObject, pick, valueMap, type Dict } from '@deepseek-ai/cosmokit'
+import { createVolatile, isVolatile, type Volatile } from '@deepseek-ai/cosmokit'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 
 const kSchema = Symbol.for('schemastery')
@@ -9,7 +10,7 @@ declare global {
     /** Convert primitive constructors, constants, and existing schemas into a schema type. */
     export type From<X> =
       | X extends string | number | boolean ? Schema<X>
-      : X extends Schema ? X
+      : X extends Schema<any, any, SchemaMode> ? X
       : X extends typeof String ? Schema<string>
       : X extends typeof Number ? Schema<number>
       : X extends typeof Boolean ? Schema<boolean>
@@ -17,8 +18,8 @@ declare global {
       : X extends Constructor<infer S> ? Schema<S>
       : never
 
-    type TypeS1<X> = X extends Schema<infer S, unknown> ? S : never
-    type Inverse<X> = X extends Schema<any, infer Y> ? (arg: Y) => void : never
+    type TypeS1<X> = X extends Schema<infer S, infer _T, infer _M> ? S : never
+    type Inverse<X> = X extends Schema<infer _S, infer T, infer M> ? (arg: SchemaOutput<T, M>) => void : never
 
     /** Input type accepted by a schema-like value. */
     export type TypeS<X> = TypeS1<From<X>>
@@ -28,7 +29,7 @@ declare global {
     export type Resolve = (data: any, schema: Schema, options: Options, strict?: boolean) => [any, any?]
 
     /** Input type accepted by one schema in an intersection. */
-    export type IntersectS<X> = From<X> extends Schema<infer S, unknown> ? S : never
+    export type IntersectS<X> = From<X> extends Schema<infer S, infer _T, infer _M> ? S : never
     /** Output type returned by one schema in an intersection. */
     export type IntersectT<X> = Inverse<From<X>> extends ((arg: infer T) => void) ? T : never
 
@@ -85,8 +86,8 @@ declare global {
       dict<X, Y extends Schema<any, string> = Schema<string>>(inner: X, sKey?: Y): Schema<Dict<TypeS<X>, TypeS<Y>>, Dict<TypeT<X>, TypeT<Y>>>
       /** Accept tuple arrays where each index matches the corresponding schema. */
       tuple<const X extends readonly any[]>(list: X): Schema<TupleS<X>, TupleT<X>>
-      /** Accept plain objects whose declared properties match the schema dictionary. */
-      object<X extends Dict>(dict: X): Schema<ObjectS<X>, ObjectT<X>>
+      /** Accept plain objects; infer fields from the dictionary, not the enclosing schema's output type. */
+      object<X extends Dict>(dict: X): Schema<ObjectS<NoInfer<X>>, ObjectT<NoInfer<X>>>
       /** Accept values matching at least one schema in `list`. */
       union<const X>(list: readonly X[]): Schema<TypeS<X>, TypeT<X>>
       /** Accept values matching every schema in `list`, merging object outputs. */
@@ -94,7 +95,7 @@ declare global {
       /** Validate with `inner`, then convert the result with `callback`. */
       transform<X, T>(inner: X, callback: (value: TypeS<X>, options: Schemastery.Options) => T, preserve?: boolean): Schema<TypeS<X>, T>
       /** Defer construction of a recursive schema until validation or serialization. */
-      lazy<X extends Schema>(callback: () => X): X
+      lazy<X extends Schema<any, any, SchemaMode>>(callback: () => X): X
       ValidationError: typeof ValidationError
     }
 
@@ -112,6 +113,8 @@ declare global {
     export interface Meta<T = any> {
       default?: T extends {} ? Partial<T> : T
       required?: boolean
+      /** Parse this node as a stable config reference; its type and UI metadata remain unchanged. */
+      volatile?: boolean
       disabled?: boolean
       collapse?: boolean
       badges?: { text: string; type: string }[]
@@ -130,9 +133,9 @@ declare global {
   }
 
   /** Callable schema instance that validates input and returns normalized output. */
-  interface Schemastery<S = any, T = S> {
-    (data?: S | null, options?: Schemastery.Options): T
-    new (data?: S | null, options?: Schemastery.Options): T
+  interface Schemastery<S = any, T = S, Mode extends SchemaMode = 'plain'> {
+    (data?: S | null, options?: Schemastery.Options): SchemaOutput<T, Mode>
+    new (data?: S | null, options?: Schemastery.Options): SchemaOutput<T, Mode>
     [kSchema]: true
     uid: number
     meta: Schemastery.Meta<T>
@@ -152,49 +155,54 @@ declare global {
     /** Format this schema as a compact TypeScript-like type string. */
     toString(inline?: boolean): string
     /** Serialize this schema, preserving shared and recursive references. */
-    toJSON(): Schema<S, T>
+    toJSON(): Schema<S, T, Mode>
     /** Mark nullable input as invalid unless a default supplies a fallback. */
-    required(value?: boolean): Schema<S, T>
+    required<R extends boolean = true>(value?: R): Schema<S, T, SetRequired<Mode, R>>
+    /**
+     * Parse this config field as a stable reference containing immutable data.
+     * @returns a schema whose output supports get(), including when the field is absent.
+     */
+    volatile(): Schema<NoInfer<S>, NoInfer<T>, Mode extends 'defined' | 'volatile-defined' ? 'volatile-defined' : 'volatile'>
     /** Hide this schema node from UI renderers. */
-    hidden(value?: boolean): Schema<S, T>
+    hidden(value?: boolean): Schema<S, T, Mode>
     /** Return the default value instead of throwing when validation fails. */
-    loose(value?: boolean): Schema<S, T>
+    loose(value?: boolean): Schema<S, T, Mode>
     /** Attach a renderer role and optional role-specific metadata. */
-    role(text: string, extra?: any): Schema<S, T>
+    role(text: string, extra?: any): Schema<S, T, Mode>
     /** Attach an external documentation link. */
-    link(link: string): Schema<S, T>
+    link(link: string): Schema<S, T, Mode>
     /** Set the fallback value used for nullable input. */
-    default(value: T): Schema<S, T>
+    default(value: T | NoInfer<Partial<S>>): Schema<S, T, SetRequired<Mode, true>>
     /** Attach an auxiliary comment for documentation or form UIs. */
-    comment(text: string): Schema<S, T>
+    comment(text: string): Schema<S, T, Mode>
     /** Attach a localized or plain description for documentation or form UIs. */
-    description(text: string): Schema<S, T>
+    description(text: string): Schema<S, T, Mode>
     /** Mark this schema node as disabled for form UIs. */
-    disabled(value?: boolean): Schema<S, T>
+    disabled(value?: boolean): Schema<S, T, Mode>
     /** Request collapsed rendering for nested form UIs. */
-    collapse(value?: boolean): Schema<S, T>
+    collapse(value?: boolean): Schema<S, T, Mode>
     /** Add a deprecated badge to this schema node. */
-    deprecated(): Schema<S, T>
+    deprecated(): Schema<S, T, Mode>
     /** Add an experimental badge to this schema node. */
-    experimental(): Schema<S, T>
+    experimental(): Schema<S, T, Mode>
     /** Require strings to match a regular expression. */
-    pattern(regexp: RegExp): Schema<S, T>
+    pattern(regexp: RegExp): Schema<S, T, Mode>
     /** Set an inclusive maximum for numbers or collection lengths. */
-    max(value: number): Schema<S, T>
+    max(value: number): Schema<S, T, Mode>
     /** Set an inclusive minimum for numbers or collection lengths. */
-    min(value: number): Schema<S, T>
+    min(value: number): Schema<S, T, Mode>
     /** Set the numeric increment constraint. */
-    step(value: number): Schema<S, T>
+    step(value: number): Schema<S, T, Mode>
     /** Add or replace an object property schema. */
-    set(key: string, value: Schema): Schema<S, T>
+    set(key: string, value: Schema): Schema<S, T, Mode>
     /** Append a tuple, union, or intersection member schema. */
-    push(value: Schema): Schema<S, T>
+    push(value: Schema): Schema<S, T, Mode>
     /** Remove values equal to schema defaults from normalized output. */
     simplify(value?: any): any
     /** Return a schema clone with descriptions merged from locale messages. */
-    i18n(messages: Dict): Schema<S, T>
+    i18n(messages: Dict): Schema<S, T, Mode>
     /** Attach arbitrary metadata consumed by form renderers and downstream tools. */
-    extra<K extends keyof Schemastery.Meta>(key: K, value: Schemastery.Meta[K]): Schema<S, T>
+    extra<K extends keyof Schemastery.Meta>(key: K, value: Schemastery.Meta[K]): Schema<S, T, Mode>
   }
 }
 
@@ -234,7 +242,14 @@ Object.defineProperty(ValidationError.prototype, kValidationError, {
   value: true,
 })
 
-type Schema<S = any, T = S> = Schemastery<S, T>
+type SchemaMode = 'plain' | 'defined' | 'volatile' | 'volatile-defined'
+type SchemaOutput<T, M extends SchemaMode> = M extends 'volatile' ? Volatile<T | undefined>
+  : M extends 'volatile-defined' ? Volatile<T> : T
+type SetRequired<M extends SchemaMode, R extends boolean> = M extends 'volatile' | 'volatile-defined'
+  ? R extends true ? 'volatile-defined' : 'volatile'
+  : R extends true ? 'defined' : 'plain'
+
+type Schema<S = any, T = S, Mode extends SchemaMode = 'plain'> = Schemastery<S, T, Mode>
 
 const Schema = function (options: Schema) {
   const schema = function (data: any, options: Schemastery.Options = {}) {
@@ -405,6 +420,7 @@ Schema.prototype.pattern = function pattern(regexp) {
 }
 
 Schema.prototype.simplify = function simplify(this: Schema, value) {
+  if (isVolatile(value)) value = value.get()
   if (deepEqual(value, this.meta.default, this.type === 'dict')) return null
   if (isNullable(value)) return value
   if (this.type === 'object' || this.type === 'dict') {
@@ -461,7 +477,36 @@ for (const key of ['default', 'link', 'comment', 'description', 'max', 'min', 's
   })
 }
 
+Schema.prototype.volatile = function volatile() {
+  if (this.meta.volatile) throw new TypeError('volatile schema is already wrapped')
+  return this.extra('volatile', true)
+}
+
 const resolvers: Dict<Schemastery.Resolve> = {}
+const checkedVolatile = Symbol('checked-volatile-schema')
+
+function validateVolatileSchema(schema: Schema, path: (keyof any)[] = [], blocked = false, seen = new Map<Schema, Set<boolean>>()) {
+  const states = seen.get(schema) ?? new Set<boolean>()
+  if (states.has(blocked)) return
+  states.add(blocked)
+  seen.set(schema, states)
+  if (schema.meta?.volatile && blocked) {
+    throw new ValidationError('volatile fields require a fixed object path without an enclosing volatile field', { path })
+  }
+  const nested = blocked || !!schema.meta?.volatile
+  if (schema.dict) {
+    for (const [key, child] of Object.entries(schema.dict)) validateVolatileSchema(child, [...path, key], nested, seen)
+  }
+  if (schema.sKey) validateVolatileSchema(schema.sKey, [...path, '<key>'], true, seen)
+  if (schema.inner && (schema.type !== 'lazy' || schema.inner[kSchema])) {
+    validateVolatileSchema(schema.inner, [...path, '*'], true, seen)
+  }
+  if (schema.list) {
+    for (let index = 0; index < schema.list.length; index++) {
+      validateVolatileSchema(schema.list[index]!, [...path, String(index)], true, seen)
+    }
+  }
+}
 
 Schema.extend = function extend(type, resolve) {
   resolvers[type] = resolve
@@ -469,6 +514,20 @@ Schema.extend = function extend(type, resolve) {
 
 Schema.resolve = function resolve(data, schema, options = {}, strict = false) {
   if (!schema) return [data]
+  if (!(options as Schemastery.Options & { [checkedVolatile]?: boolean })[checkedVolatile]) {
+    validateVolatileSchema(schema, options.path)
+    options = { ...options, [checkedVolatile]: true } as Schemastery.Options
+  }
+  if (schema.meta?.volatile) {
+    const inner = Schema(schema)
+    inner.meta = { ...schema.meta, volatile: false }
+    const [value, adapted] = Schema.resolve(data, inner, options, strict)
+    try {
+      return [createVolatile(value), adapted]
+    } catch (error) {
+      throw new ValidationError(error instanceof Error ? error.message : String(error), options)
+    }
+  }
   if (options.ignore?.(data, schema)) return [data]
 
   if (isNullable(data) && schema.type !== 'lazy') {
@@ -582,6 +641,7 @@ Schema.extend('lazy', (data, schema, options, strict) => {
   if (!schema.inner![kSchema]) {
     schema.inner = schema.builder!()
     schema.inner!.meta = { ...schema.meta, ...schema.inner!.meta }
+    validateVolatileSchema(schema.inner!, options.path, true)
   }
   return Schema.resolve(data, schema.inner!, options, strict)
 })
@@ -706,7 +766,7 @@ function property(data: any, key: keyof any, schema: Schema, options: Schemaster
   } catch (e) {
     if (!options?.autofix) throw e
     delete data[key]
-    return schema.meta.default
+    return schema.meta.volatile ? createVolatile(schema.meta.default) : schema.meta.default
   }
 }
 

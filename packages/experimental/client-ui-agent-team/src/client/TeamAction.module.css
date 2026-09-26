@@ -2,100 +2,130 @@
   position: relative;
 }
 
-.trigger,
-.iconButton,
-.smallButton,
-.taskActions button,
-.formActions button {
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-}
-
 .trigger {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   min-height: 28px;
   padding: 3px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
+  cursor: pointer;
 }
 
 .trigger:hover,
-.iconButton:hover,
-.smallButton:hover,
-.taskActions button:hover,
-.formActions button:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+.trigger:focus-visible {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Second sacrifice after the preset label: past this title-row width the
+   trigger keeps only its icon. TeamAction reads the collapsed state off this
+   rule to switch from hover-open to click-only. */
+@container (max-width: 480px) {
+  .triggerLabel {
+    display: none;
+  }
 }
 
 .count {
-  min-width: 16px;
-  border-radius: 8px;
-  background: var(--dsw-alias-fill-l2);
+  color: var(--dsw-alias-label-caption);
+  font-size: 12px;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
-  text-align: center;
+  line-height: 16px;
 }
 
 .panel {
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 0;
-  z-index: 110;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  z-index: 100;
   box-sizing: border-box;
-  width: min(560px, calc(100vw - 32px));
-  max-height: min(680px, calc(100vh - 120px));
-  padding: 10px;
-  overflow: auto;
+  width: min(500px, 100vw - 32px);
+  max-height: min(680px, calc(100vh - 32px));
+  /* Horizontal insets live on the toolbar and scroll body, not the panel, so
+     member-card hover shadows stay inside the body's clip box; the thumb hugs
+     the panel edge (2px) while the body's stable gutter and trailing padding
+     rebuild the 16px content inset. */
+  padding: 8px 2px 0;
+  overflow: hidden;
   border: 0;
   border-radius: 12px;
-  background: var(--dsw-specific-menu);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
 }
 
-.toolbar,
-.sectionTitle,
-.taskTitle,
-.taskActions,
-.formActions {
+/* The menu skin lives on a pseudo-element: backdrop-filter on the panel
+   itself would turn it into the containing block for fixed descendants, so
+   the member Tooltip bubbles would be re-anchored into the panel and clipped
+   by its hidden overflow. */
+.panel::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+}
+
+/* A lone member with no shared tasks fits one card; the full panel width
+   would sit mostly empty, so the roster drops to one column. */
+.panelCompact {
+  width: min(320px, 100vw - 32px);
+}
+
+.panelCompact .roster {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.body {
+  --dsh-scrollbar-track-margin: 8px;
+
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 9px 16px 14px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.taskTitle {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.toolbar {
-  min-height: 28px;
-}
-
-.spacer {
-  flex: 1;
-}
-
-.iconButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
+.taskTitle strong {
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .panel h3 {
-  margin: 12px 0 6px;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 8px 4px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
   font-weight: 500;
+}
+
+/* Without a toolbar the first heading sits 16px under the panel edge: 8px
+   panel padding plus this trimmed margin. */
+.body section:first-of-type h3 {
+  margin-top: 8px;
 }
 
 .roster {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
 }
 
 .member {
@@ -103,10 +133,12 @@
   align-items: flex-start;
   gap: 8px;
   min-width: 0;
-  padding: 8px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
+  padding: 10px 12px;
+  border: 0;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
+  box-shadow: var(--dsw-elevation-stroke);
   border-radius: 8px;
-  background: transparent;
+  background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-primary);
   text-align: left;
   cursor: pointer;
@@ -116,10 +148,76 @@
   cursor: default;
 }
 
+/* The Current tag and card share a tint; the inset ring adds emphasis
+   without changing the card's dimensions. */
+.memberCurrent {
+  --dsw-elevation-stroke-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, transparent);
+  box-shadow: var(--dsw-elevation-stroke), inset 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, transparent);
+}
+
+.member:not(:disabled):hover,
+.member:not(:disabled):focus-visible {
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
+  box-shadow: var(--dsw-elevation-panel);
+}
+
+/* Seat height 1lh tracks the member name's first text line, so any dot
+   diameter centers on that line instead of the row's top edge. */
+.memberDot {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 1lh;
+}
+
+.inactiveIcon {
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .memberText {
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+
+.memberName {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.memberNameText,
+.memberText small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Model details stay behind a hover/focus reveal to keep the resting card to
+   its name and activity. */
+.memberModel {
+  display: none;
+}
+
+.member:hover .memberModel,
+.member:focus-visible .memberModel {
+  display: inline;
+}
+
+/* The member card is denser than the surfaces the standard capsule ships for,
+   so the current-conversation tag drops one step in size. The 999 shrink
+   factor collapses the tag (block display re-enables text-overflow) before
+   the member name gives up any width. */
+.currentTag {
+  display: inline-block;
+  flex: 0 999 auto;
+  min-width: 0;
+  padding: 0 4px;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 15px;
+  text-overflow: ellipsis;
 }
 
 .memberText small,
@@ -134,30 +232,31 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-.smallButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  padding: 4px 7px;
-  font-size: 11px;
-}
-
 .tasks {
   display: flex;
   flex-direction: column;
   gap: 7px;
 }
 
-.task,
-.form {
-  padding: 9px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 9px;
-  background: var(--dsw-alias-bg-base);
+/* Empty task board: a plain description in place of the section heading,
+   flush with the body's bottom padding. */
+.emptyNotice {
+  margin: 16px 0 0 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
 }
 
-.taskTitle span {
+.task {
+  padding: 11px 13px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.taskState {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
@@ -167,74 +266,61 @@
   margin: 5px 0;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
+  line-height: 18px;
   white-space: pre-wrap;
 }
 
-.meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
+.clampedDescription {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.taskActions {
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-
-.taskActions label {
+.expandToggle {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  /* Floated ahead of the meta spans: it keeps the first line's top-right
+     corner, so wrapped meta lines continue below it instead of pushing the
+     toggle under content it expands. */
+  float: right;
+  margin-left: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
+  line-height: 20px;
+  cursor: pointer;
 }
 
-.taskActions select,
-.form input,
-.form textarea {
-  box-sizing: border-box;
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 6px;
-  background: var(--dsw-alias-bg-base);
+.expandToggle:hover,
+.expandToggle:focus-visible {
   color: var(--dsw-alias-label-primary);
-  font: inherit;
 }
 
-.taskActions button,
-.formActions button {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 4px 6px;
-  font-size: 11px;
+.expandToggle svg {
+  transition: transform 120ms ease;
 }
 
-.taskActions button:disabled,
-.formActions button:disabled {
-  opacity: 0.45;
-  cursor: default;
+.expandToggleOpen {
+  transform: rotate(180deg);
 }
 
-.form {
-  display: grid;
-  gap: 6px;
-  margin-bottom: 7px;
+.meta {
+  line-height: 20px;
 }
 
-.form input,
-.form textarea {
-  width: 100%;
-  padding: 6px 8px;
-  font-size: 12px;
-}
-
-.form textarea {
-  min-height: 58px;
-  resize: vertical;
+.meta > span {
+  margin-right: 10px;
 }
 
 .notice,
 .error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 9px;
   font-size: 12px;
 }

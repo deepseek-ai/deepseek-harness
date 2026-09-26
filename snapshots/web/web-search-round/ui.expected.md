@@ -1,58 +1,28 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "Use web_search once with queries" [disabled]
-  - img
+  - navigation "Session hierarchy": Use web_search once with queries
   - text: Standard mode
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
 - text: Use web_search once with queries ["DeepSeek Harness snapshot search","DeepSeek Harness multi-query search"]. Then reply exactly SEARCH_DONE and stop. {{clock}}
-- button "Copy":
-  - img
-- button "1 tool call" [expanded]:
-  - text: 1 tool call
-  - img
-- button "Context injection @deepseek-ai/dsh-system-prompt":
-  - img
-  - img
-  - text: Context injection @deepseek-ai/dsh-system-prompt
-- button "Search DeepSeek Harness snapshot search, DeepSeek Harness multi-query search":
-  - img
-  - img
-  - text: Search DeepSeek Harness snapshot search, DeepSeek Harness multi-query search
+- button "Copy"
+- status: Worked
+- button "Took {{duration}}" [expanded]
+- button "Searched the web" [expanded]
+- button "Search DeepSeek Harness snapshot search, DeepSeek Harness multi-query search"
 - paragraph: SEARCH_DONE
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
 - text: {{clock}}
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
-- button "0% of context used"
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Send message" [disabled]
-- button "1 turns 2 steps · {{throughput}} tok/s":
-  - img
-  - text: 1 turns 2 steps{{throughput}} tok/s
-- button "29 tok · Cache hit 0%":
-  - img
-  - text: 29 tokCache hit 0%
+- button "1 turns 2 steps · {{throughput}} tok/s": 1 turns 2 steps{{throughput}} tok/s
+- button "29 tok · Cache hit 0%": 29 tokCache hit 0%
+- button "0% of context used": 0%

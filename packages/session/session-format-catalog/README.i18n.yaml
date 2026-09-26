@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/session-format-catalog/README.md
-README.md: 8232a28b2c2c31c0176adb62e07ed16a804791e8
-README.zh.md: 2c4c86da50640f672842d98e6cc254dca08a3470
+/:
+  en: 89c9b992aff39650
+  zh: 94d371a24dedeec1
+/deepseek-ai-dsh-session-format-catalog:
+  en: f3d8ff5a8c114032
+  zh: 9c44f1a7d6992f73
+/deepseek-ai-dsh-session-format-catalog/summary:
+  en: 9ba3c445056b28ed
+  zh: 267ba018514b5e12
+/deepseek-ai-dsh-session-format-catalog/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-session-format-catalog/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-session-format-catalog/use-this-package/when-to-use-it:
+  en: 705e341a9189d58f
+  zh: 849007446a7b8a46
+/deepseek-ai-dsh-session-format-catalog/use-this-package/entry-point:
+  en: f955b2fb458cf64d
+  zh: 0e0b6f025be928a7
+/deepseek-ai-dsh-session-format-catalog/understand-the-implementation:
+  en: cac81936d7b06de4
+  zh: 6ec5b5af0c115464
+/deepseek-ai-dsh-session-format-catalog/further-exploration:
+  en: 48df998c195e1fc9
+  zh: 4213cc5c7c19a73c
+/deepseek-ai-dsh-session-format-catalog/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-session-format-catalog/model-experience/catalog-dispatch:
+  en: 370b9bf19d575dbd
+  zh: e08724fcf4189634
+/deepseek-ai-dsh-session-format-catalog/model-experience/catalog-dispatch/what-the-model-sees:
+  en: 53fa22f9082ca037
+  zh: 81c5ebd439d9afdf
+/deepseek-ai-dsh-session-format-catalog/model-experience/catalog-dispatch/token-effect:
+  en: f7d1eb359afe1932
+  zh: 5fc82f0403c52d19
+/deepseek-ai-dsh-session-format-catalog/model-experience/catalog-dispatch/kv-cache-effect:
+  en: 3796ca9965965a66
+  zh: a6f655fa0d6e7aa4
+/deepseek-ai-dsh-session-format-catalog/known-limitations-and-deferred-work:
+  en: 9f86bd4bcaa5f43d
+  zh: aef8d58f4d1e0370
+/deepseek-ai-dsh-session-format-catalog/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

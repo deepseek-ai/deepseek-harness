@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-19-real-api-e2e-ci.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-06-19-real-api-e2e-ci.md
-2026-06-19-real-api-e2e-ci.md: b218d77f0817416b01459fbb70f5cacffe048ee8
-2026-06-19-real-api-e2e-ci.zh.md: 52c988dad00ddb3ee7f0cd2d23da9771f0900808
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api:
+  en: 705c6fd43858bdac
+  zh: 2bbc6491368fb4c0
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/problem:
+  en: 80cf8dc578552364
+  zh: a54441ea02664483
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/decision:
+  en: 3fbdb8769322e05f
+  zh: f46f68f8eba74d67
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/decision/a-separate-workflow-not-a-job-in-ci-yml:
+  en: e4745c43611b96bb
+  zh: 8fb980401b0c5e9b
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/decision/cost-is-not-the-constraint-reliability-is:
+  en: 88b945361b1d4804
+  zh: 0887a653945f4dda
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/decision/triggers-trusted-events-only:
+  en: 42a2fb15f00aec3a
+  zh: c4775447c863d209
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/decision/the-untrusted-pr-gate:
+  en: e94c28db20896508
+  zh: c8e77c54dceed035
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/decision/preflight-fail-loud-never-false-green:
+  en: 07904c7ad53be5ad
+  zh: 67d84d4dc6f082a9
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/decision/secret-mapping-and-hygiene:
+  en: fbbcc9a926dfc943
+  zh: 506acdb4e034574b
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/decision/scope-runtime-shape:
+  en: c59c441547da2a4d
+  zh: b08d50e7cfd40cd5
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/security:
+  en: 1fd3925ab26c11d4
+  zh: 0d7103fd0b1afa89
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/security/who-can-reach-the-secret-in-a-private-repository:
+  en: a748b4e79bab26e1
+  zh: 1c607bc65274cdef
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/security/the-residual-exposure-the-pull-request-trigger-adds:
+  en: 04463ffd6f67a2bd
+  zh: 4126fb30873782ed
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/security/what-changes-when-the-repo-goes-public:
+  en: 02aa2f4100f6aac5
+  zh: f9868c6a12e19ecd
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/alternatives-considered:
+  en: 7e7aa3a387a174bc
+  zh: 2431a0df2fb478a8
+/agent-note-real-api-e2e-in-ci-against-the-external-deepseek-api/consequences:
+  en: a999af1cbd7776da
+  zh: 5f1fab52fd4eb304

@@ -1,0 +1,11 @@
+{
+  "final_response": "Before sign-out",
+  "finish_reason": "aborted",
+  "reason": {
+    "kind": "aborted",
+    "reason": {
+      "kind": "hook",
+      "reason": "deepseek-account/signed-out"
+    }
+  }
+}

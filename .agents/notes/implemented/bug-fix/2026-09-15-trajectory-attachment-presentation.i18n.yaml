@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-09-15-trajectory-attachment-presentation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-15-trajectory-attachment-presentation.md
+/agent-note-consistent-trajectory-attachment-presentation:
+  en: 44651b6372b8e74e
+  zh: 8e1df22f6c969427
+/agent-note-consistent-trajectory-attachment-presentation/problem:
+  en: 3a02d475408db611
+  zh: 49ef7f0e91917e13
+/agent-note-consistent-trajectory-attachment-presentation/decision:
+  en: 9a37a61d84813db3
+  zh: 546cf3d1734289ee
+/agent-note-consistent-trajectory-attachment-presentation/decision/ownership:
+  en: d453afd765988e76
+  zh: eeb4c7d40fe578dc
+/agent-note-consistent-trajectory-attachment-presentation/alternatives-considered:
+  en: f32a7ff301caf058
+  zh: fbea3a171a300aef
+/agent-note-consistent-trajectory-attachment-presentation/consequences:
+  en: da70caa5b98ac85d
+  zh: 52a5379c3adaa62f
+/agent-note-consistent-trajectory-attachment-presentation/verification:
+  en: 145819ab133854c3
+  zh: f9a440d57c12a257

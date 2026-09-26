@@ -17,6 +17,8 @@
  * in this tab's place, so the guide is a doorway rather than a page that stays
  * open.
  */
+import { ShortcutKeys } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { ReactNode } from 'react'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { ChainRenderOpts, HookContextOf, InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -27,7 +29,10 @@ import css from './GuideBody.module.css'
 /** What the guide body needs from its host beyond the framework shares. */
 export interface GuideInjected {
   /** The registry's guide entries in `order`; observable, so a type registering later appears. */
-  readonly hooks: { readonly guideEntries: ObservableSnapshot<readonly SidebarRightGuideBox[]> }
+  readonly hooks: {
+    readonly shortcuts: ObservableSnapshot<readonly ShortcutCatalogEntry[]>
+    readonly guideEntries: ObservableSnapshot<readonly SidebarRightGuideBox[]>
+  }
 }
 
 /** The guide body's composed props: the tab it draws, its chain child, and the entries. */
@@ -40,7 +45,8 @@ export type GuideBodyProps =
 const MAX_DESCRIBED_ENTRIES = 4
 
 /** One entry capsule: the contributing type's glyph and title, and its description while the guide is short. */
-function EntryBox({ entry, described, onPick }: {
+function EntryBox({ entry, described, onPick, shortcut }: {
+  shortcut: ShortcutCatalogEntry | undefined
   entry: SidebarRightGuideBox
   described: boolean
   onPick: (entry: SidebarRightGuideBox) => void
@@ -52,6 +58,7 @@ function EntryBox({ entry, described, onPick }: {
       type="button"
       className={css.entry}
       data-sidebar-right-guide-entry={entry.kind}
+      aria-keyshortcuts={shortcut?.aria}
       onClick={() => { onPick(entry) }}
     >
       {/* The glyph rides the capsule's height: 22 beside a bare title, 26 beside two lines. */}
@@ -62,6 +69,7 @@ function EntryBox({ entry, described, onPick }: {
         <span className={css.entryTitle}>{entry.title()}</span>
         {description !== undefined && <span className={css.entryDescription}>{description}</span>}
       </span>
+      {shortcut !== undefined && shortcut.keys.length > 0 && <ShortcutKeys keys={shortcut.keys} />}
     </button>
   )
 }
@@ -77,7 +85,8 @@ function ShippedGuide({ children }: { children: ReactNode }): ReactNode {
 }
 
 /** The guide tab's body, replaceable through its chain child. */
-export function GuideBody({ useTabInfo, useGuideEntries, renderSlot, renderSlotChain }: GuideBodyProps): ReactNode {
+export function GuideBody({ useTabInfo, useGuideEntries, renderSlot, renderSlotChain, useShortcuts }: GuideBodyProps): ReactNode {
+  const shortcuts = useShortcuts(entries => entries)
   const { tab } = useTabInfo()
   const entries = useGuideEntries(entries => entries)
   const options = {
@@ -92,7 +101,7 @@ export function GuideBody({ useTabInfo, useGuideEntries, renderSlot, renderSlotC
             ...description === undefined ? {} : { description },
           }, {
             entryKey: entry.providerId, hookContext: useTabInfo,
-            fallback: <EntryBox entry={entry} described={described}
+            fallback: <EntryBox entry={entry} described={described} shortcut={shortcuts.find(shortcut => shortcut.id === entry.commandId)}
               onPick={(selected) => { tab.actions.openTab(selected.kind, { replaceTab: true }) }} />,
           })}
         </div>

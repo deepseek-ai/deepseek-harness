@@ -53,11 +53,11 @@ const wrapClear = (clear: Clear): ((handle?: unknown) => void) =>
 
 /** Replace the worker's timer globals with the Node-shaped wrappers. */
 export function installTimerGlobals(): void {
-  const scope = globalThis as unknown as Record<string, unknown>
-  const setTimeoutRaw = globalThis.setTimeout.bind(globalThis) as unknown as Scheduler
-  const setIntervalRaw = globalThis.setInterval.bind(globalThis) as unknown as Scheduler
-  const clearTimeoutRaw = globalThis.clearTimeout.bind(globalThis) as unknown as Clear
-  const clearIntervalRaw = globalThis.clearInterval.bind(globalThis) as unknown as Clear
+  const scope = globalThis as Record<string, unknown>
+  const setTimeoutRaw = globalThis.setTimeout.bind(globalThis) as Scheduler
+  const setIntervalRaw = globalThis.setInterval.bind(globalThis) as Scheduler
+  const clearTimeoutRaw = globalThis.clearTimeout.bind(globalThis) as Clear
+  const clearIntervalRaw = globalThis.clearInterval.bind(globalThis) as Clear
   scope.setTimeout = wrapScheduler(setTimeoutRaw)
   scope.setInterval = wrapScheduler(setIntervalRaw)
   scope.clearTimeout = wrapClear(clearTimeoutRaw)

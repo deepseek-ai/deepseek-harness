@@ -75,18 +75,15 @@ describe('DiffBlock structure', () => {
   })
 
   it('treats a trailing newline as a terminator, not an extra blank line', () => {
-    // A create whose newText ends in a newline is one added line, not two, and
-    // the footer counts one — the phantom `+ ` empty line the naive split drew.
     const { container } = render(<DiffBlock diffs={[{ path: 'n.txt', oldText: null, newText: 'hello\n' }]} />)
     expect(changeRows(container)).toEqual(['hello'])
-    expect(screen.getByText('└ +1 -0 · 1 file')).toBeTruthy()
   })
 
   it('renders a full deletion as removed-only with no phantom added line', () => {
     // newText '' is zero added lines: an empty string must contribute nothing.
     const { container } = render(<DiffBlock diffs={[{ path: 'gone.ts', oldText: 'a\nb', newText: '' }]} />)
     expect(container.querySelectorAll('[class*="_add_"]').length).toBe(0)
-    expect(screen.getByText('└ +0 -2 · 1 file')).toBeTruthy()
+    expect(changeRows(container)).toEqual(['a', 'b'])
   })
 
   it('keeps a genuine interior blank line', () => {
@@ -105,7 +102,6 @@ describe('DiffBlock local changes', () => {
     const total = count === 128 ? count : count + 1
     render(<DiffBlock diffs={diffs} maxLines={1000} />)
     expect(diffTotals(diffs)).toEqual({ added: total, removed: total })
-    expect(screen.getByText(`└ +${total} -${total} · 1 file`)).toBeTruthy()
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '复制' })) })
     expect(writeText).toHaveBeenCalledWith(count === 128
       ? ['large.txt', '  shared context', ...oldLines.slice(1).map(line => `- ${line}`), ...newLines.slice(1).map(line => `+ ${line}`)].join('\n')
@@ -132,7 +128,6 @@ describe('DiffBlock local changes', () => {
     render(<DiffBlock diffs={diffs} />)
     expect(screen.getAllByText('start')).toHaveLength(1)
     expect(screen.getAllByText('end')).toHaveLength(1)
-    expect(screen.getByText('└ +1 -1 · 1 file')).toBeTruthy()
     expect(diffTotals(diffs)).toEqual({ added: 1, removed: 1 })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '复制' })) })
     expect(writeText).toHaveBeenCalledWith('settings.ts\n  start\n- mode = 1\n+ mode = 2\n  end')
@@ -150,7 +145,6 @@ describe('DiffBlock local changes', () => {
       'item 40', 'changed 40', 'item 41', 'item 42', 'item 43',
     ])
     expect(changeRows(container)).toEqual(['item 10', 'changed 10', 'item 40', 'changed 40'])
-    expect(screen.getByText('└ +2 -2 · 1 file')).toBeTruthy()
   })
 
   it.each([
@@ -163,26 +157,10 @@ describe('DiffBlock local changes', () => {
     ['a\n\nb', 'a\nb', 0, 1],
   ])('counts ordered changes in %j → %j', (oldText, newText, added, removed) => {
     const diffs = [{ path: 'a.txt', oldText, newText }]
-    render(<DiffBlock diffs={diffs} />)
+    const { container } = render(<DiffBlock diffs={diffs} />)
     expect(diffTotals(diffs)).toEqual({ added, removed })
-    expect(screen.getByText(`└ +${added} -${removed} · 1 file`)).toBeTruthy()
-  })
-})
-
-describe('DiffBlock footer', () => {
-  it('counts added and removed lines and one file', () => {
-    const diffs: DiffHunk[] = [{ path: 'a.ts', oldText: 'a\nb', newText: 'c' }]
-    render(<DiffBlock diffs={diffs} />)
-    expect(screen.getByText('└ +1 -2 · 1 file')).toBeTruthy()
-  })
-
-  it('pluralizes the distinct-file count', () => {
-    const diffs: DiffHunk[] = [
-      { path: 'a.ts', oldText: null, newText: 'x' },
-      { path: 'b.ts', oldText: null, newText: 'y' },
-    ]
-    render(<DiffBlock diffs={diffs} />)
-    expect(screen.getByText('└ +2 -0 · 2 files')).toBeTruthy()
+    expect(container.querySelectorAll('[class*="_add_"]')).toHaveLength(added)
+    expect(container.querySelectorAll('[class*="_del_"]')).toHaveLength(removed)
   })
 })
 

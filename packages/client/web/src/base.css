@@ -39,6 +39,56 @@ html[data-platform='darwin'] body {
   background: transparent;
 }
 
+/* Menu backings paint below page content but above the native vibrancy. */
+html[data-platform='darwin'] body {
+  isolation: isolate;
+}
+
+/* macOS desktop: the one drag declaration. A chrome row marks itself in markup
+   (`data-window-drag`) and its own box becomes its draggable geometry, so no fixed
+   band has to match any row's height; the ui-theme app-region gate's CHROME_ROWS
+   manifest is the list of rows that must carry the mark. Electron composes
+   app-regions from geometry, not hit testing, so a surface covering a row would
+   otherwise drag the window instead of receiving clicks; every covering overlay
+   portals to document.body beside #root, which also puts it after every drag row
+   in document order, and one rule subtracts them all. */
+html[data-platform='darwin'] [data-window-drag] {
+  -webkit-app-region: drag;
+}
+
+/* One-frame app-region pulse that forces Electron to recollect the window's drag
+   rects (electron#32341): a change to a computed app-region value is what dirties
+   them. The shell's window drag watcher (window-drag/recall.ts) sets this
+   attribute on the body for each frame in which a marked row's box moved, and
+   clears it on the frame that finds the geometry settled. The box it subtracts
+   is the body's own: the row marks inside still declare drag and win over it in
+   document order, so the pulse changes nothing about the composed surface — it
+   only makes Electron collect it again. */
+html[data-platform='darwin'] [data-window-drag-recall] {
+  -webkit-app-region: no-drag;
+}
+
+html[data-platform='darwin'] body > :not(#root) {
+  -webkit-app-region: no-drag;
+}
+
+/* Inside #root, interactive controls and raised surfaces (dialogs, menus)
+   subtract themselves from any drag row they overlap, wherever they render.
+   Electron composes app-regions from geometry in document order, so a drag rule
+   must sit on a chrome row that precedes the overlays covering it — never on a
+   content container, which would override every overlay mounted earlier in the
+   DOM. One selector on the native elements, ARIA roles, and tabindexed custom
+   widgets replaces per-component no-drag opt-outs. */
+html[data-platform='darwin'] :is(
+  button, a, input, select, textarea, summary, [contenteditable='true'], [tabindex],
+  [role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox'], [role='tooltip'],
+  [role='button'], [role='link'], [role='tab'], [role='menuitem'], [role='menuitemcheckbox'],
+  [role='menuitemradio'], [role='option'], [role='checkbox'], [role='radio'], [role='switch'],
+  [role='slider'], [role='combobox'], [role='textbox']
+) {
+  -webkit-app-region: no-drag;
+}
+
 code,
 pre,
 [data-diff],

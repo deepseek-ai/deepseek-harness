@@ -8,7 +8,7 @@
 
 import { pathToFileURL } from 'node:url'
 import { readFileSync } from 'node:fs'
-import { parseEnv } from 'node:util'
+import { inspect, parseEnv } from 'node:util'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { Context, type FiberState } from '@deepseek-ai/cordis'
@@ -17,7 +17,19 @@ import Include, { applyEntryPatches, entryListSchema, type PatchOptions } from '
 import Group from '@deepseek-ai/cordis-plugin-group'
 import { dshHomePath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
-export { readProfilePatches, resolveTelemetryPatch, type ProfileContext } from './profile-context.ts'
+export { readProfilePatches, resolveTelemetryPatch, type ProfileContext, type ProfilePnpmInvocation } from './profile-context.ts'
+export { sanitizeProfile } from './profile-sanitize.ts'
+export { getDshRuntimeVersion, evaluatePluginCompatibility, pluginCompatibilityWarning, type PluginCompatibility } from './plugin-compatibility.ts'
+export {
+  PROFILE_COMPATIBILITY_FILENAME, readProfileCompatibility, readProfileVersionExemptions,
+  setProfileVersionExemption, type ProfileCompatibility,
+} from './profile-compatibility.ts'
+import { prepareProfilePatches } from './compatibility-preflight.ts'
+export { prepareProfileEntries, prepareProfilePatches } from './compatibility-preflight.ts'
+export { readPluginMeta } from './package-meta.ts'
+export { generateConfigSchema, type ConfigSchemaDump, type NativeConfigSchema } from './config-schema/index.ts'
+export { createConfigProjector, LOADER_EXPRESSION_SCHEMA, type ConfigProjection } from './config-schema/projector.ts'
+export { isNativeConfigSchema } from './config-schema/native.ts'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
 export {
@@ -30,33 +42,44 @@ declare module '@deepseek-ai/cordis' {
     /** Harness-home path resolver available to Loader `!!js` config expressions. */
     dshHomePath?: typeof dshHomePath
   }
+
+  interface Events {
+    /**
+     * Profile patches were reconciled into the running Loader tree: every entry update settled and no new
+     * inactive entry was introduced. Carries no diff; listeners re-read Loader entries.
+     * @mode emit
+     */
+    'app-boot/config-reload'(): void
+  }
 }
 
 export {
   composeEntries,
-  createProfileResolutionGeneration,
+  createRuntimeResolution,
   DEFAULT_PROFILE_BUNDLES,
   OPTIONAL_BUNDLES,
-  healProfilesModuleFallback,
-  healIsolatedProfileModuleFallback,
-  unlinkProfileModuleFallback,
+  bundlePatchFiles,
+  bundlePatchPaths,
   initProfile,
+  removeLinkProjections,
   loadProfile,
   loadProfileDirectory,
   PROFILE_PATCH_FILENAME,
   PROFILE_TEMPLATES,
   PROFILES_DIR,
   readProfileManifest,
+  reportSkippedBundles,
   resolveBundleDir,
   resolveProfileDir,
   writeProfileManifest,
   type Profile,
   type ProfileLayer,
+  type SkippedBundle,
   type ProfileManifest,
-  type ProfileModuleFallbackOptions,
-  type ProfileResolutionEntry,
-  type ProfileResolutionGeneration,
-  type ProfileResolutionMode,
+  type LinkedRoot,
+  type RuntimeResolutionOptions,
+  type RuntimeResolutionEntry,
+  type RuntimeResolution,
   type ProfileTemplate,
 } from './profile.ts'
 export {
@@ -253,25 +276,29 @@ export async function reconcileProfilePatches(
   const entry = bootstrapIncludes.get(ctx)
   if (entry === undefined) throw new Error(`${binName}: profile reload requires the root Include entry`)
   const previousFailures = (await inactiveEntries(ctx)).map(failure => ({
-    ...failure, fiber: failure.entry.fiber, options: JSON.stringify(failure.entry.options),
+    ...failure, diagnostic: inactiveDiagnostic(failure), fiber: failure.entry.fiber, options: JSON.stringify(failure.entry.options),
   }))
   // Removed entries leave the Loader store before their async disposers finish.
   const previousFibers = [...ctx.loader.entries()].flatMap(row => row.fiber === undefined ? [] : [{
     fiber: row.fiber, failed: row.fiber.state === FIBER_FAILED || row.fiber.state === FIBER_DISPOSED,
   }])
   const { patches: _previous, ...includeConfig } = entry.options.config as Include.Config
-  await entry.update({ config: { ...includeConfig, patches } })
+  // The recomposition judges the rows the launch judged, resolved from the file this Include read.
+  const parentURL = new URL('.', new URL(includeConfig.path, entry.parent.tree.ctx.baseUrl)).href
+  const prepared = prepareProfilePatches(ctx, patches, parentURL, binName)
+  await entry.update({ config: { ...includeConfig, patches: prepared } })
   const results = await Promise.allSettled(previousFibers.map(({ fiber }) => fiber.await()))
   await ctx.loader.await()
   const failures = await inactiveEntries(ctx)
   const introduced = failures.filter(failure => requiredIds.includes(failure.entry.options.id) || !previousFailures.some(previous =>
     previous.entry === failure.entry && previous.fiber === failure.entry.fiber
-    && previous.options === JSON.stringify(failure.entry.options) && previous.diagnostic === failure.diagnostic))
-  if (introduced.length > 0) throw new Error(activationDiagnostic(binName, 'warning', introduced).trimEnd())
+    && previous.options === JSON.stringify(failure.entry.options) && previous.diagnostic === inactiveDiagnostic(failure)))
+  if (introduced.length > 0) throw new Error(activationDiagnostic(binName, introduced).trimEnd())
   for (const [index, result] of results.entries()) {
     if (result.status === 'rejected' && !previousFibers[index]?.failed) throw result.reason
   }
-  return failures.map(failure => failure.diagnostic)
+  ctx.emit('app-boot/config-reload')
+  return failures.map(inactiveDiagnostic)
 }
 
 /**
@@ -369,14 +396,15 @@ export interface ConfigDumpLayer {
 }
 
 /**
- * Compose the effective entry list exactly as `boot()` would mount it: parse
- * the base config file with the include's entry-list dialect, apply every
- * layer's patches as ONE flattened list through the include's own patch
- * algorithm (`applyEntryPatches`) — the same single call `boot()` makes, so
- * even patch-visibility corner cases (a later layer targeting a group child a
- * plain config replacement introduced, which the single-pass id index never
- * sees) compose identically — then render the result as YAML in the same
- * dialect (`!!js` expressions print verbatim, unevaluated).
+ * Compose the configured entry list: parse the base config file with the
+ * include's entry-list dialect, apply every layer's patches as ONE flattened
+ * list through the include's own patch algorithm (`applyEntryPatches`) — the
+ * same call `boot()` makes, so even patch-visibility corner cases (a later
+ * layer targeting a group child a plain config replacement introduced, which
+ * the single-pass id index never sees) compose identically — then render the
+ * result as YAML in the same dialect (`!!js` expressions print verbatim,
+ * unevaluated). Row admission is a later stage: a plugin row the compatibility
+ * policy denies still appears here, while a denied bundle contributes no layer.
  *
  * Every run of rows from the same file and patch layers is preceded by a `# ==` comment
  * naming the file that contributed the rows and any layers that patched them,
@@ -502,6 +530,7 @@ function groupedDump(
  * @param patches - initial app and user patches, applied in order.
  * @param bareModuleBaseUrl - optional installed-host base for bare package
  * names; relative names continue to resolve beside the configuration file.
+ * @param binName - diagnostic prefix for a profile plugin denied by compatibility policy; defaults to `dsh`.
  * @returns the created root Include entry, or `undefined` when a surface
  * disposed the whole tree (taking the Loader service with it) while the
  * entry creation was in flight.
@@ -511,6 +540,7 @@ export async function mountRootInclude(
   absoluteConfigPath: string,
   patches: readonly PatchOptions[] = [],
   bareModuleBaseUrl?: string,
+  binName = 'dsh',
 ): Promise<Entry | undefined> {
   ctx.loader.builtins.include = bareModuleBaseUrl === undefined
     ? Include
@@ -534,9 +564,12 @@ export async function mountRootInclude(
   // Pinned id: the bootstrap include is app glue, not a config row, and its
   // id appears in Loader failure chains — a random id would make startup
   // diagnostics unstable across runs (and snapshot fixtures).
+  // The launcher's own copy is prepared here: compatibility decisions must be made before the root
+  // Include imports anything, and they change no profile patch layer, manifest, or bundle list.
+  const prepared = prepareProfilePatches(ctx, [...patches], pathToFileURL(dirname(absoluteConfigPath)).href + '/', binName)
   const includeConfig: Include.Config = {
     path: pathToFileURL(absoluteConfigPath).href,
-    ...patches.length > 0 ? { patches: [...patches] } : {},
+    ...prepared.length > 0 ? { patches: prepared } : {},
   }
   const rootInclude: EntryOptions = {
     id: 'include',
@@ -551,13 +584,16 @@ export async function mountRootInclude(
   return entry
 }
 
+/** The two process events {@link installFailLoud} turns into a fatal exit. */
+export type FailLoudEvent = 'unhandledRejection' | 'uncaughtException'
+
 /**
  * The slice of `process` {@link installFailLoud} needs — injectable so tests
  * exercise the handler without registering on (or exiting) the real process.
  */
 export interface FailLoudProcess {
-  on(event: 'unhandledRejection', handler: (err: unknown) => void): unknown
-  off(event: 'unhandledRejection', handler: (err: unknown) => void): unknown
+  on(event: FailLoudEvent, handler: (err: unknown) => void): unknown
+  off(event: FailLoudEvent, handler: (err: unknown) => void): unknown
   stderr: { write(chunk: string): unknown }
   /**
    * Terminate the process. Callers treat this as the end of the run, as
@@ -601,11 +637,22 @@ async function observeLoaderRejectionCheckpoint(reasons: readonly unknown[]): Pr
 export const FAIL_LOUD_RELEASE_TIMEOUT_MS = 2_000
 
 /**
- * Install before boot to turn a late unhandled plugin-init rejection into one
- * labelled stderr diagnostic and `exit(1)`. A rejection already included by
- * {@link auditStartupEntries} is ignored during its process checkpoint;
- * every other rejection remains fatal. Stdout remains untouched for ACP; the
- * returned function removes the handler.
+ * Install before boot to turn an unhandled rejection or an uncaught exception,
+ * at any point in the process lifetime, into one labelled stderr diagnostic and
+ * `exit(1)`. A rejection already included by {@link auditStartupEntries} is
+ * ignored during its process checkpoint; every other rejection and every
+ * uncaught exception remains fatal. Control never returns to the failed
+ * operation after either: only the throw site knows which state is intact, and
+ * a listener that threw mid-update (a stream `'data'` handler, a half-applied
+ * registry write) leaves silently wrong results behind if it were resumed. The
+ * event loop keeps running only until the release hook settles or times out.
+ * Stdout remains untouched for ACP; the returned function removes both handlers.
+ *
+ * The diagnostic is `util.inspect(err)`, not `err.stack`: a `node:fs` error's
+ * `code`, `syscall`, and `path` and any `cause` chain are enumerable properties
+ * that the stack line omits, and they are what a crash report needs. Once a
+ * handler is installed Node prints nothing of its own, so this line is the
+ * only record of the failure.
  *
  * The Loader mounts entries concurrently, so a surface that owns the terminal
  * can already hold it when a sibling entry rejects. Exiting straight from the
@@ -627,7 +674,7 @@ export const FAIL_LOUD_RELEASE_TIMEOUT_MS = 2_000
  * @param release - optional teardown awaited before exit, used by a
  *   terminal-owning surface to restore the terminal. Its own failure is
  *   swallowed because the pending fatal exit already owns the outcome.
- * @returns the uninstaller that removes the rejection handler.
+ * @returns the uninstaller that removes both handlers.
  */
 export function installFailLoud(
   binName: string,
@@ -635,14 +682,13 @@ export function installFailLoud(
   release?: () => Promise<void> | void,
 ): () => void {
   let exiting = false
-  const handler = (err: unknown): void => {
-    if (assembledActivationRejections.has(err)) return
-    // A release in flight already owns the exit. Swallow later rejections
+  const report = (err: unknown, label: string): void => {
+    // A release in flight already owns the exit. Swallow later failures
     // (teardown's own included) rather than reporting a second failure over the
     // real one or letting Node kill the process before the terminal is back.
     if (exiting) return
     exiting = true
-    proc.stderr.write(`${binName}: fatal load failure: ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`)
+    proc.stderr.write(`${binName}: ${label}: ${inspect(err, { depth: 4, maxArrayLength: 50 })}\n`)
     if (release === undefined) {
       proc.exit(1)
       return
@@ -666,15 +712,24 @@ export function installFailLoud(
       proc.exit(1)
     })()
   }
-  const uninstall = (): void => void proc.off('unhandledRejection', handler)
-  proc.on('unhandledRejection', handler)
+  const onRejection = (err: unknown): void => {
+    if (assembledActivationRejections.has(err)) return
+    // Label kept stable: the Web profile expected-output e2e tests match it.
+    report(err, 'fatal load failure')
+  }
+  const onException = (err: unknown): void => { report(err, 'fatal uncaught exception') }
+  const uninstall = (): void => {
+    proc.off('unhandledRejection', onRejection)
+    proc.off('uncaughtException', onException)
+  }
+  proc.on('unhandledRejection', onRejection)
+  proc.on('uncaughtException', onException)
   return uninstall
 }
 
 /**
  * Value mirrors used because Cordis's const enum has no runtime object to import.
- * Keep aligned with `packages/extensions/tool-cordis/src/fiber-state.ts` and
- * `packages/client/web/src/loader-status.ts`.
+ * Keep aligned with `packages/client/web/src/loader-status.ts`.
  */
 const FIBER_PENDING = 0 as FiberState.PENDING
 const FIBER_ACTIVE = 2 as FiberState.ACTIVE
@@ -720,8 +775,45 @@ function formatActivationError(error: unknown): string {
 interface InactiveEntry {
   /** Loader entry used to identify the bootstrap Include and required ids. */
   entry: Entry
-  /** Complete diagnostic beginning with the entry id and module specifier. */
-  diagnostic: string
+  /** Activation errors and missing services remain distinct for presentation. */
+  outcome: { kind: 'failed'; error: unknown; phase?: string }
+    | { kind: 'pending'; missing: string[] }
+}
+
+/** Inactive plugin metadata without retaining its Context or Fiber. */
+interface StartupEntryDiagnostic {
+  id: string
+  module: string
+  required: boolean
+  fiberState: FiberState | undefined
+  outcome: InactiveEntry['outcome']
+}
+
+/** Startup warning or error arguments, including import errors with no Fiber. */
+interface StartupLogRecord {
+  ts: number
+  name: string
+  type: string
+  args: readonly unknown[]
+}
+
+/** Startup audit failure with non-enumerable metadata and original failures as its cause. */
+export class StartupError extends Error {
+  /** Root configuration and startup logs, attached by boot after disposal. */
+  startup?: { configurationPath: string; messages: readonly StartupLogRecord[] }
+
+  /**
+   * @param message - concise terminal diagnostic.
+   * @param entries - inactive plugin metadata and original failure values.
+   */
+  constructor(message: string, readonly entries: readonly StartupEntryDiagnostic[]) {
+    const failures = entries.flatMap(({ outcome }) => outcome.kind === 'failed' ? [outcome.error] : [])
+    super(message, failures.length > 0 ? { cause: new AggregateError(failures, 'Plugin activation failures') } : undefined)
+    Object.defineProperties(this, {
+      entries: { enumerable: false },
+      startup: { enumerable: false },
+    })
+  }
 }
 
 /**
@@ -733,16 +825,15 @@ async function inactiveEntries(ctx: Context): Promise<InactiveEntry[]> {
   const failures: InactiveEntry[] = []
   const rejectionReasons: unknown[] = []
   for (const entry of ctx.loader.entries()) {
-    const subject = `${entry.options.id} (${entry.options.name})`
     try {
       if (entry.disabled) continue
     } catch (error) {
-      failures.push({ entry, diagnostic: `${subject}: disabled expression failed: ${formatActivationError(error)}` })
+      failures.push({ entry, outcome: { kind: 'failed', error, phase: 'disabled expression failed' } })
       continue
     }
     const fiber = entry.fiber
     if (fiber === undefined) {
-      failures.push({ entry, diagnostic: `${subject}: failed to import` })
+      failures.push({ entry, outcome: { kind: 'failed', error: 'failed to import' } })
       continue
     }
     const state = fiber.state
@@ -752,7 +843,7 @@ async function inactiveEntries(ctx: Context): Promise<InactiveEntry[]> {
         await fiber.await()
       } catch (error) {
         rejectionReasons.push(error)
-        failures.push({ entry, diagnostic: `${subject}: ${formatActivationError(error)}` })
+        failures.push({ entry, outcome: { kind: 'failed', error } })
       }
       continue
     }
@@ -760,40 +851,76 @@ async function inactiveEntries(ctx: Context): Promise<InactiveEntry[]> {
       const missing = Object.keys(fiber.inject).filter(service => fiber.ctx.get(service) === undefined)
       failures.push({
         entry,
-        diagnostic: `${subject}: pending (waiting for ${missing.length === 1 ? 'service' : 'services'}: ${missing.join(', ') || 'unknown'})`,
+        outcome: { kind: 'pending', missing },
       })
     } else {
-      failures.push({ entry, diagnostic: `${subject}: fiber state ${String(state)}` })
+      failures.push({ entry, outcome: { kind: 'failed', error: `fiber state ${String(state)}` } })
     }
   }
   if (rejectionReasons.length > 0) await observeLoaderRejectionCheckpoint(rejectionReasons)
   return failures
 }
 
-/** Render an inactive-entry diagnostic with a count and severity label. */
+/** Render one failed plugin's original error and activation phase. */
+function failureDetail(outcome: Extract<InactiveEntry['outcome'], { kind: 'failed' }>): string {
+  return `${outcome.phase === undefined ? '' : `${outcome.phase}: `}${formatActivationError(outcome.error)}`
+}
+
+/** Render optional-only warnings without changing startup policy. */
 function activationDiagnostic(
   binName: string,
-  severity: 'warning' | 'required startup failure',
   failures: readonly InactiveEntry[],
 ): string {
   const noun = failures.length === 1 ? 'entry' : 'entries'
-  const prefix = binName === '' ? '' : `${binName}: `
-  return `${prefix}${severity}: ${String(failures.length)} ${noun} did not activate\n${failures.map(failure => failure.diagnostic).join('\n')}\n`
+  return `${binName}: warning: ${String(failures.length)} ${noun} did not activate\n${failures.map(inactiveDiagnostic).join('\n')}\n`
+}
+
+/** Stable per-entry text for reload comparisons and optional warnings. */
+function inactiveDiagnostic({ entry, outcome }: InactiveEntry): string {
+  const detail = outcome.kind === 'failed' ? failureDetail(outcome)
+    : `pending (waiting for ${outcome.missing.length === 1 ? 'service' : 'services'}: ${outcome.missing.join(', ') || 'unknown'})`
+  return `${entry.options.id} (${entry.options.name}): ${detail}`
+}
+
+/** Group startup failures and pending services, marking every required entry. */
+function startupDiagnostic(binName: string, failures: readonly InactiveEntry[], required: ReadonlySet<Entry>): string {
+  const lines = [`${binName}: startup failed: ${String(required.size)} required ${required.size === 1 ? 'plugin' : 'plugins'} did not activate`]
+  const failed = failures.flatMap(({ entry, outcome }) => outcome.kind === 'failed' ? [{ entry, outcome }] : [])
+  const pending = failures.flatMap(({ entry, outcome }) => outcome.kind === 'pending' ? [{ entry, outcome }] : [])
+  pending.sort((left, right) => Number(required.has(right.entry)) - Number(required.has(left.entry)))
+  const label = (entry: Entry): string => `${entry.options.id}${required.has(entry) ? ' (required)' : ''}`
+  if (failed.length > 0) {
+    lines.push('', `Failed plugins (${String(failed.length)}):`)
+    for (const { entry, outcome } of failed) {
+      lines.push(`  ${label(entry)}`, `    Package: ${entry.options.name}`)
+      lines.push(...failureDetail(outcome).split('\n').map(line => `    ${line}`))
+    }
+  }
+  if (pending.length > 0) {
+    const width = Math.max('Plugin'.length, ...pending.map(({ entry }) => label(entry).length)) + 2
+    lines.push('', `Plugins waiting for services (${String(pending.length)}):`, `  ${'Plugin'.padEnd(width)}Missing services`)
+    for (const { entry, outcome } of pending) {
+      lines.push(`  ${label(entry).padEnd(width)}${outcome.missing.join(', ') || 'unknown'}`)
+    }
+  }
+  return lines.join('\n')
 }
 
 /**
  * Apply DSH startup policy to a settled Loader tree.
  *
  * Inactive entries from the global required list reject startup. Other
- * inactive entries produce one warning and leave successful siblings running.
+ * inactive entries join that failure diagnostic, or produce one warning when
+ * no required entry failed and leave successful siblings running.
  * Required ids absent from the tree, and disabled required entries, are ignored.
  * A throwing disabled expression is an entry failure, not a disabled entry.
  * The bootstrap Include must activate so unreadable or invalid root config is fatal.
  * @param ctx - the settled context whose Loader entries to audit.
- * @param binName - the diagnostic prefix on optional-entry warnings.
+ * @param binName - the prefix on startup diagnostics.
  * @param warn - sink for optional-entry warnings.
  * @returns after optional warnings if required startup checks pass.
- * @throws when the bootstrap Include or a required entry is inactive or its disabled expression throws.
+ * @throws {@link StartupError} when the bootstrap Include or a required entry is inactive or its disabled expression throws;
+ * its message includes optional failures too.
  */
 export async function auditStartupEntries(
   ctx: Context,
@@ -801,17 +928,14 @@ export async function auditStartupEntries(
   warn: (line: string) => void = line => void process.stderr.write(line),
 ): Promise<void> {
   const failures = await inactiveEntries(ctx)
-  const required: InactiveEntry[] = []
-  const optional: InactiveEntry[] = []
-  for (const failure of failures) {
-    const target = failure.entry === bootstrapIncludes.get(ctx)
-      || requiredStartupEntryIds.has(failure.entry.options.id) ? required : optional
-    target.push(failure)
+  const required = new Set(failures.filter(({ entry }) => entry === bootstrapIncludes.get(ctx)
+    || requiredStartupEntryIds.has(entry.options.id)).map(({ entry }) => entry))
+  if (required.size > 0) {
+    throw new StartupError(startupDiagnostic(binName, failures, required), failures.map(({ entry, outcome }) => ({
+      id: entry.options.id, module: entry.options.name, required: required.has(entry), fiberState: entry.fiber?.state, outcome,
+    })))
   }
-  if (optional.length > 0) warn(activationDiagnostic(binName, 'warning', optional))
-  if (required.length > 0) {
-    throw new Error(activationDiagnostic('', 'required startup failure', required).trimEnd())
-  }
+  if (failures.length > 0) warn(activationDiagnostic(binName, failures))
 }
 
 /**
@@ -839,7 +963,8 @@ export async function auditStartupEntries(
  * complete plugin set.
  * @returns the root context after the initial startup audit, or as soon as a
  * surface disposed the tree while startup was still in flight.
- * @throws a labelled error after disposing the partial context — `host
+ * @throws {@link StartupError} for an inactive required entry, including all inactive plugins in its message;
+ * otherwise a labelled error after disposing the partial context — `host
  * preparation failed` when `prepare` threw before any config-tree entry
  * mounted, `plugin tree failed to load` afterwards. Cyclic causes terminate
  * diagnostic traversal without replacing the original cause.
@@ -852,6 +977,16 @@ export async function boot(
   bareModuleBaseUrl?: string,
 ): Promise<Context> {
   const ctx = new Context()
+  const startupLogs: StartupLogRecord[] = []
+  // The collector must outlive root disposal to retain asynchronous cleanup errors.
+  const diagnostics = new Context()
+  diagnostics.logger = ctx.logger
+  diagnostics.logger.exporter({
+    levels: { default: 2 },
+    export: ({ ts, name, type, args }) => {
+      if (type === 'warn' || type === 'error') startupLogs.push({ ts, name, type, args })
+    },
+  })
   // Two failure labels: `prepare` runs before any config-tree entry mounts,
   // so its failure is host setup, not the plugin tree.
   let stage = 'host preparation failed'
@@ -866,7 +1001,7 @@ export async function boot(
     await ctx.plugin(Loader)
     await prepare?.(ctx)
     stage = 'plugin tree failed to load'
-    await mountRootInclude(ctx, absoluteConfigPath, patches, bareModuleBaseUrl)
+    await mountRootInclude(ctx, absoluteConfigPath, patches, bareModuleBaseUrl, binName)
     // A surface can finish and dispose the whole tree while startup is still
     // in flight, before the last entry settles. The Loader service goes with
     // it, and the activation audit describes a live tree — reading `ctx.loader`
@@ -881,6 +1016,10 @@ export async function boot(
     // fiber.ts hardening) and a repeated call returns the settled single-shot
     // result, so this await cannot reject and replace `cause`.
     await ctx.fiber.dispose()
+    if (cause instanceof StartupError) {
+      cause.startup = { configurationPath: absoluteConfigPath, messages: startupLogs }
+      throw cause
+    }
     const detail = cause instanceof Error ? cause.message : String(cause)
     // A wrapper can carry an activation error whose original stack names the failed plugin.
     let deepest: unknown = cause
@@ -893,6 +1032,8 @@ export async function boot(
       ? `\n${deepest.stack ?? deepest.message}\n${deepest.errors.map(formatActivationError).join('\n')}`
       : deepest instanceof Error && deepest !== cause ? `\n${deepest.stack ?? deepest.message}` : ''
     throw new Error(`${binName}: ${stage}: ${detail}${stack}`, { cause })
+  } finally {
+    await diagnostics.fiber.dispose()
   }
 }
 

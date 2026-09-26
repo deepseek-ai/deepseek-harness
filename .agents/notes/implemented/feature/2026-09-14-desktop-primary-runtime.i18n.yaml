@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-14-desktop-primary-runtime.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-14-desktop-primary-runtime.md
-2026-09-14-desktop-primary-runtime.md: 17d489e6c788c786cefcdddf5f1983ac48522bfe
-2026-09-14-desktop-primary-runtime.zh.md: f8be37801452ebf4f4623a1ad0342de770e21ad5
+/agent-note-desktop-primary-runtime:
+  en: aac537d0aef9e6c3
+  zh: 30166e8f8627087f
+/agent-note-desktop-primary-runtime/problem:
+  en: 36bf235f0821ef6a
+  zh: a86bf07af03d54a3
+/agent-note-desktop-primary-runtime/decision:
+  en: b3b104e314762322
+  zh: 77478c007893201f
+/agent-note-desktop-primary-runtime/alternatives-considered:
+  en: 566fd91c30cb0a0a
+  zh: 70758ae2617f6ebb
+/agent-note-desktop-primary-runtime/consequences:
+  en: d0583f2397b7f778
+  zh: cf42263bc62ee947

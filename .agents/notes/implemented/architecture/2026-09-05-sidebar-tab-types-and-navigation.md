@@ -36,7 +36,7 @@ interface SidebarRightTabDefinition {
 
 `priority` is one of three literal bands, spelled as strings so that a type from another package needs no runtime import: `extension` is the band of a type from outside the product and the highest, so a type that declares nothing outranks every viewer shipped here; `builtin` is the ordinary band for shipped types; `fallback` is the plain-content position that anything more specific should beat, which VS Code's text editor holds implicitly and our text preview holds explicitly. `candidates(address)` returns every type whose globs match and whose `canOpen` does not veto, ranked by band, then by the length of the longest pattern that matched, then by registration order. `claim(address, kind?)` takes the best candidate, or the named kind's type in force when the caller overrides (its globs are not consulted; naming the type is the decision), and throws for an address nothing will open — a wiring mistake, not a user error. `get(kind)` returns the type in force; `entries()` and `guide()` list the types and their guide boxes in force; `subscribe` observes changes.
 
-`title(address)`, `guide[].title()`, and optional `guide[].description()` are thunks read on every use, so a language change needs no re-registration. [Guide start page and stat pill refinements](../feature/2026-09-10-guide-start-page-and-stat-pill-refinements.md) owns the current description visibility and fallback-glyph rules. The registry itself is a plain object provided at `apply`'s top level **without** `Service.tracker`: a tracker would rebind `this.ctx` to the caller's context, and a cross-package `register()` would then add its effect to the caller's fiber while that fiber is the active scope, stalling the browser boot with no error.
+`title(address)`, `guide[].title()`, and optional `guide[].description()` are thunks read on every use, so a language change needs no re-registration. The [Sidebar README](../../../../packages/client/ui-sidebar-right/README.md#the-guide) defines description visibility and fallback-glyph rules. The registry itself is a plain object provided at `apply`'s top level **without** `Service.tracker`: a tracker would rebind `this.ctx` to the caller's context, and a cross-package `register()` would then add its effect to the caller's fiber while that fiber is the active scope, stalling the browser boot with no error.
 
 ### Bodies and titles: keyed Slot seats under the definition's `id`
 
@@ -116,6 +116,5 @@ The conversation's `openFile(path, { line? })` — tool-row path links, produced
 ## Deferred
 
 - A navigation protocol beyond `sidebar://<kind>`: sub-routes within a page, naming an implementation, and the ecosystem-facing rules for other navigation schemes.
-- Parameters for the shipped page types, which today declare none.
 - Opening into a session other than the one on screen from the public face, which acts on the mounted session only; a tab's own actions already act on their tab's session.
 - A localized message when an open fails from the conversation; the failure is currently the thrown error's text.

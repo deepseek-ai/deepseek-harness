@@ -27,6 +27,7 @@ const MODE = webSnapshotMode()
 
 interface OtlpCapture {
   resourceLogs: { scopeLogs: { logRecords: {
+    eventName: string
     attributes: { key: string; value: { stringValue?: string; intValue?: number | string } }[]
   }[] }[] }[]
 }
@@ -53,8 +54,11 @@ describe.each(MODE === 'record' ? ['deepseek-official'] : ['deepseek-official', 
       return capture.resourceLogs.flatMap(resource => resource.scopeLogs.flatMap(scope =>
         scope.logRecords.map((record) => {
           const attribute = (key: string) => record.attributes.find(value => value.key === key)?.value
-          return [attribute('session.id')?.stringValue, Number(attribute('event.seq')?.intValue),
-            attribute('event.type')?.stringValue] as [string | undefined, number, string | undefined]
+          expect(record.eventName).toBe('session-log')
+          const content = attribute('content')?.stringValue
+          expect(typeof content).toBe('string')
+          const event = JSON.parse(content!) as SessionEvent
+          return [attribute('sessionId')?.stringValue, event.seq, event.type] as [string | undefined, number, string | undefined]
         })))
     })
   }
@@ -71,6 +75,10 @@ describe.each(MODE === 'record' ? ['deepseek-official'] : ['deepseek-official', 
     const expected = authorized.map(event => [sessionId, event.seq, event.type])
     // No teardown, flush hook, or subsequent interaction may cause this delivery.
     await expect.poll(captured, { timeout: 10_000 }).toEqual(expected)
+    const uploadedEvents = uploads.flatMap(upload => (JSON.parse(upload) as OtlpCapture).resourceLogs
+      .flatMap(resource => resource.scopeLogs.flatMap(scope => scope.logRecords))
+      .map(record => JSON.parse(record.attributes.find(attribute => attribute.key === 'content')!.value.stringValue!) as SessionEvent))
+    expect(uploadedEvents).toEqual(authorized)
     suffixes.push(authorized.slice(releasedCount).map(event => event.type))
     releasedCount = authorized.length
     expect(scaffold.ctx.agents.get(sessionId)).toBe(agent)
@@ -268,7 +276,9 @@ describe.each(MODE === 'record' ? ['deepseek-official'] : ['deepseek-official', 
       }
     })
     await compareOrRefreshGolden(RELEASE_EXPECTED, JSON.stringify({
-      mode: 'FEEDBACK_ONLY', feedback,
+      mode: 'FEEDBACK_ONLY',
+      eventName: (JSON.parse(uploads[0]!) as OtlpCapture).resourceLogs[0]!.scopeLogs[0]!.logRecords[0]!.eventName,
+      feedback,
       // The prefix is compared with each provider's actual canonical log above.
       laterSubmissionSuffixes: suffixes.slice(1),
     }, null, 2), MODE)

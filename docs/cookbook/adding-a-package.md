@@ -14,6 +14,8 @@ packages/<group>/<pkg>/
                    # ../../../vendor/cordis (+ ../../../vendor/schemastery if
                    # you use Config, + ../../<group>/<dep> for each dsh dep)
   src/index.ts     # service default export or plugin (name/inject/apply/Config)
+  locale/en.json   # optional display metadata: meta.title and meta.description
+  locale/zh.json   # translations using the same fields
   README.md        # service API, events, extension points, design notes,
                    # + gated Model Experience context blocks or short form
                    # + the gated "Known Limitations and Deferred Work" section
@@ -69,6 +71,8 @@ Use a singular `ctx` key for one engine, runtime, policy, controller, resolver, 
 
 Use `SDK` only for the JSON-RPC client/server protocol used by the supported Python and TypeScript SDKs. DeepSeek Harness itself is an agent harness, not an SDK project. Use the canonical product spelling `Typert`, never `TypeRT` or `typeRT`.
 
+<a id="4-write-the-package-readme"></a>
+
 ## 4. Write the package README
 
 Keep package-specific service API, config, events, extension points, and design notes first. Choose the frontmatter `kind` from the four kind labels in the [dsh-doc metadata reference](../../.agents/skills/dsh-doc/references/metadata-links-i18n.md#the-kind-system) — group, reference, library, or bundle — matching the package's repository position and entry shape; each kind selects one README template. The limitations section records durable consumer gaps and non-obvious maintainer constraints owned by this package; ordinary cleanup stays in its source TODO or Agent Note. An indirect Model Experience sentence may name the consumer that surfaces this package's contribution, but it does not restate that consumer's implementation. End a package README with this canonical sequence:
@@ -105,7 +109,58 @@ Fill Model Experience from the implementation. Use one H3 per direct, conditiona
 
 A package with no context effect or one consumer-owned path uses the audited `None, as ` or `Indirectly, through ` sentence in [`SENTENCE_MODEL_EXPERIENCE`](../../scripts/verify-package-readme-model-experience.ts), followed by a `KV Cache effect` H4 and one non-empty paragraph; a model-agnostic generic package may instead join `NO_MODEL_EXPERIENCE_SECTION`. Do not expand either case into a description of another package's work. The limitations [allowlist](../../scripts/verify-package-readme-limitations.ts) is independent. The [Model Experience Agent Note](../../.agents/notes/implemented/process/2026-07-12-package-model-experience-contract.md) records the rationale.
 
-## 5. Verify
+<a id="plugin-display-metadata"></a>
+
+## 5. Add optional plugin display metadata
+
+For an npm package plugin, define its title and description in `locale/en.json`. Other language files, such as `locale/zh.json`, use the same fields:
+
+```json
+{
+  "meta": {
+    "title": "Workspace Tools",
+    "description": "Tools for your workspace."
+  }
+}
+```
+
+Merge these entries into `package.json`, retaining existing runtime exports and publication files:
+
+```json
+{
+  "exports": {
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": ["locale/*.json"]
+}
+```
+
+Keep language files together in `locale/`, with `en.json` as the discovery entry. Fields are optional; present values must be non-empty strings. Missing files or fields permit fallback, while malformed JSON or invalid fields produce a per-plugin diagnostic.
+
+Fields fall back independently before view-specific name formatting, using the existing locale language chain first:
+
+- Title: locale `meta.title` → `package.json.name` → complete Cordis plugin name.
+- Description: locale `meta.description` → `package.json.description` → no description.
+
+Export `<package name>/locale/en.json` for locale lookup; expose `<package name>/package.json` for package-field fallback or an icon declaration.
+
+For an image on bundle cards, details, and component rows, set top-level `"icon": "./icon.svg"` in that exported manifest and include the image in `files`. The path is relative to the declaring manifest's directory, including for independently exported plugin manifests. SVG, PNG, JPEG (`.jpg`/`.jpeg`), and WebP files are supported up to 256 KiB. Absolute paths, URLs, paths outside that directory, and symlinks resolving outside it are rejected. Images need no separate export and must be self-contained; SVG is rendered as an image, not inline HTML. The Host returns a data URL without activating the plugin. Invalid declarations or unreadable files produce a metadata diagnostic while retaining valid text; missing or undecodable images use the panel's default artwork.
+
+Installed bundle cards and details, component lists and configuration details, and Settings' plugin inventory display this metadata, including disabled and preset plugins. Reads do not activate plugins.
+
+Only Settings shortens literal package-name and module-name fallbacks by removing npm scope and Cordis/DSH prefixes; Plugin Manager keeps complete names. Locale titles and descriptions remain unchanged. A row configuration page can use its registered summary when the plugin has no display description.
+
+The Install view still uses npm registry information from `pnpm view`, not locale metadata.
+
+Verify the result:
+
+1. Run `pnpm run verify-package-meta` from the repository root to check fields, resource exports, and publication coverage.
+2. Switch an installed plugin's applicable Plugin Manager and Settings entries between English and Chinese; check the title, description, per-field fallback, and Settings-only compact technical names.
+
+See the [plugin metadata Agent Note](../../.agents/notes/implemented/architecture/2026-09-18-localized-package-metadata.md) for resource ownership and non-activation rationale.
+
+## 6. Verify
 
 ```sh
 pnpm install        # registers the workspace

@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-11-plugin-owned-message-projections.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-11-plugin-owned-message-projections.md
-2026-09-11-plugin-owned-message-projections.md: 9e1eca92567fc035d48c1c42ad86d371f2542c5b
-2026-09-11-plugin-owned-message-projections.zh.md: b26b5d4549294b37665ac933944b7f51ef7a5717
+/agent-note-plugin-owned-message-projections:
+  en: 534c84d25c21d930
+  zh: 30964b3e14ffaeac
+/agent-note-plugin-owned-message-projections/problem:
+  en: bd3ad5505204ec0b
+  zh: 770b6089c760d99f
+/agent-note-plugin-owned-message-projections/decision:
+  en: 2b33d4a1cfba0f53
+  zh: 55347f3ecf234862
+/agent-note-plugin-owned-message-projections/alternatives-considered:
+  en: c6e4c770739dca68
+  zh: 7bfcb3dda06a22a1
+/agent-note-plugin-owned-message-projections/consequences:
+  en: c2f3ff0b9639bec5
+  zh: 357f90d9a3423751

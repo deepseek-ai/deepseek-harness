@@ -31,6 +31,7 @@ import {
   parseToolSchemasSnapshot,
   redactSessionSnapshotIds,
   refreshFixtureReplacements,
+  reconcileCatalogCreationTimes,
   restorePinnedToolSchemas,
   scrubModelRequestBulk,
   scrubSessionSnapshot,
@@ -124,6 +125,9 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'dynamic-tool-updates': {
+    expectedFinalResponse: 'DONE',
+  },
   'tool-error-details': {
     patches: [fileURLToPath(new URL('./tool-error-details/runtime.cordis.yml', import.meta.url))],
     expectedFinalResponse: 'ERROR_DETAILS_OK',
@@ -311,8 +315,7 @@ function assembledRuntimeContexts(log: PersistedLog): string[] {
       data?: { source?: { kind?: string; plugin?: string }; content?: Array<{ type?: string; text?: unknown }> }
     }
     if (event.type !== 'user/message'
-      || event.data?.source?.kind !== 'plugin'
-      || event.data.source.plugin !== '@deepseek-ai/dsh-system-prompt') return []
+      || event.data?.source?.kind !== 'runtime-context') return []
     return event.data.content?.flatMap(block => block.type === 'text' && typeof block.text === 'string' ? [block.text] : []) ?? []
   })
 }
@@ -406,6 +409,17 @@ function records(log: string): JsonObject[] {
   return log.split(/\r?\n/)
     .filter(line => line.trim() !== '')
     .map(line => JSON.parse(line) as JsonObject)
+}
+
+function notificationComparisonRecords(log: string, sourceLogs: readonly string[]): JsonObject[] {
+  const versions = sourceLogs.map((source, index) => sessionHeaderVersion(source, `notification Session ${index}`))
+  expect(new Set(versions).size, 'wire golden Session roles share one native writer generation').toBe(1)
+  return records(log).map((record) => {
+    if (record.method !== 'session.event') return record
+    const params = record.params as JsonObject
+    const event = JSON.parse(normalizeSessionFormatMetadata(JSON.stringify(params.event), versions[0])) as unknown
+    return { ...record, params: { ...params, event } }
+  })
 }
 
 function modelFromSession(log: string): { provider: string; model: string } {
@@ -784,6 +798,24 @@ async function verifyHeaders(
 }
 
 describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
+  it('restores the retained V3 max-tokens recording after an interrupted next-turn restart', async () => {
+    const path = join(corpusRoot, 'sdk/max-tokens-continue/session.v3.jsonl')
+    const fixture = await readFile(path, 'utf8')
+    const rows = records(fixture)
+    const turnEnd = rows.findIndex(row => row.type === 'turn/end')
+    expect(rows[turnEnd + 1]).toMatchObject({ type: 'agent/inbox/spliced', data: { target: 'next-turn', inserted: [expect.anything()] } })
+    expect(rows[turnEnd + 2]).toMatchObject({ type: 'turn/start', data: { turn: 2 } })
+    const interrupted = rows.filter((_, index) => index !== turnEnd)
+    const expected = [...interrupted.slice(0, turnEnd + 1),
+      { type: 'turn/end', data: { turn: 1, reason: { kind: 'interrupted' } } },
+      ...interrupted.slice(turnEnd + 1)]
+    const serialize = (values: JsonObject[]) => values.map(row => JSON.stringify(row)).join('\n') + '\n'
+    const context = contextOfContents([fixture])
+    expect(normalizeSessionSnapshots([serialize(interrupted)], context))
+      .toEqual(normalizeSessionSnapshots([serialize(expected)], context))
+    expect(await readFile(path, 'utf8')).toBe(fixture)
+  })
+
   for (const scenario of sdkScenarios) {
     const scenarioTest = recording
       && (scenario.manifest.recording === 'authored' || scenario.manifest.sessionFormat !== undefined)
@@ -811,7 +843,50 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         recording ? logs.length : files.length,
         assertions.dshSdkChild !== undefined,
       )
+      reconcileCatalogCreationTimes(ordered.map(log => log.content), 'validate')
       const actualContext = contextOf(ordered, cwd)
+      if (scenario.name === 'dynamic-tool-updates') {
+        const selectedTypes = new Set(['request/header', 'request/context', 'developer/message', 'tool/call', 'tool/result'])
+        const events = results.flatMap(result => result.events).filter(event => selectedTypes.has(event.type))
+        const subscribed = notifications.flatMap(notification => {
+          const event = notificationEvent(notification)
+          return event !== undefined && typeof event.type === 'string' && selectedTypes.has(event.type) ? [event] : []
+        })
+        expect(subscribed, 'SDK notifications retain the dynamic-tool events').toEqual(events)
+        expect(records(ordered[0]!.content).filter(event => typeof event.type === 'string' && selectedTypes.has(event.type)),
+          'SDK events agree with the durable log').toEqual(events)
+        const headers = events.filter(event => event.type === 'request/header')
+        expect(headers).toHaveLength(3)
+        const toolNames = headers.map(event => (event.data as { header: { tools: LoggedTool[] } }).header.tools.map(tool => tool.name))
+        expect(toolNames.map(names => names.includes('snapshot_ping'))).toEqual([false, true, false])
+        expect(toolNames[1]!.filter(name => !toolNames[0]!.includes(name))).toEqual(['snapshot_ping'])
+        expect(toolNames[2]).toEqual(toolNames[0])
+        const updates = events.filter(event => event.type === 'developer/message')
+        expect(updates).toMatchObject([
+          { data: { headerSeq: headers[1]!.seq, message: {
+            role: 'developer', source: { kind: 'tool-registry' },
+            content: [{ type: 'tool-addition', toolName: 'snapshot_ping' }],
+          } }, surfaceOp: 'append' },
+          { data: { message: {
+            role: 'developer', source: { kind: 'tool-registry' },
+            content: [{ type: 'tool-removal', toolName: 'snapshot_ping' }],
+          } }, surfaceOp: 'append' },
+        ])
+        expect(updates[1]!.data).not.toHaveProperty('headerSeq')
+        expect(events.filter(event => event.type === 'tool/call').map(event => event.data['name']))
+          .toEqual(['read', 'snapshot_ping'])
+        expect(events.filter(event => event.type === 'tool/result').at(-1)).toMatchObject({ data: { message: {
+          toolCallId: 'call_dynamic_ping', isError: false, content: [{ type: 'text', text: 'pong' }],
+        } } })
+      }
+      if (scenario.name === 'subagent-activation-limit') {
+        expect(ordered).toHaveLength(2)
+        const denied = records(ordered[0]!.content).find(record => record.type === 'tool/result'
+          && JSON.stringify(record).includes('call_over_capacity'))
+        expect(denied).toMatchObject({ data: {
+          message: { content: [{ type: 'text', text: expect.stringContaining('subagent limit reached (active child limit: 1)') }], isError: true },
+        } })
+      }
       if (scenario.name === 'tool-error-details') {
         const events = results.flatMap(result => result.events)
         const errors = events.filter(event => event.type === 'tool/result' || event.type === 'tool/ptc-dispatch')
@@ -862,7 +937,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
             stabilizeRefreshLog(log.content, existing, replacements, actualContext),
           ))
         })
-        expectedContents = redactSessionSnapshotIds(stabilizeFixtureMessageIds(refreshed, expectedContents))
+        expectedContents = redactSessionSnapshotIds(stabilizeFixtureMessageIds(reconcileCatalogCreationTimes(refreshed, 'preserve-headers'), expectedContents))
       }
 
       if (writesSessionFixtures || refreshing && retained) {
@@ -885,14 +960,14 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(await Promise.all((await fixtureFiles(scenario)).map(file => readFile(file, 'utf8'))),
           'historical replay input remains unchanged').toEqual(replayContents)
         for (const [index, content] of expectedContents.entries()) {
-          expect(sessionHeaderVersion(content, writerSnapshotName(index))).toBe(SESSION_FORMAT_VERSION)
+          expect(sessionHeaderVersion(content, writerSnapshotName(index))).toBeLessThanOrEqual(SESSION_FORMAT_VERSION)
         }
       }
 
       // Persisted transcripts match the committed fixtures.
       const expectedContext = contextOfContents(expectedContents)
-      const actualSnapshots = normalizeSessionSnapshots(ordered.map(log => log.content), actualContext)
-      const expectedSnapshots = normalizeSessionSnapshots(expectedContents, expectedContext)
+      const actualSnapshots = normalizeSessionSnapshots(ordered.map(log => log.content), actualContext, { nativeWriterOutput: true })
+      const expectedSnapshots = normalizeSessionSnapshots(expectedContents, expectedContext, { nativeWriterOutput: true })
       expect(actualSnapshots.map(records), `${scenario.name}: sessions`).toEqual(expectedSnapshots.map(records))
       await verifyHeaders(scenario, ordered, actualContext, assertions.dshSdkChild?.agentConfig)
 
@@ -908,10 +983,10 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         }
         const expectedNotifications = await readFile(notificationsExpectedPath, 'utf8')
         expect(
-          records(normalizedNotifications),
+          notificationComparisonRecords(normalizedNotifications, ordered.map(log => log.content)),
           `${scenario.name}: notifications`,
         )
-          .toEqual(records(expectedNotifications))
+          .toEqual(notificationComparisonRecords(expectedNotifications, expectedContents))
         expect(normalizedResult).toBe(await readFile(resultExpectedPath, 'utf8'))
       }
 

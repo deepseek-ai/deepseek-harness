@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-03-semantic-issue-templates-and-policy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-03-semantic-issue-templates-and-policy.md
-2026-09-03-semantic-issue-templates-and-policy.md: 96b1981b21e901841d88b09d68a0e7e31ca140a2
-2026-09-03-semantic-issue-templates-and-policy.zh.md: 706cd59047fe5121964183bbc27efc8961a493ed
+/agent-note-semantic-issue-templates-and-presentation-neutral-policy:
+  en: e1e183193c798bf4
+  zh: db76ac954cd3038f
+/agent-note-semantic-issue-templates-and-presentation-neutral-policy/problem:
+  en: 5da7b92d65316469
+  zh: 30bc615947b3a8aa
+/agent-note-semantic-issue-templates-and-presentation-neutral-policy/decision:
+  en: a351c272ef520bb9
+  zh: 98db942d18da7565
+/agent-note-semantic-issue-templates-and-presentation-neutral-policy/verification:
+  en: 90912d4c58b9e35d
+  zh: 811eaab5bdd54ab4
+/agent-note-semantic-issue-templates-and-presentation-neutral-policy/alternatives-considered:
+  en: 520ba80ce03e05b4
+  zh: 50df33c59c4c837d
+/agent-note-semantic-issue-templates-and-presentation-neutral-policy/consequences:
+  en: c762b95945320c61
+  zh: 935f6e7290c06811

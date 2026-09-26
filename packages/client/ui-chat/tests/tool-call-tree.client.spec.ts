@@ -1,6 +1,6 @@
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { describe, expect, it } from 'vitest'
-import type { RunningToolCall, ToolCallBlock } from '../src/client/contract/snapshot.ts'
+import type { StartedToolCall, ToolCallBlock } from '../src/client/contract/snapshot.ts'
 import {
   MAX_TOOL_CALL_TREE_DEPTH, ToolCallTree,
 } from '../src/client/model/tool-call-tree.ts'
@@ -19,8 +19,8 @@ const settle = (seq: number, parentCallId: string, subCallId: string): SessionEv
     isError: false, content: [],
   })
 
-const root = (callId: string): RunningToolCall => ({
-  callId, name: 'run_code', argsRaw: '{}', turn: 1, step: 1,
+const root = (callId: string): StartedToolCall => ({
+  phase: 'start' as const, callId, name: 'run_code', argsRaw: '{}', turn: 1, step: 1,
   time: 1_700_000_000_000, subCalls: [],
 })
 

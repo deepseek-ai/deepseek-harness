@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 07-into-the-harness.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cordis-tutorial/07-into-the-harness.md
-07-into-the-harness.md: a1285e63edcc94f119c64ddef6827c6d8dc4d5c6
-07-into-the-harness.zh.md: 30c91c8e40d80d0c5c25a0b64ca3568f23a16591
+/7-into-the-harness:
+  en: 470ff1f9eadc2663
+  zh: d92a95cc0058ed3b
+/7-into-the-harness/a-tool-plugin:
+  en: 00ae7d882a28622d
+  zh: 6386dcfac5df1a70
+/7-into-the-harness/an-observer-plugin:
+  en: 144e0445e183588a
+  zh: f02cfb7e91fdbd24
+/7-into-the-harness/compose-and-run:
+  en: 64a9d7a1430b3d0e
+  zh: 034e95c7f08bd70c
+/7-into-the-harness/from-here-to-a-full-agent:
+  en: a758f5739e30667b
+  zh: 3f9e0e2cc38af87b

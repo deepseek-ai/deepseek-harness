@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/llm/llm-deepseek-api-key/README.md
+/:
+  en: 3bc991d01c87c9c6
+  zh: ba63ebb46b72bc3e
+/deepseek-ai-dsh-llm-deepseek-api-key:
+  en: b6871195e386cc64
+  zh: 742b05a3ca80883c
+/deepseek-ai-dsh-llm-deepseek-api-key/summary:
+  en: ad5a00f16f233d42
+  zh: 743d55599144836b
+/deepseek-ai-dsh-llm-deepseek-api-key/table-of-contents:
+  en: 23386452a66b2fbd
+  zh: 4cf93c4bf17b3da2
+/deepseek-ai-dsh-llm-deepseek-api-key/use-this-package:
+  en: ab3d8cc5be370482
+  zh: 8a8b9871d5afe1df
+/deepseek-ai-dsh-llm-deepseek-api-key/understand-the-implementation:
+  en: a2a213e5629a569f
+  zh: eb23478d0081270a
+/deepseek-ai-dsh-llm-deepseek-api-key/further-exploration:
+  en: e8bf99d78aa7035f
+  zh: e4a74d2d48b6d271
+/deepseek-ai-dsh-llm-deepseek-api-key/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-llm-deepseek-api-key/model-experience/authenticated-model-requests:
+  en: 5cf024f0d3370159
+  zh: ed480db8f348a42f
+/deepseek-ai-dsh-llm-deepseek-api-key/model-experience/authenticated-model-requests/what-the-model-sees:
+  en: e5624a2c7bb26e90
+  zh: 44da0286a548f24a
+/deepseek-ai-dsh-llm-deepseek-api-key/model-experience/authenticated-model-requests/token-effect:
+  en: fecefb75b719c317
+  zh: f0c2322f657c5914
+/deepseek-ai-dsh-llm-deepseek-api-key/model-experience/authenticated-model-requests/kv-cache-effect:
+  en: 2004df60d997da79
+  zh: a215a6586b44746b
+/deepseek-ai-dsh-llm-deepseek-api-key/known-limitations-and-deferred-work:
+  en: d5880c883b1b678f
+  zh: bf7a4da24ba75280
+/deepseek-ai-dsh-llm-deepseek-api-key/known-limitations-and-deferred-work/dev-note:
+  en: 0525041e573e96b6
+  zh: b05ed8d852498e6b

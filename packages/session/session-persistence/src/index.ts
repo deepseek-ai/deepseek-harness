@@ -133,6 +133,9 @@ declare module '@deepseek-ai/cordis' {
  * on this backend instance observe at least that prefix.
  */
 export abstract class SessionPersistence extends Service {
+  /** Process-local instance identity, stable through Context proxies and distinct after service replacement. */
+  readonly identity: symbol = Symbol('sessionPersistence')
+
   constructor(ctx: Context) {
     super(ctx, 'sessionPersistence')
   }

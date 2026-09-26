@@ -14,6 +14,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import ts from 'typescript'
 import {
   declaredTypes,
   indexExportedTypes,
@@ -208,7 +209,7 @@ export function validateSlotContracts(
     }
   }
   for (const registration of registrations) {
-    if (!byKey.has(registration.key)) {
+    if (registration.factory !== true && !byKey.has(registration.key)) {
       problems.push(`registration into '${registration.key}' (${registration.source}) targets a slot no SlotMap merge declares; either the scan has a blind spot or the registration is dead.`)
     }
     for (const child of registration.children) {
@@ -267,7 +268,8 @@ function entryOf(
   types: ReadonlyMap<string, TypeDeclaration>,
   kits: ReadonlyMap<string, readonly string[]>,
 ): SlotEntry {
-  const occupants = registrations.filter(registration => registration.key === declaration.key)
+  const occupants = registrations.filter(registration =>
+    registration.factory !== true && registration.key === declaration.key)
   const cellOccupied = occupants.some(occupant =>
     declaration.kind === 'single' || occupant.entryKey !== undefined)
   const doc = docProse(declaration.jsDoc)
@@ -287,7 +289,9 @@ function entryOf(
     slotInject: declaration.injectType ?? '',
     declaredBy: declaredBy === undefined
       ? 'the runtime itself (built in; always present)'
-      : `an entry in '${declaredBy.key}' (${shortPackage(declaredBy.package)}), so it exists while that entry is mounted`,
+      : declaredBy.factory === true
+        ? `factory '${declaredBy.key}' (${shortPackage(declaredBy.package)}), so it exists while that definition is registered`
+        : `an entry in '${declaredBy.key}' (${shortPackage(declaredBy.package)}), so it exists while that entry is mounted`,
     occupants: occupants.map(occupant => [
       shortPackage(occupant.package),
       occupant.component,
@@ -303,22 +307,38 @@ function entryOf(
 }
 
 /**
- * The owner-props contract at ONE level: the owner declaration(s) themselves,
- * plus the names of the shapes their fields reference. Expanding transitively
- * pulled the whole session model into four seats (one report exceeded 2400
- * lines), which defeats the purpose of narrowing to a single slot — a registrant
- * needs the fields and their documented meaning, not the type graph behind them.
+ * Owner declarations include the aliases that compose their top-level fields.
+ * Field value types remain references so one slot does not expand the Session graph.
  */
 function ownerShapes(
   ownerType: string | undefined,
   types: ReadonlyMap<string, TypeDeclaration>,
 ): { declarations: TypeDeclaration[]; references: string[] } {
   if (ownerType === undefined) return { declarations: [], references: [] }
-  const declarations = declaredTypes(referencedTypeNames([ownerType], types), types)
-  const own = new Set(declarations.map(declaration => declaration.name))
+  const own = new Map(declaredTypes(referencedTypeNames([ownerType], types), types)
+    .map(declaration => [declaration.name, declaration]))
+  for (const declaration of own.values()) {
+    const source = ts.createSourceFile(declaration.source, declaration.text, ts.ScriptTarget.Latest, true)
+    const alias = source.statements.find(ts.isTypeAliasDeclaration)
+    if (alias === undefined) continue
+    for (const composed of declaredTypes(ownerCompositionNames(alias.type), types)) {
+      own.set(composed.name, composed)
+    }
+  }
+  const declarations = [...own.values()].sort((left, right) => left.name.localeCompare(right.name))
   const references = referencedTypeNames(declarations.map(declaration => declaration.text), types)
     .filter(name => !own.has(name))
   return { declarations, references }
+}
+
+/** Top-level composition excludes nested field values and generic arguments. */
+function ownerCompositionNames(type: ts.TypeNode): string[] {
+  if (ts.isUnionTypeNode(type) || ts.isIntersectionTypeNode(type)) return type.types.flatMap(ownerCompositionNames)
+  if (ts.isParenthesizedTypeNode(type)) return ownerCompositionNames(type.type)
+  if (ts.isTypeReferenceNode(type) && ts.isIdentifier(type.typeName) && type.typeArguments === undefined) {
+    return [type.typeName.text]
+  }
+  return []
 }
 
 /** How a keyed slot's key domain is constrained, '' for the other kinds. */
@@ -333,6 +353,8 @@ function keyDomainOf(declaration: SlotDeclaration, occupants: readonly SlotRegis
 
 /** A runnable minimal registration for one slot, per cardinality. */
 function exampleOf(declaration: SlotDeclaration): string {
+  const authored = blockTag(declaration.jsDoc, 'example')
+  if (authored !== undefined) return authored
   const options = [`name: '${declaration.key}'`, ...KIND_EXAMPLE[declaration.kind] ?? []].join(', ')
   return [
     'return {',
@@ -345,6 +367,21 @@ function exampleOf(declaration: SlotDeclaration): string {
     '  },',
     '}',
   ].join('\n')
+}
+
+/** One multiline JSDoc block tag, without comment decoration. */
+function blockTag(jsDoc: string, name: string): string | undefined {
+  const lines = jsDoc.replace(/^\/\*\*/, '').replace(/\*\/$/, '').split('\n')
+    .map(line => line.replace(/^\s*\*?\s?/, '').replace(/\s+$/, ''))
+  const start = lines.findIndex(line => line === `@${name}` || line.startsWith(`@${name} `))
+  if (start < 0) return undefined
+  const body = [lines[start]?.slice(name.length + 1).trimStart() ?? '']
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith('@')) break
+    body.push(line)
+  }
+  const value = body.join('\n').trim()
+  return value === '' ? undefined : value
 }
 
 /** Extra example options per cardinality. */

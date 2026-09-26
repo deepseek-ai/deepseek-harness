@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../util/package-manifest"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -52,6 +55,15 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../sandbox/sandbox-policy"
+    },
+    {
+      "path": "../../sandbox/sandbox"
+    },
+    {
+      "path": "../../interaction/user-approval"
     }
   ]
 }

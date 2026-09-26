@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for schedule.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/guide/schedule.md
-schedule.md: fdb4899925f34d6c58fa34cc6ee1e589b461c001
-schedule.zh.md: d5d134ed7ec53c61e7efdf5267f915fc26a427ff
+/schedule-reminders:
+  en: c3cb91d1d53b7603
+  zh: 715ced3f1a2e9dd5
+/schedule-reminders/summary:
+  en: bc85e4ac935f2fd5
+  zh: c39e54e4beaa3f9a
+/schedule-reminders/table-of-contents:
+  en: b3b2a6e0ce02bdee
+  zh: 2ddb168de79fd19c
+/schedule-reminders/create-reminders:
+  en: c76ee99f59529942
+  zh: be1d75c226231dd7
+/schedule-reminders/inspect-and-delete-tasks:
+  en: a44fc1aabc2ab957
+  zh: 31f444d4c7fd5c7a
+/schedule-reminders/edit-an-active-task:
+  en: b3426f5dbc185958
+  zh: ccf118e2415a5e77
+/schedule-reminders/timing-and-delivery-reference:
+  en: 6e5aa8ae5906df4f
+  zh: afdf670a31fae2bb
+/schedule-reminders/further-exploration:
+  en: b7eb797281f028c0
+  zh: 3754f9d19127a3c5
+/schedule-reminders/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

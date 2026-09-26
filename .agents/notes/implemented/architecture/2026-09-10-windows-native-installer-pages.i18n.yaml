@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-10-windows-native-installer-pages.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-10-windows-native-installer-pages.md
-2026-09-10-windows-native-installer-pages.md: 93aa4839620207447ad85b1027a68fcfdc5d3e2c
-2026-09-10-windows-native-installer-pages.zh.md: da28e22f82c6e403696904362bcbe6c8b96881b8
+/agent-note-native-windows-installer-pages:
+  en: 2170ba78b248756f
+  zh: 6e5852f4685fbc81
+/agent-note-native-windows-installer-pages/problem:
+  en: 5d148a332b151928
+  zh: a79cdfd0f1556c58
+/agent-note-native-windows-installer-pages/decision:
+  en: 3357e9aca4862152
+  zh: c2fa86534f9c8737
+/agent-note-native-windows-installer-pages/alternatives-considered:
+  en: a5b1e11a1b30ab99
+  zh: 8495f05dc87b831a
+/agent-note-native-windows-installer-pages/consequences:
+  en: 16243ca0777d1ff8
+  zh: e35cb7f33a756b47

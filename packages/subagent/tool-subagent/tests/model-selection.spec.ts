@@ -97,7 +97,7 @@ describe('dsh-tool-subagent model selection', () => {
       { onStart: () => { starts += 1 } },
     )
     const parent = modelSelectionSetupAgent(ctx)
-    ;(parent as unknown as { options: Agent['options'] }).options = {
+    ;(parent as { options: Agent['options'] }).options = {
       provider: 'deployment-provider',
       model: 'deployment-model',
     }
@@ -170,7 +170,7 @@ describe('dsh-tool-subagent model selection', () => {
     }, { onStart: (request) => { requests.push(request) } })
     ctx.llm.registerAdapter(['alpha'], new MockAdapter([], REASONING))
     const parent = modelSelectionSetupAgent(ctx)
-    ;(parent as unknown as { options: Agent['options'] }).options = parentWithRoute().options
+    ;(parent as { options: Agent['options'] }).options = parentWithRoute().options
 
     const selected = await callSubagent(ctx, {
       description: 'route work',
@@ -210,7 +210,7 @@ describe('dsh-tool-subagent model selection', () => {
     }, { onStart: (request) => { requests.push(request) } })
     ctx.llm.registerAdapter(['alpha'], new MockAdapter([], REASONING))
     const parent = modelSelectionSetupAgent(ctx)
-    ;(parent as unknown as { options: Agent['options'] }).options = parentWithRoute().options
+    ;(parent as { options: Agent['options'] }).options = parentWithRoute().options
 
     const result = await callSubagent(ctx, {
       description: 'effort work',
@@ -223,7 +223,7 @@ describe('dsh-tool-subagent model selection', () => {
     const inherited = await setup({ provider: 'mock', withModelSelection: true })
     inherited.llm.registerAdapter(['alpha'], new MockAdapter([], REASONING))
     const inheritedParent = modelSelectionSetupAgent(inherited)
-    ;(inheritedParent as unknown as { options: Agent['options'] }).options = parentWithRoute().options
+    ;(inheritedParent as { options: Agent['options'] }).options = parentWithRoute().options
     const inheritedResult = await callSubagent(inherited, {
       description: 'parent effort work',
       prompt: 'do it',
@@ -236,7 +236,7 @@ describe('dsh-tool-subagent model selection', () => {
     const ctx = await setup({ provider: 'mock', withModelSelection: true })
     ctx.llm.registerAdapter(['alpha'], new MockAdapter([], REASONING))
     const parent = modelSelectionSetupAgent(ctx)
-    ;(parent as unknown as { options: Agent['options'] }).options = parentWithRoute().options
+    ;(parent as { options: Agent['options'] }).options = parentWithRoute().options
     const result = await callSubagent(ctx, {
       description: 'same route work',
       prompt: 'do it',
@@ -255,7 +255,7 @@ describe('dsh-tool-subagent model selection', () => {
     }, { onStart: (request) => { requests.push(request) } })
     ctx.llm.registerAdapter(['current-provider'], new MockAdapter([], REASONING))
     const parent = modelSelectionSetupAgent(ctx)
-    ;(parent as unknown as { options: Agent['options'] }).options = {
+    ;(parent as { options: Agent['options'] }).options = {
       provider: 'created-provider', model: 'created-model',
     }
     parent.session.append('request/header', {

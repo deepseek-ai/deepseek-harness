@@ -129,7 +129,7 @@ describe('hooks-claude-code bridge — UserPromptSubmit', () => {
     // The injected context reached the model and is recorded with the plugin source.
     expect(JSON.stringify(adapter.requests[0]!.messages)).toContain('remember: be brief')
     const ctxMsg = events(agent).find(e => e.type === 'user/message' && e.data.source.kind !== 'user')
-    expect(ctxMsg?.type === 'user/message' && ctxMsg.data.source).toEqual({ kind: 'plugin', plugin: 'hooks-claude-code' })
+    expect(ctxMsg?.type === 'user/message' && ctxMsg.data.source).toEqual({ kind: 'hooks-claude-code' })
   })
 })
 
@@ -153,8 +153,8 @@ describe('hooks-claude-code bridge — PreToolUse', () => {
 
     expect(ran).toBe(false)
     const result = events(agent).find(e => e.type === 'tool/result')
-    expect(result?.type === 'tool/result' && result.data.message.content[0].isError).toBe(true)
-    expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('danger tool blocked'))).toBe(true)
+    expect(result?.type === 'tool/result' && result.data.message.isError).toBe(true)
+    expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('danger tool blocked'))).toBe(true)
   })
 
   it('a PreToolUse hook whose matcher does NOT match leaves the tool alone', async () => {
@@ -176,7 +176,7 @@ describe('hooks-claude-code bridge — PreToolUse', () => {
 
     expect(ran).toBe(true)
     const result = events(agent).find(e => e.type === 'tool/result')
-    expect(result?.type === 'tool/result' && result.data.message.content[0].isError).toBe(false)
+    expect(result?.type === 'tool/result' && result.data.message.isError).toBe(false)
   })
 })
 
@@ -198,8 +198,8 @@ describe('hooks-claude-code bridge — PostToolUse', () => {
 
     const result = events(agent).find(e => e.type === 'tool/result')
     // PostToolUse blocks AFTER the tool ran: the result is rewritten to isError + feedback.
-    expect(result?.type === 'tool/result' && result.data.message.content[0].isError).toBe(true)
-    expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('output rejected, retry'))).toBe(true)
+    expect(result?.type === 'tool/result' && result.data.message.isError).toBe(true)
+    expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('output rejected, retry'))).toBe(true)
   })
 
   it('a PostToolUse hook printing additionalContext attaches it after the tool result', async () => {
@@ -244,8 +244,8 @@ describe('hooks-claude-code bridge — PostToolUse', () => {
     // No approval service is mounted, so `ask` fails closed: the tool does not run and the result is isError.
     expect(ran).toBe(false)
     const result = events(agent).find(e => e.type === 'tool/result')
-    expect(result?.type === 'tool/result' && result.data.message.content[0].isError).toBe(true)
-    expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('needs approval'))).toBe(true)
+    expect(result?.type === 'tool/result' && result.data.message.isError).toBe(true)
+    expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('needs approval'))).toBe(true)
   })
 })
 

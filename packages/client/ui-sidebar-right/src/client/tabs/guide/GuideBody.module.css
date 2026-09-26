@@ -5,6 +5,7 @@
    above the body's middle by the spacer below. The minimum height centres a
    short guide while allowing a tall guide to grow into the pane's scroller. */
 .guide {
+  --dsl-guide-entry-radius: var(--dsw-radius-xl);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -56,8 +57,8 @@
   font: inherit;
   text-align: left;
   background: var(--dsw-alias-bg-layer-1);
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 24px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsl-guide-entry-radius);
   cursor: pointer;
 }
 
@@ -88,6 +89,7 @@
    description while the guide shows one. */
 .entryText {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
@@ -95,7 +97,7 @@
 
 .entryTitle {
   overflow: hidden;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.4;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -104,8 +106,8 @@
 /* One line under the title on the quieter ink; it ellipsizes like the title. */
 .entryDescription {
   overflow: hidden;
-  color: var(--dsw-alias-label-caption);
-  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
   line-height: 1.4;
   white-space: nowrap;
   text-overflow: ellipsis;

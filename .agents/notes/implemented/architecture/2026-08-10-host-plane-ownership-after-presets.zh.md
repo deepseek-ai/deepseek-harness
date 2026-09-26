@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-[逐会话 agent preset](2026-08-03-per-session-agent-presets.zh.md) 把每一个面向模型的行搬上了 agent 平面，此后的每一处修复都是一个仍按搬迁之前的世界写成的读取点。`tasks` 因为 realm 之外的 preset 行要解析它而搬回宿主；`goals` 因为同样的理由从未离开；而当所有面向模型的工具都变成祖先贡献之后，子 agent 的 `toolFilter` 也已被修好（[子 agent 加入父方 preset](../bug-fix/2026-08-10-child-agents-join-their-parent-preset.zh.md)）。
+[逐会话 agent preset](2026-09-18-declarative-agent-presets.zh.md) 把每一个面向模型的行搬上了 agent 平面，此后的每一处修复都是一个仍按搬迁之前的世界写成的读取点。`tasks` 因为 realm 之外的 preset 行要解析它而搬回宿主；`goals` 因为同样的理由从未离开；而当所有面向模型的工具都变成祖先贡献之后，子 agent 的 `toolFilter` 也已被修好（[子 agent 加入父方 preset](../bug-fix/2026-08-10-child-agents-join-their-parent-preset.zh.md)）。
 
 还有两个读取点仍站在这条线的错误一侧。
 
@@ -18,15 +18,15 @@ Status: implemented
 
 **meter 属于宿主平面。** `dsh-token-meter` 回到宿主组装，并离开各 preset 的 `isolate` 映射，于是 `compaction-basic` 与 `tool-result-pruner` 在自己的 realm 内部解析到那一份宿主实例。preset 保留 realm 与压缩后端——preset 选择的是它的 agent 是否压缩，而不是它的 token 是否被计。这正是 `tasks` 与 `goals` 已经采用的判据，只是这次适用于一个因**投影**触达面而不该归 preset 所有的 Service：当一个单元的空值与真实值无法区分时，只要它注册进的那张表是进程级的，它就不能是逐组装的。
 
-**未加入的 agent 在两个不同的点上被指出两次。** 在配置了名单的前提下，`AgentPresets` 对每个作用域链长度为一就发布的 agent 记录一条警告。invariant 配套则直接失败——并且发生在 `system-prompt/assemble` 而非发布时，因为一个未加入的 agent 在它对模型说话之前都是合法的：`recompose` 绑定的正是这样一个 agent 作为它的首次链接；而提示词组装是唯一会提供 agent 作用域的调用方，因此宿主组装与常驻挂载都正确地落在检查范围之外。
+**未加入的 Agent 在使用模型时失败。** 不变量 companion 检查 `system-prompt/assemble`，因为未绑定的 Agent 可以合法地稍后通过 `recompose` 绑定。纯 Host 和历史 scope 提示词读取没有 Agent，不属于此检查范围。
 
-有三处限制不在此处修复，而是记录在会咬到它们的地方：投影 key 是否存在不能当作逐会话的能力信号（[`dsh-session-projection`](../../../../packages/session/session-projection/README.zh.md)）；被替代的常驻代际永不回收，而设置页的编写流程把它变成每次保存的代价（[`dsh-agent-presets`](../../../../packages/preset/agent-presets/README.zh.md)）；通过 `cordis_mount` 挂上的临时插件属于组装而非挂载它的会话（[`dsh-tool-cordis`](../../../../packages/extensions/tool-cordis/README.zh.md)）。
+投影 key 是否存在不能代表逐会话能力（[会话投影](../../../../packages/session/session-projection/README.zh.md)）。通过 `cordis_mount` 挂载的临时插件属于组装，而非调用会话（[Cordis 工具](../../../../packages/extensions/tool-cordis/README.zh.md)）。[声明式 preset](2026-09-18-declarative-agent-presets.zh.md) 负责代际保留，在最后一个引用释放后回收退役树。
 
 ## 测试
 
-`apps/cli/tests/web-agent-presets.e2e.ts` 在本文件中任何 preset 挂载**之前**，于已启动的 Web 组装上读取 `ctx.get('tokenMeter')`——preset 侧的 meter 会待在 `isolate` realm 里，对 `ctx.get` 不可见，因此这次读取是一次所有权断言而不是挂载顺序的巧合——随后断言一个 `minimal` 会话的快照带齐三个单元。
+`apps/cli/tests/web-agent-presets.e2e.ts` 在创建任何 Agent **之前**，于已启动的 Web 组装上读取 `ctx.get('tokenMeter')`——preset 侧的 meter 会待在 `isolate` realm 里，对 `ctx.get` 不可见，因此这次读取是一次所有权断言而不是挂载顺序的巧合——随后断言一个 `minimal` 会话的快照带齐三个单元。
 
-`packages/preset/agent-presets/tests/mount.spec.ts` 断言警告对裸 agent 恰好触发一次、对已加入的 agent 完全不触发。`tests/invariant.spec.ts` 承担负控：未加入 agent 的组装被拒绝，而已加入 agent 的组装与不带作用域的宿主组装都通过。
+`packages/preset/agent-preset-registry/tests/invariant.spec.ts` 拒绝未加入的 Agent 组装，并接受已加入的 Agent、Host 读取和历史 scope 读取。
 
 ## 考虑过的替代方案
 
@@ -42,4 +42,4 @@ Status: implemented
 
 context meter 成为逐会话的事实，而不再是挂载历史的函数。代价是 preset 不能再选择不做 token 记账；随附的 preset 没有一个这么做，`minimal` 现在也写明它放弃的是自动压缩而非记账。
 
-那条警告是建议性的，因此给 ACP 或 SDK server 入口加上名单的部署依然会启动没有工具的 agent——只是每个 agent 会说一次，而不再静默。invariant 只触达装载了 `dsh-invariants` 的组装，因此它把关的是包测试与开发宿主，不是随附宿主。
+不变量覆盖加载了 `dsh-invariants` 的组装。生产入口必须显式组装 Agent；仅安装注册表不会自动绑定。

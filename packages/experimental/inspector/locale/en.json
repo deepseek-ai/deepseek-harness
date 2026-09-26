@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Inspector",
+    "description": "Open the running Host and its browser Clients in Chrome DevTools through a loopback endpoint that allows code execution and captures Host network traffic, including secrets. For developers; Web only; reload open pages after enabling."
+  }
+}

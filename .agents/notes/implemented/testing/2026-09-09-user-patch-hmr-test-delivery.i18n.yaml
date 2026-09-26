@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-user-patch-hmr-test-delivery.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-09-user-patch-hmr-test-delivery.md
-2026-09-09-user-patch-hmr-test-delivery.md: 32ee3073dcb67e1f6bed70c515dd9b6990b97d03
-2026-09-09-user-patch-hmr-test-delivery.zh.md: bcd6f261c0ec4428f4f28138e7e62b80141dd981
+/agent-note-user-patch-tests-control-filesystem-event-delivery:
+  en: c2c70a16f6deea8b
+  zh: 3b11c81b87910ce7
+/agent-note-user-patch-tests-control-filesystem-event-delivery/problem:
+  en: 3f8862080b8c3c89
+  zh: 0e83c485f02c10f1
+/agent-note-user-patch-tests-control-filesystem-event-delivery/decision:
+  en: a49b4a6e76725b7e
+  zh: 9813f60c40a19f83
+/agent-note-user-patch-tests-control-filesystem-event-delivery/alternatives-considered:
+  en: 5d559ee291e2e15e
+  zh: 828e7def587d71e8
+/agent-note-user-patch-tests-control-filesystem-event-delivery/consequences:
+  en: da9f64f4d269cece
+  zh: 6bbbcc771c5fbcde

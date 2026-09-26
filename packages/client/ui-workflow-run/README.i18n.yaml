@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-workflow-run/README.md
-README.md: 2f61cbee94414349030c67a45c03057f21fd9afe
-README.zh.md: 94d90d057a119e1093ec014bad29f0f4fff82af6
+/:
+  en: 1310faa1582887b5
+  zh: 16b77855de7f9292
+/deepseek-ai-dsh-client-ui-workflow-run:
+  en: d606bcab47f1b3f3
+  zh: 31fd19010234cbd4
+/deepseek-ai-dsh-client-ui-workflow-run/summary:
+  en: bbb41a09daa0ed51
+  zh: db65a976a21b1972
+/deepseek-ai-dsh-client-ui-workflow-run/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-workflow-run/use-this-package:
+  en: 9712b1ed5f00f24f
+  zh: c8f72b2ef448d9af
+/deepseek-ai-dsh-client-ui-workflow-run/use-this-package/navigating-the-node:
+  en: ced9d82bdf540585
+  zh: 34651e03ed937508
+/deepseek-ai-dsh-client-ui-workflow-run/use-this-package/state-and-completion:
+  en: 03784e501ae8f70a
+  zh: 90b32daccf577780
+/deepseek-ai-dsh-client-ui-workflow-run/understand-the-implementation:
+  en: d41b996f3fb6727b
+  zh: 6b40fdf1db894fff
+/deepseek-ai-dsh-client-ui-workflow-run/understand-the-implementation/disclosure-choices:
+  en: adf86d983c51865e
+  zh: 014a4644d55be111
+/deepseek-ai-dsh-client-ui-workflow-run/understand-the-implementation/composition:
+  en: 364d3c38e5f02149
+  zh: ca5dbee6ac27e141
+/deepseek-ai-dsh-client-ui-workflow-run/further-exploration:
+  en: e95928b8d16b4043
+  zh: 15f74b81c7c7b6df
+/deepseek-ai-dsh-client-ui-workflow-run/model-experience:
+  en: 62a75f801964a0bb
+  zh: a247663753a52ae9
+/deepseek-ai-dsh-client-ui-workflow-run/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-client-ui-workflow-run/known-limitations-and-deferred-work:
+  en: 3c5afa2d75f50eb0
+  zh: 84f2e93d6dcb0ada
+/deepseek-ai-dsh-client-ui-workflow-run/known-limitations-and-deferred-work/dev-note:
+  en: 8e5a74ff5f3bc069
+  zh: b5d05c4d192ac837

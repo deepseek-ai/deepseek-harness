@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-10-symmetric-message-feedback-submission.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-10-symmetric-message-feedback-submission.md
-2026-09-10-symmetric-message-feedback-submission.md: 51c754dbd3ecc566e15ec1b7a276fc2a3cf7c551
-2026-09-10-symmetric-message-feedback-submission.zh.md: 0ba5d1a1c53f08b76c5bbc32b84687c3dcd38ec2
+/agent-note-symmetric-message-feedback-submission:
+  en: 40f6c11f8f4332a2
+  zh: fa31c26c296f892c
+/agent-note-symmetric-message-feedback-submission/problem:
+  en: f5afa64229a1e8db
+  zh: b73e730754f33cc5
+/agent-note-symmetric-message-feedback-submission/decision:
+  en: a8a9598cb30f8f8e
+  zh: 3073219d585bc5fd
+/agent-note-symmetric-message-feedback-submission/alternatives-considered:
+  en: b425d01d854f8962
+  zh: f74131c171c9f74a
+/agent-note-symmetric-message-feedback-submission/consequences:
+  en: 833bc3370c02fd1e
+  zh: 2718d60cdf762436

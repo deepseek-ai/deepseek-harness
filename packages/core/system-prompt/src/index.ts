@@ -143,7 +143,6 @@ const SECTION_ORDERS = {
   TOOL_LSP: 2200,
   TOOL_SESSION_QUERY: 2300,
   TOOL_GOAL: 2400,
-  TOOL_CORDIS: 2500,
   TOOL_WORKFLOW: 2600,
   TOOL_RALPH: 2700,
   TOOL_SUBAGENT: 2800,
@@ -584,10 +583,11 @@ export class SystemPrompt extends Service {
     const knownNames = new Set<string>()
     for (const provider of providers) {
       const result = provider(context)
-      const schemas = result.schemas.map(({ name, description, parameters }): ToolSchema => ({
+      const schemas = result.schemas.map(({ name, description, parameters, deferLoading }): ToolSchema => ({
         name,
         description,
         parameters: structuredClone(parameters),
+        ...deferLoading === true ? { deferLoading } : {},
       }))
       const acceptedKnownNames = result.knownNames ?? schemas.map(tool => tool.name)
       collected.push(...schemas)

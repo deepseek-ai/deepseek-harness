@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/goal/goal-round-driver/README.md
-README.md: c80def6393c0a119c20d59acf4b527856811f47c
-README.zh.md: 92f793ac8eba98322bf3781b1ccc30584a0ef66e
+/:
+  en: ac0eab4e811114ab
+  zh: 5ded4a1b84f8afe1
+/deepseek-ai-dsh-goal-round-driver:
+  en: e8011e091ba10543
+  zh: 77d822a4089d5d24
+/deepseek-ai-dsh-goal-round-driver/summary:
+  en: 3eb8adb73b51242d
+  zh: 2cebd67cf56289ea
+/deepseek-ai-dsh-goal-round-driver/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-goal-round-driver/use-this-package:
+  en: 9fdb8ee19fed7701
+  zh: bf7f72538c7bbd18
+/deepseek-ai-dsh-goal-round-driver/use-this-package/compose-it:
+  en: dbf043249119778f
+  zh: 75a61167426d0d85
+/deepseek-ai-dsh-goal-round-driver/use-this-package/what-each-round-does:
+  en: a1312339977f1127
+  zh: 57450327ff7e7d83
+/deepseek-ai-dsh-goal-round-driver/use-this-package/when-continuation-stops:
+  en: fc22b566b233d3a1
+  zh: 276ee5f35d4524f5
+/deepseek-ai-dsh-goal-round-driver/use-this-package/after-resume-fork-or-unload:
+  en: 85d5470b1b330330
+  zh: e761f9046ba7af8a
+/deepseek-ai-dsh-goal-round-driver/understand-the-implementation:
+  en: 907f73e7cee7269d
+  zh: 1230e8e9b15655df
+/deepseek-ai-dsh-goal-round-driver/understand-the-implementation/design:
+  en: 58a2316725fe1f38
+  zh: d42d60cf02ad518e
+/deepseek-ai-dsh-goal-round-driver/understand-the-implementation/source-map:
+  en: 2636a395ea78f621
+  zh: f169bc50b4c79ffb
+/deepseek-ai-dsh-goal-round-driver/understand-the-implementation/the-round-prompt:
+  en: 88c61c1dcb13352b
+  zh: 8dd618c327469bbf
+/deepseek-ai-dsh-goal-round-driver/further-exploration:
+  en: 4bf1ec9b975f92b7
+  zh: 00b4b2eba534c127
+/deepseek-ai-dsh-goal-round-driver/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-goal-round-driver/model-experience/goal-round-prompt:
+  en: 4d07e0f4df39dd39
+  zh: b4b4b1a1ac49133d
+/deepseek-ai-dsh-goal-round-driver/model-experience/goal-round-prompt/what-the-model-sees:
+  en: 627dbb55e83ea545
+  zh: f7961cb0d8cee632
+/deepseek-ai-dsh-goal-round-driver/model-experience/goal-round-prompt/token-effect:
+  en: d754ed8cc26fc2a5
+  zh: 75aad6a5759b1fec
+/deepseek-ai-dsh-goal-round-driver/model-experience/goal-round-prompt/kv-cache-effect:
+  en: 261db0e11125cb5c
+  zh: fcceb0bb63f4e07a
+/deepseek-ai-dsh-goal-round-driver/known-limitations-and-deferred-work:
+  en: 9a392b465bd1b96d
+  zh: f24e557f8b67020c
+/deepseek-ai-dsh-goal-round-driver/known-limitations-and-deferred-work/dev-note:
+  en: 19c6db37afd5cff4
+  zh: 86e849e83cdc1d94

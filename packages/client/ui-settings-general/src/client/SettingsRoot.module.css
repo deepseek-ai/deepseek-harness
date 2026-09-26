@@ -1,4 +1,5 @@
 .triggerRow {
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
@@ -24,7 +25,7 @@
   padding: 0 10px 0 8px;
   box-sizing: border-box;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   cursor: pointer;
   overflow: hidden;
@@ -73,20 +74,22 @@
   backdrop-filter: var(--dsw-mask-blur);
 }
 
-/* Panel (figma Settings 501:29947): r24, white; the figma lv3 effects are
-   superseded by the shared elevation treatment; figma's 1080x700 is shrunk to 800 wide.
-   One height for every section, taken from the viewport rather than the
-   content: sections differ by hundreds of pixels (a settings list against the
-   composition editor), and a content-sized panel would resize under the
-   pointer on every nav click. Whatever does not fit scrolls in `.options`. */
+/* Settings uses a shared 800×800 panel; longer sections scroll
+   inside the options column; the navigation scrolls independently. One height for
+   every section, taken from the viewport rather than the content, because a
+   content-sized panel would resize under the pointer on every nav click.
+   The viewport height leaves 24px of air above and below, widened to the
+   frame's published top clearance (the macOS window strip, where clicks drag
+   the window) on both sides, so the panel sits centered and clear of the
+   strip. */
 .panel {
   position: relative;
   z-index: 1;
   display: flex;
   width: 800px;
-  height: min(800px, calc(100vh - 48px));
+  height: min(800px, calc(100vh - 2 * max(24px, var(--dsh-frame-top-clearance, 24px))));
   max-width: calc(100vw - 48px);
-  border-radius: 32px;
+  border-radius: var(--dsw-radius-panel);
   overflow: hidden;
   background: var(--dsw-alias-bg-layer-2);
   box-shadow: var(--dsw-elevation-prominent);
@@ -97,6 +100,10 @@
      styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.panel:focus {
+  outline: none;
 }
 
 /* Nav rail (figma .Setting-nav 501:29958): 188 wide, pad (12,22,12,0),
@@ -125,6 +132,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow-y: auto;
 }
 
 /* Nav cell (figma .Setting-nav-cell 501:29962): 164x40, r12, pad
@@ -137,7 +145,7 @@
   padding: 9px 16px 9px 12px;
   box-sizing: border-box;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   cursor: pointer;
   font-family: inherit;
@@ -197,7 +205,7 @@
   margin-left: auto;
 }
 
-/* Close button (figma .Icon_container 501:29982): 28x28, r28, 14px glyph. */
+/* Compact close control. */
 .close {
   display: inline-flex;
   align-items: center;
@@ -206,7 +214,7 @@
   height: 28px;
   padding: 0;
   border: none;
-  border-radius: 28px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   cursor: pointer;
   color: var(--dsw-alias-label-primary);
@@ -233,3 +241,8 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* No app-region rule here: the overlay portals beside #root (SettingsRoot), so
+   ui-web base.css's `body > :not(#root)` subtraction covers it wherever it
+   overlaps a chrome row's drag — including above every column, which an in-root
+   overlay could not promise once a chrome row declares drag itself. */

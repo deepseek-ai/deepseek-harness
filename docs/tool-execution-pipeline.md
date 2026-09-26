@@ -3,7 +3,7 @@
 
 # Tool Execution Pipeline
 
-This graph shows where policy, hooks, sandboxing, filesystem guards, result rewriting, final-outcome observation, and UI rendering run without changing the loop. The `tools/pre-execute` waterfall runs first, monotonic guards run next, and the `tools/execute` and `tools/post-execute` waterfalls follow; the three waterfalls may transform a call. Definition-owned `finalizeContent` and `tools/result` run afterward.
+This graph shows where policy, hooks, sandboxing, filesystem guards, result rewriting, final-outcome observation, and UI rendering run without changing the loop. The `tools/pre-execute` waterfall runs first, monotonic guards run next, and the `tools/execute` and `tools/post-execute` waterfalls follow; the three waterfalls may transform a call. Definition-owned `projectContent` installs prepared content before post-execute; `finalizeContent` and `tools/result` run afterward.
 
 ```mermaid
 flowchart TD
@@ -18,6 +18,7 @@ flowchart TD
   toolBody["Registered tool execute() body"]
   fsGate["<code>fs/write-intent</code> or <code>fs/edit-intent</code><br/>tool-fs mutations only"]
   owned["Tool-owned session events<br/><code>todo/write</code>, <code>fs/observed</code>, <code>hook/invoked</code>, <code>hook/result</code>, <code>tool/ptc-dispatch</code>"]
+  project["ToolDefinition.projectContent<br/>execution-prepared text and images"]
   post["<code>tools/post-execute</code> waterfall<br/>accept, block, replace, add context"]
   normalized["Registry outer normalization<br/>pipeline/result snapshot throws become isError"]
   finalize["ToolDefinition.finalizeContent<br/>last content-only invariant"]
@@ -39,13 +40,15 @@ flowchart TD
   approval -->|allowed-once| guards
   approval -->|rejected, cancelled, unavailable| denied
   approval -.->|throw| normalized
-  denied --> post
+  denied --> project
   pre -.->|throw| normalized
   toolBody --> fsGate
   fsGate --> toolBody
   toolBody --> owned
   toolBody --> around
-  around --> post
+  around --> project
+  project --> post
+  project -.->|throw| normalized
   around -.->|wrapper throws| normalized
   post -.->|throw| normalized
   post --> finalize

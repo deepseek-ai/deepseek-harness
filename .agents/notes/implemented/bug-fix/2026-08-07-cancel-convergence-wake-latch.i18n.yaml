@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-07-cancel-convergence-wake-latch.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-07-cancel-convergence-wake-latch.md
-2026-08-07-cancel-convergence-wake-latch.md: a6540a7b46b3e4af4058c7549ff056b92fcc708d
-2026-08-07-cancel-convergence-wake-latch.zh.md: 2c4f368feaaca91386cac0a5a833ecd8e9f2e1e1
+/agent-note-latch-wake-ups-that-land-in-the-cancel-convergence-window:
+  en: 0b877f8208b50162
+  zh: dd6b6af7d96a5f86
+/agent-note-latch-wake-ups-that-land-in-the-cancel-convergence-window/problem:
+  en: 4539f5fa2c7dc7e4
+  zh: f7b6cbe04ca0ffc2
+/agent-note-latch-wake-ups-that-land-in-the-cancel-convergence-window/decision:
+  en: 23d5dbc6b75ca908
+  zh: 116ae93f6a48e6ed
+/agent-note-latch-wake-ups-that-land-in-the-cancel-convergence-window/alternatives-considered:
+  en: 6df22ff84b2dc081
+  zh: 38d1559935b66fb9
+/agent-note-latch-wake-ups-that-land-in-the-cancel-convergence-window/consequences:
+  en: 7d72c68239cd7e31
+  zh: 19045871dcceb4bf

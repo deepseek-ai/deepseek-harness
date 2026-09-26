@@ -1,62 +1,29 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "Reply with the single word" [disabled]
-  - img
+  - navigation "Session hierarchy": Reply with the single word
   - text: Standard mode
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
 - text: Reply with the single word LIGHTHOUSE and stop. {{clock}}
-- button "Copy":
-  - img
-- button "Thought for a while" [expanded]:
-  - text: Thought for a while
-  - img
-- button "Context injection @deepseek-ai/dsh-system-prompt":
-  - img
-  - img
-  - text: Context injection @deepseek-ai/dsh-system-prompt
-- button "Think The user wants me to reply with a single word. Let me comply.":
-  - img
-  - img
-  - text: Think The user wants me to reply with a single word. Let me comply.
+- button "Copy"
+- status: Worked
+- button "Took {{duration}}" [expanded]
+- button "Analysis completed" [expanded]
+- button "Think The user wants me to reply with a single word. Let me comply."
 - paragraph: LIGHTHOUSE
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
 - text: {{clock}}
-- 'button "feedback Feedback recorded for session session-{{uuid}} Anonymous user: {{uuid}}."':
-  - img
-  - img
-  - text: "feedback Feedback recorded for session session-{{uuid}} Anonymous user: {{uuid}}."
+- 'button "feedback Feedback recorded for session session-{{uuid}} Anonymous user: {{uuid}}."'
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
-- button "6% of context used"
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Send message" [disabled]
-- button "1 turns 1 steps · {{throughput}} tok/s":
-  - img
-  - text: 1 turns 1 steps{{throughput}} tok/s
-- button "7.8K tok · Cache hit 99%":
-  - img
-  - text: 7.8K tokCache hit 99%
+- button "1 turns 1 steps · {{throughput}} tok/s": 1 turns 1 steps{{throughput}} tok/s
+- button "7.8K tok · Cache hit 99%": 7.8K tokCache hit 99%
+- button "6% of context used": 6%

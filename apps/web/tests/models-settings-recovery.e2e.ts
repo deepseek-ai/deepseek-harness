@@ -1,5 +1,5 @@
 /** Stored catalog drift remains repairable through the assembled Models settings page. */
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,7 +9,7 @@ import {
   captureStableAria, compareOrRefreshGolden, launchWebScaffold,
   watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
+import { openSettings, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 const EXPECTED = fileURLToPath(new URL('./expected/models-settings-recovery/stored-error.expected.md', import.meta.url))
 const FAILURE = 'llm-pi-ai: provider "openrouter" model "111" needs an api; '
@@ -26,17 +26,18 @@ describe('web e2e: repairs a stored provider after catalog drift', () => {
 
   beforeAll(async () => {
     home = await mkdtemp(join(tmpdir(), 'dsh-models-recovery-'))
-    await writeFile(join(home, 'settings.yaml'), [
-      'llm-pi-ai:', '  providers:', '    openrouter:', '      models:',
-      '        - id: "111"', '    zai: {}', '    acme-gateway:',
-      '      baseURL: https://gateway.example/v1', '      models:', '        - id: "custom-model"', '',
+    await mkdir(join(home, 'profiles', 'scaffold'), { recursive: true })
+    await writeFile(join(home, 'profiles', 'scaffold', 'cordis.patch.yml'), [
+      '- id: llm-pi-ai', '  config:', '    providers:', '      openrouter:', '        models:',
+      '          - id: "111"', '      zai: {}', '      acme-gateway:',
+      '        baseURL: https://gateway.example/v1', '        models:', '          - id: "custom-model"', '',
     ].join('\n'))
     scaffold = await launchWebScaffold({ harnessHome: home })
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.getByRole('button', { name: '设置', exact: true }).click()
+    await openSettings(page, 'zh')
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('button', { name: '模型', exact: true }).click()
     await dialog.getByText(FAILURE, { exact: true }).waitFor()
@@ -54,22 +55,24 @@ describe('web e2e: repairs a stored provider after catalog drift', () => {
     }
   })
 
-  it('shows the failed provider beside healthy providers and keeps both add actions usable', async () => {
+  it('shows the failed provider beside healthy providers and keeps the add action usable', async () => {
     onTestFailed(() => saveFailureShot(page, 'models-settings-recovery'))
     const dialog = page.getByRole('dialog', { name: '设置' })
     expect(await dialog.getByRole('button', { name: '编辑 openrouter', exact: true }).count()).toBe(1)
     expect(await dialog.getByRole('button', { name: '编辑 zai', exact: true }).count()).toBe(1)
     expect(await dialog.getByRole('button', { name: '编辑 acme-gateway', exact: true }).count()).toBe(1)
     expect(await dialog.getByText(CUSTOM_FAILURE, { exact: true }).count()).toBe(1)
-    expect(await dialog.getByRole('button', { name: '添加提供方', exact: true }).isEnabled()).toBe(true)
-    expect(await dialog.getByRole('button', { name: '添加自定义提供方', exact: true }).isEnabled()).toBe(true)
+    expect(await dialog.getByRole('button', { name: '添加模型提供商', exact: true }).isEnabled()).toBe(true)
     await compareOrRefreshGolden(EXPECTED, await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), webSnapshotMode())
 
-    await dialog.getByRole('button', { name: '添加提供方', exact: true }).click()
-    await dialog.getByLabel('提供方', { exact: true }).selectOption('minimax-cn')
+    await dialog.getByRole('button', { name: '添加模型提供商', exact: true }).click()
+    // Both modes stay offered beside a failed route: the card opens on the
+    // third-party mode with the custom-API segment enabled.
+    expect(await dialog.getByRole('tab', { name: '自定义模型 API' }).isEnabled()).toBe(true)
+    await dialog.getByLabel('提供商', { exact: true }).selectOption('minimax-cn')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
     await dialog.getByText('已保存 minimax-cn。', { exact: true }).waitFor()
-    expect(await readFile(join(home, 'settings.yaml'), 'utf8')).toContain('minimax-cn: {}')
+    expect(await readFile(join(home, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).toContain('minimax-cn: {}')
     expect(await dialog.getByText(FAILURE, { exact: true }).count()).toBe(1)
   })
 
@@ -78,15 +81,15 @@ describe('web e2e: repairs a stored provider after catalog drift', () => {
     await dialog.getByRole('button', { name: '编辑 openrouter', exact: true }).click()
     await dialog.getByText('自定义设置', { exact: true }).click()
     await dialog.getByLabel('API 地址', { exact: true }).fill('https://gateway.example/v1')
-    const before = await readFile(join(home, 'settings.yaml'), 'utf8')
+    const before = await readFile(join(home, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
     await expect.poll(() => dialog.getByText(FAILURE, { exact: true }).count()).toBe(2)
-    expect(await readFile(join(home, 'settings.yaml'), 'utf8')).toBe(before)
+    expect(await readFile(join(home, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).toBe(before)
     await dialog.getByRole('button', { name: '删除模型 1', exact: true }).click()
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
     await dialog.getByText('已保存 openrouter。', { exact: true }).waitFor()
     expect(await dialog.getByText(FAILURE, { exact: true }).count()).toBe(0)
-    const repaired = await readFile(join(home, 'settings.yaml'), 'utf8')
+    const repaired = await readFile(join(home, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(repaired).not.toContain('111')
     expect(repaired).toContain('baseURL: https://gateway.example/v1')
     expect(tripwire.pageErrors).toEqual([])

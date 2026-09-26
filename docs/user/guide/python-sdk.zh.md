@@ -14,9 +14,14 @@
 
 ## 安装 SDK
 
-### Linux 与 macOS
+<div>
+<a id="linux-与-macos"></a>
+<a id="windows-powershell"></a>
+</div>
 
-```sh
+::: code-group
+
+```sh [Linux/macOS]
 git clone https://github.com/deepseek-ai/deepseek-harness.git
 cd deepseek-harness
 python -m venv .venv
@@ -24,9 +29,7 @@ python -m venv .venv
 python -m pip install deepseek-harness-sdk
 ```
 
-### Windows PowerShell
-
-```powershell
+```powershell [Windows PowerShell]
 git clone https://github.com/deepseek-ai/deepseek-harness.git
 Set-Location deepseek-harness
 py -3.10 -m venv .venv
@@ -34,31 +37,43 @@ py -3.10 -m venv .venv
 python -m pip install deepseek-harness-sdk
 ```
 
+:::
+
 安装内容包含匹配的原生运行时 wheel 与 `dsh` 命令。普通 SDK 运行不需要系统 Node.js。需要构建产物的仓库贡献者应使用 [Python 贡献者工作流](../../../python/development.zh.md)。
 
 ## 运行检入示例
 
 导出凭据；使用兼容代理时再设置 endpoint：
 
-### Linux 与 macOS
+<div>
+<a id="linux-与-macos-1"></a>
+<a id="windows-powershell-1"></a>
+</div>
 
-```sh
+::: code-group
+
+```sh [Linux/macOS]
 export DEEPSEEK_API_KEY=sk-your-key-here
 # export DEEPSEEK_BASE_URL=http://127.0.0.1:8000/v1
 ```
 
-### Windows PowerShell
-
-```powershell
+```powershell [Windows PowerShell]
 $env:DEEPSEEK_API_KEY = "sk-your-key-here"
 # $env:DEEPSEEK_BASE_URL = "http://127.0.0.1:8000/v1"
 ```
 
+:::
+
 使用显式 workspace 与 home 路径运行一个任务：
 
-### Linux 与 macOS
+<div>
+<a id="linux-与-macos-2"></a>
+<a id="windows-powershell-2"></a>
+</div>
 
-```sh
+::: code-group
+
+```sh [Linux/macOS]
 python python/sdk/examples/minimal.py \
   --workspace /absolute/path/to/disposable-workspace \
   --dsh-home /absolute/path/to/example-dsh-home \
@@ -66,15 +81,15 @@ python python/sdk/examples/minimal.py \
   "Inspect the repository and fix the failing tests."
 ```
 
-### Windows PowerShell
-
-```powershell
+```powershell [Windows PowerShell]
 python python/sdk/examples/minimal.py `
   --workspace C:\work\disposable-workspace `
   --dsh-home C:\work\example-dsh-home `
   --session-id example-001 `
   "Inspect the repository and fix the failing tests."
 ```
+
+:::
 
 脚本会打印最终 assistant 响应。所选 home 会保存生成的 `sdk-minimal` profile、已安装插件，以及 `sessions/` 下的未压缩 JSONL 会话日志。示例与 SDK 绝不会静默读取 `~/.dsh`。
 
@@ -109,21 +124,26 @@ SDK 会延迟启动内置的 `dsh --profile sdk-minimal` 进程，并复用到�
 
 需要在该 home 中持久保存依赖与 bundle 层时，使用 `dsh plugin`：
 
-### Linux 与 macOS
+<div>
+<a id="linux-与-macos-3"></a>
+<a id="windows-powershell-3"></a>
+</div>
 
-```sh
+::: code-group
+
+```sh [Linux/macOS]
 export DSH_HOME=/absolute/path/to/example-dsh-home
 dsh --profile sdk-minimal --dump-default-config >/dev/null
 dsh plugin --profile sdk-minimal add file:/absolute/path/to/my-plugin-bundle
 ```
 
-### Windows PowerShell
-
-```powershell
+```powershell [Windows PowerShell]
 $env:DSH_HOME = "C:\work\example-dsh-home"
 dsh --profile sdk-minimal --dump-default-config | Out-Null
 dsh plugin --profile sdk-minimal add file:C:/work/my-plugin-bundle
 ```
+
+:::
 
 第一个命令初始化随附的独立 profile。第二个命令把包管理转发给 `pnpm`，然后记录所有导出 `dsh.bundle` 层的已安装包。只有执行此管理命令时才需要安装 `pnpm`；启动已安装 SDK 不需要它。持久配置项变更应编辑 `$DSH_HOME/profiles/sdk-minimal/cordis.patch.yml`；单次启动变更则从 Python 传入 patch 文件。
 
@@ -157,7 +177,7 @@ dsh plugin --profile sdk-minimal add file:C:/work/my-plugin-bundle
 | 运行时上下文与 compaction | 不存在 |
 | 会话持久化 | `<dsh_home>/sessions` 下的未压缩 JSONL |
 
-该 profile 的唯一组合包会在空根之上插入完整配置树，且不包含 `dsh-base`，因此基础 profile 以后新增的工具不会隐式出现。它包含 SDK 协议、一个由环境配置的 DeepSeek 适配器、本地执行与持久化；文件系统工具、settings、托管凭据、OTel 遥测、Web 工具、subagent、本地指令发现和 compaction 均不存在。[DeepSeek 会话日志贡献器](../../../packages/session/session-log-deepseek/README.zh.md)默认随 DeepSeek 请求上传完整的未接受日志后缀；在 profile patch 中设置 `session-log-deepseek.enabled: false` 可将其关闭。它固定使用 `danger-full-access`，因此按平台选择的持久 shell 可以修改运行时可见的任何路径；应使用一次性 checkout 或容器。
+该 profile 的唯一组合包会在空根之上插入完整配置树，且不包含 `dsh-base`，因此基础 profile 以后新增的工具不会隐式出现。它包含 SDK 协议、一个由环境配置的 DeepSeek 适配器、本地执行与持久化；文件系统工具、settings、托管凭据、OTel 遥测、Web 工具、subagent、本地指令发现和 compaction 均不存在。[DeepSeek 会话日志贡献器](../../../packages/session/session-log-deepseek/README.zh.md)默认随 DeepSeek 请求上传未接受的日志事件，每次请求最多 `maxBytes`（8 MiB）；在 profile patch 中设置 `session-log-deepseek.enabled: false` 可将其关闭。它固定使用 `danger-full-access`，因此按平台选择的持久 shell 可以修改运行时可见的任何路径；应使用一次性 checkout 或容器。
 
 已安装 wheel 仍会打包完整 `web` profile 与前端产物。如果 Python SDK 部署还需要浏览器应用，请针对显式 `DSH_HOME` 运行 `dsh web`；`web` 是独立 CLI 应用，不能为 Python SDK client 提供服务。
 

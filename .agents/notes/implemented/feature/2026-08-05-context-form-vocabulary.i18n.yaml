@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-05-context-form-vocabulary.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-05-context-form-vocabulary.md
-2026-08-05-context-form-vocabulary.md: e1c909b761fee60ebacb306ef204a4212a03baa4
-2026-08-05-context-form-vocabulary.zh.md: 4d595bf52fba2f7323643ddc47bd365ce6508c9e
+/agent-note-producer-declared-context-forms:
+  en: a88151ac41197659
+  zh: 4aaffb71b4ae04ea
+/agent-note-producer-declared-context-forms/problem:
+  en: 74c06aa0b3e5337e
+  zh: c13364dbaebabba1
+/agent-note-producer-declared-context-forms/decision:
+  en: e97830627fd8245f
+  zh: 0b035c15ed09902d
+/agent-note-producer-declared-context-forms/why-not-a-presenter-registry:
+  en: feb1b16eeb312e0c
+  zh: 9eb3c5af2d510235
+/agent-note-producer-declared-context-forms/alternatives-considered:
+  en: 86f7f90f4c573316
+  zh: d8008512145a89b4
+/agent-note-producer-declared-context-forms/testing:
+  en: 5910183c18c3341e
+  zh: 7c5d4e538a66533f
+/agent-note-producer-declared-context-forms/consequences:
+  en: 15d3d98980ea3919
+  zh: 4e14b65420de0df3

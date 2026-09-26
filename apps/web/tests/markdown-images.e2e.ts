@@ -1,5 +1,5 @@
 // Real browser image loading and failure fallbacks through the shipped Web composition.
-import { open, writeFile } from 'node:fs/promises'
+import { mkdir, open, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -112,6 +112,14 @@ function markdownImageFixture(remoteUrl: string, outsidePath: string): string {
           '',
           `![${WORKSPACE_ALT}]({{cwd}}/valid.png)`,
           '',
+          '[View comparison](./valid.png)',
+          '',
+          '![Space path]({{cwd}}/test workspace/测试图.png)',
+          '',
+          '![Encoded path]({{cwd}}/test%20workspace/测试图.png)',
+          '',
+          '![Encoded filename]({{cwd}}/test%20workspace/测试%23100%25.png)',
+          '',
           '![Oversized image]({{cwd}}/oversized.png)',
           '',
           `![Outside workspace image](${outsidePath})`,
@@ -164,6 +172,10 @@ describe('web e2e: Markdown image rendering', () => {
     imageOrigin = await startImageOrigin()
     scaffold = await launchWebScaffold({})
     await writeFile(join(scaffold.workspaceCwd, 'valid.png'), PNG)
+    await writeFile(join(scaffold.workspaceCwd, 'local-image.png'), PNG)
+    await mkdir(join(scaffold.workspaceCwd, 'test workspace'))
+    await writeFile(join(scaffold.workspaceCwd, 'test workspace/测试图.png'), PNG)
+    await writeFile(join(scaffold.workspaceCwd, 'test workspace/测试#100%.png'), PNG)
     await writeFile(join(scaffold.workspaceCwd, 'corrupt.png'), 'invalid image')
     const oversized = await open(join(scaffold.workspaceCwd, 'oversized.png'), 'w')
     try {
@@ -234,14 +246,16 @@ describe('web e2e: Markdown image rendering', () => {
         referrerPolicy: element.getAttribute('referrerpolicy'),
       }
     })).toEqual({
-      borderRadius: '8px',
+      borderRadius: '12px',
       decoding: 'async',
       loading: 'lazy',
-      maxWidth: '100%',
+      maxWidth: 'min(100%, 640px)',
       referrerPolicy: 'no-referrer',
     })
-    expect(await page.getByRole('img', { name: LOCAL_ALT }).count()).toBe(0)
-    expect(await page.getByText(LOCAL_ALT, { exact: true }).count()).toBe(1)
+    await expect.poll(() => page.getByRole('img', { name: LOCAL_ALT }).evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1)
+    for (const name of ['Space path', 'Encoded path', 'Encoded filename']) {
+      await expect.poll(() => page.getByRole('img', { name, exact: true }).evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1)
+    }
     expect(imageOrigin.requests).toEqual([{ path: '/image.png', referer: undefined }])
 
     const workspaceImage = page.getByRole('img', { name: WORKSPACE_ALT })
@@ -253,17 +267,38 @@ describe('web e2e: Markdown image rendering', () => {
     const outsideImage = page.getByRole('img', { name: 'Outside workspace image' })
     await expect.poll(() => outsideImage.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1)
     for (const alt of ['Oversized image', 'Missing image']) {
-      await page.getByText(alt, { exact: true }).waitFor()
+      await page.getByText(`Image preview unavailable · ${alt}`, { exact: true }).waitFor()
       expect(await page.getByRole('img', { name: alt }).count()).toBe(0)
     }
-    await page.getByText(join(scaffold.workspaceCwd, 'corrupt.png'), { exact: true }).waitFor()
+    await page.getByText(`Image preview unavailable · ${join(scaffold.workspaceCwd, 'corrupt.png')}`, { exact: true }).waitFor()
     expect(mediaResponses).toEqual(new Map([
       [join(scaffold.workspaceCwd, 'valid.png'), 200],
+      [`${scaffold.workspaceCwd}/./local-image.png`, 200],
+      [join(scaffold.workspaceCwd, 'test workspace/测试图.png'), 200],
+      [join(scaffold.workspaceCwd, 'test workspace/测试#100%.png'), 200],
       [join(scaffold.workspaceCwd, 'oversized.png'), 413],
       [join(scaffold.persistenceRoot, 'outside.png'), 200],
       [join(scaffold.workspaceCwd, 'missing.png'), 404],
       [join(scaffold.workspaceCwd, 'corrupt.png'), 200],
     ]))
+
+    await page.getByRole('button', { name: `View full image: ${WORKSPACE_ALT}`, exact: true }).click()
+    const lightbox = page.getByRole('dialog', { name: 'Image preview', exact: true })
+    await lightbox.waitFor()
+    await lightbox.getByRole('button', { name: 'Close image preview' }).click()
+    await lightbox.waitFor({ state: 'detached' })
+    const link = page.getByRole('button', { name: 'View comparison', exact: true })
+    await link.hover()
+    const hoverImage = page.getByRole('img', { name: './valid.png', exact: true })
+    await hoverImage.waitFor()
+    await expect.poll(() => hoverImage.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1)
+    await page.keyboard.press('Escape')
+    await hoverImage.waitFor({ state: 'detached' })
+    await link.press('Tab')
+    await page.keyboard.press('Shift+Tab')
+    await hoverImage.waitFor()
+    await page.keyboard.press('Escape')
+    await hoverImage.waitFor({ state: 'detached' })
 
     const snapshot = (await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd))
       .split(SEED_ID).join('{{seededId}}')
@@ -271,5 +306,21 @@ describe('web e2e: Markdown image rendering', () => {
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, ['ui.expected.md'])
+    await link.evaluate((element) => { element.scrollIntoView({ block: 'end' }) })
+    await page.mouse.move(0, 0)
+    await link.hover()
+    await hoverImage.waitFor()
+    const linkRect = await link.boundingBox()
+    if (linkRect === null) throw new Error('image link is not visible')
+    const previewRect = await hoverImage.evaluate((element) => {
+      const rect = element.parentElement!.parentElement!.getBoundingClientRect()
+      return { top: rect.top, bottom: rect.bottom }
+    })
+    expect(previewRect.bottom <= linkRect.y || previewRect.top >= linkRect.y + linkRect.height).toBe(true)
+    const thumbnailRect = await hoverImage.boundingBox()
+    if (thumbnailRect === null) throw new Error('image preview is not visible')
+    expect(thumbnailRect.y + thumbnailRect.height).toBeLessThanOrEqual(previewRect.bottom)
+    await page.mouse.click(linkRect.x + linkRect.width / 2, linkRect.y + linkRect.height / 2)
+    await expect.poll(() => page.locator('[data-image-preview] img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1)
   }, 60_000)
 })

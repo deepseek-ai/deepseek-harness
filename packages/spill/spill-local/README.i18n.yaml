@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/spill/spill-local/README.md
-README.md: 1c7ea86631a7da51c774081c7178d1f29c5094c9
-README.zh.md: 93ed836b9fa7429eddcca2a4138cbdfba4d6ef5a
+/:
+  en: 081da64c1be2d775
+  zh: cd51e86e3c5c49cf
+/deepseek-ai-dsh-spill-local:
+  en: 91630ef1d0319ea4
+  zh: 0f5efea58fa94bec
+/deepseek-ai-dsh-spill-local/summary:
+  en: 1d8b50741c23fe72
+  zh: 9e3eb775ee92d964
+/deepseek-ai-dsh-spill-local/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-spill-local/use-this-package:
+  en: afebd49584624c46
+  zh: d0655462bc01cfc7
+/deepseek-ai-dsh-spill-local/use-this-package/minimal-configuration:
+  en: a1ce98a82eac11cf
+  zh: 8d3abbbc081f1617
+/deepseek-ai-dsh-spill-local/use-this-package/what-you-get-back:
+  en: c8aca7d0d3fe321e
+  zh: b7f7a168d3ca78e0
+/deepseek-ai-dsh-spill-local/use-this-package/where-files-land:
+  en: 32262a03c40c49df
+  zh: 9a028fff66aed750
+/deepseek-ai-dsh-spill-local/use-this-package/startup-cleanup:
+  en: 33c695953619df83
+  zh: a72ad3865baed8ac
+/deepseek-ai-dsh-spill-local/use-this-package/failures-and-recovery:
+  en: 910bbe363921952d
+  zh: 1c21b9ca1d050a1e
+/deepseek-ai-dsh-spill-local/understand-the-implementation:
+  en: deb655b3b1860576
+  zh: d83d8a3c24a71a16
+/deepseek-ai-dsh-spill-local/understand-the-implementation/design-philosophy:
+  en: 905f7242345308cd
+  zh: 66907177a6dd4b94
+/deepseek-ai-dsh-spill-local/understand-the-implementation/source-map:
+  en: d7746db31950fddb
+  zh: d7e2190e5c821801
+/deepseek-ai-dsh-spill-local/understand-the-implementation/file-naming-and-write:
+  en: cb92a60310c465a8
+  zh: ce474c16abd2df5d
+/deepseek-ai-dsh-spill-local/further-exploration:
+  en: 8651e6ea70f0564d
+  zh: ec0bed43293ac04b
+/deepseek-ai-dsh-spill-local/model-experience:
+  en: ae2966f8fc63dc5b
+  zh: 141aa4ebbc52574f
+/deepseek-ai-dsh-spill-local/model-experience/kv-cache-effect:
+  en: 40294c1c31b74824
+  zh: 6b9a967b5b4765e4
+/deepseek-ai-dsh-spill-local/known-limitations-and-deferred-work:
+  en: 363cf4b1b822e043
+  zh: c28e52f67ef21400
+/deepseek-ai-dsh-spill-local/known-limitations-and-deferred-work/dev-note:
+  en: a63e51f03bdb279f
+  zh: 191a48d3bfc4a792
+/deepseek-ai-dsh-spill-local/known-limitations-and-deferred-work/dev-note/future-workspace-confinement-interplay:
+  en: 7cc389241a5b9a4c
+  zh: af4b8e65ed565ec6

@@ -58,21 +58,24 @@ async function setup() {
   })
   const start = (timeoutMs = 10, signal?: AbortSignal) => {
     const observed: { done: boolean; result?: ShellRunResult; error?: unknown } = { done: false }
-    const promise = ctx.shell.run(ctx.shell.resolve({ command: 'fixture command', timeoutMs, signal }))
+    const execution = ctx.shell.execute(ctx.shell.resolve({ command: 'fixture command', timeoutMs, signal }))
+    const promise = execution.then(process => process.result())
     runs.push(promise)
     void promise.then(
       (result) => { observed.done = true; observed.result = result },
       (error: unknown) => { observed.done = true; observed.error = error },
     )
-    return { promise, observed }
+    return { promise, observed, execution }
   }
   return { ctx, prepared, entered, spawned, completion, wrap, confine, spawn, terminate, start }
 }
 
 describe('pwsh preparation deadline', () => {
-  it.each(['success', 'rejection'] as const)('times out unresolved preparation and prevents late %s from spawning', async (late) => {
+  it.each([
+    { late: 'success' }, { late: 'rejection' },
+  ] as const)('times out preparation and prevents late $late from spawning', async ({ late }) => {
     const test = await setup()
-    const run = test.start()
+    const run = test.start(10)
     const signal = await test.entered.promise
     await vi.advanceTimersByTimeAsync(10)
     expect(run.observed.done).toBe(true)

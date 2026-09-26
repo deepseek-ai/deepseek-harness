@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { get } from 'node:http'
+import { request as httpRequest } from 'node:http'
 import type { IncomingHttpHeaders } from 'node:http'
 import { resolveExampleLaunch } from '@deepseek-ai/dsh-loader-smoke'
 import ts from 'typescript'
@@ -18,6 +18,7 @@ const repoRoot = fileURLToPath(new URL('../../../../../../', import.meta.url))
 
 /** Live process whose IPC observer reports independently collected runtime state. */
 interface DefaultWeb {
+  root: string
   url: string
   request: (command: 'roster' | 'mount-experimental' | 'mount-experimental-entry') => Promise<RuntimeRoster>
 }
@@ -26,13 +27,19 @@ interface DefaultWeb {
  * Boot the built Web profile under plain Node and dispose it to quiescence after an assertion callback.
  * @param test - owning Vitest case, including its timeout, cancellation, and cleanup hooks.
  * @param inspect - assertions against the running process and its ephemeral loopback URL.
+ * @param options - additional profile patches and test data prepared before startup.
  */
-export async function withDefaultWeb(test: TestContext, inspect: (app: DefaultWeb) => Promise<void>): Promise<void> {
+export async function withDefaultWeb(
+  test: TestContext,
+  inspect: (app: DefaultWeb) => Promise<void>,
+  options: { patches?: readonly string[]; prepare?: (root: string) => Promise<void> } = {},
+): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-web-default-isolation-'))
   let removal: Promise<void> | undefined
   const removeRoot = (): Promise<void> => removal ??= rm(root, { recursive: true, force: true })
   test.onTestFinished(removeRoot)
   try {
+    await options.prepare?.(root)
     await writeFile(join(root, 'package.json'), JSON.stringify({ type: 'module' }) + '\n')
     for (const relative of ['runtime-roster.ts', 'fixtures/runtime-roster-observer.ts']) {
       const source = await readFile(new URL(relative, import.meta.url), 'utf8')
@@ -53,7 +60,10 @@ export async function withDefaultWeb(test: TestContext, inspect: (app: DefaultWe
     const launch = resolveExampleLaunch({
       srcBin: join(repoRoot, 'apps/cli/src/bin.ts'),
       mode: 'lib',
-      configArgs: ['--profile', 'web', '--patch', patch, '--host', '127.0.0.1', '--port', '0', '--no-open'],
+      configArgs: [
+        '--profile', 'web', ...options.patches?.flatMap(path => ['--patch', path]) ?? [],
+        '--patch', patch, '--host', '127.0.0.1', '--port', '0', '--no-open',
+      ],
       env: {
         NODE_OPTIONS: undefined,
         NODE_PATH: undefined,
@@ -145,7 +155,7 @@ export async function withDefaultWeb(test: TestContext, inspect: (app: DefaultWe
         return /dsh web: (http:\/\/[^\s]+)/u.exec(stdout)?.[1]
       }, { timeout: test.task.timeout }).toBeDefined()
       const url = /dsh web: (http:\/\/[^\s]+)/u.exec(stdout)![1]!
-      await inspect({ url, request })
+      await inspect({ root, url, request })
     } finally {
       const result = await close()
       test.signal.removeEventListener('abort', abort)
@@ -167,13 +177,26 @@ export async function withDefaultWeb(test: TestContext, inspect: (app: DefaultWe
  * @param headers - optional authentication cookie.
  * @returns complete response after its stream ends.
  */
-export function webGet(url: string | URL, signal: AbortSignal, headers: Record<string, string> = {}): Promise<{
-  status: number | undefined
-  headers: IncomingHttpHeaders
-  text: string
-}> {
+export function webGet(
+  url: string | URL, signal: AbortSignal, headers: Record<string, string> = {},
+): ReturnType<typeof webRequest> {
+  return webRequest(url, signal, { method: 'GET', headers })
+}
+
+/**
+ * Send one public-protocol request directly to the test-owned loopback process.
+ * @param url - Exact URL of the owned process.
+ * @param signal - Owning test cancellation signal.
+ * @param options - HTTP method, headers, and optional serialized request body.
+ * @returns Complete response after its stream ends.
+ */
+export function webRequest(
+  url: string | URL,
+  signal: AbortSignal,
+  options: { method: 'GET' | 'POST'; headers?: Record<string, string>; body?: string },
+): Promise<{ status: number | undefined; headers: IncomingHttpHeaders; text: string }> {
   return new Promise((resolve, reject) => {
-    const request = get(url, { headers, agent: false, signal }, (response) => {
+    const request = httpRequest(url, { method: options.method, headers: options.headers, agent: false, signal }, (response) => {
       response.setEncoding('utf8')
       let text = ''
       response.on('data', (chunk: string) => { text += chunk })
@@ -181,5 +204,6 @@ export function webGet(url: string | URL, signal: AbortSignal, headers: Record<s
       response.once('end', () => { resolve({ status: response.statusCode, headers: response.headers, text }) })
     })
     request.once('error', reject)
+    request.end(options.body)
   })
 }

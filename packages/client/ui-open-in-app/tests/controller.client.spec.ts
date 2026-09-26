@@ -1,4 +1,4 @@
-/** Controller wire behavior: host-base resolution, availability filtering, and launch errors. */
+/** Controller wire behavior: document-relative routes, availability filtering, and launch errors. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OpenInAppController } from '../src/client/controller.ts'
@@ -15,6 +15,7 @@ describe('OpenInAppController availability', () => {
   it('starts without a platform-specific choice', () => {
     const controller = new OpenInAppController(async () => jsonResponse({ apps: [] }))
     expect(controller.choice.getSnapshot()).toBe('')
+    expect(controller.currentApp()).toBeUndefined()
   })
 
   it('shares one availability read across concurrent loads', async () => {
@@ -36,24 +37,43 @@ describe('OpenInAppController availability', () => {
     expect(malformed.apps.getSnapshot()).toEqual([])
   })
 
-  it('resolves routes against the page origin when the page has one', async () => {
-    vi.stubGlobal('location', { origin: 'http://dsh.example:8080' })
+  it('requests the document-relative availability route', async () => {
     const fetcher = vi.fn(async (input: string | URL) => { void input; return jsonResponse({ apps: [] }) })
     const controller = new OpenInAppController(fetcher)
     await controller.load()
-    expect(String(fetcher.mock.calls[0]?.[0])).toBe('http://dsh.example:8080/open-in-app/apps')
-  })
-
-  it('falls back to the internal host base under a null origin', async () => {
-    vi.stubGlobal('location', { origin: 'null' })
-    const fetcher = vi.fn(async (input: string | URL) => { void input; return jsonResponse({ apps: [] }) })
-    const controller = new OpenInAppController(fetcher)
-    await controller.load()
-    expect(String(fetcher.mock.calls[0]?.[0])).toBe('http://dsh.internal/open-in-app/apps')
+    expect(fetcher.mock.calls[0]?.[0]).toBe('open-in-app/apps')
   })
 })
 
 describe('OpenInAppController launching', () => {
+  it('uses only nameable installed apps and falls back when the remembered choice is unavailable', () => {
+    const controller = new OpenInAppController()
+    controller.apps.set(['unknown-app', 'finder', 'cursor'])
+    controller.choose('cursor')
+    expect(controller.currentApp()).toBe('cursor')
+    controller.apps.set(['unknown-app', 'finder'])
+    expect(controller.currentApp()).toBe('finder')
+    controller.apps.set(['unknown-app'])
+    expect(controller.currentApp()).toBeUndefined()
+  })
+
+  it('shares the busy operation across gestures and captures its app and directory', async () => {
+    let finish!: (response: Response) => void
+    const fetcher = vi.fn((_input: string | URL, _init?: RequestInit) => new Promise<Response>((resolve) => { finish = resolve }))
+    const controller = new OpenInAppController(fetcher)
+    controller.choose('cursor')
+    const pending = controller.launch('cursor', '/workspace/first')
+    expect(controller.operation.getSnapshot()).toEqual({ phase: 'busy', path: '/workspace/first' })
+    controller.choose('finder')
+    await controller.launch('finder', '/workspace/second')
+    expect(controller.choice.getSnapshot()).toBe('cursor')
+    expect(fetcher).toHaveBeenCalledOnce()
+    expect(fetcher.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ app: 'cursor', path: '/workspace/first' }))
+    finish(jsonResponse({ ok: true }))
+    await pending
+    expect(controller.operation.getSnapshot()).toEqual({ phase: 'idle', path: '/workspace/first' })
+  })
+
   it('restores the chosen app from the open-in-app storage key', () => {
     const values = new Map<string, string>()
     vi.stubGlobal('localStorage', {
@@ -72,6 +92,7 @@ describe('OpenInAppController launching', () => {
     const fetcher = vi.fn(async (input: string | URL, init?: RequestInit) => { void input; void init; return jsonResponse({ ok: true }) })
     const controller = new OpenInAppController(fetcher)
     await controller.launch('cursor', '/w/dir')
+    expect(fetcher.mock.calls[0]?.[0]).toBe('open-in-app/open')
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -80,5 +101,6 @@ describe('OpenInAppController launching', () => {
 
     const failing = new OpenInAppController(async () => jsonResponse({}, 404))
     await expect(failing.launch('cursor', '/w/dir')).rejects.toThrow('open failed: HTTP 404')
+    expect(failing.operation.getSnapshot()).toEqual({ phase: 'error', path: '/w/dir' })
   })
 })

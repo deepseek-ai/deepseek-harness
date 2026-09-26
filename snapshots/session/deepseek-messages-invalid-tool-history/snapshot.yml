@@ -1,0 +1,10 @@
+version: 1
+scenario: deepseek-messages-invalid-tool-history
+profile: headless
+composition: deepseek-messages-invalid-tool-history
+recording: authored
+header:
+  class: deepseek-messages-invalid-tool-history
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

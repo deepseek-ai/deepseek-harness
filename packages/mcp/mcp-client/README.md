@@ -60,7 +60,7 @@ Add one entry per server; nothing else is required. After the harness starts, th
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
 | `toolCallTimeoutMs` | `60,000` | Timeout per `tools/call` or resource request |
 | `startupTimeoutMs` | `30,000` | Budget for one connection attempt — negotiation and connect plus the initial tool sync |
-| `healthCheckIntervalMs` | `30,000` | Spacing between liveness pings on an established connection (also each ping's answer budget) |
+| `healthCheckIntervalMs` | `30,000` | Spacing between legacy `ping` or modern `discover` health checks (also each check's answer budget) |
 | `maxInstructionBytes` | `32,768` | Maximum UTF-8 bytes of server instructions including attribution; an oversized value rejects the connection |
 | `failOnStartupError` | `false` | Reject plugin activation when the initial connection or tool synchronization fails |
 | `reconnect.enabled` | `true` | Reconnect automatically after a lost connection |
@@ -90,7 +90,7 @@ Images are supported when the current model accepts image input and the harness 
 
 ### Startup, updates, and reconnection
 
-The server's tools appear before the harness starts its first turn. Every connection attempt — the first one and each reconnect — is bounded by `startupTimeoutMs` (default 30 seconds) covering the connection plus the initial tool discovery, so an unresponsive server cannot hold startup open. An established connection is pinged every `healthCheckIntervalMs` (default 30 seconds): a stdio server's death closes the transport by itself, but a Streamable HTTP server holds no connection between requests, so the failed or timed-out ping is what moves a silently dead server into the reconnect path. When the server changes its tool list, the model's tool set updates automatically; if the update fails, the previous tool set keeps working.
+The server's tools appear before the harness starts its first turn. Every connection attempt — the first one and each reconnect — is bounded by `startupTimeoutMs` (default 30 seconds) covering the connection plus the initial tool discovery, so an unresponsive server cannot hold startup open. An established connection is checked every `healthCheckIntervalMs` (default 30 seconds): a stdio server's death closes the transport by itself, but a Streamable HTTP server holds no connection between requests, so the failed or timed-out check is what moves a silently dead server into the reconnect path. When the server changes its tool list, the model's tool set updates automatically; if the update fails, the previous tool set keeps working.
 
 When a server connection drops — for example a local server process crashes — the plugin reconnects automatically with delays that double from 500 ms up to 30 s and then refreshes the tool set; reconnect progress is visible in the logs. During an outage the last known tools stay listed but calls to them fail until the server recovers. After ten consecutive failed attempts the server's tools are removed and reconnection stops until you reload the configuration or restart the harness; a server that stays connected for a while resets that counter. Set `reconnect.enabled: false` to disable automatic reconnection — tools then stay listed but fail until you reload. Editing the configuration entry reloads the server connection in place, and unchanged names stay unchanged.
 
@@ -110,7 +110,7 @@ This section explains the design decisions behind the bridge and points at the c
 - **Naming is a pinned contract.** Public names are pure functions of `(serverName, rawName)` and satisfy the DeepSeek function-name contract; lossy normalization appends a 12-hex-char SHA-256 hash so distinct identities never collapse. Session history and permission rules therefore survive HMR swaps, re-syncs, and other servers' changes.
 - **The raw name is the only wire name.** `tools/call` always receives the raw name; the public name is never sent to the server and never parsed to recover the raw name.
 - **Full generation or none.** Syncs swap generations atomically: a fetch failure keeps the previous generation, and a registration conflict rolls back the entire attempted generation.
-- **One canonical value, one projection.** The executor returns the protocol-complete canonical `McpResult`; a separate ordered projection prepares Native content, and `finalizeContent` installs it only when the registry's post-execute result is unchanged, so policy blocks and value replacements stay authoritative.
+- **One canonical value, one projection.** The executor preserves the complete canonical MCP value and prepares ordered text/image content. `projectContent` installs that content before `tools/post-execute`, so retention sees real images. Subsequent content replacement, value replacement, and blocking remain authoritative.
 
 ### Source map
 
@@ -215,7 +215,7 @@ These limits describe what you cannot do with this plugin and when it needs oper
 
 - **Resources are read on demand** — shipped profiles provide the [shared resource service](../mcp-resources/README.md); resource subscriptions and MCP prompt templates are unsupported.
 - **Only startup attempts are budget-bounded** — `startupTimeoutMs` covers each connection attempt (negotiation, connect, and the initial tool sync); a notification-driven re-sync's `tools/list` requests still ride the MCP SDK's 60-second request default and its page limit. Plugin unload closes the transport to interrupt pending startup requests before awaiting teardown.
-- **Reconnect handles failed negotiation, transport close, and a failed health ping** — a failed initial probe, a crashed stdio child, or a Streamable HTTP server that stops answering pings uses the configured reconnect budget. Once HTTP is connected, request failures use the SDK transport's recovery rather than respawning the connection.
+- **Reconnect handles failed negotiation, transport close, and a failed health check** — a failed initial probe, a crashed stdio child, or a Streamable HTTP server that stops answering health checks uses the configured reconnect budget. Once HTTP is connected, request failures use the SDK transport's recovery rather than respawning the connection.
 - **Image is the only durable rich-result bridge** — PNG, JPEG, WebP, and GIF enter Native context after exact capability proof. Audio and embedded-resource payloads remain execution-local with explicit diagnostics, while resource links preserve only their name and URI as text.
 - **Invalid protocol results or output schemas fail through the SDK** — the bridge does not accept legacy `toolResult` substitutes or bypass advertised schema validation.
 - **Task-required MCP tools are rejected at call time** — a tool that requires the task-based execution extension throws instead of bridging; the extension is not implemented.

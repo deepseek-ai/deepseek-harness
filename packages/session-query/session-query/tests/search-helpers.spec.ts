@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, ToolCallId , createMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, {
   SESSION_FORMAT_VERSION,
   SessionId,
@@ -21,6 +22,12 @@ import {
 } from '@deepseek-ai/dsh-session-query'
 import { TestSessionQueryEngine } from './test-service.ts'
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'test': { kind: 'test' } & ContextFormed
+  }
+}
+
 const id = SessionId('session')
 
 function header(value: string, extra: Partial<SessionHeader> = {}): SessionHeader {
@@ -38,12 +45,8 @@ describe('session-query semantic extraction', () => {
       { type: 'text', text: ' visible ' },
       { type: 'reasoning', text: 'thought' },
       { type: 'tool-call', id: callId, name: 'read', arguments: '{"path":"a"}' },
-      {
-        type: 'tool-result',
-        toolCallId: callId,
-        content: [{ type: 'text', text: 'nested' }],
-        isError: false,
-      },
+      { type: 'text', text: 'nested' },
+      { type: 'plugin:text', text: 'opaque hidden', content: [{ type: 'text', text: 'hidden child' }] } as never,
       { type: 'future-content', payload: 'hidden' } as never,
     ]
     const events: SessionEvent[] = [
@@ -63,7 +66,7 @@ describe('session-query semantic extraction', () => {
         }),
       }, surfaceOp: 'append' },
       { type: 'user/message', seq: SessionSeq(2), time: 3, data: createUserMessage({
-        content: messageContent, source: { kind: 'plugin', plugin: 'test' },
+        content: messageContent, source: { kind: 'test' },
       }), surfaceOp: 'append' },
       { type: 'tool/call', seq: SessionSeq(3), time: 5, data: { turn: 1, step: 1, callId, name: 'bash', arguments: '{"cmd":"pwd"}' } },
       {
@@ -174,7 +177,7 @@ describe('session-query document and filter helpers', () => {
     { type: 'user/message', seq: SessionSeq(2), time: 12, data:
       createUserMessage({
         content: [{ type: 'text', text: 'replacement' }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'test' },
       }),
     surfaceOp: { op: 'replace', startSeq: SessionSeq(0), endSeq: SessionSeq(0) },
     sourceEventSeqs: [SessionSeq(0)] },
@@ -250,7 +253,7 @@ describe('session-query document and filter helpers', () => {
       time: 1,
       data: createUserMessage({
         content: [{ type: 'text', text: 'bad' }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'test' },
       }),
       surfaceOp: { op: 'replace', startSeq: SessionSeq(9), endSeq: SessionSeq(9) },
     }]

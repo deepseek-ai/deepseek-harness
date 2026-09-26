@@ -1,7 +1,6 @@
 /**
  * Permission default-settings controller. The permission descriptor comes
- * from the shared describe mirror (the dynamic preset enum lives in the
- * namespace schema, which per-namespace scopes do not carry); writes target
+ * from the shared describe mirror and choices from the permission catalog; writes target
  * only `defaultPreset`, carry the descriptor revision, and fold their answer
  * back into the mirror.
  */
@@ -11,9 +10,9 @@ import type { SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   createSnapshotStore, type SnapshotStore,
 } from '@deepseek-ai/dsh-client-store'
-import type {
-  SchemaNode, SettingsDescribeFace, SettingsSchemaService,
-} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { SettingsDescribeFace } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { PermissionCatalog } from '@deepseek-ai/dsh-permission-presets/client'
+import type { PermissionCatalogDirectory } from './catalog.ts'
 import { displayPermissionPreset } from './presentation.ts'
 
 /** Permission's settings namespace on the host wire. */
@@ -37,44 +36,21 @@ export interface PermissionSettingsState {
   revision: number
 }
 
-interface ConstChoice {
-  type: string
-  value?: unknown
-  meta?: { description?: unknown }
-}
-
-/**
- * Read the dynamic preset enum encoded by the host's `defaultPreset` schema.
- * @param view - permission namespace descriptor.
- * @param schema - settings schema operations.
- * @returns current value and selectable options.
+/** Resolve the new-session choices from the permission domain's catalog.
+ * @param view Live configuration descriptor.
+ * @param catalog Configured permission options and effective default.
+ * @returns Current choice and labels for its allowed options.
  */
-export function permissionDefaultOf(view: SettingsNamespaceView, schema: SettingsSchemaService): {
+export function permissionDefaultOf(view: SettingsNamespaceView, catalog: PermissionCatalog): {
   currentValue: string
   options: PermissionDefaultOption[]
 } {
-  const value = (view.value as { defaultPreset?: unknown } | null)?.defaultPreset
-  if (typeof value !== 'string') throw new Error('permission settings has no defaultPreset value')
-  const node = schema.nodeAtPath(schema.rehydrate(view.schema), ['defaultPreset'])
-  if (node === undefined) throw new Error('permission settings schema has no defaultPreset field')
-  const rawChoices = node.type === 'union'
-    ? (node.list as SchemaNode[] | undefined) ?? []
-    : [node]
-  const options = rawChoices.flatMap((candidate) => {
-    const choice = candidate as unknown as ConstChoice
-    if (choice.type !== 'const' || typeof choice.value !== 'string') return []
-    const described = choice.meta?.description
-    return [{
-      id: choice.value,
-      label: typeof described === 'string' && described.length > 0
-        ? displayPermissionPreset(choice.value, described)
-        : displayPermissionPreset(choice.value, choice.value),
-    }]
-  })
-  if (options.length === 0 || !options.some(option => option.id === value)) {
-    throw new Error('permission settings schema does not advertise its current preset')
-  }
-  return { currentValue: value, options }
+  const currentValue = (view.value as { defaultPreset?: string }).defaultPreset ?? catalog.defaultPreset
+  const options = catalog.defaultOptions.map(option => ({
+    id: option.value, label: displayPermissionPreset(option.value, option.name),
+  }))
+  if (!options.some(option => option.id === currentValue)) throw new Error('permission catalog does not advertise its current default')
+  return { currentValue, options }
 }
 
 /** Controller deriving the row from the shared mirror and writing the default through it. */
@@ -90,6 +66,7 @@ export class PermissionPresetSettingsController {
   })
 
   private following: (() => void) | undefined
+  private followingCatalog: (() => void) | undefined
   private saving = false
   private disposed = false
 
@@ -97,12 +74,12 @@ export class PermissionPresetSettingsController {
    * @param describeFace - the shared mirror's read/fold face (descriptor and schema source).
    * @param ctx - the row plugin's context, whose `remote.settings` namespace
    * carries the `defaultPreset` write.
-   * @param schema - settings-owned schema operations.
+   * @param catalog - configured permission choices and their effective default.
    */
   constructor(
     private readonly describeFace: SettingsDescribeFace,
     private readonly ctx: ClientContext,
-    private readonly schema: SettingsSchemaService,
+    private readonly catalog: Pick<PermissionCatalogDirectory, 'store' | 'load'>,
   ) {}
 
   /**
@@ -112,11 +89,15 @@ export class PermissionPresetSettingsController {
   async load(): Promise<void> {
     if (this.disposed) return
     this.following ??= this.describeFace.subscribe(() => { this.derive() })
+    this.followingCatalog ??= this.catalog.store.subscribe(() => { this.derive() })
     this.store.update((state) => {
       state.status = 'loading'
       state.error = null
     })
     await this.describeFace.ensure()
+    if (this.describeFace.getSnapshot().status !== 'unavailable') {
+      try { await this.catalog.load() } catch (error) { this.fail(error); return }
+    }
     this.derive()
   }
 
@@ -165,6 +146,8 @@ export class PermissionPresetSettingsController {
     this.disposed = true
     this.following?.()
     this.following = undefined
+    this.followingCatalog?.()
+    this.followingCatalog = undefined
   }
 
   private derive(): void {
@@ -198,7 +181,9 @@ export class PermissionPresetSettingsController {
       return
     }
     try {
-      const resolved = permissionDefaultOf(view, this.schema)
+      const catalog = this.catalog.store.getSnapshot().value
+      if (catalog === null) return
+      const resolved = permissionDefaultOf(view, catalog)
       const { writable } = mirrored.view
       this.store.update((state) => {
         state.status = 'ready'

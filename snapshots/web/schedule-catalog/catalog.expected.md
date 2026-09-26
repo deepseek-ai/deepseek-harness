@@ -1,4 +1,19 @@
 - list "Active reminders":
-  - listitem: Overdue Review overdue deployment Once Aug 25, 2099, 7:59 PM 1 minute overdue
-  - listitem: Scheduled Join release review with the release owners, verify the rollout checklist, capture each unresolved dependency, confirm the customer-facing message, compare the staged configuration with the approved release notes, inspect the deployment dashboard for every region, confirm that database migrations completed without warnings, review the rollback steps with the incident commander, verify that support has the final customer timeline, record every owner and deadline, check the public status wording against the internal decision, review the accessibility and localization sign-offs, confirm the monitoring thresholds and alert routes, read back the final launch sequence, document every unresolved question in plain language, keep all technical qualifiers and exception cases visible, include the exact handoff conditions for each downstream team, retain the complete audit context for the final decision, and preserve every final word without truncation. Once Aug 25, 2099, 8:05 PM in 6 minutes
-  - listitem: Scheduled Check exact cadence Every 301 seconds Aug 25, 2099, 8:05 PM in 6 minutes
+  - listitem:
+    - 'button "Open reminder details: Review overdue deployment"': Review overdue deployment
+    - text: Once Next run
+    - time: Aug 25, 2099, {{clock}}
+    - text: (1 minute overdue)
+    - 'button "Delete reminder: Review overdue deployment"'
+  - listitem:
+    - 'button "Open reminder details: Join release review"': Join release review
+    - text: Once Next run
+    - time: Aug 25, 2099, {{clock}}
+    - text: (in 6 minutes)
+    - 'button "Delete reminder: Join release review"'
+  - listitem:
+    - 'button "Open reminder details: Check exact cadence"': Check exact cadence
+    - text: Every 301 seconds Next run
+    - time: Aug 25, 2099, {{clock}}
+    - text: (in 6 minutes)
+    - 'button "Delete reminder: Check exact cadence"'

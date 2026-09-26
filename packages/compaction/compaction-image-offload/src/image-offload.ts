@@ -34,8 +34,6 @@ export function offloadOldestImages(session: Session, sourceEventSeqs: readonly 
             count -= 1
           }
           imageIndex += 1
-        } else if (block.type === 'tool-result') {
-          visit(block.content)
         }
       }
     }

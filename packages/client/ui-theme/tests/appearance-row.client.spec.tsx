@@ -26,19 +26,19 @@ const COPY: Record<string, string> = {
 
 function emptySessions() {
   const store = createSnapshotStore<SessionListState>(
-    { ids: [], byId: {}, current: undefined, phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined })
+    { ids: [], byId: {}, phase: 'ready', projectionsBySession: {} })
   return bindSnapshotSelector(store)
 }
 function emptyWorkspaces() {
   const store = createSnapshotStore<WorkspaceSnapshot>({
-    items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+    items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
   })
   return bindSnapshotSelector(store)
 }
 
-type AttentionSnapshot = Parameters<Parameters<AppearanceRowComponentProps['useSessionPendingInteraction']>[0]>[0]
+type AttentionSnapshot = Parameters<Parameters<AppearanceRowComponentProps['useSessionStatus']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
-const useSessionPendingInteraction: AppearanceRowComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
+const useSessionStatus: AppearanceRowComponentProps['useSessionStatus'] = selector => selector(noAttention)
 
 function mount(preference: ThemePreference = 'system') {
   // Real store instance — the sanctioned zero-machinery path for tests.
@@ -47,8 +47,8 @@ function mount(preference: ThemePreference = 'system') {
   const setTheme = vi.fn()
   const props: AppearanceRowComponentProps = {
     useSessions: emptySessions(),
-    useSessionPendingInteraction,
-    usePanelInfo, useResource,
+    useSessionStatus,
+    usePanelInfo, useSessionRetainInfo: () => undefined, useResource,
     useWorkspaces: emptyWorkspaces(),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,

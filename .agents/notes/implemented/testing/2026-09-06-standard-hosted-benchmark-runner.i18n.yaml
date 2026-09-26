@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-06-standard-hosted-benchmark-runner.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-06-standard-hosted-benchmark-runner.md
-2026-09-06-standard-hosted-benchmark-runner.md: af95af6ee8cef1128a5475863ea7a1aaf66f30b9
-2026-09-06-standard-hosted-benchmark-runner.zh.md: 47095a5b2e91318c2f3ec5ac3cc9f6df3bce04d6
+/agent-note-standard-hosted-runner-for-required-benchmarks:
+  en: 07d81b0ddc7349cd
+  zh: 0494136a627f09a4
+/agent-note-standard-hosted-runner-for-required-benchmarks/problem:
+  en: e930cd992a15b811
+  zh: fe791e9581ff6a35
+/agent-note-standard-hosted-runner-for-required-benchmarks/decision:
+  en: 07bc990d5c68d617
+  zh: 5bf08df36181b2a6
+/agent-note-standard-hosted-runner-for-required-benchmarks/alternatives-considered:
+  en: 82f0eab2a8e66383
+  zh: 6677a34a53b8915f
+/agent-note-standard-hosted-runner-for-required-benchmarks/consequences:
+  en: 173caff985f5ff21
+  zh: 83f3ef068ec62439

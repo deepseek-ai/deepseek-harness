@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-17-workspace-file-binary-transfer.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-17-workspace-file-binary-transfer.md
+/agent-note-binary-workspace-file-transfer:
+  en: ea1888ee2f867b71
+  zh: fd32b8b9f29347cb
+/agent-note-binary-workspace-file-transfer/problem:
+  en: 7da36071204124c9
+  zh: c90cdeaef381b252
+/agent-note-binary-workspace-file-transfer/decision:
+  en: e1e0224605793212
+  zh: 4e55f4b57a4b8739
+/agent-note-binary-workspace-file-transfer/alternatives-considered:
+  en: c548577bd53db153
+  zh: 2880f3751b7fcad3
+/agent-note-binary-workspace-file-transfer/consequences:
+  en: 44733fbb2102c581
+  zh: a0290e25401a40de
+/agent-note-binary-workspace-file-transfer/validation:
+  en: 6d62210510b842d8
+  zh: 6c5a2436ed59c354

@@ -33,7 +33,7 @@ export type Mode =
   | 'ci-consumers'
   | 'ci-windows-blocking'
   | 'ci-windows-complete'
-  | 'ci-windows-observational'
+  | 'ci-windows-observational-ready'
   | 'node-compat'
   | 'check-all'
   | 'hygiene'
@@ -102,6 +102,9 @@ if (import.meta.main) {
 
 async function main(args: string[]): Promise<number> {
   const mode = parseMode(args[0])
+  const workerEnv = ciWorkerEnvironment(mode, process.env)
+  Object.assign(process.env, workerEnv)
+  if (Object.keys(workerEnv).length > 0) console.log(`run-gates: worker settings ${JSON.stringify(workerEnv)}`)
   const gates = gatesForMode(mode)
   const concurrencyDefault = defaultConcurrency(mode, gates.length)
   const concurrencyOverride = process.env.DSH_GATE_CONCURRENCY
@@ -144,7 +147,7 @@ function parseMode(raw: string | undefined): Mode {
     case 'ci-consumers':
     case 'ci-windows-blocking':
     case 'ci-windows-complete':
-    case 'ci-windows-observational':
+    case 'ci-windows-observational-ready':
     case 'node-compat':
     case 'check-all':
     case 'hygiene':
@@ -153,7 +156,7 @@ function parseMode(raw: string | undefined): Mode {
       return raw
     default:
       throw new Error(
-        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-bench | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational | node-compat | check-all | hygiene | doc-sync | doc-quick, got ${JSON.stringify(raw)}.`,
+        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-bench | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational-ready | node-compat | check-all | hygiene | doc-sync | doc-quick, got ${JSON.stringify(raw)}.`,
       )
   }
 }
@@ -170,7 +173,6 @@ export function defaultConcurrency(
   total: number,
   available = availableParallelism(),
 ): ConcurrencyDefault {
-  if (selectedMode === 'ci-consumers') return { workers: total, source: 'ci-consumers gate count' }
   // Local modes cap workers: several doc gates each build a full ts.Program,
   // so an uncapped default on a large host trades wall clock for memory blowups.
   const localCap = selectedMode === 'check-all'
@@ -184,6 +186,41 @@ export function defaultConcurrency(
       ? `${available} available CPU(s), ${selectedMode} cap 4`
       : `${available} available CPU(s)`,
   }
+}
+
+/**
+ * Fill CI worker defaults from the CPU allocation without replacing explicit overrides.
+ * Coverage shares one budget; artifact readers share CPUs with sibling commands.
+ * @param mode - aggregate selected by the caller.
+ * @param env - inherited worker overrides, including serial reference settings.
+ * @param available - CPUs available to this runner process.
+ * @returns environment additions for this aggregate and its children.
+ */
+export function ciWorkerEnvironment(
+  mode: Mode,
+  env: NodeJS.ProcessEnv,
+  available = availableParallelism(),
+): Record<string, string> {
+  if (!mode.startsWith('ci-')) return {}
+  const additions: Record<string, string> = {}
+  const setDefault = (name: string, value: number): void => {
+    if (env[name] === undefined || env[name] === '') additions[name] = String(value)
+  }
+  const shared = Math.max(1, Math.floor(available / 2))
+  setDefault('DSH_OXLINT_THREADS', shared)
+  setDefault('DSH_PUBLINT_CONCURRENCY', shared)
+  setDefault('DSH_SNAPSHOT_MAX_WORKERS', 1)
+  setDefault('DSH_SNAPSHOT_MAX_CONCURRENCY', shared)
+  setDefault('DSH_WEB_SNAPSHOT_WORKERS', env.DSH_GATE_CONCURRENCY === '1' ? 1 : available)
+  setDefault('DSH_COVERAGE_MAX_WORKERS', available)
+  const coverageBudget = env.DSH_COVERAGE_MAX_WORKERS || String(available)
+  const total = Number(coverageBudget)
+  if (!Number.isSafeInteger(total) || total < 1) {
+    throw new Error(`run-gates: DSH_COVERAGE_MAX_WORKERS must be a positive integer, got ${JSON.stringify(coverageBudget)}.`)
+  }
+  const instrumented = Math.max(1, total - Math.max(1, Math.floor(total / 3)))
+  if (instrumented > 1) setDefault(COVERAGE_PARTITIONS_ENV, instrumented)
+  return additions
 }
 
 function concurrencyFromEnv(name: string, fallback: number): number {
@@ -256,8 +293,15 @@ export function gatesForMode(selected: Mode): Gate[] {
       return ciWindowsBlockingGates()
     case 'ci-windows-complete':
       return ciWindowsCompleteGates()
-    case 'ci-windows-observational':
+    case 'ci-windows-observational-ready':
+      // The caller owns the successful workspace build; all diagnostics remain.
       return ciWindowsObservationalGates()
+        .filter(gate => gate.id !== 'build')
+        .map(gate => ({
+          ...gate,
+          ...gate.needs === undefined ? {} : { needs: gate.needs.filter(id => id !== 'build') },
+          ...gate.after === undefined ? {} : { after: gate.after.filter(id => id !== 'build') },
+        }))
     case 'node-compat':
       return nodeCompatGates()
     case 'check-all':
@@ -303,15 +347,24 @@ function ciSharedStaticGates(): Gate[] {
     pnpmScript('package-dependencies', 'verify-package-dependencies', { label: 'package dependencies' }),
     pnpmScript('dsh-package-licenses', 'verify-dsh-package-licenses', { label: 'DSH package licenses' }),
     pnpmScript('package-invariants', 'verify-package-invariants', { label: 'package invariants' }),
+    pnpmScript('package-meta', 'verify-package-meta', { label: 'package metadata' }),
     pnpmScript('cordis-config', 'verify-cordis-config', { label: 'Cordis config' }),
+    ...sharedHygieneGates(),
+    pnpmScript('approval-policy', 'test:approval-policy', { label: 'Weighted approval policy' }),
+    pnpmScript('issue-management', 'test:issue-management', { label: 'Issue management policy' }),
+  ]
+}
+
+function sharedHygieneGates(): Gate[] {
+  return [
     pnpmScript('optional-dependency-imports', 'verify-optional-dependency-imports', {
       label: 'optional dependency imports',
     }),
     pnpmScript('client-packages', 'verify-client-packages', { label: 'client packages' }),
     pnpmScript('client-ui-i18n', 'verify-client-ui-i18n', { label: 'client UI i18n' }),
+    pnpmScript('client-route-resolution', 'verify-client-route-resolution', { label: 'client route resolution' }),
     pnpmScript('no-bare-dispatcher', 'verify-no-bare-dispatcher', { label: 'proxy-aware dispatchers' }),
-    pnpmScript('approval-policy', 'test:approval-policy', { label: 'Weighted approval policy' }),
-    pnpmScript('issue-management', 'test:issue-management', { label: 'Issue management policy' }),
+    pnpmScript('no-unknown-casts', 'verify-no-unknown-casts', { label: 'no new unknown casts' }),
   ]
 }
 
@@ -498,8 +551,8 @@ function webSnapshotGate(needs: string[], after?: string[]): Gate {
   const workerRaw = process.env.DSH_WEB_SNAPSHOT_WORKERS
   if (workerRaw !== undefined && workerRaw !== '') {
     const workers = Number.parseInt(workerRaw, 10)
-    if (!Number.isSafeInteger(workers) || workers < 2 || String(workers) !== workerRaw) {
-      throw new Error(`run-gates: DSH_WEB_SNAPSHOT_WORKERS must be an integer greater than 1, got ${JSON.stringify(workerRaw)}.`)
+    if (!Number.isSafeInteger(workers) || workers < 1 || String(workers) !== workerRaw) {
+      throw new Error(`run-gates: DSH_WEB_SNAPSHOT_WORKERS must be a positive integer, got ${JSON.stringify(workerRaw)}.`)
     }
     return pnpmScript('web-snapshot', 'test:web:ci', {
       label: 'web browser snapshot',
@@ -593,10 +646,9 @@ function lintGate(options: { needs?: string[] } = {}): Gate {
 // under v8 instrumentation while contributing nothing the thresholds need
 // (membership rules in scripts/coverage-exempt.ts).
 //
-// DSH_COVERAGE_MAX_WORKERS is the ordinary lane's worker budget, so the two
-// parallel gates split it instead of each claiming it whole. When
-// DSH_COVERAGE_PARTITIONS is set, its single-worker processes replace the
-// instrumented share while this budget still sizes the exempt gate. The exempt
+// DSH_COVERAGE_MAX_WORKERS is shared between the two parallel gates. CI
+// defaults its partition count to the instrumented share; an explicit
+// DSH_COVERAGE_PARTITIONS overrides that share independently. The exempt
 // gate's wall clock is dominated by its longest single file, so it takes the
 // small share. A budget of 1 gives each gate 1 worker; lanes that need a strict
 // total of one (the serial reference jobs) also set DSH_GATE_CONCURRENCY=1,
@@ -711,12 +763,7 @@ function hygieneLeafGates(options: { artifactNeeds?: string[] } = {}): Gate[] {
       label: 'node-next types',
       ...artifactOptions,
     }),
-    pnpmScript('optional-dependency-imports', 'verify-optional-dependency-imports', {
-      label: 'optional dependency imports',
-    }),
-    pnpmScript('client-packages', 'verify-client-packages', { label: 'client packages' }),
-    pnpmScript('client-ui-i18n', 'verify-client-ui-i18n', { label: 'client UI i18n' }),
-    pnpmScript('no-bare-dispatcher', 'verify-no-bare-dispatcher', { label: 'proxy-aware dispatchers' }),
+    ...sharedHygieneGates(),
   ]
 }
 
@@ -750,6 +797,7 @@ function docSyncLeafGates(options: {
     pnpmScript('export-jsdoc', 'verify-export-jsdoc', { label: 'export jsdoc' }),
     pnpmScript('tool-catalog', 'verify-tool-catalog', { label: 'tool catalog' }),
     pnpmScript('config-catalog', 'verify-config-catalog', { label: 'config catalog' }),
+    pnpmScript('plugin-packages', 'verify-plugin-packages', { label: 'skill plugin package list' }),
     pnpmScript('dependency-catalog', 'verify-dependency-catalog', { label: 'npm dependency catalog', quick: true }),
     pnpmScript('persistence-catalog', 'verify-persistence-catalog', { label: 'persistence catalog' }),
     pnpmScript('persistence-changes', 'verify-persistence-changes', { label: 'persistence type history' }),
@@ -779,6 +827,9 @@ function docSyncLeafGates(options: {
     pnpmExec('docs-site-projection', [
       'vitest', 'run', 'scripts/project-doc-site.spec.ts', 'scripts/verify-doc-site-fragments.spec.ts',
       'website/tests/mermaid-viewer.spec.ts',
+      'website/tests/image-viewer.spec.ts',
+      'website/tests/code-groups.spec.ts',
+      'website/tests/page-markdown-actions.spec.ts', 'website/tests/raw-markdown.spec.ts',
     ], {
       label: 'documentation site checks',
     }),
@@ -802,10 +853,11 @@ function builtBinSmokeGate(needs: string[] = ['build']): Gate {
     '--config',
     'vitest.e2e.config.ts',
     'apps/cli/tests/profiles/headless/tests/keyless-smoke.e2e.ts',
+    'apps/cli/tests/profiles/headless/tests/source-tool.built.e2e.ts',
     'apps/cli/tests/built-bin.e2e.ts',
     'packages/host/directory-picker-native/tests/built-worker.e2e.ts',
     'packages/sdk/server/tests/built-scope-carrier.e2e.ts',
-    'packages/fs/tool-present/tests/built-errors.e2e.ts',
+    'packages/deliverables/tool-present/tests/built-errors.e2e.ts',
     'packages/subprocess/subprocess-local/tests/spawn-runner-built.e2e.ts',
     'packages/subagent/subagent-codex/tests/loader-composition.e2e.ts',
     'packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts',

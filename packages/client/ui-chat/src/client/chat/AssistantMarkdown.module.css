@@ -63,7 +63,7 @@
 .stopped {
   align-self: flex-start;
   padding: 0 6px;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
@@ -73,6 +73,6 @@
 /* Finalized footer offset (figma 43:32997); chrome lives in MessageIconActions. */
 .actions {
   margin-top: 16px;
-  /* Optical align with 28px icon hit targets that pad 6px past the glyph. */
+  /* Optical align with the 28px action hit targets. */
   margin-left: -6px;
 }

@@ -44,6 +44,6 @@ Current-writer snapshot expectations include catalog facts even when replay inpu
 
 ## Consequences
 
-Session observations and client snapshots expose the direct-child list through `projections.values.subagentCatalog`. The projection change feed publishes a complete list when catalog state changes. Each view costs O(D), so D creations can incur O(D²) cumulative view work; this follows the existing projection mechanism. Direct-child and descendant listing still use the Session corpus and child identity projection.
+Session observations and client snapshots expose the direct-child list through `projections.values.subagentCatalog`. The projection change feed publishes a complete list when catalog state changes. Each view costs O(D), so D creations can incur O(D²) cumulative view work; this follows the existing projection mechanism. `listChildren()` reads the parent projection through one live-preferred Session observation; descendant listing recursively calls the same reader in catalog order. Reachable catalog facts supply identity and membership without a global Session scan or a separate child-identity cache path. Unreadable branches remain diagnostics; uncataloged Sessions are outside discovery. [Web projection consumption](../simplification/2026-09-08-web-subagent-catalog-projections.md) owns browser loading and synchronization.
 
-Backends that do not know the required event refuse the log under the existing Session event mechanism. Catalog projection does not reconstruct missing parent facts by scanning old child logs.
+[Creation metadata exclusion](../simplification/2026-09-16-subagent-catalog-membership-only.md) records why model configuration is absent from catalog facts.

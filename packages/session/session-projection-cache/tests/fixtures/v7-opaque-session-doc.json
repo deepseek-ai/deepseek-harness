@@ -1,0 +1,76 @@
+{
+  "version": 7,
+  "record": {
+    "identity": {
+      "formatVersion": 3,
+      "createdAt": 42,
+      "isSeeded": false,
+      "inheritedEventCount": 0
+    },
+    "rows": {
+      "opaque-values": {
+        "ver": 1,
+        "seq": 0,
+        "val": {
+          "__proto__": {
+            "retained": "state"
+          },
+          "constructor": {
+            "retained": "state-constructor"
+          },
+          "records": [
+            {
+              "kind": "opaque-record",
+              "record": {
+                "category": "sample",
+                "key": "saved-record",
+                "entries": [
+                  {
+                    "kind": "opaque-extension",
+                    "name": "vendor",
+                    "data": {
+                      "__proto__": {
+                        "retained": "extension"
+                      },
+                      "constructor": {
+                        "retained": "extension-constructor"
+                      },
+                      "nested": [
+                        {
+                          "__proto__": {
+                            "retained": "nested"
+                          },
+                          "value": [
+                            null,
+                            false,
+                            true,
+                            0,
+                            7,
+                            "text"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "metadata": {
+                  "__proto__": {
+                    "retained": "result"
+                  },
+                  "constructor": {
+                    "retained": "result-constructor"
+                  },
+                  "metadata": {
+                    "__proto__": {
+                      "retained": "nested-result"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -11,8 +11,8 @@ export {
   type TunnelAbortFrame, type TunnelInboundFrame, type TunnelOutboundFrame, type TunnelRequestFrame,
   type TunnelRequestId, type TunnelResponseChunkFrame, type TunnelResponseEndFrame,
   type TunnelResponseErrorFrame, type TunnelResponseFrame, type TunnelResponseHeadFrame,
-  type TunnelStreamEndFrame, type TunnelStreamErrorFrame, type TunnelStreamItemFrame,
-  type TunnelStreamOpenFrame,
+  type TunnelStreamEndFrame, type TunnelStreamErrorFrame, type TunnelStreamUplinkEndFrame,
+  type TunnelStreamUplinkItemFrame, type TunnelStreamItemFrame, type TunnelStreamOpenFrame,
 } from './transport/frames.ts'
 export {
   DEFAULT_CONDITIONS, requireActiveModuleLoader, setActiveModuleLoader, WorkerModuleLoader,

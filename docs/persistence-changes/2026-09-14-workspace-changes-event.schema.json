@@ -1,0 +1,72 @@
+{
+  "formatVersion": 1,
+  "roots": [
+    {
+      "key": "event:workspace/changes",
+      "kind": "event",
+      "event": "workspace/changes",
+      "surface": false,
+      "digest": "e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 3,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 4,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "turn",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "workspace/changes"
+          }
+        ]
+      }
+    }
+  ],
+  "types": []
+}

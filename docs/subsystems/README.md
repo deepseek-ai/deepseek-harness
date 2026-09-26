@@ -13,8 +13,9 @@ One page per subsystem of the DeepSeek Harness: what it is, the data structures 
 | [scope.md](scope.md) | scoped registration identity, dispatch carriers, and the owned `Scope` context |
 | [typert.md](typert.md) | Remote invocation descriptors, lookup/Context declarations, Typert registries, and the Host Gateway/Client API boundaries |
 | [goal.md](goal.md) | persisted goal identity, lifecycle snapshots, activation, change records, and round attribution |
-| [schedule.md](schedule.md) | Session-local reminder records, durable transitions, active views, and ordinary-conversation delivery |
+| [schedule.md](schedule.md) | Host-owned reminder records, durable transitions, active and ended views, and ordinary-conversation delivery |
 | [todo.md](todo.md) | the todo package's whole-list item type, durable event ownership, projection, and open-turn invariant |
+| [deliverables.md](deliverables.md) | what a turn hands to the user: `PresentedFile` deliveries from `present` and the Host-served `WorkspaceChangesSummary` of changed files from git snapshots |
 | [commands.md](commands.md) | the human-command registry service: definitions, adapter discovery, direct invocation, results, and parsing views |
 | [session.md](session.md) | the full `SessionEventMap` variant catalog, `TurnEndReason`, `deriveMessages()`, execution enclosure, and standalone events |
 | [persistence.md](persistence.md) | the durability seam: `SessionPersistence`, the JSONL provider, `session/flush`, crash recovery, `SessionHeader` |
@@ -29,6 +30,7 @@ One page per subsystem of the DeepSeek Harness: what it is, the data structures 
 | [mcp.md](mcp.md) | external MCP connections, scoped tools and resources, server instructions, protocol results, and configuration ownership |
 | [user-questions.md](user-questions.md) | the UI-backed human question/answer seam: `AskUserQuestionRequest`, answer/options vocabulary, provider API, error taxonomy |
 | [approval.md](approval.md) | the one-shot user-approval seam: `ApprovalRequest`, `ApprovalOutcome`, per-session policy, audit events, and answerer contracts |
+| [office-to-pdf.md](office-to-pdf.md) | authorized Office-to-PDF conversion, native/WASM engines, and bounded shared reuse |
 | [attachment.md](attachment.md) | durable image identity and metadata, validation inputs, verified reads, and the `AttachmentStore` seam |
 | [shell.md](shell.md) | the shell executor seam: `ShellExecRequest`/`Spec`, `ShellRunResult`, background `ShellProcess` handles |
 | [subprocess.md](subprocess.md) | the subprocess seam: fully-explicit `SubprocessSpawnSpec`, offset-based output readers, unclassified `SubprocessOutcome`, and the managed `DSH_*` environment vocabulary |
@@ -44,6 +46,7 @@ One page per subsystem of the DeepSeek Harness: what it is, the data structures 
 | [skills.md](skills.md) | the skill service: discovery priority, `SkillSummary`/`SkillDefinition`, session-prefix catalog, model-facing `skill` loading |
 | [compaction.md](compaction.md) | the compaction seam: the `compaction/*` session events, `CompactionResult`, the `CompactionEngine` interface |
 | [subagent.md](subagent.md) | the subagent seam: the named-provider registry, `SubagentStartRequest`/`Result`/`Run`, the start-time-vs-runtime capability split |
+| [voice-input.md](voice-input.md) | experimental named recognizers, transient audio and revision-guarded draft insertion |
 | [agent-team.md](agent-team.md) | Agent Teams: implicit Lead identity, named continuable teammates, durable peer mailbox, and shared task DAG |
 | [web.md](web.md) | the web access seam: `WebSearchRequest`/`Result`, `WebFetchRequest`/`Result`, `WebFetchBody`, provider availability, `WebError` |
 | [spill.md](spill.md) | the spill storage seam: `SaveTextSpill`, `SpillOwner`/`SpillSource`, `SpillRef`, the branded `SpillLocator` |
@@ -64,5 +67,7 @@ One page per subsystem of the DeepSeek Harness: what it is, the data structures 
 | [conversation.md](conversation.md) | target-neutral Session-event assembly: Context identity, Location data, replay paths, view builders, and target-owned render nodes |
 | [session-projection.md](session-projection.md) | the projection seam: `SessionProjectionMap`, the pure `ProjectionDefinition` unit, `ProjectionSnapshot`'s consistent cut, the change feed |
 | [session-telemetry.md](session-telemetry.md) | the outbound session-reporting capability seam: `SessionTelemetryRecord`/`SessionTelemetrySeverity`, the `SessionTelemetrySink` contract, and the `session-telemetry/record` redact waterfall |
+| [otel.md](otel.md) | Shared ordinary-event and Session-log OTLP channels |
+| [product-telemetry.md](product-telemetry.md) | Explicit product analytics submission and OTLP/HTTP transport |
 
 > Type declarations and their JSDoc on these pages are source-equivalent and drift-checked by `pnpm run verify-type-equiv` (see [development.md](../development.md#documenting-types-verbatim-ts-type-equiv)). Ordinary blocks preserve complete declarations; `public-api` blocks preserve body-stripped public class declarations. Cordis services and events use each page's generated **Cordis API** section.

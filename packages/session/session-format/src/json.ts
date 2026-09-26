@@ -90,5 +90,5 @@ export function snapshotSessionFormatHeader(header: SessionFormatHeader, label =
   sessionFormatCount(snapshot['createdAt'], `${label} createdAt`)
   if (typeof snapshot['isSeeded'] !== 'boolean') throw new SessionFormatError(`${label} isSeeded must be a boolean`)
   sessionFormatCount(snapshot['delegationDepth'], `${label} delegationDepth`)
-  return snapshot as unknown as SessionFormatHeader
+  return snapshot as SessionFormatHeader
 }

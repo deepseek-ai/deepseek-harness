@@ -1,0 +1,48 @@
+.panel {
+  position: absolute;
+  z-index: 2;
+  inset-inline-start: 50%;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-lg);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: 0 8px 24px light-dark(#0000001a, #00000060), 0 2px 5px light-dark(#00000009, #00000035);
+  font-size: 12px;
+  line-height: 18px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 16px) scale(0.98);
+  transition: opacity 160ms ease-in, transform 160ms cubic-bezier(0.4, 0, 1, 1);
+  will-change: opacity, transform;
+}
+
+.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0) scale(1);
+  transition: opacity 140ms ease-out, transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.controlAnchor { display: flex; }
+.zoomButton { width: 28px; padding: 0; flex: none; }
+.percent { display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-width: 58px; padding-inline: 6px; font-variant-numeric: tabular-nums; }
+.zoomMenu { min-width: 112px; }
+
+@media (hover: none), (pointer: coarse) {
+  .panel {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .visible { transition-duration: 0.01ms; }
+}

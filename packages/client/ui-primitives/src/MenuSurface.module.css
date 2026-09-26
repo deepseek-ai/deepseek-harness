@@ -1,0 +1,49 @@
+.surface,
+.backing {
+  border-radius: var(--dsw-radius-lg);
+}
+
+.compact {
+  border-radius: var(--dsw-radius-md);
+}
+
+:where(.surface) {
+  position: relative;
+}
+
+.surface {
+  anchor-name: var(--dsh-menu-anchor);
+  isolation: isolate;
+}
+
+/* Filtering only the background keeps nested menus and fixed overlays free of
+ * an ancestor backdrop root or a new fixed-position containing block. */
+.material {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--dsw-menu-surface-fill);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  pointer-events: none;
+}
+
+.backing {
+  display: none;
+}
+
+/* Chromium needs opaque pixels behind the page content to blur it over native
+ * vibrancy. Body isolation keeps this backing above the native window and below
+ * the page; CSS anchors limit it to this menu without a layout observer. */
+:global(html[data-platform='darwin']) .backing {
+  display: block;
+  position: fixed;
+  position-anchor: var(--dsh-menu-anchor);
+  top: anchor(top);
+  left: anchor(left);
+  width: anchor-size(width, 0px);
+  height: anchor-size(height, 0px);
+  z-index: -1;
+  background: var(--dsw-alias-bg-base);
+  pointer-events: none;
+}

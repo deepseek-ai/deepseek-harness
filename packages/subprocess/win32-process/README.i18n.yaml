@@ -1,6 +1,43 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/subprocess/win32-process/README.md
-README.md: e3009bb207e0436b4d4113d7bf1ea677ab191abc
-README.zh.md: 65f834b447a2d9f4db94130fe3f7070456aab351
+/:
+  en: db276aeb82a48db9
+  zh: 1c8a9dd88ae46710
+/deepseek-ai-dsh-win32-process:
+  en: d0f1b3fbea235dfa
+  zh: 8e253d46b74becdb
+/deepseek-ai-dsh-win32-process/summary:
+  en: 42ad2ffcf9f12d54
+  zh: cbfe9568356ec50a
+/deepseek-ai-dsh-win32-process/table-of-contents:
+  en: a3450c8cdd5f5802
+  zh: 15eec66f42e42ce7
+/deepseek-ai-dsh-win32-process/behavior:
+  en: 77806095cd7f781d
+  zh: 69d09cabc4d49185
+/deepseek-ai-dsh-win32-process/header-verification:
+  en: 2b60a9001b480546
+  zh: 12a621e421c7d789
+/deepseek-ai-dsh-win32-process/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-win32-process/model-experience/process-primitives:
+  en: b002d2485eefd20f
+  zh: fdf07032ec9556bd
+/deepseek-ai-dsh-win32-process/model-experience/process-primitives/what-the-model-sees:
+  en: 973baec28c6a918c
+  zh: 057044d193626dd6
+/deepseek-ai-dsh-win32-process/model-experience/process-primitives/token-effect:
+  en: 0d02f5258e0937b3
+  zh: 3c0d20a82023c891
+/deepseek-ai-dsh-win32-process/model-experience/process-primitives/kv-cache-effect:
+  en: c5961328f1ae01cf
+  zh: 890142bc50091faf
+/deepseek-ai-dsh-win32-process/known-limitations-and-deferred-work:
+  en: e97c61be17a1db4f
+  zh: 11dbf9721db63877
+/deepseek-ai-dsh-win32-process/known-limitations-and-deferred-work/dev-note:
+  en: b395f1375ae2d653
+  zh: 39f0fb47eedc996c

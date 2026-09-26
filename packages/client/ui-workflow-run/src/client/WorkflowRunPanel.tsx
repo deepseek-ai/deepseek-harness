@@ -3,13 +3,14 @@ import {
   type FocusEvent, type MouseEvent, type ReactNode,
 } from 'react'
 import {
-  DisclosureRow, IconChevronRightOutline14, StateDot,
+  DisclosureRow, IconChevronRightOutlineRegular, StateDot,
   type DisclosureRowProps, type StateDotState,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionListState, SessionTarget } from '@deepseek-ai/dsh-api-session-controller/client'
 import { shallowEqual } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { WorkflowRunKey } from './locales.ts'
 import type {
   WorkflowRunMemberData, WorkflowRunPhaseData, WorkflowRunStatus,
@@ -18,7 +19,7 @@ import css from './WorkflowRunPanel.module.css'
 
 /** Navigation action injected from the plugin's own Session Controller access. */
 export interface WorkflowRunInjected {
-  readonly openSession: (id: SessionId) => void
+  readonly openSession: (target: SessionTarget) => void
 }
 
 /** Complete keyed Chat renderer props. */
@@ -183,17 +184,15 @@ function navigableMembers(
   sessions: SessionListState,
   phases: readonly WorkflowRunPhaseData[],
   parentId: SessionId,
+  statuses: SessionStatusSnapshot,
 ): readonly SessionId[] {
-  const ordinary = new Set(sessions.ids)
+  const catalog = sessions.projectionsBySession[parentId]
   const result: SessionId[] = []
   for (const phase of phases) {
     for (const member of phase.members) {
-      const summary = sessions.byId[member.childId]
+      const child = catalog?.values.subagentCatalog?.find(entry => entry.id === member.childId)
       if (member.status === 'running'
-        && ordinary.has(member.childId)
-        && summary?.origin === 'subagent'
-        && summary.parentId === parentId
-        && summary.running) {
+        && child !== undefined && (statuses.get(child.id)?.running ?? sessions.byId[child.id]?.running) === true) {
         result.push(member.childId)
       }
     }
@@ -212,7 +211,7 @@ function RunHeader({ children, count, name, onToggle, open, status, t }: {
 }) {
   return (
     <StatusDisclosure
-      icon={<IconChevronRightOutline14 />}
+      icon={<IconChevronRightOutlineRegular />}
       title={t('run.title', { name })}
       open={open}
       onToggle={onToggle}
@@ -238,10 +237,11 @@ function RunHeader({ children, count, name, onToggle, open, status, t }: {
   )
 }
 
-function MemberRow({ member, navigable, openSession, t }: {
+function MemberRow({ member, navigable, openSession, parentSessionId, t }: {
   readonly member: WorkflowRunMemberData
   readonly navigable: boolean
   readonly openSession: WorkflowRunInjected['openSession']
+  readonly parentSessionId: SessionId
   readonly t: WorkflowRunPanelProps['t']
 }) {
   const name = readableMember(member.label, t)
@@ -268,7 +268,15 @@ function MemberRow({ member, navigable, openSession, t }: {
       tabIndex={navigable ? undefined : -1}
       onFocus={() => { setFocused(true) }}
       onBlur={() => { setFocused(false) }}
-      onClick={navigable ? () => { openSession(member.childId) } : undefined}
+      onClick={navigable
+        ? () => {
+          openSession({
+            parentSessionId,
+            childSessionId: member.childId,
+            mode: 'one-shot',
+          })
+        }
+        : undefined}
     >
       {content}
     </button>
@@ -277,7 +285,7 @@ function MemberRow({ member, navigable, openSession, t }: {
 
 function PhaseSection({
   contentRef, onContentBlur, onToggle, open, pendingCleanCollapse,
-  phase, navigable, openSession, t,
+  phase, navigable, openSession, parentSessionId, t,
 }: {
   readonly contentRef: (element: HTMLDivElement | null) => void
   readonly onContentBlur: (event: FocusEvent<HTMLDivElement>) => void
@@ -287,6 +295,7 @@ function PhaseSection({
   readonly phase: WorkflowRunPhaseData
   readonly navigable: readonly SessionId[]
   readonly openSession: WorkflowRunInjected['openSession']
+  readonly parentSessionId: SessionId
   readonly t: WorkflowRunPanelProps['t']
 }) {
   return (
@@ -295,7 +304,7 @@ function PhaseSection({
       onMouseDownCapture={pendingCleanCollapse ? preventPendingHeaderFocus : undefined}
     >
       <StatusDisclosure
-        icon={<IconChevronRightOutline14 />}
+        icon={<IconChevronRightOutlineRegular />}
         title={readablePhase(phase.phase, t)}
         open={open}
         onToggle={onToggle}
@@ -320,6 +329,7 @@ function PhaseSection({
               member={member}
               navigable={navigable.includes(member.childId)}
               openSession={openSession}
+              parentSessionId={parentSessionId}
               t={t}
             />
           ))}
@@ -330,7 +340,7 @@ function PhaseSection({
 }
 
 /** Render one durable workflow run with status-driven run and phase disclosure. */
-export function WorkflowRunPanel({ node, sessionId, useSessions, openSession, t }: WorkflowRunPanelProps) {
+export function WorkflowRunPanel({ node, sessionId, useSessions, useSessionStatus, openSession, t }: WorkflowRunPanelProps) {
   const phaseFacts = useMemo(() => node.data.phases.map(phase => (
     [phase.key, phaseDisclosureFacts(phase)] as const
   )), [node.data.phases])
@@ -345,8 +355,9 @@ export function WorkflowRunPanel({ node, sessionId, useSessions, openSession, t 
   }))
   const runContentRef = useRef<HTMLDivElement>(null)
   const phaseContentRefs = useRef(new Map<string, HTMLDivElement>())
+  const statuses = useSessionStatus(value => value)
   const navigable = useSessions(
-    sessions => navigableMembers(sessions, node.data.phases, sessionId),
+    sessions => navigableMembers(sessions, node.data.phases, sessionId, statuses),
     shallowEqual,
   )
 
@@ -458,6 +469,7 @@ export function WorkflowRunPanel({ node, sessionId, useSessions, openSession, t 
                   phase={phase}
                   navigable={navigable}
                   openSession={openSession}
+                  parentSessionId={sessionId}
                   t={t}
                 />
               )

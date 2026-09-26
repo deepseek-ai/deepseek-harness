@@ -1,8 +1,7 @@
 /** Session-addressed, cold-readable skill catalog Remote. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-agent-presets/types'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry/types'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import { isUserInvocable } from '@deepseek-ai/dsh-skill'
 import type { ScopeKey } from '@deepseek-ai/dsh-scope'
@@ -72,7 +71,8 @@ export class SessionSkillCatalog extends TypertRemoteService {
       )
     }
 
-    const scope = await this.scopeFor(sessionId, agentPreset)
+    await using lease = live === undefined ? await this.scopeFor(agentPreset) : undefined
+    const scope = live ?? lease?.key
     try {
       const skills = (await skillRegistry.list({ cwd, scope })).filter(isUserInvocable)
       return {
@@ -91,15 +91,12 @@ export class SessionSkillCatalog extends TypertRemoteService {
 
   /** Resolve a live or standing preset scope without creating an Agent. */
   private async scopeFor(
-    sessionId: SessionId,
     agentPreset: string | undefined,
-  ): Promise<ScopeKey | undefined> {
-    const live = this.ctx.agents.get(sessionId)
-    if (live !== undefined) return live
+  ): Promise<({ key: ScopeKey } & AsyncDisposable) | undefined> {
     const presets = this.ctx.get('agentPresets')
     if (presets === undefined) return undefined
     try {
-      return await presets.standingKeyFor(agentPreset)
+      return await presets.acquireScope(agentPreset)
     } catch {
       // An unknown or unusable recorded preset falls back to the global registry.
       return undefined

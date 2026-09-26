@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-24-project-session-directories.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-24-project-session-directories.md
-2026-07-24-project-session-directories.md: 0074c8b31304e6a7d32199b7461575356e406448
-2026-07-24-project-session-directories.zh.md: 3a1d348255588fd120221dc277a2841359c0a038
+/agent-note-project-grouped-session-directories:
+  en: c8960daf61fa50fa
+  zh: d8c7c844180fcaae
+/agent-note-project-grouped-session-directories/problem:
+  en: 7df6078347bd7176
+  zh: bb769760d7abc903
+/agent-note-project-grouped-session-directories/decision:
+  en: cdefd1f4d9d0a55a
+  zh: 5916d456f3faab2b
+/agent-note-project-grouped-session-directories/alternatives-considered:
+  en: ba4657ba95479806
+  zh: 5c53c5c964efa932
+/agent-note-project-grouped-session-directories/consequences:
+  en: 228c46a599899be1
+  zh: 265a233cd41b5c05

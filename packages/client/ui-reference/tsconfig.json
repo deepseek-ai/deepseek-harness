@@ -33,7 +33,7 @@
       "path": "../connection/tsconfig.client.json"
     },
     {
-      "path": "../locale"
+      "path": "../locale/tsconfig.client.json"
     },
     {
       "path": "../ui-input-trigger"

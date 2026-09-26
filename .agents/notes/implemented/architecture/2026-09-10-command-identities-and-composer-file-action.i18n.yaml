@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-10-command-identities-and-composer-file-action.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-10-command-identities-and-composer-file-action.md
-2026-09-10-command-identities-and-composer-file-action.md: 696c3486c5e007416da3fd5e7be1d4b41cb5f582
-2026-09-10-command-identities-and-composer-file-action.zh.md: 2ce803bad5d39a6d4f40b665fb4ef7456e987912
+/agent-note-command-identities-and-composer-owned-file-action:
+  en: 96db2d4653b47858
+  zh: b914d79ab95b0e51
+/agent-note-command-identities-and-composer-owned-file-action/problem:
+  en: ad2c360593eb7a42
+  zh: 503a9c31a5eb55e7
+/agent-note-command-identities-and-composer-owned-file-action/decision:
+  en: c78d13ee6a59c04d
+  zh: 53fc322d351e437b
+/agent-note-command-identities-and-composer-owned-file-action/alternatives-considered:
+  en: 94ccabd1fe224408
+  zh: bfa28806f0218ce8
+/agent-note-command-identities-and-composer-owned-file-action/consequences:
+  en: 08f25ff5e0d227cf
+  zh: a26663e5b7d9feeb

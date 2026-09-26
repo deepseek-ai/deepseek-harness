@@ -12,20 +12,12 @@
   flex-direction: column;
   width: 100%;
   max-width: var(--dsh-chat-content-width);
-  /* Composer seat sits in a fixed-height conversation column (overflow
-     hidden): cap the card against the viewport and scroll the plan, so the
-     strip and the decision row stay reachable on a long plan. */
-  max-height: min(60vh, 520px);
-  border: 1px solid var(--dsw-alias-state-warn-secondary);
-  border-radius: 20px;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
+  border: 0;
+  border-radius: var(--dsw-radius-xl);
   background: var(--dsw-specific-input-major);
-  box-shadow: var(--dsw-shadow-lv2);
+  box-shadow: var(--dsw-elevation-panel);
   color: var(--dsw-alias-label-primary);
-  /* Elevated surface in dark: the plan body inside scrolls once the card hits
-     the cap above, so the thumb takes the l2 pair (see ui-theme
-     styles/scrollbar.css for the rebinding contract). */
-  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 .card,
@@ -39,30 +31,11 @@
   align-items: center;
   flex-shrink: 0;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 12px 16px;
   background: var(--dsw-alias-state-warn-tertiary);
   color: var(--dsw-alias-state-warn-primary);
-  font-size: 13px;
-  line-height: 18px;
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  corner-shape: round;
-  background: var(--dsw-alias-state-warn-primary);
-}
-
-/* The plan is the panel's message: it takes the whole body and the scroll. */
-.body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 12px 16px 4px;
   font-size: 14px;
-  line-height: 22px;
+  line-height: 20px;
 }
 
 .footer {
@@ -88,29 +61,49 @@
   gap: 8px;
 }
 
-/* The discuss verb stays a quiet text button beside the two decision
-   capsules: 14px glyph against the 14px label with a slightly wider gap, so
-   the icon reads as a prefix rather than a peer-sized control. */
-.discuss {
-  gap: 6px;
-  color: var(--dsw-alias-label-secondary);
+.summary {
+  min-width: 0;
+  padding: 14px 16px 12px;
 }
 
-.discuss:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
+.title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 8px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 24px;
+}
+
+.discuss {
+  gap: 6px;
 }
 
 @media (max-width: 720px) {
   .card {
-    border-radius: 16px;
-  }
-
-  .body {
-    padding: 10px 12px 4px;
+    border-radius: var(--dsw-radius-xl);
   }
 
   .footer {
     align-items: flex-end;
     padding: 8px 12px 10px;
   }
+}
+
+.previewActions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
 }

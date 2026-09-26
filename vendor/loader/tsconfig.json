@@ -19,6 +19,9 @@
     },
     {
       "path": "../cordis"
+    },
+    {
+      "path": "../schemastery"
     }
   ]
 }

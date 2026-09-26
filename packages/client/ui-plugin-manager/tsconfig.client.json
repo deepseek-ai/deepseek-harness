@@ -1,0 +1,56 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "references": [
+    {
+      "path": "../../util/package-manifest"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../../boot/plugin-manager"
+    },
+    {
+      "path": "../../test-support/client-runtime"
+    },
+    {
+      "path": "../locale/tsconfig.client.json"
+    },
+    {
+      "path": "../store"
+    },
+    {
+      "path": "../ui-layout"
+    },
+    {
+      "path": "../ui-primitives"
+    },
+    {
+      "path": "../ui-renderer"
+    },
+    {
+      "path": "../ui-sidebar"
+    },
+    {
+      "path": "../ui-slots"
+    },
+    {
+      "path": "../../util/crypto"
+    },
+    {
+      "path": "../ui-settings/tsconfig.client.json"
+    }
+  ],
+  "include": [
+    "src/client",
+    "src/css-modules.d.ts"
+  ]
+}

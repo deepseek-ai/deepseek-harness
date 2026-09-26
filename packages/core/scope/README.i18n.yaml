@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/core/scope/README.md
-README.md: 72c41e4c1a3b8f8a79940838ead7447f64781cc4
-README.zh.md: b48842570c564979f920d8e6f6fda87284f4bc65
+/:
+  en: 47f2816e2d2cecb9
+  zh: e051427327761450
+/deepseek-ai-dsh-scope:
+  en: a493a184041d2c95
+  zh: af060f6404de90d8
+/deepseek-ai-dsh-scope/summary:
+  en: f645dd571d3c8ca7
+  zh: 781b83572498adf1
+/deepseek-ai-dsh-scope/table-of-contents:
+  en: 80b31a934611cb4a
+  zh: 05f3f7f9cb2fd881
+/deepseek-ai-dsh-scope/use-this-package:
+  en: 14e53a4df086a0de
+  zh: 17ea1f39cfbe007e
+/deepseek-ai-dsh-scope/use-this-package/mint-a-scope:
+  en: e7bfa7a59f61fd72
+  zh: 852d6d4b113babd1
+/deepseek-ai-dsh-scope/use-this-package/route-scoped-events:
+  en: 7439a6c862956a63
+  zh: bfeda5194bb8cdc9
+/deepseek-ai-dsh-scope/use-this-package/build-a-scoped-registry-layer:
+  en: 187aa0e904782395
+  zh: 14fa36d3716eaff2
+/deepseek-ai-dsh-scope/understand-the-implementation:
+  en: ce7e776e9d516bdb
+  zh: 59d2751743db7795
+/deepseek-ai-dsh-scope/understand-the-implementation/design-concept:
+  en: 1d19d421fa6f3546
+  zh: ed6679cfc9166f14
+/deepseek-ai-dsh-scope/understand-the-implementation/source-map:
+  en: 52dd18180452c174
+  zh: 47d0198266697794
+/deepseek-ai-dsh-scope/understand-the-implementation/the-parent-chain:
+  en: f0c433a9b0091de4
+  zh: 21cecb4194aff7d0
+/deepseek-ai-dsh-scope/understand-the-implementation/event-filtering:
+  en: 9ec9b8d491c7dfe7
+  zh: da82e63bac268535
+/deepseek-ai-dsh-scope/further-exploration:
+  en: f6f4e46a89785446
+  zh: ea130e3ffefe1139
+/deepseek-ai-dsh-scope/known-limitations-and-deferred-work:
+  en: 87eea2029792dc14
+  zh: ba020413273d3235
+/deepseek-ai-dsh-scope/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

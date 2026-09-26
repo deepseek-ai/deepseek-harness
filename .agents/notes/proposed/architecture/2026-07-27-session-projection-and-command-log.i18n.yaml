@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-27-session-projection-and-command-log.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-07-27-session-projection-and-command-log.md
-2026-07-27-session-projection-and-command-log.md: fb329a4117fdea8f4aa0e98548982c3197d9c8f6
-2026-07-27-session-projection-and-command-log.zh.md: eb359058a74c6ed53959253ae80f2002cb67a351
+/agent-note-session-projections-and-command-lifecycle-logging:
+  en: c4b22a24c549feb8
+  zh: 4e4921326e0cd13a
+/agent-note-session-projections-and-command-lifecycle-logging/problem:
+  en: 017166a86aa35cad
+  zh: b6a2e826fbed2474
+/agent-note-session-projections-and-command-lifecycle-logging/proposal:
+  en: d13f906be5b62374
+  zh: 1cf74760f668902a
+/agent-note-session-projections-and-command-lifecycle-logging/proposal/whole-value-event-rule:
+  en: e6c93d89a25f0d03
+  zh: 65e1f5842bc74008
+/agent-note-session-projections-and-command-lifecycle-logging/proposal/host-projection-registry-dsh-session-projection-new-package:
+  en: 6068eb6aba54b102
+  zh: 20e91466baf6ad11
+/agent-note-session-projections-and-command-lifecycle-logging/proposal/shipped-consumer-the-subagent-identity-unit:
+  en: 10093535660c3cae
+  zh: a7f4ff9e71ee6751
+/agent-note-session-projections-and-command-lifecycle-logging/proposal/wire-projections-block-on-the-history-tail-page:
+  en: 1a6357e8821e7951
+  zh: b4b75959af4f3910
+/agent-note-session-projections-and-command-lifecycle-logging/proposal/push-frame-and-the-client-value-store-domains-write-zero-client-code:
+  en: e95962f82eefed51
+  zh: d2b3dfa8a23c8f0f
+/agent-note-session-projections-and-command-lifecycle-logging/proposal/plan-through-the-standard-command-channel-worked-example:
+  en: be319089ba75cae5
+  zh: 2cf0ec8d0ef79564
+/agent-note-session-projections-and-command-lifecycle-logging/proposal/react-useprojection-the-fifth-framework-hook-seat:
+  en: 7b536bd8a51cc5dc
+  zh: 1ead63f6358b3799
+/agent-note-session-projections-and-command-lifecycle-logging/proposal/command-lifecycle-in-the-log:
+  en: a7e04451f3ed417c
+  zh: fb60c8729200b825
+/agent-note-session-projections-and-command-lifecycle-logging/delivery-plan:
+  en: 64ad8d08a8ab44e0
+  zh: fb0a0f7369d0bd23
+/agent-note-session-projections-and-command-lifecycle-logging/alternatives-considered:
+  en: e945e84e8360e0c4
+  zh: becdeb100a4c5b6b
+/agent-note-session-projections-and-command-lifecycle-logging/acceptance-criteria:
+  en: 9dfcca30fffda225
+  zh: 0beddb81d32e0ca7
+/agent-note-session-projections-and-command-lifecycle-logging/risks:
+  en: f0eb219b4119ca7d
+  zh: de870016c1623895

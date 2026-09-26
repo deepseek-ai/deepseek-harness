@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-06-preview-hosted-runner-sizing.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-06-preview-hosted-runner-sizing.md
-2026-09-06-preview-hosted-runner-sizing.md: 414a17bf8a47f901e61ed271e9b2cf3dee3415b8
-2026-09-06-preview-hosted-runner-sizing.zh.md: 91a67b90b6617fea4dfa77672cb7e78412f462ee
+/agent-note-measured-github-hosted-pr-preview-sizing:
+  en: 987e2592c644030d
+  zh: 55f306766247e4a4
+/agent-note-measured-github-hosted-pr-preview-sizing/problem:
+  en: bc382c3ef9c28709
+  zh: 27e50735d80696a2
+/agent-note-measured-github-hosted-pr-preview-sizing/decision:
+  en: 9988e6268f8fc5b8
+  zh: e92f3922b49b193d
+/agent-note-measured-github-hosted-pr-preview-sizing/decision/measurements:
+  en: 768cd2ecf9d33c87
+  zh: 693ea069a5275736
+/agent-note-measured-github-hosted-pr-preview-sizing/alternatives-considered:
+  en: 04f845ddb2a86e31
+  zh: 993c6f82f5119f66
+/agent-note-measured-github-hosted-pr-preview-sizing/consequences:
+  en: ed9e8446f4579f5d
+  zh: c899cdd070e6befa

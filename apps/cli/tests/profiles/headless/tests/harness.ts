@@ -8,7 +8,7 @@ import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
-import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
+import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import ToolResultPruner from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -49,8 +49,18 @@ export interface CodingHarnessOptions {
    * compaction plugin (the default suites run without it).
    */
   compact?: BasicCompactionConfig
-  /** Test-only context capacity advertised for `deepseek-v4-flash`. */
+  /**
+   * Test-only context capacity advertised for `deepseek-v4-flash`. Automatic
+   * pressure scales the message budget left after the request's reserved
+   * output tokens, so this capacity must exceed the advertised output cap.
+   */
   modelContextWindow?: number
+  /**
+   * Test-only per-request output cap advertised for `deepseek-v4-flash`, which
+   * the adapter forwards as `max_tokens` and pressure excludes from the
+   * capacity above.
+   */
+  modelMaxTokens?: number
 }
 
 export async function codingHarness(workdir: string, options: CodingHarnessOptions = {}): Promise<Context> {
@@ -60,8 +70,12 @@ export async function codingHarness(workdir: string, options: CodingHarnessOptio
   })
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(LlmDeepSeek, {
-    ...options.modelContextWindow === undefined ? {} : {
-      models: [{ id: 'deepseek-v4-flash', contextWindow: options.modelContextWindow }],
+    ...options.modelContextWindow === undefined && options.modelMaxTokens === undefined ? {} : {
+      models: [{
+        id: 'deepseek-v4-flash',
+        ...options.modelContextWindow === undefined ? {} : { contextWindow: options.modelContextWindow },
+        ...options.modelMaxTokens === undefined ? {} : { maxTokens: options.modelMaxTokens },
+      }],
     },
   })
   await ctx.plugin(LocalSubprocessRuntime)

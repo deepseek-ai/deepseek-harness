@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-15-docs-platform-command-tabs.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-15-docs-platform-command-tabs.md
+/agent-note-platform-command-tabs-in-the-python-sdk-guide:
+  en: 3d96f04869d2a2fb
+  zh: 4a6ebfb3ccf9c69d
+/agent-note-platform-command-tabs-in-the-python-sdk-guide/problem:
+  en: 8fb6ad2440352a06
+  zh: 0809a5c9866e52ee
+/agent-note-platform-command-tabs-in-the-python-sdk-guide/decision:
+  en: 0ec36e0eccea6209
+  zh: 5df6069c60a55f31
+/agent-note-platform-command-tabs-in-the-python-sdk-guide/alternatives-considered:
+  en: a98aa2b8d03f11aa
+  zh: 0aefaa161a20a24e
+/agent-note-platform-command-tabs-in-the-python-sdk-guide/consequences:
+  en: f3af5502a73e7725
+  zh: 4ca34dfd993fcc21

@@ -1,6 +1,6 @@
 # Minimal keyless composition: real app, pwsh executor, and pwsh tool; replayed model.
 - id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   disabled: true
 
 - insert:

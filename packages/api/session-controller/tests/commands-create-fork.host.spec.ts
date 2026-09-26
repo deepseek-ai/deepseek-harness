@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -120,6 +120,10 @@ describe('Session creation failures', () => {
       code: 'session/conflict',
     },
     {
+      error: Object.assign(new Error('writer already held'), { name: 'SessionAlreadyOwnedError' }),
+      code: 'session/writer-held',
+    },
+    {
       error: new Error('factory unavailable'),
       code: 'gateway/internal',
     },
@@ -217,6 +221,10 @@ describe('Session fork failures', () => {
     const controller = new SessionCommandController(ctx, controllerAgents(), '/default')
 
     await expectFailure(controller.fork({ sessionId: source.id }), 'session/fork-unavailable')
+    await expect(controller.fork({ sessionId: source.id, atSeq: 0 })).rejects.toMatchObject({
+      code: 'session/fork-unavailable',
+      message: 'event 0 does not exist in session "empty-source" (last seq: none)',
+    })
     await ctx.fiber.dispose()
   })
 

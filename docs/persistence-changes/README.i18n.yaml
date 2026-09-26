@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/persistence-changes/README.md
-README.md: 7eb46efe69e139c294ad76e1b584e2d7384151b5
-README.zh.md: d91cfff9e5010bfff92b905ce0f075e7e419eb52
+/:
+  en: 10d173d8956e12a0
+  zh: 3c32dcdb66727fed
+/persistence-type-change-records:
+  en: 9054f01380aa9207
+  zh: 10e27fb51600cd08
+/persistence-type-change-records/summary:
+  en: 272d85bc8ddda7b6
+  zh: 01614508fc8f332e
+/persistence-type-change-records/table-of-contents:
+  en: 1ba6efaa0b5d6e47
+  zh: 6e216391ad24c541
+/persistence-type-change-records/files-and-ownership:
+  en: 6cd0f79a9455bdf2
+  zh: a5978b7834c0802b
+/persistence-type-change-records/compatibility-rules:
+  en: 7d5ce8c14e387922
+  zh: 9106c78283ad932c
+/persistence-type-change-records/history-and-limitations:
+  en: 10a426d36c41548b
+  zh: ef03b693d9d9be26
+/persistence-type-change-records/dev-note:
+  en: 5de1d6304e00c58f
+  zh: 8d8225361cfa29e5

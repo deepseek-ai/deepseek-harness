@@ -7,6 +7,9 @@ export const MACOS_SIGNING_IDENTITY_ENV: 'DSH_DESKTOP_MACOS_SIGNING_IDENTITY'
 /** Environment variable that supplies the expected Apple Developer Team ID. */
 export const MACOS_TEAM_ID_ENV: 'DSH_DESKTOP_MACOS_TEAM_ID'
 
+/** Environment variable that selects the npm registry used for the bundled runtime install. */
+export const NPM_REGISTRY_ENV: 'DSH_DESKTOP_NPM_REGISTRY'
+
 /** Public identity expected on a macOS release. */
 export interface MacOSSigningEnvironment {
   readonly signingIdentity: string
@@ -45,6 +48,13 @@ export type MacOSNotarizationEnvironment =
  * @returns Reverse-DNS application identifier.
  */
 export function resolveDesktopAppId(env: NodeJS.ProcessEnv): string
+
+/**
+ * Resolve the npm registry used to materialize the bundled runtime and its external dependencies.
+ * @param env - Packaging environment.
+ * @returns Registry origin; the public registry unless a local mirror is configured.
+ */
+export function resolveNpmRegistry(env: NodeJS.ProcessEnv): string
 
 /**
  * Resolve and validate the public identity expected on a macOS release.

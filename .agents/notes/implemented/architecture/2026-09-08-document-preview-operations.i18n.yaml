@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-08-document-preview-operations.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-08-document-preview-operations.md
-2026-09-08-document-preview-operations.md: 43cc8d935763512a53379466bb796b5cac469793
-2026-09-08-document-preview-operations.zh.md: 44eccba894b3748a1d8640561a9eb760de481919
+/agent-note-document-preview-and-file-addresses:
+  en: fffa621b7586f221
+  zh: d9c7e9bea55fc11f
+/agent-note-document-preview-and-file-addresses/problem:
+  en: a35075e6babe3f7a
+  zh: 3a64ac57761e1009
+/agent-note-document-preview-and-file-addresses/decision:
+  en: d0a2923efefbcfe1
+  zh: 34f71d092c0e706b
+/agent-note-document-preview-and-file-addresses/alternatives-considered:
+  en: 8e9616e954df488c
+  zh: 10801341ec53bbe8
+/agent-note-document-preview-and-file-addresses/consequences:
+  en: cc810ba19e203ead
+  zh: 9421857a5eb2abe2

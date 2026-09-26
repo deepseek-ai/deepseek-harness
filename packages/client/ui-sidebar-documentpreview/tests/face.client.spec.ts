@@ -9,12 +9,12 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
-import type { WorkspaceFileBytes, WorkspaceFileText } from '@deepseek-ai/dsh-api-workspace-files/types'
+import type { WorkspaceFileText } from '@deepseek-ai/dsh-api-workspace-files/types'
 import { textFace } from '../src/client/face.ts'
 import type { DocumentFileBytes, ReadDocumentBytes, ReadWorkspaceFilePage } from '../src/client/rpc.ts'
 import { hostFileOf } from '../src/client/rpc.ts'
 import { createTextStore } from '../src/client/store.ts'
-import { ABSOLUTE_PATH, FILE, PATH, SESSION, failure, page } from './fixtures.client.ts'
+import { ABSOLUTE_PATH, FILE, PATH, SESSION, createResources, failure, page } from './fixtures.client.ts'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 
 const TAB_1 = 'tab-1' as TabId
@@ -81,7 +81,7 @@ function bench(sessionId = 'other-session' as SessionId) {
     pending.push({ offset, ...deferred })
     return deferred.promise
   })
-  const whole = readQueue<WorkspaceFileBytes>()
+  const whole = readQueue<DocumentFileBytes>()
   let sequence = 0
   const bytes = vi.fn<ReadDocumentBytes>(() => whole.request(++sequence))
   const controller = new AbortController()
@@ -94,7 +94,8 @@ function bench(sessionId = 'other-session' as SessionId) {
   // The store's own `forget`, counted: the record's end must forget a tab exactly once.
   const forget = vi.fn(instance.actions.forget)
   // Injected for another session on purpose: the address's session must win.
-  const face = textFace(read, bytes)(sessionId, { ...instance.actions, forget })
+  const resources = createResources()
+  const face = textFace(read, bytes, resources)(sessionId, { ...instance.actions, forget })
   /** Settle the oldest outstanding read, or the oldest one for `offset`. */
   const settle = async (result: RemoteResult<WorkspaceFileText>, offset?: number): Promise<void> => {
     const at = offset === undefined ? 0 : pending.findIndex(call => call.offset === offset)
@@ -104,11 +105,8 @@ function bench(sessionId = 'other-session' as SessionId) {
     await call.promise
   }
   return {
-    instance, read, face, forget, settle, bytes, controller,
-    settleAll: (result: RemoteResult<DocumentFileBytes>, key?: number) => whole.settle(result.ok
-      ? { ok: true, value: { ...result.value, data: btoa(String.fromCharCode(...result.value.data)) } }
-      : result, key),
-    settleAllWire: whole.settle,
+    instance, read, face, forget, settle, bytes, controller, resources,
+    settleAll: whole.settle,
     outstandingAll: whole.outstanding,
     outstanding: () => pending.map(call => call.offset),
     tab: () => instance.getSnapshot().byTab[TAB_1],
@@ -123,6 +121,19 @@ const settlements = [
 ] as const
 
 describe('textFace', () => {
+  it('subscribes to a dependency once and stops accepting members after the tab ends', () => {
+    const { face, resources, controller, forget } = bench()
+    const source = vi.spyOn(resources, 'source')
+    const address = sessionFileAddress(SESSION, 'style.css')
+    face.addResource(TAB_1, address, controller.signal)
+    face.addResource(TAB_1, address, controller.signal)
+    expect(source).toHaveBeenCalledExactlyOnceWith(address)
+    controller.abort()
+    expect(forget).toHaveBeenCalledExactlyOnceWith(TAB_1)
+    face.addResource(TAB_1, sessionFileAddress(SESSION, 'other.css'), controller.signal)
+    expect(source).toHaveBeenCalledTimes(1)
+  })
+
   it('marks the read in flight, then keeps the page', async () => {
     const { read, face, settle, tab } = bench()
     const controller = new AbortController()
@@ -216,16 +227,17 @@ describe('textFace', () => {
     await settle(page(1, ['A'], true, 'v2'))
     expect(tab()).toMatchObject({ pages: { 1: { text: 'A', lines: 1 } }, version: 'v2', eof: true })
   })
-  it('loads native complete bytes with only the tab signal', async () => {
+  it('loads native complete bytes with cancellable read lifetime', async () => {
     const { face, read, bytes, settleAll, tab, controller } = bench()
     const result = complete()
     face.loadAll(TAB_1, FILE, controller.signal)
-    expect(bytes).toHaveBeenCalledExactlyOnceWith(FILE, controller.signal)
+    expect(bytes).toHaveBeenCalledExactlyOnceWith(FILE, expect.any(AbortSignal))
     expect(read).not.toHaveBeenCalled()
     expect(tab()).toMatchObject({ mode: 'bytes-complete', loading: true, pages: {}, failure: undefined })
     expect(tab()?.complete).toBeUndefined()
     await settleAll(result)
     expect(tab()).toMatchObject({ mode: 'bytes-complete', loading: false, complete: result.value, version: 'v1', eof: true, pages: {} })
+    expect(tab()?.complete?.data).toBe(result.value.data)
   })
 
   it('records a complete-read failure and clears it when the read is retried', async () => {
@@ -240,20 +252,6 @@ describe('textFace', () => {
     expect(tab()).toMatchObject({ loading: false, failure: undefined, complete: complete().value })
   })
 
-  it('records malformed complete-byte wire data as a failed read', async () => {
-    const { face, settleAllWire, tab, controller } = bench()
-    face.loadAll(TAB_1, FILE, controller.signal)
-    await settleAllWire({
-      ok: true,
-      value: { absolutePath: ABSOLUTE_PATH, version: 'v1', offset: 0, data: '!!!', eof: true, bytes: 3 },
-    })
-    expect(tab()).toMatchObject({
-      mode: 'bytes-complete', loading: false, version: undefined,
-      failure: { code: 'gateway/internal', message: 'document file byte response has malformed base64 data' },
-    })
-    expect(tab()?.complete).toBeUndefined()
-  })
-
   it('reloads complete bytes, discarding the old result and preserving the view', async () => {
     const { instance, face, bytes, settleAll, tab, controller } = bench()
     face.loadAll(TAB_1, FILE, controller.signal)
@@ -264,7 +262,7 @@ describe('textFace', () => {
     instance.actions.navigated(TAB_1, 3)
     face.reloadAll(TAB_1, FILE, controller.signal)
     expect(bytes).toHaveBeenCalledTimes(2)
-    expect(bytes).toHaveBeenLastCalledWith(FILE, controller.signal)
+    expect(bytes).toHaveBeenLastCalledWith(FILE, expect.any(AbortSignal))
     expect(tab()).toMatchObject({ mode: 'bytes-complete', loading: true, version: undefined, eof: false, pages: {} })
     expect(tab()?.complete).toBeUndefined()
     const result = complete('v2', new Uint8Array([2, 3, 255]))
@@ -406,11 +404,36 @@ describe('textFace', () => {
     await second.settle(page(1, ['second'], true))
     first.face.loadAll(TAB_1, firstFile, first.controller.signal)
     second.face.reloadAll(TAB_1, secondFile, second.controller.signal)
-    expect(first.bytes).toHaveBeenCalledExactlyOnceWith(firstFile, first.controller.signal)
-    expect(second.bytes).toHaveBeenCalledExactlyOnceWith(secondFile, second.controller.signal)
+    expect(first.bytes).toHaveBeenCalledExactlyOnceWith(firstFile, expect.any(AbortSignal))
+    expect(second.bytes).toHaveBeenCalledExactlyOnceWith(secondFile, expect.any(AbortSignal))
     await first.settleAll(complete('v1'))
     await second.settleAll(complete('v2'))
     expect(first.tab()?.version).toBe('v1')
     expect(second.tab()?.version).toBe('v2')
   })
+})
+
+it.each([new Error('invalid bytes'), 'invalid bytes'])('reports an active complete-read decoding failure: %s', async (failure) => {
+  const instance = createTextStore().create()
+  const controller = new AbortController()
+  const read = vi.fn<ReadDocumentBytes>().mockRejectedValue(failure)
+  try {
+    textFace(vi.fn(), read, createResources())(SESSION, instance.actions).loadAll(TAB_1, FILE, controller.signal)
+    await Promise.resolve()
+    expect(instance.getSnapshot().byTab[TAB_1]?.failure).toMatchObject({ code: 'gateway/internal', message: 'invalid bytes' })
+  } finally { controller.abort() }
+})
+
+it('ignores a complete-read rejection after renderer-owned loading takes over', async () => {
+  const instance = createTextStore().create()
+  const controller = new AbortController()
+  const pending = Promise.withResolvers<Awaited<ReturnType<ReadDocumentBytes>>>()
+  const face = textFace(vi.fn(), () => pending.promise, createResources())(SESSION, instance.actions)
+  try {
+    face.loadAll(TAB_1, FILE, controller.signal)
+    face.prepareRenderer(TAB_1, controller.signal, 'office')
+    pending.reject(new Error('retired'))
+    await pending.promise.catch(() => {})
+    expect(instance.getSnapshot().byTab[TAB_1]?.failure).toBeUndefined()
+  } finally { controller.abort() }
 })

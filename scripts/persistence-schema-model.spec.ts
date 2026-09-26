@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canonicalizeSchema, isArbitraryJsonSchema, schemaDigest, type SchemaNode } from './persistence-schema-model.ts'
+import { canonicalizeSchema, isArbitraryJsonSchema, schemaDigest, type SchemaNode, type SourceCompatibility } from './persistence-schema-model.ts'
 
 const string: SchemaNode = { kind: 'primitive', type: 'string' }
 const number: SchemaNode = { kind: 'primitive', type: 'number' }
@@ -85,5 +85,25 @@ describe('canonical persisted type graphs', () => {
   it('rejects missing references and unproductive union cycles', () => {
     expect(() => canonicalizeSchema([{ kind: 'array', element: 5 }], 0)).toThrow('missing node 5')
     expect(() => canonicalizeSchema([{ kind: 'union', types: [0] }], 0)).toThrow('union cycle')
+  })
+})
+
+
+describe('policy-aware graph normalization', () => {
+  it('normalizes recorded policy fields and kind order without changing unrelated graph digests', () => {
+    const policy: SourceCompatibility = { version: 1, policy: 'session-source-attribution', binding: 'session.user-message.source',
+      discriminator: 'kind', unknownKinds: 'preserve', attributionKinds: ['b', 'a'] }
+    const object = (compatibility: SourceCompatibility): SchemaNode => ({ kind: 'object', indices: [], properties: [
+      { name: 'source', type: 1, optional: false, compatibility },
+    ] })
+    const reordered = { attributionKinds: ['a', 'b', 'a'], unknownKinds: policy.unknownKinds, discriminator: policy.discriminator,
+      binding: policy.binding, policy: policy.policy, version: policy.version }
+    const left = canonicalizeSchema([object(policy), string], 0)
+    const right = canonicalizeSchema([object(reordered), string], 0)
+    expect(left).toEqual(right)
+    expect(schemaDigest(left)).toBe(schemaDigest(right))
+    const unannotated = canonicalizeSchema([{ kind: 'object', indices: [], properties: [{ name: 'source', type: 1, optional: false }] }, string], 0)
+    expect(schemaDigest(left)).not.toBe(schemaDigest(unannotated))
+    expect(schemaDigest(canonicalizeSchema(left.nodes, 1))).toBe(schemaDigest(canonicalizeSchema([string], 0)))
   })
 })

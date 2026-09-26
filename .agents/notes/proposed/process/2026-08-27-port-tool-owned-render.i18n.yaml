@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-27-port-tool-owned-render.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/process/2026-08-27-port-tool-owned-render.md
-2026-08-27-port-tool-owned-render.md: 4ab27142fdc2d13d7d152c21c2f246e340fb4711
-2026-08-27-port-tool-owned-render.zh.md: fe8a018235db59b6f3bf80eae45d3a25181f37ec
+/agent-note-port-tool-owned-render-into-current-dsh-apis:
+  en: a13180eec1968793
+  zh: e47a83ddb329de88
+/agent-note-port-tool-owned-render-into-current-dsh-apis/problem:
+  en: 3a3ceea534efabd1
+  zh: f13f8531d1819b8a
+/agent-note-port-tool-owned-render-into-current-dsh-apis/proposal:
+  en: a51c0e6f23d8d4d4
+  zh: 1eecd0ed06685c40
+/agent-note-port-tool-owned-render-into-current-dsh-apis/alternatives-considered:
+  en: a2364e3fca0a06e5
+  zh: a76370082e218154
+/agent-note-port-tool-owned-render-into-current-dsh-apis/acceptance-criteria:
+  en: 5e2815d18df000f9
+  zh: 97845472646b1881
+/agent-note-port-tool-owned-render-into-current-dsh-apis/risks:
+  en: 4fa51a62af0a3fc5
+  zh: d6f555a8a5d9120c

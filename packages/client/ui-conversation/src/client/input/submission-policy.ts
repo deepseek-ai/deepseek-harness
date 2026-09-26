@@ -6,7 +6,7 @@
 import {
   createSnapshotStore, type SnapshotStore,
 } from '@deepseek-ai/dsh-client-store'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {
   BusyEnterBehavior, ComposerSubmitGesture, InputSubmitMode,
 } from '../contract/composer-submission.ts'
@@ -46,21 +46,22 @@ export function resolveSubmitMode(
 export class ComposerSubmissionPolicy {
   /** Reactive preference source for the composer bar and the Settings row. */
   readonly busyEnter: SnapshotStore<BusyEnterBehavior> = createSnapshotStore(DEFAULT_BUSY_ENTER_BEHAVIOR)
-  private readonly host: SettingsScope<ConversationSettings> | undefined
+  private readonly unsubscribe: (() => void) | undefined
+  private readonly host: ConfigForm<ConversationSettings> | undefined
 
   /**
-   * @param host - durable preference scope owned by the providing plugin;
-   * absent compositions stay process-local. The adoption subscription shares
-   * the scope's plugin lifetime — a disposed scope never publishes again, so
-   * the policy needs no release hook.
+   * @param host Shared configuration form; omitted keeps the browser-local default.
    */
-  constructor(host?: SettingsScope<ConversationSettings>) {
+  constructor(host?: ConfigForm<ConversationSettings>) {
     this.host = host
     if (host !== undefined) {
-      host.subscribe(() => { this.adopt(host) })
+      this.unsubscribe = host.subscribe(() => { this.adopt(host) })
       this.adopt(host)
     }
   }
+
+  /** Release the preference subscription. */
+  dispose(): void { this.unsubscribe?.() }
 
   /**
    * Change the busy-state submission behavior; the live value publishes
@@ -77,7 +78,7 @@ export class ComposerSubmissionPolicy {
    * Adopt the scope's accepted durable behavior without writing it back.
    * @param host - the constructor-narrowed scope driving this adoption.
    */
-  private adopt(host: SettingsScope<ConversationSettings>): void {
+  private adopt(host: ConfigForm<ConversationSettings>): void {
     const section = host.getSnapshot().value
     if (section === undefined || this.busyEnter.getSnapshot() === section.busyEnter) return
     this.busyEnter.set(section.busyEnter)

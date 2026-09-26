@@ -36,7 +36,7 @@ function mount(overrides: Partial<FeedbackDialogState> = {}) {
   }
   const useDialog = (<T,>(select: (v: FeedbackDialogState) => T): T =>
     useSyncExternalStore(() => () => {}, () => select(state))) as never
-  const props = { useDialog, ...verbs, t } as unknown as Parameters<typeof FeedbackDialog>[0]
+  const props = { useDialog, ...verbs, t } as Parameters<typeof FeedbackDialog>[0]
   return { ...render(<FeedbackDialog {...props} />), ...verbs }
 }
 

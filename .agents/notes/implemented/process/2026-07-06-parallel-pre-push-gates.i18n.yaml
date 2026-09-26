@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-06-parallel-pre-push-gates.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-06-parallel-pre-push-gates.md
-2026-07-06-parallel-pre-push-gates.md: 9773a86428545608d184112ec4ab95136d4690d0
-2026-07-06-parallel-pre-push-gates.zh.md: 4d0e15a3389d276ea4b1c51224c96b864b0958a0
+/agent-note-parallel-pre-push-gates:
+  en: d5ee83ee15159e15
+  zh: 07a6599af21d98a9
+/agent-note-parallel-pre-push-gates/problem:
+  en: 896ffdae7d51cc19
+  zh: eed0d7e80456bd8e
+/agent-note-parallel-pre-push-gates/decision:
+  en: c95d213689164ad6
+  zh: da85165d13b26d58
+/agent-note-parallel-pre-push-gates/verification:
+  en: c7124c68afb12a8e
+  zh: 0a0269476ae353f3
+/agent-note-parallel-pre-push-gates/alternatives-considered:
+  en: d54f4ed806116b2e
+  zh: 38725684130bb843
+/agent-note-parallel-pre-push-gates/consequences:
+  en: 5d22505a7c041e41
+  zh: ba1010f18d3e8302

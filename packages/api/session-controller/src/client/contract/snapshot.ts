@@ -46,7 +46,7 @@ export type PendingSubmissionPlacement = 'transcript' | 'queued' | 'steering'
 export interface PendingSubmission {
   /** The prompt RPC identity; the durable `user/message` source echoes it as `rpcId`. */
   readonly requestId: SessionRequestId
-  /** Expected surface until the Host reports the admitted queue or durable occurrence. */
+  /** Surface fixed at submission time; Inbox acceptance does not move a Chat echo into the dock. */
   readonly placement: PendingSubmissionPlacement
   /** Client wall-clock ms when the submission began. */
   readonly time: number

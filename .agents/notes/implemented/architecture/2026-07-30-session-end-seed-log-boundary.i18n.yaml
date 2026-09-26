@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-30-session-end-seed-log-boundary.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-30-session-end-seed-log-boundary.md
-2026-07-30-session-end-seed-log-boundary.md: 9cf7c7f20701688208e8b1c343904f2a9f2cab9e
-2026-07-30-session-end-seed-log-boundary.zh.md: fdf4ec9de610f17e792de98334dd5d37f5e4c355
+/agent-note-the-end-seed-log-boundary:
+  en: 0f53ca9c0166d7ad
+  zh: e16b2376c2afb1bc
+/agent-note-the-end-seed-log-boundary/problem:
+  en: e7192f854b24129c
+  zh: 74a38ee95988e338
+/agent-note-the-end-seed-log-boundary/decision:
+  en: 519aa4faadd01960
+  zh: 1430cc9bd81e7df9
+/agent-note-the-end-seed-log-boundary/persistence-needs-no-changes:
+  en: 5df69ed0156e50c8
+  zh: 9ad6caad6d33b183
+/agent-note-the-end-seed-log-boundary/scope-of-the-guarantee:
+  en: 31c23e4e25640fb1
+  zh: d207c2a8aa7d936c
+/agent-note-the-end-seed-log-boundary/alternatives-considered:
+  en: cd1ed7dfa77722ae
+  zh: 4ad834f3cf3b5443
+/agent-note-the-end-seed-log-boundary/consequences:
+  en: 69eb86480b191135
+  zh: 51ef88fb78701b1f

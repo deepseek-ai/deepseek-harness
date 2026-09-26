@@ -1,7 +1,7 @@
 /** Real JSONL publication and provider-neutral message preservation across the V2 PTC rename. */
 
 import { Context } from '@deepseek-ai/cordis'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { createHash } from 'node:crypto'
@@ -40,6 +40,10 @@ const toolMessage = {
     content: [{ type: 'text', text: 'tools-code-mode: image attached; tool/code-dispatch' }],
   }],
 }
+const currentToolMessage = {
+  role: 'tool', source: toolMessage.source, toolCallId: toolCall.id,
+  content: toolMessage.content[0]!.content, isError: false, id: toolMessage.id,
+}
 const imageMessage = {
   id: 'tools-code-mode:root-call:image-context', role: 'user',
   source: { kind: 'plugin', plugin: 'tools-code-mode', form: 'notice', summary: 'Image from tools-code-mode' },
@@ -53,7 +57,8 @@ const imageMessage = {
   ],
 }
 const currentImageMessage = {
-  ...imageMessage, source: { ...imageMessage.source, plugin: 'tools-ptc' },
+  ...imageMessage,
+  source: { kind: 'ptc-mode', form: imageMessage.source.form, summary: imageMessage.source.summary },
 }
 const dispatch = {
   rootCallId: toolCall.id, parentCallId: toolCall.id, subCallId: 'tools-code-mode:child-call',
@@ -117,21 +122,21 @@ describe('JSONL V2 PTC publication and restore', () => {
     }
   })
 
-  it('publishes V3 without changing V2 bytes and preserves restored IDs, roles, content, and replay state', async () => {
+  it('publishes the current generation without changing V2 bytes and preserves restored IDs, roles, content, and replay state', async () => {
     if (root === undefined || ctx === undefined) throw new Error('persistence fixture is not initialized')
     const id = SessionId('tools-code-mode:session')
     const header = { type: 'session', version: 2, id, createdAt: 1000, isSeeded: false, delegationDepth: 0 }
     const events = releasedV2Events()
     const source = Buffer.from([header, ...events].map(row => JSON.stringify(row)).join('\n') + '\n')
     const predecessor = generationLogPath(root, undefined, id, 2, 'none')
-    const successor = join(dirname(predecessor), 'session.v3.jsonl')
+    const successor = join(dirname(predecessor), `session.v${SESSION_FORMAT_VERSION}.jsonl`)
     await mkdir(dirname(predecessor), { recursive: true })
     await writeFile(predecessor, source)
     const sourceStat = await stat(predecessor)
 
     const reader = await ctx.sessionPersistence.open(id, 'read')
     try {
-      expect(reader.header).toEqual({ version: 3, id, createdAt: 1000, isSeeded: false, delegationDepth: 0 })
+      expect(reader.header).toEqual({ version: SESSION_FORMAT_VERSION, id, createdAt: 1000, isSeeded: false, delegationDepth: 0 })
       expect((await reader.read()).events.map(event => event.type)).toEqual([
         'turn/start', 'step/start', 'system/message', 'user/message', 'assistant/message', 'tool/call',
         'tool/ptc-dispatch-start', 'tool/ptc-dispatch', 'tool/result', 'agent/inbox/spliced',
@@ -153,21 +158,26 @@ describe('JSONL V2 PTC publication and restore', () => {
     const published = await readFile(successor)
     const [publishedHeader, ...publishedEvents] = published.toString('utf8').trimEnd().split('\n')
       .map((row): unknown => JSON.parse(row))
-    expect(publishedHeader).toEqual({ ...header, version: 3 })
+    expect(publishedHeader).toEqual({ ...header, version: SESSION_FORMAT_VERSION })
     const expectedEvents: SessionFormatEvent[] = events.map(event => ({ ...event, seq: event.seq < 2 ? event.seq : event.seq + 1 }))
     expectedEvents[5] = { ...expectedEvents[5], type: 'tool/ptc-dispatch-start' } as SessionFormatEvent
     expectedEvents[6] = { ...expectedEvents[6], type: 'tool/ptc-dispatch' } as SessionFormatEvent
+    expectedEvents[7] = { ...expectedEvents[7], data: { turn: 1, step: 1, message: currentToolMessage } } as SessionFormatEvent
     expectedEvents[8] = { ...expectedEvents[8], data: {
       target: 'next-step', start: 0, removedCount: 0, inserted: [currentImageMessage],
     } } as SessionFormatEvent
     expectedEvents[9] = { ...expectedEvents[9], data: currentImageMessage } as SessionFormatEvent
+    const titleRequestData = events[10]?.data as { messages: Array<Record<string, unknown>> }
     expectedEvents[10] = { ...expectedEvents[10], data: {
       ...(events[10]?.data as Record<string, unknown>), messageSeqs: [3],
+      messages: titleRequestData.messages.map(message => ({
+        ...message, source: { kind: 'dsh-session-title-llm' },
+      })),
     } } as SessionFormatEvent
     const systemMessage = {
       id: 'v2-to-v3-system-' + createHash('sha256')
         .update(JSON.stringify(['session-format-v2-to-v3', id, 1, 'step/start'])).digest('hex'),
-      role: 'system', source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' }, content: [],
+      role: 'system', source: { kind: 'system-prompt' }, content: [],
     }
     expectedEvents.splice(2, 0, {
       type: 'system/message', seq: 2, time: 1002, surfaceOp: 'append',
@@ -186,10 +196,10 @@ describe('JSONL V2 PTC publication and restore', () => {
       expect(restored.events).toEqual(expectedEvents)
       const session = Session.fromRestore(id, restored.events, reloaded.header, reloaded.inheritedEventCount, restored.eventState)
       const messages = session.deriveMessages()
-      expect(messages).toEqual([userMessage, assistantMessage, toolMessage, currentImageMessage])
+      expect(messages).toEqual([userMessage, assistantMessage, currentToolMessage, currentImageMessage])
       // Provider-neutral input evidence: no provider converter is a declared dependency here.
       expect(messages.map(({ id, role, content }) => ({ id, role, content }))).toEqual(
-        [userMessage, assistantMessage, toolMessage, imageMessage].map(({ id, role, content }) => ({ id, role, content })),
+        [userMessage, assistantMessage, currentToolMessage, imageMessage].map(({ id, role, content }) => ({ id, role, content })),
       )
       expect(messages[1]?.source).toEqual(assistantMessage.source)
       expect(messages[2]?.source).toEqual({ kind: 'tool', callId: 'tools-code-mode:root-call' })
@@ -201,6 +211,6 @@ describe('JSONL V2 PTC publication and restore', () => {
     expect(await stat(predecessor)).toMatchObject({ dev: sourceStat.dev, ino: sourceStat.ino })
     expect(await readFile(successor)).toEqual(published)
     expect((await readdir(dirname(predecessor))).filter(name => name.endsWith('.jsonl')).sort())
-      .toEqual(['session.v2.jsonl', 'session.v3.jsonl'])
+      .toEqual(['session.v2.jsonl', `session.v${SESSION_FORMAT_VERSION}.jsonl`])
   })
 })

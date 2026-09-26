@@ -10,11 +10,11 @@ Workspace Files 同时提供文件内容与工作区导航。对所有操作应�
 
 ## Decision
 
-`read`、`readBytes`、`readAll`、`readRelated` 与 `stat` 继承被寻址 Session 的文件系统后端读取权限。工作区根是输入相对路径的基准，而不是读取边界；只要后端允许，就可以读取绝对路径和离开工作区的相对路径。服务仍要求普通文件、拒绝符号链接，并应用文本和字节上限。
+`read`、`readBytes` 与 `stat` 继承被寻址 Session 的文件系统后端读取权限。工作区根是输入相对路径的基准，而不是读取边界；只要后端允许，就可以读取绝对路径和离开工作区的相对路径。服务仍要求普通文件、拒绝符号链接，并应用文本和字节上限。
 
 `list` 与 `changes` 仍限于工作区，因为它们暴露工作区导航和观察，而不是读取一个具名文件。`list` 拒绝根外目录，`changes` 通过后端的工作区包含判定过滤观察。
 
-`readRelated` 从基准文件所在目录解析相对路径。因此，只要 Session 后端允许，`..` 路径就可以读取工作区外的 JavaScript 或 CSS。Document Preview 把有界、静态声明的本地脚本与样式表打包进带 `sandbox="allow-scripts"` 的 HTML Blob iframe；不透明源阻止访问父应用，但浏览器保留正常网络访问。这种暴露是为渲染静态生成 HTML 而有意接受的安全取舍。
+带 `baseFile` 的 `readBytes` 从基准文件所在目录解析相对路径。因此，只要 Session 后端允许，`..` 路径就可以读取工作区外的 JavaScript 或 CSS。开启[开发者工具](../feature/2026-09-17-developer-tools-settings.zh.md)时，Document Preview 把有界、静态声明的本地脚本与样式表打包进带 `sandbox="allow-scripts"` 的 HTML Blob iframe；不透明源阻止访问父应用，但浏览器保留正常网络访问。这种暴露是为渲染静态生成 HTML 而有意接受的安全取舍。
 
 [Workspace Files 服务](2026-09-05-workspace-files-service.zh.md)负责分页、文件检查、列举和观察。[Document Preview](2026-09-08-document-preview-operations.zh.md)负责选择要打包的关联文件及 iframe sandbox。
 
@@ -26,4 +26,4 @@ Workspace Files 同时提供文件内容与工作区导航。对所有操作应�
 
 ## Consequences
 
-持有有效 Session 文件地址的调用方可以接收 Session 文件系统后端允许读取的每个普通文件的字节，包括工作区外文件。预览的 HTML 文档可以执行已打包的本地 JavaScript，并发起网络请求。工作区外文件不会产生 `changes` 帧，因此其预览需要显式刷新才能观察更新。
+持有有效 Session 文件地址的调用方可以接收 Session 文件系统后端允许读取的每个普通文件的字节，包括工作区外文件。开启开发者工具时，预览的 HTML 文档可以执行已打包的本地 JavaScript，并发起网络请求。工作区外文件不会产生 `changes` 帧，因此其预览需要显式刷新才能观察更新。

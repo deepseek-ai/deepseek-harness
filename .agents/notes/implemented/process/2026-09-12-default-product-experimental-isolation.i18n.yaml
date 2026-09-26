@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-12-default-product-experimental-isolation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-12-default-product-experimental-isolation.md
-2026-09-12-default-product-experimental-isolation.md: 5c2485e4f737b822088a680b0006f395a5479fa9
-2026-09-12-default-product-experimental-isolation.zh.md: 3a412a491ab8356a4e29d706fed55226dc0f6038
+/agent-note-keep-experimental-packages-outside-the-default-product:
+  en: 2d1751612781064c
+  zh: 8be0f776c4a37e11
+/agent-note-keep-experimental-packages-outside-the-default-product/problem:
+  en: 6938ed9a5ca419bb
+  zh: 6d2cd6bb912b9118
+/agent-note-keep-experimental-packages-outside-the-default-product/decision:
+  en: d471671fd6c06d03
+  zh: 205586983a29eba4
+/agent-note-keep-experimental-packages-outside-the-default-product/alternatives-considered:
+  en: b8615d8d31f313d7
+  zh: 556e3b96a90f6897
+/agent-note-keep-experimental-packages-outside-the-default-product/consequences:
+  en: 5ffd5e60d782a0bd
+  zh: 300665f42d70f049

@@ -1,8 +1,8 @@
 {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentInfo":{"name":"deepseek-harness-acp","version":"0.0.1"},"agentCapabilities":{"mcpCapabilities":{"http":true},"promptCapabilities":{"image":true,"audio":false,"embeddedContext":false},"sessionCapabilities":{"close":{},"list":{},"resume":{}}},"authMethods":[]}}
 {"jsonrpc":"2.0","id":2,"result":{"sessionId":"{{sessionId}}","configOptions":[{"id":"model","name":"Model","category":"model","type":"select","currentValue":"[\"deepseek-official\",\"deepseek-v4-flash-vision-exp\"]","options":[{"group":"deepseek-official","name":"DeepSeek","options":[{"value":"[\"deepseek-official\",\"deepseek-v4-flash\"]","name":"deepseek-v4-flash"},{"value":"[\"deepseek-official\",\"deepseek-v4-pro\"]","name":"deepseek-v4-pro"},{"value":"[\"deepseek-official\",\"deepseek-v4-flash-vision-exp\"]","name":"deepseek-v4-flash-vision-exp"}]}]}]}}
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"agent_message_chunk","messageId":"{{messageId}}","content":{"type":"text","text":"Received six dashboard frames; ready to discuss."}}}}
-{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"usage_update","used":"{{usedTokens}}","size":11600}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"usage_update","used":"{{usedTokens}}","size":10022}}}
 {"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"agent_message_chunk","messageId":"{{messageId}}","content":{"type":"text","text":"DONE"}}}}
-{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"usage_update","used":"{{usedTokens}}","size":11600}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"usage_update","used":"{{usedTokens}}","size":10022}}}
 {"jsonrpc":"2.0","id":4,"result":{"stopReason":"end_turn"}}

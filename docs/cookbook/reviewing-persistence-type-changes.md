@@ -33,8 +33,18 @@ Use `--silent` when consuming JSON: pnpm otherwise appends lifecycle failure tex
 
 Read the reported root, path, change kind, and version requirement. A referenced type can affect several event digests; inspect every affected root. Until the history covers the new schemas, verification fails. A stale generated inventory also fails verification; the recording command refreshes it. If `changes` is empty after reordering fields or union alternatives, run `pnpm run gen-persistence-catalog` and repeat the check. An unchanged digest needs no new acknowledgement even when copied declarations or source locations produce a catalog diff.
 
+To review a PR independently of its acknowledgement history, save the base and head inventories as local JSON files and run:
+
+```sh
+pnpm --silent run persistence-review --before .artifacts/base.schema.json --after docs/persistence-schema.json
+```
+
+Record the commits supplying those files with the report. Add `--json` for structured output. This read-only comparison groups shared changes with their affected roots and uses actual literal `kind`/`form` values instead of union positions. Ambiguous alternatives remain separate additions and removals. Its compatibility section copies every root's authoritative classifier result; the structural explanation does not replace acknowledgement checks. Current catalog labels and declaration names are descriptive metadata; structural anchors and fingerprints identify types.
+
 <a id="acknowledge"></a>
 ## 1. Record the change
+
+Check the [accepted baseline](../session-format-status.md#finalization-record) first. Preserve its locked records. Record backward-compatible evolution in a new same-version acknowledgement; implement a higher writer version before recording a breaking change.
 
 Write a local JSON file containing `en` and `zh`, each with `summary`, `compatibility`, and `verification` strings. The following input describes an exercised required-to-optional hook audit field change. Replace the explanation and test evidence with facts about your change; the CLI does not establish these claims.
 
@@ -87,7 +97,7 @@ If source changes after recording, review the compatibility explanation and refr
 pnpm --silent run persistence-changes --update 2026-09-11-poc-optional --prose .artifacts/persistence-change.prose.json --json
 ```
 
-The command refreshes the machine declaration, schemas, catalogs, and pairing. Without `--prose`, it preserves the existing explanation. Update refuses the initial baseline and records that another record depends on. The tree cannot identify which records were accepted in review: preserve accepted history and create a successor instead.
+The command refreshes the machine declaration, schemas, catalogs, and pairing. Without `--prose`, it preserves the existing explanation. Update refuses the initial baseline, records that another record depends on, and finalized checkpoint records. Outside finalized checkpoints, the tree does not infer review acceptance: preserve accepted history and create a successor instead.
 
 When integration creates competing terminal records, update the unaccepted record against the remaining history, then reassess the resulting diff. An unrelated root's acknowledgement does not need refreshing. The [mechanism decision](../../.agents/notes/implemented/process/2026-09-11-persistence-type-history.md) explains why complete snapshots and per-root predecessors are retained.
 

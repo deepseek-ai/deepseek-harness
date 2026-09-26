@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-26-frozen-agent-note-archive.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-26-frozen-agent-note-archive.md
-2026-07-26-frozen-agent-note-archive.md: 0c139c4a5d892de5bdace76b4935edf32586c4c1
-2026-07-26-frozen-agent-note-archive.zh.md: 2c2751c56a9b20423b00eac7a90c02286ce3e8b0
+/agent-note-freeze-low-future-value-agent-notes-outside-the-active-corpus:
+  en: f6883e4627411644
+  zh: e034e9b350dfd622
+/agent-note-freeze-low-future-value-agent-notes-outside-the-active-corpus/problem:
+  en: cef0f05fd8dfd6a1
+  zh: 228107eb6c00a91a
+/agent-note-freeze-low-future-value-agent-notes-outside-the-active-corpus/decision:
+  en: f0d9c292c3b8dd3b
+  zh: fd928084dfd333e2
+/agent-note-freeze-low-future-value-agent-notes-outside-the-active-corpus/alternatives-considered:
+  en: 7637deef67f3ec14
+  zh: 7f43606e487fab67
+/agent-note-freeze-low-future-value-agent-notes-outside-the-active-corpus/consequences:
+  en: 679af41e64d0dd15
+  zh: ebbead84f8b8e1df

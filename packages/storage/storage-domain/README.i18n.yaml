@@ -1,6 +1,73 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/storage/storage-domain/README.md
-README.md: bfe5cc6c5344dfc8cf09ac90184b96cf712b358d
-README.zh.md: 692577b1d2e98f4794e7a4c392390233d4fc134f
+/:
+  en: 6aefa593f50b7b9a
+  zh: 013e3bd1d843e39b
+/deepseek-ai-dsh-storage-domain:
+  en: 854dd576e7d6a08d
+  zh: 4d19e9bde70ec0d7
+/deepseek-ai-dsh-storage-domain/summary:
+  en: 2b76bd793d7b8f28
+  zh: 3fe5c99abf1bd05e
+/deepseek-ai-dsh-storage-domain/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-storage-domain/use-this-package:
+  en: 371260c7041be164
+  zh: d933049beb28ef40
+/deepseek-ai-dsh-storage-domain/use-this-package/when-to-use-it:
+  en: a96040b95821b5a9
+  zh: 33bcd8ea7e3fa037
+/deepseek-ai-dsh-storage-domain/use-this-package/declaring-a-domain:
+  en: 3c9626dcbc42c9d0
+  zh: e29ba23ab0c58e17
+/deepseek-ai-dsh-storage-domain/use-this-package/opening-and-using-a-domain:
+  en: 7355f5a286c30697
+  zh: 15eaca07fc5f6d05
+/deepseek-ai-dsh-storage-domain/use-this-package/routing-domains-to-backends:
+  en: d64e0107381688b3
+  zh: 7cb43a30677f5be6
+/deepseek-ai-dsh-storage-domain/use-this-package/observable-behavior-and-failures:
+  en: ed4b40d0c10ce081
+  zh: 554e490deaaa6b33
+/deepseek-ai-dsh-storage-domain/understand-the-implementation:
+  en: 1cc8b33834457c38
+  zh: c549afc7c4960e9e
+/deepseek-ai-dsh-storage-domain/understand-the-implementation/design-concept:
+  en: 1e063b13eced114a
+  zh: f65c910b124fd595
+/deepseek-ai-dsh-storage-domain/understand-the-implementation/open-sequence:
+  en: 052da5d6c45205ca
+  zh: 724c875e3c431fee
+/deepseek-ai-dsh-storage-domain/understand-the-implementation/source-map:
+  en: faade3f273420fc7
+  zh: 2cd48a0e4a415f56
+/deepseek-ai-dsh-storage-domain/understand-the-implementation/invariant:
+  en: 03cb11c4ce394210
+  zh: 0456212bf772c086
+/deepseek-ai-dsh-storage-domain/further-exploration:
+  en: 45403f2aa04996cf
+  zh: d9abd75cee7d413f
+/deepseek-ai-dsh-storage-domain/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-storage-domain/model-experience/durable-domain-state:
+  en: 57b8c561d80ab712
+  zh: 3246a498fe289ad8
+/deepseek-ai-dsh-storage-domain/model-experience/durable-domain-state/what-the-model-sees:
+  en: d265b549d349bb70
+  zh: 8c8293c21e9aa8b1
+/deepseek-ai-dsh-storage-domain/model-experience/durable-domain-state/token-effect:
+  en: 2d6ab1c549d3f683
+  zh: c0f264de06587598
+/deepseek-ai-dsh-storage-domain/model-experience/durable-domain-state/kv-cache-effect:
+  en: 0e7d1c06d17c542f
+  zh: ead94d355f161be1
+/deepseek-ai-dsh-storage-domain/known-limitations-and-deferred-work:
+  en: bd03348ad87d9210
+  zh: f50d6f19bcac93b9
+/deepseek-ai-dsh-storage-domain/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

@@ -212,7 +212,7 @@ function serializeByValue(value: unknown): InspectorJsonValue {
     throw new ClientRuntimeExecutionError('unsupported', `Value cannot be returned by value: ${renderError(error)}`)
   }
   if (typeof serialized !== 'string') throw new ClientRuntimeExecutionError('unsupported', 'Value cannot be returned by value')
-  const result = JSON.parse(serialized) as unknown
+  const result: unknown = JSON.parse(serialized)
   if (!isJsonValue(result)) throw new ClientRuntimeExecutionError('unsupported', 'Value is outside the JSON value set')
   return result
 }

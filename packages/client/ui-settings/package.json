@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-settings",
-  "description": "Settings domain base plugin: the settings-namespace scope service and the canonical settings slot-type contract",
-  "version": "0.1.6-alpha.1",
+  "description": "Settings domain base plugin: shared configuration forms and the canonical settings slot-type contract",
+  "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -39,23 +39,25 @@
   },
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-api-remotes": "workspace:^",
-    "@deepseek-ai/dsh-client-store": "workspace:^",
-    "@deepseek-ai/dsh-client-test-runtime": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
-    "@deepseek-ai/dsh-settings": "workspace:^",
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-api-remotes": "workspace:*",
+    "@deepseek-ai/dsh-client-store": "workspace:*",
+    "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
+    "@deepseek-ai/dsh-settings": "workspace:*",
     "@types/react": "~18.3.1",
     "react": "^18.2.0",
-    "@deepseek-ai/schemastery": "workspace:^",
-    "@deepseek-ai/dsh-util-values": "workspace:^"
+    "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "files": [
     "lib/index.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
-  ]
+  ],
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:~"
+  }
 }

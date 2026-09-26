@@ -1,4 +1,4 @@
-/* Active plan status follows Figma's warn-state pill. */
+/* Plan status uses the same compact geometry as the sibling mode controls. */
 
 .wrap {
   display: inline-flex;
@@ -10,13 +10,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  height: 28px;
   min-width: 34px;
-  padding: 2px 8px;
+  padding: 0 8px;
   border: none;
-  border-radius: 999px;
-  corner-shape: round;
-  background: var(--dsw-alias-state-warn-tertiary);
-  color: var(--dsw-alias-state-warn-label);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
@@ -24,11 +24,15 @@
 }
 
 .chip:hover:not(:disabled) {
-  color: var(--dsw-alias-state-warn-primary);
+  background: color-mix(
+    in srgb,
+    var(--dsw-alias-state-business-tertiary),
+    var(--dsw-alias-state-business-primary) 6%
+  );
 }
 
 .chip:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-warn-label);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
@@ -37,10 +41,26 @@
   cursor: default;
 }
 
-.close {
+/* One 14px glyph slot ahead of the label (the access-mode trigger's layout):
+   the plan glyph at rest, the circled close while the enabled chip is hovered
+   or keyboard-focused, marking the pending click as turning plan mode off. */
+.glyph {
   display: inline-flex;
-  align-items: center;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
   color: currentColor;
+}
+
+.hoverGlyph,
+.chip:hover:not(:disabled) .restGlyph,
+.chip:focus-visible .restGlyph {
+  display: none;
+}
+
+.chip:hover:not(:disabled) .hoverGlyph,
+.chip:focus-visible .hoverGlyph {
+  display: block;
 }
 
 .error {

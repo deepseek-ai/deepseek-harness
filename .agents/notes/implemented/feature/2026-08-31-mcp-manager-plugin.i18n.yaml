@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-31-mcp-manager-plugin.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-31-mcp-manager-plugin.md
-2026-08-31-mcp-manager-plugin.md: a59aec96fd5ffb3deebed6e6a453570b381af470
-2026-08-31-mcp-manager-plugin.zh.md: 46f4d3feeaf3ad9c7bc4a4d2996c0b23357c18a0
+/agent-note-settings-driven-mcp-server-manager:
+  en: 56c40f7db118247c
+  zh: 3b3c596983cd48e1
+/agent-note-settings-driven-mcp-server-manager/problem:
+  en: 2b64b44522760272
+  zh: 5aa4fd804355b930
+/agent-note-settings-driven-mcp-server-manager/decision:
+  en: ecb7c732e97f9f75
+  zh: 2f3a141b476b7db8
+/agent-note-settings-driven-mcp-server-manager/alternatives-considered:
+  en: 7487801b50d17f38
+  zh: eba0b6a67b78f1a3
+/agent-note-settings-driven-mcp-server-manager/testing:
+  en: abadc829e6c35b5f
+  zh: 0eb2a428d19139de
+/agent-note-settings-driven-mcp-server-manager/consequences:
+  en: bd6f0e3f30e64806
+  zh: 9161496b0f8600d2

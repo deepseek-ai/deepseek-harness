@@ -61,10 +61,13 @@ export const MODULE_PROXIES: Record<string, string> = {
   'dns/promises': './node/builtin_modules/mock/dns/promises.ts',
   'node:net': './node/builtin_modules/mock/net.ts',
   'node:stream': './node/builtin_modules/implemented/stream.ts',
+  'node:stream/promises': './node/builtin_modules/implemented/stream/promises.ts',
+  'stream/promises': './node/builtin_modules/implemented/stream/promises.ts',
   'node:vm': './node/builtin_modules/mock/vm.ts',
   'node:worker_threads': './node/builtin_modules/mock/worker_threads.ts',
   'node:sqlite': './node/builtin_modules/mock/sqlite.ts',
   // External npm replacements, named after the package each stands in for.
+  '@deepseek-ai/libreoffice-kit': './node/external_packages/libreoffice-kit.ts',
   '@deepseek-ai/node-addon-system/flock': './node/external_packages/node-addon-system-flock.ts',
   'koffi': './node/external_packages/koffi.ts',
   'sharp': './node/external_packages/sharp.ts',

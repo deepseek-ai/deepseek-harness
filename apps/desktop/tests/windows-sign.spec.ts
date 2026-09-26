@@ -1,9 +1,11 @@
 import { execFile } from 'node:child_process'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { validateDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
+import { createPackagingRun } from '../scripts/packaging-run.mjs'
 import {
   buildWindowsSigningEnvironment,
   createRedactedWindowsSigningError,
@@ -15,12 +17,23 @@ import {
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>()
-  return { ...actual, execFile: vi.fn() }
+  const { promisify } = await import('node:util')
+  const mock = vi.fn()
+  // Node's execFile promisifier returns both output streams; generic promisify drops stderr.
+  Object.defineProperty(mock, promisify.custom, { value: (...args: unknown[]) => new Promise((resolve, reject) => {
+    mock(...args, (error: Error | null, stdout: string, stderr: string) => {
+      if (error) reject(error)
+      else resolve({ stdout, stderr })
+    })
+  }) })
+  return { ...actual, execFile: mock }
 })
 
-vi.mock('node:crypto', () => ({
+vi.mock('node:crypto', async importOriginal => ({
+  ...await importOriginal<typeof import('node:crypto')>(),
   X509Certificate: class {
     readonly ca = false
+    readonly fingerprint = 'A'.repeat(40)
     readonly keyUsage = ['1.3.6.1.5.5.7.3.3']
 
     constructor(contents: Buffer) {
@@ -35,6 +48,107 @@ const CERTIFICATE_FILE = 'C:\\release\\server.cer'
 const SIGN_SCRIPT = resolve(import.meta.dirname, '../scripts/windows-sign.cmd')
 
 describe('Windows token signing', () => {
+  it.each(['invalid-primary', 'timestamp-exhausted', 'timestamp-recovered', 'normalization-corrupt'] as const)(
+    'keeps hardware protection separate from %s', async (mode) => {
+      const root = await mkdtemp(join(tmpdir(), 'dsh-sign-completion-'))
+      const certificateFile = join(root, 'server.cer')
+      const signTool = join(root, 'signtool.exe')
+      const path = join(root, 'application.exe')
+      const stateDirectory = join(root, 'state')
+      await writeFile(certificateFile, 'code-signing-certificate-fixture')
+      await writeFile(signTool, 'fixture')
+      await writeFile(path, 'input')
+      const run = createPackagingRun(join(root, 'records'), {})
+      let hardware = 0
+      let timestamps = 0
+      vi.mocked(execFile).mockImplementation((...args: unknown[]) => {
+        const command = args[0] as string
+        const argv = args[1] as string[]
+        const options = args[2] as { env: NodeJS.ProcessEnv }
+        const callback = args.at(-1) as (error: Error | null, stdout?: string, stderr?: string) => void
+        if (argv[0] === '/d') {
+          hardware++
+          expect(existsSync(join(stateDirectory, 'attempt.json'))).toBe(true)
+          writeFileSync(options.env.DSH_DESKTOP_WINDOWS_SIGN_TARGET!, 'signed:input')
+          callback(null, '', '')
+        } else {
+          expect(options.env.DSH_DESKTOP_WINDOWS_TOKEN_PIN).toBeUndefined()
+          expect(options.env.DSH_DESKTOP_WINDOWS_KEY_CONTAINER).toBeUndefined()
+          if (command === 'powershell.exe') {
+            const timestamped = readFileSync(options.env.DSH_RUNTIME_VERIFY_FILE!, 'utf8').endsWith(':timestamp')
+            if (!timestamped) expect(existsSync(join(stateDirectory, 'attempt.json'))).toBe(true)
+            callback(null, JSON.stringify({ status: mode === 'invalid-primary' ? 'NotTrusted' : 'Valid', timestamped, thumbprint: 'A'.repeat(40) }), '')
+          } else if (argv[0] === 'remove') {
+            const target = argv.at(-1)!
+            const content = readFileSync(target, 'utf8')
+            if (mode === 'normalization-corrupt') writeFileSync(target, 'unexpected modification')
+            else writeFileSync(target, content.replace(':timestamp', ''))
+            if (mode === 'normalization-corrupt' || !content.endsWith(':timestamp')) {
+              callback(Object.assign(new Error('normalization warning'), { code: 2 }))
+            } else callback(null, '', '')
+          } else {
+            expect(argv[0]).toBe('timestamp')
+            expect(existsSync(join(stateDirectory, 'attempt.json'))).toBe(false)
+            const target = argv.at(-1)!
+            expect(readFileSync(target, 'utf8')).toBe('signed:input')
+            timestamps++
+            if (mode === 'timestamp-exhausted' || timestamps === 1) {
+              writeFileSync(target, 'failed partial output')
+              callback(Object.assign(new Error('timestamp unavailable'), { code: 1, stderr: 'timestamp unavailable' }))
+            } else {
+              writeFileSync(target, 'signed:input:timestamp')
+              callback(null, '', '')
+            }
+          }
+        }
+        return undefined as unknown as ReturnType<typeof execFile>
+      })
+      try {
+        const sign = createWindowsTokenSigner({ certificateFile, signTool, tokenPin: 'fixture-pin', keyContainer: 'fixture-container',
+          runDirectory: run.directory, stateDirectory })
+        const task = { path, hash: 'sha256', isNest: false }
+        if (mode === 'timestamp-recovered') {
+          await sign(task)
+          expect(await readFile(path, 'utf8')).toBe('signed:input:timestamp')
+          expect(timestamps).toBe(2)
+        } else {
+          const results = await Promise.allSettled([sign(task), sign(task)])
+          expect(results.map(result => result.status)).toEqual(['rejected', 'rejected'])
+          expect(await readFile(path, 'utf8')).toBe('input')
+          expect(timestamps).toBe(mode === 'timestamp-exhausted' ? 3 : 0)
+          expect(existsSync(join(run.directory, 'fatal.json'))).toBe(true)
+        }
+        expect(hardware).toBe(1)
+        expect(existsSync(join(stateDirectory, 'attempt.json'))).toBe(mode === 'invalid-primary')
+      } finally {
+        vi.mocked(execFile).mockReset()
+        await rm(root, { recursive: true, force: true })
+      }
+    }, 15_000,
+  )
+  it('preserves verified copies without hardware and rejects the entire queue after preservation failure', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'dsh-windows-copy-signature-'))
+    try {
+      const certificateFile = join(directory, 'server.cer')
+      const signTool = join(directory, 'signtool.exe')
+      await writeFile(certificateFile, 'code-signing-certificate-fixture')
+      await writeFile(signTool, 'fixture')
+      const preserveSignature = vi.fn(async () => true)
+      const sign = createWindowsTokenSigner({ certificateFile, signTool, tokenPin: 'fixture-pin',
+        keyContainer: 'fixture-container', preserveSignature })
+      const task = { path: join(directory, 'copy.exe'), hash: 'sha256', isNest: false }
+      await sign(task)
+      expect(execFile).not.toHaveBeenCalled()
+      preserveSignature.mockRejectedValueOnce(new Error('copy changed'))
+      const results = await Promise.allSettled([sign(task), sign(task), sign(task)])
+      expect(results.map(result => result.status)).toEqual(['rejected', 'rejected', 'rejected'])
+      expect(preserveSignature).toHaveBeenCalledTimes(2)
+      expect(execFile).not.toHaveBeenCalled()
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('stops concurrent and subsequent signing tasks after a PIN failure', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'dsh-windows-pin-failure-'))
     try {
@@ -45,9 +159,12 @@ describe('Windows token signing', () => {
       await writeFile(signTool, 'fixture')
       await writeFile(path, 'fixture')
       validateDesktopPackageEnvironment({
-        DSH_DESKTOP_APP_ID: 'com.example.desktop', DOWNLOAD_TEST_ORIGIN: 'https://updates.example.com',
+        DSH_DESKTOP_APP_ID: 'com.example.desktop', DOWNLOAD_TEST_ORIGIN: 'https://updates.example.com', DOWNLOAD_TEST_RELEASE_ID: '0123456789abcdef0123456789abcdef',
+        DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
+        DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }),
         DSH_DESKTOP_WINDOWS_CER_FILE: certificateFile, DSH_DESKTOP_WINDOWS_SIGNTOOL: signTool,
         DSH_DESKTOP_WINDOWS_TOKEN_PIN: 'fixture-pin', DSH_DESKTOP_WINDOWS_KEY_CONTAINER: 'fixture-container',
+        DSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_DIR: 'C:\\fixture\\signature-cache',
       }, { platform: 'win32', arch: 'x64' })
       expect(execFile).not.toHaveBeenCalled()
       vi.mocked(execFile).mockImplementationOnce((...args: unknown[]) => {
@@ -55,12 +172,22 @@ describe('Windows token signing', () => {
         callback(Object.assign(new Error('signing failed'), { stderr: 'SignTool Error: No private key is available.', code: 1 }))
         return undefined as unknown as ReturnType<typeof execFile>
       })
-      const sign = createWindowsTokenSigner({ certificateFile, signTool, tokenPin: 'fixture-pin', keyContainer: 'fixture-container' })
+      const run = createPackagingRun(join(directory, 'records'), {})
+      const options = { certificateFile, signTool, tokenPin: 'fixture-pin', keyContainer: 'fixture-container',
+        runDirectory: run.directory, stateDirectory: join(directory, 'state') }
+      const sign = createWindowsTokenSigner(options)
       const task = { path, hash: 'sha256', isNest: false }
       const results = await Promise.allSettled([sign(task), sign(task), sign(task)])
       expect(results.map(result => result.status)).toEqual(['rejected', 'rejected', 'rejected'])
       await expect(sign(task)).rejects.toThrow('No private key is available.')
+      const laterRun = createPackagingRun(join(directory, 'records'), {})
+      await expect(createWindowsTokenSigner({ ...options, runDirectory: laterRun.directory })(task)).rejects.toThrow('interlock unavailable')
       expect(execFile).toHaveBeenCalledTimes(1)
+      const records = await readFile(join(run.directory, 'events.jsonl'), 'utf8')
+      expect(records).toContain('sign-start')
+      expect(records).toContain('sign-failure')
+      expect(records).not.toContain('fixture-pin')
+      expect(await readFile(join(options.stateDirectory, 'attempt.json'), 'utf8')).toContain(run.directory.replaceAll('\\', '\\\\'))
     } finally {
       vi.mocked(execFile).mockReset()
       await rm(directory, { recursive: true, force: true })
@@ -111,7 +238,7 @@ describe('Windows token signing', () => {
     expect(text).toContain('setlocal DisableDelayedExpansion\r\n')
     expect(text).toContain('set "DSH_DESKTOP_WINDOWS_CER_FILE="\r\n')
     expect(text).toContain('set "DSH_DESKTOP_WINDOWS_TOKEN_PIN="\r\n')
-    expect(text).toContain('"%signTool%" sign /v /fd sha256 /f "%certificateFile%" /kc "[{{%tokenPin%}}]=%keyContainer%" /csp "eToken Base Cryptographic Provider" %appendSignature% /tr http://timestamp.digicert.com /td sha256 "%targetFile%"\r\n')
+    expect(text).toContain('"%signTool%" sign /v /fd sha256 /f "%certificateFile%" /kc "[{{%tokenPin%}}]=%keyContainer%" /csp "eToken Base Cryptographic Provider" %appendSignature% "%targetFile%"\r\n')
   })
 
   it('rejects incomplete signing identities and non-SHA-256 signing tasks', async () => {
@@ -161,6 +288,9 @@ describe('Windows token signing', () => {
         hash: 'sha1',
         isNest: false,
       })).rejects.toThrow(/requires SHA-256/u)
+      await expect(createWindowsTokenSigner({ certificateFile, signTool, tokenPin: 'fixture-pin', keyContainer: 'fixture-container' })({
+        path: 'C:\\release\\setup.exe', hash: 'sha256', isNest: true,
+      })).rejects.toThrow('does not support appended signatures')
     }
     finally {
       await rm(directory, { recursive: true })

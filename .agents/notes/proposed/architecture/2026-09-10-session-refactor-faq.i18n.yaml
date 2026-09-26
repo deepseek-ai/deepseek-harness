@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-10-session-refactor-faq.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-09-10-session-refactor-faq.md
-2026-09-10-session-refactor-faq.md: cae6dbaaf0354836c34d1414da16f7b274da382e
-2026-09-10-session-refactor-faq.zh.md: b0d5099250d439a133ca80b6f555d78541906367
+/agent-note-session-refactor-faq:
+  en: e51be5edaac914bc
+  zh: 2e3ef4006e0ab07d
+/agent-note-session-refactor-faq/problem:
+  en: dd6312b4ffd1f4b4
+  zh: 16d132992aaf81fc
+/agent-note-session-refactor-faq/proposal:
+  en: 986dd8097aac4d3d
+  zh: 986dd8097aac4d3d
+/agent-note-session-refactor-faq/proposal/why-logicalsession:
+  en: f3826d6dba15dd3f
+  zh: c5f63ae9322dd924
+/agent-note-session-refactor-faq/proposal/is-concrete-session-forbidden-immediately:
+  en: 129c7ac82e23e811
+  zh: 834033794db12916
+/agent-note-session-refactor-faq/proposal/how-do-sessionservice-and-sessionstorage-differ:
+  en: 2dec5b2809ca1ea8
+  zh: d6446f78a2da0e0d
+/agent-note-session-refactor-faq/proposal/where-does-projection-fit:
+  en: 6b2ce6773bdd958b
+  zh: c59f2e6fcea57417
+/agent-note-session-refactor-faq/proposal/why-no-sessionsearch-or-sessionstats:
+  en: 49016cb52c419fa0
+  zh: 1d7ad3a8d23a7d0c
+/agent-note-session-refactor-faq/proposal/must-ordinary-users-migrate:
+  en: 561adffeb62beb3e
+  zh: bc11f602e9bc6a87
+/agent-note-session-refactor-faq/proposal/what-is-complete:
+  en: 7693e479cc3d69f2
+  zh: ed827338c03c0c01
+/agent-note-session-refactor-faq/proposal/how-can-i-contribute:
+  en: 4fb0e060d2a6648b
+  zh: 03f0039e1bc32437
+/agent-note-session-refactor-faq/alternatives-considered:
+  en: bd143e9bcef3df2c
+  zh: c20c997563d10d6a
+/agent-note-session-refactor-faq/acceptance-criteria:
+  en: a78f08bcf0c0af46
+  zh: 5aa2b6952969705d
+/agent-note-session-refactor-faq/risks:
+  en: e0db80998e7b18b4
+  zh: fd6b75e582d743ed

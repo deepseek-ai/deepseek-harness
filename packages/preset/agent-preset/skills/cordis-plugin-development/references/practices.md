@@ -1,0 +1,38 @@
+# Harness plugin practices
+
+These rules follow from Harness mechanisms. Confirm every Service method, Event name, and dispatch mode named here with `cordis_inspect_query` (`Service`, `Event`) before relying on it; the installed Harness is the authority.
+
+## Principles
+
+1. **The session log is the only source of truth.** Anything the model sees must be reconstructable from committed session events; fork, resume, and replay derive from the log. Plugin memory is a derived cache.
+2. **Registrations are effects owned by a context.** Plugin unload, agent disposal, slot collapse, and profile patches remove what was registered on the corresponding context. Choose the owning context. A registration on another context, such as `agent.ctx`, has two owners: keep its disposer in your plugin's own effect too, so either teardown removes it.
+3. **The framework drives; the plugin computes.** Session projections, Conversation assembly, and slot rendering subscribe, cache, and publish for you. A plugin that subscribes, rescans, or writes DOM itself bypasses that incremental machinery.
+4. **Extension points are shared; use the weakest mechanism that suffices.** From weakest to strongest: `ctx.tools.restrict()` can only remove tools; `ctx.tools.guard()` can only deny; waterfall listeners can rewrite and depend on registration order; `system-prompt/assemble` replaces the whole assembly. The stronger the mechanism, the more of other plugins' contributions you must preserve.
+5. **Other plugins and other Harness versions read your data.** Unknown event types, older readers, and older cached state meet what you write; declare compatibility with the envelope fields and versions the Harness provides.
+6. **Plugin UI is part of the Harness UI.** Users see one application, so a plugin uses the host's theme tokens, locale, and layout patterns, and matches the look and behavior of host components. Whether that is possible is decided by where the UI renders, so choose the rendering surface before writing any view; later styling inside the wrong surface cannot recover consistency.
+
+## Stability
+
+- A waterfall listener (`agent/pre-step`, `agent/request`, `llm/stream`, `tools/pre-execute`, `tools/execute`, `tools/post-execute`) that does not own the decision must return `next()`. When rewriting an `agent/pre-step` decision, spread it (`{ ...decision, messages }`) so fields such as `startsRequestSeries` survive.
+- A denial that must hold regardless of order is a `ctx.tools.guard()`; a guard is synchronous, so a decision that must await something, such as asking the user, returns `ask` from `tools/pre-execute`. Hiding tools from one agent is `ctx.tools.restrict()` on that agent's context; it keeps schema presentation, lookup, and execution aligned. Observe final tool outcomes on `tools/result`; use `tools/post-execute` only to transform a result. Do not listen to `system-prompt/assemble` to add or remove tools or text.
+- Add prompt text with `ctx.systemPrompt.section()`. Add per-agent context with `agent.inject()`; it is logged as `agent/inbox/spliced` at call time and enters the next admitted step. `agent/request` listeners cannot change request messages.
+- Register per-agent behavior on `agent.ctx`, obtained in an `agent/created` listener, so it is removed when that agent is disposed. Wrap it in one `agent.ctx.effect()` and also keep that disposer, keyed by agent, in your plugin's own effect; unloading the plugin does not dispose `agent.ctx` registrations by itself.
+- Put optional services in `inject` or `ctx.inject([...], ...)` so the plugin stays inactive in profiles without them instead of throwing.
+- Do not append session events with a new `type`. Readers accept an unknown stored event only when its envelope carries `ignorable: true`, and live `Session.append()` cannot set that marker, so the Session would refuse to reopen. Derive state from existing events, or keep plugin-owned data in a storage service found through inspection.
+- Put tunable values in the plugin's `Config` so users change them in `cordis.patch.yml`; the user's patch layer survives upgrades.
+
+## Performance
+
+- Keep per-session state derived from the log in a `ctx.sessionProjections` unit instead of subscribing to `session/event` and rescanning `session.events`. `apply(state, event)` is pure and synchronous and returns the same reference for events it ignores, so unchanged state costs nothing downstream. Read with `stateOf()`. A `view()` returns the same reference when its value is unchanged, which suppresses publication.
+- Keep projection state plain JSON and bump `stateVersion` when fields or fold semantics change. The projection cache then checkpoints it, cold reads replay only the tail, and stale checkpoints are discarded.
+- Wait on durable events such as `turn/end`, `assistant/message`, or `tool/result`; render live tokens from `agent/assistant-stream`. Do not poll `agent/status`. `whenIdle()` does not mean one follow-up finished: several inputs can share one running interval.
+- A timer that starts work calls `agent.followup()`, which wakes the agent; `agent.inject()` does not wake it, so injected context can wait in the inbox until other input arrives. Clear the timer in the owning effect.
+
+## UI
+
+- Render plugin pages as React components in a slot. Do not serve an HTML page from the Host and embed it in an iframe: an iframe document does not receive the host's theme tokens, light/dark switching, or `ctx.locale`.
+- Style with the theme tokens that `cordis_inspect_query` `Theme` lists (`--dsw-alias-*`); literal colors are for artwork only. Tokens are the lowest-risk way to match the host: a renamed token degrades appearance but never breaks rendering. Copy spacing, type sizes, and row patterns from an existing host page of the same kind; the Plugin Manager page is the reference for management lists.
+- Do not `require('@deepseek-ai/dsh-client-ui-primitives')` or load any other Harness Client package as a module; `dsh.client.inject` entries only order activation and stay allowed. They change without notice, a plain-JS plugin has no type check, and a throwing component blanks your slot entry (console: `slot entry crashed in '<slot>'`). Write your own controls and match the host instead: copy markup, CSS, and behavior from the primitive into the plugin (`src/*.tsx` and `*.module.css` in a DSH source checkout, or the installed package's `lib/index.js` and `lib/**/*.css`), or inspect the rendered host control in the connected page. Rename copied classes under your plugin's prefix, keep only `--dsw-alias-*` token references, and keep the behavior that users rely on, such as Modal focus and Escape handling, `role="switch"` with `aria-checked`, and Tooltip placement. Tokens then remain the only shared styling dependency.
+- Contribute through slots: `ctx.slots.inject(ownerKey, () => ctx.slots.register(...))`. The callback's registrations are disposed when the owning declaration collapses and reinstalled when it returns. Read session data through the slot props' selector hooks, subscribing to the smallest slice. Do not write DOM outside your component or append to `document.body`.
+- Add a Chat row by registering an event definition with `ctx.uiConversation.events.register()` and its view in the `conversation.chat.node` slot under the definition's `kind`, which is the renderer key; the Conversation layer owns paging, Turn and Step placement, and incremental assembly.
+- When the Client needs a value derived from a session, declare `wire.view` on the Host projection. The value reaches the Client already computed; the Client does not fold session events itself.

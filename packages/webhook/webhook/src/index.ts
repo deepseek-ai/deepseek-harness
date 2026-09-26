@@ -100,7 +100,7 @@ export class WebhookRuntime extends Service {
 
     // The public generic preserves adapter-specific authoring types. The runtime
     // stores one erased callback after validating the shared provider tag.
-    const erased = rule as unknown as AnyWebhookRule
+    const erased = rule as AnyWebhookRule
     let registration!: RuleRegistration
     const disposeEffect = this.ctx.effect(() => {
       /* v8 ignore next -- no await separates the public liveness check from this initializer. */

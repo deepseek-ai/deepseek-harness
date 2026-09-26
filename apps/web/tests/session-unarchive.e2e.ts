@@ -1,8 +1,5 @@
-// Web e2e scenario: the archived-session Settings page restores a Session
-// through the real wire, from its row menu through the archive set, the page,
-// and the reload that rebuilds state from the host baseline. Zero model calls:
-// both verbs are host RPCs and the page reads already-loaded Session summaries,
-// so no replay fixture mounts and a stray model stream fails loud.
+// Archive and restore through sidebar row menus and the archived filter,
+// then reload from the Host baseline. This flow makes no model calls.
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
@@ -19,7 +16,7 @@ import { newEnglishPage, saveFailureShot } from './support.ts'
 const SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url))
 const SEED_ID = 'session-unarchive-web-e2e'
 
-describe('web e2e: archived sessions are restored from the Settings page', () => {
+describe('web e2e: archived sessions are restored from the sidebar filter', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
@@ -76,7 +73,7 @@ describe('web e2e: archived sessions are restored from the Settings page', () =>
     await scaffold?.close()
   })
 
-  it('archives the seed, unarchives it from Settings, and keeps it restored across reload', async () => {
+  it('archives the seed, restores it through the sidebar filter, and keeps it restored across reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-session-unarchive'))
     // Select the only visible Session, then give it a user-owned title: the
     // locator binds to the seed's own copy on both sides of the round trip.
@@ -104,46 +101,20 @@ describe('web e2e: archived sessions are restored from the Settings page', () =>
     expect((await scaffold.ctx.sessionPersistence.list()).map(snapshot => snapshot.header.id))
       .toContain(SessionId(SEED_ID))
 
-    // The Settings page lists the archived Session behind its own search box.
-    await page.getByRole('button', { name: 'Settings', exact: true }).click()
-    const dialog = page.getByRole('dialog', { name: 'Settings' })
-    await dialog.waitFor({ timeout: 10_000 })
-    await dialog.getByRole('button', { name: 'Archived sessions' }).click()
-    const search = dialog.getByRole('searchbox', { name: 'Search archived sessions' })
-    await search.waitFor({ timeout: 10_000 })
-    const unarchiveRow = dialog.getByRole('button', { name: `Unarchive ${title}` })
-    await expect.poll(() => unarchiveRow.count(), { timeout: 10_000 }).toBe(1)
-    expect(await dialog.getByText(title, { exact: true }).count()).toBe(1)
-    expect(await dialog.getByText(/^Ungrouped · /).count()).toBe(1)
-    expect(await dialog.getByText('No archived sessions.', { exact: true }).count()).toBe(0)
-    // The search box filters these rows in both directions.
-    await search.fill('zzz-no-such-archived-session')
-    await expect.poll(
-      () => dialog.getByText('No matching sessions.', { exact: true }).count(),
-      { timeout: 5_000 },
-    ).toBe(1)
-    expect(await unarchiveRow.count()).toBe(0)
-    await search.fill(title)
-    await expect.poll(() => unarchiveRow.count(), { timeout: 5_000 }).toBe(1)
-    expect(await dialog.getByText('No matching sessions.', { exact: true }).count()).toBe(0)
-    await search.fill('')
-    await expect.poll(() => unarchiveRow.count(), { timeout: 5_000 }).toBe(1)
-
-    // Unarchive: the durable set empties (the row's own RPC), the page row
-    // leaves with the empty status, and the Session row is back in the sidebar.
-    await unarchiveRow.click()
+    await page.getByRole('button', { name: 'View options' }).click()
+    await page.getByRole('menuitem', { name: 'All conversations (show archived)', exact: true }).click()
+    await ungroupedSection()
+    await expect.poll(() => sessionRow.count(), { timeout: 10_000 }).toBe(1)
+    await clickHoverAction(sessionRow, `Session actions for ${title}`)
+    await page.getByRole('menuitem', { name: 'Unarchive session' }).click()
     await expect.poll(
       () => [...scaffold.ctx.workspaceRegistry.archivedSessionIds],
       { timeout: 10_000 },
     ).toEqual([])
-    await expect.poll(() => unarchiveRow.count(), { timeout: 10_000 }).toBe(0)
-    expect(await dialog.getByText(title, { exact: true }).count()).toBe(0)
-    await expect.poll(
-      () => dialog.getByText('No archived sessions.', { exact: true }).count(),
-      { timeout: 10_000 },
-    ).toBe(1)
-    await dialog.getByRole('button', { name: 'Close' }).last().click()
-    await dialog.waitFor({ state: 'hidden', timeout: 10_000 })
+    // Back to the default filter: the restored row must be an ordinary row
+    // again, visible without any archived rows in the view.
+    await page.getByRole('button', { name: 'View options' }).click()
+    await page.getByRole('menuitem', { name: 'Hide archived', exact: true }).click()
     await ungroupedSection()
     await expect.poll(() => sessionRow.count(), { timeout: 15_000 }).toBe(1)
 

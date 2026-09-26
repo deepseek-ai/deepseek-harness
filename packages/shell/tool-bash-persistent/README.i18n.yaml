@@ -1,6 +1,79 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/shell/tool-bash-persistent/README.md
-README.md: f6d6daa0f9c312b64e913aa811fadff3ad6b6acf
-README.zh.md: 19f88c9c130a0bb1001770869355b88cae943644
+/:
+  en: 1516a333e77ca54a
+  zh: 53ef80da9cefd884
+/deepseek-ai-dsh-tool-bash-persistent:
+  en: 7182dce9573ad218
+  zh: 2a103f9a62465adb
+/deepseek-ai-dsh-tool-bash-persistent/summary:
+  en: c69d0b2f4043b9af
+  zh: 03a50ce77e9dd092
+/deepseek-ai-dsh-tool-bash-persistent/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tool-bash-persistent/use-this-package:
+  en: ddec7cc1004498f8
+  zh: cd0cba22e570d1e9
+/deepseek-ai-dsh-tool-bash-persistent/use-this-package/when-to-choose-it:
+  en: cabfbfebb53d909a
+  zh: 9e403f87f211cc4a
+/deepseek-ai-dsh-tool-bash-persistent/use-this-package/minimal-configuration:
+  en: 83cb0aeb3b41f700
+  zh: cb1316b70eb98a09
+/deepseek-ai-dsh-tool-bash-persistent/use-this-package/what-the-agent-can-rely-on:
+  en: b398f124ea7b77b0
+  zh: 50855e601e6c1b88
+/deepseek-ai-dsh-tool-bash-persistent/use-this-package/what-can-go-wrong:
+  en: 2713550ebdb02f69
+  zh: 52ed398dc541d1fc
+/deepseek-ai-dsh-tool-bash-persistent/understand-the-implementation:
+  en: 8d94a7381bca3fa9
+  zh: f4bd2866fff6fa8d
+/deepseek-ai-dsh-tool-bash-persistent/understand-the-implementation/design-philosophy:
+  en: 61c39f52982612e3
+  zh: 92bc7e3c8d13a211
+/deepseek-ai-dsh-tool-bash-persistent/understand-the-implementation/source-map:
+  en: 8dc5a2fb04ac01a2
+  zh: ad7822d2f49fafce
+/deepseek-ai-dsh-tool-bash-persistent/understand-the-implementation/command-flow:
+  en: 3b7bf7c20b266c31
+  zh: 85a325ef65fa7ac7
+/deepseek-ai-dsh-tool-bash-persistent/further-exploration:
+  en: 3a700d3333442a0c
+  zh: 67fb851aaf297d27
+/deepseek-ai-dsh-tool-bash-persistent/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-bash-persistent/model-experience/tool-schema:
+  en: e4c7376d4f29dbd5
+  zh: 6b7a9eaf69c9ea53
+/deepseek-ai-dsh-tool-bash-persistent/model-experience/tool-schema/what-the-model-sees:
+  en: b3bac26e0866aec6
+  zh: 8ee63c4c128ea2b4
+/deepseek-ai-dsh-tool-bash-persistent/model-experience/tool-schema/token-effect:
+  en: feee7dec91ae7329
+  zh: b62338fa72ad3b87
+/deepseek-ai-dsh-tool-bash-persistent/model-experience/tool-schema/kv-cache-effect:
+  en: 7d9323583a83cb95
+  zh: cc5daa6bce8450f8
+/deepseek-ai-dsh-tool-bash-persistent/model-experience/tool-results:
+  en: beaabb79f229692a
+  zh: 8573891441963be4
+/deepseek-ai-dsh-tool-bash-persistent/model-experience/tool-results/what-the-model-sees:
+  en: 7c197e9bb86cc044
+  zh: d8ffe918aab08250
+/deepseek-ai-dsh-tool-bash-persistent/model-experience/tool-results/token-effect:
+  en: 5dea04ce6a30ad48
+  zh: c2434253dc517d3d
+/deepseek-ai-dsh-tool-bash-persistent/model-experience/tool-results/kv-cache-effect:
+  en: ba6a48888c3361e5
+  zh: 3a8f648053555dc9
+/deepseek-ai-dsh-tool-bash-persistent/known-limitations-and-deferred-work:
+  en: dc5a908f2b2da040
+  zh: 3afceaabcf324771
+/deepseek-ai-dsh-tool-bash-persistent/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

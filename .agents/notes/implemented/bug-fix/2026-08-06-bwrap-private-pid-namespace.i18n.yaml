@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-06-bwrap-private-pid-namespace.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-06-bwrap-private-pid-namespace.md
-2026-08-06-bwrap-private-pid-namespace.md: c7c83fd274c5dcd6634bdb78a909f1366e1926ba
-2026-08-06-bwrap-private-pid-namespace.zh.md: fa53d4eb66669236d3e4ed82b2a4df3adff6dfc5
+/agent-note-isolate-bwrap-from-the-host-pid-namespace:
+  en: 56e719d5aa015e57
+  zh: 2568d89bb33ab663
+/agent-note-isolate-bwrap-from-the-host-pid-namespace/problem:
+  en: 2da6f0dd324f054d
+  zh: 4a414f04e638aa47
+/agent-note-isolate-bwrap-from-the-host-pid-namespace/decision:
+  en: d1000f28dd8cd2c6
+  zh: 9b35f7085ae68b99
+/agent-note-isolate-bwrap-from-the-host-pid-namespace/alternatives-considered:
+  en: e794f6d8578bffef
+  zh: 61feee3ed99c615d
+/agent-note-isolate-bwrap-from-the-host-pid-namespace/verification:
+  en: 7f9a12f088ce869f
+  zh: 8d1ea7519de1605d
+/agent-note-isolate-bwrap-from-the-host-pid-namespace/consequences:
+  en: 4543b72f4d669fdf
+  zh: 7576f60bac467013

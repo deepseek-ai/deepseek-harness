@@ -36,7 +36,19 @@
       "path": "../../session/session-persistence-jsonl"
     },
     {
-      "path": "../../session/session-projection"
+      "path": "../../runtime-diagnostics/invariants"
+    },
+    {
+      "path": "../../api/session-controller/tsconfig.host.json"
+    },
+    {
+      "path": "../../storage/storage-domain"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../workspace/workspace"
     },
     {
       "path": "../../runtime-diagnostics/invariants"

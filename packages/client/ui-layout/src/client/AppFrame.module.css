@@ -5,8 +5,14 @@
   height: 100%;
   overflow: hidden;
   background: var(--dsw-alias-bg-base);
-  /* Collapse/expand animates the tracks on the deepsuite sider curve
-     (--ds-ease-in-out / --ds-transition-duration-slow, ui-theme base.css). */
+}
+
+/* Only a discrete collapse/expand toggle eases the tracks (the TSX holds
+   data-animating across the toggle on the deepsuite sider curve). Steady-state
+   tracks move only with the viewport, and those updates must land instantly:
+   an eased track chases the live window edge and the centre column visibly
+   rubber-bands while the user resizes the window. */
+.frame[data-animating] {
   transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
@@ -16,8 +22,40 @@
   transition: none;
 }
 
+/* The Windows caption row remains outside every conversation and file panel. */
+:global([data-windows-titlebar]) .frame {
+  --dsh-windows-content-radius: 16px;
+  box-sizing: border-box;
+  padding-top: var(--dsh-windows-titlebar-height);
+  grid-template-rows: minmax(0, 1fr);
+  background: var(--dsw-specific-sidebar-fill);
+}
+
+:global([data-windows-titlebar]) .centerCol {
+  background: var(--dsw-alias-bg-base);
+  border-radius: var(--dsh-windows-content-radius) 0 0 0;
+  corner-shape: round;
+}
+
+:global([data-windows-titlebar]) .frame::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--dsh-windows-titlebar-height);
+  background: var(--dsw-specific-sidebar-fill);
+  -webkit-app-region: drag;
+}
+
+:global([data-windows-titlebar]) .sidebarCol {
+  border-right: none;
+}
+
+:global([data-windows-titlebar]) .handle {
+  top: var(--dsh-windows-titlebar-height);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .frame {
+  .frame[data-animating] {
     transition: none;
   }
 }
@@ -45,9 +83,57 @@
   background: transparent;
 }
 
+/* The constant step below the window's top strip (traffic lights, sidebar
+   toggle, shell.leading controls), the same in both sidebar states. Entry
+   pages in the main panel (plugin manager, settings-like pages — not the
+   conversation, which owns its header) pad their top by it so their leading
+   content clears the strip, and overlay primitives keep it as their top
+   viewport margin. Declared on the root element rather than the frame so
+   overlays portalled to document.body inherit it too. */
+:global(html[data-platform='darwin']) {
+  --dsh-frame-top-clearance: 48px;
+}
+
 :global([data-platform='darwin']) .sidebarCol {
-  background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 60%, transparent);
+  /* A blue wash over the top of the translucent tint, gone by a third of the
+     column; a faint blue-grey-violet rises through the bottom third; and a
+     faint blue cast is mixed into the tint itself. Every layer stays
+     transparent so vibrancy shows. */
+  background:
+    linear-gradient(
+      to bottom,
+      rgb(122 155 240 / 0.1),
+      rgb(122 155 240 / 0) 35%,
+      rgb(143 137 184 / 0) 68%,
+      rgb(143 137 184 / 0.09)
+    ),
+    color-mix(in srgb, color-mix(in srgb, var(--dsw-specific-sidebar-fill) 97%, rgb(122 155 240)) 40%, transparent);
   border-right: none;
+}
+
+/* Dark drops the blue cast (the light-mode wash reads purple over dark fills)
+   and thins the fill so more wallpaper shows; the washes stay. */
+:global([data-platform='darwin']) :global([data-ds-dark-theme]) .sidebarCol {
+  background:
+    linear-gradient(
+      to bottom,
+      rgb(122 155 240 / 0.08),
+      rgb(122 155 240 / 0) 35%,
+      rgb(143 137 184 / 0) 68%,
+      rgb(143 137 184 / 0.07)
+    ),
+    color-mix(in srgb, var(--dsw-specific-sidebar-fill) 50%, transparent);
+}
+
+/* macOS Reduce Transparency: the OS flattens the window's vibrancy layer to a
+   solid grey, so the thin tint and washes read washed-out over it. Replace
+   them with a 90%-opaque fill of the same token in both themes (the dark
+   selector repeats so this outranks its thinner fill). */
+@media (prefers-reduced-transparency: reduce) {
+  :global([data-platform='darwin']) .sidebarCol,
+  :global([data-platform='darwin']) :global([data-ds-dark-theme]) .sidebarCol {
+    background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 90%, transparent);
+  }
 }
 
 :global([data-platform='darwin']) .centerCol {
@@ -55,10 +141,64 @@
   border-left: 0.5px solid var(--dsw-alias-border-l3);
 }
 
+/* The right track paints the base ground on the transparent frame: while the
+   track and the occupant's translateX slide ride the same curve, the grid
+   eases in layout and the transform on the compositor, so frames where they
+   diverge would otherwise show vibrancy glass between the centre's right edge
+   and the incoming panel. The occupant's opaque panel covers this at rest. */
+:global([data-platform='darwin']) .rightbarCol {
+  background: var(--dsw-alias-bg-base);
+}
+
 /* The darwin closed sidebar has no rail: the centre reaches the window edge,
    where a separator would draw a seam against nothing. */
 :global([data-platform='darwin']) [data-sidebar-collapsed] .centerCol {
   border-left: none;
+}
+
+/* Published while the shell.leading seat is mounted (same condition as the
+   TSX mount: darwin with the sidebar collapsed — the collapse that hides the
+   column entirely): the inline band the window chrome occupies, measured from
+   the frame's left edge — traffic lights to x 68, controls at x 88
+   (28 + 8 + 28), then 8px of air. Main panels whose content reaches the
+   top-left corner pad by this. */
+:global([data-platform='darwin']) .frame[data-sidebar-collapsed] {
+  --dsh-frame-leading-clearance: 160px;
+}
+
+/* Fullscreen hides the traffic lights (preload mirrors the window state onto
+   html[data-fullscreen]): the seat takes their band and the clearance keeps
+   only the controls (12 + 28 + 8 + 28 + 8). The 12px start matches the
+   expanded sidebar strip's inline padding (ui-sidebar .topStrip), so
+   collapsing never shifts the toggle. */
+:global([data-platform='darwin'][data-fullscreen]) .frame[data-sidebar-collapsed] {
+  --dsh-frame-leading-clearance: 84px;
+}
+
+:global([data-platform='darwin'][data-fullscreen]) .leadingSeat {
+  left: 12px;
+}
+
+/* The frame declares no window drag of its own: every chrome row owns the drag
+   over its own box (ui-web base.css holds the one rule; the ui-theme app-region
+   gate lists the rows). The ordering rule that replaces the old "band first"
+   invariant: a surface that covers the window and must stay clickable portals
+   beside #root, which puts it after every drag row in document order. The Windows
+   caption row above is the other platform's chrome and stays. */
+
+/* The seat itself: the two 28px controls centered on the conversation title
+   row (10px header inset + 30px row → centre y 25) and level with the traffic
+   lights (centre y ≈ 24). Sits above column content, below frame overlays
+   (20) and the fullscreen right panel (40). The box subtracts itself from any
+   window drag row beneath (Electron app-regions are geometry, not stacking). */
+.leadingSeat {
+  position: absolute;
+  top: 11px;
+  left: 88px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
 }
 
 /* Drag handles are frame children (columns clip overflow): an 8px hit strip
@@ -76,8 +216,12 @@
   cursor: col-resize;
   z-index: 11;
   touch-action: none;
-  /* Rides the same curve as the tracks so the pill stays on the moving
-     border during collapse/expand; paused while dragging (frame rule). */
+}
+
+/* Rides the same curve as the tracks so the pill stays on the moving border
+   during collapse/expand; instant at steady state (viewport-driven moves)
+   and while dragging. */
+.frame[data-animating] .handle {
   transition: left var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
@@ -94,7 +238,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .handle {
+  .frame[data-animating] .handle {
     transition: none;
   }
 }

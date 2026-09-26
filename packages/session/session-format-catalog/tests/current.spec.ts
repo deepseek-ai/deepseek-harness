@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import type { SessionFormatArtifact, SessionFormatHeader } from '@deepseek-ai/dsh-session-format'
 import {
   validateInstalledCurrentSessionArtifact,
@@ -6,7 +7,7 @@ import {
 } from '../src/current.ts'
 
 const currentHeader: SessionFormatHeader = {
-  version: 3,
+  version: SESSION_FORMAT_VERSION,
   id: 'installed-current',
   createdAt: 1,
   isSeeded: false,
@@ -16,14 +17,14 @@ const currentHeader: SessionFormatHeader = {
 describe('installed current Session restoration', () => {
   it('rejects version skew before entering current Session validation', () => {
     expect(() => { validateInstalledCurrentSessionHeader({ ...currentHeader, version: 0 }) })
-      .toThrow(/installed Session format is v3, got v0/)
+      .toThrow(`installed Session format is v${SESSION_FORMAT_VERSION}, got v0`)
     const artifact: SessionFormatArtifact = {
       header: { ...currentHeader, version: 0 },
       inheritedEventCount: 0,
       events: [],
     }
     expect(() => { validateInstalledCurrentSessionArtifact(artifact) })
-      .toThrow(/installed Session format is v3, got v0/)
+      .toThrow(`installed Session format is v${SESSION_FORMAT_VERSION}, got v0`)
   })
 
   it('accepts only current request-header reasons and the true starts-series marker', () => {

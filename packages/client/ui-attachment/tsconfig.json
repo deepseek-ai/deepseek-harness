@@ -18,10 +18,10 @@
       "path": "../ui-renderer"
     },
     {
-      "path": "../ui-chat"
+      "path": "../ui-chat/tsconfig.client.json"
     },
     {
-      "path": "../ui-conversation"
+      "path": "../ui-conversation/tsconfig.client.json"
     },
     {
       "path": "../ui-tool"

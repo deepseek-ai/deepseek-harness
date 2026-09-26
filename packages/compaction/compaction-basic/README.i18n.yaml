@@ -1,6 +1,100 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/compaction/compaction-basic/README.md
-README.md: 68d5a321e04a90bfb726392d1fb179612f6e0626
-README.zh.md: f941cac74053a680cad859b68c7836e181065bc9
+/:
+  en: 4c3172f95eb524e1
+  zh: dd92ec1300ad9cbe
+/deepseek-ai-dsh-compaction-basic:
+  en: 3ba5f9e37ab36328
+  zh: 2390a55415d4c27b
+/deepseek-ai-dsh-compaction-basic/summary:
+  en: 31202d573182cc31
+  zh: e0a0c96f67a9c1ba
+/deepseek-ai-dsh-compaction-basic/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: bda879a892f240f0
+/deepseek-ai-dsh-compaction-basic/use-this-package:
+  en: b40fa08b8ad55cca
+  zh: f8765a6f199c8c7b
+/deepseek-ai-dsh-compaction-basic/use-this-package/what-you-get:
+  en: eb8e340061f72b98
+  zh: 327a51037b2d1adf
+/deepseek-ai-dsh-compaction-basic/use-this-package/smallest-working-composition:
+  en: 4cb73d7a57908948
+  zh: 7ba2ddc4c76e4957
+/deepseek-ai-dsh-compaction-basic/use-this-package/tuning-when-condensation-starts:
+  en: 3446c54c062d7e34
+  zh: fb502c941e508ae0
+/deepseek-ai-dsh-compaction-basic/use-this-package/what-happens-when-condensation-runs:
+  en: c872a8ef069596f0
+  zh: b3a48e309ae830d4
+/deepseek-ai-dsh-compaction-basic/use-this-package/on-demand-condensation-with-compact:
+  en: 4c5067e4c57ca708
+  zh: 1c0e70319b9b2112
+/deepseek-ai-dsh-compaction-basic/use-this-package/trimming-oversized-tool-outputs:
+  en: 1d6a74c0dc874dc8
+  zh: bcfa95549308c030
+/deepseek-ai-dsh-compaction-basic/understand-the-implementation:
+  en: deb655b3b1860576
+  zh: 79f56e41a9dfe01f
+/deepseek-ai-dsh-compaction-basic/understand-the-implementation/design-philosophy:
+  en: 54945a18965f12a8
+  zh: fecd5d4fc2f2e6d6
+/deepseek-ai-dsh-compaction-basic/understand-the-implementation/automatic-triggers-and-overflow-recovery:
+  en: d62d65547dd0b2dc
+  zh: 5c21671f16d94f5a
+/deepseek-ai-dsh-compaction-basic/understand-the-implementation/summarization-mechanics:
+  en: 967531b71453eb88
+  zh: c7919b46e36763e6
+/deepseek-ai-dsh-compaction-basic/understand-the-implementation/the-region-transaction:
+  en: f4330f6bff22d400
+  zh: 46e16c51bb66a0f7
+/deepseek-ai-dsh-compaction-basic/understand-the-implementation/config-resolution:
+  en: 246736aa86d3013d
+  zh: 35e261927ba0699c
+/deepseek-ai-dsh-compaction-basic/understand-the-implementation/source-map:
+  en: bd9d1e01ec833593
+  zh: cbadca50d8e9ed07
+/deepseek-ai-dsh-compaction-basic/further-exploration:
+  en: 84b5b81eb9b5965d
+  zh: 7000af0fa502fcc1
+/deepseek-ai-dsh-compaction-basic/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-compaction-basic/model-experience/conversation-history:
+  en: 2e1148dd0f39a281
+  zh: cd68c9fff63534af
+/deepseek-ai-dsh-compaction-basic/model-experience/conversation-history/what-the-model-sees:
+  en: 8d4325e6659bc314
+  zh: f80e69305b39f4a3
+/deepseek-ai-dsh-compaction-basic/model-experience/conversation-history/what-the-model-sees/conversation-checkpoint-preamble:
+  en: 129d1eaba2519330
+  zh: 3ec517bdc6cb5ae3
+/deepseek-ai-dsh-compaction-basic/model-experience/conversation-history/token-effect:
+  en: 872515a75b5a9726
+  zh: c0045e1972bbac4e
+/deepseek-ai-dsh-compaction-basic/model-experience/conversation-history/kv-cache-effect:
+  en: a22b43f321843aee
+  zh: a5960da1bef34441
+/deepseek-ai-dsh-compaction-basic/model-experience/auxiliary-summarizer-request:
+  en: 7169bd02a7a6c396
+  zh: 7c62e3d4a97c73f7
+/deepseek-ai-dsh-compaction-basic/model-experience/auxiliary-summarizer-request/what-the-model-sees:
+  en: b7afcf1cc1c85c40
+  zh: a112c5b3984c31dc
+/deepseek-ai-dsh-compaction-basic/model-experience/auxiliary-summarizer-request/what-the-model-sees/compaction-instruction-final-user-message:
+  en: 39a362ee4890dbdb
+  zh: 3b98699120b1548e
+/deepseek-ai-dsh-compaction-basic/model-experience/auxiliary-summarizer-request/token-effect:
+  en: 5e0679cb7cb4291a
+  zh: c9df8ebc526b05d9
+/deepseek-ai-dsh-compaction-basic/model-experience/auxiliary-summarizer-request/kv-cache-effect:
+  en: d31d3e3d46542c91
+  zh: 5a42f873993e0c79
+/deepseek-ai-dsh-compaction-basic/known-limitations-and-deferred-work:
+  en: 8f459fa26e079883
+  zh: 4acdcefa71ebb409
+/deepseek-ai-dsh-compaction-basic/known-limitations-and-deferred-work/dev-note:
+  en: 1fec7b90c3b68c49
+  zh: ad9ae54a598846d0

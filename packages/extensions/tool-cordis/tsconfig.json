@@ -24,19 +24,22 @@
       "path": "../../core/agent"
     },
     {
-      "path": "../../core/scope"
-    },
-    {
       "path": "../../core/tools"
     },
     {
-      "path": "../../core/session"
-    },
-    {
-      "path": "../../llm/llm"
-    },
-    {
       "path": "../cordis-host-runner"
+    },
+    {
+      "path": "../../../vendor/loader"
+    },
+    {
+      "path": "../../boot/app-boot"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../../../vendor/group"
     }
   ]
 }

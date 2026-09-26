@@ -25,9 +25,9 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-Web bundle 将此包与 subprocess provider、sandbox policy 和 Typert Gateway 一起挂载。`remote.terminal` 提供 `environment`、`shells`、`list`、`create`、`retain`、`follow`、`write`、`resize`、`rename` 和 `close`；每个操作均按 Session 标识限定范围。列表直接读取 Host 保留的终端，因此查看离线 Session 不会激活 Agent，也不会产生恢复错误。
+Web bundle 将此包与 subprocess provider、sandbox policy 和 Typert Gateway 一起挂载。Sandbox policy 仅为没有 cwd 的 Session 提供默认工作目录。`remote.terminal` 提供 `environment`、`shells`、`list`、`create`、`retain`、`follow`、`write`、`resize`、`rename` 和 `close`；每个操作均按 Session 标识限定范围。列表直接读取 Host 保留的终端，因此查看离线 Session 不会激活 Agent，也不会产生恢复错误。
 
-Shell 探测结果首先列出执行环境声明的默认 shell。仅当 provider 未声明默认值时，才在 POSIX 使用 `/bin/sh`，在 Windows 使用 `cmd.exe`。可选的 `shell` profile 通过可执行路径 `path`、显示名称 `name` 和参数 `args`（默认 `[]`）覆盖这一选择。选择器还会通过执行 provider 探测 `shellCandidates`，仅省略确定未找到的候选。创建请求接受探测返回的 `shellPath` 并再次验证；解析或传输失败会直接报告，不启动其他 shell。环境查询只返回工作目录和限制，不解析 shell，因此默认 shell 不可用时仍可重新连接已有进程。POSIX 自动 profile 以交互模式启动，PowerShell 使用 `-NoLogo`，补全和启动配置仍由 shell 提供。初始目录来自 Session 工作区，终端遵循同一 sandbox policy。
+Shell 探测结果首先列出执行环境声明的默认 shell。仅当 provider 未声明默认值时，才在 POSIX 使用 `/bin/sh`，在 Windows 使用 `cmd.exe`。可选的 `shell` profile 通过可执行路径 `path`、显示名称 `name` 和参数 `args`（默认 `[]`）覆盖这一选择。选择器还会通过执行 provider 探测 `shellCandidates`，仅省略确定未找到的候选。创建请求接受探测返回的 `shellPath` 并再次验证；解析或传输失败会直接报告，不启动其他 shell。环境查询只返回工作目录和限制，不解析 shell，因此默认 shell 不可用时仍可重新连接已有进程。POSIX 自动 profile 以交互模式启动，PowerShell 使用 `-NoLogo`，补全和启动配置仍由 shell 提供。初始目录来自 Session 工作区。用户终端使用执行环境中系统用户的权限，独立于 Agent 的沙箱模式和审批策略。操作系统和容器的限制仍然生效；DSH 不提升用户权限。Subprocess provider 继续清除环境中的凭据变量。
 
 | 配置 | 默认值 | 含义 |
 |---|---|---|
@@ -53,7 +53,7 @@ Shell 探测结果首先列出执行环境声明的默认 shell。仅当 provide
 
 Host 通过 `ctx.subprocess.spawnTerminal` 创建 `TERM=xterm-256color` 的终端，不启动桌面终端应用。流式 UTF-8 解码保留跨块字符和开头的 BOM，并在 EOF 将不完整的尾部字节替换为替代字符。控制请求走 Gateway，`follow` 使用其复用的 Remote stream。Headless xterm 和序列化 addon 在此前输出写入后生成初始屏幕，后续增量携带单调序号。过慢的订阅者明确失败；重新连接恢复当前屏幕。
 
-最新连接持有输入和尺寸控制权。断开连接只释放输入权，不结束进程。显式关闭等待进程清理和最后输出；清理失败时保留资源以便重试。Session 记住已关闭的标识并拒绝迟到或重复的创建请求，包括关闭到达时仍在进行的创建。新终端使用新标识。取消创建且清理失败时，已分配的进程仍有所有者。Session owner 和 controller 卸载也会终止所拥有的进程。存在终端或创建请求时不能改变该 Session 的 sandbox mode。 控制权转移或进程退出后被拒绝的输入和尺寸请求保留输出连接并禁用输入，不重发被拒绝的输入。
+最新连接持有输入和尺寸控制权。断开连接只释放输入权，不结束进程。显式关闭等待进程清理和最后输出；清理失败时保留资源以便重试。Session 记住已关闭的标识并拒绝迟到或重复的创建请求，包括关闭到达时仍在进行的创建。新终端使用新标识。取消创建且清理失败时，已分配的进程仍有所有者。Session owner 和 controller 卸载也会终止所拥有的进程。改变 Session 的沙箱模式时，用户终端继续以原有权限运行。控制权转移或进程退出后被拒绝的输入和尺寸请求保留输出连接并禁用输入，不重发被拒绝的输入。
 
 Client 在分配前将每条 Session/内容与终端身份的关联保存到独立的 localStorage key `dsh.terminal.binding.v1.*`。内容身份全局唯一；布局内的 tab id 只标识活动视图 occurrence。逐条记录的写入和删除会保留其他窗口的关联。恢复视图复用该身份；侧栏 terminal provider 先恢复自己的视图，再查询尚无视图的 Host 终端。新视图可以创建进程，恢复视图在目标缺失时显示错误，不创建替代进程。显式关闭先保存清理请求，再删除关联。当前进程元数据和屏幕内容由 Host 提供，不保存在浏览器中。Client 模型在浏览器完成屏幕解析后确认帧，按序发送输入，并忽略旧连接迟到的响应。Client 自产错误携带本地化键。插件卸载等待活跃及先前断开的输出流结束，不关闭 Host 进程。
 
@@ -70,6 +70,7 @@ Client 在分配前将每条 Session/内容与终端身份的关联保存到独�
 
 - [Subprocess](../../subprocess/subprocess/README.zh.md)
 - [Right Sidebar](../../client/ui-sidebar-right/README.zh.md)
+- [用户终端权限](../../../.agents/notes/implemented/architecture/2026-09-16-user-terminal-permissions.zh.md)
 - [Web terminal decision](../../../.agents/notes/implemented/feature/2026-09-09-web-sidebar-terminal.zh.md)
 
 <a id="model-experience"></a>

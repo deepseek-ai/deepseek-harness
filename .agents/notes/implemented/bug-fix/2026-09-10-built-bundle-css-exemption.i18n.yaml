@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-10-built-bundle-css-exemption.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-10-built-bundle-css-exemption.md
-2026-09-10-built-bundle-css-exemption.md: e5a55689696f885b8ea9411a5b3a7598295fff35
-2026-09-10-built-bundle-css-exemption.zh.md: 1c1aab35df72497946b02bf2a7f67a2271c804e5
+/agent-note-built-bundle-exemption-for-a-failing-stylesheet:
+  en: 7eea80c07cea261d
+  zh: 936523023c0b527d
+/agent-note-built-bundle-exemption-for-a-failing-stylesheet/problem:
+  en: ca5c97dd0ad51b66
+  zh: 8491ee495b0c625e
+/agent-note-built-bundle-exemption-for-a-failing-stylesheet/decision:
+  en: cd272aa1bfd34a14
+  zh: d184be63053f73b8
+/agent-note-built-bundle-exemption-for-a-failing-stylesheet/alternatives-considered:
+  en: 7f0eb995b7f00d73
+  zh: aaf7b18f7bb2c20d
+/agent-note-built-bundle-exemption-for-a-failing-stylesheet/consequences:
+  en: 767857f0bbd93ca8
+  zh: f49bf34e304a7dee

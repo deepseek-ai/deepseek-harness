@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-12-linux-scope-direct-kill-settlement.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-12-linux-scope-direct-kill-settlement.md
-2026-09-12-linux-scope-direct-kill-settlement.md: e89d8f801d6f7fb1309f50e0bc3dbad69aa797d0
-2026-09-12-linux-scope-direct-kill-settlement.zh.md: 7ab43107491ec24d5e39a62c401d245b61bb744d
+/agent-note-join-direct-termination-before-rejecting-linux-scope-cleanup:
+  en: 6a72b66b6d0cf21b
+  zh: be432bfebb8e9919
+/agent-note-join-direct-termination-before-rejecting-linux-scope-cleanup/problem:
+  en: be042a28c1154171
+  zh: 7b8356c9dcb159be
+/agent-note-join-direct-termination-before-rejecting-linux-scope-cleanup/decision:
+  en: 75b071e48715ff29
+  zh: 3f1d710f54ed3b1b
+/agent-note-join-direct-termination-before-rejecting-linux-scope-cleanup/alternatives-considered:
+  en: ea3f33dd6c9bab88
+  zh: 6f274fcd86b231a7
+/agent-note-join-direct-termination-before-rejecting-linux-scope-cleanup/consequences:
+  en: 4f7e7535b49b22fe
+  zh: 10447b3c42a341a2

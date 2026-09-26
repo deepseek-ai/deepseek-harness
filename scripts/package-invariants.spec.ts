@@ -38,6 +38,7 @@ function fixture(options: {
   invariantExport?: boolean
   invariantFile?: boolean
   invariantDependency?: boolean
+  invariantRange?: string
   invariantReference?: boolean
   buildEntry?: boolean
   omissionReason?: boolean
@@ -78,10 +79,10 @@ function fixture(options: {
     exports,
     files: ['lib/index.js', ...invariantFile ? ['lib/invariant.js'] : []],
     peerDependencies: !invariantDependency || developmentOnlyInvariant ? {} : {
-      '@deepseek-ai/dsh-invariants': 'workspace:^',
+      '@deepseek-ai/dsh-invariants': options.invariantRange ?? 'workspace:*',
     },
     devDependencies: !invariantDependency ? {} : {
-      '@deepseek-ai/dsh-invariants': 'workspace:^',
+      '@deepseek-ai/dsh-invariants': options.invariantRange ?? 'workspace:*',
     },
   }
   writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
@@ -105,6 +106,13 @@ function fixture(options: {
 describe('package invariant gate', () => {
   it('accepts a hand-owned checking companion with publication metadata', () => {
     expect(collectPackageInvariantViolations(fixture())).toEqual([])
+  })
+
+  it('rejects caret ranges for the invariant peer and development dependency', () => {
+    expect(collectPackageInvariantViolations(fixture({ invariantRange: 'workspace:^' }))).toEqual([
+      { path: 'packages/core/probe/package.json', message: '@deepseek-ai/dsh-invariants must be a workspace:* peerDependency' },
+      { path: 'packages/core/probe/package.json', message: '@deepseek-ai/dsh-invariants must be a workspace:* devDependency' },
+    ])
   })
 
   it('accepts a package that cleanly omits an invariant companion', () => {

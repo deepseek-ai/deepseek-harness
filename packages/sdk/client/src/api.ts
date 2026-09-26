@@ -138,7 +138,7 @@ export function createProcessDeepSeekHarness(
   runtime: RuntimeProcessOptions,
   options: DeepSeekHarnessOptions = {},
 ): DeepSeekHarness {
-  const Constructor = DeepSeekHarness as unknown as new (
+  const Constructor = DeepSeekHarness as new (
     publicOptions: DeepSeekHarnessOptions,
     clientFactory: () => HarnessClient,
   ) => DeepSeekHarness
@@ -257,7 +257,7 @@ function validatedTurnEndReason(value: unknown): TurnEndReason {
         throw new SdkProtocolError(`turn/end carried an unknown abort reason: ${JSON.stringify(value)}`)
     }
   }
-  return value as unknown as TurnEndReason
+  return value as TurnEndReason
 }
 
 /** Validate the fields in a wire `session.event` envelope before returning the typed result. */
@@ -282,7 +282,7 @@ function validatedSessionEvent(value: unknown): SessionEvent {
     }
     validatedTurnEndReason(data.reason)
   }
-  return value as unknown as SessionEvent
+  return value as SessionEvent
 }
 
 /** Whether a raw session event is the durable enqueue receipt for `messageId`. */

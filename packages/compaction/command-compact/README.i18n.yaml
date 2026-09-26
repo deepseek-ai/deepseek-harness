@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/compaction/command-compact/README.md
-README.md: 4c9a550febd3cef13fea82c61f9bf96f65a17b64
-README.zh.md: ad31604e9e37c3b676da9b6497cab660e90bc0e4
+/:
+  en: 50e574eada34df78
+  zh: 2cd08d40d11d0059
+/deepseek-ai-dsh-command-compact:
+  en: 4e97e77fb62ef83f
+  zh: aef1cbba63b69522
+/deepseek-ai-dsh-command-compact/summary:
+  en: 5b2c62d3505485bb
+  zh: a4d71e8106312e8e
+/deepseek-ai-dsh-command-compact/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-command-compact/use-this-package:
+  en: ee457d37a1769e9d
+  zh: 60bf7402563034a4
+/deepseek-ai-dsh-command-compact/use-this-package/using-the-command:
+  en: f04f6a29f4170376
+  zh: 16f838e848eadeb2
+/deepseek-ai-dsh-command-compact/use-this-package/what-you-see:
+  en: ee0cd9f39afcad64
+  zh: ba8e5feb9f72cae7
+/deepseek-ai-dsh-command-compact/use-this-package/composing-the-command:
+  en: 7f1922f277c46d93
+  zh: 531edb1176829c6a
+/deepseek-ai-dsh-command-compact/use-this-package/what-happens-to-the-conversation:
+  en: 97bb54fca90ac8b9
+  zh: a7e59ba0678f7359
+/deepseek-ai-dsh-command-compact/understand-the-implementation:
+  en: 55197024cba97312
+  zh: ff3a096d2d46cd05
+/deepseek-ai-dsh-command-compact/understand-the-implementation/design-philosophy:
+  en: 1877e628fa664a42
+  zh: 8e438bf9d0dccba9
+/deepseek-ai-dsh-command-compact/understand-the-implementation/lifecycle-and-correlation:
+  en: 498a645054ff192f
+  zh: f993a288e1408355
+/deepseek-ai-dsh-command-compact/understand-the-implementation/source-map:
+  en: 84b40f60d465fd94
+  zh: aac534b232817c05
+/deepseek-ai-dsh-command-compact/further-exploration:
+  en: 2d8e82f68867898e
+  zh: bb18a352091adf85
+/deepseek-ai-dsh-command-compact/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-command-compact/model-experience/human-compact-control:
+  en: 0233c5bd155d0c78
+  zh: a0c2d5cefd9c3503
+/deepseek-ai-dsh-command-compact/model-experience/human-compact-control/what-the-model-sees:
+  en: bfe6aa41237c0194
+  zh: f1b577b15b5988c3
+/deepseek-ai-dsh-command-compact/model-experience/human-compact-control/token-effect:
+  en: f18e2c4147b62a08
+  zh: 00409233f610a4fe
+/deepseek-ai-dsh-command-compact/model-experience/human-compact-control/kv-cache-effect:
+  en: 41db62c6b45d9361
+  zh: 2a1b13410fb2e96d
+/deepseek-ai-dsh-command-compact/known-limitations-and-deferred-work:
+  en: beeea87558d2f6ea
+  zh: 9d6115543013aa61
+/deepseek-ai-dsh-command-compact/known-limitations-and-deferred-work/dev-note:
+  en: 8cdea65425c059ef
+  zh: 2afb257d7a61aa16

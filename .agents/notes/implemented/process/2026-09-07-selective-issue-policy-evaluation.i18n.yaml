@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-07-selective-issue-policy-evaluation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-07-selective-issue-policy-evaluation.md
-2026-09-07-selective-issue-policy-evaluation.md: 5e05bef320980b6069ede9edb0d40446ddd27b0f
-2026-09-07-selective-issue-policy-evaluation.zh.md: 37c531e14e485499a3cb76d042d4c17438d413a0
+/agent-note-selective-issue-policy-evaluation:
+  en: b0f986e68a7b7d74
+  zh: cffd2efae38626ef
+/agent-note-selective-issue-policy-evaluation/problem:
+  en: 5af4901a5e9576fb
+  zh: eb089750b27129b1
+/agent-note-selective-issue-policy-evaluation/decision:
+  en: 99e6c76f04a4d49b
+  zh: 2631ff72b4db3bdf
+/agent-note-selective-issue-policy-evaluation/alternatives-considered:
+  en: 89631c2a92ab079a
+  zh: 37b94f76ec6dc36a
+/agent-note-selective-issue-policy-evaluation/consequences:
+  en: 6013a044827444e5
+  zh: 69f767a1d534761a
+/agent-note-selective-issue-policy-evaluation/verification:
+  en: b7fb4ebd009d7fd3
+  zh: 6d682a4b7f41a4e0

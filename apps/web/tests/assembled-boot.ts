@@ -52,21 +52,16 @@ interface ComposedEntry {
 }
 
 interface BootComposition {
+  bundlePatchPaths(packageDir: string, bundle: { patch: string | string[] }): string[]
   loadOverlayPatches(binName: string, file: string): unknown[]
   composeEntries(layers: readonly unknown[][]): ComposedEntry[]
 }
 
 const REPO_ROOT = process.cwd()
-const BUNDLE_LAYERS = [
-  {
-    manifest: join(REPO_ROOT, 'packages/bundle/base/package.json'),
-    patch: join(REPO_ROOT, 'packages/bundle/base/cordis.patch.yml'),
-  },
-  {
-    manifest: join(REPO_ROOT, 'packages/bundle/web-app/package.json'),
-    patch: join(REPO_ROOT, 'packages/bundle/web-app/cordis.patch.yml'),
-  },
-] as const
+const BUNDLE_LAYERS = ['packages/bundle/base', 'packages/bundle/web-app'].map(dir => ({
+  dir: join(REPO_ROOT, dir),
+  manifest: join(REPO_ROOT, dir, 'package.json'),
+}))
 const bundleResolvers = BUNDLE_LAYERS.map(layer => createRequire(layer.manifest))
 const webBundleResolver = bundleResolvers[1]
 if (webBundleResolver === undefined) throw new Error('assembled boot: web bundle resolver missing')
@@ -91,13 +86,16 @@ function resolveClientExport(packagePath: string, pkg: ClientPackageManifest): s
   return resolve(dirname(packagePath), relative)
 }
 
-const comboUrl = (ids: readonly string[], rev: string): string =>
-  `/plugins/??${ids.map(id => `${id}/client.js`).join(',')}&rev=${rev}`
+/** App-directory-relative combo references, matching the wire the Host composes. */
+const comboReference = (ids: readonly string[], rev: string): string =>
+  `plugins/??${ids.map(id => `${id}/client.js`).join(',')}&rev=${rev}`
 
 /** Derive the assembled browser graph from the same bundle patches and package declarations as `dsh web`. */
 function loadAssembledPlugins(): readonly AssembledPlugin[] {
-  const entries = appBoot.composeEntries(BUNDLE_LAYERS.map(layer =>
-    appBoot.loadOverlayPatches('assembled boot', layer.patch)))
+  const entries = appBoot.composeEntries(BUNDLE_LAYERS.map((layer) => {
+    const declared = (JSON.parse(readFileSync(layer.manifest, 'utf8')) as { dsh: { bundle: { patch: string | string[] } } }).dsh.bundle
+    return appBoot.bundlePatchPaths(layer.dir, declared).flatMap(patch => appBoot.loadOverlayPatches('assembled boot', patch))
+  }))
   const plugins = new Map<string, AssembledPlugin>()
   for (const entry of entries) {
     if (entry.disabled === true || typeof entry.name !== 'string') continue
@@ -112,7 +110,7 @@ function loadAssembledPlugins(): readonly AssembledPlugin[] {
     plugins.set(entry.name, {
       id: entry.name,
       bundlePath: resolveClientExport(packagePath, pkg),
-      url: comboUrl([entry.name], 'fx'),
+      url: comboReference([entry.name], 'fx'),
       rev: 'fx',
       ...(declaration.inject === undefined ? {} : { inject: declaration.inject }),
       ...(declaration.external === undefined ? {} : { external: declaration.external }),
@@ -145,13 +143,13 @@ function bootGraph(plugins: readonly AssembledPlugin[]): WebBootGraph {
     batches: [
       ...(bootstrapEntries.length === 0 ? [] : [{
         phase: 'bootstrap' as const,
-        url: comboUrl(bootstrapEntries, 'fx'),
+        url: comboReference(bootstrapEntries, 'fx'),
         rev: 'fx',
         entries: bootstrapEntries,
       }]),
       ...(applicationEntries.length === 0 ? [] : [{
         phase: 'application' as const,
-        url: comboUrl(applicationEntries, 'fx'),
+        url: comboReference(applicationEntries, 'fx'),
         rev: 'fx',
         entries: applicationEntries,
       }]),
@@ -202,7 +200,7 @@ let mountedRemote: RemoteMock | undefined
  * Register the per-test jsdom setup and teardown the assembled boot needs:
  * English pinned before boot so role/text locators stay deterministic across
  * localized component migrations (the newEnglishPage e2e convention), the
- * observers and frame callbacks jsdom lacks, and a full reset of the document,
+ * observers, font events, and frame callbacks jsdom lacks, and a full reset of the document,
  * the boot globals, and the injected plugin styles afterwards.
  */
 export function installAssembledBootEnv(): void {
@@ -219,7 +217,10 @@ export function installAssembledBootEnv(): void {
       top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}),
     })
   }
+  let fontsDescriptor: PropertyDescriptor | undefined
   beforeEach(() => {
+    fontsDescriptor = Object.getOwnPropertyDescriptor(document, 'fonts')
+    Object.defineProperty(document, 'fonts', { configurable: true, value: new EventTarget() })
     localStorage.clear()
     // The locale service derives its provisional locale from the browser and
     // takes an explicit choice only from Host settings. This scenario serves no
@@ -262,6 +263,8 @@ export function installAssembledBootEnv(): void {
     delete ownNavigator.languages
     delete ownNavigator.language
     vi.unstubAllGlobals()
+    if (fontsDescriptor === undefined) Reflect.deleteProperty(document, 'fonts')
+    else Object.defineProperty(document, 'fonts', fontsDescriptor)
     if (failures.length > 0) throw new AggregateError(failures, 'assembled boot teardown failed')
   })
 }

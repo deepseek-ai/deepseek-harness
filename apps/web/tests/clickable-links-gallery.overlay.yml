@@ -1,0 +1,11 @@
+# The gallery asserts native open actions without launching them. Pin the
+# capability so headless Linux CI and desktop developer hosts expose the same
+# UI branch; platform opener behavior belongs to the Host unit tests.
+- id: session-controller
+  config:
+    nativeOpen: true
+- id: settings-controller
+  config:
+    nativeOpen: true
+- id: ui-sidebar-browser
+  disabled: false

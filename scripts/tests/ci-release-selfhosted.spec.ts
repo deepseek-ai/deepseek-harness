@@ -35,7 +35,7 @@ function evaluate(expression: string, context: Record<string, string | boolean>)
   const source = expression.trim().replace(/^\$\{\{|\}\}$/g, '')
     .replace(/\b(?:github|vars|runner)(?:\.[a-zA-Z_][a-zA-Z_0-9]*)+/g,
       key => JSON.stringify(context[key] ?? ''))
-  return runInNewContext(source, { fromJSON: JSON.parse }, { timeout: 1000 }) as unknown
+  return runInNewContext(source, { fromJSON: JSON.parse }, { timeout: 1000 })
 }
 
 function assertSharedPersistentStore(run: string | undefined): void {

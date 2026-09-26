@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-09-16-sidebar-browser.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-16-sidebar-browser.md
+/agent-note-sandboxed-sidebar-browser:
+  en: eae586a5966353a5
+  zh: ca3a7283e3fae594
+/agent-note-sandboxed-sidebar-browser/problem:
+  en: 5236141e90e42b81
+  zh: 1af6306b20797603
+/agent-note-sandboxed-sidebar-browser/decision:
+  en: 9e89a0fe77cd8b9f
+  zh: 7aba8507320cf504
+/agent-note-sandboxed-sidebar-browser/web-navigation-states:
+  en: 6aec277c70600c7d
+  zh: e2b53f01072b2423
+/agent-note-sandboxed-sidebar-browser/electron-carrier:
+  en: dd20fa5656fc5779
+  zh: 94b5908de0695755
+/agent-note-sandboxed-sidebar-browser/alternatives-considered:
+  en: 73919eb8d5618982
+  zh: 18d2f5becae72790
+/agent-note-sandboxed-sidebar-browser/verification:
+  en: 91563b2be0b76a37
+  zh: 24e55764bc85b8ae
+/agent-note-sandboxed-sidebar-browser/consequences:
+  en: d9844d90ebdeb553
+  zh: 7f05c8e911bd73c4

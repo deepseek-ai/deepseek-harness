@@ -1,0 +1,80 @@
+/* Sized to sit in the document header's 24px control row beside its round
+   icon buttons: a hairline pill with a 12px label and a narrow chevron half. */
+
+.menuAnchor {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+}
+
+.split {
+  display: inline-flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: 24px;
+  overflow: hidden;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-sm);
+  font-family: var(--dsw-font-family);
+}
+
+.main,
+.chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.main {
+  gap: 4px;
+  padding: 3px 5px;
+}
+
+.chevron {
+  padding: 3px 4px 3px 3px;
+  border-left: 0.5px solid var(--dsw-alias-border-l4);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.main:hover:not(:disabled),
+.main:focus-visible,
+.chevron:hover:not(:disabled),
+.chevron:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Pending disables clicks without a restyle; only hover feedback pauses. */
+.main:disabled,
+.chevron:disabled {
+  cursor: default;
+}
+
+.appIcon {
+  object-fit: contain;
+}
+
+/* The unavailable preview emphasizes the same actions with a labeled button. */
+.split[data-size='large'] {
+  height: 36px;
+  border-radius: var(--dsw-radius-md);
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.split[data-size='large'] .main {
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 14px;
+}
+
+.split[data-size='large'] .chevron {
+  padding: 6px 10px;
+}
+
+.skeleton { display: inline-block; flex: none; border-radius: var(--dsw-radius-xs); background: var(--dsw-alias-interactive-bg-hover); }

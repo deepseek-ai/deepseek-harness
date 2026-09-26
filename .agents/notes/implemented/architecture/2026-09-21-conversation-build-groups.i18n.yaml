@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for 2026-09-21-conversation-build-groups.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-21-conversation-build-groups.md
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly:
+  en: 011f264e0aea8d0c
+  zh: d0ad8b4334af619e
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/problem:
+  en: 83dd98f48ee30a1a
+  zh: 66dec35b4b54f291
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/decision:
+  en: d4216ce4d80382e8
+  zh: 9ee608af410e81e0
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/decision/responsibilities:
+  en: d7cf1bd544f163ee
+  zh: 2433f3faa5f5abcb
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/decision/related-decisions:
+  en: d8307dcaf2a9ac72
+  zh: 4852b1e2a4d09af0
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/definition-input-state-and-registration:
+  en: 9fb89bddbfd75627
+  zh: 950c319db123c637
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/node-group-references-and-updates:
+  en: 13034cf7eb143055
+  zh: 4ff0c0be55028258
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/assembly-order-and-lifecycle:
+  en: 52a1bbfe6e9bcac7
+  zh: dabbcd108f68bd14
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/concrete-implementation-locations:
+  en: 85715eb77bf73713
+  zh: 7e6c90830b65281b
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/react-reading-and-presentation:
+  en: 7636207f33e971a4
+  zh: ace1f5bbaf5a01b5
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/alternatives-considered:
+  en: 21a74f9031f86a92
+  zh: c6abd0a5dfbf56a8
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/verification:
+  en: b42409d029fc0fde
+  zh: 0f8ab7d206cab772
+/agent-note-definition-owned-grouping-with-generic-node-group-assembly/consequences:
+  en: 96f1d81b28534661
+  zh: 8cb1c7a0f000c335

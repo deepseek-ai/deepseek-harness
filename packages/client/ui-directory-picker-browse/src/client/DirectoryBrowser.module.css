@@ -57,7 +57,7 @@
   margin-left: -9px;
   padding: 0 8px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-sm);
 }
 
 /* Lit by the affordance the row belongs to, never by a crumb: a crumb's hover
@@ -119,6 +119,12 @@
   font-weight: 500;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
+}
+
+.crumb:focus-visible {
+  /* The trail scrolls, so an outer ring would be clipped; keep it inside. */
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
 }
 
 .crumb:hover {
@@ -233,10 +239,16 @@
   flex: none;
   padding: 4px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   text-align: left;
   cursor: pointer;
+}
+
+.row:focus-visible {
+  /* The column scrolls and its left edge carries no padding; keep the ring inside. */
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
 }
 
 .row:hover {
@@ -401,7 +413,7 @@
   height: 44px;
   padding: 7px 14px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 22px;
+  border-radius: var(--dsw-radius-lg);
   outline: none;
   background: transparent;
   font-size: 14px;

@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-09-15-client-session-blank-reconciliation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-15-client-session-blank-reconciliation.md
+/agent-note-keep-accepted-session-presentation-across-list-refreshes:
+  en: cb6cc54ba8dbdb04
+  zh: 49155298ed676aa9
+/agent-note-keep-accepted-session-presentation-across-list-refreshes/problem:
+  en: 43f5cb3e859ff15c
+  zh: 6aaf24dbd90601ba
+/agent-note-keep-accepted-session-presentation-across-list-refreshes/decision:
+  en: a96b274615d2b533
+  zh: 1610d9bc4bddd29f
+/agent-note-keep-accepted-session-presentation-across-list-refreshes/alternatives-considered:
+  en: c1d81465f7ae6906
+  zh: 668641e19a3e5088
+/agent-note-keep-accepted-session-presentation-across-list-refreshes/consequences:
+  en: 488d87360f50c682
+  zh: 68408e517189ac93
+/agent-note-keep-accepted-session-presentation-across-list-refreshes/verification:
+  en: 4c16904319ae2745
+  zh: 06bf9126b7f504ec
+/agent-note-keep-accepted-session-presentation-across-list-refreshes/related-decisions:
+  en: 99d6b7e450a8dc09
+  zh: 46a6df4730514668

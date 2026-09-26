@@ -4,11 +4,11 @@
 
 subagent seam 让一个 agent（智能体）将工作委派给子 agent。与 [bash](shell.zh.md) 一样，它是**一项可选能力**，不属于 agent loop（智能体循环），因此其类型定义在此而非 [core.md](core.zh.md) 中。它不同于其他能力 seam，因为**同一上下文中可共存多个提供方实现**，并按名称注册（`ctx.subagents`），而 bash 只允许一个执行器。该注册表遵循 [LLM（大语言模型）适配器注册表](llm-streaming.zh.md)，而非单服务的 bash 执行器。
 
-Service Definition：[dsh-subagent](../../packages/subagent/subagent)（`ctx.subagents` + 下文词汇）。Service Provider 是六个兄弟包：`dsh-subagent-spawn-in-process`、`dsh-subagent-fork-in-process`、`dsh-subagent-acp`、`dsh-subagent-codex`、`dsh-subagent-claude-code`、`dsh-subagent-dsh-sdk`；面向模型的 Consumer 包括 [dsh-tool-subagent](../../packages/subagent/tool-subagent)（按提供方委派）和 [dsh-tool-subagent-control](../../packages/subagent/tool-subagent-control)（可选的全局 `send_message`、`interrupt_agent` 与 `list_agents` 控制工具）。同一个 `ctx.subagents` 服务通过内部激活管理器负责可继续子 agent 编排，并直接基于会话存储和可选的会话持久化提供只读的 child 与后代发现。产品提供方设计理由见 [Codex 与 Claude Code Agent Note](../../.agents/notes/implemented/feature/2026-08-04-claude-code-and-codex-subagent-backends.zh.md)；通用 seam 的设计理由见 [subagent Agent Note](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.zh.md)、[可继续 subagent Agent Note](../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.zh.md)和[相邻 Agent 消息 Agent Note](../../.agents/notes/implemented/architecture/2026-08-27-adjacent-agent-steer-messaging.zh.md)；[已归档的列表身份投影记录](../../.agents/notes/archived/architecture/2026-08-06-subagent-list-identity-projection.md)记录了最初的列表身份决策。
+Service Definition：[dsh-subagent](../../packages/subagent/subagent)（`ctx.subagents` + 下文词汇）。Service Provider 是六个兄弟包：`dsh-subagent-spawn-in-process`、`dsh-subagent-fork-in-process`、`dsh-subagent-acp`、`dsh-subagent-codex`、`dsh-subagent-claude-code`、`dsh-subagent-dsh-sdk`；面向模型的 Consumer 包括 [dsh-tool-subagent](../../packages/subagent/tool-subagent)（按提供方委派）和 [dsh-tool-subagent-control](../../packages/subagent/tool-subagent-control)（可选的全局 `send_message`、`interrupt_agent` 与 `list_agents` 控制工具）。同一个 `ctx.subagents` 服务通过内部激活管理器负责可继续子 agent 编排，通过 parent 目录发现直接 child，并通过父目录递归发现后代。产品提供方设计理由见 [Codex 与 Claude Code Agent Note](../../.agents/notes/implemented/feature/2026-08-04-claude-code-and-codex-subagent-backends.zh.md)；通用 seam 的设计理由见 [subagent Agent Note](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.zh.md)、[可继续 subagent Agent Note](../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.zh.md)和[相邻 Agent 消息 Agent Note](../../.agents/notes/implemented/architecture/2026-08-27-adjacent-agent-steer-messaging.zh.md)；[已归档的列表身份投影记录](../../.agents/notes/archived/architecture/2026-08-06-subagent-list-identity-projection.md)记录了最初的列表身份决策。
 
 源码：[`packages/subagent/subagent/src/types.ts`](../../packages/subagent/subagent/src/types.ts)、[`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)和 [`packages/subagent/subagent/src/continuation.ts`](../../packages/subagent/subagent/src/continuation.ts)
 
-`subagentCatalog` projection 通过 Session 观察和客户端快照暴露按父会话事件排序的 `SubagentCatalogEntry[]`。每个条目包含子级 id、创建时间、模式和依模式确定的标签；fork 继承的目录事实不在其中。[subagent 包](../../packages/subagent/subagent/README.zh.md) 定义目录创建和持久化语义。
+`subagentCatalog` projection 通过 Session 观察和客户端快照暴露按父会话事件排序的 `SubagentCatalogEntry[]`。每个条目包含子级 id、创建时间、模式和依模式确定的标签；fork 继承的目录事实不在其中。[subagent 包](../../packages/subagent/subagent/README.zh.md) 定义目录创建和持久化语义。历史子会话的 descriptor 不可用时使用 `mode: 'unknown'`，保留 header 身份供发现，但不授予继续执行能力。
 
 ## 两类能力，两种发现方式
 
@@ -262,22 +262,20 @@ interface ContinuableCreateSpec {
 
 描述符（[descriptor.ts](../../packages/subagent/subagent/src/descriptor.ts) 中的 `SubagentDescriptorData`）是每个由会话支撑的 subagent 所使用、按模式判别的持久化身份。两种模式都携带提供方名称。`one-shot` 描述符可以携带调用方拥有的可选显示 `label`；`continuable` 描述符要求以委派 `description` 作为持久化创建标签，并另外对已解析的子 agent `agentOptions.provider`／`model`／`reasoningEffort` 与可选的 `persona`／`toolFilter` 建立快照，用于冷恢复。它绝不会对可合并扩展的 `AgentOptions` 对象建立快照，因此无关的扩展值不会破坏继续执行，后续新增组合配置输入则是一次有意的版本更改。描述符省略 `subagentDepth`（冷恢复以持久化 header 中的 `delegationDepth` 作为单调下界）和 `outputSchema`（单次运行或 Activation 的结果约定，而非持久化身份）。
 
-本地一次性提供方会在子 agent 的初始轮次内、首次请求前追加描述符。继续执行管理器会在任何提供方提供的谱系之后、初始提示词获准之前追加描述符；`Session.inheritedEventCount` 仍是 fork 谱系边界：恢复时的描述符权威读取子 agent 自身的后缀，而供列表使用的身份投影以 last-wins 折叠 `subagent/descriptor`，子 agent 自己的描述符会覆盖 fork seed 中祖先的描述符。seeded cold list 会跳过 cache hint，直到权威 observation 提供该精确 cut。该事件只进入日志：不含 `surfaceOp`，绝不进入模型历史，并由仅追加日志跨压缩保留。格式错误的当前版本描述符属于损坏；本运行时无法对不受支持的版本进行分类。
+本地一次性提供方会在子 agent 的初始轮次内、首次请求前追加描述符。继续执行管理器会在任何提供方提供的谱系之后、初始提示词获准之前追加描述符；`Session.inheritedEventCount` 仍是 fork 谱系边界：恢复时的描述符权威读取子 agent 自身的后缀，而身份投影以 last-wins 折叠 `subagent/descriptor`，子 agent 自己的描述符会覆盖 fork seed 中祖先的描述符。该事件只进入日志：不含 `surfaceOp`，绝不进入模型历史，并由仅追加日志跨压缩保留。格式错误的当前版本描述符属于损坏；本运行时无法对不受支持的版本进行分类。
 
 ## 持久化枚举：`listChildren()`、`listDescendants()` 与其条目
 
-`SubagentRuntime.listChildren(parentSessionId)` 从 `ctx.sessions` 与会话查询引擎 `listSessions()` 的实时优先合并中枚举 parent 直接且由会话支撑的 subagent——不会加载或恢复任何 Agent。候选是持久 header 携带 `origin: 'subagent'` 的直接 child；该标记只负责枚举分类与粗粒度的通用路由拒绝，不能证明描述符有效、child 可恢复或操作已获授权——身份由投影折叠负责，恢复由 Activation 约定负责。每行的 `mode`／`label` 是已注册 `subagent` projection unit 的值，经三级阶梯供值：存活 child 由注册表水位缓存供值（零日志读取）；冷 child 先读可选的投影 checkpoint 缓存（`cachedSnapshot`——过 own-suffix seq 门的身份即定值，own descriptor 一经追加不可变）；否则在一次 `query.observeSession()` 冷观察上经注册表折叠（有界并发，每次列表重新计算）。该缓存是纯可选加速层：服务缺席、行里是 `null` 哨兵或 key 缺席、seq 门不过、读取出错，都静默落到权威重折。折叠规则是 `subagent/descriptor` last-wins 且没有失败通道：子 agent 自己的描述符覆盖 fork seed 中祖先的描述符，格式错误或版本不认识的载荷折叠为可序列化的 `null` 哨兵，视同无值。结果是按 `createdAt`、再按 id 排序的 `SubagentListEntry[]`：取到身份即生成带有 `mode: 'one-shot' | 'continuable'` 和 `activity: 'running' | 'inactive'` 的 `child` 条目；可继续条目始终携带 `label`，一次性条目则只在启动调用方提供展示元数据时携带该字段。已定局而折叠无身份的候选生成 `corrupt` diagnostic——缺失、格式错误与版本不认识的描述符有意不再细分（`unsupported` 仍保留在类型中但从不产出）；运行中而无身份的候选被省略（描述符落盘前的创建窗口）；冷检查失败生成一条 `unavailable` diagnostic 并在下次列表自然重试，因此一个损坏的 sibling 不会隐藏健康 child。`hasChildren` 标记存在持久 subagent origin 的直接后代，读取自同一份合并材料。活动状态只表示逻辑记录是否在 `ctx.sessions` 中存活，而不表示结果或可恢复性。缺少持久化时，枚举退化为仅存活枚举而不是报错——此时冷 child 本就无法恢复。缺少 `ctx.sessionProjections` 注册表时，`listChildren()` 抛出携带错误码 `SUBAGENT_CONTROL_PROJECTIONS_UNAVAILABLE` 的 `SubagentError`，缺少会话存储时则抛出 `SUBAGENT_CONTROL_SESSION_STORE_UNAVAILABLE`，两者都在任何读取之前检查，因此零 child 的部署同样确定失败；列表工具在插件加载时要求 `ctx.subagents` 与 `ctx.agents`。UI 等服务消费方可以展示两种模式，并为无标签的一次性 child 选择回退展示；面向模型的 `list_agents` 适配器（[dsh-tool-subagent-control](../../packages/subagent/tool-subagent-control) 中可单独加载的 `/list-agents` 插件）则只保留可继续条目，并通过在线 Agent 注册表将状态细化为自己的 `running`／`idle`／`ready` 词汇，其中 `ready` 把仅存于存储的 child 命名为可恢复而非终态。枚举不会查询继续执行管理器的 Activation map、Agent 注册表或提供方可用性；`send_message` 仍是消息送达时的权威操作，列表中的运行中可继续 child 仍可能因所有权冲突而拒绝投递。[已归档的列表身份投影记录](../../.agents/notes/archived/architecture/2026-08-06-subagent-list-identity-projection.md)记录了最初的读路径决策。
+模型侧的 `list_agents` 适配器将当前活动表示为 `running` 或 `inactive`。这些值不描述任务完成情况，也不保证 `send_message` 会成功。
 
-`SubagentRuntime.listDescendants(rootSessionId)` 将同一份实时优先语料与基于投影的解释应用到根的完整后代树，并按稳定 pre-order 输出。普通会话和一次性 child 仍作为遍历节点，因此其下的可继续后代仍可发现；只有 `origin: 'subagent'` 的候选会生成条目。每个返回的 child 或 diagnostic 都从枚举所得的持久 header 附加树位置；冷检查在提供身份前还会重新校验完整生命周期：
+`SubagentRuntime.listChildren(parentSessionId, signal?)` 通过优先使用在线 Session 的观察读取父会话的 `subagentCatalog` 视图，并在成功或失败时释放观察。它按父会话事件顺序返回直接子级条目，不读取子级日志，也不枚举 Session 语料库。查询失败直接传播；缺少目录投影时显式失败。浏览器条目从共享 projection store 派生成员关系，并从 Session 状态补充活动状态；control stream 推送完整目录更新。`listDescendants()` 递归读取这些目录，并从每个子级目录推导 `hasChildren`。[父目录 Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.zh.md) 说明创建、fork 隔离、排序和持久化成本。
+
+`SubagentRuntime.listDescendants(rootSessionId)` 以稳定前序递归调用同一目录读取函数，保留每个父级的事件顺序。一次性和未知模式条目仍是遍历节点；未知模式产生 `unsupported` 诊断。无法读取的子级目录产生 `corrupt` 或 `unavailable`，只停止该分支。根读取失败、服务或投影缺失、取消会使整个查询失败。每个可达目录只观察一次，并在下一次读取前释放；重复 id 和循环引用会被跳过。可达目录中不存在的 Session 不会被发现，包括普通 Session fork 及其下的子 agent。每行携带目录中的父级和相对根的深度：
 
 ```ts type-equiv
-/**
- * One entry of a descendant listing: the interpreted subagent facts plus its
- * position in the complete session tree. `parentId` is the durable direct
- * parent from the enumerated header, and `depth` counts edges from the root.
- */
+/** One catalog descendant with its direct parent and edge distance from the requested root. */
 type SubagentDescendantListEntry = SubagentListEntry & {
-  /** Durable direct parent of this candidate in the enumerated tree. */
+  /** Parent whose catalog contains this child. */
   readonly parentId: SessionId
   /** Edge distance from the requested root; direct children are `1`. */
   readonly depth: number
@@ -302,7 +300,7 @@ interface SubagentResult {
    * are skipped. Without a non-empty message, the output is its accumulated
    * assistant text stream, or `[]` when the child produced neither.
    */
-  readonly output: ContentBlock[]
+  readonly output: readonly ContentBlock[]
   /**
    * The structured result after a requested `outputSchema` was successfully
    * satisfied. Requesting a schema does not guarantee presence: a provider can
@@ -467,6 +465,8 @@ spawn 和 fork 后端通过 `parent.ctx` 创建一个普通的单次 agent，将
 - **委派深度**由持久 `SessionHeader.delegationDepth` 与可合并扩展的运行时字段 `AgentOptions.subagentDepth` 共同表示；缺失表示顶层深度为零，存在的较大值具有权威性。两个字段都归该 seam 所有——循环既不设置也不读取它们——因此进程内子 agent 会持久保存 parent 深度 + 1，冷恢复无法降低深度，而且每次 start 都会拒绝超出安全整数域、或高于已定义绝对 `request.maxDepth` 上限的派生深度。
 - **Fork 种子注入**使用 [`CreateAgentOptions.seed`](core.zh.md#creation-and-ownership)（一个 `SessionEvent[]` 前缀，经由 `AgentLoop.createAgent` → `ctx.sessions.prepare({ seed })` 传递，与 `ctx.agents.resume()` 使用的原语相同）。fork 后端传入父级日志的一段*平衡的已完成轮次前缀*——父级事件直到并包括其最后一个 `turn/end`——因此种子从 0 连续，[invariants](../../packages/runtime-diagnostics/invariants) 回放可以接受它（进行中的、未平衡的轮次被排除在外）。
 
+`SubagentCatalogEntry` 描述一条完整或未知模式的直接子级目录记录；`SubagentCatalogState` 是仅 host 使用的 projection state。`listChildren()` 拥有一次 live-preferred 父 Session observation，不打开子级日志。浏览器消费者通过共享 Session projection store 读取 `subagentCatalog`，并将成员关系与 Session 列表活动状态组合。`SubagentCatalogRow` 属于递归目录列表。[父目录决策](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.zh.md) 规定持久事实与读取语义。
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -498,6 +498,13 @@ Source: [`packages/subagent/tool-subagent/src/model-selection-settings.ts`](../.
 Named provider registry with one-shot runs, durable discovery, and continuable-child operations.
 
 ```ts cordis-catalog
+/**
+ * Resolve a delegation tool's depth policy against the current user setting.
+ * @param configured - Explicit tool limit, or provider-managed for external delegation.
+ * @returns The numeric limit, or undefined when the provider owns depth enforcement.
+ */
+resolveMaxDepth(configured?: number | 'provider-managed'): number | undefined
+
 /**
  * Establish one durable continuable child and deliver its initial prompt.
  * Resolves when the child's inbox accepts that prompt, without waiting for the
@@ -567,55 +574,32 @@ async drainContinuableDescendants(parents: readonly Agent[]): Promise<void>
 async drainContinuableChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>
 
 /**
- * Enumerate the parent's direct session-backed subagents without loading or
- * resuming an Agent. The Session query service supplies one live-preferred
- * corpus and shared point observations; the projection cache supplies
- * immutable descriptor hits without opening cold logs. The registered
- * `subagent` projection remains the sole mode/label classifier.
- *
- * Every query receives `signal`, and the listing rechecks cancellation
- * around each await. Read rejections that settle
- * after an abort become a stable `SubagentError` with code `CANCELLED`.
- * @param parentSessionId - parent session whose direct children are listed.
- * @param signal - caller-owned cancellation forwarded to Session queries
- *   and observed around every read await.
- * @returns children and per-child diagnostics ordered by `createdAt`, then id.
- * @throws {@link SubagentError} when the projection registry or the session
- *   store is not mounted, or the caller cancels the listing.
+ * Read the parent's durable direct-child catalog without loading or resuming an Agent.
+ * The service owns and releases the live-preferred Session observation.
+ * @param parentSessionId - parent whose direct children are requested.
+ * @param signal - cancellation forwarded to the Session query.
+ * @returns catalog children in parent event order.
+ * @throws {@link SubagentError} when query or catalog projection is unavailable.
+ * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
  */
-listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentListEntry[]>
+listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]>
 
 /**
- * Enumerate the root's complete session-backed subagent tree in stable
- * pre-order from one live-preferred corpus, without loading or resuming an
- * Agent. Ordinary sessions and one-shot children remain traversal nodes so
- * continuable descendants below them are discovered; each returned entry
- * adds its durable `parentId` and root-relative `depth`. Identity resolution,
- * diagnostics, optional persistence, and cancellation follow the same
- * projection-backed contract as {@link listChildren}.
- * @param rootSessionId - session whose complete descendant tree is listed.
- * @param signal - caller-owned cancellation forwarded to persistence reads
- *   and observed around every read await.
- * @returns children and per-candidate diagnostics with tree position, in
- *   stable pre-order.
- * @throws {@link SubagentError} under the same conditions as {@link listChildren}.
+ * Recursively list reachable parent catalogs in stable pre-order, preserving
+ * each catalog's event order. Each row carries its catalog parent and depth;
+ * one-shot and unknown-mode children remain traversal nodes. Unknown modes
+ * produce unsupported diagnostics. Unreadable child catalogs produce corrupt
+ * or unavailable diagnostics and stop only that branch. Root read failures,
+ * missing services or projections, and cancellation reject the whole listing.
+ * Each catalog is observed once and released before the next read. No Agent
+ * is loaded or resumed; Sessions absent from reachable catalogs are omitted.
+ * @param rootSessionId - session whose catalog starts descendant discovery.
+ * @param signal - cancellation forwarded to and checked around each catalog read.
+ * @returns children and branch diagnostics in parent-catalog pre-order.
+ * @throws {@link SubagentError} when listing dependencies are unavailable or the caller cancels.
+ * @throws SessionQueryError when the root catalog cannot be read.
  */
 listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>
-
-/**
- * Remote face of {@link listChildren} for one browser: the durable listing
- * plus live Agent activity and the delivery-time parent availability hint.
- * Parent availability is a hint; {@link prompt} performs the authoritative
- * check. Named apart from the provider-name {@link list}, which owns the
- * member.
- * @param parentSessionId - parent session whose direct children are listed.
- * @param signal - carrier cancellation forwarded to Session queries.
- * @returns the catalog view for that parent.
- * @throws {RemoteError} `gateway/bad-request` for an empty parent id,
- *   `gateway/cancelled` for an aborted read, `subagent/projections-unavailable` when
- *   the deployment has no projection registry, otherwise `gateway/internal`.
- */
-@Remote('list') async remoteExportList(parentSessionId: SessionId, signal: AbortSignal): Promise<SubagentCatalog>
 
 /**
  * Deliver one browser-authored message to a continuable child through the
@@ -626,6 +610,7 @@ listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<Subagen
  * nearest step and retains the Agent loop's best-effort fallback semantics.
  * Image parts are admitted and persisted through the attachment store
  * before delivery, and the child's model must accept image input.
+ * Cold resume at capacity rejects with `subagent/delivery-unavailable`.
  * @param request - durable address, delivery, minted identity, content, and optional browser zone.
  * @param signal - carrier cancellation, owning the call until inbox acceptance.
  * @returns the accepted message's inbox identity.

@@ -29,6 +29,7 @@ Loader 并发挂载各个条目，因此条目失败的顺序并不等于启动�
 - 使用闩锁（latch）而非卸载监听器，来保证被报告的始终是第一个 rejection。若在拆卸期间移除监听器，第二个并发 rejection 就会变成未捕获错误，Node 会在拆卸中途杀死进程——恰好残留下本次要恢复的终端状态。后续 rejection（包括 release 自身的）都会落入已挂起的退出流程。
 - release 以 `FAIL_LOUD_RELEASE_TIMEOUT_MS`（2 秒）为上限，且其 rejection 被吞掉。卡住或失败的 disposer 只会延迟致命退出，绝不会取消它。该定时器保持 **referenced**：一旦 `unref()`，Node 就会在事件循环清空后、恰恰在报告这次失败时以 0 退出，因为 `unhandledRejection` 监听器抑制了默认的致命退出。
 - 不传 `release` 时行为与此前完全一致，因此 ACP（Agent Client Protocol）、JSON-RPC 和各 demo bin 均无变化。
+- 自[致命诊断与崩溃报告](../architecture/2026-09-22-fatal-diagnostics-and-crash-reports.zh.md)决定起，同一 handler、闩锁与 release 也对 `uncaughtException` 生效，诊断同时改为 `util.inspect`。
 
 `dsh` 的 TUI 启动器传入的 release 会释放根上下文，从而执行 TUI 已有的 `shutdown()` 并把终端交还。
 

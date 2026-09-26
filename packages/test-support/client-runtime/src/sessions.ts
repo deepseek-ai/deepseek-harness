@@ -7,8 +7,10 @@ import {
 import type {
   AgentContext, ISessions, ProjectionsFace, SessionBinding, SessionFace, SessionListState,
   SessionEventLikeEntry, SessionLiveEventEntry, SessionSearchResultItem,
-  SessionSnapshot, SessionSummary, SubmissionHandle,
+  SessionReference, SessionReferenceSource, SessionRetainInfo, SessionRetainOptions,
+  SessionSnapshot, SessionSummary, SessionTarget, SubmissionHandle,
 } from '@deepseek-ai/dsh-api-session-controller/client'
+import { scopeIdentityOf } from '@deepseek-ai/dsh-api-session-controller/src/client/scope.ts'
 import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -18,6 +20,14 @@ import { sessionSnapshot } from './fixtures.ts'
 import type {
   SessionFixture, SessionFixtureSnapshot, Stabilizer,
 } from './fixtures.ts'
+
+declare module '@deepseek-ai/dsh-api-session-controller/client' {
+  interface SessionReferenceSourceMap {
+    testFixture: unknown
+    testView: unknown
+    testOperation: unknown
+  }
+}
 
 /**
  * The fixture-backed session face: lifecycle reads delegate to the fixture's
@@ -169,36 +179,139 @@ export class FixtureSession implements SessionFace {
   }
 }
 
-/** One live test session: fixture-derived stores plus its minted scope state. */
+/** Catalog fixture data remains available across live Client generations. */
 interface SessionRecord {
   summary: SessionSummary
   snapshot: SnapshotStore<SessionFixtureSnapshot>
   session: FixtureSession
-  scope: AgentContext | undefined
-  scopeFiber: { dispose(): Promise<void> } | undefined
-  binding: SessionBinding | undefined
+  overrides: Record<string, unknown>
+  projections: Map<string, unknown>
+  initialOpen: SessionFixture['initialOpen']
 }
+
+interface SessionGeneration {
+  readonly binding: SessionBinding
+  readonly snapshot: SnapshotStore<SessionFixtureSnapshot>
+  readonly session: FixtureSession
+  readonly fiber: { dispose(): Promise<void> }
+  readonly lifetime: AbortController
+  readonly opening: Promise<void>
+  retention: SessionRetainInfo
+  live: boolean
+}
+
+interface OpeningControl {
+  readonly promise: Promise<void>
+  readonly resolve: () => void
+  readonly reject: (error: unknown) => void
+}
+
+function freezeRetainedBy(
+  counts: Partial<Record<SessionReferenceSource, number>>,
+): SessionRetainInfo['retainedBy'] {
+  Object.setPrototypeOf(counts, null)
+  return Object.freeze(counts)
+}
+
+const EMPTY_RETAIN_INFO: SessionRetainInfo = Object.freeze({
+  referenceCount: 0,
+  retainedBy: freezeRetainedBy({}),
+})
+
+// TestSessions implements SessionReference against its fixture-owned
+// SessionGeneration without importing the production service's private record.
+/* jscpd:ignore-start -- The fixture intentionally mirrors production SessionReference settlement and release semantics. */
+async function waitForOpen(opening: Promise<void>, signal?: AbortSignal): Promise<void> {
+  /* v8 ignore next -- TestSessionReference always supplies its release-composed signal. */
+  if (signal === undefined) return opening
+  const aborted = Promise.withResolvers<never>()
+  const onAbort = (): void => { aborted.reject(signal.reason) }
+  signal.addEventListener('abort', onAbort, { once: true })
+  try {
+    if (signal.aborted) onAbort()
+    await Promise.race([opening, aborted.promise])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+  }
+}
+
+class TestSessionReference implements SessionReference {
+  private readonly released = new AbortController()
+  private readonly readiness = Promise.withResolvers<SessionBinding>()
+  readonly ready = this.readiness.promise
+
+  constructor(
+    readonly sessionId: SessionId,
+    private generation: SessionGeneration | undefined,
+    private releaseReference: (() => void) | undefined,
+  ) {
+    void this.ready.catch(() => {})
+  }
+
+  get binding(): SessionBinding {
+    if (this.generation === undefined || !this.generation.live) {
+      throw new Error(`Session reference "${this.sessionId}" is released`)
+    }
+    return this.generation.binding
+  }
+
+  attachOpening(opening: Promise<void>, signal?: AbortSignal): void {
+    const waitSignal = signal === undefined
+      ? this.released.signal
+      : AbortSignal.any([this.released.signal, signal])
+    void waitForOpen(opening, waitSignal).then(
+      () => {
+        try {
+          waitSignal.throwIfAborted()
+          this.readiness.resolve(this.binding)
+        } catch (error: unknown) {
+          this.readiness.reject(error)
+        }
+      },
+      (error: unknown) => { this.readiness.reject(error) },
+    )
+  }
+
+  release(): void {
+    const reason = new Error(`Session reference "${this.sessionId}" is released`)
+    const release = this.releaseReference
+    this.released.abort(reason)
+    this.readiness.reject(reason)
+    this.generation = undefined
+    this.releaseReference = undefined
+    release?.()
+  }
+
+  [Symbol.dispose](): void {
+    this.release()
+  }
+}
+/* jscpd:ignore-end */
 
 /**
  * Sessions test double behind the renderer host and feature injects: owns the
- * list/current observable, scope minting through the production `createScope`,
+ * catalog observable, scope minting through the production `createScope`,
  * stable Controller bindings, and the session behavior face supplied per
  * fixture. `ui-session` owns standard-source materialization.
  *
  * Implements the same ISessions face features receive as `ctx.sessions`, so
  * a production face change breaks this double at compile time; the extra
- * members (add/updateSessionSnapshot/event-window drivers/setCurrent/remove/
+ * members (add/updateSessionSnapshot/event-window drivers/remove/
  * behavior/calls/stubs) are bench-only surface.
  */
 export class TestSessions implements ISessions {
-  /** The useSessions standard feed (list rows + current selection). */
+  /** The useSessions catalog feed, independent of view ownership. */
   readonly list: SnapshotStore<SessionListState>
   private readonly records = new Map<SessionId, SessionRecord>()
+  private readonly generations = new Map<SessionId, SessionGeneration>()
+  private readonly addresses = new Map<SessionId, SubagentAddress>()
+  private readonly retentionStores = new Map<SessionId, SnapshotStore<SessionRetainInfo>>()
+  private readonly pendingDrops = new Set<Promise<void>>()
+  private closed = false
 
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
-    method: 'create' | 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'refresh' | 'search' | 'fork'
+    method: 'create' | 'refreshProjections' | 'refresh' | 'search' | 'fork'
     args: unknown[]
   }[] = []
 
@@ -215,18 +328,27 @@ export class TestSessions implements ISessions {
    */
   constructor(private readonly stabilize: Stabilizer, private readonly rootCtx: Context) {
     this.list = createSnapshotStore<SessionListState>({
-      ids: [], byId: {}, current: undefined, phase: 'ready',
-      subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
+      ids: [], byId: {}, phase: 'ready', projectionsBySession: {},
     })
+    rootCtx.effect(() => async () => {
+      this.closed = true
+      for (const [id, generation] of this.generations) {
+        generation.live = false
+        generation.retention = EMPTY_RETAIN_INFO
+        generation.lifetime.abort(new Error('test Session Controller is disposed'))
+        this.publishRetention(id)
+      }
+      this.generations.clear()
+      await this.drainDrops()
+    }, 'test sessions: Client generations')
   }
 
   /**
-   * Add a session from a fixture and (by default) make it current.
+   * Add a Session fixture to the catalog without retaining a generation.
    * @param fixture - identity + snapshot/summary overrides + behavior face.
-   * @param opts - pass `current: false` to add without selecting.
    * @returns the stable session id (branded view of `fixture.id`).
    */
-  async add(fixture: SessionFixture, opts?: { current?: boolean }): Promise<SessionId> {
+  async add(fixture: SessionFixture): Promise<SessionId> {
     const id = fixture.id as SessionId
     if (this.records.has(id)) throw new Error(`test session "${id}" already added`)
     const summary: SessionSummary = {
@@ -236,6 +358,7 @@ export class TestSessions implements ISessions {
       blank: false,
       updatedAt: this.records.size + 1,
       ...fixture.summary,
+      retainedBy: this.retentionSnapshot(id).retainedBy,
     }
     const snapshot = createSnapshotStore<SessionFixtureSnapshot>({
       ...sessionSnapshot(id),
@@ -249,15 +372,14 @@ export class TestSessions implements ISessions {
       summary,
       snapshot,
       session,
-      scope: undefined,
-      scopeFiber: undefined,
-      binding: undefined,
+      overrides: fixture.session ?? {},
+      projections: new Map(),
+      initialOpen: fixture.initialOpen,
     })
     await this.stabilize(() => {
       this.list.update((draft) => {
         draft.ids.push(id)
         draft.byId[id] = summary
-        if (opts?.current !== false) draft.current = id
       })
     })
     return id
@@ -273,7 +395,10 @@ export class TestSessions implements ISessions {
     mutate: (draft: SessionFixtureSnapshot) => void,
   ): Promise<void> {
     const record = this.require(id)
-    await this.stabilize(() => { record.snapshot.update(mutate) })
+    await this.stabilize(() => {
+      record.snapshot.update(mutate)
+      this.generations.get(id as SessionId)?.snapshot.set(record.snapshot.getSnapshot())
+    })
   }
 
   /**
@@ -284,7 +409,11 @@ export class TestSessions implements ISessions {
    */
   async setProjection(id: string, key: string, value: unknown): Promise<void> {
     const record = this.require(id)
-    await this.stabilize(() => { record.session.projections.set(key, value) })
+    record.projections.set(key, value)
+    await this.stabilize(() => {
+      record.session.projections.set(key, value)
+      this.generations.get(id as SessionId)?.session.projections.set(key, value)
+    })
   }
 
   /**
@@ -298,7 +427,10 @@ export class TestSessions implements ISessions {
     entries: readonly SessionEventLikeEntry[],
     hasMore = false,
   ): Promise<void> {
-    await this.stabilize(() => { this.require(id).session.eventSource.replace(entries, hasMore) })
+    await this.stabilize(() => {
+      this.require(id).session.eventSource.replace(entries, hasMore)
+      this.generations.get(id as SessionId)?.session.eventSource.replace(entries, hasMore)
+    })
   }
 
   /**
@@ -312,7 +444,10 @@ export class TestSessions implements ISessions {
     entries: readonly SessionEventLikeEntry[],
     hasMore = false,
   ): Promise<void> {
-    await this.stabilize(() => { this.require(id).session.eventSource.prepend(entries, hasMore) })
+    await this.stabilize(() => {
+      this.require(id).session.eventSource.prepend(entries, hasMore)
+      this.generations.get(id as SessionId)?.session.eventSource.prepend(entries, hasMore)
+    })
   }
 
   /**
@@ -321,7 +456,10 @@ export class TestSessions implements ISessions {
    * @param entry - live event entry.
    */
   async appendEvent(id: string, entry: SessionLiveEventEntry): Promise<void> {
-    await this.stabilize(() => { this.require(id).session.eventSource.append(entry) })
+    await this.stabilize(() => {
+      this.require(id).session.eventSource.append(entry)
+      this.generations.get(id as SessionId)?.session.eventSource.append(entry)
+    })
   }
 
   /**
@@ -332,71 +470,115 @@ export class TestSessions implements ISessions {
    */
   async updateSummary(id: string, patch: Partial<Omit<SessionSummary, 'id'>>): Promise<void> {
     const record = this.require(id)
-    record.summary = { ...record.summary, ...patch }
+    record.summary = {
+      ...record.summary,
+      ...patch,
+      retainedBy: this.retentionSnapshot(id as SessionId).retainedBy,
+    }
     await this.stabilize(() => {
       this.list.update((draft) => { draft.byId[id as SessionId] = record.summary })
     })
   }
 
   /**
-   * Switch the current selection (undefined = the no-session empty state).
-   * @param id - session id to select, or undefined to clear.
-   */
-  async setCurrent(id: string | undefined): Promise<void> {
-    if (id !== undefined) this.require(id)
-    await this.stabilize(() => {
-      this.list.update((draft) => { draft.current = id as SessionId | undefined })
-    })
-  }
-
-  /**
-   * Remove a session: list row, scope fiber, and per-session store instances
-   * (with persisted state) die together — the same single lifecycle axis the
-   * production Client Sessions service drives on session death, minus staging.
+   * Remove a catalog row and mark its retained Session removed without releasing owners.
    * @param id - session id.
    */
   async remove(id: string): Promise<void> {
-    const record = this.require(id)
+    this.require(id)
     this.records.delete(id as SessionId)
-    await this.stabilize(async () => {
+    await this.stabilize(() => {
       this.list.update((draft) => {
         draft.ids = draft.ids.filter(existing => existing !== id)
         const { [id as SessionId]: _dead, ...rest } = draft.byId
         draft.byId = rest
-        if (draft.current === id) draft.current = undefined
       })
-      if (record.scopeFiber !== undefined) await record.scopeFiber.dispose()
+      this.generations.get(id as SessionId)?.snapshot.update((draft) => { draft.removed = true })
     })
   }
 
   /**
-   * Resolve (mint on first touch) the session-scoped Cordis context through
-   * the production `createScope`, so real `scopeOf`/scope-addressed services
-   * resolve it.
+   * Borrow the already-retained session-scoped Cordis context.
    * @param id - session id.
-   * @returns the scoped context, or undefined for unknown sessions.
+   * @returns the scoped context, or undefined without a live reference.
    */
   scope(id: string): AgentContext | undefined {
-    const record = this.records.get(id as SessionId)
-    if (record === undefined) return undefined
-    if (record.scope === undefined) {
-      const handle = createScope(this.rootCtx, id as SessionId)
-      record.scope = handle.ctx
-      record.scopeFiber = handle.fiber
-    }
-    return record.scope
+    return this.generations.get(id as SessionId)?.binding.ctx
   }
 
   /**
    * Session assembly binding (inject factories and provide resolvers receive it).
    * @param id - session id.
-   * @returns sessionId + behavior face + scoped ctx, or undefined when unknown.
+   * @returns the live generation's binding, or undefined without a reference.
    */
   binding(id: string): SessionBinding | undefined {
-    const record = this.records.get(id as SessionId)
-    if (record === undefined) return undefined
-    record.binding ??= this.bindingOf(id as SessionId, record)
-    return record.binding
+    return this.generations.get(id as SessionId)?.binding
+  }
+
+  /* jscpd:ignore-start -- The fixture intentionally mirrors production SessionReference acquisition and release semantics. */
+  retain(
+    target: SessionTarget,
+    options: SessionRetainOptions = { source: 'testFixture' },
+  ): SessionReference {
+    const { source, signal } = options
+    signal?.throwIfAborted()
+    if (this.closed) throw new Error('test Session Controller is disposed')
+    const id = this.resolveTarget(target)
+    const generation = this.generations.get(id) ?? this.materialize(id, this.require(id))
+    const reference = this.retainGeneration(id, generation, source)
+    try {
+      reference.attachOpening(generation.opening, signal)
+      return reference
+    } catch (error: unknown) {
+      reference.release()
+      throw error
+    }
+  }
+
+  async using<T>(
+    target: SessionTarget,
+    options: SessionRetainOptions,
+    operation: (reference: SessionReference) => T | Promise<T>,
+  ): Promise<T> {
+    const reference = this.retain(target, options)
+    try {
+      await reference.ready
+      return await operation(reference)
+    } finally {
+      reference.release()
+    }
+  }
+  /* jscpd:ignore-end */
+
+  retainInfo(id: SessionId): ObservableSnapshot<SessionRetainInfo> {
+    let store = this.retentionStores.get(id)
+    if (store === undefined) {
+      store = createSnapshotStore(this.retentionSnapshot(id))
+      this.retentionStores.set(id, store)
+    }
+    return store
+  }
+
+  /**
+   * Retain one fixture Session until the supplied Cordis owner stops.
+   * @param ownerCtx - context whose disposal releases the reference.
+   * @param target - fixture Session identity or subagent address.
+   * @param options - reference source and optional readiness cancellation.
+   * @returns the owned reference immediately.
+   */
+  retainFor(
+    ownerCtx: Context,
+    target: SessionTarget,
+    options: SessionRetainOptions = { source: 'testFixture' },
+  ): SessionReference {
+    const reference = this.retain(target, options)
+    try {
+      ownerCtx.effect(() => () => { reference.release() }, 'test sessions: owned reference')
+      return reference
+    } catch (error: unknown) {
+      reference.release()
+      throw error
+    }
   }
 
   /**
@@ -417,7 +599,11 @@ export class TestSessions implements ISessions {
   sessionOf(ctx: Context): SessionFace | undefined {
     const id = scopeOf(ctx)
     if (id === undefined) return undefined
-    return this.records.get(id)?.session
+    const generation = this.generations.get(id)
+    return generation !== undefined
+      && scopeIdentityOf(generation.binding.ctx) === scopeIdentityOf(ctx)
+      ? generation.session
+      : undefined
   }
 
   /**
@@ -428,7 +614,7 @@ export class TestSessions implements ISessions {
     this.createStub = impl
   }
 
-  /** Create through the installed test behavior and require an addressable binding. */
+  /** Create through the installed test behavior and require a catalogued fixture. */
   async create(opts?: Parameters<ISessions['create']>[0]): Promise<SessionId> {
     this.calls.push({ method: 'create', args: [opts] })
     if (this.createStub === undefined) {
@@ -439,55 +625,23 @@ export class TestSessions implements ISessions {
     return id
   }
 
-  /**
-   * Service-level selection call (recorded, then applied to the list store
-   * synchronously — inject callbacks call this outside any act window; the
-   * store notify is microtask-batched so the next stabilized step observes it).
-   * @param id - session id.
-   */
-  open(id: SessionId): void {
-    this.calls.push({ method: 'open', args: [id] })
-    this.require(id)
-    this.list.update((draft) => {
-      draft.current = id
-      draft.currentAddress = undefined
-    })
-  }
-
-  /** Open an existing fixture through its catalog address. */
-  openSubagent(address: SubagentAddress): void {
-    this.calls.push({ method: 'openSubagent', args: [address] })
-    this.require(address.childSessionId)
-    this.list.update((draft) => {
-      draft.current = address.childSessionId
-      draft.currentAddress = address
-    })
-  }
-
-  /** Resolve the current fixture's retained catalog address. */
+  /** Resolve a retained or catalog-derived address independently of a view. */
   subagentAddress(id: SessionId): SubagentAddress | undefined {
-    const address = this.list.getSnapshot().currentAddress
-    return address?.childSessionId === id ? address : undefined
+    const retained = this.addresses.get(id)
+    if (retained !== undefined) return retained
+    for (const [parentSessionId, projections] of Object.entries(this.list.getSnapshot().projectionsBySession)) {
+      const child = projections.values.subagentCatalog?.find(entry => entry.id === id)
+      if (child !== undefined) {
+        return { parentSessionId: parentSessionId as SessionId, childSessionId: id, mode: child.mode }
+      }
+    }
+    return undefined
   }
 
-  /** Record catalog consumption; fixture callers drive snapshots explicitly. */
-  setSubagentCatalogOpen(parentSessionId: SessionId, open: boolean): void {
-    this.calls.push({ method: 'setSubagentCatalogOpen', args: [parentSessionId, open] })
-  }
-
-  /** Record a catalog refresh; fixture callers drive snapshots explicitly. */
-  refreshSubagents(parentSessionId: SessionId): Promise<void> {
-    this.calls.push({ method: 'refreshSubagents', args: [parentSessionId] })
+  /** Record a projection refresh; fixture callers drive snapshots explicitly. */
+  refreshProjections(sessionId: SessionId): Promise<void> {
+    this.calls.push({ method: 'refreshProjections', args: [sessionId] })
     return Promise.resolve()
-  }
-
-  /** Clear the current selection (recorded; the production no-session flow). */
-  clear(): void {
-    this.calls.push({ method: 'clear', args: [] })
-    this.list.update((draft) => {
-      draft.current = undefined
-      draft.currentAddress = undefined
-    })
   }
 
   /** Record a list refresh; fixture callers publish list state explicitly. */
@@ -535,32 +689,142 @@ export class TestSessions implements ISessions {
    * @returns the FixtureSession carried by the Controller binding.
    */
   behavior(id: string): FixtureSession {
-    return this.require(id).session
+    return this.generations.get(id as SessionId)?.session ?? this.require(id).session
   }
 
   /** Dispose minted scope fibers (runtime dispose path). */
   async disposeScopes(): Promise<void> {
-    for (const record of this.records.values()) {
-      if (record.scopeFiber !== undefined) {
-        await record.scopeFiber.dispose()
-        record.scope = undefined
-        record.scopeFiber = undefined
-        record.binding = undefined
+    this.closed = true
+    for (const [id, generation] of this.generations) this.drop(id, generation)
+    await this.drainDrops()
+  }
+
+  private resolveTarget(target: SessionTarget): SessionId {
+    const id = typeof target === 'string' ? target : target.childSessionId
+    if (typeof target !== 'string') {
+      this.addresses.set(id, target)
+    }
+    this.require(id)
+    return id
+  }
+
+  private retainGeneration(
+    id: SessionId,
+    generation: SessionGeneration,
+    source: SessionReferenceSource,
+  ): TestSessionReference {
+    const previous = generation.retention
+    generation.retention = Object.freeze({
+      referenceCount: previous.referenceCount + 1,
+      retainedBy: freezeRetainedBy({
+        ...previous.retainedBy,
+        [source]: (previous.retainedBy[source] ?? 0) + 1,
+      }),
+    })
+    const reference = new TestSessionReference(id, generation, () => {
+      if (!generation.live) return
+      const count = generation.retention.referenceCount - 1
+      const { [source]: sourceCount = 0, ...otherSources } = generation.retention.retainedBy
+      const retainedBy = sourceCount > 1
+        ? { ...otherSources, [source]: sourceCount - 1 }
+        : otherSources
+      generation.retention = count === 0
+        ? EMPTY_RETAIN_INFO
+        : Object.freeze({ referenceCount: count, retainedBy: freezeRetainedBy(retainedBy) })
+      if (count === 0) this.drop(id, generation)
+      else this.publishRetention(id)
+    })
+    this.publishRetention(id)
+    return reference
+  }
+
+  private retentionSnapshot(id: SessionId): SessionRetainInfo {
+    return this.generations.get(id)?.retention ?? EMPTY_RETAIN_INFO
+  }
+
+  private publishRetention(id: SessionId): void {
+    const retention = this.retentionSnapshot(id)
+    const store = this.retentionStores.get(id)
+    if (store !== undefined && store.getSnapshot() !== retention) store.set(retention)
+    const state = this.list.getSnapshot()
+    const row = state.byId[id]
+    if (row === undefined || row.retainedBy === retention.retainedBy) return
+    const summary = { ...row, retainedBy: retention.retainedBy }
+    const record = this.records.get(id)
+    /* v8 ignore next -- a catalog row and its fixture record are inserted and removed together. */
+    if (record !== undefined) record.summary = summary
+    this.list.set({ ...state, byId: { ...state.byId, [id]: summary } })
+  }
+
+  private materialize(id: SessionId, fixture: SessionRecord): SessionGeneration {
+    const { ctx, fiber } = createScope(this.rootCtx, id)
+    const snapshot = createSnapshotStore(fixture.snapshot.getSnapshot())
+    const session = new FixtureSession(id, snapshot, fixture.overrides)
+    const window = fixture.session.eventSource.getSnapshot()
+    session.eventSource.replace(window.entries, window.hasMore)
+    for (const [key, value] of fixture.projections) session.projections.set(key, value)
+    const opening = Promise.withResolvers<void>()
+    void opening.promise.catch(() => {})
+    const lifetime = new AbortController()
+    const generation: SessionGeneration = {
+      binding: { sessionId: id, session, eventSource: session.eventSource, ctx },
+      snapshot,
+      session,
+      fiber,
+      lifetime,
+      opening: opening.promise,
+      retention: EMPTY_RETAIN_INFO,
+      live: true,
+    }
+    this.generations.set(id, generation)
+    ctx.effect(() => async () => {
+      if (generation.live) {
+        generation.live = false
+        generation.retention = EMPTY_RETAIN_INFO
+        if (this.generations.get(id) === generation) this.generations.delete(id)
+        this.publishRetention(id)
       }
+      lifetime.abort(new Error(`test Session generation "${id}" is disposed`))
+      await Promise.allSettled([generation.opening])
+    }, 'test sessions: exact generation')
+    this.startOpening(fixture.initialOpen, lifetime.signal, opening)
+    return generation
+  }
+
+  private startOpening(
+    initialOpen: SessionFixture['initialOpen'],
+    signal: AbortSignal,
+    opening: OpeningControl,
+  ): void {
+    try {
+      Promise.resolve(initialOpen?.(signal)).then(opening.resolve, opening.reject)
+    } catch (error: unknown) {
+      opening.reject(error)
     }
   }
 
-  private bindingOf(id: SessionId, record: SessionRecord): SessionBinding {
-    const ctx = this.scope(id)
-    /* v8 ignore next 2 -- bindingOf only runs for a live record, whose scope
-     * always resolves; kept so a future caller cannot mint a ctx-less binding. */
-    if (ctx === undefined) throw new Error(`test session "${id}" resolved no scope`)
-    return {
-      sessionId: id,
-      session: record.session,
-      eventSource: record.session.eventSource,
-      ctx,
-    }
+  private drop(id: SessionId, generation: SessionGeneration): void {
+    /* v8 ignore next -- only the live generation's retained callback can enter drop. */
+    if (!generation.live) return
+    generation.live = false
+    generation.retention = EMPTY_RETAIN_INFO
+    /* v8 ignore next -- this synchronous path drops only the generation currently stored for id. */
+    if (this.generations.get(id) === generation) this.generations.delete(id)
+    generation.lifetime.abort(new Error(`test Session generation "${id}" is released`))
+    this.publishRetention(id)
+    const disposal = generation.fiber.dispose()
+    this.pendingDrops.add(disposal)
+    void disposal.then(
+      () => { this.pendingDrops.delete(disposal) },
+      (error: unknown) => {
+        this.pendingDrops.delete(disposal)
+        this.rootCtx.logger.warn('test Session scope disposal failed:', error)
+      },
+    )
+  }
+
+  private async drainDrops(): Promise<void> {
+    while (this.pendingDrops.size !== 0) await Promise.all([...this.pendingDrops])
   }
 
   private require(id: string): SessionRecord {

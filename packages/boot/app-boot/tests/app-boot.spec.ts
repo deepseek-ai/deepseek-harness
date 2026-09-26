@@ -2,13 +2,14 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { inspect } from 'node:util'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import {
-  addHarnessSourceSection, auditStartupEntries, boot,
+  addHarnessSourceSection, auditStartupEntries, boot, StartupError,
   FAIL_LOUD_RELEASE_TIMEOUT_MS, HARNESS_SOURCE_SECTION,
-  installFailLoud, loadEnv, loadLayeredEnv, loadOverlayPatches, resolveConfigPath, type FailLoudProcess,
+  installFailLoud, loadEnv, loadLayeredEnv, loadOverlayPatches, resolveConfigPath, type FailLoudEvent, type FailLoudProcess,
 } from '../src/index.ts'
 
 const NAME = 'dsh-test-bin'
@@ -359,14 +360,24 @@ describe('loadLayeredEnv', () => {
 })
 
 describe('installFailLoud', () => {
-  function fakeProc(): FailLoudProcess & { handlers: Array<(err: unknown) => void>; written: string[]; exits: number[] } {
-    const handlers: Array<(err: unknown) => void> = []
+  type Handler = (err: unknown) => void
+  function fakeProc(): FailLoudProcess & {
+    handlers: Handler[]
+    rejection: Handler
+    exception: Handler
+    written: string[]
+    exits: number[]
+  } {
+    const handlers: Handler[] = []
+    const registered = new Map<FailLoudEvent, Handler>()
     const written: string[] = []
     const exits: number[] = []
     return {
       handlers, written, exits,
-      on: (_event, handler) => { handlers.push(handler) },
-      off: (_event, handler) => { handlers.splice(handlers.indexOf(handler), 1) },
+      get rejection() { return registered.get('unhandledRejection')! },
+      get exception() { return registered.get('uncaughtException')! },
+      on: (event, handler) => { handlers.push(handler); registered.set(event, handler) },
+      off: (event, handler) => { handlers.splice(handlers.indexOf(handler), 1); registered.delete(event) },
       stderr: { write: (chunk: string) => { written.push(chunk) } },
       exit: (code: number) => { exits.push(code) },
     }
@@ -376,7 +387,7 @@ describe('installFailLoud', () => {
     const proc = fakeProc()
     installFailLoud(NAME, proc)
     const error = new Error('boom')
-    proc.handlers[0]!(error)
+    proc.rejection(error)
     expect(proc.written[0]).toContain(`${NAME}: fatal load failure: `)
     expect(proc.written[0]).toContain(error.stack)
     expect(proc.exits).toEqual([1])
@@ -387,7 +398,7 @@ describe('installFailLoud', () => {
   it('stringifies a non-Error rejection and an Error without a stack falls back to its message', () => {
     const plain = fakeProc()
     installFailLoud(NAME, plain)
-    plain.handlers[0]!('plain failure')
+    plain.rejection('plain failure')
     expect(plain.written[0]).toContain('plain failure')
     expect(plain.exits).toEqual([1])
 
@@ -395,7 +406,7 @@ describe('installFailLoud', () => {
     delete (stackless as { stack?: string }).stack
     const bare = fakeProc()
     installFailLoud(NAME, bare)
-    bare.handlers[0]!(stackless)
+    bare.rejection(stackless)
     expect(bare.written[0]).toContain('no stack')
     expect(bare.exits).toEqual([1])
   })
@@ -403,16 +414,18 @@ describe('installFailLoud', () => {
   it('returns an uninstaller that removes the handler (and defaults to the real process)', () => {
     const proc = fakeProc()
     const uninstall = installFailLoud(NAME, proc)
-    expect(proc.handlers).toHaveLength(1)
+    expect(proc.handlers).toHaveLength(2)
     uninstall()
     expect(proc.handlers).toHaveLength(0)
     // Default-proc arm: install on the real process, then immediately uninstall
     // so the suite leaks no handler and can never exit the runner.
-    const before = process.listenerCount('unhandledRejection')
+    const before = [process.listenerCount('unhandledRejection'), process.listenerCount('uncaughtException')]
     const uninstallReal = installFailLoud(NAME)
-    expect(process.listenerCount('unhandledRejection')).toBe(before + 1)
+    expect(process.listenerCount('unhandledRejection')).toBe(before[0]! + 1)
+    expect(process.listenerCount('uncaughtException')).toBe(before[1]! + 1)
     uninstallReal()
-    expect(process.listenerCount('unhandledRejection')).toBe(before)
+    expect(process.listenerCount('unhandledRejection')).toBe(before[0])
+    expect(process.listenerCount('uncaughtException')).toBe(before[1])
   })
 
   it('does not report an activation rejection shared by entries in the boot audit', async () => {
@@ -435,12 +448,12 @@ describe('installFailLoud', () => {
     } as unknown as Context, NAME, warn)
     await Promise.resolve()
     await Promise.resolve()
-    proc.handlers[0]!(error)
+    proc.rejection(error)
     expect(proc.written).toEqual([])
     expect(proc.exits).toEqual([])
     await audit
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('assembled activation failure'))
-    proc.handlers[0]!(error)
+    proc.rejection(error)
     expect(proc.exits).toEqual([1])
   })
 
@@ -454,7 +467,7 @@ describe('installFailLoud', () => {
       await Promise.resolve()
       order.push('released')
     })
-    proc.handlers[0]!(new Error('sibling entry rejected'))
+    proc.rejection(new Error('sibling entry rejected'))
     expect(proc.written[0]).toContain(`${NAME}: fatal load failure: `)
     // The release is in flight, so the exit has not committed yet.
     expect(proc.exits).toEqual([])
@@ -465,7 +478,7 @@ describe('installFailLoud', () => {
   it('still exits when the release hook rejects', async () => {
     const proc = fakeProc()
     installFailLoud(NAME, proc, () => Promise.reject(new Error('terminal stop failed')))
-    proc.handlers[0]!(new Error('boom'))
+    proc.rejection(new Error('boom'))
     await vi.waitFor(() => { expect(proc.exits).toEqual([1]) })
   })
 
@@ -474,7 +487,7 @@ describe('installFailLoud', () => {
     try {
       const proc = fakeProc()
       installFailLoud(NAME, proc, () => new Promise<void>(() => {}))
-      proc.handlers[0]!(new Error('boom'))
+      proc.rejection(new Error('boom'))
       expect(proc.exits).toEqual([])
       await vi.advanceTimersByTimeAsync(FAIL_LOUD_RELEASE_TIMEOUT_MS)
       expect(proc.exits).toEqual([1])
@@ -493,11 +506,49 @@ describe('installFailLoud', () => {
       await Promise.resolve()
       released = true
     })
-    proc.handlers[0]!(new Error('first rejection'))
-    proc.handlers[0]!(new Error('second rejection'))
-    expect(proc.handlers).toHaveLength(1)
+    proc.rejection(new Error('first rejection'))
+    proc.rejection(new Error('second rejection'))
+    proc.exception(new Error('exception during teardown'))
+    expect(proc.handlers).toHaveLength(2)
     expect(proc.written).toHaveLength(1)
     expect(proc.written[0]).toContain('first rejection')
+    await vi.waitFor(() => { expect(proc.exits).toEqual([1]) })
+    expect(released).toBe(true)
+  })
+
+  it('turns an uncaught exception into a labelled diagnostic with its enumerable properties and exits 1', () => {
+    const proc = fakeProc()
+    installFailLoud(NAME, proc)
+    const error = Object.assign(new Error("ENOENT: no such file or directory, open '/tmp/dsh-subprocess-x/out.log'"), {
+      errno: -2, code: 'ENOENT', syscall: 'open', path: '/tmp/dsh-subprocess-x/out.log',
+    })
+    proc.exception(error)
+    expect(proc.written).toHaveLength(1)
+    expect(proc.written[0]).toContain(`${NAME}: fatal uncaught exception: `)
+    expect(proc.written[0]).toContain(error.stack)
+    expect(proc.written[0]).toContain("syscall: 'open'")
+    expect(proc.written[0]).toContain("path: '/tmp/dsh-subprocess-x/out.log'")
+    expect(proc.exits).toEqual([1])
+  })
+
+  it('includes the cause chain in the diagnostic', () => {
+    const proc = fakeProc()
+    installFailLoud(NAME, proc)
+    proc.exception(new Error('wrapper', { cause: new Error('root cause') }))
+    expect(proc.written[0]).toContain('[cause]: Error: root cause')
+    expect(proc.exits).toEqual([1])
+  })
+
+  it('awaits the release hook for an uncaught exception as it does for a rejection', async () => {
+    const proc = fakeProc()
+    let released = false
+    installFailLoud(NAME, proc, async () => {
+      await Promise.resolve()
+      released = true
+    })
+    proc.exception(new Error('listener threw'))
+    expect(proc.written[0]).toContain('fatal uncaught exception')
+    expect(proc.exits).toEqual([])
     await vi.waitFor(() => { expect(proc.exits).toEqual([1]) })
     expect(released).toBe(true)
   })
@@ -587,7 +638,7 @@ describe('auditStartupEntries', () => {
     }]), NAME, warn)
     const detail = `${id} (./plugin.mjs): disabled expression failed: ${error.stack!}`
     if (required) {
-      await expect(result).rejects.toThrow(`required startup failure: 1 entry did not activate\n${detail}`)
+      await expect(result).rejects.toThrow(`  ${id} (required)\n    Package: ./plugin.mjs\n    disabled expression failed: ${error.stack!.replaceAll('\n', '\n    ')}`)
       expect(warn).not.toHaveBeenCalled()
     } else {
       await expect(result).resolves.toBeUndefined()
@@ -670,18 +721,97 @@ describe('auditStartupEntries', () => {
     expect(diagnostic).toContain('unexpected-state (./unexpected-state.mjs): fiber state 1')
   })
 
-  it.each(requiredIds)('rejects required %s failures after warning about optional failures', async (id) => {
+  it.each(requiredIds)('combines required %s and optional failures without a separate warning', async (id) => {
     const warn = vi.fn()
     const requiredError = new Error('address already in use')
     const optionalError = new Error('todo unavailable')
-    await expect(auditStartupEntries(ctxWith([
+    const error = await auditStartupEntries(ctxWith([
       { fiber: fiber(3, requiredError), options: { id, name: './required.mjs' } },
       { fiber: fiber(3, optionalError), options: { id: 'tool-todo', name: '@deepseek-ai/dsh-tool-todo' } },
-    ]), NAME, warn)).rejects.toThrow([
-      'required startup failure: 1 entry did not activate',
-      `${id} (./required.mjs): ${requiredError.stack!}`,
-    ].join('\n'))
-    expect(warn).toHaveBeenCalledWith(`${NAME}: warning: 1 entry did not activate\ntool-todo (@deepseek-ai/dsh-tool-todo): ${optionalError.stack!}\n`)
+    ]), NAME, warn).catch((error: unknown) => error)
+    expect(error).toBeInstanceOf(StartupError)
+    expect((error as Error).message).toContain(`${NAME}: startup failed: 1 required plugin did not activate`)
+    expect((error as Error).message).toContain(`  ${id} (required)\n    Package: ./required.mjs`)
+    expect((error as Error).message).toContain('  tool-todo\n    Package: @deepseek-ai/dsh-tool-todo')
+    expect(((error as Error).cause as AggregateError).errors).toEqual([requiredError, optionalError])
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('omits an error cause when required plugins are only waiting for services', async () => {
+    const error = await auditStartupEntries(ctxWith([
+      { fiber: fiber(0, undefined, { webRuntime: {} }), options: { id: 'connection', name: './connection.mjs' } },
+    ]), NAME, vi.fn()).catch((error: unknown) => error)
+    expect(error).toBeInstanceOf(StartupError)
+    expect(Object.hasOwn(error as StartupError, 'cause')).toBe(false)
+    expect(inspect(error)).not.toContain('AggregateError')
+    expect((error as StartupError).message).toContain('Plugins waiting for services (1):')
+  })
+
+  it('keeps diagnostic metadata available without expanding it in ordinary error inspection', () => {
+    const entries = [{
+      id: 'connection', module: './connection.mjs', required: true, fiberState: 0,
+      outcome: { kind: 'pending' as const, missing: ['webRuntime'] },
+    }]
+    const error = new StartupError('waiting for webRuntime', entries)
+    const startup = { configurationPath: '/private/cordis.yml', messages: [
+      { ts: 1, name: 'loader', type: 'warn', args: ['raw diagnostic argument'] },
+    ] }
+    error.startup = startup
+    expect(error.entries).toBe(entries)
+    expect(error.startup).toBe(startup)
+    const output = inspect(error)
+    expect(output).toContain('waiting for webRuntime')
+    expect(output).not.toContain('connection.mjs')
+    expect(output).not.toContain('/private/cordis.yml')
+    expect(output).not.toContain('raw diagnostic argument')
+    const full = inspect(error, { showHidden: true, depth: null })
+    expect(full).toContain('connection.mjs')
+    expect(full).toContain('/private/cordis.yml')
+    expect(full).toContain('raw diagnostic argument')
+  })
+
+  it('retains nested and shared errors in a fatal diagnostic without duplicating them', async () => {
+    const leaf = new Error('leaf failure')
+    leaf.stack = 'Error: leaf failure\n    at plugin.mjs:1:2'
+    const aggregate = new AggregateError([leaf, 'plain failure'], 'activation failed', { cause: leaf })
+    aggregate.stack = 'AggregateError: activation failed\n    at plugin.mjs:3:4'
+    const error = await auditStartupEntries(ctxWith([
+      { fiber: fiber(3, aggregate), options: { id: 'webserver', name: './plugin.mjs' } },
+    ]), NAME, vi.fn()).catch((error: unknown) => error)
+    expect((error as Error).message).toContain('AggregateError: activation failed')
+    expect((error as Error).message).toContain('    Error: leaf failure\n        at plugin.mjs:1:2')
+    expect((error as Error).message.match(/leaf failure/gu)).toHaveLength(1)
+    expect((error as Error).message).toContain('    plain failure')
+    expect(((error as Error).cause as AggregateError).errors).toEqual([aggregate])
+  })
+
+  it('groups original failure stacks and pending services in one startup diagnostic', async () => {
+    const original = new Error('listen EADDRINUSE: address already in use 127.0.0.1:3080')
+    original.stack = `${original.name}: ${original.message}\n    at Server.listen (node:net:1:2)`
+    const warn = vi.fn()
+    const error = await auditStartupEntries(ctxWith([
+      { fiber: fiber(0, undefined, { webServer: {} }), options: { id: 'web-runtime', name: './web.mjs' } },
+      { fiber: fiber(3, original), options: { id: 'webserver', name: '@deepseek-ai/dsh-host-webserver' } },
+      { fiber: fiber(0, undefined, { webRuntime: {} }), options: { id: 'connection', name: './connection.mjs' } },
+      { fiber: fiber(0), options: { id: 'unknown', name: './unknown.mjs' } },
+    ]), NAME, warn).catch((error: unknown) => error)
+    expect(error).toBeInstanceOf(StartupError)
+    expect((error as Error).message).toMatchInlineSnapshot(`
+      "dsh-test-bin: startup failed: 2 required plugins did not activate
+
+      Failed plugins (1):
+        webserver (required)
+          Package: @deepseek-ai/dsh-host-webserver
+          Error: listen EADDRINUSE: address already in use 127.0.0.1:3080
+              at Server.listen (node:net:1:2)
+
+      Plugins waiting for services (3):
+        Plugin                 Missing services
+        connection (required)  webRuntime
+        web-runtime            webServer
+        unknown                unknown"
+    `)
+    expect(warn).not.toHaveBeenCalled()
   })
 
   it('rejects a required entry pending on an injected service', async () => {
@@ -689,7 +819,7 @@ describe('auditStartupEntries', () => {
       fiber: fiber(0, undefined, { headlessStartup: {} }),
       options: { id: 'headless-runner', name: '@deepseek-ai/dsh-headless' },
     }]), NAME, vi.fn())).rejects.toThrow(
-      'headless-runner (@deepseek-ai/dsh-headless): pending (waiting for service: headlessStartup)',
+      'headless-runner (required)  headlessStartup',
     )
   })
 })
@@ -714,6 +844,78 @@ describe('loadOverlayPatches', () => {
 })
 
 describe('boot', () => {
+  it('retains import errors and inactive-entry metadata after disposing the startup tree', async () => {
+    const dir = tmp()
+    const config = join(dir, 'cordis.yml')
+    writeFileSync(config, '- id: webserver\n  name: ./missing.mjs\n')
+    const failure = await boot(NAME, config).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(StartupError)
+    const error = failure as StartupError
+    expect(error.entries).toEqual([{
+      id: 'webserver', module: './missing.mjs', required: true, fiberState: undefined,
+      outcome: { kind: 'failed', error: 'failed to import' },
+    }])
+    expect(error.startup?.configurationPath).toBe(config)
+    expect(error.startup?.messages.some(message => message.args.some(arg => arg instanceof Error && arg.message.includes('missing.mjs')))).toBe(true)
+  })
+
+  it('retains warnings and errors from asynchronous failed-startup cleanup', async () => {
+    const dir = tmp()
+    const marker = join(dir, 'cleanup.txt')
+    writeFileSync(join(dir, 'cleanup.mjs'), `
+      import { writeFileSync } from 'node:fs'
+      export function apply(ctx) {
+        ctx.effect(() => async () => {
+          await Promise.resolve()
+          writeFileSync(${JSON.stringify(marker)}, 'ran')
+          ctx.logger.warn('plugin cleanup warning')
+          throw new Error('plugin cleanup error')
+        })
+      }
+    `)
+    const config = join(dir, 'cordis.yml')
+    writeFileSync(config, '- id: cleanup\n  name: ./cleanup.mjs\n- id: webserver\n  name: ./missing.mjs\n')
+    let root!: Context
+    const failure = await boot(NAME, config, undefined, (ctx) => {
+      root = ctx
+      ctx.effect(() => async () => {
+        await Promise.resolve()
+        ctx.logger.warn('root cleanup warning')
+      })
+    }).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(StartupError)
+    expect(readFileSync(marker, 'utf8')).toBe('ran')
+    const messages = (failure as StartupError).startup!.messages
+    const args = messages.flatMap(message => message.args)
+    expect(args).toContain('plugin cleanup warning')
+    expect(args).toContain('root cleanup warning')
+    expect(args.some(value => value instanceof Error && value.message.includes('plugin cleanup error'))).toBe(true)
+    const count = messages.length
+    root.logger.warn('after boot rejected')
+    expect(messages).toHaveLength(count)
+  })
+
+  it('stops collecting startup diagnostics after a successful boot', async () => {
+    const dir = tmp()
+    const config = join(dir, 'cordis.yml')
+    writeFileSync(config, '[]\n')
+    let exporters = 0
+    const messages: unknown[][] = []
+    const ctx = await boot(NAME, config, undefined, (host) => {
+      host.logger.exporter({ levels: { default: 2 }, export: ({ args }) => { messages.push(args) } })
+      exporters = host.logger.exporters.size
+      host.logger.info('startup information')
+      host.logger.warn('startup warning')
+    })
+    try {
+      expect(ctx.logger.exporters.size).toBe(exporters - 1)
+      ctx.logger.warn('warning after startup')
+      expect(messages).toEqual([['startup information'], ['startup warning'], ['warning after startup']])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('boots a leaf config through the real Loader and settles the tree', async () => {
     const dir = tmp()
     writeFileSync(join(dir, 'noop.mjs'), 'export const name = "noop"\nexport function apply() {}\n')
@@ -960,7 +1162,7 @@ describe('boot', () => {
     ['import', undefined, '', 'failed to import'],
     ['config schema', 'export const Config = { "~standard": { version: 1, vendor: "app-boot-test", validate() { return { issues: [{ message: "schema failure" }] } } } }\nexport function apply() {}\n', '', 'schema failure'],
     ['config expression', 'export function apply() {}\n', '  config: { value: !!js "JSON.parse(\'invalid\')" }\n', 'SyntaxError'],
-    ['disabled expression', 'export function apply() {}\n', '  disabled: !!js "JSON.parse(\'invalid\')"\n', 'required startup failure: 1 entry did not activate\nwebserver (./required.mjs): disabled expression failed: SyntaxError'],
+    ['disabled expression', 'export function apply() {}\n', '  disabled: !!js "JSON.parse(\'invalid\')"\n', 'disabled expression failed: SyntaxError'],
     ['sync apply', 'export function apply() { throw new Error("sync failure") }\n', '', 'sync failure'],
     ['async apply', 'export async function apply() { await Promise.resolve(); throw new Error("async failure") }\n', '', 'async failure'],
     ['missing dependency', 'export const inject = ["missingRequiredService"]\nexport function apply() {}\n', '', 'missingRequiredService'],
@@ -995,8 +1197,8 @@ describe('boot', () => {
     ].join('\n'))
 
     await expect(boot(NAME, join(dir, 'cordis.yml'))).rejects.toThrow(new RegExp([
-      'plugin tree failed to load: required startup failure: 1 entry did not activate',
-      String.raw`webserver \(\.\/required-failure\.mjs\):`,
+      'startup failed: 1 required plugin did not activate',
+      String.raw`webserver \(required\)`,
       'required apply failure',
     ].join(String.raw`[\s\S]*`)))
     disposed = (globalThis as { __DSH_REQUIRED_TEST_DISPOSED__?: boolean }).__DSH_REQUIRED_TEST_DISPOSED__ ?? false

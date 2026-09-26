@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-11-deepseek-request-user-id-header.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-11-deepseek-request-user-id-header.md
-2026-08-11-deepseek-request-user-id-header.md: 54f59a3f69a933af4f80d629f32f5089676263f6
-2026-08-11-deepseek-request-user-id-header.zh.md: 4904a08fcf4320211fd4253403bddda062bd496e
+/agent-note-deepseek-request-user-and-session-identity-headers:
+  en: 6888d1c6a57a6839
+  zh: e3817ccbcd782a44
+/agent-note-deepseek-request-user-and-session-identity-headers/problem:
+  en: fdeb3bc22bab88c0
+  zh: 089ea4713776fb7a
+/agent-note-deepseek-request-user-and-session-identity-headers/decision:
+  en: b168d3c975d191aa
+  zh: fdd92a1a92f87537
+/agent-note-deepseek-request-user-and-session-identity-headers/verification:
+  en: 3984cb1cb953605e
+  zh: 59e06d6eac8070d7
+/agent-note-deepseek-request-user-and-session-identity-headers/alternatives-considered:
+  en: 2233f9f6a934a48f
+  zh: c73d1db971239742
+/agent-note-deepseek-request-user-and-session-identity-headers/consequences:
+  en: 1621a8eab7787622
+  zh: 636cf922cf76d2bc

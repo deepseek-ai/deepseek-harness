@@ -57,7 +57,7 @@ type BrowserLauncher = ChildProcess & { stderr: PassThrough }
 
 /** Minimal browser-launcher process for the native handoff adapter. */
 function launcher(): BrowserLauncher {
-  return Object.assign(new EventEmitter(), { stderr: new PassThrough() }) as unknown as BrowserLauncher
+  return Object.assign(new EventEmitter(), { stderr: new PassThrough() }) as BrowserLauncher
 }
 
 /** Stage a dist fixture and point the bundle's resolver at it. */

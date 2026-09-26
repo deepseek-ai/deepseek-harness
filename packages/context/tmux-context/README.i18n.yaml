@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/context/tmux-context/README.md
-README.md: 1a5255e11f661296d44423e1bed940ec160b80b5
-README.zh.md: 3dab566a4fbe3d3819d81861e6531d5b01c940eb
+/:
+  en: d1bef1216dfe10fa
+  zh: aee241b6eed43293
+/deepseek-ai-dsh-tmux-context:
+  en: 18e42c83b8bc27da
+  zh: 89f0739235511ab1
+/deepseek-ai-dsh-tmux-context/summary:
+  en: 4c62923f1912d201
+  zh: 7f2211f9616c0197
+/deepseek-ai-dsh-tmux-context/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tmux-context/use-this-package:
+  en: 872d46d8bbbcda8d
+  zh: 9d14bbdb45851c07
+/deepseek-ai-dsh-tmux-context/use-this-package/what-the-model-gets:
+  en: 8d594d379878de46
+  zh: cfa52a5e0b297a6d
+/deepseek-ai-dsh-tmux-context/use-this-package/configuration:
+  en: bdbf74db21f91152
+  zh: 6722e00c4a3e29db
+/deepseek-ai-dsh-tmux-context/use-this-package/when-the-location-is-known:
+  en: 360821e2ef8f3d50
+  zh: 691d23a188558e9f
+/deepseek-ai-dsh-tmux-context/understand-the-implementation:
+  en: 2d21fa2aad5a729d
+  zh: cfbfada0eb647435
+/deepseek-ai-dsh-tmux-context/understand-the-implementation/design-concept:
+  en: 1902de51becf7c7d
+  zh: 130e673b471c38c4
+/deepseek-ai-dsh-tmux-context/understand-the-implementation/source-map:
+  en: 57d240751bb587a0
+  zh: 0a4195a9e3024208
+/deepseek-ai-dsh-tmux-context/understand-the-implementation/main-flow:
+  en: 2d5768fe44120780
+  zh: cd601c59d9604e6e
+/deepseek-ai-dsh-tmux-context/further-exploration:
+  en: 08c09f5eb13c30e6
+  zh: 1b34ef9ca42ac9e7
+/deepseek-ai-dsh-tmux-context/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tmux-context/model-experience/preparation-time-tmux-location:
+  en: 9c9825ee622e4b92
+  zh: b9edc0c529612fe6
+/deepseek-ai-dsh-tmux-context/model-experience/preparation-time-tmux-location/what-the-model-sees:
+  en: 8697059219e2ab02
+  zh: d321f11003c93de9
+/deepseek-ai-dsh-tmux-context/model-experience/preparation-time-tmux-location/what-the-model-sees/changed-turn-reading:
+  en: efdd843a7c1aa9d7
+  zh: 533b6f25b583363e
+/deepseek-ai-dsh-tmux-context/model-experience/preparation-time-tmux-location/token-effect:
+  en: 6a0348385ba38e7e
+  zh: 02af00a2c5aea469
+/deepseek-ai-dsh-tmux-context/model-experience/preparation-time-tmux-location/kv-cache-effect:
+  en: 2fbf2175168e8244
+  zh: b70653f9cbe2a47b
+/deepseek-ai-dsh-tmux-context/known-limitations-and-deferred-work:
+  en: af80ce3c69f582ab
+  zh: da5ad546c19d7d56
+/deepseek-ai-dsh-tmux-context/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

@@ -55,7 +55,8 @@ describe.skipIf(MODE === 'record').each(CASES)('web e2e: $name', (scenario) => {
     const card = edit.locator('[data-diff]')
     await card.waitFor()
     expect(await card.getByText(scenario.shared, { exact: true }).count()).toBe(1)
-    expect(await card.textContent()).toContain(`${scenario.totals} · 1 file`)
+    expect(await edit.getByText(scenario.totals, { exact: true }).count()).toBe(1)
+    expect(await card.textContent()).not.toContain(scenario.totals)
     const snapshotDir = `${ROOT}/web/${scenario.name}`
     await compareOrRefreshGolden(`${snapshotDir}/ui.expected.md`,
       await captureStableAria(page, '[data-variant="edit"]', scaffold.workspaceCwd), MODE)

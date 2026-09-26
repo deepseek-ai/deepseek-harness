@@ -53,11 +53,11 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Switching presets
 
-Switching to Auto first runs its synchronous admission check; every preset switch then changes only the knobs whose effective value differs, and selecting the preset already in effect changes nothing. The current value resolves as the still-matching last recorded selection, else the first matching configured entry, else `custom`. Users switch through the `/permission` command: a bare invocation reports the current preset and every available entry, and a preset argument switches to it.
+Switching to Auto first runs its synchronous admission check; every preset switch then changes only the knobs whose effective value differs, and selecting the preset already in effect changes nothing. The current value resolves as the still-matching last recorded selection, including a recorded Auto selection under the `never` approval policy, else the first matching configured entry, else `custom`. Users switch through the `/permission` command: a bare invocation reports the current preset and every available entry, and a preset argument switches to it.
 
 ### What users see
 
-Clients render selectable entries from the process catalog: configured presets in table order followed by Auto while its integration is live. They join that snapshot with the Session's current value; an unmatched `custom` value may label the current control but never appears as a selectable catalog row. Auto's identity and Full access knob bundle are fixed inside this service. The shipped client locale dictionaries own Auto's label and description, while configured presets retain Host-supplied presentation. Callers cannot publish another preset through a generic contribution API, and they can switch away from `custom` but cannot select or persist a named custom preset through this service.
+Clients render selectable entries from the process catalog: configured presets in table order followed by Auto while its integration is live. They join that snapshot with the Session's current value; an unmatched `custom` value may label the current control but never appears as a selectable catalog row. Auto's identity and knob bundle, Full access sandbox with the `ask` approval policy, are fixed inside this service; a recorded Auto selection also matches the `never` policy that delegated children pin. The shipped client locale dictionaries own Auto's label and description, while configured presets retain Host-supplied presentation. Callers cannot publish another preset through a generic contribution API, and they can switch away from `custom` but cannot select or persist a named custom preset through this service.
 
 ### Session defaults
 
@@ -83,11 +83,11 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 
 ### Write path
 
-`set()` resolves the preset and synchronously runs Auto admission when applicable. Transitions append `permission/preset` only when the effective preset changes, then write each changed knob through its canonical setter — `setSandboxMode` from `dsh-sandbox-policy` and `setApprovalPolicy` from `dsh-user-approval`. The selection event therefore preserves user intent when two presets share a bundle: switching between Auto and Full access records only the new identity because their sandbox and approval values already match. A net-zero selection appends nothing.
+`set()` resolves the preset and synchronously runs Auto admission when applicable. Transitions append `permission/preset` only when the effective preset changes, then write each changed knob through its canonical setter — `setSandboxMode` from `dsh-sandbox-policy` and `setApprovalPolicy` from `dsh-user-approval`. The selection event therefore preserves user intent when two presets share a bundle. Switching between Auto and Full access records the new identity and the changed approval policy. A net-zero selection appends nothing.
 
 ### Read side and `custom`
 
-`current(session)` reads the required `permissions` projection, whose unit folds the three whole-value knob events over the composition defaults (`ctx.shell.sandboxMode` and the approval config). The host state also retains whether `session/end-seed` has occurred, so session pinning distinguishes an explicitly empty restored seed from a genuinely fresh session without rescanning the log. A still-matching last selection wins shared-bundle ties; otherwise the first configured match wins; otherwise the derived `CUSTOM_PRESET` is returned. A missing projection key fails explicitly.
+`current(session)` reads the required `permissions` projection, whose unit folds the three whole-value knob events over the composition defaults (`ctx.shell.sandboxMode` and the approval config). The host state also retains whether `session/end-seed` has occurred, so session pinning distinguishes an explicitly empty restored seed from a genuinely fresh session without rescanning the log. A still-matching last selection wins shared-bundle ties, and a recorded Auto selection also matches the `never` approval policy; otherwise the first configured match wins; otherwise the derived `CUSTOM_PRESET` is returned. A missing projection key fails explicitly.
 
 `optionOf(name)` returns a configured entry, the live Auto entry, or the display-only `custom` entry. It throws only when the name matches none of those; a withdrawn Auto entry is unavailable.
 
@@ -135,7 +135,7 @@ These limits define what the preset service does not offer. They are current pac
 - **`custom` is derived-only** — callers can switch away from an unmatched knob combination but cannot target or persist a named custom preset through this service.
 - **The configured preset table is fixed for the plugin lifetime** — only the fixed Auto contribution can change the live process catalog without reloading this service.
 - **Auto cannot become a default** — it exists only while its integration effect is live and is intentionally absent from the `permission` settings schema.
-- **Stored defaults must remain in the preset table** — removing the referenced preset makes Permission settings registration fail until the `permission` section in `settings.yaml` is updated or reset.
+- **Configured defaults must name a configured preset** — removing a referenced preset requires changing `defaultPreset` in the same Config edit.
 
 <a id="dev-note"></a>
 ### Dev Note

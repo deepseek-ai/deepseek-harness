@@ -18,6 +18,8 @@ Session log 在发布后必须能升级格式，而最先发布的运行时决�
 
 **逐事件的 `ignorable` 标记吸收词汇表增长，普通的新增事件永远不用升版本。**事件词汇表由挂载了哪些插件决定，单个版本整数描述不了它。读取器遇到不认识的事件类型时拒绝解读日志，除非该事件的信封带 `ignorable: true`。默认为必需：忘写标记的后果是把一个本可恢复的会话拒绝过头（体验问题），而默认可忽略会让同样的疏忽静默恢复出残缺会话（安全事故）。架构保证了这条规则成立：模型可见内容只经四种带 `surfaceOp` 标记的 surface 事件加 `request/header`、`request/context` 折叠进入重建，危险的未知事件恰好是那些不进 surface 但改变日志其余部分解读方式的事件（`session/end-seed` 是现存例子）。
 
+[已接受兼容性检查点](../../../../docs/session-format-status.zh.md#finalization-record)阻止已接受转换复用原来的头版本递增来授权后续破坏性变更。向后兼容的演进在相同 Session 版本上使用新的确认记录；破坏性变更要求更高的写入器版本。检查点不改变未知事件协议。
+
 ### 写入器与发布真源
 
 `SESSION_FORMAT_VERSION` 拥有工作区写入器版本号；[发布状态参考](../../../../docs/session-format-status.zh.md)拥有唯一的双语 `latestReleasedVersion` 与 `evidenceTag` 记录。发布状态独立于源码开发而变化，因此通过比较这两个事实推导状态，而不另行维护 `released` 布尔值。一般文档链接到这些真源；固定版本约定与历史证据保留明确版本号。

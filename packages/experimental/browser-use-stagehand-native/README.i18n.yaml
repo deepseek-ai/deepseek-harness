@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/browser-use-stagehand-native/README.md
-README.md: 671a900d5dab4f3575129e0b8410742be889079c
-README.zh.md: 69f3c115c68751f6452e0e0f99e2dcaa33500786
+/:
+  en: 3f9127c3981e9453
+  zh: b4fcc1468319b9b2
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native:
+  en: 4b88ed0b7d903e32
+  zh: 6375e389216d981c
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/summary:
+  en: 05c2fd0d2d2856a0
+  zh: fd90ef7fce885498
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: a949126695843224
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/use-this-package:
+  en: de47f71ab56fd0ed
+  zh: fdc58f273a7dba3d
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/use-this-package/minimal-configuration:
+  en: 1554d55fd5be9735
+  zh: d39e7dd0b8ff1b7d
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/use-this-package/verification:
+  en: fea3ad16a77fc478
+  zh: cf551a8a2d183f93
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/understand-the-implementation:
+  en: 63e42e22af64f7df
+  zh: d8218ad3e12a8ebe
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/further-exploration:
+  en: eff8f4541eb26ca7
+  zh: 76a61fe9bd48df2a
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/model-experience/browser-guidance:
+  en: db27706a7478c425
+  zh: d36d746cf60e56c4
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/model-experience/browser-guidance/what-the-model-sees:
+  en: c76eeb849a7dcc9d
+  zh: 466f6573ee758f66
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/model-experience/browser-guidance/what-the-model-sees/browser-guidance-text:
+  en: d618f1a8fcd2f9b4
+  zh: a2c8620646573b9f
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/model-experience/browser-guidance/token-effect:
+  en: 54fb52d906a0ed1d
+  zh: 0c92cb1daf790ce9
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/model-experience/browser-guidance/kv-cache-effect:
+  en: 8b85590b83e40fc0
+  zh: 9061599a76700e66
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/model-experience/native-browser-tools-and-results:
+  en: 0295a32030d24cd0
+  zh: 65ef3d8920d811c2
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/model-experience/native-browser-tools-and-results/what-the-model-sees:
+  en: 615b72f1971846c8
+  zh: d0ec71a9905137df
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/model-experience/native-browser-tools-and-results/token-effect:
+  en: 8c75c58031e659c8
+  zh: b40294201e358ce3
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/model-experience/native-browser-tools-and-results/kv-cache-effect:
+  en: 2bd36c8da753a1e5
+  zh: 172e2151f7c7b0cd
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/known-limitations-and-deferred-work:
+  en: 27754d9785e555ae
+  zh: 89fef432cebabef6
+/deepseek-ai-dsh-experimental-browser-use-stagehand-native/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

@@ -32,7 +32,7 @@ import type {
   DockMode, DockZone, FloatRect, History, LayoutOp, LayoutState, Mint, PaneId, SplitId, TabId, TabRecord,
 } from '@deepseek-ai/dsh-client-ui-dockkit'
 import {
-  activeDockPaneId, createInitialState, dockPaneIds, EMPTY_HISTORY, findPaneContentTab, findTabPane, getPane,
+  activeDockPaneId, createInitialState, dockPaneIds, EMPTY_HISTORY, findContentTab, findPaneContentTab, findTabPane, getPane,
   planDropTab, planDuplicateTab, planFloatTab, planOpenContent, planPlaceTab, planResizeSplit, planSetExpanded,
   planSetMode, planSettle, planSplitPane, planUnfloatPane, record, replay, stepBack, stepForward,
 } from '@deepseek-ai/dsh-client-ui-dockkit'
@@ -87,6 +87,8 @@ export interface OpenContentIntent {
   readonly title: string
   /** Land a new tab in this pane. */
   readonly paneId?: PaneId
+  /** Split the target pane and put new content alone in the new pane. */
+  readonly preferNewPane?: boolean
   /** Take this tab's pane and slot, and close it in the same entry. */
   readonly replaceTab?: TabId
   /** Resource tabs reveal an existing identity by default; `false` permits duplicates. Pages always deduplicate within the target pane. */
@@ -319,18 +321,30 @@ export function createSidebarRightStore(
           // cross-pane reveal is for resources only.
           const page = contentId === pageAddress(kind)
           const held = page ? panePage(state, paneId ?? activeDockPaneId(state), kind) : undefined
-          const planned = held !== undefined
-            ? { ops: [{ type: 'focusTab' as const, tabId: held }], tabId: held }
-            : planOpenContent(state, mint, {
-              kind,
-              contentId,
-              title,
-              ...paneId === undefined ? {} : { paneId },
-              ...index === undefined ? {} : { index },
-              ...page
-                ? { revealIfOpened: false }
-                : intent.revealIfOpened === undefined ? {} : { revealIfOpened: intent.revealIfOpened },
+          const revealed = page
+            ? held
+            : intent.revealIfOpened === false ? undefined : findContentTab(state, contentId, kind)
+          let openedInNewPane: TabId | undefined
+          const split = intent.preferNewPane === true && replace === undefined && revealed === undefined
+            ? planSplitPane(state, mint, paneId, (id) => {
+              openedInNewPane = id
+              return { id, kind, contentId, title }
             })
+            : []
+          const planned = revealed !== undefined
+            ? { ops: [{ type: 'focusTab' as const, tabId: revealed }], tabId: revealed }
+            : openedInNewPane !== undefined
+              ? { ops: split, tabId: openedInNewPane }
+              : planOpenContent(state, mint, {
+                kind,
+                contentId,
+                title,
+                ...paneId === undefined ? {} : { paneId },
+                ...index === undefined ? {} : { index },
+                ...page
+                  ? { revealIfOpened: false }
+                  : intent.revealIfOpened === undefined ? {} : { revealIfOpened: intent.revealIfOpened },
+              })
           ops.push(...planned.ops)
           if (replace !== undefined && replace !== planned.tabId) ops.push({ type: 'closeTab', tabId: replace })
           settled(planned.tabId)

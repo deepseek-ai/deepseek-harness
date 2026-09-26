@@ -1,0 +1,18 @@
+- tablist:
+  - tab "Browser Close":
+    - text: Browser
+    - button "Close"
+  - tab "Browser Close" [selected]:
+    - text: Browser
+    - button "Close"
+  - button "New tab"
+  - button "Split"
+  - button "Fullscreen"
+  - button "Collapse right sidebar"
+- button "Back" [disabled]
+- button "Forward" [disabled]
+- button "Reload" [disabled]
+- textbox "Enter an HTTP(S) address"
+- button "Open in system browser" [disabled]
+- button "Disable sandbox restrictions"
+- text: Enter an HTTP(S) address to start browsing

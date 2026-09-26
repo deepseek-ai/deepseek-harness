@@ -104,8 +104,8 @@ describe('hooks-codex bridge', () => {
 
     expect(ran).toBe(false)
     const result = events(agent).find(e => e.type === 'tool/result')
-    expect(result?.type === 'tool/result' && result.data.message.content[0].isError).toBe(true)
-    expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('codex blocked it'))).toBe(true)
+    expect(result?.type === 'tool/result' && result.data.message.isError).toBe(true)
+    expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('codex blocked it'))).toBe(true)
     expect(events(agent).some(e => e.type === 'hook/invoked' && e.data.dialect === 'codex' && e.data.point === 'PreToolUse')).toBe(true)
   })
 

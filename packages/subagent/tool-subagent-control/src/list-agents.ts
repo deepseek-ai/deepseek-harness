@@ -11,7 +11,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { SubagentDescendantListEntry, SubagentListEntry } from '@deepseek-ai/dsh-subagent'
+import type {
+  SubagentCatalogEntry, SubagentDescendantListEntry, SubagentListEntry,
+} from '@deepseek-ai/dsh-subagent'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 
 export const name = 'tool-subagent-list-agents'
@@ -32,7 +34,7 @@ type ListAgentsEntry =
     readonly kind: 'child'
     readonly id: SessionId
     readonly label: string
-    readonly status: 'running' | 'idle' | 'ready'
+    readonly status: 'running' | 'inactive'
     readonly parent?: SessionId
     readonly depth?: number
   }
@@ -49,27 +51,19 @@ function resolveListAgentsRequest(request: ListAgentsRequest): ListAgentsSpec {
   return { scope: request.scope ?? 'children' }
 }
 
-/**
- * Refine one candidate's status through the live Agent registry: `running`
- * for an active driver, `idle` for a resident Agent between turns (possibly
- * waiting on agents it started), and `ready` when no live Agent remains.
- * `ready` preserves resumability without presenting an inactive conversation
- * as a terminal result to collect.
- */
-function statusOf(agents: { get(id: SessionId): Agent | undefined }, id: SessionId): 'running' | 'idle' | 'ready' {
-  const agent = agents.get(id)
-  if (agent === undefined) return 'ready'
-  return agent.status === 'running' ? 'running' : 'idle'
+/** Report turn activity without exposing whether the child is loaded. */
+function statusOf(agents: { get(id: SessionId): Agent | undefined }, id: SessionId): 'running' | 'inactive' {
+  return agents.get(id)?.status === 'running' ? 'running' : 'inactive'
 }
 
 /** Project one service row into the model-facing entry, or omit a one-shot child. */
 function project(
   agents: { get(id: SessionId): Agent | undefined },
-  entry: SubagentListEntry,
+  entry: SubagentCatalogEntry | SubagentListEntry,
   position?: Pick<SubagentDescendantListEntry, 'parentId' | 'depth'>,
 ): ListAgentsEntry | undefined {
   const at = position === undefined ? {} : { parent: position.parentId, depth: position.depth }
-  if (entry.kind === 'diagnostic') {
+  if ('kind' in entry && entry.kind === 'diagnostic') {
     return { kind: 'diagnostic', id: entry.id, reason: entry.reason, ...at }
   }
   // One-shot children cannot be continued by send_message, so the model
@@ -92,23 +86,16 @@ export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
     name: 'list_agents',
     description:
-      'List your continuable background subagents by durable id and label. Use it to recall which ones '
-      + 'you started, not to poll for completion — you are told when one finishes. Status comes from the live '
-      + 'registry: running means the agent is working right now, idle means it is loaded but between turns '
-      + '(it may be waiting on agents it started), and ready means it exists only in storage — resumable, not '
-      + 'terminal, and not a result waiting to be collected; a `send_message` steers a running child at its nearest '
-      + 'step boundary or starts a turn for an idle or ready child, and a direct child remains a `send_message` '
-      + 'candidate in every status. The snapshot is not a delivery '
-      + 'promise — `send_message` performs the authoritative check and may still fail. Children that could '
-      + 'not be read are reported as diagnostics instead of being silently dropped. Scope `descendants` '
-      + 'walks the whole tree below you in stable pre-order, annotating each entry with its durable direct-parent '
-      + 'session id and depth. You may use `send_message` only for depth-1 entries; deeper entries are '
-      + 'candidates for `interrupt_agent` only.',
+      'List subagents you started, with their ids, labels, and status. '
+      + 'running means it is working; inactive means it is not currently working. '
+      + 'You will be notified when a subagent finishes; there is no need to keep checking its status. '
+      + 'Use send_message to continue the conversation.',
     parameters: {
       scope: {
         type: 'string',
         enum: ['children', 'descendants'],
-        description: 'children (default) lists direct children only; descendants walks the complete tree below you.',
+        description: 'children (default) lists direct children, which accept send_message in any status. '
+          + 'descendants lists the whole tree below you with each entry\'s parent session id and depth; entries deeper than 1 accept only interrupt_agent.',
       },
     },
     output: {
@@ -123,7 +110,7 @@ export function apply(ctx: Context): void {
                 kind: { type: 'string', required: true, enum: ['child'] },
                 id: { type: 'string', required: true },
                 label: { type: 'string', required: true },
-                status: { type: 'string', required: true, enum: ['running', 'idle', 'ready'] },
+                status: { type: 'string', required: true, enum: ['running', 'inactive'] },
                 parent: { type: 'string' },
                 depth: { type: 'number' },
               },
@@ -169,8 +156,6 @@ export function apply(ctx: Context): void {
         throw new Error('list_agents requires a calling agent (exec.agent was undefined)')
       }
       const request = resolveListAgentsRequest(args)
-      // The registry drains started tool bodies, so the scan must observe the
-      // call's signal rather than finish a slow catalog after cancellation.
       switch (request.scope) {
         case 'children': {
           const entries = await ctx.subagents.listChildren(parent.id, exec.signal)

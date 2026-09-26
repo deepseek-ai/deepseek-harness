@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/feedback/message-feedback/README.md
-README.md: bd10014ce627dd6b4283e04781a1d98991588446
-README.zh.md: a0c228629467f4ff4a1f82c370a45542375d4e96
+/:
+  en: f3648275facc4888
+  zh: 110c0e8aedf63e4e
+/deepseek-ai-dsh-message-feedback:
+  en: ec92a0c87a814aee
+  zh: c35482c435473cb9
+/deepseek-ai-dsh-message-feedback/summary:
+  en: 07fec1cc63536ffb
+  zh: 530c8f20786c7af6
+/deepseek-ai-dsh-message-feedback/table-of-contents:
+  en: 122f0d41696980b1
+  zh: 528864635b577290
+/deepseek-ai-dsh-message-feedback/use-this-package:
+  en: 98f9e7d58c5fc950
+  zh: ebfc3d4642cc1083
+/deepseek-ai-dsh-message-feedback/use-this-package/configuration:
+  en: 045ff728d54ae2b4
+  zh: e344c18e3d272023
+/deepseek-ai-dsh-message-feedback/use-this-package/reading-and-changing-feedback:
+  en: fed12d93b538866d
+  zh: 4b45e81d9e5a8260
+/deepseek-ai-dsh-message-feedback/understand-the-implementation:
+  en: ee4615a04fa6503d
+  zh: ee2c5fb2204a43cf
+/deepseek-ai-dsh-message-feedback/understand-the-implementation/canonical-log-and-durability:
+  en: 73ddbcf524f213a1
+  zh: 050f1a72c7f56fd6
+/deepseek-ai-dsh-message-feedback/understand-the-implementation/source-map:
+  en: 7846ae54837ca631
+  zh: 40198060b97891af
+/deepseek-ai-dsh-message-feedback/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-message-feedback/model-experience/message-feedback:
+  en: 73eacb58a40342f6
+  zh: 1ee3049173128f61
+/deepseek-ai-dsh-message-feedback/model-experience/message-feedback/what-the-model-sees:
+  en: 3928187c2f20ec0f
+  zh: fd5273ee1a885bde
+/deepseek-ai-dsh-message-feedback/model-experience/message-feedback/token-effect:
+  en: 5ff6c3ac5017b3ef
+  zh: 4ccd5af39b37dd1c
+/deepseek-ai-dsh-message-feedback/model-experience/message-feedback/kv-cache-effect:
+  en: 2bdd13dcb4078358
+  zh: 591328cf1a061fca
+/deepseek-ai-dsh-message-feedback/known-limitations-and-deferred-work:
+  en: f47ca0745f088f39
+  zh: 551850b23816c589
+/deepseek-ai-dsh-message-feedback/known-limitations-and-deferred-work/dev-note:
+  en: 3c3ce6ed67282e05
+  zh: 213816553e3581b4

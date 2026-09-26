@@ -1,8 +1,9 @@
-import { useMemo, useState, type KeyboardEvent } from 'react'
+import { memo, useCallback, useMemo, type KeyboardEvent } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import clsx from 'clsx'
 import {
-  IconApiOutline14, IconChevronDownOutline14, IconInspectOutline12, StateDot, TerminalBlock,
+  IconApiOutlineRegular, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular, IconInspectOutlineRegular,
+  TerminalBlock, TextShimmer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
@@ -14,22 +15,16 @@ import {
   terminalCardModel,
   terminalFailed,
 } from '../models/terminal-card-model.ts'
-import { formatToolBody, toolRowModel, type ToolRowState } from '../models/tool-call-model.ts'
+import { formatToolBody, toolRowModel, toolTitleKey, type ToolRowState } from '../models/tool-call-model.ts'
+import { PreparingToolRow } from '../components/PreparingToolRow.tsx'
 import { CONVERSATION_NS as NS } from '../../locale.ts'
 import css from './bash-sample.module.css'
 
 type BashRowProps = ToolCallViewProps & PropsLocale<'conversation'>
 
-function leadingFor(state: ToolRowState) {
-  switch (state) {
-    case 'error': return <StateDot state="error" />
-    case 'stopped': return <StateDot state="warning" />
-    // Running keeps the icon — the row sweep carries the in-flight signal.
-    default: return <IconApiOutline14 size={14} />
-  }
-}
+const BASH_ICON = <IconApiOutlineRegular size={14} />
 
-/** Visually hidden status — StateDot is aria-hidden; AT needs a text label. */
+/** Visually hidden status for the color-only running sweep and error tone. */
 function stateStatus(state: ToolRowState, t: BashRowProps['t']): string | null {
   switch (state) {
     case 'running': return t('bash.running')
@@ -39,21 +34,32 @@ function stateStatus(state: ToolRowState, t: BashRowProps['t']): string | null {
   }
 }
 
-/** Renders expandable Bash output with an accessible lifecycle label. */
-export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }: BashRowProps) {
-  const model = toolRowModel(toolName, block)
+/**
+ * Render expandable Bash output with an accessible lifecycle label.
+ * @param props - tool call, Session sources, locale, and inspection callback.
+ * @returns the Bash output row.
+ */
+export const BashRow = memo(function BashRow(props: BashRowProps) {
+  if (props.phase === 'preparing') return <PreparingToolRow {...props}
+    icon={BASH_ICON} title={props.t(toolTitleKey(props.toolName))} />
+  return <StartedBashRow {...props} />
+})
+
+const StartedBashRow = memo(function StartedBashRow({ toolName, block, sessionId, useSessions, inspect, useDisclosure, t }: Exclude<BashRowProps, { phase: 'preparing' }>) {
+  const model = useMemo(() => toolRowModel(toolName, block), [toolName, block])
   // An omitted shell workdir is the session workspace; relative values resolve
   // against it before reaching the terminal primitive.
   const cwd = useSessions(list => list.byId[sessionId]?.cwd)
-  const terminalModel = terminalCardModel(block, cwd)
-  const terminal = terminalModel === null ? null : localizeTerminalCardModel(terminalModel, t)
+  const terminalModel = useMemo(() => terminalCardModel(block, cwd), [block, cwd])
+  const terminal = useMemo(() => terminalModel === null ? null : localizeTerminalCardModel(terminalModel, t), [terminalModel, t])
+  const labels = useMemo(() => terminalBlockLabels(t), [t])
   // A failing exit status is the terminal card's own error signal (the call
-  // itself settles isError:false), surfaced as the row's red state dot.
+  // itself settles isError:false), surfaced through the row's error summary.
   const state = model.state === 'ok' && terminalModel !== null && terminalFailed(terminalModel)
     ? 'error'
     : model.state
   const status = stateStatus(state, t)
-  const [expanded, setExpanded] = useState(false)
+  const { expanded, toggle: toggleExpand } = useDisclosure()
   // Failures, persistent-shell results, and spill previews use a generic body;
   // background acknowledgements and malformed calls remain collapsed.
   const genericBody = terminal === null
@@ -67,25 +73,26 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
       : null,
     [genericBody, model.bodyRaw, model.variant, open],
   )
-  const failureLine = model.state === 'error' ? model.errorSummary : null
-  const toggleExpand = () => {
-    setExpanded(v => !v)
-  }
-  const toggleFromKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
+  const normalSummary = terminal?.description ?? model.summary
+  const settlementLine = state === 'error'
+    ? model.errorSummary ?? normalSummary
+    : state === 'stopped' ? t('bash.stopped') : null
+  const running = state === 'running'
+  const toggleFromKeyboard = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (!expandable || (event.key !== 'Enter' && event.key !== ' ')) return
     event.preventDefault()
     toggleExpand()
-  }
+  }, [expandable, toggleExpand])
   const leading = open
-    ? <IconChevronDownOutline14 className={css.chevron} />
+    ? <IconChevronUpOutlineRegular className={css.chevron} />
     : expandable
       ? (
         <>
-          <span className={css.iconIdle}>{leadingFor(state)}</span>
-          <IconChevronDownOutline14 className={clsx(css.chevron, css.chevronHover)} />
+          <span className={css.iconIdle}>{BASH_ICON}</span>
+          <IconChevronDownOutlineRegular className={clsx(css.chevron, css.chevronHover)} />
         </>
       )
-      : leadingFor(state)
+      : BASH_ICON
   return (
     <div className={css.card}>
       <div
@@ -102,10 +109,14 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
       >
         <span className={css.leading}>{leading}</span>
         {status !== null && <span className={css.visuallyHidden}>{status}</span>}
-        <span className={css.title}>{t(model.titleKey)}</span>
+        <TextShimmer className={css.title} active={running}>{t(model.titleKey)}</TextShimmer>
         <span className={css.sep} aria-hidden />
-        <span className={clsx(css.summary, failureLine !== null && css.errorSummary)}>
-          {failureLine ?? terminal?.description ?? model.summary}
+        <span className={clsx(
+          css.summary,
+          state === 'error' && css.errorSummary,
+          state === 'stopped' && css.stoppedSummary,
+        )}>
+          <TextShimmer active={running}>{settlementLine ?? normalSummary}</TextShimmer>
         </span>
       </div>
       {open && (
@@ -115,7 +126,7 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
               <TerminalBlock
                 {...terminal.card}
                 maxLines={Infinity}
-                labels={terminalBlockLabels(t)}
+                labels={labels}
                 className={css.terminal}
               />
             )
@@ -142,7 +153,7 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
             )}
           {inspect !== undefined && (
             <button type="button" className={css.inspectButton} onClick={inspect}>
-              <IconInspectOutline12 />
+              <IconInspectOutlineRegular />
               {t('row.inspect')}
             </button>
           )}
@@ -150,7 +161,7 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
       )}
     </div>
   )
-}
+})
 
 /** Registers the standalone Bash conversation-row sample. */
 export const bashToolviewSample = {

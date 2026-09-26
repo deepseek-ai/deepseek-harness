@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-12-maintained-repository-references.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-12-maintained-repository-references.md
-2026-09-12-maintained-repository-references.md: b2bc750100e1aaf2ff63ffc773bbd54997fdf355
-2026-09-12-maintained-repository-references.zh.md: 99216e8105af9d159f6f371c9e31fec6d75a0e75
+/agent-note-maintained-repository-references:
+  en: 10750a69061b5dd0
+  zh: ab4be61612ead1da
+/agent-note-maintained-repository-references/problem:
+  en: 36ca11f2ef3d8b4e
+  zh: 6e6ca6ae00fab2f7
+/agent-note-maintained-repository-references/decision:
+  en: ec87568d74d5dc5f
+  zh: bc34159aeafa9fcd
+/agent-note-maintained-repository-references/alternatives-considered:
+  en: de1c15bc0d404c41
+  zh: a32a80be126d3d71
+/agent-note-maintained-repository-references/consequences:
+  en: 17e87405d1ab8efa
+  zh: d4dbc337733d9a2d

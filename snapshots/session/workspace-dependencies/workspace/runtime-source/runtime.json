@@ -1,1 +1,15 @@
-{}
+{
+  "desktopVersion": "1.0.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "components": {
+    "python": "3.12.14",
+    "node": "24.21.0",
+    "pnpm": "11.7.0",
+    "numpy": "2.3.5",
+    "pandas": "3.0.1"
+  },
+  "pythonPackages": {
+    "Numpy": "2.3.4"
+  }
+}

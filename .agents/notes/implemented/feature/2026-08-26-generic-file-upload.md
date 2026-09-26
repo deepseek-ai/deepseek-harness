@@ -48,3 +48,9 @@ Default mode, active Plan Mode, and an active goal share ordinary queue, follow-
 ## Testing
 
 Unit and integration coverage pins verbatim and streamed storage, name sanitization, a declared 2.19 GiB request passing through the streaming bridge without aggregate buffering, raw and RPC wire admission, Blob and transferable `ReadableStream` carriers, bounded background-upload concurrency, progress and cancellation, cross-Session upload residency, command file-receipt submission without a second byte read, native and PTC projection under read-only and workspace-write permissions, upload staging, ordered queue and steer submission, queue-to-steer conversion, pending echo retirement and failure recovery, active plan and goal intake, `/plan` and `/goal` mixed attachments, subagent refusal, composer and Chat attachment layouts, and Trajectory file summaries. The keyless `file-upload-round` snapshot records the browser upload, model file read, and rendered answer.
+
+## Related
+
+The [Trajectory attachment presentation decision](../bug-fix/2026-09-15-trajectory-attachment-presentation.md) owns ledger counts and inspector attachment layouts.
+
+The [input echo admission decision](../bug-fix/2026-09-22-input-echo-admission-ownership.md) owns placement-specific retirement and delayed Inbox suppression for submissions with or without attachments.

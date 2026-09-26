@@ -2,7 +2,7 @@
 
 English | [中文](deepseek-llm-api-wire-extensions.zh.md)
 
-This reference defines every DeepSeek Harness-specific HTTP header and additive JSON field sent by [`@deepseek-ai/dsh-llm-deepseek`](../packages/llm/llm-deepseek/README.md) on `deepseek-official` Messages and Chat Completions requests. It does not redefine fields owned by the upstream DeepSeek API. The provider-neutral LLM interface and `llm-pi-ai` do not implement these additions.
+This reference defines every DeepSeek Harness-specific HTTP header and additive JSON field sent by [`@deepseek-ai/dsh-llm-deepseek`](../packages/llm/llm-deepseek/README.md) on `deepseek-official` Messages requests. It does not redefine fields owned by the upstream DeepSeek API. The provider-neutral LLM interface and `llm-pi-ai` do not implement these additions.
 
 The adapter sends the additions to its resolved `baseURL`, including a configured gateway. They remain outside `messages`, system prompts, and tool schemas, so they do not add model-input tokens or alter the model-visible prefix.
 
@@ -34,7 +34,7 @@ Credential failure happens before anonymous-user-id resolution, so an unauthoriz
 
 The adapter serializes the complete base body, including the exact `messages`, before it asks registered providers to prepare fields. A provider receives that immutable body, the request cancellation signal, and optional `sessionId` and auxiliary-call `purpose`. Returning `undefined` omits that provider's field for the request.
 
-Prepared JSON values are detached from provider-owned state, merged as top-level siblings of the base fields, and serialized in the same HTTP body. Preparation or collision failure prevents the request. A composition without the registry sends the unextended base body.
+Prepared JSON values are detached from provider-owned state, merged as top-level siblings of the base fields, and serialized in the same HTTP body. Preparation or collision failure prevents the request. If the merged body fails to serialize, the adapter sends the base body without any extension field, skips the acceptance transaction so contributors resend their state on a later request, and logs the omitted field names. A composition without the registry sends the unextended base body.
 
 After the configured endpoint returns HTTP 2xx, the adapter runs the prepared `accept()` transaction before reading the SSE response body. Transport failures and non-2xx responses do not accept any contribution. An acceptance failure fails the model request even though the endpoint returned 2xx. Acceptance records endpoint-level HTTP success; it does not assert that an SSE stream completed or that the endpoint persisted an extension.
 
@@ -73,7 +73,7 @@ An enabled inventory with no qualifying entries sends `packages: []`; disabling 
 
 ## `dsh_session_log`
 
-[`@deepseek-ai/dsh-session-log-deepseek`](../packages/session/session-log-deepseek/README.md) contributes one contiguous suffix of the canonical Session log. The field is enabled by default. It applies to a request with a live Session and at least one event; a direct request, a stale Session id, or an empty log omits the field, and a composition disables it with `enabled: false`. The examples below use logical Session format 2 only to illustrate the wire fields; they do not identify the [current writer format](session-format-status.md).
+[`@deepseek-ai/dsh-session-log-deepseek`](../packages/session/session-log-deepseek/README.md) contributes one contiguous suffix of the canonical Session log. The field is enabled by default. It applies to a request with a live Session and at least one event; a direct request, a stale Session id, or an empty log omits the field, as does a request whose first pending event alone exceeds `maxBytes` or cannot be serialized; a composition disables it with `enabled: false`. The examples below use logical Session format 2 only to illustrate the wire fields; they do not identify the [current writer format](session-format-status.md).
 
 ```json
 {
@@ -110,7 +110,7 @@ An enabled inventory with no qualifying entries sends `packages: []`; disabling 
 | `throughSeq` | non-negative integer | Greatest sequence represented by this request |
 | `events` | array | Contiguous events from `afterSeq + 1` through `throughSeq` |
 
-The first upload uses `afterSeq: -1` and carries the complete current log. Each later upload starts after the greatest accepted watermark for the same Session id. The sender snapshots the event array once per request; appends after that snapshot belong to a later request.
+The first upload uses `afterSeq: -1`, and each later upload starts after the greatest accepted watermark for the same Session id. Each upload carries the longest contiguous run from that point whose serialized field fits `maxBytes`, 8 MiB by default and counted in UTF-8 bytes including the header and numeric fields, so a backlog above the limit spans several accepted requests. The sender snapshots the event array once per request; appends after that snapshot belong to a later request.
 
 ### Wire Session header
 
@@ -151,12 +151,12 @@ After the endpoint returns HTTP 2xx, the contribution appends this canonical eve
 
 `delivery-accepted` means that the configured endpoint returned HTTP 2xx for the containing LLM request. It does not assert SSE completion or remote persistence. The event's `throughSeq` must identify an earlier event, its `sessionId` identifies the Session whose suffix was sent, and `sessionFormatVersion` binds the watermark to that exact logical generation. Absence means historical format v0.
 
-The sender folds the greatest matching `throughSeq` for the current Session id and format generation, so concurrent accepted requests cannot move the cursor backward and a watermark from another generation cannot authorize the current suffix. A resumed process rebuilds the cursor from the durable log. A fork ignores inherited watermarks that name another Session, and therefore sends its own complete inherited prefix before advancing under the child id. The watermark event itself belongs to the next unsent suffix.
+The sender folds the greatest matching `throughSeq` for the current Session id and format generation, so concurrent accepted requests cannot move the cursor backward and a watermark from another generation cannot authorize the current suffix. A resumed process rebuilds the cursor from the durable log. A fork ignores inherited watermarks that name another Session, and therefore uploads its own inherited prefix from sequence zero, in requests bounded by `maxBytes`, before advancing under the child id. The watermark event itself belongs to the next unsent suffix.
 
-Transport and non-2xx failures append no watermark. A crash after endpoint acceptance but before local persistence may resend an already accepted range; uncertainty produces duplicates, never a sequence gap. There is no independent upload store, size cap, or truncation path.
+Transport failures, non-2xx responses, and requests sent without extension fields after a serialization failure append no watermark. A crash after endpoint acceptance but before local persistence may resend an already accepted range; uncertainty produces duplicates, never a sequence gap. There is no independent upload store or truncation path; `maxBytes` bounds each request's field instead.
 
 ## Exposure and receiver requirements
 
 The request headers expose the Harness application version, one anonymous Harness-home identity, and an optional Session identity. `dsh_plugin_packages` exposes active npm package names and versions. Unless a composition disables it, `dsh_session_log` may expose the Session working directory, system-prompt snapshots, user and Assistant content, embedded Assistant streams, failed-attempt output, tool arguments and results, compaction summaries, feedback, and plugin-owned events. Adapter API keys are not Session events and therefore do not enter the field. A gateway selected through `baseURL` receives the same values as the official endpoint.
 
-Receivers address extension fields by name, dispatch each field by its own `version`, preserve distinct package versions, and ignore JSON member ordering. A session-log receiver validates the contiguous sequence range before interpreting event types. An unrecognized canonical event without `ignorable: true` prevents lossless reconstruction. The base request remains usable without either the registry or a particular contribution; field absence means that contribution did not apply to that request.
+Receivers address extension fields by name, dispatch each field by its own `version`, preserve distinct package versions, and ignore JSON member ordering. A session-log receiver validates the contiguous sequence range before interpreting event types. An unrecognized canonical event without `ignorable: true` prevents lossless reconstruction. The base request remains usable without either the registry or a particular contribution; field absence means that contribution did not apply to that request. While a session-log backlog drains, `throughSeq` trails the Session's latest event, so a 2xx does not show that the receiver holds the current log.

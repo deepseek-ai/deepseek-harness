@@ -5,10 +5,13 @@ import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { ShellExecutor } from '@deepseek-ai/dsh-shell'
-import type { ShellExecRequest, ShellExecSpec, ShellProcess, ShellRunResult } from '@deepseek-ai/dsh-shell'
+import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import * as tmuxContext from '@deepseek-ai/dsh-tmux-context'
 import type { Config } from '@deepseek-ai/dsh-tmux-context'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+
+/** Empty offset readers for fakes that never produce output. */
+const silentReader = { readFrom: (fromByte: number) => ({ text: '', nextOffset: fromByte, lossy: false }) }
 
 const SIGNAL = new AbortController().signal
 
@@ -61,18 +64,25 @@ class FakeBash extends ShellExecutor {
       command: request.command,
       workdir: request.workdir ?? '/work',
       timeoutMs: request.timeoutMs ?? 60_000,
+      onExpiry: request.onExpiry ?? 'kill',
       stdoutMaxBytes: request.stdoutMaxBytes ?? 64_000,
       signal: request.signal,
       sandboxPolicy: request.sandboxPolicy,
     }
   }
-  override async run(spec: ShellExecSpec): Promise<ShellRunResult> {
+  override async execute(spec: ShellExecSpec): Promise<ShellExecution> {
+    if (spec.onExpiry === 'none') throw new Error('tmux-context must never start a background job')
     this.commands.push(spec.command)
-    if (this.runError) throw this.runError
-    return this.result
-  }
-  override async start(): Promise<ShellProcess> {
-    throw new Error('tmux-context must never start a background job')
+    return {
+      status: 'completed',
+      exitCode: 0,
+      signal: null,
+      done: Promise.resolve(),
+      readOutput: () => ({ delta: '', lossy: false }),
+      observed: { stdout: silentReader, stderr: silentReader },
+      kill: () => false,
+      result: () => this.runError ? Promise.reject(this.runError) : Promise.resolve(this.result),
+    }
   }
 }
 
@@ -125,8 +135,7 @@ function contextTexts(session: Session): string[] {
   const texts: string[] = []
   for (const event of session.snapshotEvents()) {
     if (event.type === 'user/message'
-      && event.data.source.kind === 'plugin'
-      && event.data.source.plugin === 'tmux-context') {
+      && event.data.source.kind === 'tmux-context') {
       texts.push(event.data.content.find(block => block.type === 'text')?.text ?? '')
     }
   }
@@ -176,8 +185,7 @@ describe('tmux-context injection', () => {
     // `snapshot` form: one named contribution carrying exactly the reading the
     // model saw, so a consumer attributes it without re-splitting prose.
     expect(event.data.source).toMatchObject({
-      kind: 'plugin',
-      plugin: 'tmux-context',
+      kind: 'tmux-context',
       form: 'snapshot',
       sections: [{ name: 'tmux-context' }],
     })
@@ -275,7 +283,7 @@ describe('tmux-context prior-reading resilience', () => {
     openMessageTurn(session, 1)
     session.append('user/message', createUserMessage({
       content: [{ type: 'reasoning', text: 'not a location' }],
-      source: { kind: 'plugin', plugin: 'tmux-context' },
+      source: { kind: 'tmux-context' },
     }), { surfaceOp: 'append' })
 
     await fire(ctx, agent, 1, 1)
@@ -291,7 +299,7 @@ describe('tmux-context prior-reading resilience', () => {
     openMessageTurn(session, 1)
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'single line, no newline' }],
-      source: { kind: 'plugin', plugin: 'tmux-context' },
+      source: { kind: 'tmux-context' },
     }), { surfaceOp: 'append' })
 
     await fire(ctx, agent, 1, 1)

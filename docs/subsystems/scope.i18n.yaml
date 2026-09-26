@@ -1,6 +1,16 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for scope.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/scope.md
-scope.md: 1ed297f7ae8bec2b850ee2110cd689751e287cf6
-scope.zh.md: 3633c99003d3c47cb02c04313fd6dd1a5208ddfc
+/scoped-registration:
+  en: ebcefe4dd75f9a9c
+  zh: e7a4edad80d59002
+/scoped-registration/identity-and-dispatch-carrier:
+  en: f4e1bdd96c43a845
+  zh: c74409f7f81bd0e0
+/scoped-registration/owned-registration-context:
+  en: 7908e0caa7acf71f
+  zh: 2979adca7cf33912
+/scoped-registration/scoped-registry-layer:
+  en: 19c3ed72868597e5
+  zh: 6dbb5327817e0118

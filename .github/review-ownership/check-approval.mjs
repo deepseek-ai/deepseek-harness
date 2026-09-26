@@ -319,7 +319,7 @@ export async function runApprovalCheck({ event, policySource, api, runUrl, getOw
       for (const reviewId of delegation.reviewIds) {
         const dismissed = await api(`/repos/${pull.repository}/pulls/${pull.number}/reviews/${reviewId}/dismissals`, {
           method: 'PUT',
-          body: { message: `This is by automated Angry Turtle Cyborg, not a human. @${delegation.login} delegated approval to @${delegation.delegatedTo} via /delegate.`, event: 'DISMISS' },
+          body: { message: `@${delegation.login} delegated approval to @${delegation.delegatedTo} via /delegate.`, event: 'DISMISS' },
         })
         if (!isRecord(dismissed) || dismissed.id !== reviewId || dismissed.state !== 'DISMISSED') {
           throw new Error('delegated review dismissal was not confirmed')

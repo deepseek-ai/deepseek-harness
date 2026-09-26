@@ -47,7 +47,7 @@ The effective mode comes from the calling session's override or escalation grant
 
 ### Observable success and failures
 
-Reads, listings, and metadata work exactly as with `fs-local`. A denied mutation returns an `FS_SANDBOX_DENIED` error carrying the effective mode; through the tools the model sees `[sandbox: file access denied under <mode> mode]` plus the one-approved-wider retry hint, identical to bash's denials. A session with an approved escalation may retry the same operation at a strictly wider mode for that one call.
+Reads, listings, metadata, and read-only watches work exactly as with `fs-local`; the mutation fence does not restrict observation. A denied mutation returns an `FS_SANDBOX_DENIED` error carrying the effective mode; through the tools the model sees `[sandbox: file access denied under <mode> mode]` plus the one-approved-wider retry hint, identical to bash's denials. A session with an approved escalation may retry the same operation at a strictly wider mode for that one call.
 
 -----
 

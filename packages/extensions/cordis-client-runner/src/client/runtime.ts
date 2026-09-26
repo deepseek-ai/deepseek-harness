@@ -167,7 +167,7 @@ export interface DynamicCordisLivePackage {
   pluginRunId: CordisDynamicPluginRunId
   /** Label from the define call. */
   name: string
-  /** Slot names this package registered into here. */
+  /** Slot names and `factory:<name>` definitions this package registered here. */
   slots: string[]
   /** Live injected-style tag count. */
   styleCount: number
@@ -504,6 +504,9 @@ export function errorDetails(error: unknown): CordisErrorDetails {
 function renderFailureMessage(slot: string, message: string): string {
   const redirect = Object.entries(DYNAMIC_CLIENT_REDIRECTS)
     .find(([name, text]) => message.includes(name) && !message.includes(text))?.[1]
-  return `your entry in slot "${slot}" crashed while React rendered it: ${message}`
+  const subject = slot.startsWith('factory:')
+    ? `your component in Factory "${slot.slice('factory:'.length)}"`
+    : `your entry in slot "${slot}"`
+  return `${subject} crashed while React rendered it: ${message}`
     + (redirect === undefined ? '' : `\n${redirect}`)
 }

@@ -1,21 +1,22 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import type { ShellExecRequest, ShellExecSpec, ShellExecutor, ShellRunResult } from '@deepseek-ai/dsh-shell'
+import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellExecutor, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import { DEFAULT_HOOK_TIMEOUT_MS, runHook } from '@deepseek-ai/dsh-hook-protocol'
 import type { RunHookOptions } from '@deepseek-ai/dsh-hook-protocol'
 
 /**
  * A minimal stand-in for the bits of {@link ShellExecutor} that {@link runHook}
- * actually calls (`resolve` then `run`). `runHook` is pure plumbing over those
- * two methods, so a duck-typed recorder is the right test hook — the REAL
- * executor (dsh-bash-local) is exercised end-to-end by the hook-bridge plugins
- * that consume this library, not here.
+ * actually calls (`resolve` then `execute().result()`). `runHook` is pure
+ * plumbing over those two methods, so a duck-typed recorder is the right test
+ * hook — the REAL executor (dsh-bash-local) is exercised end-to-end by the
+ * hook-bridge plugins that consume this library, not here.
  */
 function recordingBash(run: (spec: ShellExecSpec) => Promise<ShellRunResult>): {
-  bash: ShellExecutor
+  bash: Pick<ShellExecutor, 'resolve' | 'execute'>
   specs: ShellExecSpec[]
 } {
   const specs: ShellExecSpec[] = []
-  const bash = {
+  const reader = { readFrom: (from: number) => ({ text: '', nextOffset: from, lossy: false }) }
+  const bash: Pick<ShellExecutor, 'resolve' | 'execute'> = {
     resolve(request: ShellExecRequest): ShellExecSpec {
       // Carry the request through verbatim, defaulting the required spec fields —
       // exactly what dsh-bash-local's resolve does for the fields runHook sets.
@@ -23,6 +24,7 @@ function recordingBash(run: (spec: ShellExecSpec) => Promise<ShellRunResult>): {
         command: request.command,
         workdir: request.workdir ?? '/stub',
         timeoutMs: request.timeoutMs ?? 0,
+        onExpiry: request.onExpiry ?? 'kill',
         stdoutMaxBytes: request.stdoutMaxBytes ?? 64_000,
         ...request.signal ? { signal: request.signal } : {},
         ...request.stdin !== undefined ? { stdin: request.stdin } : {},
@@ -30,11 +32,21 @@ function recordingBash(run: (spec: ShellExecSpec) => Promise<ShellRunResult>): {
         sandboxPolicy: request.sandboxPolicy,
       }
     },
-    async run(spec: ShellExecSpec): Promise<ShellRunResult> {
+    async execute(spec: ShellExecSpec): Promise<ShellExecution> {
       specs.push(spec)
-      return run(spec)
+      // Only `result()` is consulted; the live-handle members are inert.
+      return {
+        status: 'completed',
+        exitCode: 0,
+        signal: null,
+        done: Promise.resolve(),
+        readOutput: () => ({ delta: '', lossy: false }),
+        observed: { stdout: reader, stderr: reader },
+        kill: () => false,
+        result: () => run(spec),
+      }
     },
-  } as unknown as ShellExecutor
+  }
   return { bash, specs }
 }
 

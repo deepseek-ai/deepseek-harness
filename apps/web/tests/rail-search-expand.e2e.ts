@@ -53,7 +53,7 @@ describe('web e2e: rail search click survives its own document-level bubble', ()
 
     const wideSearch = page.getByRole('button', { name: 'Search sessions' })
     await expect.poll(async () => wideSearch.getAttribute('aria-expanded'), { timeout: 10_000 }).toBe('true')
-    const input = page.getByPlaceholder('Search sessions...')
+    const input = page.getByPlaceholder('Search session names')
     await expect.poll(
       async () => input.evaluate(el => document.activeElement === el),
       { timeout: FOCUS_SETTLE_MS + 10_000 },

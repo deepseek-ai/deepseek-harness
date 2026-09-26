@@ -1,7 +1,7 @@
 # Keyless replay counterpart: the failed search remains real; only the
 # conversation model adapter is replaced by replay.
 - id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   disabled: true
 
 - id: plugin-package-inventory-deepseek

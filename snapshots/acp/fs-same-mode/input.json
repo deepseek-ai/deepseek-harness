@@ -1,0 +1,14 @@
+{
+  "steps": [
+    {
+      "op": "initialize"
+    },
+    {
+      "op": "newSession"
+    },
+    {
+      "op": "prompt",
+      "text": "Use the write tool to create escalated.md containing exactly the single line: escalated. Set sandbox_permissions to danger-full-access and justification to 'use the current permissions'. The session already uses danger-full-access. After the result, reply with exactly DONE."
+    }
+  ]
+}

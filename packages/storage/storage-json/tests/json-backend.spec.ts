@@ -178,6 +178,38 @@ describe('json backend specifics', () => {
 
     await writeFile(join(root, 'shape.json'), JSON.stringify('just a string'), 'utf8')
     await expect(backend.kv.open(descriptor)).rejects.toMatchObject({ code: 'malformed-medium' })
+
+    await writeFile(join(root, 'shape.json'), JSON.stringify([{ t: { k: 1 } }]), 'utf8')
+    await expect(backend.kv.open(descriptor)).rejects.toMatchObject({ code: 'malformed-medium' })
+    await backend.close()
+  })
+
+  it('rejects a whole-unit document whose tables is an array', async () => {
+    const root = await freshRoot()
+    // An array passes `typeof 'object'`: reading it as a table map would open
+    // an empty unit, and the first write would republish the file without the
+    // records it could not see.
+    await writeFile(
+      join(root, 'shape.json'),
+      JSON.stringify({ unit: { name: 'shape', version: 1 }, global: null, tables: [{ t: { k: { hello: 'world' } } }] }),
+      'utf8',
+    )
+    const backend = new JsonStorageBackend(root)
+    await expect(backend.kv.open(descriptor)).rejects.toMatchObject({ code: 'malformed-medium' })
+    await expect(backend.kv.open(descriptor)).rejects.toThrow(/unit 'shape': tables is not an object/)
+    await backend.close()
+  })
+
+  it('opens a whole-unit document whose declared tables hold records', async () => {
+    const root = await freshRoot()
+    await writeFile(
+      join(root, 'shape.json'),
+      `${JSON.stringify({ unit: { name: 'shape', version: 1 }, global: { g: 1 }, tables: { t: { k: { hello: 'world' } } } }, null, 2)}\n`,
+      'utf8',
+    )
+    const backend = new JsonStorageBackend(root)
+    const unit = await backend.kv.open(descriptor)
+    expect(await unit.loadAll()).toEqual({ tables: { t: { k: { hello: 'world' } } }, global: { g: 1 } })
     await backend.close()
   })
 

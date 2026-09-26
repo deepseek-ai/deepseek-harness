@@ -25,6 +25,7 @@ const DEFAULT_RETAIN_RATIO = 0.16
 /** Fields shared by top-level defaults and exact-target overrides. */
 const POLICY_CONFIG_KEYS = [
   'thresholdRatio',
+  'headroomTokens',
   'retainRatio',
   'retainTokens',
   'summarizationProvider',
@@ -71,11 +72,22 @@ export function resolveConfig(config: BasicCompactionConfig = {}): ResolvedConfi
     throw new Error('BasicCompactionConfig: auto must be a boolean')
   }
 
+  const headroomTokens = config.headroomTokens ?? 65_536
+  const maxTokens = config.maxTokens ?? headroomTokens
+  assertPositiveInteger('BasicCompactionConfig.maxTokens (explicit or from headroomTokens)', maxTokens)
   const thresholdRatio = config.thresholdRatio ?? DEFAULT_THRESHOLD_RATIO
   const retention = resolveRetention(config, { retainRatio: DEFAULT_RETAIN_RATIO })
   validateRatioRetention(thresholdRatio, retention, 'BasicCompactionConfig')
   const modelPolicies = resolveModelPolicies(config.modelPolicies)
   for (const [index, policy] of modelPolicies.entries()) {
+    if (policy.maxTokens === undefined && config.maxTokens === undefined
+      && policy.headroomTokens !== undefined) {
+      policy.maxTokens = policy.headroomTokens
+    }
+    assertPositiveInteger(
+      `BasicCompactionConfig: modelPolicies[${index}].maxTokens (explicit or from headroomTokens)`,
+      policy.maxTokens ?? maxTokens,
+    )
     validateRatioRetention(
       policy.thresholdRatio ?? thresholdRatio,
       resolveRetention(policy, retention),
@@ -85,10 +97,11 @@ export function resolveConfig(config: BasicCompactionConfig = {}): ResolvedConfi
 
   return deepFreeze({
     thresholdRatio,
+    headroomTokens,
     ...retention,
     summarizationProvider: config.summarizationProvider ?? '',
     summarizationModel: config.summarizationModel ?? '',
-    maxTokens: config.maxTokens ?? 8192,
+    maxTokens,
     compactionRetries: config.compactionRetries ?? 1,
     maxOverflowRetries: config.maxOverflowRetries ?? 1,
     modelPolicies,
@@ -115,6 +128,7 @@ export function resolveTargetPolicy(
   return deepFreeze({
     target: { provider: target.provider, model: target.model },
     thresholdRatio: override?.thresholdRatio ?? config.thresholdRatio,
+    headroomTokens: override?.headroomTokens ?? config.headroomTokens,
     ...resolveRetention(override ?? {}, inheritedRetention),
     summarizationProvider: override?.summarizationProvider ?? config.summarizationProvider,
     summarizationModel: override?.summarizationModel ?? config.summarizationModel,
@@ -126,13 +140,20 @@ export function resolveTargetPolicy(
 
 /**
  * Scale one routed policy into concrete token budgets for its model capacity.
+ *
+ * Pressure is capped by both the window fraction and the capacity remaining
+ * after the routed output reservation plus compaction headroom. Retention scales
+ * the message budget before headroom is deducted.
+ *
  * @param policy - merged policy for the exact routed target.
  * @param contextWindow - positive adapter-owned capacity for that target.
+ * @param reservedCompletionTokens - output tokens one routed request reserves.
  * @returns detached immutable pressure and retention budgets.
  */
 export function resolveCompactSpec(
   policy: ResolvedTargetPolicy,
   contextWindow: number,
+  reservedCompletionTokens: number,
 ): ResolvedCompactSpec {
   const targetKey = `${policy.target.provider}/${policy.target.model}`
   if (!Number.isInteger(contextWindow) || contextWindow <= 0) {
@@ -141,9 +162,38 @@ export function resolveCompactSpec(
       `BasicCompactionConfig: contextWindow (${contextWindow}) must be a positive integer`,
     )
   }
-  const thresholdTokens = Math.floor(contextWindow * policy.thresholdRatio)
+  if (!Number.isInteger(reservedCompletionTokens) || reservedCompletionTokens < 0) {
+    throw new TargetPressureConfigError(
+      targetKey,
+      `BasicCompactionConfig: reservedCompletionTokens (${reservedCompletionTokens}) `
+      + 'must be a non-negative integer',
+    )
+  }
+  const messageBudgetTokens = contextWindow - reservedCompletionTokens
+  if (messageBudgetTokens <= 0) {
+    throw new TargetPressureConfigError(
+      targetKey,
+      `compaction-basic: ${targetKey} reserves ${reservedCompletionTokens} completion tokens `
+      + `of its ${contextWindow}-token context window, leaving no message budget; configure `
+      + "the adapter model's contextWindow above the effective request maxTokens",
+    )
+  }
+  const pressureBudgetTokens = messageBudgetTokens - policy.headroomTokens
+  if (pressureBudgetTokens <= 0) {
+    throw new TargetPressureConfigError(
+      targetKey,
+      `compaction-basic: ${targetKey} reserves ${reservedCompletionTokens} completion tokens `
+      + `and ${policy.headroomTokens} headroom tokens of its ${contextWindow}-token context `
+      + 'window, leaving no pressure budget; reduce the effective request maxTokens or '
+      + 'compaction headroomTokens, or configure a larger adapter model contextWindow',
+    )
+  }
+  const thresholdTokens = Math.floor(Math.min(
+    contextWindow * policy.thresholdRatio,
+    pressureBudgetTokens,
+  ))
   const retainTokens = policy.retainTokens === undefined
-    ? Math.floor(contextWindow * policy.retainRatio)
+    ? Math.floor(messageBudgetTokens * policy.retainRatio)
     : policy.retainTokens
   if (retainTokens >= thresholdTokens) {
     throw new TargetPressureConfigError(
@@ -229,12 +279,14 @@ function validatePolicy(
   name: string,
 ): void {
   const thresholdRatio = config.thresholdRatio
+  const headroomTokens = config.headroomTokens
   const retainRatio = config.retainRatio
   const retainTokens = config.retainTokens
   const maxTokens = config.maxTokens
   const compactionRetries = config.compactionRetries
   const maxOverflowRetries = config.maxOverflowRetries
   if (thresholdRatio !== undefined) assertRatio(`${name}.thresholdRatio`, thresholdRatio)
+  if (headroomTokens !== undefined) assertNonNegativeInteger(`${name}.headroomTokens`, headroomTokens)
   if (retainRatio !== undefined) assertRatio(`${name}.retainRatio`, retainRatio)
   if (retainTokens !== undefined) assertNonNegativeInteger(`${name}.retainTokens`, retainTokens)
   if (retainRatio !== undefined && retainTokens !== undefined) {

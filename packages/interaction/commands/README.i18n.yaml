@@ -1,6 +1,76 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/interaction/commands/README.md
-README.md: bfcb82786a71a938ed793deb591ff45d32ffe1e7
-README.zh.md: 33e128f12ff765ee00adc7ae907da957c06244d8
+/:
+  en: d331b9706513154d
+  zh: 20e08461c498d058
+/deepseek-ai-dsh-commands:
+  en: 1f9f0eb541c10a2f
+  zh: c5998cda404abf36
+/deepseek-ai-dsh-commands/summary:
+  en: 534b063e88bcf17e
+  zh: 10ac9af2797f6dee
+/deepseek-ai-dsh-commands/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-commands/use-this-package:
+  en: 6eee80c31dad122b
+  zh: 8f261f844a22ddad
+/deepseek-ai-dsh-commands/use-this-package/registering-a-command:
+  en: 81cefbf12580c26a
+  zh: 01c49d94aca89a07
+/deepseek-ai-dsh-commands/use-this-package/command-syntax:
+  en: f9160436da4939e7
+  zh: 90af200afaf3bb4c
+/deepseek-ai-dsh-commands/use-this-package/agent-scoped-commands:
+  en: b2e46875757e31c8
+  zh: 6f97db278fcbc58a
+/deepseek-ai-dsh-commands/use-this-package/attachments:
+  en: 5239ef9c245c3a6b
+  zh: 34e2f89e4e7f5554
+/deepseek-ai-dsh-commands/use-this-package/dispatching-from-an-adapter:
+  en: a5c6aecf74468137
+  zh: 5548d846d600d29a
+/deepseek-ai-dsh-commands/use-this-package/cancellation:
+  en: ee26e9855ce39626
+  zh: 7c092436d03b84a9
+/deepseek-ai-dsh-commands/understand-the-implementation:
+  en: 063b49f26f48d628
+  zh: 2ec899aa6f01359f
+/deepseek-ai-dsh-commands/understand-the-implementation/source-map:
+  en: c0a1ffbf3bd434e7
+  zh: 6b0b5699d749e38f
+/deepseek-ai-dsh-commands/understand-the-implementation/lifecycle-events:
+  en: c9fcc06089f8035d
+  zh: 74072476994a2093
+/deepseek-ai-dsh-commands/understand-the-implementation/scoping:
+  en: d2d9d05bb5efbec4
+  zh: 85ab0abcf728c56d
+/deepseek-ai-dsh-commands/understand-the-implementation/attachment-admission:
+  en: ee0efa5308dcf1e3
+  zh: da5a1d938301426c
+/deepseek-ai-dsh-commands/further-exploration:
+  en: 61626a7fcd4ea04b
+  zh: 217cd5e1e360729e
+/deepseek-ai-dsh-commands/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-commands/model-experience/direct-human-commands:
+  en: 47824d39a7117a5c
+  zh: 05fefe83ee7f8ad6
+/deepseek-ai-dsh-commands/model-experience/direct-human-commands/what-the-model-sees:
+  en: a6c574fb3a59ac88
+  zh: 8b0a365ea1528844
+/deepseek-ai-dsh-commands/model-experience/direct-human-commands/token-effect:
+  en: d212d42f4315c80c
+  zh: 433dd07e1a167f12
+/deepseek-ai-dsh-commands/model-experience/direct-human-commands/kv-cache-effect:
+  en: a0683fff79d40075
+  zh: 3d14d36c8a640031
+/deepseek-ai-dsh-commands/known-limitations-and-deferred-work:
+  en: 7e930763024d2644
+  zh: 351bbea360cab6d3
+/deepseek-ai-dsh-commands/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

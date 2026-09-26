@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-08-feedback-dialog-and-categories.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-08-feedback-dialog-and-categories.md
-2026-09-08-feedback-dialog-and-categories.md: ee656946a9e5d2921a02a1b642041e5965661f31
-2026-09-08-feedback-dialog-and-categories.zh.md: ef2b2d4670aad12398125925dd1e1a7e7c10a5f0
+/agent-note-feedback-dialog-categories-and-the-acknowledgement-toast:
+  en: 0ca76fe002b0b0fc
+  zh: 14fa2772a6a23e25
+/agent-note-feedback-dialog-categories-and-the-acknowledgement-toast/problem:
+  en: 90ac7f116156c209
+  zh: 20274add2ffbcdc0
+/agent-note-feedback-dialog-categories-and-the-acknowledgement-toast/decision:
+  en: 4cde40e5b1ad6beb
+  zh: fb49e47434faf06f
+/agent-note-feedback-dialog-categories-and-the-acknowledgement-toast/alternatives-considered:
+  en: 3713257ee75869da
+  zh: 5892d375fe8d0764
+/agent-note-feedback-dialog-categories-and-the-acknowledgement-toast/consequences:
+  en: a55c05291a78e922
+  zh: 1373131586665daf

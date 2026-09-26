@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-03-jobs-seam-consolidation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-03-jobs-seam-consolidation.md
+/agent-note-one-output-ring-one-projection-one-event-stream-for-background-jobs:
+  en: f4cb113e6501a363
+  zh: 55693cca6db201b0
+/agent-note-one-output-ring-one-projection-one-event-stream-for-background-jobs/problem:
+  en: 2e213085523c8ebe
+  zh: 28229d752ccc7ec4
+/agent-note-one-output-ring-one-projection-one-event-stream-for-background-jobs/decision:
+  en: a7e2bd18a7e647f0
+  zh: 1d8f5500a3b0502a
+/agent-note-one-output-ring-one-projection-one-event-stream-for-background-jobs/alternatives-considered:
+  en: d5d9d6c2c05e563b
+  zh: 66b2489d947365fe
+/agent-note-one-output-ring-one-projection-one-event-stream-for-background-jobs/consequences:
+  en: 23b0112bba743396
+  zh: 28f38ff246b4525f

@@ -1,0 +1,7 @@
+version: 1
+scenario: auto-review-approval
+profile: web
+composition: web-auto-review
+recording: authored
+header:
+  class: web-default

@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-19-prune-stream-visibility-helpers.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/simplification/2026-09-19-prune-stream-visibility-helpers.md
+/agent-note-prune-unused-stream-visibility-helpers:
+  en: 5d82ce82cac8a687
+  zh: 4cfc68fceb215e35
+/agent-note-prune-unused-stream-visibility-helpers/problem:
+  en: da5bf344b0d704c1
+  zh: 6826b064d8b66373
+/agent-note-prune-unused-stream-visibility-helpers/proposal:
+  en: b6cec09bd23a2f5a
+  zh: ac348bbe47ea7cc9
+/agent-note-prune-unused-stream-visibility-helpers/alternatives-considered:
+  en: 1a190cf86a9f7ec9
+  zh: 2a30aa235c69bdc7
+/agent-note-prune-unused-stream-visibility-helpers/acceptance-criteria:
+  en: ee2de1dbabc60983
+  zh: d01c9f1e399266af
+/agent-note-prune-unused-stream-visibility-helpers/risks:
+  en: 466ed8d1fb426011
+  zh: 1c0765622c9fdf32

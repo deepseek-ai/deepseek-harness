@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $Makensis = [System.IO.Path]::GetFullPath($Makensis)
 $SevenZip = [System.IO.Path]::GetFullPath($SevenZip)
+if ($FrameLibrary) { $FrameLibrary = [System.IO.Path]::GetFullPath($FrameLibrary) }
 $scratch = [System.IO.Directory]::CreateTempSubdirectory('dsh-directory-smoke-').FullName
 $fixture = Join-Path $PSScriptRoot '../tests/fixtures/installer-directory-smoke.nsi'
 
@@ -42,8 +43,9 @@ try {
     }
     $probe = Join-Path $caseRoot 'probe.exe'
     $caseArchive = if ($mode -eq 'broken') { $brokenArchive } else { $archive }
+    $reportDir = Join-Path $caseRoot 'installer-logs'
     $compileArgs = @('/V2', "/DOUTPUT_FILE=$probe", "/DPAYLOAD_FILE=$caseArchive", "/DTARGET_DIR=$target", "/DDSH_SEVENZIP_PATH=$SevenZip")
-    if ($FrameLibrary) { $compileArgs += "/DSOURCE_DLL=$FrameLibrary" }
+    if ($FrameLibrary) { $compileArgs += @("/DSOURCE_DLL=$FrameLibrary", "/DREPORT_DIR=$reportDir") }
     if ($mode -eq 'missing-stage') { $compileArgs += '/DMISSING_STAGE' }
     if ($mode -eq 'cancelled') { $compileArgs += '/DCANCELLED' }
     Invoke-Checked $Makensis ($compileArgs + $fixture)
@@ -76,8 +78,23 @@ try {
     if ((Test-Path -LiteralPath (Join-Path $target 'obsolete.txt')) -ne $expectObsolete) {
       throw "Directory smoke $mode did not preserve the expected old-only file state"
     }
-    if (@(Get-ChildItem -LiteralPath $caseRoot -Directory | Where-Object Name -ne 'Application').Count -ne 0) {
+    if (@(Get-ChildItem -LiteralPath $caseRoot -Directory | Where-Object Name -notin @('Application', 'installer-logs')).Count -ne 0) {
       throw "Directory smoke $mode left transaction directories behind"
+    }
+    if ($FrameLibrary) {
+      # Only an extraction failure writes a report; it must quote 7-Zip's verdict so support can read the cause.
+      $reports = @(if (Test-Path -LiteralPath $reportDir) { Get-ChildItem -LiteralPath $reportDir -File })
+      if ($mode -eq 'broken') {
+        if ($reports.Count -ne 1 -or $reports[0].Name -notmatch '^extract-failure-20\d{6}-\d{6}\.log$') {
+          throw "Directory smoke $mode did not save exactly one extraction report"
+        }
+        $report = Get-Content -LiteralPath $reports[0].FullName -Raw -Encoding UTF8
+        foreach ($expected in @('Result: 7-Zip exit code 2 (fatal error)', "Archive: $caseArchive", 'Cannot open the file as [7z] archive')) {
+          if (-not $report.Contains($expected)) { throw "Directory smoke $mode report lacks '$expected'" }
+        }
+      } elseif ($reports.Count -ne 0) {
+        throw "Directory smoke $mode saved an unexpected extraction report"
+      }
     }
     Write-Output "Directory replacement smoke passed: $mode"
   }

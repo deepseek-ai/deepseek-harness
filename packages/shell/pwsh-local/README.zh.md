@@ -57,21 +57,22 @@ kind: "package-reference"
 
 ### 运行命令
 
-用 `run` 运行命令并从结果读取输出；非零退出、超时或取消都会返回描述性结果，只有基础设施失败才会导致调用被拒绝。命令字符串作为单个参数传给 `-Command`：由 PowerShell 自己解析文本，不存在中间 shell，因此没有需要转义的 shell 引号层，原生 Win32 路径也原样通过。每条命令都先固定 UTF-8 输出，因此即使在 Windows PowerShell 5.1 兜底上，非 ASCII 输出也不会乱码。环境默认面向模型：`NO_COLOR=1 PAGER=cat GIT_PAGER=cat`（没有 `TERM=dumb`——那是 POSIX 概念），调用方显式提供的条目仍然优先。
+通过等待执行句柄的 `result()` 投影来运行命令；非零退出、超时或取消都会返回描述性结果，只有基础设施失败才会导致调用被拒绝。命令字符串作为单个参数传给 `-Command`：由 PowerShell 自己解析文本，不存在中间 shell，因此没有需要转义的 shell 引号层，原生 Win32 路径也原样通过。每条命令都先固定 UTF-8 输出，因此即使在 Windows PowerShell 5.1 兜底上，非 ASCII 输出也不会乱码。环境默认面向模型：`NO_COLOR=1 PAGER=cat GIT_PAGER=cat`（没有 `TERM=dumb`——那是 POSIX 概念），调用方显式提供的条目仍然优先。
 
 ```text
-const result = await ctx.shell.run(ctx.shell.resolve({ command: 'Get-ChildItem' }))
+const execution = await ctx.shell.execute(ctx.shell.resolve({ command: 'Get-ChildItem' }))
+const result = await execution.result()
 if (result.timedOut) console.log('timed out after', result.timeoutMs)
 ```
 
 ### 后台进程
 
-等待 `start` 即可在后台运行命令；它完成准备后返回进程句柄，且不应用执行超时。取消或准备失败会在发布句柄前拒绝调用。`readOutput()` 把流增量合并为一次消费式读取，并在 `[stderr]` 分段下标记 stderr；`kill()` 终止由提供方管理的 range；`done` 在 direct command 关闭时结算且绝不 reject。job id、所有权、轮询与通知属于通用 `ctx.jobs` 运行时，工具层会把句柄注册进去。
+以 `onExpiry: 'none'` 解析并等待 `execute` 返回句柄即可在后台运行命令；不布置任何 deadline。取消或准备失败会在发布句柄前拒绝调用。`readOutput()` 把流增量合并为一次消费式读取，并在 `[stderr]` 分段下标记 stderr；`kill()` 终止提供方管理的 range；`done` 在直接命令关闭时结算且绝不 reject。job id、所有权、轮询与通知属于通用 `ctx.jobs` 运行时，工具层会把句柄注册进去。
 
 <a id="adjusting-budgets-at-runtime"></a>
 ### 运行时调整预算
 
-当组合了设置提供方时，本执行器注册该能力共享的 `shell` 设置命名空间——与 POSIX 家族共用同一个，因为一个宿主只组装一个 `ctx.shell` 提供方——因此 `settings.yaml` 中的用户段会叠加在组合条目之上，下一条命令即按新预算运行。schema 无法判定的值——正有限数字与 `graceMs` 的定时器上界——会在写入时被拒绝，运行中的执行器保持它最后一份可用的段。
+执行预算是解析每条命令时读取的 volatile Config 字段。插件页面编辑当前执行器的 profile 条目。完整 Config 验证在表单写入磁盘前拒绝无效数字和定时器上限。
 
 -----
 
@@ -145,7 +146,7 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
 - **自身不提供隔离**——命令以 harness 进程的权限运行；需要隔离的部署组合沙箱执行器或策略。
 - **没有持久 shell 或 PTY**——每次调用都启动全新的 `pwsh -Command`。
 - **命令字符串是 PowerShell 文本**——`-Command` 域没有 shell 引号层，但面向模型的命令由 PowerShell 自己解析，因此 PowerShell 语法错误是命令失败，而非启动失败。
-- **后台提供方失败提示只投递一次**——`SubprocessHandle.done` 可能在目标开始执行前或后被拒绝，因此执行器会将不指明失败阶段的 `subprocess failed before reporting an outcome: …` 注入且仅注入一个 `readOutput()` 增量；丢弃该增量的读取方无法恢复它。
+- **后台提供方失败提示就是整条 stderr 流**——`SubprocessHandle.done` 可能在目标命令开始执行前或后被拒绝，而 subprocess 服务不会为从未上报结果的目标命令 缓冲任何输出，因此执行器把不声明失败阶段的 `subprocess failed before reporting an outcome: …` 作为观测到的 stderr 流提供（偏移读取方按各自偏移重读），并只折入恰好一个 `readOutput()` 增量；丢弃了该增量的消耗式读取方只能经 `observed.stderr` 恢复它。
 - **Windows 终止不报告信号**——被强制终止的进程以退出码 1、`signal: null` 结算，因此基于信号的状态分类在 Windows 上不适用；`kill()` 发起的停止仍会直接标记为 `killed`。
 - **编码 preamble 位于命令之前**——PowerShell 要求 `param(...)`、`#requires` 与 `using` 语句位于脚本最顶部，因此以其中一种开头的命令无法在 UTF-8 输出 preamble 下运行；`param(...)` 脚本请包进 `& { … }`，`using`/`#requires` 脚本请改从文件运行。
 - **Windows PowerShell 5.1 下的非 ASCII stdin 可能被错误解码**——preamble 只固定输出编码；`[Console]::InputEncoding` 保持主机默认，因为在重定向 stdin 下设置它会抛出异常；pwsh 7 默认 UTF-8，不受影响。

@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/boot/hmr/README.md
-README.md: 735b37c41e50c6a1f663cbfa0cde42f7250ec415
-README.zh.md: b0d3196913cb11e434b397350c81ad1bb45dc0c6
+/:
+  en: 0d369858959a42ab
+  zh: aed78464c165f6bd
+/deepseek-ai-dsh-hmr:
+  en: 320535d0b618f5f6
+  zh: 8dfa97b775476ef1
+/deepseek-ai-dsh-hmr/summary:
+  en: a20180062e3ed8fb
+  zh: 94bbaa4bbdb5ac9b
+/deepseek-ai-dsh-hmr/table-of-contents:
+  en: 76368b6b1da79c80
+  zh: 52384aee991ac542
+/deepseek-ai-dsh-hmr/use-this-package:
+  en: 9fd376ac44e7f515
+  zh: 83bd165982e99d2a
+/deepseek-ai-dsh-hmr/use-this-package/configuration:
+  en: 45ee194ad781d603
+  zh: b3d7fcd8ed73717c
+/deepseek-ai-dsh-hmr/understand-the-implementation:
+  en: 5c7ff789d5d6b653
+  zh: 46ef96a031ac87bd
+/deepseek-ai-dsh-hmr/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-hmr/model-experience/reloaded-plugins:
+  en: 440394ecf06680e0
+  zh: f1b515fca0a2db63
+/deepseek-ai-dsh-hmr/model-experience/reloaded-plugins/what-the-model-sees:
+  en: 9354fbd20bf1592d
+  zh: 5a3b0cafba8455a8
+/deepseek-ai-dsh-hmr/model-experience/reloaded-plugins/token-effect:
+  en: 43453397533501ca
+  zh: 207d34979ba8ccd0
+/deepseek-ai-dsh-hmr/model-experience/reloaded-plugins/kv-cache-effect:
+  en: 89e0624fafd701fb
+  zh: 19d36a33c1d9af9d
+/deepseek-ai-dsh-hmr/known-limitations-and-deferred-work:
+  en: 75e861bd7c91e37b
+  zh: d209c33dd5b16182
+/deepseek-ai-dsh-hmr/known-limitations-and-deferred-work/dev-note:
+  en: 7972e4b2005ec9a4
+  zh: 754c49ec538c164c

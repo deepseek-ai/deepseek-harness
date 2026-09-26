@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/extensions/ui-cordis/README.md
-README.md: 1cd6d778148d1afdcfc470b20b7e5ac437a21921
-README.zh.md: 2c15d6be3fcbfb4667cbdee7761f8e3716ce5c39
+/:
+  en: cdad52474ffc161d
+  zh: 864ed938d5ee9012
+/deepseek-ai-dsh-client-ui-cordis:
+  en: 63d8703a05312146
+  zh: 9e4c02908b65c417
+/deepseek-ai-dsh-client-ui-cordis/summary:
+  en: 4d3e762156a6e66e
+  zh: 436215c71fd8905c
+/deepseek-ai-dsh-client-ui-cordis/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-cordis/use-this-package:
+  en: b2f4dd7bdcfa5fea
+  zh: 23e48220e532f98a
+/deepseek-ai-dsh-client-ui-cordis/use-this-package/what-the-panel-shows:
+  en: 56ec98fc74c1706a
+  zh: 06d2c6315aa20217
+/deepseek-ai-dsh-client-ui-cordis/use-this-package/what-the-tool-cards-show:
+  en: a9c45dd79deab953
+  zh: 6d68858f202ee247
+/deepseek-ai-dsh-client-ui-cordis/use-this-package/boundaries-to-plan-around:
+  en: c76ace6595f805d6
+  zh: 53ee7e51823f367c
+/deepseek-ai-dsh-client-ui-cordis/understand-the-implementation:
+  en: e4e1b788078bcd0d
+  zh: 93d0cb3132fd2157
+/deepseek-ai-dsh-client-ui-cordis/understand-the-implementation/design-philosophy:
+  en: b27840fda9efefc6
+  zh: 53ed0401355290eb
+/deepseek-ai-dsh-client-ui-cordis/understand-the-implementation/source-map:
+  en: de077f5773f79ac6
+  zh: 6d6f98cc34d530a5
+/deepseek-ai-dsh-client-ui-cordis/understand-the-implementation/how-the-panel-stays-current:
+  en: cbcc34aa282d8739
+  zh: ad054d71184037e3
+/deepseek-ai-dsh-client-ui-cordis/further-exploration:
+  en: 30316fa7214c7995
+  zh: 01bf063e4c21b0c7
+/deepseek-ai-dsh-client-ui-cordis/model-experience:
+  en: 83a0687b7ad68dde
+  zh: 9763803384bef7af
+/deepseek-ai-dsh-client-ui-cordis/model-experience/kv-cache-effect:
+  en: ec4562df89d18e78
+  zh: 30084e7fb8dee95d
+/deepseek-ai-dsh-client-ui-cordis/known-limitations-and-deferred-work:
+  en: 3b9cfd230ab18a75
+  zh: 47b87bb34b9c9d1c
+/deepseek-ai-dsh-client-ui-cordis/known-limitations-and-deferred-work/dev-note:
+  en: 82bc60a2bd964744
+  zh: 900679483cdbde4b

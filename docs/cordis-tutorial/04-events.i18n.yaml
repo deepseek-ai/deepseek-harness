@@ -1,6 +1,16 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 04-events.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cordis-tutorial/04-events.md
-04-events.md: db911b9a06d7304d73030a2020de3d465fde2f9c
-04-events.zh.md: 0125f81c5521ed62da790ee7033ca4b715311ee1
+/4-events:
+  en: c0d426252aeee143
+  zh: a9d91f2ef46e2d3b
+/4-events/declare-emit-listen:
+  en: a5b9207a435caf1f
+  zh: 3e06d12249fb712e
+/4-events/dispatch-modes:
+  en: 24799f579b04b2d4
+  zh: 97d4d82dc3a02c75
+/4-events/waterfall-transform-or-short-circuit:
+  en: 8309aea415b395c3
+  zh: 480ee4a163543dd0

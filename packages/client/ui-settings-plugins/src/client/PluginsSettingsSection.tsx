@@ -120,7 +120,7 @@ export function PluginsSettingsSection({ t, renderSlot, useTabs }: PluginsSettin
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Plugins section, configurable-tab, and card copy. */
+    /** Built-in plugins section and plugin configuration page copy. */
     'settings.plugins': PluginsSettingsLocaleKey
   }
 }

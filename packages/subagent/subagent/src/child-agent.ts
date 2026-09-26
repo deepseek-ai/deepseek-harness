@@ -26,7 +26,7 @@ import type {} from '@deepseek-ai/dsh-permission-presets'
 // documented `ctx.get` pattern), never as a hard dep. A rosterless deployment
 // keeps its model-facing rows on the host plane, where the child already sees
 // them through the tool registry's global layer.
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { delegationDepthOf } from './depth.ts'
 
 /** Thrown when starting a child would exceed the requested depth cap. */
@@ -220,7 +220,10 @@ export function applyChildComposition(
 
 /** Policy seeded onto a child session's log at the delegation boundary. */
 export interface DelegatedPolicyOverrides {
-  /** The shared-bundle preset identity when the parent currently runs in Auto or Full access. */
+  /**
+   * The parent's current preset identity when it runs in Auto or Full access;
+   * the child keeps it under the pinned `never` approval policy.
+   */
   readonly permissionPreset: 'auto' | 'danger-full-access' | undefined
   /** The parent session's explicit sandbox-mode override, or `undefined` without one. */
   readonly sandboxMode: SandboxMode | undefined

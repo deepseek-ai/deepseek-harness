@@ -25,7 +25,7 @@
   color: var(--dsw-alias-label-primary);
 }
 
-/* Selector pill (figma 'Selector': h36 r18, fill #F5F6F7, pad 0/14, gap 12). */
+/* Language selector uses the standard control size. */
 .selector {
   display: inline-flex;
   align-items: center;
@@ -33,7 +33,7 @@
   height: 36px;
   padding: 0 14px;
   border: none;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-module-platform);
   font: inherit;
   font-size: 14px;

@@ -4,20 +4,26 @@
 // or the live adapter (record). Drive steps run in every mode and wait only
 // on generic completion (whenTurnSettled — never model-content selectors, so
 // record cannot hang on a live model answering differently); assertion steps
-// run in replay/refresh only. Settled states only — streaming fidelity is
-// asserted from the durable embedded Assistant stream, not transient DOM.
+// run in replay/refresh only. Streaming fidelity is asserted from the durable
+// embedded Assistant stream, not transient DOM.
 // Record: DSH_SNAPSHOT=record writes session.v3.jsonl, then a keyless
 // DSH_SNAPSHOT=refresh regenerates ui.expected.md.
+// Suite setup (beforeAll, not per step): one fixed page clock
+// (page.clock.setFixedTime) and one routed Remote mux socket
+// (page.routeWebSocket) serve every step below, so the reconnect checkpoints
+// rely on both without re-pinning or re-routing them.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Page, Route, WebSocketRoute } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { ToolCallId, expandAssistantStream } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionListValue } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import {
-  assertFixtureInventory, captureExpandedTurnProcessAria, captureStableAria,
+  acknowledgeReloadConnectionLoss, assertFixtureInventory, captureExpandedTurnProcessAria, captureStableAria,
   compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
@@ -29,6 +35,8 @@ const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/fresh-round-t
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.v3.jsonl', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/ui.expected.md', import.meta.url))
 const ECHO_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/submission-echo.expected.md', import.meta.url))
+const ACCEPTED_RECONNECT_EXPECTED = join(SNAPSHOT_DIR, 'accepted-reconnect.expected.md')
+const BLANK_EXPECTED = join(SNAPSHOT_DIR, 'blank-reload.expected.md')
 const UI_EXPANDED_EXPECTED = fileURLToPath(
   new URL('../../../snapshots/web/fresh-round-trip/ui-expanded.expected.md', import.meta.url),
 )
@@ -39,6 +47,8 @@ const MODE = webSnapshotMode()
 // committed fixture recorded exactly it, so drive script and fixture cannot
 // drift apart.
 const PROMPT = 'Use the bash tool to run exactly: echo WEB_E2E_OK. Then reply with the single word DONE and stop.'
+
+type SessionListResponse = { result: RemoteResult<SessionListValue> }
 
 /** Rendered text of the system prompt surface node, or undefined when the surface carries none. */
 function systemPromptText(session: Session): string | undefined {
@@ -52,7 +62,9 @@ describe('web e2e: fresh round trip through the real assembly', () => {
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
   let settledSessionId: SessionId | undefined
+  let remoteSocket: WebSocketRoute | undefined
   const sessionEvents: SessionEvent[] = []
+  const browserNow = Date.now()
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({
@@ -62,6 +74,11 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { sessionEvents.push(event) })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    await page.clock.setFixedTime(browserNow)
+    await page.routeWebSocket('**/api/remote.mux', (route) => {
+      remoteSocket = route
+      route.connectToServer()
+    })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -80,28 +97,117 @@ describe('web e2e: fresh round trip through the real assembly', () => {
       // Drift guard: the committed fixture must carry exactly the drive prompt.
       expect(fixtureUserPrompts(await readFile(FIXTURE, 'utf8'))).toEqual([PROMPT])
     }
+    const beforeReload = await page.evaluate(() => localStorage.getItem('dsh.sessions.current'))
+    expect(beforeReload).not.toBeNull()
+    await page.reload({ waitUntil: 'load' })
+    await page.locator('[data-composer-input]').first().waitFor({ timeout: 15_000 })
+    await page.getByRole('button', { name: 'Standard mode', exact: true }).waitFor({ timeout: 15_000 })
+    await page.getByRole('button', { name: 'Select model, current DeepSeek-V4-Flash' }).waitFor({ timeout: 15_000 })
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('dsh.sessions.current'))).toBe(beforeReload)
+    if (MODE !== 'record') {
+      await compareOrRefreshGolden(BLANK_EXPECTED,
+        await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), MODE)
+    }
     const input = page.locator('[data-composer-input]').first()
     await input.waitFor({ timeout: 10_000 })
-    // Arm the host-side settled barrier BEFORE the send click.
-    const settled = scaffold.whenTurnSettled()
-    await input.fill(PROMPT)
-    const echoSnapshot = await input.evaluate(async (element, prompt) => {
-      element.dispatchEvent(new KeyboardEvent('keydown', {
-        key: 'Enter', code: 'Enter', bubbles: true, cancelable: true,
-      }))
-      // sendSession registered its paint yield first. This frame observes the
-      // committed echo while admission remains queued on the following task.
-      await new Promise<void>((resolve) => { requestAnimationFrame(() => { resolve() }) })
-      const echo = document.querySelector<HTMLElement>('[data-submission-echo]')
-      return [
-        `echo: ${echo?.textContent?.includes(prompt) === true ? prompt : '(missing)'}`,
-        `composer: ${JSON.stringify(element.textContent ?? '')}`,
-        `contenteditable: ${element.getAttribute('contenteditable')}`,
-      ].join('\n')
-    }, PROMPT)
-    await compareOrRefreshGolden(ECHO_EXPECTED, echoSnapshot, MODE)
-    const sessionId = await settled
-    settledSessionId = sessionId
+    const sessionId = await page.evaluate(() => {
+      const selected = JSON.parse(localStorage.getItem('dsh.sessions.current')!) as { sessionId: string }
+      return selected.sessionId
+    }) as SessionId
+    const agent = scaffold.ctx.agents.get(sessionId)
+    if (agent === undefined) throw new Error('the selected Web Session has no live Agent')
+    await agent.whenIdle()
+    const release = Promise.withResolvers<undefined>()
+    // Maintenance leaves status idle and accepts inbox input without starting a turn.
+    const maintenance = agent.runMaintenance(() => release.promise)
+    let accepted = false
+    try {
+      await input.fill(PROMPT)
+      const admitted = page.waitForResponse('**/api/session/prompt')
+      const [echoSnapshot, response] = await Promise.all([
+        input.evaluate(async (element, prompt) => {
+          element.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Enter', code: 'Enter', bubbles: true, cancelable: true,
+          }))
+          // sendSession registered its paint yield first. This frame observes the
+          // committed echo while admission remains queued on the following task.
+          await new Promise<void>((resolve) => { requestAnimationFrame(() => { resolve() }) })
+          const echo = document.querySelector<HTMLElement>('[data-submission-echo]')
+          return [
+            `echo: ${echo?.textContent?.includes(prompt) === true ? prompt : '(missing)'}`,
+            `composer: ${JSON.stringify(element.textContent ?? '')}`,
+            `contenteditable: ${element.getAttribute('contenteditable')}`,
+          ].join('\n')
+        }, PROMPT),
+        admitted,
+      ])
+      expect(await response.json()).toMatchObject({ result: { ok: true, value: { accepted: true } } })
+      accepted = true
+      await compareOrRefreshGolden(ECHO_EXPECTED, echoSnapshot, MODE)
+      const row = page.getByRole('tree', { name: 'Sessions', exact: true })
+        .locator('[role="treeitem"][aria-selected="true"]')
+      await expect.poll(() => row.getAttribute('draggable'), { timeout: 5_000 }).toBe('true')
+      expect(sessionEvents.some(event => event.type === 'turn/start')).toBe(false)
+
+      const disconnected = remoteSocket
+      if (disconnected === undefined) throw new Error('the Web Remote socket never connected')
+      const warningStart = tripwire.warnings.length
+      // Only this list response carries the 2d timestamp. Its rendered label
+      // confirms the refresh reached the row, without altering blank/running.
+      const listUrl = new URL('/api/session/list', scaffold.baseUrl).href
+      const markListResponse = async (route: Route): Promise<void> => {
+        const response = await route.fetch()
+        try {
+          const body = await response.json() as SessionListResponse
+          if (body.result.ok) {
+            body.result = { ...body.result, value: {
+              ...body.result.value,
+              items: body.result.value.items.map(item => item.sessionId === sessionId
+                ? { ...item, updatedAt: browserNow - 2 * 86_400_000 }
+                : item),
+            } }
+          }
+          await route.fulfill({ response, json: body })
+        } finally {
+          await response.dispose()
+        }
+      }
+      await page.route(listUrl, markListResponse, { times: 1 })
+      try {
+        const refreshing = page.waitForResponse(listUrl)
+        const [, refreshed] = await Promise.all([disconnected.close(), refreshing])
+        // Cross-network reconnect: allow more than expect.poll's default.
+        await expect.poll(() => remoteSocket !== disconnected, { timeout: 15_000 }).toBe(true)
+        const baseline = await refreshed.json() as SessionListResponse
+        expect(baseline.result.ok).toBe(true)
+        if (!baseline.result.ok) throw new Error('the reconnect list request failed')
+        const hostSummary = baseline.result.value.items.find(item => item.sessionId === sessionId)
+        expect(hostSummary).toMatchObject({ blank: true, running: false })
+        await row.getByText('2d', { exact: true }).waitFor()
+        expect(await row.getAttribute('draggable')).toBe('true')
+        expect(await row.getByText('New Session', { exact: true }).count()).toBe(0)
+        expect(sessionEvents.some(event => event.type === 'turn/start')).toBe(false)
+        const checkpoint = [
+          `selected sidebar rows: ${await row.count()}`,
+          `new-session labels: ${await row.getByText('New Session', { exact: true }).count()}`,
+          `row draggable: ${await row.getAttribute('draggable')}`,
+          `host history blank: ${hostSummary?.blank}`,
+          `composer: ${JSON.stringify(await input.textContent())}`,
+          `contenteditable: ${await input.getAttribute('contenteditable')}`,
+        ].join('\n')
+        await compareOrRefreshGolden(ACCEPTED_RECONNECT_EXPECTED, checkpoint, MODE)
+        acknowledgeReloadConnectionLoss(tripwire, warningStart)
+      } finally {
+        await page.unroute(listUrl, markListResponse)
+      }
+    } finally {
+      // No turn can settle before maintenance releases the accepted input.
+      const settled = accepted ? scaffold.whenTurnSettled() : undefined
+      release.resolve(undefined)
+      await maintenance
+      if (settled !== undefined) settledSessionId = await settled
+      await agent.whenIdle()
+    }
     if (MODE === 'record') {
       await recordFixture(scaffold, sessionId, FIXTURE)
     }
@@ -159,8 +265,8 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     const bashResult = sessionEvents.find(event =>
       event.type === 'tool/result' && event.data.message.source.callId === bashCall.data.callId)
     if (bashResult?.type !== 'tool/result') throw new Error('the bash tool call produced no durable result')
-    expect(bashResult.data.message.content[0].isError).toBe(false)
-    expect(bashResult.data.message.content[0].content.filter(block => block.type === 'text').map(block => block.text).join(''))
+    expect(bashResult.data.message.isError).toBe(false)
+    expect(bashResult.data.message.content.filter(block => block.type === 'text').map(block => block.text).join(''))
       .toBe('WEB_E2E_OK\n')
     const turnEnds = sessionEvents.filter(e => e.type === 'turn/end')
     expect(turnEnds.length).toBe(1)
@@ -190,24 +296,13 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     await compareOrRefreshGolden(UI_EXPANDED_EXPECTED, expanded, MODE)
   })
 
-  it.skipIf(MODE === 'record')('renders the system prompt disclosure inside the expanded Turn process', async () => {
+  it.skipIf(MODE === 'record')('omits system prompt rows even when the Turn process is expanded', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-round-trip-system-prompt'))
     await expandTurnProcesses(page)
-    const disclosure = page.getByRole('button', { name: 'System prompt', exact: true })
-    const body = page.locator('[data-system-prompt-body]')
-    await expect.poll(() => disclosure.count(), { timeout: 10_000 }).toBe(1)
-    await expect.poll(() => disclosure.getAttribute('aria-expanded')).toBe('false')
-    expect(await body.count()).toBe(0)
-
-    await disclosure.click()
-    await expect.poll(() => disclosure.getAttribute('aria-expanded')).toBe('true')
-    const opaque = body.locator('[data-context-text]')
-    await expect.poll(() => opaque.count(), { timeout: 5_000 }).toBe(1)
-    expect(await opaque.textContent()).toContain('You are an AI agent powered by DeepSeek Harness.')
-
-    await disclosure.click()
-    await expect.poll(() => disclosure.getAttribute('aria-expanded')).toBe('false')
-    await expect.poll(() => body.count()).toBe(0)
+    expect(sessionEvents.some(event => event.type === 'system/message')).toBe(true)
+    expect(await page.locator('[data-chat-flow-kind="system-prompt"]').count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'System prompt', exact: true }).count()).toBe(0)
+    expect(await page.locator('[data-system-prompt-body]').count()).toBe(0)
   })
 
   it.skipIf(MODE === 'record')('expands and collapses the reasoning fold from its click target', async () => {
@@ -225,11 +320,13 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     await expect.poll(() => think.getAttribute('aria-expanded'), { timeout: 5_000 }).toBe('false')
   })
 
-  it.skipIf(MODE === 'record')('stayed clean: no pageerrors, no reconnect self-healing, no server errors', async () => {
+  it.skipIf(MODE === 'record')('stayed clean after the intentional reconnect: no pageerrors or server errors', async () => {
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
+      'blank-reload.expected.md',
       'session.v3.jsonl',
+      'accepted-reconnect.expected.md',
       'submission-echo.expected.md',
       'system-prompt.expected.md',
       'tool-schemas.expected.json',

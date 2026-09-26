@@ -40,7 +40,9 @@ Fresh children have no inherited conversation. Fork children capture the Lead's 
 
 Peer communication is a Lead-log mailbox. `team/message/queued` is appended and flushed before delivery. The target message carries the stable message id and sender identity in both durable source metadata and a short model-visible prefix. A target receipt is acknowledged with `team/message/delivered` only after its pending inbox item or recorded user message is flushed. Immediate admission is serialized per target in queued-log order, recovery retries queued-minus-delivered in the same order, and delivery folds live or persisted target inbox/history state before cold resume. Every current-version Team payload is runtime-validated before entering replay state. The Team runtime tracks dispatch and asynchronous acknowledgement work from synchronous admission until settlement; disposal closes admission and awaits both before removing the service. Current waiters wake only after the owning Team event flush succeeds.
 
-`send_message` always attempts Steer delivery. A running target receives the message at the nearest step boundary, an idle target starts a turn, and an inactive teammate cold-resumes. Success means the message is already durable even when temporary delivery failure leaves it queued. The mechanism provides process-local retry and target-Session de-duplication, not a cross-process exactly-once claim. The [Team Steer messaging decision](../../archived/simplification/2026-08-30-team-send-message-steer.md) owns the single-tool scheduling rationale.
+Unknown mailbox content stays as decoded JSON during event projection and checkpoint admission. Validation inspects its type without rebuilding its fields, because generic object parsing can omit a valid own `__proto__` key. Locally declared content variants undergo structural validation; opaque plugin fields do not gain Team semantics. Cache invalidation is necessary because parser correction alone cannot recover keys omitted from cached state. The [Team documentation](../../../../packages/experimental/agent-team/README.md) owns the restore behavior.
+
+`send_message` always attempts Steer delivery. A running target receives the message at the nearest step boundary; an inactive target starts a turn if loaded or cold-resumes otherwise. Success means the message is already durable even when temporary delivery failure leaves it queued. The mechanism provides process-local retry and target-Session de-duplication, not a cross-process exactly-once claim. The [Team Steer messaging decision](../../archived/simplification/2026-08-30-team-send-message-steer.md) owns the single-tool scheduling rationale.
 
 Shared tasks are complete snapshots with Team-local ids and monotonic revisions. Every mutation carries `expectedRevision`. Any member creates, reads, or claims a ready unowned task; the owner or Lead edits and transitions it, while only the Lead assigns another member. Numeric task ids remain within the safe-integer allocation range, and exhaustion fails without reusing an id. Dependencies must name non-deleted tasks and form a complete DAG. Deleted tasks are retained tombstones. `writeScopes` are normalized path prefixes that produce overlap diagnostics but never block claim or authorize a write.
 
@@ -51,6 +53,14 @@ Shared tasks are complete snapshots with Team-local ids and monotonic revisions.
 All members use the same cwd and observe writes immediately. The policy tells members to partition tasks, record advisory write scopes, order dependent work, and let the Lead inspect the final diff and run tests. A filesystem stale-version rejection requires rereading and rebasing the intended change. No equivalent guarantee is claimed for Bash, formatters, code generation, or direct external writes.
 
 Worktree isolation is not a harness runtime behavior. A deployment or prompt may arrange separate worktrees, but the Team domain does not infer branches, merge changes, or silently change cwd. This preserves the existing same-world subagent and sandbox contracts.
+
+## Web projection
+
+The Web panel reads the Lead Session's `agentTeam` wire projection because the existing projection stream keeps browser state current without a separate Team read API. Both Lead and teammate conversations select values from the shared cross-Session store. The panel owns no projection reads: Session loading, cached list values, and control baselines supply the data.
+
+The wire view carries durable roster phases, non-deleted task views with shared readiness and overlap derivation, and `failure` beside the last valid state. Live activity comes from Session status. Model selection has its own durable projection; the panel displays the shared store's available values without opening member conversations. A missing cached value remains absent until Session loading or a live update supplies it.
+
+Publication requires `apply` to return a new state object per applied Team event and replace only the touched collection. Mailbox-only events retain the view reference and publish nothing. The existing carrier sends each changed complete view to every connected browser; the package README records that cost.
 
 ## Alternatives considered
 
@@ -71,6 +81,8 @@ Worktree isolation is not a harness runtime behavior. A deployment or prompt may
 ## Testing
 
 Package tests cover identity, name and authority checks, provider selection, reserved-id persistence collisions, child-before-Lead flush ordering, durable provisioning failure and pending-inbox JSONL reconciliation, concurrent target-local ordering, pending/history de-duplication, mailbox limits, post-flush notification, bounded disposal with in-flight creation and dispatch cancellation, failed-member cleanup, task CAS and DAG validation, write-scope warnings, wait cancellation/timeout, inbox-preserving interruption, ordinary-fork isolation, legacy-control shadowing, compact declared-schema result rendering, and scoped registration HMR at per-file 100% coverage. A keyless product snapshot loads the Agent Teams profile bundle through `dsh --profile headless` and pins its complete model-visible tool list, Team policy, and durable workflow projection for two teammates, dependent tasks, peer delivery, waiting, completion, and aggregation. A CLI e2e reuses the same deterministic adapter and verifies normal process exit with persisted Team and child logs.
+
+Model-facing member identities and availability follow the [tool projection decision](../simplification/2026-09-15-model-agent-availability-and-team-targets.md); service residency and durable identity remain distinct.
 
 ## Consequences
 

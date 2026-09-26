@@ -145,7 +145,7 @@ SDK 接受符合协议的工具，并执行现代 HTTP header 声明检查。注
 1. 调用 SDK 的 `callTool`，传入闭包持有的 `rawName`、模型参数、`exec.signal`、配置的超时时间与完整的已发现 `toolDefinition`——公开名称永远不发送给服务器。
 2. 把规范成功值保留为 `{ content: JsonValue[], structuredContent? }`；完整 MCP JSON 块仍是程序化调用／PTC mode 值。`isError: true` 会在持久化任何图片前抛出，使失败路径归注册表所有。
 3. 另行准备有序 Native 投影。连续文本块以 `'\n'` 连接；资源链接以文本保留名称和 URI；音频和嵌入资源成为明确诊断。SDK 拒绝格式错误的协议结果。只要存在图片，桥接层就严格解码完整批次，解析调用 agent 的最新确切路由，要求附件存储以及模型明确支持图片输入，再把全成员校验和有序持久化委托给 `AttachmentStore.saveImages()`。任何解码、能力或存储拒绝都会把全部图片渲染为诊断文本，且不返回部分引用。
-4. 保持 `output.render` 同步且纯净。执行器把更丰富的投影暂存在按同步世代创建、以确切执行为键的 `WeakMap` 中；只有注册表的 post-execute 结果仍保留原规范值和兜底内容时，`finalizeContent` 才安装该投影。策略阻止、值替换或内容替换仍具有权威性，重新同步也无法让旧世代消费新执行状态。
+4. 执行器保留完整的规范 MCP 返回值，并准备有序图文内容。`projectContent` 在 `tools/post-execute` 之前安装已准备的内容，让省略策略看到真实图片块。后续策略的内容替换、值替换和阻止均保持生效。
 5. PTC mode 接收未改动的规范值。其通用分发桥接层会把包含图片的成功最终内容序列经外层 `run_code` 结果延后，因此 MCP 无需私有父 token 特例。
 6. 取消：`exec.signal`（来自 agent loop 的取消）透传给 MCP SDK 的 `callTool`、确切模型查询和存储前门禁。
 
@@ -156,6 +156,8 @@ SDK 接受符合协议的工具，并执行现代 HTTP header 声明检查。注
 ### 断连 / 崩溃
 
 每个实例的连接监督器在连接丢失后以有界指数退避和单次故障尝试预算自动重连，成功后重新执行发现流程；尝试耗尽则注销该服务器的工具并停止，直到重新加载。[自动重连 Agent Note](../../archived/feature/2026-08-06-mcp-client-auto-reconnect.md) 拥有该决策，包括 `reconnect` 配置块和恢复手动 HMR/重启恢复的 `reconnect.enabled: false` opt-out。
+
+图片在结果策略之前进入内容的原因见[图文结果保留决策](../../implemented/bug-fix/2026-09-21-multimodal-tool-result-retention.zh.md)。
 
 ## 曾考虑的替代方案
 

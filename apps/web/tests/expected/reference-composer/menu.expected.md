@@ -2,8 +2,7 @@
   - text: Files & folders
   - option "folderx/ Browse folder" [selected]:
     - text: folderx/
-    - button "Browse folder":
-      - img
+    - button "Browse folder"
   - option "reference.txt"
   - text: Sessions
   - option "reference-order-target-session {{cwd}} · {{age}}"

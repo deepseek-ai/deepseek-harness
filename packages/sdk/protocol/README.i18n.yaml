@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/sdk/protocol/README.md
-README.md: 7cc6a28ac4424927613da6e64e4508e25659ab1f
-README.zh.md: 69b85d6ca7858c826bed6269adcfb98fc2593543
+/:
+  en: f7e65364dfe462b8
+  zh: 20d2b8f84f10f681
+/deepseek-ai-dsh-sdk-protocol:
+  en: dee270a439f6cd2d
+  zh: 44f5ec584c476872
+/deepseek-ai-dsh-sdk-protocol/summary:
+  en: 8813bd2a0bf7a55a
+  zh: 07d880c01d13f904
+/deepseek-ai-dsh-sdk-protocol/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-sdk-protocol/use-this-package:
+  en: c4ca91b51aab452a
+  zh: 1c77b1deaeb34931
+/deepseek-ai-dsh-sdk-protocol/use-this-package/framing-and-transport:
+  en: be53c71505c0d1b4
+  zh: 6210dee577715539
+/deepseek-ai-dsh-sdk-protocol/use-this-package/the-sdk-methods:
+  en: 8cfc9efc99c7198d
+  zh: ac00d94406fc2388
+/deepseek-ai-dsh-sdk-protocol/use-this-package/payload-semantics:
+  en: 3cf5d4ffbaf37f69
+  zh: 23c4450e31c91d67
+/deepseek-ai-dsh-sdk-protocol/understand-the-implementation:
+  en: a11b136d8296deda
+  zh: 85081da5be53c9e1
+/deepseek-ai-dsh-sdk-protocol/understand-the-implementation/design-concept:
+  en: bc4b8dfc36ed4565
+  zh: 6a707eff1a4bbf2f
+/deepseek-ai-dsh-sdk-protocol/understand-the-implementation/source-map:
+  en: bfeb9999d7e71aaf
+  zh: afc873a229bb4bc5
+/deepseek-ai-dsh-sdk-protocol/understand-the-implementation/frame-dispatch:
+  en: eaf7d095810481c8
+  zh: 92767f908500be5e
+/deepseek-ai-dsh-sdk-protocol/further-exploration:
+  en: f8c31cd1ed16a4a5
+  zh: 1669ef35992231a5
+/deepseek-ai-dsh-sdk-protocol/model-experience:
+  en: 1c3205c59385b059
+  zh: 9198a341567beca0
+/deepseek-ai-dsh-sdk-protocol/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: 696d26adaf4eda6d
+/deepseek-ai-dsh-sdk-protocol/known-limitations-and-deferred-work:
+  en: c83a6b621a8f8793
+  zh: 32accb03ee0b8ac8
+/deepseek-ai-dsh-sdk-protocol/known-limitations-and-deferred-work/dev-note:
+  en: 951fa06249790ac1
+  zh: da66e7f53df3ab00

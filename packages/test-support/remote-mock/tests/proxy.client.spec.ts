@@ -1,9 +1,9 @@
 /** Native namespace mocks shared by local callers and the Connection carrier. */
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { RemoteMock, frames, ok, openStream, type StreamHandle } from '../src/index.ts'
+import { RemoteMock, frames, ok, openStream, streamHandle, type StreamHandle } from '../src/index.ts'
 
 const describeValue = (hasDocument: boolean) => ok({ writable: true, hasDocument, namespaces: [] })
-const baseline = { type: 'baseline' as const, value: { queues: {}, jobs: {}, projections: {} } }
+const baseline = { type: 'baseline' as const, value: { projections: {} } }
 
 async function drain(source: AsyncIterable<unknown>): Promise<unknown[]> {
   const values: unknown[] = []
@@ -58,7 +58,7 @@ describe('RemoteMock.remote unary proxies', () => {
   it('records every business argument while the carrier keeps its signal out of positional args', async () => {
     const mock = RemoteMock.create()
     const mutate = mock.remote.settings.mutate
-    const result = ok({ ns: 'locale', schema: {}, value: { preference: 'en' }, applies: 'live' as const, secrets: [], revision: 8 })
+    const result = ok({ ns: 'locale', schema: {}, value: { preference: 'en' }, autoGenerate: true, applies: 'live' as const, secrets: [], revision: 8 })
     const ops = [{ op: 'set' as const, path: ['preference'], value: 'en' }]
     mutate.mockResolvedValue(result)
 
@@ -230,8 +230,9 @@ describe('RemoteMock.remote stream proxies', () => {
       consumed = true
       yield baseline
     }
-    const native = response()
-    onTestFinished(async () => { await native.return(undefined) })
+    const generator = response()
+    const native = streamHandle(generator)
+    onTestFinished(async () => { await generator.return(undefined) })
     control.mockReturnValueOnce(native)
     const overridden = mock.open('session/control', [], signal)
     expect(overridden).toBe(native)

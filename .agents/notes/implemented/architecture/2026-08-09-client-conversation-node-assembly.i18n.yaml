@@ -1,6 +1,94 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-09-client-conversation-node-assembly.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-09-client-conversation-node-assembly.md
-2026-08-09-client-conversation-node-assembly.md: 43f9f0359822f7d7c5b52c09646fd3ffbf80f783
-2026-08-09-client-conversation-node-assembly.zh.md: d7475f5ff8218419743448d455d5d5ffe3cc4091
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots:
+  en: 32abbd757c29e1ee
+  zh: ea0b9de97fd04196
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/problem:
+  en: ebdd3ce57ca5b24d
+  zh: 1aa034b4c3ed515f
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision:
+  en: af502b4eb9c09d33
+  zh: a20cd538e66d3a4b
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/responsibility-layers:
+  en: 36b54ef989c331af
+  zh: 58cad4e07a800ba9
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract:
+  en: 74f17ca7ae05af83
+  zh: 591fbc6c98f90262
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract/kind-business-id-and-context-key:
+  en: 3081736d55350c67
+  zh: bfa89f127c16c59f
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract/match-event:
+  en: 5c97a2a4e91325a7
+  zh: d29e52647b699810
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract/conversationmatch:
+  en: 616c50e24ab990d1
+  zh: 2c4a6d129f491046
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract/conversationnodecontext:
+  en: 7d1ce8db92084e90
+  zh: 7b7e6bf3840f6986
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract/start-context-match-reader:
+  en: 1167bbc860581e33
+  zh: 549896c06507ce57
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract/reader-previous-kind:
+  en: 48e127652f2dab8d
+  zh: 35f48d4cefc8ce52
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract/update-context-match:
+  en: 66bd752825ad2c41
+  zh: 1cec352eb3d7ab28
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract/publication-match:
+  en: 43be4c019d79e37a
+  zh: 54978ef8317e777b
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract/buildlocationdata-context-scope:
+  en: 8c2b8eab071f5f7b
+  zh: d3207b1fcfff0a4b
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract/buildviewnode-context-target:
+  en: c8091375cf986eaa
+  zh: 0c3226e3f42e51e4
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/overall-conversationnodedefinition-contract/no-generic-end:
+  en: d5a57346207b0da3
+  zh: cb4a4f22ce237c34
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/decision/location-is-a-first-class-engine-fact:
+  en: c66d870529588ea6
+  zh: c9af12feb1e3fae2
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/three-input-window-paths:
+  en: cc8d60a4ceba6f41
+  zh: 552220db9f839429
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/three-input-window-paths/initial-history-tail-and-logical-backward-scanning:
+  en: a777deacfd73ed3f
+  zh: 2a9c75dd0aeedcd5
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/three-input-window-paths/prepending-a-newly-loaded-older-page:
+  en: 3aa4c0a9006b35e8
+  zh: 9627f4aaa18c8066
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/three-input-window-paths/forward-live-append:
+  en: 484172cce965aad7
+  zh: 15fffdd32c66cc95
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/three-input-window-paths/consistency-across-replace-prepend-and-append:
+  en: a9cf356610f46a53
+  zh: abc1149bf06b230e
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/how-built-in-businesses-use-definitions:
+  en: 2a7cae3607dcbc1a
+  zh: 86f6d8eb7871e253
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/how-built-in-businesses-use-definitions/matching-id-and-state:
+  en: 130f5db917574545
+  zh: 9bf13c96abdc3a4e
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/how-built-in-businesses-use-definitions/chat-node-and-history-live-behavior:
+  en: 0c52c9ae98f84a86
+  zh: d1c7587ad427d8fc
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/view-builder-and-react-identity:
+  en: ced7ab385e5a81a8
+  zh: 5c319ed7ca40e5b8
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/runtime-and-render-path:
+  en: 114ca8db361d22e5
+  zh: 37b6d474e855c187
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/verification:
+  en: cf36507c86d1139c
+  zh: 1fcdd4e2c2cc106b
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/alternatives-considered:
+  en: e150870d4e2525ed
+  zh: 34eafb435036af9a
+/agent-note-client-conversation-business-node-assembly-and-keyed-chat-snapshots/consequences:
+  en: 0da343d3b6b29da3
+  zh: d7b3774a23be7311

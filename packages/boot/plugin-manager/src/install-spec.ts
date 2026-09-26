@@ -6,17 +6,25 @@
 
 import { isAbsolute } from 'node:path'
 
-/** One spec read into its form and the parts an inspection needs. */
+/**
+ * One spec read into its form and the parts an inspection needs. A git spec
+ * and a tarball URL carry the `host` pnpm fetches them from, which no registry
+ * stands in for; only their dependencies come from the registry.
+ */
 export type ParsedInstallSpec =
   | { readonly kind: 'registry'; readonly spec: string; readonly name: string; readonly range?: string }
   | { readonly kind: 'path'; readonly spec: string; readonly path: string }
-  | { readonly kind: 'tarball'; readonly spec: string; readonly path?: string }
-  | { readonly kind: 'git'; readonly spec: string }
+  | { readonly kind: 'tarball'; readonly spec: string; readonly path?: string; readonly host?: string }
+  | { readonly kind: 'git'; readonly spec: string; readonly host: string }
 
 /** The forms pnpm resolves through a git host: a host shorthand, a git URL, or a hosted repository URL. */
 const GIT_SHORTHAND = /^(?:github|gitlab|bitbucket|gist):/i
 const GIT_URL = /^git(?:\+[a-z]+)?:\/\/|^git@[^:]+:/i
 const HOSTED_REPOSITORY_URL = /^https?:\/\/[^/]+\/[^/]+\/[^/#]+(?:\.git)?(?:#.*)?$/i
+/** The hosts pnpm's shorthands stand for. */
+const GIT_SHORTHAND_HOSTS: Readonly<Record<string, string>> = {
+  github: 'github.com', gitlab: 'gitlab.com', bitbucket: 'bitbucket.org', gist: 'gist.github.com',
+}
 /** A tarball, on disk or over HTTP. */
 const TARBALL_SPEC = /\.(?:tgz|tar\.gz)(?:#.*)?$/i
 /** An npm package name: lowercase URL-safe segments, an optional scope, no leading dot or underscore. */
@@ -39,6 +47,15 @@ function invalid(spec: string, reason: string): InvalidInstallSpecError {
   return new InvalidInstallSpecError(spec, reason)
 }
 
+/** The host a git spec is cloned from: the shorthand's host, the scp-like user@host, or the URL's host with its port. */
+function gitHost(spec: string): string {
+  const shorthand = /^([a-z]+):/i.exec(spec)?.[1]?.toLowerCase()
+  if (shorthand !== undefined && Object.hasOwn(GIT_SHORTHAND_HOSTS, shorthand)) return GIT_SHORTHAND_HOSTS[shorthand] as string
+  const scp = /^git@([^:]+):/i.exec(spec)?.[1]
+  if (scp !== undefined) return scp.toLowerCase()
+  return new URL(spec.replace(/^git\+/i, '')).host
+}
+
 /**
  * Read a spec into its form. A path must be absolute: the Host's working
  * directory means nothing to the person typing into a browser, and a
@@ -58,9 +75,9 @@ export function parseInstallSpec(raw: string): ParsedInstallSpec {
   }
   if (/^\.{1,2}(?:[\\/]|$)/.test(spec)) throw invalid(spec, 'a local path must be absolute')
   const git = GIT_SHORTHAND.test(spec) || GIT_URL.test(spec) || HOSTED_REPOSITORY_URL.test(spec)
-  if (git && !TARBALL_SPEC.test(spec)) return { kind: 'git', spec }
+  if (git && !TARBALL_SPEC.test(spec)) return { kind: 'git', spec, host: gitHost(spec) }
   if (/^https?:\/\//i.test(spec)) {
-    if (TARBALL_SPEC.test(spec)) return { kind: 'tarball', spec }
+    if (TARBALL_SPEC.test(spec)) return { kind: 'tarball', spec, host: new URL(spec).host }
     throw invalid(spec, 'a URL must point at a git repository or a tarball')
   }
   const at = spec.indexOf('@', 1)

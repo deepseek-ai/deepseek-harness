@@ -1,5 +1,5 @@
 ---
-description: "MCP server manager for deployments and management surfaces that add, edit, enable, disable, delete, probe, and observe MCP servers through the mcp settings namespace at runtime."
+description: "MCP server manager for deployments and management surfaces that add, edit, enable, disable, delete, probe, and observe MCP servers through live plugin configuration at runtime."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-mcp-manager` turns the `mcp` settings namespace into a live fleet of MCP servers: declare servers under `mcp.servers` in `settings.yaml` (or let a management surface write them), and the manager mounts one `dsh-mcp-client` instance per enabled entry, adding, rebuilding, disabling, and removing instances as the document changes without a restart. `ctx.mcpServers` aggregates every server's connection status, `restart` recovers a server whose reconnect budget ran out, and `probe` tests a configuration without touching the live instances. `${env:NAME}` and `${credential:REF}` templates keep secrets out of the document, and a rotated credential rebuilds only the servers referencing it.
+`dsh-mcp-manager` manages a live fleet of MCP servers: declare `config.servers` on its profile entry (or edit it through Settings), and the manager mounts one `dsh-mcp-client` instance per enabled entry, adding, rebuilding, disabling, and removing instances as the document changes without a restart. `ctx.mcpServers` aggregates every server's connection status, `restart` recovers a server whose reconnect budget ran out, and `probe` tests a configuration without touching the live instances. `${env:NAME}` and `${credential:REF}` templates keep secrets out of the document, and a rotated credential rebuilds only the servers referencing it.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the manager once; from then on the `mcp.servers` section of the user settings document is the single place servers are managed.
+Mount the manager once. Its volatile `config.servers` is the server configuration; Settings uses the owning entry id as its namespace (`mcp` in this example).
 
 ### When to choose it
 
@@ -48,17 +48,18 @@ One `cordis.yml` row mounts the manager; `servers` in its config is optional and
           GITHUB_TOKEN: '${credential:GITHUB_TOKEN}'
 ```
 
-Users add or override servers in `settings.yaml` under the same shape:
+A profile’s `cordis.patch.yml` replaces the entry’s complete `servers` map. Use Settings for partial edits that retain inherited servers; a complete replacement targets the manager entry as follows:
 
 ```yaml
-mcp:
-  servers:
-    internal:
-      transport: streamable-http
-      url: https://mcp.example.com/mcp
-      headers:
-        Authorization: 'Bearer ${env:MCP_TOKEN}'
-      enabled: true
+- id: mcp
+  config:
+    servers:
+      internal:
+        transport: streamable-http
+        url: https://mcp.example.com/mcp
+        headers:
+          Authorization: 'Bearer ${env:MCP_TOKEN}'
+        enabled: true
 ```
 
 | Field | Default | Meaning |
@@ -74,9 +75,9 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Managing servers at runtime
 
-Every committed settings change reconciles the fleet: a new enabled entry mounts, a removed entry unmounts, `enabled: false` unmounts while keeping the entry listed, and any other field change rebuilds that one instance while unchanged siblings keep running. The base layer from the composition can be overridden or disabled from the user document but not deleted; only entries the user layer alone carries are removable. A broken entry — a missing `command`, a cross-transport field, a malformed template — is refused at the write, so the document never stores a server the manager cannot act on.
+Settings writes persist through ConfigEditor with revision checks; Loader updates the volatile configuration without remounting the manager. Every committed configuration change reconciles the fleet: a new enabled entry mounts, a removed entry unmounts, `enabled: false` unmounts while keeping the entry listed, and any other field change rebuilds that one instance while unchanged siblings keep running. Through Settings, inherited servers can be overridden or disabled; deleting an inherited server restores its base configuration. Only servers added by the user layer are removable. A broken entry — a missing `command`, a cross-transport field, a malformed template — is refused at the write, so the document never stores a server the manager cannot act on.
 
-`env` values, `headers` values, `command`, `args`, `cwd`, and `url` accept `${env:NAME}` and `${credential:REF}` templates, resolved when the instance mounts, so the settings document never carries a secret; stored values — template strings included — stay readable to management surfaces, so a value that must stay hidden belongs in a template, not in the document. A missing referent fails that one server with a message naming the fix. Storing or rotating a referenced credential rebuilds the servers that use it — including one whose earlier mount failed because the credential did not exist yet.
+`env` values, `headers` values, `command`, `args`, `cwd`, and `url` accept `${env:NAME}` and `${credential:REF}` templates, resolved when the instance mounts, so the profile patch need not carry a secret; stored values — template strings included — stay readable to management surfaces, so a value that must stay hidden belongs in a template, not in the document. A missing referent fails that one server with a message naming the fix. Storing or rotating a referenced credential rebuilds the servers that use it — including one whose earlier mount failed because the credential did not exist yet.
 
 ### Observing and recovering
 
@@ -94,7 +95,7 @@ This section explains the design decisions and points at the code; the observabl
 
 ### Design philosophy
 
-- **Configuration is the only truth.** The manager never stores server state of its own: the resolved settings value (schema defaults → composition base → user layer) is read fresh for every decision, so external file edits and management-surface writes take the same path.
+- **Configuration is the only truth.** The manager never stores server state of its own: the current volatile Config value (schema defaults → inherited profile configuration → user patch) is read fresh for every decision, so external file edits and management-surface writes take the same path.
 - **One serialized operation tail.** Reconciles, restarts, and credential rebuilds queue on one chain, so two lifecycle operations can never interleave one instance's unmount/mount, and disposal drains the tail before unwinding.
 - **Whole-entry identity.** Any field change except `enabled` rebuilds the instance — instance config is captured at mcp-client load, so an in-place update cannot exist. `enabled` alone toggles mounting.
 - **A flat entry schema, validated cross-field.** Write-time validation enforces the per-transport rules a union would have expressed and rejects them at the write, naming the offending field where a union's shape error would not.
@@ -123,7 +124,7 @@ The first reconcile waits for the manager's own fiber to activate, because the s
 Read these pages when the package-level contract is not enough.
 
 - [mcp-client README](../mcp-client/README.md) — the per-instance bridge: naming, reconnect policy, tool execution, status surface.
-- [Settings package README](../../settings/settings/README.md) — the namespace registration, layering, and write semantics the manager builds on.
+- [Settings package README](../../settings/settings/README.md) — the Config forms, inheritance, revision checks, and profile writes the manager uses.
 - [Credentials group README](../../credentials/README.md) — the credential references `${credential:…}` templates resolve.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-manager) — every accepted config field.
 - [MCP manager Agent Note](../../../.agents/notes/implemented/feature/2026-08-31-mcp-manager-plugin.md) — the design decisions, peer-product survey, and rejected alternatives.

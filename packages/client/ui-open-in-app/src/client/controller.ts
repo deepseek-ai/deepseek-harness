@@ -6,13 +6,15 @@ import {
   type OpenInAppAppsPayload, type OpenInAppOpenPayload,
 } from '@deepseek-ai/dsh-host-open-in-app/shared'
 
-type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>
+import { APP_LABEL_KEY } from './applications.ts'
 
-/** Resolve the browser's Host base with the connection carrier's null-origin fallback. */
-function hostBase(): string {
-  const origin = (globalThis as { location?: { origin?: string } }).location?.origin
-  return origin !== undefined && origin !== 'null' ? origin : 'http://dsh.internal'
+/** Shared launch status for controls targeting the captured workspace path. */
+export interface OpenInAppLaunchState {
+  readonly phase: 'idle' | 'busy' | 'error'
+  readonly path: string | null
 }
+
+type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>
 
 /**
  * Owns the once-per-page availability read, the persisted last choice, and
@@ -26,6 +28,19 @@ export class OpenInAppController {
   readonly choice: SnapshotStore<string> = createSnapshotStore<string>('', {
     persist: { name: 'dsh.open-in-app.choice' },
   })
+
+  /** Current launch, shared by pointer and keyboard gestures. */
+  readonly operation = createSnapshotStore<OpenInAppLaunchState>({ phase: 'idle', path: null })
+
+  /**
+   * Resolve the remembered nameable installed application, with the button's first-app fallback.
+   * @returns the installed app id, or undefined while unavailable.
+   */
+  currentApp(): string | undefined {
+    const apps = (this.apps.getSnapshot() ?? []).filter(id => APP_LABEL_KEY[id] !== undefined)
+    const choice = this.choice.getSnapshot()
+    return apps.includes(choice) ? choice : apps[0]
+  }
 
   private loading: Promise<void> | undefined
 
@@ -49,29 +64,38 @@ export class OpenInAppController {
    * @param appId - catalog id from the availability list.
    */
   choose(appId: string): void {
-    this.choice.set(appId)
+    if (this.operation.getSnapshot().phase !== 'busy') this.choice.set(appId)
   }
 
   /**
    * Launch one installed app on a workspace directory.
    * @param appId - catalog id from the availability list.
    * @param path - the session's absolute workspace directory.
+   * Concurrent gestures are ignored until the current Host request settles.
    * @returns after the host acknowledged the launch; rejects on any failure.
    */
   async launch(appId: string, path: string): Promise<void> {
+    if (this.operation.getSnapshot().phase === 'busy') return
+    this.operation.set({ phase: 'busy', path })
     const body: OpenInAppOpenPayload = { app: appId, path }
-    const response = await this.fetcher(new URL(OPEN_IN_APP_OPEN_ROUTE, hostBase()), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!response.ok) throw new Error(`open failed: HTTP ${String(response.status)}`)
+    try {
+      const response = await this.fetcher(OPEN_IN_APP_OPEN_ROUTE, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!response.ok) throw new Error(`open failed: HTTP ${String(response.status)}`)
+      this.operation.set({ phase: 'idle', path })
+    } catch (error) {
+      this.operation.set({ phase: 'error', path })
+      throw error
+    }
   }
 
   private async run(): Promise<void> {
     let apps: readonly string[] = []
     try {
-      const response = await this.fetcher(new URL(OPEN_IN_APP_APPS_ROUTE, hostBase()), {
+      const response = await this.fetcher(OPEN_IN_APP_APPS_ROUTE, {
         headers: { accept: 'application/json' },
       })
       if (response.ok) {

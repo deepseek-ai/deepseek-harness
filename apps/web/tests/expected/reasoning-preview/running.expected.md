@@ -1,0 +1,2 @@
+- text: Running
+- 'button "Think Next paragraph: inspect the loaded context and pending tools inspect the loaded context and pending tools inspect the loaded context and pending tools inspect the loaded context and pending tools inspect the loaded context and pending tools inspect the loaded context and pending tools inspect the loaded context and pending tools inspect the loaded context and pending tools"'

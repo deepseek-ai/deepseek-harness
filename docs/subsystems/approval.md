@@ -50,7 +50,7 @@ Both policies contribute their complete current meaning to the cache-safe runtim
 
 ## Approval request
 
-`ApprovalRequest` identifies the agent and tool action closely enough to route and audit the question. It deliberately omits tool arguments: an answerer attaches the prompt to the already-streamed tool call through `callId` instead of rendering a second copy that could drift.
+`ApprovalRequest` identifies the agent and tool action closely enough to route and audit the question. It deliberately omits tool arguments: an answerer attaches the prompt to the already-streamed tool call through `callId` instead of rendering a second copy that could drift. Optional `displayReason` carries requester-owned locale strings to presentation; `reason` remains the audit text.
 
 ```ts type-equiv
 /**

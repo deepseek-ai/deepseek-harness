@@ -10,7 +10,7 @@ import type {
   SaveImageAttachment,
   StoredImageAttachment,
 } from '@deepseek-ai/dsh-attachment'
-import LlmRuntime, { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import type { PiAiReplayResponse } from '../src/replay.ts'
@@ -121,7 +121,7 @@ afterEach(async () => {
 function ask(text: string): Message[] {
   return [createUserMessage({
     content: [{ type: 'text', text }],
-    source: { kind: 'plugin', plugin: 'test' },
+    source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' },
   })]
 }
 
@@ -209,13 +209,10 @@ for (const profile of providerCases) {
           messages: [
             ...prompt,
             first.message,
-            createUserMessage({
-              content: [{
-                type: 'tool-result',
-                toolCallId: ToolCallId(call!.id),
-                content: [{ type: 'text', text: 'The code blue means ocean.' }],
-              }],
-              source: { kind: 'plugin', plugin: 'test' },
+            createToolResultMessage({
+              callId: ToolCallId(call!.id),
+              content: [{ type: 'text', text: 'The code blue means ocean.' }],
+              isError: false,
             }),
           ],
           tools: [lookupTool],
@@ -252,7 +249,7 @@ for (const profile of providerCases) {
                 },
                 { type: 'image', attachment: ref },
               ],
-              source: { kind: 'plugin', plugin: 'test' },
+              source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' },
             })],
             maxTokens: 256,
           })

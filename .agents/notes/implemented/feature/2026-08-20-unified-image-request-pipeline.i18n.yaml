@@ -1,6 +1,37 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-20-unified-image-request-pipeline.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-20-unified-image-request-pipeline.md
-2026-08-20-unified-image-request-pipeline.md: 7431a474b55a9dae82b1c9cd36b770b31fe39602
-2026-08-20-unified-image-request-pipeline.zh.md: 247a57b8017f513c552204d951ef6931f7f9d045
+/agent-note-unified-normalized-attachments-request-versions-and-provider-files:
+  en: 79d1a6f50ac76c3d
+  zh: 9af0070009537602
+/agent-note-unified-normalized-attachments-request-versions-and-provider-files/problem:
+  en: 7ce3a351a1492dd0
+  zh: 7c7e3bb6799822f8
+/agent-note-unified-normalized-attachments-request-versions-and-provider-files/decision:
+  en: 98e7aad889f5b79c
+  zh: 84b24f6fd9209fcf
+/agent-note-unified-normalized-attachments-request-versions-and-provider-files/decision/provider-independent-normalized-attachment:
+  en: 75b1d3732f3a9d05
+  zh: c8683df3c6f0c989
+/agent-note-unified-normalized-attachments-request-versions-and-provider-files/decision/deterministic-request-versions:
+  en: 8afa51d02643bd40
+  zh: d27d9a5b09fc6d74
+/agent-note-unified-normalized-attachments-request-versions-and-provider-files/decision/stable-handles:
+  en: 1b204c138b0d8e6c
+  zh: 3d6a2e82372e6825
+/agent-note-unified-normalized-attachments-request-versions-and-provider-files/decision/deepseek-files-lifecycle:
+  en: b35a18963d122b21
+  zh: faa21c45cef3555a
+/agent-note-unified-normalized-attachments-request-versions-and-provider-files/decision/diagnostics:
+  en: e4c79434bedfc385
+  zh: 9e7de1061629ef5e
+/agent-note-unified-normalized-attachments-request-versions-and-provider-files/alternatives-considered:
+  en: 7bfd39c761549b85
+  zh: 6ac48c5842f7df91
+/agent-note-unified-normalized-attachments-request-versions-and-provider-files/verification:
+  en: 7697f72ce5a7d969
+  zh: 733ca1e0a05ae4ed
+/agent-note-unified-normalized-attachments-request-versions-and-provider-files/consequences:
+  en: 1a6ef14a3e13b502
+  zh: bc4ab273755b2739

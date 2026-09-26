@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-08-package-index-link-discovery.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-08-package-index-link-discovery.md
-2026-09-08-package-index-link-discovery.md: be9084f72e468b914bd035ce62e95aa6a89983dc
-2026-09-08-package-index-link-discovery.zh.md: 93d6c2163183b4fb6391b731e982002b1938a704
+/agent-note-include-package-indexes-in-markdown-link-discovery:
+  en: edf2fd5b97c0075a
+  zh: da6ca05db38ee998
+/agent-note-include-package-indexes-in-markdown-link-discovery/problem:
+  en: 74a87cccbf602fc4
+  zh: 88d1116da4cc35fb
+/agent-note-include-package-indexes-in-markdown-link-discovery/decision:
+  en: 350354f891182cbf
+  zh: 4607ef9c38ff7a68
+/agent-note-include-package-indexes-in-markdown-link-discovery/alternatives-considered:
+  en: e12999e567cd2cbd
+  zh: a502f11b11e86815
+/agent-note-include-package-indexes-in-markdown-link-discovery/consequences:
+  en: 0bd932bd7feb363b
+  zh: acce05659887e5e5

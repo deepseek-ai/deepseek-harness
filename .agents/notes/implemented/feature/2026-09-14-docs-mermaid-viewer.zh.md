@@ -1,4 +1,4 @@
-# Agent Note: 文档站 Mermaid 查看器
+# Agent Note: 文档站图表与图片查看器
 
 Status: implemented
 
@@ -6,15 +6,17 @@ Status: implemented
 
 ## 问题
 
-复杂 Mermaid 图表缩放到文档正文列宽后，细节难以辨认。阅读长时序图需要在保留全图概览的同时放大和平移，以检查交互细节。
+复杂 Mermaid 图表和界面截图缩放到文档正文列宽后，细节难以辨认。阅读时需要在保留全图概览的同时放大和平移，以检查交互细节。
 
 ## 决策
 
 [VitePress 主题](../../../../website/.vitepress/theme/index.ts) 在每张已渲染的 Mermaid SVG 角落增加全屏图标。原生模态对话框使背景不可交互，并支持 Escape 退出。可见标题也用于辅助技术识别对话框；页面标题缺失或为空白时，使用本地化的查看器标题。浮动工具栏集中显示缩放控件、当前比例和适应窗口操作；关闭按钮位于顶部角落，帮助按需展开。键盘焦点在五个按钮之间循环。Panzoom 提供指针、滚轮和双指交互。方向键按固定的屏幕距离平移。关闭时恢复入口焦点且不滚动页面，并恢复页面原有的 overflow 设置。
 
+普通图片与 Mermaid 共用一个弹层和缩放控制器。已加载、具有非空 alt 文本且独占段落的图片支持点击图片或角落按钮打开；链接图片、行内图片、装饰图片和 `data-no-zoom` 图片保留原有交互。图片的 alt 文本作为弹层标题，比例按钮返回并居中显示自然尺寸（100%），其辅助名称同时包含当前比例；图片视图的键盘焦点在六个按钮之间循环。
+
 查看器将 SVG 复制到 shadow root 中。Mermaid 内嵌的选择器和片段 ID 限定在副本内部，因此副本的标记和样式不会解析到原始图表上。Panzoom 变换与视口等大的画布，其中的 SVG 使用 viewBox 的自然尺寸，使指针坐标与变换原点共享同一个中心；初始缩放以及每次窗口尺寸变化都会适配整张图表，且不会放大到超出自然尺寸。这样既保留矢量细节，也使适配不受文档窄列宽度的影响。画布没有可见边框；预留空间使控件不会遮挡适配后的图表。
 
-查看器资源由已挂载的主题持有。路由、语言、主题和源 SVG 替换都会关闭当前视图；异步渲染的 Mermaid 图表会获得新的入口。body 的 overflow 滚动锁依赖默认主题让 HTML 元素保持 visible overflow。它避免修改 HTML 属性，因为 Mermaid 插件会观察这些属性并重新渲染。[实现](../../../../website/.vitepress/theme/mermaid-viewer.ts) 将 Markdown、原始页面副本和 `llms.txt` 的生成保留在原有归属处。
+查看器资源由已挂载的主题持有。路由、语言、主题和源内容替换都会关闭当前视图；异步渲染的 Mermaid 图表和加载完成的图片会获得新的入口。body 的 overflow 滚动锁依赖默认主题让 HTML 元素保持 visible overflow。它避免修改 HTML 属性，因为 Mermaid 插件会观察这些属性并重新渲染。[共享弹层](../../../../website/.vitepress/theme/media-viewer.ts)、[Mermaid 适配器](../../../../website/.vitepress/theme/mermaid-viewer.ts) 与[图片适配器](../../../../website/.vitepress/theme/image-viewer.ts) 将 Markdown、原始页面副本和 `llms.txt` 的生成保留在原有归属处。
 
 ## 考虑过的替代方案
 
@@ -26,8 +28,8 @@ Status: implemented
 
 ## 影响
 
-文档站增加了 Panzoom 直接依赖，并使用原生 dialog、shadow root 和 ResizeObserver 支持。查看器的缩放和平移状态是临时的：窗口尺寸变化会重新适配图表，导航或主题变化会关闭视图。原有页面图表仍然是阅读和链接导航的来源。
+文档站增加了 Panzoom 直接依赖，并使用原生 dialog、shadow root 和 ResizeObserver 支持。查看器的缩放和平移状态是临时的：窗口尺寸变化会重新适配内容，导航或主题变化会关闭视图。原有页面图片和图表仍然是阅读和链接导航的来源。
 
-[定向测试](../../../../website/tests/mermaid-viewer.spec.ts) 属于根单元测试集；`docs:check` 和 `doc-sync`（文档同步门禁）也会选中这些测试，使仅运行文档验证时同样覆盖查看器。它们验证延迟渲染、无障碍标题、初始及窗口变化后的适配、控件连接、键盘焦点循环、图表替换和资源释放。
+[Mermaid 测试](../../../../website/tests/mermaid-viewer.spec.ts) 与[图片测试](../../../../website/tests/image-viewer.spec.ts) 属于根单元测试集；`docs:check` 和 `doc-sync`（文档同步门禁）也会选中这些测试，使仅运行文档验证时同样覆盖查看器。它们验证延迟渲染和加载、无障碍名称、初始及窗口变化后的适配、100% 操作、键盘焦点循环、图片与图表互相切换、源内容替换和资源释放。
 
 **CI 覆盖缺口。** DOM 测试模拟了 Panzoom，不执行浏览器布局。原生模态行为、SVG 标记、以指针为锚点的滚轮缩放、画布拖动、主题颜色和窄屏几何布局需要真实浏览器验证。浏览器演示记录提供了当前实现的证据，但不属于自动回归检查。

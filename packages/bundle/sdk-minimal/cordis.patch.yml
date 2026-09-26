@@ -24,7 +24,7 @@
       name: '@deepseek-ai/dsh-plugin-package-inventory-deepseek'
 
     - id: llm-deepseek
-      name: '@deepseek-ai/dsh-llm-deepseek'
+      name: '@deepseek-ai/dsh-llm-deepseek-api-key'
       config:
         apiKeyEnv: DEEPSEEK_API_KEY
         defaultContextWindow: !!js Number(process.env.DSH_CONTEXT_WINDOW ?? 1000000)

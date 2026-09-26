@@ -1,6 +1,82 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/acp/acp/README.md
-README.md: a30396733026108fdeaff67713fbe7aefb8c5101
-README.zh.md: 7f7f2f43ac6fa3059a6d5400e6c2c8d7227197d9
+/:
+  en: c2dc875f178f219b
+  zh: e1ebac19bf1c696d
+/deepseek-ai-dsh-acp:
+  en: 5e36bdb5bef5842c
+  zh: 486621193ef243a8
+/deepseek-ai-dsh-acp/summary:
+  en: 59aff9dea7a075b1
+  zh: c0f5734c5fd09126
+/deepseek-ai-dsh-acp/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-acp/use-this-package:
+  en: 014a5573a8c05663
+  zh: e45302786655eea5
+/deepseek-ai-dsh-acp/use-this-package/when-to-choose-it:
+  en: c3f5f144daf83157
+  zh: a65a64842fd35bef
+/deepseek-ai-dsh-acp/use-this-package/minimal-configuration:
+  en: 320139cc5ebcf34a
+  zh: 89beb58d9a0511ba
+/deepseek-ai-dsh-acp/use-this-package/start-a-server:
+  en: 4ed8e37834267edb
+  zh: a32d5dedb4e8e919
+/deepseek-ai-dsh-acp/use-this-package/protocol-contract:
+  en: 804b87d8ebed9f8d
+  zh: 1b0c1c7269cdf040
+/deepseek-ai-dsh-acp/understand-the-implementation:
+  en: ea8afe89dbdd1934
+  zh: 6567979f92f34afd
+/deepseek-ai-dsh-acp/understand-the-implementation/design-philosophy:
+  en: ad90a93d87b6caa4
+  zh: d7e90af3ea7a678c
+/deepseek-ai-dsh-acp/understand-the-implementation/source-map:
+  en: 837330574e01d196
+  zh: 46f29717d175f7bb
+/deepseek-ai-dsh-acp/understand-the-implementation/admission-and-prompt-settlement:
+  en: 6485d449b5945b4a
+  zh: 90e56a9b410c9c42
+/deepseek-ai-dsh-acp/understand-the-implementation/teardown-and-connection-ownership:
+  en: 7e2be6a9e211d4d6
+  zh: 3ba8482d3231b9d0
+/deepseek-ai-dsh-acp/further-exploration:
+  en: 8238535f032b31c9
+  zh: c97975bfaf6eac4f
+/deepseek-ai-dsh-acp/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-acp/model-experience/prompt-content:
+  en: 7fca865c9895801f
+  zh: 78a0ab12c0bb0499
+/deepseek-ai-dsh-acp/model-experience/prompt-content/what-the-model-sees:
+  en: e3adbb072da5ff1d
+  zh: 0af2105dd9e171d3
+/deepseek-ai-dsh-acp/model-experience/prompt-content/token-effect:
+  en: 93b8f76c67bef353
+  zh: 354fa2dca0804f72
+/deepseek-ai-dsh-acp/model-experience/prompt-content/kv-cache-effect:
+  en: 54946b64b26a3171
+  zh: 09550292ccfb36b0
+/deepseek-ai-dsh-acp/model-experience/permission-decisions:
+  en: 2e6d83c846a3a5e1
+  zh: 8d4339c26f3d8f68
+/deepseek-ai-dsh-acp/model-experience/permission-decisions/what-the-model-sees:
+  en: 87b55e04137085c3
+  zh: cdba4acf2e38b872
+/deepseek-ai-dsh-acp/model-experience/permission-decisions/token-effect:
+  en: bd0ded535cbedb19
+  zh: 47bcaa76827f88f2
+/deepseek-ai-dsh-acp/model-experience/permission-decisions/kv-cache-effect:
+  en: 83120763a07c4b72
+  zh: 6a1a181dc4da869d
+/deepseek-ai-dsh-acp/known-limitations-and-deferred-work:
+  en: da83c6d3b9604f74
+  zh: d93d6f6d418bebdc
+/deepseek-ai-dsh-acp/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

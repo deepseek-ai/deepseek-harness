@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-win32-process",
   "description": "Shared low-level Win32 process, stdio, and Job Object primitives",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -27,13 +27,13 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-lazy-require": "workspace:^",
+    "@deepseek-ai/dsh-lazy-require": "workspace:*",
     "koffi": "^3.1.0"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~"
   }
 }

@@ -20,7 +20,7 @@ The [superseded-CI cancellation policy](2026-09-09-cancel-superseded-ci.md) gove
 
 ### What the in-house pool is
 
-`vm-backup`: one shared VM with multiple always-on systemd-managed runner instances. Registrations share its CPU, memory, and disk; their count is not a count of independent machines. Its image must preinstall Playwright Chromium's Linux system packages; CI downloads the lockfile-selected browser but never runs `apt` on this persistent shared host. Check the latest `serial / linux (self-hosted standby)` run before switching: its aggregate includes browser replay, so a green standby verifies both ordinary capacity and this browser prerequisite.
+`vm-backup`: one shared VM with multiple always-on systemd-managed runner instances. Registrations share its CPU, memory, and disk; their count is not a count of independent machines. Its image must preinstall the Linux system packages for Playwright Chromium and WebKit; CI downloads the lockfile-selected browsers but never runs `apt` on this persistent shared host. Check the latest `serial / linux (self-hosted standby)` run before switching: its aggregate includes browser replay, so a green standby verifies both ordinary capacity and this browser prerequisite.
 
 #### Windows pool
 
@@ -32,7 +32,7 @@ The two switches are independent: flip only the one whose platform is degraded.
 
 1. Repository **Settings → Secrets and variables → Actions → Variables → New repository variable**: name `DSH_CI_FAILOVER_LINUX` (Linux pool outage) or `DSH_CI_FAILOVER_WINDOWS` (Windows pool outage), value `selfhosted`.
 2. Retrigger the required jobs so they re-resolve their pool. Jobs already **queued** for the hosted labels do not retarget and cannot be re-run in place, so for the documented indefinite-queue outage, cancel the stuck run and re-run all jobs, or push a new commit; "Re-run failed jobs" only helps once a job has actually failed rather than queued.
-3. That is the entire switch. Under the `selfhosted` Linux failover value the workflow also drops `DSH_SNAPSHOT_MAX_CONCURRENCY` to 12 for the shared VM and skips the hosted-path pnpm cache restores because the VM's persistent store serves warm installs. Coverage uses the same four single-worker instrumented partitions and two exempt workers on both Linux pools. The Windows switch has no concurrency or cache branches; it only retargets the native Windows jobs' pool.
+3. That is the entire switch. Under the `selfhosted` Linux failover value the workflow also drops `DSH_SNAPSHOT_MAX_CONCURRENCY` to 12 for the shared VM and skips the hosted-path pnpm cache restores because the VM's persistent store serves warm installs. Self-hosted coverage uses four single-worker instrumented partitions and two exempt workers; isolated hosted runners derive worker defaults from available CPUs. The Windows switch selects the native Windows pool and retains explicit worker limits on shared self-hosted runners.
 
 **Dependabot exception.** Both switches' `selfhosted` legs deliberately exclude `dependabot[bot]`: under self-hosted failover, Dependabot PRs stay queued for the hosted pool rather than executing dependency-supplied code on the persistent VMs. A Dependabot PR that remains queued during an outage is expected behavior, not a failed switch; it completes when the hosted pool recovers. The `blacksmith` value's branches carry no such exclusion, because Blacksmith runners are ephemeral (see the [blacksmith failover leg note](2026-09-09-blacksmith-failover-leg.md)).
 

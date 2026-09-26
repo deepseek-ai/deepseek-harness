@@ -1,6 +1,16 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-11-quality-gates.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-06-11-quality-gates.md
-2026-06-11-quality-gates.md: b4bcbcbb6e47ccbb3ed193300c4a8b2daa3901c0
-2026-06-11-quality-gates.zh.md: 64179fd7b13bf5de3d82bf9bf8819f6230b46238
+/agent-note-mechanical-quality-gates-over-prose-guidelines:
+  en: ee219fd65689e5ea
+  zh: a5eb719557f02ad6
+/agent-note-mechanical-quality-gates-over-prose-guidelines/problem:
+  en: 526b060333ea2457
+  zh: 182f46699589aff5
+/agent-note-mechanical-quality-gates-over-prose-guidelines/decision:
+  en: c6d1551e56d22b99
+  zh: 6b7efc184274b7ac
+/agent-note-mechanical-quality-gates-over-prose-guidelines/consequences:
+  en: 7bf0c081f242501e
+  zh: 30f892fbd982f1b2

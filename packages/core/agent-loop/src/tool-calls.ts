@@ -129,7 +129,7 @@ async function runGroup(
   acceptContext: (context: UserMessage) => void,
 ): Promise<GroupOutcome> {
   const { session } = ctx.agents.requireInitiator()
-  const { maxParallelToolCalls } = ctx.agentLoop.config
+  const maxParallelToolCalls = ctx.agentLoop.config.maxParallelToolCalls.get()
   const slots: (Slot | undefined)[] = group.map(() => undefined)
   // Started slots retain their `tool/call` seq so the result can cite it.
   const callSeqs: Array<SessionSeq | undefined> = group.map(() => undefined)

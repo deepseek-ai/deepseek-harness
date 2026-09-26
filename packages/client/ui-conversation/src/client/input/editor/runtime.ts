@@ -3,7 +3,8 @@ import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { LexicalEditor, NodeKey } from 'lexical'
 import {
   $addUpdateTag, $createParagraphNode, $createTextNode, $getRoot, $getSelection, $isRangeSelection,
-  CLEAR_HISTORY_COMMAND, createEditor, HISTORY_MERGE_TAG, PASTE_TAG,
+  BLUR_COMMAND, CLEAR_HISTORY_COMMAND, COMMAND_PRIORITY_CRITICAL, createEditor, HISTORY_MERGE_TAG, PASTE_TAG,
+  RootNode, SELECTION_CHANGE_COMMAND, SKIP_DOM_SELECTION_TAG,
 } from 'lexical'
 import { registerPlainText } from '@lexical/plain-text'
 import { createEmptyHistoryState, registerHistory } from '@lexical/history'
@@ -65,8 +66,23 @@ export class DraftEditorRuntime {
    * @returns unregister callback that also detaches the editor root.
    */
   register(): () => void {
+    // A retained draft selection must not move keyboard focus back from another control.
+    const preserveExternalSelection = (): false => {
+      const root = this.editor.getRootElement()
+      if (root !== null && !root.contains(root.ownerDocument.activeElement)) {
+        $addUpdateTag(SKIP_DOM_SELECTION_TAG)
+      }
+      return false
+    }
     const unregister = mergeRegister(
       registerPlainText(this.editor),
+      this.editor.registerCommand(BLUR_COMMAND, () => {
+        // Finish this batch before an explicit focus can restore its updated selection.
+        this.editor.update(preserveExternalSelection, { discrete: true })
+        return false
+      }, COMMAND_PRIORITY_CRITICAL),
+      this.editor.registerCommand(SELECTION_CHANGE_COMMAND, preserveExternalSelection, COMMAND_PRIORITY_CRITICAL),
+      this.editor.registerNodeTransform(RootNode, preserveExternalSelection),
       registerReferenceActivation(this.editor, (source, reference) =>
         this.deps.openReference(source, reference)),
       registerHistory(this.editor, createEmptyHistoryState(), HISTORY_MERGE_DELAY_MS),
@@ -211,6 +227,19 @@ export class DraftEditorRuntime {
   }
 
   /**
+   * Insert an asynchronous text result as one independent undo operation.
+   * @param span - owner-validated insertion range.
+   * @param text - text sanitized with the same rules as paste.
+   * @returns whether the range mapped and the edit applied.
+   */
+  insertAsyncText(span: DetectSpan, text: string): boolean {
+    let applied = false
+    const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
+    this.applyEdit(() => { applied = $replaceDetectSpanWithText(span, clean) }, PASTE_TAG)
+    return applied
+  }
+
+  /**
    * Insert a reference chip with the existing trailing-space rule.
    * @param span - detect-coordinate range.
    * @param ref - reference fields.
@@ -225,6 +254,25 @@ export class DraftEditorRuntime {
         : [$createReferenceChipNode(ref), $createTextNode(' ')]
       applied = $replaceDetectSpanWithNodes(span, nodes)
     })
+    return applied
+  }
+
+  /**
+   * Insert an ordered file-reference batch after the live selection without deleting it.
+   * @param references - validated references in source order.
+   * @returns whether the live insertion position accepted the batch.
+   */
+  insertFileReferences(references: readonly ReferenceInsert[]): boolean {
+    if (references.length === 0) return true
+    let applied = false
+    this.applyEdit(() => {
+      const projection = $projectComposer(key => this.occurrenceIdOf(key))
+      const at = projection.selection?.end ?? projection.detectText.length
+      const before = projection.detectText.slice(0, at)
+      const nodes = references.flatMap(ref => [$createReferenceChipNode(ref), $createTextNode(' ')])
+      if (before !== '' && !/\s$/u.test(before)) nodes.unshift($createTextNode(' '))
+      applied = $replaceDetectSpanWithNodes({ start: at, end: at }, nodes)
+    }, PASTE_TAG)
     return applied
   }
 

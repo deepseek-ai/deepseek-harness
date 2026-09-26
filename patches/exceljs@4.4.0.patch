@@ -1,0 +1,806 @@
+diff --git a/dist/exceljs.js b/dist/exceljs.js
+index ab2c9d6e576d8069d77d787b863dfe09c7659890..99213b8606d02b8948ce6ce44a5a7dcfc203d854 100644
+--- a/dist/exceljs.js
++++ b/dist/exceljs.js
+@@ -4636,24 +4636,37 @@ module.exports = async function* (iterable) {
+   if (iterable.pipe && !iterable[Symbol.asyncIterator]) {
+     iterable = iterable.pipe(new PassThrough());
+   }
+-  const saxesParser = new SaxesParser();
++  const saxesParser = new SaxesParser({xmlns: true});
++  // Xforms use canonical names; OOXML producers may choose different prefixes.
++  const prefixes = new Map([
++    ['http://schemas.openxmlformats.org/spreadsheetml/2006/main', ''],
++    ['http://purl.oclc.org/ooxml/spreadsheetml/main', ''],
++    ['http://schemas.openxmlformats.org/package/2006/relationships', ''],
++    ['http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'r'],
++    ['http://purl.oclc.org/ooxml/officeDocument/relationships', 'r'],
++    ['urn:schemas-microsoft-com:vml', 'v'],
++    ['urn:schemas-microsoft-com:office:office', 'o'],
++    ['urn:schemas-microsoft-com:office:excel', 'x'],
++  ]);
++  const canonicalName = node => {
++    const prefix = prefixes.get(node.uri);
++    return prefix === undefined ? node.name : prefix ? `${prefix}:${node.local}` : node.local;
++  };
+   let error;
+   saxesParser.on('error', err => {
+     error = err;
+   });
+   let events = [];
+-  saxesParser.on('opentag', value => events.push({
+-    eventType: 'opentag',
+-    value
+-  }));
+-  saxesParser.on('text', value => events.push({
+-    eventType: 'text',
+-    value
+-  }));
+-  saxesParser.on('closetag', value => events.push({
+-    eventType: 'closetag',
+-    value
+-  }));
++  saxesParser.on('opentag', node => {
++    const attributes = Object.create(null);
++    Object.values(node.attributes).forEach(attribute => {
++      attributes[canonicalName(attribute)] = attribute.value;
++    });
++    events.push({eventType: 'opentag', value: {...node, name: canonicalName(node), attributes}});
++  });
++  saxesParser.on('text', value => events.push({eventType: 'text', value}));
++  saxesParser.on('cdata', value => events.push({eventType: 'text', value}));
++  saxesParser.on('closetag', node => events.push({eventType: 'closetag', value: {...node, name: canonicalName(node)}}));
+   for await (const chunk of iterable) {
+     saxesParser.write(bufferToString(chunk));
+     // saxesParser.write and saxesParser.on() are synchronous,
+@@ -6477,12 +6490,11 @@ class WorkbookXform extends BaseXform {
+     let index = 0;
+     (model.sheets || []).forEach(sheet => {
+       const rel = rels[sheet.rId];
+-      if (!rel) {
+-        return;
++      if (!rel) throw new Error(`Missing worksheet relationship: ${sheet.rId}`);
++      worksheet = model.worksheetHash[rel.Target];
++      if (!worksheet && rel.Type === 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet') {
++        throw new Error(`Missing worksheet: ${rel.Target}`);
+       }
+-      // if rel.Target start with `[space]/xl/` or `/xl/` , then it will be replaced with `''` and spliced behind `xl/`,
+-      // otherwise it will be spliced directly behind `xl/`. i.g.
+-      worksheet = model.worksheetHash[`xl/${rel.Target.replace(/^(\s|\/xl\/)+/, '')}`];
+       // If there are "chartsheets" in the file, rel.Target will
+       // come out as chartsheets/sheet1.xml or similar here, and
+       // that won't be in model.worksheetHash.
+@@ -6635,6 +6647,11 @@ utils.inherits(CommentXform, BaseXform, {
+           ...node.attributes
+         };
+         return true;
++      case 't':
++        this.plainText = true;
++        this.parser = this.richTextXform.textXform;
++        this.parser.parseOpen(node);
++        return true;
+       case 'r':
+         this.parser = this.richTextXform;
+         this.parser.parseOpen(node);
+@@ -6649,6 +6666,12 @@ utils.inherits(CommentXform, BaseXform, {
+     }
+   },
+   parseClose(name) {
++    if (this.plainText && name === 't') {
++      this.model.note.texts.push({text: this.parser.model});
++      this.parser = undefined;
++      this.plainText = false;
++      return true;
++    }
+     switch (name) {
+       case 'comment':
+         return false;
+@@ -12386,17 +12409,17 @@ class WorkSheetXform extends BaseXform {
+     // options.merges.reconcile(model.mergeCells, model.rows);
+     const rels = (model.relationships || []).reduce((h, rel) => {
+       h[rel.Id] = rel;
+-      if (rel.Type === RelType.Comments) {
+-        model.comments = options.comments[rel.Target].comments;
+-      }
+-      if (rel.Type === RelType.VmlDrawing && model.comments && model.comments.length) {
+-        const vmlComment = options.vmlDrawings[rel.Target].comments;
+-        model.comments.forEach((comment, index) => {
+-          comment.note = Object.assign({}, comment.note, vmlComment[index]);
+-        });
+-      }
+       return h;
+     }, {});
++    const commentRel = Object.values(rels).find(rel => rel.Type === RelType.Comments);
++    if (commentRel) model.comments = options.comments[commentRel.Target].comments;
++    const vmlRel = Object.values(rels).find(rel => rel.Type === RelType.VmlDrawing);
++    if (vmlRel && model.comments && model.comments.length) {
++      const vmlComments = options.vmlDrawings[vmlRel.Target].comments;
++      model.comments.forEach((comment, index) => {
++        comment.note = Object.assign({}, comment.note, vmlComments[index]);
++      });
++    }
+     options.commentsMap = (model.comments || []).reduce((h, comment) => {
+       if (comment.ref) {
+         h[comment.ref] = comment;
+@@ -15491,9 +15514,7 @@ const ZipStream = require('../utils/zip-stream');
+ const StreamBuf = require('../utils/stream-buf');
+ const utils = require('../utils/utils');
+ const XmlStream = require('../utils/xml-stream');
+-const {
+-  bufferToString
+-} = require('../utils/browser-buffer-decode');
++
+ const StylesXform = require('./xform/style/styles-xform');
+ const CoreXform = require('./xform/core/core-xform');
+ const SharedStringsXform = require('./xform/strings/shared-strings-xform');
+@@ -15621,6 +15642,31 @@ class XLSX {
+     delete model.drawingRels;
+     delete model.vmlDrawings;
+   }
++  // XML processors must accept UTF-8 and both byte orders of UTF-16.
++  async _readXmlEntry(entry) {
++    const bytes = await entry.async('uint8array');
++    const encoding = (bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0x3c && bytes[1] === 0)
++      ? 'utf-16le'
++      : (bytes[0] === 0xfe && bytes[1] === 0xff) || (bytes[0] === 0 && bytes[1] === 0x3c)
++        ? 'utf-16be' : 'utf-8';
++    return new TextDecoder(encoding, {fatal: true}).decode(bytes);
++  }
++
++  // Resolve an internal OPC target against its owning part, without filesystem access.
++  _resolvePart(owner, target) {
++    const parts = target.startsWith('/') ? [] : owner.split('/').slice(0, -1);
++    for (const segment of target.split('/')) {
++      if (!segment || segment === '.') continue;
++      if (segment === '..') {
++        if (!parts.length) throw new Error(`Relationship escapes package: ${target}`);
++        parts.pop();
++      } else {
++        parts.push(segment);
++      }
++    }
++    return parts.join('/');
++  }
++
+   async _processWorksheetEntry(stream, model, sheetNo, options, path) {
+     const xform = new WorksheetXform(options);
+     const worksheet = await xform.parseStream(stream);
+@@ -15631,18 +15677,14 @@ class XLSX {
+   async _processCommentEntry(stream, model, name) {
+     const xform = new CommentsXform();
+     const comments = await xform.parseStream(stream);
+-    model.comments[`../${name}.xml`] = comments;
++    model.comments[name] = comments;
+   }
+   async _processTableEntry(stream, model, name) {
+     const xform = new TableXform();
+     const table = await xform.parseStream(stream);
+-    model.tables[`../tables/${name}.xml`] = table;
+-  }
+-  async _processWorksheetRelsEntry(stream, model, sheetNo) {
+-    const xform = new RelationshipsXform();
+-    const relationships = await xform.parseStream(stream);
+-    model.worksheetRels[sheetNo] = relationships;
++    model.tables[name] = table;
+   }
++
+   async _processMediaEntry(entry, model, filename) {
+     const lastDot = filename.lastIndexOf('.');
+     // if we can't determine extension, ignore it
+@@ -15683,7 +15725,7 @@ class XLSX {
+   async _processVmlDrawingEntry(entry, model, name) {
+     const xform = new VmlNotesXform();
+     const vmlDrawing = await xform.parseStream(entry);
+-    model.vmlDrawings[`../drawings/${name}.vml`] = vmlDrawing;
++    model.vmlDrawings[name] = vmlDrawing;
+   }
+   async _processThemeEntry(entry, model, name) {
+     await new Promise((resolve, reject) => {
+@@ -15727,7 +15769,7 @@ class XLSX {
+     const model = {
+       worksheets: [],
+       worksheetHash: {},
+-      worksheetRels: [],
++      worksheetRels: Object.create(null),
+       themes: {},
+       media: [],
+       mediaIndex: {},
+@@ -15738,6 +15780,49 @@ class XLSX {
+       vmlDrawings: {}
+     };
+     const zip = await JSZip.loadAsync(buffer);
++    const partKey = path => path.replace(/[A-Z]/g, character => character.toLowerCase());
++    const partNames = new Map();
++    for (const entry of Object.values(zip.files)) {
++      if (entry.dir) continue;
++      const key = partKey(entry.name);
++      if (partNames.has(key)) throw new Error(`Ambiguous workbook part: ${entry.name}`);
++      partNames.set(key, entry.name);
++    }
++    const partTypes = new Map();
++    const relationships = new Map();
++    const resolvedTypes = new Set([
++      XLSX.RelType.OfficeDocument, XLSX.RelType.Styles, XLSX.RelType.SharedStrings,
++      XLSX.RelType.Worksheet, XLSX.RelType.Comments, XLSX.RelType.Table, XLSX.RelType.VmlDrawing,
++    ]);
++    // Relationship order and ZIP entry order do not determine part identity.
++    for (const entry of Object.values(zip.files)) {
++      const match = entry.name.match(/^(.*\/)?_rels\/([^/]+)\.rels$/i);
++      if (entry.dir || (!match && partKey(entry.name) !== '_rels/.rels')) continue;
++      const owner = match ? `${match[1] || ''}${match[2]}` : '';
++      const rels = await this.parseRels([await this._readXmlEntry(entry)]);
++      if (!rels) throw new Error(`Invalid relationships: ${entry.name}`);
++      for (const rel of rels) {
++        rel.Type = rel.Type.replace(/^http:\/\/purl\.oclc\.org\/ooxml\/officeDocument\/relationships\//,
++          'http://schemas.openxmlformats.org/officeDocument/2006/relationships/');
++        if (!resolvedTypes.has(rel.Type)) continue;
++        if (rel.TargetMode === 'External') throw new Error(`External workbook part: ${rel.Target}`);
++        const target = this._resolvePart(owner, rel.Target);
++        rel.Target = partNames.get(partKey(target));
++        if (!rel.Target) throw new Error(`Missing workbook part: ${target}`);
++        const type = partTypes.get(rel.Target);
++        if (type && type !== rel.Type) throw new Error(`Conflicting workbook part: ${rel.Target}`);
++        partTypes.set(rel.Target, rel.Type);
++      }
++      relationships.set(partKey(owner), rels);
++    }
++    model.globalRels = relationships.get('') || [];
++    const officeDocuments = model.globalRels.filter(rel => rel.Type === XLSX.RelType.OfficeDocument);
++    if (officeDocuments.length !== 1) throw new Error('Expected one workbook relationship');
++    model.workbookRels = relationships.get(partKey(officeDocuments[0].Target));
++    if (!model.workbookRels) throw new Error('Missing workbook relationships');
++    for (const [path, type] of partTypes) {
++      if (type === XLSX.RelType.Worksheet) model.worksheetRels[path] = relationships.get(partKey(path));
++    }
+     for (const entry of Object.values(zip.files)) {
+       /* eslint-disable no-await-in-loop */
+       if (!entry.dir) {
+@@ -15745,10 +15830,9 @@ class XLSX {
+         if (entryName[0] === '/') {
+           entryName = entryName.substr(1);
+         }
++        if (!partTypes.has(entryName) && !/\.(xml|rels|vml)$/i.test(entryName) && !entryName.match(/xl\/media\//)) continue;
+         let stream;
+-        if (entryName.match(/xl\/media\//) ||
+-        // themes are not parsed as stream
+-        entryName.match(/xl\/theme\/([a-zA-Z0-9]+)[.]xml/)) {
++        if (entryName.match(/xl\/media\//)) {
+           stream = new PassThrough();
+           stream.write(await entry.async('nodebuffer'));
+         } else {
+@@ -15757,46 +15841,48 @@ class XLSX {
+             writableObjectMode: true,
+             readableObjectMode: true
+           });
+-          let content;
+-          // https://www.npmjs.com/package/process
+-          if (process.browser) {
+-            // running in browser, use TextDecoder if possible
+-            content = bufferToString(await entry.async('nodebuffer'));
+-          } else {
+-            // running in node.js
+-            content = await entry.async('string');
+-          }
++          const content = await this._readXmlEntry(entry);
+           const chunkSize = 16 * 1024;
+           for (let i = 0; i < content.length; i += chunkSize) {
+             stream.write(content.substring(i, i + chunkSize));
+           }
+         }
+         stream.end();
+-        switch (entryName) {
+-          case '_rels/.rels':
+-            model.globalRels = await this.parseRels(stream);
+-            break;
+-          case 'xl/workbook.xml':
+-            {
+-              const workbook = await this.parseWorkbook(stream);
+-              model.sheets = workbook.sheets;
+-              model.definedNames = workbook.definedNames;
+-              model.views = workbook.views;
+-              model.properties = workbook.properties;
+-              model.calcProperties = workbook.calcProperties;
+-              break;
+-            }
+-          case 'xl/_rels/workbook.xml.rels':
+-            model.workbookRels = await this.parseRels(stream);
+-            break;
+-          case 'xl/sharedStrings.xml':
++        switch (partTypes.get(entryName)) {
++          case XLSX.RelType.OfficeDocument: {
++            const workbook = await this.parseWorkbook(stream);
++            model.sheets = workbook.sheets;
++            model.definedNames = workbook.definedNames;
++            model.views = workbook.views;
++            model.properties = workbook.properties;
++            model.calcProperties = workbook.calcProperties;
++            continue;
++          }
++          case XLSX.RelType.SharedStrings:
+             model.sharedStrings = new SharedStringsXform();
+             await model.sharedStrings.parseStream(stream);
+-            break;
+-          case 'xl/styles.xml':
++            continue;
++          case XLSX.RelType.Styles:
+             model.styles = new StylesXform();
+             await model.styles.parseStream(stream);
++            continue;
++          case XLSX.RelType.Worksheet:
++            await this._processWorksheetEntry(stream, model, entryName, options, entryName);
++            continue;
++          case XLSX.RelType.Comments:
++            await this._processCommentEntry(stream, model, entryName);
++            continue;
++          case XLSX.RelType.Table:
++            await this._processTableEntry(stream, model, entryName);
++            continue;
++          case XLSX.RelType.VmlDrawing:
++            await this._processVmlDrawingEntry(stream, model, entryName);
++            continue;
++          default:
+             break;
++        }
++        switch (entryName) {
++
+           case 'docProps/app.xml':
+             {
+               const appXform = new AppXform();
+@@ -15814,17 +15900,7 @@ class XLSX {
+             }
+           default:
+             {
+-              let match = entryName.match(/xl\/worksheets\/sheet(\d+)[.]xml/);
+-              if (match) {
+-                await this._processWorksheetEntry(stream, model, match[1], options, entryName);
+-                break;
+-              }
+-              match = entryName.match(/xl\/worksheets\/_rels\/sheet(\d+)[.]xml.rels/);
+-              if (match) {
+-                await this._processWorksheetRelsEntry(stream, model, match[1]);
+-                break;
+-              }
+-              match = entryName.match(/xl\/theme\/([a-zA-Z0-9]+)[.]xml/);
++              let match = entryName.match(/xl\/theme\/([a-zA-Z0-9]+)[.]xml/);
+               if (match) {
+                 await this._processThemeEntry(stream, model, match[1]);
+                 break;
+@@ -15839,26 +15915,14 @@ class XLSX {
+                 await this._processDrawingEntry(stream, model, match[1]);
+                 break;
+               }
+-              match = entryName.match(/xl\/(comments\d+)[.]xml/);
+-              if (match) {
+-                await this._processCommentEntry(stream, model, match[1]);
+-                break;
+-              }
+-              match = entryName.match(/xl\/tables\/(table\d+)[.]xml/);
+-              if (match) {
+-                await this._processTableEntry(stream, model, match[1]);
+-                break;
+-              }
++
++
+               match = entryName.match(/xl\/drawings\/_rels\/([a-zA-Z0-9]+)[.]xml[.]rels/);
+               if (match) {
+                 await this._processDrawingRelsEntry(stream, model, match[1]);
+                 break;
+               }
+-              match = entryName.match(/xl\/drawings\/(vmlDrawing\d+)[.]vml/);
+-              if (match) {
+-                await this._processVmlDrawingEntry(stream, model, match[1]);
+-                break;
+-              }
++
+             }
+         }
+       }
+diff --git a/lib/utils/parse-sax.js b/lib/utils/parse-sax.js
+index 14c682a731b5e51f999859a03ce4dd4e0bfcbb26..65c0f2b7ddd5c4e0c3a283f74c37a2fd22728aad 100644
+--- a/lib/utils/parse-sax.js
++++ b/lib/utils/parse-sax.js
+@@ -8,15 +8,37 @@ module.exports = async function* (iterable) {
+   if (iterable.pipe && !iterable[Symbol.asyncIterator]) {
+     iterable = iterable.pipe(new PassThrough());
+   }
+-  const saxesParser = new SaxesParser();
++  const saxesParser = new SaxesParser({xmlns: true});
++  // Xforms use canonical names; OOXML producers may choose different prefixes.
++  const prefixes = new Map([
++    ['http://schemas.openxmlformats.org/spreadsheetml/2006/main', ''],
++    ['http://purl.oclc.org/ooxml/spreadsheetml/main', ''],
++    ['http://schemas.openxmlformats.org/package/2006/relationships', ''],
++    ['http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'r'],
++    ['http://purl.oclc.org/ooxml/officeDocument/relationships', 'r'],
++    ['urn:schemas-microsoft-com:vml', 'v'],
++    ['urn:schemas-microsoft-com:office:office', 'o'],
++    ['urn:schemas-microsoft-com:office:excel', 'x'],
++  ]);
++  const canonicalName = node => {
++    const prefix = prefixes.get(node.uri);
++    return prefix === undefined ? node.name : prefix ? `${prefix}:${node.local}` : node.local;
++  };
+   let error;
+   saxesParser.on('error', err => {
+     error = err;
+   });
+   let events = [];
+-  saxesParser.on('opentag', value => events.push({eventType: 'opentag', value}));
++  saxesParser.on('opentag', node => {
++    const attributes = Object.create(null);
++    Object.values(node.attributes).forEach(attribute => {
++      attributes[canonicalName(attribute)] = attribute.value;
++    });
++    events.push({eventType: 'opentag', value: {...node, name: canonicalName(node), attributes}});
++  });
+   saxesParser.on('text', value => events.push({eventType: 'text', value}));
+-  saxesParser.on('closetag', value => events.push({eventType: 'closetag', value}));
++  saxesParser.on('cdata', value => events.push({eventType: 'text', value}));
++  saxesParser.on('closetag', node => events.push({eventType: 'closetag', value: {...node, name: canonicalName(node)}}));
+   for await (const chunk of iterable) {
+     saxesParser.write(bufferToString(chunk));
+     // saxesParser.write and saxesParser.on() are synchronous,
+diff --git a/lib/xlsx/xform/book/workbook-xform.js b/lib/xlsx/xform/book/workbook-xform.js
+index 5c10a5857eba8d3fbf9d3841ff15b39aefde8862..c6c1dcd6fe739b37db48ae30d1b039d635e14aa5 100644
+--- a/lib/xlsx/xform/book/workbook-xform.js
++++ b/lib/xlsx/xform/book/workbook-xform.js
+@@ -165,12 +165,11 @@ class WorkbookXform extends BaseXform {
+
+     (model.sheets || []).forEach(sheet => {
+       const rel = rels[sheet.rId];
+-      if (!rel) {
+-        return;
++      if (!rel) throw new Error(`Missing worksheet relationship: ${sheet.rId}`);
++      worksheet = model.worksheetHash[rel.Target];
++      if (!worksheet && rel.Type === 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet') {
++        throw new Error(`Missing worksheet: ${rel.Target}`);
+       }
+-      // if rel.Target start with `[space]/xl/` or `/xl/` , then it will be replaced with `''` and spliced behind `xl/`,
+-      // otherwise it will be spliced directly behind `xl/`. i.g.
+-      worksheet = model.worksheetHash[`xl/${rel.Target.replace(/^(\s|\/xl\/)+/, '')}`];
+       // If there are "chartsheets" in the file, rel.Target will
+       // come out as chartsheets/sheet1.xml or similar here, and
+       // that won't be in model.worksheetHash.
+diff --git a/lib/xlsx/xform/comment/comment-xform.js b/lib/xlsx/xform/comment/comment-xform.js
+index 16363bfea8d0903ac66c77606c4362ef3fcd72bb..dc0df108c5433c5447a37ecd163883f5fe24cf32 100644
+--- a/lib/xlsx/xform/comment/comment-xform.js
++++ b/lib/xlsx/xform/comment/comment-xform.js
+@@ -74,6 +74,11 @@ utils.inherits(CommentXform, BaseXform, {
+           ...node.attributes,
+         };
+         return true;
++      case 't':
++        this.plainText = true;
++        this.parser = this.richTextXform.textXform;
++        this.parser.parseOpen(node);
++        return true;
+       case 'r':
+         this.parser = this.richTextXform;
+         this.parser.parseOpen(node);
+@@ -88,6 +93,12 @@ utils.inherits(CommentXform, BaseXform, {
+     }
+   },
+   parseClose(name) {
++    if (this.plainText && name === 't') {
++      this.model.note.texts.push({text: this.parser.model});
++      this.parser = undefined;
++      this.plainText = false;
++      return true;
++    }
+     switch (name) {
+       case 'comment':
+         return false;
+diff --git a/lib/xlsx/xform/sheet/worksheet-xform.js b/lib/xlsx/xform/sheet/worksheet-xform.js
+index b38930042cbb05dccd01c46a9adacb7a9fc59dba..e0b239143b4e80ecb0c2030c3bb7b48a803ebef8 100644
+--- a/lib/xlsx/xform/sheet/worksheet-xform.js
++++ b/lib/xlsx/xform/sheet/worksheet-xform.js
+@@ -449,17 +449,17 @@ class WorkSheetXform extends BaseXform {
+     // options.merges.reconcile(model.mergeCells, model.rows);
+     const rels = (model.relationships || []).reduce((h, rel) => {
+       h[rel.Id] = rel;
+-      if (rel.Type === RelType.Comments) {
+-        model.comments = options.comments[rel.Target].comments;
+-      }
+-      if (rel.Type === RelType.VmlDrawing && model.comments && model.comments.length) {
+-        const vmlComment = options.vmlDrawings[rel.Target].comments;
+-        model.comments.forEach((comment, index) => {
+-          comment.note = Object.assign({}, comment.note, vmlComment[index]);
+-        });
+-      }
+       return h;
+     }, {});
++    const commentRel = Object.values(rels).find(rel => rel.Type === RelType.Comments);
++    if (commentRel) model.comments = options.comments[commentRel.Target].comments;
++    const vmlRel = Object.values(rels).find(rel => rel.Type === RelType.VmlDrawing);
++    if (vmlRel && model.comments && model.comments.length) {
++      const vmlComments = options.vmlDrawings[vmlRel.Target].comments;
++      model.comments.forEach((comment, index) => {
++        comment.note = Object.assign({}, comment.note, vmlComments[index]);
++      });
++    }
+     options.commentsMap = (model.comments || []).reduce((h, comment) => {
+       if (comment.ref) {
+         h[comment.ref] = comment;
+diff --git a/lib/xlsx/xlsx.js b/lib/xlsx/xlsx.js
+index ff2d9a117d78cacf727564f74770e1e8f19d0fa1..179d1dac2ed02bfc4b81f85afe7abd9822ef1a1d 100644
+--- a/lib/xlsx/xlsx.js
++++ b/lib/xlsx/xlsx.js
+@@ -6,7 +6,7 @@ const StreamBuf = require('../utils/stream-buf');
+
+ const utils = require('../utils/utils');
+ const XmlStream = require('../utils/xml-stream');
+-const {bufferToString} = require('../utils/browser-buffer-decode');
++
+
+ const StylesXform = require('./xform/style/styles-xform');
+
+@@ -146,6 +146,31 @@ class XLSX {
+     delete model.vmlDrawings;
+   }
+
++  // XML processors must accept UTF-8 and both byte orders of UTF-16.
++  async _readXmlEntry(entry) {
++    const bytes = await entry.async('uint8array');
++    const encoding = (bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0x3c && bytes[1] === 0)
++      ? 'utf-16le'
++      : (bytes[0] === 0xfe && bytes[1] === 0xff) || (bytes[0] === 0 && bytes[1] === 0x3c)
++        ? 'utf-16be' : 'utf-8';
++    return new TextDecoder(encoding, {fatal: true}).decode(bytes);
++  }
++
++  // Resolve an internal OPC target against its owning part, without filesystem access.
++  _resolvePart(owner, target) {
++    const parts = target.startsWith('/') ? [] : owner.split('/').slice(0, -1);
++    for (const segment of target.split('/')) {
++      if (!segment || segment === '.') continue;
++      if (segment === '..') {
++        if (!parts.length) throw new Error(`Relationship escapes package: ${target}`);
++        parts.pop();
++      } else {
++        parts.push(segment);
++      }
++    }
++    return parts.join('/');
++  }
++
+   async _processWorksheetEntry(stream, model, sheetNo, options, path) {
+     const xform = new WorksheetXform(options);
+     const worksheet = await xform.parseStream(stream);
+@@ -157,19 +182,13 @@ class XLSX {
+   async _processCommentEntry(stream, model, name) {
+     const xform = new CommentsXform();
+     const comments = await xform.parseStream(stream);
+-    model.comments[`../${name}.xml`] = comments;
++    model.comments[name] = comments;
+   }
+
+   async _processTableEntry(stream, model, name) {
+     const xform = new TableXform();
+     const table = await xform.parseStream(stream);
+-    model.tables[`../tables/${name}.xml`] = table;
+-  }
+-
+-  async _processWorksheetRelsEntry(stream, model, sheetNo) {
+-    const xform = new RelationshipsXform();
+-    const relationships = await xform.parseStream(stream);
+-    model.worksheetRels[sheetNo] = relationships;
++    model.tables[name] = table;
+   }
+
+   async _processMediaEntry(entry, model, filename) {
+@@ -215,7 +234,7 @@ class XLSX {
+   async _processVmlDrawingEntry(entry, model, name) {
+     const xform = new VmlNotesXform();
+     const vmlDrawing = await xform.parseStream(entry);
+-    model.vmlDrawings[`../drawings/${name}.vml`] = vmlDrawing;
++    model.vmlDrawings[name] = vmlDrawing;
+   }
+
+   async _processThemeEntry(entry, model, name) {
+@@ -265,7 +284,7 @@ class XLSX {
+     const model = {
+       worksheets: [],
+       worksheetHash: {},
+-      worksheetRels: [],
++      worksheetRels: Object.create(null),
+       themes: {},
+       media: [],
+       mediaIndex: {},
+@@ -277,6 +296,49 @@ class XLSX {
+     };
+
+     const zip = await JSZip.loadAsync(buffer);
++    const partKey = path => path.replace(/[A-Z]/g, character => character.toLowerCase());
++    const partNames = new Map();
++    for (const entry of Object.values(zip.files)) {
++      if (entry.dir) continue;
++      const key = partKey(entry.name);
++      if (partNames.has(key)) throw new Error(`Ambiguous workbook part: ${entry.name}`);
++      partNames.set(key, entry.name);
++    }
++    const partTypes = new Map();
++    const relationships = new Map();
++    const resolvedTypes = new Set([
++      XLSX.RelType.OfficeDocument, XLSX.RelType.Styles, XLSX.RelType.SharedStrings,
++      XLSX.RelType.Worksheet, XLSX.RelType.Comments, XLSX.RelType.Table, XLSX.RelType.VmlDrawing,
++    ]);
++    // Relationship order and ZIP entry order do not determine part identity.
++    for (const entry of Object.values(zip.files)) {
++      const match = entry.name.match(/^(.*\/)?_rels\/([^/]+)\.rels$/i);
++      if (entry.dir || (!match && partKey(entry.name) !== '_rels/.rels')) continue;
++      const owner = match ? `${match[1] || ''}${match[2]}` : '';
++      const rels = await this.parseRels([await this._readXmlEntry(entry)]);
++      if (!rels) throw new Error(`Invalid relationships: ${entry.name}`);
++      for (const rel of rels) {
++        rel.Type = rel.Type.replace(/^http:\/\/purl\.oclc\.org\/ooxml\/officeDocument\/relationships\//,
++          'http://schemas.openxmlformats.org/officeDocument/2006/relationships/');
++        if (!resolvedTypes.has(rel.Type)) continue;
++        if (rel.TargetMode === 'External') throw new Error(`External workbook part: ${rel.Target}`);
++        const target = this._resolvePart(owner, rel.Target);
++        rel.Target = partNames.get(partKey(target));
++        if (!rel.Target) throw new Error(`Missing workbook part: ${target}`);
++        const type = partTypes.get(rel.Target);
++        if (type && type !== rel.Type) throw new Error(`Conflicting workbook part: ${rel.Target}`);
++        partTypes.set(rel.Target, rel.Type);
++      }
++      relationships.set(partKey(owner), rels);
++    }
++    model.globalRels = relationships.get('') || [];
++    const officeDocuments = model.globalRels.filter(rel => rel.Type === XLSX.RelType.OfficeDocument);
++    if (officeDocuments.length !== 1) throw new Error('Expected one workbook relationship');
++    model.workbookRels = relationships.get(partKey(officeDocuments[0].Target));
++    if (!model.workbookRels) throw new Error('Missing workbook relationships');
++    for (const [path, type] of partTypes) {
++      if (type === XLSX.RelType.Worksheet) model.worksheetRels[path] = relationships.get(partKey(path));
++    }
+     for (const entry of Object.values(zip.files)) {
+       /* eslint-disable no-await-in-loop */
+       if (!entry.dir) {
+@@ -284,12 +346,9 @@ class XLSX {
+         if (entryName[0] === '/') {
+           entryName = entryName.substr(1);
+         }
++        if (!partTypes.has(entryName) && !/\.(xml|rels|vml)$/i.test(entryName) && !entryName.match(/xl\/media\//)) continue;
+         let stream;
+-        if (
+-          entryName.match(/xl\/media\//) ||
+-          // themes are not parsed as stream
+-          entryName.match(/xl\/theme\/([a-zA-Z0-9]+)[.]xml/)
+-        ) {
++        if (entryName.match(/xl\/media\//)) {
+           stream = new PassThrough();
+           stream.write(await entry.async('nodebuffer'));
+         } else {
+@@ -298,50 +357,47 @@ class XLSX {
+             writableObjectMode: true,
+             readableObjectMode: true,
+           });
+-          let content;
+-          // https://www.npmjs.com/package/process
+-          if (process.browser) {
+-            // running in browser, use TextDecoder if possible
+-            content = bufferToString(await entry.async('nodebuffer'));
+-          } else {
+-            // running in node.js
+-            content = await entry.async('string');
+-          }
++          const content = await this._readXmlEntry(entry);
+           const chunkSize = 16 * 1024;
+           for (let i = 0; i < content.length; i += chunkSize) {
+             stream.write(content.substring(i, i + chunkSize));
+           }
+         }
+         stream.end();
+-        switch (entryName) {
+-          case '_rels/.rels':
+-            model.globalRels = await this.parseRels(stream);
+-            break;
+-
+-          case 'xl/workbook.xml': {
++        switch (partTypes.get(entryName)) {
++          case XLSX.RelType.OfficeDocument: {
+             const workbook = await this.parseWorkbook(stream);
+             model.sheets = workbook.sheets;
+             model.definedNames = workbook.definedNames;
+             model.views = workbook.views;
+             model.properties = workbook.properties;
+             model.calcProperties = workbook.calcProperties;
+-            break;
++            continue;
+           }
+-
+-          case 'xl/_rels/workbook.xml.rels':
+-            model.workbookRels = await this.parseRels(stream);
+-            break;
+-
+-          case 'xl/sharedStrings.xml':
++          case XLSX.RelType.SharedStrings:
+             model.sharedStrings = new SharedStringsXform();
+             await model.sharedStrings.parseStream(stream);
+-            break;
+-
+-          case 'xl/styles.xml':
++            continue;
++          case XLSX.RelType.Styles:
+             model.styles = new StylesXform();
+             await model.styles.parseStream(stream);
++            continue;
++          case XLSX.RelType.Worksheet:
++            await this._processWorksheetEntry(stream, model, entryName, options, entryName);
++            continue;
++          case XLSX.RelType.Comments:
++            await this._processCommentEntry(stream, model, entryName);
++            continue;
++          case XLSX.RelType.Table:
++            await this._processTableEntry(stream, model, entryName);
++            continue;
++          case XLSX.RelType.VmlDrawing:
++            await this._processVmlDrawingEntry(stream, model, entryName);
++            continue;
++          default:
+             break;
+-
++        }
++        switch (entryName) {
+           case 'docProps/app.xml': {
+             const appXform = new AppXform();
+             const appProperties = await appXform.parseStream(stream);
+@@ -358,17 +414,7 @@ class XLSX {
+           }
+
+           default: {
+-            let match = entryName.match(/xl\/worksheets\/sheet(\d+)[.]xml/);
+-            if (match) {
+-              await this._processWorksheetEntry(stream, model, match[1], options, entryName);
+-              break;
+-            }
+-            match = entryName.match(/xl\/worksheets\/_rels\/sheet(\d+)[.]xml.rels/);
+-            if (match) {
+-              await this._processWorksheetRelsEntry(stream, model, match[1]);
+-              break;
+-            }
+-            match = entryName.match(/xl\/theme\/([a-zA-Z0-9]+)[.]xml/);
++            let match = entryName.match(/xl\/theme\/([a-zA-Z0-9]+)[.]xml/);
+             if (match) {
+               await this._processThemeEntry(stream, model, match[1]);
+               break;
+@@ -383,26 +429,11 @@ class XLSX {
+               await this._processDrawingEntry(stream, model, match[1]);
+               break;
+             }
+-            match = entryName.match(/xl\/(comments\d+)[.]xml/);
+-            if (match) {
+-              await this._processCommentEntry(stream, model, match[1]);
+-              break;
+-            }
+-            match = entryName.match(/xl\/tables\/(table\d+)[.]xml/);
+-            if (match) {
+-              await this._processTableEntry(stream, model, match[1]);
+-              break;
+-            }
+             match = entryName.match(/xl\/drawings\/_rels\/([a-zA-Z0-9]+)[.]xml[.]rels/);
+             if (match) {
+               await this._processDrawingRelsEntry(stream, model, match[1]);
+               break;
+             }
+-            match = entryName.match(/xl\/drawings\/(vmlDrawing\d+)[.]vml/);
+-            if (match) {
+-              await this._processVmlDrawingEntry(stream, model, match[1]);
+-              break;
+-            }
+           }
+         }
+       }
+diff --git a/package.json b/package.json
+index 7a70a5e13145a917b57806a6998b8d5e04f47acd..8a1c0a87b0140412517ab7a0fa871afdfbe22b6c 100644
+--- a/package.json
++++ b/package.json
+@@ -16,7 +16,7 @@
+     "node": ">=8.3.0"
+   },
+   "main": "./excel.js",
+-  "browser": "./dist/exceljs.min.js",
++  "browser": "./dist/exceljs.js",
+   "types": "./index.d.ts",
+   "files": [
+     "dist",

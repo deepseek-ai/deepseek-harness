@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { createUserMessage, ToolCallId , createMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionForkError, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
-import type { SessionEvent, TurnEndReason } from '@deepseek-ai/dsh-session'
+import { createUserMessage, ToolCallId, createMessage } from '@deepseek-ai/dsh-llm'
+import type { MessageSource } from '@deepseek-ai/dsh-llm'
+import SessionStore, { Session, SessionForkError, SessionId, SessionLogOffset, SessionSeq, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SurfaceEvent, TurnEndReason } from '@deepseek-ai/dsh-session'
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
@@ -85,7 +86,8 @@ describe('SessionStore.fork', () => {
     expect(child.snapshotEvents()).not.toBe(source.snapshotEvents())
     expect(child.snapshotEvents()[1]).not.toBe(source.snapshotEvents()[1])
     expect(() => {
-      firstUserMessage(child.snapshotEvents()).data.content[0] = { type: 'text', text: 'child mutation' }
+      (firstUserMessage(child.snapshotEvents()).data as unknown as { content: { type: string; text?: string }[] }).content[0]
+        = { type: 'text', text: 'child mutation' }
     }).toThrow(TypeError)
     expect(firstUserMessage(source.snapshotEvents()).data.content).toEqual([{ type: 'text', text: 'hello' }])
     expect(firstUserMessage(child.snapshotEvents()).data.content).toEqual([{ type: 'text', text: 'hello' }])
@@ -172,7 +174,7 @@ describe('SessionStore.fork', () => {
     const boundary = child.snapshotEvents().at(-1)
     expect(boundary).toMatchObject({ type: 'session/end-seed' })
     expect(boundary!.seq).toBeGreaterThan(open.seq)
-    expect(child.firstLiveSeq).toBe(open.seq + 1)
+    expect(child.firstLiveSeq).toBe(open.seq + 2)
     expect(inherited(child).at(-1)).toMatchObject({ type: 'test/bracket-open', data: { id: 'op-1' } })
   })
 
@@ -231,73 +233,6 @@ describe('SessionStore.fork', () => {
       .toThrow(new SessionForkError('session "same-id" is not the live store instance', 'SESSION_NOT_LIVE'))
   })
 
-  it('rejects selected slices whose boundary is inside an open turn', async () => {
-    const { ctx, sessions } = await setup()
-    const cases: [string, (session: Session) => number][] = [
-      ['turn/start', (session) => {
-        session.append('turn/start', { turn: 1 })
-        return lastSeq(session)
-      }],
-      ['step/start', (session) => {
-        session.append('turn/start', { turn: 1 })
-        session.append('step/start', { turn: 1, step: 1 })
-        return lastSeq(session)
-      }],
-      ['user/message', (session) => {
-        session.append('turn/start', { turn: 1 })
-        session.append('user/message', createUserMessage({
-          content: [{ type: 'text', text: 'open' }], source: { kind: 'user' },
-        }), { surfaceOp: 'append' })
-        return lastSeq(session)
-      }],
-      ['assistant/message', (session) => {
-        session.append('turn/start', { turn: 1 })
-        session.append('step/start', { turn: 1, step: 1 })
-        session.append('assistant/message', {
-          stream: [],
-          turn: 1, step: 1,
-          message: createMessage({
-            role: 'assistant',
-            content: [{ type: 'text', text: 'partial' }],
-            source: {
-              kind: 'model',
-              ...{ provider: 'mock', model: 'mock' },
-            },
-          }),
-        }, { surfaceOp: 'append' })
-        return lastSeq(session)
-      }],
-      ['tool/call', (session) => {
-        const callId = ToolCallId('call-open')
-        session.append('turn/start', { turn: 1 })
-        session.append('step/start', { turn: 1, step: 1 })
-        session.append('assistant/message', {
-          stream: [],
-          turn: 1,
-          step: 1,
-          message: createMessage({
-            role: 'assistant',
-            content: [{ type: 'tool-call', id: callId, name: 'bash', arguments: '{}' }],
-            source: {
-              kind: 'model',
-              ...{ provider: 'mock', model: 'mock' },
-            },
-          }),
-        }, { surfaceOp: 'append' })
-        session.append('tool/call', { turn: 1, step: 1, callId, name: 'bash', arguments: '{}' })
-        return lastSeq(session)
-      }],
-    ]
-
-    for (const [lastType, build] of cases) {
-      const source = ctx.sessions.create(SessionId(`open-${lastType}`))
-      const boundary = build(source)
-
-      expect(() => sessions.fork(source, SessionSeq(boundary)))
-        .toThrow(new SessionForkError(`fork boundary ${boundary} in session "open-${lastType}" ends inside open turn 1`, 'OPEN_TURN'))
-    }
-  })
-
   it('rejects a child session id that is already live with a typed fork error', async () => {
     const { ctx, sessions } = await setup()
     const source = ctx.sessions.create(SessionId('parent'))
@@ -316,5 +251,222 @@ describe('SessionStore.fork', () => {
 
     expect(() => sessions.fork(source, undefined, SessionId('child')))
       .toThrow(new SessionForkError('session "child" already exists', 'SESSION_ALREADY_EXISTS'))
+  })
+})
+
+describe('fork boundaries inside an open turn', () => {
+  /** Open turn 2 after a closed turn 1 and return the source. */
+  async function openTurnSource(id: string): Promise<{ ctx: Context; sessions: SessionStore; source: Session }> {
+    const { ctx, sessions } = await setup()
+    const source = ctx.sessions.create(SessionId(id))
+    appendClosedTurn(source, 1, 'first')
+    source.append('turn/start', { turn: 2 })
+    return { ctx, sessions, source }
+  }
+
+  /** Append the open step + assistant tool request of turn 2. */
+  function appendToolRequest(session: Session, callId: ToolCallId): void {
+    session.append('step/start', { turn: 2, step: 1 })
+    session.append('assistant/message', {
+      stream: [],
+      turn: 2, step: 1,
+      message: createMessage({
+        role: 'assistant',
+        content: [{ type: 'tool-call', id: callId, name: 'bash', arguments: '{}' }],
+        source: {
+          kind: 'model',
+          ...{ provider: 'mock', model: 'mock' },
+        },
+      }),
+    }, { surfaceOp: 'append' })
+  }
+
+  it('closes an empty open turn with a synthetic turn/end {forked} outside seedLength', async () => {
+    const { sessions, source } = await openTurnSource('open-empty')
+
+    const child = sessions.fork(source, lastSeq(source), SessionId('open-empty-child'))
+
+    const seed = child.snapshotEvents()
+    expect(seed.slice(0, source.snapshotEvents().length)).toEqual(source.snapshotEvents())
+    expect(seed.at(-1)).toMatchObject({
+      type: 'turn/end',
+      data: { turn: 2, reason: { kind: 'forked' } },
+    })
+    // The closer is child work: `seedLength` names only events that exist in
+    // the parent's log, so telemetry receivers stitching a fork's prefix from
+    // the parent's stream on `(parent_id, seed_length)` read exactly the
+    // copied prefix.
+    expect(child.inheritedEventCount).toBe(source.snapshotEvents().length)
+  })
+
+  it('closes only the turn when the cut lands on a closed step boundary', async () => {
+    const { sessions, source } = await openTurnSource('open-step-closed')
+    source.append('step/start', { turn: 2, step: 1 })
+    source.append('assistant/message', {
+      stream: [],
+      turn: 2, step: 1,
+      message: createMessage({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'step done' }],
+        source: {
+          kind: 'model',
+          ...{ provider: 'mock', model: 'mock' },
+        },
+      }),
+    }, { surfaceOp: 'append' })
+    source.append('step/end', { turn: 2, step: 1 })
+
+    const child = sessions.fork(source, lastSeq(source), SessionId('open-step-closed-child'))
+
+    expect(child.snapshotEvents().slice(source.snapshotEvents().length + 1).map(e => e.type)).toEqual(['turn/end'])
+  })
+
+  it('answers an assistant call cut before its tool/call with a forked not-started error result', async () => {
+    const { sessions, source } = await openTurnSource('open-not-started')
+    appendToolRequest(source, ToolCallId('call-ns'))
+
+    const child = sessions.fork(source, lastSeq(source), SessionId('open-not-started-child'))
+
+    const closers = child.snapshotEvents().slice(source.snapshotEvents().length + 1)
+    expect(closers.map(e => e.type)).toEqual(['tool/result', 'step/end', 'turn/end'])
+    const result = closers[0]!
+    expect(result.type === 'tool/result' && result.data).toMatchObject({
+      message: {
+        id: expect.stringMatching(/^forked-tool-result-call-ns-/) as unknown,
+        source: { callId: ToolCallId('call-ns') },
+      },
+      error: { name: 'ToolNotStartedError', code: TOOL_NOT_STARTED },
+    })
+    // The synthetic result is part of the child's model-visible history, not a
+    // request-time patch: the derived messages end with the error tool result.
+    const derived = child.deriveMessages()
+    expect(derived.at(-1)).toMatchObject({
+      role: 'tool',
+      source: { kind: 'tool', callId: ToolCallId('call-ns') },
+      toolCallId: ToolCallId('call-ns'),
+      isError: true,
+      content: [{ type: 'text' }],
+    })
+  })
+
+  it('answers a dispatched call cut before its result with an unknown-outcome error citing the tool/call', async () => {
+    const { sessions, source } = await openTurnSource('open-unknown')
+    appendToolRequest(source, ToolCallId('call-uo'))
+    const call = source.append('tool/call', { turn: 2, step: 1, callId: ToolCallId('call-uo'), name: 'bash', arguments: '{}' })
+
+    const child = sessions.fork(source, lastSeq(source), SessionId('open-unknown-child'))
+
+    const closers = child.snapshotEvents().slice(source.snapshotEvents().length + 1)
+    expect(closers.map(e => e.type)).toEqual(['tool/result', 'step/end', 'turn/end'])
+    const result = closers[0]!
+    expect(result.type === 'tool/result' && result.data.error).toEqual({
+      name: 'ToolOutcomeUnknownError', code: TOOL_OUTCOME_UNKNOWN,
+    })
+    expect((result as SurfaceEvent).sourceEventSeqs).toEqual([call.seq])
+  })
+
+  it('omits a failed assistant attempt from derived history', async () => {
+    const { sessions, source } = await openTurnSource('open-mid-stream')
+    source.append('step/start', { turn: 2, step: 1 })
+    source.append('assistant/attempt', {
+      turn: 2, step: 1, stream: [],
+    })
+
+    const child = sessions.fork(source, lastSeq(source), SessionId('open-mid-stream-child'))
+
+    expect(child.snapshotEvents().slice(source.snapshotEvents().length + 1).map(e => e.type)).toEqual(['step/end', 'turn/end'])
+    expect(child.deriveMessages().some(message => message.role === 'assistant')).toBe(false)
+  })
+
+  it.each([false, true])('preserves a closed step with an unanswered call (turn ended: %s)', async (turnEnded) => {
+    const { sessions, source } = await openTurnSource('dangling-closed-step')
+    appendToolRequest(source, ToolCallId('call-dangling'))
+    source.append('tool/call', {
+      turn: 2, step: 1, callId: ToolCallId('call-dangling'), name: 'bash', arguments: '{}',
+    })
+    source.append('step/end', { turn: 2, step: 1 })
+    if (turnEnded) {
+      source.append('turn/end', {
+        turn: 2, reason: { kind: 'error', error: { message: 'scheduler failed', code: 'UNKNOWN' } },
+      })
+    }
+    const copiedPrefix = source.snapshotEvents()
+
+    const child = sessions.fork(source)
+
+    expect(inherited(child).slice(0, copiedPrefix.length)).toEqual(copiedPrefix)
+    expect(child.snapshotEvents().slice(copiedPrefix.length + 1)).toEqual(turnEnded ? [] : [{
+      type: 'turn/end', seq: SessionSeq(copiedPrefix.length + 1), time: copiedPrefix.at(-1)!.time,
+      data: { turn: 2, reason: { kind: 'forked' } },
+    }])
+    expect(child.inheritedEventCount).toBe(copiedPrefix.length)
+    expect(child.deriveMessages()).toEqual(source.deriveMessages())
+  })
+
+  it('leaves a plugin bracket left open at the cut untouched (log-only locks belong to their owner)', async () => {
+    const { sessions, source } = await openTurnSource('open-bracket')
+    source.append('test/bracket-open', { id: 'op-live' })
+
+    const child = sessions.fork(source, lastSeq(source), SessionId('open-bracket-child'))
+
+    const closers = child.snapshotEvents().slice(source.snapshotEvents().length + 1)
+    expect(closers.map(e => e.type)).toEqual(['turn/end'])
+    // The unmatched bracket sits before the child's end-seed marker, so its
+    // owning plugin decides its staleness from that boundary.
+    expect(child.snapshotEvents()[child.inheritedEventCount]).toMatchObject({ type: 'session/end-seed', data: { inherited: true } })
+  })
+})
+
+describe('fork boundaries around a surface replacement', () => {
+  /**
+   * A source whose open turn 2 replaces turn 1's user message with a summary
+   * (the compaction surface pattern: a `user/message` with a range replace op).
+   */
+  async function replacementSource(id: string): Promise<{
+    sessions: SessionStore
+    source: Session
+    replacedSeq: SessionSeq
+    replacementSeq: SessionSeq
+  }> {
+    const { ctx, sessions } = await setup()
+    const source = ctx.sessions.create(SessionId(id))
+    appendClosedTurn(source, 1, 'original request')
+    const replacedSeq = firstUserMessage(source.snapshotEvents()).seq
+    source.append('turn/start', { turn: 2 })
+    const replacement = source.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'summary of earlier work' }],
+      source: {
+        kind: 'compact-checkpoint',
+        compactionId: 'open-bracket' as Extract<MessageSource, { readonly kind: 'compact-checkpoint' }>['compactionId'],
+      },
+    }), {
+      surfaceOp: { op: 'replace', startSeq: replacedSeq, endSeq: replacedSeq },
+      sourceEventSeqs: [replacedSeq],
+    })
+    return { sessions, source, replacedSeq, replacementSeq: replacement.seq }
+  }
+
+  it('derives the original message for a cut before the replacement', async () => {
+    const { sessions, source, replacementSeq } = await replacementSource('replace-before')
+
+    const child = sessions.fork(source, SessionSeq(replacementSeq - 1), SessionId('replace-before-child'))
+
+    expect(child.deriveMessages().map(message => message.content)).toEqual([
+      [{ type: 'text', text: 'original request' }],
+    ])
+  })
+
+  it('derives the compacted surface for a cut after the replacement', async () => {
+    const { sessions, source, replacementSeq } = await replacementSource('replace-after')
+
+    const child = sessions.fork(source, replacementSeq, SessionId('replace-after-child'))
+
+    expect(child.deriveMessages().map(message => message.content)).toEqual([
+      [{ type: 'text', text: 'summary of earlier work' }],
+    ])
+    expect(child.snapshotEvents().at(-1)).toMatchObject({
+      type: 'turn/end',
+      data: { turn: 2, reason: { kind: 'forked' } },
+    })
   })
 })

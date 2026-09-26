@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-15-bundled-office-skills.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-15-bundled-office-skills.md
+/agent-note-bundled-office-skills-with-structural-verification:
+  en: 8cc7012d7343c387
+  zh: 8565543be5d94a56
+/agent-note-bundled-office-skills-with-structural-verification/problem:
+  en: d1e1e74b0fa286de
+  zh: 61ce855e4726d4a3
+/agent-note-bundled-office-skills-with-structural-verification/decision:
+  en: 486c2b40a0a4fe3c
+  zh: 317f47318b27e8f8
+/agent-note-bundled-office-skills-with-structural-verification/alternatives-considered:
+  en: c5389aef638deb0c
+  zh: a11a99a269e81c6a
+/agent-note-bundled-office-skills-with-structural-verification/consequences:
+  en: a6035aefa4443df3
+  zh: f87c6f099e4f3c7d

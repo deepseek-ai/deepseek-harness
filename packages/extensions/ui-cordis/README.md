@@ -1,5 +1,5 @@
 ---
-description: "Cordis dynamic-plugin browser surfaces for users and maintainers choosing, composing, or debugging the panel, tool cards, and @pluginId input."
+description: "Historical Cordis cards and controls for process-local runner definitions."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-cordis` adds a frame-wide control panel, conversation tool cards, and `@pluginId` completion for dynamic Cordis packages in a web client. A person can approve or decline a blocked model request from any session, run, stop, or remove definitions, and inspect their live status. Conversation cards replay recorded calls and results. The package adds no model-visible content or session events, and definitions must be run again after the page reloads.
+`dsh-client-ui-cordis` renders historical generated-plugin cards and a control panel for process-local definitions. Users can operate definitions supplied by programmatic consumers; persisted cards remain readable after restart without recreating those definitions. New Creator plugins use Plugin Manager.
 
 ## Table of Contents
 
@@ -25,19 +25,17 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Compose this package in a web client that also mounts the browser runner and the host runner, and it adds the panel, the tool cards, and the `@` completion. A person then has everything needed to run the lifecycle: approve or decline a model's run request, run, stop, or remove any definition, and watch a package's live state change on the same rows.
+Compose this package with the Host and Client runners to render historical tool cards and operate programmatically registered definitions in the panel. New agent-authored plugins use Plugin Manager; this package exposes no model mutation tools.
 
 ### What the panel shows
 
-A `sidebar.footer.action` seat shows a badge counting what runs plus what waits; opening it lists every definition with its run controls. The list is never filtered by session: the current session's rows group first, everyone else's stay listed below. Rows come from the host's current inventory and update whenever an announcement changes what exists. A pending run request whose definition the last read does not cover still gets a row, rendered from the request's own session, label, purpose, and identity. Each row shows two independent facts — what the host runs and what this page has loaded — so a reloaded page offers "load back into this page" before the global stop, while a host-only definition reads plainly running and offers the stop alone. The row also carries this page's last render failure inline, in the same place as a load failure: one is "it never loaded", the other "it loaded and then threw".
+A `sidebar.footer.action` seat shows a badge counting what runs plus what waits; opening it lists every definition with its run controls. The list is never filtered by session: the current session's rows group first, everyone else's stay listed below. Rows come from the host's current inventory and update whenever an announcement changes what exists. A pending run request whose definition the last read does not cover still gets a row, rendered from the request's own session, label, purpose, and identity. Each row shows two independent facts — what the host runs and what this page has loaded — and maps them onto the shared status marker: idle uses idle, client loading and an action in flight use ongoing, a running definition uses done, approval waits use warning, and failures use error. A reloaded page offers "load back into this page" before the global stop, while a host-only definition reads plainly running and offers the stop alone. The row also carries this page's last render failure inline, in the same place as a load failure: one is "it never loaded", the other "it loaded and then threw".
 
 ### What the tool cards show
 
-The `cordis_define` card is a record: the name and purpose the model wrote, the source it wrote, and whether the definition is running — no switch, no approval, and a pointer to the panel. The `cordis_run` card shows the mode, the plugin, package, and run ids, the outcome, and offers the package's own business view through the `tool.view.cordis` slot when the package registered one. `cordis_stop` and `cordis_undefine` render compact action rows. All cards render from the recorded call and result, so replay shows the same card.
+Preparing calls show their ordinary Cordis icon and title in one non-expandable row. This stage does not derive a package identity, read its live inventory, or mount its business view; those operations require the start/result props.
 
-### The @pluginId input source
-
-Typing `@` in the input offers the current session's defined plugins; picking one emits `@pluginId`, which the tool package turns into a pinned reference context for the model.
+The `cordis_define` card is a record: the name and purpose the model wrote, the source it wrote, and whether the definition is running — no switch, no approval, and a pointer to the panel. The `cordis_run` card shows the mode, the plugin, package, and run ids, the outcome, and offers the package's own business view through the `tool.view.cordis` slot when the package registered one. Define, run, stop, and undefine cards retain their ordinary business glyph when they fail or are interrupted, including a correlated activation failure after a successful run receipt. All cards render from the recorded call and result, so replay shows the same card.
 
 ### Boundaries to plan around
 
@@ -61,7 +59,7 @@ The surfaces are built on one rule: neither keeps run state in component state, 
 
 | File | Role |
 |---|---|
-| [`src/client/index.ts`](src/client/index.ts) | Plugin entry: slot registrations, inventory wiring, `@pluginId` source |
+| [`src/client/index.ts`](src/client/index.ts) | Plugin entry: slot registrations and inventory wiring |
 | [`src/client/CordisPanel.tsx`](src/client/CordisPanel.tsx) | The frame-wide panel and its run controls |
 | [`src/client/CordisDefineRow.tsx`](src/client/CordisDefineRow.tsx) | The read-only `cordis_define` card |
 | [`src/client/CordisRunRow.tsx`](src/client/CordisRunRow.tsx) | The `cordis_run` card and its business-view seat |
@@ -87,7 +85,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Client runner](../cordis-client-runner/README.md) — the browser face the panel reads and calls.
 - [Host runner](../cordis-host-runner/README.md) — the inventory and lifecycle verbs behind the panel.
-- [Tool package](../tool-cordis/README.md) — the model-facing tools whose calls these cards render.
+- [Tool package](../tool-cordis/README.md) — read-only runtime API discovery.
 - [Extensions subsystem](../../../docs/subsystems/extensions.md) — the generated `ctx.dynamicCordisRunner` API and forwarded `cordis/*` events.
 - [Slots subsystem](../../../docs/subsystems/slots.md) — how slot-registered browser UI is owned by its package.
 
@@ -96,11 +94,11 @@ Read these pages when the package-level contract is not enough. They move from t
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the run and stop verbs these surfaces drive — the browser-side runner's orchestration for a run, and the host's stop and remove verbs, the same host verbs the model's `cordis_run` and `cordis_stop` tools reach — so whatever a running definition then contributes is the runner's effect, while nothing model-visible originates in this package, which renders logged call and result slices and a host inventory read, adds no prompt content, writes no session event, and deliberately leaves no session-log trace of a person approving, declining, running, or stopping anything.
+Indirectly, through the runner lifecycle actions that own session steering and permission outcomes; this package renders historical calls and results and adds no tools or prompt sections.
 
 #### KV Cache effect
 
-None: no prompt input originates here, and answering a run request neither extends nor rewrites the history tail.
+None directly: this package owns rendering; runner-originated steering changes the session history.
 
 ## Known Limitations and Deferred Work
 
@@ -109,10 +107,10 @@ None: no prompt input originates here, and answering a run request neither exten
 
 These limits define where the surfaces need special care. They are current package constraints, not a task backlog.
 
-- **An open panel does not see registry changes that announce nothing** — `cordis_define`, and an undefine of a definition that was not running, change the registry without a dispatch announcement, so a panel left open across one of them keeps its rows until it is closed and opened again. A run request is the exception: it blocks the model, so it both renders its own row and triggers a read.
+- **An open panel does not see registry changes that announce nothing** — programmatic `define` and inactive `undefine` can leave the current rows unchanged until the next inventory read. A run request triggers a read.
 - **A request-only row is answerable but not operable** — it offers approve and decline only, because the run and stop controls need the registry row the read has yet to deliver.
 - **A row can disappear for the width of one read** — the activity's orchestrating arm carries the session but deliberately no label, so an approved request whose registry read has not landed leaves no row until it does; in practice the read is triggered when the request arrives.
-- **A render failure is this page's own reading, and it arrives too late for the run receipt** — the panel shows the last crash the runner saw here, so a package that renders fine in this tab shows nothing even while it crashes in another, and the model learns about it by asking (`cordis_inspect_self`) rather than from the call it already made.
+- **Render failures are page-local and follow the load receipt** — the panel displays this page’s crash; the Host runner steers the owning session separately.
 - **A second page's load failure is invisible to the others** — the host settles a dispatch on the first load report, so a page whose browser half failed after another page acknowledged keeps reading as running on the other pages.
 - **Any page may answer any request** — approvals are frame-wide by design, so a person in one tab can approve a run the model asked for while another tab is in front of the defining session; narrowing who may answer is deferred.
 - **A card whose call head left the event window loses its labels** — the define card derives name and purpose from the call arguments, so a session long enough to truncate them leaves the card naming its call id; the panel is unaffected because the host inventory carries the labels.

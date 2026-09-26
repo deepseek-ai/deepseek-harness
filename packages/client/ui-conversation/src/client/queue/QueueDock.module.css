@@ -27,13 +27,24 @@
 
 .panel {
   position: relative;
+  isolation: isolate;
   overflow: hidden;
   width: 100%;
   padding: 2px 0;
-  border-radius: 12px 12px 0 0;
-  background: var(--dsw-specific-tip);
+  border-radius: var(--dsw-radius-lg) var(--dsw-radius-lg) 0 0;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.panel::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  content: '';
+  pointer-events: none;
 }
 
 .panel::after {
@@ -58,7 +69,7 @@
      header's chevron (12px body padding there). */
   padding: 4px 12px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   text-align: left;
@@ -66,7 +77,7 @@
 }
 
 .header:focus-visible {
-  outline: 2px solid var(--dsw-alias-label-tertiary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }
 
@@ -113,9 +124,10 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  height: 36px;
+  /* Grows with the inline editor's content; the other rows stay 36px. */
+  min-height: 36px;
   padding: 4px 5px 4px 12px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-md);
 }
 
 .row + .row {
@@ -145,7 +157,7 @@
   padding: 0 6px;
   overflow: hidden;
   border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-base);
   box-sizing: border-box;
 }
@@ -177,7 +189,7 @@
   width: 24px;
   height: 24px;
   border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-xs);
   background: var(--dsw-alias-bg-base);
   object-fit: cover;
 }
@@ -200,13 +212,17 @@
 
 .editor {
   box-sizing: border-box;
-  height: 28px;
-  padding: 0 8px;
+  min-height: 28px;
+  /* Six 20px text lines plus padding and border, then the editor scrolls. */
+  max-height: 127px;
+  padding: 3px 8px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   outline: none;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
+  overflow-y: auto;
+  resize: none;
 }
 
 .editor:focus {
@@ -247,7 +263,7 @@
 }
 
 .action:focus-visible {
-  outline: 2px solid var(--dsw-alias-label-tertiary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }
 

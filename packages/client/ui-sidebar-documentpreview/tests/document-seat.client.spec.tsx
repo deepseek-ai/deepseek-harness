@@ -1,20 +1,23 @@
 // @vitest-environment jsdom
 /** Document extension registration and dispatch through the production Sidebar and Slot renderer. */
+import { byteResult } from './fixtures.client.ts'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 import { absoluteFileAddress, sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { apply as resourcesApply, inject as resourcesInject } from '@deepseek-ai/dsh-client-resources/src/client/index.ts'
 import { apply as sidebarApply, inject as sidebarInject } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/index.ts'
 import { apply, inject } from '../src/client/index.ts'
 import type { DocumentPreviewProps } from '../src/client/document/contract.ts'
 import type { DocumentLoadMode } from '../src/client/document/registry.ts'
+import type { WorkspaceFilesReadRemote } from '../src/client/rpc.ts'
 import { PLAIN_BODY_ID } from '../src/client/text/index.ts'
 
 const SESSION = 'documents' as SessionId
+const SHORTCUT_CATALOG: readonly never[] = []
 let runtime: SlotTestRuntime | undefined
 let animations: PropertyDescriptor | undefined
 
@@ -36,7 +39,9 @@ afterEach(async () => {
 async function boot() {
   const rt = await SlotTestRuntime.create()
   runtime = rt
+  rt.ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) } } as never)
   rt.ctx.provide('layout', { openRightbar: vi.fn(), closeRightbar: vi.fn() } as never)
+  rt.ctx.provide('shortcuts', { register: () => () => {}, catalog: { getSnapshot: () => SHORTCUT_CATALOG, subscribe: () => () => {} } } as never)
   const locale = new LocaleRuntime(rt.ctx)
   rt.ctx.provide('locale', locale)
   rt.slots.installLocale(locale)
@@ -45,17 +50,14 @@ async function boot() {
     'conversation.session.header.corner': { kind: 'single', scope: 'session' },
   })
   await rt.sessions.add({ id: SESSION })
+  await rt.sessions.retainFor(rt.ctx, SESSION, { source: 'mainView' }).ready
   await rt.mount({ inject: [...resourcesInject], apply: resourcesApply })
-  const read = vi.fn<ClientRemote['workspaceFiles']['read']>().mockImplementation(async (_sessionId, _path, range) => ({
+  const read = vi.fn<WorkspaceFilesReadRemote['workspaceFiles']['read']>().mockImplementation(async (_sessionId, _path, range) => ({
     ok: true,
     value: { absolutePath: '/host/notes', version: 'v1', bytes: 18, offset: range.offset ?? 1, text: range.offset === 3 ? 'third' : 'first\nsecond', lines: range.offset === 3 ? 1 : 2, eof: range.offset === 3 },
   }))
-  const bytes = vi.fn<ClientRemote['workspaceFiles']['readAll']>().mockResolvedValue({
-    ok: true, value: { absolutePath: '/host/notes', version: 'v1', offset: 0, data: btoa('all'), bytes: 3, eof: true },
-  })
-  const workspaceFiles = { read, readAll: bytes }
-  rt.ctx.provide('remote', { workspaceFiles } as never)
-  rt.ctx.provide('remote.workspaceFiles', workspaceFiles as never)
+  const bytes = vi.fn(async () => byteResult(new TextEncoder().encode('all')))
+  rt.remote.provideNamespaces({ workspaceFiles: { read, readBytes: bytes } })
   rt.ctx.effect(() => rt.ctx.resources.register({
     protocol: 'file',
     open: async function* (_address, { signal }) {
@@ -83,7 +85,7 @@ async function boot() {
             data-renderer={id} data-renderer-tab={tab.id}
             data-renderer-path={resource.value?.absolutePath} data-renderer-version={resource.value?.version}
           >
-            {props.content.kind === 'text' ? props.content.text : new TextDecoder().decode(props.content.data)}
+            {props.content.kind === 'text' ? props.content.text : props.content.kind === 'bytes' ? new TextDecoder().decode(props.content.data) : 'renderer'}
           </div>
         )
       },
@@ -100,7 +102,9 @@ describe('document extension seat', () => {
       const h = await boot()
       act(() => { h.rt.ctx.sidebarRight.openResource(sessionFileAddress('address-session', path)) })
       await waitFor(() => { expect(h.view.container.querySelectorAll('[data-textpreview-line]')).toHaveLength(2) })
-      expect(h.read).toHaveBeenCalledExactlyOnceWith('address-session', path, { offset: 1 }, expect.any(AbortSignal))
+      expect(h.read.mock.calls).toEqual([
+        ['address-session', path, { offset: 1 }, expect.any(AbortSignal)],
+      ])
       expect(h.bytes).not.toHaveBeenCalled()
     },
   )
@@ -147,7 +151,7 @@ describe('document extension seat', () => {
     })
     const tab = h.view.container.querySelector('[data-renderer-tab]')?.getAttribute('data-renderer-tab')
     expect(h.read).not.toHaveBeenCalled()
-    expect(h.bytes).toHaveBeenCalledTimes(1)
+    expect(h.bytes).toHaveBeenCalledOnce()
     fireEvent.click(h.view.container.querySelector('[data-document-viewer-menu]')!)
     fireEvent.click(screen.getByRole('menuitem', { name: 'builtin-reader' }))
     await waitFor(() => { expect(h.view.container.querySelector('[data-renderer="builtin-reader"]')?.textContent).toBe('first\nsecond') })
@@ -169,6 +173,6 @@ describe('document extension seat', () => {
     })
     await act(async () => { await remove!() })
     await waitFor(() => { expect(h.view.container.querySelector('[data-document-markdown]')).not.toBeNull() })
-    expect(h.read).toHaveBeenCalledTimes(1)
+    expect(h.read).toHaveBeenCalledOnce()
   })
 })

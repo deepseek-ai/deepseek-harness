@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-14-chat-presentation-defaults.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-14-chat-presentation-defaults.md
-2026-09-14-chat-presentation-defaults.md: 6703a14e2ad108c4b43dd50692a44c159cf3ea5a
-2026-09-14-chat-presentation-defaults.zh.md: 67ca433339ecf6e44d3f74b6c3ff9e465f802b0b
+/agent-note-keep-chat-presentation-independent-of-trajectory-inspection:
+  en: 72d5bc0911e0bc3f
+  zh: 1fc58f89bdc53b56
+/agent-note-keep-chat-presentation-independent-of-trajectory-inspection/problem:
+  en: 2102a58c1baafe54
+  zh: 939872d86e013f94
+/agent-note-keep-chat-presentation-independent-of-trajectory-inspection/decision:
+  en: f77e394352fe8d8e
+  zh: 7c4c9b066874dc9b
+/agent-note-keep-chat-presentation-independent-of-trajectory-inspection/alternatives-considered:
+  en: f4c1b9c9998e3355
+  zh: f684e39ffabce5e6
+/agent-note-keep-chat-presentation-independent-of-trajectory-inspection/consequences:
+  en: bb15d68e46b10b8e
+  zh: 8506ab5775d04fe8

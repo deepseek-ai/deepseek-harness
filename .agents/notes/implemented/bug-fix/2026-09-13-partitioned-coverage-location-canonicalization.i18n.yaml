@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-13-partitioned-coverage-location-canonicalization.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-13-partitioned-coverage-location-canonicalization.md
-2026-09-13-partitioned-coverage-location-canonicalization.md: 54e5aaefe9551d1357f1c60201212873a1c7aef7
-2026-09-13-partitioned-coverage-location-canonicalization.zh.md: 1aa4b8de844a1f0e544d2bbb223641dbbfeff3da
+/agent-note-canonicalize-partition-coverage-locations-before-the-blob-merge:
+  en: 9346bcf9fc59bea8
+  zh: 170ebd969ac038bd
+/agent-note-canonicalize-partition-coverage-locations-before-the-blob-merge/problem:
+  en: c2f8792fb6ec46d1
+  zh: cc01e2e2ff14f367
+/agent-note-canonicalize-partition-coverage-locations-before-the-blob-merge/decision:
+  en: 07f37eb8430ef8ee
+  zh: bc2910040b90291c
+/agent-note-canonicalize-partition-coverage-locations-before-the-blob-merge/divergent-statement-maps-across-vite-environments:
+  en: 4f6d088fd7e272fc
+  zh: d44463ee8485b060
+/agent-note-canonicalize-partition-coverage-locations-before-the-blob-merge/testing:
+  en: 59a8515f97eb4c63
+  zh: 86d655d454da2c63
+/agent-note-canonicalize-partition-coverage-locations-before-the-blob-merge/alternatives-considered:
+  en: 8c7efd287cf0e56b
+  zh: 2ed0477918e10f4e
+/agent-note-canonicalize-partition-coverage-locations-before-the-blob-merge/consequences:
+  en: c7a2e99922697cb6
+  zh: 0c98a57b00263bf8

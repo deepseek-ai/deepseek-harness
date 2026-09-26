@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-05-read-only-session-migration-preparation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-05-read-only-session-migration-preparation.md
-2026-09-05-read-only-session-migration-preparation.md: 081044e34d5071ba242792c588f43a3b83adddd5
-2026-09-05-read-only-session-migration-preparation.zh.md: 7406e7cf31112df6c9f6bb0d454f38d0cf7eb6a4
+/agent-note-historical-session-reads-prepare-before-write-publication:
+  en: 9b0c300b8c4ea348
+  zh: fb248e39c7c82d21
+/agent-note-historical-session-reads-prepare-before-write-publication/problem:
+  en: 1064c02bdd0829f6
+  zh: b8804a72c487d7f6
+/agent-note-historical-session-reads-prepare-before-write-publication/problem/serial-readiness-cost:
+  en: d1a38e3967176a41
+  zh: 746d22a7b65bbacf
+/agent-note-historical-session-reads-prepare-before-write-publication/problem/a-naive-split-would-break-lifecycle-guarantees:
+  en: b6c28b36e59cff21
+  zh: 7c52d50d332204ad
+/agent-note-historical-session-reads-prepare-before-write-publication/decision:
+  en: b1c9289331cc1b1c
+  zh: cddc6fba651201b3
+/agent-note-historical-session-reads-prepare-before-write-publication/decision/prepared-generation-api:
+  en: 70013314a5ab75c2
+  zh: dc83dc7254554951
+/agent-note-historical-session-reads-prepare-before-write-publication/decision/preparation-ownership-and-cancellation:
+  en: 1e0583523a341ec1
+  zh: a78b8cac656559e9
+/agent-note-historical-session-reads-prepare-before-write-publication/decision/read-handle-transition:
+  en: a74f92b2e6224c7e
+  zh: 0190d524f8c84770
+/agent-note-historical-session-reads-prepare-before-write-publication/decision/write-open-publication:
+  en: 9d2d50cb76754b74
+  zh: 9ceed3652475f18d
+/agent-note-historical-session-reads-prepare-before-write-publication/decision/follow-and-agent-promotion:
+  en: 692c29db3e7ab07e
+  zh: 7da0cfdbc80f407d
+/agent-note-historical-session-reads-prepare-before-write-publication/problem-to-solution-mapping:
+  en: e067e187cd4d0a8c
+  zh: b0c79b635a637296
+/agent-note-historical-session-reads-prepare-before-write-publication/verification:
+  en: b2b07b60141996ac
+  zh: 5280ee3455b8c953
+/agent-note-historical-session-reads-prepare-before-write-publication/verification/first-opening-of-historical-data:
+  en: 048ea8684231ac22
+  zh: 83591137f214478b
+/agent-note-historical-session-reads-prepare-before-write-publication/verification/scheduling-observation-points:
+  en: a91766778611df3b
+  zh: 2a38f5a865dcd413
+/agent-note-historical-session-reads-prepare-before-write-publication/consequences:
+  en: 4482da434feb62a0
+  zh: 38bf9bbb99d3e246
+/agent-note-historical-session-reads-prepare-before-write-publication/alternatives-considered:
+  en: c11bc9a1ad9a8568
+  zh: 717da2fad77cff17

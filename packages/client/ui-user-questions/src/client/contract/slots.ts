@@ -1,6 +1,7 @@
 /** Question composer props and one pending Remote waterfall response. */
-import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 // The client module declares the conversation.composer SlotMap entry required by PropsRuntime.
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   AskUserQuestionAnswer, AskUserQuestionItem,
@@ -11,6 +12,13 @@ declare module '@deepseek-ai/dsh-client-ui-session/client' {
   interface SessionPendingInteractionMap {
     /** Pending question or plan-review request. */
     question: PendingQuestion
+  }
+}
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    /** Actions for the exact plan under review; approval remains with the question composer. */
+    'conversation.plan-review.actions': { kind: 'list'; scope: 'session'; owner: { review: PlanReview; requestKey: PendingQuestion['key'] } }
   }
 }
 
@@ -50,6 +58,8 @@ export interface PlanReview {
   question: string
   /** The plan markdown under review. */
   plan: string
+  /** Logged tool invocation used to reopen this plan. */
+  callId?: ToolCallId
   /** The option that approves the plan. */
   approve: QuestionOption
   /** The option that declines it; absent when the asker offered no other option. */
@@ -60,16 +70,10 @@ export interface PlanReview {
  * Narrow a request to a renderable plan review, or return undefined to leave it
  * to the generic question flow.
  *
- * The card is one decision over one plan, and it claims a request only when it
- * can send every answer that request allows — an intent changes the layout,
- * never which answers are reachable. So the batch must be a single question
- * that declares the intent, carries the plan as its detail, offers the approve
- * label the intent names, and is a binary single choice: at most one option
- * besides approve, and not multi-select. A third option or a multi-select batch
- * has answers two buttons cannot express, so the generic flow keeps it — as it
- * keeps any request whose intent the asker's own service would have rejected,
- * because the client sits downstream of a wire boundary and every request must
- * stay answerable.
+ * The card offers approval and a return to the composer for change requests.
+ * It accepts one question carrying the plan as detail and the named approve
+ * option, with at most one alternative and no multi-select. Larger choices
+ * remain in the generic question flow.
  *
  * @param questions - the request's whole question batch.
  * @returns The narrowed review, or undefined when the generic flow owns it.
@@ -90,6 +94,7 @@ export function planReviewOf(questions: readonly QuestionItem[]): PlanReview | u
     id: question.id,
     question: question.question,
     plan: question.detail,
+    ...(intent.callId === undefined ? {} : { callId: intent.callId }),
     approve,
     ...(decline === undefined ? {} : { decline }),
   }
@@ -220,5 +225,6 @@ export type QuestionWait = PendingQuestion
 export type QuestionComposerProps =
   PropsRuntime<'conversation.composer'>
   & PropsStore<ReturnType<typeof createQuestionDraftStore>>
+  & PropsRenderSlots<'conversation.plan-review.actions'>
   & { matched: QuestionWait }
   & PropsLocale<'question'>

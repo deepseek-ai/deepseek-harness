@@ -13,7 +13,7 @@ export interface GoalActivationDeps {
   readonly projection: HostObservable<GoalProjection | null | undefined>
   /** Session snapshot; running flips trigger a fresh authoritative read. */
   readonly session: HostObservable<{ readonly running: boolean }>
-  /** Read the current live goal at call time. */
+  /** Read live activation after initial history; rejected reads leave the current snapshot unchanged. */
   readonly getGoal: () => Promise<RemoteResult<GoalView | undefined>>
   /** Subscribe to activation edges after the transport delivers them. */
   readonly subscribeActivation: (listener: (goal: GoalActivationChanged['goal']) => void) => () => void
@@ -69,6 +69,8 @@ export function createGoalActivationSource(deps: GoalActivationDeps): HostObserv
         return
       }
       publish({ id: goal.id, revision: goal.revision, activation: goal.activation })
+    }, (error: unknown) => {
+      console.warn('[ui-goal] goal activation read failed:', error)
     })
   }
 

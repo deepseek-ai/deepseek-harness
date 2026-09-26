@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for events.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/develop/framework/events.md
-events.md: c8c1bc753a2353f735f3f0d56f1c7e7f37b5be6d
-events.zh.md: 366c37ca4dc02a97d8ecb43d0425da141ec4253d
+/event-system:
+  en: 325f3d8726f52d9b
+  zh: 059d0c424e70feb7
+/event-system/basic-use:
+  en: 0f77f08250cc0b09
+  zh: 43c64f755c0de880
+/event-system/basic-use/listen-for-an-event:
+  en: 54c623cad1f04d3d
+  zh: 6c023e21df4cf6fd
+/event-system/basic-use/emit-an-event:
+  en: 5038c270c7a28863
+  zh: 01da169b2de7eed2
+/event-system/event-modes:
+  en: 95c09e39e3c07143
+  zh: d8ac8b6b65f092eb
+/event-system/event-modes/emit-broadcast:
+  en: 486df849733f05ff
+  zh: 1031ccfa266c13b7
+/event-system/event-modes/bail-short-circuit:
+  en: bae8dbcf78cb8217
+  zh: 9310977dbfe6f197
+/event-system/event-modes/serial-ordered-execution:
+  en: f8937683891b0c88
+  zh: 071feca4572f3f97
+/event-system/event-modes/waterfall-pipeline:
+  en: 64a336bbc72680a6
+  zh: 22fe42401ccf3dae
+/event-system/typed-events:
+  en: 18070de55501a230
+  zh: 0a34d22dc2662599
+/event-system/cordis-events-and-session-records:
+  en: 93102b27250eea35
+  zh: a97a0197f785a4aa
+/event-system/event-listeners-are-effects:
+  en: b7cc96734661caef
+  zh: 442ec0da611cf644
+/event-system/example-logging-plugin:
+  en: 9a79302d8fbec77c
+  zh: 58db4d48c4189ecb
+/event-system/next-steps:
+  en: 5f2a85db2ceb2c76
+  zh: b2507ab4e5e4afbf

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `spill/` group stores full text outside the model's context and returns a locator with retrieval guidance. The family splits into the storage service in `spill/`, the local filesystem backend in `spill-local/`, and the tool-result policy in `spill-policy/`. Tool-result spilling is opt-in through `maxInlineBytes` and keeps the original result on storage failure. [Session references](../context/session-reference/README.md) also consume storage directly for truncated captured transcripts, with their own preview and failure notices; they do not require the tool-result policy.
+The `spill/` group stores full text outside the model's context and returns a locator with retrieval guidance. The family splits into the storage service in `spill/`, the local filesystem backend in `spill-local/`, and the tool-result policy in `spill-policy/`. Tool-result spilling is opt-in through `maxInlineTokens` and keeps the original result on storage failure. [Session references](../context/session-reference/README.md) also consume storage directly for truncated captured transcripts, with their own preview and failure notices; they do not require the tool-result policy.
 
 ## Table of Contents
 

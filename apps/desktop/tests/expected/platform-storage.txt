@@ -1,0 +1,8 @@
+first-open=visible
+first-got-it=hidden
+first-reopen=hidden
+reopen-cookies=cleared
+second-account=visible
+back-to-first=hidden
+signed-in-again=hidden
+restart-first-open=hidden

@@ -65,7 +65,7 @@ kind: "package-reference"
 | `dsh-permission-presets`、`dsh-user-approval`、`dsh-commands` | preset 引用指向活动 preset、审批询问/决定配对、命令运行/完成配对 |
 | `dsh-jobs`、`dsh-tool-todo`、`dsh-time-context` | 任务快照字段关系、整表 todo 形状、持久时钟读数 |
 | `dsh-credentials`、`dsh-settings`、`dsh-storage-domain`、`dsh-workspace` | 提交事件对照活动服务或内存状态、实体缓存镜像 |
-| `dsh-agent-presets`、`dsh-session-title`、`dsh-plan-mode`、`dsh-schedule` | preset 挂载位置、标题来源引用、plan-mode 载荷、schedule 流 |
+| `dsh-agent-preset-registry`、`dsh-session-title`、`dsh-plan-mode`、`dsh-schedule` | preset 挂载位置、标题来源引用、plan-mode 载荷、schedule 流 |
 | `dsh-client-hmr`、`dsh-client-modules`、`dsh-client-runtime` | 浏览器/node 侧 stat-watcher 生命周期、启动入口图、slot 变更版本化 |
 
 其余工作区包省略配套入口，并在各自 README 中说明包级原因。

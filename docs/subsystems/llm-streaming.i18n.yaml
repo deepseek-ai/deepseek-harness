@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for llm-streaming.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/llm-streaming.md
-llm-streaming.md: 6d29664f4362a3196d3ba7526c6fb18e20b034ad
-llm-streaming.zh.md: 3c60ae3935f745e11b850990c98a75208fb1c9f3
+/llm-streaming:
+  en: 989057ec9786a505
+  zh: 03e20367da473086
+/llm-streaming/content-blocks-and-messages:
+  en: 365ecc228f756098
+  zh: 396e68661a789854
+/llm-streaming/streamchunk-the-raw-protocol:
+  en: a18fe401763efde4
+  zh: ef59a76d9c694654
+/llm-streaming/compact-assistant-streams:
+  en: 4d0d51bc3c4cbc9b
+  zh: b5c386d8e995dd06
+/llm-streaming/llmfailure:
+  en: 13415501869b4ca9
+  zh: 723c7533cce3d1d6
+/llm-streaming/request-image-pricing:
+  en: 10598e1a98262415
+  zh: 7fb85b22174a1497
+/llm-streaming/the-adapter-contract:
+  en: f9dacddf34a48d66
+  zh: 1a426c55909c081f
+/llm-streaming/resolvedretrypolicy:
+  en: cbab49d689311d4d
+  zh: 76246140eabaa55e
+/llm-streaming/appidentity-app-attribution:
+  en: 7ff4b18ef82a959d
+  zh: 8a40e6c7c57258a4
+/llm-streaming/tokenusage:
+  en: 33830f78fdb845fa
+  zh: f43a4502c4c3bfff
+/llm-streaming/blockassembler:
+  en: 58dec2259b0b1c6f
+  zh: fc99fe965acaabf3
+/llm-streaming/the-model-request:
+  en: ddca84b082554567
+  zh: 804ffb1cb0c94bfa
+/llm-streaming/the-model-request/the-request-envelope-llmcallconfig-and-the-logged-header:
+  en: 8b6e6b65ccea943f
+  zh: bce1edd6386e37b1
+/llm-streaming/official-deepseek-request-extensions:
+  en: b19f291f094157ed
+  zh: 682f13a833e8bb52
+/llm-streaming/service-and-provider-contracts:
+  en: 8dc79d4cc82824c2
+  zh: 3ebabd3a117ad717

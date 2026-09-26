@@ -75,8 +75,6 @@ function blockText(block: SessionContentBlock): string[] {
       return []
     case 'tool-call':
       return [block.name, block.arguments]
-    case 'tool-result':
-      return block.content.flatMap(blockText)
     // ContentBlockMap is merge-extensible. Unknown blocks do not become
     // searchable merely because their payload happens to contain strings.
     default:

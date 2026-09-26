@@ -37,9 +37,11 @@ if (!isJsonValue(input)) throw new TypeError('expected lossless JSON')
 const snapshot = snapshotJsonValue(input) as JsonValue
 ```
 
-### Publish or compare values
+### Publish, compare, or retain keyed values
 
 `deepFreeze(value)` freezes an object graph in place and returns the same value. It walks enumerable string-keyed children and deliberately leaves live `AbortSignal` objects mutable. `deepEqualJson(a, b)` compares JSON-compatible arrays and records structurally; callers must validate hostile or unconstrained values before comparison.
+
+`WeakMapWithValues<Key, Value>` combines weak object-key lookup with a strongly retained, insertion-ordered `values` set. Each value belongs to one key. The owner must call `delete(key)` or `clear()` at the corresponding lifecycle boundary; the collection does not perform automatic cleanup.
 
 ### Close a discriminated union
 
@@ -53,13 +55,13 @@ Use `assertNever(value, context?)` in the default branch of a closed discriminat
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The JSON validator uses an explicit work stack and tracks only the active ancestor chain, so deeply nested values do not consume the JavaScript call stack and repeated non-cyclic references remain valid. Snapshot writes use own data properties, including for names such as `__proto__`. The other helpers derive their result only from their arguments and retain no state between calls.
+The JSON validator uses an explicit work stack and tracks only the active ancestor chain, so deeply nested values do not consume the JavaScript call stack and repeated non-cyclic references remain valid. Snapshot writes use own data properties, including for names such as `__proto__`. Value operations derive their result only from their arguments; `WeakMapWithValues` stores only instance-owned associations.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | JSON value type, validation and snapshot traversal, structural equality, deep freezing, and exhaustive-union failure |
+| [`src/index.ts`](src/index.ts) | JSON value type, validation and snapshot traversal, structural equality, deep freezing, weak-key/strong-value associations, and exhaustive-union failure |
 | — | No runtime invariant companion is published because these value operations have no shared runtime state; unit tests cover their algebra. |
 
 </details>
@@ -81,6 +83,7 @@ The JSON validator uses an explicit work stack and tracks only the active ancest
 
 - **`deepEqualJson` assumes JSON-compatible inputs** — it is not a general object comparator and does not define semantics for prototypes, symbols, accessors, cycles, maps, or sets.
 - **`deepFreeze` follows enumerable string-keyed children** — it does not turn arbitrary host objects into immutable data, and it intentionally skips live `AbortSignal` instances.
+- **`WeakMapWithValues` requires explicit cleanup and unique values** — values remain strongly held until their owning key is deleted or the collection is cleared, and one value must not be shared by several keys.
 
 <a id="dev-note"></a>
 ### Dev Note

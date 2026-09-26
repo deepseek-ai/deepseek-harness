@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ShellExecutor } from '@deepseek-ai/dsh-shell'
-import type { ShellExecRequest, ShellExecSpec, ShellProcess, ShellProcessRead, ShellRunResult } from '@deepseek-ai/dsh-shell'
+import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellProcessRead } from '@deepseek-ai/dsh-shell'
+
+/** Empty offset readers for fakes that never produce output. */
+const silentReader = { readFrom: (fromByte: number) => ({ text: '', nextOffset: fromByte, lossy: false }) }
 
 /**
  * Minimal concrete executor: canned foreground results, a hand-built process
- * handle. The seam is TASK-FREE (start returns a {@link ShellProcess} handle;
+ * handle. The seam is TASK-FREE (execute returns a live handle;
  * task semantics live in `ctx.jobs`), so this stub is all an implementation
  * owes the abstract class.
  */
@@ -15,36 +18,35 @@ class StubExecutor extends ShellExecutor {
       command: request.command,
       workdir: request.workdir ?? '/stub',
       timeoutMs: request.timeoutMs ?? 1000,
+      onExpiry: request.onExpiry ?? 'kill',
       stdoutMaxBytes: request.stdoutMaxBytes ?? 64_000,
       ...request.signal ? { signal: request.signal } : {},
       sandboxPolicy: request.sandboxPolicy,
     }
   }
 
-  async run(spec: ShellExecSpec): Promise<ShellRunResult> {
-    return {
-      exitCode: 0,
-      signal: null,
-      timedOut: false,
-      aborted: false,
-      timeoutMs: spec.timeoutMs,
-      stdout: { text: 'ok', truncated: false },
-      stderr: { text: '', truncated: false },
-    }
-  }
-
-  async start(): Promise<ShellProcess> {
-    const proc: ShellProcess = {
+  async execute(spec: ShellExecSpec): Promise<ShellExecution> {
+    const proc: ShellExecution = {
       status: 'running',
       exitCode: null,
       signal: null,
       done: Promise.resolve(),
       readOutput: (): ShellProcessRead => ({ delta: '', lossy: false }),
+      observed: { stdout: silentReader, stderr: silentReader },
       kill: (): boolean => {
         if (proc.status !== 'running') return false
         proc.status = 'killed'
         return true
       },
+      result: () => Promise.resolve({
+        exitCode: 0,
+        signal: null,
+        timedOut: false,
+        aborted: false,
+        timeoutMs: spec.timeoutMs,
+        stdout: { text: 'ok', truncated: false },
+        stderr: { text: '', truncated: false },
+      }),
     }
     return proc
   }
@@ -55,13 +57,16 @@ describe('ShellExecutor service seam', () => {
     const ctx = new Context()
     await ctx.plugin(StubExecutor)
     const spec = ctx.shell.resolve({ command: 'echo hi' })
-    expect(spec).toEqual({ command: 'echo hi', workdir: '/stub', timeoutMs: 1000, stdoutMaxBytes: 64_000, sandboxPolicy: undefined })
+    expect(spec).toEqual({ command: 'echo hi', workdir: '/stub', timeoutMs: 1000, onExpiry: 'kill', stdoutMaxBytes: 64_000, sandboxPolicy: undefined })
 
-    const result = await ctx.shell.run(spec)
+    // One execution, two views: the foreground result projection…
+    const ex = (await ctx.shell.execute(spec))
+    const result = await ex.result()
     expect(result.exitCode).toBe(0)
     expect(result.stdout.text).toBe('ok')
 
-    const proc = await ctx.shell.start(spec)
+    // …and the live handle itself.
+    const proc = (await ctx.shell.execute({ ...spec, onExpiry: 'none' }))
     expect(proc.status).toBe('running')
     expect(proc.readOutput()).toEqual({ delta: '', lossy: false })
     expect(proc.kill()).toBe(true)

@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-16-desktop-cos-upload-transport.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-16-desktop-cos-upload-transport.md
+/agent-note-upload-desktop-releases-through-the-tencent-cos-sdk:
+  en: acead237faaa9390
+  zh: ca5d23451f3b4577
+/agent-note-upload-desktop-releases-through-the-tencent-cos-sdk/problem:
+  en: 74f8515cdbb2a0aa
+  zh: a00d1b08db6d6158
+/agent-note-upload-desktop-releases-through-the-tencent-cos-sdk/decision:
+  en: 54cef8eacccce2e8
+  zh: 8bad9ce5c932e0dd
+/agent-note-upload-desktop-releases-through-the-tencent-cos-sdk/testing:
+  en: c15a405f365ca499
+  zh: ee59d1b593473ee7
+/agent-note-upload-desktop-releases-through-the-tencent-cos-sdk/alternatives-considered:
+  en: faae1f132d6cd404
+  zh: 1683143fbe6b07ce
+/agent-note-upload-desktop-releases-through-the-tencent-cos-sdk/consequences:
+  en: 2453f558b12db1ec
+  zh: 15d77bfb842f9b31

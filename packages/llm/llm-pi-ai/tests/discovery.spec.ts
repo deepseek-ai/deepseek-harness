@@ -74,6 +74,14 @@ async function harness(): Promise<Context> {
 }
 
 describe('catalog-route model discovery', () => {
+  it('includes the installed model input types for vision models', async () => {
+    const ctx = await harness()
+    const models = await ctx.llm.discoverModels('llm-pi-ai', { provider: 'openai' })
+    const installed = getBuiltinModels('openai').find(model => model.id === 'gpt-6-astra')
+    expect(installed?.input).toContain('image')
+    expect(models.find(model => model.id === 'gpt-6-astra')).toMatchObject({ inputModalities: installed?.input })
+  })
+
   it('answers from the installed registry, with capacities and no network call', async () => {
     const server = await listingServer({ body: JSON.stringify({ data: [{ id: 'from-the-endpoint' }] }) })
     const ctx = await harness()

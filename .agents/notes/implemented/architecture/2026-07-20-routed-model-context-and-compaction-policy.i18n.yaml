@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-20-routed-model-context-and-compaction-policy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-20-routed-model-context-and-compaction-policy.md
-2026-07-20-routed-model-context-and-compaction-policy.md: 26d8a4a85c284e50b9635017f0dd0bf905a4427f
-2026-07-20-routed-model-context-and-compaction-policy.zh.md: 8656200a4b25c2ca70160e8f5949a7518e390168
+/agent-note-routed-model-context-and-compaction-policy:
+  en: eca190695d4857f5
+  zh: f9d6411b8a8612ae
+/agent-note-routed-model-context-and-compaction-policy/problem:
+  en: f7d1f343e487d725
+  zh: c7f736180e44d586
+/agent-note-routed-model-context-and-compaction-policy/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-routed-model-context-and-compaction-policy/decision/adapters-own-exact-route-capacity:
+  en: 7bcf0ae2c74a0eb7
+  zh: bc0e04a25492d5ba
+/agent-note-routed-model-context-and-compaction-policy/decision/token-measurement-remains-model-agnostic:
+  en: 51d1b39d06407320
+  zh: 85c88f6b5d8508d6
+/agent-note-routed-model-context-and-compaction-policy/decision/compact-basic-resolves-a-target-spec:
+  en: d8827f9fa70aa65f
+  zh: a9d29e05dcb0cfdb
+/agent-note-routed-model-context-and-compaction-policy/decision/target-specific-pressure-failures-preserve-optional-composition:
+  en: 1bd81ae0a1409e24
+  zh: 635c2937d5a94df7
+/agent-note-routed-model-context-and-compaction-policy/testing:
+  en: 1ac13596df50571f
+  zh: 8605a6f0de049dfc
+/agent-note-routed-model-context-and-compaction-policy/alternatives-considered:
+  en: 0ca0a4b1318188ec
+  zh: de98cd4494a6c0d0
+/agent-note-routed-model-context-and-compaction-policy/consequences:
+  en: d00f83e85ba5e431
+  zh: 32665480f0cdc4ea

@@ -1,6 +1,10 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for dynamic-cordis.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/develop/practice/dynamic-cordis.md
-dynamic-cordis.md: 5e324f88c9fc5ac8f770749cf4ab2c97d175121d
-dynamic-cordis.zh.md: 69486cd0d2bacf7c0831e12801128be22fb209ef
+/configure-persistent-plugins-from-a-prompt:
+  en: 9503745724cbe962
+  zh: 985513234a4eda31
+/configure-persistent-plugins-from-a-prompt/connect-an-mcp-server:
+  en: f9fefda94ba8a005
+  zh: f1a9a977a0732fc0

@@ -1,6 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent, Inbox, InboxState } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SessionControlController } from '../src/control.ts'
@@ -9,6 +10,12 @@ import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
 } from '@deepseek-ai/dsh-agent-loop-testkit'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'fixture': { kind: 'fixture' } & ContextFormed
+  }
+}
 
 const ownedContexts = new Set<Context>()
 afterEach(async () => {
@@ -33,7 +40,7 @@ async function harness(): Promise<{
 function message(text: string, source: 'user' | 'plugin' = 'user') {
   return createUserMessage({
     content: [{ type: 'text', text }],
-    source: source === 'user' ? { kind: 'user' } : { kind: 'plugin', plugin: 'fixture' },
+    source: source === 'user' ? { kind: 'user' } : { kind: 'fixture' },
   })
 }
 
@@ -107,6 +114,23 @@ describe('Session control Inbox projection', () => {
       },
     })
 
+    abort.abort()
+    await iterator.next()
+  })
+
+  it('projects inbox state for live and cold sessions', async () => {
+    const { ctx, control, inbox } = await harness()
+    inbox.append('next-turn', message('queued'))
+    const cold = ctx.sessions.create(SessionId('cold-session'))
+
+    const abort = new AbortController()
+    const iterator = control.control(abort.signal)[Symbol.asyncIterator]()
+    const opened = await iterator.next()
+    if (opened.done || opened.value.type !== 'baseline') throw new Error('missing baseline')
+    expect(opened.value.value.projections[cold.id]?.values.inbox).toEqual({ 'next-turn': [], 'next-step': [] })
+    expect(opened.value.value.projections['queue-session' as SessionId]?.values.inbox).toMatchObject({
+      'next-turn': [expect.objectContaining({ content: [{ type: 'text', text: 'queued' }] })],
+    })
     abort.abort()
     await iterator.next()
   })

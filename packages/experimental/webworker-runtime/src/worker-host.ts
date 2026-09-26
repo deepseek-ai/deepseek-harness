@@ -17,11 +17,12 @@
  *
  * The tree itself boots through the host's own `boot()` glue loaded from the
  * image, so entry mounting, the activation audit, and its diagnostics are the
- * same code the Node deployment runs. Only the module seam and the command line
- * are supplied from here.
+ * same code the Node deployment runs. The Worker supplies module loading,
+ * profile locations, and the command line.
  * @module @deepseek-ai/dsh-experimental-webworker-runtime/src/worker-host
  */
 import { setActiveModuleLoader, WorkerModuleLoader, type StaticModuleFactory } from './module-system/module-loader.ts'
+import type { ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import type { TypertGateway } from '@deepseek-ai/dsh-api-gateway'
 import type { HostConnectionHandle } from '@deepseek-ai/dsh-client-connection'
 import type { AlsCausality } from './polyfill/async-context/als-runtime.ts'
@@ -230,8 +231,10 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
         provideCmdline(ctx: unknown, host: { args: readonly string[]; exit: (code: number) => void }): void
       }
 
-      const { patches, presetOverlay } = bootPatches(loader, mounted, configPath, root)
-      const ctx = await appBoot.boot('dsh-webworker', configPath, patches, (hostCtx) => {
+      const { patches, profile } = bootPatches(loader, mounted, configPath, root)
+      const profileConfig = join(profile.dir, 'cordis.yml')
+      const ctx = await appBoot.boot('dsh-webworker', profileConfig, patches, (hostCtx) => {
+        hostCtx.provide('profileContext', profile)
         // Before any entry mounts: the Loader would otherwise fall back to the
         // runtime's own dynamic import for every row.
         hostCtx.loader.internal = loader.internal
@@ -251,12 +254,14 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
       }
       const handler = connection.createSharedFetchHandler('/api')
       const usage = loader.usage()
-      console.info(`webworker host: tree active (modules=${String(usage.modules)}, data overlays=${String(overlays.length)}, preset root overlay=${presetOverlay ? 'applied' : 'already in roster'}, direct lane=connection.createSharedFetchHandler, als causality=${options.alsCausality === undefined ? 'inert' : 'snapshot/restore'}, image lowering=${LOWERING_VERSION})`)
+      console.info(`webworker host: tree active (modules=${String(usage.modules)}, data overlays=${String(overlays.length)}, direct lane=connection.createSharedFetchHandler, als causality=${options.alsCausality === undefined ? 'inert' : 'snapshot/restore'}, image lowering=${LOWERING_VERSION})`)
 
       tunnel.serve({
         directFetch: (request: Request) => handler.fetch(request),
         bootPayload: () => readBootPayload(ctx),
-        openStream: typertGateway.wireStream.open,
+        // The worker tree serves its own page: every stream speaks for the operator.
+        openStream: (endpoint, payload, uplink, signal) =>
+          typertGateway.wireStream.open(endpoint, payload, uplink, undefined, signal),
         streamFailure: typertGateway.wireStream.failure,
       })
     } catch (reason) {
@@ -347,36 +352,32 @@ function requireLoweredImage(vfs: MemoryVfs, path: string): void {
 }
 
 /**
- * The shipped preset root, as the application layer that owns the composition
- * supplies it.
- *
- * A launcher appends this root itself rather than writing it into the roster —
- * `apps/cli` does it in `composeProfile` (`profile-boot.ts:159-166`) because only
- * the application knows where its own presets sit. The worker's presets travel
- * in the image, so the same overlay names their virtual path. Patching replaces
- * a row's whole `config`, so the current one is read and spread, and a roster
- * that already names roots keeps them.
+ * Prepare an editable VFS profile from the packed rows and deployment overlays.
+ * ConfigEditor writes overrides beside the insertion rows; reconciliation starts
+ * at the empty profile root and retains the Worker deployment overlays.
  * @param loader - Module loader, for the image's YAML reader.
  * @param vfs - Filesystem holding the composed configuration.
  * @param configPath - Composed configuration path.
  * @param root - Virtual root.
- * @returns Boot patches (preset root overlay, frontend serving off) and
- * whether the preset overlay was applied.
+ * @returns Profile locations and effective boot patches.
  */
 function bootPatches(
   loader: WorkerModuleLoader,
   vfs: MemoryVfs,
   configPath: string,
   root: string,
-): { patches: unknown[]; presetOverlay: boolean } {
+): { patches: unknown[]; profile: ProfileContext } {
   const text = vfs.readFileSync(configPath, 'utf8') as string
+  const include = loader.load(loader.resolve('@deepseek-ai/cordis-plugin-include', root)) as { entryListSchema: unknown }
+  const yaml = loader.load(loader.resolve('js-yaml', root)) as {
+    load(source: string, options: { schema: unknown }): unknown
+    dump(value: unknown, options: { schema: unknown }): string
+  }
   let rows: unknown
   if (configPath.endsWith('.json')) {
     rows = JSON.parse(text)
   } else {
     // The roster's `!!js` scalars need Include's own YAML dialect.
-    const include = loader.load(loader.resolve('@deepseek-ai/cordis-plugin-include', root)) as { entryListSchema: unknown }
-    const yaml = loader.load(loader.resolve('js-yaml', root)) as { load(source: string, options: { schema: unknown }): unknown }
     rows = yaml.load(text, { schema: include.entryListSchema })
   }
   const find = (entries: unknown, id: string): Record<string, unknown> | undefined => {
@@ -393,15 +394,11 @@ function bootPatches(
       ? row.config
       : {}) as Record<string, unknown>
 
-  const patches: unknown[] = []
-  let presetOverlay = false
-  const presets = find(rows, 'agent-presets')
-  if (presets !== undefined && configOf(presets).roots === undefined) {
-    presetOverlay = true
-    patches.push({
-      id: 'agent-presets',
-      config: { ...configOf(presets), roots: [{ path: join(root, 'config/agent-presets'), trust: 'system' }] },
-    })
+  const patches: Array<ProfileContext['overlays'][number]> = []
+  // The image has no package manager or Node module-reload cache. ConfigEditor
+  // reconciles writes directly; Loader commits accepted live values.
+  for (const id of ['hmr', 'plugin-manager']) {
+    if (find(rows, id) !== undefined) patches.push({ id, disabled: true })
   }
   // The worker carries no compression codec, and the VFS is in-memory anyway:
   // the JSONL backend's plaintext path is the composition's one legal encoding.
@@ -409,7 +406,22 @@ function bootPatches(
   if (jsonl !== undefined) {
     patches.push({ id: 'session-persistence-jsonl', config: { ...configOf(jsonl), compression: 'none' } })
   }
-  return { patches, presetOverlay }
+  const dir = join(root, IMAGE_HOME_DIRECTORY, 'profiles/preview')
+  const profile: ProfileContext = {
+    name: 'preview', dir, patchPath: join(dir, 'cordis.patch.yml'),
+    installAnchor: join(dir, 'package.json'), cwd: root,
+    home: join(root, IMAGE_HOME_DIRECTORY), startedBundles: [],
+    overlays: patches, telemetryDisabledEnv: undefined,
+  }
+  vfs.seed(join(dir, 'package.json'), '{"private":true,"dsh":{"profile":{"bundles":[]}}}\n')
+  vfs.seed(join(dir, 'cordis.yml'), '[]\n')
+  if (!vfs.existsSync(profile.patchPath)) {
+    vfs.seed(profile.patchPath, yaml.dump([{ insert: rows }], { schema: include.entryListSchema }))
+  }
+  const appBoot = loader.load(loader.resolve('@deepseek-ai/dsh-app-boot', root)) as {
+    readProfilePatches(binName: string, profile: ProfileContext): unknown[]
+  }
+  return { patches: appBoot.readProfilePatches('dsh-webworker', profile), profile }
 }
 
 /**

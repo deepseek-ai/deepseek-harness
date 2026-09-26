@@ -1,6 +1,37 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for persistence.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/persistence.md
-persistence.md: 7e18e9bbfec8c7aa81525da33ad3cffa4681ea73
-persistence.zh.md: 8250fb93b20dc33c2df705fd2c7092bc8dea155c
+/session-persistence:
+  en: b3d66086d8863a84
+  zh: dd532fd7c9947b35
+/session-persistence/sessionhandle-one-open-channel-onto-a-stored-session:
+  en: 283765de86ff454d
+  zh: ef8fcf55a3071243
+/session-persistence/the-flush-checkpoint:
+  en: a751d1952a47d938
+  zh: f0ae8447fdc26dfb
+/session-persistence/crash-recovery-preserves-an-interrupted-turn:
+  en: 534044a0ce482d52
+  zh: d2e8a7dfeb066946
+/session-persistence/sessionlocation-refusal-diagnostics-artifact-target:
+  en: 886589f052a916d7
+  zh: 2ca126aa700c933c
+/session-persistence/sessionheader-metadata-beside-the-log:
+  en: 5795ae03d2d163cd
+  zh: a46ceeb22cfbb6a1
+/session-persistence/format-refusal-logs-a-build-cannot-faithfully-read:
+  en: fa822e9185bf758b
+  zh: 7fcdbe2f69f848b9
+/session-persistence/createsessionoptions-seeding-and-metadata:
+  en: 627c1f7798802ae7
+  zh: ebfe7fb5a7f981b9
+/session-persistence/preparation-and-restoration-ownership:
+  en: 8a37d5ec058058e5
+  zh: 9c54c2c06c167c0b
+/session-persistence/lightweight-source-revisions:
+  en: 142ff3bed547efcf
+  zh: a73ca5ea4743d3e8
+/session-persistence/the-backend:
+  en: adcd78909565b046
+  zh: a09bcb6ec0ebad9e

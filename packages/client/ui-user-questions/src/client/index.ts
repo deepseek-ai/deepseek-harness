@@ -98,6 +98,7 @@ export function apply(ctx: ClientContext): void {
         pendingInteraction instanceof PendingQuestion ? pendingInteraction : null,
       locale: NS,
       store: questionDraftStore,
+      children: { 'conversation.plan-review.actions': { kind: 'list', scope: 'session' } },
     },
     QuestionComposer,
   ))

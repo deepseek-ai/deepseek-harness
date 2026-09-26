@@ -46,6 +46,8 @@ selector 是 per-spawn locator 或 sentinel，不是凭据或持久格式。Linu
 
 正常 Cordis dispose 会独立启动 direct-result 与 range observation、请求终止，并等待每个自有 range。消费方 teardown 不检查普通 PID；它会保留原始 operation 或 startup error，同时尝试 terminate 与 final wait，并按消费方既有错误顺序保留 cleanup failure。range 一旦被确认为空，就会永久禁止后续向陈旧 identity 发送信号。
 
+原生 Windows fixture 在成功和失败时都通过同一个 Job owner 请求终止并完成最终等待。后代 PID 仅用于观察：进程退出后再执行 `taskkill`，可能终止已复用该编号的无关进程，包括并发运行的其他测试 worker。
+
 在 JavaScript 可观察的 host exit 期间，`LocalSubprocessRuntime` 会同步强制终止每个仍存活的句柄，不使用 Promise 或 timer。Linux 会发送既有 direct fallback kill 与准确 scope kill；Windows 会终止 runner，使其唯一 Job handle 关闭；PTY fallback 扫描仍是 best effort。每个句柄的失败相互隔离，也不改变宿主退出结果。JavaScript 无法运行的终止形态不属于该 listener 的保证。
 
 ## Existing decisions and supersession
@@ -53,6 +55,8 @@ selector 是 per-spawn locator 或 sentinel，不是凭据或持久格式。Linu
 本 Note 拥有当前 native containment 机制。它局部更新了[subprocess seam](../../archived/architecture/2026-07-26-subprocess-seam.md)中的 provider 与 no-PID 事实、[持久化 PTY 会话](../feature/2026-07-16-persistent-pty-sessions.zh.md)中的 Linux teardown 事实、[宿主退出同步清理](../../archived/bug-fix/2026-08-11-synchronous-subprocess-exit-cleanup.md)使用的 native target、[共享 Win32 process primitives](../../archived/architecture/2026-08-19-shared-win32-process-primitives.md)的 ordinary 消费方，以及[Python SDK profile 运行时](../../archived/architecture/2026-08-23-python-sdk-dsh-profile-runtime.md)选择的私有入口。每份 Note 都保留其余决策并继续处于 active 状态。
 
 ## Verification
+
+宿主退出清理 fixture 对比 provider 在 disposal 前后的监听器身份，并验证独立注册的退出监听器仍然存在。进程监听器总数无法证明 provider 清理完成，因为其他进程生命周期处理器可能在 provider 构造之后注册。
 
 - provider 与 Linux 协议测试套件固定同步 NUL 拒绝发生在启动副作用之前、严格 request／error 解码、target cwd 与完整环境恢复、私有变量碰撞、保留 argv 且对 symlink 敏感的 PATH 遍历、为继承 stdio 清除 close-on-exec、pre-exec error ownership、失败深度 probe 重试与成功深度 probe 缓存及逐调用 manager 检查、三种 scope 建立状态（包括 request 未消费时的请求终止与意外退出）、`LoadState`／`ActiveState`／`TasksCurrent` 解析、释放被留在 active 且没有任何进程的遗留 scope（连同 client 仍存活、未请求终止与进程数未上报三种情形）、`reloading`、带未胜出 delay 取消的 terminate wake-up、建立后有上限的退避，以及 PTY managed-owner 恰好一次 cleanup。
 - Windows 协议与 Win32 测试套件固定恰好两个 result 分支、只含数字的 target exit、使用普通 error 的 start cancellation 与 parent 原样保留的本地 reason、缩减到 `name`／`message`／`code`／`syscall`／`path` 的 error record、固定的 `2`／`3`／`267` 到 `ENOENT`、`740` 到 `EACCES`、`5` 到 `EPERM`、`193` 到 `EFTYPE` 及其余 code 到 `UNKNOWN` 的映射、runner spawn 后才发送 start、spawn 前 failure 的 empty-range settlement、按序数显式排序的 target 环境块及 `=C:` 保留和双 NUL 结尾、`uv_get_osfhandle()` carrier 映射与 unsigned invalid sentinel 拒绝、null-device ignored-stdin carrier 与非 ignore stdin pipe、result-send 与 IPC-disconnect failure、stdio settlement 前的 direct-result 锁存、active-process 完全停稳，以及唯一 handle cleanup。

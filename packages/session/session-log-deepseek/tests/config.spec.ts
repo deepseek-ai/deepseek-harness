@@ -29,3 +29,12 @@ describe('session-log upload configuration', () => {
     }
   })
 })
+
+describe('session-log upload byte limit', () => {
+  it('defaults each request to 8 MiB and accepts only positive integer limits', async () => {
+    const { Config } = await import('../src/index.ts')
+    expect(Config({}).maxBytes).toBe(8 * 1024 * 1024)
+    expect(Config({ maxBytes: 1 }).maxBytes).toBe(1)
+    for (const maxBytes of [0, -1, 1.5]) expect(() => Config({ maxBytes })).toThrow()
+  })
+})

@@ -19,14 +19,15 @@
     var(--dsh-composer-dock-inset) -
     var(--dsh-composer-dock-inset)
   );
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
-  background: var(--dsw-specific-tip);
-  /* Elevated surface: `--dsw-specific-tip` is the same dark rung as the menu
-     surface, and `.list` scrolls inside this card, so the thumb takes the l2
-     elevation tokens. Declared here because the elevation belongs to the
-     surface, and the custom properties inherit down to `.list` (see ui-theme
-     styles/scrollbar.css for the rebinding contract). */
+  border: 0;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  box-shadow: var(--dsw-elevation-panel);
+  /* The menu surface and the scrolling `.list` use the l2 scrollbar colors.
+     Declared here because the custom properties inherit into `.list` (see
+     ui-theme styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
@@ -111,25 +112,6 @@
   place-items: center;
   width: 16px;
   height: 16px;
-}
-
-.glyphCompleted {
-  color: var(--dsw-alias-state-success-primary);
-}
-
-.glyphPending {
-  color: var(--dsw-alias-label-caption);
-}
-
-.glyphProgress {
-  color: var(--dsw-alias-state-business-primary);
-  animation: todo-progress-spin 1s linear infinite;
-}
-
-@keyframes todo-progress-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* Figma strip is single-line; long items ellipsize with no inline expand. */

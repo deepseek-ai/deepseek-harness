@@ -80,3 +80,21 @@ export function webCardModel(block: ToolCallBlock): WebCardModelProps | null {
     truncated: meta.truncated,
   }
 }
+
+/**
+ * Read the openable URL of a web_fetch call from its arguments.
+ * @param block - running or settled Tool block.
+ * @returns the http(s) URL, or undefined for another tool, protocol, or unparsable argument.
+ */
+export function webFetchHref(block: ToolCallBlock): string | undefined {
+  const call = parsedToolCall(block)
+  if (call?.name !== 'web_fetch' || typeof call.args.url !== 'string') return undefined
+  const { url } = call.args
+  try {
+    const { protocol } = new URL(url)
+    return protocol === 'http:' || protocol === 'https:' ? url : undefined
+  } catch {
+    // An unparsable URL stays plain summary text.
+    return undefined
+  }
+}

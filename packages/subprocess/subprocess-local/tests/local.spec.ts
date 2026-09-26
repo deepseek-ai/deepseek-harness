@@ -2,7 +2,9 @@ import { PassThrough } from 'node:stream'
 import os from 'node:os'
 import { syncBuiltinESMExports } from 'node:module'
 import { describe, expect, it, vi } from 'vitest'
-import { basename, dirname, relative, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import type { SubprocessSpawnSpec, SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
@@ -742,6 +744,35 @@ describe('LocalSubprocessRuntime', () => {
     expect(result.exitCode).toBe(0)
     expect(handle.collected.stdout!.readFrom(0).text).toBe('managed\n')
     await fiber.dispose()
+  })
+
+  it('logs one error through the plugin logger when a spill cannot be written and keeps the tail', async () => {
+    const removedDir = mkdtempSync(join(tmpdir(), 'dsh-subprocess-removed-'))
+    rmSync(removedDir, { recursive: true, force: true })
+    const ctx = new Context()
+    const logged = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    const fiber = await ctx.plugin(LocalSubprocessRuntime)
+    const runtime = ctx.subprocess as LocalSubprocessRuntime
+    runtime.internals = { spillDir: removedDir }
+    try {
+      const handle = runtime.spawn(spec('', {
+        argv: [process.execPath, '-e', 'process.stdout.write("x".repeat(4096))'],
+        stdio: { stdin: 'ignore', stdout: { maxBytes: 16, spill: { maxBytes: 1_000_000 } }, stderr: 'pipe' },
+      }))
+      const result = await handle.done
+      expect(result.exitCode).toBe(0)
+      const stdout = handle.collected.stdout!.readFrom(0)
+      expect(stdout.text).toBe('x'.repeat(16))
+      expect(stdout.lossy).toBe(true)
+      expect(stdout.spillPath).toBeUndefined()
+      expect(logged).toHaveBeenCalledOnce()
+      const [message, error] = logged.mock.calls[0] as [string, NodeJS.ErrnoException]
+      expect(message).toContain('could not write the complete stdout stream')
+      expect(message).toContain('temporary-file cleaner')
+      expect(error.code).toBe('ENOENT')
+    } finally {
+      await fiber.dispose()
+    }
   })
 
   it('warns once when ordinary spawns use the weaker macOS fallback', async () => {

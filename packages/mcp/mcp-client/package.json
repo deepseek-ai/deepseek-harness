@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-mcp-client",
   "description": "MCP client bridge: connects to MCP servers and registers their tools on ctx.tools",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -27,38 +27,38 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-attachment": "workspace:^",
-    "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/dsh-scope": "workspace:^",
-    "@deepseek-ai/dsh-subprocess": "workspace:^",
-    "@deepseek-ai/dsh-timeout": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-mcp-resources": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^"
+    "@deepseek-ai/dsh-attachment": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-scope": "workspace:*",
+    "@deepseek-ai/dsh-subprocess": "workspace:*",
+    "@deepseek-ai/dsh-timeout": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-mcp-resources": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:~",
     "@modelcontextprotocol/client": "2.0.0",
-    "@deepseek-ai/dsh-util-values": "workspace:^"
+    "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-attachment": "workspace:^",
-    "@deepseek-ai/dsh-attachment-local": "workspace:^",
-    "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/dsh-scope": "workspace:^",
-    "@deepseek-ai/dsh-subprocess": "workspace:^",
-    "@deepseek-ai/dsh-timeout": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-attachment": "workspace:*",
+    "@deepseek-ai/dsh-attachment-local": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-scope": "workspace:*",
+    "@deepseek-ai/dsh-subprocess": "workspace:*",
+    "@deepseek-ai/dsh-timeout": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
     "@modelcontextprotocol/server-everything": "^2026.7.4",
     "@modelcontextprotocol/server-filesystem": "^2026.7.4",
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-http-proxy": "workspace:^",
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-http-proxy": "workspace:*",
     "@modelcontextprotocol/server": "2.0.0",
     "@modelcontextprotocol/node": "2.0.0",
     "zod": "^4.4.3",
-    "@deepseek-ai/dsh-mcp-resources": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^"
+    "@deepseek-ai/dsh-mcp-resources": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-mcp-resources": {

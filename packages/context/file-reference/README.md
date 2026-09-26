@@ -29,7 +29,7 @@ Choose this package when a host-backed UI (web or terminal) should offer `@file`
 
 ### Mention grammar
 
-An `@path` token at the start of input or after whitespace triggers completion; an `@` inside another token, such as an email address, does not. `@"path with spaces"` opens a quoted mention, and a directory candidate keeps that quote open after its trailing slash so completion can descend another level. The formatter rejects paths with control characters or embedded quotes that the grammar cannot represent safely.
+An `@path` token at the start of input or after whitespace triggers completion; an `@` inside another token, such as an email address, does not. `@"path with spaces"` opens a quoted mention, and a directory candidate keeps that quote open after its trailing slash so completion can descend another level. Completed directory chips close the quote after the trailing slash. Relative mentions resolve from the workspace root; absolute mentions retain the host path. The formatter rejects paths with control characters or embedded quotes that the grammar cannot represent safely.
 
 ### Getting candidates
 

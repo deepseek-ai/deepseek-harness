@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import type { PanzoomOptions } from '@panzoom/panzoom'
 import { getByRole, queryAllByRole, queryByRole, waitFor } from '@testing-library/dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MediaViewer } from '../.vitepress/theme/media-viewer.ts'
 import { installMermaidViewer, type MermaidViewer } from '../.vitepress/theme/mermaid-viewer.ts'
 
 const panzoom = vi.hoisted(() => ({
@@ -14,6 +15,8 @@ const panzoom = vi.hoisted(() => ({
 vi.mock('@panzoom/panzoom', () => ({ default: panzoom.create }))
 
 let viewer: MermaidViewer | undefined
+let media: MediaViewer
+let locale = 'en-US'
 let resize: (() => void) | undefined
 let viewportWidth = 1032
 let viewportHeight = 632
@@ -24,6 +27,8 @@ const dialogMethods = new Map(['showModal', 'close'].map(name => [
 
 beforeEach(() => {
   vi.clearAllMocks()
+  locale = 'en-US'
+  media = new MediaViewer(document, () => locale)
   panzoom.create.mockImplementation((_element, options) => {
     panzoom.getScale.mockReturnValue(options.startScale ?? 1)
     return panzoom
@@ -55,6 +60,7 @@ beforeEach(() => {
 
 afterEach(() => {
   viewer?.dispose()
+  media.close()
   viewer = undefined
   resize = undefined
   document.body.replaceChildren()
@@ -95,7 +101,8 @@ describe('documentation Mermaid viewer', () => {
       h1.textContent = heading
       required(document.querySelector('.vp-doc')).prepend(h1)
     }
-    viewer = installMermaidViewer(document, () => language)
+    locale = language
+    viewer = installMermaidViewer(document, () => locale, media)
     getByRole(document.body, 'button').click()
     const dialog = getByRole(document.body, 'dialog', { name: expected })
     const title = required(document.getElementById(required(dialog.getAttribute('aria-labelledby'))))
@@ -103,7 +110,7 @@ describe('documentation Mermaid viewer', () => {
   })
 
   it('adds one entry only after an SVG with usable dimensions renders', async () => {
-    viewer = installMermaidViewer(document, () => 'en-US')
+    viewer = installMermaidViewer(document, () => locale, media)
     expect(queryAllByRole(document.body, 'button')).toHaveLength(0)
     render('0 0 0 3000')
     viewer.refresh()
@@ -124,10 +131,10 @@ describe('documentation Mermaid viewer', () => {
   it('fits the natural SVG into the viewport and isolates copied styles and fragment IDs', () => {
     const source = render()
     const original = source.outerHTML
-    viewer = installMermaidViewer(document, () => 'en-US')
+    viewer = installMermaidViewer(document, () => locale, media)
     const dialog = open()
     expect(panzoom.create.mock.calls[0]?.[1]).toMatchObject({ startScale: 0.2, minScale: 0.1 })
-    const paper = required(dialog.querySelector<HTMLElement>('.dsh-diagram-paper'))
+    const paper = required(dialog.querySelector<HTMLElement>('.dsh-media-paper'))
     const clone = required(paper.shadowRoot?.querySelector('svg'))
     expect(clone.style.width).toBe('2000px')
     expect(clone.style.height).toBe('3000px')
@@ -148,13 +155,13 @@ describe('documentation Mermaid viewer', () => {
 
   it('connects zoom, wheel, keyboard panning and fit without dismissing a canvas click', () => {
     render()
-    viewer = installMermaidViewer(document, () => 'en-US')
+    viewer = installMermaidViewer(document, () => locale, media)
     const dialog = open()
     getByRole(dialog, 'button', { name: 'Zoom in' }).click()
     getByRole(dialog, 'button', { name: 'Zoom out' }).click()
     expect(panzoom.zoomIn).toHaveBeenCalledOnce()
     expect(panzoom.zoomOut).toHaveBeenCalledOnce()
-    const viewport = required(dialog.querySelector<HTMLElement>('.dsh-diagram-viewport'))
+    const viewport = required(dialog.querySelector<HTMLElement>('.dsh-media-viewport'))
     const wheel = new WheelEvent('wheel', { deltaY: -100 })
     viewport.dispatchEvent(wheel)
     expect(panzoom.zoomWithWheel).toHaveBeenCalledWith(wheel)
@@ -170,7 +177,7 @@ describe('documentation Mermaid viewer', () => {
 
   it('wraps keyboard focus through the viewer controls in both directions', () => {
     render()
-    viewer = installMermaidViewer(document, () => 'en-US')
+    viewer = installMermaidViewer(document, () => locale, media)
     const dialog = open()
     const close = getByRole(dialog, 'button', { name: 'Close' })
     const zoomOut = getByRole(dialog, 'button', { name: 'Zoom out' })
@@ -187,10 +194,10 @@ describe('documentation Mermaid viewer', () => {
 
   it('shows zoom changes and reveals help on demand without retaining listeners after close', () => {
     render()
-    viewer = installMermaidViewer(document, () => 'en-US')
+    viewer = installMermaidViewer(document, () => locale, media)
     const dialog = open()
-    const scale = required(dialog.querySelector('.dsh-diagram-scale'))
-    const paper = required(dialog.querySelector('.dsh-diagram-paper'))
+    const scale = required(dialog.querySelector('.dsh-media-scale'))
+    const paper = required(dialog.querySelector('.dsh-media-paper'))
     expect(scale.textContent).toBe('20%')
     panzoom.getScale.mockReturnValue(0.75)
     paper.dispatchEvent(new Event('panzoomchange'))
@@ -213,7 +220,7 @@ describe('documentation Mermaid viewer', () => {
 
   it.each(['button', 'cancel', 'refresh', 'dispose'] as const)('releases resources on %s and restores focus and scrolling', (method) => {
     render()
-    viewer = installMermaidViewer(document, () => 'en-US')
+    viewer = installMermaidViewer(document, () => locale, media)
     const trigger = getByRole(document.body, 'button')
     const dialog = open()
     const zoom = getByRole(dialog, 'button', { name: 'Zoom in' })
@@ -233,8 +240,7 @@ describe('documentation Mermaid viewer', () => {
 
   it('closes a replaced diagram and permits repeated opens with the updated locale', async () => {
     render()
-    let locale = 'en-US'
-    viewer = installMermaidViewer(document, () => locale)
+    viewer = installMermaidViewer(document, () => locale, media)
     open()
     render('0 0 400 200')
     await waitFor(() => {
@@ -252,7 +258,7 @@ describe('documentation Mermaid viewer', () => {
 
   it('closes when route content is removed and stops enhancing after disposal', async () => {
     render()
-    viewer = installMermaidViewer(document, () => 'en-US')
+    viewer = installMermaidViewer(document, () => locale, media)
     open()
     required(document.querySelector('.mermaid')).remove()
     await waitFor(() => {

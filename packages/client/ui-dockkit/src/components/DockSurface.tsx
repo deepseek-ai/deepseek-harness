@@ -21,6 +21,7 @@ import {
 import { fitOf, measurePaneFits, paneElements, sameFits } from './measure.ts'
 import { useGesture } from './pointer.ts'
 import { PaneTree, type SizePreview } from './PaneTree.tsx'
+import { TabLayout, type TabRetention } from './TabLayout.tsx'
 import type { PaneCallbacks, SplitBlock } from './render.ts'
 import css from './dockkit.module.css'
 
@@ -161,10 +162,11 @@ function sameSizes(a: readonly number[], b: readonly number[]): boolean {
 }
 
 /** The split tree and the gestures over it. */
-export function DockSurface({
+function Surface({
   state, canSplit, canAddTab, canCloseTab, intents, labels, renderTab, renderTabTitle, renderTabMenuItems, chrome, onRoom,
+  draw,
   dropZones = 'edges', minPaneFraction = MIN_PANE_FRACTION, hideSplitWhenBlocked = false,
-}: DockSurfaceProps): ReactNode {
+}: DockSurfaceProps & { readonly draw: (callbacks: PaneCallbacks, preview: SizePreview | undefined) => ReactNode }): ReactNode {
   const surface = useRef<HTMLDivElement | null>(null)
   const [preview, setPreview] = useState<Preview>(NO_PREVIEW)
   const [fits, setFits] = useState(NO_FITS)
@@ -289,7 +291,26 @@ export function DockSurface({
 
   return (
     <div className={css.surface} ref={surface} data-dockkit-surface data-dockkit-drop-zones={dropZones}>
-      <PaneTree state={state} nodeId={state.rootId} callbacks={callbacks} preview={preview.sizes} />
+      {draw(callbacks, preview.sizes)}
     </div>
   )
+}
+
+/** Recursive docked layout; floating content is rendered separately by FloatLayer. */
+export function DockSurface(props: DockSurfaceProps): ReactNode {
+  return <Surface {...props} draw={(callbacks, preview) =>
+    <PaneTree state={props.state} nodeId={props.state.rootId} callbacks={callbacks} preview={preview} />} />
+}
+
+/** Horizontal Sidebar layout with stable tab containers across docking and floating. */
+export type DockLayoutProps = DockSurfaceProps & TabRetention
+
+/**
+ * Render one pane or two horizontal panes, and their floats, in one stable content tree.
+ * @param props - layout, gestures and lazy body-retention policy.
+ * @returns the layout; the containing ancestors must not clip or establish a fixed-position containing block.
+ */
+export function DockLayout(props: DockLayoutProps): ReactNode {
+  return <Surface {...props} draw={(callbacks, preview) =>
+    <TabLayout {...props} callbacks={callbacks} preview={preview} />} />
 }

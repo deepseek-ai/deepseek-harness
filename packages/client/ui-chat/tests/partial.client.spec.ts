@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-api-remotes/client'
 import { PartialAccumulator } from '../src/client/conversation-nodes/partial.ts'
 
-const chunk = (c: Record<string, unknown>): StreamChunk => c as unknown as StreamChunk
+const chunk = (c: Record<string, unknown>): StreamChunk => c as StreamChunk
 
 describe('PartialAccumulator', () => {
   it('builds empty blocks per block-start type, unknown type falls to other', () => {

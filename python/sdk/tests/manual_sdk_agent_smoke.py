@@ -26,16 +26,22 @@ class MockCompletionHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(length).decode("utf-8")
         self.requests.append({
             "path": self.path,
-            "authorization": self.headers.get("authorization"),
+            "api_key": self.headers.get("x-api-key"),
             "body": json.loads(body),
         })
         self.send_response(200)
         self.send_header("content-type", "text/event-stream")
         self.end_headers()
-        self.wfile.write(b'data: {"choices":[{"delta":{"role":"assistant","content":null,"reasoning_content":""}}]}\n\n')
-        self.wfile.write(b'data: {"choices":[{"delta":{"content":"SDK runtime reached the configured HTTP model endpoint."}}]}\n\n')
-        self.wfile.write(b'data: {"choices":[{"delta":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":7,"completion_tokens":9}}\n\n')
-        self.wfile.write(b"data: [DONE]\n\n")
+        events = [
+            {"type": "message_start", "message": {"id": "sdk-smoke", "model": "sdk-smoke-model", "usage": {"input_tokens": 7, "output_tokens": 0}}},
+            {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "SDK runtime reached the configured HTTP model endpoint."}},
+            {"type": "content_block_stop", "index": 0},
+            {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 9}},
+            {"type": "message_stop"},
+        ]
+        for event in events:
+            self.wfile.write(f"event: {event['type']}\ndata: {json.dumps(event)}\n\n".encode())
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
@@ -46,7 +52,7 @@ def run_smoke(repo_root: Path, keep_sessions: bool) -> None:
     session_root = dsh_home / "sessions"
     runtime_entry = repo_root / "apps/cli/src/bin.ts"
     server = ThreadingHTTPServer(("127.0.0.1", 0), MockCompletionHandler)
-    thread = threading.Thread(target=server.serve_forever, name="mock-openai-compatible-server", daemon=True)
+    thread = threading.Thread(target=server.serve_forever, name="mock-messages-server", daemon=True)
     thread.start()
     base_url = f"http://127.0.0.1:{server.server_address[1]}"
 
@@ -86,7 +92,8 @@ def run_smoke(repo_root: Path, keep_sessions: bool) -> None:
         assert len(MockCompletionHandler.requests) == 1
         request = MockCompletionHandler.requests[0]
         print(json.dumps(request, ensure_ascii=False, indent=2)[:4000])
-        assert request["authorization"] == "Bearer sdk-smoke-key"
+        assert request["path"] == "/v1/messages"
+        assert request["api_key"] == "sdk-smoke-key"
         assert request["body"]["model"] == "sdk-smoke-model"
 
         jsonl_files = sorted(session_root.rglob("*.jsonl.zstd"))

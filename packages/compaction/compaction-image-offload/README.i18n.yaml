@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/compaction/compaction-image-offload/README.md
-README.md: 8e4d812c043234e07207c7326882856b445b0950
-README.zh.md: 06ed168e750cffbaa6594454ac4459f0ceb99788
+/:
+  en: b599a8ee08c48558
+  zh: 4534254e1fd4cdcf
+/deepseek-ai-dsh-compaction-image-offload:
+  en: 943faf0e7d54c535
+  zh: 9d62398ac8842657
+/deepseek-ai-dsh-compaction-image-offload/summary:
+  en: 8881f7155e7f99c7
+  zh: 1e01354c7a7b1e68
+/deepseek-ai-dsh-compaction-image-offload/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-compaction-image-offload/use-this-package:
+  en: 4e36e8e742bc94ed
+  zh: ca42226676c9da28
+/deepseek-ai-dsh-compaction-image-offload/use-this-package/minimal-configuration:
+  en: 7e32fdf2571d190c
+  zh: 6b455c98d3afa3e0
+/deepseek-ai-dsh-compaction-image-offload/use-this-package/what-you-can-observe:
+  en: 6a156ba4e44b520a
+  zh: a61fc63697f85095
+/deepseek-ai-dsh-compaction-image-offload/use-this-package/failures-and-recovery:
+  en: 5e4ac1980eec905a
+  zh: 0284e597c82cb179
+/deepseek-ai-dsh-compaction-image-offload/understand-the-implementation:
+  en: 884900df82bc9029
+  zh: 2a7a69ae08bbf202
+/deepseek-ai-dsh-compaction-image-offload/further-exploration:
+  en: 081a5eafe9160c31
+  zh: a4ed86e9389c91d0
+/deepseek-ai-dsh-compaction-image-offload/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-compaction-image-offload/model-experience/offloaded-request-images:
+  en: e57e89ce994680bd
+  zh: b31ac5142af08695
+/deepseek-ai-dsh-compaction-image-offload/model-experience/offloaded-request-images/what-the-model-sees:
+  en: 54a927e19008dd58
+  zh: 45ec6d988b73e2fb
+/deepseek-ai-dsh-compaction-image-offload/model-experience/offloaded-request-images/token-effect:
+  en: a1a6386bbdad684e
+  zh: 09a1f02f013390cd
+/deepseek-ai-dsh-compaction-image-offload/model-experience/offloaded-request-images/kv-cache-effect:
+  en: 1ddf05ccd042aa85
+  zh: 0f2984a2e6b8c5c7
+/deepseek-ai-dsh-compaction-image-offload/known-limitations-and-deferred-work:
+  en: 56e34b1ca548fa07
+  zh: 8ad247f5251a5461
+/deepseek-ai-dsh-compaction-image-offload/known-limitations-and-deferred-work/dev-note:
+  en: 699a8ae4642c8f5a
+  zh: 19a4edd00e473c8a

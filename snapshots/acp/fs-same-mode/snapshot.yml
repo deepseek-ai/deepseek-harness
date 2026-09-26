@@ -1,0 +1,10 @@
+version: 1
+scenario: fs-same-mode
+profile: acp
+composition: acp-default
+recording: authored
+header:
+  class: acp-default
+permission: danger-full-access
+workspace:
+  final: true

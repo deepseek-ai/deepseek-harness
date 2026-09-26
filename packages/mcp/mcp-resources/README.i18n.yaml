@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/mcp/mcp-resources/README.md
-README.md: 050cce658ffcb96e592320b028c757ed86ed3b53
-README.zh.md: 693c58face75da5bdbaadb0fac98b264dd4ed171
+/:
+  en: 34b851d97ea0313e
+  zh: 2fa00063647b6eee
+/deepseek-ai-dsh-mcp-resources:
+  en: 81abc44a56e1c7d3
+  zh: 34bb6d70ea0219a0
+/deepseek-ai-dsh-mcp-resources/summary:
+  en: 03c61c0b7beab085
+  zh: 4c5efe7fa7d8da36
+/deepseek-ai-dsh-mcp-resources/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 725b47765ee8f30b
+/deepseek-ai-dsh-mcp-resources/use-this-package:
+  en: 6df1a242b8679b3d
+  zh: 9dd9363d22d8a660
+/deepseek-ai-dsh-mcp-resources/use-this-package/server-configuration:
+  en: ec0195a4ad06b3ab
+  zh: 0b5c41a4f8ff511e
+/deepseek-ai-dsh-mcp-resources/use-this-package/discover-and-read:
+  en: f7fb6597acd3c5dc
+  zh: 9c59219fb4ab00d9
+/deepseek-ai-dsh-mcp-resources/understand-the-implementation:
+  en: e0e93efbb88e6047
+  zh: b941463944659422
+/deepseek-ai-dsh-mcp-resources/further-exploration:
+  en: 66e212708f2fa883
+  zh: da8e26a414e86d55
+/deepseek-ai-dsh-mcp-resources/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-mcp-resources/model-experience/shared-resource-tools:
+  en: 520e0b6cb35e4285
+  zh: 20a323f87e6d12fc
+/deepseek-ai-dsh-mcp-resources/model-experience/shared-resource-tools/what-the-model-sees:
+  en: a4bcd3734a1fbd07
+  zh: abc25fb23ebaf485
+/deepseek-ai-dsh-mcp-resources/model-experience/shared-resource-tools/token-effect:
+  en: 92682e15ca9e90a5
+  zh: 3487ef2adb89c9e4
+/deepseek-ai-dsh-mcp-resources/model-experience/shared-resource-tools/kv-cache-effect:
+  en: fdb450babcdf877b
+  zh: f013ae46ce9e1125
+/deepseek-ai-dsh-mcp-resources/model-experience/resource-results:
+  en: f46ae3151a215b4d
+  zh: 8d15019792d3fe61
+/deepseek-ai-dsh-mcp-resources/model-experience/resource-results/what-the-model-sees:
+  en: 62d0a18c52283474
+  zh: 70b2fbea70c98818
+/deepseek-ai-dsh-mcp-resources/model-experience/resource-results/token-effect:
+  en: e6fb5043a1ccc6ff
+  zh: d15d2e7b5986d614
+/deepseek-ai-dsh-mcp-resources/model-experience/resource-results/kv-cache-effect:
+  en: ea0dfc069bf175c0
+  zh: 3e1465e56ff79764
+/deepseek-ai-dsh-mcp-resources/known-limitations-and-deferred-work:
+  en: 58d13dc99946c11d
+  zh: 4099c46a1ca60512
+/deepseek-ai-dsh-mcp-resources/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

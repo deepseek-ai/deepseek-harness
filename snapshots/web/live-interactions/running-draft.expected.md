@@ -1,34 +1,19 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "Reply with a one-sentence description" [disabled]
-  - img
+  - navigation "Session hierarchy": Reply with a one-sentence description
   - text: Standard mode
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
 - text: Reply with a one-sentence description of event sourcing, then stop. {{clock}}
-- button "Copy":
-  - img
-- button "Context injection @deepseek-ai/dsh-system-prompt":
-  - img
-  - img
-  - text: Context injection @deepseek-ai/dsh-system-prompt
-- paragraph: partial
+- button "Copy"
 - status: Deep diving...
+- button "Deep diving for {{duration}}" [disabled] [expanded]
+- paragraph: partial
 - textbox "Message or run a task, / commands, @ files or sessions":
   - paragraph: Queue this follow-up while the current turn is running.
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Queue message"

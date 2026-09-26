@@ -27,7 +27,7 @@ type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
 type ConfinedSandboxMode = Exclude<SandboxMode, 'danger-full-access'>
 ```
 
-强制执行完整性是后端报告的事实。`full` 表示后端管控了该模式承诺的所有文件效果；`partial` 表示活跃后端或较旧的内核 ABI 仅管控其中一个子集，因此要求绝对保证的消费方必须拒绝或向上暴露这一区别。当前的部分强制执行情形包括较旧的 Landlock ABI，以及 Windows ACL runner 的 Everyone 与硬链接边界。
+强制执行完整性是后端报告的事实。`full` 表示后端管控了该模式承诺的所有文件效果；`partial` 表示活跃后端或较旧的内核 ABI 仅管控其中一个子集，因此要求绝对保证的消费方必须拒绝或向上暴露这一区别。当前的部分强制执行情形包括较旧的 Landlock ABI，以及 Windows ACL runner 的硬链接、读取不受限与 AppContainer ACL 边界。
 
 ```ts type-equiv
 /**

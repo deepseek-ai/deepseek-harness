@@ -128,7 +128,7 @@ export function writeDesktopRuntime(
   const sharedPackages = [...new Set(sharedNames)].sort().map((name) => {
     if (!PACKAGE_NAME.test(name)) throw new Error(`desktop runtime: invalid shared package ${name}`)
     const path = `node_modules/${name}`
-    const manifest = JSON.parse(readFileSync(join(runtimePath(root, path), 'package.json'), 'utf8')) as unknown
+    const manifest: unknown = JSON.parse(readFileSync(join(runtimePath(root, path), 'package.json'), 'utf8'))
     if (!record(manifest) || manifest.name !== name || typeof manifest.version !== 'string' || valid(manifest.version) === null) {
       throw new Error(`desktop runtime: invalid shared package manifest ${name}`)
     }
@@ -181,12 +181,13 @@ export function readDesktopRuntime(root: string): DesktopRuntimeDescriptor {
 /**
  * Verify every packaged runtime file against its recorded bytes and permissions at build time.
  * @param root - Materialized runtime resources.
- * @param electronVersion - Expected shell version.
+ * @param expectedVersion - Version the bundled runtime must declare: the product version ordinarily,
+ * and a rewritten one for installed-update qualification.
  * @param target - Required execution target; defaults to the current process.
  * @returns Validated runtime descriptor.
  */
 export async function verifyDesktopRuntime(
-  root: string, electronVersion: string, target: { platform: NodeJS.Platform; arch: string } = process,
+  root: string, expectedVersion: string, target: { platform: NodeJS.Platform; arch: string } = process,
 ): Promise<DesktopRuntimeDescriptor> {
   const descriptor = readDesktopRuntime(root)
   // readDesktopRuntime preserves the disk schema value without validating release compatibility.
@@ -195,7 +196,7 @@ export async function verifyDesktopRuntime(
     throw new Error('desktop runtime: invalid descriptor or incompatible platform/architecture')
   }
   const release = parseDesktopRelease(descriptor.release)
-  if (release.version !== electronVersion) throw new Error(`desktop runtime: ${release.version} does not match Electron ${electronVersion}`)
+  if (release.version !== expectedVersion) throw new Error(`desktop runtime: bundled ${release.version} is not the expected ${expectedVersion}`)
   for (const entry of descriptor.sharedPackages) {
     const manifest: unknown = JSON.parse(readFileSync(join(runtimePath(root, entry.path), 'package.json'), 'utf8'))
     if (!record(manifest) || manifest.name !== entry.name || manifest.version !== entry.version) {

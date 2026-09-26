@@ -9,7 +9,7 @@ import type {
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from '../src/client/contract/slots.ts'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
 import { zh } from '../src/client/locales.ts'
@@ -35,11 +35,11 @@ function hook<T>(snapshot: T) {
   return function select<S>(selector: (state: T) => S): S { return selector(snapshot) }
 }
 const sessions: SessionListState = {
-  ids: [], byId: {}, current: undefined, phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
+  ids: [], byId: {}, phase: 'ready', projectionsBySession: {},
 }
-const noPendingInteraction: SessionPendingInteractionSnapshot = new Map()
+const noPendingInteraction: SessionStatusSnapshot = new Map()
 const workspaceState = (items: readonly WorkspaceView[]): WorkspaceSnapshot => ({
-  items, archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+  items, archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
 })
 function anchor(): { current: HTMLElement } {
   const element = document.createElement('button')
@@ -98,7 +98,8 @@ function mount(
       open
       anchorRef={anchorRef}
       useSessions={hook(sessions)}
-      useSessionPendingInteraction={hook(noPendingInteraction)}
+      useSessionStatus={hook(noPendingInteraction)}
+      useSessionRetainInfo={() => undefined}
       usePanelInfo={usePanelInfo} useResource={useResource}
       useWorkspaces={hook(workspaceState(nextItems))}
       onPick={onPick}
@@ -220,7 +221,8 @@ describe('WorkspacePicker', () => {
     render(
       <WorkspacePicker
         open useSessions={hook(sessions)} useWorkspaces={hook(workspaceState([workspace('alpha', 'Alpha')]))}
-        useSessionPendingInteraction={hook(noPendingInteraction)}
+        useSessionStatus={hook(noPendingInteraction)}
+        useSessionRetainInfo={() => undefined}
         usePanelInfo={usePanelInfo} useResource={useResource}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
         useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
@@ -237,7 +239,8 @@ describe('WorkspacePicker', () => {
     render(
       <WorkspacePicker
         open anchorRef={anchor()} useSessions={hook(sessions)} useWorkspaces={hook(state)}
-        useSessionPendingInteraction={hook(noPendingInteraction)}
+        useSessionStatus={hook(noPendingInteraction)}
+        useSessionRetainInfo={() => undefined}
         usePanelInfo={usePanelInfo} useResource={useResource}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
         useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}

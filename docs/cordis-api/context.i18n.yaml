@@ -1,6 +1,73 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for context.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cordis-api/context.md
-context.md: 320b23de1c8d19e2dacdf0ec9f2361037bcf8048
-context.zh.md: b97fe51eb8afdd5c2235ac9cf8586c3ff68830d4
+/:
+  en: d2c0c5bce430d1be
+  zh: a317d7ff7fc9f112
+/context:
+  en: fc6fd9ae25b8e9e5
+  zh: 1a2407d299404ace
+/context/ctx-extend-meta:
+  en: 2c407cb9589b001f
+  zh: 70dc8650250cd4c5
+/context/ctx-isolate-name-label:
+  en: ab77052c3bf31e2b
+  zh: 686ca829ea5b8170
+/context/ctx-intercept-name-config:
+  en: 1bd1e349f5c8687d
+  zh: 7634b27d2c9bade4
+/context/ctx-root:
+  en: eb89a7f0d2bc1753
+  zh: 263219126a310d3b
+/context/ctx-baseurl:
+  en: 29c28e7558cea0ad
+  zh: 9b591e449c1bfd72
+/context/ctx-events:
+  en: 6ce1e444e9dc3c48
+  zh: d4ca16ff2aeaa9f4
+/context/ctx-logger:
+  en: da8400d2e8dac772
+  zh: 8dd6fea850dd3b90
+/context/ctx-reflect:
+  en: 31e86abee38e9040
+  zh: 77ab752a7e69ccfe
+/context/ctx-registry:
+  en: d2f27d281bbf9f56
+  zh: 9193074fac7e9bfc
+/context/static-members:
+  en: ceb197529207a8ed
+  zh: 7d444c03f8be0f0d
+/context/static-members/context-effect:
+  en: 19f4aaef44a7e8eb
+  zh: 2179cf28a7ee3f6a
+/context/static-members/context-filter:
+  en: e8ca384b9a1ea98b
+  zh: 82189892bf0afcb0
+/context/static-members/context-isolate:
+  en: b8673b719837ce51
+  zh: 83892f9f96c3ac28
+/context/static-members/context-intercept:
+  en: f3ebe6568cc9a863
+  zh: bb51ab61a4e47d33
+/context/static-members/context-is-value:
+  en: 7425e0ee4bc1ada7
+  zh: 93dee27133ded9e0
+/context/service-store-and-mixins:
+  en: 9f7ca8a6a0f80512
+  zh: 05e8cbc30e5709fc
+/context/service-store-and-mixins/ctx-get-name-strict:
+  en: 5a9a1212850a136f
+  zh: 2b6f287c8bbcc0c6
+/context/service-store-and-mixins/ctx-set-name-value:
+  en: a04668f00e1cbe91
+  zh: 8e8444e6b393358e
+/context/service-store-and-mixins/ctx-provide-name-value:
+  en: 5887dc4233a37a5b
+  zh: 810dcde64664170b
+/context/service-store-and-mixins/ctx-accessor-name-options:
+  en: 82ccb33229d3cf32
+  zh: d969904f023380b4
+/context/service-store-and-mixins/ctx-mixin-name-mixins:
+  en: 777f36aed85fa512
+  zh: 47b809ad5f799134

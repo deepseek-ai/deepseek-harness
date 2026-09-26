@@ -1,14 +1,5 @@
 // @vitest-environment jsdom
-/**
- * The body against a scripted listing.
- *
- * What is asserted is the reader's contract: the root lists itself on mount,
- * rows come out directories-first, a directory click asks for exactly that
- * level, a file click opens exactly that session-scoped `file:` address through
- * the owner, an `other` entry is shown but not clickable, the tree says when it
- * was cut or could not be read, and reload asks again for the expanded levels
- * only. The two pure helpers the rows are built from are checked on their own.
- */
+/** File-tree presentation over controlled directory watches and deferred listings. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent } from '@testing-library/react'
 import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
@@ -37,6 +28,13 @@ function names(root: HTMLElement): string[] {
 }
 
 describe('FilesBody', () => {
+  it('displays the effective file-tree refresh accelerator', async () => {
+    const { view, script } = mountBody(ROOT, { id: 'page.refresh' as never, label: 'Refresh', aliases: [],
+      binding: null, keys: ['Ctrl', 'R'], aria: 'Control+R', modified: true, conflicts: [], issue: null })
+    await act(() => script.watches.ready(ROOT))
+    await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
+    expect(view.getByRole('button', { name: zh.reload }).getAttribute('aria-keyshortcuts')).toBe('Control+R')
+  })
   it('says so when the session has no workspace directory, and asks for nothing', () => {
     const { view, script } = mountBody(null)
     expect(view.container.querySelector('[data-files-state="no-workspace"]')?.textContent).toBe(zh.noWorkspace)
@@ -45,13 +43,15 @@ describe('FilesBody', () => {
 
   it('lists the root on mount, heads it with its path split at the last segment, and draws directories first with dotfiles kept', async () => {
     const { view, script } = mountBody()
+    expect(script.list).not.toHaveBeenCalled()
+    await act(() => script.watches.ready(ROOT))
     expect(script.list).toHaveBeenCalledWith(SESSION, ROOT, expect.any(AbortSignal))
     expect(view.container.querySelector('[data-files-row="loading"]')).not.toBeNull()
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
     expect(view.container.querySelector('[data-files-state="tree"]')?.getAttribute('data-files-root')).toBe(ROOT)
     const path = view.container.querySelector('[data-files-path]')
     expect(path?.getAttribute('title')).toBe(ROOT)
-    expect([...path?.querySelectorAll('span > span') ?? []].map(span => span.textContent)).toEqual(['/work/', 'app'])
+    expect([...path?.firstElementChild?.children ?? []].map(span => span.textContent)).toEqual(['/work/', 'app'])
     expect(names(view.container)).toEqual([`${ROOT}/src`, `${ROOT}/.env`, `${ROOT}/pipe`, `${ROOT}/README.md`])
     const envIcon = view.container.querySelector(`[data-files-path="${ROOT}/.env"] svg`)?.innerHTML
     const readmeIcon = view.container.querySelector(`[data-files-path="${ROOT}/README.md"] svg`)?.innerHTML
@@ -60,9 +60,10 @@ describe('FilesBody', () => {
 
   it('heads a separator-only root by the root itself, since it has no final segment', async () => {
     const { view, script } = mountBody('/')
+    await act(() => script.watches.ready('/'))
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
     const path = view.container.querySelector('[data-files-path]')
-    expect([...path?.querySelectorAll('span > span') ?? []].map(span => span.textContent)).toEqual(['/'])
+    expect([...path?.firstElementChild?.children ?? []].map(span => span.textContent)).toEqual(['/'])
     expect(names(view.container)).toEqual(['/src', '/.env', '/pipe', '/README.md'])
   })
 
@@ -88,10 +89,11 @@ describe('FilesBody', () => {
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => boxWidth })
     try {
       const { view, script } = mountBody()
+      await act(() => script.watches.ready(ROOT))
       await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
       const path = view.container.querySelector<HTMLElement>('[data-files-path]')
       const text = path?.firstElementChild
-      expect(path?.hasAttribute('data-files-path-clipped')).toBe(false)
+      expect(path?.hasAttribute('data-path-clipped')).toBe(false)
       const observer = FakeResizeObserver.latest
       if (observer === undefined) throw new Error('expected the path to observe its size')
       expect(observer.observe).toHaveBeenCalledWith(path)
@@ -99,11 +101,11 @@ describe('FilesBody', () => {
 
       boxWidth = 120
       act(() => { observer.fire() })
-      expect(path?.hasAttribute('data-files-path-clipped')).toBe(true)
+      expect(path?.hasAttribute('data-path-clipped')).toBe(true)
 
       boxWidth = 300
       act(() => { observer.fire() })
-      expect(path?.hasAttribute('data-files-path-clipped')).toBe(false)
+      expect(path?.hasAttribute('data-path-clipped')).toBe(false)
       view.unmount()
       expect(observer.disconnect).toHaveBeenCalledTimes(1)
     } finally {
@@ -115,25 +117,37 @@ describe('FilesBody', () => {
     }
   })
 
-  it('a directory click lists that level once and marks it expanded; a second click collapses without asking again', async () => {
+  it('reopening a directory shows its cache and replaces it after the new subscription is ready', async () => {
     const { view, script } = mountBody()
+    await act(() => script.watches.ready(ROOT))
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
     const dir = view.container.querySelector(`[data-files-path="${ROOT}/src"] > button`)!
     act(() => { fireEvent.click(dir) })
+    expect(script.list).toHaveBeenCalledTimes(1)
+    const childStream = await act(() => script.watches.ready(`${ROOT}/src`))
     expect(script.list).toHaveBeenLastCalledWith(SESSION, `${ROOT}/src`, expect.any(AbortSignal))
     expect(dir.getAttribute('aria-expanded')).toBe('true')
     await act(() => script.settle({ ok: true, value: { entries: [{ name: 'a.ts', type: 'file' }], truncated: false } }))
     expect(names(view.container)).toContain(`${ROOT}/src/a.ts`)
     act(() => { fireEvent.click(dir) })
+    expect(childStream.signal.aborted).toBe(true)
+    await childStream.released.promise
     expect(dir.getAttribute('aria-expanded')).toBe('false')
     expect(names(view.container)).not.toContain(`${ROOT}/src/a.ts`)
     act(() => { fireEvent.click(dir) })
     expect(names(view.container)).toContain(`${ROOT}/src/a.ts`)
     expect(script.list).toHaveBeenCalledTimes(2)
+    await act(() => script.watches.ready(`${ROOT}/src`, 1))
+    expect(script.list).toHaveBeenCalledTimes(3)
+    expect(names(view.container)).toContain(`${ROOT}/src/a.ts`)
+    await act(() => script.settle({ ok: true, value: { entries: [{ name: 'b.ts', type: 'file' }], truncated: false } }))
+    expect(names(view.container)).toContain(`${ROOT}/src/b.ts`)
+    expect(names(view.container)).not.toContain(`${ROOT}/src/a.ts`)
   })
 
   it('a file click opens its session-scoped file: address through the owner; an other entry offers no button', async () => {
     const { view, script, tabActions } = mountBody()
+    await act(() => script.watches.ready(ROOT))
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
     fireEvent.click(view.container.querySelector(`[data-files-path="${ROOT}/README.md"] > button`)!)
     // Every row sits under the tree's root, so the address is the path relative to it.
@@ -146,15 +160,18 @@ describe('FilesBody', () => {
 
   it('marks a cut listing and an empty one', async () => {
     const { view, script } = mountBody()
+    await act(() => script.watches.ready(ROOT))
     await act(() => script.settle({ ok: true, value: { entries: [{ name: 'd', type: 'directory' }], truncated: true } }))
     expect(view.container.querySelector('[data-files-row="truncated"]')?.textContent).toBe(zh.truncated)
     act(() => { fireEvent.click(view.container.querySelector(`[data-files-path="${ROOT}/d"] > button`)!) })
+    await act(() => script.watches.ready(`${ROOT}/d`))
     await act(() => script.settle({ ok: true, value: { entries: [], truncated: false } }))
     expect(view.container.querySelector('[data-files-row="empty"]')?.textContent).toBe(zh.empty)
   })
 
   it('shows a failed level under its directory with the failure code', async () => {
     const { view, script } = mountBody()
+    await act(() => script.watches.ready(ROOT))
     await act(() => script.settle({
       ok: false,
       error: new RemoteError('workspace-file/not-found', 'gone', { path: ROOT }),
@@ -164,28 +181,84 @@ describe('FilesBody', () => {
     expect(failed?.textContent).toBe(zh['error.notFound'])
   })
 
-  it('reload resets every level and lists the expanded ones again', async () => {
-    const { view, script, controller, instance } = mountBody()
+  it('shows a refresh failure beside the existing directory rows and clears it on retry', async () => {
+    const { view, script } = mountBody()
+    await act(() => script.watches.ready(ROOT))
+    await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
+    const rows = names(view.container)
+    const reload = view.getByRole('button', { name: zh.reload })
+    act(() => { fireEvent.click(reload) })
+    await act(() => script.settle({
+      ok: false, error: new RemoteError('workspace-file/not-found', 'gone', { path: ROOT }),
+    }))
+    expect(view.container.querySelector('[data-files-row="failed"]')?.textContent).toBe(zh['error.notFound'])
+    expect(names(view.container)).toEqual(rows)
+    act(() => { fireEvent.click(reload) })
+    await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
+    expect(view.container.querySelector('[data-files-row="failed"]')).toBeNull()
+    expect(names(view.container)).toEqual(rows)
+  })
+
+  it.each(['button', 'shortcut'])('%s refreshes expanded nodes without clearing cached rows or the scroll position', async (source) => {
+    const { view, script, instance, tabActions } = mountBody()
     const child = `${ROOT}/src`
     const collapsed = `${ROOT}/docs`
+    const rootStream = await act(() => script.watches.ready(ROOT))
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
     act(() => { fireEvent.click(view.container.querySelector(`[data-files-path="${child}"] > button`)!) })
+    await act(() => script.watches.ready(child))
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
-    // A level listed earlier and since collapsed is dropped, not re-fetched.
     act(() => { instance.actions.loaded(TAB, collapsed, ROOT_LEVEL) })
-    script.list.mockClear()
+    const cached = instance.getSnapshot().byTab[TAB]!
+    const childRow = view.container.querySelector(`[data-files-path="${child}"]`)
+    const body = view.container.querySelector('[data-files-body]')!
+    fireEvent.scroll(body, { target: { scrollTop: 120 } })
 
-    act(() => { fireEvent.click(view.container.querySelector('[data-files-reload]')!) })
-    expect(script.list.mock.calls.map(call => call[1])).toEqual([ROOT, child])
-    expect(script.list).toHaveBeenCalledWith(SESSION, ROOT, controller.signal)
-    const state = instance.getSnapshot().byTab[TAB]!
-    expect(state.expanded).toEqual([ROOT, child])
-    expect(state.levels).toEqual({ [ROOT]: { kind: 'loading' }, [child]: { kind: 'loading' } })
+    act(() => {
+      if (source === 'button') fireEvent.click(view.container.querySelector('[data-files-reload]')!)
+      else tabActions.bindCommands.mock.calls.at(-1)![0].refresh!()
+    })
+    expect(script.list.mock.calls.slice(2).map(call => call[1])).toEqual([ROOT])
+    expect(script.list).toHaveBeenLastCalledWith(SESSION, ROOT, rootStream.signal)
+    expect(instance.getSnapshot().byTab[TAB]!.levels).toEqual(cached.levels)
+    expect(view.container.querySelector('[data-files-row="loading"]')).toBeNull()
+    await act(async () => {
+      await script.settle({ ok: true, value: ROOT_LEVEL })
+      await script.waitForList(3)
+    })
+    expect(script.list.mock.calls.slice(2).map(call => call[1])).toEqual([ROOT, child])
+    expect(instance.getSnapshot().byTab[TAB]!.levels).toEqual(cached.levels)
+    await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
+    expect(view.container.querySelector(`[data-files-path="${child}"]`)).toBe(childRow)
+    expect(body.scrollTop).toBe(120)
+    expect(instance.getSnapshot().byTab[TAB]!.expanded).toEqual([ROOT, child])
+    expect(script.watches.opened.map(stream => stream.path)).toEqual([ROOT, child])
     expect(view.container.querySelector('[data-files-reload]')?.getAttribute('aria-label')).toBe(zh.reload)
+  })
+
+  it('keeps the automatic control hidden and enabled by default, with manual reload independent of its setting', async () => {
+    const { view, script, instance } = mountBody()
+    const stream = await act(() => script.watches.ready(ROOT))
+    await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
+    const automatic = view.container.querySelector('[data-files-auto-refresh]')!
+    expect(automatic.closest('span[hidden]')).not.toBeNull()
+    expect(automatic.getAttribute('aria-pressed')).toBe('true')
+    expect(view.queryByRole('button', { name: zh.autoRefresh })).toBeNull()
+    expect(view.getByRole('button', { name: zh.reload })).toBeDefined()
+    act(() => { fireEvent.click(automatic) })
+    expect(automatic.getAttribute('aria-pressed')).toBe('false')
+    await act(() => stream.deliver('change'))
+    expect(script.list).toHaveBeenCalledTimes(1)
+    act(() => { fireEvent.click(view.getByRole('button', { name: zh.reload })) })
+    await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
+    expect(script.list).toHaveBeenCalledTimes(2)
+    expect(instance.getSnapshot().byTab[TAB]!.autoRefresh).toBe(false)
+    expect(automatic.getAttribute('aria-pressed')).toBe('false')
   })
 
   it('captures the body scroll offset on unmount and restores it when a tab switch remounts the tree', async () => {
     const { view, script, instance, remount } = mountBody()
+    await act(() => script.watches.ready(ROOT))
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
     const body = view.container.querySelector('[data-files-body]')!
     fireEvent.scroll(body, { target: { scrollTop: 120 } })
@@ -199,6 +272,7 @@ describe('FilesBody', () => {
 
   it('a scroll before the owner aborts is not written to a forgotten bucket', async () => {
     const { view, script, controller, instance } = mountBody()
+    await act(() => script.watches.ready(ROOT))
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
     fireEvent.scroll(view.container.querySelector('[data-files-body]')!, { target: { scrollTop: 80 } })
     act(() => { controller.abort() })
@@ -208,6 +282,7 @@ describe('FilesBody', () => {
 
   it('an aborted record is forgotten and not seeded again while the body is still mounted', async () => {
     const { view, script, controller, instance } = mountBody()
+    await act(() => script.watches.ready(ROOT))
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
     act(() => { controller.abort() })
     expect(instance.getSnapshot().byTab[TAB]).toBeUndefined()

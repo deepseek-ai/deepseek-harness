@@ -8,7 +8,7 @@ import type { Duplex, Readable, Writable } from 'node:stream'
 import { finished, pipeline } from 'node:stream/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SubprocessHandle, SubprocessSpawnSpec, SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
-import { OutputCollector, prepareManagedProcessBinding } from '@deepseek-ai/dsh-subprocess-local/output'
+import { logSpillFailure, OutputCollector, prepareManagedProcessBinding, type SpillFailureReporter } from '@deepseek-ai/dsh-subprocess-local/output'
 import { doneSchema, outputSnapshotFrameLimit, spawnSchema, type SshProcessId, type SshStreamEndpoint } from './schemas.ts'
 import { z } from 'zod'
 import { SSH_STREAM_TLS_OPTIONS } from './stream-security.ts'
@@ -94,10 +94,15 @@ export class RemoteProcesses {
   private readonly cleanups = new Set<Promise<void>>()
   private closing = false
 
+  /** Spill failures reach the helper's logger; the remote caller then receives the tail without a spill path. */
+  private readonly reportSpillFailure: SpillFailureReporter
+
   constructor(
     private readonly ctx: Context, private readonly root: string,
     private readonly limit: number, private readonly preparationMs: number,
-  ) {}
+  ) {
+    this.reportSpillFailure = logSpillFailure(ctx.logger, 'ssh helper')
+  }
 
   /**
    * Allocate private stream listeners; no target executes until start().
@@ -217,7 +222,10 @@ export class RemoteProcesses {
       const mode = stdio[name]
       const socket = await (record.endpoints[name] as Endpoint).connected
       if (typeof mode === 'object') {
-        const collector = new OutputCollector(mode.maxBytes, mode.spill?.maxBytes, name, prepareManagedProcessBinding().spillDir)
+        const binding = prepareManagedProcessBinding({ onSpillFailure: this.reportSpillFailure })
+        const collector = new OutputCollector(mode.maxBytes, name, mode.spill === undefined ? undefined : {
+          maxBytes: mode.spill.maxBytes, dir: binding.spillDir, onFailure: binding.onSpillFailure,
+        })
         collectors[name] = collector
         const forwarder = new CollectedOutputForwarder(socket, collector, mode.maxBytes)
         forwarders.push(forwarder)

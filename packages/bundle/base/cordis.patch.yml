@@ -91,16 +91,29 @@
     - id: llm-retry
       name: '@deepseek-ai/dsh-llm-retry'
 
-    # User-settings document (`$DSH_HOME/settings.yaml`, hot-reloaded): a
-    # `llm-deepseek:` or `llm-pi-ai:` section there overrides the adapter entries
-    # below without a restart, and is what the web Models page writes.
+    # Live Config forms persist through the active profile patch.
+
+    # Live configuration forms persist through the launcher's profile.
+    - id: config-editor
+      name: '@deepseek-ai/dsh-config-editor'
+      disabled: !!js "!ctx.get('profileContext')"
+
     - id: settings
-      name: '@deepseek-ai/dsh-settings-file'
+      name: '@deepseek-ai/dsh-settings'
+      disabled: !!js "!ctx.get('profileContext')"
 
     # Credential sources: inherited environment over the managed
     # `$DSH_HOME/.credentials.yaml`, with project and user `.env` fallbacks.
     # Adapters resolve references per request; the Models page writes only the
     # managed document, which is never materialized into the process environment.
+    - id: authorization
+      name: '@deepseek-ai/dsh-authorization'
+
+    - id: deepseek-account
+      name: '@deepseek-ai/dsh-deepseek-account-platform'
+      config:
+        desktopPlatform: !!js "ctx.get('profileContext')?.name === 'desktop' && ['darwin', 'win32'].includes(process.platform) ? process.platform : null"
+
     - id: credentials
       name: '@deepseek-ai/dsh-credentials-local'
 
@@ -172,6 +185,9 @@
         writeEveryEvents: 200
         writeIntervalMs: 5000
 
+    - id: otel
+      name: '@deepseek-ai/dsh-otel'
+
     # OTel releases a Session-log prefix only after explicit user feedback,
     # regardless of model provider. Ordinary activity never triggers capture.
     # DSH_TELEMETRY_OTLP_URL overrides the production endpoint. A non-empty
@@ -179,22 +195,20 @@
     # process out (the launchers patch the row disabled; config cannot disable
     # a row). Exports carry the harness home's anonymous user id ($DSH_HOME/.anonymous-user-id,
     # random UUID; delete the file to reset the identity) as the Resource's
-    # user.id. The exporter/processor values normally bound the shutdown drain
-    # to ~1s against an unreachable collector: exporter.timeoutMillis is both
-    # the per-attempt socket timeout and the retry deadline (1s effectively
-    # disables the SDK's 5-try backoff), while maxExportBatchSize == maxQueueSize
-    # (both explicit) makes the drain a single batch. The SDK awaits
-    # exporter.forceFlush() outside exportTimeoutMillis, so the backend's 3s
-    # shutdownTimeoutMillis is the load-bearing outer bound when a transport
-    # promise never settles. Every CLI exit path drains it by disposing the root
-    # on SIGINT/SIGTERM.
+    # user.id. Byte-bounded batching may turn an authorized prefix into
+    # several HTTP requests. Requests run serially; each has its own 1s
+    # transport timeout and 1.5s watchdog. A watchdog does not release the
+    # active request slot. The outer 3s shutdown deadline stops queued sends;
+    # large prefixes or an unsettled transport may leave records unsent.
+    # Every CLI exit path drains by disposing the root on SIGINT/SIGTERM.
     - id: session-telemetry-otel
       name: '@deepseek-ai/dsh-session-telemetry-otel'
       config:
         mode: !!js process.env.DSH_TELEMETRY_MODE || 'FEEDBACK_ONLY'
         shutdownTimeoutMillis: 3000
+        maxRequestBytes: 4000000
         exporter:
-          url: !!js process.env.DSH_TELEMETRY_OTLP_URL ?? 'https://harness-telemetry.deepseeksvc.com/v1/logs'
+          url: !!js process.env.DSH_TELEMETRY_OTLP_URL ?? 'https://dsh-otel-collector.deepseeksvc.com/v1/logs'
           compression: gzip
           timeoutMillis: 1000
         processor:
@@ -393,7 +407,7 @@
     - id: spill-policy
       name: '@deepseek-ai/dsh-spill-policy'
       config:
-        maxInlineBytes: 50000
+        maxInlineTokens: 12500
 
     # Durability checkpoints before each model request and top-level dispatch.
     - id: session-checkpoint-policy
@@ -449,7 +463,7 @@
     # preset; products with a stricter network policy override tool-web. DeepSeek
     # search resolves the same DEEPSEEK_API_KEY
     # credential the Models page manages for chat, at each search; its Messages
-    # endpoint is separate from the chat-completions endpoint, so it takes its own
+    # endpoint is configured independently from the model route, so it takes its own
     # base-URL override. Anonymous fetch accepts only public HTTP(S) destinations,
     # resolves and validates every destination, and pins every actual connection.
     # Search is a full auxiliary model request with server-side retrieval, so this
@@ -509,4 +523,7 @@
     # key coming from the credential store below. Thinking defaults are a deployment
     # choice.
     - id: llm-deepseek
-      name: '@deepseek-ai/dsh-llm-deepseek'
+      name: '@deepseek-ai/dsh-llm-deepseek-api-key'
+
+    - id: llm-deepseek-account
+      name: '@deepseek-ai/dsh-llm-deepseek-account'

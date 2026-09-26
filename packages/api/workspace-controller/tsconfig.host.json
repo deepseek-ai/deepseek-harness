@@ -9,16 +9,20 @@
     "src/index.ts",
     "src/types.ts",
     "src/commands.ts",
+    "src/default-workspace.ts",
     "src/directory-picker.ts",
-    "src/feed.ts"
+    "src/feed.ts",
+    "src/default-directory.ts"
   ],
   "references": [
     { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
     { "path": "../../core/session" },
     { "path": "../../host/directory-picker" },
     { "path": "../../storage/storage-domain" },
     { "path": "../../typert/protocol" },
     { "path": "../../util/deque" },
+    { "path": "../../util/native-command" },
     { "path": "../../workspace/workspace" }
   ]
 }

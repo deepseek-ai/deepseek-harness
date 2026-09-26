@@ -1,6 +1,79 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/terminal/terminal/README.md
-README.md: 99b2a687cf7e1a581c48ebbc877bf226180077a1
-README.zh.md: ea4f926c204442832277dd3cacc30c2b0d59c8c3
+/:
+  en: 3d90ab1819787962
+  zh: d5279e899341168a
+/deepseek-ai-dsh-terminal:
+  en: 51faab4a45b4d0a3
+  zh: c026cbe279584a55
+/deepseek-ai-dsh-terminal/summary:
+  en: b275cca5aa0ccbd6
+  zh: 0452420c4b45c7db
+/deepseek-ai-dsh-terminal/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-terminal/use-this-package:
+  en: 51bfe428d2b44ee2
+  zh: 557154468269985e
+/deepseek-ai-dsh-terminal/use-this-package/when-to-choose-it:
+  en: c4244a1757ca3584
+  zh: b6fb10e30146b347
+/deepseek-ai-dsh-terminal/use-this-package/composition:
+  en: c6562461d8c66517
+  zh: 8bab392367901144
+/deepseek-ai-dsh-terminal/use-this-package/what-sessions-give-you:
+  en: 6527302f4ad84cbb
+  zh: 8edc988f1d0a3cee
+/deepseek-ai-dsh-terminal/use-this-package/ownership-and-isolation:
+  en: 47820d85ea37cb36
+  zh: 857686d08af67fcb
+/deepseek-ai-dsh-terminal/use-this-package/observable-outcomes-and-failures:
+  en: 4fcedb18b5e8d5f2
+  zh: d72bb1a45e45cfff
+/deepseek-ai-dsh-terminal/understand-the-implementation:
+  en: 0d0669b98b14a3dd
+  zh: 57416c205270e4e1
+/deepseek-ai-dsh-terminal/understand-the-implementation/design-concept:
+  en: 6bae42fb7275816f
+  zh: 5f75e1b26074108c
+/deepseek-ai-dsh-terminal/understand-the-implementation/source-map:
+  en: a958f52bab5cf58d
+  zh: 5ae1e96dc2a5a09c
+/deepseek-ai-dsh-terminal/understand-the-implementation/data-model-and-lifecycle:
+  en: a2adfa2708882e19
+  zh: 002f257fd8c4addb
+/deepseek-ai-dsh-terminal/understand-the-implementation/ownership-and-cleanup-rules:
+  en: 7af36e58919e41d5
+  zh: 4fe7b4db1099bcbf
+/deepseek-ai-dsh-terminal/understand-the-implementation/send-reservation:
+  en: 5815723cd0c6089c
+  zh: 0c612ffa4b8c466c
+/deepseek-ai-dsh-terminal/further-exploration:
+  en: 0e744f900665e8ad
+  zh: bd7b20a82fad207e
+/deepseek-ai-dsh-terminal/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-terminal/model-experience/indirect-consumer:
+  en: a601a3c4f5b848cd
+  zh: ec617f79f706aaa1
+/deepseek-ai-dsh-terminal/model-experience/indirect-consumer/what-the-model-sees:
+  en: be5049f4851a1b2a
+  zh: 056ddf9f9f1fc112
+/deepseek-ai-dsh-terminal/model-experience/indirect-consumer/token-effect:
+  en: 477da21b0a5be3a6
+  zh: 3ae1d37fe671ef96
+/deepseek-ai-dsh-terminal/model-experience/indirect-consumer/kv-cache-effect:
+  en: 2d1f12c1eb4164e5
+  zh: 7d22b2cd3f9649ff
+/deepseek-ai-dsh-terminal/known-limitations-and-deferred-work:
+  en: a133ebc47a4df34f
+  zh: 9bb949487ee566d5
+/deepseek-ai-dsh-terminal/known-limitations-and-deferred-work/dev-note:
+  en: 112f870e68bd1ff3
+  zh: 693f37bbd32497a0
+/deepseek-ai-dsh-terminal/known-limitations-and-deferred-work/dev-note/undecided-directions:
+  en: 3c5203a9c40a38ef
+  zh: a7660ca08bd0d279

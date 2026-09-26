@@ -31,8 +31,8 @@ The Remote consumer projection contains `.d.ts`, `.d.ts.map`, and `.js` files. T
 | `@deepseek-ai/dsh-typert-protocol` | Declares only the minimal `ctx.typert` protocol | `TypertRemoteService`, decorators, binding fallback, descriptors, lookup/Context, and the Remote map; no dependency on the compiler, Zod, Connection, or Browser |
 | Typert registry | `ctx.typert` | Separately stores reflection for the current environment, imported Remote contributions, lookup providers, and Context providers |
 | Typert generator/loader | No new business service | Generates three kinds of `lib` artifacts from the Host/Client Programs and registers the current environment's artifacts with `ctx.typert` |
-| API Gateway's Host face | `ctx.typertGateway` | Associates Host definitions with live Services, decodes parameters, resolves receivers, and invokes methods |
-| Connection | `ctx.connection` | Exclusively owns the HTTP Server/future WebSocket, the shared `/api` route, RPC envelope, rpcId, serialization, trust, error transport, Typert interception, and owner-registered exact Fetch routes on the same channel |
+| API Gateway's Host face | `ctx.typertGateway` | Associates Host definitions with live Services, decodes parameters, resolves receivers, invokes methods, and projects unary results into carrier-neutral fields and attachments |
+| Connection | `ctx.connection` | Exclusively owns the HTTP Server/future WebSocket, the shared `/api` route, RPC envelope, rpcId, physical serialization, trust, error transport, Typert interception, and owner-registered exact Fetch routes on the same channel |
 | API Gateway's Client face | `ctx.remote`, `ctx.remote.<namespace>` | Mounts Remote contributions, materializes each namespace as a traced `remote.<namespace>` child Service, and delegates canonical calls to `ctx.connection.rpc` |
 | API Remotes | No new service | Owns Host Agent/Session lookup policy and serves as the only Client business facade, selecting and mounting `/remote` contributions while exposing the selected API declarations |
 | Agent/Session owning packages | Existing domain services | Provide both static interface merges and runtime lookup/Context providers |
@@ -181,7 +181,7 @@ Consequently, `SessionId`, the Agent wire ID, the request, and the result all re
 
 Remote methods themselves use declaration-map navigation. Typert anchors `InvocationModel.location` to the decorated Host method-name token and emits a source-map segment on the corresponding property of the namespace interface. For an adapter-backed endpoint, after the TypeScript editor resolves `ctx.remote.models.list` to its generated declaration, `typert.remote-client.d.ts.map` takes it to the Host Service's `remoteExportList` entry point. That entry point explicitly calls the existing, unrenamed `list()` method; the map does not misidentify the decorator, class, or full signature as the method definition.
 
-Typert generates a wire Zod codec for the same symbol key. The Host Gateway uses parameter and identity codecs to validate input. Client Remote trusts its generated TypeScript arguments and successful Host results instead of executing invocation codecs. If a complex type cannot produce a strict codec, the LIB build fails instead of degrading to `unknown` or unchecked JSON.
+Typert generates a wire Zod codec for the same symbol key. The Host Gateway uses parameter and identity codecs to validate input. Client Remote trusts its generated TypeScript arguments and JSON success results. Binary success results use their generated codec after multipart decoding, as specified by [binary Remote transfer](2026-09-17-workspace-file-binary-transfer.md). If a complex type cannot produce a strict codec, the LIB build fails instead of degrading to `unknown` or unchecked JSON.
 
 Named business types referenced by Remote methods must be exported from public, type-only subpaths. If the only reachable entry also imports Host Services, Cordis `Context` merges, or Host-only implementations, the build fails and requires the business package to provide a safe type entry. Primitives, literals, and simple compositions explicitly supported by Typert need no additional names.
 
@@ -514,7 +514,7 @@ Canonical public types require business DTOs to have type-only entries, which ma
 
 Type imports and runtime contributions have different effects. `import type {}` extends only the static Remote surface. If a real calling environment omits the value contribution, the Client Remote Service must fail with an explicit "Remote not mounted" error.
 
-Generated Host and Client artifacts carry matching Zod factories, but Client Remote does not materialize invocation schemas. Canonical symbol keys, the same generated model, and Host wire validation keep the two sides aligned without comparing schema object identities across realms.
+Generated Host and Client artifacts carry matching Zod factories; Client Remote materializes only binary result schemas. Canonical symbol keys, the same generated model, and Host wire validation keep the two sides aligned without comparing schema object identities across realms.
 
 A consumer may import a Remote contract that is not currently mounted on the Host. The types mean "this protocol capability was selected by the consumer," not that a corresponding Service currently exists in the target process; an unavailable endpoint must fail explicitly at runtime.
 

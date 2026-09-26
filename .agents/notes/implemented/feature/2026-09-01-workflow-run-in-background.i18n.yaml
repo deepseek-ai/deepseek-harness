@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-01-workflow-run-in-background.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-01-workflow-run-in-background.md
+/agent-note-workflow-runs-gain-run-in-background-over-the-job-registry:
+  en: f009de4a29acc7d0
+  zh: d207b3722564338d
+/agent-note-workflow-runs-gain-run-in-background-over-the-job-registry/problem:
+  en: 4ef955f5184800a3
+  zh: 8e4e74557efac4ca
+/agent-note-workflow-runs-gain-run-in-background-over-the-job-registry/decision:
+  en: b0bc1669a6e61b1e
+  zh: 99ba5afe693aed9d
+/agent-note-workflow-runs-gain-run-in-background-over-the-job-registry/alternatives-considered:
+  en: 70c9a5dd502eae0c
+  zh: 2b4f7b6a83cfec18
+/agent-note-workflow-runs-gain-run-in-background-over-the-job-registry/consequences:
+  en: 439882b972d28d4e
+  zh: 3bd61f42e29f490c

@@ -391,14 +391,14 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     // the wrapper focused, and focus-visible also reveals the bar.
     await page.mouse.move(4, 4)
     await wide.evaluate((element) => { element.blur() })
-    await expect.poll(overflowState, { timeout: 5_000 }).toBe('hidden 8px')
+    await expect.poll(overflowState, { timeout: 5_000 }).toBe('hidden 5px')
     // Resting hidden overflow keeps the scroll position reachable and intact.
     expect(await wide.evaluate(element => element.scrollLeft)).toBeGreaterThanOrEqual(0)
     await wide.hover()
     await expect.poll(overflowState, { timeout: 5_000 }).toBe('scroll 0px')
     // Pointer leaves: the bar rests hidden again.
     await page.mouse.move(4, 4)
-    await expect.poll(overflowState, { timeout: 5_000 }).toBe('hidden 8px')
+    await expect.poll(overflowState, { timeout: 5_000 }).toBe('hidden 5px')
     expect(tripwire.pageErrors).toEqual([])
   }, 120_000)
 

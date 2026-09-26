@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-session-projection-mandatory-seam.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-19-session-projection-mandatory-seam.md
-2026-08-19-session-projection-mandatory-seam.md: e1c6835311228fcaf7a22140f1db8da748603186
-2026-08-19-session-projection-mandatory-seam.zh.md: 5d6a5169a556febae3f5c960b2d519c324d99863
+/agent-note-session-projections-as-a-required-reader-seam:
+  en: 41f30d473ff53ce2
+  zh: 6851c4414f5331c1
+/agent-note-session-projections-as-a-required-reader-seam/problem:
+  en: c0c779c717cad546
+  zh: 5d2916ac86bf5d84
+/agent-note-session-projections-as-a-required-reader-seam/decision:
+  en: a1c50d2f43334a88
+  zh: d7736994733454b4
+/agent-note-session-projections-as-a-required-reader-seam/alternatives-considered:
+  en: aea3da939c90d240
+  zh: 21e91c481cdd23b7
+/agent-note-session-projections-as-a-required-reader-seam/consequences:
+  en: 73325513ec70fbb2
+  zh: 610bf34b9f9db420

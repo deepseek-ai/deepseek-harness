@@ -59,7 +59,7 @@ export class SettingsSchemaService extends Service {
    */
   validate(schema: SchemaNode, draft: unknown): string | undefined {
     try {
-      ;(schema as unknown as (value: unknown) => unknown)(draft)
+      ;(schema as (value: unknown) => unknown)(draft)
       return undefined
     } catch (error) {
       return error instanceof Error ? error.message : String(error)

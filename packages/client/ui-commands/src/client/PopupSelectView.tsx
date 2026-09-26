@@ -3,16 +3,18 @@
  * store into the conversation.input.overlay anchor. Unlike the slash menu
  * (combobox — textarea keeps focus), this shell HOLDS focus while open: the
  * inner search input takes focus, plain typing filters the loaded options
- * locally, Enter/↑↓ drive the filtered highlight (scrolled into view), Escape
- * dismisses back to the composer, and ←→ keep the search input's native
- * caret. Any pointer interaction outside the box dismisses (the click's own
- * target takes focus). Closed state renders null; the overlay slot stays
- * mounted. The card height clamps to the space above the composer.
+ * locally, Enter and Tab accept the filtered highlight, ↑↓ walk it (wrapping,
+ * scrolled into view), and Escape and Shift+Tab dismiss back to the composer.
+ * ←→ keep the search input's native caret. Any pointer interaction outside the
+ * box dismisses (the click's own target takes focus). Closed state renders
+ * null; the overlay slot stays mounted. The card height clamps to the space
+ * above the composer.
  */
+import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useRef } from 'react'
 import { useSyncExternalStore } from 'react'
 import clsx from 'clsx'
-import { IconCheckOutline16, RiskConfirmation, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutlineRegular, RiskConfirmation, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { filterOptions } from './popup.ts'
 import type { PopupSelectController } from './popup.ts'
@@ -95,6 +97,19 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
         ev.preventDefault()
         void popup.select(state.active)
         return
+      // Tab settles like Enter and Shift+Tab dismisses like Escape, so the
+      // card's keys mean what they mean in the composer. Both must be consumed:
+      // the shell HOLDS focus, and native traversal would leave an open card
+      // whose search input lost focus.
+      case 'Tab':
+        // With nothing to settle — still loading, failed, or filtered empty —
+        // the keystroke stays the browser's, which is how the error strip's
+        // retry button remains reachable.
+        if (!ev.shiftKey && (state.status !== 'ready' || rows.length === 0)) return
+        ev.preventDefault()
+        if (ev.shiftKey) popup.dismiss({ focusComposer: true })
+        else void popup.select(state.active)
+        return
       case 'Escape':
         ev.preventDefault()
         popup.dismiss({ focusComposer: true })
@@ -106,7 +121,7 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
   return (
     <>
       {state.confirming === null && (
-        <div
+        <MenuSurface
           ref={cardRef}
           className={css.card}
           style={{ maxHeight }}
@@ -154,12 +169,12 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
                     {option.badge !== undefined && <sup className={css.badge}>{option.badge}</sup>}
                   </span>
                   {option.detail !== undefined && <span className={css.detail}>{option.detail}</span>}
-                  {option.active === true && <span className={css.check}><IconCheckOutline16 /></span>}
+                  {option.active === true && <span className={css.check}><IconCheckOutlineRegular /></span>}
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </MenuSurface>
       )}
       {confirmation !== undefined && (
         <RiskConfirmation

@@ -43,6 +43,11 @@ function Start-Setup([string]$Theme, [string]$Path = $installPath) {
         Start-Sleep -Milliseconds 5
     } while ($timer.Elapsed.TotalSeconds -lt 30)
     if ($window -eq [IntPtr]::Zero) { throw 'Installer welcome window did not appear' }
+    $timer.Restart()
+    while ([InstallerCapture]::GetProp($window, 'HarnessInstaller.Presented') -eq [IntPtr]::Zero) {
+        if ($process.HasExited -or $timer.Elapsed.TotalSeconds -gt 10) { throw 'Installer welcome window was not presented' }
+        Start-Sleep -Milliseconds 10
+    }
     [InstallerCapture]::Reveal($window)
     $languages = @($localizedCopy.Keys | Where-Object {
         [InstallerCapture]::FindButton($process.Id, $localizedCopy[$_].INSTALLER_INSTALL) -ne [IntPtr]::Zero
@@ -72,6 +77,7 @@ function Finish-Setup([Diagnostics.Process]$Process, [bool]$Launch, [string]$The
     while ([InstallerCapture]::FindButton($Process.Id, $copy.INSTALLER_FINISH) -eq [IntPtr]::Zero) {
         if ($Process.HasExited -or $timer.Elapsed.TotalSeconds -gt 30) { throw 'Installer did not complete' }
         $visible = [InstallerCapture]::VisibleText($Process.Id)
+        if ($visible.Contains('msctls_progress32') -ne $expected.nativeProgressVisible) { throw 'Stock green progress bar is visible' }
         if ($visible -match 'HarnessInstallerProgress[^\r\n]*?(\d+)%') {
             $percent = [int]$Matches[1]
             if ($percent -lt $previous) { throw 'Installation progress went backwards' }
@@ -127,6 +133,7 @@ function Run-Silent([string]$Arguments, [int]$Code) {
 }
 try {
     $process = Start-Setup light
+    $results.Add('welcome-presented-on-first-show')
     $window = [InstallerCapture]::Find($process.Id)
     [void][InstallerCapture]::Save($window, (Join-Path $OutputDirectory 'light-welcome.png'))
     Click-Control $process $copy.INSTALLER_CHOOSE_PATH
@@ -175,33 +182,34 @@ try {
     $results.Add('registered-directory-and-checked-launch')
     $results.Add('launch-failure-retry-and-prompt-dismissal')
 
-    $process = Start-Setup dark
-    Click-Control $process $copy.INSTALLER_INSTALL
-    [void](Wait-Control $process $copy.INSTALLER_RUNNING -Dialog)
-    $visible = [InstallerCapture]::VisibleText($process.Id)
-    if ($visible.Contains('msctls_progress32') -ne $expected.nativeProgressVisible) { throw 'Stock green progress bar is visible' }
-    if (-not $visible.Contains('HarnessInstallerProgress')) { throw 'Custom progress page is missing' }
-    $window = [InstallerCapture]::Find($process.Id)
-    $source = [InstallerCapture]::FindClass($window, 'msctls_progress32')
-    if ($source -eq [IntPtr]::Zero) { throw 'Stock progress source is missing' }
-    # Directory staging finishes before the running-app prompt; promotion has not started.
-    if ([InstallerCapture]::GetProp($window, 'HarnessInstaller.Stage').ToInt32() -ne 1) { throw 'Running-app prompt reached the wrong installation stage' }
-    $previous = [InstallerCapture]::Progress($window)
-    foreach ($sample in @(@(100, 95), @(100, 59), @(1000, 0), @(1000, 950), @(100, 59), @(100, 100))) {
-        [void][InstallerCapture]::SendMessage($source, 0x406, [IntPtr]::Zero, [IntPtr]$sample[0])
-        [void][InstallerCapture]::SendMessage($source, 0x402, [IntPtr]$sample[1], [IntPtr]::Zero)
-        $percent = [InstallerCapture]::Progress($window)
-        if ($percent -lt $previous -or $percent -ge 100) { throw "Progress regressed or completed before success: $previous -> $percent" }
-        $previous = $percent
+    function Assert-RunningRejected([Diagnostics.Process]$Setup) {
+        [void](Wait-Control $Setup $copy.INSTALLER_RUNNING -Dialog)
+        $visible = [InstallerCapture]::VisibleText($Setup.Id)
+        if ($visible.Contains('HarnessInstallerProgress')) { throw 'Running-app rejection started progress UI' }
+        if (Get-ChildItem -LiteralPath $OutputDirectory -Directory -Filter 'Installed App.new-*') { throw 'Running-app rejection staged payload files' }
+        Dismiss $Setup $copy.INSTALLER_RUNNING
+        if (-not $Setup.WaitForExit(10000) -or $Setup.ExitCode -ne 2 -or $app.HasExited) { throw 'Running application was not preserved' }
     }
-    if ($previous -gt 94) { throw 'Internal progress escaped the extraction stage' }
-    $results.Add('progress-remains-monotonic-across-native-resets')
-    [void][InstallerCapture]::Save([InstallerCapture]::Find($process.Id), (Join-Path $OutputDirectory 'dark-progress.png'))
-    Dismiss $process $copy.INSTALLER_RUNNING
-    if (-not $process.WaitForExit(10000) -or $app.HasExited) { throw 'Running application was not preserved' }
+    $process = Start-Process -FilePath $Installer -ArgumentList ('/THEME=dark /D=' + $installPath) -PassThru -WindowStyle Hidden
+    $processes.Add($process)
+    Assert-RunningRejected $process
+    $results.Add('running-app-rejected-before-welcome-and-extraction')
+    Run-Silent ('/S /D=' + $installPath) 2
+    if ($app.HasExited) { throw 'Silent rejection stopped the running application' }
+    if (Get-ChildItem -LiteralPath $OutputDirectory -Directory -Filter 'Installed App.new-*') { throw 'Silent rejection staged payload files' }
+    $results.Add('silent-running-app-rejected-before-extraction')
     Dismiss $app 'Installer test application is running.'
     if (-not $app.WaitForExit(10000)) { throw 'Test application did not exit' }
-    $results.Add('running-app-preserved-and-native-progress-hidden')
+
+    $process = Start-Setup dark
+    $app = Start-Process -FilePath $appPath -PassThru -WindowStyle Hidden
+    $processes.Add($app)
+    [void](Wait-Control $app 'Installer test application is running.' -Dialog)
+    Click-Control $process $copy.INSTALLER_INSTALL
+    Assert-RunningRejected $process
+    Dismiss $app 'Installer test application is running.'
+    if (-not $app.WaitForExit(10000)) { throw 'Test application did not exit' }
+    $results.Add('app-started-on-welcome-rejected-before-extraction')
 
     $otherPath = Join-Path $OutputDirectory 'Other Installation'
     New-Item -ItemType Directory -Path $otherPath | Out-Null

@@ -1,4 +1,5 @@
 import { createUserMessage, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -9,6 +10,12 @@ import {
   textResponse,
   type BridgeHarness,
 } from './harness.ts'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'test': { kind: 'test' } & ContextFormed
+  }
+}
 
 async function newSession(harness: BridgeHarness): Promise<string> {
   await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
@@ -188,7 +195,7 @@ describe('ACP prompt lifecycle', () => {
     harness.ctx.on('agent/inbox/inserted', ({ agent: subject, message }) => {
       if (subject === agent && message.source.kind === 'user' && !injected) {
         injected = true
-        agent.inject(createUserMessage({ content: [{ type: 'text', text: 'context' }], source: { kind: 'plugin', plugin: 'test' } }))
+        agent.inject(createUserMessage({ content: [{ type: 'text', text: 'context' }], source: { kind: 'test' } }))
       }
     })
 
@@ -208,7 +215,7 @@ describe('ACP prompt lifecycle', () => {
     })
     agent.followup(createUserMessage({
       content: [{ type: 'text', text: 'autonomous work' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'test' },
     }))
     await started
 
@@ -230,7 +237,7 @@ describe('ACP prompt lifecycle', () => {
       kind: 'enter',
       messages: [createUserMessage({
         content: [{ type: 'text', text: 'rewritten prompt' }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'test' },
       })],
     }))
     const sessionId = await newSession(harness)
@@ -332,7 +339,7 @@ describe('ACP prompt lifecycle', () => {
     const agent = harness.ctx.agents.get(SessionId(sessionId))!
     agent.followup(createUserMessage({
       content: [{ type: 'text', text: 'unrelated work' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'test' },
     }))
     await vi.waitFor(() => { expect(harness!.adapter.requests).toHaveLength(1) })
 
@@ -375,7 +382,7 @@ describe('ACP prompt lifecycle', () => {
 
     agent.followup(createUserMessage({
       content: [{ type: 'text', text: 'unrelated work' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'test' },
     }))
     await agent.whenIdle()
     releaseValidation.resolve(undefined)
@@ -465,7 +472,7 @@ describe('ACP prompt lifecycle', () => {
     const agent = harness.ctx.agents.get(SessionId(sessionId))!
     agent.followup(createUserMessage({
       content: [{ type: 'text', text: 'autonomous work' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'test' },
     }))
     await vi.waitFor(() => {
       expect(agent.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(true)

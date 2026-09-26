@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-30-followup-enqueue-and-owned-runs.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-30-followup-enqueue-and-owned-runs.md
-2026-07-30-followup-enqueue-and-owned-runs.md: c9b3b992dffb39c94b476cd6541b8ec9e2256047
-2026-07-30-followup-enqueue-and-owned-runs.zh.md: 7f272484cad4f9d0fd918e5c1b05fb8fcb0384c0
+/agent-note-follow-up-enqueue-and-owned-run-boundaries:
+  en: 30b533c813f80a2c
+  zh: 5f56ae990ca597f2
+/agent-note-follow-up-enqueue-and-owned-run-boundaries/problem:
+  en: 33387f4ed29e967b
+  zh: b61ab718327d4cc9
+/agent-note-follow-up-enqueue-and-owned-run-boundaries/decision:
+  en: 9d68149d8090d355
+  zh: d3efa8ac850603bf
+/agent-note-follow-up-enqueue-and-owned-run-boundaries/alternatives-considered:
+  en: 70a57101ffa08e81
+  zh: 36c3539ee9c759af
+/agent-note-follow-up-enqueue-and-owned-run-boundaries/verification:
+  en: 4c65688fc0bc1f6c
+  zh: 04f1fd160e38a69d
+/agent-note-follow-up-enqueue-and-owned-run-boundaries/consequences:
+  en: 7de608183c0bd34d
+  zh: 598eeb85cfd2993b

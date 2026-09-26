@@ -1,0 +1,139 @@
+/* schedule_create transcript card: clock, task title, frequency, open action.
+   The box is the delivery card's (ui-deliverables Deliverables.module.css
+   `.file`): the same fill/hover pair, 60px row, 8/10 padding, and 18px corner,
+   with one inset overlay button making the whole row open the task. */
+
+.card {
+  --card-fill: var(--dsw-static-neutral-50);
+  --card-hover: var(--dsw-static-neutral-100);
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  overflow: hidden;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: 18px;
+  background: var(--card-fill);
+  color: var(--dsw-alias-label-primary);
+  transition: background-color 120ms ease;
+}
+
+:global(body[data-ds-dark-theme]) .card {
+  --card-fill: var(--dsw-static-neutral-850);
+  --card-hover: var(--dsw-static-neutral-800);
+}
+
+/* Only a card whose whole row opens the task answers hover. */
+.card:has(.cardOpen):hover {
+  background: var(--card-hover);
+}
+
+.cardOpen {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.cardOpen:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+}
+
+.row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  pointer-events: none;
+}
+
+/* The clock glyph sits in the delivery card's icon frame (`.fileIcon`): a
+   40px bordered 10px-corner square on the card's own fill. */
+.leading {
+  display: grid;
+  flex: none;
+  place-items: center;
+  box-sizing: border-box;
+  width: 40px;
+  height: 40px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--card-fill);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.leading svg {
+  flex: none;
+}
+
+/* Title over the frequency line, both truncated before the open control, on
+   the delivery card's own steps (`.fileName` 13/20 at 500 over the 10/16
+   tertiary `.description`). */
+.body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.frequency {
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A task the catalog no longer states as the call wrote it: the card says what
+   happened instead of repeating the rule it was created with. */
+.status {
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The open control keeps the primitive's outlined capsule geometry and stays
+   its own target over the row-wide overlay. */
+.openButton {
+  flex: none;
+  pointer-events: auto;
+}
+
+/* A result the card cannot read as a task keeps its raw model-facing text. */
+.fallback {
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

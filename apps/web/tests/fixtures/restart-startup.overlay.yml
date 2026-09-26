@@ -1,0 +1,5 @@
+- id: session-controller
+  inject: [webRestartReady]
+- insert:
+    - id: web-restart-startup
+      name: ./restart-startup.js

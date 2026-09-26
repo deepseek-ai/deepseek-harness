@@ -9,9 +9,7 @@
   height: calc(28px + var(--dsh-content-font-delta, 0px));
 }
 
-/* Clock before icons (user figma 388:20051) / after (assistant 43:32997).
-   Both read the secondary tier so the user row's clock matches the assistant
-   tail's meta line. */
+/* The user clock keeps the secondary tier. */
 .timeStart {
   padding-right: 12px;
   font-size: var(--dsh-content-font-size-secondary, 13px);
@@ -20,14 +18,22 @@
   white-space: nowrap;
 }
 
-/* The assistant tail's clock sits at the row end after the stat pills; the
-   row's 8px flex gap spaces it, and it reads the secondary tier so it matches
-   the pill labels beside it. */
+/* Assistant-tail metadata keeps the smaller information size while sharing
+   the action icons' resting color. */
 .timeEnd {
-  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-tertiary);
+  color: inherit;
   white-space: nowrap;
+}
+
+.endInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-left: 8px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 /* Earlier user-authored flow rows and opted-in turn tails reveal the complete
@@ -62,17 +68,22 @@
   height: calc(28px + var(--dsh-content-font-delta, 0px));
   padding: 6px;
   border: none;
-  border-radius: 28px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
 }
 
-/* The 15px action glyphs follow the same px delta as the text they serve;
-   the CSS edge overrides each svg's own width/height attributes. */
+/* Action glyphs follow the same px delta as the text they serve; the
+   assistant completion row gives them two extra pixels. */
 .action svg {
   width: calc(15px + var(--dsh-content-font-delta, 0px));
   height: calc(15px + var(--dsh-content-font-delta, 0px));
+}
+
+.actions[data-clock='end'] .action svg {
+  width: calc(17px + var(--dsh-content-font-delta, 0px));
+  height: calc(17px + var(--dsh-content-font-delta, 0px));
 }
 
 .action:hover {

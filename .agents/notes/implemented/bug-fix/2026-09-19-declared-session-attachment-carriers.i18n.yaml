@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-19-declared-session-attachment-carriers.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-19-declared-session-attachment-carriers.md
+/agent-note-declared-session-attachment-carriers:
+  en: ec696589b6d29694
+  zh: fca0e8292a840d47
+/agent-note-declared-session-attachment-carriers/problem:
+  en: 2c3544ea223fd86c
+  zh: fee865c0ce374115
+/agent-note-declared-session-attachment-carriers/decision:
+  en: 7538fa848fbbeff8
+  zh: 6fd10f3683cadef0
+/agent-note-declared-session-attachment-carriers/alternatives-considered:
+  en: 3307cfd109d19377
+  zh: a0051b257807e6d0
+/agent-note-declared-session-attachment-carriers/consequences:
+  en: 9d028f075b96f121
+  zh: c5da5f89f7b75efc
+/agent-note-declared-session-attachment-carriers/verification:
+  en: f297ee8e56e7e69e
+  zh: e6bc44cb7711b778

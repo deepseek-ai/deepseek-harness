@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-11-microkernel-event-taxonomy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-06-11-microkernel-event-taxonomy.md
-2026-06-11-microkernel-event-taxonomy.md: 6cacbc30f29c863de0f8ddfa4df7251a64bc80ca
-2026-06-11-microkernel-event-taxonomy.zh.md: 1c7919392b835c491b9dc606d46f638a708d2948
+/agent-note-microkernel-extension-via-cordis-event-taxonomy-one-concrete-loop:
+  en: e5775d7ec6f1cdc3
+  zh: a364697f860a545a
+/agent-note-microkernel-extension-via-cordis-event-taxonomy-one-concrete-loop/problem:
+  en: 3bc74749db819441
+  zh: 19b5497ed3a9378b
+/agent-note-microkernel-extension-via-cordis-event-taxonomy-one-concrete-loop/decision:
+  en: 2153b0cb5773cb08
+  zh: 82d7ad1b250cd52d
+/agent-note-microkernel-extension-via-cordis-event-taxonomy-one-concrete-loop/alternatives-considered:
+  en: e528c5a20e0c55a3
+  zh: 004d3bf06241cc26
+/agent-note-microkernel-extension-via-cordis-event-taxonomy-one-concrete-loop/consequences:
+  en: 6acb80cdaa7c010f
+  zh: acca672d8094d985

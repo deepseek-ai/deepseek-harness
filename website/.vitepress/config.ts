@@ -5,8 +5,10 @@ import { resolve } from 'node:path'
 import type { DefaultTheme, PageData, SiteConfig } from 'vitepress'
 import type { ViteDevServer } from 'vite'
 import { withMermaid } from 'vitepress-plugin-mermaid'
+import { codeGroupFallbackHead, isolateCodeGroupRadios } from './code-groups.ts'
 import { landingLink, localeCollections, orderedPages, routeLink, sectionSpec, type DocsLocale, type DocsPage, type DocsSidebar } from '../docs.ts'
-import { docsSourceFiles, emitRawMarkdownPages, llmsTxt, projectDocs, rawMarkdownRoute } from '../../scripts/project-doc-site.ts'
+import { docsSourceFiles, emitRawMarkdownPages, llmsTxt, projectDocs } from '../../scripts/project-doc-site.ts'
+import { rawMarkdownMiddleware } from '../raw-markdown.ts'
 
 projectDocs()
 
@@ -117,38 +119,7 @@ function watchCanonicalDocs(server: ViteDevServer): void {
  * their canonical sources per request, so an edit shows without a rebuild.
  */
 function serveRawMarkdown(server: ViteDevServer): void {
-  server.middlewares.use((req, res, next) => {
-    if (req.url === undefined || (req.method !== 'GET' && req.method !== 'HEAD')) {
-      next()
-      return
-    }
-    // The dev client imports page modules at these same `.md` URLs, and a
-    // module script must reach Vite's transform. Browsers declare the purpose:
-    // `script` for module imports, `document` for address-bar navigation.
-    // Header-less clients (curl, agents) read the raw twin. In-page fetch()
-    // (`empty`) also passes to Vite — a deliberate dev-only divergence that
-    // keeps Vite's own requests unbroken, while production static hosting
-    // answers such a fetch with the raw file.
-    const fetchDest = req.headers['sec-fetch-dest']
-    if (fetchDest !== undefined && fetchDest !== 'document') {
-      next()
-      return
-    }
-    const pathname = req.url.split(/[?#]/, 1)[0] ?? ''
-    const sitePath = pathname.startsWith(base) ? pathname.slice(base.length) : pathname.replace(/^\//, '')
-    if (sitePath === 'llms.txt') {
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-      res.end(llmsTxt({ base, ...siteIdentity }))
-      return
-    }
-    const content = sitePath.endsWith('.md') ? rawMarkdownRoute(sitePath) : undefined
-    if (content === undefined) {
-      next()
-      return
-    }
-    res.setHeader('Content-Type', 'text/markdown; charset=utf-8')
-    res.end(content)
-  })
+  server.middlewares.use(rawMarkdownMiddleware(base, () => llmsTxt({ base, ...siteIdentity })))
 }
 
 function escapeVueInterpolation(html: string): string {
@@ -295,6 +266,7 @@ export default withMermaid({
   title: siteIdentity.title,
   description: siteIdentity.description,
   base,
+  transformHead: ({ siteConfig }) => codeGroupFallbackHead(siteConfig.mpa),
   /** Emit the raw-Markdown twin of every route plus llms.txt beside the rendered site. */
   buildEnd(siteConfig: SiteConfig) {
     emitRawMarkdownPages(siteConfig.outDir)
@@ -381,6 +353,7 @@ export default withMermaid({
   },
   markdown: {
     config(md) {
+      isolateCodeGroupRadios(md)
       const renderText = md.renderer.rules.text
       const renderCode = md.renderer.rules.code_inline
       const renderFence = md.renderer.rules.fence

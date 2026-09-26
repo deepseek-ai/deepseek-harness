@@ -1,6 +1,6 @@
 /**
  * CommandUiRuntime tests on a real cordis Context with fake slash/connection
- * faces and real session scopes (createScope): session-keyed candidate
+ * faces and retained TestSessions: session-keyed candidate
  * synthesis (host catalog by sessionId + contributions by availability,
  * collision fail-loud), the dispatch decision table cell by cell, matchSpace
  * hot-key policy, matchEnter strong-wait / reject, the sessionId execute
@@ -11,10 +11,11 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { CommandResult } from '@deepseek-ai/dsh-commands/types'
 import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
-import { createScope, scopeOf } from '@deepseek-ai/dsh-api-session-controller/client'
+import { scopeOf } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
-import { IconGoalOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { RemoteError, TestRemote, TestSessions } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SessionFixture } from '@deepseek-ai/dsh-client-test-runtime'
+import { IconGoalOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ClientSessionContext, ConsumeTokenRequest, InputTriggerPick, InputTriggerSource, SubmitAttachment } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { CommandContribution, CommandDecoration, PopupSelectSpec, SelectOption } from '../src/client/contract.ts'
 import type { CommandDescriptor } from '../src/client/directory.ts'
@@ -44,6 +45,8 @@ interface BenchOptions {
   execute?: (payload: { sessionId: SessionId; line: string }) => Promise<ExecuteValue>
   translate?: (namespace: string, key: string, params?: Record<string, unknown>) => string
   addressed?: SessionId
+  initialOpen?: SessionFixture['initialOpen']
+  snapshot?: SessionFixture['snapshot']
 }
 
 /**
@@ -105,15 +108,30 @@ async function bench(opts: BenchOptions = {}) {
       opts.translate?.(ns, key, params)
       ?? `${ns}:${key}${params === undefined ? '' : JSON.stringify(params)}`,
   })
-  // Real scope tags behind a fake sessions face.
-  const scopes = new Map<SessionId, { ctx: Context; fiber: { dispose(): Promise<void> } }>()
-  const removeSessions = ctx.provide('sessions', {
-    scope: (id: SessionId) => scopes.get(id)?.ctx,
-    scopeOf: (c: Context) => scopeOf(c),
-    subagentAddress: (id: SessionId) => id === opts.addressed
-      ? { parentSessionId: sid('parent'), childSessionId: id, mode: 'continuable' as const }
-      : undefined,
+  const sessions = new TestSessions(async (action) => { await action() }, ctx)
+  onTestFinished(async () => {
+    await sessions.disposeScopes()
+    await ctx.fiber.dispose()
   })
+  const removeSessions = ctx.provide('sessions', sessions)
+  for (const id of new Set(['s1', 's2', 'other', 'ghost', ...opts.addressed === undefined ? [] : [opts.addressed]])) {
+    await sessions.add({
+      id,
+      ...opts.initialOpen === undefined ? {} : { initialOpen: opts.initialOpen },
+      ...opts.snapshot === undefined ? {} : { snapshot: opts.snapshot },
+    })
+  }
+  const mint = (key: string) => {
+    const id = sid(key)
+    const target = id === opts.addressed
+      ? { parentSessionId: sid('parent'), childSessionId: id, mode: 'continuable' as const }
+      : id
+    const binding = sessions.binding(id) ?? sessions.retainFor(ctx, target).binding
+    return { ctx: binding.ctx, fiber: binding.ctx.fiber }
+  }
+  mint('s1')
+  mint('s2')
+  if (opts.addressed !== undefined) mint(opts.addressed)
   const remote = Object.assign(new TestRemote(ctx), { commands: commandsRemote })
   ctx.provide('remote.commands', commandsRemote)
   const executions: Array<{ sessionId: SessionId; name: string; result: CommandResult }> = []
@@ -122,12 +140,15 @@ async function bench(opts: BenchOptions = {}) {
   })
   /** Notices the fake conversation face collected (runDetached routing). */
   const notices: Array<{ scope: SessionId | undefined; level: 'info' | 'error'; text: string }> = []
+  /** Composer focuses the fake conversation face collected (popup dismissal). */
+  const focuses: Array<SessionId | undefined> = []
   const removeConversation = ctx.provide('conversation', {
     input: {
       for: (actx: Context) => ({
         notify: (level: 'info' | 'error', text: string) => {
           notices.push({ scope: scopeOf(actx), level, text })
         },
+        focus: () => { focuses.push(scopeOf(actx)) },
       }),
     },
   })
@@ -136,18 +157,13 @@ async function bench(opts: BenchOptions = {}) {
   const command = ctx.get('commandUi') as CommandUiRuntime
   const source = registered.get('/ command')
   if (source === undefined) throw new Error('command source not registered')
-  const mint = (key: string) => {
-    const handle = createScope(ctx, sid(key))
-    scopes.set(sid(key), handle)
-    return handle
-  }
   /** Warm one session's catalog through the source's own candidate pull. */
   const warm = async (session: ClientSessionContext) => {
     await source.candidates(session, { query: '', position: 'leading', drilled: false, signal: new AbortController().signal })
   }
   return {
-    ctx, fiber, command, source, mint, warm, listCalls, executeCalls, executions, registered, notices, remote,
-    removeSessions, removeConversation,
+    ctx, fiber, command, source, mint, warm, listCalls, executeCalls, executions, registered, notices, focuses, remote,
+    removeSessions, removeConversation, sessions,
   }
 }
 
@@ -203,15 +219,51 @@ describe('registration', () => {
   it('the warm hook prewarms the session key: one pull per session, no duplicate over pending', async () => {
     const { source, listCalls } = await bench()
     source.warm!(proj('s1'))
-    expect(listCalls).toEqual([{ sessionId: sid('s1') }])
+    await vi.waitFor(() => { expect(listCalls).toEqual([{ sessionId: sid('s1') }]) })
     source.warm!(proj('s2'))
-    expect(listCalls).toEqual([{ sessionId: sid('s1') }, { sessionId: sid('s2') }])
+    await vi.waitFor(() => { expect(listCalls).toEqual([{ sessionId: sid('s1') }, { sessionId: sid('s2') }]) })
     source.warm!(proj('s1')) // s1 already pending → no duplicate pull
     expect(listCalls).toHaveLength(2)
   })
 })
 
 describe('candidates', () => {
+  it('waits for initial history and retains the Session until the catalog RPC settles', async () => {
+    const opened = Promise.withResolvers<undefined>()
+    const response = Promise.withResolvers<{ commands: CommandDescriptor[] }>()
+    const b = await bench({ initialOpen: () => opened.promise, commands: () => response.promise })
+    try {
+      const pending = b.source.candidates(proj('s1'), req(''))
+      expect(b.sessions.retainInfo(sid('s1')).getSnapshot().retainedBy.commandCatalog).toBe(1)
+      expect(b.listCalls).toEqual([])
+      opened.resolve(undefined)
+      await vi.waitFor(() => { expect(b.listCalls).toHaveLength(1) })
+      expect(b.sessions.retainInfo(sid('s1')).getSnapshot().referenceCount).toBe(2)
+      response.resolve({ commands: S1_CMDS })
+      await pending
+      expect(b.sessions.retainInfo(sid('s1')).getSnapshot().referenceCount).toBe(1)
+    } finally {
+      opened.resolve(undefined)
+      response.resolve({ commands: S1_CMDS })
+    }
+  })
+
+  it.each([true, false])('refuses an unsuccessful history open (reported error: %s)', async (reported) => {
+    const error = new RemoteError('gateway/internal', 'history unavailable', {})
+    const b = await bench({ snapshot: { openState: 'error', openError: reported ? error : null } })
+    await expect(b.source.candidates(proj('s1'), req(''))).rejects.toThrow(reported ? 'history unavailable' : 'is not open')
+    expect(b.listCalls).toEqual([])
+    expect(b.sessions.retainInfo(sid('s1')).getSnapshot().referenceCount).toBe(1)
+  })
+
+  it('does not reopen a Session released before catalog lookup', async () => {
+    const b = await bench()
+    await b.mint('s1').fiber.dispose()
+    await expect(b.source.candidates(proj('s1'), req(''))).rejects.toThrow('requires a retained session')
+    expect(b.sessions.binding(sid('s1'))).toBeUndefined()
+    expect(b.listCalls).toEqual([])
+  })
+
   it('does not fetch Agent-bound commands for an addressed child', async () => {
     const b = await bench({ addressed: sid('child') })
     await expect(b.warm(proj('child'))).resolves.toBeUndefined()
@@ -348,7 +400,7 @@ describe('candidates', () => {
         name: 'goal',
         label: 'command:label.goal',
         description: 'command:description.goal',
-        icon: IconGoalOutline16,
+        icon: IconGoalOutlineRegular,
         hint: '<objective>',
         section: 'command:section.add',
       })
@@ -665,6 +717,7 @@ describe('matchEnter (enter column)', () => {
       commands: () => new Promise((resolve) => { release = resolve }),
     })
     const wait = source.matchEnter!(proj('s1'), '/goal args', signal(), { attachments: 0 })
+    await vi.waitFor(() => { expect(release).toBeTypeOf('function') })
     release({ commands: S1_CMDS })
     const outcome = await wait
     if (outcome === undefined || outcome === 'handled' || !('claim' in outcome)) throw new Error('expected claim')
@@ -827,7 +880,7 @@ describe('execute payload', () => {
     const after = vi.fn()
     const warn = vi.spyOn(b.ctx.logger, 'warn').mockImplementation(() => undefined)
     b.ctx.on('command/executed', () => { throw syncFailure })
-    const rejectingListener = (() => Promise.reject(asyncFailure)) as unknown as () => void
+    const rejectingListener = (() => Promise.reject(asyncFailure)) as () => void
     b.ctx.on('command/executed', rejectingListener)
     b.ctx.on('command/executed', after)
 
@@ -894,10 +947,12 @@ describe('detached admission notices', () => {
   })
 
   it('a torn-down scope drops the failure notice', async () => {
-    const { source, warm, notices } = await bench({
+    const { source, warm, notices, mint } = await bench({
       execute: () => Promise.reject(new Error('orphan failure')),
     })
-    await warm(proj('ghost')) // never minted: scopeFor misses
+    const scope = mint('ghost')
+    await warm(proj('ghost'))
+    await scope.fiber.dispose()
     menuPick(source, 'plan', proj('ghost'))
     await flush()
     expect(notices).toEqual([])
@@ -939,7 +994,7 @@ describe('popupFor', () => {
   })
 
   it('dismisses matching popups and confirmations while preserving other commands and drafts', async () => {
-    const { command, source, mint } = await bench()
+    const { command, source, mint, focuses } = await bench()
     const pending = Promise.withResolvers<readonly SelectOption[]>()
     let pendingSignal: AbortSignal | undefined
     const onSelect = vi.fn()
@@ -967,8 +1022,6 @@ describe('popupFor', () => {
     const other = command.popupFor(mint('other').ctx)
     const consume = vi.fn(() => true as const)
     scope.ctx.on('slash/input-consume-token', consume)
-    const focus = vi.fn()
-    command.bindComposerFocus(sid('s1'), focus)
     menuPick(source, 'theme', proj('s1'))
     menuPick(source, 'theme', proj('s2'))
     menuPick(source, 'other', proj('other'))
@@ -990,7 +1043,8 @@ describe('popupFor', () => {
     expect(second.state.getSnapshot()).toMatchObject({ open: false, options: [] })
     expect(onSelect).not.toHaveBeenCalled()
     expect(consume).not.toHaveBeenCalled()
-    expect(focus).not.toHaveBeenCalled()
+    // The stale catalog takes the rows away; the composer keeps the keyboard.
+    expect(focuses).toEqual([sid('s1'), sid('s2')])
   })
 
   it('resolves lazily per session; a foreign session gets its own controller; unscoped ctx throws', async () => {
@@ -999,11 +1053,11 @@ describe('popupFor', () => {
     const first = command.popupFor(a.ctx)
     expect(command.popupFor(a.ctx)).toBe(first)
     expect(command.popupFor(mint('s2').ctx)).not.toBe(first)
-    expect(() => command.popupFor(ctx)).toThrow('requires a session scope')
+    expect(() => command.popupFor(ctx)).toThrow('requires a retained Session scope')
   })
 
-  it('a successful select dispatches the scoped consume-token and fires the bound composer focus', async () => {
-    const { command, source, mint } = await bench()
+  it('a successful select dispatches the scoped consume-token and focuses the composer', async () => {
+    const { command, source, mint, focuses } = await bench()
     const onSelect = vi.fn()
     command.register(themeContribution({ ui: themeUi({ onSelect }) }))
     const scope = mint('s1')
@@ -1012,38 +1066,13 @@ describe('popupFor', () => {
       consumes.push(r)
       return true
     })
-    const focus = vi.fn()
-    command.bindComposerFocus(sid('s1'), focus)
-
     expect(menuPick(source, 'theme', proj('s1'), 6)).toBe('handled')
     const popup = command.popupFor(scope.ctx)
     await Promise.resolve() // options land
     await popup.select(0)
     expect(onSelect).toHaveBeenCalledExactlyOnceWith({ id: 'dark', label: 'Dark' } satisfies SelectOption, proj('s1'))
     expect(consumes).toEqual([{ guard: { kind: 'span', span: { start: 0, end: 6, draftRev: 3 } } }])
-    expect(focus).toHaveBeenCalledTimes(1)
-  })
-
-  it('unbinding an old composer preserves its replacement and unbinding the current one removes focus', async () => {
-    const { command, source, mint } = await bench()
-    command.register(themeContribution())
-    const scope = mint('s1')
-    scope.ctx.on('slash/input-consume-token', () => true)
-    const oldFocus = vi.fn()
-    const newFocus = vi.fn()
-    const unbindOld = command.bindComposerFocus(sid('s1'), oldFocus)
-    const unbindNew = command.bindComposerFocus(sid('s1'), newFocus)
-    unbindOld()
-    menuPick(source, 'theme', proj('s1'))
-    await Promise.resolve()
-    await command.popupFor(scope.ctx).select(0)
-    expect(oldFocus).not.toHaveBeenCalled()
-    expect(newFocus).toHaveBeenCalledOnce()
-    unbindNew()
-    menuPick(source, 'theme', proj('s1'))
-    await Promise.resolve()
-    await command.popupFor(scope.ctx).select(0)
-    expect(newFocus).toHaveBeenCalledOnce()
+    expect(focuses).toEqual([sid('s1')])
   })
 
   it('the enter path opens with the bare-token guard', async () => {
@@ -1136,6 +1165,7 @@ describe('directory invalidation events', () => {
     ctx.emit('connection/reset')
     // Hard reset: silent until the rewarm lands.
     expect(source.matchSpace!(proj('s2'), '/attach')).toBeUndefined()
+    await vi.waitFor(() => { expect(release).toBeTypeOf('function') })
     release({ commands: S2_CMDS })
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(source.matchSpace!(proj('s2'), '/attach')).not.toBeUndefined()

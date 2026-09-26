@@ -21,6 +21,17 @@ describe('tunnel init frame', () => {
   })
 })
 
+describe('tunnel uplink frames', () => {
+  it('parses uplink items with and without a value and the uplink end', () => {
+    expect(parseInboundFrame({ t: 'stream-uplink-item', id: 7, value: { line: 'ls' } }))
+      .toEqual({ t: 'stream-uplink-item', id: 7, value: { line: 'ls' } })
+    expect(parseInboundFrame({ t: 'stream-uplink-item', id: 'seven' }))
+      .toEqual({ t: 'stream-uplink-item', id: 'seven', value: undefined })
+    expect(parseInboundFrame({ t: 'stream-uplink-end', id: 7 })).toEqual({ t: 'stream-uplink-end', id: 7 })
+    expect(() => parseInboundFrame({ t: 'stream-uplink-end' })).toThrow('frame has no usable id')
+  })
+})
+
 describe('tunnel request bodies', () => {
   it('accepts ArrayBuffer, Blob, and ReadableStream bodies and rejects other values', () => {
     const bytes = Uint8Array.of(1, 2).buffer

@@ -3,7 +3,7 @@
 import type { ClientConnectionRpc, ConnectionRpcResult } from '@deepseek-ai/dsh-client-connection/client'
 import { fn, type Mock } from '@vitest/spy'
 import { MockLogStore, type MockLog } from './log.ts'
-import { MockStream, toError, type StreamScript } from './streams.ts'
+import { HandleUplink, MockClientStream, MockStream, toError, type StreamScript } from './streams.ts'
 import { createRemoteProxy, type MockedRemote } from './remote-proxy.ts'
 
 /** A unary handler receives the caller's positional arguments, without its trailing `AbortSignal`. */
@@ -116,6 +116,8 @@ export class RemoteMock {
   private readonly logStore = new MockLogStore()
   private readonly unaryMocks = new Map<string, Mock<UnaryRuleFn>>()
   private readonly streamMocks = new Map<string, Mock<UnaryRuleFn>>()
+  /** The carrier's uplink for the open in progress through {@link open}; a direct call has none. */
+  private carrierUplink: AsyncIterable<unknown> | undefined
   private readonly proxy = createRemoteProxy(endpoint => this.modeOf(endpoint) === 'stream'
     ? this.streamMock(endpoint)
     : this.unaryMock(endpoint))
@@ -156,7 +158,7 @@ export class RemoteMock {
       // The carrier contract names the result envelope; the registered value is taken as that envelope unchecked.
       return value as ConnectionRpcResult<unknown>
     },
-    open: (_channel, endpoint, payload, signal) => this.open(endpoint, argsOf(endpoint, payload), signal),
+    open: (_channel, endpoint, payload, signal, uplink) => this.open(endpoint, argsOf(endpoint, payload), signal, uplink),
   }
 
   private constructor() {}
@@ -277,16 +279,30 @@ export class RemoteMock {
   }
 
   /**
-   * Open through the endpoint's native mock; its default runs the registered script as a controlled stream.
-   * A native override returns its own iterable: the caller owns consumption and cancellation, outside `OpenStreams`.
+   * Open through the endpoint's native mock, which is called with the generated
+   * signature's arguments only; its default runs the registered script as a
+   * controlled stream. A native override returns its own iterable: the caller
+   * owns consumption and cancellation, outside `OpenStreams`.
    * @param endpoint - endpoint.
    * @param args - positional args.
    * @param signal - consumer cancellation.
+   * @param uplink - the carrier's uplink for this open, which the script reads as `StreamHandle.uplink`;
+   *   absent for a direct call, whose returned handle owns the uplink.
    * @returns the controlled script stream or the native override's caller-owned iterable.
    * @throws {Error} when the default runs without a registered script (logged as unmatched).
    */
-  open(endpoint: string, args: readonly unknown[], signal: AbortSignal): AsyncIterable<unknown> {
-    return this.streamMock(endpoint)(...args, signal) as AsyncIterable<unknown>
+  open(
+    endpoint: string,
+    args: readonly unknown[],
+    signal: AbortSignal,
+    uplink?: AsyncIterable<unknown>,
+  ): AsyncIterable<unknown> {
+    this.carrierUplink = uplink
+    try {
+      return this.streamMock(endpoint)(...args, signal) as AsyncIterable<unknown>
+    } finally {
+      this.carrierUplink = undefined
+    }
   }
 
   private streamMock(endpoint: string): Mock<UnaryRuleFn> {
@@ -295,24 +311,37 @@ export class RemoteMock {
       mock = fn((...values: readonly unknown[]) => {
         const args = [...values]
         const signal = args.at(-1) instanceof AbortSignal ? args.pop() as AbortSignal : new AbortController().signal
-        return this.openScript(endpoint, args, signal)
+        return this.openScript(endpoint, args, signal, this.carrierUplink)
       })
       this.streamMocks.set(endpoint, mock)
     }
     return mock
   }
 
-  private openScript(endpoint: string, args: readonly unknown[], signal: AbortSignal): AsyncIterable<unknown> {
+  private openScript(
+    endpoint: string,
+    args: readonly unknown[],
+    signal: AbortSignal,
+    carrierUplink: AsyncIterable<unknown> | undefined,
+  ): MockClientStream {
     const script = this.scripts.get(endpoint)
     if (script === undefined) {
       this.logStore.miss(endpoint, 'stream')
       throw new Error(this.noRuleMessage(endpoint))
     }
-    const stream = new MockStream(this.logStore.stream(endpoint, args), signal)
+    let uplink: AsyncIterable<unknown>
+    let owned: HandleUplink | undefined
+    if (carrierUplink === undefined) {
+      owned = new HandleUplink()
+      uplink = owned
+    } else {
+      uplink = carrierUplink
+    }
+    const stream = new MockStream(this.logStore.stream(endpoint, args), signal, uplink, () => { owned?.close() })
     this.live.push(stream)
     this.wakeOpened(endpoint)
     stream.run(script, args)
-    return stream
+    return new MockClientStream(stream, owned)
   }
 
   /** Throw when any request found no rule, naming the endpoints and the registered ones. */

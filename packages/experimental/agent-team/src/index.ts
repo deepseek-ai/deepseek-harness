@@ -1,10 +1,9 @@
 /** Agent Teams service façade over roster, mailbox, task, and runtime lifecycle owners. */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-session-persistence'
-import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { TeamActivity } from './activity.ts'
 import { errorMessage, TeamError } from './error.ts'
 import { TeamJournal } from './journal.ts'
@@ -23,9 +22,7 @@ import type {
   SpawnTeammateRequest,
   SpawnTeammateResult,
   TeamMemberView,
-  TeamTaskMutationResult,
   TeamTaskView,
-  TeamView,
   TeamWaitResult,
   UpdateTeamTaskRequest,
 } from './types.ts'
@@ -56,7 +53,7 @@ function positiveLimit(name: string, value: number): number {
 }
 
 /** Agent Teams service backed by the exact live Lead Session log. */
-export class TeamService extends TypertRemoteService {
+export class TeamService extends Service {
   static inject = ['agents', 'sessions', 'sessionPersistence', 'sessionProjections', 'subagents']
 
   static Config: z<Config> = z.object({
@@ -221,7 +218,7 @@ export class TeamService extends TypertRemoteService {
    * @param targetName - durable teammate name.
    * @returns the target status sampled before cancellation.
    */
-  interrupt(caller: Agent, targetName: string): { previousStatus: 'running' | 'idle' | 'inactive' } {
+  interrupt(caller: Agent, targetName: string): { previousStatus: 'running' | 'inactive' } {
     return this.roster.interrupt(caller, targetName)
   }
 
@@ -232,57 +229,6 @@ export class TeamService extends TypertRemoteService {
    */
   tryMembership(agent: Agent): TeamMembership | undefined {
     return this.roster.tryMembership(agent)
-  }
-
-  /**
-   * Read the current roster and non-deleted task board through the generated Remote API.
-   * @param agent - exact live Team member used as the authority credential.
-   * @returns detached current roster and task views.
-   */
-  @Remote('view')
-  remoteView(agent: Agent): TeamView {
-    return {
-      members: this.listMembers(agent),
-      tasks: this.listTasks(agent),
-    }
-  }
-
-  /**
-   * Create one shared task through the generated Remote API.
-   * @param agent - exact live Team member creating the task.
-   * @param request - task text, blockers, and advisory write scopes.
-   * @returns the revision-one task or a typed Team rejection.
-   */
-  @Remote('createTask')
-  remoteCreateTask(agent: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskMutationResult> {
-    return this.taskMutationResult(this.createTask(agent, request))
-  }
-
-  /**
-   * Apply one task mutation and preserve Team rejections as business results.
-   * @param agent - exact live Team member authorizing the mutation.
-   * @param request - task identity, expected revision, action, and action fields.
-   * @returns the committed task or a typed Team rejection.
-   */
-  @Remote('updateTask')
-  remoteUpdateTask(agent: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskMutationResult> {
-    return this.taskMutationResult(this.updateTask(agent, request))
-  }
-
-  /** Preserve Team task rejections while allowing unexpected failures to reject the Remote call. */
-  private async taskMutationResult(operation: Promise<TeamTaskView>): Promise<TeamTaskMutationResult> {
-    try {
-      return { ok: true, value: await operation }
-    } catch (error) {
-      if (!(error instanceof TeamError)) throw error
-      return {
-        ok: false,
-        error: {
-          code: error.code === 'TEAM_TASK_STALE_REVISION' ? 'team-task-conflict' : 'team-rejected',
-          message: error.message,
-        },
-      }
-    }
   }
 
   /** Queue one contained recovery pass after publication has unwound. */

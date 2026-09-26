@@ -151,6 +151,20 @@ describe('GoalBar', () => {
     expect(actions.onResume).toHaveBeenCalledTimes(1)
   })
 
+  it('portals an action tooltip out of the strip, where the input card cannot cover it', () => {
+    vi.useFakeTimers()
+    try {
+      render(<GoalBar goal={makeGoal()} activation="armed" {...makeActions()} t={t} />)
+      fireEvent.mouseEnter(screen.getByRole('button', { name: '暂停目标' }))
+      act(() => { vi.advanceTimersByTime(500) })
+      const tooltip = screen.getByRole('tooltip')
+      expect(tooltip.textContent).toBe('暂停目标')
+      expect(tooltip.parentElement).toBe(document.body)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('a new goal identity drops the edit form (no stale draft over the new goal)', () => {
     const actions = makeActions()
     const { rerender } = render(<GoalBar goal={makeGoal()} {...actions} t={t} />)

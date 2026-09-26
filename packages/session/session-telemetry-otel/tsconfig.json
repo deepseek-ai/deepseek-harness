@@ -34,6 +34,9 @@
     },
     {
       "path": "../../identity/anonymous-user-id"
+    },
+    {
+      "path": "../../telemetry/otel"
     }
   ]
 }

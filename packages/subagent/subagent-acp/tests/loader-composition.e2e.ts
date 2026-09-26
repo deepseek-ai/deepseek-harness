@@ -37,7 +37,7 @@ async function jsonlFiles(dir: string): Promise<string[]> {
 function toolResultText(events: SessionEvent[]): string {
   const results = events.filter(event => event.type === 'tool/result')
   expect(results).toHaveLength(1)
-  return results[0]!.data.message.content[0].content
+  return results[0]!.data.message.content
     .filter(block => block.type === 'text')
     .map(block => block.text)
     .join('')

@@ -38,7 +38,7 @@
   height: 36px;
   padding: 0 14px;
   border: none;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-module-platform);
   font: inherit;
   font-size: 14px;

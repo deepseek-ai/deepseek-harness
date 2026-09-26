@@ -29,9 +29,9 @@ Install dependencies from the repo root:
 pnpm install
 ```
 
-The install also configures worktree-local Lefthook hooks and the `dsh-translation-pairing` Git merge driver through `scripts/install-lefthook.mjs`. The [worktree-local hooks Agent Note](../.agents/notes/implemented/process/2026-07-27-worktree-local-lefthook.md) owns the hook-path safety contract; the [automatic pairing merges Agent Note](../.agents/notes/implemented/process/2026-08-08-automatic-translation-pairing-merges.md) owns the merge driver.
+The install also configures worktree-local Lefthook hooks through `scripts/install-lefthook.mjs`. The [worktree-local hooks Agent Note](../.agents/notes/implemented/process/2026-07-27-worktree-local-lefthook.md) owns the hook-path safety contract.
 
-If either integration is missing because dependencies were restored from cache or `postinstall` was skipped, install them manually:
+If the hooks are missing because dependencies were restored from cache or `postinstall` was skipped, install them manually:
 
 ```sh
 node scripts/install-lefthook.mjs
@@ -74,16 +74,17 @@ The root build follows the generated dependency order:
 ```sh
 tsc -b tsconfig.host.json
 tsdown --env.DSH_BUILD_FACE host
+pnpm --filter @deepseek-ai/dsh-desktop run bundle
 tsc -b tsconfig.client.json
 tsdown --env.DSH_BUILD_FACE client
 pnpm run build:web
 ```
 
-Both tsdown passes use the same complete workspace match. They neither scan build artifacts to discover Client packages nor maintain a Host/Client package filter list. Package-local tsdown configs select entries for the current phase through `DSH_BUILD_FACE`: an ordinary Client plugin produces both its Node loader and browser bundle during the Client phase; `api-remotes` uses `hostPhase: true` to produce its Host entry early and only its browser bundle during the Client phase. Tsdown consumes only the JavaScript emitted to `lib/types` by the preceding tsc phase.
+Both tsdown passes match `vendor/*`, `packages/*/*`, and `apps/cli`; the Host pass also matches `apps/desktop-host`. They neither scan build artifacts to discover Client packages nor maintain a Host/Client package filter list. Package-local tsdown configs select entries for the current phase through `DSH_BUILD_FACE`: an ordinary Client plugin produces both its Node loader and browser bundle during the Client phase; `api-remotes` uses `hostPhase: true` to produce its Host entry early and only its browser bundle during the Client phase. Tsdown consumes only the JavaScript emitted to `lib/types` by the preceding tsc phase. Tsdown builds the matched workspace members concurrently, so `apps/desktop`, whose main bundle inlines workspace devDependencies from their `lib/` output, bundles in its own step after the Host pass ([Desktop README](../apps/desktop/README.md#bundled-workspace-dependencies)).
 
 Typert runs only during Host tsdown, seeded by `tsconfig.host.json`. It analyzes Host types and generates both Host reflection artifacts and the Host-for-Client Remote projection; Client tsdown does not start Typert. Consequently, `pnpm run typecheck` runs the complete Host lib phase before Client tsc, while `pnpm run build` continues through Client tsdown and the Web build.
 
-`pnpm run build` embeds the root package version, the seven-character source commit, and a dirty marker when Git reports local changes; it also inherits other caller-supplied `DSH_CLIENT_*` values. `pnpm run build:official` is the cross-platform local equivalent of the CI and release artifact build and omits the local dirty marker. Each successful complete build writes a gitignored record that binds the exact public values to the Vite output and dynamic client bundles; release packing and built Web tests reject a missing record or artifacts changed by a later partial build. `pnpm run dev:web` still requires the artifact tree from a prior complete build, but it samples the current version and Git state once at startup and shares that environment across every watcher stage for the session; it does not validate the complete-build record because the watcher stages rewrite its recorded artifacts.
+`pnpm run build` embeds the root package version, the seven-character source commit, and a dirty marker when Git reports local changes; it also inherits other caller-supplied `DSH_CLIENT_*` values. `pnpm run build:official` is the cross-platform local equivalent of the CI and release artifact build and omits the local dirty marker. Each successful complete build writes a gitignored record that binds the exact public values to the Vite output and dynamic client bundles; release packing and built Web tests reject a missing record or artifacts changed by a later partial build. `pnpm run dev:web` runs that complete build first (`--skip-build` reuses an existing artifact tree instead), then samples the current version and Git state once and shares that environment across every watcher stage for the session; it does not validate the complete-build record because the watcher stages rewrite its recorded artifacts.
 
 Static analysis and tests resolve workspace imports through the base `paths` map to `src` and must pass on a clean tree; gates that consume built `lib/` output declare that dependency explicitly. Generated Host-for-Client Remote declarations are the deliberate exception: the public `typecheck`, `lint`, and `doc-typecheck` commands generate them first, while internal `*:contracts-ready` scripts assume that an invoking public command or scheduler gate already depends on the Typert contract-generation pass or the complete build. See the [ts-build-config note](../.agents/notes/implemented/process/2026-06-17-ts-build-config.md) for tsc-first emit ownership and the [Typert Remote note](../.agents/notes/implemented/architecture/2026-08-02-typert-remote-method-calls.md) for the gate-preparation contract.
 
@@ -110,9 +111,7 @@ DEEPSEEK_BASE_URL=https://... # optional
 
 ### Git integrations
 
-The pairing merge driver derives a conflicted `.i18n.yaml` record from the confirmed ancestor, current, and other owner blobs when both language files use Git's default text strategy and merge cleanly. It fails closed on owner conflicts, non-text merge configuration, or invalid records; after an already-stopped merge, run `pnpm run resolve-translation-pairing-conflicts`, which stages every safe pairing record and exits unsuccessfully if other pairing conflicts still need manual work. See the [bilingual documentation contract](i18n/README.md#the-pairing-contract) for the exact files and states the driver accepts.
-
-The installer probes the exact Node/tsx driver entrypoint before publishing its worktree configuration. If that runtime later becomes unavailable, the Node-independent launcher writes Git's ordinary text result, leaves the sidecar unresolved, and prints the recovery path; restore dependencies and run `pnpm run resolve-translation-pairing-conflicts`, or run `git merge --abort`. If `pre-merge-commit` rejects an otherwise clean merge, Git leaves the complete result staged without a commit; repair the failure and run `git commit`, or abort. The [automatic pairing merges Agent Note](../.agents/notes/implemented/process/2026-08-08-automatic-translation-pairing-merges.md#failure-contract) owns the exact index and `MERGE_HEAD` states.
+`.i18n.yaml` records use Git's default text merge. A record conflicts only when both branches changed language-specific content in the same heading section; resolve the Markdown, then rerun `pnpm run verify-translation-pairing --write <pair>`. If `pre-merge-commit` rejects an otherwise clean merge, Git leaves the complete result staged without a commit; repair the failure and run `git commit`, or run `git merge --abort`.
 
 lefthook is configured in `lefthook.yml` as a fast local checkpoint:
 
@@ -155,6 +154,19 @@ The PTC mode demo runs the same headless profile with code presentation enabled:
 ```sh
 pnpm run demo:ptc -- "summarize this workspace"
 ```
+
+### Application commands
+
+Web and Desktop share one command pair. `start:*` launches the artifacts of a prior `pnpm run build`; `dev:*` runs that build first and then launches. Web additionally keeps client bundles rebuilt on source edits, because its Host runs from source while the browser loads built bundles:
+
+```sh
+pnpm run start:web       # serve built Web artifacts through the source launcher (the same launch as pnpm dsh web)
+pnpm run dev:web         # build, serve, and rebuild Web client bundles on source edits
+pnpm run start:desktop   # launch built Desktop artifacts
+pnpm run dev:desktop     # build, then launch Desktop
+```
+
+Arguments after a Web command reach `dsh web`, for example `pnpm run dev:web --no-open --port 3081`; `dev:web` also accepts `--skip-build` to reuse the existing artifact tree and `--no-serve` to run only the rebuild watchers beside a server started elsewhere. Both Web commands use the normal Harness home, while the Desktop commands use the isolated development home described in the [Desktop README](../apps/desktop/README.md). The root `Makefile` names the same commands as `make web`, `make dev-web`, `make desktop`, `make dev-desktop`, and `make build`; `ARGS='--no-open'` forwards options.
 
 ### TODO markers
 

@@ -35,9 +35,11 @@ kind: "package-reference"
 
 Chat 中的一条用户消息把文件与图片放在同一个靠右、可换行的排列中，并保持来源顺序。消息仅有一张图片且没有其他附件时，图片按长边 240px 渲染（宽高比钳制在 [0.25, 4]，从不放大）；消息有多个附件时，每张图片显示为固定 64px 方块，与 240×64px 文件卡同排。加载完成的图片单击打开文档级灯箱；加载失败则显示重试控件。灯箱按 Escape、按下遮罩或点关闭按钮关闭，并把焦点还给打开者。
 
+Trajectory 附件行使用 48px 方形缩略图，完整缩放图片而不裁剪。加载与重试图标保持相同尺寸，提供本地化的工具提示和可访问名称；图片打开同一个灯箱。插槽持有方可以为缩略图与灯箱提供仅用于展示的图片名称，而不改变持久化引用或缓存查询。
+
 ### 拖放遮罩
 
-文件拖到页面上方时，全视口遮罩显示拖放提示，包括插画和标题；接受拖放时还会显示一行限制说明。遮罩只呈现状态——是否接受由持有方的文档级监听器决定。
+文件拖到页面上方时，全视口遮罩显示拖放提示，包括插画和标题；接受拖放时还会显示一行限制说明。遮罩只呈现状态，是否接受由持有方的文档级监听器决定，拖放处理器通过 entry API 报告放下的成员中哪些是文件夹，以便持有方引用或拒绝它们。
 
 -----
 
@@ -56,7 +58,7 @@ Chat 中的一条用户消息把文件与图片放在同一个靠右、可换行
 | [`src/AttachmentRail.tsx`](src/AttachmentRail.tsx) | 附件横向溢出、滚轮转换、边缘箭头 |
 | [`src/client/MessageImages.tsx`](src/client/MessageImages.tsx) | 每消息画廊＋灯箱的组装 |
 | [`src/MessageImage.tsx`](src/MessageImage.tsx) | 单图尺寸、加载／重试、点击打开；本地提交回显预览直接显示其 object URL |
-| [`src/ImageLightbox.tsx`](src/ImageLightbox.tsx) | 铺在共享遮罩上的文档级模态预览 |
+| [`ImageLightbox`](../ui-primitives/src/ImageLightbox.tsx) | 铺在共享遮罩上的文档级模态预览 |
 | [`src/DropOverlay.tsx`](src/DropOverlay.tsx) | 不接收指针事件的拖放提示 portal |
 
 </details>

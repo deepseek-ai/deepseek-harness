@@ -69,7 +69,7 @@ export class SqliteKvUnit implements KvUnit {
         // Null prototype: record keys are arbitrary strings, so '__proto__'
         // must land as an own property instead of mutating the prototype.
         const records: Record<string, unknown> = Object.create(null) as Record<string, unknown>
-        for (const row of statements.selectAll.all() as unknown as Array<{ key: string; value: string }>) {
+        for (const row of statements.selectAll.all() as Array<{ key: string; value: string }>) {
           records[row.key] = this.parseValue(row.value, `table '${name}' key '${row.key}'`)
         }
         tables[name] = records

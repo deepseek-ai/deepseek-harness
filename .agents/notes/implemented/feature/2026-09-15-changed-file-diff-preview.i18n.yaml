@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-15-changed-file-diff-preview.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-15-changed-file-diff-preview.md
+/agent-note-turn-review-tab:
+  en: cdcf921443075122
+  zh: 177609e61939922a
+/agent-note-turn-review-tab/problem:
+  en: 91d904d836519a4b
+  zh: c0aec4e184ff924b
+/agent-note-turn-review-tab/decision:
+  en: 8169e63f8bf8416d
+  zh: 24c1e3fb394983e3
+/agent-note-turn-review-tab/alternatives-considered:
+  en: e648f82b78a2c0d3
+  zh: f4e6511766ace168
+/agent-note-turn-review-tab/consequences:
+  en: 2147596d8c6574da
+  zh: db8b2e1ce86465df

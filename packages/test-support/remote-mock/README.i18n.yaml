@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/test-support/remote-mock/README.md
-README.md: 82979e37052aecee6ec716702f634d25c969f5ad
-README.zh.md: 201ca011410dd5a4d65b6ebdfb0c47f23742b0d3
+/:
+  en: 5807aeb1022af801
+  zh: 1b8715d41b159629
+/deepseek-ai-dsh-remote-mock:
+  en: c3f8bf28950c870f
+  zh: 6348be0d6f910cce
+/deepseek-ai-dsh-remote-mock/summary:
+  en: a8195f61b1341ebb
+  zh: 1d058f9ca3e42562
+/deepseek-ai-dsh-remote-mock/table-of-contents:
+  en: 76368b6b1da79c80
+  zh: 52384aee991ac542
+/deepseek-ai-dsh-remote-mock/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-remote-mock/use-this-package/when-to-use-it:
+  en: 0d7cdedee1c07e7a
+  zh: 2fef0c2109425f25
+/deepseek-ai-dsh-remote-mock/use-this-package/use-the-remote-proxy:
+  en: 5dca47c5bedcf13b
+  zh: 92cbe6b3fbb4ddfa
+/deepseek-ai-dsh-remote-mock/use-this-package/register-default-responses:
+  en: c7022d673fbbb095
+  zh: aa827878f3215388
+/deepseek-ai-dsh-remote-mock/use-this-package/drive-streams:
+  en: 0a466b4351c5ad4c
+  zh: 602d87000880166f
+/deepseek-ai-dsh-remote-mock/use-this-package/connect-a-client:
+  en: 302d3015e5d82fd8
+  zh: 2e83a236952ba390
+/deepseek-ai-dsh-remote-mock/use-this-package/observe-and-assert:
+  en: 56fcb7912f6365ec
+  zh: 299299e8afad0512
+/deepseek-ai-dsh-remote-mock/use-this-package/what-can-go-wrong:
+  en: 441ed8ae66b85a7d
+  zh: b9eea1cbaeefa086
+/deepseek-ai-dsh-remote-mock/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-remote-mock/understand-the-implementation/design:
+  en: 6385fe57822aa455
+  zh: 53eda1b6a602f357
+/deepseek-ai-dsh-remote-mock/understand-the-implementation/source-map:
+  en: ddecff98fb835572
+  zh: 66a17c9059f79069
+/deepseek-ai-dsh-remote-mock/model-experience:
+  en: 53b590e95981d312
+  zh: 231c0245f6b6b827
+/deepseek-ai-dsh-remote-mock/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: f57cc48a1b5cbfa9
+/deepseek-ai-dsh-remote-mock/known-limitations-and-deferred-work:
+  en: 281c77a33b08da46
+  zh: 13f9efe0045b0f42
+/deepseek-ai-dsh-remote-mock/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

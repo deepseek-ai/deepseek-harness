@@ -43,6 +43,7 @@
 
 .renderer .code pre {
   box-sizing: border-box;
+  padding: 16px;
   min-width: 100%;
   overflow: visible;
   white-space: pre;

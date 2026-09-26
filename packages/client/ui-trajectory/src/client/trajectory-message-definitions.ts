@@ -136,10 +136,24 @@ const trajectoryInboxDefinition: ConversationNodeDefinition<InboxState> = {
 const trajectoryMessageDefinition: ConversationNodeDefinition<MessageNode> = {
   kind: 'trajectory-input-message',
   target: 'trajectory',
-  match: event => event.type === 'user/message'
-    ? { id: String(event.seq), role: 'start' }
-    : null,
+  match: (event) => {
+    return event.type === 'user/message' || event.type === 'developer/message'
+      ? { id: String(event.seq), role: 'start' }
+      : null
+  },
   start: (_context, match, reader) => {
+    if (match.event.type === 'developer/message') {
+      const { seq, time, data: { message } } = match.event
+      return {
+        kind: 'context',
+        seq,
+        time,
+        content: message.content,
+        source: message.source,
+        producer: contextProducer(message.source),
+        form: contextForm(message.source),
+      }
+    }
     if (match.event.type !== 'user/message') {
       throw new Error('trajectory-input-message start requires user/message')
     }

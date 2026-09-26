@@ -35,9 +35,11 @@ Images and generic files retain pick order in one non-wrapping horizontal rail. 
 
 In Chat, one user message presents files and images in a right-aligned wrapping flow that preserves source order. A lone image without another attachment renders at 240px on its longer edge (aspect clamped to [0.25, 4], never upscaled); when the message has more than one attachment, each image is a fixed 64px square beside 240×64px file cards. A loaded image opens the document-level lightbox on click; a failed load shows a retry control instead. The lightbox closes on Escape, a mask press, or its close control, and restores focus to its opener.
 
+Trajectory attachment rows request 48px square thumbnails that contain the complete image without cropping. Loading and retry icons keep the same box, with localized tooltips and accessible names; the image opens the same lightbox. A slot owner may supply a presentation-only image label for the thumbnail and lightbox without changing the durable reference or the cache lookup.
+
 ### Drop overlay
 
-While a file drag is over the page, the full-viewport overlay announces the drop: illustration, title, and a limits line when drops are accepted. The overlay only shows state — the owner's document-level listeners decide accept or reject.
+While a file drag is over the page, the full-viewport overlay announces the drop: illustration, title, and a limits line when drops are accepted. The overlay only shows state — the owner's document-level listeners decide accept or reject, and the drop handler reports which dropped members are directories through the entry API so the owner can cite or refuse them.
 
 -----
 
@@ -56,7 +58,7 @@ The plugin waits for `conversation.input.attachments`, `conversation.message.ima
 | [`src/AttachmentRail.tsx`](src/AttachmentRail.tsx) | Horizontal attachment overflow, wheel translation, edge arrows |
 | [`src/client/MessageImages.tsx`](src/client/MessageImages.tsx) | Per-message gallery + lightbox assembly |
 | [`src/MessageImage.tsx`](src/MessageImage.tsx) | Single image sizing, load/retry, click-to-open; local submission-echo previews render their object URL directly |
-| [`src/ImageLightbox.tsx`](src/ImageLightbox.tsx) | Document-level modal preview over the shared mask |
+| [`ImageLightbox`](../ui-primitives/src/ImageLightbox.tsx) | Document-level modal preview over the shared mask |
 | [`src/DropOverlay.tsx`](src/DropOverlay.tsx) | Pointer-inert drag invitation portal |
 
 </details>

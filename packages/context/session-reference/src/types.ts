@@ -51,6 +51,8 @@ export interface SessionReferenceCandidate {
   sessionId: SessionId
   /** Latest log-backed title, falling back to the opaque session id. */
   label: string
+  /** Display and canonical-mention text, preferring a subagent's durable creation label over {@link label}. */
+  displayTitle?: string
   /** Source session working directory, when recorded. */
   cwd?: string
   /**

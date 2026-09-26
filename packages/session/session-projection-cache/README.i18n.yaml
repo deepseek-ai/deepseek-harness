@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/session-projection-cache/README.md
-README.md: 3125f50b07f222feb0ef2af5e28abcfae19631a7
-README.zh.md: c98cda187dd898a0b30a9721c0bc7412a91964c5
+/:
+  en: 5701298a1670d9ec
+  zh: 7bb42d5f715e481c
+/deepseek-ai-dsh-session-projection-cache:
+  en: 88c785e7f9d6e4be
+  zh: 95b5f979bf471d34
+/deepseek-ai-dsh-session-projection-cache/summary:
+  en: bf8d9303afdc56ad
+  zh: b6d54b39b6411be5
+/deepseek-ai-dsh-session-projection-cache/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-session-projection-cache/use-this-package:
+  en: 99e629888eec55e5
+  zh: 3520f8f0cc64795d
+/deepseek-ai-dsh-session-projection-cache/use-this-package/when-to-choose-it:
+  en: 96aa72949587ad79
+  zh: 8e8727d59d3768c1
+/deepseek-ai-dsh-session-projection-cache/use-this-package/minimal-configuration:
+  en: 0ff4aa70ebfe918f
+  zh: 9235f115502717b7
+/deepseek-ai-dsh-session-projection-cache/use-this-package/how-checkpoints-are-written:
+  en: bae62224d0008bc0
+  zh: 0daf92dab3314913
+/deepseek-ai-dsh-session-projection-cache/use-this-package/reading-cached-values:
+  en: e8dc676fbfe97c5b
+  zh: 686837459289fd41
+/deepseek-ai-dsh-session-projection-cache/use-this-package/what-the-cache-guarantees:
+  en: 6e4878de28ea113e
+  zh: 6f940a2220585b5e
+/deepseek-ai-dsh-session-projection-cache/understand-the-implementation:
+  en: d3845f1edb97db3e
+  zh: 26d4e54a4f6c2b7b
+/deepseek-ai-dsh-session-projection-cache/understand-the-implementation/design-concept:
+  en: fbc54d6055d5772a
+  zh: ebfa186b3702635f
+/deepseek-ai-dsh-session-projection-cache/understand-the-implementation/read-and-write-ownership:
+  en: 8be14e573e0b3acf
+  zh: be96a2859be64e95
+/deepseek-ai-dsh-session-projection-cache/understand-the-implementation/source-map:
+  en: 546d7d0ff03b92c1
+  zh: f3d56e81a738ce56
+/deepseek-ai-dsh-session-projection-cache/further-exploration:
+  en: 63e7495d8853b368
+  zh: 754db26cb2b0bfba
+/deepseek-ai-dsh-session-projection-cache/model-experience:
+  en: 25c9652e94565a76
+  zh: efd5ca7105d8a561
+/deepseek-ai-dsh-session-projection-cache/model-experience/kv-cache-effect:
+  en: d483aa4968fa1955
+  zh: 90f8c38f978123d2
+/deepseek-ai-dsh-session-projection-cache/known-limitations-and-deferred-work:
+  en: 1c4efba49a67f7b9
+  zh: 494f1a6fa4207c3a
+/deepseek-ai-dsh-session-projection-cache/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

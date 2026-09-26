@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/bundle/sdk-minimal/README.md
-README.md: 2632bf9bd949bb37a01b963f13fb96f341eaea28
-README.zh.md: 7aa26c9e895dea4b11d06416f5eca815ef187655
+/:
+  en: ae5bdac5add26503
+  zh: 93cd37d41c05fc9c
+/deepseek-ai-dsh-sdk-minimal:
+  en: 807c43eedba7d53e
+  zh: 9f1efe5d6ac393f7
+/deepseek-ai-dsh-sdk-minimal/summary:
+  en: 1885da605fd804b8
+  zh: 742cbfdd2a4a224b
+/deepseek-ai-dsh-sdk-minimal/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-sdk-minimal/use-this-package:
+  en: 107f4613e077f9ad
+  zh: e7d89433a98b296b
+/deepseek-ai-dsh-sdk-minimal/understand-the-implementation:
+  en: 281b8d6f1aa0e526
+  zh: 070c2a66b1b2feee
+/deepseek-ai-dsh-sdk-minimal/understand-the-implementation/source-map:
+  en: d992e946f4928fa3
+  zh: 46d6b3d1aabdc3f4
+/deepseek-ai-dsh-sdk-minimal/further-exploration:
+  en: 6909fc128c321153
+  zh: 7d2a0866efdc5a69
+/deepseek-ai-dsh-sdk-minimal/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-sdk-minimal/model-experience/minimal-coding-agent-composition:
+  en: bd87e16b0c6e0506
+  zh: c8ee5e3b4578754e
+/deepseek-ai-dsh-sdk-minimal/model-experience/minimal-coding-agent-composition/what-the-model-sees:
+  en: fa9af6239831a097
+  zh: 6951e08b165cb282
+/deepseek-ai-dsh-sdk-minimal/model-experience/minimal-coding-agent-composition/token-effect:
+  en: 65613fb41fcc3151
+  zh: fc20a732aca8282c
+/deepseek-ai-dsh-sdk-minimal/model-experience/minimal-coding-agent-composition/kv-cache-effect:
+  en: 904ae09b5fdb87c1
+  zh: de6fcaaa12bd9733
+/deepseek-ai-dsh-sdk-minimal/known-limitations-and-deferred-work:
+  en: 8f74b1b4f39eda83
+  zh: af96ec4cb42810c5
+/deepseek-ai-dsh-sdk-minimal/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

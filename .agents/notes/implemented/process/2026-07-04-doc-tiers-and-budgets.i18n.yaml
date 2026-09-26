@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-04-doc-tiers-and-budgets.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-04-doc-tiers-and-budgets.md
-2026-07-04-doc-tiers-and-budgets.md: 209504218d18e97ae6da65bed9a22da40d2a7681
-2026-07-04-doc-tiers-and-budgets.zh.md: 9c866424d84b4fefa5ffe95efa21a3cf7d3c321a
+/agent-note-documentation-structure-tiers-and-budgets:
+  en: f2add84f6fdb18d0
+  zh: 7f97fab8f9234bb9
+/agent-note-documentation-structure-tiers-and-budgets/problem:
+  en: 6ecec6cc312745dd
+  zh: ac1244b6113b89da
+/agent-note-documentation-structure-tiers-and-budgets/decision:
+  en: 8a3a2e086af59a6c
+  zh: d1d45a4a108031a2
+/agent-note-documentation-structure-tiers-and-budgets/alternatives-considered:
+  en: 8275e8f6ffe18def
+  zh: 06a5af3e5581f45b
+/agent-note-documentation-structure-tiers-and-budgets/consequences:
+  en: 76c254b56618cef6
+  zh: 1f1264d6879df20c

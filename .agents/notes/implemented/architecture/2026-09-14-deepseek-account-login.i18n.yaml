@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-09-14-deepseek-account-login.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-14-deepseek-account-login.md
+/agent-note-deepseek-account-browser-login:
+  en: 8328647bcdf8a666
+  zh: 445a07c7ec4bcca4
+/agent-note-deepseek-account-browser-login/problem:
+  en: 67c00444d9dcf06d
+  zh: ef294910952ba052
+/agent-note-deepseek-account-browser-login/decision:
+  en: 3b6c781b5374a8af
+  zh: 2a3fb7c63dfdaf83
+/agent-note-deepseek-account-browser-login/alternatives-considered:
+  en: 3c2dd2c948ffb51b
+  zh: d019197df0ee3dcf
+/agent-note-deepseek-account-browser-login/consequences:
+  en: a6eff4a0350e9018
+  zh: 2e3200ca089023ab
+/agent-note-deepseek-account-browser-login/verification:
+  en: 881edcb454b941a6
+  zh: 7dc5a9b7a066f623
+/agent-note-deepseek-account-browser-login/related:
+  en: 3efeda0686194f07
+  zh: 9c3ddc3b8baf9381

@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-25-promote-open-anywhere-plugin.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-25-promote-open-anywhere-plugin.md
-2026-08-25-promote-open-anywhere-plugin.md: 83888cb548046cd8e023cd2b7c87f123cda0ed0f
-2026-08-25-promote-open-anywhere-plugin.zh.md: 4ef476ce7043d2dcee05dec9f604849741ce5e96
+/agent-note-promote-open-anywhere-from-community-plugin-to-first-party-package:
+  en: 279cf946b4f6c386
+  zh: cf76602956b811de
+/agent-note-promote-open-anywhere-from-community-plugin-to-first-party-package/problem:
+  en: 08d8d5454fdc2e75
+  zh: 22381ce00cb51148
+/agent-note-promote-open-anywhere-from-community-plugin-to-first-party-package/decision:
+  en: 26a46d3b6f21288a
+  zh: 94c32f789b3e28ac
+/agent-note-promote-open-anywhere-from-community-plugin-to-first-party-package/alternatives-considered:
+  en: cc7c2ed172e4de3f
+  zh: b8fed28d9ee835c5
+/agent-note-promote-open-anywhere-from-community-plugin-to-first-party-package/consequences:
+  en: 5be6b2891e3429c9
+  zh: 68ffcff52676824f

@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for dsh-v0.1.2-alpha.1.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/persistence-changes/releases/dsh-v0.1.2-alpha.1.md
-dsh-v0.1.2-alpha.1.md: 3ed00447e4c99722e3eeb04e5dcfa52b582df916
-dsh-v0.1.2-alpha.1.zh.md: 09a6bf3df1654b412809cef5cd296a37500a93bd
+/:
+  en: 22be48a6b7150419
+  zh: b13a0cb3162ff117
+/persistence-release-dsh-v0-1-2-alpha-1:
+  en: f81ab121d79469ee
+  zh: bc6ec8d81b684b73
+/persistence-release-dsh-v0-1-2-alpha-1/summary:
+  en: 30148f1fb82be3eb
+  zh: 3d887a22566d1eb0
+/persistence-release-dsh-v0-1-2-alpha-1/table-of-contents:
+  en: 0ff4a6f3c6af323f
+  zh: f5c7bd70cc1585c7
+/persistence-release-dsh-v0-1-2-alpha-1/release-evidence:
+  en: 3694ebede634e908
+  zh: c386d00137845df1
+/persistence-release-dsh-v0-1-2-alpha-1/declaration:
+  en: af9cea43334ee692
+  zh: c6c8bd0d6a17718a
+/persistence-release-dsh-v0-1-2-alpha-1/structural-changes:
+  en: f8e5907da99d32b9
+  zh: dcd8dbc9660a20b6
+/persistence-release-dsh-v0-1-2-alpha-1/verification:
+  en: 8ccca317964523b1
+  zh: 2c8b3e70a3320778
+/persistence-release-dsh-v0-1-2-alpha-1/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

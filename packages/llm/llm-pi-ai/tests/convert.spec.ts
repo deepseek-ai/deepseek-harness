@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
 import type { AttachmentStore, ImageAttachmentRef, ImageRequestTarget, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
-import { createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, createMessage } from '@deepseek-ai/dsh-llm'
+import { createToolResultMessage, createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { AssistantMessage, AssistantMessageEvent, Usage } from '@earendil-works/pi-ai'
 import { transformMessages } from '@earendil-works/pi-ai/api/transform-messages'
@@ -80,7 +80,7 @@ describe('toPiContext', () => {
       system: 'be helpful',
       messages: [createUserMessage({
         content: [{ type: 'text', text: 'hi' }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'test' },
       })],
       tools: [{ name: 'f', description: 'F', parameters: { type: 'object', properties: {} } }],
     })
@@ -113,7 +113,7 @@ describe('toPiContext', () => {
       model: 'gpt-4.1',
       messages: [createUserMessage({
         content: [{ type: 'text', text: 'describe' }, { type: 'image', attachment }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'test' },
       })],
     }, imageContext(attachmentStore(readImageRequest)))
 
@@ -133,7 +133,7 @@ describe('toPiContext', () => {
     })
   })
 
-  it('flattens nested tool-result images into the enclosing result', async () => {
+  it('converts a tool message with text and images on the image path', async () => {
     const attachment = {
       attachmentId: AttachmentId(`sha256:${'c'.repeat(64)}`),
       mediaType: 'image/png' as const,
@@ -147,25 +147,15 @@ describe('toPiContext', () => {
     const context = await toPiContext({
       provider: 'openai',
       model: 'gpt-4.1',
-      messages: [createUserMessage({
-        content: [{
-          type: 'tool-result',
-          toolCallId: ToolCallId('outer'),
-          content: [
-            { type: 'tool-result', toolCallId: ToolCallId('empty'), content: [] },
-            { type: 'text', text: 'before' },
-            { type: 'tool-result', toolCallId: ToolCallId('text'), content: [{ type: 'text', text: 'middle' }] },
-            {
-              type: 'tool-result',
-              toolCallId: ToolCallId('inner'),
-              content: [
-                { type: 'image', attachment },
-                { type: 'text', text: 'after' },
-              ],
-            },
-          ],
-        }],
-        source: { kind: 'plugin', plugin: 'test' },
+      messages: [createToolResultMessage({
+        callId: ToolCallId('outer'),
+        content: [
+          { type: 'text', text: 'before' },
+          { type: 'text', text: 'middle' },
+          { type: 'image', attachment },
+          { type: 'text', text: 'after' },
+        ],
+        isError: false,
       })],
     }, imageContext(attachmentStore(readImageRequest)))
 
@@ -196,7 +186,7 @@ describe('toPiContext', () => {
             mediaType: 'image/png', bytes: 1, width: 1, height: 1,
           },
         }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'test' },
       })],
     })).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_CONTENT' }))
   })
@@ -212,7 +202,7 @@ describe('toPiContext', () => {
           { type: 'text', text: 'calling' },
           { type: 'tool-call', id: ToolCallId('c1'), name: 'f', arguments: '{"a":1}' },
         ],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'model', provider: 'deepseek', model: 'm' },
       })],
     })
     const message = context.messages[0] as AssistantMessage
@@ -231,7 +221,7 @@ describe('toPiContext', () => {
       model: 'm',
       messages: [createMessage({
         role: 'assistant', content: [{ type: 'text', text: 'done' }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'model', provider: 'deepseek', model: 'm' },
       })],
     })
     expect((context.messages[0] as AssistantMessage).stopReason).toBe('stop')
@@ -262,7 +252,7 @@ describe('toPiContext', () => {
       messages: [createMessage({
         role: 'assistant',
         content: [{ type: 'tool-call', id: ToolCallId('c1'), name: 'f', arguments: '{broken' }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'model', provider: 'deepseek', model: 'm' },
       })],
     })
     const message = context.messages[0] as AssistantMessage
@@ -276,7 +266,7 @@ describe('toPiContext', () => {
       messages: [createMessage({
         role: 'assistant',
         content: [{ type: 'tool-call', id: ToolCallId('c1'), name: 'f', arguments: '[1,2]' }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'model', provider: 'deepseek', model: 'm' },
       })],
     })
     expect((context.messages[0] as AssistantMessage).content[0]).toMatchObject({ arguments: {} })
@@ -290,19 +280,16 @@ describe('toPiContext', () => {
         createMessage({
           role: 'assistant',
           content: [{ type: 'tool-call', id: ToolCallId('c1'), name: 'get_weather', arguments: '{}' }],
-          source: { kind: 'plugin', plugin: 'test' },
+          source: { kind: 'model', provider: 'deepseek', model: 'm' },
         }),
-        createUserMessage({
-          content: [{
-            type: 'tool-result',
-            toolCallId: ToolCallId('c1'),
-            content: [
-              { type: 'text', text: 'Sunny' },
-              { type: 'tool-result', toolCallId: ToolCallId('nested'), content: [{ type: 'text', text: '!' }] },
-              { type: 'chart', data: 'ignored' } as unknown as ContentBlock,
-            ],
-          }],
-          source: { kind: 'plugin', plugin: 'test' },
+        createToolResultMessage({
+          callId: ToolCallId('c1'),
+          content: [
+            { type: 'text', text: 'Sunny' },
+            { type: 'text', text: '!' },
+            { type: 'chart', data: 'ignored' } as unknown as ContentBlock,
+          ],
+          isError: false,
         }),
       ],
     })
@@ -320,10 +307,7 @@ describe('toPiContext', () => {
     const context = toPiContext({
       provider: 'deepseek',
       model: 'm',
-      messages: [createUserMessage({
-        content: [{ type: 'tool-result', toolCallId: ToolCallId('zz'), content: [], isError: true }],
-        source: { kind: 'plugin', plugin: 'test' },
-      })],
+      messages: [createToolResultMessage({ callId: ToolCallId('zz'), content: [], isError: true })],
     })
     expect(context.messages[0]).toMatchObject({
       role: 'toolResult',
@@ -340,14 +324,16 @@ describe('toPiContext', () => {
       messages: [
         createMessage({
           role: 'system', content: [{ type: 'text', text: 'rule' }],
-          source: { kind: 'plugin', plugin: 'test' },
+          source: { kind: 'system-prompt' },
         }),
         createUserMessage({
-          content: [
-            { type: 'text', text: 'note' },
-            { type: 'tool-result', toolCallId: ToolCallId('c1'), content: [{ type: 'text', text: 'ok' }] },
-          ],
-          source: { kind: 'plugin', plugin: 'test' },
+          content: [{ type: 'text', text: 'note' }],
+          source: { kind: 'model', provider: 'deepseek', model: 'm' },
+        }),
+        createToolResultMessage({
+          callId: ToolCallId('c1'),
+          content: [{ type: 'text', text: 'ok' }],
+          isError: false,
         }),
       ],
     })
@@ -365,7 +351,7 @@ describe('toPiContext', () => {
           { type: 'chart', data: 'x' } as unknown as ContentBlock,
           { type: 'text', text: 'visible' },
         ],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'model', provider: 'deepseek', model: 'm' },
       })],
     })
     expect((context.messages[0] as AssistantMessage).content).toEqual([{ type: 'text', text: 'visible' }])

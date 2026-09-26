@@ -1,0 +1,13 @@
+# The bonus notice scenario points the shipped account provider at a loopback
+# Platform double. The scaffold substitutes {{origin}} after the listener binds,
+# so no port is ever committed here. No notice timing is overridden: every read
+# comes from the product's own startup and settings-refresh paths.
+- id: deepseek-account
+  config:
+    platformOrigin: "{{origin}}"
+    allowLoopbackHttp: true
+# This scenario exercises the account launcher after initial setup.
+- id: ui-settings-account
+  config:
+    step: done
+    completion: completed

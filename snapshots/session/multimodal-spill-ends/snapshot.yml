@@ -1,0 +1,8 @@
+version: 1
+scenario: multimodal-spill-ends
+profile: headless
+composition: multimodal-spill
+recording: authored
+header:
+  class: multimodal-spill
+  pin: true

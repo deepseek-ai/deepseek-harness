@@ -15,6 +15,13 @@ export function buildWindowsSigningEnvironment(environment: NodeJS.ProcessEnv, i
 }): NodeJS.ProcessEnv
 
 /**
+ * Pin updater verification to the release certificate's organization, country, and common name.
+ * @param certificateFile Public Windows Code Signing certificate file.
+ * @returns Distinguished-name attributes consumed by electron-updater.
+ */
+export function resolveWindowsUpdatePublisher(certificateFile: string | undefined): string
+
+/**
  * Serialize hardware-token signing and stop all queued tasks after the first failure.
  *
  * @param options Release signing configuration.
@@ -26,6 +33,9 @@ export function createWindowsTokenSigner(options: {
   tokenPin?: string | undefined
   keyContainer?: string | undefined
   commandInterpreter?: string | undefined
+  runDirectory?: string | undefined
+  stateDirectory?: string | undefined
+  preserveSignature?: (path: string) => Promise<boolean>
 }): (
   configuration: {
     path: string

@@ -1,4 +1,5 @@
 import { createUserMessage, createMessage } from '@deepseek-ai/dsh-llm'
+import type { MessageSource } from '@deepseek-ai/dsh-llm'
 /**
  * Derived-message cache contract against a scratch oracle: project new nodes
  * once, rebuild on surface replacements, return fresh arrays over shared
@@ -7,6 +8,13 @@ import { createUserMessage, createMessage } from '@deepseek-ai/dsh-llm'
 
 import { describe, expect, it } from 'vitest'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
+
+type CheckpointSource = Extract<MessageSource, { readonly kind: 'compact-checkpoint' }>
+
+/** Build a typed checkpoint source for a derived-message fixture. */
+function checkpointSource(compactionId: string): CheckpointSource {
+  return { kind: 'compact-checkpoint', compactionId: compactionId as CheckpointSource['compactionId'] }
+}
 
 function userText(session: Session, text: string): void {
   session.append('user/message', createUserMessage({
@@ -65,7 +73,7 @@ describe('derived-message cache', () => {
 
     const nodes = session.surface.nodes
     session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'summary' }], source: { kind: 'plugin', plugin: 'compact' },
+      content: [{ type: 'text', text: 'summary' }], source: checkpointSource('derived-cache-compaction'),
     }), { surfaceOp: { op: 'replace', startSeq: nodes[0]!, endSeq: nodes[1]! }, sourceEventSeqs: [nodes[0]!, nodes[1]!] })
 
     expect(session.deriveMessages()).toHaveLength(1)

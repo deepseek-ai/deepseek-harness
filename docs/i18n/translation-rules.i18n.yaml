@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for translation-rules.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/i18n/translation-rules.md
-translation-rules.md: f268a09cf02e1a079065441271ffb304eb81d3ee
-translation-rules.zh.md: 7daa639ce390d109649f16edf6935d2d80edfbb4
+/translation-rules:
+  en: 3c1986ac40089c83
+  zh: 77018b198ab87218
+/translation-rules/faithfulness:
+  en: 8ce28f619f598d6e
+  zh: 2d594d5c48dca50e
+/translation-rules/voice:
+  en: 141f316ff4118081
+  zh: ee7d3584c213cd00
+/translation-rules/structure-preservation:
+  en: 923089613a4d7ccb
+  zh: 69ee213924eef4f1
+/translation-rules/terminology:
+  en: f99cf0e192e4a77f
+  zh: 2a716cf90873fe1d
+/translation-rules/typography:
+  en: f80b5b382300a979
+  zh: eb5f4ec2808e7222
+/translation-rules/quality-bar:
+  en: f6220091b7ad5eed
+  zh: 5e62a15a87463672
+/translation-rules/references:
+  en: 31d651937c72a2c5
+  zh: 54d424132cf6c4c9

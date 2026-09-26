@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/skill/README.md
-README.md: 963b8195b2240f22cb2df16ffccbb91365e62566
-README.zh.md: f11bd1be5ae005f23592ec479ae635ca28eebeeb
+/:
+  en: b65db52ddcb307fe
+  zh: d599a27c5f80409f
+/skill-skill-capability-family:
+  en: 0b439cfc74ac0737
+  zh: fd4f28f03ac7c06c
+/skill-skill-capability-family/summary:
+  en: 3119b70ce39aa67a
+  zh: ca05b86efbf84141
+/skill-skill-capability-family/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/skill-skill-capability-family/packages:
+  en: c539cb44637a4415
+  zh: e327e6dc6c84bf60
+/skill-skill-capability-family/related-documentation:
+  en: 98bb14ef9f1ec72d
+  zh: f20309f41603392a
+/skill-skill-capability-family/dev-note:
+  en: 5de1d6304e00c58f
+  zh: 8d8225361cfa29e5

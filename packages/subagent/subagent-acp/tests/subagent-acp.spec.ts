@@ -59,7 +59,7 @@ async function setup(mockEnv: SetupEnv = {}, permission: 'allow' | 'reject' = 'r
   return ctx
 }
 
-function text(blocks: { type: string; text?: string }[]): string {
+function text(blocks: readonly { type: string; text?: string }[]): string {
   return blocks.filter(b => b.type === 'text').map(b => b.text).join('')
 }
 

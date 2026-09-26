@@ -73,7 +73,6 @@ function toolResultTexts(agent: Agent): string[] {
   return agent.session.snapshotEvents()
     .filter((event): event is SessionEvent<'tool/result'> => event.type === 'tool/result')
     .map(event => event.data.message.content
-      .flatMap(block => block.content)
       .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
       .map(block => block.text)
       .join(''))
@@ -173,8 +172,7 @@ describe('in-process policy inheritance', () => {
       )
       const runtimeContext = child.session.snapshotEvents().find(
         (event): event is SessionEvent<'user/message'> => event.type === 'user/message'
-          && event.data.source.kind === 'plugin'
-          && event.data.source.plugin === '@deepseek-ai/dsh-system-prompt',
+          && event.data.source.kind === 'runtime-context',
       )
       if (request === undefined || systemNode === undefined || runtimeContext === undefined) {
         throw new Error('child request lacks its system node or runtime policy context')

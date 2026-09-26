@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-29-durable-last-activity-index.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-07-29-durable-last-activity-index.md
-2026-07-29-durable-last-activity-index.md: f007f01bf34c830ef9c0093e58ca86f07416d68c
-2026-07-29-durable-last-activity-index.zh.md: c3259f47bcf02f6214ea6081730ee1e850c27e77
+/agent-note-record-last-activity-in-the-session-index:
+  en: f64dc6aee10c755f
+  zh: a28d8450c78b0c01
+/agent-note-record-last-activity-in-the-session-index/problem:
+  en: 332469396acd98d4
+  zh: c9e4d587628fc0e7
+/agent-note-record-last-activity-in-the-session-index/proposal:
+  en: 2260380e10b59eb6
+  zh: dcf5a7f2d6003021
+/agent-note-record-last-activity-in-the-session-index/alternatives-considered:
+  en: 9034b95d80405f9c
+  zh: 573e1dcd10b62344
+/agent-note-record-last-activity-in-the-session-index/acceptance-criteria:
+  en: ec546e4feceb77a7
+  zh: a29c9268e1c189c7
+/agent-note-record-last-activity-in-the-session-index/risks:
+  en: 9aaf88097b46e9b6
+  zh: d16e5bbbe221b139
+/agent-note-record-last-activity-in-the-session-index/related:
+  en: 3fde35c997f273f8
+  zh: 2d063c34cc9fe0bb

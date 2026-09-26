@@ -95,7 +95,7 @@ function pipeOkApi(overrides: Partial<Win32ProcessBindings> = {}): {
     closeHandle,
     formatMessageW: vi.fn(() => 0),
     ...overrides,
-  } as unknown as Win32ProcessBindings
+  } as Win32ProcessBindings
   return { api, closed, closeHandle }
 }
 
@@ -195,7 +195,7 @@ describe('spawnInheritedJobProcess failure paths', () => {
       closeHandle,
       formatMessageW: vi.fn(() => 0),
       ...overrides,
-    } as unknown as Win32ProcessBindings
+    } as Win32ProcessBindings
     return { api, closed, closeHandle }
   }
 

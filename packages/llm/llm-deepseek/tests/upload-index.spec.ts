@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
-import { DeepSeekFileId } from '../src/common/file-id.ts'
-import { deepSeekFileScope, DeepSeekUploadIndex } from '../src/common/upload-index.ts'
+import { DeepSeekFileId } from '../src/file-id.ts'
+import { deepSeekFileScope, DeepSeekUploadIndex } from '../src/upload-index.ts'
 
 const ATTACHMENT = AttachmentId(`sha256:${'a'.repeat(64)}`)
 const VARIANT = ImageVariantId(`sha256:${'b'.repeat(64)}`)
@@ -56,10 +56,34 @@ describe('DeepSeekUploadIndex', () => {
     await index.commit(first, 1, 1)
 
     await expect(index.commit(duplicate, 2, 1)).resolves.toEqual({ record: first, accepted: false })
-    await index.remove(scope, VARIANT, duplicate.fileId)
+    await index.remove(scope, [{ variantId: VARIANT, fileId: duplicate.fileId }])
     await expect(index.get(scope, VARIANT, 2, 1)).resolves.toEqual(first)
-    await index.remove(scope, VARIANT, first.fileId)
+    await index.remove(scope, [{ variantId: VARIANT, fileId: first.fileId }])
     await expect(index.get(scope, VARIANT, 2, 1)).resolves.toBeUndefined()
+  })
+
+  it('removes several exact generations in one update and keeps unlisted mappings', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-upload-index-'))
+    roots.push(dir)
+    const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
+    const scope = deepSeekFileScope('https://api.deepseek.com', 'key')
+    const record = (digest: string) => ({
+      scope, attachmentId: ATTACHMENT, variantId: ImageVariantId(`sha256:${digest.repeat(64)}`),
+      fileId: DeepSeekFileId(`file-api-${digest}`), bytes: 3, createdAt: 1, expiresAt: 10_000,
+    })
+    const first = record('b')
+    const second = record('c')
+    const third = record('d')
+    for (const entry of [first, second, third]) await index.commit(entry, 1, 1)
+
+    await index.remove(scope, [
+      { variantId: first.variantId, fileId: first.fileId },
+      { variantId: second.variantId, fileId: second.fileId },
+      { variantId: third.variantId, fileId: DeepSeekFileId('file-api-superseded') },
+    ])
+    await expect(index.get(scope, first.variantId, 2, 1)).resolves.toBeUndefined()
+    await expect(index.get(scope, second.variantId, 2, 1)).resolves.toBeUndefined()
+    await expect(index.get(scope, third.variantId, 2, 1)).resolves.toEqual(third)
   })
 
   it('treats a corrupt upload cache as empty and repairs it on the next commit', async () => {

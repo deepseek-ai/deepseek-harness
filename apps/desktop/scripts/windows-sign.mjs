@@ -6,6 +6,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import wineVmModule from 'app-builder-lib/out/vm/WineVm.js'
+import { beginWindowsSigningAttempt } from './windows-signing-state.mjs'
+import { completeWindowsSignature, normalizeWindowsSignature } from './windows-timestamp.mjs'
+import { failPackagingRun, recordPackagingEvent } from './packaging-run.mjs'
 
 const execFileAsync = promisify(execFile)
 const { WineVmManager } = wineVmModule
@@ -67,7 +70,28 @@ function resolveCertificateFile(value) {
   if (certificate.ca || !certificate.keyUsage?.includes(CODE_SIGNING_EKU)) {
     throw new Error(`Windows code-signing certificate file must contain a non-CA Code Signing certificate: ${path}`)
   }
-  return path
+  return { path, certificate }
+}
+
+/**
+ * Pin updater verification to the release certificate's organization, country, and common name.
+ *
+ * @param {string | undefined} certificateFile Public Windows Code Signing certificate file.
+ * @returns {string} Distinguished-name attributes consumed by electron-updater.
+ */
+export function resolveWindowsUpdatePublisher(certificateFile) {
+  const { certificate } = resolveCertificateFile(certificateFile)
+  const subject = certificate.toLegacyObject().subject
+  // These attributes have identical names in OpenSSL and Windows certificate subjects.
+  return ['CN', 'O', 'C'].map((key) => {
+    const value = subject[key]
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new Error(`Windows update publisher requires one nonempty ${key} certificate attribute`)
+    }
+    const escaped = value.replace(/[\\",;+\x00-\x20]/gu,
+      character => `\\${character.charCodeAt(0).toString(16).padStart(2, '0')}`)
+    return `${key}=${escaped}`
+  }).join(',')
 }
 
 function resolveSignTool(value) {
@@ -136,11 +160,11 @@ export function buildWindowsSigningEnvironment(environment, input) {
 /**
  * Serialize SafeNet signing and stop all queued tasks after the first failure.
  *
- * @param {{ certificateFile?: string, signTool?: string, tokenPin?: string, keyContainer?: string, commandInterpreter?: string }} options Release signing configuration.
+ * @param {{ certificateFile?: string, signTool?: string, tokenPin?: string, keyContainer?: string, commandInterpreter?: string, runDirectory?: string, stateDirectory?: string, preserveSignature?: (path: string) => Promise<boolean> }} options Release identity, supervised run, verified-copy preservation, and test-only isolated interlock directory.
  * @returns {(configuration: { path: string, hash: string, isNest: boolean }) => Promise<void>} The signing hook.
  */
 export function createWindowsTokenSigner(options) {
-  const certificateFile = resolveCertificateFile(options.certificateFile)
+  const { path: certificateFile, certificate } = resolveCertificateFile(options.certificateFile)
   const signTool = resolveSignTool(options.signTool)
   const { keyContainer, tokenPin } = resolveTokenIdentity(options)
   const commandInterpreter = options.commandInterpreter
@@ -152,35 +176,67 @@ export function createWindowsTokenSigner(options) {
       if (configuration.hash !== 'sha256') {
         throw new Error(`Windows release signing requires SHA-256, received ${configuration.hash}`)
       }
-      await repairDanglingAuthenticodeDirectory(configuration.path)
+      if (configuration.isNest) throw new Error('Windows release signing does not support appended signatures')
+      if (await options.preserveSignature?.(configuration.path)) return
       const secrets = [tokenPin]
-      let result
+      const runDirectory = options.runDirectory ?? process.env.DSH_DESKTOP_PACKAGING_RUN_DIR
+      if (!runDirectory) throw new Error('Windows hardware signing requires a supervised packaging run')
+      const { inspectWindowsRuntimeSignature: inspect } = await import('./windows-runtime-signature.mjs')
+      const thumbprint = certificate.fingerprint.replaceAll(':', '')
       try {
-        result = await execFileAsync(commandInterpreter, [
-          '/d',
-          '/v:off',
-          '/c',
-          WINDOWS_SIGN_SCRIPT,
-        ], {
-          cwd: WINDOWS_SIGN_SCRIPT_DIRECTORY,
-          env: buildWindowsSigningEnvironment(process.env, {
-            certificateFile,
-            signTool,
-            path: configuration.path,
-            isNest: configuration.isNest,
-            tokenPin,
-            keyContainer,
-          }),
-          windowsHide: true,
+        await completeWindowsSignature(configuration.path, {
+          thumbprint, inspect, evidenceDirectory: runDirectory,
+          record: event => recordPackagingEvent(runDirectory, event),
+          normalize: path => normalizeWindowsSignature(path, signTool, scrubWindowsSigningEnvironment(process.env)),
+          timestamp: async path => { await execFileAsync(signTool, ['timestamp', '/v', '/tr', 'http://timestamp.digicert.com', '/td', 'sha256', path], {
+            env: scrubWindowsSigningEnvironment(process.env), windowsHide: true, timeout: 60_000,
+          }) },
+          sign: async (path) => {
+            await repairDanglingAuthenticodeDirectory(path)
+            const attempt = beginWindowsSigningAttempt({ runDirectory,
+              stateDirectory: options.stateDirectory, target: path })
+            let result
+            try {
+              const operation = execFileAsync(commandInterpreter, [
+                '/d',
+                '/v:off',
+                '/c',
+                WINDOWS_SIGN_SCRIPT,
+              ], {
+                cwd: WINDOWS_SIGN_SCRIPT_DIRECTORY,
+                env: buildWindowsSigningEnvironment(process.env, {
+                  certificateFile,
+                  signTool,
+                  path,
+                  isNest: false,
+                  tokenPin,
+                  keyContainer,
+                }),
+                windowsHide: true,
+              })
+              attempt.started(operation.child?.pid ?? null)
+              result = await operation
+              const signature = await inspect(path)
+              if (signature.status !== 'Valid' || signature.timestamped || signature.thumbprint?.toUpperCase() !== thumbprint.toUpperCase()) {
+                throw new Error('Windows hardware signing: primary signature verification failed')
+              }
+            }
+            catch (error) {
+              const failure = createRedactedWindowsSigningError(error, path, secrets)
+              attempt.failure(typeof error.code === 'number' || typeof error.code === 'string' ? error.code : null, failure.message)
+              throw failure
+            }
+            attempt.success()
+            const stdout = redactedSigningOutput(result.stdout, secrets)
+            const stderr = redactedSigningOutput(result.stderr, secrets)
+            if (stdout !== '') process.stdout.write(stdout)
+            if (stderr !== '') process.stderr.write(stderr)
+          },
         })
+      } catch (error) {
+        failPackagingRun(runDirectory, 'signature-completion-failed')
+        throw error
       }
-      catch (error) {
-        throw createRedactedWindowsSigningError(error, configuration.path, secrets)
-      }
-      const stdout = redactedSigningOutput(result.stdout, secrets)
-      const stderr = redactedSigningOutput(result.stderr, secrets)
-      if (stdout !== '') process.stdout.write(stdout)
-      if (stderr !== '') process.stderr.write(stderr)
     })
     return pending
   }

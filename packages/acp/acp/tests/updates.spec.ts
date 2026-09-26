@@ -73,14 +73,11 @@ describe('standard ACP update projection', () => {
         step: 1,
         message: {
           id: MessageId('tool-message'),
-          role: 'user',
+          role: 'tool',
+          toolCallId: ToolCallId('call-bad'),
+          isError: true,
           source: { kind: 'tool', callId: ToolCallId('call-bad') },
-          content: [{
-            type: 'tool-result',
-            toolCallId: ToolCallId('call-bad'),
-            isError: true,
-            content: [{ type: 'reasoning', text: 'hidden' }],
-          }],
+          content: [{ type: 'reasoning', text: 'hidden' }],
         },
       },
     })

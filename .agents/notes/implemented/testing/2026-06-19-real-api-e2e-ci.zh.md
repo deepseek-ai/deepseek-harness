@@ -49,7 +49,7 @@ repo secret 命名为 `DEEPSEEK_API_KEY_EXTERNAL`；映射到适配器和测试�
 
 - **步骤级 secret。** `DEEPSEEK_API_KEY` 仅在 preflight 和 e2e 步骤的 `env:` 中设置，从不在 job 级设置——因此 checkout/setup-node/install 永远看不到它。依赖中被入侵的安装时生命周期脚本无法读取不在其环境中的 secret。
 - **`permissions: contents: read`。** job 仅读取仓库以运行测试；不需要写权限（无 PR 评论、无 status 写入），因此 `GITHUB_TOKEN` 降至最小权限。
-- **`DEEPSEEK_BASE_URL` 固定**为 e2e 步骤上的 `https://api.deepseek.com`。适配器在未设置时会默认使用此值（[packages/llm/llm-deepseek/src/index.ts](../../../../packages/llm/llm-deepseek/src/index.ts) `PUBLIC_BASE_URL`），但显式固定具有自文档性和密封性——仓库根目录的 `.env`（如果存在，`vitest.e2e.config.ts` 会加载它）无法静默地将运行重定向到其他端点。
+- **`DEEPSEEK_BASE_URL` 固定**为 e2e 步骤上的 `https://api.deepseek.com/anthropic`。适配器在未设置时会默认使用此值（[packages/llm/llm-deepseek/src/index.ts](../../../../packages/llm/llm-deepseek/src/index.ts) `PUBLIC_BASE_URL`），但显式固定具有自文档性和密封性——仓库根目录的 `.env`（如果存在，`vitest.e2e.config.ts` 会加载它）无法静默地将运行重定向到其他端点。
 - **不回显 secret。** preflight 仅打印 `DEEPSEEK_API_KEY present.`——不打印值或长度。
 
 ### 范围与运行时形态

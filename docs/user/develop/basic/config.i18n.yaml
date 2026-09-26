@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for config.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/develop/basic/config.md
-config.md: d935fc3f3b5b42c5b3fbd8d3b0d398a2608aead3
-config.zh.md: 642a413950e2d8deb8591bc688968607604c050d
+/plugin-configuration:
+  en: f605e6e8021b82ba
+  zh: 3f33c4b0afb3f249
+/plugin-configuration/define-the-config-type:
+  en: a351a086d890f148
+  zh: 385803dd9d671391
+/plugin-configuration/schema-validation:
+  en: 6a20f3351a1c3e47
+  zh: b5ae56917fcbca2c
+/plugin-configuration/design-principles:
+  en: 79717ddc9d714ad9
+  zh: 67240f8382bbe783
+/plugin-configuration/design-principles/do-not-hardcode-tunable-values:
+  en: da67063750a52b55
+  zh: bd2c5978e10b6f79
+/plugin-configuration/design-principles/fail-loudly-on-invalid-configuration:
+  en: 98a4ff7d959783bd
+  zh: cb1410360b03b7a7
+/plugin-configuration/work-with-hmr:
+  en: 939f750af6fefbd5
+  zh: 94fbb3a0d761f098
+/plugin-configuration/next-steps:
+  en: 1151bb8b59577519
+  zh: 47a95340df47d273

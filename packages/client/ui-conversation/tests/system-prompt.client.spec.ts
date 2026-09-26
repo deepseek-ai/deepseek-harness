@@ -7,7 +7,7 @@ function system(seq: number, text: string, replaces?: number): SessionEvent {
     seq, time: seq, type: 'system/message',
     data: { turn: 1, step: seq, message: { role: 'system', content: [{ type: 'text', text }] } },
     surfaceOp: replaces === undefined ? 'append' : { op: 'replace', startSeq: replaces, endSeq: replaces },
-  } as SessionEvent
+  } as unknown as SessionEvent
 }
 
 function replace(seq: number, start: number, end: number): SessionEvent {

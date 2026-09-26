@@ -9,9 +9,7 @@ import type {
   StandardSourceBinding,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { bindSnapshotSelector } from './bind.ts'
-
-/** Missing renderer assembly dependency. */
-export class SlotAssemblyError extends Error {}
+import { SlotAssemblyError } from './errors.ts'
 
 /** In-package renderer host context. */
 export const HostContext = createContext<SlotRendererHost | null>(null)
@@ -47,6 +45,20 @@ export function useScopeBinding(): StandardSourceBinding {
   const binding = useContext(ScopeBindingContext)
   if (binding === null) throw new SlotAssemblyError('scoped slot rendered outside its scope provider')
   return binding
+}
+
+/**
+ * Publish one resolved scope binding to a renderer subtree.
+ * @param props - provider inputs.
+ * @param props.binding - binding exposed to scoped entries.
+ * @param props.children - subtree that inherits the binding.
+ * @returns the scoped React provider.
+ */
+export function ScopeBindingProvider({ binding, children }: {
+  binding: StandardSourceBinding
+  children: ReactNode
+}): ReactNode {
+  return <ScopeBindingContext.Provider value={binding}>{children}</ScopeBindingContext.Provider>
 }
 
 /**
@@ -91,8 +103,8 @@ function useAbsentSnapshot<S>(
 
 /** Erased open-key selector Hook synthesized from one keyed source family. */
 export type KeyedSnapshotHook = (
-  key: string,
-  selector?: (value: unknown) => unknown,
+  keyOrSelector: string | ((value: unknown) => unknown),
+  selectorOrEqual?: ((value: unknown) => unknown) | ((left: unknown, right: unknown) => boolean),
   equal?: (left: unknown, right: unknown) => boolean,
 ) => unknown
 
@@ -101,23 +113,41 @@ export type KeyedSnapshotHook = (
  * @param source - keyed resolver, or absence for an optional scope.
  * @returns cached keyed selector Hook.
  */
-export function keyedObservableHook(source: KeyedStandardSource | undefined): KeyedSnapshotHook {
+export function keyedObservableHook(
+  source: KeyedStandardSource | undefined,
+  defaultKey?: string,
+): KeyedSnapshotHook {
   if (source === undefined) return absentKeyedHook
-  let hook = keyedHookCache.get(source)
+  let hooks = keyedHookCache.get(source)
+  if (hooks === undefined) {
+    hooks = new Map()
+    keyedHookCache.set(source, hooks)
+  }
+  const cacheKey = defaultKey ?? NO_DEFAULT_KEY
+  let hook = hooks.get(cacheKey)
   if (hook === undefined) {
-    hook = (key, selector, equal) => {
-      const useValue = observableHook(source(key) ?? absentSource)
-      return useValue(selector ?? identity, equal)
+    hook = (keyOrSelector, selectorOrEqual, equal) => {
+      const keyed = typeof keyOrSelector === 'string'
+      const key = keyed ? keyOrSelector : defaultKey
+      const selector = (keyed ? selectorOrEqual : keyOrSelector) as ((value: unknown) => unknown) | undefined
+      const comparison = (keyed ? equal : selectorOrEqual) as ((left: unknown, right: unknown) => boolean) | undefined
+      const useValue = observableHook(key === undefined ? absentSource : source(key) ?? absentSource)
+      return useValue(selector ?? identity, comparison)
     }
-    keyedHookCache.set(source, hook)
+    hooks.set(cacheKey, hook)
   }
   return hook
 }
 
-const keyedHookCache = new WeakMap<KeyedStandardSource, KeyedSnapshotHook>()
+const NO_DEFAULT_KEY = Symbol('no default key')
+const keyedHookCache = new WeakMap<KeyedStandardSource, Map<string | symbol, KeyedSnapshotHook>>()
 const identity = (value: unknown): unknown => value
-const absentKeyedHook: KeyedSnapshotHook = (_key, selector, equal) =>
-  observableHook(absentSource)(selector ?? identity, equal)
+const absentKeyedHook: KeyedSnapshotHook = (keyOrSelector, selectorOrEqual, equal) => {
+  const keyed = typeof keyOrSelector === 'string'
+  const selector = (keyed ? selectorOrEqual : keyOrSelector) as ((value: unknown) => unknown) | undefined
+  const comparison = (keyed ? equal : selectorOrEqual) as ((left: unknown, right: unknown) => boolean) | undefined
+  return observableHook(absentSource)(selector ?? identity, comparison)
+}
 
 /** Subscribe the tree to the atomically assembled root standard-source roster. */
 export function RootStandardProvider({ children }: { children: ReactNode }) {

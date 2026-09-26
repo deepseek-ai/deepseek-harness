@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for session-query.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/session-query.md
-session-query.md: 1cf3dff325db76485a0afca4ca1a882a4ff175b8
-session-query.zh.md: 2b8504dfb9ec8ee25d925135dbc99fa7beaede98
+/session-query:
+  en: 041684440d88fbbc
+  zh: 376e7f0b173b238d
+/session-query/logical-records:
+  en: 839a70b2761c16f1
+  zh: 883277abce68c750
+/session-query/provider-independent-filters-and-documents:
+  en: a1818c567b28613c
+  zh: 5dd442cf5ce0438e
+/session-query/full-text-search-pages:
+  en: 192dc8ec7f3a9d28
+  zh: c18aef45c61610b9
+/session-query/session-lineage:
+  en: c4b3e9e77a1b07d8
+  zh: e510802ab034ceac
+/session-query/bounded-event-reads:
+  en: 2f4a5fa959be3554
+  zh: 3590a7f6aeeb7e02
+/session-query/event-relationships:
+  en: 2ec376e3a10ee5fa
+  zh: 3a7706de112f6e17
+/session-query/errors:
+  en: 34e775125232d999
+  zh: 0c5c608760c4865d

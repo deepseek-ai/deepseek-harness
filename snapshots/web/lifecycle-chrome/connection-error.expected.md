@@ -1,4 +1,2 @@
-- button "Settings":
-  - img
-  - text: Settings
+- button "Settings"
 - button "Reconnecting, reconnect now": Reconnecting

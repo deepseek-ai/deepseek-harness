@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/extensions/tool-cordis/README.md
-README.md: d7fa7acf14ffbe5e9d3177af3ec354963d05e8db
-README.zh.md: 80d094252848cd11b175686963a15b86490fecd3
+/:
+  en: 784a82be07311e99
+  zh: 85d917ecc6386ec9
+/deepseek-ai-dsh-tool-cordis:
+  en: ea2c0ac7e7932a08
+  zh: 5562e6f26d700b64
+/deepseek-ai-dsh-tool-cordis/summary:
+  en: 245a3cd287214bed
+  zh: 8687666c28a676cf
+/deepseek-ai-dsh-tool-cordis/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 3a2f21ff0dc3420d
+/deepseek-ai-dsh-tool-cordis/use-this-package:
+  en: e8c90b0ad037513c
+  zh: 563454508c30d9b0
+/deepseek-ai-dsh-tool-cordis/understand-the-implementation:
+  en: de18fe3471a4a341
+  zh: fda07860cfe1e325
+/deepseek-ai-dsh-tool-cordis/further-exploration:
+  en: 1863373f02bcc196
+  zh: 3efdbf5569411562
+/deepseek-ai-dsh-tool-cordis/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-cordis/model-experience/runtime-inspection:
+  en: 72ffb7cae674c31a
+  zh: 85674f298a78592a
+/deepseek-ai-dsh-tool-cordis/model-experience/runtime-inspection/what-the-model-sees:
+  en: 197fabc06c289f6e
+  zh: e7f1695ee2118ed6
+/deepseek-ai-dsh-tool-cordis/model-experience/runtime-inspection/token-effect:
+  en: 5d9791798f8ce57f
+  zh: b47984cc13e12cfd
+/deepseek-ai-dsh-tool-cordis/model-experience/runtime-inspection/kv-cache-effect:
+  en: f57a20cd4e76d13c
+  zh: 7b673116422bee87
+/deepseek-ai-dsh-tool-cordis/known-limitations-and-deferred-work:
+  en: ffe15dd1fd333dbf
+  zh: b256afc74a1782cb
+/deepseek-ai-dsh-tool-cordis/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

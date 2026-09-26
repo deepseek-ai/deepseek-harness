@@ -28,7 +28,7 @@ describe('renderer slots/changed invariant', () => {
     // A real registration bumps the version first and re-emits through
     // onMutate — the audit sees version > 0 and stays quiet. (Erased call:
     // the typed register face rides the wave-1 ui-slots types.)
-    const slots = ctx.slots as unknown as { register(options: object, component: unknown): () => void }
+    const slots = ctx.slots as { register(options: object, component: unknown): () => void }
     expect(() => slots.register({ name: 'root' }, () => null)).not.toThrow()
   })
 

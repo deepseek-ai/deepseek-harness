@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-parallel-macos-notarization.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-09-parallel-macos-notarization.md
-2026-09-09-parallel-macos-notarization.md: 152da4661207bf130389e600c16398335fd9fe70
-2026-09-09-parallel-macos-notarization.zh.md: d5375e39a6348b49ffe5bb93c2c056151d5abe75
+/agent-note-parallel-macos-notarization-from-isolated-app-copies:
+  en: 610808eedf6e8fdd
+  zh: 2db10903004a3ebd
+/agent-note-parallel-macos-notarization-from-isolated-app-copies/problem:
+  en: 12c2160b03bac5e0
+  zh: 2222e4490505f728
+/agent-note-parallel-macos-notarization-from-isolated-app-copies/decision:
+  en: 9084607b8e5ecba2
+  zh: 00d70d13629a7dd4
+/agent-note-parallel-macos-notarization-from-isolated-app-copies/alternatives-considered:
+  en: 0ec8e4f3902e17e6
+  zh: 3df3091fc01ab600
+/agent-note-parallel-macos-notarization-from-isolated-app-copies/consequences:
+  en: 81b2cc070cc05152
+  zh: 30c684868025f994

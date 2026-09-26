@@ -21,7 +21,8 @@ import { describe, expect, it } from 'vitest'
 
 const fixtureDir = fileURLToPath(new URL('./expected/subagent-inheritance', import.meta.url))
 const replayOverride = join(fixtureDir, 'replay.override.json')
-// Native replay preserves the V0 script's model outputs without migrating its pre-step user event.
+// The released V3 child fixture replays through the V3-to-V4 migration, so its
+// tool results lift and its plugin sources move onto producer kinds.
 const childReplay = join(fixtureDir, 'child.replay.v3.jsonl')
 const parentExpected = join(fixtureDir, 'parent.expected.jsonl')
 const childExpected = join(fixtureDir, 'child.expected.jsonl')
@@ -59,7 +60,7 @@ async function seedReadOnlyParent(root: string, cwd: string): Promise<void> {
     { type: 'step/start', seq: SessionSeq(1), time: 11, data: { turn: 1, step: 1 } },
     {
       type: 'system/message', seq: SessionSeq(2), time: 12,
-      data: { turn: 1, step: 1, message: createMessage({ role: 'system', content: [], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } }) },
+      data: { turn: 1, step: 1, message: createMessage({ role: 'system', content: [], source: { kind: 'system-prompt' } }) },
       surfaceOp: 'append',
     },
     { type: 'user/message', seq: SessionSeq(3), time: 13, data: createUserMessage({ content: [{ type: 'text', text: 'Tighten this session to read-only.' }], source: { kind: 'user' } }), surfaceOp: 'append' },
@@ -140,11 +141,10 @@ describe('parent-only override inheritance snapshot', () => {
         const runtimeContexts = (content: string): string[] => content.trimEnd().split('\n').flatMap((line) => {
           const record = JSON.parse(line) as {
             type?: string
-            data?: { source?: { kind?: string; plugin?: string }; content?: Array<{ type?: string; text?: unknown }> }
+            data?: { source?: { kind?: string }; content?: Array<{ type?: string; text?: unknown }> }
           }
           if (record.type !== 'user/message'
-            || record.data?.source?.kind !== 'plugin'
-            || record.data.source.plugin !== '@deepseek-ai/dsh-system-prompt') return []
+            || record.data?.source?.kind !== 'runtime-context') return []
           return record.data.content?.flatMap(block => block.type === 'text' && typeof block.text === 'string' ? [block.text] : []) ?? []
         })
         const policyContexts = [...runtimeContexts(parent), ...runtimeContexts(child)]

@@ -126,7 +126,7 @@ agent 每次更新都发送完整列表；新列表替换旧列表，因此没�
 
 #### 模型看到什么
 
-模型会看到生成的 [`todo_write` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-todo)：一个对象，含一个必填的 `todos` 数组，元素为 `{ content, status }`，其中 `status` 为 `pending`、`in_progress` 或 `completed`。描述是组合后的整表指令，其活跃状态条款跟随 `allowParallelInProgress`。
+模型会看到生成的 [`todo_write` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-todo)：一个对象，含一个必填的 `todos` 数组，元素为 `{ content, status }`，其中 `status` 为 `pending`、`in_progress` 或 `completed`。`todos` 描述说明每次调用都会替换整个列表；工具描述中的活跃状态条款跟随 `allowParallelInProgress`。
 
 #### Token 影响
 

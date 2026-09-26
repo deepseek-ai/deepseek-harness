@@ -1,0 +1,20 @@
+- insert:
+    - id: office-skills
+      name: '@deepseek-ai/dsh-skill-office'
+      config:
+        assetRoot: !!js process.cwd() + '/office-skills'
+        cli: false
+
+- id: llm-deepseek
+  config:
+    thinking: enabled
+    reasoningEffort: high
+    maxTokens: 8192
+    models:
+      - id: deepseek-v4-flash
+
+- id: tool-bash
+  disabled: true
+
+- id: tool-pwsh
+  disabled: true

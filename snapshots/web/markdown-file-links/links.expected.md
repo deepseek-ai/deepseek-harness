@@ -1,0 +1,11 @@
+- paragraph:
+  - button "src/example.txt:24–30"
+  - text: ·
+  - button "src/example.txt:30"
+  - text: ·
+  - button "other/example.txt"
+  - text: ·
+  - button "Missing file"
+  - text: ·
+  - link "Website":
+    - /url: https://example.com/

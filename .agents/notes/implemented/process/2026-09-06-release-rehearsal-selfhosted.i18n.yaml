@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-06-release-rehearsal-selfhosted.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-06-release-rehearsal-selfhosted.md
-2026-09-06-release-rehearsal-selfhosted.md: 415ae4716e9bc0ae9b165afc807f6f41e8a57e04
-2026-09-06-release-rehearsal-selfhosted.zh.md: a6fa441d01e66cea998d77a9b1be588053ac60a5
+/agent-note-trusted-release-rehearsals-on-persistent-linux-runners:
+  en: 1bccf6bdafd4cc76
+  zh: 28ce63be303697f1
+/agent-note-trusted-release-rehearsals-on-persistent-linux-runners/problem:
+  en: c458bf4244320194
+  zh: fbd5f64cf8875725
+/agent-note-trusted-release-rehearsals-on-persistent-linux-runners/decision:
+  en: d51d35350d91f19b
+  zh: 65297576aff64e8a
+/agent-note-trusted-release-rehearsals-on-persistent-linux-runners/alternatives-considered:
+  en: cd04297045b93d7b
+  zh: 9eacc1d9c6c10726
+/agent-note-trusted-release-rehearsals-on-persistent-linux-runners/consequences:
+  en: 90c50dda81822e7c
+  zh: 9c3ff4df4d2d9533

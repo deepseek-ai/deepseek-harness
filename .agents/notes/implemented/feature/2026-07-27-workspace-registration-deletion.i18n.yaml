@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-27-workspace-registration-deletion.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md
-2026-07-27-workspace-registration-deletion.md: 1d9804cfc4e2d44ea6c44f69b69dd6b10578f08a
-2026-07-27-workspace-registration-deletion.zh.md: 54e10b67a7607e32b08609fe00191da87d75f7e8
+/agent-note-workspace-registration-deletion:
+  en: 68262d0cd61db2ae
+  zh: bb2f78757972aae6
+/agent-note-workspace-registration-deletion/problem:
+  en: a51dbe0190d4dff0
+  zh: 25b6c3083ee60627
+/agent-note-workspace-registration-deletion/decision:
+  en: 70182cd2979bdfd6
+  zh: a6580a23cfbe6c07
+/agent-note-workspace-registration-deletion/durable-commit-and-publication:
+  en: f97d526274c3608b
+  zh: b0ae161f4e9febb8
+/agent-note-workspace-registration-deletion/client-convergence:
+  en: 84e56775e22ecf23
+  zh: ab146e3179868efb
+/agent-note-workspace-registration-deletion/confirmation-interaction:
+  en: 95178832030a9697
+  zh: 3a2bd50680ed0c97
+/agent-note-workspace-registration-deletion/alternatives-considered:
+  en: d7b866f763db5364
+  zh: 5e0865d42522d189
+/agent-note-workspace-registration-deletion/verification:
+  en: a7e98d39e3ffdba7
+  zh: 9c4f8168e3fff83e
+/agent-note-workspace-registration-deletion/consequences:
+  en: 3a50bfb5d93f6ef7
+  zh: 80b8dd19b2d50b16

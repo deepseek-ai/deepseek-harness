@@ -17,7 +17,7 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
+import { launchWebScaffold, watchConsole, captureStableAria, compareOrRefreshGolden, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, saveFailureShot } from './support.ts'
 
 /** Points the shipped shared Agent default at this scenario's own route. */
@@ -104,20 +104,40 @@ describe('web e2e: the composer model switch is the default for later sessions',
 
     const trigger = page.getByRole('button', { name: /^选择模型/ })
     await trigger.waitFor({ timeout: 15_000 })
+    expect(await trigger.evaluate(element => getComputedStyle(element).fontWeight)).toBe('400')
     await trigger.click()
     await page.getByRole('menuitem', { name: /模型/ }).click()
-    await page.getByRole('menuitemradio', { name: 'Acme Large' }).click()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const blocked = scaffold.ctx.hmr.runExclusive(async () => {
+      entered.resolve(undefined)
+      await release.promise
+    })
+    try {
+      await entered.promise
+      await page.getByRole('menuitemradio', { name: 'Acme Large' }).click()
+      await expect.poll(() => trigger.getAttribute('aria-busy')).toBe('false')
+      await expect.poll(() => trigger.textContent()).toContain('Acme Large')
+      expect(scaffold.ctx.agentDefaultModel.currentSelection()).toEqual({ provider: START_ROUTE, model: START_MODEL })
+      const aria = await captureStableAria(page, '[data-composer-card]', scaffold.workspaceCwd)
+      await compareOrRefreshGolden(fileURLToPath(new URL('./expected/default-model/background-save.expected.md', import.meta.url)), aria, webSnapshotMode())
+    } finally {
+      release.resolve(undefined)
+      await blocked
+    }
 
     // The switch is what sets the default: the shared Agent-route settings section
     // now names it, beside the provider profiles the Models page writes.
     await expect.poll(
-      async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'),
+      async () => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'),
       { timeout: 10_000 },
-    ).toContain('agent-default-model:')
-    const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
+    ).toContain('id: agent-default-model')
+    const document = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(document).toContain(`provider: ${ROUTE}`)
     expect(document).toContain(`model: ${MODEL}`)
 
+    await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection())
+      .toEqual({ provider: ROUTE, model: MODEL })
     // A session created after the switch starts from it...
     expect(await currentOf(await createSession('default-model-after')))
       .toEqual({ provider: ROUTE, model: MODEL })
@@ -126,33 +146,24 @@ describe('web e2e: the composer model switch is the default for later sessions',
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('goes inert when the route the default names stops being served', async () => {
+  it('retains the saved route and editable composer when its provider is removed', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-default-model-blocked'))
     const box = page.locator('[data-composer-input]').first()
     await expect.poll(async () => box.isEnabled(), { timeout: 10_000 }).toBe(true)
 
-    // What removing the provider on the Models page leaves behind: the saved
-    // default still names the route, and nothing serves it any more.
-    // `replace`, not `update`: a merge patch of `{providers: {}}` leaves every
-    // stored profile in place.
-    await scaffold.ctx.settings.replace('llm-pi-ai', { providers: {} })
+    // Removing the selected provider preserves the other route and the saved
+    // selection. A merge update would retain the removed profile.
+    await scaffold.ctx.settings.replace('llm-pi-ai', { providers: {
+      [START_ROUTE]: { displayName: 'Origin Gateway', api: 'openai-completions',
+        baseURL: 'https://gateway.origin.example/v1', models: [{ id: START_MODEL, name: 'Origin Large' }] },
+    } })
 
-    await expect.poll(async () => box.isEnabled(), { timeout: 15_000 }).toBe(false)
-    expect(await box.getAttribute('data-placeholder')).toBe('当前模型不可用，请先选择模型')
-
-    // The block is an affordance; the refusal is the Host's. A client that
-    // never disabled anything still cannot start a turn on a dead route.
-    await expect(scaffold.ctx.sessionController.prompt({
-      requestId: 'default-model-refused' as never,
-      sessionId: SessionId(await createSession('default-model-refusal')),
-      mode: 'queue',
-      content: [{ type: 'text', text: 'hi' }],
-    }, new AbortController().signal)).rejects.toMatchObject({ code: 'session/model-unavailable' })
-
-    // The way out stays open. Locking the model seat with everything else
-    // would leave the composer asking for the one thing it prevents.
-    const seat = page.getByRole('button', { name: /^选择模型/ })
-    expect(await seat.isEnabled()).toBe(true)
+    const seat = page.getByRole('button', { name: new RegExp(`^选择模型.*${ROUTE}/${MODEL}`) })
+    await seat.waitFor()
+    expect(await box.isEnabled()).toBe(true)
+    expect(scaffold.ctx.agentDefaultModel.currentSelection()).toMatchObject({ provider: ROUTE, model: MODEL })
+    const aria = await captureStableAria(page, '[data-composer-card]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(fileURLToPath(new URL('./expected/default-model/unselected.expected.md', import.meta.url)), aria, webSnapshotMode())
     await seat.click()
     await page.getByRole('menuitem', { name: /模型/ }).click()
     await page.getByRole('menuitemradio').first().click()

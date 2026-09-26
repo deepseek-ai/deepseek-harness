@@ -9,5 +9,16 @@
   ],
   "exclude": [
     "**/*.legacy.*"
+  ],
+  "references": [
+    {
+      "path": "../store"
+    },
+    {
+      "path": "../../util/code-language"
+    },
+    {
+      "path": "../../util/workspace-path"
+    }
   ]
 }

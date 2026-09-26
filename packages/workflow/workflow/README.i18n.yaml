@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/workflow/workflow/README.md
-README.md: de167e520e34d823f14cb6c13c57b24067ceb85a
-README.zh.md: 77f2cddd3dbdb07df994d203892d1ed3ab359eed
+/:
+  en: 2db6c7ad9f69f2b8
+  zh: ccfc28844ee5cebd
+/deepseek-ai-dsh-workflow:
+  en: 66b7ebaf4283775e
+  zh: 70e7cef1a19a52d4
+/deepseek-ai-dsh-workflow/summary:
+  en: c7603bd9094b5102
+  zh: 661b875a7683e5fc
+/deepseek-ai-dsh-workflow/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-workflow/use-this-package:
+  en: bda974ed11bff0cb
+  zh: 91724b1f624a4ca6
+/deepseek-ai-dsh-workflow/use-this-package/the-model-facing-path:
+  en: ce15aee67cce8b25
+  zh: 1a7a812f5fd77492
+/deepseek-ai-dsh-workflow/use-this-package/running-a-workflow-script:
+  en: 938a268642212305
+  zh: 08d094d12060e349
+/deepseek-ai-dsh-workflow/use-this-package/programmatic-runs:
+  en: 7a7173fc43e9e5f4
+  zh: 2488e8bb8c69bb4b
+/deepseek-ai-dsh-workflow/use-this-package/failures-and-recovery:
+  en: 69e3e5358c089908
+  zh: 1d17b4e8aad5f028
+/deepseek-ai-dsh-workflow/understand-the-implementation:
+  en: 32d9c2e2fd581462
+  zh: 04ed23a3d3bb4e19
+/deepseek-ai-dsh-workflow/understand-the-implementation/design-concept:
+  en: 274b3de2f7b713ec
+  zh: e3953c1ae1f59442
+/deepseek-ai-dsh-workflow/understand-the-implementation/source-map:
+  en: 67240e519a3e725f
+  zh: 495f806856054230
+/deepseek-ai-dsh-workflow/understand-the-implementation/lifecycle-and-ownership:
+  en: 95b074d816b52323
+  zh: dfa070a1531651f9
+/deepseek-ai-dsh-workflow/understand-the-implementation/failure-discipline:
+  en: e2c2a6e2876457e8
+  zh: 764cba9eede4bb79
+/deepseek-ai-dsh-workflow/further-exploration:
+  en: 727ba336da235497
+  zh: 4562f0653af6b975
+/deepseek-ai-dsh-workflow/model-experience:
+  en: e8bb1d12900a4025
+  zh: b8936a40dc5867d6
+/deepseek-ai-dsh-workflow/model-experience/kv-cache-effect:
+  en: 243e59cc08420e3b
+  zh: 14d648f12ae48786
+/deepseek-ai-dsh-workflow/known-limitations-and-deferred-work:
+  en: 5f6f60fbb44f67e9
+  zh: 0b1b9018f09aad25
+/deepseek-ai-dsh-workflow/known-limitations-and-deferred-work/dev-note:
+  en: e225f492e530edc1
+  zh: 62234cac2367cc97

@@ -1,0 +1,6 @@
+- dialog "连接 GitHub 超时":
+  - heading "连接 GitHub 超时" [level=2]
+  - button "关闭"
+  - paragraph: 请尝试其他安装来源。
+  - button "取消"
+  - button "试试其他方式"

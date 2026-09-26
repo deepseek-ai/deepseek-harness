@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write native/system/README.md
-README.md: 5a01754cb96fabbdfd2dbf4f068f19addd7a2347
-README.zh.md: 27d0ca70e28e68e46cb121b8e6b63c56ba5c99d3
+/:
+  en: ed5e9f5d2671e1f4
+  zh: 8fa84f8f1701ce80
+/deepseek-ai-node-addon-system:
+  en: 3a4e2480deeeb684
+  zh: 601bdf2644a2e135
+/deepseek-ai-node-addon-system/summary:
+  en: 2f22378ed387874f
+  zh: 6b3dafd68b4e3a40
+/deepseek-ai-node-addon-system/table-of-contents:
+  en: 31582297cf197373
+  zh: 18bf672282b2b9bf
+/deepseek-ai-node-addon-system/use:
+  en: be1fc16b1df23ca7
+  zh: 59f1492b03768f67
+/deepseek-ai-node-addon-system/support:
+  en: 1636635ae2ba7c2f
+  zh: 489c417969be91e6
+/deepseek-ai-node-addon-system/development:
+  en: 7a9f641c1342e76b
+  zh: c0bdfa33facc9f13
+/deepseek-ai-node-addon-system/development/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: e41c2f4a4edbf459

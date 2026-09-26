@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-04-claude-code-and-codex-subagent-backends.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-04-claude-code-and-codex-subagent-backends.md
-2026-08-04-claude-code-and-codex-subagent-backends.md: d11b200e95cbb0769ad30ae88cb976c7921c80f8
-2026-08-04-claude-code-and-codex-subagent-backends.zh.md: 5899a27bb8ad592d9b83b7d19e681bef375525fb
+/agent-note-claude-code-and-codex-subagent-backends:
+  en: 0f3599cefa53ad5b
+  zh: 988c28cdd9ee4e61
+/agent-note-claude-code-and-codex-subagent-backends/problem:
+  en: dbd5758c1c46b303
+  zh: ca5b8479f4358c9b
+/agent-note-claude-code-and-codex-subagent-backends/decision:
+  en: caf8c74c3466b27a
+  zh: 5b1daf0a738221cd
+/agent-note-claude-code-and-codex-subagent-backends/decision/ownership-and-lifecycle:
+  en: 1c106b8b0063fee2
+  zh: 0a38a1ffbe93086d
+/agent-note-claude-code-and-codex-subagent-backends/codex-provider:
+  en: 5835894b4ac2e182
+  zh: c1fcbd2b2b7e0ea0
+/agent-note-claude-code-and-codex-subagent-backends/claude-code-provider:
+  en: 81a92541d399b155
+  zh: d73a1f20c34982bb
+/agent-note-claude-code-and-codex-subagent-backends/distribution-and-evidence:
+  en: ff6d6216e5ce11dd
+  zh: 6198c006ba8c61e7
+/agent-note-claude-code-and-codex-subagent-backends/alternatives-considered:
+  en: 10b5b282fac03988
+  zh: bf9fb4899f2c8e16
+/agent-note-claude-code-and-codex-subagent-backends/consequences:
+  en: 4154bcdc7ad9ff7c
+  zh: e2bc1f2010bb48a9

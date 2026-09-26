@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-03-root-marker-metadata-failures.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-03-root-marker-metadata-failures.md
-2026-09-03-root-marker-metadata-failures.md: e31ef646d7190a1239684f7b66a118deb9ae1087
-2026-09-03-root-marker-metadata-failures.zh.md: 4b62f4e01ba56074a10dbcb3ae37c4478fe82379
+/agent-note-root-marker-metadata-failures:
+  en: c351be96177b2ea5
+  zh: a094d77aaffd1fbe
+/agent-note-root-marker-metadata-failures/problem:
+  en: 3d88594600ede55b
+  zh: fd9e36f5b72d8aee
+/agent-note-root-marker-metadata-failures/decision:
+  en: 8131fbf06980774f
+  zh: 21a3c48edbe9ab99
+/agent-note-root-marker-metadata-failures/alternatives-considered:
+  en: 2070e244fd8ffc91
+  zh: 31324cd0d5ace0a9
+/agent-note-root-marker-metadata-failures/consequences:
+  en: a459fc1a7a8353a3
+  zh: 144b373b0988b633
+/agent-note-root-marker-metadata-failures/verification:
+  en: 4c912e5effdaedb7
+  zh: 1b28ba3dea9170dd

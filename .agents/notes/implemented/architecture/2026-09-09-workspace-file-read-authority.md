@@ -10,11 +10,11 @@ Workspace Files serves both file content and workspace navigation. Applying work
 
 ## Decision
 
-`read`, `readBytes`, `readAll`, `readRelated`, and `stat` inherit the addressed Session filesystem backend's read authority. The workspace root is the base for relative input paths, not a read boundary; absolute paths and relative paths that leave the workspace are readable when the backend allows them. The service still requires regular files, refuses symlinks, and applies its text and byte caps.
+`read`, `readBytes`, and `stat` inherit the addressed Session filesystem backend's read authority. The workspace root is the base for relative input paths, not a read boundary; absolute paths and relative paths that leave the workspace are readable when the backend allows them. The service still requires regular files, refuses symlinks, and applies its text and byte caps.
 
 `list` and `changes` remain workspace-scoped because they expose workspace navigation and observation rather than a named file read. `list` rejects a directory outside the root, and `changes` filters observations through the backend's workspace-containment predicate.
 
-`readRelated` resolves a relative path from the base file's directory. A `..` path may therefore read JavaScript or CSS outside the workspace when the Session backend permits it. Document Preview packages bounded, statically declared local scripts and stylesheets into an HTML Blob iframe with `sandbox="allow-scripts"`; the opaque origin blocks parent access, but the browser retains normal network access. This exposure is an intentional security trade-off for rendering static generated HTML.
+`readBytes` with `baseFile` resolves a relative path from the base file's directory. A `..` path may therefore read JavaScript or CSS outside the workspace when the Session backend permits it. With [Developer tools](../feature/2026-09-17-developer-tools-settings.md) enabled, Document Preview packages bounded, statically declared local scripts and stylesheets into an HTML Blob iframe with `sandbox="allow-scripts"`; the opaque origin blocks parent access, but the browser retains normal network access. This exposure is an intentional security trade-off for rendering static generated HTML.
 
 The [Workspace Files service](2026-09-05-workspace-files-service.md) owns paging, file checks, listing, and observation. [Document Preview](2026-09-08-document-preview-operations.md) owns which related files are packaged and the iframe sandbox.
 
@@ -26,4 +26,4 @@ The [Workspace Files service](2026-09-05-workspace-files-service.md) owns paging
 
 ## Consequences
 
-Any caller holding a valid Session file address can receive bytes from every regular file that the Session filesystem backend permits it to read, including files outside the workspace. A previewed HTML document can execute packaged local JavaScript and make network requests. Outside files do not produce `changes` frames, so their previews require explicit refresh to observe updates.
+Any caller holding a valid Session file address can receive bytes from every regular file that the Session filesystem backend permits it to read, including files outside the workspace. With Developer tools enabled, a previewed HTML document can execute packaged local JavaScript and make network requests. Outside files do not produce `changes` frames, so their previews require explicit refresh to observe updates.

@@ -40,6 +40,9 @@
     },
     {
       "path": "../../client/web"
+    },
+    {
+      "path": "../../boot/app-boot"
     }
   ]
 }

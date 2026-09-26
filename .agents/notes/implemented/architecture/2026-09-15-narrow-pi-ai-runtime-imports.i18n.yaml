@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-15-narrow-pi-ai-runtime-imports.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-15-narrow-pi-ai-runtime-imports.md
-2026-09-15-narrow-pi-ai-runtime-imports.md: 307d880f3fce22b0e1b96efb9c3a220a511eff15
-2026-09-15-narrow-pi-ai-runtime-imports.zh.md: 139983446a2f0cd5315629c4e0a632f8c125a837
+/agent-note-narrow-pi-ai-runtime-imports:
+  en: d29340bbc4bf0e5b
+  zh: 12a39c4efe53b580
+/agent-note-narrow-pi-ai-runtime-imports/problem:
+  en: 4b2048b356064ada
+  zh: 9926d7c54da73852
+/agent-note-narrow-pi-ai-runtime-imports/decision:
+  en: d425c01ec05ee7f2
+  zh: 8d58d6db913720c4
+/agent-note-narrow-pi-ai-runtime-imports/alternatives-considered:
+  en: c663ce67f3831d3f
+  zh: de280dc149d5a6a0
+/agent-note-narrow-pi-ai-runtime-imports/consequences:
+  en: 9707284a83c1294a
+  zh: c53be621aac00fc9

@@ -1,0 +1,11 @@
+version: 1
+scenario: dynamic-tool-prompt-updates
+profile: headless
+composition: dynamic-tool-prompt-updates
+recording: authored
+header:
+  class: dynamic-tool-prompt-updates
+  pin: true
+  toolSchemasSource: dynamic-tool-updates
+  changes: 2
+  promptChanges: 1

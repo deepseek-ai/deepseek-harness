@@ -2,8 +2,9 @@
 /**
  * PopupSelectView interaction spec: the search input takes
  * focus on open and plain typing filters locally, ↑↓ move the filtered
- * highlight while ←→ stay native to the input, Enter selects single-flight,
- * Escape dismisses back through focusComposer, outside pointerdown dismisses
+ * highlight while ←→ stay native to the input, Enter and Tab select
+ * single-flight, Escape and Shift+Tab dismiss back through focusComposer,
+ * outside pointerdown dismisses
  * plainly, the submitting/failed states render pending text and a working
  * retry button, the highlighted row scrolls into view, and the card height
  * clamps to the space above the composer.
@@ -112,15 +113,60 @@ describe('PopupSelectView', () => {
 
   it('ArrowUp/Down move the filtered highlight; ArrowLeft/Right are left to the native caret', async () => {
     const { search } = await mountOpen()
+    // Open parks the highlight on the current-value row (Light, index 1).
+    expect(screen.getAllByRole('option')[1]!.getAttribute('aria-selected')).toBe('true')
     act(() => { fireEvent.keyDown(search, { key: 'ArrowDown' }) })
     let options = screen.getAllByRole('option')
-    expect(options[1]!.getAttribute('aria-selected')).toBe('true')
+    expect(options[2]!.getAttribute('aria-selected')).toBe('true')
     act(() => { fireEvent.keyDown(search, { key: 'ArrowUp' }) })
     options = screen.getAllByRole('option')
-    expect(options[0]!.getAttribute('aria-selected')).toBe('true')
+    expect(options[1]!.getAttribute('aria-selected')).toBe('true')
     // fireEvent returns false when preventDefault was called: arrow left/right must NOT be intercepted.
     expect(fireEvent.keyDown(search, { key: 'ArrowLeft' })).toBe(true)
     expect(fireEvent.keyDown(search, { key: 'ArrowRight' })).toBe(true)
+  })
+
+  it('Tab accepts the highlighted row like Enter; Shift+Tab dismisses like Escape', async () => {
+    const onSelect = vi.fn()
+    const leaving = await mountOpen({ onSelect })
+    // false = preventDefault ran: the shell holds focus, so Tab may not fall through.
+    // Shift+Tab leaves without settling: no pick, focus back to the composer.
+    expect(fireEvent.keyDown(leaving.search, { key: 'Tab', shiftKey: true })).toBe(false)
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(leaving.focusComposer).toHaveBeenCalledTimes(1)
+    expect(leaving.view.container.childElementCount).toBe(0)
+    cleanup()
+
+    const settling = await mountOpen({ onSelect })
+    // Tab settles the parked highlight — the current value — exactly like Enter.
+    await act(async () => { fireEvent.keyDown(settling.search, { key: 'Tab' }) })
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith(OPTIONS[1], 'ctx-A')
+    expect(settling.consume).toHaveBeenCalledExactlyOnceWith(SEGMENT)
+    expect(settling.focusComposer).toHaveBeenCalledTimes(1)
+    expect(settling.view.container.childElementCount).toBe(0)
+  })
+
+  it('Tab stays the browser\'s while the rows are still loading: no pick, no escape', async () => {
+    const popup = new PopupSelectController<string>({ consume: () => true, focusComposer: () => {} })
+    render(<PopupSelectView popup={popup} t={t} />)
+    await act(async () => { popup.open('theme', spec({ options: () => new Promise(() => {}) }), 'ctx-A', SEGMENT) })
+    const search = screen.getByRole('textbox', { name: '筛选选项' })
+    // Nothing is settleable yet, so the keystroke is not swallowed.
+    expect(fireEvent.keyDown(search, { key: 'Tab' })).toBe(true)
+    expect(document.activeElement).toBe(search)
+    expect(screen.getByText('正在加载选项…')).toBeTruthy()
+  })
+
+  it('Tab stays the browser\'s on a failed load, so the retry stays reachable', async () => {
+    const popup = new PopupSelectController<string>({ consume: () => true, focusComposer: () => {} })
+    render(<PopupSelectView popup={popup} t={t} />)
+    await act(async () => {
+      popup.open('theme', spec({ options: () => Promise.reject(new Error('directory down')) }), 'ctx-A', SEGMENT)
+      await Promise.resolve()
+    })
+    const search = screen.getByRole('textbox', { name: '筛选选项' })
+    expect(fireEvent.keyDown(search, { key: 'Tab' })).toBe(true)
+    expect(screen.getByRole('button', { name: '重试' })).toBeTruthy()
   })
 
   it('scrolls the highlighted row into view when the highlight moves', async () => {
@@ -129,7 +175,7 @@ describe('PopupSelectView', () => {
     act(() => { fireEvent.keyDown(search, { key: 'ArrowDown' }) })
     const options = screen.getAllByRole('option')
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
-    expect(scrollIntoView.mock.instances.at(-1)).toBe(options[1])
+    expect(scrollIntoView.mock.instances.at(-1)).toBe(options[2])
   })
 
   it('caps the card height at the design maximum when the composer sits low enough', async () => {
@@ -144,12 +190,11 @@ describe('PopupSelectView', () => {
     expect(screen.getByLabelText('/theme 选项').style.maxHeight).toBe('188px')
   })
 
-  it('Enter selects the highlighted row: onSelect, consume, close, focusComposer', async () => {
+  it('Enter accepts the parked highlight — the current value on open — then consumes, closes, and refocuses', async () => {
     const seen: Array<{ option: SelectOption; context: string }> = []
     const { view, search, consume, focusComposer } = await mountOpen({
       onSelect: (option, context) => { seen.push({ option, context }) },
     })
-    act(() => { fireEvent.keyDown(search, { key: 'ArrowDown' }) })
     await act(async () => { fireEvent.keyDown(search, { key: 'Enter' }) })
     expect(seen).toEqual([{ option: OPTIONS[1], context: 'ctx-A' }])
     expect(consume).toHaveBeenCalledExactlyOnceWith(SEGMENT)

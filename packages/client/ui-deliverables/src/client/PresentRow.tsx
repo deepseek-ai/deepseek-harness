@@ -1,12 +1,15 @@
 /** Present call status and expandable durable result text. */
 import { useState } from 'react'
-import { DisclosureRow, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconDeliverDocRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { NS } from './locales.ts'
 import css from './PresentRow.module.css'
 
 type PresentRowProps = ToolCallViewProps & PropsLocale<typeof NS>
+
+/* v8 ignore next -- Non-expandable rows never invoke DisclosureRow's required toggle callback. */
+const noop = (): void => undefined
 
 /** Raw arguments can be partial while a call is streaming. */
 function fileNames(raw: string): string {
@@ -25,7 +28,18 @@ function fileNames(raw: string): string {
  * @param props - tool call and localized status copy.
  * @returns a status row with a result disclosure.
  */
-export function PresentRow({ block, inspect, t }: PresentRowProps) {
+export function PresentRow(props: PresentRowProps) {
+  return props.phase === 'preparing' ? <PreparingPresentRow {...props} /> : <StartedPresentRow {...props} />
+}
+
+function PreparingPresentRow({ t }: Extract<PresentRowProps, { phase: 'preparing' }>) {
+  return <div data-tool="present" data-state="preparing" aria-label={t('row.preparing')}>
+    <DisclosureRow title={t('row.title')} icon={<IconDeliverDocRegular size={14} />}
+      open={false} expandable={false} onToggle={noop} running />
+  </div>
+}
+
+function StartedPresentRow({ block, inspect, t }: Exclude<PresentRowProps, { phase: 'preparing' }>) {
   const settled = 'kind' in block
   const state = !settled ? 'running' : block.error?.code === 'interrupted' ? 'stopped' : block.isError ? 'error' : 'ok'
   const args = (settled ? block.call?.argsRaw : block.argsRaw) ?? ''
@@ -34,7 +48,7 @@ export function PresentRow({ block, inspect, t }: PresentRowProps) {
   const [expanded, setExpanded] = useState(false)
   return <div data-tool="present" data-state={state}>
     <DisclosureRow title={t('row.title')}
-      icon={<StateDot state={state === 'running' ? 'ongoing' : state === 'ok' ? 'done' : state === 'stopped' ? 'warning' : 'error'} />}
+      icon={<IconDeliverDocRegular size={14} />}
       open={expanded && details !== ''} expandable={details !== ''} expandOnRowClick keepContentWhenOpen
       onToggle={() => { setExpanded(value => !value) }}
       collapsedContent={<span className={css.summary}><span>{t(`row.${state}`)}</span><span className={css.paths}>{fileNames(args)}</span></span>}>

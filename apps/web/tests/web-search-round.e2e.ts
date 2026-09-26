@@ -84,7 +84,7 @@ async function startSearchServer(captured: CapturedSearchRequest[]): Promise<{ s
     request.setEncoding('utf8')
     request.on('data', (chunk: string) => { body += chunk })
     request.on('end', () => {
-      const parsedBody = JSON.parse(body) as unknown
+      const parsedBody: unknown = JSON.parse(body)
       captured.push({
         path: request.url ?? '',
         apiKey: typeof request.headers['x-api-key'] === 'string' ? request.headers['x-api-key'] : undefined,
@@ -239,9 +239,9 @@ describe('web e2e: shipped default web search', () => {
         event.type === 'tool/result' && event.data.message.source.callId === searchCall.data.callId,
     )
     if (searchResult === undefined) throw new Error('web_search produced no durable result')
-    const content = searchResult.data.message.content[0]
-    expect(content.isError).toBe(false)
-    const rendered = content.content.filter(block => block.type === 'text').map(block => block.text).join('')
+    const message = searchResult.data.message
+    expect(message.isError).toBe(false)
+    const rendered = message.content.filter(block => block.type === 'text').map(block => block.text).join('')
     // The tool interleaves sources from both seam results before applying the
     // combined cap, so each query remains represented in model-visible output.
     for (const source of KEPT_SOURCES) {

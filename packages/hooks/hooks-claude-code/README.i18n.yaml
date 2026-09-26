@@ -1,6 +1,88 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/hooks/hooks-claude-code/README.md
-README.md: 8a9f235019d588306ba33e77cf57e9c8f41e88bd
-README.zh.md: c7e3607b57a719024ce6df9527c40da2d6d5b1f1
+/:
+  en: 3570440302708236
+  zh: 6e4217f2856879a1
+/deepseek-ai-dsh-hooks-claude-code:
+  en: 75bf646e3e8954d0
+  zh: b03df967b39b5b1a
+/deepseek-ai-dsh-hooks-claude-code/summary:
+  en: fd56bd2d9107d126
+  zh: de7e8358840e23b1
+/deepseek-ai-dsh-hooks-claude-code/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-hooks-claude-code/use-this-package:
+  en: af7c3b8bcce24e7f
+  zh: 6b5225e34cbd1c85
+/deepseek-ai-dsh-hooks-claude-code/use-this-package/when-to-choose-it:
+  en: 5fdf4ff17e6d9a2e
+  zh: 82979c137758005d
+/deepseek-ai-dsh-hooks-claude-code/use-this-package/smallest-working-setup:
+  en: b2724490aee1f8e0
+  zh: abbcb0eebb3207a4
+/deepseek-ai-dsh-hooks-claude-code/use-this-package/what-your-hooks-can-do:
+  en: 6c3b126e6607c311
+  zh: 33199f443edb2824
+/deepseek-ai-dsh-hooks-claude-code/use-this-package/how-hooks-run-and-fail:
+  en: 98d13f2e7207e3f3
+  zh: 4e0336b32c2775e9
+/deepseek-ai-dsh-hooks-claude-code/understand-the-implementation:
+  en: d33ddd080880b3f5
+  zh: 64328f5239c26752
+/deepseek-ai-dsh-hooks-claude-code/understand-the-implementation/hook-point-mapping:
+  en: d315f54ec60f8860
+  zh: 53b7a6531d9f4bbb
+/deepseek-ai-dsh-hooks-claude-code/understand-the-implementation/payloads-and-environment:
+  en: 0389b516653c7f45
+  zh: 15ec2182113a9aa4
+/deepseek-ai-dsh-hooks-claude-code/understand-the-implementation/matcher-subjects-and-serial-execution:
+  en: 0f30690502687688
+  zh: 19d4ec653c19f00e
+/deepseek-ai-dsh-hooks-claude-code/understand-the-implementation/detached-runs-and-disposal:
+  en: b04f07b845653345
+  zh: 9159c4a908e292cb
+/deepseek-ai-dsh-hooks-claude-code/understand-the-implementation/design-philosophy:
+  en: e9dc2e482e9a7b50
+  zh: 5fa4e92b75884f93
+/deepseek-ai-dsh-hooks-claude-code/understand-the-implementation/source-map:
+  en: e09d368cbacd0d37
+  zh: 1c5d9060facbe340
+/deepseek-ai-dsh-hooks-claude-code/further-exploration:
+  en: 03aa2ae7d5d5e675
+  zh: 97c723b6905d31de
+/deepseek-ai-dsh-hooks-claude-code/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-hooks-claude-code/model-experience/hook-provided-context:
+  en: 7b2f5028dacd7146
+  zh: e4d226735f7abfc2
+/deepseek-ai-dsh-hooks-claude-code/model-experience/hook-provided-context/what-the-model-sees:
+  en: 7b6edde085633c5f
+  zh: caadcfe8b9364c6d
+/deepseek-ai-dsh-hooks-claude-code/model-experience/hook-provided-context/token-effect:
+  en: b70e3524b160cd63
+  zh: e1011ee18d1bf12b
+/deepseek-ai-dsh-hooks-claude-code/model-experience/hook-provided-context/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: f681f89596f500f5
+/deepseek-ai-dsh-hooks-claude-code/model-experience/blocked-prompt-or-tool-outcome:
+  en: 82be8d95921ef639
+  zh: 11c185068ec18932
+/deepseek-ai-dsh-hooks-claude-code/model-experience/blocked-prompt-or-tool-outcome/what-the-model-sees:
+  en: 1313b662532a2bda
+  zh: 4002d38540286a94
+/deepseek-ai-dsh-hooks-claude-code/model-experience/blocked-prompt-or-tool-outcome/token-effect:
+  en: 7c13e10d2a0e3151
+  zh: 54ffd88bca4fce3a
+/deepseek-ai-dsh-hooks-claude-code/model-experience/blocked-prompt-or-tool-outcome/kv-cache-effect:
+  en: f84fa6c0511cd113
+  zh: f6ce9cdd47a72684
+/deepseek-ai-dsh-hooks-claude-code/known-limitations-and-deferred-work:
+  en: 23ab8cf19542ea03
+  zh: e56f896b4393c1c5
+/deepseek-ai-dsh-hooks-claude-code/known-limitations-and-deferred-work/dev-note:
+  en: b1e9a373ae8b7bb0
+  zh: 30446fe59d5ec8be

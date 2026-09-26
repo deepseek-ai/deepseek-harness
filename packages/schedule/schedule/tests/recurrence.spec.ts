@@ -26,6 +26,7 @@ describe('fixed-rate recurrence properties', () => {
           'property reminder',
           everySeconds,
           BASE,
+          'property reminder',
         )
         const interval = everySeconds * 1_000
         const target = Date.parse(record.scheduledAt)

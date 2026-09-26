@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-31-explicit-agent-runtime-identity.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-31-explicit-agent-runtime-identity.md
-2026-08-31-explicit-agent-runtime-identity.md: f52b8ec116c312a27306fe73dc0bd5b99fcd9039
-2026-08-31-explicit-agent-runtime-identity.zh.md: 6b6fd2f2ea1f1645069264f09fd53c3f71e1d02f
+/agent-note-explicit-agent-identity-at-runtime-boundaries:
+  en: f5e76516df025fc5
+  zh: 462fe05b46e6c1ea
+/agent-note-explicit-agent-identity-at-runtime-boundaries/problem:
+  en: 0b737a098e4e19ce
+  zh: 97b4254c4533114f
+/agent-note-explicit-agent-identity-at-runtime-boundaries/decision:
+  en: dfee8c7c574e0001
+  zh: 3894ffa7beba4348
+/agent-note-explicit-agent-identity-at-runtime-boundaries/verification:
+  en: 85130faaa171036b
+  zh: 06e5e9fab32dbfb4
+/agent-note-explicit-agent-identity-at-runtime-boundaries/alternatives-considered:
+  en: 2c41456509d54d21
+  zh: 5704ee9a2274e300
+/agent-note-explicit-agent-identity-at-runtime-boundaries/consequences:
+  en: 08ab86b89fc3ec6f
+  zh: 3866e6557858543a

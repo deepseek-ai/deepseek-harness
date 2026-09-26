@@ -1,8 +1,12 @@
-.entry { box-sizing: border-box; display: flex; align-items: stretch; width: 100%; overflow: hidden; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: 24px; background: var(--dsw-alias-bg-layer-1); }
-.main { flex: 1; justify-content: flex-start; gap: 14px; min-width: 0; height: auto; min-height: 56px; padding: 14px 20px; border-radius: 24px 0 0 24px; text-align: left; }
-.icon { flex: none; }
-.text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.title { overflow: hidden; color: var(--dsw-alias-label-primary); font-size: 15px; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
-.description { overflow: hidden; color: var(--dsw-alias-label-caption); font-size: 13px; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
-.trigger { align-self: stretch; flex: none; height: auto; width: 44px; padding: 0; border-radius: 0 24px 24px 0; }
-.menu { display: flex; align-self: stretch; flex: none; }
+.entry { position: relative; box-sizing: border-box; display: flex; align-items: center; gap: 14px; width: 100%; min-height: 56px; padding: 14px 20px; overflow: hidden; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsl-guide-entry-radius); background: var(--dsw-alias-bg-layer-1); }
+.main { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; }
+.main:focus-visible { outline-offset: -2px; }
+.icon { position: relative; display: flex; align-items: center; justify-content: center; flex: none; width: 26px; height: 26px; color: var(--dsw-alias-label-secondary); pointer-events: none; }
+.text { position: relative; flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; pointer-events: none; }
+.titleRow { display: flex; align-items: center; min-width: 0; gap: 4px; }
+.title { overflow: hidden; color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
+.description { overflow: hidden; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
+.trigger { flex: none; height: 20px; width: 20px; padding: 0; border-radius: 4px; }
+.trigger svg { width: 14px; height: 14px; color: var(--dsw-alias-label-tertiary); }
+.menu { display: flex; flex: none; pointer-events: auto; }
+.shortcut { position: relative; pointer-events: none; }

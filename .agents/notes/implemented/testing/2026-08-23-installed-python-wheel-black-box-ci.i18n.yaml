@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-23-installed-python-wheel-black-box-ci.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-08-23-installed-python-wheel-black-box-ci.md
-2026-08-23-installed-python-wheel-black-box-ci.md: a23f7ea1b0157ba4ec050069b9fa9a4ea705bfa7
-2026-08-23-installed-python-wheel-black-box-ci.zh.md: 1751430445c6f42cf37fdf9b6164c19b04f01536
+/agent-note-installed-wheel-python-runtime-pull-request-validation:
+  en: e7a926cb3fc87ca2
+  zh: 9d4df26986ee2c25
+/agent-note-installed-wheel-python-runtime-pull-request-validation/problem:
+  en: a8679e0c46ab5294
+  zh: 1c3b4edd7263d8a9
+/agent-note-installed-wheel-python-runtime-pull-request-validation/decision:
+  en: a15c7c13f167e5ac
+  zh: a15c7c13f167e5ac
+/agent-note-installed-wheel-python-runtime-pull-request-validation/decision/installed-artifact-boundary:
+  en: 57b22736a43ce8ef
+  zh: b80a12ade299258a
+/agent-note-installed-wheel-python-runtime-pull-request-validation/decision/keyless-behavior:
+  en: c1b78f6c3cedd4d2
+  zh: 03e267c73af6036b
+/agent-note-installed-wheel-python-runtime-pull-request-validation/decision/real-deepseek-api:
+  en: 0f98f5b5f78b5603
+  zh: 95ee8bafa66d6b1b
+/agent-note-installed-wheel-python-runtime-pull-request-validation/decision/required-targets:
+  en: 4eafb728b9b3d596
+  zh: e127fdfe44659767
+/agent-note-installed-wheel-python-runtime-pull-request-validation/existing-decisions-and-supersession:
+  en: 04aa439d4e607324
+  zh: f4c1d24b6a418cc4
+/agent-note-installed-wheel-python-runtime-pull-request-validation/alternatives-considered:
+  en: 360a7e4cd0f6e1ec
+  zh: 53beb38864ff052d
+/agent-note-installed-wheel-python-runtime-pull-request-validation/consequences:
+  en: 6161aae704abdd20
+  zh: 4c81c9f6d1bef7d4

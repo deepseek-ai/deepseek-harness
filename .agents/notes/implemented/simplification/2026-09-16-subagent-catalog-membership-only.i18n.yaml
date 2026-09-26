@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-16-subagent-catalog-membership-only.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-16-subagent-catalog-membership-only.md
+/agent-note-keep-model-configuration-outside-subagent-catalogs:
+  en: 58a38a2045e8bd43
+  zh: 1a1b02b0a93ebc9e
+/agent-note-keep-model-configuration-outside-subagent-catalogs/problem:
+  en: d817b413b7e38939
+  zh: a4a3a12df1407a34
+/agent-note-keep-model-configuration-outside-subagent-catalogs/decision:
+  en: e46b59047e7cbe7d
+  zh: 2249547faa8e6a72
+/agent-note-keep-model-configuration-outside-subagent-catalogs/alternatives-considered:
+  en: 415a276e8011a2ab
+  zh: d86739d9fbe72fb9
+/agent-note-keep-model-configuration-outside-subagent-catalogs/consequences:
+  en: 6849156944864ab6
+  zh: b74ba42a7d5711d9

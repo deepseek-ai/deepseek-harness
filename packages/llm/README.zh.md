@@ -25,7 +25,9 @@ llm 组提供 harness 的模型调用能力：一个提供方无关的服务，�
 | 包 | 职责 | ctx key |
 |---|---|---|
 | [`llm/`](llm/README.zh.md) | 通过已注册的提供方适配器流式发起一次模型调用，并共享 harness 的消息、块与分片词汇 | `ctx.llm` |
-| [`llm-deepseek/`](llm-deepseek/README.zh.md) | 以 DeepSeek chat-completions 直连、thinking 与图片输入服务 `deepseek-official` 路由 | 注册到 `ctx.llm` |
+| [`llm-deepseek/`](llm-deepseek/README.zh.md) | 共享 Messages 协议、请求配置与模型能力 | — |
+| [`llm-deepseek-api-key/`](llm-deepseek-api-key/README.zh.md) | API key 鉴权与 official 模型发现 | `ctx.llm` |
+| [`llm-deepseek-account/`](llm-deepseek-account/README.zh.md) | 账号 token 鉴权、失效处理与模型发现 | `ctx.llm` |
 | [`llm-pi-ai/`](llm-pi-ai/README.zh.md) | 通过 pi-ai 目录与协议格式服务配置的提供方路由，包括手工声明的网关 | 注册到 `ctx.llm` |
 | [`deepseek-llm-api-extensions/`](deepseek-llm-api-extensions/README.zh.md) | 在官方 DeepSeek 请求上注册具有生命周期归属的顶层字段 | `ctx.deepseekLlmApiExtensions` |
 | [`plugin-package-inventory-deepseek/`](plugin-package-inventory-deepseek/README.zh.md) | 为官方 DeepSeek 请求贡献当前启用的 Loader 包清单 | 贡献 `dsh_plugin_packages` |

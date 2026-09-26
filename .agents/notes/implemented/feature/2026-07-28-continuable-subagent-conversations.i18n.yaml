@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-28-continuable-subagent-conversations.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.md
-2026-07-28-continuable-subagent-conversations.md: af4382a764a59a2d7c02f3cd5feffb32022441f8
-2026-07-28-continuable-subagent-conversations.zh.md: 886e31fa3d88b78f875d51058bb2ec8c525837fe
+/agent-note-continuable-subagents:
+  en: 14c7d31032237174
+  zh: ac2666670a0ca5ab
+/agent-note-continuable-subagents/problem:
+  en: a72071eeedb77402
+  zh: 818d16ce429fd610
+/agent-note-continuable-subagents/decision:
+  en: 445a8c9783aad214
+  zh: 9b5c576bb76100a4
+/agent-note-continuable-subagents/decision/materialization-and-public-operations:
+  en: c7c55e5738a7c0d8
+  zh: 54849d8938f7c77f
+/agent-note-continuable-subagents/decision/durable-session-and-live-activation:
+  en: 92fd7302d4c8f2e5
+  zh: e821764c07070ebc
+/agent-note-continuable-subagents/decision/activation-lifecycle:
+  en: 68215c0ae5628608
+  zh: fdf038decac8f07a
+/agent-note-continuable-subagents/decision/one-inbox-and-follow-up-delivery:
+  en: 065399ce5b1de59e
+  zh: b60af3c37851323e
+/agent-note-continuable-subagents/decision/child-ownership:
+  en: 503fb4311cd94674
+  zh: 376fa98ec4d22b20
+/agent-note-continuable-subagents/decision/adjacent-agent-messaging:
+  en: a6899f5a82d5dceb
+  zh: 0671b89b2dca9c4e
+/agent-note-continuable-subagents/decision/agent-and-human-scheduling:
+  en: 8c861f3846fef1b5
+  zh: 8cc3d668d73c7748
+/agent-note-continuable-subagents/decision/authority-and-recorded-sender-identity:
+  en: f5ba7e9c5339ceef
+  zh: 31ae1b2f57e44463
+/agent-note-continuable-subagents/decision/durability-disposal-and-recovery:
+  en: 276626f3b6d4a080
+  zh: 806f9c4786bc4004
+/agent-note-continuable-subagents/decision/scope:
+  en: a47eed90de23351c
+  zh: 2351e4acbfe4c8e1
+/agent-note-continuable-subagents/alternatives-considered:
+  en: 485aef32231dac62
+  zh: 5e2c103afb3e2d6f
+/agent-note-continuable-subagents/consequences:
+  en: fa5a6b4bf262b8dd
+  zh: 4bffd7b8cc2efae5
+/agent-note-continuable-subagents/consequences/accepted-costs:
+  en: 4d4330ee4d7c3f31
+  zh: 8fd11ba0625fb76d

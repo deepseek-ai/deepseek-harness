@@ -25,10 +25,10 @@ describe('dsh badge assembled snapshot', () => {
       configPath,
       tsconfigPath,
     })
-    const disabledSnapshot = JSON.parse(disabled.stdout) as unknown
-    const enabledSnapshot = JSON.parse(
+    const disabledSnapshot: unknown = JSON.parse(disabled.stdout)
+    const enabledSnapshot: unknown = JSON.parse(
       enabled.stdout.replaceAll(badgeAssetsPath, '{{badgeAssetsPath}}'),
-    ) as unknown
+    )
 
     expect(disabled.stderr).toBe('')
     expect(enabled.stderr).toBe('')

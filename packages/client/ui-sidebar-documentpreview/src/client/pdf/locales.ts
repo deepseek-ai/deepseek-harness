@@ -1,8 +1,11 @@
+import { zoomEn, zoomZh } from '../zoom/locales.ts'
+
 /** Copy owned by the PDF renderer. */
 export const zh = {
+  ...zoomZh,
   title: 'PDF',
   pageImage: 'PDF 第 {page} 页',
-  loading: '正在读取…',
+  loading: '文档渲染中...',
   rendering: '正在绘制页面…',
   failed: '无法显示 PDF：{message}',
   password: '此 PDF 需要密码，暂不支持预览',
@@ -16,9 +19,10 @@ export type PdfLocaleKey = keyof typeof zh
 
 /** English PDF-renderer dictionary. */
 export const en = {
+  ...zoomEn,
   title: 'PDF',
   pageImage: 'PDF page {page}',
-  loading: 'Reading…',
+  loading: 'Rendering document...',
   rendering: 'Rendering page…',
   failed: 'Cannot display PDF: {message}',
   password: 'This PDF requires a password; password-protected previews are not supported.',

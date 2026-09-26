@@ -1,108 +1,11 @@
 {
-  "extends": "../../../tsconfig.base.client.json",
-  "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "lib/types"
-  },
-  "include": [
-    "src"
-  ],
+  "files": [],
   "references": [
     {
-      "path": "../../../vendor/cordis"
+      "path": "./tsconfig.host.json"
     },
     {
-      "path": "../../../vendor/schemastery"
-    },
-    {
-      "path": "../../api/remotes/tsconfig.client.json"
-    },
-    {
-      "path": "../../api/session-controller/tsconfig.client.json"
-    },
-    {
-      "path": "../../api/workspace-controller/tsconfig.client.json"
-    },
-    {
-      "path": "../../attachment/attachment"
-    },
-    {
-      "path": "../../compaction/compaction"
-    },
-    {
-      "path": "../../core/agent"
-    },
-    {
-      "path": "../../core/session"
-    },
-    {
-      "path": "../../core/tools"
-    },
-    {
-      "path": "../../interaction/commands"
-    },
-    {
-      "path": "../../llm/llm"
-    },
-    {
-      "path": "../../llm/llm-retry"
-    },
-    {
-      "path": "../../llm/token-meter"
-    },
-    {
-      "path": "../../util/workspace-path"
-    },
-    {
-      "path": "../../session/session-stats"
-    },
-    {
-      "path": "../../session/session-turn-outline"
-    },
-    {
-      "path": "../../settings/settings"
-    },
-    {
-      "path": "../locale"
-    },
-    {
-      "path": "../store"
-    },
-    {
-      "path": "../ui-approval"
-    },
-    {
-      "path": "../ui-conversation"
-    },
-    {
-      "path": "../ui-layout"
-    },
-    {
-      "path": "../ui-primitives"
-    },
-    {
-      "path": "../ui-renderer"
-    },
-    {
-      "path": "../ui-session"
-    },
-    {
-      "path": "../ui-sidebar-right"
-    },
-    {
-      "path": "../ui-settings"
-    },
-    {
-      "path": "../ui-slots"
-    },
-    {
-      "path": "../ui-workspace"
-    },
-    {
-      "path": "../ui-sidebar-documentpreview"
-    },
-    {
-      "path": "../ui-input-trigger"
+      "path": "./tsconfig.client.json"
     }
   ]
 }

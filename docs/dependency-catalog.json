@@ -529,11 +529,11 @@
       ]
     },
     {
-      "name": "@deepseek-ai/dsh-agent-presets",
+      "name": "@deepseek-ai/dsh-agent-preset-registry",
       "version": "0.1.5-rc.2",
       "installations": [
         {
-          "location": "node_modules/@deepseek-ai/dsh-agent-presets",
+          "location": "node_modules/@deepseek-ai/dsh-agent-preset-registry",
           "direct": false,
           "optional": false,
           "peer": false

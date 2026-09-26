@@ -1,43 +1,23 @@
 - banner:
-  - navigation "Session hierarchy":
-    - 'button "Run two shell commands: wait" [disabled]'
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - navigation "Session hierarchy": "Run two shell commands: wait"
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
 - text: "Run two shell commands: wait for cancellation, then write skipped.txt. {{clock}}"
-- button "Copy":
-  - img
-- button "Context injection @deepseek-ai/dsh-system-prompt":
-  - img
-  - img
-  - text: Context injection @deepseek-ai/dsh-system-prompt
-- 'button "Failed Bash Error: tool call aborted" [expanded]':
-  - img
-  - text: "Failed Bash Error: tool call aborted"
+- button "Copy"
+- status: Stopped
+- button "Stopped" [disabled] [expanded]
+- button "Ran commands" [expanded]
+- 'button "Failed Bash Error: tool call aborted" [expanded]'
 - text: "IN { \"command\": \"node -e \\\"const fs=require('node:fs'); fs.writeFileSync('started.tmp', 'started'); fs.renameSync('started.tmp', 'started.txt'); setInterval(() => {}, 1000)\\\"\", \"description\": \"Wait until cancellation\" } OUT Error: tool call aborted"
 - button "Inspect"
-- 'button "Failed Bash Error: tool call aborted before dispatch"':
-  - img
-  - text: "Failed Bash Error: tool call aborted before dispatch"
+- 'button "Failed Bash Error: tool call aborted before dispatch"'
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Full access"': Full access
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Send message" [disabled]
-- button "1 turns 1 steps":
-  - img
-  - text: 1 turns 1 steps
-- button "20 tok · Cache hit 0%":
-  - img
-  - text: 20 tokCache hit 0%
+- button "1 turns 1 steps"
+- button "20 tok · Cache hit 0%": 20 tokCache hit 0%

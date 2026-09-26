@@ -1,7 +1,10 @@
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import type {
+  ConversationGroupData, ConversationGroupedView, ConversationGroupInput,
+} from './groups.ts'
 
-/** Definition-local identity and lifecycle role extracted from one event. */
+/** Definition-local identity; start permits initialization when no earlier start is present. */
 export interface ConversationMatchResult {
   readonly id: string
   readonly role: 'start' | 'update'
@@ -115,8 +118,8 @@ interface ConversationMatchOf<
   readonly location: ConversationLocation
 }
 
-/** One scalar event accepted as a Context's unique start. */
-export type ConversationStartMatch = ConversationMatchOf<SessionEvent, 'start'>
+/** A durable or transient event that can initialize its Context. */
+export type ConversationStartMatch = ConversationMatchOf<SessionEventLike, 'start'>
 
 /** One event accepted by a Definition, with its lifecycle role and resolved Location. */
 export type ConversationMatch =
@@ -141,6 +144,14 @@ export interface ConversationViewSnapshotStore {
   get<Target extends Extract<keyof ConversationViewSnapshotMap, string>>(
     target: Target,
   ): ConversationViewSnapshotMap[Target] | undefined
+  /**
+   * Read grouping for an activated target without activating another target.
+   * @param target - registered View target.
+   * @returns its grouped reader, when a Group Definition is active.
+   */
+  grouped<Target extends string>(
+    target: Target,
+  ): ConversationGroupedView<ConversationGroupData<Target>> | undefined
 }
 
 /** Immutable public view of an assembled business Context. */
@@ -193,7 +204,7 @@ export interface ConversationNodeDefinition<State = unknown> {
    */
   match(event: SessionEventLike): ConversationMatchResult | null
   /**
-   * Create State from the unique start Match.
+   * Create State from the earliest currently loaded start Match.
    * @param context - complete evidence currently collected for the Context.
    * @param match - the start Match.
    * @param reader - strictly-backward read-only Context lookup.
@@ -205,9 +216,9 @@ export interface ConversationNodeDefinition<State = unknown> {
     reader: ConversationContextReader,
   ): State
   /**
-   * Apply one post-start update Match.
+   * Apply a later Match, including another event marked start.
    * @param context - Context with its current State.
-   * @param match - update Match in ascending log order.
+   * @param match - subsequent Match in ascending event order.
    * @returns the State adopted by the engine.
    */
   update(
@@ -261,6 +272,7 @@ export interface ConversationViewBuilder<Node extends ConversationViewNode = Con
   replace(input: {
     readonly nodes: readonly Node[]
     readonly timeline: ConversationTimelineSnapshot
+    readonly changedTurns?: readonly number[]
   }): Snapshot
   /**
    * Apply only Nodes whose materialized values changed in this transaction.
@@ -270,12 +282,23 @@ export interface ConversationViewBuilder<Node extends ConversationViewNode = Con
   apply(input: {
     readonly upserts: readonly Node[]
     readonly timeline: ConversationTimelineSnapshot
+    readonly changedTurns?: readonly number[]
   }): Snapshot
+  /** @returns the latest target-processed Node inputs; required only for a grouped target. */
+  groupInput?(): ConversationGroupInput<Node>
+  /** Publish local sources after all target snapshots and grouping results have been installed. */
+  publish?(): void
 }
 
 /** Registry contribution that creates an isolated builder when a Session first uses this target. */
 export interface ConversationViewDefinition<Node extends ConversationViewNode = ConversationViewNode, Snapshot = unknown> {
   readonly target: string
+  /**
+   * Address a tool call in this target's inspector; absent for non-inspection views.
+   * @param callId - tool-call identity from the Session.
+   * @returns the target's opaque focus identity.
+   */
+  toolCallFocus?(callId: string): string
   /** @returns a new Session-owned incremental builder. */
   create(): ConversationViewBuilder<Node, Snapshot>
   /**

@@ -73,7 +73,9 @@ mock.streams.fail('session/follow', new Error('gone'))
 await mock.streams.drained('session/follow')
 ```
 
-A failed stream rejects the consumer's next read with the given `Error`. Consumer cancellation (the opening signal or an early iterator `return()`) aborts `StreamHandle.signal`, ends the iteration without throwing, and logs the stream as `cancelled`.
+A failed stream rejects the consumer's next read with the given `Error`. Consumer cancellation (the opening signal or an early iterator `return()`) aborts `StreamHandle.signal`, ends the iteration without throwing, and logs the stream as `cancelled`. `StreamHandle.uplink` is what the script reads as the Client's uplink: through `rpc.open` it is the carrier's iterable; for a direct `mock.remote.<namespace>.<method>(...)` call it is fed by the returned handle, which is the `RemoteStreamHandle` a generated method returns (iterate it for the downlink, `send()` and `end()` feed the uplink, `dispose()` cancels the stream); `send()` rejects a non-lossless JSON item as the real handle does, and the uplink it owns closes once the stream settles, is cancelled, or the consumer leaves, so a later `send()` throws. The mock function is called with the method's own arguments only, so the uplink never appears in call assertions or logged args.
+
+A fake that stands in for a generated stream method returns the `RemoteStreamHandle` the generated method does. `streamHandle(source)` types an `AsyncIterable` as that handle with inert `send`, `end`, and `dispose`; `streamMethod<M>(generator)` lifts an async generator function written for the method's arguments into the method's own signature, for `vi.fn<M>()` and `mockImplementation`.
 
 ### Connect a client
 
@@ -108,7 +110,7 @@ A failed stream rejects the consumer's next read with the given `Error`. Consume
 | [`src/index.ts`](src/index.ts) | Public face re-exports |
 | [`src/remote-mock.ts`](src/remote-mock.ts) | `RemoteMock`: default responses, native mocks, Connection dispatch, controlled streams and missing-response checks; `ok` |
 | [`src/remote-proxy.ts`](src/remote-proxy.ts) | Namespace/method lookup and generated-map mock types |
-| [`src/streams.ts`](src/streams.ts) | `frames` / `openStream` scripts and `MockStream` (handle + `AsyncIterable`) |
+| [`src/streams.ts`](src/streams.ts) | `frames` / `openStream` scripts, `streamHandle` / `streamMethod` fake typing, and `MockStream` (handle + `AsyncIterable`) |
 | [`src/log.ts`](src/log.ts) | Log store with the shared `seq` counter |
 | — | No runtime invariant companion is published; this test-support library owns no production event stream or mutable process state, and its behavior is exercised by its package tests. |
 
@@ -130,7 +132,7 @@ None; this package neither assembles nor sends a provider request.
 <a id="known-limitations-and-deferred-work"></a>
 
 - **In-process carrier only** — `rpc` serves a Connection instance in the same realm; no HTTP or WebSocket carrier for browser-lane specs is provided.
-- **Values cross by reference** — answers and stream items reach the client unserialized, so a non-JSON value that the real wire would reject passes through unchanged.
+- **Values cross by reference** — answers and downlink items reach the client unserialized, so a non-JSON downlink value that the real wire would reject passes through unchanged; only the handle's `send()` applies the real uplink check.
 - **Values are not checked** — a unary answer must be the result the caller reads (`{ ok, value }` or `{ ok: false, error }`); the mock passes it through unchanged and does not check those fields.
 - **No payload matching** — rules match on endpoint only; discriminate on business arguments inside a handler.
 - **Native stream overrides own their iterable** — an override returning its own iterable bypasses scripted-stream logs, `requests`, `opened`, `drained`, and `push` / `end` / `fail`; the caller also owns cancellation. Native call assertions still work. Use a registered stream script when a scenario needs those controls.

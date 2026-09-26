@@ -35,7 +35,7 @@ kind: "package-reference"
 
 | 模式 | 文件影响 |
 |---|---|
-| `read-only`（默认） | 写入被拒绝；由于受限令牌必须保留 Everyone，边界仍是不完整的 |
+| `read-only`（默认） | 写入被拒绝；边界仍受共享的硬链接、读取不受限与 AppContainer ACL 限制 |
 | `workspace-write` | 只能写入策略的工作区根目录加一个私有临时目录；spawn 前 `TMP`/`TEMP` 会被重写到该目录 |
 | `danger-full-access` | 不作限制；绝不咨询提供方，结果携带 `sandbox: { mode, denied: false }` |
 
@@ -75,20 +75,20 @@ kind: "package-reference"
 
 ### 设计概念
 
-本执行器是 `dsh-bash-sandbox` 的 pwsh 孪生：它继承 `dsh-pwsh-local` 的进程机制，消费其 argv 级 seam（`argv()`/`runArgv()`/`startArgv()`/`onProcessDone()`），并在 spawn 前通过 `ctx.sandbox.confine()` 等待精确的 pwsh 调用完成限制准备。前台准备使用本地执行器与命令共享的 deadline；在 spawn 前超时不会声明 enforcement 事实。后台准备只跟随调用方信号。两条路径都在 spawn 前重新检查取消状态。隔离实体本身是平台无关的——沙箱 seam 解析到平台的 runner——而本包只负责 pwsh 侧：所选模式、强制执行完整度，以及结果上的拒绝分类。
+本执行器是 `dsh-bash-sandbox` 的 pwsh 孪生：它继承 `dsh-pwsh-local` 的进程机制，消费其 argv 级 seam（`argv()`/`executeArgv()`/`onProcessDone()`），并在 spawn 前把精确的 pwsh 调用经 `ctx.sandbox.confine()` 包装。隔离实体本身是平台无关的——沙箱 seam 解析到平台的 runner——而本包只负责 pwsh 侧：所选模式、强制执行完整度，以及结果上的拒绝分类。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：`SandboxPwshExecutor`、按进程保留事实、run/start 包装 |
+| [`src/index.ts`](src/index.ts) | 插件入口：`SandboxPwshExecutor`、按进程保留事实、执行准备 |
 | [`src/helpers.ts`](src/helpers.ts) | 拒绝、runner 失败与 runner spawn 失败分类 |
 | — | 不发布运行时不变式伴生入口；除所属 seam 所执行的约定外，本包不暴露独立事件序列或可变数据关系；分类可在结果中观察。 |
 | `tests/` | 跨 ACL 与平台 runner 演练的行为 |
 
 ### 主要流程
 
-对受限模式，`resolve()` 标记每次调用的策略；`run` 与 `start` 把 pwsh argv 经提供方包装，再把受限 argv 交给继承的子进程路径。结算时执行器对结果分类：runner 失败优先于拒绝（命令从未运行），stderr 携带 runner 拒绝方言的失败运行报告 `denied: true`，每次受限运行都携带模式与强制执行事实。`danger-full-access` 完全绕过提供方，并标记 `denied: false`。
+对受限模式，`resolve()` 标记每次调用的策略；`execute` 把 pwsh argv 经提供方包装，再把受限 argv 交给继承的子进程路径。结算时执行器对结果分类：runner 失败优先于拒绝（命令从未运行），stderr 携带 runner 拒绝方言的失败运行报告 `denied: true`，每次受限运行都携带模式与强制执行事实。`danger-full-access` 完全绕过提供方，并标记 `denied: false`。
 
 ### 不变式
 
@@ -140,7 +140,7 @@ kind: "package-reference"
 
 - **Windows 上读不受限**——ACL runner 只限写；读边界文档在 `@deepseek-ai/dsh-sandbox-windows-acl`。
 - **Windows workspace-write 的临时权限按每个活跃的会话/工作区对私有**——无 agent（智能体）的调用每次都获得一个新的私有目录；环境临时根目录绝不会被授权，runner 会在 spawn 前将 `TMP`/`TEMP` 重写为该私有目录。
-- **Windows read-only 不授予任何显式可写根目录，但仍为部分强制执行**——受限令牌必须保留 Everyone；DACL 向 Everyone 授予写访问的对象——包括以兼容方式打开的 NUL 设备——仍构成环境权限来源，而 PowerShell 的 `> $null` 重定向仍可工作，且不会打开 NUL。
+- **Windows read-only 不授予任何显式可写根目录，但仍为部分强制执行**——NTFS 硬链接会把同一文件对象别名为多个路径、读取仍不受限，且被其他 AppContainer 工具以包 SID 标记过的目录树对 Low 完整性子进程不可读。NUL 在两种模式下仍可写，因为设备 DACL 向 Everyone 授予写权限且不带更高的标签；PowerShell 的 `> $null` 重定向仍然工作，且不会打开 NUL。
 
 <a id="dev-note"></a>
 ### 开发备注

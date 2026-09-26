@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/document/office-to-pdf/README.md
+/:
+  en: c3e6e5964cf9df7d
+  zh: a3874301c5f7745f
+/deepseek-ai-dsh-office-to-pdf:
+  en: fc7d38b1fd8bd1d0
+  zh: 580c51545286af31
+/deepseek-ai-dsh-office-to-pdf/summary:
+  en: 5df2262ee89a5601
+  zh: c999e9e5574ee169
+/deepseek-ai-dsh-office-to-pdf/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: a134331a31395608
+/deepseek-ai-dsh-office-to-pdf/use-this-package:
+  en: 52227a5bd93ee125
+  zh: 5b48a8dc2db7c3b9
+/deepseek-ai-dsh-office-to-pdf/understand-the-implementation:
+  en: 2cd10fdd5204d64a
+  zh: 769a79b7d684fda4
+/deepseek-ai-dsh-office-to-pdf/further-exploration:
+  en: 4d5e635227d14056
+  zh: 6c72a032786acd55
+/deepseek-ai-dsh-office-to-pdf/model-experience:
+  en: b03ae5780f8495eb
+  zh: 2a5428663141e3db
+/deepseek-ai-dsh-office-to-pdf/model-experience/kv-cache-effect:
+  en: e77332dfb6691852
+  zh: 2d7ce43f908b35ef
+/deepseek-ai-dsh-office-to-pdf/known-limitations-and-deferred-work:
+  en: 6cd56e2c8255ffd9
+  zh: 75891a4136f929e0
+/deepseek-ai-dsh-office-to-pdf/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

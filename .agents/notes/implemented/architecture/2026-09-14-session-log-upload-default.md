@@ -23,6 +23,6 @@ This supersedes only the opt-in default in the [request-extension decision](2026
 
 ## Consequences
 
-Eligible requests send the complete unaccepted canonical log suffix, including message text, tool arguments and results, workspace paths, and feedback, to the resolved DeepSeek endpoint or configured gateway. No prompt tokens or model-visible content are added. Request bodies can grow substantially, and provider rejection still fails the request. OTel remains independent; disabling OTel does not disable this contribution.
+Eligible requests send the unaccepted canonical log suffix, up to `maxBytes` per request under the [bounded-upload decision](2026-09-24-bounded-session-log-upload.md), including message text, tool arguments and results, workspace paths, and feedback, to the resolved DeepSeek endpoint or configured gateway. No prompt tokens or model-visible content are added. Request bodies grow by up to that limit, and provider rejection still fails the request. OTel remains independent; disabling OTel does not disable this contribution.
 
 Configuration tests cover default-on and explicit overrides with and without test environment markers. Both DeepSeek protocol Loader cases observe the default request field and recorded acceptance watermark, and explicit-off cases observe their absence. Existing headless, ACP, Web, and SDK recordings validate their declared upload policies without rewriting committed Session generations.

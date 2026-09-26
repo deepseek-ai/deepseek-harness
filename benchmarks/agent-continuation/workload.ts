@@ -69,7 +69,7 @@ export function syntheticHistory(turns: number): SessionEvent[] {
     session.append('turn/start', { turn })
     session.append('step/start', { turn, step: 1 })
     if (turn === 1) session.append('system/message', {
-      turn, step: 1, message: { id: MessageId('system-head'), role: 'system', content: [], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } },
+      turn, step: 1, message: { id: MessageId('system-head'), role: 'system', content: [], source: { kind: 'system-prompt' } },
     }, { surfaceOp: 'append' })
     session.append('user/message', {
       id: MessageId('prompt-' + String(turn)), role: 'user',
@@ -91,8 +91,9 @@ export function syntheticHistory(turns: number): SessionEvent[] {
         session.append('tool/result', {
           turn, step,
           message: {
-            id: MessageId('result-' + block.id), role: 'user', source: { kind: 'tool', callId: block.id },
-            content: [{ type: 'tool-result', toolCallId: block.id, content: [{ type: 'text', text: resultText(turn) }], isError: false }],
+            id: MessageId('result-' + block.id), role: 'tool', toolCallId: block.id, isError: false,
+            source: { kind: 'tool', callId: block.id },
+            content: [{ type: 'text', text: resultText(turn) }],
           },
         }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
       }

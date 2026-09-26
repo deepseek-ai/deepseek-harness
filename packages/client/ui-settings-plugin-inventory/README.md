@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The **Plugin list** tab lets Web users inspect plugins without changing their configuration. It lists agent presets, then the global inventory; both start collapsed and open on demand or during a search. Cards retain the package name as the primary title, identify instances by stable entry id, and expose enablement, source details, runtime status, disabled conditions, and discovery failures; preset-provided global entries name their presets. Search covers both groups and points to matches in other presets. The tab handles loading, empty, no-match, failure, and retry states without exposing transport details, and still shows the global inventory without a preset roster.
+The **Plugin list** tab lets Web users inspect plugins without changing their configuration. It lists agent presets, then the global inventory; both start collapsed and open on demand or during a search. Cards show localized titles and descriptions when available, identify instances by stable entry id, and expose enablement, source details, runtime status, disabled conditions, and discovery failures; preset-provided global entries name their presets. Search covers both groups and points to matches in other presets. The tab handles loading, empty, no-match, failure, and retry states without exposing transport details, and still shows the global inventory without a preset roster.
 
 ## Table of Contents
 
@@ -31,7 +31,9 @@ A failed installation with pending pnpm build permissions offers **Allow these s
 
 ### Reading a card
 
-Each collapsed card uses the short module name as its primary title, shows the stable entry id underneath, and carries a small enablement tag; enabled entries also show a colored root-fiber status dot. A composition-generated subtitle omits its leading `include:` marker, while hover, search, the accessible name, and expanded details retain the complete id. Long entry ids truncate in the row and remain available on hover. Expanding one card reveals the declared entry id, the full module specifier, and the state facts: a preset row names the preset it comes from, its runtime status when the composition is live, and its disable condition when it carries one; a preset-provided global row explains that agent presets provide it per session, names the presets that enable it, and offers a jump into the preset group. Preset names resolve through the shared `presetDisplayText` fold (`dsh-agent-presets/display`) over [`ui-agent-preset`](../ui-agent-preset/README.md)'s dictionaries: shipped presets follow the active locale while user-authored ones keep their own metadata, so an English surface never echoes the preset files' Chinese names. Search filters both groups by module name and entry id.
+Each collapsed card uses the plugin's localized title and description when available. Settings shortens literal package-name or module-name fallbacks by removing the npm scope and the `cordis:`, `cordis-plugin-`, or `dsh-`/`dsh-host-`/`dsh-client-` prefix; locale titles remain unchanged. The Host supplies locale and package-field fallbacks in `meta`; the Client selects the current language. Full module specifiers remain available in details and search. Missing descriptions are omitted, and metadata diagnostics appear with the card. This compact naming applies only to Settings, not the sidebar's Plugins page.
+
+The stable entry id appears underneath the title, alongside a small enablement tag; a colored root-fiber status dot marks only the phases the tag cannot state: `pending` maps to idle, while `loading` and `unloading` map to ongoing. An `active` or `failed` fiber shows its tag without a dot. A composition-generated subtitle omits its leading `include:` marker, while hover, search, the accessible name, and expanded details retain the complete id. Long entry ids truncate in the row and remain available on hover. Expanding one card reveals the declared entry id, the full module specifier, and the state facts: a preset row names the preset it comes from, its runtime status when the composition is live, and its disable condition when it carries one; a preset-provided global row explains that agent presets provide it per session, names the presets that enable it, and offers a jump into the preset group. Preset names resolve through the shared `presetDisplayText` fold (`dsh-agent-preset-registry/display`) over [`ui-agent-preset`](../ui-agent-preset/README.md)'s dictionaries: shipped presets follow the active locale while user-authored ones keep their own metadata, so an English surface never echoes the preset declarations' Chinese names. Search filters both groups by localized title and description, module name, and entry id.
 
 ### The preset switcher
 
@@ -39,7 +41,7 @@ The switcher is the same selector-pill-plus-menu control the General settings ro
 
 ### Retrying a failed read
 
-A failed read renders a generic failure state inside the tab; retrying re-runs the lazy `list()` call without exposing transport details.
+A failed read renders the shared error marker inside the tab; loading and current-page synchronization use the shared ongoing loader. Retrying re-runs the lazy `list()` call without exposing transport details.
 
 The Plugin list also shows synchronization failures on the current page. Its retry reapplies the latest client graph without changing Host enablement or refreshing the page.
 

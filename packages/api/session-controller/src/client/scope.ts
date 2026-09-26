@@ -1,20 +1,4 @@
-/**
- * Client Agent-scope primitive: mint a Cordis context tagged with the owning
- * Agent's identity. The mechanism mirrors the host `dsh-scope` architecture
- * (no-op plugin fiber + context tag + `Context.filter` routing predicate);
- * the shape deliberately diverges: the filter lives on the actx itself
- * instead of a separate carrier object, so scoped dispatch is plain cordis —
- * `actx.bail(actx, event, payload)` / `actx.emit(actx, ...)` — with no
- * wrapper. The host needs a detached carrier because its dispatch subject is
- * the business Agent object; client scope events carry only ids, so the
- * actx is the natural subject. The second divergence stands: the scope key
- * is the branded `SessionId` (value compared), not an object identity — the
- * agent and its session share one id (1:1, same axis; no separate AgentId
- * brand), and a client scope's identity IS that wire id. Third divergence,
- * deliberate: the client scopes the Agent IDENTITY, not a live Agent object
- * — a cold session's host Agent is already disposed while its client actx
- * stays alive for history viewing.
- */
+/** Client scope generations route local events independently of Host Agent residency. */
 import { Context as CordisContext } from '@deepseek-ai/cordis'
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
@@ -29,11 +13,15 @@ export type AgentContext = Omit<Context, 'remote'> & {
 /** Context tag written by {@link createScope}. */
 const kScope = Symbol('dsh.client.scope')
 
+interface ScopeIdentity {
+  readonly sessionId: SessionId
+}
+
 /** A minted Agent scope and its disposal boundary. */
 export interface AgentScopeHandle {
   /**
    * Tagged context: scope-owned registrations and scoped dispatch both go
-   * through it (passing it as the dispatch subject routes to this agent's
+   * through it (passing it as the dispatch subject routes to this generation's
    * tagged listeners plus every untagged one).
    */
   ctx: AgentContext
@@ -47,19 +35,20 @@ function agentScope(): void {}
 /**
  * Mint an Agent scope under `ctx`: a no-op plugin fiber whose context
  * carries the agent tag and the dispatch filter — untagged listeners are
- * admitted globally, tagged listeners only for a matching agent.
+ * admitted globally, tagged listeners only for the same Client generation.
  * Registrations through the returned ctx dispose with the fiber.
  * @param ctx - client root context the scope fiber mounts under.
- * @param key - owning agent identity (the routing tag; agent id === session id).
+ * @param key - durable Session identity carried by this generation.
  * @returns the tagged context and its backing fiber.
  */
 export function createScope(ctx: Context, key: SessionId): AgentScopeHandle {
   const fiber = ctx.plugin(agentScope)
+  const identity: ScopeIdentity = { sessionId: key }
   const scoped = fiber.ctx.extend({
-    [kScope]: key,
+    [kScope]: identity,
     [CordisContext.filter](listenerCtx: Context): boolean {
-      const tag = scopeOf(listenerCtx)
-      return tag === undefined || tag === key
+      const tag = scopeIdentityOf(listenerCtx)
+      return tag === undefined || tag === identity
     },
   }) as AgentContext
   return {
@@ -74,5 +63,14 @@ export function createScope(ctx: Context, key: SessionId): AgentScopeHandle {
  * @returns its agent identity (the session id), or undefined for root contexts.
  */
 export function scopeOf(ctx: Context): SessionId | undefined {
-  return (ctx as Context & { [kScope]?: SessionId })[kScope]
+  return scopeIdentityOf(ctx)?.sessionId
+}
+
+/**
+ * Read the exact generation identity inherited by a Client Context.
+ * @param ctx - scoped or root Client Context.
+ * @returns the generation identity, or undefined for an unscoped Context.
+ */
+export function scopeIdentityOf(ctx: Context): ScopeIdentity | undefined {
+  return (ctx as Context & { [kScope]?: ScopeIdentity })[kScope]
 }

@@ -56,6 +56,8 @@ export interface ApprovalPresentationRequest {
   readonly callId?: ToolCallId
   /** Human-readable reason supplied by the requester. */
   readonly reason?: string
+  /** Localized presentation copy; the audit reason remains unchanged. */
+  readonly displayReason?: { readonly en: string; readonly [locale: string]: string }
   /** Cancellation projected from the Host waterfall. */
   readonly signal?: AbortSignal
 }
@@ -64,6 +66,9 @@ export interface ApprovalPresentationRequest {
 export type ApprovalDecision = 'allowed-once' | 'rejected'
 
 let nextApprovalKey = 0
+
+/** Domain discriminator literal carried by {@link PendingApproval.kind}. */
+export type ApprovalInteractionKind = 'approval'
 
 /** One answerable Client presentation of a pending Host waterfall. */
 export class PendingApproval {
@@ -77,6 +82,8 @@ export class PendingApproval {
   readonly callId: ToolCallId | undefined
   /** Human-readable reason supplied by the asker. */
   readonly reason: string | undefined
+  /** Localized presentation copy, when supplied by the asker. */
+  readonly displayReason: ApprovalPresentationRequest['displayReason']
   /** Result returned by the Remote Event listener to the Host waterfall. */
   readonly result: Promise<ApprovalDecision>
 
@@ -98,6 +105,7 @@ export class PendingApproval {
     this.toolName = request.toolName
     this.callId = request.callId
     this.reason = request.reason
+    this.displayReason = request.displayReason
     const completion = Promise.withResolvers<ApprovalDecision>()
     this.result = completion.promise
     this.#resolve = completion.resolve
@@ -113,6 +121,14 @@ export class PendingApproval {
     this.#onAbort = onAbort
     request.signal.addEventListener('abort', onAbort, { once: true })
     if (request.signal.aborted) onAbort()
+  }
+
+  /**
+   * Availability of this pending request after answer or withdrawal.
+   * @returns whether this request can still accept a decision.
+   */
+  get answerable(): boolean {
+    return !this.#settled
   }
 
   /**
@@ -159,9 +175,20 @@ export class PendingApproval {
   }
 }
 
+/** Locale lookup supplied by the approval registration. */
+export interface ApprovalInjected {
+  /**
+   * Resolve requester-owned copy in the current UI language.
+   * @param reason - localized presentation text with an English fallback.
+   * @returns text for the active UI language.
+   */
+  resolveReason(reason: NonNullable<ApprovalPresentationRequest['displayReason']>): string
+}
+
 /** Full props of the approval composer takeover. */
 export type ApprovalComposerProps =
   PropsRuntime<'conversation.composer'>
   & PropsRenderSlots<'conversation.approval.detail'>
   & { matched: PendingApproval }
   & PropsLocale<'approval'>
+  & ApprovalInjected

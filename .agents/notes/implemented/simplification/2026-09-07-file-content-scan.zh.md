@@ -6,11 +6,11 @@ Status: implemented
 
 ## Problem
 
-每次模型分发都检查完整消息内容中的文件，包括嵌套工具结果。请求历史 CPU profile 将 23.540 ms 自身时间归于 `contentHasFile`，将 5.584 ms 归于其回调。即使[循环自有冻结证据](2026-09-06-agent-request-freeze-evidence.zh.md)消除了重复请求冻结，这次遍历仍然必需。两次抽样的 master 修订与实测的 V3 集成修订 的 LLM 热点源码完全相同；这些观察不能证明 PR 因果关系。
+每次模型分发都检查完整消息内容中的文件，包括 tool-role 结果内容。请求历史 CPU profile 将 23.540 ms 自身时间归于 `contentHasFile`，将 5.584 ms 归于其回调。即使[循环自有冻结证据](2026-09-06-agent-request-freeze-evidence.zh.md)消除了重复请求冻结，这次遍历仍然必需。两次抽样的 master 修订与实测的 V3 集成修订 的 LLM 热点源码完全相同；这些观察不能证明 PR 因果关系。
 
 ## Decision
 
-[`contentHasFile`](../../../../packages/llm/llm/src/content.ts) 使用直接迭代，替代递归的 `Array.some` 回调。它保留提前退出、嵌套工具结果遍历，以及其他块类型返回 false 的行为。它不存储身份、校验结果或冻结证明。图片检测、文件投影和请求构建保持既有行为。[请求冻结证据](2026-09-06-agent-request-freeze-evidence.zh.md)拥有请求历史预算。
+[`contentHasFile`](../../../../packages/llm/llm/src/content.ts) 使用直接迭代，替代递归的 `Array.some` 回调。它保留提前退出、tool-role 结果遍历，以及其他块类型返回 false 的行为。它不存储身份、校验结果或冻结证明。图片检测、文件投影和请求构建保持既有行为。[请求冻结证据](2026-09-06-agent-request-freeze-evidence.zh.md)拥有请求历史预算。
 
 ## Measurement evidence
 

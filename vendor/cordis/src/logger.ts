@@ -231,8 +231,9 @@ export class LoggerService {
    */
   exporter(exporter: Exporter) {
     return this.ctx.effect(() => {
-      this.exporters.set(++this._snExporter, exporter)
-      return () => this.exporters.delete(this._snExporter)
+      const id = ++this._snExporter
+      this.exporters.set(id, exporter)
+      return () => this.exporters.delete(id)
     }, 'ctx.logger.exporter()')
   }
 

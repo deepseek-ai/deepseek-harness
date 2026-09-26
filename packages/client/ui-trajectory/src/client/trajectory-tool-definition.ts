@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  ConversationMatch, ConversationNodeContext, ConversationNodeDefinition, RunningToolCall,
-  ToolCallBlock, ToolResultNode,
+  ConversationMatch, ConversationNodeContext, ConversationNodeDefinition, StartedToolCall,
+  ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-tools/types'
 import { trajectoryNode } from './trajectory-definition-common.ts'
@@ -10,6 +10,8 @@ import { trajectoryNode } from './trajectory-definition-common.ts'
  * state machines independent; see ../../../../../.agents/notes/implemented/
  * architecture/2026-08-09-client-conversation-node-assembly.md. */
 const MAX_DEPTH = 256
+
+type ToolCallBlock = StartedToolCall | ToolResultNode
 
 interface ToolState {
   readonly rootId: string
@@ -28,11 +30,12 @@ interface DispatchData {
   readonly content?: ToolResultNode['content']
 }
 
-function rootCall(match: ConversationMatch): RunningToolCall {
+function rootCall(match: ConversationMatch): StartedToolCall {
   if (match.event.type !== 'tool/call') {
     throw new Error('trajectory-tool-call start requires tool/call')
   }
   return {
+    phase: 'start',
     callId: String(match.event.data.callId),
     name: match.event.data.name,
     argsRaw: match.event.data.arguments,
@@ -45,19 +48,19 @@ function rootCall(match: ConversationMatch): RunningToolCall {
 
 function rootResult(
   match: ConversationMatch,
-  previous?: RunningToolCall,
+  previous?: StartedToolCall,
 ): ToolResultNode | undefined {
   if (match.event.type !== 'tool/result') return undefined
-  const result = match.event.data.message.content[0]
+  const message = match.event.data.message
   return {
     kind: 'tool-result',
     seq: match.event.seq,
     time: match.event.time,
-    callId: String(match.event.data.message.source.callId),
+    callId: String(message.source.callId),
     call: previous === undefined ? null : { name: previous.name, argsRaw: previous.argsRaw },
     callTime: previous?.time ?? null,
-    content: result.content,
-    isError: result.isError === true,
+    content: message.content,
+    isError: message.isError === true,
     ...(match.event.data.error === undefined ? {} : { error: match.event.data.error }),
     meta: match.event.data.meta,
     subCalls: [],
@@ -74,8 +77,9 @@ function locationStep(match: ConversationMatch): number {
   return match.location.kind === 'step' ? match.location.step.step : 0
 }
 
-function childCall(match: ConversationMatch, data: DispatchData): RunningToolCall {
+function childCall(match: ConversationMatch, data: DispatchData): StartedToolCall {
   return {
+    phase: 'start',
     callId: data.subCallId,
     parentCallId: data.parentCallId,
     name: data.name,

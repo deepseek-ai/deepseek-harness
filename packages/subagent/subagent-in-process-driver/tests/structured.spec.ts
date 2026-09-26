@@ -199,7 +199,7 @@ describe('in-process structured output', () => {
     const child = ctx.agents.get(run.id)
     const sideEffectResult = child?.session.snapshotEvents().find(event =>
       event.type === 'tool/result' && event.data.message.source.callId === 'c2')
-    expect(sideEffectResult?.type === 'tool/result' && sideEffectResult.data.message.content[0].isError).toBe(true)
+    expect(sideEffectResult?.type === 'tool/result' && sideEffectResult.data.message.isError).toBe(true)
     await run.dispose()
   })
 
@@ -243,7 +243,7 @@ describe('in-process structured output', () => {
     const child = ctx.agents.get(run.id)!
     const results = child.session.snapshotEvents().filter(e => e.type === 'tool/result')
     expect(results.length).toBe(2)
-    expect(results[0]!.data.message.content[0].isError).toBe(true)
+    expect(results[0]!.data.message.isError).toBe(true)
     await run.dispose()
   })
 
@@ -259,7 +259,7 @@ describe('in-process structured output', () => {
     // Exactly one model request and one caller-supplied user message: no nudge turn exists.
     expect(adapter.requests.length).toBe(1)
     const child = ctx.agents.get(run.id)!
-    expect(child.session.snapshotEvents().filter(e => e.type === 'user/message' && e.data.source.kind !== 'plugin').length).toBe(1)
+    expect(child.session.snapshotEvents().filter(e => e.type === 'user/message' && e.data.source.kind !== 'runtime-context').length).toBe(1)
     await run.dispose()
   })
 
@@ -325,7 +325,7 @@ describe('in-process structured output', () => {
     // ...the logged tool result is the blocked isError with the feedback...
     const child = ctx.agents.get(run.id)!
     const results = child.session.snapshotEvents().filter(e => e.type === 'tool/result')
-    expect(results[0]!.data.message.content[0].isError).toBe(true)
+    expect(results[0]!.data.message.isError).toBe(true)
     expect(JSON.stringify(results[0]!.data.message.content)).toContain('capture rejected by hook')
     // ...and the turn CONTINUED past the blocked call (no captured veto):
     // the model got to react to the failure with a second step.
@@ -371,7 +371,7 @@ describe('in-process structured output', () => {
     const child = ctx.agents.get(run.id)
     const captureResult = child?.session.snapshotEvents().find(event =>
       event.type === 'tool/result' && event.data.message.source.callId === 'c1')
-    expect(captureResult?.type === 'tool/result' && captureResult.data.message.content[0].isError).toBe(true)
+    expect(captureResult?.type === 'tool/result' && captureResult.data.message.isError).toBe(true)
     await run.dispose()
   })
 
@@ -443,7 +443,7 @@ describe('in-process structured output', () => {
     const child = ctx.agents.get(run.id)!
     const outer = child.session.snapshotEvents().find(event =>
       event.type === 'tool/result' && event.data.message.source.callId === ToolCallId('c1'))
-    expect(outer?.type === 'tool/result' && outer.data.message.content[0].isError).toBe(true)
+    expect(outer?.type === 'tool/result' && outer.data.message.isError).toBe(true)
     await run.dispose()
   })
 

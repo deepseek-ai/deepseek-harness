@@ -297,7 +297,7 @@ describe('checkDoneValue', () => {
   it('emits exact digits for beyond-safe integral doubles', () => {
     // String(2**60) prints the ROUNDED ...847000; echoing that to the child
     // would change the integer. BigInt digits give the exact ...846976.
-    const v = JSON.parse('[1152921504606846976]') as unknown
+    const v: unknown = JSON.parse('[1152921504606846976]')
     expect(encodeJsonPlain(v)).toBe('[1152921504606846976]')
     expect(checkDoneValue(v, 100)).toEqual({ ok: true, bytes: Buffer.byteLength('[1152921504606846976]', 'utf8') })
   })

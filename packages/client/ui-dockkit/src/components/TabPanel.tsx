@@ -23,7 +23,7 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import clsx from 'clsx'
-import { IconCloseFill14, IconPlusOutline16, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCloseFillRegular, IconPlusOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DockZone, LayoutState, PaneNode, TabId } from '../contract/types.ts'
 import { getTab } from '../engine/tree.ts'
 import type { PaneCallbacks, SplitBlock } from './render.ts'
@@ -38,11 +38,12 @@ import css from './dockkit.module.css'
  */
 const PANEL_FRAME = 'M9.67272 0.522841C10.8339 0.522841 11.76 0.522714 12.4963 0.602493C13.2453 0.683657 13.8789 0.854248 14.4264 1.25197C14.7504 1.48739 15.0355 1.77247 15.2709 2.0965C15.6686 2.64394 15.8392 3.27758 15.9204 4.02655C16.0002 4.7629 16 5.68895 16 6.85014V9.14986C16 10.3111 16.0002 11.2371 15.9204 11.9735C15.8392 12.7224 15.6686 13.3561 15.2709 13.9035C15.0355 14.2275 14.7504 14.5126 14.4264 14.748C13.8789 15.1458 13.2453 15.3163 12.4963 15.3975C11.76 15.4773 10.8339 15.4772 9.67272 15.4772H6.3273C5.16611 15.4772 4.24006 15.4773 3.50371 15.3975C2.75474 15.3163 2.1211 15.1458 1.57366 14.748C1.24963 14.5126 0.964549 14.2275 0.729131 13.9035C0.331407 13.3561 0.160817 12.7224 0.0796529 11.9735C-0.000126137 11.2371 1.25338e-09 10.3111 1.25338e-09 9.14986V6.85014C1.25329e-09 5.68895 -0.000126137 4.7629 0.0796529 4.02655C0.160817 3.27758 0.331407 2.64394 0.729131 2.0965C0.964549 1.77247 1.24963 1.48739 1.57366 1.25197C2.1211 0.854248 2.75474 0.683657 3.50371 0.602493C4.24006 0.522714 5.16611 0.522841 6.3273 0.522841H9.67272ZM4.1828 14.0873L5.54303 14.1118C5.78636 14.1128 6.04709 14.1169 6.3273 14.1169H9.67272C10.8639 14.1169 11.7032 14.1164 12.3493 14.0465C12.9824 13.9779 13.3497 13.8494 13.6268 13.6482C13.8354 13.4966 14.0195 13.3125 14.1711 13.1039C14.3723 12.8268 14.5007 12.4595 14.5693 11.8264C14.6393 11.1803 14.6398 10.341 14.6398 9.14986V6.85014C14.6398 5.65896 14.6393 4.81967 14.5693 4.1736C14.5007 3.54048 14.3723 3.17318 14.1711 2.89609C14.0195 2.68747 13.8354 2.50337 13.6268 2.35179C13.3497 2.1506 12.9824 2.02212 12.3493 1.95353C11.7032 1.88358 10.8639 1.88307 9.67272 1.88307H6.3273C6.04709 1.88307 5.78636 1.8862 5.54303 1.88715L4.1828 1.91166C3.99125 1.9216 3.8148 1.93577 3.65076 1.95353C3.01764 2.02212 2.65034 2.1506 2.37325 2.35179C2.16463 2.50337 1.98052 2.68747 1.82895 2.89609C1.62776 3.17318 1.49928 3.54048 1.43069 4.1736C1.36074 4.81967 1.36023 5.65896 1.36023 6.85014V9.14986C1.36023 10.341 1.36074 11.1803 1.43069 11.8264C1.49928 12.4595 1.62776 12.8268 1.82895 13.1039C1.98052 13.3125 2.16463 13.4966 2.37325 13.6482C2.65034 13.8494 3.01764 13.9779 3.65076 14.0465C3.81478 14.0642 3.99127 14.0774 4.1828 14.0873Z'
 
-/** The split control's glyph: the panel frame with its divider moved to the centre. */
+/** The split control's glyph from the shared product artwork. */
 function SplitGlyph(): ReactNode {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path fillRule="evenodd" clipRule="evenodd" d={`${PANEL_FRAME}M7.31989 1.88307H8.68012V14.1169H7.31989V1.88307Z`} fill="currentColor" />
+      <path d="M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z" stroke="currentColor" />
+      <path d="M8 1.5V14.5" stroke="currentColor" />
     </svg>
   )
 }
@@ -207,8 +208,8 @@ function splitBlockedTitle(labels: PaneCallbacks['labels'], block: SplitBlock): 
   }
 }
 
-/** The pane's tab strip, split control, and body. */
-export function TabPanel({ state, pane, callbacks }: TabPanelProps): ReactNode {
+/** @param props - pane state and gestures. @returns its tab strip without a content container. */
+export function TabStrip({ state, pane, callbacks }: TabPanelProps): ReactNode {
   // The open context menu and the chip that opened it; the menu positions
   // itself against that chip from its portal.
   const [menu, setMenu] = useState<{ readonly tabId: TabId; readonly anchor: HTMLElement } | undefined>(undefined)
@@ -217,14 +218,10 @@ export function TabPanel({ state, pane, callbacks }: TabPanelProps): ReactNode {
   const stripTabs = useRef<HTMLDivElement | null>(null)
   useStripScrollFades(stripTabs, pane.tabs)
   useActiveChipInView(stripTabs, chips, pane.tabs, pane.activeTabId)
-  const active = pane.activeTabId === undefined ? undefined : getTab(state, pane.activeTabId)
   const block = callbacks.splitBlock(pane.id)
   const target = callbacks.dropTarget
   const stripIndex = target !== undefined && target.kind === 'strip' && target.paneId === pane.id
     ? target.index
-    : undefined
-  const zone = target !== undefined && target.kind === 'zone' && target.paneId === pane.id
-    ? target.zone
     : undefined
 
   /** Select a tab from a click or a key, unless it is the active pane's selected tab already: that changes nothing. */
@@ -241,92 +238,87 @@ export function TabPanel({ state, pane, callbacks }: TabPanelProps): ReactNode {
   }
 
   return (
-    <section
-      className={css.pane}
-      data-dockkit-pane={pane.id}
-      data-dockkit-pane-active={state.activePaneId === pane.id || undefined}
-      // A click on the pane's body or strip focuses the pane, unless it is the
-      // active one already: that click changes nothing and records nothing. The
-      // chips and the strip's controls stop their own clicks: each reports one
-      // intent, and that intent already decides which pane is active.
-      onClick={() => {
-        if (state.activePaneId === pane.id) return
-        callbacks.onFocusPane(pane.id)
-      }}
-    >
-      <div className={css.tabStrip} role="tablist" data-dockkit-strip={pane.id}>
-        <div ref={stripTabs} className={css.stripTabs} role="presentation" data-dockkit-strip-tabs={pane.id}>
-          {pane.tabs.map((tabId, index) => {
-            const tab = getTab(state, tabId)
-            const selected = tabId === pane.activeTabId
-            const closable = callbacks.canCloseTab(tabId)
-            // A pane's lone unclosable chip is a label, not a choice: there is
-            // no other tab to select against and nothing to do to it.
-            const quiet = !closable && pane.tabs.length === 1
-            return (
-              <Fragment key={tabId}>
-                {(index > 0 || stripIndex === index) && (
-                  <div
-                    className={clsx(css.slot, stripIndex === index && css.slotCaret)}
-                    data-dockkit-caret={stripIndex === index ? index : undefined}
-                  />
-                )}
+    // The window drag claim is withdrawn while any pane floats: a floating pane
+    // renders among this surface's cells in tab-id order, so one sorted before this
+    // row would sit earlier in the document, where this row's drag box overrides the
+    // float's own subtraction and swallows the panel's header and controls.
+    <div className={css.tabStrip} role="tablist" data-dockkit-strip={pane.id}
+      data-window-drag={state.floats.length === 0 ? true : undefined}>
+      <div ref={stripTabs} className={css.stripTabs} role="presentation" data-dockkit-strip-tabs={pane.id}>
+        {pane.tabs.map((tabId, index) => {
+          const tab = getTab(state, tabId)
+          const selected = tabId === pane.activeTabId
+          const closable = callbacks.canCloseTab(tabId)
+          // A pane's lone unclosable chip is a label, not a choice: there is
+          // no other tab to select against and nothing to do to it.
+          const quiet = !closable && pane.tabs.length === 1
+          return (
+            <Fragment key={tabId}>
+              {(index > 0 || stripIndex === index) && (
                 <div
-                  role="tab"
-                  aria-selected={selected}
-                  tabIndex={selected ? 0 : -1}
-                  className={clsx(
-                    css.tab,
-                    selected && css.tabActive,
-                    quiet && css.tabQuiet,
-                    callbacks.draggingTabId === tabId && css.tabDragging,
-                  )}
-                  data-dockkit-tab={tabId}
-                  data-dockkit-tab-quiet={quiet || undefined}
-                  ref={(element) => {
-                    if (element === null) chips.delete(tabId)
-                    else chips.set(tabId, element)
-                  }}
-                  // Focus lands on click, not on press: a state change between
-                  // pointerdown and the first pointermove rebuilds this subtree,
-                  // and Chromium cancels the pointer when the pressed element is
-                  // replaced — which would abandon every drag. A drag that ends
-                  // elsewhere fires no click, and its own operation carries focus.
-                  onPointerDown={(event) => {
-                    // A secondary press is the menu, never a drag.
-                    if (event.button === 2) return
-                    callbacks.onTabPressed(tabId, event)
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    activate(tabId)
-                  }}
-                  onKeyDown={(event) => {
-                    // Keys on the chip's nested close control are that control's.
-                    if (event.target !== event.currentTarget) return
-                    const next = chipToFocus(event.key, pane.tabs, tabId)
-                    if (next !== undefined) {
-                      event.preventDefault()
-                      focusChip(next)
-                      return
-                    }
-                    if (selects(event.key)) {
-                      event.preventDefault()
-                      activate(tabId)
-                    }
-                  }}
-                  onContextMenu={(event) => {
+                  className={clsx(css.slot, stripIndex === index && css.slotCaret)}
+                  data-dockkit-caret={stripIndex === index ? index : undefined}
+                />
+              )}
+              <div
+                role="tab"
+                aria-selected={selected}
+                tabIndex={selected ? 0 : -1}
+                className={clsx(
+                  css.tab,
+                  selected && css.tabActive,
+                  quiet && css.tabQuiet,
+                  callbacks.draggingTabId === tabId && css.tabDragging,
+                )}
+                data-dockkit-tab={tabId}
+                data-dockkit-tab-quiet={quiet || undefined}
+                ref={(element) => {
+                  if (element === null) chips.delete(tabId)
+                  else chips.set(tabId, element)
+                }}
+                // Focus lands on click, not on press: a state change between
+                // pointerdown and the first pointermove rebuilds this subtree,
+                // and Chromium cancels the pointer when the pressed element is
+                // replaced — which would abandon every drag. A drag that ends
+                // elsewhere fires no click, and its own operation carries focus.
+                onPointerDown={(event) => {
+                  // A secondary press is the menu, never a drag.
+                  if (event.button === 2) return
+                  callbacks.onTabPressed(tabId, event)
+                }}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  activate(tabId)
+                }}
+                onKeyDown={(event) => {
+                  // Keys on the chip's nested close control are that control's.
+                  if (event.target !== event.currentTarget) return
+                  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.nativeEvent.isComposing) return
+                  const next = chipToFocus(event.key, pane.tabs, tabId)
+                  if (next !== undefined) {
                     event.preventDefault()
-                    const anchor = event.currentTarget
-                    setMenu(current => current?.tabId === tabId ? undefined : { tabId, anchor })
-                  }}
-                >
-                  <TabTitle>{callbacks.renderTabTitle?.(tab) ?? tab.title}</TabTitle>
-                  {closable && (
+                    focusChip(next)
+                    return
+                  }
+                  if (selects(event.key)) {
+                    event.preventDefault()
+                    activate(tabId)
+                  }
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  const anchor = event.currentTarget
+                  setMenu(current => current?.tabId === tabId ? undefined : { tabId, anchor })
+                }}
+              >
+                <TabTitle>{callbacks.renderTabTitle?.(tab) ?? tab.title}</TabTitle>
+                {closable && (
+                  <Tooltip disabled={menu !== undefined} label={callbacks.labels.closeTab} shortcutKeys={callbacks.labels.closeTabKeys} side="bottom" delayMs={500}>
                     <button
                       type="button"
                       className={css.tabClose}
                       aria-label={callbacks.labels.closeTab}
+                      aria-keyshortcuts={callbacks.labels.closeTabShortcut}
                       data-dockkit-tab-close={tabId}
                       // A nested control stops its own press: otherwise the press
                       // starts a drag, captures the pointer, and this click never lands.
@@ -336,50 +328,53 @@ export function TabPanel({ state, pane, callbacks }: TabPanelProps): ReactNode {
                         callbacks.onCloseTab(tabId)
                       }}
                     >
-                      <IconCloseFill14 size={14} />
+                      <IconCloseFillRegular size={14} />
                     </button>
-                  )}
-                  {menu?.tabId === tabId && (
-                    <TabMenu
-                      labels={callbacks.labels}
-                      anchor={menu.anchor}
-                      onClose={closable ? () => { setMenu(undefined); callbacks.onCloseTab(tabId) } : undefined}
-                      onDismiss={() => { setMenu(undefined) }}
-                      extras={callbacks.renderTabMenuItems?.(tab, () => { setMenu(undefined) })}
-                    />
-                  )}
-                </div>
-              </Fragment>
-            )
-          })}
-          {stripIndex === pane.tabs.length && <div className={clsx(css.slot, css.slotCaret)} data-dockkit-caret={stripIndex} />}
-        </div>
-        {callbacks.canAddTab(pane.id) && (
-          <Tooltip label={callbacks.labels.addTab} side="bottom" delayMs={500}>
-            <button
-              type="button"
-              className={css.addTab}
-              aria-label={callbacks.labels.addTab}
-              data-dockkit-add-tab={pane.id}
-              onClick={(event) => {
-                event.stopPropagation()
-                callbacks.onAddTab(pane.id)
-              }}
-            >
-              <IconPlusOutline16 size={14} />
-            </button>
-          </Tooltip>
-        )}
-        <div className={css.stripFill} data-dockkit-strip-fill />
-        {!(callbacks.hideSplitWhenBlocked && block !== undefined) && (
-          <Tooltip label={callbacks.labels.splitPane} side="bottom" delayMs={500} disabled={block !== undefined}>
+                  </Tooltip>
+                )}
+                {menu?.tabId === tabId && (
+                  <TabMenu
+                    labels={callbacks.labels}
+                    anchor={menu.anchor}
+                    onClose={closable ? () => { setMenu(undefined); callbacks.onCloseTab(tabId) } : undefined}
+                    onDismiss={() => { setMenu(undefined) }}
+                    extras={callbacks.renderTabMenuItems?.(tab, () => { setMenu(undefined) })}
+                  />
+                )}
+              </div>
+            </Fragment>
+          )
+        })}
+        {stripIndex === pane.tabs.length && <div className={clsx(css.slot, css.slotCaret)} data-dockkit-caret={stripIndex} />}
+      </div>
+      {callbacks.canAddTab(pane.id) && (
+        <Tooltip label={callbacks.labels.addTab} side="bottom" delayMs={500}>
+          <button
+            type="button"
+            className={css.addTab}
+            aria-label={callbacks.labels.addTab}
+            data-dockkit-add-tab={pane.id}
+            onClick={(event) => {
+              event.stopPropagation()
+              callbacks.onAddTab(pane.id)
+            }}
+          >
+            <IconPlusOutlineRegular size={14} />
+          </button>
+        </Tooltip>
+      )}
+      <div className={css.stripFill} data-dockkit-strip-fill />
+      {!(callbacks.hideSplitWhenBlocked && block !== undefined) && (
+        <Tooltip label={block === undefined ? callbacks.labels.splitPane : splitBlockedTitle(callbacks.labels, block)} shortcutKeys={callbacks.labels.splitPaneKeys} side="bottom" delayMs={500}>
+          <span
+            tabIndex={block === undefined ? undefined : 0}
+            aria-label={block === undefined ? undefined : splitBlockedTitle(callbacks.labels, block)}
+          >
             <button
               type="button"
               className={css.iconButton}
               aria-label={callbacks.labels.splitPane}
-              // Disabled buttons fire no hover events, so the blocked reason
-              // stays a native title.
-              title={block === undefined ? undefined : splitBlockedTitle(callbacks.labels, block)}
+              aria-keyshortcuts={callbacks.labels.splitPaneShortcut}
               disabled={block !== undefined}
               data-dockkit-split-button={pane.id}
               data-dockkit-split-blocked={block}
@@ -390,37 +385,61 @@ export function TabPanel({ state, pane, callbacks }: TabPanelProps): ReactNode {
             >
               <SplitGlyph />
             </button>
-          </Tooltip>
-        )}
-        {/* The embedder's surface-wide controls, in the top-right pane only: the
+          </span>
+        </Tooltip>
+      )}
+      {/* The embedder's surface-wide controls, in the top-right pane only: the
             strip is the surface's top edge, and this pane's end is its corner. */}
-        {pane.id === callbacks.chromePaneId && callbacks.chrome !== undefined && (
-          // The embedder's controls report their own intents; the pane's
-          // click-to-focus must not add a focus entry to each of them.
-          <div
-            className={css.stripChrome}
-            data-dockkit-strip-chrome
-            onClick={(event) => { event.stopPropagation() }}
-          >
-            {callbacks.chrome}
-          </div>
-        )}
-      </div>
+      {pane.id === callbacks.chromePaneId && callbacks.chrome !== undefined && (
+      // The embedder's controls report their own intents; the pane's
+      // click-to-focus must not add a focus entry to each of them.
+        <div
+          className={css.stripChrome}
+          data-dockkit-strip-chrome
+          onClick={(event) => { event.stopPropagation() }}
+        >
+          {callbacks.chrome}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** @param props - target pane and drag preview. @returns body-local drop feedback, or nothing. */
+export function PaneDropHints({ pane, callbacks }: Pick<TabPanelProps, 'pane' | 'callbacks'>): ReactNode {
+  const target = callbacks.dropTarget
+  const zone = target?.kind === 'zone' && target.paneId === pane.id ? target.zone : undefined
+  if (zone === undefined) return null
+  return <>
+    <div className={css.dockScrim} data-dockkit-dock-scrim />
+    {callbacks.horizontalDrops && zone !== 'center'
+      ? <>
+        <DockHint zone="left" active={zone === 'left'} labels={callbacks.labels} />
+        <DockHint zone="right" active={zone === 'right'} labels={callbacks.labels} />
+      </>
+      : <DockHint zone={zone} active labels={callbacks.labels} />}
+  </>
+}
+
+/** @param props - pane state and gestures. @returns one pane in the recursive, visibility-mounted layout. */
+export function TabPanel({ state, pane, callbacks }: TabPanelProps): ReactNode {
+  const active = pane.activeTabId === undefined ? undefined : getTab(state, pane.activeTabId)
+  return (
+    <section
+      className={css.pane}
+      data-dockkit-pane={pane.id}
+      tabIndex={-1}
+      data-dockkit-pane-active={state.activePaneId === pane.id || undefined}
+      onClick={() => {
+        if (state.activePaneId !== pane.id) callbacks.onFocusPane(pane.id)
+      }}
+    >
+      <TabStrip state={state} pane={pane} callbacks={callbacks} />
       <div className={css.paneBody}>
         {active === undefined
           ? <p className={css.empty}>{callbacks.labels.emptyPane}</p>
           : callbacks.renderTab(active)}
-        {zone !== undefined && (
-          <>
-            <div className={css.dockScrim} data-dockkit-dock-scrim />
-            {callbacks.horizontalDrops && zone !== 'center'
-              ? <>
-                <DockHint zone="left" active={zone === 'left'} labels={callbacks.labels} />
-                <DockHint zone="right" active={zone === 'right'} labels={callbacks.labels} />
-              </>
-              : <DockHint zone={zone} active labels={callbacks.labels} />}
-          </>
-        )}
+        <PaneDropHints pane={pane} callbacks={callbacks} />
       </div>
     </section>
   )

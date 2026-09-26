@@ -8,7 +8,7 @@
   padding: 0 4px 0 8px;
   border: none;
   /* Rounded chip chrome, matching the sibling model trigger. */
-  border-radius: 24px;
+  border-radius: var(--dsw-radius-sm);
   outline: none;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
@@ -23,7 +23,7 @@
 }
 
 .trigger:focus-visible {
-  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+  box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
 }
 
 .trigger:disabled {

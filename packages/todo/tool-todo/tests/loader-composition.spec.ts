@@ -100,8 +100,8 @@ describe('tool-todo real Loader composition through cordis.yml', () => {
   it('allowParallelInProgress: false narrows the description and rejects a parallel write', async () => {
     const ctx = await boot(['    allowParallelInProgress: false'])
     const description = ctx.tools.schemas().find(s => s.name === 'todo_write')?.description ?? ''
-    expect(description).toContain('Keep AT MOST ONE todo `in_progress`')
-    expect(description).not.toContain('several at once')
+    expect(description).toContain('keep exactly one todo `in_progress`')
+    expect(description).not.toContain('several only')
 
     const owner = await agent(ctx)
     const result = await ctx.tools.execute({
@@ -119,7 +119,7 @@ describe('tool-todo real Loader composition through cordis.yml', () => {
   it('allowParallelInProgress: true permits a parallel write end to end', async () => {
     const ctx = await boot(['    allowParallelInProgress: true'])
     const description = ctx.tools.schemas().find(s => s.name === 'todo_write')?.description ?? ''
-    expect(description).toContain('several at once when work genuinely runs in parallel')
+    expect(description).toContain('several only when work runs in parallel')
 
     const owner = await agent(ctx)
     const result = await ctx.tools.execute({

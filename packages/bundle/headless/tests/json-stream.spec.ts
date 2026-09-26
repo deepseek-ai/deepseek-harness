@@ -59,7 +59,7 @@ function toolResult(
     data: {
       turn: 1,
       step: 1,
-      message: { content: [{ type: 'tool-result', toolCallId: callId, content, isError: false }] },
+      message: { role: 'tool', toolCallId: callId, isError: false, content },
     },
   } as unknown as SessionEvent
 }
@@ -169,12 +169,10 @@ describe('--json projection', () => {
         turn: 1,
         step: 1,
         message: {
-          content: [{
-            type: 'tool-result',
-            toolCallId: 'c2',
-            content: [{ type: 'image' }, { type: 'text' }, { type: 'text', text: 'boom' }],
-            isError: true,
-          }],
+          role: 'tool',
+          toolCallId: 'c2',
+          isError: true,
+          content: [{ type: 'image' }, { type: 'text' }, { type: 'text', text: 'boom' }],
         },
       },
     } as unknown as SessionEvent)

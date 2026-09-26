@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for maintaining-dsh-code-review.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cookbook/maintaining-dsh-code-review.md
-maintaining-dsh-code-review.md: a8c2a66c065aaec5c03f0ab6965377d1d1eb14bd
-maintaining-dsh-code-review.zh.md: fca56ffeb35309660ac5284cb8e877eb8648405a
+/maintaining-the-dsh-code-review-skill:
+  en: 7356eb0a9cc41144
+  zh: 3194fbcf27f4fac1
+/maintaining-the-dsh-code-review-skill/what-the-maintainer-receives:
+  en: 1c4d0f340591ca39
+  zh: 81bd728a7c2296cb
+/maintaining-the-dsh-code-review-skill/what-the-operator-does-with-a-candidate-diff:
+  en: 1423d67e7c440cc6
+  zh: bc6d30d6615377f5
+/maintaining-the-dsh-code-review-skill/when-a-run-produces-no-candidate:
+  en: feb6d261939d6c19
+  zh: 044d8238cd6537d3
+/maintaining-the-dsh-code-review-skill/interruptions-and-handoff:
+  en: f6e8cab2266e6a3e
+  zh: e6e950fa8807bfb4
+/maintaining-the-dsh-code-review-skill/where-the-operator-s-private-setup-lives:
+  en: ae06145764738c16
+  zh: d527b944db8c52be

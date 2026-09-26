@@ -1,0 +1,15 @@
+[
+  {
+    "initiallyVisible": true,
+    "loaded": { "parent": true, "overlay": true, "filter": "none" },
+    "restored": { "parent": true, "overlay": true, "filter": "none" },
+    "released": { "filter": "none", "showListenersRestored": true, "keyboardListeners": 0 }
+  },
+  {
+    "initiallyVisible": false,
+    "loaded": { "parent": false, "overlay": false, "filter": "none" },
+    "restored": { "parent": true, "overlay": true, "filter": "none" },
+    "released": { "filter": "none", "showListenersRestored": true, "keyboardListeners": 0 }
+  },
+  { "parentDestroyed": true, "overlayDestroyed": true }
+]

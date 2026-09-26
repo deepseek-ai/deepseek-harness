@@ -51,6 +51,7 @@ function projectSessionConversation(snapshot: SessionSurfaceSnapshot): Projected
         if (text !== '') conversation.push({ role: 'assistant', text, checkpoint: false, originalText: text, omittedBytes: 0 })
         break
       }
+      case 'developer/message':
       case 'system/message':
       case 'tool/result':
         break

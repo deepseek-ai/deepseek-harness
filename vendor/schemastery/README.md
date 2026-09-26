@@ -387,3 +387,7 @@ const schema2 = new Schema(JSON.parse(JSON.stringify(schema1)))
 
 Schemastery also exposes the Standard Schema `~standard` property, so compatible
 tools can validate values without depending on Schemastery-specific APIs.
+
+## Volatile configuration
+
+`.volatile()` preserves a field's schema type and metadata while parsing its value into a stable reference read with `.get()`. Defaults remain ordinary data; absent optional fields return references containing `undefined`. `simplify()` unwraps references for persistence. See the [configuration guide](../../docs/cordis-tutorial/05-config.md#volatile-fields) for supported placements and Cordis update semantics.

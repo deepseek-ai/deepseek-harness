@@ -1,0 +1,24 @@
+.frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 180px;
+  overflow: hidden;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+}
+.image { width: 100%; height: 100%; min-height: 0; object-fit: contain; opacity: 0; }
+.image[data-ready] { opacity: 1; }
+.status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}

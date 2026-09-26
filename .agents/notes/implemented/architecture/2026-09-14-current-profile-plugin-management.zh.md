@@ -16,7 +16,7 @@ Web 和 Agent 控件需要修改运行中的 profile，同时避免另建包安�
 
 profile 文件保持为持久状态：条目开关只修改最后一条符合条目 id 及模块名称断言的覆盖项中的 `disabled`，没有匹配项时追加，组合包开关修改有序字符串列表。更新依赖不会重新激活保留的已停用组合包。service 删除组合包时，先应用去掉该组合包的配置，等待旧 fiber 完成卸载后再删除依赖。已保存配置、pnpm 完成状态与运行时激活分别报告；失败的删除保留实际的部分状态与诊断路径，失败或被取消的安装则恢复它快照的 profile 文件。
 
-这扩展了[profile 组合包决策](2026-08-05-profile-plugin-bundles.zh.md)。startup profile 保留进程组合，Desktop 包管理仍由 shell 持有。Web 控件与显式启用的 Agent 工具调用同一 service。管理操作向调用方返回结果，不向存活 Agent 添加消息。base 组合包和内置预设默认禁用该 Agent 工具。纯浏览器 worker 预览没有宿主包安装器；其模块代理表明确拒绝 `execa` 调用，同时保留管理模块用于清单发现。
+这扩展了[profile 组合包决策](2026-08-05-profile-plugin-bundles.zh.md)。startup profile 保留进程组合，Desktop 包管理仍由 shell 持有。Web 控件与显式启用的 Agent 工具调用同一 service。管理操作向调用方返回结果，不向存活 Agent 添加消息。创造模式启用该 Agent 工具；base 组合包和其他内置预设默认禁用。纯浏览器 worker 预览没有宿主包安装器；其模块代理表明确拒绝 `execa` 调用，同时保留管理模块用于清单发现。
 
 CLI 调用继承终端和认证环境；service 调用保留子进程凭据清理与有界诊断。管理结果提供错误码和参数，由 Web 词典呈现文案。重载前后比较 entry、fiber、配置与诊断：未变化的已有故障保留为警告，本次影响到的新故障使操作失败。显式启用的目标必须成功激活。
 

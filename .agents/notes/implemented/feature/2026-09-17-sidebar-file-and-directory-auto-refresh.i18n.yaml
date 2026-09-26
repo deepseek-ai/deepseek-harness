@@ -1,0 +1,73 @@
+# Bilingual-pair consistency record for 2026-09-17-sidebar-file-and-directory-auto-refresh.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-17-sidebar-file-and-directory-auto-refresh.md
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees:
+  en: 8dfe4436b064776d
+  zh: acb3f1e2fae231f4
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/problem:
+  en: f7e7751fe98be91e
+  zh: e1d6c4f042c7d75d
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/decision:
+  en: b51a6972761816ef
+  zh: 6f50b2a09b8d6abc
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/implementation-and-responsibilities:
+  en: 79480338424c1829
+  zh: c32ff30ccf3d9b87
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/implementation-and-responsibilities/fs-and-host:
+  en: ca63fb903b447c2d
+  zh: 3014adbdb0a890ee
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/implementation-and-responsibilities/client-and-sidebar:
+  en: 5cb8326d8a5b0407
+  zh: a31173f990276856
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/watch-requests-and-notifications:
+  en: 025ba83ae78824df
+  zh: 264d74d2bdfe3d27
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/watch-requests-and-notifications/one-stream-per-explicit-target:
+  en: 75d1c4e35d0f4d74
+  zh: a6b11f70a64d6922
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/watch-requests-and-notifications/os-watching-and-access-scope:
+  en: 48af866f541caf04
+  zh: c3df4edf7f7ddb4a
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/complete-file-preview-data-flow:
+  en: f8468653186b2a60
+  zh: 0c624d957c9ce332
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/html-resourcegroup:
+  en: 0f2419d75906ca0a
+  zh: 3ff0dbb7382ba02c
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/automatic-refresh-controls:
+  en: a00c8265a48e910d
+  zh: e1aa7c639a4e2c10
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/complete-files-panel-data-flow:
+  en: d688642e5f272d48
+  zh: 96088fbc0471aeae
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/directory-node-tree-and-lifecycle:
+  en: 2ea8615be8d5229b
+  zh: 0c73fa4ebb06445e
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/user-flows:
+  en: eb4005a334103895
+  zh: e2c207faffa64e57
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/user-flows/edit-a-previewed-file:
+  en: 2b7d90550ad49eff
+  zh: a8136d5d00390635
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/user-flows/browse-changing-directories:
+  en: d375f21c1ae106ef
+  zh: 5a39f248cc98f20a
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/user-flows/deletion-renaming-and-failure:
+  en: 4f343f7a6c4d3ba4
+  zh: a4390843a20f8dde
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/readiness-races-and-refresh-coalescing:
+  en: caadd187479e9074
+  zh: 3deedd8093f60703
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/alternatives-considered:
+  en: 8a8c19229647c760
+  zh: 2de283fc2c815e65
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/verification:
+  en: e8143b93c93b4dc2
+  zh: a90105eb5823a2ff
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/consequences:
+  en: 8faa05de777dea21
+  zh: 2f0b1ff65bdba75b
+/agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/relationship-to-existing-agent-notes:
+  en: 8ddc059f64cb3b1c
+  zh: f6d6836458ef9522

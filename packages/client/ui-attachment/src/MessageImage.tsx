@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { ImageLightbox } from './ImageLightbox.tsx'
-import type { ImageLightboxLabels } from './ImageLightbox.tsx'
+import { IconLoadingOutlineRegular, IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { ImageLightbox } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ImageLightboxLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './MessageImage.module.css'
 
 /** Loads a session-authorized durable image URL and may expose a cached URL synchronously. */
@@ -11,7 +12,11 @@ export type ImageLoader = ((attachment: ImageAttachmentRef) => Promise<string>) 
 
 /** One gallery entry: a durable admitted reference, or a submission echo's local preview. */
 export type MessageImageSpec =
-  | { readonly attachment: ImageAttachmentRef }
+  | {
+    readonly attachment: ImageAttachmentRef
+    /** Presentation-only name for the thumbnail and lightbox; loading uses the original reference. */
+    readonly label?: string
+  }
   | {
     readonly preview: {
       readonly url: string
@@ -69,17 +74,18 @@ function dimensionsOf(image: MessageImageSpec): { readonly width: number; readon
  * preview. A lone image renders at its `singleFit` size; an image among
  * several renders as a fixed 64px square tile. The preview arm displays its
  * local URL directly — no loader round-trip, no failure/retry surface.
+ * List thumbnails use status icons with localized tooltips and accessible names.
  *
  * @param props.image - the durable reference to load, or the local preview to display.
  * @param props.load - session-authorized URL loader for the durable arm.
- * @param props.variant - `single` for a message's lone image, `tile` otherwise.
+ * @param props.variant - lone image, cropped gallery tile, or uncropped list thumbnail.
  * @param props.labels - resolved strings (tooltip, loading, retry, lightbox).
  * @returns the bounded thumbnail button, or the retry control on failure.
  */
 export function MessageImage({ image, load, variant, labels }: {
   image: MessageImageSpec
   load: ImageLoader
-  variant: 'single' | 'tile'
+  variant: 'single' | 'tile' | 'thumbnail'
   labels: MessageImageLabels
 }) {
   const preview = 'preview' in image ? image.preview : undefined
@@ -116,8 +122,23 @@ export function MessageImage({ image, load, variant, labels }: {
   }, [attachment, load, attempt])
 
   const src = preview?.url ?? loaded
-  const label = (preview?.name ?? attachment?.name) ?? labels.image
-  if (error) return <button type="button" className={css.error} data-variant={variant} onClick={request}>{labels.loadFailed}</button>
+  const label = ('attachment' in image ? image.label : undefined)
+    ?? preview?.name ?? attachment?.name ?? labels.image
+  const loadingThumbnail = variant === 'thumbnail' && src === null
+  if (error) return (
+    <button
+      type="button"
+      className={css.error}
+      data-variant={variant}
+      title={variant === 'thumbnail' ? labels.loadFailed : undefined}
+      aria-label={variant === 'thumbnail' ? labels.loadFailed : undefined}
+      onClick={request}
+    >
+      {variant === 'thumbnail'
+        ? <span aria-hidden="true"><IconRefreshOutlineRegular /></span>
+        : labels.loadFailed}
+    </button>
+  )
   return (
     <>
       <button
@@ -125,12 +146,17 @@ export function MessageImage({ image, load, variant, labels }: {
         className={css.frame}
         data-variant={variant}
         style={fit === undefined ? undefined : { width: fit.width, height: fit.height }}
-        title={labels.open}
-        aria-label={labels.openNamed(label)}
+        title={loadingThumbnail ? labels.loading : labels.open}
+        aria-label={loadingThumbnail ? labels.loading : labels.openNamed(label)}
+        aria-busy={loadingThumbnail || undefined}
         onClick={() => { if (src !== null) setOpen(true) }}
       >
         {src === null
-          ? <span className={css.loading}>{labels.loading}</span>
+          ? (
+            <span className={css.loading} aria-hidden={loadingThumbnail || undefined}>
+              {loadingThumbnail ? <IconLoadingOutlineRegular className={css.spinner} /> : labels.loading}
+            </span>
+          )
           : <img src={src} alt={label} style={fit === undefined ? undefined : { objectPosition: fit.objectPosition }} />}
       </button>
       {open && src !== null && <ImageLightbox src={src} alt={label} labels={labels.lightbox} onClose={close} />}
@@ -139,16 +165,17 @@ export function MessageImage({ image, load, variant, labels }: {
 }
 
 /** Wrapping image group shared by user and assistant history: a lone image
- * renders large unless its owning mixed-attachment row requests compact tiles. */
-export function ImageGallery({ images, load, align, compact = false, labels }: {
+ * renders large unless its owner requests compact tiles or contained list thumbnails. */
+export function ImageGallery({ images, load, align, compact = false, thumbnail = false, labels }: {
   images: readonly MessageImageSpec[]
   load: ImageLoader
   align: 'start' | 'end'
   compact?: boolean
+  thumbnail?: boolean
   labels: MessageImageLabels
 }) {
   if (images.length === 0) return null
-  const variant = compact || images.length > 1 ? 'tile' : 'single'
+  const variant = thumbnail ? 'thumbnail' : compact || images.length > 1 ? 'tile' : 'single'
   return (
     <div className={css.gallery} data-align={align}>
       {images.map((image, index) => (

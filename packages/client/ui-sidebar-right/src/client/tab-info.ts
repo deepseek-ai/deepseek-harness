@@ -1,4 +1,5 @@
 /** Slot-owned tab information derived from framework-bound store and navigation hooks. */
+import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { useMemo } from 'react'
 import { findTabPane } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
@@ -8,9 +9,11 @@ import type { createSidebarRightStore } from './stores.ts'
 
 /** Stable dispatch identity and framework hooks; never passed as tab component props. */
 export interface TabHookContext {
+  readonly shortcuts: readonly ShortcutCatalogEntry[]
   readonly tabId: TabId
   readonly title: boolean
   readonly fullscreen: boolean
+  readonly active: boolean
   readonly signal: AbortSignal
   readonly actions: SidebarRightTabActions
   readonly useStore: PropsStore<ReturnType<typeof createSidebarRightStore>>['useStore']
@@ -25,7 +28,7 @@ export interface TabHookContext {
  */
 export const tabInfoFactory: SlotHookFactory<'sidebar.right.pane.tab', UseSidebarRightTabInfo> = (standard, context) => {
   const { sessionId } = standard
-  const { tabId, title, fullscreen, signal, actions, useStore, useTabNavigation } = context
+  const { tabId, title, fullscreen, active, signal, actions, useStore, useTabNavigation, shortcuts } = context
   return function useTabInfo() {
     const layout = useStore(state => state.bySession[sessionId]?.layout)
     const navigation = useTabNavigation(tabId)
@@ -40,13 +43,14 @@ export const tabInfoFactory: SlotHookFactory<'sidebar.right.pane.tab', UseSideba
         panel: { id: pane.id },
         tab: {
           ...tab,
-          visible: pane.host === 'float' || (layout.expanded && (title || pane.activeTabId === tabId)),
+          visible: active && (pane.host === 'float' || (layout.expanded && (title || pane.activeTabId === tabId))),
           navigation,
           signal,
           actions,
+          refreshShortcut: shortcuts.find(row => row.id === 'page.refresh'),
         },
       }
-    }, [layout, navigation, tabId, title, fullscreen, signal, actions])
+    }, [layout, navigation, tabId, title, fullscreen, active, signal, actions, shortcuts])
   }
 }
 

@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for feedback.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/feedback.md
-feedback.md: 1fa8631c2c262351e320d0e8642bdad96474214d
-feedback.zh.md: 2417ade68447a9b4fe08c7433b7ce779044b99c5
+/message-feedback:
+  en: 707e1e2e0183cf62
+  zh: f47848008069df70
+/message-feedback/public-types:
+  en: 514e3a869e355a86
+  zh: 4b6f416f8ff3847f
+/message-feedback/session-feedback-types:
+  en: dacd5384864a040f
+  zh: 1912000a5d76c277
+/message-feedback/data-and-concurrency:
+  en: 12231161d9001f8b
+  zh: 2f1aa0cf78f67643
+/message-feedback/target-and-lifecycle-authority:
+  en: 5f27c79e933bec0a
+  zh: e9211a24f97e730f
+/message-feedback/persistence-and-remote-contract:
+  en: d30ec3f187959494
+  zh: 3a32859637c492ce
+/message-feedback/web-surface:
+  en: 6f60352749185e55
+  zh: c654a17ec1e17393
+/message-feedback/boundaries-and-limitations:
+  en: 6e258de40224234e
+  zh: 05a7e181d357d038

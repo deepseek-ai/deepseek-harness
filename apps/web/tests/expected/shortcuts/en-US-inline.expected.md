@@ -1,0 +1,5 @@
+- group "Toggle left sidebar":
+  - button "Restore default"
+  - button "Remove"
+  - button "Press a shortcut"
+  - text: Use Ctrl+/, Ctrl+,, Ctrl+Alt+key, or Ctrl+Shift+key. Combinations with three or four distinct modifiers are also supported. Browser or system shortcuts may not reach the page.

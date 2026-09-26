@@ -1,0 +1,14 @@
+# Proactive compaction with a bounded message budget.
+
+- id: llm-deepseek
+  config:
+    models:
+      - id: deepseek-v4-flash
+        contextWindow: 8382
+        maxTokens: 1000
+
+- id: compaction-basic
+  config:
+    thresholdRatio: 0.8
+    headroomTokens: 1800
+    retainTokens: 20

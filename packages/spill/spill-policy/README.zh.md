@@ -1,5 +1,5 @@
 ---
-description: "工具结果 spill 策略：部署如何用预览和可检索的 spill 文件把过大的纯文本工具结果挡在模型上下文之外。"
+description: "工具结果保留：文字和图片共享 token 预算，并通过完整结果文件恢复省略内容。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-当过大的纯文本工具结果不应进入模型上下文时，挂载本包。超过 `maxInlineBytes` 的结果会变成有界的首尾预览，并附带定位信息与取回指引；完整文本仍可通过已配置的 spill 后端访问。spill 失败时原始结果仍然可见，省略 `maxInlineBytes` 则会禁用该策略。同一上限也约束 `run_code` 子调用的持久日志副本，但不会改变程序收到的值。
+将过大的文字和图片结果限制在共享的估算 token 预算内。模型收到按原顺序保留的首尾内容，以及完整结果文件的路径。图片保存在附件存储中，结果文件记录其可读取路径。省略 `maxInlineTokens` 会禁用策略，无法保存可恢复内容时保留原结果。
 
 ## 目录
 
@@ -25,28 +25,28 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-把策略与 spill 后端一起挂载，以限制模型看到的工具纯文本结果大小。上限作用于工具运行后的最终结果；策略放过的结果仍会原样通过。
+将策略与 spill 后端一起挂载。执行后策略接受结果之后，文字和图片共享配置的预算。
 
 ### 最小配置
 
-以 UTF-8 字节计的 `maxInlineBytes` 预算加载策略，并同时挂载 spill 后端：
+挂载 spill 后端，并以估算 token 数设置 `maxInlineTokens`：
 
 ```yaml
 - name: '@deepseek-ai/dsh-spill-local'
 - name: '@deepseek-ai/dsh-spill-policy'
   config:
-    maxInlineBytes: 50000
+    maxInlineTokens: 12500
 ```
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `maxInlineBytes` | 省略 | 纯文本结果面向模型的上下文上限（UTF-8 字节）；省略时完全禁用该策略 |
+| `maxInlineTokens` | 省略 | 保留的文字、图片、图片说明和提示的估算 token 上限；省略时禁用策略 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-spill-policy)是每个受支持字段的穷尽式真源。负数或小数上限会让插件加载失败，而不是破坏每次调用的行为。
 
 ### 模型看到什么
 
-过大的纯文本结果会在同一预算内被替换为预览加通知，因此整个替换内容永远不会超过 `maxInlineBytes`：
+过大的结果保持原始顺序。扣除省略提示后，两端各使用剩余预算的一半；文字可以切分，图片整张保留或省略。省略区间中的图片也会被省略。成功替换的内容不超过配置的 token 估算预算：
 
 ```text
 <retained head/tail preview>
@@ -54,19 +54,19 @@ kind: "package-reference"
 (Omitted N bytes. Full formatted result stored at: /…/session-…/…-web_fetch.txt. Use read with offset/limit, or grep this path to search within it.)
 ```
 
-当通知本身已占满预算（上限极小或定位信息很长）时，预览为空，只返回通知；如果连这也会超过上限，策略会保留原始内联结果——上限内的替换内容总比原始结果小。完整文本仍保留在 spill 文件中，成功的替换只改变面向模型的副本，绝不改变规范的程序化结果。
+提示也会报告省略的图片数量。预算容不下预览时允许只返回提示；连提示也超出上限时保留原内容。完整结果文件保存全部已接受文字，并在每张图片的位置记录附件路径，模型可先用 `read` 读取，再用 `read_image` 查看。图片字节不复制到这个文件中。本地附件对象的持久保存独立于 spill 文件清理。
 
 ### 哪些结果会受影响
 
-策略只作用于最终、已接受且纯文本的结果。不超过上限的结果、包含任何非文本块的结果、嵌套复合调用、`read` 结果、被阻止的决策与已接受的值替换都会原样通过。此前已经发生的提供方级截断（例如 `web-fetch-http.maxBodyChars`）无法在此恢复——spill 文件保存的是工具实际返回的内容。
+策略接受文字和图片序列。预算内结果、`read`、被阻止的决策、值替换以及其他内容块类型会原样通过。纯文本嵌套结果只限制日志副本。提供方或工具在此前应用的限制无法在这里恢复。
 
 ### 尽力而为的故障行为
 
-缺少会话所有者、缺少 `ctx.spillStore` 后端或 `saveText` 拒绝时，会记录警告并返回原始结果。spill 失败绝不会把成功的调用变成错误，也绝不会隐藏内联结果。
+缺少归属或 spill 后端、存储失败、缺少模型图片计量或图片路径无法在执行环境读取时，策略记录警告并保留原内容。策略不会用无法读取的路径替换图片。
 
 ### 持久日志副本
 
-同样的上限也约束每个 `run_code` 子调用结果的会话日志副本：程序仍会收到完整值，只有日志副本被替换为预览与定位信息。过大的 `read` 子调用结果在此同样设界，因为日志副本不是模型上下文。
+PTC 程序收到完整的规范值。含图片的子结果在转发给模型前设定上限；全部图片被省略时，模型仍会收到保留的文字和读取提示。分发日志使用相同的保留内容。纯文本子调用的日志，包括 `read`，异步设定上限，不延迟程序获取返回值。
 
 -----
 
@@ -80,16 +80,16 @@ kind: "package-reference"
 
 ### 设计理念
 
-该策略刻意保持狭窄：它只决定**何时** spill，并组合通知。它不注册服务、不负责存储、也不负责预览机制——`dsh-output-retention` 的 `TextRetainer` 负责构建首尾预览。两个不变式塑造了代码：面向模型的替换永远不会超过 `maxInlineBytes`（先为通知预留字节成本），且 spill 失败永远不会改变工具调用的结果。
+纯保留函数按成本选择有序内容，插件负责策略、读取提示和存储调用。文字使用现有 token-meter 估算。图片使用当前模型的 `imageRequestPricing`，并计入说明文字。DeepSeek 模型复用提供方的图片尺寸计算器。预算是估算值，不保证与实际分词结果完全一致。
 
 ### 两条分支
 
-`tools/post-execute` waterfall（瀑布式事件）监听器（以 `prepend` 注册、通过 `next()` 委托）约束面向模型的结果；`tools/ptc-dispatch-log` 监听器约束每个 `run_code` 子调用的持久日志副本。两者共享同一个替换辅助函数，因此两个投影字节一致。post-execute 分支跳过 `read` 以避免 read → spill → read 循环；dispatch-log 分支约束 `read` 子调用，因为日志副本不是模型上下文。
+以 prepend 注册的 `tools/post-execute` 监听器先委托，再限制已接受的内容。`tools/ptc-dispatch-log` 共用同一辅助函数。MCP 的 `projectContent` 在这些策略之前安装真实图片块；后续内容替换、值替换或阻止仍然生效。
 
 <a id="shared-notice-ownership"></a>
 ### 共享通知的所有权
 
-浏览器安全入口 `@deepseek-ai/dsh-spill-policy/notice` 同时负责生产方使用的 `formatSpillNotice(omitted, ref)` 和展示消费方使用的 `hasSpillNotice(text)`。格式化与识别共用通知分隔符；省略信息通过现有的 `describeOmitted` 格式化函数校验，而非复制一套文案。识别支持预览之后或单独出现的完整末尾通知，并保留持久化通知的原有拼写。它只读取已记录的文本，不改写文本。
+浏览器安全入口 `./notice` 负责 `formatSpillNotice(omitted, ref, images)` 和 `hasSpillNotice(text)`。它识别历史的仅字节提示和包含整张图片数量的提示，不改写已有记录。
 
 ### 源码地图
 
@@ -97,12 +97,12 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` 校验、两个 waterfall 监听器、共享替换辅助函数 |
 | [`src/notice.ts`](src/notice.ts) | 浏览器安全的通知格式化与识别，以 `./notice` 发布 |
-| [`src/types.ts`](src/types.ts) | `SpillPolicyExec`：策略读取所属会话 id 所需的最小结构化工具执行视图 |
+| [`src/retention.ts`](src/retention.ts) | 有序图文首尾保留的纯函数 |
 | — | 不发布运行时不变式伴生入口；除在所属 seam 处强制执行的约定外，本包不公开独立的事件序列或可变数据关系。 |
 
 ### 故障模式
 
-两条分支都适用尽力而为降级：没有会话所有者、没有后端、保存被拒绝或没有上限内的替换时，记录警告并保留原始内容。加载时校验会拒绝负数或小数 `maxInlineBytes`，让错误配置失败在部署阶段，而不是让每次超大调用都失败。
+无法恢复内容或计量失败时保留输入，并记录原因。负数、小数或非安全整数预算会使插件加载失败。包含不支持的内容块类型的结果保持原样。
 
 </details>
 
@@ -115,7 +115,7 @@ kind: "package-reference"
 
 - [spill 存储服务](../spill/README.zh.md)——策略替换背后的 `saveText` 约定。
 - [dsh-spill-local](../spill-local/README.zh.md)——保存 spill 文本的本地后端。
-- [dsh-output-retention](../../util/output-retention/README.zh.md)——策略组合的预览机制（`TextRetainer`）。
+- [Token meter](../../llm/token-meter/README.zh.md) — 共享文字估算和模型图片计量。
 - [工具输出 spill 决策](../../../.agents/notes/implemented/architecture/2026-07-08-tool-output-spill-files.zh.md)——能力边界与设计依据。
 
 -----
@@ -123,15 +123,15 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-### 过大的纯文本结果
+### 过大的文字和图片结果
 
 #### 模型看到什么
 
-不超过 `maxInlineBytes` 的结果、嵌套结果、`read` 结果、被阻止的决策与包含非文本块的结果保持不变。过大的纯文本面向模型结果会变成有界的首尾预览，后面附加 `(Omitted <bytes> bytes. Full formatted result stored at: <locator>. <retrievalHint>)`；存储或归属失败时原始结果仍然可见。
+保留的前缀和后缀维持图片顺序，并在省略区间显示 `[...]`。末尾提示说明省略的文字字节数、整张图片数量及完整结果路径。读取该文件可以找到省略的文字和图片地址。
 
 #### Token 影响
 
-成功的替换最多为 `maxInlineBytes` 个 UTF-8 字节，并保留在历史中直到压缩（compaction）；完整 spill 文本不会重新发送给模型。
+成功替换的结果在共享文字估算和当前模型图片计算器下不超过 `maxInlineTokens`，包括提示和图片说明文字。实际用量以提供方报告为准。
 
 #### KV Cache 影响
 
@@ -145,7 +145,7 @@ kind: "package-reference"
 这些限制说明策略在哪些情况下无法提供帮助。它们是当前的包约束。
 
 - **文本识别无法认证输出来源**——工具也能打印相同的通知文本；`hasSpillNotice` 识别的是文本约定，不能证明策略保存过结果。
-- **只能对最终纯文本结果执行 spill**——混合内容结果、阻止反馈与 `read` 会原样通过；此前已经发生的提供方截断或工具自有保留无法在此恢复。
+- **无法恢复或计量**：图片要求模型计算器和执行环境可读取的附件路径，否则保留原内容。不支持的内容块、被阻止的反馈和 `read` 也会原样通过。
 - **通知无法容纳时会禁用该次调用的替换**——上限极小或定位信息很长时，后端已经保存了无引用的 spill，但过大的原始结果仍留在内联位置。
 
 <a id="dev-note"></a>
@@ -162,6 +162,6 @@ kind: "package-reference"
 
 #### 未来：更早的 spill
 
-该策略只能看到最终格式化文本，因此已被提供方截断或只以运行时产物形式存在的内容（例如 bash 流或 subagent 展开）仍在触达范围之外；通过 `ctx.spillStore` 实现的工具自有早期 spill 仍然延期。
+策略只处理最终已接受的内容。此前的提供方截断和工具自身的输出限制仍由各自负责。
 
 </details>

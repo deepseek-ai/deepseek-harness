@@ -13,8 +13,10 @@
  * The glyph is the left sidebar's collapse icon mirrored: the same affordance,
  * on the other edge.
  */
+import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
+import type { InjectFace, HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ReactNode } from 'react'
-import { IconPanelLeftOutline16, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconPanelLeftOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { createSidebarRightStore } from '../stores.ts'
@@ -25,24 +27,27 @@ export type ExpandButtonProps =
   & PropsRuntime<'conversation.session.header.corner'>
   & PropsStore<ReturnType<typeof createSidebarRightStore>>
   & PropsLocale<'sidebarRight'>
+  & InjectFace<{ hooks: { shortcuts: HostObservable<readonly ShortcutCatalogEntry[]> } }>
 
 /** The expand control while the panel is collapsed; nothing while it is shown. */
-export function ExpandButton({ sessionId, useStore, actions, t }: ExpandButtonProps): ReactNode {
+export function ExpandButton({ sessionId, useStore, actions, t, useShortcuts }: ExpandButtonProps): ReactNode {
   // A session with no surface yet is collapsed: the panel seat materializes the
   // surface on its own mount, and until then there is nothing expanded.
+  const shortcut = useShortcuts(entries => entries.find(entry => entry.id === 'sidebar.right.toggle'))
   const expanded = useStore(state => state.bySession[sessionId]?.layout.expanded ?? false)
   if (expanded) return null
   return (
-    <Tooltip label={t('chrome.expand')} side="bottom" delayMs={500}>
-      <button
-        type="button"
+    <Tooltip label={t('chrome.expand')} shortcutKeys={shortcut?.keys} side="bottom" delayMs={500}>
+      <Button
+        size="sm"
         className={css.button}
         aria-label={t('chrome.expandAria')}
+        aria-keyshortcuts={shortcut?.aria}
         data-sidebar-right-expand
         onClick={() => { actions.setExpanded(sessionId, true) }}
       >
-        <IconPanelLeftOutline16 className={css.icon} />
-      </button>
+        <IconPanelLeftOutlineRegular className={css.icon} />
+      </Button>
     </Tooltip>
   )
 }

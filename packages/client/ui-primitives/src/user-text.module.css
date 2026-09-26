@@ -14,10 +14,13 @@
      chip's label rode ~3px above the surrounding text in both surfaces. An
      inline chip shares the consumer's baseline by construction. */
   display: inline;
+  max-width: 100%;
   margin: 0 2px;
   color: var(--dsw-alias-state-business-primary);
   font-weight: 500;
-  white-space: nowrap;
+  white-space: inherit;
+  overflow-wrap: anywhere;
+  text-align: inherit;
 }
 
 /* Skill and command tokens read as code: the theme's code family at the

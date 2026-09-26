@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-15-guided-plugin-installation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-15-guided-plugin-installation.md
-2026-09-15-guided-plugin-installation.md: 26ad870856ce948e1ebb736a07004e41af2a17be
-2026-09-15-guided-plugin-installation.zh.md: 36e76c8ace0ae990ede14436b65fa00752f86bbe
+/agent-note-guided-plugin-installation:
+  en: 6b8375e59efb720e
+  zh: d94f130f72639233
+/agent-note-guided-plugin-installation/problem:
+  en: edefff7cd986a509
+  zh: a270839fa86976a2
+/agent-note-guided-plugin-installation/decision:
+  en: b661fb786e7182c5
+  zh: 4cdeb584639fda23
+/agent-note-guided-plugin-installation/alternatives-considered:
+  en: be64b541f4d81e7c
+  zh: 8600531c08ab4288
+/agent-note-guided-plugin-installation/consequences:
+  en: e4536b20f3587497
+  zh: a8eeb1d3c578b785
+/agent-note-guided-plugin-installation/testing:
+  en: 1e121dca5f7dc572
+  zh: bcdb1b6482cc1af6

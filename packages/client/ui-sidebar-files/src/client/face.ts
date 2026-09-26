@@ -1,7 +1,7 @@
 /**
  * The tree's asynchronous half: listing directories into the store.
  *
- * The component never awaits anything. It calls `start` / `load` / `toggle`, and
+ * The component never awaits anything. It calls `start` / `refresh` / `toggle`, and
  * this face performs the listing and writes the outcome through the store's own
  * actions — the Slot-standard `inject` shape, so the session id is resolved by
  * the framework and the write set stays the store's.
@@ -23,6 +23,47 @@ import type { BoundActions } from '@deepseek-ai/dsh-client-store'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { DirLevel, createFilesStore } from './store.ts'
+import type { WorkspaceFileWatchFrame } from '@deepseek-ai/dsh-api-workspace-files/types'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import { DirectoryNode } from './directory-node.ts'
+
+/**
+ * Observe one directory without recursively watching its descendants.
+ * @param sessionId - Session owning the directory tree.
+ * @param path - absolute directory path.
+ * @param signal - node lifetime.
+ * @returns readiness and invalidation notifications.
+ */
+export type WatchWorkspaceDirectory = (sessionId: SessionId, path: string, signal: AbortSignal) => AsyncIterable<'ready' | 'change'>
+
+/**
+ * Bind directory observation to the Remote stream supervisor.
+ * @param remote - Client Remote with workspace file streams.
+ * @returns a watcher that awaits stream disposal when its node ends.
+ */
+export function createWatch(remote: ClientRemote): WatchWorkspaceDirectory {
+  return async function* (sessionId, path, signal) {
+    const aborted = (): boolean => signal.aborted
+    if (aborted()) return
+    const stream = remote.$stream<WorkspaceFileWatchFrame>({
+      name: `directory ${path}`,
+      open: lifetime => remote.workspaceFiles.changes(sessionId, path, lifetime),
+      ended: () => new Error(`Directory watch ended: ${path}`),
+    })
+    const abort = (): void => { void stream.dispose() }
+    signal.addEventListener('abort', abort, { once: true })
+    try {
+      for await (const item of stream) {
+        if (aborted()) return
+        if (item.value.kind === 'ready') item.accept()
+        yield item.value.kind
+      }
+    } finally {
+      signal.removeEventListener('abort', abort)
+      await stream.dispose()
+    }
+  }
+}
 
 /**
  * One directory listing, bound to a Remote face.
@@ -73,6 +114,10 @@ export function childPath(parent: string, name: string): string {
 
 /** The tree's injected business face, as the body receives it. */
 export interface FilesInjected {
+  /** Refresh the open directory tree. @param tabId - owning tab. */
+  readonly refresh: (tabId: TabId) => void
+  /** Control automatic rereads without closing watches. @param tabId - owning tab. @param enabled - automatic-refresh setting. */
+  readonly setAutoRefresh: (tabId: TabId, enabled: boolean) => void
   /**
    * Seed this tab's tree and list its root.
    * @param tabId - the tab being drawn.
@@ -88,22 +133,25 @@ export interface FilesInjected {
    */
   readonly load: (tabId: TabId, path: string, signal: AbortSignal) => void
   /**
-   * Open or collapse one directory, listing it the first time it opens.
+   * Open or collapse one directory, retaining intent during ancestor restoration.
    * @param tabId - the tab being drawn.
+   * @param parentPath - the listed parent directory's exact tree key.
    * @param path - absolute directory path.
-   * @param loaded - whether this level already has state.
+   * @param expanded - current expansion preferences, including descendants to restore.
    * @param signal - the tab record's lifetime.
    */
-  readonly toggle: (tabId: TabId, path: string, loaded: boolean, signal: AbortSignal) => void
+  readonly toggle: (tabId: TabId, parentPath: string, path: string, expanded: readonly string[], signal: AbortSignal) => void
 }
 
 /**
  * Bind the tree's face to one directory listing.
  * @param list - the bound `workspaceFiles.list` call.
+ * @param watch - target-scoped directory observation.
  * @returns the Slot `inject` factory: session and bound actions in, face out.
  */
 export function filesFace(
   list: ListWorkspaceDirectory,
+  watch: WatchWorkspaceDirectory,
 ): (sessionId: SessionId, actions: BoundActions<ReturnType<typeof createFilesStore>>) => FilesInjected {
   return (
     sessionId: SessionId,
@@ -111,6 +159,7 @@ export function filesFace(
   ): FilesInjected => {
     /** Per tab, per absolute path: the listing generation a settlement must match; the latest request wins. */
     const generations = new Map<TabId, Map<string, number>>()
+    const roots = new Map<TabId, DirectoryNode>()
     const nextGeneration = (tabId: TabId, path: string): number => {
       const byPath = generations.get(tabId) ?? new Map<string, number>()
       generations.set(tabId, byPath)
@@ -118,31 +167,54 @@ export function filesFace(
       byPath.set(path, generation)
       return generation
     }
-    const load = (tabId: TabId, path: string, signal: AbortSignal): void => {
+    const load = async (tabId: TabId, path: string, signal: AbortSignal): Promise<DirLevel | undefined> => {
       if (signal.aborted) return
       const generation = nextGeneration(tabId, path)
       actions.loading(tabId, path)
-      void list(sessionId, path, signal).then((result) => {
+      return list(sessionId, path, signal).then((result) => {
         // A newer listing of this level was asked for since, or the record is
         // gone and its bookkeeping with it: nothing left for this one to write.
-        if (generations.get(tabId)?.get(path) !== generation) return
+        if (signal.aborted || generations.get(tabId)?.get(path) !== generation) return
         if (result.ok) actions.loaded(tabId, path, result.value)
         else actions.failed(tabId, path, result.error)
+        return result.ok ? result.value : undefined
       })
     }
     return {
+      refresh: (tabId) => { void roots.get(tabId)?.refreshTree() },
+      setAutoRefresh: (tabId, enabled) => {
+        actions.autoRefresh(tabId, enabled)
+        roots.get(tabId)?.setAutomatic(enabled)
+      },
       start(tabId, root, signal) {
         actions.start(tabId, root)
         signal.addEventListener('abort', () => {
+          void roots.get(tabId)?.close()
+          roots.delete(tabId)
           generations.delete(tabId)
           actions.forget(tabId)
         }, { once: true })
-        load(tabId, root, signal)
+        roots.set(tabId, new DirectoryNode(root,
+          (path, lifetime) => load(tabId, path, lifetime),
+          (path, lifetime) => watch(sessionId, path, lifetime),
+          (path, error) => {
+            if (!signal.aborted) actions.failed(tabId, path, new RemoteError('gateway/internal', error instanceof Error ? error.message : String(error), {}))
+          }, signal,
+        ).open())
       },
-      load,
-      toggle(tabId, path, loaded, signal) {
+      load: (tabId, path, signal) => { void load(tabId, path, signal) },
+      toggle(tabId, parentPath, path, expanded, signal) {
+        if (signal.aborted) return
+        const root = roots.get(tabId)
+        if (root === undefined) return
+        const parent = root.find(parentPath)
+        if (parent === undefined && !expanded.includes(parentPath)) return
+        const collapsing = expanded.includes(path)
+        const next = collapsing ? expanded.filter(value => value !== path) : [...expanded, path]
+        root.setExpanded(next)
+        if (collapsing) void parent?.collapse(path)
+        else parent?.expand(path, next)
         actions.toggled(tabId, path)
-        if (!loaded) load(tabId, path, signal)
       },
     }
   }

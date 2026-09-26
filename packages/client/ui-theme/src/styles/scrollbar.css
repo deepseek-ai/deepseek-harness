@@ -22,14 +22,14 @@ body {
      below. A surface that must align itself beside a space-consuming bar
      (ConversationRoot's overlay composer seat) reads this instead of
      hardcoding the number. */
-  --dsh-scrollbar-width: 8px;
+  --dsh-scrollbar-width: 5px;
 }
 
 /* The two paths are mutually exclusive, and the gate is load-bearing rather
    than defensive. A non-`auto` `scrollbar-width` or `scrollbar-color` makes
    Chromium and Safari drop every `::-webkit-scrollbar*` rule for that
    element, including `::-webkit-scrollbar-thumb:hover` — measured in chromium
-   as an 8px `::-webkit-scrollbar` width taking effect on its own and being
+   as a `::-webkit-scrollbar` width taking effect on its own and being
    ignored as soon as `scrollbar-width: thin` is added. Declaring both
    unconditionally therefore leaves the hover tokens with no rendering at all,
    because the engines that implement the hover pseudo-element are exactly the

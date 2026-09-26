@@ -1,0 +1,9 @@
+- dialog "Stop and archive this session?":
+  - heading "Stop and archive this session?" [level=2]
+  - button "Close"
+  - paragraph: “ARCHIVE_ACTIVE run the long command” still has work in progress. Archiving stops it first; you can restore the session later from the “All conversations (show archived)” filter in the sidebar, and the stopped work will not resume on its own.
+  - list "Work that will be stopped":
+    - listitem: The turn in progress
+    - listitem: "1 background job: node -e \"const fs=require('node:fs'); fs.writeFileSync('started.txt', 'started'); setInterval(() => { fs.appendFileSync('heartbeat.txt', '.') }, 200); setTimeout(() => { fs.writeFileSync('finished.txt', 'finished') }, 60000)\""
+  - button "Cancel"
+  - button "Stop and archive"

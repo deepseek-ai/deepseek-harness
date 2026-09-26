@@ -203,8 +203,8 @@ interface CreateSessionOptions {
   readonly seed?: readonly SessionEvent[]
   /**
    * Exact fork-inherited prefix length when `meta.isSeeded` is true. The
-   * constructor seed is exactly this inherited prefix; the constructor
-   * appends the child-owned tagged marker at the cut.
+   * constructor appends the child-owned tagged marker at the cut unless
+   * the seed already includes it followed by child-owned fork closers.
    */
   readonly inheritedEventCount?: SessionLogOffset
   /**

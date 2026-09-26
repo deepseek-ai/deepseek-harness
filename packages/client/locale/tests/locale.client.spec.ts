@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { stubSettingsScope, type StubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
+import { stubConfigForm, type StubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import type { LocaleSettings, LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 import { FALLBACK_LOCALE, LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-const make = (host?: StubSettingsScope<LocaleSettings>): {
+const make = (host?: StubConfigForm<LocaleSettings>): {
   ctx: Context
   svc: LocaleRuntime
   events: LocaleSnapshot[]
@@ -139,7 +139,7 @@ describe('LocaleRuntime', () => {
   })
 
   it('setLocale writes through the scope and republishes only on a real change', () => {
-    const host = stubSettingsScope<LocaleSettings>()
+    const host = stubConfigForm<LocaleSettings>()
     const { svc, events } = make(host)
     svc.setLocale('en')
     expect(svc.getLocale().active).toBe('en')
@@ -162,7 +162,7 @@ describe('LocaleRuntime', () => {
     // nothing stored. Choosing that same language in the menu must become
     // durable, or a Chinese browser sharing the home still opens Chinese.
     stubLanguages('fr-FR')
-    const host = stubSettingsScope<LocaleSettings>()
+    const host = stubConfigForm<LocaleSettings>()
     const { svc } = make(host)
     expect(svc.getLocale().active).toBe('en')
     expect(host.set).not.toHaveBeenCalled()
@@ -183,7 +183,7 @@ describe('LocaleRuntime', () => {
   })
 
   it('registers an external locale for selection, translation, persistence, and reversible disposal', () => {
-    const host = stubSettingsScope<LocaleSettings>()
+    const host = stubConfigForm<LocaleSettings>()
     const { svc, events } = make(host)
     svc.register('ns', 'en', { hello: 'Hello' })
     svc.register('ns', 'JA', { hello: 'こんにちは' })
@@ -277,7 +277,7 @@ describe('LocaleRuntime', () => {
   })
 
   it('adopts a saved external locale when its definition registers later', () => {
-    const host = stubSettingsScope<LocaleSettings>()
+    const host = stubConfigForm<LocaleSettings>()
     const { svc, events } = make(host)
     host.publish({ status: 'ready', value: { preference: 'ja' }, revision: 1, writable: true })
     expect(svc.getLocale().active).toBe('zh')
@@ -289,7 +289,7 @@ describe('LocaleRuntime', () => {
   })
 
   it('adopts a Host preference over the browser language without writing it back', () => {
-    const host = stubSettingsScope<LocaleSettings>()
+    const host = stubConfigForm<LocaleSettings>()
     const { svc, events } = make(host)
     host.publish({ status: 'ready', value: { preference: 'en' }, revision: 1, writable: true })
     expect(svc.getLocale().active).toBe('en')
@@ -300,7 +300,7 @@ describe('LocaleRuntime', () => {
   })
 
   it('an absent Host preference returns to the browser-derived locale', () => {
-    const host = stubSettingsScope<LocaleSettings>()
+    const host = stubConfigForm<LocaleSettings>()
     const { svc } = make(host)
     host.publish({ status: 'ready', value: { preference: 'en' }, revision: 1, writable: true })
     expect(svc.getLocale().active).toBe('en')
@@ -309,7 +309,7 @@ describe('LocaleRuntime', () => {
   })
 
   it('adopts a section already standing at construction and releases its subscription on dispose', async () => {
-    const host = stubSettingsScope<LocaleSettings>()
+    const host = stubConfigForm<LocaleSettings>()
     host.publish({ status: 'ready', value: { preference: 'en' }, revision: 1, writable: true })
     const { ctx, svc } = make(host)
     expect(svc.getLocale().active).toBe('en')

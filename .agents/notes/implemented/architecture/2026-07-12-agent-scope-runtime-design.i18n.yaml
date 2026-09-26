@@ -1,6 +1,157 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-12-agent-scope-runtime-design.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-12-agent-scope-runtime-design.md
-2026-07-12-agent-scope-runtime-design.md: b9b2c837f560c2b8b98da37e3656caf298b705e2
-2026-07-12-agent-scope-runtime-design.zh.md: 4b94d1b8449bd619c47f6bee0712ec8ed0b39593
+/agent-note-agent-scope-runtime-design-and-correctness:
+  en: b63ecbd21fc1f427
+  zh: 4990d96d76888802
+/agent-note-agent-scope-runtime-design-and-correctness/problem:
+  en: ae7b688bd991a6df
+  zh: 73b6b28755852054
+/agent-note-agent-scope-runtime-design-and-correctness/decision:
+  en: cfd6abca8404c7d4
+  zh: a9372aae85e49f55
+/agent-note-agent-scope-runtime-design-and-correctness/cordis-model-context-fiber-effect-receiver-and-waterfall:
+  en: 4d4bdb629a57139d
+  zh: 7b4d21d9eb42d94b
+/agent-note-agent-scope-runtime-design-and-correctness/cordis-model-context-fiber-effect-receiver-and-waterfall/a-context-is-an-ownership-path-through-one-service-graph:
+  en: 201a1882518455e2
+  zh: 830e25eab7ed37db
+/agent-note-agent-scope-runtime-design-and-correctness/cordis-model-context-fiber-effect-receiver-and-waterfall/fibers-and-effects-make-cleanup-structural:
+  en: d0ef6e1b5d453350
+  zh: 4a774ac9daf20849
+/agent-note-agent-scope-runtime-design-and-correctness/cordis-model-context-fiber-effect-receiver-and-waterfall/receivers-route-listeners-waterfalls-compose-decisions:
+  en: 594e198a8b566049
+  zh: 50378e7a2a533dff
+/agent-note-agent-scope-runtime-design-and-correctness/scope-routing-one-opaque-key-selects-one-layer:
+  en: fa59d22549e9e44a
+  zh: 80904729042e87b3
+/agent-note-agent-scope-runtime-design-and-correctness/scope-routing-one-opaque-key-selects-one-layer/scope-identity-uses-object-identity:
+  en: 3a05a7bfb2197f58
+  zh: fbb599031788b70b
+/agent-note-agent-scope-runtime-design-and-correctness/scope-routing-one-opaque-key-selects-one-layer/registry-reads-overlay-one-exact-layer:
+  en: 28636ae6d55935d7
+  zh: 33a989f049de2f3e
+/agent-note-agent-scope-runtime-design-and-correctness/scope-routing-one-opaque-key-selects-one-layer/fused-dispatch-helpers-prevent-subject-drift:
+  en: 638e3711206e3c41
+  zh: 61d370123d30c1ed
+/agent-note-agent-scope-runtime-design-and-correctness/agent-creation-one-transaction-owns-the-complete-operation:
+  en: ef58215c8554180b
+  zh: 44571074148d2467
+/agent-note-agent-scope-runtime-design-and-correctness/agent-creation-one-transaction-owns-the-complete-operation/registry-entries-are-the-only-live-identity-records:
+  en: 092b49671e83df98
+  zh: 330ea6e45c4deb99
+/agent-note-agent-scope-runtime-design-and-correctness/agent-creation-one-transaction-owns-the-complete-operation/the-transaction-owns-preparation-before-awaiting-it:
+  en: 3940920908ec6066
+  zh: 888e36ca43611d30
+/agent-note-agent-scope-runtime-design-and-correctness/agent-creation-one-transaction-owns-the-complete-operation/setup-is-trusted-composition-inside-a-private-world:
+  en: 40a73b8eede856ee
+  zh: 7dab8f2548cb92ea
+/agent-note-agent-scope-runtime-design-and-correctness/agent-creation-one-transaction-owns-the-complete-operation/publication-has-one-ordered-commit-path:
+  en: 227eff7a5adacd0e
+  zh: b9ee423c2dd4212f
+/agent-note-agent-scope-runtime-design-and-correctness/agent-creation-one-transaction-owns-the-complete-operation/teardown-preserves-work-before-revoking-registrations:
+  en: 1cbe77cff192815d
+  zh: 7f517936a8aa469e
+/agent-note-agent-scope-runtime-design-and-correctness/session-append-materialize-validate-commit-notify:
+  en: cc37e93081fea4cb
+  zh: daf2234f84e4c9bf
+/agent-note-agent-scope-runtime-design-and-correctness/session-append-materialize-validate-commit-notify/durable-data-is-materialized-once:
+  en: d0a57b0ac227d84c
+  zh: e9ae6ced0e65fe49
+/agent-note-agent-scope-runtime-design-and-correctness/session-append-materialize-validate-commit-notify/pre-commit-listeners-can-veto-post-commit-observers-cannot:
+  en: 15255d3d0b62fac0
+  zh: c1995d5aa3c78f0a
+/agent-note-agent-scope-runtime-design-and-correctness/trust-boundaries-copy-only-when-ownership-actually-changes:
+  en: 22b381902fe903f3
+  zh: 8a2efe9a8b458bba
+/agent-note-agent-scope-runtime-design-and-correctness/tools-and-prompts-one-view-authoritative-assembly-committed-outcomes:
+  en: 456ac0359d3c02f6
+  zh: 9099e15d22139751
+/agent-note-agent-scope-runtime-design-and-correctness/tools-and-prompts-one-view-authoritative-assembly-committed-outcomes/one-resolver-defines-the-tool-view:
+  en: 120e1c79f0b99b1a
+  zh: 1c21a5b1d6b08235
+/agent-note-agent-scope-runtime-design-and-correctness/tools-and-prompts-one-view-authoritative-assembly-committed-outcomes/tool-execution-owns-identity-and-boundary-materialization:
+  en: 41f1f2ad73d83d73
+  zh: e6bff63958ede05e
+/agent-note-agent-scope-runtime-design-and-correctness/tools-and-prompts-one-view-authoritative-assembly-committed-outcomes/the-assembly-waterfall-owns-the-final-model-visible-composition:
+  en: 5c5880ccea139058
+  zh: 3e5b7d10cb4c6ff8
+/agent-note-agent-scope-runtime-design-and-correctness/tools-and-prompts-one-view-authoritative-assembly-committed-outcomes/structured-output-commits-only-authoritative-outcomes:
+  en: a9a711cf31559765
+  zh: e9083b000fc89128
+/agent-note-agent-scope-runtime-design-and-correctness/tools-and-prompts-one-view-authoritative-assembly-committed-outcomes/three-execution-boundaries-are-deliberately-one-way:
+  en: a109f3fadf338061
+  zh: 12eb46fe775fa46a
+/agent-note-agent-scope-runtime-design-and-correctness/tools-and-prompts-one-view-authoritative-assembly-committed-outcomes/skill-and-approval-services-trust-typed-callers:
+  en: 9572833d47f779e6
+  zh: 7ff491d309060030
+/agent-note-agent-scope-runtime-design-and-correctness/subagents-publication-is-the-start-promise:
+  en: b9216021f8f50bcc
+  zh: fda52f9434cc8191
+/agent-note-agent-scope-runtime-design-and-correctness/subagents-publication-is-the-start-promise/the-service-contract-has-one-cancellation-channel:
+  en: 84a4be83b78c045b
+  zh: 043e14cf628413cd
+/agent-note-agent-scope-runtime-design-and-correctness/subagents-publication-is-the-start-promise/in-process-providers-reuse-the-core-transaction:
+  en: b5e0b3dcf0dff750
+  zh: 63905010383781b9
+/agent-note-agent-scope-runtime-design-and-correctness/subagents-publication-is-the-start-promise/acp-providers-own-the-process-until-readiness-or-cleanup:
+  en: aa0c00cee368c7e6
+  zh: 767539b0f4d56f55
+/agent-note-agent-scope-runtime-design-and-correctness/workflows-and-acp-processes-retain-only-independent-async-facts:
+  en: effbb0acf7f66bed
+  zh: e0cc9ad6ac0777de
+/agent-note-agent-scope-runtime-design-and-correctness/workflows-and-acp-processes-retain-only-independent-async-facts/workflow-children-are-pending-starts-or-published-records:
+  en: 9f05eed800f3413c
+  zh: 8230a28a0f94bffa
+/agent-note-agent-scope-runtime-design-and-correctness/workflows-and-acp-processes-retain-only-independent-async-facts/terminal-result-and-physical-cleanup-remain-separate:
+  en: 5ad141c6df9f4fc3
+  zh: 63effa4f14f3c530
+/agent-note-agent-scope-runtime-design-and-correctness/workflows-and-acp-processes-retain-only-independent-async-facts/acp-prompt-settlement-does-not-depend-on-update-delivery:
+  en: d39f73f50f0370bd
+  zh: 3889c1db46de560e
+/agent-note-agent-scope-runtime-design-and-correctness/correctness-enforcement:
+  en: 840564e766d2f05c
+  zh: 059243afea7eb9c0
+/agent-note-agent-scope-runtime-design-and-correctness/correctness-enforcement/types-make-the-ordinary-path-hard-to-misuse:
+  en: 9183eb29dddfd97f
+  zh: e6ce13295e6c3e65
+/agent-note-agent-scope-runtime-design-and-correctness/correctness-enforcement/runtime-invariants-cover-cross-service-facts:
+  en: fabafbebc0ab4f95
+  zh: 06d94a98ed5aa40c
+/agent-note-agent-scope-runtime-design-and-correctness/correctness-enforcement/generated-artifacts-keep-public-contracts-aligned:
+  en: d0ddc5f38289225d
+  zh: 781d910228d5e334
+/agent-note-agent-scope-runtime-design-and-correctness/alternatives-considered:
+  en: 5eef7873a795c8f0
+  zh: 3e8ba109a6e29ba5
+/agent-note-agent-scope-runtime-design-and-correctness/alternatives-considered/use-a-transparent-proxy-as-the-scope-carrier:
+  en: 199c7345a237e7e9
+  zh: b262d5ad0c7cb562
+/agent-note-agent-scope-runtime-design-and-correctness/alternatives-considered/reserve-agent-and-session-ids-before-setup:
+  en: 3a8cb6969139dd84
+  zh: 2913bb68433c9ec7
+/agent-note-agent-scope-runtime-design-and-correctness/alternatives-considered/snapshot-every-typed-same-process-argument:
+  en: 3e1f19f909f8d138
+  zh: 0727777e34964afe
+/agent-note-agent-scope-runtime-design-and-correctness/alternatives-considered/give-readiness-cancellation-and-disposal-separate-controllers:
+  en: f2c6ecbd139bbdb0
+  zh: 0ff5b1e192dcb376
+/agent-note-agent-scope-runtime-design-and-correctness/alternatives-considered/keep-synchronous-subagent-start-plus-run-started:
+  en: 7f5669933cb35c9c
+  zh: c55e35d4c175af36
+/agent-note-agent-scope-runtime-design-and-correctness/alternatives-considered/restore-selected-prompt-or-tool-contributions-after-assembly:
+  en: a2b2e48d9ccda310
+  zh: 3a4e925fde9d05b0
+/agent-note-agent-scope-runtime-design-and-correctness/alternatives-considered/remove-worker-process-lifecycle-guards-with-same-process-hardening:
+  en: 662e0904d90a3a94
+  zh: 84c5e49f7cc59b32
+/agent-note-agent-scope-runtime-design-and-correctness/consequences:
+  en: 0d781b2dc4c41ddb
+  zh: 844652a4aaac37aa
+/agent-note-agent-scope-runtime-design-and-correctness/consequences/what-the-design-guarantees:
+  en: eb2001592d7bd7b1
+  zh: e534dbb6daa9af32
+/agent-note-agent-scope-runtime-design-and-correctness/consequences/costs-and-limits:
+  en: e9383713d56b9e10
+  zh: d3ab00aea8ecf4e0

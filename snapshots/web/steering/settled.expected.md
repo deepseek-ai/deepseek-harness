@@ -1,53 +1,29 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "Use the ask_user_question tool to" [disabled]
-  - img
+  - navigation "Session hierarchy": Use the ask_user_question tool to
   - text: Standard mode
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
 - text: Use the ask_user_question tool to ask me exactly one question with id "checkpoint", question "Ready to continue?", header "Checkpoint", and options labeled "Yes" and "No". After I answer, reply with one short sentence acknowledging my answer and stop. {{clock}}
-- button "Copy":
-  - img
-- button "1 tool call":
-  - text: 1 tool call
-  - img
+- button "Copy"
+- status: Worked
+- button "Took {{duration}}" [disabled]
+- button "Asked questions"
 - text: "Interjection: include the word BANANA in your final reply. {{clock}}"
-- button "Copy":
-  - img
+- button "Copy"
 - paragraph: Great, let's move forward. BANANA!
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
 - text: {{clock}}
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
-- button "0% of context used"
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Send message" [disabled]
-- button "1 turns 2 steps · {{throughput}} tok/s":
-  - img
-  - text: 1 turns 2 steps{{throughput}} tok/s
-- button "30 tok · Cache hit 0%":
-  - img
-  - text: 30 tokCache hit 0%
+- button "1 turns 2 steps · {{throughput}} tok/s": 1 turns 2 steps{{throughput}} tok/s
+- button "30 tok · Cache hit 0%": 30 tokCache hit 0%
+- button "0% of context used": 0%

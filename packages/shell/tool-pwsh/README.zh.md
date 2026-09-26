@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-pwsh` 为 agent（智能体）提供 `pwsh` 工具，通过已挂载的 shell 执行器运行 PowerShell 命令——它是 `dsh-tool-bash` 的 Windows 对应物，逐调用镜像。每次调用都运行在全新 pwsh 进程中，因此状态不会保留；`run_in_background` 把长时间运行的命令变成后台任务。命令是 PowerShell 方言：原生 `C:\...` 路径与 `$env:NAME` 变量，不做方言翻译。每次调用都运行在受管 `DSH_*` 环境中；在沙箱执行器下，工具会向模型说明并强制执行 Windows 特有的语言模式与命名管道约定。请与 `dsh-pwsh-local` 等 PowerShell 执行器以及 `dsh-shell-env` 插件一起挂载。
+`dsh-tool-pwsh` 让 agent（智能体）通过已挂载的 shell 执行器运行 PowerShell 命令。每次调用使用全新进程；组合中有 job 注册表时，每条命令从启动那一刻起就是一个任务，因此 `run_in_background` 立即返回 id，超过超时仍在运行的前台命令返回同一个 id，输出可观测。命令使用原生 Windows 路径和 `$env:NAME` 变量，不做方言翻译。调用获得受管 `DSH_*` 环境，沙箱执行会落实 Windows 语言模式与命名管道要求。请与 `dsh-pwsh-local` 等 PowerShell 执行器及 `dsh-shell-env` 插件一起挂载。
 
 ## 目录
 
@@ -41,11 +41,12 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-tool-pwsh'
 ```
 
-唯一的配置字段用于开关后台支持。
+配置字段决定后台能力面。
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `enableRunInBackground` | `true` | 暴露 `run_in_background`；为 `false` 时拒绝强制后台调用 |
+| `enableRunInBackground` | `true` | 组合中有 job 注册表时暴露 `run_in_background`；为 `false` 时拒绝强制后台调用 |
+| `promoteOnTimeout` | `true` | 到达超时的前台命令继续作为它的后台任务运行，而不是杀掉它 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-pwsh)是每个受支持字段及其 JSDoc 的穷尽式真源；生成的[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-pwsh)携带完整参数 schema。
 
@@ -53,9 +54,13 @@ kind: "package-reference"
 
 工具执行 `pwsh -Command <command>` 并返回合并后的输出。命令每次调用都运行在全新 pwsh 进程中，因此状态从不保留——请传 `workdir` 而不是 `cd`。路径使用原生 Windows 形式，环境变量用 `$env:NAME` 读取。非零退出以 `[exit code: N]` 报告；在 Windows 上，强制终止的命令以 `[exit code: 1]` 结算且没有信号标记，因此 agent 把中断后的裸 exit 1 当作终止而非命令失败。后台运行、输出截断以及 `description`／`timeoutMs`／`workdir` 参数的行为与 [`dsh-tool-bash`](../tool-bash/README.zh.md#running-long-commands-in-the-background) 完全一致，包括异步 shell 准备过程中由任务负责的取消。
 
+### 前台命令即任务
+
+组合中有 job 注册表时，前台命令一启动就登记到 `ctx.jobs`，调用等待该任务：命令在运行期间始终被列出、经 `job.list` 与 `job.follow` 流式观看，并可从 Web 任务列表停止。在超时内完成的命令返回普通前台结果，其任务记录随结果一起离开注册表，模型从不看到 id。超过超时仍在运行的命令继续作为它本来就是的那个任务运行，调用返回 `[still running after <timeoutMs>ms; moved to background job <id>]` 加任务交接指引，并以一次消费式读取带上目前为止的输出——`job_output` 恰好从此处接续。来自调用之外的杀停（人在界面上停止任务）会让前台结果在退出标记之前带上 `[stopped: <reason>]`，模型读到的是原因而不是命令失败；取消调用本身则杀掉任务。登记是尽力而为的：`promoteOnTimeout: false`、缺少 job 注册表，或注册表在启动时拒绝该任务（持有者的任务上限、没有控制器）都会改为在执行器的 deadline 杀下运行命令，`timeoutMs` 参数描述也只在交接语义成立时才宣传它。
+
 ### Windows 特有的沙箱行为
 
-在沙箱执行器下，被拒绝的命令会报告 `[sandbox: file access denied under <mode> mode]`，并适用相同的单次升权路径：用 `sandbox_permissions` 加一句 `justification`，经用户审批后重试完全相同的命令一次。工具还会在其描述中教授两条 Windows 受限令牌约定：只读 pwsh 运行在 ConstrainedLanguage 中（`.NET` 静态调用、`Add-Type`、COM 与反射会以 "only core types" 错误失败）；两种受限模式下程序都无法打开命名管道，因此通过管道 stdio 捕获另一程序输出的命令会以 EPERM 失败——请升权该确切命令一次，或重构命令以避免捕获输出。
+在沙箱执行器下，被拒绝的命令会报告 `[sandbox: file access denied under <mode> mode]`，并适用相同的单次升权路径：用 `sandbox_permissions` 加一句 `justification`，经用户审批后重试完全相同的命令一次。理由字段提示模型使用用户当前提问的语言。工具还会在其描述中教授两条 Windows 受限令牌约定：只读 pwsh 运行在 ConstrainedLanguage 中（`.NET` 静态调用、`Add-Type`、COM 与反射会以 "only core types" 错误失败）；两种受限模式下程序都无法打开命名管道，因此通过管道 stdio 捕获另一程序输出的命令会以 EPERM 失败——请升权该确切命令一次，或重构命令以避免捕获输出。
 
 ### 可能出什么问题
 
@@ -83,7 +88,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：工具注册、提示词区段、参数校验、升权、请求组装 |
-| [`src/background.ts`](src/background.ts) | 把已结算的后台进程映射为通用任务结果词汇 |
+| [`src/background.ts`](src/background.ts) | 把已结算的进程映射为通用任务结果词汇，并把输出环读取渲染为进程读取 |
 | [`src/render.ts`](src/render.ts) | 模型侧结果文本：流、标记、截断通知（bash 孪生） |
 | — | 不发布运行时不变式伴生入口；除所属 seam 强制执行的约定外，本包不公开独立的事件序列或可变数据关系。 |
 
@@ -138,7 +143,7 @@ Non-zero exits are reported as `[exit code: N]` markers; investigate failures be
 
 #### 模型看到什么
 
-模型会看到生成的 [`pwsh` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-pwsh)。按 agent 作用域实施的工具限制可以移除该 agent 的定义。
+模型会看到生成的 [`pwsh` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-pwsh)。其理由字段提示模型使用用户当前提问的语言。按 agent 作用域实施的工具限制可以移除该 agent 的定义。
 
 #### Token 影响
 
@@ -152,7 +157,7 @@ Non-zero exits are reported as `[exit code: N]` markers; investigate failures be
 
 #### 模型看到什么
 
-渲染器输出依数据而定的 stdout 尾部，再输出可选的 `[stderr]` 和 stderr 尾部。条件行精确为 `[output truncated; full output: <path-or-(unavailable)>]`、`[sandbox: file access denied under <mode> mode]` 加升权提示 `[sandbox: escalation available — …]`（仅在组合声明升权时）、`[timed out after <timeoutMs>ms]`、`[killed by signal: <signal>]` 与 `[exit code: <exitCode>]`（仅非零退出）；空正文渲染为 `(no output)`。
+渲染器输出依数据而定的 stdout 尾部，再输出可选的 `[stderr]` 和 stderr 尾部。条件行精确为 `[output truncated; full output: <path-or-(unavailable)>]`、`[sandbox: file access denied under <mode> mode]` 加升权提示 `[sandbox: escalation available — …]`（仅在组合声明升权时）、`[timed out after <timeoutMs>ms]`、`[stopped: <reason>]`、`[killed by signal: <signal>]` 与 `[exit code: <exitCode>]`（仅非零退出）；空正文渲染为 `(no output)`。
 
 #### Token 影响
 

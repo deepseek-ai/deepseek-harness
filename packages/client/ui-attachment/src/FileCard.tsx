@@ -1,4 +1,4 @@
-import { fileExtension, FileTypeIcon, fileSizeText, IconCloseFill14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { fileExtension, FileTypeIcon, fileSizeText, IconCloseFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './FileCard.module.css'
 
 /** Localized strings consumed by one pending-file card. */
@@ -66,7 +66,7 @@ export function FileCard({
         aria-label={labels.remove}
         onClick={onRemove}
       >
-        <IconCloseFill14 size={12} />
+        <IconCloseFillRegular size={12} />
       </button>
       {state === 'uploading' && (
         <span className={css.progressTrack} aria-hidden>

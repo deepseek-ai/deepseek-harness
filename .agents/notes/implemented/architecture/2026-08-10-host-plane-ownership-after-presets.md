@@ -6,7 +6,7 @@ English | [中文](2026-08-10-host-plane-ownership-after-presets.zh.md)
 
 ## Problem
 
-[Per-session agent presets](2026-08-03-per-session-agent-presets.md) moved every model-facing row onto the agent plane, and each later fix has been one reader that assumed the world before the move. `tasks` came back to the host because a preset row outside its realm resolved it; `goals` never left for the same reason; a child agent's `toolFilter` was repaired once every model-facing tool became an ancestor contribution rather than a global one ([child agents join their parent's preset](../bug-fix/2026-08-10-child-agents-join-their-parent-preset.md)).
+[Per-session agent presets](2026-09-18-declarative-agent-presets.md) moved every model-facing row onto the agent plane, and each later fix has been one reader that assumed the world before the move. `tasks` came back to the host because a preset row outside its realm resolved it; `goals` never left for the same reason; a child agent's `toolFilter` was repaired once every model-facing tool became an ancestor contribution rather than a global one ([child agents join their parent's preset](../bug-fix/2026-08-10-child-agents-join-their-parent-preset.md)).
 
 Two more readers were still on the wrong side of that line.
 
@@ -18,15 +18,15 @@ Nothing named an agent that joined no preset. The join is a scope-parent link; w
 
 **The meter is host-plane.** `dsh-token-meter` returns to the host composition and leaves the presets' `isolate` map, so `compaction-basic` and `tool-result-pruner` resolve the one host instance from inside their realm. The presets keep the realm and the backend — what a preset chooses is whether its agent compacts, not whether its tokens are counted. This is the criterion `tasks` and `goals` are already read by, applied to a Service whose *projection* reach is what made preset ownership wrong: a unit whose empty value is indistinguishable from a real one cannot be per-composition while the table it registers into is per-process.
 
-**An unjoined agent is named twice, at two different points.** `AgentPresets` logs one warning per agent published with a scope chain of length one while a roster is configured. The invariant companion fails instead — and at `system-prompt/assemble`, not at publication, because an unjoined agent is legal until it addresses a model: `recompose` binds exactly such an agent as its first link, and prompt assembly is the only caller that supplies an agent scope, so a host assembly and a standing mount are both correctly out of range.
+**An unjoined agent fails at model use.** The invariant companion checks `system-prompt/assemble`, because a bare Agent can legally be bound later through `recompose`. Host-only and cold-scope prompt reads have no Agent and remain outside this check.
 
-Three limits stay open and are recorded where they bite rather than fixed here: projection key presence is not a per-session capability signal ([`dsh-session-projection`](../../../../packages/session/session-projection/README.md)); a superseded standing generation is never reclaimed, which the settings-page authoring flow turns into a per-save cost ([`dsh-agent-presets`](../../../../packages/preset/agent-presets/README.md)); and a temporary plugin mounted through `cordis_mount` belongs to the composition rather than the session that mounted it ([`dsh-tool-cordis`](../../../../packages/extensions/tool-cordis/README.md)).
+Projection key presence is not a per-session capability signal ([session projection](../../../../packages/session/session-projection/README.md)). Temporary plugins mounted through `cordis_mount` belong to the composition rather than the invoking session ([tool Cordis](../../../../packages/extensions/tool-cordis/README.md)). [Declarative presets](2026-09-18-declarative-agent-presets.md) own revision retention and reclaim retired trees after their final reference releases.
 
 ## Testing
 
-`apps/cli/tests/web-agent-presets.e2e.ts` reads `ctx.get('tokenMeter')` on the booted Web composition before any preset in the file mounts — a preset-side meter sits behind an `isolate` realm and is invisible to `ctx.get`, so the read is an ownership assertion rather than a mount-order coincidence — then asserts a `minimal` session's snapshot carries all three units.
+`apps/cli/tests/web-agent-presets.e2e.ts` reads `ctx.get('tokenMeter')` on the booted Web composition before any Agent is created — a preset-side meter sits behind an `isolate` realm and is invisible to `ctx.get`, so the read is an ownership assertion rather than a mount-order coincidence — then asserts a `minimal` session's snapshot carries all three units.
 
-`packages/preset/agent-presets/tests/mount.spec.ts` asserts the warning fires exactly once for a bare agent and not at all for a joined one. `tests/invariant.spec.ts` carries the negative control: an unjoined agent's assembly rejects, while a joined agent's assembly and a scopeless host assembly both pass.
+`packages/preset/agent-preset-registry/tests/invariant.spec.ts` rejects an unjoined Agent's assembly and accepts a joined Agent, a Host read and a cold-scope read.
 
 ## Alternatives considered
 
@@ -42,4 +42,4 @@ Three limits stay open and are recorded where they bite rather than fixed here: 
 
 The context meter becomes a per-session fact instead of a function of mount history. A preset can no longer opt out of token accounting; no shipped preset did, and `minimal` now says it drops auto-compaction rather than the accounting.
 
-The warning is advisory, so a deployment that adds a roster to the ACP or SDK-server entry points still starts agents with no tools — it just says so once per agent instead of silently. The invariant reaches only compositions that load `dsh-invariants`, which fences package tests and development hosts, not a shipped one.
+The invariant reaches compositions loading `dsh-invariants`. Production entry points must compose Agents explicitly; installing the registry alone does not bind them.

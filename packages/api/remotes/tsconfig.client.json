@@ -39,6 +39,9 @@
       "path": "../../goal/goal"
     },
     {
+      "path": "../../schedule/schedule"
+    },
+    {
       "path": "../../feedback/message-feedback"
     },
     {
@@ -54,7 +57,7 @@
       "path": "../../llm/llm"
     },
     {
-      "path": "../../preset/agent-presets"
+      "path": "../../preset/agent-preset-registry"
     },
     {
       "path": "../../settings/settings"
@@ -67,6 +70,9 @@
     },
     {
       "path": "../../interaction/user-questions"
+    },
+    {
+      "path": "../job-controller/tsconfig.client.json"
     },
     {
       "path": "../session-controller/tsconfig.client.json"
@@ -91,6 +97,15 @@
     },
     {
       "path": "../../boot/plugin-manager"
+    },
+    {
+      "path": "../../document/office-to-pdf"
+    },
+    {
+      "path": "../account-controller"
+    },
+    {
+      "path": "../../credentials/deepseek-account"
     }
   ]
 }

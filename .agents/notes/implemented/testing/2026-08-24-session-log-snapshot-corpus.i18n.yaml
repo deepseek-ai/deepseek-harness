@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-24-session-log-snapshot-corpus.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-08-24-session-log-snapshot-corpus.md
-2026-08-24-session-log-snapshot-corpus.md: a9001c2eabd610e08cfb1177f2b1339f306320af
-2026-08-24-session-log-snapshot-corpus.zh.md: d02c798af23a205993e92ed72a0f3a162f8bdded
+/agent-note-session-log-snapshot-corpus:
+  en: 9cb40b5081c110bc
+  zh: 17c221d99b579119
+/agent-note-session-log-snapshot-corpus/problem:
+  en: ec6f331737be909e
+  zh: 5faee4c81cf2314f
+/agent-note-session-log-snapshot-corpus/decision:
+  en: 1611b352461c63c5
+  zh: f32a5229bac3264a
+/agent-note-session-log-snapshot-corpus/alternatives-considered:
+  en: 76db318c1c2dad2d
+  zh: b868b7c9b29c1e00
+/agent-note-session-log-snapshot-corpus/invariants:
+  en: 04098d11861c90ae
+  zh: 6af6c376fe1ba8bb
+/agent-note-session-log-snapshot-corpus/consequences:
+  en: 3d5810a9518fcb8d
+  zh: 075ad9a226b8b312
+/agent-note-session-log-snapshot-corpus/risks:
+  en: 333b33afa03cf4e1
+  zh: 3b8f3bcdf57cfe8e

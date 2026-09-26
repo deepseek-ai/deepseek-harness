@@ -69,7 +69,10 @@ export function parse(text: string, descriptor: KvUnitDescriptor): UnitState {
       `unit '${descriptor.name}': stored version ${version} != expected ${descriptor.version}`,
     )
   }
-  if (typeof tables !== 'object' || tables === null) {
+  // `typeof` alone admits an array: reading one as a table map reports every
+  // declared table as absent, and the next publish replaces the file with that
+  // empty view, discarding records this reader could not see.
+  if (typeof tables !== 'object' || tables === null || Array.isArray(tables)) {
     throw new StorageError('malformed-medium', `unit '${descriptor.name}': tables is not an object`)
   }
   const state: UnitState = { version, global: globalValue ?? null, tables: new Map() }

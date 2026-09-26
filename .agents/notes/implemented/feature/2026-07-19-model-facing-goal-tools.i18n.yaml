@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-19-model-facing-goal-tools.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-19-model-facing-goal-tools.md
-2026-07-19-model-facing-goal-tools.md: 2c05c8aa0ee2caecb0264fa87984085b3df5d785
-2026-07-19-model-facing-goal-tools.zh.md: f16055e52e4a3d6a4db423699a36929f6f8c4cd2
+/agent-note-model-facing-same-session-goal-tools:
+  en: 4d9b039620654dd6
+  zh: e8703b6a1723f910
+/agent-note-model-facing-same-session-goal-tools/problem:
+  en: f8e860155bfc0b43
+  zh: 3279c90b622e8c08
+/agent-note-model-facing-same-session-goal-tools/decision:
+  en: 0ab1e1c40cb2dac9
+  zh: b4180b6681c130b2
+/agent-note-model-facing-same-session-goal-tools/decision/tools-and-model-contract:
+  en: 288a819f644611c9
+  zh: d6bd7986ba091519
+/agent-note-model-facing-same-session-goal-tools/decision/execution-authority:
+  en: 63a9e7e85303b9f1
+  zh: d3f1d0c225103cfe
+/agent-note-model-facing-same-session-goal-tools/decision/blocking-threshold:
+  en: 398de9518db40d11
+  zh: b7f36c4061ca7e78
+/agent-note-model-facing-same-session-goal-tools/testing:
+  en: 92650dd6648ca455
+  zh: 5b57276a6a983fea
+/agent-note-model-facing-same-session-goal-tools/alternatives-considered:
+  en: e84b9fc4823bcc1e
+  zh: a125628e4746bf50
+/agent-note-model-facing-same-session-goal-tools/consequences:
+  en: e254571a176b37e5
+  zh: 01f76aff35e3618d
+/agent-note-model-facing-same-session-goal-tools/known-limitations-and-deferred-work:
+  en: 5b043a930afd4a13
+  zh: d91e8a61de2590a4

@@ -119,8 +119,8 @@ function tryClaimSourceId(
 }
 
 function clientOrigin(): string {
-  const location = Reflect.get(globalThis, 'location') as unknown
+  const location: unknown = Reflect.get(globalThis, 'location')
   if (typeof location !== 'object' || location === null) return ''
-  const origin = Reflect.get(location, 'origin') as unknown
+  const origin: unknown = Reflect.get(location, 'origin')
   return typeof origin === 'string' ? origin : ''
 }

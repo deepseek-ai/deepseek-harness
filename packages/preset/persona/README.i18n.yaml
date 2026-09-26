@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/preset/persona/README.md
-README.md: 11f9fdc1d3968fdb9ba0792936a050aca04d4e8b
-README.zh.md: 9903c857121123d7ad9f29b8dbf7fb4e9cba4454
+/:
+  en: fca2b93080507b37
+  zh: 0a8c803deedc0731
+/deepseek-ai-dsh-persona:
+  en: 743695093b8a920e
+  zh: 3784b6641780bd27
+/deepseek-ai-dsh-persona/summary:
+  en: 147d5511056246c0
+  zh: 9998f4c946957cf9
+/deepseek-ai-dsh-persona/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-persona/use-this-package:
+  en: 9b74e4172eaf5fdd
+  zh: ab94a985d1f96523
+/deepseek-ai-dsh-persona/use-this-package/configuration:
+  en: d6abd7f52ebb8e03
+  zh: ff56b29693d3883b
+/deepseek-ai-dsh-persona/use-this-package/persona-behavior:
+  en: 60a0513b27aa1204
+  zh: a5604819b059dd86
+/deepseek-ai-dsh-persona/use-this-package/when-to-use-it:
+  en: 4721bb61679c0279
+  zh: 51aaa09929dd06d0
+/deepseek-ai-dsh-persona/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-persona/understand-the-implementation/how-the-row-registers:
+  en: 72eeb11ca6e5401e
+  zh: f8b036d1d0444b56
+/deepseek-ai-dsh-persona/understand-the-implementation/why-the-row-is-scope-only:
+  en: bcd57eaefa6d1ff8
+  zh: 8d7de63d2bfaa5ef
+/deepseek-ai-dsh-persona/understand-the-implementation/source-map:
+  en: 6d3b20dc423825bf
+  zh: 2ada808509e73edc
+/deepseek-ai-dsh-persona/further-exploration:
+  en: 2636f1f672f3d32e
+  zh: f1b4a371cc90cbd1
+/deepseek-ai-dsh-persona/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-persona/model-experience/the-persona-section:
+  en: 2b53c1d07ef68f24
+  zh: 33a3c17ab56adf57
+/deepseek-ai-dsh-persona/model-experience/the-persona-section/what-the-model-sees:
+  en: 7f01b67034a26a2f
+  zh: 7f65b5eee49e71a4
+/deepseek-ai-dsh-persona/model-experience/the-persona-section/token-effect:
+  en: af8e73cbc540aa5a
+  zh: fa1182678427ab11
+/deepseek-ai-dsh-persona/model-experience/the-persona-section/kv-cache-effect:
+  en: e9f96cf496c544c7
+  zh: b986f1b22d1beb70
+/deepseek-ai-dsh-persona/known-limitations-and-deferred-work:
+  en: dc09a92d00af8e8a
+  zh: 15f0f663ba6dc2cb
+/deepseek-ai-dsh-persona/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

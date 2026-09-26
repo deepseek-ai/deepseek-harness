@@ -1,36 +1,21 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "Reply with a one-sentence description" [disabled]
-  - img
+  - navigation "Session hierarchy": Reply with a one-sentence description
   - text: Standard mode
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
 - text: Reply with a one-sentence description of event sourcing, then stop. {{clock}}
-- button "Copy":
-  - img
-- button "Context injection @deepseek-ai/dsh-system-prompt":
-  - img
-  - img
-  - text: Context injection @deepseek-ai/dsh-system-prompt
+- button "Copy"
+- status: Failed
+- button "Failed" [disabled]
 - status:
   - text: This turn failedAPI key is invalid
   - code: AUTH
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Send message" [disabled]
-- img
 - text: 1 turns 1 steps

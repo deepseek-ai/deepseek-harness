@@ -41,7 +41,7 @@ function hostOver(core: SlotCore): SlotRendererHost {
   }
   const sessionAdapter: SlotScopeAdapter = {
     current: bindingSource,
-    resolve: () => undefined,
+    bindingSource: () => bindingSource,
   }
   return {
     subscribe: (key, fn) => core.subscribe(key, fn),
@@ -49,9 +49,16 @@ function hostOver(core: SlotCore): SlotRendererHost {
     entriesOf: key => core.entries(key),
     entriesOfSlot: key => core.entriesOfSlot(key),
     reportEntryError: (key, entry, error, info) => { core.reportEntryError(key, entry, error, info) },
+    reportFactoryError: (name, definition, error) => { core.reportFactoryError(name, definition, error) },
     specOf: key => core.specDynamic(key),
     isLive: entry => core.isLive(entry),
     storeOf: () => undefined,
+    factoryStoreOf: () => undefined,
+    retainFactoryOccurrence: () => () => {},
+    subscribeFactory: (name, fn) => core.subscribeFactory(name, fn),
+    getFactoryVersion: name => core.factoryVersion(name),
+    factoryOf: name => core.factory(name),
+    isFactoryLive: definition => core.isFactoryLive(definition),
     root: bindingSource,
     scopeRevision: { getSnapshot: () => 0, subscribe: () => () => {} },
     scope: () => sessionAdapter,

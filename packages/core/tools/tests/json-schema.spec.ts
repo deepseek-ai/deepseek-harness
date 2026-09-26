@@ -231,13 +231,13 @@ describe('the enforced raw JSON Schema subset', () => {
   })
 
   it('accepts lossless annotation containers from another JavaScript realm', () => {
-    const schema = runInNewContext(`({
+    const schema: unknown = runInNewContext(`({
       type: 'object',
       properties: { value: { type: 'string', enum: ['x'] } },
       required: ['value'],
       default: { x: 1 },
       examples: [[{ ok: true }]],
-    })`) as unknown
+    })`)
 
     expect(() => { assertSupportedJsonSchema(schema) }).not.toThrow()
   })

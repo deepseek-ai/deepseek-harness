@@ -33,7 +33,9 @@ Ordinary-session candidates come from the `skills/list` Remote; the host serves 
 
 ### The skill tool row
 
-A collapsed row renders the skill glyph, `Skill` title, and requested skill name; running calls carry the transcript shimmer, failures replace the name with the first error line, and interrupted calls use the warning state. A settled row expands into a bounded `Instructions` card containing the exact durable tool output, with the standard trajectory `Inspect` affordance when available. The row derives its name, lifecycle, and body only from the frozen call/result slice supplied by ui-tool, never from the current catalog, so replay stays stable when installed skills or their descriptions change.
+The `preparing` stage shows only the skill icon and title, with no requested skill name or expansion. The `start` and `result` stages use the recorded arguments and output described below; preparation does not consult the installed catalog.
+
+A collapsed row renders the skill glyph, `Skill` title, and requested skill name on the same secondary font-size axis, line height, row height, and glyph scaling as ordinary Tool rows. Every lifecycle state retains the ordinary skill glyph; running calls carry the transcript shimmer, while failures replace the name with the first error line and interruptions retain their explicit status text. A settled row expands into a bounded `Instructions` card containing the exact durable tool output, with the standard trajectory `Inspect` affordance when available; this expanded card keeps its own typography. The row derives its name, lifecycle, and body only from the frozen call/result slice supplied by ui-tool, never from the current catalog, so replay stays stable when installed skills or their descriptions change.
 
 Hovering over `/name` highlights the entire reference. Clicking a known skill opens its provider-supplied `SKILL.md` path in the right Sidebar while keeping the token editable. An uncached click shares the per-Session catalog fetch and opens when it completes, retaining the clicked Session address. Preset changes, connection resets, and plugin disposal cancel pending previews; a later click fetches the current catalog again. Skills without a file path remain invocable but have no file preview.
 
@@ -50,6 +52,8 @@ The source implements no adjudication hooks and no reference codec: the pick lan
 ### Candidate flow
 
 Catalogs cache per ordinary session with a single-flight fetch; the scope-birth `warm` hook prewarms the session's entry, the forwarded `agent-preset/selected` owner event drops that one session's entry (the catalog belongs to the preset, and a blank session may switch after the warm), and `connection/reset` clears everything. Catalog-addressed continuable children resolve no skill candidates locally because the existing skill RPC requires an attached session; viewing their persisted history must not activate them. The list RPC rides the plugin's root-context connection captured at registration; draft chip visuals derive from the `lexicon` scan.
+
+Each catalog fetch requires an existing retained Client Session and waits for its initial history open to succeed before sending `skills/list`. A temporary `skillCatalog` reference holds that Session until the fetch settles. An unretained Session or a failed open rejects without sending the RPC; preset invalidation, connection reset, and plugin disposal also cancel a pending history wait.
 
 ### Registration
 

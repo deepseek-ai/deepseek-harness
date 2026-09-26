@@ -145,11 +145,9 @@ describe('installed Cua Driver Loader composition', () => {
       parameters: { type: 'object', properties: { display: { type: 'integer', minimum: 0 } }, required: ['display'], additionalProperties: false },
     })
     const result = agent.session.snapshotEvents().find(event => event.type === 'tool/result')
-    expect(result?.data).toMatchObject({ message: { content: [{ type: 'tool-result', content: [{ type: 'text', text: 'Display 0' }, { type: 'image' }] }] } })
+    expect(result?.data).toMatchObject({ message: { content: [{ type: 'text', text: 'Display 0' }, { type: 'image' }] } })
     if (result?.type !== 'tool/result') throw new Error('Missing durable screenshot result')
-    const toolResult = result.data.message.content[0]
-    if (toolResult?.type !== 'tool-result') throw new Error('Missing tool result block')
-    const image = toolResult.content.find(block => block.type === 'image')
+    const image = result.data.message.content.find(block => block.type === 'image')
     if (image?.type !== 'image') throw new Error('Missing durable screenshot image')
     expect(await ctx.attachments.readImage(image.attachment)).toMatchObject({ ref: { width: 1, height: 1, mediaType: 'image/png' } })
     expect(JSON.stringify(agent.session.snapshotEvents())).not.toContain('iVBORw0KGgo')

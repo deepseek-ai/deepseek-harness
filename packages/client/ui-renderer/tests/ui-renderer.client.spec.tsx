@@ -37,7 +37,7 @@ async function bench() {
   }
   const adapter: SlotScopeAdapter = {
     current,
-    resolve: () => undefined,
+    bindingSource: () => current,
   }
   slots.installScope('session', adapter)
   return { ctx, slots, fiber }

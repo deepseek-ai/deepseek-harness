@@ -11,10 +11,11 @@
 
 import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { isAbsolute, join } from 'node:path'
+import { join } from 'node:path'
+import { desktopApplicationIcon } from '@deepseek-ai/dsh-native-command'
 import type { OpenInAppApp } from './catalog.ts'
 import {
-  findDesktopEntry, isFile, output, resolveInternals, specFor, xdgDataDirectories,
+  findDesktopEntry, output, resolveInternals, specFor, xdgDataDirectories,
   type OpenInAppInternals, type OpenInAppResolvedLaunch, type ResolvedInternals,
 } from './resolver.ts'
 
@@ -121,50 +122,6 @@ async function extractExecutableIconPng(
   }
 }
 
-/** Theme sizes searched largest-first; the button renders at 15-18 CSS px. */
-const HICOLOR_SIZES = ['512x512', '256x256', '128x128', '64x64', '48x48', '32x32'] as const
-
-/** The media type an icon file's extension names. */
-function iconContentType(path: string): OpenInAppIcon['contentType'] | null {
-  if (path.endsWith('.png')) return 'image/png'
-  if (path.endsWith('.svg')) return 'image/svg+xml'
-  return null
-}
-
-/** Read one icon file when it exists and carries a servable media type. */
-async function readIconFile(path: string): Promise<OpenInAppIcon | null> {
-  const contentType = iconContentType(path)
-  if (contentType === null || !await isFile(path)) return null
-  return { bytes: await readFile(path), contentType }
-}
-
-/**
- * Resolve a Linux icon name through the hicolor theme and pixmaps
- * directories, largest size first. The user's active icon theme is not
- * consulted (README Known Limitations): hicolor is the freedesktop fallback
- * every theme inherits from, so the stock icon is found wherever the
- * application installed one.
- */
-async function findLinuxThemeIcon(
-  name: string, dataDirs: readonly string[],
-): Promise<OpenInAppIcon | null> {
-  for (const dataDir of dataDirs) {
-    for (const size of HICOLOR_SIZES) {
-      for (const extension of ['png', 'svg'] as const) {
-        const icon = await readIconFile(join(dataDir, 'icons', 'hicolor', size, 'apps', `${name}.${extension}`))
-        if (icon !== null) return icon
-      }
-    }
-    const scalable = await readIconFile(join(dataDir, 'icons', 'hicolor', 'scalable', 'apps', `${name}.svg`))
-    if (scalable !== null) return scalable
-    for (const extension of ['png', 'svg'] as const) {
-      const pixmap = await readIconFile(join(dataDir, 'pixmaps', `${name}.${extension}`))
-      if (pixmap !== null) return pixmap
-    }
-  }
-  return null
-}
-
 /** One Linux application's icon from its desktop entry's `Icon=` key. */
 async function extractLinuxIcon(
   desktopId: string, internals: ResolvedInternals,
@@ -172,8 +129,7 @@ async function extractLinuxIcon(
   const entry = await findDesktopEntry(desktopId, internals)
   const icon = entry?.icon
   if (icon === undefined || icon === '') return null
-  if (isAbsolute(icon)) return readIconFile(icon)
-  return findLinuxThemeIcon(icon, xdgDataDirectories(internals))
+  return desktopApplicationIcon(icon, xdgDataDirectories(internals))
 }
 
 /**

@@ -6,6 +6,7 @@ import { chromium, type Browser, type Page } from 'playwright'
 import { unzipSync, strFromU8 } from 'fflate'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { tmpdir, release } from 'node:os'
+import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-tool-present/types'
 import {
@@ -13,7 +14,7 @@ import {
   compareOrRefreshGolden, fixtureUserPrompts, launchWebScaffold, recordFixture,
   watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage } from './support.ts'
+import { connectFreshWorkspace, expandTurnProcesses, newEnglishPage, scrollIntoView } from './support.ts'
 
 const DIR = fileURLToPath(new URL('../../../snapshots/web/present', import.meta.url))
 const FIXTURE = join(DIR, 'session.v3.jsonl')
@@ -53,10 +54,18 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
     vi.stubEnv('PATH', `${nativeRoot}${delimiter}${process.env.PATH ?? ''}`)
     await mkdir(DIR, { recursive: true })
     scaffold = await launchWebScaffold({
+      openInAppEnvironment: createLaunchEnvironmentSnapshot([{ source: 'process', values: { SSH_CONNECTION: '10.0.0.2 55000 10.0.0.9 22' } }]),
       extraOverlayPath: fileURLToPath(new URL('./present.overlay.yml', import.meta.url)),
-      agentPresets: { roots: [], default: 'ptc' }, compareReplaySession: true,
+      agentPresets: { default: 'ptc' }, compareReplaySession: true,
       ...(MODE === 'record' ? {} : { replayFixture: FIXTURE }),
     })
+    // File associations belong to the desktop rather than the recorded Session.
+    const controller = scaffold.ctx.get('sessionController')
+    if (controller === undefined) throw new Error('present requires Session Controller')
+    const nativeQuery: unknown = Reflect.get(controller, 'fileApplications')
+    if (typeof nativeQuery !== 'function') throw new Error('present requires native association discovery')
+    Reflect.set(controller, 'fileApplications', async () => [{ id: 'test-editor', name: 'Test Editor', default: true, icon: null }])
+    scaffold.ctx.effect(() => () => { Reflect.set(controller, 'fileApplications', nativeQuery) }, 'present: native association fixture')
     disposeApproval = scaffold.ctx.on('approval/request', () => Promise.resolve('allowed-once'), { prepend: true })
     scaffold.ctx.on('session/event', (_session, event) => { events.push(event) })
     browser = await chromium.launch()
@@ -106,7 +115,7 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
       }
     }
     expect(events.some(event => event.type === 'tool/ptc-dispatch' && event.data.name === 'present' && event.data.isError)).toBe(true)
-    expect(events.some(event => event.type === 'tool/result' && event.data.message.content[0].isError)).toBe(true)
+    expect(events.some(event => event.type === 'tool/result' && event.data.message.isError)).toBe(true)
   }, 200_000)
 
   it('opens current source files after edits and reload, and reports deletion without downloading', async () => {
@@ -121,8 +130,20 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
       }
       const row = page.locator('[data-presented-files-row]')
       await row.waitFor()
-      expect(await row.getByRole('button', { name: /More file actions/ }).count()).toBe(2)
+      await expect.poll(() => row.getByRole('button', { name: 'More ways to open' }).count()).toBe(2)
       expect(await row.getByText('report.txt', { exact: true }).innerText()).toBe('report.txt')
+      const card = row.locator('[data-presented-file]').filter({ hasText: 'report.txt' })
+      await card.getByRole('button', { name: 'Open in Test Editor', exact: true }).hover()
+      await page.getByRole('tooltip', { name: 'Open in Test Editor', exact: true }).waitFor()
+      expect(await page.getByRole('tooltip').evaluate((tooltip) => {
+        const rect = tooltip.getBoundingClientRect()
+        const previous = tooltip.style.pointerEvents
+        tooltip.style.pointerEvents = 'auto'
+        const visible = document.elementFromPoint(rect.left + rect.width / 2, rect.bottom - 1) === tooltip
+        tooltip.style.pointerEvents = previous
+        return tooltip.parentElement === document.body && visible
+      })).toBe(true)
+      await page.mouse.move(0, 0)
       const beforePreview = (await opened()).length
       const column = page.locator('[data-rightbar-col]')
       for (const [name, content] of [['report.txt', 'EDITED_REPORT'], ['说明.txt', 'EDITED_NOTE']] as const) {
@@ -139,19 +160,16 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
       expect(downloads).toEqual([])
       await page.getByRole('button', { name: 'Collapse right sidebar', exact: true }).click()
       const beforeReveal = (await opened()).length
-      await row.getByRole('button', { name: 'More file actions for report.txt', exact: true }).click()
+      await row.locator('[data-presented-file]').filter({ hasText: 'report.txt' }).getByRole('button', { name: 'More ways to open', exact: true }).click()
       const revealResponse = page.waitForResponse(response => response.url().includes('action=reveal') && response.request().method() === 'POST')
-      await page.getByRole('menuitem', { name: process.platform === 'darwin' ? /Show in Finder/ : /Open containing folder/ }).click()
+      await page.getByRole('menuitem', { name: 'Show file location', exact: true }).click()
       expect((await revealResponse).status()).toBe(204)
-      expect(await row.getByRole('button', { name: 'Open report.txt in sidebar', exact: true })
-        .evaluate(button => button === document.activeElement)).toBe(true)
       await expect.poll(opened).toHaveLength(beforeReveal + 1)
       expect((await opened()).at(-1)).toEqual({ action: 'reveal', content: null, path: await realpath(process.platform === 'darwin' ? join(cwd, 'report.txt') : cwd) })
       for (const [name, bytes] of [['report.txt', 'EDITED_REPORT\n'], ['说明.txt', 'EDITED_NOTE\n']] as const) {
         const count = (await opened()).length
         const response = page.waitForResponse(response => response.url().includes('/api/present.open?') && response.request().method() === 'POST')
-        await row.getByRole('button', { name: `More file actions for ${name}`, exact: true }).click()
-        await page.getByRole('menuitem', { name: 'Open in default app', exact: true }).click()
+        await row.locator('[data-presented-file]').filter({ hasText: name }).getByRole('button', { name: 'Open in Test Editor', exact: true }).click()
         expect((await response).status()).toBe(204)
         await page.waitForFunction(() => document.querySelector('[data-presented-files-row] button:disabled') === null)
         expect(await opened()).toHaveLength(count + 1)
@@ -174,9 +192,10 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
     ])
     expect(exported).not.toContain('EDITED_REPORT')
     if (MODE !== 'record') {
+      await expect.poll(() => page.locator('[data-presented-file] [role="status"]').count(), { timeout: 10_000 }).toBe(0)
       const aria = await captureExpandedTurnProcessAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
       await compareOrRefreshGolden(join(DIR, 'ui.expected.md'), aria, MODE)
-      await page.locator('[data-turn-process]').click()
+      await expandTurnProcesses(page)
       const failed = page.locator('[data-tool="present"][data-state="error"]')
       const delivered = page.locator('[data-tool="present"][data-state="ok"]')
       expect(await failed.count()).toBe(1)
@@ -215,9 +234,9 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
               .find(element => element.textContent === 'report.txt'),
           'report title',
         )
-        const description = requiredElement(report.querySelector<HTMLElement>('span[role="status"]'), 'report status')
+        const description = requiredElement(report.querySelector<HTMLElement>('[data-presented-description]'), 'report description')
         const open = requiredElement(
-          report.querySelector<HTMLButtonElement>('button[aria-label="Open report.txt in sidebar"]'),
+          report.querySelector<HTMLButtonElement>('[data-open-target] button'),
           'report open action',
         )
         const icon = requiredElement(report.querySelector<SVGElement>('svg'), 'report icon')
@@ -250,10 +269,11 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
       expect(geometry.iconWidth).toBe('20')
       expect(geometry.titleFontSize).toBe('13px')
       expect(geometry.descriptionFontSize).toBe('10px')
-      expect(geometry.openFontSize).toBe('12px')
+      expect(geometry.openFontSize).toBe('11px')
       await page.setViewportSize({ width: 480, height: 900 })
+      await page.locator('[data-sidebar-collapsed="true"]').waitFor({ state: 'attached' })
       const row = page.locator('[data-presented-files-row]')
-      await row.scrollIntoViewIfNeeded()
+      await scrollIntoView(row)
       for (const card of await row.getByRole('button').all()) {
         const bounds = await card.boundingBox()
         expect(bounds).not.toBeNull()
@@ -263,9 +283,9 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
     }
     const beforeDelete = (await opened()).length
     await unlink(join(cwd, 'report.txt'))
-    const missing = page.waitForResponse(response => response.url().includes('/api/present.open?'))
-    await page.locator('[data-presented-files-row]').getByRole('button', { name: 'More file actions for report.txt', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'Open in default app', exact: true }).click()
+    const missing = page.waitForResponse(response => response.url().includes('/api/present.open?') && response.request().method() === 'POST')
+    await page.locator('[data-presented-file]').filter({ hasText: 'report.txt' })
+      .getByRole('button', { name: 'Open in Test Editor', exact: true }).click()
     expect((await missing).status()).toBe(404)
     await page.getByText('Could not open. Click to retry.', { exact: true }).waitFor()
     expect(await opened()).toHaveLength(beforeDelete)

@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-15-desktop-native-fatal-recovery.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-15-desktop-native-fatal-recovery.md
-2026-09-15-desktop-native-fatal-recovery.md: b2a0dfff1a630d1eedaa898e4a4c8144ff7ae776
-2026-09-15-desktop-native-fatal-recovery.zh.md: 0fee729e3be791d10966050d21482c5132b14fe6
+/agent-note-native-desktop-fatal-recovery:
+  en: 753dfd819203ac69
+  zh: 5ea088778b13d940
+/agent-note-native-desktop-fatal-recovery/problem:
+  en: 9cf7ba7dfd36aee0
+  zh: 356fdbb01870981e
+/agent-note-native-desktop-fatal-recovery/decision:
+  en: a3b9aa3659117524
+  zh: 6f25cb295c37cddd
+/agent-note-native-desktop-fatal-recovery/alternatives-considered:
+  en: 624d62bc0b73c37a
+  zh: 81c3d7cd66782f73
+/agent-note-native-desktop-fatal-recovery/consequences:
+  en: 309a935614b0b6a1
+  zh: 58db41cd59568a6d

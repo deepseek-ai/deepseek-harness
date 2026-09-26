@@ -30,7 +30,7 @@
       "path": "../../core/session"
     },
     {
-      "path": "../../preset/agent-presets"
+      "path": "../../preset/agent-preset-registry"
     },
     {
       "path": "../deepseek-llm-api-extensions"

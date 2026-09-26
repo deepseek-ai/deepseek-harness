@@ -595,6 +595,15 @@ def test_client_keeps_unmatched_notifications_available_globally_while_subscribe
 def test_session_subscription_keeps_descendant_relationships_across_subscriptions() -> None:
     client = HarnessClient()
     with client.subscribe_session_notifications("main") as first:
+        unknown_child = {
+            "type": "subagent/catalog", "seq": 0, "time": 1,
+            "data": {"version": 1, "childId": "unreadable-child", "childCreatedAt": 1, "mode": "unknown"},
+        }
+        client._handle_message({
+            "jsonrpc": "2.0", "method": "session.event",
+            "params": {"sessionId": "main", "event": unknown_child},
+        })
+        assert first.next().payload == {"sessionId": "main", "event": unknown_child}
         client._handle_message({
             "jsonrpc": "2.0",
             "method": "subagent.started",

@@ -2,9 +2,8 @@
 # local provider endpoint is supplied by the snapshot test; the real attachment
 # store and ACP bridge carry two uploaded images into one model request.
 - id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   config:
-    protocol: !!js process.env.DSH_SNAPSHOT_PROTOCOL
     apiKeyEnv: DSH_SNAPSHOT_API_KEY
     baseURL: !!js process.env.DSH_SNAPSHOT_BASE_URL
     thinking: disabled

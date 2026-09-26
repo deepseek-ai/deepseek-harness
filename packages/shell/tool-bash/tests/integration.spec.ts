@@ -76,7 +76,7 @@ function findEvent<T extends SessionEvent['type']>(
 
 function resultText(event: SessionEvent): string {
   if (event.type !== 'tool/result') return ''
-  return event.data.message.content[0].content
+  return event.data.message.content
     .filter(block => block.type === 'text')
     .map(block => block.text)
     .join('')
@@ -136,14 +136,12 @@ describe('bash tool through the agent loop', () => {
     expect(toolCall.data.name).toBe('bash')
 
     const toolResult = findEvent(log, 'tool/result')
-    expect(toolResult.data.message.content[0].isError).toBe(false)
+    expect(toolResult.data.message.isError).toBe(false)
     expect(resultText(toolResult)).toBe('integration-ok\n')
 
     // The second model call saw the tool result in its derived history.
     const lastRequest = adapter.requests.at(-1)
-    const toolResultBlocks = (lastRequest?.messages ?? [])
-      .flatMap(message => message.content)
-      .filter(block => block.type === 'tool-result')
+    const toolResultBlocks = (lastRequest?.messages ?? []).filter(message => message.role === 'tool')
     expect(toolResultBlocks).toHaveLength(1)
 
     const finalMessage = findEvent(log, 'assistant/message', 'last')
@@ -164,7 +162,7 @@ describe('bash tool through the agent loop', () => {
     await waitForIdle(ctx, agent)
 
     const toolResult = findEvent(events(agent), 'tool/result')
-    expect(toolResult.data.message.content[0].isError).toBe(false)
+    expect(toolResult.data.message.isError).toBe(false)
     expect(resultText(toolResult)).toContain('[exit code: 9]')
   })
 
@@ -197,11 +195,11 @@ describe('bash tool through the agent loop', () => {
     await waitForIdle(ctx, agent)
 
     const firstResult = findEvent(events(agent), 'tool/result')
-    expect(firstResult.data.message.content[0].isError).toBe(false)
+    expect(firstResult.data.message.isError).toBe(false)
     expect(resultText(firstResult)).toBe('started background job bash-1')
     // The turn closed with the task still running, so the notice cannot exist yet.
     const isNotice = (e: SessionEvent): e is SessionEvent<'user/message'> =>
-      e.type === 'user/message' && e.data.source.kind === 'plugin'
+      e.type === 'user/message' && e.data.source.kind !== 'user'
     expect(events(agent).some(isNotice)).toBe(false)
 
     // Releasing the command now settles it against a provably idle owner. No
@@ -224,12 +222,11 @@ describe('bash tool through the agent loop', () => {
     expect(noticeText).toContain('background job bash-1 (bash: ')
     expect(noticeText).toContain('finished [status: completed, exit code: 0]')
     expect(notice.data.source).toMatchObject({
-      kind: 'plugin',
-      plugin: 'tool-jobs',
+      kind: 'tool-jobs',
       form: 'notice',
     })
     const readResult = findEvent(events(agent), 'tool/result', 'last')
-    expect(readResult.data.message.content[0].isError).toBe(false)
+    expect(readResult.data.message.isError).toBe(false)
     expect(resultText(readResult)).toContain('bg-ok')
     expect(resultText(readResult)).toContain('[status: completed, exit code: 0]')
   })

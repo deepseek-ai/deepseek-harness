@@ -8,10 +8,24 @@
  */
 
 import type { SandboxEnforcement, SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import type { CollectedOutput, DshEnvironment } from '@deepseek-ai/dsh-subprocess'
+import type { CollectedOutput, DshEnvironment, SubprocessOutputReader } from '@deepseek-ai/dsh-subprocess'
 
 export { DSH_ENV_PREFIX } from '@deepseek-ai/dsh-subprocess'
-export type { CollectedOutput, DshEnvironment, DshEnvironmentKey } from '@deepseek-ai/dsh-subprocess'
+export type { CollectedOutput, DshEnvironment, DshEnvironmentKey, SubprocessOutputRead, SubprocessOutputReader } from '@deepseek-ai/dsh-subprocess'
+
+/**
+ * Non-consuming offset readers over a background process's captured streams,
+ * for observers independent of the consuming {@link ShellProcess.readOutput}
+ * cursor. Every background process exposes both streams; a spawn that
+ * rejected produced no process output, so its stderr reader serves the
+ * `spawn failed: …` note as the whole stream.
+ */
+export interface ShellObservedStreams {
+  /** Offset reader over captured stdout. */
+  stdout: SubprocessOutputReader
+  /** Offset reader over captured stderr (the spawn-failure note after a rejected spawn). */
+  stderr: SubprocessOutputReader
+}
 
 /**
  * Sandbox facts for one run, present iff a sandboxing executor handled it.
@@ -30,6 +44,15 @@ export interface ShellSandboxInfo {
 }
 
 /**
+ * What the executor does when the deadline expires: `kill` stops the command
+ * and classifies the result `timedOut` (the default), and `none` arms no
+ * deadline at all, leaving the caller's signal and {@link ShellProcess.kill}
+ * as the only ways to stop the command. A consumer that wants to keep waiting
+ * only for a while runs the command under `none` and bounds its own wait.
+ */
+export type ShellExpiryPolicy = 'kill' | 'none'
+
+/**
  * A caller's execution REQUEST: `workdir` and `timeoutMs` are optional and
  * filled by {@link ShellExecutor.resolve} from the implementation's config.
  * This is the model-/plugin-facing shape; pass it to `resolve()` to obtain a
@@ -41,6 +64,8 @@ export interface ShellExecRequest {
   workdir?: string | undefined
   /** Timeout override in milliseconds (implementations cap it). */
   timeoutMs?: number | undefined
+  /** Deadline policy at `timeoutMs` expiry (default `'kill'`). */
+  onExpiry?: ShellExpiryPolicy | undefined
   /**
    * Foreground stdout capture budget in bytes. Absent uses the executor's
    * default output cap. Trusted in-process consumers use this when they must
@@ -48,7 +73,7 @@ export interface ShellExecRequest {
    * tool does not expose it as a parameter.
    */
   stdoutMaxBytes?: number | undefined
-  /** Abort signal — implementations kill the command when it fires. */
+  /** Abort signal — implementations kill the command when it fires, and treat a signal that is already aborted as fired. */
   signal?: AbortSignal | undefined
   /**
    * Bytes to write to the command's stdin, then close it. Absent leaves stdin
@@ -80,19 +105,21 @@ export interface ShellExecRequest {
 
 /**
  * A resolved execution spec. {@link ShellExecutor.resolve} fills and caps the
- * required fields; {@link ShellExecutor.start} ignores `timeoutMs` because
- * background processes have no executor timeout.
+ * required fields; under `onExpiry: 'none'` the resolved `timeoutMs` arms no
+ * timer and is only echoed into {@link ShellRunResult.timeoutMs}.
  */
 export interface ShellExecSpec {
   command: string
   workdir: string
   timeoutMs: number
+  /** Deadline policy at `timeoutMs` expiry ({@link ShellExecutor.resolve} defaults it to `'kill'`). */
+  onExpiry: ShellExpiryPolicy
   /**
-   * Resolved foreground stdout capture budget in bytes. `run()` uses it for
-   * stdout; background jobs and stderr keep the executor's own output cap.
+   * Resolved stdout capture budget in bytes, applied to every execution's
+   * stdout; stderr keeps the executor's own output cap.
    */
   stdoutMaxBytes: number
-  /** Abort signal — implementations kill the command when it fires. */
+  /** Abort signal — implementations kill the command when it fires, and treat a signal that is already aborted as fired. */
   signal?: AbortSignal | undefined
   /** Bytes to write to stdin before closing it; absent means no stdin. */
   stdin?: string | undefined
@@ -179,8 +206,33 @@ export interface ShellProcess {
    */
   readOutput(): ShellProcessRead
   /**
+   * Non-consuming offset readers over the same captured streams the consuming
+   * {@link readOutput} cursor drains, including the provider-failure note a
+   * rejected spawn leaves on stderr. Independent observers read here at their
+   * own offsets without stealing bytes from `readOutput`.
+   */
+  observed: ShellObservedStreams
+  /**
    * Terminate the provider-managed range. Returns false when it had already finished
    * (no-op); idempotent.
    */
   kill(): boolean
+}
+
+/**
+ * The one execution handle {@link ShellExecutor.execute} returns: the live
+ * {@link ShellProcess} itself plus the foreground projection `result()`.
+ */
+export interface ShellExecution extends ShellProcess {
+  /**
+   * Foreground projection: settles when the process closes, with split
+   * collected streams and first-cause `timedOut`/`aborted` classification.
+   * Rejects only for infrastructure failures (a spawn that never produced a
+   * process); nonzero exits, timeout kills, and abort kills resolve with a
+   * descriptive result. Created on demand and memoized — callers that never
+   * invoke it (background producers) never observe the rejection either; the
+   * handle's `done`/read path carries the spawn-failure story for them.
+   * @returns the settled foreground result for this execution.
+   */
+  result(): Promise<ShellRunResult>
 }

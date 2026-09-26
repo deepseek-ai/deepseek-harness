@@ -150,7 +150,7 @@ describe('SessionObservationReader live path', () => {
     await ctx.fiber.dispose()
   })
 
-  it('computes live projections when the registry is mounted and surfaces its failure raw', async () => {
+  it('computes live projections and wraps projection failures as corrupt-session errors', async () => {
     const ctx = await readerContext()
     await ctx.plugin(SessionProjectionRegistry)
     const session = ctx.sessions.create(SessionId('live-projections'))
@@ -159,10 +159,13 @@ describe('SessionObservationReader live path', () => {
     using observed = await reader.read(session.id)
     expect(observed.projections).toBeDefined()
 
-    vi.spyOn(ctx.sessionProjections, 'snapshot').mockImplementation(() => {
-      throw new Error('projection failed')
+    const failure = new Error('projection failed')
+    vi.spyOn(ctx.sessionProjections, 'snapshot').mockImplementation(() => { throw failure })
+    await expect(reader.read(session.id)).rejects.toMatchObject({
+      code: 'SESSION_QUERY_CORRUPT_SESSION',
+      message: `failed to project session "${session.id}": projection failed`,
+      cause: failure,
     })
-    await expect(reader.read(session.id)).rejects.toThrow('projection failed')
     await ctx.fiber.dispose()
   })
 

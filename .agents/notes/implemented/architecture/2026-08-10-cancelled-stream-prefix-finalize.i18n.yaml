@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-10-cancelled-stream-prefix-finalize.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-10-cancelled-stream-prefix-finalize.md
-2026-08-10-cancelled-stream-prefix-finalize.md: 1e6fe59bcc1b323941b69d0e9232f0bcf9e56f53
-2026-08-10-cancelled-stream-prefix-finalize.zh.md: 7aa81f179b80925ef47a8820f8a80c1ef37ec5ea
+/agent-note-cancelled-streams-finalize-their-delivered-prefix:
+  en: d727a01958e5724c
+  zh: b2d11741f70caf24
+/agent-note-cancelled-streams-finalize-their-delivered-prefix/problem:
+  en: 142c716d174403a5
+  zh: bbb906ca25d7c9f4
+/agent-note-cancelled-streams-finalize-their-delivered-prefix/decision:
+  en: 28e166977c0dffde
+  zh: d7c6b175984627fc
+/agent-note-cancelled-streams-finalize-their-delivered-prefix/alternatives-considered:
+  en: ca4363e11e8eff48
+  zh: 834152cbe57e1f3e
+/agent-note-cancelled-streams-finalize-their-delivered-prefix/consequences:
+  en: 2d58504acfc4fffe
+  zh: a6a7ca872c003099
+/agent-note-cancelled-streams-finalize-their-delivered-prefix/testing:
+  en: 241507aff996c16a
+  zh: 599eed3162f3ba8d

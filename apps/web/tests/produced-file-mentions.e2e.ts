@@ -151,8 +151,8 @@ describe('web e2e: inline-code mentions of produced files', () => {
     expect(await mentions.first().innerText()).toBe('report.html')
     expect(await mentions.first().getAttribute('aria-label')).toBe('Open site/report.html in sidebar')
     expect(await mentions.first().getAttribute('title')).toBe('site/report.html')
-    // The turn still ends with its produced-files row (all three writes).
-    expect(await page.getByText('Files changed', { exact: true }).count()).toBe(1)
+    // Mentions resolve from the mutation calls alone; without a recorded summary no card follows.
+    expect(await page.locator('[data-changed-files]').count()).toBe(0)
 
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])

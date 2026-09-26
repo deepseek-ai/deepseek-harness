@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-25-session-log-otel-byte-limits.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-25-session-log-otel-byte-limits.md
+/agent-note-session-log-otlp-strings-and-bounded-requests:
+  en: 041f7e2b55202ea3
+  zh: e01834ae6c9fc7bc
+/agent-note-session-log-otlp-strings-and-bounded-requests/problem:
+  en: 20f659a15fb55352
+  zh: 49d39c95da1b8aa5
+/agent-note-session-log-otlp-strings-and-bounded-requests/decision:
+  en: 0f0866232326658b
+  zh: aa608d17ba712d8a
+/agent-note-session-log-otlp-strings-and-bounded-requests/alternatives-considered:
+  en: 0dc933b18a1a3573
+  zh: 77655740322c4e45
+/agent-note-session-log-otlp-strings-and-bounded-requests/consequences:
+  en: 3859569c9cdea30c
+  zh: 517449b8c49807f6

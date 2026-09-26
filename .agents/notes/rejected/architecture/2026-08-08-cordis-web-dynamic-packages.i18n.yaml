@@ -1,6 +1,73 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-08-cordis-web-dynamic-packages.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/rejected/architecture/2026-08-08-cordis-web-dynamic-packages.md
-2026-08-08-cordis-web-dynamic-packages.md: e6c7b9135198ae4f3c21f0b5116e99c521ede185
-2026-08-08-cordis-web-dynamic-packages.zh.md: 269f0f279f5415c6506bb509bfb54c3b819637d6
+/agent-note-cordis-host-client-dynamic-plugin-runtime:
+  en: f89118c354fe715d
+  zh: dcee1e4dd9bbb250
+/agent-note-cordis-host-client-dynamic-plugin-runtime/problem:
+  en: 19617f888995a1ec
+  zh: e4abb5efa2b77571
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal:
+  en: 986dd8097aac4d3d
+  zh: 986dd8097aac4d3d
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/core-principles:
+  en: 400bacbc13cc4ca2
+  zh: efb84f4257ebf13c
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/package-responsibilities-and-dependency-direction:
+  en: 60b7a0c8880e579c
+  zh: d85388f9e9d34589
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/domain-objects:
+  en: fb29437ba7cc624a
+  zh: 2c2322991e282f7c
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/domain-objects/plugin:
+  en: 84d17d0aa91fa20c
+  zh: 354cf1a6531e2353
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/domain-objects/package:
+  en: 950f4e014a7fa6df
+  zh: 9641809a80ddbb9f
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/domain-objects/plugin-run:
+  en: f5cc71352e3f2eea
+  zh: 6933e78a031bb3e1
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/domain-objects/version-pointers:
+  en: 0d17a946a46eb645
+  zh: 0d82d5287cd227af
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/host-authority-and-persistence:
+  en: 02a605a63f0b9d06
+  zh: 3918b603de86ad4b
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/define-run-and-version-switching:
+  en: dce63bf4526ae240
+  zh: 32898ea25290fd35
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/client-approval-and-authorization:
+  en: d3c874acd464c5da
+  zh: 04ffde8db6a0daa9
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/client-activation-orchestration:
+  en: 58708703b5069952
+  zh: c378e4398b8d8063
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/package-private-client-to-host-communication:
+  en: 02f6557f8f3f1155
+  zh: 33e2f26f371f20b6
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/dynamic-code-guard-and-lifecycle:
+  en: 601f8cc278c10286
+  zh: 31aa97d5c66b086c
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/inspect-providers-and-catalogs:
+  en: 8febbabca425cce7
+  zh: 078461769a69719f
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/model-guidance-layers:
+  en: 879ad6fef8ca4ae7
+  zh: 38ec8d838628bacd
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/pluginid-and-tool-ui:
+  en: 03c501a6503961fc
+  zh: 4e5b6633a393f8ca
+/agent-note-cordis-host-client-dynamic-plugin-runtime/proposal/errors-and-model-feedback:
+  en: ec2d9dedbe2cd9d5
+  zh: 005260a95cda020c
+/agent-note-cordis-host-client-dynamic-plugin-runtime/alternatives-considered:
+  en: ef5f387f4019d7ad
+  zh: 4d5da887bafc5f22
+/agent-note-cordis-host-client-dynamic-plugin-runtime/acceptance-criteria:
+  en: 3a4b3100f19377d6
+  zh: c36d31e04f7d4b2d
+/agent-note-cordis-host-client-dynamic-plugin-runtime/risks:
+  en: 3ec21c3758ab98a8
+  zh: e949a28f8e38042c

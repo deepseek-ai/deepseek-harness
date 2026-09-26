@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-31-win32-picker-path-string-read.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-31-win32-picker-path-string-read.md
-2026-08-31-win32-picker-path-string-read.md: 63b2a2ea5ee88b5fa3ac79aca98350f58067fd1e
-2026-08-31-win32-picker-path-string-read.zh.md: 8afc6610a0cf1c7c8649f9e1c62c26b3d89f5a03
+/agent-note-read-the-win32-picker-path-without-a-fixed-size-unmanaged-view:
+  en: abd03a3bff03600e
+  zh: 8a4a21ecc7cae78b
+/agent-note-read-the-win32-picker-path-without-a-fixed-size-unmanaged-view/problem:
+  en: 1835aa6f42229a1f
+  zh: 928cb408e879fc41
+/agent-note-read-the-win32-picker-path-without-a-fixed-size-unmanaged-view/decision:
+  en: 831ea941c84193ef
+  zh: b7a1842d9843bf0d
+/agent-note-read-the-win32-picker-path-without-a-fixed-size-unmanaged-view/alternatives-considered:
+  en: 8c0a9a1620504f50
+  zh: 7f439ecb6ca5a618
+/agent-note-read-the-win32-picker-path-without-a-fixed-size-unmanaged-view/consequences:
+  en: 616bc4293a0b1856
+  zh: ed8cf574d7a126cc

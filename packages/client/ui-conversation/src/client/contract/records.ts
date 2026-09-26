@@ -197,13 +197,9 @@ export interface CompactionSummaryNode {
 }
 
 /**
- * Fallback for surface events this UI version does not know: the documented
- * default arm of `SessionEventMap`, which is merge-extensible, so the
- * projection's switch cannot end in `assertNever`. No event produces this node
- * because `isAppendSurfaceEvent` admits only the four types in core's
- * `SurfaceEventType`, and each has its own arm (`system/message` is claimed by
- * a Chat Definition that renders no transcript row) — and it exists so widening
- * that set core-side degrades to a raw row instead of dropping the event silently.
+ * Fallback for unclaimed append-surface events. The merge-extensible
+ * SessionEventMap permits unfamiliar events to retain a raw presentation.
+ * Known unsupported developer events throw before fallback selection.
  */
 export interface UnknownSurfaceNode {
   kind: 'unknown'
@@ -261,22 +257,35 @@ export type ConversationNode =
   | CompactionSummaryNode
   | UnknownSurfaceNode
 
-/** In-flight tool card material: tool/call seen, tool/result not yet. */
-export interface RunningToolCall {
+/** Identity and placement shared by tool preparation and dispatch. */
+interface ToolCallHead {
   callId: string
   /** Parent Tool call for a PTC dispatch start; absent on a root Session call. */
   parentCallId?: string
   name: string
-  argsRaw: string
   turn: number
   step: number
-  /** Unix epoch ms when the tool/call event was logged. */
+  /** Unix epoch ms when this stage began. */
   time: number
   /** Child calls owned by this call, in dispatch order. */
   subCalls: readonly ToolCallBlock[]
 }
 
-/** One running or settled call, recursively owning its child calls. */
+/** A named model call whose arguments are not yet available to tool views. */
+export interface PreparingToolCall extends ToolCallHead {
+  readonly phase: 'preparing'
+}
+
+/** A dispatched tool call with complete arguments and no result yet. */
+export interface StartedToolCall extends ToolCallHead {
+  readonly phase: 'start'
+  readonly argsRaw: string
+}
+
+/** A tool still preparing or awaiting its result. */
+export type RunningToolCall = PreparingToolCall | StartedToolCall
+
+/** One preparing, dispatched, or settled call, recursively owning its child calls. */
 export type ToolCallBlock = RunningToolCall | ToolResultNode
 
 /** In-progress assistant output (chunk accumulator product). */

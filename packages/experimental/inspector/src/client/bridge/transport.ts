@@ -156,7 +156,7 @@ export class ClientInspectorSource extends InspectorSourceConnection {
         if (new TextEncoder().encode(event.data).byteLength > this.bootstrap.maxFrameBytes) {
           throw new Error(`inspector protocol: Worker frame exceeds ${String(this.bootstrap.maxFrameBytes)} bytes`)
         }
-        const value = JSON.parse(event.data) as unknown
+        const value: unknown = JSON.parse(event.data)
         if (this.queries.receive(value)) return
         const frame = parseWorkerSourceFrame(value)
         if (frame.t !== 'source/rejected'

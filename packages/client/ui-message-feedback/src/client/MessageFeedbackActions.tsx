@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  IconDislikeFill16, IconDislikeOutline16, IconLikeFill16, IconLikeOutline16, Tooltip,
+  IconDislikeFillRegular, IconDislikeOutlineRegular, IconLikeFillRegular, IconLikeOutlineRegular, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MessageFeedbackRating } from '@deepseek-ai/dsh-message-feedback/types'
 import type { MessageFeedbackActionFailure } from './controller.ts'
@@ -88,7 +88,7 @@ export function MessageFeedbackActions({
           onPointerEnter={seed}
           onClick={onLike}
         >
-          {rating === 'positive' ? <IconLikeFill16 /> : <IconLikeOutline16 />}
+          {rating === 'positive' ? <IconLikeFillRegular /> : <IconLikeOutlineRegular />}
         </button>
       </Tooltip>
       <Tooltip label={dislikeLabel} side="bottom">
@@ -103,7 +103,7 @@ export function MessageFeedbackActions({
           onPointerEnter={seed}
           onClick={onDislike}
         >
-          {rating === 'negative' ? <IconDislikeFill16 /> : <IconDislikeOutline16 />}
+          {rating === 'negative' ? <IconDislikeFillRegular /> : <IconDislikeOutlineRegular />}
         </button>
       </Tooltip>
       {failure === null && loadFailed && (

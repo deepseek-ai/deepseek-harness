@@ -485,7 +485,7 @@ test('publishes setup phases without evaluating or installing dependencies', asy
   await assert.rejects(publishApprovalPhase({ ...options, phase: 'success' }), /invalid approval setup phase/u)
 })
 
-for (const [mergedCount, credit] of [[0, 0], [1, 0.004], [50, 0.2], [100, 0.4], [125, 0.5], [150, 0.6], [200, 0.6]]) {
+for (const [mergedCount, credit] of [[0, 0], [1, 0.011], [50, 0.55], [99, 1.089], [100, 1.1], [101, 1.1], [200, 1.1]]) {
   test(`author with ${mergedCount} merged PRs contributes ${credit} points but cannot approve alone`, async () => {
     const result = await evaluateApproval({
       event: pullRequestEvent(), policySource, getMergedCount: async () => mergedCount,
@@ -499,15 +499,30 @@ for (const [mergedCount, credit] of [[0, 0], [1, 0.004], [50, 0.2], [100, 0.4], 
 }
 
 test('combines author credit and reviewer ownership at the passing threshold', async () => {
-  for (let mergedCount = 0; mergedCount <= 150; mergedCount++) {
+  for (let mergedCount = 0; mergedCount <= 90; mergedCount++) {
     const result = await evaluateApproval({
       event: pullRequestEvent(), policySource, getMergedCount: async () => mergedCount,
-      getOwnership: async () => ({ totalLines: 1000, reviewerLines: { writer: 250 - mergedCount } }),
+      getOwnership: async () => ({ totalLines: 1000000, reviewerLines: { writer: 250000 - 2750 * mergedCount } }),
       api: async path => path.includes('/reviews?') ? [review('writer', 'APPROVED')] : { permission: 'write' },
     })
     assert.equal(result.state, 'success', `author merged ${mergedCount}`)
   }
 })
+
+for (const [mergedCount, state] of [[90, 'pending'], [91, 'success'], [100, 'success']]) {
+  test(`one ordinary approval with ${mergedCount} merged PRs is ${state}`, async () => {
+    const result = await evaluateApproval({
+      event: pullRequestEvent(), policySource, getMergedCount: async () => mergedCount,
+      getOwnership: async () => {
+        assert.equal(mergedCount, 90, 'sufficient author credit must skip ownership lookup')
+        return { totalLines: 0, reviewerLines: {} }
+      },
+      api: async path => path.includes('/reviews?') ? [review('writer', 'APPROVED')] : { permission: 'write' },
+    })
+    assert.equal(result.state, state)
+    assert.equal(result.approvals[0].points, 1)
+  })
+}
 
 test('blockers skip history and ignore non-write reviewers', async () => {
   const result = await evaluateApproval({
@@ -544,8 +559,8 @@ test('drafts skip history and history failures revoke success with error', async
 
 test('a score just below the threshold remains pending even if its display rounds to two', async () => {
   const result = await evaluateApproval({
-    event: pullRequestEvent(), policySource, getMergedCount: async () => 150,
-    getOwnership: async () => ({ totalLines: 1000000, reviewerLines: { writer: 99999 } }),
+    event: pullRequestEvent(), policySource, getMergedCount: async () => 50,
+    getOwnership: async () => ({ totalLines: 1000000, reviewerLines: { writer: 112499 } }),
     api: async path => path.includes('/reviews?') ? [review('writer', 'APPROVED')] : { permission: 'write' },
   })
   assert.equal(result.state, 'pending')
@@ -558,13 +573,13 @@ test('the publisher counts merged history through the production API path', asyn
   const output = []
   const result = await runWithHistory({
     event, policySource, runUrl: 'https://github.example/run/1', write: line => output.push(line),
-    getOwnership: async () => ({ totalLines: 8, reviewerLines: { writer: 1 } }),
+    getOwnership: async () => ({ totalLines: 80, reviewerLines: { writer: 9 } }),
     api: async (path, options) => {
       if (path.includes('/comments?')) return []
       if (path === '/graphql') {
         assert.equal(options.body.variables.owner, 'deepseek-harness')
         return { data: { repository: { pullRequests: {
-          nodes: Array.from({ length: options.body.variables.after ? 25 : 100 }, (_, i) => ({
+          nodes: Array.from({ length: 25 }, (_, i) => ({
             number: i + (options.body.variables.after ? 200 : 100), author: { id: event.pull_request.user.node_id },
           })),
           pageInfo: { hasNextPage: !options.body.variables.after, endCursor: 'next' },
@@ -577,10 +592,10 @@ test('the publisher counts merged history through the production API path', asyn
     },
   })
   assert.equal(result.points, 2)
-  assert.equal(result.authorCredit.points, 0.5)
-  assert.equal(result.approvals[0].points, 1.5)
+  assert.equal(result.authorCredit.points, 0.55)
+  assert.equal(result.approvals[0].points, 1.45)
   assert.deepEqual(states, ['pending', 'success'])
-  assert.equal(output[0], 'Author credit: 0.5 (125 merged PRs).')
+  assert.equal(output[0], 'Author credit: 0.55 (50 merged PRs).')
 })
 
 test('sufficient reviewer points and drafts publish without querying author history', async () => {
@@ -617,11 +632,11 @@ test('bot authors receive the same history credit', async () => {
   const event = pullRequestEvent({ author: 'dependabot[bot]' })
   event.pull_request.user.type = 'Bot'
   const result = await evaluateApproval({
-    event, policySource, getMergedCount: async () => 150,
+    event, policySource, getMergedCount: async () => 100,
     getOwnership: async () => ({ totalLines: 10, reviewerLines: { writer: 1 } }),
     api: async path => path.includes('/reviews?') ? [review('writer', 'APPROVED')] : { permission: 'write' },
   })
-  assert.equal(result.authorCredit.points, 0.6)
+  assert.equal(result.authorCredit.points, 1.1)
   assert.equal(result.state, 'success')
 })
 
@@ -900,7 +915,7 @@ test('delegation dismisses only the sender old decisions and stays active across
   })
   assert.deepEqual(calls.map(call => call.method), ['PUT', 'PUT'])
   assert.equal(calls[0].body.event, 'DISMISS')
-  assert.equal(calls[0].body.message, 'This is by automated Angry Turtle Cyborg, not a human. @turtle1999 delegated approval to @writer via /delegate.')
+  assert.equal(calls[0].body.message, '@turtle1999 delegated approval to @writer via /delegate.')
   assert.deepEqual(result.blockers, ['other'])
   assert.equal(result.delegations.length, 1)
   assert.deepEqual(result.delegations[0].reviewIds, [])

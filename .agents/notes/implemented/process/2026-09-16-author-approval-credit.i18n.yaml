@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-16-author-approval-credit.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-16-author-approval-credit.md
+/agent-note-author-approval-credit:
+  en: 58068bcf9dbf6d30
+  zh: ad51b869c8f3e791
+/agent-note-author-approval-credit/problem:
+  en: 13def594e495779d
+  zh: d5ceaa0d156ba043
+/agent-note-author-approval-credit/decision:
+  en: 5670829131121899
+  zh: 7df21c9b22c4978d
+/agent-note-author-approval-credit/alternatives-considered:
+  en: 8ab9e11e49044029
+  zh: c7930455d747ceb5
+/agent-note-author-approval-credit/consequences:
+  en: 70ad19025f7fe6d4
+  zh: c73aa8be25724790
+/agent-note-author-approval-credit/verification:
+  en: 0617e23e217b0a67
+  zh: 82576f05a59d8db7

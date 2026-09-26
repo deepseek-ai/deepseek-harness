@@ -49,12 +49,17 @@ class GatedAdapter extends LlmAdapter {
 const testToolSignal = new AbortController().signal
 
 const roots: string[] = []
-afterEach(() => {
+const contexts = new Set<Context>()
+afterEach(async () => {
+  vi.restoreAllMocks()
+  for (const ctx of contexts) await ctx.fiber.dispose()
+  contexts.clear()
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 async function setupWith(adapter: MockAdapter | GatedAdapter, park = true) {
   const ctx = new Context()
+  contexts.add(ctx)
   await mountAgentLoopTestDependencies(ctx)
   const root = mkdtempSync(join(tmpdir(), 'dsh-tool-subagent-control-'))
   roots.push(root)
@@ -75,7 +80,7 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
   return setupWith(new MockAdapter(script))
 }
 
-function text(result: { content: { type: string; text?: string }[] }): string {
+function text(result: { content: readonly { type: string; text?: string }[] }): string {
   return result.content.filter(block => block.type === 'text').map(block => block.text).join('')
 }
 
@@ -113,9 +118,7 @@ describe('dsh-tool-subagent-control', () => {
     // The continuable path has no Task, so the schema must not promise one.
     expect(schemas[0]!.description).not.toContain('job_output')
     expect(schemas[0]!.description).not.toContain('job id')
-    expect(schemas[0]!.description).toContain('nearest step')
-    expect(schemas[0]!.description).toContain('direct continuable child')
-    expect(schemas[0]!.description).toContain('If you are a resident continuable child')
+    expect(schemas[0]!.description).toContain('receives it at its next step')
     expect(props.agent_id).toMatchObject({
       description: 'The agent id of your direct continuable child, or your direct parent when you are a resident continuable child.',
     })
@@ -278,7 +281,7 @@ describe('dsh-tool-subagent-control', () => {
 
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'plugin'
+    const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'runtime-context'
       ? event.data.content.flatMap(block => block.type === 'text'
         && !block.text.startsWith('Your parent agent id is ')
         ? [block.text]
@@ -329,6 +332,7 @@ describe('dsh-tool-subagent-control', () => {
 
   it('unregisters with its plugin fiber (HMR safety)', async () => {
     const ctx = new Context()
+    contexts.add(ctx)
     await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(SubagentRuntime)
@@ -355,7 +359,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     expect(schemas).toHaveLength(1)
     const props = (schemas[0]!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props)).toEqual(['agent_id'])
-    expect(schemas[0]!.description).toContain('current turn')
+    expect(schemas[0]!.description).toContain('stop its current work')
     expect(schemas[0]!.description).toContain('send_message')
   })
 
@@ -400,7 +404,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     expect(waking.isError).toBe(false)
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'plugin'
+    const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'runtime-context'
       ? event.data.content.flatMap(block => block.type === 'text'
         && !block.text.startsWith('Your parent agent id is ')
         ? [block.text]

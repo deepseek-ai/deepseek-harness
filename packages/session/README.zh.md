@@ -31,6 +31,8 @@ session 组让对话持久保存，恢复已发布的日志格式，并使已提
 | [`session-format/`](session-format/README.zh.md) | 纯相邻格式链与产物校验库 | 库，不使用 ctx key |
 | [`session-format-v0-to-v1/`](session-format-v0-to-v1/README.zh.md) | 冻结的 released-v0 解码器，以及到 released v1 的恒等迁移 | 库，不使用 ctx key |
 | [`session-format-v1-to-v2/`](session-format-v1-to-v2/README.zh.md) | 冻结的 released-v1 解码器，以及迁移到 released v2 时会改变基数的 Assistant 流迁移 | 库，不使用 ctx key |
+| [`session-format-v2-to-v3/`](session-format-v2-to-v3/README.zh.md) | 冻结的 V2 解码器，以及迁入 V3 的系统提示词、信封与 PTC 转换 | 库——无 ctx 键 |
+| [`session-format-v3-to-v4/`](session-format-v3-to-v4/README.zh.md) | V3 恒等迁移与 V4 编解码器，按 generation 校验 delivery | 库——无 ctx 键 |
 | [`session-format-catalog/`](session-format-catalog/README.zh.md) | 自动生成的已交付相邻迁移静态目录 | 库，不使用 ctx key |
 | [`session-persistence/`](session-persistence/README.zh.md) | 定义持久会话存储服务，以及每个后端组合的共享写入协调机制 | `ctx.sessionPersistence` |
 | [`session-persistence-jsonl/`](session-persistence-jsonl/README.zh.md) | 随产品交付的后端：逐 Session 使用不可变规范 generation 文件名并排他发布后继；可选 Zstandard 压缩 | 注册到 `ctx.sessionPersistence` |

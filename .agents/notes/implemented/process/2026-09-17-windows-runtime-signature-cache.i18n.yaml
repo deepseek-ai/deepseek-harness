@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-17-windows-runtime-signature-cache.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-17-windows-runtime-signature-cache.md
+/agent-note-windows-runtime-signature-cache:
+  en: 36e012be8a24f6d3
+  zh: 6caabddc72c89c95
+/agent-note-windows-runtime-signature-cache/problem:
+  en: ee8762f64fbefe3f
+  zh: 8781828a4b19d862
+/agent-note-windows-runtime-signature-cache/decision:
+  en: 4c114a4e0c81a753
+  zh: 3e05c0fcc9fe637b
+/agent-note-windows-runtime-signature-cache/alternatives-considered:
+  en: f83b7439bb610dd4
+  zh: 938ae28e9f269406
+/agent-note-windows-runtime-signature-cache/consequences:
+  en: 382899114280f46a
+  zh: c12090b052308163
+/agent-note-windows-runtime-signature-cache/risks:
+  en: 12b4df69b80bee3d
+  zh: 9cce7f8a26918f5d

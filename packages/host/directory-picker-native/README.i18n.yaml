@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/host/directory-picker-native/README.md
-README.md: 3f980831848965b976e32b0e5ef25abb77fe4e6e
-README.zh.md: 7a221cbbfebf3d79534e049800e26dab6ca39ad3
+/:
+  en: caa1e08492610d5a
+  zh: ea5b4fca758305d4
+/deepseek-ai-dsh-host-directory-picker-native:
+  en: f8f2ccf11332c1c1
+  zh: 58075651e5dd36d9
+/deepseek-ai-dsh-host-directory-picker-native/summary:
+  en: d02a09798cbe9a37
+  zh: c0231f9dacf8f6d0
+/deepseek-ai-dsh-host-directory-picker-native/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-host-directory-picker-native/use-this-package:
+  en: ae1b7eabeea5047d
+  zh: 192d3f3bdb96b5eb
+/deepseek-ai-dsh-host-directory-picker-native/use-this-package/when-to-choose-it:
+  en: b515ea015fb8a7e8
+  zh: faedbf0a30b28062
+/deepseek-ai-dsh-host-directory-picker-native/use-this-package/what-an-operator-experiences:
+  en: 6ea5dc02d78653c1
+  zh: 5d247656f3650d6f
+/deepseek-ai-dsh-host-directory-picker-native/use-this-package/observable-failures:
+  en: 43926a0387f0ce2b
+  zh: 43c2051a64f48d4c
+/deepseek-ai-dsh-host-directory-picker-native/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-host-directory-picker-native/understand-the-implementation/design-concept:
+  en: 98afddc74b2d7010
+  zh: 39ed0d1a2508f78e
+/deepseek-ai-dsh-host-directory-picker-native/understand-the-implementation/platform-mechanics:
+  en: a78d75054b81753a
+  zh: 52867e73630b1be2
+/deepseek-ai-dsh-host-directory-picker-native/understand-the-implementation/source-map:
+  en: 22ecabd6b74d6ecb
+  zh: af59381cf2957b68
+/deepseek-ai-dsh-host-directory-picker-native/further-exploration:
+  en: 4ffff44b86ad443d
+  zh: 5ce3409c011c391d
+/deepseek-ai-dsh-host-directory-picker-native/model-experience:
+  en: cdbb9c75fbb91bb5
+  zh: 35047dda1956f0ac
+/deepseek-ai-dsh-host-directory-picker-native/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-host-directory-picker-native/known-limitations-and-deferred-work:
+  en: 08faf27d90fde463
+  zh: b8edfb7ec238f2b4
+/deepseek-ai-dsh-host-directory-picker-native/known-limitations-and-deferred-work/dev-note:
+  en: 321aef90f4cdb291
+  zh: c6cdc00db1ee9a42

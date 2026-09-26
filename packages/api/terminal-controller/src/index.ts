@@ -1,11 +1,9 @@
-/** Session-scoped browser terminals over the composed subprocess and sandbox providers. */
+/** Session-owned user terminals with the execution environment's system-user permissions. */
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
-import type {} from '@deepseek-ai/dsh-sandbox'
-import type {} from '@deepseek-ai/dsh-session-projection'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { discoverShells, resolveShell } from './shells.ts'
 import { BrowserTerminal } from './terminal.ts'
@@ -75,7 +73,7 @@ interface OwnedSession {
 
 /** Typed Remote control of transient Session-owned terminal processes. */
 export class TerminalController extends TypertRemoteService {
-  static inject = ['subprocess', 'sandboxPolicy', 'sessionProjections', 'typert']
+  static inject = ['subprocess', 'sandboxPolicy', 'typert']
   static Config: z<Config> = z.object({
     shell: z.union([z.object({
       path: z.string().required(), name: z.string().required(), args: z.array(z.string()).default([]),
@@ -102,15 +100,6 @@ export class TerminalController extends TypertRemoteService {
    */
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'terminalController', { namespace: 'terminal' })
-    ctx.on('internal/dispatch', (_mode, eventName, args) => {
-      if (eventName !== 'session/event') return
-      const [session, event] = args as [Session, SessionEvent]
-      if (event.type !== 'sandbox/mode') return
-      const owner = this.owners.get(session.id)
-      if (owner === undefined || owner.terminals.size + owner.pending.size + owner.allocations.size === 0) return
-      const current = ctx.sessionProjections.stateOf(session, 'sandboxMode') ?? ctx.sandboxPolicy.defaultMode
-      if (event.data.mode !== current) throw new Error('Close browser terminals before changing the Session sandbox mode')
-    }, { global: true })
     ctx.effect(() => async () => {
       this.lifetime.abort(new Error('Terminal controller disposed'))
       const results = await Promise.allSettled([...this.owners].map(([id, owner]) => this.disposeOwner(id, owner)))
@@ -129,7 +118,7 @@ export class TerminalController extends TypertRemoteService {
   environment(agent: Agent, signal: AbortSignal): TerminalEnvironment {
     signal.throwIfAborted()
     const { sandboxPolicy } = this.execution(agent)
-    return { cwd: sandboxPolicy.resolve({ session: agent.session }).workspaceRoot,
+    return { cwd: agent.session.header.cwd ?? sandboxPolicy.workspaceRoot,
       maxInputBytes: this.config.maxInputBytes, maxCols: this.config.maxCols,
       maxRows: this.config.maxRows, scrollback: this.config.scrollback }
   }
@@ -159,7 +148,7 @@ export class TerminalController extends TypertRemoteService {
   }
 
   /**
-   * Allocate an interactive shell once for a caller-generated identity.
+   * Allocate a user shell once for a caller-generated identity, without Agent sandbox or approval restrictions.
    * @param agent - Session owner supplied by the Gateway.
    * @param request - initial dimensions and idempotency identity.
    * @param signal - allocation cancellation; committed terminals survive disconnection.
@@ -349,20 +338,13 @@ export class TerminalController extends TypertRemoteService {
 
   private async spawn(agent: Agent, owner: OwnedSession, request: TerminalCreateRequest, signal: AbortSignal): Promise<BrowserTerminal> {
     const environment = this.environment(agent, signal)
-    const { subprocess, sandboxPolicy } = this.execution(agent)
+    const { subprocess } = this.execution(agent)
     const shell = request.shellPath === undefined
       ? await resolveShell(subprocess, this.config.shell, signal)
       : (await this.shells(agent, signal)).find(candidate => candidate.path === request.shellPath)
     if (shell === undefined) throw new Error('Selected shell is not available in this execution environment')
-    const policy = sandboxPolicy.resolve({ session: agent.session })
-    let argv = [shell.path, ...shell.args]
-    if (policy.mode !== 'danger-full-access') {
-      const sandbox = agent.ctx.get('sandbox')
-      if (sandbox === undefined) throw new Error('The Session sandbox mode requires an execution sandbox provider')
-      argv = (await sandbox.confine(argv, { ...policy, mode: policy.mode }, signal)).argv
-    }
     const handle = await subprocess.spawnTerminal({
-      argv, cwd: environment.cwd, cols: request.cols, rows: request.rows,
+      argv: [shell.path, ...shell.args], cwd: environment.cwd, cols: request.cols, rows: request.rows,
       terminalType: 'xterm-256color', env: { DSH_SESSION_ID: agent.id },
       shellActivity: true,
       graceMs: this.config.disposeGraceMs, signal,

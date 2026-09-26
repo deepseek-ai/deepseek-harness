@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-11-supply-chain-and-vendor-drift.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/process/2026-06-11-supply-chain-and-vendor-drift.md
-2026-06-11-supply-chain-and-vendor-drift.md: aecab81292e8d6eb59fe13a5530ba78de9b307a5
-2026-06-11-supply-chain-and-vendor-drift.zh.md: ba55b3b1815c8164650dd4aa5022dd4f98efd6a4
+/agent-note-supply-chain-checks-and-vendor-drift-verification:
+  en: 14763706c0292472
+  zh: bc846b9df1cd559c
+/agent-note-supply-chain-checks-and-vendor-drift-verification/problem:
+  en: 2668c33c520ba25e
+  zh: 5dbb2e8a25cc50cd
+/agent-note-supply-chain-checks-and-vendor-drift-verification/proposal:
+  en: c9f9e2ebf0e66922
+  zh: 2c1ed4bc35bc2d90
+/agent-note-supply-chain-checks-and-vendor-drift-verification/plan:
+  en: c52921928996b2f0
+  zh: 6c0ae36667b1bf44
+/agent-note-supply-chain-checks-and-vendor-drift-verification/alternatives-considered:
+  en: 39f18421ca3a9c3d
+  zh: 5923ddb6c420e56f
+/agent-note-supply-chain-checks-and-vendor-drift-verification/acceptance-criteria:
+  en: e770eb9ebced47d1
+  zh: df915bb02264be7a
+/agent-note-supply-chain-checks-and-vendor-drift-verification/risks:
+  en: 515f9c9dd5ef7c20
+  zh: a8358875334b2c64

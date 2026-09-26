@@ -14,9 +14,9 @@ import {
   PREVIEW_FIXTURE_MANIFEST_FILE, PREVIEW_FIXTURE_MANIFEST_VERSION,
   type PreviewFixtureManifest,
 } from '@deepseek-ai/dsh-experimental-webworker-runtime'
-import { packVfsImage, packVfsOverlay } from './pack.ts'
+import { packVfsImage } from './pack.ts'
 import {
-  composeProfile, configTrees, describePack, indexWorkspacePackages, previewFixtures,
+  composeProfile, configTrees, describePack, indexWorkspacePackages, packPreviewFixture, previewFixtures,
 } from './repository.ts'
 
 /**
@@ -66,7 +66,7 @@ const fixtureDirectory = join(dirname(outputFile), 'fixtures')
 mkdirSync(fixtureDirectory, { recursive: true })
 const fixtureLines: string[] = []
 const fixtures = fixtureDefinitions.map((fixture) => {
-  const packed = packVfsOverlay(fixture.trees)
+  const packed = packPreviewFixture(fixture.trees)
   const file = `fixtures/${fixture.id}.tar.gz`
   writeFileSync(join(dirname(outputFile), file), packed.image)
   fixtureLines.push(`  fixture overlay     ${fixture.id} (${String(packed.image.byteLength)} B compressed)`)

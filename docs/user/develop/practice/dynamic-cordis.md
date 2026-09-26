@@ -1,15 +1,15 @@
-# Extend a running agent with Cordis tools
+# Configure persistent plugins from a prompt
 
 English | [中文](dynamic-cordis.zh.md)
 
-This practice guide enables [`@deepseek-ai/dsh-tool-cordis`](../../../../packages/extensions/tool-cordis/README.md). The agent can inspect its current Cordis process and mount or unmount model-authored plugins in memory. Temporary plugins disappear when they are unmounted or the process exits and may affect other sessions in the same process.
+Creator mode provides [Plugin Manager](../../../../packages/boot/plugin-manager/README.md) and read-only [runtime inspection](../../../../packages/extensions/tool-cordis/README.md). Plugin configuration belongs to the current profile, affects its sessions, and survives process restarts.
 
-## Run it
+## Connect an MCP server
 
-Start the browser interface with the checked-in overlay:
+Start the Web profile and select Creator mode. With a reachable Streamable HTTP MCP server that exposes `ping`, send this prompt using its actual endpoint:
 
-```sh
-pnpm dsh web --patch apps/cli/config/examples/cordis/cordis.yml
-```
+> Configure the MCP server at `<endpoint>` in this profile as `demo`. Make its tools available now, then call its ping tool and tell me the result.
 
-The command requires a model credential. The [Cordis tool reference](../../../../packages/extensions/tool-cordis/README.md) defines the tool arguments, lifetime, cleanup, and safety contracts.
+The agent writes a configuration-only bundle whose patch inserts `@deepseek-ai/dsh-mcp-client`, then installs it with `plugin_manager install_bundle`. With HMR enabled, the tools appear in the same running session. Verify both the management result (`application: applied`) and a successful `mcp__demo__ping` call. A saved entry with `restart-required` has not activated yet; a failed entry needs configuration repair.
+
+Read the bundle patch before editing its configuration. Use Plugin Manager to disable entries or remove the bundle. See the [MCP client reference](../../../../packages/mcp/mcp-client/README.md) for accepted configuration and connection failure behavior.

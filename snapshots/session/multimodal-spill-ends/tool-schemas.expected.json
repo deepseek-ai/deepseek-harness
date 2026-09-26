@@ -1,0 +1,637 @@
+{
+  "initial": [
+    {
+      "name": "bash",
+      "description": "Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell; pass `workdir` instead of using `cd`. Managed `$DSH_*` variables expose current harness environment facts. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]`, a policy denial: do not retry another way.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "The bash command to execute."
+          },
+          "description": {
+            "type": "string",
+            "description": "Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: \"ls\" → \"List files in current directory\"; \"git status\" → \"Show working tree status\"; \"npm install\" → \"Install package dependencies\"."
+          },
+          "timeoutMs": {
+            "type": "number",
+            "description": "Timeout in milliseconds. The executor applies its configured default and cap; on expiry the command moves to the background as a job instead of being killed."
+          },
+          "workdir": {
+            "type": "string",
+            "description": "Working directory for this command. Defaults to the session workspace; a relative path is resolved against it."
+          },
+          "run_in_background": {
+            "type": "boolean",
+            "description": "Run in the background and return a job id immediately (collect with job_output, stop with job_kill). No timeout applies."
+          },
+          "sandbox_permissions": {
+            "type": "string",
+            "description": "The narrowest wider sandbox mode for a one-shot retry of the exact command the sandbox just denied; the retry asks the user for approval.",
+            "enum": [
+              "workspace-write",
+              "danger-full-access"
+            ]
+          },
+          "justification": {
+            "type": "string",
+            "description": "Required with sandbox_permissions: one sentence for the user explaining why this exact command needs the wider access. Use the language of the user’s current request."
+          }
+        },
+        "required": [
+          "command",
+          "description"
+        ]
+      }
+    },
+    {
+      "name": "create_goal",
+      "description": "Create a persisted goal that keeps this session working across automatic continuation rounds. Use it when the direct human request is a long-running objective, even if the user did not say \"goal\"; not for single-turn work.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "objective": {
+            "type": "string",
+            "description": "The concrete completion objective inferred from the direct human request."
+          },
+          "max_goal_rounds": {
+            "type": "number",
+            "description": "Optional positive safe-integer limit on automatic continuation rounds."
+          }
+        },
+        "required": [
+          "objective"
+        ]
+      }
+    },
+    {
+      "name": "edit",
+      "description": "Edit an existing UTF-8 text file by replacing literal text.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Path to edit, resolved by the filesystem backend."
+          },
+          "old_string": {
+            "type": "string",
+            "description": "Literal text to replace."
+          },
+          "new_string": {
+            "type": "string",
+            "description": "Literal replacement text. Use an empty string to delete the match."
+          },
+          "replace_all": {
+            "type": "boolean",
+            "description": "Replace all matches. Defaults to false; when false, old_string must appear exactly once."
+          },
+          "sandbox_permissions": {
+            "type": "string",
+            "description": "The narrowest wider sandbox mode for a one-shot retry of the exact operation the sandbox just denied; the retry asks the user for approval.",
+            "enum": [
+              "workspace-write",
+              "danger-full-access"
+            ]
+          },
+          "justification": {
+            "type": "string",
+            "description": "Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access. Use the language of the user’s current request."
+          }
+        },
+        "required": [
+          "file_path",
+          "old_string",
+          "new_string"
+        ]
+      }
+    },
+    {
+      "name": "exit_plan_mode",
+      "description": "Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "string",
+            "description": "The complete plan, as markdown, starting with a # heading that names it."
+          }
+        },
+        "required": [
+          "plan"
+        ]
+      }
+    },
+    {
+      "name": "get_goal",
+      "description": "Read the current session goal, including the id and revision that update_goal requires.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "glob",
+      "description": "Find files, not directories, whose paths match a glob pattern, including hidden and ignored files. Returns up to 100 paths in modification-time order; a larger result keeps the first paths and reports where the complete list was saved.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Glob pattern to match file paths against (e.g. \"**/*.ts\", \"src/**/*.test.js\"). A pattern with no \"/\" matches the basename at any depth, so \"*\" and \"*.ts\" both search the whole tree; include a separator to anchor the depth."
+          },
+          "path": {
+            "type": "string",
+            "description": "Directory to search in. Defaults to the session workspace; a relative path resolves against it."
+          }
+        },
+        "required": [
+          "pattern"
+        ]
+      }
+    },
+    {
+      "name": "grep",
+      "description": "Search file contents with a ripgrep regular expression. Returns matching lines with line numbers, grouped by file. Returns up to 250 matches; a larger result reports where the complete match list was saved.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Regular expression to search for (ripgrep syntax)."
+          },
+          "path": {
+            "type": "string",
+            "description": "File or directory to search. Defaults to the session workspace; a relative path resolves against it."
+          },
+          "include": {
+            "type": "string",
+            "description": "One glob filter for which files to search (e.g. \"*.ts\", \"*.{js,jsx}\"). Not a list; negation is not supported."
+          }
+        },
+        "required": [
+          "pattern"
+        ]
+      }
+    },
+    {
+      "name": "interrupt_agent",
+      "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a direct child's conversation later with send_message. Subagents it started will keep running.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "The id of an agent created under you: your direct child or a deeper descendant."
+          }
+        },
+        "required": [
+          "agent_id"
+        ]
+      }
+    },
+    {
+      "name": "job_kill",
+      "description": "Request cancellation of a running background job.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "description": "Job id returned by the tool that started the background work."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Optional short reason, recorded in the log and forwarded to the job."
+          }
+        },
+        "required": [
+          "job_id"
+        ]
+      }
+    },
+    {
+      "name": "job_list",
+      "description": "List your background jobs (running and finished) with their ids, kinds, and statuses.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "job_output",
+      "description": "Read a background job: output since the previous read for stream jobs, or the result of a finished final-output job.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "description": "Job id returned by the tool that started the background work."
+          },
+          "wait": {
+            "type": "boolean",
+            "description": "Block until the job finishes or the timeout expires; a timed-out wait leaves the job running. Defaults to false."
+          },
+          "timeout_ms": {
+            "type": "number",
+            "description": "Max wait in milliseconds with wait: true. Defaults to and is capped by configuration."
+          }
+        },
+        "required": [
+          "job_id"
+        ]
+      }
+    },
+    {
+      "name": "list_agents",
+      "description": "List subagents you started, with their ids, labels, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "description": "children (default) lists direct children, which accept send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent.",
+            "enum": [
+              "children",
+              "descendants"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "mcp__fixture__inspect",
+      "description": "Read a fixed window snapshot.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "layout": {
+            "type": "string",
+            "enum": [
+              "ends",
+              "middle"
+            ]
+          }
+        },
+        "required": [
+          "layout"
+        ]
+      }
+    },
+    {
+      "name": "read",
+      "description": "Read a UTF-8 text file and return line-numbered content.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Path to read, resolved by the filesystem backend."
+          },
+          "offset": {
+            "type": "number",
+            "description": "1-based first line to return. Defaults to 1."
+          },
+          "limit": {
+            "type": "number",
+            "description": "Maximum number of lines to return. Defaults to 2000."
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    },
+    {
+      "name": "read_image",
+      "description": "Read a PNG/JPEG/WebP/GIF file and return the image itself. Large images are downscaled automatically; do not install image libraries or create thumbnails to inspect an image.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Path to the image file, resolved by the filesystem backend."
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    },
+    {
+      "name": "send_message",
+      "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "The agent id of your direct continuable child, or your direct parent when you are a resident continuable child."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message to deliver to the agent."
+          }
+        },
+        "required": [
+          "agent_id",
+          "message"
+        ]
+      }
+    },
+    {
+      "name": "skill",
+      "description": "Load the full instructions for a skill. Call it before acting on a task that names or clearly matches a skill in the session skill catalog.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The exact skill name from the available skills list."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "subagent",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. It runs in the background by default and returns a subagent id you can continue with `send_message`; you are notified when the run settles.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "A short (3-5 word) description of the delegated task, for display."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs."
+          },
+          "run_in_background": {
+            "type": "boolean",
+            "description": "Defaults to true. Set false only when your next action depends on the result."
+          }
+        },
+        "required": [
+          "description",
+          "prompt"
+        ]
+      }
+    },
+    {
+      "name": "subagent_fork",
+      "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This call waits for the subagent and returns its result.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "A short (3-5 word) description of the delegated task, for display."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The task for the subagent. It already sees this conversation's completed turns, so build on them freely and state only what is new."
+          }
+        },
+        "required": [
+          "description",
+          "prompt"
+        ]
+      }
+    },
+    {
+      "name": "todo_write",
+      "description": "Record and update a task list to plan multi-step work and show progress; skip it for trivial single-step tasks. Add one todo per concrete step before you start. While work remains, keep the todos being worked on `in_progress`, several only when work runs in parallel. Mark each todo `completed` as soon as it is done.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "todos": {
+            "type": "array",
+            "description": "The COMPLETE task list, replacing any previous list.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "content": {
+                  "type": "string",
+                  "description": "What the task is — a short imperative line."
+                },
+                "status": {
+                  "type": "string",
+                  "description": "pending (not started) | in_progress (now) | completed (done).",
+                  "enum": [
+                    "pending",
+                    "in_progress",
+                    "completed"
+                  ]
+                }
+              },
+              "required": [
+                "content",
+                "status"
+              ]
+            }
+          }
+        },
+        "required": [
+          "todos"
+        ]
+      }
+    },
+    {
+      "name": "update_goal",
+      "description": "Update the current goal.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "goal_id": {
+            "type": "string",
+            "description": "Exact id returned by get_goal."
+          },
+          "revision": {
+            "type": "number",
+            "description": "Exact positive revision returned by get_goal."
+          },
+          "action": {
+            "type": "string",
+            "description": "edit, pause, and resume require a direct top-level human request. complete and blocked are also allowed during an automatic continuation of this goal; blocked is rejected before the configured minimum round count.",
+            "enum": [
+              "edit",
+              "pause",
+              "resume",
+              "complete",
+              "blocked"
+            ]
+          },
+          "objective": {
+            "type": "string",
+            "description": "Replacement objective; valid only with action edit."
+          },
+          "max_goal_rounds": {
+            "type": "number",
+            "description": "Replacement cap; valid only with action edit."
+          },
+          "blocked_reason": {
+            "type": "string",
+            "description": "Required only with action blocked: the concrete condition that persisted across rounds and blocks progress."
+          }
+        },
+        "required": [
+          "goal_id",
+          "revision",
+          "action"
+        ]
+      }
+    },
+    {
+      "name": "web_fetch",
+      "description": "Fetch the content of a specific HTTP(S) URL and return it decoded to text.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The HTTP(S) URL to fetch."
+          }
+        },
+        "required": [
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "web_search",
+      "description": "Search the web for current information. Returns an optional summary answer and a list of source URLs.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queries": {
+            "type": "array",
+            "description": "1–4 search queries; their results are merged.",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "queries"
+        ]
+      }
+    },
+    {
+      "name": "workflow",
+      "description": "Run a JavaScript workflow script that orchestrates subagents at scale. Use this for work that fans out across many independent pieces — an audit over many files, a migration, multi-angle research, adversarial verification of findings — where you write the orchestration as a script instead of delegating turn by turn.\n\nScript-body hooks:\n- `agent(prompt, opts?): Promise<any>` — run one subagent to completion. Without `opts.schema` it resolves to the child's final text; with `opts.schema` (an object-rooted JSON Schema using ONLY type/properties/required/additionalProperties/items/enum/const/oneOf) it resolves to the validated object. Resolves `null` when the child fails (filter with `.filter(Boolean)`). Other opts: `label` (display), `phase` (progress group), and independent `provider`/`model` LLM target overrides.\n- `pipeline(items, ...stages): Promise<any[]>` — run each item through the stages independently with NO barrier between stages (prefer this for multi-stage work). Each stage receives `(prev, item, index)`. A stage throw drops that ITEM to `null` and skips its remaining stages.\n- `parallel(thunks): Promise<any[]>` — run zero-argument functions concurrently and await ALL of them (a barrier; use only when a stage genuinely needs every prior result together). A throwing thunk resolves to `null`.\n- `phase(title)` — start a progress phase; `log(message)` — narrate progress; `args` — the tool call's `args` input, verbatim.\n\nMisused hooks (bad arguments, unknown options, unsupported schemas, tripped caps) end the whole script instead of producing `null`. The script has no filesystem, network, timer, or Node.js APIs; the agents do the work.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "script": {
+            "type": "string",
+            "description": "The plain JavaScript body, not TypeScript and without an `export const meta` statement; top-level await is allowed. End with `return <value>`; the JSON-serializable value is this tool's result."
+          },
+          "meta": {
+            "type": "object",
+            "description": "The workflow identity as plain JSON, not code.",
+            "additionalProperties": true,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Short kebab-case workflow name."
+              },
+              "description": {
+                "type": "string",
+                "description": "One-line description of what the workflow does."
+              },
+              "whenToUse": {
+                "type": "string",
+                "description": "Optional guidance on when this workflow applies."
+              },
+              "phases": {
+                "type": "array",
+                "description": "Optional phase declarations matched by phase() calls.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "title": {
+                      "type": "string",
+                      "description": "The phase title phase() calls match by exact string."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Optional one-line description of the phase."
+                    },
+                    "provider": {
+                      "type": "string",
+                      "description": "Optional provider override this phase is expected to use."
+                    },
+                    "model": {
+                      "type": "string",
+                      "description": "Optional model override this phase is expected to use."
+                    }
+                  },
+                  "required": [
+                    "title"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "name",
+              "description"
+            ]
+          },
+          "args": {
+            "type": "object",
+            "description": "Optional JSON input exposed to the script as the `args` global (wrap a bare list as a field, e.g. {\"files\": [...]}).",
+            "additionalProperties": true
+          },
+          "run_in_background": {
+            "type": "boolean",
+            "description": "Run as a background job: return a job id immediately instead of waiting; the return value arrives with the completion notice."
+          }
+        },
+        "required": [
+          "script",
+          "meta"
+        ]
+      }
+    },
+    {
+      "name": "write",
+      "description": "Create or fully replace a UTF-8 text file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Path to write, resolved by the filesystem backend."
+          },
+          "content": {
+            "type": "string",
+            "description": "Full UTF-8 text content to write."
+          },
+          "sandbox_permissions": {
+            "type": "string",
+            "description": "The narrowest wider sandbox mode for a one-shot retry of the exact operation the sandbox just denied; the retry asks the user for approval.",
+            "enum": [
+              "workspace-write",
+              "danger-full-access"
+            ]
+          },
+          "justification": {
+            "type": "string",
+            "description": "Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access. Use the language of the user’s current request."
+          }
+        },
+        "required": [
+          "file_path",
+          "content"
+        ]
+      }
+    }
+  ],
+  "changes": []
+}

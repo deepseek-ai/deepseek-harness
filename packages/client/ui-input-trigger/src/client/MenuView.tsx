@@ -12,9 +12,10 @@
  * (a localized title), then the description right-aligned. A source publishing crumbs gets a breadcrumb
  * header pinned above the scrolling list.
  */
+import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import clsx from 'clsx'
-import { IconChevronRightOutline14, ReferenceIcon, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronRightOutlineRegular, ReferenceIconRegular, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './MenuView.module.css'
 import type { MenuViewInjected } from './slots.ts'
@@ -25,6 +26,13 @@ export type MenuViewProps = MenuViewInjected & PropsLocale<'slash.menu'>
 
 /** Height cap that fits the two headings and eight built-in command rows. */
 const MAX_HEIGHT = 400
+
+/**
+ * Viewport top margin: the conversation header's 76px block (title row plus
+ * view tabs, ui-conversation) plus 8px of air, so a tall list stops below the
+ * header instead of sliding under it.
+ */
+const TOP_MARGIN = 84
 
 /** DOM id of one option row (the aria-activedescendant target). */
 function optionId(source: string, index: number): string {
@@ -51,7 +59,7 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
   // The list is bottom-anchored above the composer; clamp the design cap to
   // the space above it, re-measured on every store update (the anchor moves
   // when the composer grows).
-  const maxHeight = useAnchoredMaxHeight(listRef, MAX_HEIGHT, state)
+  const maxHeight = useAnchoredMaxHeight(listRef, MAX_HEIGHT, state, TOP_MARGIN)
   const updateOverflowHint = useCallback(() => {
     const viewport = viewportRef.current
     setHasOverflowBelow(viewport !== null
@@ -86,7 +94,7 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
   return (
     // The listbox role sits on the scrolling viewport, not this shell: a
     // breadcrumb header is not an option, and a listbox may not carry one.
-    <div
+    <MenuSurface
       ref={listRef}
       className={css.menu}
       style={{ maxHeight }}
@@ -99,7 +107,7 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
           <nav key={group.source} className={css.crumbs} aria-label={t('crumbs.aria')}>
             {trail.map((crumb, index) => (
               <Fragment key={`${String(index)}-${crumb.value}`}>
-                {index > 0 && <span className={css.crumbSeparator} aria-hidden><IconChevronRightOutline14 /></span>}
+                {index > 0 && <span className={css.crumbSeparator} aria-hidden><IconChevronRightOutlineRegular /></span>}
                 <button
                   type="button"
                   className={clsx(css.crumb, crumb.current === true && css.crumbCurrent)}
@@ -171,8 +179,8 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
                         {item.icon !== undefined && (
                           <span className={css.itemIcon} aria-hidden>
                             {typeof item.icon === 'string'
-                              ? <ReferenceIcon kind={item.icon} size={16} />
-                              : <item.icon size={16} />}
+                              ? <ReferenceIconRegular kind={item.icon} size={14} />
+                              : <item.icon size={14} />}
                           </span>
                         )}
                         <span className={css.itemName}>{item.label ?? item.name}</span>
@@ -198,7 +206,7 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
                                 onPick(group.source, index, 'drill')
                               }}
                             >
-                              <IconChevronRightOutline14 />
+                              <IconChevronRightOutlineRegular size={12} />
                             </span>
                           </span>
                         )}
@@ -209,6 +217,6 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
             </Fragment>
           ))}
       </div>
-    </div>
+    </MenuSurface>
   )
 }

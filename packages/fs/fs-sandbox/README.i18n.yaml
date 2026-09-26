@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/fs/fs-sandbox/README.md
-README.md: e126e71573f4ce1480543d0a94cfe8512f03472b
-README.zh.md: b224296711ae7c43849fa2a426a2a6e79c99f65e
+/:
+  en: 4061a46ba3cf0fbd
+  zh: c374141974bfe4bb
+/deepseek-ai-dsh-fs-sandbox:
+  en: 68f0a0a66d33b6ec
+  zh: 62fed2012166c111
+/deepseek-ai-dsh-fs-sandbox/summary:
+  en: ae186a7675a9332b
+  zh: 323e9043c1d90a83
+/deepseek-ai-dsh-fs-sandbox/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-fs-sandbox/use-this-package:
+  en: c6fe0aa054b2a402
+  zh: 78a779a1b91ac808
+/deepseek-ai-dsh-fs-sandbox/use-this-package/minimal-composition:
+  en: a954957753339bbf
+  zh: c6633e86de8b2707
+/deepseek-ai-dsh-fs-sandbox/use-this-package/how-the-fence-behaves:
+  en: 1a6f19bb21aff7b1
+  zh: ace300527edd0c1f
+/deepseek-ai-dsh-fs-sandbox/use-this-package/observable-success-and-failures:
+  en: 722f744eb7b3b040
+  zh: b95db78f9968f9c5
+/deepseek-ai-dsh-fs-sandbox/understand-the-implementation:
+  en: 1c359075f33df1ed
+  zh: 1306d6c28b5dd1f5
+/deepseek-ai-dsh-fs-sandbox/understand-the-implementation/design-concept:
+  en: ef26d25e866ae9c0
+  zh: 8206760b2e2c5feb
+/deepseek-ai-dsh-fs-sandbox/understand-the-implementation/source-map:
+  en: 5422d25675578549
+  zh: 9bb87cede194cd99
+/deepseek-ai-dsh-fs-sandbox/understand-the-implementation/how-a-mutation-is-fenced:
+  en: d30a62f5f7e9aee7
+  zh: 837e33fb5eea2f64
+/deepseek-ai-dsh-fs-sandbox/understand-the-implementation/threat-model:
+  en: 051808b6e28313a5
+  zh: a06a46f26c552678
+/deepseek-ai-dsh-fs-sandbox/further-exploration:
+  en: dd643f4f40336b99
+  zh: e4cf95298d89e2cb
+/deepseek-ai-dsh-fs-sandbox/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-fs-sandbox/model-experience/filesystem-policy-and-refusals:
+  en: 36178638b7ce9cf8
+  zh: 929c8292023f3541
+/deepseek-ai-dsh-fs-sandbox/model-experience/filesystem-policy-and-refusals/what-the-model-sees:
+  en: 388c39763c12dfe6
+  zh: bc3be0faeff618cd
+/deepseek-ai-dsh-fs-sandbox/model-experience/filesystem-policy-and-refusals/token-effect:
+  en: fd86bc3fc7106117
+  zh: 1b9eb71e5aba714b
+/deepseek-ai-dsh-fs-sandbox/model-experience/filesystem-policy-and-refusals/kv-cache-effect:
+  en: a4ca227f2f83edec
+  zh: 5bb3c452b412566d
+/deepseek-ai-dsh-fs-sandbox/known-limitations-and-deferred-work:
+  en: c0ba1642a5e62459
+  zh: 10a27abcd6f27888
+/deepseek-ai-dsh-fs-sandbox/known-limitations-and-deferred-work/dev-note:
+  en: e83aa1d2ff6b4366
+  zh: f0feffa169cb8bd3

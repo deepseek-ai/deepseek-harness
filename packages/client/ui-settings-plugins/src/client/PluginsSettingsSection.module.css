@@ -58,7 +58,7 @@
 }
 
 .tab:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
   border-radius: 2px;
   color: var(--dsw-alias-label-primary);

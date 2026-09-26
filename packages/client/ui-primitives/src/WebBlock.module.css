@@ -1,5 +1,5 @@
 .block {
-  --dsl-web-radius: 12px;
+  --dsl-web-radius: var(--dsw-radius-lg);
 
   margin: 16px 0;
   padding: 12px 14px;

@@ -8,7 +8,7 @@ import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import {
   assertFixtureInventory,
@@ -82,8 +82,7 @@ describe('minimal agent preset', () => {
     const systemPrompt = systemPromptText(agentHandle.agent.session)
     if (systemPrompt === undefined) throw new Error('the minimal agent issued no system prompt')
     expect(agentHandle.agent.session.snapshotEvents().some(event => event.type === 'user/message'
-      && event.data.source.kind === 'plugin'
-      && event.data.source.plugin === '@deepseek-ai/dsh-system-prompt')).toBe(false)
+      && event.data.source.kind === 'runtime-context')).toBe(false)
     expect(scaffold.ctx.agentPresets.serviceFor(agentHandle.agent, 'fs')).toBeUndefined()
     expect(scaffold.ctx.agentPresets.serviceFor(agentHandle.agent, 'compaction')).toBeUndefined()
 
@@ -153,7 +152,14 @@ describe('minimal agent preset', () => {
     await process.click()
     await expect.poll(() => process.getAttribute('aria-expanded')).toBe('true')
 
-    const row = page.locator('[data-sample="bash"]').first()
+    const group = page.locator('[data-chat-group-key]').filter({ has: page.locator('[data-sample="bash"]') }).first()
+    const groupControl = group.locator('[data-process-activity]')
+    await groupControl.waitFor({ timeout: 15_000 })
+    await expect.poll(() => groupControl.getAttribute('aria-expanded')).toBe('false')
+    const row = group.locator('[data-sample="bash"]').first()
+    expect(await row.isVisible()).toBe(false)
+    await groupControl.click()
+    await expect.poll(() => groupControl.getAttribute('aria-expanded')).toBe('true')
     await row.waitFor({ timeout: 15_000 })
     await expect.poll(() => row.getAttribute('aria-expanded')).toBe('false')
     await row.click()

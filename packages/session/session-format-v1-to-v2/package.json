@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-format-v1-to-v2",
   "description": "Frozen released-v1 Session codec and assistant-stream migration to v2",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -39,16 +39,16 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/dsh-session-format": "workspace:^",
-    "@deepseek-ai/dsh-session-format-v0-to-v1": "workspace:^",
-    "@deepseek-ai/dsh-util-values": "workspace:^"
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-session-format": "workspace:*",
+    "@deepseek-ai/dsh-session-format-v0-to-v1": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-session": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-session": "workspace:*"
   }
 }

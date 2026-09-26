@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-When an agent asks a question in the Web client, this package replaces the chat composer with an interactive question surface. Users can move through questions, choose one or multiple options, enter custom answers, skip items, and submit one structured answer batch. Single-choice selections advance immediately, while drafts survive Session navigation for the lifetime of the page. A single question with a supported presentation intent can use a dedicated surface, including the plan-review card with `Chat about it`, `Refuse`, and `Approve` actions.
+When an agent asks a question in the Web client, this package replaces the chat composer with an interactive question surface. Users can move through questions, choose one or multiple options, enter custom answers, skip items, and submit one structured answer batch. Single-choice selections advance immediately, while drafts survive Session navigation for the lifetime of the page. A single question with a supported presentation intent can use a dedicated surface, including the plan-review card with `Request changes` and `Approve` actions.
 
 ## Table of Contents
 
@@ -33,11 +33,11 @@ A multi-select draft keeps its selected labels while the user opens or edits the
 
 ### The plan-review card
 
-A `plan-review` intent — set by `dsh-plan-mode` on the `exit_plan_mode` review — renders the waiting-approval card layout: a `Plan review` strip, the plan as the scrolling markdown body, and one decision row of `Chat about it` / `Refuse` / `Approve`. Approve and Refuse answer with the asker's own option labels; `Chat about it` rejects the wait as `ASK_CANCELLED`, returning the composer so the user can say what they want instead.
+A `plan-review` intent — set by `dsh-plan-mode` on the `exit_plan_mode` review — renders a compact approval card: a `Plan review` strip with a `View full plan` link, the plan title and a two-line plain-text summary, and `Request changes` / `Approve` actions. The strip uses the shared warning dot and changes it to the ongoing loader while either action settles. The complete plan opens in the sidebar through the link or its permanent Chat card. Approve answers with the asker's approval label; `Request changes` rejects the wait as `ASK_CANCELLED`, returning the composer for the user's feedback without submitting an approval. The card has no separate refusal button.
 
 ### Failure and recovery
 
-The generic question flow keeps its current page, selected labels, custom text, and explicit skips in a non-persisted Slot store scoped to the owning Session and keyed by the pending request's local render identity. Switching from Session A to B remounts the strict composer entry, but returning to A reuses A's store and restores the unfinished draft. A different request identity reads an empty draft and replaces the previous value on its first edit; a successful answer or cancellation clears the matching value. The host remains authoritative for whether the request is pending.
+The generic question flow keeps its current page, selected labels, custom text, and explicit skips in a non-persisted Slot store scoped to the owning Session generation and keyed by the pending request's local render identity. Switching from Session A to B retires A when no other reference owns it, so returning to A starts an empty question draft; another reference that keeps A's generation alive also keeps that draft. A different request identity reads an empty draft and replaces the previous value on its first edit; a successful answer or cancellation clears the matching value. The host remains authoritative for whether the request is pending.
 
 -----
 
@@ -51,11 +51,13 @@ The package is one ownership rule: rendering a question is a host UI capability,
 
 ### Intent surface election
 
-The card claims a request only when it can send every answer that request allows: one question, the intent declared, the plan present as `detail`, the named approve label offered, and a binary single choice (at most one option besides approve, not multi-select). Anything else stays on the generic flow, which can express it. An intent changes the layout, never which answers are reachable.
+The card accepts one question declaring the intent, carrying the plan as `detail`, and offering the named approve label, with at most one alternative and no multi-select. Its secondary action returns to the composer for change requests. Larger choices and multi-select questions remain in the generic flow.
 
 ### Copy and locale
 
 Composer chrome copy (pager, buttons, placeholders, validation feedback) is bilingual: the plugin registers zh/en dictionaries under the `question` namespace of `dsh-client-locale` and hands the entry its bound translator plus the locale snapshot source through the inject face, so a locale switch re-renders a mounted composer. Question and option text arrives from the model and renders verbatim; carrier failure messages also display untranslated.
+
+A plan review exposes `conversation.plan-review.actions` with its request key, full text, and optional invocation identity. The plan plugin opens logged plans from history and unlogged reviews as temporary sidebar previews. Opening a document does not answer or dismiss the review.
 
 </details>
 

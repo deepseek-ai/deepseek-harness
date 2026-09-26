@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-17-session-row-menu-actions-slot.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-17-session-row-menu-actions-slot.md
+/agent-note-session-row-actions-as-slot-lists:
+  en: 6c14eadc272cbe5f
+  zh: d0fb9907cddcae5a
+/agent-note-session-row-actions-as-slot-lists/problem:
+  en: 1afb986570a4bb49
+  zh: 22862e82275038b7
+/agent-note-session-row-actions-as-slot-lists/decision:
+  en: 7a353dd9c0642f56
+  zh: e503a953cccfdc47
+/agent-note-session-row-actions-as-slot-lists/alternatives-considered:
+  en: 19fc0c951e9e49b5
+  zh: 9010c3fb55b71ce0
+/agent-note-session-row-actions-as-slot-lists/consequences:
+  en: cfc90eb041452a48
+  zh: 882748ceb29f21ea

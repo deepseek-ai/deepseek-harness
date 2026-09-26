@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-web-sidebar-terminal.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-web-sidebar-terminal.md
-2026-09-09-web-sidebar-terminal.md: 2649610e776029b10b11fc4ea87d75a24a58d32b
-2026-09-09-web-sidebar-terminal.zh.md: 9a3fd828ff52142cb945ff14d84d13c9e8522ecf
+/agent-note-web-sidebar-terminals:
+  en: dfb245f871011059
+  zh: d64c0bd9cbe5f652
+/agent-note-web-sidebar-terminals/problem:
+  en: 71813b1cb1f750ba
+  zh: 64d2b999933ccd98
+/agent-note-web-sidebar-terminals/decision:
+  en: d73dc0a37bd7c9dd
+  zh: f5c6cf8cce36090a
+/agent-note-web-sidebar-terminals/alternatives-considered:
+  en: 0c129fba63a60777
+  zh: c334f34dd71bbaf6
+/agent-note-web-sidebar-terminals/consequences:
+  en: d710787595b5dc89
+  zh: 4df9518c32698f85
+/agent-note-web-sidebar-terminals/related:
+  en: 94540c743da01fc4
+  zh: 53e3d9d2268153d1

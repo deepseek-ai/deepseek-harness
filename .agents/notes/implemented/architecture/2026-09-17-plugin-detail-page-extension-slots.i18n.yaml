@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-17-plugin-detail-page-extension-slots.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-17-plugin-detail-page-extension-slots.md
+/agent-note-plugin-detail-pages-as-an-extension-point:
+  en: 71b432dfc4475c08
+  zh: a9f9a7e272c32093
+/agent-note-plugin-detail-pages-as-an-extension-point/problem:
+  en: 39f7e246e6ab3beb
+  zh: dba3ba5206d81d8d
+/agent-note-plugin-detail-pages-as-an-extension-point/decision:
+  en: df2cba037b6bcb4d
+  zh: 82d0a5dc61a1716c
+/agent-note-plugin-detail-pages-as-an-extension-point/alternatives-considered:
+  en: cdcc8710be8ab1be
+  zh: d82781a3c353984f
+/agent-note-plugin-detail-pages-as-an-extension-point/consequences:
+  en: 0567cb3fbfbdb4f8
+  zh: 256811c9a7271da1
+/agent-note-plugin-detail-pages-as-an-extension-point/testing:
+  en: 8957db157d2f743e
+  zh: fb24db99bb5a55aa

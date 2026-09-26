@@ -11,6 +11,8 @@ kind: "package-library"
 
 `SlotTestRuntime.create()` 让 Vitest 套件在 jsdom 中驱动生产 slot、store、带类型的 Session 与 Workspace fixture，并对局部 DOM 断言。面向插件激活、重载、重连与清理的测试，`createClientTest` 使用具名端点 Remote mock 启动 web profile 的 bundle roster，无需业务 Host。缺失服务与未打桩调用会明确失败。整机 fixture 拥有启动和销毁，局部 runtime 提供幂等销毁。通过 `devDependencies` 将本包用于客户端测试；它不是产品插件。
 
+链接到工作区的 bundle 从实际包目录解析依赖；各 bundle 自身目录中的依赖优先于祖先目录中继承的包。
+
 ## 目录
 
 - [使用本包](#use-this-package)
@@ -43,6 +45,8 @@ await runtime.dispose()
 `mount` 会预检必需服务，缺失时自明报错——先用 `provide(name, value)` 提供额外服务。运行时提供的 `fileUpload` 替身会拒绝每次调用，直到测试套件替换 `runtime.fileUpload.upload`。`storeOf(key, scopeKey)` 返回渲染器交给 slot 组件的实时存储实例，用于身份与动作驱动写入断言。
 
 可选渲染参数通过 `entryKey` 选择 keyed 条目，或通过 `only` 选择 list 条目；`view.update(owner)` 保留该选择。`runtime.panelInfo` 提供默认的 `usePanelInfo` 数据源，初始不选中全局面板。挂载生产 Layout 所有者之前，先调用 `releasePanelInfoSource()` 释放该数据源。`dispose()` 同时释放默认的工作区与面板信息根数据源；提前释放是幂等的，不会移除替代它们的所有者。
+
+Session fixture 从显式提供的地址或已加载的父级投影解析子代理地址，不会保留 Session generation。
 
 ### 局部 DOM 快照
 
@@ -87,7 +91,7 @@ test('registers into the sidebar', async ({ remote, start }) => {
 
 ### Roster 与启动行为
 
-`webApp` 是 `web` profile 的浏览器 roster，首次 import 装配入口时从它的 bundle（先 `dsh-base`、再 `dsh-web-app`）按启动器的方式现读，只是匹配不到任何行的补丁在这里抛错、启动器只警告：每个 bundle 的 `dsh.bundle.patch` 列表用 include 插件的 YAML 方言解析、用它的 `applyEntryPatches` 合成，每个未禁用且其包声明 `dsh.client.platform === 'web'` 的行成为一行，带上该声明的 `inject` 与 `immediately`；`bundleRoster(bundles)` 对任意 bundle 列表做同样的事。没有任何东西从 bundle 拷贝出来，bundle 一改下次跑测试就能看见。`webApp.closure(names)` 保留点名的行及其传递注入的全部行（即按 bundle 组合方式起这些插件所需的行），`webApp.pick(names)` 与 `webApp.without(names)` 手工裁剪，三者都对未知名字抛错，`ClientRoster.of(rows)` 内联构造一份。`remoteDefaultResponses` 是 roster 在没有 session、没有 workspace、默认设置下启动时恰好会打的那些 Remote 端点的默认响应；测试用 `mock.load(table)` 在其上叠加自己的 `RemoteTable`，任何没有规则的调用都会在 `dispose()` 时经 `mock.assertNoUnmatched()` 让测试失败。`mount` 要求 roster 提供 `uiRenderer`；否则 `start` 响亮失败而不是返回一个空容器。`client.connection` 是 roster 的 Connection 服务（没有任何 `Context` 增强声明它），`connectTimeoutMs` 限定等就绪的时长，超时消息列出 mock log。`reload(name)` 通过共享的 Client Modules 辅助函数重建一个 Loader entry（先拆 registry，再 `entry.refresh()`）；每个客户端都保留自己的模块系统和绑定实例的 Connection 替换，因此启动与重载可以重叠而无需改写页面全局变量。`unload(name)` 移除 entry 并等待插件清理完成，`flush()` 在 `act` 内让 React 落定。jsdom 既没有 `EventSource`（client-hmr 在 apply 时打开一个）也没有 `ResizeObserver`（布局组件挂载时观察尺寸），所以 `start` 对缺失的全局惰性桩做引用计数，`dispose` 只移除它装的那些——这是 jsdom 的缺口，不是客户端身份通道。每个 roster 里的 `@deepseek-ai/dsh-api-remotes` 行都会被去掉：它生成的 Remote 客户端只存在于构建后的 `lib/`，而 `remote.<ns>` 正是本档要替掉的东西。`start` 改为给 roster 注入的每个 `remote.<ns>` 服务（加上此刻 mock 登记过规则的命名空间；之后才首次登记的命名空间没有代理）提供一个无契约代理；`ctx.remote.<ns>.<method>(...args)` 变成对端点 `<ns>/<method>` 的调用，携带位置参数，mock 登记了 `stream()` 脚本的走流、否则走一元，并沿用生成客户端的结果折叠（载体抛错折成 `gateway/internal`，中止折成 `gateway/cancelled`）。没有规则的端点照样发出，所以 mock 会记下它、`dispose()` 让测试失败。
+`webApp` 是 `web` profile 的浏览器 roster，首次 import 装配入口时从它的 bundle（先 `dsh-base`、再 `dsh-web-app`）按启动器的方式现读，只是匹配不到任何行的补丁在这里抛错、启动器只警告：每个 bundle 的 `dsh.bundle.patch` 列表用 include 插件的 YAML 方言解析、用它的 `applyEntryPatches` 合成，每个未禁用且其包声明 `dsh.client.platform === 'web'` 的行成为一行，带上该声明的 `inject` 与 `immediately`；`bundleRoster(bundles, anchor, disabledContext)` 接受显式 Loader 求值作用域来处理条件 `disabled` 标记；未提供作用域时拒绝浏览器表达式。`webApp` 仅提供 Web profile 名称，不提供业务 Host 服务。没有任何东西从 bundle 拷贝出来，bundle 一改下次跑测试就能看见。`webApp.closure(names)` 保留点名的行及其传递注入的全部行（即按 bundle 组合方式起这些插件所需的行），`webApp.pick(names)` 与 `webApp.without(names)` 手工裁剪，三者都对未知名字抛错，`ClientRoster.of(rows)` 内联构造一份。`remoteDefaultResponses` 是 roster 在没有 session、没有 workspace、默认设置下启动时恰好会打的那些 Remote 端点的默认响应；测试用 `mock.load(table)` 在其上叠加自己的 `RemoteTable`，任何没有规则的调用都会在 `dispose()` 时经 `mock.assertNoUnmatched()` 让测试失败。`mount` 要求 roster 提供 `uiRenderer`；否则 `start` 响亮失败而不是返回一个空容器。`client.connection` 是 roster 的 Connection 服务（没有任何 `Context` 增强声明它），`connectTimeoutMs` 限定等就绪的时长，超时消息列出 mock log。`reload(name)` 通过共享的 Client Modules 辅助函数重建一个 Loader entry（先拆 registry，再 `entry.refresh()`）；每个客户端都保留自己的模块系统和绑定实例的 Connection 替换，因此启动与重载可以重叠而无需改写页面全局变量。`unload(name)` 移除 entry 并等待插件清理完成，`flush()` 在 `act` 内让 React 落定。jsdom 既没有 `EventSource`（client-hmr 在 apply 时打开一个）也没有 `ResizeObserver` 和 `document.fonts` 事件目标（布局组件挂载时观察尺寸与字体加载），所以 `start` 对缺失的全局惰性桩做引用计数，`dispose` 只移除它装的那些——这是 jsdom 的缺口，不是客户端身份通道。每个 roster 里的 `@deepseek-ai/dsh-api-remotes` 行都会被去掉：它生成的 Remote 客户端只存在于构建后的 `lib/`，而 `remote.<ns>` 正是本档要替掉的东西。`start` 改为给 roster 注入的每个 `remote.<ns>` 服务（加上此刻 mock 登记过规则的命名空间；之后才首次登记的命名空间没有代理）提供一个无契约代理；`ctx.remote.<ns>.<method>(...args)` 变成对端点 `<ns>/<method>` 的调用，携带位置参数，mock 登记了 `stream()` 脚本的走流、否则走一元，并沿用生成客户端的结果折叠（载体抛错折成 `gateway/internal`，中止折成 `gateway/cancelled`）。没有规则的端点照样发出，所以 mock 会记下它、`dispose()` 让测试失败。
 
 ### 何时使用
 
@@ -111,7 +115,7 @@ test('registers into the sidebar', async ({ remote, start }) => {
 
 ### 设计
 
-测试台不复制生产逻辑：它挂载生产 `SlotRegistry`、生产渲染器与 `UiSession` 适配器。`TestSessions` 与 `TestWorkspaces` 实现功能通过 Cordis 消费的 owner 接口，每个 fixture Session 实现 `SessionFace`，`stubSettingsScope` 实现 `SettingsScope`。`UiSession` 从这些控制器绑定派生标准渲染器数据源。未 stub 的 `ISession` 行为会携缺失方法名失败。
+测试台不复制生产逻辑：它挂载生产 `SlotRegistry`、生产渲染器与 `UiSession` 适配器。`TestSessions` 与 `TestWorkspaces` 实现功能通过 Cordis 消费的 owner 接口，每个 fixture Session 实现 `SessionFace`，`stubConfigForm` 实现 `ConfigForm`。`UiSession` 从这些控制器绑定派生标准渲染器数据源。未 stub 的 `ISession` 行为会携缺失方法名失败。
 
 ### 源码地图
 
@@ -123,7 +127,7 @@ test('registers into the sidebar', async ({ remote, start }) => {
 | [`src/snapshot.ts`](src/snapshot.ts) | DOM 快照序列化器（类名哈希折叠、`<svg>` 指纹） |
 | [`src/remote.ts`](src/remote.ts) | 用于 host RPC 的 `TestRemote` 替身、`RemoteError` 值转出 |
 | [`src/translate.ts`](src/translate.ts) + [`src/locale-env.ts`](src/locale-env.ts) | 翻译与固定浏览器语言测试辅助 |
-| [`src/settings-scope.ts`](src/settings-scope.ts) | 带测试驱动发布与写入 spy 的 `stubSettingsScope` |
+| [`src/config-form.ts`](src/config-form.ts) | 带测试驱动发布与写入 spy 的 `stubConfigForm` |
 | [`src/assembly/roster.ts`](src/assembly/roster.ts) | `ClientRosterRow`、`ClientRoster`（`of`/`closure`/`pick`/`without`）、它所标注的 `AssemblyPlan`，以及 `graphFromRoster` |
 | [`src/assembly/modules.ts`](src/assembly/modules.ts) | 源码 `/client` 导入及替换，通过生产模块 facade 的待注册工厂队列登记 |
 | [`src/assembly/test-client.ts`](src/assembly/test-client.ts) | `TestClient`：绑定实例的 Connection、共享 jsdom 桩、`bootClient`、挂载、等就绪、`reload`/`unload`/`dispose` |

@@ -25,8 +25,7 @@ flowchart LR
   List["list / search"] --> Corpus["SessionQuery corpus"]
   Follow["follow"] --> Observe["observeSession"]
   Page["page / attachment / fork"] --> Observe
-  Subagent["subagent list / continuation"] --> Corpus
-  Subagent --> Observe
+  Subagent["subagent list / continuation"] --> Observe
   Corpus --> Cache["projection cache hints"]
   Cache --> ClientList["Client Session list"]
   Cache -->|"small miss"| Observe
@@ -71,7 +70,7 @@ Registry 拥有 fold state；各领域拥有自己的 `init`、`apply`、`view`�
 
 `view` 保持为 folded state 上无 cache 的同步转换。其成本由已注册 projection unit 数量界定，并在 snapshot 发布时支付；引入第二层 cache 只会增加 invalidation 状态，无法减少 event replay。
 
-语料库 list 仍是独立的轻量操作。`listSessions()` 返回 live-preferred header，而不物化每份日志。Session list 与 subagent list 先读取 live projection 状态或持久 projection-cache row。当 cache 无法判断 Session 是否为空，且该 Session 拥有的独立产物未超过配置的小日志限制时，Session list 可以执行一次完整 observation；大型或不可读的 cache miss 仍以 hints 未知但 row 可见的方式返回。
+语料库 list 仍是独立的轻量操作。`listSessions()` 返回 live-preferred header，而不物化每份日志。Session list 先读取 live projection 状态或持久 projection-cache row。Subagent 发现通过精确 observation 读取父目录 projection。当 cache 无法判断 Session 是否为空，且该 Session 拥有的独立产物未超过配置的小日志限制时，Session list 可以执行一次完整 observation；大型或不可读的 cache miss 仍以 hints 未知但 row 可见的方式返回。
 
 `session.follow` 发布必需的 opening snapshot，其中包含 header、cursor、首个事件窗口和完整 projection baseline。重连使用另一份完整 snapshot 替换上一 generation。`session.page` 仅用于旧历史读取与 gap repair。只读 observation 不激活 Agent；只有普通 follow 可以保留 prepared observation，并在 opening snapshot 已交付后请求 promotion。
 
@@ -86,7 +85,7 @@ Registry 拥有 fold state；各领域拥有自己的 `init`、`apply`、`view`�
 | `session.follow` | 一份精确 observation | 全算，并由 opening snapshot 携带 | 仅普通 cold Session，且在 snapshot 交付后 |
 | `session.page` | 一份精确 observation | 不计算，但 projection-backed subagent 鉴权除外 | 从不 |
 | Attachment 与 fork source | 一份精确 observation | 鉴权不要求时不计算 | source 从不激活 |
-| Subagent list 与 continuation | Corpus 加 live/cache/observation 解析 | cold fallback 全算；audience 只消费 identity 或继承值 | Listing 从不；continuation 遵循显式命令语义 |
+| Subagent list 与 continuation | Listing 观察父目录；continuation 观察目标 | 全算；listing 消费目录值，continuation 消费身份与继承值 | Listing 从不；continuation 遵循显式命令语义 |
 
 ### 可回放的 Client 事实归 projection 所有
 
@@ -108,11 +107,11 @@ Projection 的三种交付状态含义不同：
 | Follow opening baseline | 对当前 Host composition 完整 | 精确 opening cursor | Capability 不存在 |
 | Projection frame | 单个完整 key | Frame 携带的 event sequence | 不适用 |
 
-Client 为每个 key 保存带 sequence number 的一行。更新的 hint、baseline 或 frame 会替换 row；相同或更旧的输入被忽略。因此 reconnect 可以替换 event window，而不会回退已经在更晚 sequence 接受的 projection frame。
+Client 为每个 key 保存一行。由建连 Host 算出的行带 sequence number：更新的 baseline 或 frame 会替换它，相同或更旧的输入被忽略，因此 reconnect 可以替换 event window，而不会回退已经在更晚 sequence 接受的 projection frame。从持久化缓存看出来的 list hint 不带可比的 sequence number，让位于所有 Host 排序过的写入（[Projection cache 只读面按 lifecycle 身份匹配，客户端 store 区分 cached 与 sequenced 行](2026-09-19-projection-cache-listing-identity-and-cached-rows.zh.md)）。
 
 List view 与已打开 Session 读取同一个 per-Session store。Hints 可以在 follow 完成前填充 title、preset 和其他 list presentation；opening baseline 随后收敛这份状态，而不会建立第二套 summary-only authority。
 
-每个 Session 的 Client projection store 按一条 higher-sequence-wins 规则接收 list hints、follow baseline 和后续 whole-value frame。它从不折叠 Session event。Baseline 或 frame 可以推进 hinted value，较旧切面不能覆盖较新的 row。
+每个 Session 的 Client projection store 接收 list hints、follow baseline 和后续 whole-value frame。higher-sequence-wins 只在 Host 排序过的值之间生效；cached list hint 排在它们全部之下。它从不折叠 Session event。Baseline 或 frame 可以推进 hinted value，较旧切面不能覆盖较新的 sequenced row。
 
 不由单个 Session 派生的数据不进入 projection。`session/modelCatalog` 持有当前 Host generation 的 model catalog，`agentPresets/list` 持有可配置 preset roster。Selector 只在相应 catalog 与 Session 的 `modelSelection` 或 `agentPreset` projection 均就绪后组合两者。刷新时可以保留上一份完整 catalog；第一次获得完整输入前显示 loading，而不是展示猜测的名称或可用性结论。
 
@@ -120,10 +119,10 @@ Client 本地交互状态也继续留在本地：loading 和 error 状态、打�
 
 ### 领域应用
 
-- **Title 与 list metadata。** Cached projection hints 可以渲染已有 title，并判断 blankness 或 recency。Hints 缺失时这些事实保持未知；listing 期间只有有界小日志策略可以解析它们。
+- **Title 与 list metadata。** Cached projection hints 可以渲染已有 title，并判断 blankness 或 recency。Hints 缺失时这些事实保持未知；listing 期间只有有界小日志策略可以解析它们。Client 使用当前 metadata projection 对账列表行：非空白事实会将 Session 排除在空白复用之外，较晚的 prompt 时间用于最近活动排序。Projection store 的生命周期长于惰性创建的 Client Session 实例，因此实例化时即使尚无列表行，也会读取已保留的元数据。过期列表响应不能覆盖较新的 history 或 control projection。
 - **Model selection。** `model/selection` 记录完整 provider、model 和可选 reasoning effort。`modelSelection` 区分上一请求使用的 route，以及等待 request header 消费的较晚 selection。
 - **Agent preset。** Projection 从不可变 Session metadata 初始化，并随 preset-selection event 推进。对于现有 Session，缺失或 `null` 值不会替换成部署默认值。
-- **Subagent identity。** `subagent` unit 仍是唯一 descriptor interpreter。Listing 从共享 corpus 获得 candidate，并通过 live state、projection cache 或 observation 解析值，不自行扫描 event。
+- **Subagent identity。** `subagent` unit 仍是继续执行与历史授权的唯一 descriptor interpreter。Listing 通过父级 observation 从 `subagentCatalog` projection 派生成员关系、模式与标签；后代发现递归读取可达目录（[父目录决策](2026-09-01-parent-owned-subagent-catalog.zh.md)）。
 - **Subagent presentation。** Opening projection value 在 Client 宣布 child 可交互或离线前建立 timing 与 identity，因此 transport loading 不会伪装成 durable state。
 
 这些迁移删除特殊 Client state，但不会让 projection 接管 provider catalog 或交互机制。领域仍拥有 mutation 和 command；projection 只拥有其可回放 Session 结果。
@@ -167,14 +166,14 @@ Client 本地交互状态也继续留在本地：loading 和 error 状态、打�
 - [可复用 Session preparation](../../archived/architecture/2026-08-05-session-preparation.md)拥有冷物化、修复、reservation 和发布。Observation 在该 prepared object 之上增加共享读取 lease，并未把 preparation 移入 SessionQuery。
 - [Session 历史与 Remote event transport](2026-08-18-session-history-and-event-transport.zh.md)拥有 stream generation 与 replacement 语义。本决策提供每个日志 generation 的精确 opening snapshot。
 - [Projection state 与 Client view](../../archived/architecture/2026-08-19-session-projection-state-and-client-views.md)拥有 Host fold state 和 Client value 的区分。本决策规定这些值在哪里消费，以及部分 list hints 与完整 baseline 的差别。
-- [Subagent identity projection](../../archived/architecture/2026-08-06-subagent-list-identity-projection.md)继续拥有 descriptor folding、可序列化 `null` sentinel 和 own-suffix sequence 检查。本决策只取代其中独立 corpus merge 和直接 cold inspection 路径：listing 改为使用 SessionQuery corpus 和 observation。
+- [父目录决策](2026-09-01-parent-owned-subagent-catalog.zh.md)拥有 subagent 发现机制。Descriptor folding、可序列化 `null` sentinel 和 own-suffix sequence 检查仍用于继续执行与历史授权，不用于目录身份。
 - 更广泛的 [session projection 与 command-log 提案](../../proposed/architecture/2026-07-27-session-projection-and-command-log.zh.md)仍为 proposed，其中尚未由已交付代码体现的部分不受影响。本决策记录已经交付的 observation 与 Client ownership 子集。
 
 ## 验证
 
 Persistence 与 SessionQuery 测试固定共享冷加载、取消、live-source race、retained observation、dispose 和 all-or-none projection 计算。Session Controller 与 Gateway 测试固定 snapshot-first opening、replacement reconnect、旧分页读取、gap repair、list-cache hints、小日志有界 fallback，以及 snapshot 交付后的 promotion。
 
-Client 测试固定 higher-sequence-wins projection store、title 更新、model catalog 与 selection readiness、preset roster refresh 与 Session 专属选择，以及不会短暂展示离线状态的 subagent loading。Subagent 测试固定 corpus 枚举、cache 与 observation fallback、lifecycle witness、有界冷读，以及 listing 期间不激活 Agent。
+Client 测试固定 higher-sequence-wins projection store、title 更新、model catalog 与 selection readiness、preset roster refresh 与 Session 专属选择，以及不会短暂展示离线状态的 subagent loading。Subagent 测试固定父目录顺序、递归遍历、分支诊断、取消、fork 隔离，以及 listing 期间不激活 Agent。
 
 ## 考虑过的替代方案
 

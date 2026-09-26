@@ -25,6 +25,7 @@ The boot group launches profile applications and manages their installed composi
 | [`app-boot`](app-boot/README.md) | Boots a dsh app from a `cordis.yml`: loads `.env`, applies profile and patch layers, and reports startup failures clearly | (library for the bins) |
 | [`cmdline`](cmdline/README.md) | Lets the app own its flags, `--help`, and exit code; passes everything after the launcher's flags through verbatim | `cmdlineArgs`, `appExit` |
 | [`hmr`](hmr/README.md) | Coordinates module and configuration reloads with package mutations | `hmr` |
+| [`config-editor`](config-editor/README.md) | Persists active profile configuration through Loader reconciliation | `configEditor` |
 | [`plugin-manager`](plugin-manager/README.md) | Manages current-profile plugins and bundle packages through shared CLI operations | `pluginManager` |
 
 <a id="related-documentation"></a>

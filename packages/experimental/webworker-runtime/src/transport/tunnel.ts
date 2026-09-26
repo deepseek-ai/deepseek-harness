@@ -91,10 +91,11 @@ export interface TunnelSeams {
   readonly directFetch: (request: Request) => Promise<Response>
   /** Boot payload for `GET /__boot__`: the structured index injection table. */
   readonly bootPayload: () => unknown
-  /** Open one decoded Gateway Remote stream without another network carrier. */
+  /** Open one decoded Gateway Remote stream without another network carrier; `uplink` carries the page's items. */
   readonly openStream: (
     endpoint: string,
     payload: unknown,
+    uplink: AsyncIterable<unknown>,
     signal: AbortSignal,
   ) => Promise<AsyncIterable<unknown>>
   /** Convert a Gateway stream failure to stable Client fields. */
@@ -173,6 +174,54 @@ class BufferedSink {
   }
 }
 
+/** Uplink items of one worker-local logical stream, read once by the Host method as its `uplink`. */
+class TunnelUplink implements AsyncIterable<unknown>, AsyncIterator<unknown> {
+  private readonly items: unknown[] = []
+  private ended = false
+  private closed = false
+  private wake: (() => void) | undefined
+
+  push(value: unknown): void {
+    if (this.ended || this.closed) return
+    this.items.push(value)
+    this.signal()
+  }
+
+  /** Page half-close or stream end; buffered items still drain. */
+  end(): void {
+    this.ended = true
+    this.signal()
+  }
+
+  [Symbol.asyncIterator](): AsyncIterator<unknown> {
+    return this
+  }
+
+  async next(): Promise<IteratorResult<unknown>> {
+    while (true) {
+      if (this.closed) return { value: undefined, done: true }
+      if (this.items.length > 0) return { value: this.items.shift(), done: false }
+      if (this.ended) return { value: undefined, done: true }
+      if (this.wake !== undefined) throw new Error('webworker tunnel: stream uplink has one pending read')
+      await new Promise<void>((resolve) => { this.wake = resolve })
+    }
+  }
+
+  /** The Host stopped reading: buffered and later items are dropped. */
+  return(): Promise<IteratorResult<unknown>> {
+    this.closed = true
+    this.items.length = 0
+    this.signal()
+    return Promise.resolve({ value: undefined, done: true })
+  }
+
+  private signal(): void {
+    const wake = this.wake
+    this.wake = undefined
+    wake?.()
+  }
+}
+
 /** One tunnel per worker; wire {@link TunnelServer.handleMessage} to `onmessage` first. */
 export class TunnelServer {
   private readonly port: TunnelPort
@@ -181,6 +230,8 @@ export class TunnelServer {
   private readonly unaryApiLane: 'route' | 'direct'
   private readonly queue: QueuedFrame[] = []
   private readonly inFlight = new Map<TunnelRequestId, InFlight>()
+  /** Uplinks of accepted `stream-open` frames, buffering items that arrive before or while the stream serves. */
+  private readonly uplinks = new Map<TunnelRequestId, TunnelUplink>()
   private seams: TunnelSeams | undefined
   private failure: string | undefined
   private listener: RequestListener | undefined
@@ -203,9 +254,18 @@ export class TunnelServer {
       // one reaching a live server is a client double-connect.
       throw new Error('webworker tunnel: duplicate init frame; the tunnel is already open')
     }
+    if (frame.t === 'stream-uplink-item') {
+      this.uplinks.get(frame.id)?.push(frame.value)
+      return
+    }
+    if (frame.t === 'stream-uplink-end') {
+      this.uplinks.get(frame.id)?.end()
+      return
+    }
     if (frame.t === 'abort') {
       this.inFlight.get(frame.id)?.abort()
       this.inFlight.delete(frame.id)
+      this.dropUplink(frame.id)
       // A request still parked in the boot queue must not run after its
       // caller gave up; serve() would otherwise execute it post-boot.
       const queued = this.queue.findIndex(request => request.id === frame.id)
@@ -213,6 +273,7 @@ export class TunnelServer {
       return
     }
     if (this.failure !== undefined) {  this.refuse(frame, this.failure); return }
+    if (frame.t === 'stream-open') this.uplinks.set(frame.id, new TunnelUplink())
     if (this.seams === undefined) {
       this.queue.push(frame)
       return
@@ -247,6 +308,7 @@ export class TunnelServer {
 
   private refuse(frame: QueuedFrame, message: string): void {
     if (frame.t === 'stream-open') {
+      this.dropUplink(frame.id)
       this.send({
         t: 'stream-error',
         id: frame.id,
@@ -276,10 +338,11 @@ export class TunnelServer {
       return
     }
     const seams = this.seams
+    const uplink = this.uplinks.get(frame.id) ?? new TunnelUplink()
     const controller = new AbortController()
     this.inFlight.set(frame.id, { abort: () => { controller.abort() } })
     try {
-      const source = await seams.openStream(frame.endpoint, frame.payload, controller.signal)
+      const source = await seams.openStream(frame.endpoint, frame.payload, uplink, controller.signal)
       for await (const value of source) {
         if (controller.signal.aborted) return
         this.send({ t: 'stream-item', id: frame.id, value })
@@ -296,7 +359,15 @@ export class TunnelServer {
       }
     } finally {
       this.inFlight.delete(frame.id)
+      this.dropUplink(frame.id)
     }
+  }
+
+  /** The stream is over: settle any Host read still waiting on its uplink and stop buffering. */
+  private dropUplink(id: TunnelRequestId): void {
+    const uplink = this.uplinks.get(id)
+    this.uplinks.delete(id)
+    uplink?.end()
   }
 
   private sinkFor(id: TunnelRequestId): ResponseSink {

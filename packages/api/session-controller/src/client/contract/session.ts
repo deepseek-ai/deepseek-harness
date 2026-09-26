@@ -68,9 +68,10 @@ export interface ISession {
   /**
    * Register one local submission echo in `snapshot.pendingSubmissions`,
    * synchronously, before the caller serializes and sends the prompt. The
-   * echo retires when a durable `user/message` event or queue occurrence
-   * carrying the returned identity arrives, or when the identified prompt
-   * call fails.
+   * Chat echoes persist until durable admission; transcript identities also
+   * wait for the Inbox claim watermark so stale queue rows stay suppressed.
+   * Queued echoes retire on queue acceptance. Identified failures retire
+   * submissions that have not already reached durable admission.
    * @param input - echo content and the optional settlement callback.
    * @returns the minted identity for {@link prompt} plus the pre-prompt abandon path.
    */
@@ -118,7 +119,9 @@ export interface ISession {
    */
   rename(title: string): Promise<RemoteResult<{ title: string; seq: SessionSeq }>>
   /**
-   * Extend the history window backwards (older messages pagination).
+   * Extend history by at least 50 messages and two Turn starts, including a
+   * partial Turn at the window's beginning. Stop at 500 messages or history
+   * exhaustion even when those minima cannot be met. Publish one prepend.
    * @returns completion; failures land in snapshot.openState/loadingOlder.
    */
   loadOlder(): Promise<void>
@@ -127,6 +130,10 @@ export interface ISession {
    * turn-jump loader. Repeated calls while a jump is paging lower its shared
    * target and return the in-flight completion; `snapshot.loadingOlder` is
    * the busy signal for the whole jump.
+   * Each page uses the same Turn alignment as loadOlder, with a 200-message
+   * minimum. The 500-message limit applies per page, not to the whole jump.
+   * Older pages publish together at completion, including successful pages
+   * before a later failure; live events remain independently visible.
    * @param seq - durable event seq the window must reach (a turn's `turn/start` seq).
    * @returns completion once covered, exhausted, superseded, or failed soft.
    */

@@ -1,6 +1,16 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for session-projection.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/session-projection.md
-session-projection.md: cb3ac37d593a2b5aae6725854c31a3a39ae3152b
-session-projection.zh.md: 5051dab59316840267d16d201a17717742565059
+/session-projections:
+  en: a6ab5134ca1771fd
+  zh: 523039a9d84e3f97
+/session-projections/the-unit:
+  en: fad897af8b8839ff
+  zh: 3c68c5256973bc39
+/session-projections/the-snapshot-and-the-change-feed:
+  en: a49a57c600c3cbd0
+  zh: c92f00b8a9d71bad
+/session-projections/the-registry-ctx-sessionprojections:
+  en: 50e79c1bc16abb63
+  zh: 200ecbf0e4ab19d2

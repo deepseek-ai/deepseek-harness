@@ -483,7 +483,8 @@ it('discards a failed arrival target when an uncreated entry receives a newer gr
   expect(b.modules.entries.state.getSnapshot().failures[0]?.message).toContain('offline r1')
   b.arrival(async () => {})
   await b.modules.entries.sync(graph(row('a', 'r2')))
-  expect(b.fetched).toEqual([row('a').url, row('a', 'r1').url, row('a', 'r2').url])
+  // A transport failure is retried once on the same URL before the reload is reported failed.
+  expect(b.fetched).toEqual([row('a').url, row('a', 'r1').url, row('a', 'r1').url, row('a', 'r2').url])
 })
 
 it('uses the latest desired revision when a rebuild queues before entry creation', async () => {

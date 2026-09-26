@@ -5,11 +5,12 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import * as AgentInstructions from '@deepseek-ai/dsh-agent-instructions'
-import LlmRuntime, { createUserMessage, ToolCallId, type Message, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, ToolCallId, type Message, type MessageSource, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, SessionSeq, type SessionEvent, type SurfaceIntent, type UserMessage } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop, { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { FileSystem, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
   FsDirEntry,
@@ -48,6 +49,21 @@ import {
   mountAgentLoopTestHarness,
 } from '@deepseek-ai/dsh-agent-loop-testkit'
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'downstream': { kind: 'downstream' } & ContextFormed
+    'other': { kind: 'other' } & ContextFormed
+    'test-skills': { kind: 'test-skills' } & ContextFormed
+  }
+}
+
+type CheckpointSource = Extract<MessageSource, { readonly kind: 'compact-checkpoint' }>
+
+/** Build a typed checkpoint source for an instruction projection fixture. */
+function checkpointSource(compactionId: string): CheckpointSource {
+  return { kind: 'compact-checkpoint', compactionId: compactionId as CheckpointSource['compactionId'] }
+}
+
 /** Per-candidate reconciliation scope key: directory paired with the file name. */
 const sk = (directory: string, candidateName: string): string => candidateScopeKey(directory, candidateName)
 
@@ -76,6 +92,7 @@ async function write(path: string, content: string): Promise<void> {
 }
 
 class RecordingFileSystem extends FileSystem {
+  override watch(): never { throw new Error('Fixture does not support watching') }
   entries = new Map<string, { type: FsInfo['type']; content?: string; version?: FsVersion }>()
   missingOnResolve = new Set<string>()
   throwOnStat = new Set<string>()
@@ -251,7 +268,7 @@ function stubToolExecution(
   }
 }
 
-function blocksText(blocks: { type: string; text?: string }[] | undefined): string {
+function blocksText(blocks: readonly { type: string; text?: string }[] | undefined): string {
   return blocks?.map(block => block.type === 'text' ? block.text ?? '' : '').join('\n') ?? ''
 }
 
@@ -1746,7 +1763,7 @@ describe('workspace context request injection', () => {
 
       agent.session.append('user/message', createUserMessage({
         content: [{ type: 'text', text: 'compacted summary' }],
-        source: { kind: 'plugin', plugin: 'compact' },
+        source: checkpointSource('instruction-compaction-1'),
       }), {
         surfaceOp: { op: 'replace', startSeq: baseline!.seq, endSeq: baseline!.seq },
         sourceEventSeqs: [baseline!.seq],
@@ -1779,7 +1796,7 @@ describe('workspace context request injection', () => {
 
       agent.session.append('user/message', createUserMessage({
         content: [{ type: 'text', text: 'compacted summary' }],
-        source: { kind: 'plugin', plugin: 'compact' },
+        source: checkpointSource('instruction-compaction-2'),
       }), {
         surfaceOp: { op: 'replace', startSeq: baseline!.seq, endSeq: baseline!.seq },
         sourceEventSeqs: [baseline!.seq],
@@ -1882,7 +1899,7 @@ describe('workspace context request injection', () => {
           ...decision,
           messages: [
             ...decision.messages,
-            createUserMessage({ content: [{ type: 'text', text: '<system-reminder>Available skills</system-reminder>' }], source: { kind: 'plugin', plugin: 'test-skills' } }),
+            createUserMessage({ content: [{ type: 'text', text: '<system-reminder>Available skills</system-reminder>' }], source: { kind: 'test-skills' } }),
           ],
         }
       })
@@ -3710,7 +3727,7 @@ describe('dynamic nested workspace context injection', () => {
 
       agent.session.append('user/message', createUserMessage({
         content: [{ type: 'text', text: 'compacted summary' }],
-        source: { kind: 'plugin', plugin: 'compact' },
+        source: checkpointSource('instruction-compaction-3'),
       }), {
         surfaceOp: { op: 'replace', startSeq: SessionSeq(contextSeq), endSeq: SessionSeq(contextSeq) },
         sourceEventSeqs: [SessionSeq(contextSeq)],
@@ -3757,7 +3774,7 @@ describe('dynamic nested workspace context injection', () => {
       })
       agent.session.append('user/message', createUserMessage({
         content: [{ type: 'text', text: 'compacted summary' }],
-        source: { kind: 'plugin', plugin: 'compact' },
+        source: checkpointSource('instruction-compaction-4'),
       }), {
         surfaceOp: { op: 'replace', startSeq: baseline!.seq, endSeq: baseline!.seq },
         sourceEventSeqs: [baseline!.seq],
@@ -3901,7 +3918,7 @@ describe('dynamic nested workspace context injection', () => {
       }), { surfaceOp: 'append' })
       agent.session.append('user/message', createUserMessage({
         content: [{ type: 'text', text: 'foreign plugin context' }],
-        source: { kind: 'plugin', plugin: 'other' },
+        source: { kind: 'other' },
       }), { surfaceOp: 'append' })
 
       await ctx.tools.execute({
@@ -4015,7 +4032,7 @@ describe('dynamic nested workspace context injection', () => {
         },
         additionalContexts: [createUserMessage({
           content: [{ type: 'text' as const, text: 'downstream context' }],
-          source: { kind: 'plugin' as const, plugin: 'downstream' },
+          source: { kind: 'downstream' as const },
         })],
       }))
 
@@ -4049,7 +4066,7 @@ describe('dynamic nested workspace context injection', () => {
         id: expect.any(String) as unknown,
         role: 'user',
         content: [{ type: 'text', text: 'downstream context' }],
-        source: { kind: 'plugin', plugin: 'downstream' },
+        source: { kind: 'downstream' },
       })
     } finally {
       await rm(root, { recursive: true, force: true })

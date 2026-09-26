@@ -49,6 +49,9 @@
     },
     {
       "path": "../../session/session-title"
+    },
+    {
+      "path": "../../subagent/subagent"
     }
   ]
 }

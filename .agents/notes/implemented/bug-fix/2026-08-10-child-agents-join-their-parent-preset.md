@@ -6,7 +6,7 @@ English | [中文](2026-08-10-child-agents-join-their-parent-preset.zh.md)
 
 ## Problem
 
-Tool and prompt-section visibility is inherited along `dsh-scope`'s parent chain, and an agent's scope key is minted with no parent. [Per-session agent presets](../architecture/2026-08-03-per-session-agent-presets.md) moved every model-facing row onto the agent plane and made `AgentPresets.mount()` the one thing that binds that parent link — from the api-proxy's session create, resume, and fork paths. The two in-process subagent drivers compose their children through `applyChildComposition()`, which installed only the per-child persona and tool filter, so a child's scope chain had length one and its registry view resolved the global layer alone.
+Tool and prompt-section visibility is inherited along `dsh-scope`'s parent chain, and an agent's scope key is minted with no parent. [Per-session agent presets](../architecture/2026-09-18-declarative-agent-presets.md) moved every model-facing row onto the agent plane and made `AgentPresets.mount()` the one thing that binds that parent link — from the api-proxy's session create, resume, and fork paths. The two in-process subagent drivers compose their children through `applyChildComposition()`, which installed only the per-child persona and tool filter, so a child's scope chain had length one and its registry view resolved the global layer alone.
 
 That layer is now empty in any deployment with a preset roster: the web-app patch layer disables every host-plane tool row. A one-shot child therefore reached the model with zero tools, a continuable child with only the host-plane `report`, and neither carried its parent's persona, workspace context, plan-mode section, or skill catalog. The fork path had already been given the same treatment for the same reason; delegation had not.
 
@@ -40,7 +40,7 @@ Giving the child its parent's tools exposed a second defect the same agent-plane
 
 ## Testing
 
-`packages/preset/agent-presets/tests/mount.spec.ts` covers the join against real fixture compositions: the child sees its parent's tools and prompt sections, no second generation is mounted, the join survives the parent's disposal (a background child outliving its parent), the reported id matches, a parent without a preset joins nothing, and an unscoped context is refused.
+`packages/preset/agent-preset-registry/tests/mount.spec.ts` covers the join against real fixture compositions: the child sees its parent's tools and prompt sections, no second generation is mounted, the join survives the parent's disposal (a background child outliving its parent), the reported id matches, a parent without a preset joins nothing, and an unscoped context is refused.
 
 `packages/core/tools/tests/scoped.spec.ts` covers the restriction rule directly: a child's filter removes a tool it inherited from an ancestor scope, the child's own registrations survive its own filter, and an ancestor's restriction still reaches every scope nested inside it.
 

@@ -25,6 +25,9 @@ export * from './renderer.ts'
 /** Slot contract table. Owners extend via declaration merging; entries are {@link SlotEntryDef}. */
 export interface SlotMap {}
 
+/** Reusable Component Factory contract table, extended through declaration merging. */
+export interface SlotFactoryMap {}
+
 /**
  * Locale namespace table. Dictionary owners extend via declaration merging
  * (exactly like {@link SlotMap}, and declared in this entry module for the
@@ -100,12 +103,15 @@ export type SlotKind = 'single' | 'list' | 'keyed' | 'chain'
 /** Slot data context: global, current-session-optional, or strict session-bound. */
 export type SlotScope = 'root' | 'session-maybe' | 'session'
 
+/** Declaration-merged explicit target types for non-root scope Providers. */
+export interface SlotScopeTargetMap {}
+
 /**
  * One SlotMap entry: kind/scope axes plus the optional owner-supplied props
  * share (`owner` is what the parent passes at its renderSlot call site; the
  * framework standard kit and the registrant's injected share never enter this
- * table — full component props compose at the component as the four-share
- * intersection, see {@link ComposedProps}).
+ * table — full component props compose at the component from the framework
+ * shares, see {@link ComposedProps}).
  */
 export interface SlotEntryDef {
   kind: SlotKind
@@ -129,6 +135,23 @@ export interface SlotEntryDef {
    * face; child registrants do not own or replace this common capability.
    */
   inject?: object
+}
+
+/** One caller-selected Component position inside a reusable Factory. */
+export interface FactoryLocalSlotDef {
+  scope: SlotScope
+  props?: object
+}
+
+/** Complete static definition of one reusable Component Factory. */
+export interface SlotFactoryDef {
+  scope: SlotScope
+  props?: object
+  children?: ChildrenDecl
+  store?: StoreDecl
+  inject?: object
+  locale?: keyof LocaleNamespaceMap & string
+  slots?: Record<string, FactoryLocalSlotDef>
 }
 
 /**
@@ -194,10 +217,10 @@ export type ScopeOf<K extends keyof SlotMap & string> = SlotMap[K]['scope']
 export interface SessionStandardProps {}
 
 /**
- * Framework standard kit delivered to current-session-optional slots. Its
- * hooks stay callable while no session is selected and return `undefined`
- * until one becomes current; `ui-session` and domain UI adapters merge the
- * concrete members.
+ * Framework standard kit delivered to session-optional slots. Its hooks stay
+ * callable while no session is selected and return `undefined` until one
+ * becomes current; `ui-session` and domain UI adapters merge the concrete
+ * members.
  */
 export interface SessionMaybeStandardProps {}
 
@@ -215,6 +238,12 @@ export interface GlobalStandardProps {}
  */
 export type SessionIdOf = SessionStandardProps extends { sessionId: infer S } ? S : string
 
+/** Standard props selected by one declared scope. */
+export type ScopeStandardProps<S extends SlotScope> =
+  (S extends 'session' ? SessionStandardProps
+    : S extends 'session-maybe' ? SessionMaybeStandardProps
+      : object) & GlobalStandardProps
+
 /**
  * Runtime props share for a slot key: owner share (parent's renderSlot call
  * site) + session standard kit (session scope only) + the global seat.
@@ -226,10 +255,7 @@ export type PropsRuntime<
   OwnerOf<K> &
   KeyPropsOf<K, EntryKey> &
   SlotInjectFace<SlotInjectOf<K>> &
-  (ScopeOf<K> extends 'session' ? SessionStandardProps
-    : ScopeOf<K> extends 'session-maybe' ? SessionMaybeStandardProps
-      : object) &
-  GlobalStandardProps
+  ScopeStandardProps<ScopeOf<K>>
 
 /** renderSlot dispatch options: keyed dispatch key, list filtering, and empty fallback. */
 export interface RenderOpts<EntryKey extends string = string> {
@@ -317,16 +343,21 @@ export type MatchedShare<E extends SlotEntryDef, M> =
 
 /** Props of the standard-kit SessionProvider seat. */
 export interface SessionAreaProps {
+  /**
+   * Explicit Session-scope target. Omit this property to inherit the surrounding
+   * binding; pass `undefined` to establish an explicitly absent binding.
+   */
+  readonly session?: SlotScopeTargetMap[keyof SlotScopeTargetMap & 'session'] | undefined
   /** No-session body (also covers a current id whose session cannot be resolved). */
   empty?: (() => ReactNode) | undefined
-  /** Session body; the framework remounts it per session identity. */
+  /** Session body; scoped entries apply their declared remount semantics. */
   children: ReactNode
 }
 
 /**
  * Framework-wired session area component. `ui-session` supplies the current
  * Controller binding through the renderer scope adapter; entries that declare
- * session-scoped children receive this component without importing it.
+ * `session` or `session-maybe` children receive this component without importing it.
  */
 export type SessionProviderComponent = (props: SessionAreaProps) => ReactNode
 
@@ -361,12 +392,9 @@ export type PropsRenderSlots<S extends keyof SlotMap & string> = {
    * @returns rendered node(s).
    */
   renderSlotChain: <K extends ChainKeysOf<S>>(key: K, owner: OwnerOf<K>, opts?: ChainRenderOpts) => ReactNode
-}) & ('session' extends ScopeOf<S>
-  // The SessionProvider seat rides the same source as renderSlot: declaring
-  // a session-scope child is what makes a session area exist, so the seat
-  // derives from the children key set's scopes (renderer injects the value).
-  ? { SessionProvider: SessionProviderComponent }
-  : object)
+}) & ([Extract<ScopeOf<S>, 'session' | 'session-maybe'>] extends [never]
+  ? object
+  : { SessionProvider: SessionProviderComponent })
 
 /**
  * Registration-position component shape: the bare call signature, so composed
@@ -374,6 +402,98 @@ export type PropsRenderSlots<S extends keyof SlotMap & string> = {
  * covariant noise rejecting legitimate narrowings).
  */
 export type SlotComponent<P> = (props: P) => ReactNode
+
+type FactoryDefOf<F extends keyof SlotFactoryMap & string> = SlotFactoryMap[F] & SlotFactoryDef
+type FactoryInputPropsOf<F extends keyof SlotFactoryMap & string> =
+  SlotFactoryMap[F] extends { props: infer P extends object } ? P : object
+type FactoryChildrenOf<F extends keyof SlotFactoryMap & string> =
+  SlotFactoryMap[F] extends { children: infer D extends Record<string, unknown> } ? D : Record<never, never>
+type FactoryStoreOf<F extends keyof SlotFactoryMap & string> =
+  SlotFactoryMap[F] extends { store: infer H extends StoreDecl } ? HandleOf<H> : undefined
+type FactoryInjectOf<F extends keyof SlotFactoryMap & string> =
+  SlotFactoryMap[F] extends { inject: infer I extends object } ? I : object
+type FactoryLocaleOf<F extends keyof SlotFactoryMap & string> =
+  SlotFactoryMap[F] extends { locale: infer N extends keyof LocaleNamespaceMap & string } ? N : undefined
+type FactoryLocalSlotsOf<F extends keyof SlotFactoryMap & string> =
+  SlotFactoryMap[F] extends { slots: infer S extends Record<string, FactoryLocalSlotDef> }
+    ? S
+    : Record<never, never>
+type FactoryLocalNameOf<F extends keyof SlotFactoryMap & string> = keyof FactoryLocalSlotsOf<F> & string
+type FactoryLocalDefOf<
+  F extends keyof SlotFactoryMap & string,
+  N extends FactoryLocalNameOf<F>,
+> = FactoryLocalSlotsOf<F>[N] & FactoryLocalSlotDef
+type FactoryLocalInputPropsOf<
+  F extends keyof SlotFactoryMap & string,
+  N extends FactoryLocalNameOf<F>,
+> = FactoryLocalDefOf<F, N> extends { props: infer P extends object } ? P : object
+
+type FactoryRenderPropsOf<F extends keyof SlotFactoryMap & string> =
+  [keyof FactoryChildrenOf<F> & keyof SlotMap & string] extends [never]
+    ? object
+    : PropsRenderSlots<keyof FactoryChildrenOf<F> & keyof SlotMap & string>
+
+/** Framework-derived props shared by a Factory definition and its local Components. */
+export type FactoryRegistrationPropsOf<F extends keyof SlotFactoryMap & string> =
+  FactoryRenderPropsOf<F>
+  & PropsStore<FactoryStoreOf<F>>
+  & InjectFace<FactoryInjectOf<F>>
+  & PropsLocale<FactoryLocaleOf<F>>
+  & PropsRenderFactories
+
+/** Complete props received by a registered Factory Component. */
+export type FactoryComponentPropsOf<F extends keyof SlotFactoryMap & string> =
+  FactoryInputPropsOf<F>
+  & FactoryRegistrationPropsOf<F>
+  & ScopeStandardProps<FactoryDefOf<F>['scope']>
+  & { useFactorySlot: UseFactorySlot<F> }
+
+/** Complete props received by one caller-selected or fallback local Component. */
+export type FactoryLocalComponentPropsOf<
+  F extends keyof SlotFactoryMap & string,
+  N extends FactoryLocalNameOf<F>,
+> = FactoryLocalInputPropsOf<F, N>
+  & FactoryRegistrationPropsOf<F>
+  & ScopeStandardProps<FactoryLocalDefOf<F, N>['scope']>
+
+/** Component accepted for one declared local Factory position. */
+export type FactoryLocalComponent<
+  F extends keyof SlotFactoryMap & string,
+  N extends FactoryLocalNameOf<F>,
+> = SlotComponent<FactoryLocalComponentPropsOf<F, N>>
+
+/**
+ * Hook exposed only to a Factory definition for selecting a local Component.
+ * @param name - declared local position.
+ * @param fallback - Component used when the occurrence caller makes no selection.
+ * @returns a stable Component accepting only the local occurrence props.
+ */
+export type UseFactorySlot<F extends keyof SlotFactoryMap & string> =
+  <N extends FactoryLocalNameOf<F>>(
+    name: N,
+    fallback: FactoryLocalComponent<F, N>,
+  ) => SlotComponent<FactoryLocalInputPropsOf<F, N>>
+
+/**
+ * Render one independently keyed occurrence of a registered Factory.
+ * @param name - declaration-merged Factory name.
+ * @param props - caller-owned occurrence input.
+ * @param options - local Component selections and the missing-definition fallback.
+ * @returns the Factory occurrence or fallback.
+ */
+export type RenderFactorySlot = <F extends keyof SlotFactoryMap & string>(
+  name: F,
+  props: FactoryInputPropsOf<F>,
+  options?: {
+    slots?: Partial<{ [N in FactoryLocalNameOf<F>]: FactoryLocalComponent<F, N> }>
+    fallback?: ReactNode
+  },
+) => ReactNode
+
+/** Factory rendering capability supplied to every renderer-created Component. */
+export interface PropsRenderFactories {
+  renderFactorySlot: RenderFactorySlot
+}
 
 /**
  * Registrant hooks compartment: bare observable sources (getSnapshot +
@@ -486,7 +606,8 @@ export type ComposedProps<
   I extends object,
   M = never,
   N = undefined,
-> = PropsRuntime<K, EntryKey> & PropsRenderSlots<S> & PropsStore<H> & InjectFace<I> & MatchedShare<SlotMap[K], M> & PropsLocale<N>
+> = PropsRuntime<K, EntryKey> & PropsRenderSlots<S> & PropsRenderFactories
+  & PropsStore<H> & InjectFace<I> & MatchedShare<SlotMap[K], M> & PropsLocale<N>
 
 /**
  * Inject factory parameter list, derived from the registration's declaration:
@@ -504,6 +625,130 @@ export type InjectParams<K extends keyof SlotMap & string, H> =
         ? [sessionId: SessionIdOf | undefined, actions: BoundActions<HandleOf<H>> | undefined]
         : [sessionId: SessionIdOf | undefined])
       : ([H] extends [StoreDecl] ? [actions: BoundActions<HandleOf<H>>] : [])
+
+/** Factory inject parameters use the same scope/store matrix as ordinary registrations. */
+export type FactoryInjectParams<F extends keyof SlotFactoryMap & string> =
+  FactoryDefOf<F>['scope'] extends 'session'
+    ? ([FactoryStoreOf<F>] extends [StoreDecl]
+      ? [sessionId: SessionIdOf, actions: BoundActions<FactoryStoreOf<F>>]
+      : [sessionId: SessionIdOf])
+    : FactoryDefOf<F>['scope'] extends 'session-maybe'
+      ? ([FactoryStoreOf<F>] extends [StoreDecl]
+        ? [sessionId: SessionIdOf | undefined, actions: BoundActions<FactoryStoreOf<F>> | undefined]
+        : [sessionId: SessionIdOf | undefined])
+      : ([FactoryStoreOf<F>] extends [StoreDecl]
+        ? [actions: BoundActions<FactoryStoreOf<F>>]
+        : [])
+
+type FactoryField<
+  F extends keyof SlotFactoryMap & string,
+  K extends keyof SlotFactoryDef,
+  Value,
+> = K extends keyof SlotFactoryMap[F] ? { [P in K]-?: Value } : { [P in K]?: never }
+
+type RuntimeFactorySlots<F extends keyof SlotFactoryMap & string> = {
+  [N in FactoryLocalNameOf<F>]: { scope: FactoryLocalDefOf<F, N>['scope'] }
+}
+
+type FactoryInjectCollisionKeys<F extends keyof SlotFactoryMap & string> = Extract<
+  keyof InjectFace<FactoryInjectOf<F>>,
+  keyof (
+    FactoryRenderPropsOf<F>
+    & PropsStore<FactoryStoreOf<F>>
+    & PropsLocale<FactoryLocaleOf<F>>
+    & PropsRenderFactories
+    & ScopeStandardProps<FactoryDefOf<F>['scope']>
+    & { useFactorySlot: UseFactorySlot<F> }
+  )
+>
+
+type FactoryInputCollisionKeys<F extends keyof SlotFactoryMap & string> = Extract<
+  keyof FactoryInputPropsOf<F>,
+  keyof (
+    FactoryRegistrationPropsOf<F>
+    & ScopeStandardProps<FactoryDefOf<F>['scope']>
+    & { useFactorySlot: UseFactorySlot<F> }
+  )
+>
+
+type FactoryLocalCollisionKeys<F extends keyof SlotFactoryMap & string> = {
+  [N in FactoryLocalNameOf<F>]: Extract<
+    keyof FactoryLocalInputPropsOf<F, N>,
+    keyof (FactoryRegistrationPropsOf<F> & ScopeStandardProps<FactoryLocalDefOf<F, N>['scope']>)
+  >
+}[FactoryLocalNameOf<F>]
+
+type FactoryRegistrationLocalScopeCollisionKeys<F extends keyof SlotFactoryMap & string> = {
+  [N in FactoryLocalNameOf<F>]: Extract<
+    keyof FactoryRegistrationPropsOf<F>,
+    keyof ScopeStandardProps<FactoryLocalDefOf<F, N>['scope']>
+  >
+}[FactoryLocalNameOf<F>]
+
+type FactoryCollisionCheck<F extends keyof SlotFactoryMap & string> = [
+  FactoryInjectCollisionKeys<F>
+  | FactoryInputCollisionKeys<F>
+  | FactoryLocalCollisionKeys<F>
+  | FactoryRegistrationLocalScopeCollisionKeys<F>,
+] extends [never]
+  ? unknown
+  : {
+    'Factory declaration has overlapping prop ownership':
+      FactoryInjectCollisionKeys<F>
+      | FactoryInputCollisionKeys<F>
+      | FactoryLocalCollisionKeys<F>
+      | FactoryRegistrationLocalScopeCollisionKeys<F>
+  }
+
+type FactoryChildMismatchKeys<F extends keyof SlotFactoryMap & string> = {
+  [K in keyof FactoryChildrenOf<F>]: K extends keyof SlotMap
+    ? FactoryChildrenOf<F>[K] extends SlotSpec<SlotMap[K]> ? never : K
+    : K
+}[keyof FactoryChildrenOf<F>]
+
+type FactoryChildrenCheck<F extends keyof SlotFactoryMap & string> =
+  [FactoryChildMismatchKeys<F>] extends [never]
+    ? unknown
+    : { 'Factory children must match SlotMap': FactoryChildMismatchKeys<F> }
+
+/** Registration options checked against the complete declaration-merged Factory definition. */
+export type RegisterFactoryOptions<F extends keyof SlotFactoryMap & string> = {
+  name: F
+  scope: FactoryDefOf<F>['scope']
+} & FactoryField<F, 'children', FactoryChildrenOf<F>>
+  & FactoryField<F, 'store', FactoryStoreOf<F> | (() => FactoryStoreOf<F>)>
+  & FactoryField<F, 'inject', (...args: FactoryInjectParams<F>) => FactoryInjectOf<F>>
+  & FactoryField<F, 'locale', FactoryLocaleOf<F>>
+  & FactoryField<F, 'slots', RuntimeFactorySlots<F>>
+  & FactoryCollisionCheck<F>
+  & FactoryChildrenCheck<F>
+
+/**
+ * Typed registration method implemented by the renderer-owned SlotRegistry service.
+ * @param options - runtime values checked against the Factory declaration.
+ * @param component - reusable definition Component.
+ * @returns an idempotent definition disposer.
+ */
+export interface RegisterFactory {
+  <F extends keyof SlotFactoryMap & string>(
+    options: RegisterFactoryOptions<F>,
+    component: SlotComponent<FactoryComponentPropsOf<F>>,
+  ): () => void
+}
+
+/** Type-erased Factory definition stored by the runtime registry. */
+export interface StoredFactory {
+  readonly name: string
+  readonly component: unknown
+  readonly scope: SlotScope
+  readonly children?: Readonly<Record<string, SlotSpec<SlotEntryDef>>> | undefined
+  readonly store?: StoreDecl | undefined
+  readonly inject?: ((...args: never[]) => Record<string, unknown>) | undefined
+  readonly locale?: string | undefined
+  readonly slots?: Readonly<Record<string, { scope: SlotScope }>> | undefined
+  /** Diagnostics label of who registered the definition. */
+  readonly registrant?: string | undefined
+}
 
 /**
  * A list-entry display label: a plain string, or a thunk re-evaluated per
@@ -664,6 +909,12 @@ interface SlotRecord {
   declarationListeners: Set<() => void>
 }
 
+interface FactoryRecord {
+  definition: StoredFactory | undefined
+  version: number
+  listeners: Set<() => void>
+}
+
 const NO_ENTRIES: readonly StoredEntry[] = Object.freeze([])
 
 /** JSON-safe live occupant returned by slot inspection. */
@@ -682,8 +933,10 @@ export interface LiveSlotOccupant {
   active: boolean
 }
 
-/** JSON-safe live slot declaration tree. */
+/** JSON-safe live Slot declaration tree. */
 export interface LiveSlotNode {
+  /** Discriminant for an ordinary Slot declaration. */
+  type: 'slot'
   /** Exact SlotMap key. */
   name: string
   /** Slot cardinality. */
@@ -697,6 +950,23 @@ export interface LiveSlotNode {
   /** Slots declared by entries mounted in this slot. */
   children: LiveSlotNode[]
 }
+
+/** JSON-safe live Factory definition with its ordinary child Slot tree. */
+export interface LiveFactoryNode {
+  /** Discriminant for a reusable Factory definition. */
+  type: 'factory'
+  /** Exact SlotFactoryMap key. */
+  name: string
+  /** Runtime data scope inherited by each occurrence. */
+  scope: SlotScope
+  /** Plugin or package that registered the definition, when known. */
+  registrant?: string
+  /** Ordinary Slots declared by the Factory definition. */
+  children: LiveSlotNode[]
+}
+
+/** One root in the live Slot/Factory composition topology. */
+export type LiveCompositionNode = LiveSlotNode | LiveFactoryNode
 
 /**
  * Pure slot registry (no cordis; event emission and the renderer installation contract
@@ -716,6 +986,7 @@ export interface LiveSlotNode {
  */
 export class SlotCore {
   private records = new Map<string, SlotRecord>()
+  private factories = new Map<string, FactoryRecord>()
   private mutateListeners = new Set<(key: string) => void>()
   /** Shared-handle scope ledger: handle → the scope it first mounted under + live mount count. */
   private handleScopes = new Map<object, { scope: SlotScope; count: number }>()
@@ -732,7 +1003,7 @@ export class SlotCore {
    */
   private abdicated = new WeakSet<StoredEntry>()
   private entryErrorListeners
-    = new Set<(key: string, entry: StoredEntry, error: unknown, info: { abdicated: boolean }) => void>()
+    = new Set<(key: string, registration: StoredEntry | StoredFactory, error: unknown, info: { abdicated: boolean }) => void>()
 
   constructor() {
     // The a-priori root hole. No markDirty: nothing can observe construction.
@@ -740,6 +1011,112 @@ export class SlotCore {
     root.spec = { kind: 'single', scope: 'root' }
     root.declaredBy = '(built-in)'
     root.declarationEpoch = 1
+  }
+
+  /** Register one reusable Factory definition. */
+  readonly registerFactory: RegisterFactory = ((rawOptions: object, component: unknown): (() => void) => {
+    const options = rawOptions as {
+      name: string
+      scope: SlotScope
+      children?: Record<string, SlotSpec<SlotEntryDef>>
+      store?: StoreDecl
+      inject?: (...args: never[]) => Record<string, unknown>
+      locale?: string
+      slots?: Record<string, { scope: SlotScope }>
+      registrant?: string
+    }
+    const record = this.factoryRecord(options.name)
+    if (record.definition !== undefined) {
+      throw new Error(`slot factory "${options.name}" already has a definition`)
+    }
+    for (const childKey of Object.keys(options.children ?? {})) {
+      const childRecord = this.records.get(childKey)
+      if (childRecord?.spec !== undefined) {
+        throw new Error(`slot "${childKey}" is already declared (by ${childRecord.declaredBy ?? 'an unknown entry'})`)
+      }
+    }
+    if (options.store !== undefined && typeof options.store !== 'function') {
+      const pinned = this.handleScopes.get(options.store)
+      if (pinned !== undefined && pinned.scope !== options.scope) {
+        throw new Error(
+          `store handle mounted under factory "${options.name}" (scope "${options.scope}") is already mounted under scope "${pinned.scope}" — one handle, one scope`)
+      }
+      if (pinned !== undefined) pinned.count += 1
+      else this.handleScopes.set(options.store, { scope: options.scope, count: 1 })
+    }
+    const definition: StoredFactory = {
+      name: options.name,
+      component,
+      scope: options.scope,
+      ...(options.children === undefined ? {} : { children: options.children }),
+      ...(options.store === undefined ? {} : { store: options.store }),
+      ...(options.inject === undefined ? {} : { inject: options.inject }),
+      ...(options.locale === undefined ? {} : { locale: options.locale }),
+      ...(options.slots === undefined ? {} : { slots: options.slots }),
+      ...(options.registrant === undefined ? {} : { registrant: options.registrant }),
+    }
+    record.definition = definition
+    this.markFactoryDirty(record)
+    const declarations: [string, SlotRecord][] = []
+    for (const [childKey, childSpec] of Object.entries(options.children ?? {})) {
+      const childRecord = this.record(childKey)
+      childRecord.spec = childSpec
+      childRecord.declaredBy = `factory "${options.name}"${options.registrant ? ` (${options.registrant})` : ''}`
+      childRecord.parent = `factory:${options.name}`
+      childRecord.declarationEpoch += 1
+      declarations.push([childKey, childRecord])
+    }
+    for (const [childKey, childRecord] of declarations) this.markDirty(childKey, childRecord)
+    for (const [, childRecord] of declarations) this.notifyDeclaration(childRecord)
+    return () => {
+      if (record.definition !== definition) return
+      record.definition = undefined
+      this.markFactoryDirty(record)
+      if (definition.store !== undefined && typeof definition.store !== 'function') {
+        const pinned = this.handleScopes.get(definition.store)
+        if (pinned !== undefined && --pinned.count === 0) this.handleScopes.delete(definition.store)
+      }
+      this.releaseChildren(definition.children)
+    }
+  }) as RegisterFactory
+
+  /**
+   * Read one registered Factory definition.
+   * @param name - Factory name.
+   * @returns the live definition, or `undefined` when absent.
+   */
+  factory(name: string): StoredFactory | undefined {
+    return this.factories.get(name)?.definition
+  }
+
+  /**
+   * Read the monotonic definition version for one Factory name.
+   * @param name - Factory name.
+   * @returns the current version.
+   */
+  factoryVersion(name: string): number {
+    return this.factories.get(name)?.version ?? 0
+  }
+
+  /**
+   * Subscribe to one Factory definition's registration lifetime.
+   * @param name - Factory name.
+   * @param listener - callback notified after a definition change.
+   * @returns the unsubscribe function.
+   */
+  subscribeFactory(name: string, listener: () => void): () => void {
+    const record = this.factoryRecord(name)
+    record.listeners.add(listener)
+    return () => { record.listeners.delete(listener) }
+  }
+
+  /**
+   * Return whether a retained Factory definition is still registered.
+   * @param definition - retained definition identity.
+   * @returns whether that exact definition remains live.
+   */
+  isFactoryLive(definition: StoredFactory): boolean {
+    return this.factories.get(definition.name)?.definition === definition
   }
 
   /**
@@ -769,7 +1146,7 @@ export class SlotCore {
    * @param options - registration options: target `name`, `children`
    * declaration table, `store` seat, `inject` business-face factory, kind
    * shape fields (keyed `key`; list `id`/`order`/`label`).
-   * @param component - component honoring the four-share composed props
+   * @param component - component honoring the five-share composed props
    * contract ({@link ComposedProps}); checked at this call site.
    * @returns disposer removing the registration and its declarations
    * (idempotent; stale disposers after a cascade are no-ops).
@@ -800,7 +1177,7 @@ export class SlotCore {
    * factory's return and joins the component's composed-props constraint
    * (factory parameters derive from the declaration, {@link InjectParams}).
    * @param options - registration options plus the `inject` business-face factory.
-   * @param component - component honoring the four-share composed props
+   * @param component - component honoring the five-share composed props
    * contract including the inject share `I`.
    * @returns disposer removing the registration and its declarations.
    */
@@ -1012,11 +1389,13 @@ export class SlotCore {
 
   /**
    * Export the current declaration topology without components or executable hooks.
-   * @param root - exact Slot key to select; omitted returns every live root.
+   * Factory definitions appear as `factory:<name>` parents of their ordinary
+   * child Slots, matching the parent/child topology of ordinary registrations.
+   * @param root - exact Slot or `factory:<name>` key to select; omitted returns every live root.
    * @returns selected live Slot trees, or an empty array when `root` is unavailable.
    */
-  snapshot(root?: string): LiveSlotNode[] {
-    const build = (name: string, seen: Set<string>): LiveSlotNode | undefined => {
+  snapshot(root?: string): LiveCompositionNode[] {
+    const buildSlot = (name: string, seen: Set<string>): LiveSlotNode | undefined => {
       const record = this.records.get(name)
       if (record?.spec === undefined || seen.has(name)) return undefined
       const branch = new Set(seen)
@@ -1025,10 +1404,11 @@ export class SlotCore {
       const children = [...this.records.entries()]
         .filter(([, candidate]) => candidate.spec !== undefined && candidate.parent === name)
         .flatMap(([child]) => {
-          const node = build(child, branch)
+          const node = buildSlot(child, branch)
           return node === undefined ? [] : [node]
         })
       return {
+        type: 'slot',
         name,
         kind: record.spec.kind,
         scope: record.spec.scope,
@@ -1044,17 +1424,41 @@ export class SlotCore {
         children,
       }
     }
+    const buildFactory = (name: string): LiveFactoryNode | undefined => {
+      const definition = this.factories.get(name)?.definition
+      if (definition === undefined) return undefined
+      const nodeName = `factory:${name}`
+      const children = [...this.records.entries()]
+        .filter(([, candidate]) => candidate.spec !== undefined && candidate.parent === nodeName)
+        .flatMap(([child]) => {
+          const node = buildSlot(child, new Set([nodeName]))
+          return node === undefined ? [] : [node]
+        })
+      return {
+        type: 'factory',
+        name,
+        scope: definition.scope,
+        ...(definition.registrant === undefined ? {} : { registrant: definition.registrant }),
+        children,
+      }
+    }
     if (root !== undefined) {
-      const node = build(root, new Set())
+      const node = root.startsWith('factory:')
+        ? buildFactory(root.slice('factory:'.length))
+        : buildSlot(root, new Set())
       return node === undefined ? [] : [node]
     }
-    return [...this.records.entries()]
-      .filter(([, record]) => record.spec !== undefined
-        && (record.parent === undefined || this.records.get(record.parent)?.spec === undefined))
+    const slots = [...this.records.entries()]
+      .filter(([, record]) => record.spec !== undefined && record.parent === undefined)
       .flatMap(([name]) => {
-        const node = build(name, new Set())
+        const node = buildSlot(name, new Set())
         return node === undefined ? [] : [node]
       })
+    const factories = [...this.factories.keys()].flatMap((name) => {
+      const node = buildFactory(name)
+      return node === undefined ? [] : [node]
+    })
+    return [...slots, ...factories]
   }
 
   /**
@@ -1145,16 +1549,30 @@ export class SlotCore {
   }
 
   /**
-   * Observe entry boundary crashes (every render-time entry failure the
-   * boundaries contain, abdicating or not) — the supervision seam for hosts
-   * mirroring contribution health. Fires synchronously per report, after the
-   * registry mutated for abdicating crashes (same listener discipline as
-   * {@link SlotCore.onMutate}).
-   * @param fn - called with the slot key, the crashed entry, the crash
-   * cause, and `abdicated`: whether the crash retired the entry from its cell.
+   * Report a contained Factory occurrence crash through the ordinary entry
+   * supervision channel without retiring the shared definition.
+   * @param name - Factory name whose occurrence crashed.
+   * @param registration - Factory definition or caller registration that owns the crashing Component.
+   * @param error - the crash cause, forwarded to listeners verbatim.
+   */
+  reportFactoryError(name: string, registration: StoredEntry | StoredFactory, error: unknown): void {
+    for (const fn of [...this.entryErrorListeners]) fn(`factory:${name}`, registration, error, { abdicated: false })
+  }
+
+  /**
+   * Observe ordinary entry and Factory occurrence crashes. Fires synchronously
+   * per report, after any ordinary-entry abdication mutation. Factory failures
+   * never retire their shared definition.
+   * @param fn - called with the Slot or `factory:<name>` key, the crashed
+   * registration, the cause, and whether an ordinary entry was retired.
    * @returns unsubscribe.
    */
-  onEntryError(fn: (key: string, entry: StoredEntry, error: unknown, info: { abdicated: boolean }) => void): () => void {
+  onEntryError(fn: (
+    key: string,
+    registration: StoredEntry | StoredFactory,
+    error: unknown,
+    info: { abdicated: boolean },
+  ) => void): () => void {
     this.entryErrorListeners.add(fn)
     return () => { this.entryErrorListeners.delete(fn) }
   }
@@ -1170,8 +1588,12 @@ export class SlotCore {
       const pinned = this.handleScopes.get(entry.store)
       if (pinned && --pinned.count === 0) this.handleScopes.delete(entry.store)
     }
-    if (!entry.children) return
-    for (const childKey of Object.keys(entry.children)) {
+    this.releaseChildren(entry.children)
+  }
+
+  private releaseChildren(children: Readonly<Record<string, SlotSpec<SlotEntryDef>>> | undefined): void {
+    if (children === undefined) return
+    for (const childKey of Object.keys(children)) {
       const childRec = this.records.get(childKey)
       /* v8 ignore next -- defensive: declaring always creates the record */
       if (!childRec) continue
@@ -1203,6 +1625,22 @@ export class SlotCore {
       this.records.set(key, rec)
     }
     return rec
+  }
+
+  private factoryRecord(name: string): FactoryRecord {
+    let record = this.factories.get(name)
+    if (record === undefined) {
+      record = { definition: undefined, version: 0, listeners: new Set() }
+      this.factories.set(name, record)
+    }
+    return record
+  }
+
+  private markFactoryDirty(record: FactoryRecord): void {
+    record.version += 1
+    queueMicrotask(() => {
+      for (const listener of [...record.listeners]) listener()
+    })
   }
 
   private markDirty(key: string, rec: SlotRecord): void {

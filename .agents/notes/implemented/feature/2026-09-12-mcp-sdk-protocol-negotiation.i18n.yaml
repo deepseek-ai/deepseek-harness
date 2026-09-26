@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-12-mcp-sdk-protocol-negotiation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-12-mcp-sdk-protocol-negotiation.md
-2026-09-12-mcp-sdk-protocol-negotiation.md: 74f027cead92688b0af71c1028d536b26f2a8059
-2026-09-12-mcp-sdk-protocol-negotiation.zh.md: bc8a9a41b8ccd8cbc844b4b9de8b39a646d1dcbf
+/agent-note-mcp-sdk-protocol-negotiation:
+  en: 9228ca2f4da2f41b
+  zh: 7cd10429865c3f2d
+/agent-note-mcp-sdk-protocol-negotiation/problem:
+  en: bd614e17c62d137e
+  zh: ee71fdcd310a9592
+/agent-note-mcp-sdk-protocol-negotiation/decision:
+  en: ed7b45ffcaeffedd
+  zh: 2287d525ec04006c
+/agent-note-mcp-sdk-protocol-negotiation/alternatives-considered:
+  en: 1fba2ebdcc100c37
+  zh: 45c384641d3b0300
+/agent-note-mcp-sdk-protocol-negotiation/consequences:
+  en: 1a50179c0254517c
+  zh: 046e4f72bfc2ea89

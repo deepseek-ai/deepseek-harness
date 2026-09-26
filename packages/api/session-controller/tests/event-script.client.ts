@@ -12,6 +12,19 @@ import type {
   SessionWireEvent,
 } from '../src/types.ts'
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'compact-checkpoint': { kind: 'compact-checkpoint'; compactionId: string }
+  }
+}
+
+type CheckpointSource = { kind: 'compact-checkpoint'; compactionId: string }
+
+/** Build a typed checkpoint source for the history event script. */
+function checkpointSource(): CheckpointSource {
+  return { kind: 'compact-checkpoint', compactionId: 'event-script-compaction' }
+}
+
 /** One text content block (local helper). */
 const text = (t: string): ContentBlock[] => [{ type: 'text', text: t }]
 
@@ -149,7 +162,7 @@ export const ev = {
       sourceEventSeqs: [summarySeq, start, end],
       data: createUserMessage({
         content: text('<context_checkpoint>model only</context_checkpoint>'),
-        source: { kind: 'plugin', plugin: 'compact' },
+        source: checkpointSource(),
       }),
     }),
 }

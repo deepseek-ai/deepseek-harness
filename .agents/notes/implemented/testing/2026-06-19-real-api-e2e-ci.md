@@ -49,7 +49,7 @@ The repo secret is named `DEEPSEEK_API_KEY_EXTERNAL`; it is mapped to the `DEEPS
 
 - **Step-scoped secret.** `DEEPSEEK_API_KEY` is set in the `env:` of only the preflight and e2e steps, never job-level — so checkout/setup-node/install never see it. A compromised install-time lifecycle script in a dependency cannot read a secret that isn't in its environment.
 - **`permissions: contents: read`.** The job only reads the repo to run tests; it needs no write scopes (no PR comments, no status writes), so the `GITHUB_TOKEN` is dropped to least privilege.
-- **`DEEPSEEK_BASE_URL` pinned** to `https://api.deepseek.com` on the e2e step. The adapter would default to this when unset ([packages/llm/llm-deepseek/src/index.ts](../../../../packages/llm/llm-deepseek/src/index.ts) `PUBLIC_BASE_URL`), but pinning is self-documenting and hermetic — a stray repo-root `.env` (which `vitest.e2e.config.ts` loads if present) cannot silently redirect the run to another endpoint.
+- **`DEEPSEEK_BASE_URL` pinned** to `https://api.deepseek.com/anthropic` on the e2e step. The adapter would default to this when unset ([packages/llm/llm-deepseek/src/index.ts](../../../../packages/llm/llm-deepseek/src/index.ts) `PUBLIC_BASE_URL`), but pinning is self-documenting and hermetic — a stray repo-root `.env` (which `vitest.e2e.config.ts` loads if present) cannot silently redirect the run to another endpoint.
 - **No secret echoed.** The preflight prints only `DEEPSEEK_API_KEY present.` — not the value or its length.
 
 ### Scope, runtime shape

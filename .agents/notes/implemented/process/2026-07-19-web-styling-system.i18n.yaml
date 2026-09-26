@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-19-web-styling-system.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-19-web-styling-system.md
-2026-07-19-web-styling-system.md: b4d647924ab6ab172cd7a7e2531a10a2a7e62981
-2026-07-19-web-styling-system.zh.md: e7384575cf69099c8a95610f61c85b5bcb80d300
+/agent-note-web-styling-system-the-token-framework-and-engineering-constraints:
+  en: 60e793c38185c08c
+  zh: 8f4d4644e3502c31
+/agent-note-web-styling-system-the-token-framework-and-engineering-constraints/problem:
+  en: aa546850f8c51cd1
+  zh: bba14f66aaf1e06a
+/agent-note-web-styling-system-the-token-framework-and-engineering-constraints/decision:
+  en: 72a1d3545d1ebd6d
+  zh: f2fdc9006468aa72
+/agent-note-web-styling-system-the-token-framework-and-engineering-constraints/engineering-constraints:
+  en: 39f1984d96e609ed
+  zh: 14eda6caf43c5514
+/agent-note-web-styling-system-the-token-framework-and-engineering-constraints/the-execution-shape-for-agents:
+  en: 10342491b9dcc1a7
+  zh: cd23d8c2f8ef3d26
+/agent-note-web-styling-system-the-token-framework-and-engineering-constraints/division-of-labor-with-web-styling-md:
+  en: 91e06333e11b1417
+  zh: c743f392dbd9391f
+/agent-note-web-styling-system-the-token-framework-and-engineering-constraints/consequences:
+  en: 128333a6495cbfa0
+  zh: f165ef2f3d76f216
+/agent-note-web-styling-system-the-token-framework-and-engineering-constraints/alternatives-considered:
+  en: 6579ca659b112618
+  zh: f1a650f4af1b8cc2

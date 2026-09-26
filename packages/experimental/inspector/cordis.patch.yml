@@ -1,8 +1,6 @@
-# Built-artifact overlay for the experimental inspector:
-#   node apps/cli/lib/bin.js web --patch ./packages/experimental/inspector/cordis.patch.yml
-# The relative entry is anchored to this file, so the private package does not
-# need to be installed into the selected profile. Run `pnpm run build` first.
+# Explicitly installed bundle: the cross-realm inspector. The Host row
+# activates only where a Web server exists.
 
 - insert:
     - id: experimental-inspector
-      name: './lib/index.js'
+      name: '@deepseek-ai/dsh-experimental-inspector'

@@ -152,14 +152,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # Blacksmith x64 CI builds use 2 vCPU for compilation, bundling, and wheel smokes.
   build:
     needs: [plan, sdk-wheel]
     name: ${{ matrix.target }}
     runs-on: >-
       ${{ inputs.ci && !inputs.release && matrix.target == 'node24-linux-x64'
-          && vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-16vcpu-ubuntu-2404'
+          && vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-2vcpu-ubuntu-2404'
           || inputs.ci && !inputs.release && matrix.target == 'node24-win-x64'
-          && vars.DSH_CI_FAILOVER_WINDOWS == 'blacksmith' && 'blacksmith-16vcpu-windows-2025'
+          && vars.DSH_CI_FAILOVER_WINDOWS == 'blacksmith' && 'blacksmith-2vcpu-windows-2025'
           || matrix.runner }}
     timeout-minutes: 45
     strategy:

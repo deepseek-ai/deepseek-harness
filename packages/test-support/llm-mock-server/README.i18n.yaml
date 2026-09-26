@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/test-support/llm-mock-server/README.md
-README.md: be311d9c83bcd35ad5bd0c003f6e95861b6d6976
-README.zh.md: 7a022131d9ef09d9ef89c91cae418f093f77aca1
+/:
+  en: 7a361871c93c1d91
+  zh: dd8097d1293fa845
+/deepseek-ai-dsh-llm-mock-server:
+  en: bf31466ee0c85b69
+  zh: 77ac4edc39b8fc19
+/deepseek-ai-dsh-llm-mock-server/summary:
+  en: a9e09bb7e96cc08a
+  zh: a317c2318fda0b60
+/deepseek-ai-dsh-llm-mock-server/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-llm-mock-server/use-this-package:
+  en: 63ee5ceab28cd036
+  zh: d0028db082c0eb66
+/deepseek-ai-dsh-llm-mock-server/use-this-package/running-it-standalone:
+  en: d0e61cdbdfb31f04
+  zh: ee15e7717cd58253
+/deepseek-ai-dsh-llm-mock-server/use-this-package/scripting-behaviors:
+  en: 6b7a2b230324c945
+  zh: b90a504e7eef1ed6
+/deepseek-ai-dsh-llm-mock-server/use-this-package/random-mode:
+  en: 8287cedf469f450f
+  zh: cdf4509f60441983
+/deepseek-ai-dsh-llm-mock-server/use-this-package/timing-and-content-controls:
+  en: 82bfb84a4c299dcb
+  zh: faa501b565972dbf
+/deepseek-ai-dsh-llm-mock-server/use-this-package/what-can-go-wrong:
+  en: 36649554f10ab587
+  zh: ef58d0b44e514387
+/deepseek-ai-dsh-llm-mock-server/understand-the-implementation:
+  en: 14ffdce5018881ec
+  zh: 7701df55150a8704
+/deepseek-ai-dsh-llm-mock-server/understand-the-implementation/design:
+  en: 393a6ca8f1eb021e
+  zh: d71bc369d550b527
+/deepseek-ai-dsh-llm-mock-server/understand-the-implementation/source-map:
+  en: ac683a0f364b53e4
+  zh: 3b4c782b56e024db
+/deepseek-ai-dsh-llm-mock-server/understand-the-implementation/wire-flow:
+  en: 34abeb79b2e0cdcd
+  zh: d175185e4f1cc190
+/deepseek-ai-dsh-llm-mock-server/further-exploration:
+  en: 79a13f659787f291
+  zh: e9068375f5a55211
+/deepseek-ai-dsh-llm-mock-server/model-experience:
+  en: cab9e731c97838bd
+  zh: 9a540b7a27929ea9
+/deepseek-ai-dsh-llm-mock-server/model-experience/kv-cache-effect:
+  en: 59d1d037a1ddde08
+  zh: 08a72ec95d5bf454
+/deepseek-ai-dsh-llm-mock-server/known-limitations-and-deferred-work:
+  en: 968ce23ce200caf5
+  zh: 953408a424bc0297
+/deepseek-ai-dsh-llm-mock-server/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

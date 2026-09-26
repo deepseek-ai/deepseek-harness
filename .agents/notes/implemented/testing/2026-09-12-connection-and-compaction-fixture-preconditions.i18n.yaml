@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-12-connection-and-compaction-fixture-preconditions.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-12-connection-and-compaction-fixture-preconditions.md
-2026-09-12-connection-and-compaction-fixture-preconditions.md: 9b97657c7742bb37a8a70b04350d5e6b43868f6c
-2026-09-12-connection-and-compaction-fixture-preconditions.zh.md: bc73a0e84ab4f60b7f3091f60a5217dcc950cb20
+/agent-note-connection-and-compaction-fixture-preconditions:
+  en: ea762fbdd18bdce3
+  zh: 5795a728fd210f69
+/agent-note-connection-and-compaction-fixture-preconditions/problem:
+  en: 43949801eda059d6
+  zh: 83b579735b9d3e3f
+/agent-note-connection-and-compaction-fixture-preconditions/decision:
+  en: 4e7091381ce185cf
+  zh: 6e36499f5b5e46f9
+/agent-note-connection-and-compaction-fixture-preconditions/alternatives-considered:
+  en: b8842654dbe80f4c
+  zh: e4b80e80d89203b0
+/agent-note-connection-and-compaction-fixture-preconditions/consequences:
+  en: 054ce1f776693cc9
+  zh: dd542b1ccb1cc07d

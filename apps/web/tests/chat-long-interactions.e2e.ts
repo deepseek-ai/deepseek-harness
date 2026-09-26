@@ -83,7 +83,7 @@ async function openSeed(page: Page): Promise<void> {
   // Search collapsed into a header action; expand it before filling.
   const searchButton = page.getByRole('button', { name: 'Search sessions' })
   if (await searchButton.getAttribute('aria-expanded') !== 'true') await searchButton.click()
-  const search = page.getByRole('textbox', { name: 'Search sessions...', exact: true })
+  const search = page.getByRole('textbox', { name: 'Search session names', exact: true })
   await search.fill(FIXTURE.markers.user(1))
   const results = page.getByRole('tree', { name: 'Search results' }).getByRole('treeitem')
   await results.first().waitFor({ timeout: 60_000 })
@@ -198,35 +198,37 @@ describe('web e2e: long Chat interaction contract', () => {
 
     const turnNavigation = page.getByRole('navigation', { name: 'Turn navigation' })
     await turnNavigation.waitFor({ state: 'visible', timeout: 15_000 })
-    // The whole-log outline offers every fixture turn before any paging, with
-    // the live tail mark current.
     const marks = turnNavigation.getByRole('button')
-    await expect.poll(() => marks.count(), { timeout: 15_000 }).toBe(FIXTURE_TURNS)
-    expect(await marks.last().getAttribute('aria-current')).toBe('true')
+    await expect.poll(() => marks.last().getAttribute('aria-current'), { timeout: 15_000 }).toBe('true')
+    expect(await marks.count()).toBeLessThan(FIXTURE_TURNS)
     // The oldest turn is an unloaded mark whose outline preview already
     // carries both the prompt and the settled response.
     const firstTurnButton = turnNavigation
       .getByRole('button', { name: 'Load and jump to turn 1', exact: true })
+    const railScroller = turnNavigation.locator('[class*="scroller"]')
+    await railScroller.hover()
+    await page.mouse.wheel(0, -FIXTURE_TURNS * 10)
+    await expect.poll(() => railScroller.evaluate(element => element.scrollTop)).toBe(0)
     await firstTurnButton.focus()
     const preview = page.getByRole('tooltip')
     await preview.waitFor({ state: 'visible', timeout: 5_000 })
-    expect(await preview.textContent()).toContain(FIXTURE.markers.user(1))
+    await expect.poll(() => preview.textContent(), { timeout: 5_000 }).toContain(FIXTURE.markers.user(1))
     expect(await preview.textContent()).toContain(FIXTURE.markers.assistant(1))
-    const firstTurnPosition = await firstTurnButton.evaluate(button => (
-      button.parentElement?.style.getPropertyValue('--turn-natural-position') ?? ''
+    const markPitch = () => turnNavigation.getByRole('button').evaluateAll(buttons => (
+      buttons[1]!.getBoundingClientRect().top - buttons[0]!.getBoundingClientRect().top
     ))
-    expect(firstTurnPosition).toBe('0px')
+    expect(await markPitch()).toBe(10)
 
     const loadEarlier = page.getByRole('button', { name: 'Load earlier', exact: true })
-    const loadedMarks = turnNavigation.getByRole('button', { name: /^Jump to turn / })
-    const loadedBefore = await loadedMarks.count()
+    const loadedRows = page.locator('[data-chat-flow-key]')
+    const loadedBefore = await loadedRows.count()
     await loadEarlier.click()
-    // Paging converts marks to their loaded form without moving the
-    // fixed-pitch ladder.
-    await expect.poll(() => loadedMarks.count(), { timeout: 15_000 }).toBeGreaterThan(loadedBefore)
-    expect(await firstTurnButton.evaluate(button => (
-      button.parentElement?.style.getPropertyValue('--turn-natural-position') ?? ''
-    ))).toBe(firstTurnPosition)
+    await expect.poll(() => loadedRows.count(), { timeout: 15_000 }).toBeGreaterThan(loadedBefore)
+    await railScroller.hover()
+    await page.mouse.wheel(0, -FIXTURE_TURNS * 10)
+    await expect.poll(() => railScroller.evaluate(element => element.scrollTop)).toBe(0)
+    await firstTurnButton.waitFor({ state: 'visible' })
+    expect(await markPitch()).toBe(10)
     // Activating the still-unloaded oldest mark pages the rest in and lands
     // on the turn's own row.
     await firstTurnButton.focus()
@@ -319,10 +321,10 @@ describe('web e2e: long Chat interaction contract', () => {
     expect(child.session.snapshotEvents().some(event => carries(event, FIXTURE.markers.user(BRANCH_TURN + 1)))).toBe(false)
     expect(child.session.snapshotEvents().some(event => carries(event, FIXTURE.markers.user(FIXTURE.turns)))).toBe(false)
 
+    // The current crumb renders as plain text, not a button.
     const currentCrumb = page.getByRole('navigation', { name: 'Session hierarchy' })
-      .getByRole('button').last()
-    await expect.poll(() => currentCrumb.textContent(), { timeout: 15_000 })
-      .toBe(`${FIXTURE.title} (1)`)
+      .getByText(`${FIXTURE.title} (1)`, { exact: true })
+    await expect.poll(() => currentCrumb.count(), { timeout: 15_000 }).toBe(1)
     await page.getByText(branchAssistantMarker, { exact: false }).last().waitFor({ timeout: 15_000 })
     const settled = scaffold.whenTurnSettled(60_000)
     const composer = page.locator('[data-composer-input][contenteditable="true"]').last()

@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-10-session-data-compatibility.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-09-10-session-data-compatibility.md
-2026-09-10-session-data-compatibility.md: 5784ca2a3ae3bae91030c177a8eca3c08f93c8af
-2026-09-10-session-data-compatibility.zh.md: 39e5e071703653d9a83d38420d929c0b8a310f68
+/agent-note-session-historical-data-compatibility:
+  en: bcc2d17eb800361c
+  zh: 8f74cc9e1c9f3729
+/agent-note-session-historical-data-compatibility/problem:
+  en: d125f39227dc17ee
+  zh: ab83089486d70796
+/agent-note-session-historical-data-compatibility/proposal:
+  en: 986dd8097aac4d3d
+  zh: 986dd8097aac4d3d
+/agent-note-session-historical-data-compatibility/proposal/start-with-0-1-5-rc-1-v3:
+  en: c0f09bb8e2c3aac5
+  zh: 4b7c8d3b1d1a0f76
+/agent-note-session-historical-data-compatibility/proposal/effect-on-ordinary-users:
+  en: 7e8616cc65f825e3
+  zh: db9e5a3e1090985e
+/agent-note-session-historical-data-compatibility/proposal/invariants-after-provider-replacement:
+  en: c3a8bb8665ca6d95
+  zh: 96a4b52c31fcc19d
+/agent-note-session-historical-data-compatibility/alternatives-considered:
+  en: 8d34713ac1ca54ea
+  zh: 25b01743baa11434
+/agent-note-session-historical-data-compatibility/acceptance-criteria:
+  en: abd8b41ca33f4398
+  zh: 54865a11723b670f
+/agent-note-session-historical-data-compatibility/risks:
+  en: 2cb87e77f846c8fe
+  zh: e4e2f7eae02e0a7e

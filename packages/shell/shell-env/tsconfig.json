@@ -25,6 +25,9 @@
     },
     {
       "path": "../../core/tools"
+    },
+    {
+      "path": "../../boot/app-boot"
     }
   ]
 }

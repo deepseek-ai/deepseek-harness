@@ -144,6 +144,14 @@ describe('FileSystem provider seam', () => {
     await expect(fs.readBytes(target, undefined, 1)).rejects.toMatchObject({ code: 'FS_TOO_LARGE' })
   })
 
+  it('rejects watching when a provider does not implement observation', async () => {
+    const ctx = new Context()
+    await ctx.plugin(FakeFileSystem)
+    const fs = ctx.fs as FakeFileSystem
+    await expect(fs.watch(await fs.resolve('a.txt'), () => {}, new AbortController().signal))
+      .rejects.toMatchObject({ code: 'FS_IO_ERROR' })
+  })
+
   it('listDir returns child entry targets without reading file content', async () => {
     const ctx = new Context()
     await ctx.plugin(FakeFileSystem)

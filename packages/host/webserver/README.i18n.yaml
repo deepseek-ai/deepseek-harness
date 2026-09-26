@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/host/webserver/README.md
-README.md: df1881a3a16b69f61127956127c7806c70793f91
-README.zh.md: 1d07d43ac97c616c9b7450da71ad09cb55fa4267
+/:
+  en: 40ce7ea7cd628127
+  zh: f4f1983ead36c8a4
+/deepseek-ai-dsh-host-webserver:
+  en: 9c6c5fcadd836722
+  zh: f5b79ea2c4be6dde
+/deepseek-ai-dsh-host-webserver/summary:
+  en: 2b56ae0c86dae540
+  zh: 9dd7e304074703d4
+/deepseek-ai-dsh-host-webserver/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-host-webserver/use-this-package:
+  en: 0246258969a54c27
+  zh: ba67f4df89d049de
+/deepseek-ai-dsh-host-webserver/use-this-package/minimal-configuration:
+  en: 7016f10d53d3238e
+  zh: c7968dc08a6b8a41
+/deepseek-ai-dsh-host-webserver/use-this-package/registering-routes:
+  en: 296ffba200f0dc93
+  zh: 5d78d6b5f48634c9
+/deepseek-ai-dsh-host-webserver/use-this-package/the-fallback-seat:
+  en: e21232b7aecbe7a8
+  zh: 2c4a94cab2aa53ff
+/deepseek-ai-dsh-host-webserver/use-this-package/behavior-under-failure:
+  en: 7ef1f5bedb859676
+  zh: b146ebf7ca3c0bfb
+/deepseek-ai-dsh-host-webserver/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-host-webserver/understand-the-implementation/design-concept:
+  en: 3eb8591cc484305d
+  zh: 53e427897fda8b7e
+/deepseek-ai-dsh-host-webserver/understand-the-implementation/matching-and-lifecycle:
+  en: 70dc6875e07497dd
+  zh: a1d041236e361f84
+/deepseek-ai-dsh-host-webserver/understand-the-implementation/source-map:
+  en: 5b9e4c57f7865323
+  zh: edeb68dc544bef0a
+/deepseek-ai-dsh-host-webserver/further-exploration:
+  en: 95c0c6bc24dab6cf
+  zh: ec30fe2bb45a7e61
+/deepseek-ai-dsh-host-webserver/model-experience:
+  en: 38887e1f9117e7e5
+  zh: 6a6e1a002fac4624
+/deepseek-ai-dsh-host-webserver/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-host-webserver/known-limitations-and-deferred-work:
+  en: 49b11936de031b32
+  zh: 5aa36b8f07a95e45
+/deepseek-ai-dsh-host-webserver/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

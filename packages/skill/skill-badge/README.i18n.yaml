@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/skill/skill-badge/README.md
-README.md: 973c4a003c8ac0f2e159bd886b01bc93735474e5
-README.zh.md: 1c2dbc056a545bba17748f615cf55e0549ec67cf
+/:
+  en: c32f79a869ebd48a
+  zh: 44e64fb59fa75e57
+/deepseek-ai-dsh-skill-badge:
+  en: 173ba0ed0aa79510
+  zh: 8b0cb7a81db06283
+/deepseek-ai-dsh-skill-badge/summary:
+  en: ccb1ebcc64163d39
+  zh: 3c89c981873e3b5e
+/deepseek-ai-dsh-skill-badge/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-skill-badge/use-this-package:
+  en: a559a5ed8a76e342
+  zh: 6558f9af8d6c9625
+/deepseek-ai-dsh-skill-badge/use-this-package/when-to-choose-it:
+  en: a3276561ace9e681
+  zh: d2541ab4846fefa2
+/deepseek-ai-dsh-skill-badge/use-this-package/enable-the-plugin:
+  en: fbee982ca0bbcf25
+  zh: b3e802857d784384
+/deepseek-ai-dsh-skill-badge/use-this-package/what-the-badge-skill-provides:
+  en: 7144db5613266a9b
+  zh: d1b7edf6c1253e9a
+/deepseek-ai-dsh-skill-badge/use-this-package/observable-success-and-failures:
+  en: 1b3c8501e0899f1e
+  zh: 909684f272051d5f
+/deepseek-ai-dsh-skill-badge/understand-the-implementation:
+  en: 63465b0133f30e85
+  zh: 84bebb7c1fe0ceba
+/deepseek-ai-dsh-skill-badge/understand-the-implementation/design-concept:
+  en: 52ff92fad6d26ee9
+  zh: 071c7859c158513d
+/deepseek-ai-dsh-skill-badge/understand-the-implementation/source-map:
+  en: 028c0f62dca4cf28
+  zh: 15deebc72d86e753
+/deepseek-ai-dsh-skill-badge/further-exploration:
+  en: 1b5434b8bcbd5b0b
+  zh: d170cddf3837e655
+/deepseek-ai-dsh-skill-badge/model-experience:
+  en: b9912bc3f1ba0680
+  zh: e288cc67b6d079f6
+/deepseek-ai-dsh-skill-badge/model-experience/kv-cache-effect:
+  en: 6a8366520852a607
+  zh: 453ec29827b82bbc
+/deepseek-ai-dsh-skill-badge/known-limitations-and-deferred-work:
+  en: c7e405ebbc1d4602
+  zh: 05a57fb4359da265
+/deepseek-ai-dsh-skill-badge/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

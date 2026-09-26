@@ -1,7 +1,8 @@
 {
   "name": "@deepseek-ai/dsh-experimental-inspector",
   "description": "Experimental cross-realm CDP hub for Host debugging and Client Runtime inspection",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-rc.2",
+  "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
   },
@@ -23,40 +24,48 @@
       "default": "./lib/client.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
   },
   "dsh": {
     "client": {
       "inject": [],
       "platform": "web",
       "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
     }
   },
   "files": [
+    "icon.svg",
+    "locale/*.json",
     "lib/index.js",
     "lib/client.js",
+    "cordis.patch.yml",
     "lib/worker.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/dsh-app-boot": "workspace:^",
-    "@deepseek-ai/dsh-brand": "workspace:^",
-    "@deepseek-ai/dsh-util-crypto": "workspace:^",
-    "@deepseek-ai/schemastery": "workspace:^",
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@deepseek-ai/dsh-brand": "workspace:*",
+    "@deepseek-ai/dsh-util-crypto": "workspace:*",
+    "@deepseek-ai/schemastery": "workspace:~",
     "ws": "^8.21.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
-    "@deepseek-ai/dsh-client-modules": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@deepseek-ai/dsh-client-modules": "workspace:*",
+    "@deepseek-ai/dsh-host-webserver": "workspace:*"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/cordis-plugin-include": "workspace:^",
-    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cordis-plugin-include": "workspace:~",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@deepseek-ai/dsh-host-webserver": "workspace:*",
     "@types/ws": "^8.18.1",
     "playwright": "^1.49.0",
     "tsx": "^4.19.2"

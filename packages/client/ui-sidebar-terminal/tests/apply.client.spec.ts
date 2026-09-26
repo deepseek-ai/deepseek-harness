@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-/** Terminal type, copy, seats and explicit cleanup follow the plugin lifetime. */
+/** Terminal views, copy, and tab retention follow the plugin lifetime. */
 import { createElement } from 'react'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { cleanup, render, waitFor } from '@testing-library/react'
 import { Context } from '@deepseek-ai/cordis'
+import type { ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WebTerminalId, WebTerminalInfo } from '@deepseek-ai/dsh-api-terminal-controller/types'
@@ -16,18 +17,16 @@ import { apply as hostApply } from '../src/index.ts'
 import { TerminalGuide, type TerminalGuideInjected } from '../src/client/TerminalGuide.tsx'
 import { LazyTerminalBody } from '../src/client/LazyTerminalBody.tsx'
 import { TerminalTitle } from '../src/client/TerminalTitle.tsx'
-import { TerminalRecovery, type TerminalRecoveryInjected } from '../src/client/TerminalRecovery.tsx'
-import { TerminalCleanup, type TerminalCleanupInjected } from '../src/client/TerminalCleanup.tsx'
 import type { TerminalBodyInjected } from '../src/client/face.ts'
 import { en, zh } from '../src/client/locales.ts'
 
 vi.mock('@xterm/xterm', () => ({ Terminal: vi.fn() }))
+const SHORTCUT_CATALOG: readonly never[] = []
+
 const renderedTerminal = vi.hoisted(() => vi.fn(() => null))
 vi.mock('../src/client/terminal.tsx', () => ({ TerminalBody: renderedTerminal }))
 
 afterEach(() => { cleanup(); renderedTerminal.mockClear() })
-
-const terminalInfo = (id: string): WebTerminalInfo => ({ id: id as WebTerminalId, title: id, shell: { path: '/bin/sh', name: 'sh', args: ['-i'] }, cwd: '/workspace', cols: 80, rows: 24, state: 'running', exitCode: null })
 
 async function mountPlugin() {
   const ctx = new Context()
@@ -54,15 +53,21 @@ async function mountPlugin() {
   const openTabIn = vi.fn()
   const tabsIn = vi.fn(() => [] as { id: string; kind: string }[])
   const openTabs = createSnapshotStore<readonly SidebarRightOpenTab[]>([])
+  const commandTarget = vi.fn(), openTabFromTarget = vi.fn()
+  const commands: ShortcutCommand[] = []
   ctx.provide('webTerminals', terminals as never)
   ctx.provide('sidebarRight', {
-    tabDomain: { occurrence }, openTabIn, tabsIn, openTabs,
+    tabDomain: { occurrence }, openTabIn, tabsIn, openTabs, commandTarget, openTabFromTarget,
     registerCloseHandler: (kind: string, handler: SidebarRightCloseHandler) => { expect(kind).toBe('terminal'); closeHandler = handler; return () => { closeHandler = undefined } },
   } as never)
   ctx.provide('slots', {
     inject: (_name: string, register: () => () => void) => register(),
     register: (options: Omit<typeof entries[number], 'component'>, component: unknown) => { const entry = { ...options, component }; entries.push(entry); return () => { entries.splice(entries.indexOf(entry), 1) } },
   } as never)
+  ctx.provide('shortcuts', { register: (command: ShortcutCommand) => {
+    commands.push(command)
+    return () => { commands.splice(commands.indexOf(command), 1) }
+  }, catalog: { getSnapshot: () => SHORTCUT_CATALOG, subscribe: () => () => {} } } as never)
   ctx.provide('locale', {
     bind: () => (key: string) => key,
     register: (name: string, values: unknown) => { dictionaries.set(name, values); return () => { dictionaries.delete(name) } },
@@ -72,6 +77,7 @@ async function mountPlugin() {
   const fiber = await ctx.plugin({ inject, apply })
   return {
     tabs, entries, dictionaries, terminals, model, occurrence, openTabIn, tabsIn, openTabs, theme,
+    commandTarget, openTabFromTarget, commands,
     emitTheme() { ctx.emit('theme/change', theme) },
     get closeHandler() { return closeHandler },
     setParams(next: typeof params) { params = next },
@@ -79,7 +85,7 @@ async function mountPlugin() {
   }
 }
 
-it('registers terminal views, recovery and cleanup, then releases every contribution on unload', async () => {
+it('registers terminal views without recovery or cleanup slots, then releases contributions on unload', async () => {
   expect(hostApply).not.toThrow()
   const h = await mountPlugin()
   try {
@@ -89,15 +95,13 @@ it('registers terminal views, recovery and cleanup, then releases every contribu
     const Icon = definition.guide?.[0]?.icon
     if (Icon === undefined) throw new Error('Terminal guide icon was not registered')
     expect(renderToStaticMarkup(createElement(Icon, { size: 22 }))).toContain('width="22"')
-    expect(renderToStaticMarkup(createElement(Icon))).toContain('width="26"')
+    expect(renderToStaticMarkup(createElement(Icon))).toContain('width="36"')
     expect(definition.multiple).toBe(true)
     expect(h.dictionaries.get('sidebarTerminal')).toEqual({ en, zh })
     expect(h.entries.map(entry => [entry.name, entry.component, entry.locale])).toEqual([
       ['sidebar.right.tab.guide.entry', TerminalGuide, 'sidebarTerminal'],
       ['sidebar.right.pane.tab', LazyTerminalBody, 'sidebarTerminal'],
       ['sidebar.right.pane.tab.title', TerminalTitle, 'sidebarTerminal'],
-      ['conversation.session.header.actions', TerminalRecovery, 'sidebarTerminal'],
-      ['shell.overlay', TerminalCleanup, 'sidebarTerminal'],
     ])
     const sessionId = 'session' as SessionId
     const launcher = h.entries[0]!.inject(sessionId) as TerminalGuideInjected
@@ -132,10 +136,9 @@ it('registers terminal views, recovery and cleanup, then releases every contribu
     h.setParams(undefined)
     h.closeHandler(sessionId, { id: 'new-tab', contentId: 'sidebar://terminal/new' } as Parameters<SidebarRightCloseHandler>[1])
     expect(h.terminals.close).toHaveBeenLastCalledWith(sessionId, 'new-tab', 'sidebar://terminal/new', undefined)
-    const cleanupFace = h.entries[4]!.inject(sessionId) as TerminalCleanupInjected
-    expect(cleanupFace.hooks.closeFailures).toBe(h.terminals.closeFailures)
-    cleanupFace.retryClose('terminal' as Parameters<TerminalCleanupInjected['retryClose']>[0])
-    expect(h.terminals.retryClose).toHaveBeenCalledWith('terminal')
+    expect(h.terminals.recover).not.toHaveBeenCalled()
+    expect(h.terminals.retryClose).not.toHaveBeenCalled()
+    expect(h.openTabIn).not.toHaveBeenCalled()
   } finally {
     await h.dispose()
   }
@@ -145,81 +148,25 @@ it('registers terminal views, recovery and cleanup, then releases every contribu
   expect(h.dictionaries.size).toBe(0)
 })
 
+it('opens a terminal for the command target and refuses without a selected Session', async () => {
+  const h = await mountPlugin()
+  try {
+    const command = h.commands[0]!
+    const input = { region: 'page', modal: null, target: null } as const
+    expect(command.resolve(input)).toEqual({ status: 'blocked', reason: 'shortcut.noSession' })
+    const target = { sessionId: 'terminal-session' }
+    h.commandTarget.mockReturnValue(target)
+    const result = command.resolve(input)
+    if (result.status !== 'handled') throw new Error('Expected terminal command to be available')
+    result.run()
+    expect(h.openTabFromTarget).toHaveBeenCalledWith('terminal', target)
+  } finally { await h.dispose() }
+  expect(h.commands).toEqual([])
+})
+
 it('loads the terminal body implementation when its registered wrapper mounts', async () => {
   render(createElement(LazyTerminalBody, {} as never))
   await waitFor(() => { expect(renderedTerminal).toHaveBeenCalledOnce() })
-})
-
-it('restores terminal occurrences before listing unrepresented Host terminals and shares recovery across headers', async () => {
-  const h = await mountPlugin()
-  h.tabsIn.mockReturnValue([{ id: 'collapsed-terminal', kind: 'terminal' }, { id: 'file', kind: 'text' }])
-  const pending = Promise.withResolvers<WebTerminalInfo[]>()
-  h.terminals.recover.mockImplementationOnce(() => pending.promise)
-  const sessionId = 'session' as SessionId
-  const recovery = h.entries[3]!.inject(sessionId) as TerminalRecoveryInjected
-  const remounted = h.entries[3]!.inject(sessionId) as TerminalRecoveryInjected
-  const completion = recovery.restore()
-  expect(h.terminals.view).toHaveBeenCalledWith(sessionId, 'collapsed-terminal', 'sidebar://terminal/content', undefined, undefined)
-  expect(h.terminals.view).toHaveBeenCalledOnce()
-  try {
-    expect(remounted.restore()).toBe(completion)
-    expect(h.terminals.recover).toHaveBeenCalledExactlyOnceWith(sessionId)
-    expect(h.openTabIn).not.toHaveBeenCalled()
-    pending.resolve([terminalInfo('build'), terminalInfo('tests')])
-    await completion
-    expect(h.openTabIn.mock.calls).toEqual([
-      [sessionId, 'terminal', { params: { terminalId: 'build' } }],
-      [sessionId, 'terminal', { params: { terminalId: 'tests' } }],
-    ])
-    await remounted.restore()
-    expect(h.terminals.recover).toHaveBeenCalledTimes(1)
-    expect(h.openTabIn).toHaveBeenCalledTimes(2)
-    const otherSession = 'other-session' as SessionId
-    await (h.entries[3]!.inject(otherSession) as TerminalRecoveryInjected).restore()
-    expect(h.terminals.recover).toHaveBeenLastCalledWith(otherSession)
-    expect(h.terminals.recover).toHaveBeenCalledTimes(2)
-    expect(h.openTabIn).toHaveBeenCalledTimes(2)
-  } finally {
-    pending.resolve([])
-    await completion
-    await h.dispose()
-  }
-})
-
-it('allows a failed Host lookup to be retried without marking the Session recovered', async () => {
-  const h = await mountPlugin()
-  const unavailable = new Error('Host unavailable')
-  h.terminals.recover.mockRejectedValueOnce(unavailable)
-  const sessionId = 'session' as SessionId
-  const recovery = h.entries[3]!.inject(sessionId) as TerminalRecoveryInjected
-  try {
-    await expect(recovery.restore()).rejects.toBe(unavailable)
-    expect(h.openTabIn).not.toHaveBeenCalled()
-    await recovery.restore()
-    await recovery.restore()
-    expect(h.terminals.recover).toHaveBeenCalledTimes(2)
-  } finally {
-    await h.dispose()
-  }
-})
-
-it('does not open retained terminals when their lookup completes after plugin unload', async () => {
-  const h = await mountPlugin()
-  const pending = Promise.withResolvers<WebTerminalInfo[]>()
-  h.terminals.recover.mockImplementationOnce(() => pending.promise)
-  const recovery = h.entries[3]!.inject('session' as SessionId) as TerminalRecoveryInjected
-  const completion = recovery.restore()
-  try {
-    expect(h.terminals.recover).toHaveBeenCalledOnce()
-    await h.dispose()
-    pending.resolve([terminalInfo('build')])
-    await completion
-    expect(h.openTabIn).not.toHaveBeenCalled()
-  } finally {
-    pending.resolve([])
-    await completion
-    await h.dispose()
-  }
 })
 
 it('retains terminal metadata from dormant layouts and releases its inventory subscription on unload', async () => {

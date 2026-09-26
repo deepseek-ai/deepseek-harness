@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-30-web-browser-snapshot-ci-gate.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-07-30-web-browser-snapshot-ci-gate.md
-2026-07-30-web-browser-snapshot-ci-gate.md: 719ac059d1208601e3fdd7ef10ae48464bd92877
-2026-07-30-web-browser-snapshot-ci-gate.zh.md: 57e23491e2123f9e14f478b98331dac2726ef2a2
+/agent-note-required-ci-gate-for-web-browser-expected-outputs:
+  en: 246ce605a87c0592
+  zh: 37b3fb230abcb280
+/agent-note-required-ci-gate-for-web-browser-expected-outputs/problem:
+  en: e04a5ecbd6d6a39e
+  zh: 049ce77a1a679daa
+/agent-note-required-ci-gate-for-web-browser-expected-outputs/decision:
+  en: 915efba11d7ece34
+  zh: 540495b04ef9a305
+/agent-note-required-ci-gate-for-web-browser-expected-outputs/alternatives-considered:
+  en: 145e763735dd33b1
+  zh: 4ea34838629cd3bf
+/agent-note-required-ci-gate-for-web-browser-expected-outputs/consequences:
+  en: d4c6e69ad04c5748
+  zh: 5f3034df8f13b106

@@ -63,7 +63,12 @@ export interface PopupState {
   readonly options: readonly SelectOption[]
   /** Local filter text over the loaded options. */
   readonly search: string
-  /** Highlight index into the filtered row list (0 when empty/pending). */
+  /**
+   * Highlight index into the filtered row list: 0 until options land; afterwards
+   * the row the loaded list marks as the current value
+   * ({@link SelectOption.active}), else 0. A search rebases it to the top of the
+   * filtered rows.
+   */
   readonly active: number
   /** A select() settlement is in flight: further select/search/highlight no-op until it settles. */
   readonly submitting: boolean
@@ -91,6 +96,20 @@ export function filterOptions(options: readonly SelectOption[], search: string):
   const query = search.trim().toLowerCase()
   if (query === '') return options
   return options.filter(o => o.label.toLowerCase().includes(query) || (o.detail?.toLowerCase().includes(query) ?? false))
+}
+
+/**
+ * Highlight index for a freshly loaded row list: the row marked as the current
+ * value when the live search still shows it, else the top row. Opening parks
+ * the highlight on the value the session already uses, so an accept gesture
+ * made without looking confirms that value instead of the topmost row.
+ * @param options - the loaded rows.
+ * @param search - the shell's live filter text (non-empty after a retry).
+ * @returns index into the filtered rows.
+ */
+function currentIndex(options: readonly SelectOption[], search: string): number {
+  const at = filterOptions(options, search).findIndex(option => option.active === true)
+  return at === -1 ? 0 : at
 }
 
 /** One open shell's bindings (spec + open-time context + segment snapshot + options-fetch abort). */
@@ -145,7 +164,8 @@ export class PopupSelectController<TCtx = unknown> {
     binding.spec.options(binding.context, binding.abort.signal).then(
       (options) => {
         if (this.binding !== binding) return
-        this.state.set({ ...this.state.getSnapshot(), status: 'ready', options, active: 0, error: null })
+        const current = this.state.getSnapshot()
+        this.state.set({ ...current, status: 'ready', options, active: currentIndex(options, current.search), error: null })
       },
       (error: unknown) => {
         if (this.binding !== binding) return
@@ -166,7 +186,8 @@ export class PopupSelectController<TCtx = unknown> {
 
   /**
    * Replace the local search text (pure local filter — the provider is never
-   * re-queried) and rebase the highlight onto the new filtered list.
+   * re-queried) and rebase the highlight to the top of the new filtered list:
+   * typing searches for something other than the current value.
    * @param search - the shell search input's text.
    */
   setSearch(search: string): void {

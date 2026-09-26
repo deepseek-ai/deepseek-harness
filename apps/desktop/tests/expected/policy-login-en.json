@@ -1,0 +1,18 @@
+{
+  "returned": [
+    "Checking for updates…",
+    "You’re up to date!",
+    "Sign in with Feishu to check update requirements for this test build. Signing in will not download or install an update."
+  ],
+  "cancelled": [
+    "Checking for updates…",
+    "You’re up to date!",
+    "Sign in with Feishu to check update requirements for this test build. Signing in will not download or install an update."
+  ],
+  "failed": [
+    "Checking for updates…",
+    "You’re up to date!",
+    "Sign in with Feishu to check update requirements for this test build. Signing in will not download or install an update.",
+    "Feishu sign-in did not complete. Please try again."
+  ]
+}

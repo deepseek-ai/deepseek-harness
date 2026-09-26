@@ -8,7 +8,7 @@
   height: 38px;
   padding: 0 8px 0 20px;
   gap: 24px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-md);
   border: 0.5px solid var(--dsw-alias-border-l4);
   background: var(--dsw-alias-bg-layer-3);
   min-width: 0;
@@ -16,7 +16,7 @@
 
 .selected {
   border-color: transparent;
-  box-shadow: inset 0 0 0 2px var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+  box-shadow: inset 0 0 0 2px var(--dsw-alias-state-business-primary);
 }
 
 .index {
@@ -41,7 +41,7 @@
   height: 22px;
   max-width: 100%;
   padding: 0 4px;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-xs);
   font: var(--dsw-font-xs-strong-13);
   white-space: nowrap;
 }

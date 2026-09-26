@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-21-archive-stops-running-session-work.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-21-archive-stops-running-session-work.md
+/agent-note-archiving-a-session-with-running-work:
+  en: 0fbbf70c0c7c2bfa
+  zh: 5d3119ee84af3796
+/agent-note-archiving-a-session-with-running-work/problem:
+  en: 7926983089aebab2
+  zh: 366e32db00674a83
+/agent-note-archiving-a-session-with-running-work/decision:
+  en: 23adfbe72d671d6c
+  zh: 6fec976acfa54720
+/agent-note-archiving-a-session-with-running-work/alternatives-considered:
+  en: 708268e1fe4b4b75
+  zh: 64a8f6d6f333e090
+/agent-note-archiving-a-session-with-running-work/consequences:
+  en: cb3fdefd60483d62
+  zh: 87d3cead6dc8c37c

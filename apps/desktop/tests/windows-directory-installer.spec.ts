@@ -3,11 +3,25 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
-import { directoryInstallerExits, directoryInstallSection } from '../scripts/windows-directory-installer.mjs'
+import { directoryInstallerExits, directoryInstallSection, directoryUninstaller } from '../scripts/windows-directory-installer.mjs'
 
 const require = createRequire(import.meta.url)
 const section = readFileSync(join(dirname(require.resolve('app-builder-lib/package.json')),
   'templates/nsis/installSection.nsh'), 'utf8')
+
+it('keeps data cleanup out of the upstream template while retaining application removal and registration cleanup', () => {
+  const source = readFileSync(join(dirname(require.resolve('app-builder-lib/package.json')), 'templates/nsis/uninstaller.nsh'), 'utf8')
+  const adapted = directoryUninstaller(source)
+  expect(adapted).not.toContain('--delete-app-data')
+  expect(adapted).not.toContain('RMDir /r "$APPDATA')
+  expect(adapted).toContain('!insertmacro customUnInstall')
+  expect(adapted).toContain('DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}"')
+  expect(adapted).toContain('DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY_2}"')
+  expect(directoryUninstaller(source.replaceAll('\n', '\r\n'))).toBe(adapted)
+  expect(adapted).toContain('RMDir /r "\\\\?\\$INSTDIR"')
+  expect(() => directoryUninstaller(source.replace('  Var /GLOBAL isDeleteAppData\n', ''))).toThrow('template changed')
+  expect(() => directoryUninstaller(source.replace('  DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}"', ''))).toThrow('template changed')
+})
 
 it.each(['allowOnlyOneInstallerInstance.nsh', 'installUtil.nsh'])('cleans staged files before %s exits', (helper) => {
   const source = readFileSync(join(dirname(require.resolve('app-builder-lib/package.json')), 'templates/nsis/include', helper), 'utf8')

@@ -7,10 +7,14 @@
   },
   "include": [
     "src/client",
+    "src/changes.ts",
     "src/presented.ts",
     "src/css-modules.d.ts"
   ],
   "references": [
+    {
+      "path": "../ui-settings/tsconfig.client.json"
+    },
     {
       "path": "../../../vendor/cordis"
     },
@@ -21,22 +25,28 @@
       "path": "../connection/tsconfig.client.json"
     },
     {
-      "path": "../locale"
+      "path": "../locale/tsconfig.client.json"
     },
     {
       "path": "../store"
     },
     {
-      "path": "../ui-conversation"
+      "path": "../ui-conversation/tsconfig.client.json"
     },
     {
-      "path": "../ui-chat"
+      "path": "../ui-dockkit"
+    },
+    {
+      "path": "../ui-chat/tsconfig.client.json"
     },
     {
       "path": "../ui-renderer"
     },
     {
       "path": "../ui-primitives"
+    },
+    {
+      "path": "../ui-sidebar-right"
     },
     {
       "path": "../ui-slots"
@@ -51,7 +61,10 @@
       "path": "../ui-tool"
     },
     {
-      "path": "../../fs/tool-present"
+      "path": "../../deliverables/tool-present"
+    },
+    {
+      "path": "../../deliverables/workspace-changes"
     },
     {
       "path": "../../util/workspace-path"

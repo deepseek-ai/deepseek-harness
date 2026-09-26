@@ -91,7 +91,9 @@ export async function resolveTemplateString(
   let cursor = 0
   TOKEN.lastIndex = 0
   for (const token of value.matchAll(TOKEN)) {
-    const [matched, scheme, name] = token as unknown as [string, 'env' | 'credential', string]
+    const matched = token[0]
+    const scheme = token[1]
+    const name = token[2] as string
     out += value.slice(cursor, token.index)
     if (scheme === 'env') {
       const resolved = sources.env(name)

@@ -38,6 +38,7 @@ function trajectorySystemMessageDefinition(inspect: SystemPromptInspector): Conv
       ? { id: String(event.seq), role: 'start' }
       : null,
     start: (_context, match, reader) => {
+      if (match.event.type === 'assistant/live-chunk') throw new Error('system-message requires a durable event')
       const prior = reader.previous<TrajectorySystemMessageState>('trajectory-system-message')?.state
       const state = inspect(prior, match.event)
       const node = state.effective

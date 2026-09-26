@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ReactNode } from 'react'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type {
-  SessionAreaProps, SlotEntryDef, SlotScope, SlotSpec, StoredEntry, Translate,
+  SessionAreaProps, SlotEntryDef, SlotScope, SlotSpec, StoredEntry, StoredFactory, Translate,
 } from './index.ts'
 
 /**
@@ -88,14 +88,14 @@ export interface ScopedStandardSourceBinding extends StandardSourceBinding {
 
 /** One installed source of bindings for a non-root Slot scope. */
 export interface SlotScopeAdapter {
-  /** Binding that follows the current selection, including its absent projection. */
+  /** Default binding inherited by scoped entries, including its absent projection. */
   readonly current: HostObservable<StandardSourceBinding>
   /**
-   * Resolve an already-materialized binding.
-   * @param key - scope identity.
-   * @returns the binding, or `undefined` when the identity is unavailable.
+   * Resolve a stable observable for an explicit scope target or explicit absence.
+   * @param target - domain-owned Provider target, or absence.
+   * @returns the target's current standard-source binding.
    */
-  resolve(key: string): ScopedStandardSourceBinding | undefined
+  bindingSource(target: SessionAreaProps['session']): HostObservable<StandardSourceBinding>
   /**
    * Render the scope owner's area seat over the current binding. The renderer
    * binds this function to the standard `SessionProvider` prop without owning
@@ -166,6 +166,13 @@ export interface SlotRendererHost {
    */
   reportEntryError(key: string, entry: StoredEntry, error: unknown, info: { abdicate: boolean }): void
   /**
+   * Report a contained Factory occurrence crash without retiring its shared definition.
+   * @param name - Factory name whose occurrence crashed.
+   * @param registration - Factory definition or caller registration that owns the crashing Component.
+   * @param error - the crash cause.
+   */
+  reportFactoryError(name: string, registration: StoredEntry | StoredFactory, error: unknown): void
+  /**
    * Declared runtime spec from the declarations ledger.
    * @param key - slot key.
    * @returns the spec, or undefined while the key is undeclared (outlets render empty).
@@ -185,6 +192,51 @@ export interface SlotRendererHost {
    * @returns the instance, or undefined when the entry declares no store.
    */
   storeOf(entry: StoredEntry, scopeBinding: ScopedStandardSourceBinding | undefined): StoreInstanceLike | undefined
+  /**
+   * Resolve a Factory Store for one render occurrence and inherited scope.
+   * @param definition - live Factory definition.
+   * @param scopeBinding - exact Session binding for scoped Factories, undefined for root scope.
+   * @param occurrence - identity token owned by the render position.
+   * @returns the occurrence Store instance, or undefined without a Store declaration.
+   */
+  factoryStoreOf(
+    definition: StoredFactory,
+    scopeBinding: ScopedStandardSourceBinding | undefined,
+    occurrence: object,
+  ): StoreInstanceLike | undefined
+  /**
+   * Retain an exclusive Factory Store occurrence after React commits it.
+   * Repeated setup and cleanup preserve the occurrence's Store identity.
+   * @param definition - the live Factory definition.
+   * @param occurrence - identity token owned by the mounted render position.
+   * @returns an idempotent cleanup function.
+   */
+  retainFactoryOccurrence(definition: StoredFactory, occurrence: object): () => void
+  /**
+   * Subscribe to one Factory definition's registration lifetime.
+   * @param name - Factory name.
+   * @param fn - change callback.
+   * @returns the unsubscribe function.
+   */
+  subscribeFactory(name: string, fn: () => void): () => void
+  /**
+   * Read the monotonic version for one Factory definition.
+   * @param name - Factory name.
+   * @returns the current definition version.
+   */
+  getFactoryVersion(name: string): number
+  /**
+   * Read one live Factory definition.
+   * @param name - Factory name.
+   * @returns the definition, or undefined while unregistered.
+   */
+  factoryOf(name: string): StoredFactory | undefined
+  /**
+   * Check retained Factory render authority.
+   * @param definition - a previously resolved Factory definition.
+   * @returns whether that exact definition remains live.
+   */
+  isFactoryLive(definition: StoredFactory): boolean
   /** Root standard data assembled from domain-owned contributions. */
   readonly root: HostObservable<StandardSourceBinding>
   /** Monotonic source updated whenever the installed scope-adapter roster changes. */

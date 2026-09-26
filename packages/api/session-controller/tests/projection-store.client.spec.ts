@@ -1,11 +1,12 @@
 /**
  * Projection value store (push model; session-projection subsystem page:
- * docs/subsystems/session-projection.md): the single
- * higher-seq-wins rule on both paths (a stale baseline cannot overwrite a
- * newer push frame; a replayed frame cannot regress), capability absence as
- * undefined, generation invalidation, and the Session/manager wiring (tail-page
- * seeding, control-stream projection routing pre- and post-instantiation, the
- * list rows' title projection).
+ * docs/subsystems/session-projection.md): the higher-seq-wins rule among
+ * sequenced writes (a stale baseline cannot overwrite a newer push frame; a
+ * replayed frame cannot regress), cached list values yielding to every
+ * sequenced write regardless of seq, capability absence as undefined,
+ * generation invalidation, and the Session/manager wiring (tail-page seeding,
+ * control-stream projection routing pre- and post-instantiation, the list
+ * rows' title projection).
  */
 import { describe, expect } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
@@ -43,6 +44,18 @@ function makeManager(mock: RemoteMock, remote: ClientTestFixtures['remote']): Se
 }
 
 describe('Session projection value semantics', () => {
+  it('exposes a watermark only for current Host-sequenced values', () => {
+    const store = new ProjectionValueStore()
+    expect(store.seqOf('inbox')).toBeUndefined()
+    store.applyCached({ inbox: { 'next-turn': [], 'next-step': [] } })
+    expect(store.seqOf('inbox')).toBeUndefined()
+    store.apply('inbox', { 'next-turn': [], 'next-step': [] }, SessionSeq(4))
+    store.apply('inbox', { 'next-turn': [], 'next-step': [] }, SessionSeq(2))
+    expect(store.seqOf('inbox')).toBe(4)
+    store.seed({ asOfSeq: SessionSeq(6), values: {} })
+    expect(store.seqOf('inbox')).toBeUndefined()
+  })
+
   it('reads undefined until a value lands (capability absence)', () => {
     const store = new ProjectionValueStore()
     expect(store.get('test/marks')).toBeUndefined()
@@ -73,6 +86,48 @@ describe('Session projection value semantics', () => {
     // …and an omitting fresh cut clears (capability absent as of the cut).
     store.seed({ asOfSeq: SessionSeq(40), values: {} })
     expect(store.get('test/marks')).toBeUndefined()
+  })
+
+  it('cached values fill empty keys only and never displace a sequenced row', () => {
+    const store = new ProjectionValueStore()
+    store.applyCached({ 'test/marks': { marks: ['cached'] }, title: 'Cached title' })
+    expect(store.values()).toEqual({ 'test/marks': { marks: ['cached'] }, title: 'Cached title' })
+    // A later cached view replaces an earlier one: neither carries a seq.
+    store.applyCached({ title: 'Cached again' })
+    expect(store.get('title')).toBe('Cached again')
+    // Once a sequenced row exists, cached values for that key are ignored.
+    store.apply('title', 'Pushed', SessionSeq(0))
+    store.applyCached({ title: 'Cached late', 'test/marks': { marks: ['cached late'] } })
+    expect(store.get('title')).toBe('Pushed')
+    expect(store.get('test/marks')).toEqual({ marks: ['cached late'] })
+  })
+
+  it('every sequenced write outranks a cached row regardless of seq', () => {
+    const store = new ProjectionValueStore()
+    store.applyCached({ 'test/marks': { marks: ['cached'] }, title: 'Cached title', schedule: [] })
+    // A frame at the lowest cursor still replaces the cached value.
+    store.apply('title', 'Frame at -1', -1)
+    expect(store.get('title')).toBe('Frame at -1')
+    // A baseline discards every cached row first: the carried key lands at its
+    // cut, the omitted keys clear even though a cached row has no seq to compare.
+    store.seed({ asOfSeq: SessionSeq(2), values: { 'test/marks': { marks: ['baseline-2'] } } })
+    expect(store.values()).toEqual({ 'test/marks': { marks: ['baseline-2'] } })
+    // The same baseline rule keeps protecting newer sequenced rows.
+    store.apply('title', 'Frame at 9', SessionSeq(9))
+    store.applyCached({ title: 'Cached late' })
+    store.seed({ asOfSeq: SessionSeq(5), values: { 'test/marks': { marks: ['baseline-5'] } } })
+    expect(store.values()).toEqual({ 'test/marks': { marks: ['baseline-5'] }, title: 'Frame at 9' })
+  })
+
+  it('notifies faces for cached fills and for their discard by a baseline', async () => {
+    const store = new ProjectionValueStore()
+    const observed: unknown[] = []
+    store.faceOf('title').subscribe(() => { observed.push(store.get('title')) })
+    store.applyCached({ title: 'Cached title' })
+    await Promise.resolve()
+    store.seed({ asOfSeq: SessionSeq(3), values: {} })
+    await Promise.resolve()
+    expect(observed).toEqual(['Cached title', undefined])
   })
 
   it('clears all generation watermarks without replacing subscribed faces', async () => {
@@ -187,7 +242,7 @@ describe('manager frame routing', () => {
   it('preserves a newer title when the control baseline omits it', async ({ mock, remote }) => {
     const manager = makeManager(mock, remote)
     remote.session.list.mockResolvedValue(ok({
-      items: [{ sessionId: sid('s1'), updatedAt: 1, running: false, blank: false }],
+      items: [{ agentAvailable: true, sessionId: sid('s1'), updatedAt: 1, running: false, blank: false }],
     }))
     await manager.refreshList()
     manager.handleControlFrame({
@@ -198,7 +253,6 @@ describe('manager frame routing', () => {
     manager.handleControlFrame({
       type: 'baseline',
       value: {
-        jobs: {},
         projections: { [sid('s1')]: { asOfSeq: 2, values: {} } },
       },
     })
@@ -206,12 +260,77 @@ describe('manager frame routing', () => {
     expect(manager.getListSnapshot().items[0]?.title).toBe('Projected title')
   })
 
+  it('routes a cached list block below every sequenced write: a Session baseline at any cut replaces it and a list refresh cannot restore it', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    remote.session.list.mockResolvedValue(ok({
+      items: [{ agentAvailable: false,
+        sessionId: sid('s1'), updatedAt: 1, running: false, blank: false,
+        // A cold row viewed from a stale record whose own watermark outruns
+        // the connected Session's cut.
+        projections: { kind: 'cached', asOfSeq: 40, values: { title: 'Cached title', 'test/marks': { marks: ['cached'] } } },
+      }],
+    }))
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items[0]?.title).toBe('Cached title')
+
+    // The connected Session answers at a lower cut: it still wins outright,
+    // and the key it omits clears rather than surviving on its stale seq.
+    manager.handleControlFrame({
+      type: 'baseline',
+      value: {
+        projections: { [sid('s1')]: { asOfSeq: 2, values: { title: 'Connected title' } } },
+      },
+    })
+    await Promise.resolve()
+    expect(manager.getListSnapshot().items[0]?.title).toBe('Connected title')
+    expect(manager.getListSnapshot().items[0]?.projectionValues).toEqual({ title: 'Connected title' })
+
+    // A later list refresh serving the stale block again cannot displace the
+    // sequenced value, whatever watermark the block claims.
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items[0]?.title).toBe('Connected title')
+    expect(manager.get(sid('s1')).projections.get('test/marks')).toEqual({ marks: ['cached'] })
+  })
+
+  it('merges a sequenced list block under higher-seq-wins: a lower-cut baseline neither overwrites nor clears it', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    remote.session.list.mockResolvedValue(ok({
+      items: [{ agentAvailable: true,
+        sessionId: sid('s1'), updatedAt: 1, running: false, blank: false,
+        // The Host's live registry served the block: its watermark shares the connection's seq space.
+        projections: { kind: 'sequenced', asOfSeq: 40, values: { title: 'Live title', 'test/marks': { marks: ['live'] } } },
+      }],
+    }))
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items[0]?.title).toBe('Live title')
+
+    // A delayed baseline at a lower cut is stale against the block: it can
+    // neither overwrite the carried key nor clear the omitted one.
+    manager.handleControlFrame({
+      type: 'baseline',
+      value: {
+        projections: { [sid('s1')]: { asOfSeq: 2, values: { title: 'Delayed baseline' } } },
+      },
+    })
+    await Promise.resolve()
+    expect(manager.getListSnapshot().items[0]?.title).toBe('Live title')
+    expect(manager.get(sid('s1')).projections.get('test/marks')).toEqual({ marks: ['live'] })
+
+    // A frame past the block's watermark still advances it.
+    manager.handleControlFrame({
+      type: 'projection', sessionId: sid('s1'), key: 'title', value: 'Frame title', seq: 41,
+    })
+    await Promise.resolve()
+    expect(manager.getListSnapshot().items[0]?.title).toBe('Frame title')
+  })
+
   it('projects every retained value into list rows with stable snapshot identity', async ({ mock, remote }) => {
     const manager = makeManager(mock, remote)
     remote.session.list.mockResolvedValue(ok({
-      items: [{
+      items: [{ agentAvailable: true,
         sessionId: sid('s1'), updatedAt: 1, running: false, blank: false,
         projections: {
+          kind: 'sequenced',
           asOfSeq: 2,
           values: { 'test/marks': { marks: ['baseline'] } },
         },
@@ -232,16 +351,21 @@ describe('manager frame routing', () => {
     expect(manager.getListSnapshot().items[0]?.projectionValues).not.toBe(baseline)
   })
 
-  it('drops the projection store with the removed session', async ({ mock, remote }) => {
+  it.for([undefined, []])('drops the removed ordinary Session store with catalog %s', async (catalog, { mock, remote }) => {
     const manager = makeManager(mock, remote)
     remote.session.list.mockResolvedValue(ok({
-      items: [{ sessionId: sid('s1'), updatedAt: 1, running: false, blank: false }],
+      items: [{ agentAvailable: true, sessionId: sid('s1'), updatedAt: 1, running: false, blank: false }],
     }))
     await manager.refreshList()
     manager.handleControlFrame({
       type: 'projection', sessionId: sid('s1'), key: 'title', value: 'Doomed', seq: 4,
     })
+    if (catalog !== undefined) {
+      manager.handleControlFrame({ type: 'projection', sessionId: sid('s1'), key: 'subagentCatalog', value: catalog, seq: 4 })
+    }
     manager.handleSessionRemoved(sid('s1'))
+    expect(manager.getListSnapshot().projectionsBySession[sid('s1')]).toBeUndefined()
     expect(manager.get(sid('s1')).projections.get('title')).toBeUndefined()
+    await manager.dispose()
   })
 })

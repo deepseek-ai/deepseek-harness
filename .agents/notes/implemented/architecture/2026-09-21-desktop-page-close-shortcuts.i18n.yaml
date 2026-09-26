@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-21-desktop-page-close-shortcuts.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-21-desktop-page-close-shortcuts.md
+/agent-note-desktop-close-shortcuts-follow-page-focus:
+  en: e6ce0bc9592af8ba
+  zh: b43fa4c48c634e27
+/agent-note-desktop-close-shortcuts-follow-page-focus/problem:
+  en: feb9d491ad4a9016
+  zh: 291f0e6c913b0b19
+/agent-note-desktop-close-shortcuts-follow-page-focus/decision:
+  en: c587d88575b6ce7e
+  zh: 2287cf4d6d2e7587
+/agent-note-desktop-close-shortcuts-follow-page-focus/alternatives-considered:
+  en: 10c7bb2fc87bdd16
+  zh: 796ecde8bcf09d34
+/agent-note-desktop-close-shortcuts-follow-page-focus/consequences:
+  en: aea659e749840caa
+  zh: e75d757165055a55

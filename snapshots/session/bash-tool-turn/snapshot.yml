@@ -2,6 +2,6 @@ version: 1
 scenario: bash-tool-turn
 profile: headless
 composition: default
-recording: live
+recording: authored
 header:
   class: default

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-gateway",
   "description": "Typert Remote Host dispatcher and Client API endpoint",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -27,7 +27,11 @@
       "default": "./lib/types/types.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./stream-protocol": {
+      "types": "./lib/types/stream-protocol.d.ts",
+      "default": "./lib/types/stream-protocol.js"
+    }
   },
   "dsh": {
     "client": {
@@ -51,24 +55,26 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/dsh-deque": "workspace:^",
-    "@deepseek-ai/dsh-timeout": "workspace:^",
-    "@deepseek-ai/schemastery": "workspace:^",
+    "@deepseek-ai/dsh-deque": "workspace:*",
+    "@deepseek-ai/dsh-timeout": "workspace:*",
+    "@deepseek-ai/schemastery": "workspace:~",
     "ws": "^8.21.0",
-    "@deepseek-ai/dsh-typert-protocol": "workspace:^"
+    "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-client-connection": "workspace:*"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-brand": "workspace:^",
-    "@deepseek-ai/dsh-client-connection": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^",
-    "@deepseek-ai/dsh-remote-mock": "workspace:^",
-    "@deepseek-ai/dsh-typert-registry": "workspace:^",
-    "@deepseek-ai/dsh-util-crypto": "workspace:^",
+    "@deepseek-ai/dsh-brand": "workspace:*",
+    "@deepseek-ai/dsh-cmdline": "workspace:*",
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
+    "@deepseek-ai/dsh-host-webserver": "workspace:*",
+    "@deepseek-ai/dsh-remote-mock": "workspace:*",
+    "@deepseek-ai/dsh-typert-registry": "workspace:*",
+    "@deepseek-ai/dsh-util-crypto": "workspace:*",
     "@types/ws": "^8.18.1",
-    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cordis": "workspace:~",
     "zod": "^4.4.3"
   }
 }

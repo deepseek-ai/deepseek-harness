@@ -1,6 +1,7 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for BRAND_GUIDELINES.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write BRAND_GUIDELINES.md
-BRAND_GUIDELINES.md: 900cf7bcec70ff78c6f55ed535897239cd4648df
-BRAND_GUIDELINES.zh.md: 94b239b6f6f4021f52da233cbefd23b4cc11f675
+/deepseek-harness-brand-asset-usage-guidelines:
+  en: 23933888033edf18
+  zh: eaa5afb9e2cb4d25

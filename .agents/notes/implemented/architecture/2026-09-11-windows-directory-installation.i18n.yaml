@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-11-windows-directory-installation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-11-windows-directory-installation.md
-2026-09-11-windows-directory-installation.md: 8208c6cc4b28de8d1ab947cb8e6afba7bfa4f673
-2026-09-11-windows-directory-installation.zh.md: d337397e8ea654d14cccd0839460763b66a19457
+/agent-note-replace-windows-application-directories-after-staging:
+  en: 7cdd071dd6ad760f
+  zh: eb8510c6c09f0068
+/agent-note-replace-windows-application-directories-after-staging/problem:
+  en: fa0015dca8cd9e85
+  zh: a826baa59c0a3bd1
+/agent-note-replace-windows-application-directories-after-staging/decision:
+  en: 5bec9a233d21bb35
+  zh: 50e8ba778b14b48e
+/agent-note-replace-windows-application-directories-after-staging/consequences:
+  en: 3562fbc117967fb3
+  zh: 6600b28ea6202f68
+/agent-note-replace-windows-application-directories-after-staging/alternatives-considered:
+  en: 0971baacd045ddef
+  zh: c908624104e242f9
+/agent-note-replace-windows-application-directories-after-staging/verification:
+  en: 650fdccdf35ad9d3
+  zh: 6069b9acb5f03878

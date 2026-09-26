@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-08-agent-scope-contexts.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-08-agent-scope-contexts.md
-2026-07-08-agent-scope-contexts.md: 45e635b7bc3138d4e90a25a06ff23b3b57a9415e
-2026-07-08-agent-scope-contexts.zh.md: aac860734e744843c3b9e7d55e5bc7a150763090
+/agent-note-the-agent-is-a-registration-scope:
+  en: f767894b8308f1a0
+  zh: 4ff0aead6ee4e27b
+/agent-note-the-agent-is-a-registration-scope/problem:
+  en: 87634b46a5642328
+  zh: 2adce8b041626437
+/agent-note-the-agent-is-a-registration-scope/decision:
+  en: ac58e62f780b0879
+  zh: 6b077226de04a8fa
+/agent-note-the-agent-is-a-registration-scope/decision/registration-origin-chooses-visibility-and-cleanup:
+  en: 1ec8e54543272e1b
+  zh: b5b1695a805574a2
+/agent-note-the-agent-is-a-registration-scope/decision/the-operation-chooses-the-view:
+  en: 2e236d399efdc0b2
+  zh: 00a7ba20f90862c6
+/agent-note-the-agent-is-a-registration-scope/decision/scoped-events-keep-routing-separate-from-event-data:
+  en: df5f5e4c1de44474
+  zh: d851c02959d02380
+/agent-note-the-agent-is-a-registration-scope/decision/creation-publishes-last-and-disposal-revokes-last:
+  en: f46920b4945e0e6d
+  zh: 870a157205883144
+/agent-note-the-agent-is-a-registration-scope/security-and-authority-are-non-goals:
+  en: 5ffc5a8f65ce7dfe
+  zh: 3362f236356a8033
+/agent-note-the-agent-is-a-registration-scope/alternatives-considered:
+  en: bf43310538280f62
+  zh: e4940ff47c5d47b5
+/agent-note-the-agent-is-a-registration-scope/alternatives-considered/pass-an-agent-option-to-every-registration:
+  en: 37e7487b1f1eb87a
+  zh: eeddbaf21eee7ebc
+/agent-note-the-agent-is-a-registration-scope/alternatives-considered/filter-events-while-keeping-registries-global:
+  en: 7eb2628d51ea9ed0
+  zh: e58f05faf0e95712
+/agent-note-the-agent-is-a-registration-scope/alternatives-considered/create-one-service-graph-per-agent:
+  en: 2fd1c41c3d1bc6ca
+  zh: cffad44a2c69330e
+/agent-note-the-agent-is-a-registration-scope/alternatives-considered/inherit-parent-registration-scopes:
+  en: 01f989446aab1cf1
+  zh: 8f5c9018b7b84c94
+/agent-note-the-agent-is-a-registration-scope/consequences:
+  en: 65c8f47d1607b276
+  zh: 950b86b4682f7a0e

@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/session-title-llm/README.md
-README.md: 6a1cce9e2ce2d6725562af47dac4e2f6ef5aa6e3
-README.zh.md: 4b6e06377443de8fc6a9111e0c127c2d30f06e35
+/:
+  en: da5040a980850a60
+  zh: 0a1c0f6afbfa6c9e
+/deepseek-ai-dsh-session-title-llm:
+  en: 7ef6dbec913fd508
+  zh: 87c2448be60fb88e
+/deepseek-ai-dsh-session-title-llm/summary:
+  en: 741cd917e857bd99
+  zh: 43c290b6baf222e6
+/deepseek-ai-dsh-session-title-llm/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-session-title-llm/use-this-package:
+  en: fa90841c0783ae27
+  zh: 8fbd293f8050d345
+/deepseek-ai-dsh-session-title-llm/use-this-package/registering-a-provider:
+  en: cf61c021b1bdb52f
+  zh: dac17588e4143815
+/deepseek-ai-dsh-session-title-llm/use-this-package/route-and-failure-contract:
+  en: 400a69851b523f0b
+  zh: 90c147838ba38f82
+/deepseek-ai-dsh-session-title-llm/use-this-package/configuration:
+  en: 3c53156bd151068b
+  zh: 2bf03f0831025e78
+/deepseek-ai-dsh-session-title-llm/understand-the-implementation:
+  en: aa0fd15305df90bb
+  zh: d28e3a28bb324167
+/deepseek-ai-dsh-session-title-llm/understand-the-implementation/design-concept:
+  en: be8c34c44b1a8a90
+  zh: 2a308143c209b5d2
+/deepseek-ai-dsh-session-title-llm/understand-the-implementation/source-map:
+  en: 0fdc928704abdd3a
+  zh: bd4c0a7dd47578cf
+/deepseek-ai-dsh-session-title-llm/understand-the-implementation/request-flow:
+  en: 4a4ca58e3ae2e075
+  zh: daf4a642d815833b
+/deepseek-ai-dsh-session-title-llm/further-exploration:
+  en: 641f31c35c48916b
+  zh: 8e809fbdfef61b61
+/deepseek-ai-dsh-session-title-llm/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-session-title-llm/model-experience/auxiliary-title-request:
+  en: 7dcc6f74474f78e7
+  zh: 64cffa0b4d94c69d
+/deepseek-ai-dsh-session-title-llm/model-experience/auxiliary-title-request/what-the-model-sees:
+  en: d3f50a8dab65c53f
+  zh: 6d4f2e4183564e84
+/deepseek-ai-dsh-session-title-llm/model-experience/auxiliary-title-request/token-effect:
+  en: 4d59f31ebbff4d31
+  zh: 6104f3b7a4c690af
+/deepseek-ai-dsh-session-title-llm/model-experience/auxiliary-title-request/kv-cache-effect:
+  en: 5d3b5b7c8d8b4b67
+  zh: 1b231d96bf6ca545
+/deepseek-ai-dsh-session-title-llm/known-limitations-and-deferred-work:
+  en: 8510fb2c4ed03011
+  zh: 29fb15ec84dccf56
+/deepseek-ai-dsh-session-title-llm/known-limitations-and-deferred-work/dev-note:
+  en: 2d422956999aa8f8
+  zh: 90441550709f6692

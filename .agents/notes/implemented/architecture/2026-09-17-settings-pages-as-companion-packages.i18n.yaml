@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-17-settings-pages-as-companion-packages.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-17-settings-pages-as-companion-packages.md
+/agent-note-settings-pages-as-companion-packages:
+  en: ada5eadeb6e921e4
+  zh: 1cc804b1720c2c98
+/agent-note-settings-pages-as-companion-packages/problem:
+  en: 8c23fffd3cef6ea8
+  zh: 6072e1e4197afd7c
+/agent-note-settings-pages-as-companion-packages/decision:
+  en: d0610e0445b8fdb7
+  zh: 5e8af1fce960cae5
+/agent-note-settings-pages-as-companion-packages/alternatives-considered:
+  en: cc29e94d925d84b4
+  zh: bdaec6d6ff2d511a
+/agent-note-settings-pages-as-companion-packages/consequences:
+  en: ef4733505d43fb1e
+  zh: 320475e4b5a0f5e0
+/agent-note-settings-pages-as-companion-packages/testing:
+  en: 92bef8e1c609359b
+  zh: c4f2016243441b1e

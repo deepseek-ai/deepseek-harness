@@ -1,0 +1,21 @@
+/* Components own offsets; dense tables and toolbars may keep a 1px ring. */
+:root {
+  --dsw-focus-ring-width: 2px;
+}
+
+/* The fallback names the colour and the standard width, never the style: a control that
+ * disables its outline keeps `none` and paints nothing. Without the width, Chromium's
+ * unnamed ring stayed at `auto 1px` while every declared ring used the standard geometry.
+ * Declared rings also read this color, including rings on descendants and pseudo-elements. */
+:focus-visible {
+  outline-color: var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-width: var(--dsw-focus-ring-width);
+}
+
+/* ui-primitives/input-modality publishes the attribute. Editable controls keep
+ * their focus feedback on click; other controls reveal rings on keyboard
+ * navigation. Only ring paint is suppressed, not elevation or selected borders. */
+html[data-input-modality='pointer'] body :focus-visible:not(:read-write) {
+  --dsw-focus-ring-color: transparent;
+  outline-color: transparent;
+}

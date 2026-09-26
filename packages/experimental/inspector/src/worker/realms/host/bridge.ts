@@ -19,7 +19,7 @@ interface DynamicInspectorSession {
 
 /** Connection-local carrier for requests and notifications from the Host V8 inspector. */
 export class HostInspectorSession {
-  private readonly session = new Session() as unknown as DynamicInspectorSession
+  private readonly session = new Session() as DynamicInspectorSession
   private readonly listeners = new Set<(message: HostInspectorNotification) => void>()
   private connected = false
   private failure: string | undefined

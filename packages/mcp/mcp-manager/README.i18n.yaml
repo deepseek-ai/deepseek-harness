@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/mcp/mcp-manager/README.md
-README.md: c9562087fadf21b49e72ddccbc1bffcde384c6db
-README.zh.md: 72f1407cb3cc4334ea5d1bcce2b0ccf0b8e1b337
+/:
+  en: ddff8495b603bcd2
+  zh: c252d0208dc2d308
+/deepseek-ai-dsh-mcp-manager:
+  en: 4aaba88431d337f0
+  zh: dbeb71a252aa7748
+/deepseek-ai-dsh-mcp-manager/summary:
+  en: 6303ab1bc6e72f0f
+  zh: 92d49435aca4f38e
+/deepseek-ai-dsh-mcp-manager/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: f14f34fce35a8d90
+/deepseek-ai-dsh-mcp-manager/use-this-package:
+  en: f376958a5caddc2c
+  zh: 94b3e04b6a996c85
+/deepseek-ai-dsh-mcp-manager/use-this-package/when-to-choose-it:
+  en: f8b9b5572fe8002b
+  zh: 79b6e2c8b57288d5
+/deepseek-ai-dsh-mcp-manager/use-this-package/minimal-configuration:
+  en: f361bbfebf52baf1
+  zh: a8729d31f0d587fa
+/deepseek-ai-dsh-mcp-manager/use-this-package/managing-servers-at-runtime:
+  en: fc60ed8e7f85e54f
+  zh: 5bb2a1983992393f
+/deepseek-ai-dsh-mcp-manager/use-this-package/observing-and-recovering:
+  en: ec233622e1a97c35
+  zh: 73957928c9a11d49
+/deepseek-ai-dsh-mcp-manager/understand-the-implementation:
+  en: 8a74186fa5bfe79d
+  zh: c7c952876ca2992b
+/deepseek-ai-dsh-mcp-manager/understand-the-implementation/design-philosophy:
+  en: 5514b0c402a0fc8d
+  zh: 4dd87fa425e71d6b
+/deepseek-ai-dsh-mcp-manager/understand-the-implementation/source-map:
+  en: adfba670ac5cd247
+  zh: b58f85c7f3a7da8e
+/deepseek-ai-dsh-mcp-manager/understand-the-implementation/lifecycle-notes:
+  en: 3484bb9016f2c96e
+  zh: 3fc03b2600b07cbb
+/deepseek-ai-dsh-mcp-manager/further-exploration:
+  en: 1383d0b5ab881285
+  zh: bef9f5386cb092e1
+/deepseek-ai-dsh-mcp-manager/model-experience:
+  en: 622033747c4c0066
+  zh: 821213fd61a98105
+/deepseek-ai-dsh-mcp-manager/model-experience/kv-cache-effect:
+  en: 7a8d0bf11425040b
+  zh: b39181f89ba4fbe8
+/deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work:
+  en: 2142f4a3a76ccefb
+  zh: 21f364f04a00bd5b
+/deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work/dev-note:
+  en: 43ff18c3c9eed60d
+  zh: 11416a4c1b01f2ef

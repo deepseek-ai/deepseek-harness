@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-18-model-selected-subagent-routes.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-model-selected-subagent-routes.md
-2026-08-18-model-selected-subagent-routes.md: 9cdbdbec3b79a93043fa6ae95a6a6dedf6072086
-2026-08-18-model-selected-subagent-routes.zh.md: 3b81f5417339325dd60884049a853d1094a9f1eb
+/agent-note-model-selected-subagent-routes:
+  en: 1e719fd754836549
+  zh: 603cce7a5f9ec6bd
+/agent-note-model-selected-subagent-routes/problem:
+  en: f4010276228f4441
+  zh: 50ac98640dbf519a
+/agent-note-model-selected-subagent-routes/decision:
+  en: 39836773d1830515
+  zh: 537c96bfa93573e7
+/agent-note-model-selected-subagent-routes/alternatives-considered:
+  en: 3b9fd91294fbfd27
+  zh: 2854dd690ead3d15
+/agent-note-model-selected-subagent-routes/consequences:
+  en: 55969d3742da39ce
+  zh: a248167f9bb2fa4e
+/agent-note-model-selected-subagent-routes/related-decisions:
+  en: 28c4eb2e90488ff0
+  zh: ba59bb2fafdd4720

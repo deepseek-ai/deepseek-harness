@@ -1,0 +1,10 @@
+version: 1
+scenario: account-provider-signout
+profile: sdk
+composition: sdk-account-provider-signout
+recording: authored
+header:
+  class: sdk-account-provider-signout
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

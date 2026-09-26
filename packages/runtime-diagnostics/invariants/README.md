@@ -65,7 +65,7 @@ Each companion protects relationships its package owns, and a companion installs
 | `dsh-permission-presets`, `dsh-user-approval`, `dsh-commands` | Preset references to live presets, approval asked/decided pairing, command run/done pairing |
 | `dsh-jobs`, `dsh-tool-todo`, `dsh-time-context` | Job snapshot field relationships, whole-list todo shape, durable clock readings |
 | `dsh-credentials`, `dsh-settings`, `dsh-storage-domain`, `dsh-workspace` | Commit events against the live service or memory state, entity-cache mirroring |
-| `dsh-agent-presets`, `dsh-session-title`, `dsh-plan-mode`, `dsh-schedule` | Preset mount placement, title source citation, plan-mode payload, schedule stream |
+| `dsh-agent-preset-registry`, `dsh-session-title`, `dsh-plan-mode`, `dsh-schedule` | Preset mount placement, title source citation, plan-mode payload, schedule stream |
 | `dsh-client-hmr`, `dsh-client-modules`, `dsh-client-runtime` | Browser/node-half stat-watcher lifecycle, boot entry graph, slot mutation versioning |
 
 Every other workspace package omits the companion and states the package-specific reason in its README.

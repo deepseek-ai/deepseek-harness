@@ -197,6 +197,12 @@ export interface SessionInput extends InputTarget {
    * @param text - notice body.
    */
   notify(level: 'info' | 'error', text: string): void
+
+  /**
+   * Return the keyboard to the composer with the caret it last held, for
+   * callers that took focus away from it (an overlay that held its own).
+   */
+  focus(): void
   /** Input state store (InputZone currency + decorations read here). */
   readonly state: SnapshotStore<InputState>
 }
@@ -214,6 +220,15 @@ export interface SessionInputResolver {
  * paste/…) stay InputBar-private and never ride this face.
  */
 export interface InputActions {
+  /** @returns a revision-guarded copy of the current editor selection. */
+  captureInsertion(): TokenSpan
+  /**
+   * Insert asynchronous text without replacing subsequent edits or reference chips.
+   * @param text - plain text to insert in one undo step.
+   * @param span - captured selection and draft revision.
+   * @returns false when the draft changed or submission locked the editor.
+   */
+  insertText(text: string, span: TokenSpan): boolean
   /** Replace the whole draft (persisted-draft seed and programmatic writes). */
   setDraft(text: string): void
   /** Append ordered browser-owned attachment ids; busy admission phases refuse. */

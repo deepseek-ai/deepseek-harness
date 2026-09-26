@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-09-18-chat-navigation-performance.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-18-chat-navigation-performance.md
+/agent-note-bound-turn-navigation-work-and-batch-historical-jumps:
+  en: c37ea37bfa045a00
+  zh: 88a75b8739e99fb5
+/agent-note-bound-turn-navigation-work-and-batch-historical-jumps/problem:
+  en: c3ca28379b414fc5
+  zh: 4a25378cef3f2259
+/agent-note-bound-turn-navigation-work-and-batch-historical-jumps/decision:
+  en: a15c7c13f167e5ac
+  zh: a15c7c13f167e5ac
+/agent-note-bound-turn-navigation-work-and-batch-historical-jumps/decision/fixed-pitch-virtual-rail:
+  en: 79e61c0dbffe6f01
+  zh: 47dd4758d115f8bb
+/agent-note-bound-turn-navigation-work-and-batch-historical-jumps/decision/two-layer-transcript-navigation:
+  en: 022a8ad83ac099f1
+  zh: b4393e39bfdd401d
+/agent-note-bound-turn-navigation-work-and-batch-historical-jumps/decision/one-publication-per-historical-jump:
+  en: 510e80edc58ebdea
+  zh: cfbff46bff1e43bb
+/agent-note-bound-turn-navigation-work-and-batch-historical-jumps/decision/theoretical-work-model:
+  en: 6786e39e812ad355
+  zh: eca00072cf880a08
+/agent-note-bound-turn-navigation-work-and-batch-historical-jumps/alternatives-considered:
+  en: f590762936560d5c
+  zh: 0fc836bf1841733e
+/agent-note-bound-turn-navigation-work-and-batch-historical-jumps/consequences:
+  en: 5f50c3d4a539f48c
+  zh: 5aee80a99d52233e

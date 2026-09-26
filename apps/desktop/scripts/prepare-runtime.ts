@@ -1,9 +1,11 @@
 /** Prepare the target Electron distribution and pinned pnpm CLI. */
 
+import { packagingStep } from './packaging-step.mjs'
 import { execFileSync } from 'node:child_process'
 import { chmodSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { parseArgs } from 'node:util'
 import { downloadArtifact } from '@electron/get'
 import extractZip from 'extract-zip'
 import { resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
@@ -25,14 +27,16 @@ function preparePnpm(): string {
 }
 
 async function main(): Promise<void> {
+  const { values } = parseArgs({ options: { 'defer-primary-runtime-smoke': { type: 'boolean', default: false } } })
   const target = resolveDesktopBuildTarget()
   const platform = target.startsWith('mac-') ? 'darwin' : 'win32'
   const arch = target.endsWith('arm64') ? 'arm64' : 'x64'
   const require = createRequire(import.meta.url)
   const { version } = require('electron/package.json') as { version: string }
-  const archive = await downloadArtifact({ version, platform, arch, artifactName: 'electron', cacheRoot: BUILD_PATHS.downloads })
+  const archive = await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'download:electron',
+    () => downloadArtifact({ version, platform, arch, artifactName: 'electron', cacheRoot: BUILD_PATHS.downloads }))
   rmSync(BUILD_PATHS.electron, { recursive: true, force: true })
-  await extractZip(archive, { dir: BUILD_PATHS.electron })
+  await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'extract:electron', () => extractZip(archive, { dir: BUILD_PATHS.electron }))
   const executable = join(BUILD_PATHS.electron, platform === 'win32' ? 'electron.exe' : 'Electron.app/Contents/MacOS/Electron')
   const nodeVersion = execFileSync(executable, ['-p', 'process.versions.node'], {
     encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
@@ -47,7 +51,8 @@ async function main(): Promise<void> {
     node: nodeVersion,
     pnpm: pnpmVersion,
   }, undefined, 2)}\n`)
-  await preparePrimaryRuntime()
+  await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:primary-runtime',
+    () => preparePrimaryRuntime({ deferSmoke: values['defer-primary-runtime-smoke'] }))
 }
 
 await main()

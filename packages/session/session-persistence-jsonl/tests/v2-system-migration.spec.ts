@@ -1,6 +1,6 @@
 import { freezeMessage, MessageId } from '@deepseek-ai/dsh-llm'
 import { Context } from '@deepseek-ai/cordis'
-import { Session, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { SessionFormatUnsupportedError } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
@@ -95,7 +95,7 @@ function assertRequestHistory(events: readonly SessionEvent[], handle: SessionHa
 }
 
 describe('V2 system prompts through current Session and JSONL persistence', () => {
-  it.each([undefined, ''])('prepares prompts and clear (%j) read-only, then publishes V3 without replacing V2', async (clear) => {
+  it.each([undefined, ''])('prepares prompts and clear (%j) read-only, then publishes the current generation without replacing V2', async (clear) => {
     const sourcePath = await writeV2([
       { type: 'turn/start', data: { turn: 1 } },
       { type: 'step/start', data: { turn: 1, step: 1 } },
@@ -110,7 +110,7 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
     const reader = await ctx.sessionPersistence.open(id, 'read')
     let prepared: readonly SessionEvent[]
     try {
-      expect(reader.header.version).toBe(3)
+      expect(reader.header.version).toBe(SESSION_FORMAT_VERSION)
       prepared = (await reader.read()).events
       expect(prepared.map(event => event.seq)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
       expect(prepared.filter(event => event.type !== 'system/message').map(event => [event.type, event.time])).toEqual([
@@ -156,10 +156,10 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
     }
     expect(await observeFile(sourcePath)).toEqual(original)
     expect((await readdir(directory)).filter(name => name.endsWith('.jsonl')).sort())
-      .toEqual(['session.v2.jsonl', 'session.v3.jsonl'])
-    const publishedPath = generationLogPath(root, undefined, id, 3, 'none')
+      .toEqual(['session.v2.jsonl', `session.v${SESSION_FORMAT_VERSION}.jsonl`])
+    const publishedPath = generationLogPath(root, undefined, id, SESSION_FORMAT_VERSION, 'none')
     const published = (await readFile(publishedPath, 'utf8')).trimEnd().split('\n').map(line => JSON.parse(line) as unknown)
-    expect(published[0]).toMatchObject({ type: 'session', version: 3, id })
+    expect(published[0]).toMatchObject({ type: 'session', version: SESSION_FORMAT_VERSION, id })
     expect(published.slice(1)).toEqual(prepared)
 
     const reopened = await mount()
@@ -223,7 +223,7 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
       session.append('step/start', { turn: 2, step: 1 })
       session.append('system/message', {
         turn: 2, step: 1,
-        message: freezeMessage({ role: 'system', id: MessageId('resumed-system'), content: [{ type: 'text', text: 'resumed prompt' }], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } }),
+        message: freezeMessage({ role: 'system', id: MessageId('resumed-system'), content: [{ type: 'text', text: 'resumed prompt' }], source: { kind: 'system-prompt' } }),
       }, { surfaceOp: { op: 'replace', startSeq: SessionSeq(4), endSeq: SessionSeq(4) }, sourceEventSeqs: [SessionSeq(4)] })
       session.append('step/end', { turn: 2, step: 1 })
       session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
@@ -268,7 +268,7 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
       .toEqual(['session.v1.jsonl', 'session.v2.jsonl'])
   })
 
-  it('persists native V3 system appends after the protected head without converting them to user messages', async () => {
+  it('persists current system appends after the protected head without converting them to user messages', async () => {
     const ctx = await mount()
     const session = Session.create(id)
     const writer = await ctx.sessionPersistence.create(session.header)
@@ -277,12 +277,12 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
       session.append('step/start', { turn: 1, step: 1 })
       session.append('system/message', {
         turn: 1, step: 1,
-        message: freezeMessage({ role: 'system', id: MessageId('head'), content: [{ type: 'text', text: 'head prompt' }], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } }),
+        message: freezeMessage({ role: 'system', id: MessageId('head'), content: [{ type: 'text', text: 'head prompt' }], source: { kind: 'system-prompt' } }),
       }, { surfaceOp: 'append' })
       session.append('user/message', freezeMessage({ role: 'user', id: MessageId('question'), content: human.content, source: { kind: 'user' } }), { surfaceOp: 'append' })
       session.append('system/message', {
         turn: 1, step: 1,
-        message: freezeMessage({ role: 'system', id: MessageId('context'), content: [{ type: 'text', text: 'tail context' }], source: { kind: 'plugin', plugin: 'context-plugin' } }),
+        message: freezeMessage({ role: 'system', id: MessageId('context'), content: [{ type: 'text', text: 'tail context' }], source: { kind: 'system-prompt' } }),
       }, { surfaceOp: 'append' })
       session.append('step/end', { turn: 1, step: 1 })
       session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })

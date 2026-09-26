@@ -1,18 +1,12 @@
 - heading "Code typescript Wrap lines Copy code" [level=3]:
-  - button "Code":
-    - text: Code
-    - img
+  - button "Code"
   - text: typescript
   - button "Wrap lines"
-  - button "Copy code":
-    - img
+  - button "Copy code"
 - code: "const bashResult = await tools.bash({ command: \"echo CODE_ROUND_OK\", description: \"Echo CODE_ROUND_OK\" }); let readError = null; try { await tools.read({ file_path: \"missing.txt\" }); } catch (e) { readError = { toolName: e.toolName, message: e.message }; } return { bash: bashResult.stdout.text.trim(), readError };"
 - heading "Output Copy output" [level=3]:
-  - button "Output":
-    - text: Output
-    - img
-  - button "Copy output":
-    - img
+  - button "Output"
+  - button "Copy output"
 - text: "{"
 - tree "Result JSON":
   - treeitem "bash:\"CODE_ROUND_OK\","

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 /** Global panel rows and DOM focus through the production slot renderer. */
 import type { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +8,7 @@ import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import { IconGlobeOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconGlobeOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ILayout, MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { PropsRenderSlots, PropsRuntime, SlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { apply, inject } from '../src/client/index.ts'
@@ -37,6 +38,7 @@ async function bench(collapsed = false) {
   const locale = new LocaleRuntime(runtime.ctx)
   locale.setLocale('en')
   const layout = {
+    panelInfo: runtime.panelInfo,
     beginNavigation: vi.fn(() => new AbortController().signal),
     toggleSidebar: vi.fn(),
     selectPanel: vi.fn((activePanelId: MainPanelId | null) => { runtime.panelInfo.set({ activePanelId }) }),
@@ -46,6 +48,7 @@ async function bench(collapsed = false) {
   await runtime.mount({
     inject: ['slots'],
     apply(ctx: Context) {
+      ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
       ctx.provide('layout', layout)
       ctx.provide('uiWorkspace', { startSession: vi.fn() } as never)
       ctx.provide('locale', locale)
@@ -88,7 +91,7 @@ async function mountPanel(runtime: SlotTestRuntime, { heading, ...metadata }: Te
   function Icon({ size, active }: PropsRuntime<'sidebar.panellist'>) {
     return (
       <span data-testid={`${metadata.id}-icon`} data-active={active}>
-        <IconGlobeOutline14 size={size} />
+        <IconGlobeOutlineRegular size={size} />
       </span>
     )
   }

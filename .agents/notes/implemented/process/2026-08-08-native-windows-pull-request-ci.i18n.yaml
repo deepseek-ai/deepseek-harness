@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-08-native-windows-pull-request-ci.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-08-native-windows-pull-request-ci.md
-2026-08-08-native-windows-pull-request-ci.md: e4fc7cab8c274148191632e8cc125ac75f2ec1d5
-2026-08-08-native-windows-pull-request-ci.zh.md: 27ad602c3748f2920e6b63f271a6a38b11c0ab77
+/agent-note-wine-and-native-windows-ci:
+  en: 9c96424c10b83c6b
+  zh: b2adf0c650fbf529
+/agent-note-wine-and-native-windows-ci/problem:
+  en: 3e229ecf646af866
+  zh: d358507b1e1d381f
+/agent-note-wine-and-native-windows-ci/decision:
+  en: f557cb00e1b457c1
+  zh: eeaec8412ddb315a
+/agent-note-wine-and-native-windows-ci/alternatives-considered:
+  en: f6c5e77fe3f05739
+  zh: 8de640d12d3a38c4
+/agent-note-wine-and-native-windows-ci/consequences:
+  en: 58069228d4e904c6
+  zh: 2601a48b82400903

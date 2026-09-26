@@ -33,7 +33,7 @@ export interface ActivationTerminal {
   /** Why this epoch's last ordinary turn ended, or `error` when teardown failed. */
   readonly stopReason: SubagentResult['stopReason']
   /** The epoch's final assistant content, absent when it produced none or failed. */
-  readonly output?: ContentBlock[]
+  readonly output?: readonly ContentBlock[]
 }
 
 /**
@@ -253,9 +253,10 @@ function epochStopReason(events: readonly SessionEvent[]): SubagentResult['stopR
     case undefined:
     case 'completed':
       return droppedUnrun ? 'aborted' : 'completed'
-    /* v8 ignore next 3 -- `TurnEndReason` is merge-extensible, so this arm needs a
-     * backend that adds a variant; treating an unnameable reason as success would
-     * report failed work as completed. */
+    /* v8 ignore next 4 -- `forked` appears only in constructor seed history, while
+     * this function reads an epoch-owned suffix. `TurnEndReason` is merge-extensible,
+     * so a backend-added variant cannot be listed; treating an unnameable reason as
+     * success would report failed work as completed. */
     default:
       return 'error'
   }

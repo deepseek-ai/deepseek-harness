@@ -1,0 +1,7 @@
+version: 1
+scenario: multimodal-spill-middle
+profile: headless
+composition: multimodal-spill
+recording: authored
+header:
+  class: multimodal-spill

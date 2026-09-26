@@ -27,7 +27,12 @@ export {
 interface ClientTransportGlobal {
   __DSH_TRANSPORT__?: {
     fetch: TunnelFetch
-    openStream: (endpoint: string, payload: unknown, signal: AbortSignal) => AsyncIterable<unknown>
+    openStream: (
+      endpoint: string,
+      payload: unknown,
+      signal: AbortSignal,
+      uplink?: AsyncIterable<unknown>,
+    ) => AsyncIterable<unknown>
     loadBundle: (url: string) => Promise<void>
     /** The page spawned the worker the Host runs in, so the page owns it. */
     ownsHost: boolean
@@ -151,7 +156,7 @@ export async function connectWorkerHost(worker: Worker, options?: WorkerHostConn
     const payload = await tunnel.bootPayload()
     ;(globalThis as ClientTransportGlobal).__DSH_TRANSPORT__ = {
       fetch: (input, init) => tunnel.fetch(input, init),
-      openStream: (endpoint, payload, signal) => tunnel.open(endpoint, payload, signal),
+      openStream: (endpoint, payload, signal, uplink) => tunnel.open(endpoint, payload, signal, uplink),
       loadBundle: (url: string) => tunnel.loadBundle(url),
       // The host lives in a worker this page spawned: the page owns it, so
       // the privileged surface stays reachable off loopback authorities.

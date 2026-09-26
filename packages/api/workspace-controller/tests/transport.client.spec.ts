@@ -13,6 +13,7 @@ import { createClientTest, type TestClient, webApp } from '@deepseek-ai/dsh-clie
 import {
   ClientWorkspaceModel,
   createWorkspaceStateStream,
+  WorkspaceArchiveError,
   WorkspaceController,
   WorkspaceCreateError,
   type WorkspaceFollowSink,
@@ -58,6 +59,7 @@ function accepts(overrides: Partial<WorkspaceFollowSink> = {}): WorkspaceFollowS
     removeView: ignore,
     replaceOrder: ignore,
     replaceArchived: ignore,
+    replacePinned: ignore,
     ...overrides,
   }
 }
@@ -153,6 +155,7 @@ describe('Workspace state stream', () => {
       { type: 'remove', workspaceId: view.workspaceId },
       { type: 'order', workspaceIds: [view.workspaceId] },
       { type: 'archived', archivedSessionIds: [sid('session-one')] },
+      { type: 'pinned', pinnedSessionIds: [sid('session-two')] },
     ]
     mock.stream(FOLLOW, openStream([opening, ...increments]))
     const replaceBaseline = vi.fn<WorkspaceFollowSink['replaceBaseline']>()
@@ -160,20 +163,22 @@ describe('Workspace state stream', () => {
     const removeView = vi.fn<WorkspaceFollowSink['removeView']>()
     const replaceOrder = vi.fn<WorkspaceFollowSink['replaceOrder']>()
     const replaceArchived = vi.fn<WorkspaceFollowSink['replaceArchived']>()
+    const replacePinned = vi.fn<WorkspaceFollowSink['replacePinned']>()
     const stream = createWorkspaceStateStream(remote, {
-      accept: accepts({ replaceBaseline, upsertView, removeView, replaceOrder, replaceArchived }),
+      accept: accepts({ replaceBaseline, upsertView, removeView, replaceOrder, replaceArchived, replacePinned }),
       failed: vi.fn(),
     })
 
     stream.start()
     stream.start()
-    await vi.waitFor(() => { expect(replaceArchived).toHaveBeenCalledOnce() })
+    await vi.waitFor(() => { expect(replacePinned).toHaveBeenCalledOnce() })
 
     expect(replaceBaseline).toHaveBeenCalledWith(opening.value)
     expect(upsertView).toHaveBeenCalledWith(view)
     expect(removeView).toHaveBeenCalledWith(view.workspaceId)
     expect(replaceOrder).toHaveBeenCalledWith([view.workspaceId])
     expect(replaceArchived).toHaveBeenCalledWith(['session-one'])
+    expect(replacePinned).toHaveBeenCalledWith(['session-two'])
     await stream.dispose()
     expect(streamStates(mock)).toEqual(['cancelled'])
   })
@@ -306,14 +311,26 @@ describe('Workspace state stream', () => {
 })
 
 describe('WorkspaceController', () => {
+  it('returns no Workspace when startup is ineligible without changing the list', async ({ mock, start }) => {
+    const { remote, client } = await gatewayClient(mock, start)
+    const model = new ClientWorkspaceModel(remote.workspace)
+    model.replaceBaseline({ items: [], archivedSessionIds: [], pinnedSessionIds: [] })
+    const controller = new WorkspaceController(client.ctx, model)
+    const before = model.getSnapshot()
+    mock.remote.workspace.initializeDefault.mockResolvedValueOnce({ ok: true, value: undefined })
+    await expect(controller.initializeDefault()).resolves.toBeUndefined()
+    expect(model.getSnapshot()).toBe(before)
+  })
+
   it('publishes the model source and exposes successful Workspace commands', async ({ mock, start }) => {
     const { remote, client } = await gatewayClient(mock, start)
     const model = new ClientWorkspaceModel(remote.workspace)
-    model.replaceBaseline({ items: [workspace('one')], archivedSessionIds: [] })
+    model.replaceBaseline({ items: [workspace('one')], archivedSessionIds: [], pinnedSessionIds: [] })
     const controller = new WorkspaceController(client.ctx, model)
 
     expect(controller.list).toBe(model)
     expect(client.ctx.workspaces.list).toBe(model)
+    await expect(controller.initializeDefault(new AbortController().signal)).resolves.toMatchObject({ workspaceId: 'default' })
     await expect(controller.create({ path: '/work/created' })).resolves.toMatchObject({ workspaceId: 'created' })
     await expect(controller.rename(wid('one'), 'renamed')).resolves.toMatchObject({ title: 'renamed' })
     await expect(controller.insertBefore(wid('one'))).resolves.toBeUndefined()
@@ -322,14 +339,19 @@ describe('WorkspaceController', () => {
     })
     await expect(controller.archiveSession(sid('session'))).resolves.toBeUndefined()
     await expect(controller.unarchiveSession(sid('session'))).resolves.toBeUndefined()
+    await expect(controller.pinSession(sid('session'))).resolves.toBeUndefined()
+    await expect(controller.unpinSession(sid('session'))).resolves.toBeUndefined()
     await expect(controller.delete(wid('one'))).resolves.toBeUndefined()
     // Each command crosses the wire as one positional request object.
     expect(mock.log.requests('workspace/create')).toEqual([{ path: '/work/created' }])
     expect(mock.log.requests('workspace/rename')).toEqual([{ workspaceId: 'one', title: 'renamed' }])
     expect(mock.log.requests('workspace/insertBefore')).toEqual([{ workspaceId: 'one' }])
     expect(mock.log.requests('workspace/insertSessionBefore')).toEqual([{ workspaceId: 'one', sessionId: 'session' }])
-    expect(mock.log.requests('workspace/archiveSession')).toEqual([{ sessionId: 'session' }])
+    await expect(controller.archiveSession(sid('session'), { stopActivity: true })).resolves.toBeUndefined()
+    expect(mock.log.requests('workspace/archiveSession')).toEqual([{ sessionId: 'session' }, { sessionId: 'session', stopActivity: true }])
     expect(mock.log.requests('workspace/unarchiveSession')).toEqual([{ sessionId: 'session' }])
+    expect(mock.log.requests('workspace/pinSession')).toEqual([{ sessionId: 'session' }])
+    expect(mock.log.requests('workspace/unpinSession')).toEqual([{ sessionId: 'session' }])
     expect(mock.log.requests('workspace/delete')).toEqual([{ workspaceId: 'one' }])
   })
 
@@ -338,6 +360,9 @@ describe('WorkspaceController', () => {
     const controller = new WorkspaceController(client.ctx, new ClientWorkspaceModel(remote.workspace))
     const missingWorkspace = new RemoteError('workspace/not-found', 'gone', { workspaceId: wid('missing') })
     const missingSession = new RemoteError('session/not-found', 'missing session', { sessionId: sid('session') })
+
+    mock.remote.workspace.initializeDefault.mockResolvedValueOnce(err(new RemoteError('gateway/internal', 'directory denied', {})))
+    await expect(controller.initializeDefault()).rejects.toBeInstanceOf(WorkspaceCreateError)
 
     mock.remote.workspace.create.mockResolvedValueOnce(err(new RemoteError('workspace/invalid-path', 'missing path', { path: '/missing' })))
     const create = controller.create({ path: '/missing' })
@@ -351,11 +376,28 @@ describe('WorkspaceController', () => {
     mock.remote.workspace.insertBefore.mockResolvedValueOnce(err(missingWorkspace))
     await expect(controller.insertBefore(wid('missing'))).rejects.toThrow('workspace reorder failed: workspace/not-found: gone')
     mock.remote.workspace.archiveSession.mockResolvedValueOnce(err(missingSession))
-    await expect(controller.archiveSession(sid('session')))
-      .rejects.toThrow('workspace session archive failed: session/not-found: missing session')
+    const archiveMissing = controller.archiveSession(sid('session'))
+    await expect(archiveMissing).rejects.toBeInstanceOf(WorkspaceArchiveError)
+    await expect(archiveMissing).rejects.toThrow('workspace session archive failed: session/not-found: missing session')
+    // The active-session refusal keeps its structured details so a surface
+    // can name what still runs.
+    const active = new RemoteError('workspace/session-active', 'session is active', {
+      sessionId: sid('session'), activity: [{ kind: 'probe' }, { kind: 'probe-items', items: [{ id: 'item-1' }] }],
+    })
+    mock.remote.workspace.archiveSession.mockResolvedValueOnce(err(active))
+    await expect(controller.archiveSession(sid('session'))).rejects.toMatchObject({
+      name: 'WorkspaceArchiveError',
+      rpcError: { code: 'workspace/session-active', details: { activity: [{ kind: 'probe' }, { kind: 'probe-items', items: [{ id: 'item-1' }] }] } },
+    })
     mock.remote.workspace.unarchiveSession.mockResolvedValueOnce(err(missingSession))
     await expect(controller.unarchiveSession(sid('session')))
       .rejects.toThrow('workspace session unarchive failed: session/not-found: missing session')
+    mock.remote.workspace.pinSession.mockResolvedValueOnce(err(missingSession))
+    await expect(controller.pinSession(sid('session')))
+      .rejects.toThrow('workspace session pin failed: session/not-found: missing session')
+    mock.remote.workspace.unpinSession.mockResolvedValueOnce(err(missingSession))
+    await expect(controller.unpinSession(sid('session')))
+      .rejects.toThrow('workspace session unpin failed: session/not-found: missing session')
     mock.remote.workspace.insertSessionBefore.mockResolvedValueOnce(err(new RemoteError(
       'workspace/move-invalid', 'invalid move', { workspaceId: wid('missing'), sessionId: sid('session') },
     )))
@@ -376,3 +418,11 @@ describe('WorkspaceController', () => {
     expect(mock.log.calls('workspace/create').map(call => call.state)).toEqual(['failed'])
   })
 })
+
+// The wire relays whatever families the Host's providers report; this suite merges its own.
+declare module '@deepseek-ai/dsh-workspace/types' {
+  interface SessionActivityKindMap {
+    probe: true
+    'probe-items': true
+  }
+}

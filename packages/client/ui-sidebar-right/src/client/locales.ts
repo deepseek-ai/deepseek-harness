@@ -8,6 +8,19 @@
 
 /** Simplified Chinese dictionary and key-set source of truth. */
 export const zh = {
+  'command.close': '关闭当前页面／窗口',
+  'command.refresh': '刷新当前页面',
+  'command.noRefresh': '当前页面不支持刷新',
+  'command.toggle': '展开／收起右侧栏',
+  'command.fullscreen': '面板全屏／退出全屏',
+  'command.noSession': '请先选择会话',
+  'command.noFocus': '请先聚焦右侧面板',
+  'command.stale': '页面已切换，请重新聚焦',
+  'command.collapsed': '请先展开右侧栏',
+  'command.float': '浮动面板不支持此操作',
+  'command.empty': '请先打开页面',
+  'command.budget': '已达两格上限',
+  'command.width': '栏宽不足，拖宽侧边栏后再分栏',
   'chrome.expand': '打开侧边栏',
   'chrome.expandAria': '打开右侧边栏',
   'chrome.collapse': '收起侧边栏',
@@ -36,6 +49,19 @@ export type SidebarRightKey = keyof typeof zh
 
 /** English dictionary, checked against the Chinese key set. */
 export const en = {
+  'command.close': 'Close current page or window',
+  'command.refresh': 'Refresh current page',
+  'command.noRefresh': 'This page cannot be refreshed',
+  'command.toggle': 'Toggle right sidebar',
+  'command.fullscreen': 'Toggle panel fullscreen',
+  'command.noSession': 'Select a session first',
+  'command.noFocus': 'Focus a right sidebar pane first',
+  'command.stale': 'The page changed; focus it again',
+  'command.collapsed': 'Expand the right sidebar first',
+  'command.float': 'This action is unavailable in a floating panel',
+  'command.empty': 'Open a page first',
+  'command.budget': 'Two panes is the limit',
+  'command.width': 'Not enough width to split, widen the sidebar',
   'chrome.expand': 'Open sidebar',
   'chrome.expandAria': 'Open right sidebar',
   'chrome.collapse': 'Collapse sidebar',

@@ -72,7 +72,7 @@ const invalidData = [
     rule: /must omit header.system/,
   })),
   { name: 'successful tool has failure metadata', event: toolEvent({ ...toolData(false), error: failure }), rule: /error requires/ },
-  ...[undefined, null, [], {}, { content: null }, { content: [] }, { content: [null] }, { content: [{ isError: 'true' }] }].map(message => ({
+  ...[undefined, null, [], {}, { isError: 'true' }, { content: [{ isError: true }] }].map(message => ({
     name: 'malformed tool message with failure metadata',
     event: toolEvent({ turn: 1, step: 1, ...message === undefined ? {} : { message }, error: failure }),
     rule: /error requires/,
@@ -80,6 +80,21 @@ const invalidData = [
 ]
 
 describe('canonical event payload acceptance', () => {
+  it('restores system prompts only with system-prompt producer attribution', () => {
+    const message = createSystemMessage('prompt')
+    const event: SessionEvent<'system/message'> = {
+      type: 'system/message', seq: SessionSeq(0), time: 1, surfaceOp: 'append',
+      data: { turn: 1, step: 1, message },
+    }
+    for (const accept of [entryPaths.seed!, entryPaths.restore!, entryPaths.adopt!, entryPaths.snapshot!]) {
+      expect(() => accept(structuredClone(event))).not.toThrow()
+      for (const source of [{ kind: 'runtime-context' }, { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' }, { kind: 'user' }]) {
+        const invalid = { ...event, data: { ...event.data, message: { ...message, source } } }
+        expect(() => accept(invalid as unknown as SessionEvent)).toThrow(/system-prompt source/)
+      }
+    }
+  })
+
   for (const [path, accept] of Object.entries(entryPaths)) {
     describe(path, () => {
       it.each(invalidData)('rejects $name with a located error', ({ event, rule }) => {
@@ -107,7 +122,7 @@ describe('canonical event payload acceptance', () => {
   }
 
   it('preserves nested header, source, and data extras without normalizing accepted events', () => {
-    const message = createSystemMessage('prompt', 'fixture')
+    const message = createSystemMessage('prompt')
     const events: SessionEvent[] = [
       requestEvent({ header: { config, extra: { nested: [true, null] } }, reason: 'initial', extra: ['retained'] }),
       { type: 'system/message', seq: SessionSeq(0), time: 1, surfaceOp: 'append', data: {
@@ -295,9 +310,9 @@ describe('canonical event-local surface metadata', () => {
 
   it('requires system placement and preserves system data and source-event references on head replacements', () => {
     const session = Session.create(id)
-    const data = { turn: 1, step: 1, message: createSystemMessage('head', 'fixture'), extra: { nested: true } }
+    const data = { turn: 1, step: 1, message: createSystemMessage('head'), extra: { nested: true } }
     const head = session.append('system/message', data, { surfaceOp: 'append' })
-    const next = session.append('system/message', { ...data, message: createSystemMessage('next', 'fixture') }, {
+    const next = session.append('system/message', { ...data, message: createSystemMessage('next') }, {
       surfaceOp: { op: 'replace', startSeq: head.seq, endSeq: head.seq }, sourceEventSeqs: [head.seq],
     })
     expect(next.data).toEqual({ ...data, message: next.data.message })

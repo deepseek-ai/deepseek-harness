@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-12-browser-use-provider-registration.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-12-browser-use-provider-registration.md
-2026-09-12-browser-use-provider-registration.md: a0d3cfdbd798dadee6a9514dffdc619d95811c4d
-2026-09-12-browser-use-provider-registration.zh.md: b0016b6655292ccb5259adcb5a07decedda2e21e
+/agent-note-browser-use-provider-registration-and-session-ownership:
+  en: 68473a007451cf68
+  zh: f7a8281c5a5a2e11
+/agent-note-browser-use-provider-registration-and-session-ownership/problem:
+  en: b3513236c712132d
+  zh: df7701029eae9b31
+/agent-note-browser-use-provider-registration-and-session-ownership/decision:
+  en: ffca30883c040835
+  zh: 3bfc6ebae9a1fe55
+/agent-note-browser-use-provider-registration-and-session-ownership/alternatives-considered:
+  en: 44408473ef24d8f9
+  zh: 448ca799d905e9a9
+/agent-note-browser-use-provider-registration-and-session-ownership/consequences:
+  en: 8eb33d4073f96236
+  zh: 42c456f778e36485

@@ -1,9 +1,9 @@
 /**
- * Background-job list plugin, node half. Pure UI plugin: the empty apply
- * exists so the plugin appears in the host cordis.yml / Loader; the browser
- * half ships via exports["./client"], discovered through the package.json
- * dshClient declaration.
+ * Node half of the background-job list plugin. The browser half in
+ * `src/client/` owns every contribution; this entry exists so the package
+ * appears as an ordinary Loader row.
+ * @module @deepseek-ai/dsh-client-ui-jobs
  */
 
-/** Host plugin body — no host-side behavior for this source plugin. */
+/** Loader-visible no-op body; the browser half carries the feature. */
 export function apply(): void {}

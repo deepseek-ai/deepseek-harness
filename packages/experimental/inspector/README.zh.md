@@ -1,6 +1,6 @@
 ---
 description: "面向 Host 与浏览器 Client Cordis 运行时的实验性 Chrome DevTools 检查，包括 Console 求值、Sources、Network 采集、Elements 树和独立于 CDP 的查询 API。"
-kind: "package-reference"
+kind: "package-bundle"
 ---
 
 # @deepseek-ai/dsh-experimental-inspector
@@ -9,9 +9,9 @@ kind: "package-reference"
 
 ## 概述
 
-使用这个实验性 Inspector，可以在 Chrome DevTools 中检查一个运行中的 dsh Host 及其浏览器 Client。它提供 Host 与 Client Console context、Host Sources 与调试、Host fetch 采集和共享 Cordis 树，并让 Worker 独占全部 CDP 状态。
+在 Chrome DevTools 中检查一个运行中的 dsh Host 及其浏览器 Client：Host 与 Client Console context、Host Sources 与调试、Host fetch 采集和共享 Cordis 树，全部 CDP 状态都在 Worker 中。
 
-本包以实验性名称发布，需要显式组合。Worker 不访问实时 Cordis 对象；共享 Host/Client collector 会在传输前把它们投影成已验证快照。Cordis 还负责插件组合、注册 `ctx.inspector`、注入 bootstrap 和 dispose（资源释放）。
+Inspector 不在默认插件列表中显示。使用 `dsh plugin --profile web add @deepseek-ai/dsh-experimental-inspector` 显式安装其 bundle。其 [`cordis.patch.yml`](cordis.patch.yml) 挂载已安装的包；`pnpm run demo:inspector` 则挂载源码树。Host 行需要 Web 服务器。Worker 不访问实时 Cordis 对象；共享 collector 会在传输前把它们投影成已验证快照。
 
 ## 目录
 
@@ -30,7 +30,7 @@ kind: "package-reference"
 <a id="runtime-layout"></a>
 ## 运行时布局
 
-Host 插件启动 Worker 并连接专用 `MessagePort`。Client 插件读取注入的 `globalThis.__DSH_INSPECTOR__` bootstrap，直接向 Worker 打开一条独立、带鉴权的 WebSocket。Chrome DevTools 连接 Worker 的 CDP WebSocket。每条 DevTools 连接在 Worker 中独占一个连接 Host 主线程的 `node:inspector.Session`，因此 Host JavaScript 暂停时，Host Console 求值、Sources、断点和 resume 仍然可用。
+Host 插件启动 Worker 并连接专用 `MessagePort`。Client 插件读取注入的 `globalThis.__DSH_INSPECTOR__` bootstrap，直接向 Worker 打开一条独立、带鉴权的 WebSocket；在 Host 行启用前打开的页面没有 bootstrap，其 Client 插件会以刷新提示失败，刷新后才能被检查。Chrome DevTools 连接 Worker 的 CDP WebSocket。每条 DevTools 连接在 Worker 中独占一个连接 Host 主线程的 `node:inspector.Session`，因此 Host JavaScript 暂停时，Host Console 求值、Sources、断点和 resume 仍然可用。
 
 源码树遵循这些执行环境：`client/` 与 `host/` 提供镜像的适配器 entry path，`worker/` 只包含 Worker thread orchestration 与 Chrome protocol 状态，`shared/` 包含与环境无关的 Cordis 和 network model、规范化 realm 后端接口及内部 bridge protocol。Worker 侧 Client 与 Host 适配器镜像放在 `worker/realms/` 下；其中的 Client 适配器仍然在 Worker 中执行。
 

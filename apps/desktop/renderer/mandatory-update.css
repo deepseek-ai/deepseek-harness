@@ -1,0 +1,16 @@
+#status, #version { margin-top: 12px; color: #555962; }
+#status:empty, #version:empty { display: none; }
+#error { margin-top: 12px; color: #d93025; }
+#address { display: block; width: 100%; margin-top: 4px; padding: 8px; border: 1px solid #e6e7eb; border-radius: 8px; background: #f5f5f5; font: 12px/20px monospace; color: #555962; overflow-wrap: anywhere; resize: vertical; }
+#actions button:not(.primary) { min-height: 32px; padding: 5px 8px; color: #555962; background: transparent; }
+#update, #refresh { border-radius: 100px; }
+#fallback { border-top: 1px solid #e6e7eb; margin-top: 12px; padding-top: 12px; }
+#fallback p, #manual-copy { font-size: 12px; line-height: 20px; color: #555962; }
+#copy { min-height: 32px; padding: 3px 0; background: transparent; color: #4d6bfe; font-size: 12px; }
+#copy-message { color: #d93025 !important; }
+#manual-copy { display: block; margin-top: 8px; }
+#progress { display: block; width: 100%; height: 4px; margin-top: 12px; border: 0; appearance: none; -webkit-appearance: none; background: #e6e7eb; accent-color: #0f1115; }
+
+#progress::-webkit-progress-bar { background: #e6e7eb; }
+#progress::-webkit-progress-value { background: #0f1115; }
+#progress::-moz-progress-bar { background: #0f1115; }

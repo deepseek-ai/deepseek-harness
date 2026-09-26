@@ -7,7 +7,7 @@ import {
   spawnPipedProcess,
 } from '../src/index.ts'
 import { CREATE_SUSPENDED } from '../src/abi.ts'
-import { processInformationType } from '../src/ffi.ts'
+import { processInformationType, startupInfoType } from '../src/ffi.ts'
 import type { NativePtr, Win32ProcessBindings } from '../src/index.ts'
 
 const PVOID = koffi.pointer('void')
@@ -23,6 +23,7 @@ function inheritedApi(overrides: Partial<Win32ProcessBindings> = {}): {
   const createProcessAsUserWImpl: Win32ProcessBindings['createProcessAsUserW'] =
     overrides.createProcessAsUserW
     ?? ((_token, _app, _line, _pa, _ta, _inherit, _flags, _env, _cwd, _startup, info) => {
+      expect(koffi.decode(_startup, startupInfoType())).toMatchObject({ dwFlags: 0x101, wShowWindow: 0 })
       events.push('create')
       koffi.encode(info, processInformationType(), {
         hProcess: 60n,

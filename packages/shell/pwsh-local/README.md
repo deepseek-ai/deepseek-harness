@@ -57,21 +57,22 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Running commands
 
-Run a command with `run` and read its output from the result; a nonzero exit, a timeout, or a cancellation resolves descriptively, and only infrastructure failures reject. The command string rides as one argument to `-Command`: PowerShell parses the text itself and no intermediate shell exists, so there is no shell-quoting layer to escape and native Win32 paths pass through unchanged. Every command pins UTF-8 output first, so non-ASCII output is not garbled even on the Windows PowerShell 5.1 fallback. The environment is model-friendly: `NO_COLOR=1 PAGER=cat GIT_PAGER=cat` (no `TERM=dumb` — a POSIX concept), with explicit caller-provided entries still winning.
+Run a command by awaiting the execution's `result()` projection; a nonzero exit, a timeout, or a cancellation resolves descriptively, and only infrastructure failures reject. The command string rides as one argument to `-Command`: PowerShell parses the text itself and no intermediate shell exists, so there is no shell-quoting layer to escape and native Win32 paths pass through unchanged. Every command pins UTF-8 output first, so non-ASCII output is not garbled even on the Windows PowerShell 5.1 fallback. The environment is model-friendly: `NO_COLOR=1 PAGER=cat GIT_PAGER=cat` (no `TERM=dumb` — a POSIX concept), with explicit caller-provided entries still winning.
 
 ```text
-const result = await ctx.shell.run(ctx.shell.resolve({ command: 'Get-ChildItem' }))
+const execution = await ctx.shell.execute(ctx.shell.resolve({ command: 'Get-ChildItem' }))
+const result = await execution.result()
 if (result.timedOut) console.log('timed out after', result.timeoutMs)
 ```
 
 ### Background processes
 
-Await `start` to run a command in the background; it resolves with the prepared process handle and no execution timeout applies. Cancellation or preparation failure rejects before a handle is published. `readOutput()` merges the stream deltas into one consuming read, marking stderr under a `[stderr]` section; `kill()` terminates the provider-managed range; `done` settles when the direct command closes and never rejects. Job ids, ownership, polling, and notices belong to the generic `ctx.jobs` runtime, which the tool layer registers the handle with.
+Resolve with `onExpiry: 'none'` and await `execute` to run a command in the background; no deadline is armed. Cancellation or preparation failure rejects before a handle is published. `readOutput()` merges the stream deltas into one consuming read, marking stderr under a `[stderr]` section; `kill()` terminates the provider-managed range; `done` settles when the direct command closes and never rejects. Job ids, ownership, polling, and notices belong to the generic `ctx.jobs` runtime, which the tool layer registers the handle with.
 
 <a id="adjusting-budgets-at-runtime"></a>
 ### Adjusting budgets at runtime
 
-When a settings provider is composed, this executor registers the capability's shared `shell` settings namespace — the same one the POSIX family uses, because a host composes exactly one provider of `ctx.shell` — so a user section in `settings.yaml` layers over the composition entry and the next command runs with the new budgets. Values the schema cannot judge — positive and finite numbers, and the `graceMs` timer bound — are refused at the write, leaving the running executor on its last good section.
+Execution budgets are volatile Config fields sampled when resolving each command. The Plugins page edits the active executor’s profile entry. Complete Config validation rejects invalid numbers and timer limits before a form write reaches disk.
 
 -----
 
@@ -145,7 +146,7 @@ These limits define when this executor is a poor fit. They are current package c
 - **Unconfined by itself** — commands run with the harness process's authority; deployments needing confinement compose a sandboxing executor or policy instead.
 - **No persistent shell or PTY** — every call starts a fresh `pwsh -Command`.
 - **The command string is PowerShell text** — the `-Command` domain has no shell-quoting layer, but a model-facing command is parsed by PowerShell itself, so PowerShell syntax errors are command failures, not launch failures.
-- **A background provider-failure note is single-delivery** — `SubprocessHandle.done` can reject before or after target execution begins, so the executor injects the stage-neutral `subprocess failed before reporting an outcome: …` into exactly one `readOutput()` delta; a reader that discards that delta cannot recover it.
+- **A background provider-failure note is the whole stderr stream** — `SubprocessHandle.done` can reject before or after target execution begins, and the subprocess service buffers no output for a target that never reported, so the executor serves the stage-neutral `subprocess failed before reporting an outcome: …` as the observed stderr stream (offset readers re-read it at their own offsets) and folds it into exactly one `readOutput()` delta; a consuming reader that discards that delta recovers it only through `observed.stderr`.
 - **Windows termination reports no signal** — a force-killed process settles as exit 1 with `signal: null`, so signal-based status classification does not apply on Windows; `kill()`-initiated stops still stamp `killed` directly.
 - **The encoding preamble precedes the command** — PowerShell requires `param(...)`, `#requires`, and `using` statements at the very top of a script, so a command whose first statement is one of those cannot run under the UTF-8 output preamble; wrap a `param(...)` script in `& { … }`, and run `using`/`#requires` scripts from a file instead.
 - **Non-ASCII stdin under Windows PowerShell 5.1 may be mis-decoded** — the preamble pins output encoding only; `[Console]::InputEncoding` stays at the host default because setting it under redirected stdin throws; pwsh 7 defaults to UTF-8 and is unaffected.

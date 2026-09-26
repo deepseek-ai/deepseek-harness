@@ -1,0 +1,122 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  white-space: normal;
+  font-family: var(--dsw-font, sans-serif);
+}
+
+.workbook {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  color-scheme: light;
+  /* FortuneSheet's white controls need light-scheme text even in a dark app. */
+  color: CanvasText;
+}
+
+/* Hide editing handles and redundant controls within the read-only preview. */
+.workbook :global(.fortune-stat-area),
+.workbook :global(.luckysheet-sheets-item-function),
+.workbook :global(.fortune-cols-freeze-handle),
+.workbook :global(.fortune-rows-freeze-handle) {
+  display: none;
+}
+
+.workbook :global(.luckysheet-sheet-area div.luckysheet-sheets-item) {
+  padding-right: 5px;
+}
+
+.workbook :global(.luckysheet-sheet-area) {
+  padding: 0;
+}
+
+.workbook :global(#luckysheet-sheet-content) {
+  flex: 1;
+  min-width: 0;
+}
+
+.workbook :global(.fortune-sheettab-container) {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.workbook :global(.fortune-sheettab-container .fortune-sheettab-container-c) {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.workbook :global(.fortune-sheettab-scroll),
+.workbook :global(.fortune-sheet-area-right) {
+  flex: none;
+}
+
+.workbook :global(.fortune-fx-input-container) {
+  min-width: 0;
+}
+
+.workbook :global(.fortune-fx-input) {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.notice {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--dsw-alias-state-warn-label);
+  background: var(--dsw-alias-state-warn-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.notice > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.formulaWarning {
+  position: absolute;
+  top: 4px;
+  left: 142px;
+  z-index: 3;
+  display: flex;
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  color: var(--dsw-alias-state-warn-label);
+  background: transparent;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+}
+
+.formulaWarning:hover, .formulaWarning:focus-visible {
+  background: var(--dsw-alias-state-warn-tertiary);
+  outline: none;
+}
+
+.withFormulaWarning :global(.fortune-fx-input) {
+  padding-left: 24px;
+}
+
+.status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 16px;
+  color: var(--dsw-alias-label-secondary);
+}

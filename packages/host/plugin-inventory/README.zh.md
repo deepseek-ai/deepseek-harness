@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-客户端可以调用 `pluginInventory/list`，按加载顺序展示宿主的当前插件，包括每个条目的标识符、模块标识、有效启用状态与存活阶段。部署组合了 agent preset roster 时，还会报告各预设的元数据、健康状态与压平后的插件组合；没有 roster 时，预设数据缺席。每次响应都是供展示和诊断使用的只读即时快照：它不能修改插件，也不提供历史、来源信息或变更订阅。
+客户端可以调用 `pluginInventory/list`，按加载顺序展示宿主的当前插件，包括每个条目的标识符、模块标识、有效启用状态、存活阶段与可用的展示文本。部署组合了 agent preset roster 时，还会报告各预设的元数据、健康状态与压平后的插件组合；没有 roster 时，预设数据缺席。每次响应都是供展示和诊断使用的只读即时快照：它不能修改插件，也不提供历史或变更订阅。
 
 ## 目录
 
@@ -31,6 +31,8 @@ kind: "package-reference"
 
 每一行是一个非组 Loader 条目：其条目 id、精确模块标识、有效启用状态（含被禁用的祖先组）与当前根 Fiber 阶段。`pending` 表示条目等待加载，`loading` 表示正在读取，`active` 表示正在运行，`failed` 表示其 fiber 被拒绝，`unloading` 表示正在拆除；`null` 表示完全不存在存活的根 Fiber。结构性的 group 行会被跳过。
 
+Loader 行与预设行可以携带可选的 `meta`，其中包含标题、描述或元信息诊断。Host 返回可用翻译与字面回退文本，由 Client 选择语言。元信息诊断不改变启停状态或 fiber 阶段。
+
 ### 每个预设的组合
 
 组合了 roster 时，`agentPresets` 按 roster 顺序携带每个预设一组：其 id、随部署内置还是用户自建（`trust`，客户端据此本地化内置预设名）、发布的显示名、未指名预设的会话是否组合它，以及压平后的插件行——条目 id（文件行未声明时为 null）、模块标识、有效启用状态、行自带的 `!!js` disabled 表达式（如有），以及组合存活时的根 Fiber 阶段。已有会话组合过的预设由其最新仍存续的世代作答——即使其文件事后损坏也是如此，因为挂载才是这些会话实际运行的组合；开机以来从未被组合的预设由其组合文件作答，disabled 门用 Loader 上下文求值，且读取从不挂载预设。`conditional` 表示宿主无法求值的门；无人组合的坏预设保留在列表中，携带原因且没有行。没有 roster 时该字段缺席。
@@ -49,7 +51,9 @@ kind: "package-reference"
 
 ### 设计理念
 
-网关是一层没有第二个生命周期真源的直接投影：每次 `list()` 调用都读取 `ctx.loader.entries()`，并把每个非组条目映射为公共行。Cordis 内部的 `plugin/status` 事件已经维护了 `Entry.fiber` 与 `Fiber.state`，因此再加缓存只会多出一个需要同步的生命周期真源。agent preset roster 是每次调用经 `ctx.get('agentPresets')` 解析的可选伙伴：所有预设读取都由它的 `compositionInventory()` 负责，本包只把根 Fiber 状态映射到公共阶段词汇。
+网关是一层没有第二个生命周期真源的直接投影：每次 `list()` 调用都读取 `ctx.loader.entries()`，并把每个非组条目映射为公共行。Cordis 内部的 `plugin/status` 事件已经维护了 `Entry.fiber` 与 `Fiber.state`，因此再加缓存只会多出一个需要同步的生命周期真源。agent preset roster 是每次调用经 `ctx.get('agentPresets')` 解析的可选伙伴：预设组合读取由它的 `compositionInventory()` 负责，本包把根 Fiber 状态映射到公共阶段。
+
+展示元信息来自可选的 `pluginPackages` 服务：Loader 行使用其所属树的解析基准，预设行使用网关上下文的基准。服务或对应基准不存在时，`meta` 缺席。读取元信息不会加载或激活插件。
 
 ### 阶段映射
 
@@ -97,8 +101,8 @@ Typert 生成由 `./typert` 与 `./remote` 导出的 Host 和 Client Remote 产�
 这些限制说明即时清单无法向客户端提供哪些信息。它们是当前包约束，不是任务积压。
 
 - **仅表示调用当下**——结果不包含持久的失败历史或订阅；只要不存在存活的根 Fiber，就会报告 `null`，而不区分其原因。
-- **无来源与修改能力**——服务不识别条目由哪个 bundle、profile 或 override 引入，也不能在任一平面启用、停用、添加或移除插件。
-- **预设仅随 roster 出现**——未装 `dsh-agent-presets` 的部署只提供 Loader 条目；`agentPresets` 字段缺席而非为空。
+- **不标识引入层，也不修改插件**——服务不识别条目由哪个 bundle、profile 或 override 引入，也不能在任一平面启用、停用、添加或移除插件。
+- **预设仅随 roster 出现**——未装 `dsh-agent-preset-registry` 的部署只提供 Loader 条目；`agentPresets` 字段缺席而非为空。
 
 <a id="dev-note"></a>
 ### 开发备注

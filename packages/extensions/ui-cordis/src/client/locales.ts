@@ -5,6 +5,7 @@ export const NS = 'cordis'
 /** Simplified Chinese Cordis UI messages. */
 export const zh = {
   'row.defineTitle': '注册 Cordis 插件',
+  'a11y.preparing': '准备调用 Cordis 工具',
   'row.runTitle': '运行 Cordis 插件',
   'row.updateTitle': '更新 Cordis 插件',
   'row.stopTitle': '停止 Cordis 插件',
@@ -69,6 +70,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** English Cordis UI messages. */
 export const en = {
   'row.defineTitle': 'Register Cordis Plugin',
+  'a11y.preparing': 'Preparing a Cordis tool call',
   'row.runTitle': 'Run Cordis Plugin',
   'row.updateTitle': 'Update Cordis Plugin',
   'row.stopTitle': 'Stop Cordis Plugin',

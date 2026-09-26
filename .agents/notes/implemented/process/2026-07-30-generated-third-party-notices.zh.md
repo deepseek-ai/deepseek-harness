@@ -12,13 +12,13 @@ Status: implemented
 
 ## 决策
 
-[`THIRD_PARTY_NOTICES.md`](../../../../THIRD_PARTY_NOTICES.md) 由 [`scripts/gen-third-party-notices.ts`](../../../../scripts/gen-third-party-notices.ts) 依据各工作区 manifest、`vendor/README.md`、`pyproject.toml` 与 `pnpm-workspace.yaml` 生成。根 README 双语两侧都从「许可证」一节链到该文件。
+[`THIRD_PARTY_NOTICES.md`](../../../../THIRD_PARTY_NOTICES.md) 由 [`scripts/gen-third-party-notices.ts`](../../../../scripts/gen-third-party-notices.ts) 依据各工作区 manifest、`vendor/README.md`、`pyproject.toml`、`pnpm-workspace.yaml` 与 [共享运行时锁文件](../../../../scripts/primary-runtime/lock.json)生成。根 README 双语两侧都从「许可证」一节链到该文件。
 
-**新鲜度会得到维护，而非仅靠校验。** 只要暂存了生成器的任一输入——任何 manifest、工作区声明、根锁文件、`vendor/README.md`、某个 `pyproject.toml`、生成器自身，或持有构建期 pin 的脚本——pre-commit 任务就会重新生成该文件并将其暂存，改依赖的人不必事后再折返跑一次生成器。已提交的字节随后由 [`scripts/gen-third-party-notices.spec.ts`](../../../../scripts/gen-third-party-notices.spec.ts) 断言，而测试 lane 本就会跑这个文件——这项校验不增加门禁进程、不占调度位、也不新增 CI 步骤。需要单独校验时，`pnpm run verify-third-party-notices` 仍然可用。
+**新鲜度会得到维护，而非仅靠校验。** 只要暂存了生成器的任一输入——任何 manifest、工作区声明、根锁文件或共享运行时锁文件、`vendor/README.md`、某个 `pyproject.toml`、生成器自身，或持有构建期 pin 的脚本——pre-commit 任务就会重新生成该文件并将其暂存，改依赖的人不必事后再折返跑一次生成器。已提交的字节随后由 [`scripts/gen-third-party-notices.spec.ts`](../../../../scripts/gen-third-party-notices.spec.ts) 断言，而测试 lane 本就会跑这个文件——这项校验不增加门禁进程、不占调度位、也不新增 CI 步骤。需要单独校验时，`pnpm run verify-third-party-notices` 仍然可用。
 
 有一处触发缺口是接受而非绕过的：lefthook 只检视磁盘上存在的文件，因此**删除** manifest 不会触发任何任务，移除一个包会落到测试 lane 的断言上。重构暂存文件列表以纳入删除的做法不成立——无论怎么给列表，lefthook 都会拿工作树过滤一遍。这个场景正由断言兜底。
 
-文件默认只披露**直接**依赖。完整的 npm 闭包连同锁定版本已记录在 `pnpm-lock.yaml`（`pnpm licenses list` 可渲染），Python 闭包记录在 `python/sdk/uv.lock`；再用散文誊一遍只会得到一份更差的副本。唯一明确披露的传递依赖，是 `@anthropic-ai/claude-agent-sdk` 通过 `optionalDependencies` 声明的官方 Claude 平台载荷集合，因为这些包承载随产品分发的 Claude Code 可执行文件，而非普通的库实现细节。
+文件默认只披露**直接**依赖；完整的 npm 与 Python SDK 闭包保留在各自锁文件中。两组独立分发的载荷会明确列出：`@anthropic-ai/claude-agent-sdk` 声明的官方 Claude 可执行包，以及共享运行时锁文件 `pythonPackages` 中的每个分发包。内置条目包含归一化名称、精确版本和已记录的许可证元数据；元数据缺失、归一化后名称重复或版本冲突都会使生成失败。共享 wheel 集合独立于 `python/` 下的 manifest，仅扫描后者会遗漏已打包的 Office 库。内置分发包同样通过运行时许可证检查，其中包括 Pillow 与 typing-extensions 声明的宽松许可证标识 `MIT-CMU` 和 `PSF-2.0`。
 
 **分层依据是分发内容，而非 manifest 字段名。** 安装的运行时库由 `DEV_ONLY_AREAS` 之外的 `dependencies` 或 `optionalDependencies` 识别；排除区域为根 manifest、`packages/test-support/`、`packages/test-support/client-runtime/`、`website/`、`native/`。发布所用的 tsdown 与 Vite 配置解析到的浏览器输入也属于运行时，即使它们位于 `devDependencies`；[浏览器第三方构建输入](2026-09-08-browser-third-party-build-inputs.zh.md)拥有这项分类。测试支撑依赖不会仅因字段写成 `dependencies` 就被交付，而生成器显式披露 `tsx`，因为源码启动通过其 ESM 钩子执行。
 

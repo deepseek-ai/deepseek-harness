@@ -1,6 +1,97 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/mcp/mcp-client/README.md
-README.md: 1bd8ff359d722791bea2f22f40491cdb844fc294
-README.zh.md: 5cb33f4fecae1f1de04c2c736b1b7b29d0e50410
+/:
+  en: 6440e0efb151c0fa
+  zh: d767308eb95b9d3f
+/deepseek-ai-dsh-mcp-client:
+  en: c3e635d210dd707e
+  zh: bd749579307d6a2d
+/deepseek-ai-dsh-mcp-client/summary:
+  en: 428cc4078a9d5b53
+  zh: 49b867131f518c0f
+/deepseek-ai-dsh-mcp-client/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-mcp-client/use-this-package:
+  en: e77871d58566601a
+  zh: c5ef229d22eb3ebf
+/deepseek-ai-dsh-mcp-client/use-this-package/minimal-configuration:
+  en: e909082dfca0a205
+  zh: 525c61645acef81a
+/deepseek-ai-dsh-mcp-client/use-this-package/tool-naming-and-coexistence:
+  en: 75ae9745d5b04796
+  zh: 8ae5b8ca6e73296e
+/deepseek-ai-dsh-mcp-client/use-this-package/calling-tools-and-reading-results:
+  en: cad16c6102b0e316
+  zh: 03841eea6ead54cd
+/deepseek-ai-dsh-mcp-client/use-this-package/startup-updates-and-reconnection:
+  en: a84ac57921b4792d
+  zh: f0de4b31f6547ea3
+/deepseek-ai-dsh-mcp-client/understand-the-implementation:
+  en: d33ddd080880b3f5
+  zh: 64328f5239c26752
+/deepseek-ai-dsh-mcp-client/understand-the-implementation/design-philosophy:
+  en: 4e213d68082b07f0
+  zh: 7617949ba46a3b63
+/deepseek-ai-dsh-mcp-client/understand-the-implementation/source-map:
+  en: 4b943ccfd8806794
+  zh: 006cb8f28bbeff41
+/deepseek-ai-dsh-mcp-client/understand-the-implementation/lifecycle-and-sync:
+  en: 2824ee8d014cbfc2
+  zh: 36d2c1fae7df2d04
+/deepseek-ai-dsh-mcp-client/understand-the-implementation/tool-execution-internals:
+  en: b4333df1bd3f027c
+  zh: 6bb4be691452c27a
+/deepseek-ai-dsh-mcp-client/understand-the-implementation/environment-scrubbing-stdio:
+  en: fef482a6f8cc789f
+  zh: 08f4c594ec83b4a1
+/deepseek-ai-dsh-mcp-client/further-exploration:
+  en: 402f4148cc9a39eb
+  zh: 02060d6909b39f7e
+/deepseek-ai-dsh-mcp-client/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-mcp-client/model-experience/discovered-mcp-tools:
+  en: 9f6397197d9a607d
+  zh: 79cf93aaf2e25a39
+/deepseek-ai-dsh-mcp-client/model-experience/discovered-mcp-tools/what-the-model-sees:
+  en: 866a129e71634e0e
+  zh: b27e4b22a07c2f26
+/deepseek-ai-dsh-mcp-client/model-experience/discovered-mcp-tools/token-effect:
+  en: ac85a6a5130c6440
+  zh: 9a31229f5355432b
+/deepseek-ai-dsh-mcp-client/model-experience/discovered-mcp-tools/kv-cache-effect:
+  en: dae97512f6d61027
+  zh: 5e6103fab15ab42d
+/deepseek-ai-dsh-mcp-client/model-experience/tool-call-history-and-results:
+  en: a8503137ad03720c
+  zh: 611a2dadf7c0c706
+/deepseek-ai-dsh-mcp-client/model-experience/tool-call-history-and-results/what-the-model-sees:
+  en: 5b3a7fe5bf11e73b
+  zh: e015c2468962fcf3
+/deepseek-ai-dsh-mcp-client/model-experience/tool-call-history-and-results/token-effect:
+  en: cc030374eca00e1c
+  zh: d4b19b9db621b367
+/deepseek-ai-dsh-mcp-client/model-experience/tool-call-history-and-results/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: 31911b4f3506d6c8
+/deepseek-ai-dsh-mcp-client/model-experience/server-instructions:
+  en: a3cb7c5760a8c141
+  zh: ec9fc8d4f00a5eb6
+/deepseek-ai-dsh-mcp-client/model-experience/server-instructions/what-the-model-sees:
+  en: d3e9d53702f9c494
+  zh: 62bd2b185abbd38c
+/deepseek-ai-dsh-mcp-client/model-experience/server-instructions/token-effect:
+  en: 082214331ebf38d7
+  zh: 2251c4f8e4d2e05c
+/deepseek-ai-dsh-mcp-client/model-experience/server-instructions/kv-cache-effect:
+  en: 189198f7ace2a991
+  zh: 00948145a803d614
+/deepseek-ai-dsh-mcp-client/known-limitations-and-deferred-work:
+  en: fa9e6096870de308
+  zh: ba1657b3f07ca7b1
+/deepseek-ai-dsh-mcp-client/known-limitations-and-deferred-work/dev-note:
+  en: 93353ea0be42bb65
+  zh: 4cee421cbf8628aa

@@ -3,7 +3,7 @@
 
 .block {
   --dsl-code-block-banner-background-color: var(--dsw-alias-markdown-code-block-banner);
-  --dsl-code-block-border-radius: 12px;
+  --dsl-code-block-border-radius: var(--dsw-radius-lg);
   /* Local 11/18 instead of the shared --dsw-font-xs-13: the banner scales
      with the markdown 0.875 ladder without shrinking every other xs-13 use. */
   --dsl-code-block-banner-font: 11px/18px var(--dsw-font-family);
@@ -102,6 +102,21 @@
 
 .plain {
   color: var(--dsw-alias-label-primary);
+}
+
+.card :where(pre) {
+  padding: 6px 22px 20px;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.card[data-code-wrap='false'] {
+  --dsl-code-block-line-white-space: pre;
+}
+
+.card[data-code-wrap='false'] :where(pre) {
+  white-space: pre;
+  overflow-wrap: normal;
 }
 
 .numbered :where(pre) code {

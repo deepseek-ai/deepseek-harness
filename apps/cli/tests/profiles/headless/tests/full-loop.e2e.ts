@@ -41,7 +41,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('full loop: real model + real bas
 
     const results = events.filter(event => event.type === 'tool/result')
     const resultTexts = results.flatMap(event =>
-      event.data.message.content[0].content.filter(block => block.type === 'text').map(block => block.text))
+      event.data.message.content.filter(block => block.type === 'text').map(block => block.text))
     expect(resultTexts.some(text => text.includes('e2e-ok'))).toBe(true)
 
     expect(finalText(events)).toContain('e2e-ok')

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-17-account-provider-signout.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-17-account-provider-signout.md
+/agent-note-account-provider-and-active-request-cancellation:
+  en: 3b8b363041dd596b
+  zh: 7c9b2eb195435b1f
+/agent-note-account-provider-and-active-request-cancellation/problem:
+  en: 8d4d00e33af763b2
+  zh: 61977c82d66ae9bf
+/agent-note-account-provider-and-active-request-cancellation/decision:
+  en: d5eb12a1644c6226
+  zh: 513d4f22ab74e039
+/agent-note-account-provider-and-active-request-cancellation/alternatives-considered:
+  en: a072026c1495a1ca
+  zh: bf053cc04fb33914
+/agent-note-account-provider-and-active-request-cancellation/consequences:
+  en: 8fd00b6d69b380c0
+  zh: 3830dc3a93d5de3c

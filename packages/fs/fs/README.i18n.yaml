@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/fs/fs/README.md
-README.md: e36e400d53cc581eb19733c9b3ccd890f34932a2
-README.zh.md: 3efc2106a9200ee84ab1a859a19fdb5b1631f056
+/:
+  en: a94eb1470c498a2c
+  zh: cdd5faa0a8fcb562
+/deepseek-ai-dsh-fs:
+  en: c4c564fe43efe006
+  zh: 736312b9959f58bc
+/deepseek-ai-dsh-fs/summary:
+  en: 8238ed0e699f4b17
+  zh: 0828d419e424c5a3
+/deepseek-ai-dsh-fs/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-fs/use-this-package:
+  en: 130aa12ccf7a1752
+  zh: 22d69bb7b5793fc9
+/deepseek-ai-dsh-fs/use-this-package/choosing-and-mounting-a-backend:
+  en: 8e2f904a21ba4dfb
+  zh: 76d9ce7503c84a5c
+/deepseek-ai-dsh-fs/use-this-package/what-the-service-lets-you-do:
+  en: 48aa680bb26e99c7
+  zh: 4f9b6e47292c233e
+/deepseek-ai-dsh-fs/understand-the-implementation:
+  en: 7e13d669ecc96d59
+  zh: b5fe7ae65812d926
+/deepseek-ai-dsh-fs/understand-the-implementation/design-philosophy:
+  en: 057001c4f3c7344e
+  zh: 880be1069e68b4c9
+/deepseek-ai-dsh-fs/understand-the-implementation/source-map:
+  en: 9507d7d9259fc89e
+  zh: aa500435e02e6de3
+/deepseek-ai-dsh-fs/understand-the-implementation/how-a-call-flows:
+  en: 6ce9e67b0f5653e5
+  zh: 6d974a760352417f
+/deepseek-ai-dsh-fs/understand-the-implementation/the-fs-policy-events:
+  en: 08bc855592933670
+  zh: 1e94e1f2272bbd61
+/deepseek-ai-dsh-fs/understand-the-implementation/invariants:
+  en: 15b98bc9800b6eae
+  zh: 434d9dd05fa1a332
+/deepseek-ai-dsh-fs/further-exploration:
+  en: faca30b042b7f72d
+  zh: e436ca4c5bbfd3e4
+/deepseek-ai-dsh-fs/model-experience:
+  en: 8ef3a43a11a7e187
+  zh: 0fee346e68f6e2ac
+/deepseek-ai-dsh-fs/model-experience/kv-cache-effect:
+  en: 40294c1c31b74824
+  zh: 0857e9b4dd363e0a
+/deepseek-ai-dsh-fs/known-limitations-and-deferred-work:
+  en: f37da51c7420f682
+  zh: 8f3bc6bb96851377
+/deepseek-ai-dsh-fs/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

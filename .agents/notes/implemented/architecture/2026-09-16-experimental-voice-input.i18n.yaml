@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-16-experimental-voice-input.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-16-experimental-voice-input.md
+/agent-note-experimental-voice-input-with-explicit-recognition-providers:
+  en: 8d4bb68acfedbb76
+  zh: e2fd06ac5d0d1f21
+/agent-note-experimental-voice-input-with-explicit-recognition-providers/problem:
+  en: 098f766687e70ec0
+  zh: 5f75407de5357c36
+/agent-note-experimental-voice-input-with-explicit-recognition-providers/decision:
+  en: ac3b8f0534c8bc4b
+  zh: 8480dbb4bdf9e695
+/agent-note-experimental-voice-input-with-explicit-recognition-providers/alternatives-considered:
+  en: 660a547861d966ad
+  zh: d597eac0b15d81b4
+/agent-note-experimental-voice-input-with-explicit-recognition-providers/consequences:
+  en: 75189a3d36b12ccd
+  zh: 2d88b1c723a2f02e

@@ -1,27 +1,24 @@
-/** Host loader entry for the browser implementation exported from `./client`. */
-
-import type { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
+/** Welcome acknowledgement stored in the plugin configuration. */
 import type {} from '@deepseek-ai/dsh-settings'
 
-/** Durable settings namespace for product-wide GUI onboarding facts. */
-const ONBOARDING_SETTINGS_NAMESPACE = 'ui-onboarding'
+import type { Volatile, Context } from '@deepseek-ai/cordis'
 
-interface OnboardingSettings {
-  /** Last version acknowledged by the current product welcome step. */
-  welcomeNoticeVersion?: string
+import z from '@deepseek-ai/schemastery'
+
+/** Runtime preferences projected to the browser. */
+export interface Config {
+  /** Last acknowledged welcome notice version. */
+  welcomeNoticeVersion: Volatile<string | undefined>
 }
 
-const OnboardingSettingsSchema: z<OnboardingSettings> = z.object({
-  welcomeNoticeVersion: z.string(),
+/** Live welcome preference. */
+export const Config = z.object({
+  welcomeNoticeVersion: z.string().volatile(),
 })
 
-/** Register the durable GUI-onboarding section when a settings provider exists. */
+/** The browser consumes the configuration form projection.
+ * @param ctx Plugin context used for optional settings presentation.
+ */
 export function apply(ctx: Context): void {
-  ctx.inject(['settings'], (settingsCtx) => {
-    settingsCtx.settings.register(
-      ONBOARDING_SETTINGS_NAMESPACE,
-      OnboardingSettingsSchema,
-    )
-  })
+  ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
 }

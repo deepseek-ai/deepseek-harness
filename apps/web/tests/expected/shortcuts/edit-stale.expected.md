@@ -1,0 +1,5 @@
+- group "Toggle left sidebar":
+  - button "Restore default" [disabled]
+  - button "Press a shortcut"
+  - text: Shortcut configuration or available commands changed. Review the latest bindings before saving. Shortcut configuration or available commands changed. Review the latest bindings before saving.
+  - button "I have reviewed the latest configuration"

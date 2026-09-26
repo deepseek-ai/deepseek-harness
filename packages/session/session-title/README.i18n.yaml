@@ -1,6 +1,73 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/session-title/README.md
-README.md: 09778e4e2b1cf1e6e6e4dc20dbe9237a4a0cc51f
-README.zh.md: db9efaa2ab0a226fb318b9b564d72f6f7e56be12
+/:
+  en: fc980ca9ef6bd49a
+  zh: 8c5f7b9dfe3046b5
+/deepseek-ai-dsh-session-title:
+  en: ea642fd4d4bed82c
+  zh: 90dcb6a7dac22ffe
+/deepseek-ai-dsh-session-title/summary:
+  en: e118294657a08540
+  zh: 729ff2c88ca3c971
+/deepseek-ai-dsh-session-title/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-session-title/use-this-package:
+  en: ea340b8dc55a6792
+  zh: 8db3a4e92a46e8fd
+/deepseek-ai-dsh-session-title/use-this-package/choosing-a-title-source:
+  en: ce4d31ea1dad6afc
+  zh: baf718edb594bfe2
+/deepseek-ai-dsh-session-title/use-this-package/minimal-configuration:
+  en: f72239b38a91783b
+  zh: 07e22375c09906a6
+/deepseek-ai-dsh-session-title/use-this-package/adding-a-provider:
+  en: 2e1e7b56a1f26478
+  zh: 750800b2d9e73595
+/deepseek-ai-dsh-session-title/use-this-package/reading-titles:
+  en: 34148c23c20ee6f4
+  zh: b0d10677722f3f63
+/deepseek-ai-dsh-session-title/use-this-package/failures-and-recovery:
+  en: 9acca330c1f36a5a
+  zh: 453fe66a6aee042a
+/deepseek-ai-dsh-session-title/understand-the-implementation:
+  en: 55b154c6d77c4f5d
+  zh: 29c67a3a57b3c071
+/deepseek-ai-dsh-session-title/understand-the-implementation/design-concept:
+  en: 4fb45f133de0e8a3
+  zh: 41b15f42100d816b
+/deepseek-ai-dsh-session-title/understand-the-implementation/source-map:
+  en: 84f4a3ff08caf847
+  zh: 9ed3acae2bb2a8b0
+/deepseek-ai-dsh-session-title/understand-the-implementation/lifecycle-and-concurrency:
+  en: 0167ad2951e5ae4d
+  zh: 0b1df4b7f20eb2f5
+/deepseek-ai-dsh-session-title/understand-the-implementation/normalization:
+  en: 0fa22531683cc824
+  zh: c6379873eb809e76
+/deepseek-ai-dsh-session-title/further-exploration:
+  en: 8b405b3bb2abf7cd
+  zh: 71e8a58bfae99a36
+/deepseek-ai-dsh-session-title/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-session-title/model-experience/session-title-state:
+  en: 9cbc63f58901ad4a
+  zh: a3b3049b2392eaf0
+/deepseek-ai-dsh-session-title/model-experience/session-title-state/what-the-model-sees:
+  en: afa80385f0e94fc1
+  zh: 47728506e55e29de
+/deepseek-ai-dsh-session-title/model-experience/session-title-state/token-effect:
+  en: 3b9d201fd468e785
+  zh: 14ab9ab70c39fa4f
+/deepseek-ai-dsh-session-title/model-experience/session-title-state/kv-cache-effect:
+  en: 2e04436408a67949
+  zh: 076e6a50c7357cd0
+/deepseek-ai-dsh-session-title/known-limitations-and-deferred-work:
+  en: 97affcb6a7089b59
+  zh: c166733b7be38d9b
+/deepseek-ai-dsh-session-title/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

@@ -19,6 +19,15 @@
     },
     {
       "path": "../../util/home-paths"
+    },
+    {
+      "path": "../../session/session-format"
+    },
+    {
+      "path": "../../session/session-format-catalog"
+    },
+    {
+      "path": "../../session/session-format-v3-to-v4"
     }
   ]
 }

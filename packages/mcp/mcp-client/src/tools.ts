@@ -242,7 +242,7 @@ export function createMcpToolDefinition(
     parameters: inputSchema,
     output: createOutput(rawName, supportedOutputSchema(options.outputSchema)),
     execute: createExecutor(ctx, options, projections),
-    finalizeContent(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>) {
+    projectContent(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>) {
       const projection = projections.get(exec)
       if (projection === undefined) return undefined
       projections.delete(exec)
@@ -267,7 +267,7 @@ function createOutput(rawName: string, structuredSchema: JsonSchemaNode | undefi
       additionalProperties: false,
     },
     render(_args: unknown, value: JsonValue) {
-      const result = value as unknown as McpResult
+      const result = value as McpResult
       return [{ type: 'text', text: extractText(result.content, rawName) }]
     },
   }

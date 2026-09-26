@@ -1,0 +1,10 @@
+version: 1
+scenario: office-skills
+profile: headless
+composition: office-skills
+recording: authored
+header:
+  class: office-skills
+  pin: true
+workspace:
+  setup: office-skills

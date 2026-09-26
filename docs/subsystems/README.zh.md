@@ -13,8 +13,9 @@
 | [scope.md](scope.zh.md) | 作用域注册标识、dispatch 载体，以及拥有的 `Scope` 上下文 |
 | [typert.md](typert.zh.md) | 远程调用描述符、lookup/Context 声明、Typert 注册表，以及 Host Gateway/Client API 边界 |
 | [goal.md](goal.zh.md) | 持久 goal 标识、生命周期快照、激活、变更记录与 Round 归属 |
-| [schedule.md](schedule.zh.md) | 仅限会话内的提醒记录、持久转换、活动视图与普通对话交付 |
+| [schedule.md](schedule.zh.md) | Host 拥有的提醒记录、持久转换、活动和已结束视图与普通对话交付 |
 | [todo.md](todo.zh.md) | todo 包的整列表条目类型、持久事件所有权、投影和未结束轮次不变式 |
+| [deliverables.md](deliverables.zh.md) | 一轮交给用户的东西：`present` 声明的 `PresentedFile` 交付，以及由 git 快照得出、由 Host 提供的 `WorkspaceChangesSummary` 改动摘要 |
 | [commands.md](commands.zh.md) | 人类命令注册表服务：定义、适配器发现、直接调用、结果与解析视图 |
 | [session.md](session.zh.md) | 完整的 `SessionEventMap` 变体目录、`TurnEndReason`、`deriveMessages()`、执行封闭与独立事件 |
 | [persistence.md](persistence.zh.md) | 持久性 seam：`SessionPersistence`、JSONL 提供方、`session/flush`、崩溃恢复、`SessionHeader` |
@@ -29,6 +30,7 @@
 | [mcp.md](mcp.zh.md) | 外部 MCP 连接、作用域工具与资源、服务器指令、协议结果与配置归属 |
 | [user-questions.md](user-questions.zh.md) | UI 支持的人工问答 seam：`AskUserQuestionRequest`、answer/options 词汇、提供方 API、错误分类体系 |
 | [approval.md](approval.zh.md) | 一次性用户审批 seam：`ApprovalRequest`、`ApprovalOutcome`、逐会话策略、审计事件和 answerer 约定 |
+| [office-to-pdf.md](office-to-pdf.zh.md) | 已授权的 Office 到 PDF 转换、原生/WASM 引擎与有界共享复用 |
 | [attachment.md](attachment.zh.md) | 持久图片标识与元数据、校验输入、经校验读取，以及 `AttachmentStore` seam |
 | [shell.md](shell.zh.md) | shell 执行器 seam：`ShellExecRequest`/`Spec`、`ShellRunResult`、后台 `ShellProcess` 句柄 |
 | [subprocess.md](subprocess.zh.md) | 子进程 seam：完全显式的 `SubprocessSpawnSpec`、基于偏移的输出读取器、不含分类的 `SubprocessOutcome`，以及受管 `DSH_*` 环境词汇 |
@@ -44,6 +46,7 @@
 | [skills.md](skills.zh.md) | skill（技能）服务：发现优先级、`SkillSummary`/`SkillDefinition`、会话前缀目录、面向模型的 `skill` 加载 |
 | [compaction.md](compaction.zh.md) | 压缩（compaction）seam：`compaction/*` 会话事件、`CompactionResult`、`CompactionEngine` 接口 |
 | [subagent.md](subagent.zh.md) | subagent seam：命名提供方注册表、`SubagentStartRequest`/`Result`/`Run`、启动时与运行时能力拆分 |
+| [voice-input.md](voice-input.zh.md) | 实验性具名语音识别、临时音频和受版本保护的草稿插入 |
 | [agent-team.md](agent-team.zh.md) | Agent Teams：隐式 Lead 身份、具名 continuable teammate、持久 peer mailbox 与共享任务 DAG |
 | [web.md](web.zh.md) | Web 访问 seam：`WebSearchRequest`/`Result`、`WebFetchRequest`/`Result`、`WebFetchBody`、提供方可用性、`WebError` |
 | [spill.md](spill.zh.md) | spill 存储 seam：`SaveTextSpill`、`SpillOwner`/`SpillSource`、`SpillRef`、品牌类型 `SpillLocator` |
@@ -64,5 +67,7 @@
 | [conversation.md](conversation.zh.md) | 目标无关的会话事件组装：上下文标识、位置数据、回放路径、视图构建器与目标自有的渲染节点 |
 | [session-projection.md](session-projection.zh.md) | 投影 seam：`SessionProjectionMap`、纯函数 `ProjectionDefinition` 单元、`ProjectionSnapshot` 的一致切面、变更馈送 |
 | [session-telemetry.md](session-telemetry.zh.md) | 对外会话上报能力 seam：`SessionTelemetryRecord`/`SessionTelemetrySeverity`、`SessionTelemetrySink` 约定和 `session-telemetry/record` 脱敏 waterfall（瀑布式事件） |
+| [otel.md](otel.zh.md) | 共享普通事件与 Session 日志 OTLP 通道 |
+| [product-telemetry.md](product-telemetry.zh.md) | 显式产品分析事件提交与 OTLP/HTTP 传输 |
 
 > 这些页面上的类型声明及其 JSDoc 与源码等价，并由 `pnpm run verify-type-equiv` 检查漂移（见 [development.md](../development.zh.md#documenting-types-verbatim-ts-type-equiv)）。普通块保留完整声明；`public-api` 块保留去除实现体的公开 class 声明。Cordis 服务与事件使用每页生成的 **Cordis API** 小节。

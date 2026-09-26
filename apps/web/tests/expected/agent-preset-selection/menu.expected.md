@@ -1,8 +1,5 @@
 - menu:
-  - menuitem "Standard mode Full coding agent with file editing, shell, file and web search, skills, planning, goals, subagents, and workflows.":
-    - text: Standard mode Full coding agent with file editing, shell, file and web search, skills, planning, goals, subagents, and workflows.
-    - img
-  - menuitem "PTC mode Full coding agent without the workflow tool; other tools are exposed through the PTC mode SDK so the model can combine multi-step operations in one TypeScript program."
-  - menuitem "Minimal mode Single-tool coding agent with a persistent shell."
-  - menuitem "Creator mode Built for creating custom agent presets, with all Standard mode capabilities plus runtime inspection, plugin experiments, and preset-authoring guidance."
-  - menuitem "Refusing mode Resolves, then refuses to start."
+  - menuitem "Standard mode Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed."
+  - menuitem "PTC mode Includes all Standard mode capabilities. Better suited to tasks that call tools in batches and then filter, organize, deduplicate, count, or summarize the results."
+  - menuitem "Minimal mode The agent works using only a terminal tool. Useful for testing and comparing its basic performance."
+  - menuitem "Creator mode Customize DSH through conversation. Let the agent write plugins that add features or UI, or combine tools and prompts to create your own mode."

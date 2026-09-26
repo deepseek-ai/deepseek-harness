@@ -291,7 +291,7 @@ describe('Cordis tree inspection', () => {
     const runtimeFiber = fiber.ctx.fiber
     const uidDescriptor = Object.getOwnPropertyDescriptor(runtimeFiber, 'uid')
     Object.defineProperty(runtimeFiber, 'uid', { ...uidDescriptor, value: null })
-    const hooks = root.events._hooks as unknown as Record<PropertyKey, Array<{ ctx: unknown }> | undefined>
+    const hooks = root.events._hooks as Record<PropertyKey, Array<{ ctx: unknown }> | undefined>
     const probe = Symbol('inspector-collector-probe')
     const empty = Symbol('inspector-collector-empty')
     const shadow = Object.create(root) as object

@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for 2026-09-15-client-session-references.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-15-client-session-references.md
+/agent-note-client-session-references-reference-sources-and-ui-status:
+  en: 720fca3e1f085f8f
+  zh: 3480eb43eb5f0e44
+/agent-note-client-session-references-reference-sources-and-ui-status/problem:
+  en: 0f4d2b6e8b0393dc
+  zh: fe20aca8b4fd0701
+/agent-note-client-session-references-reference-sources-and-ui-status/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-client-session-references-reference-sources-and-ui-status/decision/scope-and-ownership:
+  en: d9d52caab1468205
+  zh: 1b7665610bb025c6
+/agent-note-client-session-references-reference-sources-and-ui-status/decision/addresses-bindings-and-references:
+  en: 3743abc8bca00348
+  zh: d79e6a9311f0a2fe
+/agent-note-client-session-references-reference-sources-and-ui-status/decision/acquisition-failure-and-release:
+  en: 84e9528d4f995460
+  zh: f79f197d3dfbe8e9
+/agent-note-client-session-references-reference-sources-and-ui-status/decision/reference-sources-and-session-list-records:
+  en: e2de83d10542f93b
+  zh: 3855b38fc8c48ea3
+/agent-note-client-session-references-reference-sources-and-ui-status/decision/unified-ui-session-status:
+  en: 2d75aef5cf5f1fc8
+  zh: 87a7051f24f9871a
+/agent-note-client-session-references-reference-sources-and-ui-status/decision/explicit-providers-and-consumer-lifetimes:
+  en: 04802baa0147fec1
+  zh: b86037bf2e4bc936
+/agent-note-client-session-references-reference-sources-and-ui-status/decision/main-area-navigation-and-presentation:
+  en: c46c9ca54ea9eaad
+  zh: 918dc8eebff5edf3
+/agent-note-client-session-references-reference-sources-and-ui-status/decision/presets-and-creation-flows:
+  en: 70ef26a3cd399b14
+  zh: 5c81515ff896f91a
+/agent-note-client-session-references-reference-sources-and-ui-status/decision/host-event-context-ownership-and-typert:
+  en: eb3be89cf9431c44
+  zh: bfc26899286b37ad
+/agent-note-client-session-references-reference-sources-and-ui-status/alternatives-considered:
+  en: 658731de6bc235f3
+  zh: be16e5067f450b6e
+/agent-note-client-session-references-reference-sources-and-ui-status/verification:
+  en: b7a7bb90877fedc3
+  zh: 8b39d7a9624d6b43
+/agent-note-client-session-references-reference-sources-and-ui-status/consequences:
+  en: aa1b46303452c3e8
+  zh: 01571143251dfc61

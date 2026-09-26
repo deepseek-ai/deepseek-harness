@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-12-package-model-experience-contract.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-12-package-model-experience-contract.md
-2026-07-12-package-model-experience-contract.md: 8462cc20e8de43927cd04b73cfdb11a0c3d77336
-2026-07-12-package-model-experience-contract.zh.md: 040412f3afe4f5854d1945a6e638d6a517464f7f
+/agent-note-package-model-experience-contract:
+  en: c14f97f66251831b
+  zh: a7ef93d593a72215
+/agent-note-package-model-experience-contract/problem:
+  en: 69034b9a9ba40d49
+  zh: 016b64cb54c4c873
+/agent-note-package-model-experience-contract/decision:
+  en: f67c13ad41004520
+  zh: 28cf10f7d217f626
+/agent-note-package-model-experience-contract/alternatives-considered:
+  en: 206bc943c04313b1
+  zh: 6d295d9da6675854
+/agent-note-package-model-experience-contract/consequences:
+  en: dc6057b8836bb3fc
+  zh: 6e41a27a99ae0339

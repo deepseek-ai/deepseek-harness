@@ -23,3 +23,19 @@
 
 - id: hmr
   disabled: true
+
+# The packaged carrier supplies a default; DSH_PRIMARY_RUNTIME overrides it,
+# including an empty-string opt-out. Each row can be patched independently.
+- insert:
+    - id: workspace-dependencies
+      name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+      disabled: !!js "!(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME)"
+      config:
+        source: !!js "process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '')"
+
+    - id: skill-office
+      name: '@deepseek-ai/dsh-skill-office'
+      disabled: !!js "!(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME)"
+      config:
+        assetRoot: !!js "process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '', '..', 'office-skills')"
+        node: !!js "process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '', 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node')"

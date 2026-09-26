@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { JsonBlock, MarkdownText } from './markdown-test-components.tsx'
+import { LinkIconMedium, MarkdownDelegateProvider } from '../src/index.ts'
 import { cjkFriendlyStrong } from '../src/markdown/cjkFriendlyStrong.ts'
 import { mathCompatibility } from '../src/markdown/mathCompatibility.ts'
 
@@ -138,6 +139,57 @@ describe('MarkdownText', () => {
       .find(code => code.textContent === ` ${localUrl} `)
     expect(paddedCode?.querySelector('a')).toBeNull()
     expect(container.querySelector('pre code a')).toBeNull()
+  })
+
+  it('delegates ordinary HTTP(S) clicks while preserving modified-click behavior', () => {
+    const openExternalLink = vi.fn<(href: string) => void>()
+    render(
+      <MarkdownDelegateProvider openExternalLink={openExternalLink}>
+        <MarkdownText text={'[secure](https://example.com/a) [plain](http://example.com/b) `https://example.com/code` [mail](mailto:dev@example.com)'} />
+      </MarkdownDelegateProvider>,
+    )
+
+    const secure = screen.getByRole('link', { name: 'secure' })
+    const plain = screen.getByRole('link', { name: 'plain' })
+    const code = screen.getByRole('link', { name: 'https://example.com/code' })
+    expect(fireEvent.click(secure)).toBe(false)
+    expect(fireEvent.click(plain)).toBe(false)
+    expect(fireEvent.click(code)).toBe(false)
+    expect(openExternalLink.mock.calls).toEqual([
+      ['https://example.com/a'],
+      ['http://example.com/b'],
+      ['https://example.com/code'],
+    ])
+
+    for (const modified of [
+      { button: 1 },
+      { metaKey: true },
+      { ctrlKey: true },
+      { shiftKey: true },
+      { altKey: true },
+    ]) expect(fireEvent.click(secure, modified)).toBe(true)
+    expect(openExternalLink).toHaveBeenCalledTimes(3)
+    expect(screen.getByRole('link', { name: 'mail' }).getAttribute('target')).toBeNull()
+  })
+
+  it('updates the delegated link handler while Markdown is streaming', () => {
+    const first = vi.fn<(href: string) => void>()
+    const second = vi.fn<(href: string) => void>()
+    const source = '[web](https://example.com/)'
+    const view = render(
+      <MarkdownDelegateProvider openExternalLink={first}>
+        <MarkdownText text={source} streaming />
+      </MarkdownDelegateProvider>,
+    )
+    fireEvent.click(screen.getByRole('link', { name: 'web' }))
+    view.rerender(
+      <MarkdownDelegateProvider openExternalLink={second}>
+        <MarkdownText text={source} streaming />
+      </MarkdownDelegateProvider>,
+    )
+    fireEvent.click(screen.getByRole('link', { name: 'web' }))
+    expect(first).toHaveBeenCalledOnce()
+    expect(second).toHaveBeenCalledOnce()
   })
 
   it('links inline code through the file-mention resolver: URL first, settled only, never inside links', () => {
@@ -307,6 +359,15 @@ describe('MarkdownText', () => {
     expect(screen.getByText('file diagram')).toBeTruthy()
     expect(screen.getByText('script diagram')).toBeTruthy()
     expect(screen.getByText('mail diagram')).toBeTruthy()
+  })
+
+  it('leads a known site link with its own mark and an unknown host with the globe', () => {
+    const { container } = render(<MarkdownText text={'[repo](https://github.com/org/repo) [docs](https://example.com/a)'} />)
+    const pathsOf = (svg: SVGSVGElement): (string | null)[] => [...svg.querySelectorAll('path')].map(path => path.getAttribute('d'))
+    const marks = [...container.querySelectorAll<SVGSVGElement>('p a svg')].map(pathsOf)
+    const globe = pathsOf(render(<LinkIconMedium kind="url" />).container.querySelector('svg')!)
+    const github = pathsOf(render(<LinkIconMedium kind="url" href="https://github.com/a" />).container.querySelector('svg')!)
+    expect(marks).toEqual([github, globe])
   })
 
   it('keeps incomplete streaming Markdown renderable', () => {

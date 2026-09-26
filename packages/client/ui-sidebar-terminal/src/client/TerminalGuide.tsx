@@ -1,15 +1,17 @@
 /** Shell launch menu owned by the terminal provider's guide entry. */
 import { useEffect, useState, type ReactNode } from 'react'
-import { Button, IconChevronDownOutline14, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import { PluginArtworkTerminal, ShortcutKeys, Button, IconChevronDownOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TerminalLaunchShells } from '@deepseek-ai/dsh-api-terminal-controller/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from './locales.ts'
-import { TerminalGuideIcon } from './TerminalIcon.tsx'
 import css from './TerminalGuide.module.css'
 
 /** Provider-owned discovery and browser preference writes. */
 export interface TerminalGuideInjected {
+  readonly hooks: { readonly shortcuts: HostObservable<readonly ShortcutCatalogEntry[]> }
   /** @param signal - open menu lifetime. @returns current Host choices and browser preference. */
   readonly loadShells: (signal: AbortSignal) => Promise<TerminalLaunchShells>
   /** @param path - Host-discovered shell selected for the next terminal. */
@@ -23,10 +25,14 @@ type MenuState = { phase: 'loading' } | { phase: 'ready'; choices: TerminalLaunc
 
 /**
  * Open the remembered shell from the card or choose another shell from its menu.
+ * The card displays its effective shortcut; the shell menu sits beside the title.
  * @param props - guide copy, enclosing tab actions and cancellable discovery.
  * @returns separate launch and menu buttons within one guide card.
  */
-export function TerminalGuide({ title, description, kind, useTabInfo, loadShells, selectShell, t }: TerminalGuideProps): ReactNode {
+export function TerminalGuide({
+  title, description, kind, useTabInfo, loadShells, selectShell, t, useShortcuts,
+}: TerminalGuideProps): ReactNode {
+  const shortcut = useShortcuts(entries => entries.find(entry => entry.id === 'terminal.new'))
   const { tab } = useTabInfo()
   const [open, setOpen] = useState(false)
   const [attempt, setAttempt] = useState(0)
@@ -47,28 +53,31 @@ export function TerminalGuide({ title, description, kind, useTabInfo, loadShells
       ? [{ id: 'loading', label: t('shellLoading'), disabled: true }]
       : [{ id: 'error', label: t('failed', { message: state.message }), disabled: true }, { id: 'retry', label: t('retry') }]
   return <div className={css.entry} data-sidebar-right-guide-entry={kind}>
-    <Button variant="ghost" className={css.main} onClick={() => { tab.actions.openTab('terminal', { replaceTab: true }) }}>
-      <TerminalGuideIcon size={description === undefined ? 22 : 26} className={css.icon} />
-      <span className={css.text}>
-        <span className={css.title}>{title}</span>
-        {description !== undefined && <span className={css.description}>{description}</span>}
+    <Button variant="ghost" className={css.main} aria-label={description === undefined ? title : `${title} ${description}`} aria-keyshortcuts={shortcut?.aria}
+      onClick={() => { tab.actions.openTab('terminal', { replaceTab: true }) }} />
+    <span className={css.icon} aria-hidden="true"><PluginArtworkTerminal size={description === undefined ? 22 : 26} /></span>
+    <span className={css.text}>
+      <span className={css.titleRow}>
+        <span className={css.title} aria-hidden="true">{title}</span>
+        <Menu
+          open={open} portal autoFocus align="end" className={css.menu}
+          items={items.length === 0 ? [{ id: 'empty', label: t('shellEmpty'), disabled: true }] : items}
+          selectedId={state.phase === 'ready' ? state.choices.selectedShell : undefined}
+          onClose={() => { setOpen(false) }}
+          onSelect={(path) => {
+            if (state.phase === 'failed') { setState({ phase: 'loading' }); setAttempt(value => value + 1); return }
+            selectShell(path)
+            setOpen(false)
+            tab.actions.openTab('terminal', { replaceTab: true, params: { shellPath: path } })
+          }}
+          anchor={<Button variant="ghost" className={css.trigger} aria-label={t('shell')} aria-haspopup="menu" aria-expanded={open}
+            onClick={() => { setState({ phase: 'loading' }); setOpen(value => !value) }}>
+            <IconChevronDownOutlineRegular />
+          </Button>}
+        />
       </span>
-    </Button>
-    <Menu
-      open={open} portal autoFocus align="end" className={css.menu}
-      items={items.length === 0 ? [{ id: 'empty', label: t('shellEmpty'), disabled: true }] : items}
-      selectedId={state.phase === 'ready' ? state.choices.selectedShell : undefined}
-      onClose={() => { setOpen(false) }}
-      onSelect={(path) => {
-        if (state.phase === 'failed') { setState({ phase: 'loading' }); setAttempt(value => value + 1); return }
-        selectShell(path)
-        setOpen(false)
-        tab.actions.openTab('terminal', { replaceTab: true, params: { shellPath: path } })
-      }}
-      anchor={<Button variant="ghost" className={css.trigger} aria-label={t('shell')} aria-haspopup="menu" aria-expanded={open}
-        onClick={() => { setState({ phase: 'loading' }); setOpen(value => !value) }}>
-        <IconChevronDownOutline14 />
-      </Button>}
-    />
+      {description !== undefined && <span className={css.description} aria-hidden="true">{description}</span>}
+    </span>
+    {shortcut !== undefined && shortcut.keys.length > 0 && <ShortcutKeys keys={shortcut.keys} className={css.shortcut} />}
   </div>
 }

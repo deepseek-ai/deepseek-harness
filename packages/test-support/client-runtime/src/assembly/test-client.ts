@@ -67,7 +67,7 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 5_000
 
 /**
  * Browser globals jsdom lacks that roster plugins touch at apply or mount:
- * client-hmr opens an `EventSource`, layout components observe element size.
+ * client-hmr opens an `EventSource`; layout components observe size and font loading.
  * Inert stand-ins, installed only where the global is absent.
  */
 const JSDOM_SHIMS: Readonly<Record<string, unknown>> = {
@@ -86,7 +86,18 @@ function installJsdomShims(): () => void {
   const globals = globalThis as Record<string, unknown>
   const installed = Object.keys(JSDOM_SHIMS).filter(name => globals[name] === undefined)
   for (const name of installed) globals[name] = JSDOM_SHIMS[name]
-  return () => { for (const name of installed) Reflect.deleteProperty(globals, name) }
+  const fontDocument: { readonly fonts?: EventTarget } | undefined =
+    typeof document === 'undefined' ? undefined : document
+  const shimFonts = fontDocument !== undefined && fontDocument.fonts === undefined
+  const fontsDescriptor = fontDocument === undefined ? undefined : Object.getOwnPropertyDescriptor(fontDocument, 'fonts')
+  if (shimFonts) Object.defineProperty(fontDocument, 'fonts', { configurable: true, value: new EventTarget() })
+  return () => {
+    for (const name of installed) Reflect.deleteProperty(globals, name)
+    if (shimFonts) {
+      if (fontsDescriptor === undefined) Reflect.deleteProperty(fontDocument, 'fonts')
+      else Object.defineProperty(fontDocument, 'fonts', fontsDescriptor)
+    }
+  }
 }
 
 /** The Error a thrown value stands for: itself, or a new Error carrying its string form. */
@@ -218,7 +229,7 @@ export class TestClient {
       mountPoint = resolveMountPoint(options.mount)
       release = sharedJsdomShims.acquire()
       const system = createInProcessModules(graphFromRoster(roster.rows), modules)
-      ctx.plugin(remoteProxiesPlugin(remoteNamespacesOf(modules.values(), mock), mock) as unknown as Plugin)
+      ctx.plugin(remoteProxiesPlugin(remoteNamespacesOf(modules.values(), mock), mock) as Plugin)
       await bootClient({ ctx, modules: system, manifest: system.manifest })
       if (mountPoint.element !== undefined) {
         if (ctx.get('uiRenderer') === undefined) {

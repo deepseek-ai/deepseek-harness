@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-16-performance-usage-preference.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-16-performance-usage-preference.md
+/agent-note-performance-and-usage-detail-preference:
+  en: 6179732355b5c019
+  zh: 3a620cf25a5580c4
+/agent-note-performance-and-usage-detail-preference/problem:
+  en: 3b420f5fb2952b3e
+  zh: 6fa1ef1090e595ec
+/agent-note-performance-and-usage-detail-preference/decision:
+  en: 953b5fcaed000c9e
+  zh: 2ff9d6ff0535d846
+/agent-note-performance-and-usage-detail-preference/alternatives-considered:
+  en: 7c676c0b192d03eb
+  zh: 2e994f30fc99c5d4
+/agent-note-performance-and-usage-detail-preference/consequences:
+  en: 2bc7b780efbae1e9
+  zh: c7ecaffd29dfbbff

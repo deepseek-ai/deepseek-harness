@@ -74,6 +74,8 @@ kind: "package-reference"
 
 无。
 
+计划审批中可选的 `callId` 标识已记录的工具调用，供文档导航使用，不改变回答及其校验。
+
 </details>
 
 **运行时不变式：** 不发布伴生入口。answerer waterfall 按请求解析并把结果直接返回调用方；该 seam 不发布独立的请求／回答审计流。

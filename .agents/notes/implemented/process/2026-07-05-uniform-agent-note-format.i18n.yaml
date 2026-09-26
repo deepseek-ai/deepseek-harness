@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-05-uniform-agent-note-format.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-05-uniform-agent-note-format.md
-2026-07-05-uniform-agent-note-format.md: c05d81c700b81f0d619173a261f405b1cc039df1
-2026-07-05-uniform-agent-note-format.zh.md: 13991632e70cfab1c65170ba5f2350f47ad1acd0
+/agent-note-one-gated-in-file-format-for-agent-notes:
+  en: 1d02708a467f4a07
+  zh: 3c924198ec72c881
+/agent-note-one-gated-in-file-format-for-agent-notes/problem:
+  en: 71bd2d16e40c3ed7
+  zh: 485862218afcdc00
+/agent-note-one-gated-in-file-format-for-agent-notes/decision:
+  en: 246ec96b0c1da90d
+  zh: 12a06608ffdf28f8
+/agent-note-one-gated-in-file-format-for-agent-notes/alternatives-considered:
+  en: 330044b841da3ab9
+  zh: e909207cbcbc5edb
+/agent-note-one-gated-in-file-format-for-agent-notes/consequences:
+  en: 345e6318b76b1a06
+  zh: 63cef25e59d91654

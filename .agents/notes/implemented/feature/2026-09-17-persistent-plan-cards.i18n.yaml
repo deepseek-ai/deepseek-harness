@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-17-persistent-plan-cards.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-17-persistent-plan-cards.md
+/agent-note-persistent-plan-cards-and-sidebar-reading:
+  en: e84bc0e16f40cafb
+  zh: b11a06e7800e3f9a
+/agent-note-persistent-plan-cards-and-sidebar-reading/problem:
+  en: 273400b515da3a1d
+  zh: 13b508617f08c6d0
+/agent-note-persistent-plan-cards-and-sidebar-reading/decision:
+  en: 243abb4fe9944c97
+  zh: 6e66ddceb9c89aee
+/agent-note-persistent-plan-cards-and-sidebar-reading/alternatives-considered:
+  en: f1f8dbe0f29b89cd
+  zh: 4fc73f1f4b4bcbae
+/agent-note-persistent-plan-cards-and-sidebar-reading/consequences:
+  en: 4d1740b16711041d
+  zh: 412ac19a3705045e

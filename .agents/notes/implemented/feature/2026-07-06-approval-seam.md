@@ -55,7 +55,7 @@ After validation and a successful `approval/asked` append, the service resolves 
 
 Answerers are `approval/request` waterfall listeners. Zero listeners fall through to `unavailable`; a recognizing listener occupies the first-wins decision slot, while an unrecognized agent must delegate with `next()`. Listeners dispose with their fibers, so an unloaded channel fails closed. Because sibling registration order is not deterministic, a deployment composes one terminal answerer and reserves `prepend` for decide-or-delegate gates.
 
-`ApprovalRequest` carries the asking `agent`, `toolName`, optional exact `callId`, human-readable `reason`, and optional `signal`. It uses the `ToolCallId` brand without importing `dsh-tools`, which depends on this seam. Channel adapters correlate any richer call state by `callId`; the approval request does not duplicate tool arguments.
+`ApprovalRequest` carries the asking `agent`, `toolName`, optional exact `callId`, human-readable `reason`, optional localized `displayReason`, and optional `signal`. It uses the `ToolCallId` brand without importing `dsh-tools`, which depends on this seam. Channel adapters correlate any richer call state by `callId`; the approval request does not duplicate tool arguments.
 
 #### Ask routing in dsh-tools
 

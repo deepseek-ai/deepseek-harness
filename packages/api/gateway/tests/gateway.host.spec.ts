@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { apply as applyConnection, inject as connectionInject } from '@deepseek-ai/dsh-client-connection'
-import type { HostConnectionHandle } from '@deepseek-ai/dsh-client-connection'
+import type {
+  ConnectionRpcHandler,
+  HostConnectionHandle,
+  PeerId,
+  PeerScope,
+} from '@deepseek-ai/dsh-client-connection'
 import type { WebServer, WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import {
   bindTypertRemote,
@@ -53,6 +58,7 @@ class GoalService extends Service {
   readonly typertRemote = bindTypertRemote(this, 'goals')
   readonly calls: string[] = []
   lastSignal: AbortSignal | undefined
+  lastPeer: PeerScope | undefined
   nextResult: unknown = undefined
   businessError: Error | undefined
 
@@ -64,6 +70,7 @@ class GoalService extends Service {
   create(agent: FixtureAgent, request: { readonly title: string }, signal: AbortSignal): unknown {
     this.calls.push('create')
     this.lastSignal = signal
+    this.lastPeer = this.ctx.invocation?.peer
     return {
       agentId: agent.id,
       title: request.title,
@@ -102,19 +109,19 @@ class GoalService extends Service {
   }
 }
 
-type FakeRpcResult =
-  | { readonly ok: true; readonly value: unknown }
-  | { readonly ok: false; readonly error: { readonly code: string; readonly message: string; readonly details: object } }
-
+type FakeRpcResult = Awaited<ReturnType<ConnectionRpcHandler>>
 type FakeRpcHandler = (endpoint: string, payload: unknown, signal: AbortSignal) => Promise<FakeRpcResult>
 
 class FakeConnectionService extends Service {
   channel: string | undefined
   matches: ((endpoint: string) => boolean) | undefined
   handler: FakeRpcHandler | undefined
+  /** The operator Peer every call this fake dispatches speaks for. */
+  readonly operator: PeerScope
 
   constructor(ctx: Context) {
     super(ctx, 'connection')
+    this.operator = { id: 'fake-operator' as PeerId, ctx, dispose: () => Promise.resolve() }
   }
 
   get rpc() {
@@ -123,12 +130,12 @@ class FakeConnectionService extends Service {
       intercept: (
         channel: string,
         matches: (endpoint: string) => boolean,
-        handler: FakeRpcHandler,
+        handler: ConnectionRpcHandler,
       ) =>
         owner.effect(() => {
           this.channel = channel
           this.matches = matches
-          this.handler = handler
+          this.handler = (endpoint, payload, signal) => handler(endpoint, payload, signal, this.operator)
           return () => {
             this.channel = undefined
             this.matches = undefined
@@ -993,16 +1000,25 @@ describe('TypertGatewayService', () => {
     const signal = abort.signal
     const handler = connection.handler
     if (handler === undefined) throw new Error('fixture Connection did not retain the /api interceptor')
-    await expect(handler('goals/create', {
+    const success = await handler('goals/create', {
       args: { agentId: 'agent-1', request: { title: 'ship' } },
-    }, signal)).resolves.toEqual({
+    }, signal)
+    expect(success).toMatchObject({
       ok: true,
       value: { agentId: 'agent-1', title: 'ship', scope: 'rpc-caller' },
     })
+    if (!success.ok) throw new Error('fixture Remote failed')
+    expect(success.attachments).toBeUndefined()
     const service = rawGoalService(ctx)
     expect(service.lastSignal).toBe(signal)
     abort.abort(new Error('client disconnected'))
     expect(service.lastSignal?.aborted).toBe(true)
+    await expect(ctx.typertGateway.invoke({
+      namespace: 'goals',
+      method: 'create',
+      args: { agentId: 'agent-1', request: { title: 'direct' } },
+    })).resolves.toMatchObject({ title: 'direct' })
+    expect(service.lastPeer).toBe(connection.operator)
     const invalid = await handler('goals/create', { invalid: true }, signal)
     expect(invalid).toMatchObject({
       ok: false,
@@ -1011,11 +1027,11 @@ describe('TypertGatewayService', () => {
     if (invalid.ok) throw new Error('invalid Remote payload unexpectedly succeeded')
     expect(invalid.error.message).toMatch(/exactly one plain-object args field/)
 
-    await expect(handler('goals/maybe', { args: {} }, signal)).resolves.toEqual({
+    await expect(handler('goals/maybe', { args: {} }, signal)).resolves.toMatchObject({
       ok: true,
       value: undefined,
     })
-    await expect(handler('goals/maybe', { args: { value: null } }, signal)).resolves.toEqual({
+    await expect(handler('goals/maybe', { args: { value: null } }, signal)).resolves.toMatchObject({
       ok: true,
       value: null,
     })
@@ -1063,6 +1079,112 @@ describe('TypertGatewayService', () => {
 
     await gatewayFiber.dispose()
     expect(connection.handler).toBeUndefined()
+  })
+
+  it('projects strict and SRC result bytes before returning to Connection', async () => {
+    const { ctx } = await setup()
+    const fiber = ctx.plugin(FakeConnectionService)
+    await fiber
+    try {
+      const value = { content: new Uint8Array([0, 128, 255]) }
+      rawGoalService(ctx).nextResult = value
+      const handler = rawConnection(ctx).handler!
+      const source = await handler('goals/passthrough', { args: { value: null } }, new AbortController().signal)
+      expect(source).toEqual({
+        ok: true,
+        value: { content: null },
+        attachments: [{ path: ['content'], bytes: value.content }],
+      })
+      const descriptor = passthroughDescriptor()
+      const codec = {
+        mode: 'strict' as const,
+        typeSymbol: '@fixture/gateway#Bytes',
+        create: () => z.object({ content: z.instanceof(Uint8Array) }),
+        encode: (input: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => {
+          const result = input as { readonly content: Uint8Array }
+          return { content: writeBytes(result.content, ['content']) }
+        },
+      }
+      const remove = registerStrict(ctx, [{ ...descriptor, result: codec }])
+      const strict = await handler('goals/passthrough', { args: { value: null } }, new AbortController().signal)
+      expect(strict).toEqual({
+        ok: true,
+        value: { content: null },
+        attachments: [{ path: ['content'], bytes: value.content }],
+      })
+      await remove()
+    } finally {
+      await fiber.dispose()
+    }
+  })
+
+  it('owns runtime result projection for SRC methods', async () => {
+    const { ctx, service } = await setup()
+    const fiber = ctx.plugin(FakeConnectionService)
+    await fiber
+    try {
+      const handler = rawConnection(ctx).handler!
+      const call = () => handler('goals/passthrough', { args: { value: null } }, new AbortController().signal)
+      let reads = 0
+      const bytes = new Uint8Array([1, 2])
+      service.nextResult = { get content() { reads++; return bytes }, get count() { return ++reads } }
+      await expect(call()).resolves.toEqual({
+        ok: true,
+        value: { content: null, count: 2 },
+        attachments: [{ path: ['content'], bytes }],
+      })
+      expect(reads).toBe(2)
+
+      const array: Uint8Array[] = []
+      Object.defineProperty(array, 0, { value: bytes })
+      service.nextResult = array
+      await expect(call()).resolves.toEqual({
+        ok: true,
+        value: [null],
+        attachments: [{ path: [0], bytes }],
+      })
+
+      service.nextResult = Object.assign(new Date('2026-01-01T00:00:00Z'), { content: bytes })
+      await expect(call()).resolves.toEqual({ ok: true, value: '2026-01-01T00:00:00.000Z' })
+      const json = { self: {} as object, toJSON: () => ({ selected: true }) }
+      json.self = json
+      service.nextResult = json
+      await expect(call()).resolves.toEqual({ ok: true, value: { selected: true } })
+      let conversions = 0
+      service.nextResult = { toJSON(key: string) { conversions++; expect(key).toBe('value'); return this }, count: 5 }
+      await expect(call()).resolves.toEqual({ ok: true, value: { count: 5 } })
+      expect(conversions).toBe(1)
+      for (const primitive of [1, 'text', true]) {
+        service.nextResult = Object(primitive) as object
+        await expect(call()).resolves.toEqual({ ok: true, value: primitive })
+      }
+      service.nextResult = { toJSON: 'ordinary' }
+      await expect(call()).resolves.toEqual({ ok: true, value: service.nextResult })
+
+      const protectedName = JSON.parse('{"__proto__":null}') as Record<string, unknown>
+      Object.defineProperty(protectedName, '__proto__', { value: bytes, enumerable: true })
+      service.nextResult = protectedName
+      const protectedResult = await call()
+      expect(protectedResult).toMatchObject({
+        ok: true,
+        attachments: [{ path: ['__proto__'], bytes }],
+      })
+      if (!protectedResult.ok || typeof protectedResult.value !== 'object' || protectedResult.value === null) {
+        throw new Error('SRC protected-name result was not projected')
+      }
+      expect(Object.hasOwn(protectedResult.value, '__proto__')).toBe(true)
+      expect(Reflect.get(protectedResult.value, '__proto__')).toBeNull()
+
+      const circular: { next?: object } = {}
+      circular.next = circular
+      service.nextResult = circular
+      await expect(call()).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'gateway/internal', message: 'gateway: circular RPC result' },
+      })
+    } finally {
+      await fiber.dispose()
+    }
   })
 
   it('claims and validates in-process Remote event results for the active Client generation', async () => {
@@ -1223,7 +1345,7 @@ describe('TypertGatewayService', () => {
         }),
       })
       expect(invalid.status).toBe(200)
-      const invalidBody = await invalid.json() as unknown
+      const invalidBody: unknown = await invalid.json()
       expect(invalidBody).toMatchObject({
         type: 'server-response',
         rpcId: 'rpc-invalid',
@@ -1247,7 +1369,7 @@ describe('TypertGatewayService', () => {
         }),
       })
       expect(withdrawn.status).toBe(200)
-      const withdrawnBody = await withdrawn.json() as unknown
+      const withdrawnBody: unknown = await withdrawn.json()
       expect(withdrawnBody).toMatchObject({
         type: 'server-response',
         rpcId: 'rpc-withdrawn',

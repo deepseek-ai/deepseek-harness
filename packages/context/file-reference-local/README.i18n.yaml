@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/context/file-reference-local/README.md
-README.md: efeebdbd3e113597cc93dfe4d6c379e16b324d93
-README.zh.md: f286f92d6e6ec76afc9919db9f81c73e4ace8d04
+/:
+  en: 1416be50915cb608
+  zh: a4279b8173a8ede9
+/deepseek-ai-dsh-file-reference-local:
+  en: 9149ae1430a55ba8
+  zh: 54c229b01013c4d6
+/deepseek-ai-dsh-file-reference-local/summary:
+  en: 74449d8df9ec0f95
+  zh: e32b383ddddbfdbf
+/deepseek-ai-dsh-file-reference-local/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-file-reference-local/use-this-package:
+  en: bb3ce050657f834a
+  zh: 2e1afa3efb7a5702
+/deepseek-ai-dsh-file-reference-local/use-this-package/enabling-the-provider:
+  en: 62b9ce096fa4a94e
+  zh: 53081797c34d64eb
+/deepseek-ai-dsh-file-reference-local/use-this-package/what-you-get:
+  en: f74a8087c7d46e5a
+  zh: af19c91b1d9a38ab
+/deepseek-ai-dsh-file-reference-local/use-this-package/configuration:
+  en: 977d19768aebbfd4
+  zh: 35b735eac4619c6d
+/deepseek-ai-dsh-file-reference-local/understand-the-implementation:
+  en: e047061055178783
+  zh: da3309d34d65e965
+/deepseek-ai-dsh-file-reference-local/understand-the-implementation/design-concept:
+  en: f0023b9c833747b5
+  zh: 42aef0c0fce9ce8c
+/deepseek-ai-dsh-file-reference-local/understand-the-implementation/source-map:
+  en: a04bc6a11619cae7
+  zh: 4fb1a0d04398260b
+/deepseek-ai-dsh-file-reference-local/understand-the-implementation/main-flow:
+  en: bb338cacc1ef8c01
+  zh: d7ad96a5646f5444
+/deepseek-ai-dsh-file-reference-local/further-exploration:
+  en: dcd8fda368dc28d9
+  zh: 56090f8c2f84e7b0
+/deepseek-ai-dsh-file-reference-local/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance-when-read-is-available:
+  en: 9a457db92875eedb
+  zh: 3b6d3fd974c8a91a
+/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance-when-read-is-available/what-the-model-sees:
+  en: a8efdbf46dfc65d6
+  zh: a8e578eec71c9d98
+/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance-when-read-is-available/what-the-model-sees/file-reference-instruction:
+  en: 840f6256a44e78ba
+  zh: ebc00f948c48b635
+/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance-when-read-is-available/token-effect:
+  en: 912448c13f2b2f35
+  zh: 013de25c1511bd65
+/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance-when-read-is-available/kv-cache-effect:
+  en: 1c3ebc786f362851
+  zh: 01f43411f28d2993
+/deepseek-ai-dsh-file-reference-local/known-limitations-and-deferred-work:
+  en: 42f854dbb8d0df02
+  zh: 2045a8c0a6f69400
+/deepseek-ai-dsh-file-reference-local/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

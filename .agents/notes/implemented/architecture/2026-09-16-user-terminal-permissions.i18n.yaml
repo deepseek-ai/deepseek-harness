@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-16-user-terminal-permissions.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-16-user-terminal-permissions.md
+/agent-note-user-terminal-permissions:
+  en: 806fc2a4c3bc2294
+  zh: dfdae2dc3c49b0b3
+/agent-note-user-terminal-permissions/problem:
+  en: 2948b4f40ebe9d3b
+  zh: a59676148531470f
+/agent-note-user-terminal-permissions/decision:
+  en: 23aad535d7f8d41e
+  zh: 543ecefce61bee7f
+/agent-note-user-terminal-permissions/alternatives-considered:
+  en: a4f8d5ac653db322
+  zh: 9671639c5a2c746b
+/agent-note-user-terminal-permissions/consequences:
+  en: b1c2a8059cd44cc2
+  zh: 83aba1c4de722bdc

@@ -14,9 +14,9 @@ export const zh = {
   'action.skip': '跳过',
   'action.next': '下一题',
   'plan.header': '计划待审',
-  'plan.approve': '确认执行',
+  'plan.approve': '同意执行',
   'plan.decline': '拒绝',
-  'plan.discuss': '去聊天里说',
+  'plan.discuss': '要求修改',
 } satisfies Record<string, string>
 
 /** The question namespace key union. */
@@ -38,5 +38,5 @@ export const en = {
   'plan.header': 'Plan review',
   'plan.approve': 'Approve',
   'plan.decline': 'Refuse',
-  'plan.discuss': 'Chat about it',
+  'plan.discuss': 'Request changes',
 } satisfies Record<QuestionKey, string>

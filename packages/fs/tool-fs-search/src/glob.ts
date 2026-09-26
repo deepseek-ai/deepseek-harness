@@ -294,27 +294,20 @@ export function presentGlobResult(_args: { pattern: string; path?: string }, res
  * @param caps - the deployment's resolved glob caps (plugin config after defaulting).
  */
 export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
-  const overCapGuidance = caps.sampleOverCapGlobResults
-    ? 'while a larger one is sampled across top-level entries, so it spans the tree instead of one subtree.'
-    : 'while a larger one keeps the modification-time-ordered head.'
   ctx.systemPrompt.section({
     name: 'tool:glob',
     order: ctx.systemPrompt.getSectionOrder('TOOL_GLOB'),
     text: ({ scope }) => ctx.tools.get('glob', scope) === undefined
       ? ''
-      : 'Use the glob tool — not shell find — to discover files by path pattern. A pattern with no "/" matches basenames at any depth, so "*" matches every file in the tree rather than its top level. '
-      + `Results are files only, never directories, and include hidden and ignored files: a result that fits comes back in modification-time order, ${overCapGuidance}`,
+      : 'Use the glob tool — not shell find — to discover files by path pattern.',
   })
 
-  const overCapDescription = caps.sampleOverCapGlobResults
-    ? `a larger result instead returns ${caps.maxResults} paths sampled across top-level entries`
-    : `a larger result returns the first ${caps.maxResults} paths in modification-time order`
+  const overCapDescription = caps.sampleOverCapGlobResults ? 'is sampled across top-level entries' : 'keeps the first paths'
   const tool = defineTool({
     name: 'glob',
-    description: 'Find files whose paths match a glob pattern. Returns matching file paths — never directories — '
-      + 'including hidden and ignored files (VCS metadata directories are excluded). '
-      + `Up to ${caps.maxResults} paths come back in modification-time order; ${overCapDescription}, `
-      + 'says so, and reports where the complete sorted list was saved. This tool does not enumerate directory entries.',
+    description: 'Find files, not directories, whose paths match a glob pattern, including hidden and ignored files. '
+      + `Returns up to ${caps.maxResults} paths in modification-time order; a larger result ${overCapDescription} `
+      + 'and reports where the complete list was saved.',
     parameters: {
       pattern: {
         type: 'string',

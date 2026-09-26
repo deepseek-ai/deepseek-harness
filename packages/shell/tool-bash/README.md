@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-bash` lets an agent run one-shot `bash` commands and receive stdout, stderr, and exit markers. Each call uses a fresh shell, so cwd, variables, and functions do not persist; `run_in_background` starts long-running work that the agent can inspect with `job_output` and stop with `job_kill`. Commands receive the managed `DSH_*` environment, and sandbox denials can be retried once with wider `sandbox_permissions`, a `justification`, and user approval. Non-zero exits are reported as results, so the agent decides how to respond; use an executor such as `dsh-bash-local` or `dsh-bash-sandbox` and load `dsh-shell-env`.
+`dsh-tool-bash` runs Bash commands and returns stdout, stderr, and exit markers. Each call uses a fresh shell; cwd, variables, and functions do not persist. With a job registry composed, every command is a job from its start: `run_in_background` returns the id at once, a foreground command that outlives its timeout returns the same id, and `job_output`/`job_kill` collect and stop it. Commands receive the managed `DSH_*` environment; sandbox denials can be retried once with wider `sandbox_permissions`, a `justification`, and user approval. Nonzero exits are results for the agent to interpret. Mount an executor such as `dsh-bash-local` or `dsh-bash-sandbox` with `dsh-shell-env`.
 
 ## Table of Contents
 
@@ -41,11 +41,12 @@ The common path is an executor provider, the environment registry, and this tool
 - name: '@deepseek-ai/dsh-tool-jobs'
 ```
 
-The single config field toggles background support.
+The config fields govern the background surface.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `enableRunInBackground` | `true` | Expose `run_in_background`; when `false`, forced background calls are rejected |
+| `enableRunInBackground` | `true` | Expose `run_in_background` while a job registry is composed; when `false`, forced background calls are rejected |
+| `promoteOnTimeout` | `true` | Keep a foreground command that reaches its timeout running as its background job instead of killing it |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-bash) is the exhaustive source for every accepted field and its JSDoc; the generated [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-bash) carries the full argument schema.
 
@@ -56,11 +57,15 @@ The tool executes `bash -c <command>` and returns the combined output. Commands 
 <a id="running-long-commands-in-the-background"></a>
 ### Running long commands in the background
 
-Passing `run_in_background: true` admits a job and returns its id immediately; confinement preparation may still be pending, and no background execution timeout applies. Output is empty until the process is available. Job cancellation aborts preparation and stops any process that arrives afterward; startup failure settles the admitted job as failed. The agent reads its output with `job_output` (non-blocking unless `wait: true`), lists jobs with `job_list`, and stops it with `job_kill`; a finished job notifies the owning agent in-session. Background support needs the generic job runtime (`dsh-jobs-local`) and its control tools (`dsh-tool-jobs`) mounted.
+Passing `run_in_background: true` admits a job and returns its id immediately; confinement preparation may still be pending, and no background execution timeout applies. Output is empty until the process is available. Job cancellation aborts preparation and stops any process that arrives afterward; startup failure settles the admitted job as failed. The agent reads its output with `job_output` (non-blocking unless `wait: true`), lists jobs with `job_list`, and stops it with `job_kill`; a finished job notifies the owning agent in-session. Background support needs the generic job runtime (`dsh-jobs-local`) and its control tools (`dsh-tool-jobs`) mounted. The background job hands the run's non-consuming `observed` readers to the job registry as pull sources; the registry pumps them into the job's output ring at its own cadence (`pumpPollMs` on `dsh-jobs-local`), so the Web client streams live output and the model's `job_output` reads consume the same bytes through a separate cursor. A reader that throws is logged once and its stream stops; the job runs on to its own settlement. The ring is a best-effort live preview: stdout and stderr are copied per poll round, so writes the two streams made inside one poll window appear stdout first rather than in write order.
+
+### Foreground commands as jobs
+
+With a job registry composed, a foreground command is registered with `ctx.jobs` at its start and the call waits on that job: the command is listed, streams through `job.list` and `job.follow`, and can be stopped from the Web task list for as long as it runs. A command that finishes within the timeout returns the ordinary foreground result and its job record leaves the registry with it, so the model never sees an id. A command that outlives the timeout keeps running as the job it already was, and the call returns `[still running after <timeoutMs>ms; moved to background job <id>]` plus the job hand-off guidance, seeded with one consuming read of the output so far — `job_output` continues exactly after it. A kill from outside the call (the human stopping the job) settles the foreground result with `[stopped: <reason>]` ahead of the signal marker, so the model reads the reason instead of a command failure; cancelling the call itself kills the job. Registration is best-effort: `promoteOnTimeout: false`, a missing job registry, or a registry that refuses the job at its start (the owner's job limit, no controller) run the command under the executor's deadline kill instead, and the `timeoutMs` parameter description advertises the hand-over only when it holds.
 
 ### Sandboxed execution and escalation
 
-When the mounted executor confines commands (for example `dsh-bash-sandbox`), a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]` — a policy denial, not a command failure. The model may then retry the exact same command once in the same turn with `sandbox_permissions` (the narrowest wider mode that suffices) and a one-sentence `justification`; the approval prompt raised by that retry is how the user consents. Escalation is never speculative: a request with no real prior denial, or one that is not strictly wider than the current mode, fails closed without running anything, and a rejected escalation is final for that command.
+When the mounted executor confines commands (for example `dsh-bash-sandbox`), a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]` — a policy denial, not a command failure. The model may then retry the exact same command once in the same turn with `sandbox_permissions` (the narrowest wider mode that suffices) and a one-sentence `justification`; the approval prompt raised by that retry is how the user consents. Request wider access only after a real denial; a rejected escalation is final for that command. Repeating the current mode runs without approval, while a narrower target fails before execution. Without `sandbox_permissions`, `justification` may be omitted, empty, or whitespace-only; a non-empty reason without a mode is rejected. Repeating the effective mode also permits an omitted or blank reason. A different requested mode requires a non-empty reason; widening still requires approval.
 
 ### What can go wrong
 
@@ -81,14 +86,14 @@ This section explains the design decisions behind the tool and points at the cod
 - **Model-facing consumer of the shell seam.** The tool is the Consumer role of the bash capability: it registers the `bash` schema, renders results, and resolves per-call policy, while the executor seam owns process mechanics.
 - **Request from named args only.** The tool never exposes `stdin`, `env`, or `stdoutMaxBytes`; it builds each request from command/workdir/timeout/signal fields plus the registry-collected `dshEnv`, so model-supplied keys cannot replace managed values.
 - **Non-zero exits are reported, not errored.** Only infrastructure failures (spawn errors, aborts) surface as tool errors; the model interprets exit codes and markers.
-- **Background work belongs to the job runtime.** A background call registers a process handle with `ctx.jobs`; ids, ownership, completion notices, and disposal are the runtime's, and this tool only maps bash exit and sandbox facts into job output.
+- **Every command belongs to the job runtime when one is composed.** A call registers its process handle with `ctx.jobs` as it starts, whether the model asked for the background or the tool waits on it; ids, ownership, completion notices, and disposal are the runtime's, and this tool only maps bash exit and sandbox facts into job output. Without a registry the tool is foreground-only, and it swaps between the two registrations as the registry comes and goes.
 
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: tool registration, prompt section, arg validation, escalation, request assembly |
-| [`src/background.ts`](src/background.ts) | Own asynchronous shell preparation and map process settlement onto job outcomes |
+| [`src/background.ts`](src/background.ts) | Own asynchronous shell preparation, map process settlement onto job outcomes, and render a ring read as a process read |
 | [`src/render.ts`](src/render.ts) | Model-facing result text: streams, markers, truncation notices |
 | — | No runtime invariant companion is published; the environment registry validates ownership and collected values at each mutation/read; it publishes no independent snapshot that a companion could cross-check. |
 
@@ -146,7 +151,7 @@ Prefix-stable while the registration scope and prompt text are unchanged. Plugin
 
 #### What the model sees
 
-The model sees the generated [`bash` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-bash). `run_in_background` appears only when this producer enables it; `sandbox_permissions` and `justification` appear only when the mounted executor advertises sandboxing. Agent-scoped tool restrictions can remove the definition for that agent.
+The model sees the generated [`bash` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-bash). `run_in_background` appears only when this producer enables it and a job registry is composed; `sandbox_permissions` and `justification` appear only when the mounted executor advertises sandboxing; the justification asks the model to use the language of the current user request. Agent-scoped tool restrictions can remove the definition for that agent.
 
 #### Token effect
 
@@ -160,7 +165,7 @@ Prefix-stable while visibility, background support, and executor sandbox capabil
 
 #### What the model sees
 
-The renderer emits the data-dependent stdout tail, then optional `[stderr]` and the stderr tail. With no output it emits exactly `(no output)`. Conditional lines are exactly `[output truncated; full output: <path-or-(unavailable)>]`, `[sandbox: file access denied under <mode> mode]`, `[timed out after <timeoutMs>ms]`, `[killed by signal: <signal>]`, and `[exit code: <exitCode>]`; the sandbox escalation and runner-failure lines are quoted in [`dsh-bash-sandbox`](../bash-sandbox/README.md).
+The renderer emits the data-dependent stdout tail, then optional `[stderr]` and the stderr tail. With no output it emits exactly `(no output)`. Conditional lines are exactly `[output truncated; full output: <path-or-(unavailable)>]`, `[sandbox: file access denied under <mode> mode]`, `[timed out after <timeoutMs>ms]`, `[stopped: <reason>]`, `[killed by signal: <signal>]`, and `[exit code: <exitCode>]`; the sandbox escalation and runner-failure lines are quoted in [`dsh-bash-sandbox`](../bash-sandbox/README.md).
 
 #### Token effect
 
@@ -207,7 +212,8 @@ These limits define when the tool is a poor fit or needs special care. They are 
 
 - **Replay exit pills parse from result text** — output whose final line happens to be exactly `[exit code: N]` / `[killed by signal: …]` shows a wrong pill on session replay and loses that line from the card body, because the parse treats it as the marker it consumes; a display-only known residual.
 - **The `bash` tool opts out of `timeout-policy` budgets** — it keeps the executor-owned `BASH_TIMEOUT` path, per [the tool-call timeout-policy Agent Note](../../../.agents/notes/implemented/architecture/2026-07-07-tool-call-timeout-policy.md).
-- **Background processes have no executor timeout** — callers must use `job_kill`, or rely on owner/service disposal, when work no longer matters.
+- **Background processes have no executor timeout** — callers must use `job_kill`, or rely on owner/service disposal, when work no longer matters; a foreground command registered as a job has none either, since its timeout bounds only the wait.
+- **The job list shows every foreground command while it runs** — a settled one leaves with its result, but the Web task list does not yet mark which running rows a tool call is still waiting on.
 
 <a id="dev-note"></a>
 ### Dev Note

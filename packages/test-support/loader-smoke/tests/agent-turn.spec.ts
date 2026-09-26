@@ -5,7 +5,7 @@ import { runFixtureTurn } from '../src/agent-turn.ts'
 
 type Listener = (session: unknown, event: SessionEvent) => void
 
-const event = (value: object): SessionEvent => value as unknown as SessionEvent
+const event = (value: object): SessionEvent => value as SessionEvent
 
 function turnHarness(): {
   readonly ctx: Context

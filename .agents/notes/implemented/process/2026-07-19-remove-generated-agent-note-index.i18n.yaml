@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-19-remove-generated-agent-note-index.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-19-remove-generated-agent-note-index.md
-2026-07-19-remove-generated-agent-note-index.md: 60dba14064ffe294228968cdb111920696fe7d63
-2026-07-19-remove-generated-agent-note-index.zh.md: 912aea133068a727856475df21516a28b2d27876
+/agent-note-keep-agent-notes-discoverable-without-a-generated-index:
+  en: aedcead60a29472a
+  zh: 0b17ad37acb4a92e
+/agent-note-keep-agent-notes-discoverable-without-a-generated-index/problem:
+  en: 8a66ca1096aab8f4
+  zh: f9774f5f3e7d0a31
+/agent-note-keep-agent-notes-discoverable-without-a-generated-index/decision:
+  en: 2b02e79f20d9be1b
+  zh: 5dec073afcee9c2e
+/agent-note-keep-agent-notes-discoverable-without-a-generated-index/alternatives-considered:
+  en: 0317d3d10b97f004
+  zh: 9315c31a17f7057a
+/agent-note-keep-agent-notes-discoverable-without-a-generated-index/consequences:
+  en: 631728aa0d482555
+  zh: 910a749ae88d4c83

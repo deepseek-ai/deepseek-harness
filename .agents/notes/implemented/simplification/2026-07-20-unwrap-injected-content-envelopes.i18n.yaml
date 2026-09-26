@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-20-unwrap-injected-content-envelopes.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-07-20-unwrap-injected-content-envelopes.md
-2026-07-20-unwrap-injected-content-envelopes.md: 7d14ada7cc1b88071ec4f07870afcfff6211a883
-2026-07-20-unwrap-injected-content-envelopes.zh.md: 813adfb818cac35da6e8c3b279b2e795fa99ad1a
+/agent-note-project-injected-content-verbatim-dropping-the-xml-envelopes:
+  en: 488b566c13d0cd05
+  zh: e9b9a14dc644a313
+/agent-note-project-injected-content-verbatim-dropping-the-xml-envelopes/problem:
+  en: 0005839a50aa093b
+  zh: bfb21448bbec1ac9
+/agent-note-project-injected-content-verbatim-dropping-the-xml-envelopes/decision:
+  en: ed1a833070d10b97
+  zh: b7ce57a2b927f064
+/agent-note-project-injected-content-verbatim-dropping-the-xml-envelopes/alternatives-considered:
+  en: 93dca58966e5d55e
+  zh: 9fe7fd528d0114a2
+/agent-note-project-injected-content-verbatim-dropping-the-xml-envelopes/consequences:
+  en: 2b369a5b2ee9435b
+  zh: f72957abff1d2327
+/agent-note-project-injected-content-verbatim-dropping-the-xml-envelopes/deferred:
+  en: a772793aea7ee7ee
+  zh: a57b31af4422406d

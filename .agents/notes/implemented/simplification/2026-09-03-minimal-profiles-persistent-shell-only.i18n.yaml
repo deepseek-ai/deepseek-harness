@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-03-minimal-profiles-persistent-shell-only.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-03-minimal-profiles-persistent-shell-only.md
-2026-09-03-minimal-profiles-persistent-shell-only.md: d58210cb890e4264b02d591f213045b592ca6bfc
-2026-09-03-minimal-profiles-persistent-shell-only.zh.md: 481ef479c2dc01ae503f621df976529aeb6bdbe0
+/agent-note-minimal-profiles-expose-only-a-persistent-shell:
+  en: d48e78dc2040921c
+  zh: 70122e09d8c78e77
+/agent-note-minimal-profiles-expose-only-a-persistent-shell/problem:
+  en: a5d116f8ba3ed48b
+  zh: d60d307237a69573
+/agent-note-minimal-profiles-expose-only-a-persistent-shell/decision:
+  en: 95a1c2d9322ed9da
+  zh: 04bc770915863950
+/agent-note-minimal-profiles-expose-only-a-persistent-shell/alternatives-considered:
+  en: 55fc282c31b7d4e8
+  zh: 6daa72fb5527fcca
+/agent-note-minimal-profiles-expose-only-a-persistent-shell/consequences:
+  en: 4f0e22319608c3be
+  zh: a6393182b9452c4a

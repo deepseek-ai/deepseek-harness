@@ -3,7 +3,7 @@ import type { SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-control
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { isJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {
-  ChatConversationViewNode, ChatSnapshot, ConversationNode, RunningToolCall, ToolResultNode,
+  ChatConversationViewNode, ChatSnapshot, ConversationNode, StartedToolCall, ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 
 function jsonFixture(value: unknown): JsonValue {
@@ -14,7 +14,7 @@ function jsonFixture(value: unknown): JsonValue {
 /** Build the canonical Chat slice consumed by Tool rows and details tests. */
 export function toolChatSnapshot(
   settled: readonly ConversationNode[] = [],
-  running: readonly RunningToolCall[] = [],
+  running: readonly StartedToolCall[] = [],
 ): ChatSnapshot {
   const roots = [...settled.filter(node => node.kind === 'tool-result'), ...running]
   const nodes: ChatConversationViewNode[] = roots.map(root => ({
@@ -34,6 +34,7 @@ export function toolChatSnapshot(
     nodes: {
       get: key => byKey.get(key),
       source: key => ({ getSnapshot: () => byKey.get(key), subscribe: () => () => {} }),
+      turnDataSource: () => { throw new Error('unused') },
       processSource: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }),
       values: () => nodes,
     },
@@ -106,14 +107,11 @@ export function toolSessionEvents(nodes: readonly ToolResultNode[]): readonly Se
           step: 1,
           message: {
             id: `result-${node.callId}`,
-            role: 'user',
+            role: 'tool',
             source: { kind: 'tool', callId: node.callId },
-            content: [{
-              type: 'tool-result',
-              toolCallId: node.callId,
-              content: node.content.map(block => ({ ...block })),
-              isError: node.isError,
-            }],
+            toolCallId: node.callId,
+            content: node.content.map(block => ({ ...block })),
+            isError: node.isError,
           },
           ...(node.error === undefined ? {} : { error: node.error }),
           ...(node.meta === undefined ? {} : { meta: node.meta }),

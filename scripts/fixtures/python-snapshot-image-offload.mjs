@@ -24,7 +24,7 @@ export function apply(ctx, config) {
     injected = true
     return {
       ...decision,
-      messages: [...decision.messages, { id: 'python-snapshot-image', role: 'user', content, source: { kind: 'plugin', plugin: name } }],
+      messages: [...decision.messages, { id: 'python-snapshot-image', role: 'user', content, source: { kind: name } }],
     }
   })
   ctx.on('llm/stream', async function* (options, next) {

@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/core/agent-tool-presentation/README.md
-README.md: c7aadfc9f409392718d7f044168c5de48dd33ee5
-README.zh.md: 663bb011f3a6f1cc0f257bc3383f073b23dbda02
+/:
+  en: 1c67fea11cb4a325
+  zh: 7dc1256148273b02
+/deepseek-ai-dsh-agent-tool-presentation:
+  en: e3bfa19f60197528
+  zh: c8e9adfb80141de2
+/deepseek-ai-dsh-agent-tool-presentation/summary:
+  en: 00ce44dc07f9bd8e
+  zh: 32eb2aee42a903c3
+/deepseek-ai-dsh-agent-tool-presentation/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-agent-tool-presentation/use-this-package:
+  en: 1ff72cb4ac9c3e7b
+  zh: d3d3ad8a336a3bec
+/deepseek-ai-dsh-agent-tool-presentation/use-this-package/add-the-row-to-a-preset:
+  en: a7325b0939361096
+  zh: 3476ce4ebedd1d45
+/deepseek-ai-dsh-agent-tool-presentation/use-this-package/what-ptc-mode-requires:
+  en: e23deef6a3fa2584
+  zh: ded146d3828c73cd
+/deepseek-ai-dsh-agent-tool-presentation/use-this-package/one-presentation-per-agent:
+  en: 46bf80f051175567
+  zh: 8f5e1623da5d1520
+/deepseek-ai-dsh-agent-tool-presentation/understand-the-implementation:
+  en: ce7e776e9d516bdb
+  zh: 59d2751743db7795
+/deepseek-ai-dsh-agent-tool-presentation/understand-the-implementation/design-concept:
+  en: 6f8bb6bd853cbc13
+  zh: 422fca4b20b79fbd
+/deepseek-ai-dsh-agent-tool-presentation/understand-the-implementation/source-map:
+  en: 506105ea2c83c4a8
+  zh: 1a60101534b10dc4
+/deepseek-ai-dsh-agent-tool-presentation/understand-the-implementation/behavior-notes:
+  en: 562acace386b25ca
+  zh: 3eb362bd2730a64c
+/deepseek-ai-dsh-agent-tool-presentation/further-exploration:
+  en: 5129e69c0419f3af
+  zh: d88bececc300b65c
+/deepseek-ai-dsh-agent-tool-presentation/model-experience:
+  en: 35621b26757d462e
+  zh: a8869139783ae475
+/deepseek-ai-dsh-agent-tool-presentation/model-experience/kv-cache-effect:
+  en: c75b16e38577f026
+  zh: f802d115af4bf9a1
+/deepseek-ai-dsh-agent-tool-presentation/known-limitations-and-deferred-work:
+  en: 17a0a213ec65c95f
+  zh: ff96d985f6360338
+/deepseek-ai-dsh-agent-tool-presentation/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

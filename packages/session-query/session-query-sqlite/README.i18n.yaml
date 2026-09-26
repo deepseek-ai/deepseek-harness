@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session-query/session-query-sqlite/README.md
-README.md: da99dc20eee0b9366364f184c618a961d83ae044
-README.zh.md: 4ba088fc0dea55db60c1cc7a36743b6511a53481
+/:
+  en: c47de69fc9906da1
+  zh: 6b89540bb5977d34
+/deepseek-ai-dsh-session-query-sqlite:
+  en: 1ea8c855c9e399bc
+  zh: 6c04c65b56aebf8b
+/deepseek-ai-dsh-session-query-sqlite/summary:
+  en: e8970d4d9500f484
+  zh: d96abbbe143b3ca9
+/deepseek-ai-dsh-session-query-sqlite/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-session-query-sqlite/use-this-package:
+  en: d3bed0996d9ba473
+  zh: 2bbcbc19264c9e60
+/deepseek-ai-dsh-session-query-sqlite/use-this-package/when-to-choose-it:
+  en: d77054a6e8023089
+  zh: d44f9a5cd54dd43a
+/deepseek-ai-dsh-session-query-sqlite/use-this-package/minimal-configuration:
+  en: 1c9d4d7e60b93c65
+  zh: b55bc598768398d3
+/deepseek-ai-dsh-session-query-sqlite/use-this-package/search-behavior:
+  en: 746bd842a7b9c157
+  zh: 2515443f5d3f6656
+/deepseek-ai-dsh-session-query-sqlite/use-this-package/when-to-defer-or-disable-search:
+  en: 8df2c14374a1f3a6
+  zh: e1dd3ff73de187c4
+/deepseek-ai-dsh-session-query-sqlite/use-this-package/failures-and-recovery:
+  en: 2baafe3969855b2a
+  zh: 2781c97457191214
+/deepseek-ai-dsh-session-query-sqlite/understand-the-implementation:
+  en: 1b4ba96f994a361d
+  zh: 50148b7af190aa0c
+/deepseek-ai-dsh-session-query-sqlite/understand-the-implementation/design-philosophy:
+  en: 97d8f71fda5ed9b6
+  zh: fe1d0bd886dc2437
+/deepseek-ai-dsh-session-query-sqlite/understand-the-implementation/source-map:
+  en: 49f5cc363a886430
+  zh: f0e035cc2dc8d513
+/deepseek-ai-dsh-session-query-sqlite/understand-the-implementation/index-lifecycle:
+  en: 3a99cf9f8f64ec0e
+  zh: 40585b4764282881
+/deepseek-ai-dsh-session-query-sqlite/understand-the-implementation/schema-ownership:
+  en: cb1e6861a47a618c
+  zh: 18863cdd4986f4b7
+/deepseek-ai-dsh-session-query-sqlite/further-exploration:
+  en: 42b7e3cad4b867df
+  zh: 2549014912f746a9
+/deepseek-ai-dsh-session-query-sqlite/model-experience:
+  en: ff9dc9f0f67efd4d
+  zh: ad284a65c2091e0f
+/deepseek-ai-dsh-session-query-sqlite/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: f57cc48a1b5cbfa9
+/deepseek-ai-dsh-session-query-sqlite/known-limitations-and-deferred-work:
+  en: 9be1b4a66f06c413
+  zh: 39b29034f3cc08b1
+/deepseek-ai-dsh-session-query-sqlite/known-limitations-and-deferred-work/dev-note:
+  en: d2f0d68fe29fb750
+  zh: 323d21ee73a9e3f6
+/deepseek-ai-dsh-session-query-sqlite/known-limitations-and-deferred-work/dev-note/future-alternate-tokenizers-and-search-providers:
+  en: 66b67df07594267a
+  zh: 73b6e1fd6362f168

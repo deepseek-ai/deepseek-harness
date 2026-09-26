@@ -25,7 +25,7 @@ Typing a `/` command opens a registered popup, a client action, a host command's
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin alongside `ui-input-trigger` and `ui-conversation`; the `/` source then appears in the trigger menu, and business packages register their command surfaces through `ctx.commandUi`. Typing `/model` opens the registered popup; a host command with an argument claim opens its input or executes directly. The composer's `+` button and a typed `/` open the same menu: an Add section (File, Goal, Plan, Feedback) and a Commands section (Compact, Permission, Model, Export) in usage order, each row with a glyph, a localized title and description, and the command name as an alias where the localized title differs from it.
+Mount this plugin alongside `ui-input-trigger` and `ui-conversation`; the `/` source then appears in the trigger menu, and business packages register their command surfaces through `ctx.commandUi`. Typing `/model` opens the registered popup; a host command with an argument claim opens its input or executes directly. The popup holds composer focus: typing filters the loaded rows locally, `↑`/`↓` walk them, Enter and `Tab` accept the highlighted row, and Escape and `Shift+Tab` return to the composer. The highlight opens on the row the options mark as the session's current value, so accepting on a freshly opened panel confirms it. The composer's `+` button and a typed `/` open the same menu: an Add section (File, Goal, Plan, Feedback) and a Commands section (Compact, Permission, Model, Export) in usage order, each row with a glyph, a localized title and description, and the command name as an alias where the localized title differs from it.
 
 ### Kinds and decorations
 
@@ -44,10 +44,14 @@ When the composer submits with images or generic files, only a host command decl
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
+Menus use the shared `MenuSurface` material, including the macOS backing for background blur; custom content follows the [menu rules](../../../docs/web-styling.md#component-rules).
+
 <details>
 <summary>Implementation internals — click to expand</summary>
 
 `src/client/contract.ts` defines contribution and decoration registration, plus `dismiss(name)`, which closes that command's open popups and confirmations: dismissal aborts pending option loads, prevents their late results from reopening the popup, and preserves composer drafts. `CommandDirectory` owns the per-session wire cache and resolves typed commands through `resolution.ts`; that module owns first-party identity matching and localized input spellings. `matchSpace` reads the ready cache synchronously, while `matchEnter` waits for readiness and rejects on warmup failure or cancellation. Forwarded catalog and connection events invalidate the cache. After a matched Host execution, this browser emits `command/executed`; other clients observe only the durable command events. `PopupSelectController` owns popup state, and `PopupSelectView` occupies the input overlay. `presentation.ts` owns row labels, icons, and sections; its helpers and the resolution helpers stay internal to the plugin.
+
+Each command-directory fetch requires an existing retained Client Session and waits for its initial history open to succeed before sending `commands.list`. A temporary `commandCatalog` reference holds that Session until the fetch settles. An unretained Session or a failed open rejects without sending the RPC, so background catalog refreshes do not reopen closed Sessions.
 
 </details>
 

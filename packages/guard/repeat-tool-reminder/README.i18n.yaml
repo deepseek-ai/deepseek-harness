@@ -1,6 +1,85 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/guard/repeat-tool-reminder/README.md
-README.md: 13035b68e80c9eea3e87bb7c8315fbaf9b84a3c3
-README.zh.md: 27d142988f77c8ab03a81701ff7b89f55ca1668b
+/:
+  en: 8eb3c6cc73da87aa
+  zh: 4059266a0486ff38
+/deepseek-ai-dsh-repeat-tool-reminder:
+  en: add59e0d04eb964d
+  zh: d5224b61ea4e9413
+/deepseek-ai-dsh-repeat-tool-reminder/summary:
+  en: 36ac7ba52bc4fee0
+  zh: 39894a1c067754c4
+/deepseek-ai-dsh-repeat-tool-reminder/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-repeat-tool-reminder/use-this-package:
+  en: dcffe01b4cde60e0
+  zh: 9a105a1d0121b990
+/deepseek-ai-dsh-repeat-tool-reminder/use-this-package/when-to-choose-it:
+  en: c6b47c1f0034c021
+  zh: 5a2097425754d8b0
+/deepseek-ai-dsh-repeat-tool-reminder/use-this-package/setting-the-thresholds-and-scope:
+  en: fc64919ff223096d
+  zh: dd22a19eeffa9192
+/deepseek-ai-dsh-repeat-tool-reminder/use-this-package/what-you-get:
+  en: 5cf91a5809d2c68a
+  zh: 8f60231436b863b8
+/deepseek-ai-dsh-repeat-tool-reminder/understand-the-implementation:
+  en: dd6d7a1571af5a9a
+  zh: eba00095dfc1c92a
+/deepseek-ai-dsh-repeat-tool-reminder/understand-the-implementation/design-philosophy:
+  en: 7bca56e3cba01338
+  zh: 530fda764d226f39
+/deepseek-ai-dsh-repeat-tool-reminder/understand-the-implementation/detection-the-repeat-chain:
+  en: b76a432aad14aa90
+  zh: b0cd916f7897fb42
+/deepseek-ai-dsh-repeat-tool-reminder/understand-the-implementation/reminder-delivery:
+  en: ebd2a7d704e0a7be
+  zh: 438213ad0412a64e
+/deepseek-ai-dsh-repeat-tool-reminder/understand-the-implementation/source-map:
+  en: 567a964105e1340b
+  zh: 7a8b062b2d9b39d1
+/deepseek-ai-dsh-repeat-tool-reminder/further-exploration:
+  en: 77b646e29c1aefa8
+  zh: f63b7df7412e524d
+/deepseek-ai-dsh-repeat-tool-reminder/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-repeat-tool-reminder/model-experience/first-threshold-context-message:
+  en: 798ea2afb5efde7c
+  zh: 14fae1e31d882e8a
+/deepseek-ai-dsh-repeat-tool-reminder/model-experience/first-threshold-context-message/what-the-model-sees:
+  en: cf01847a41f3fe3d
+  zh: aebeb78ac617999c
+/deepseek-ai-dsh-repeat-tool-reminder/model-experience/first-threshold-context-message/what-the-model-sees/first-threshold-reminder:
+  en: 38c7616427fa569d
+  zh: fd443fab22a57894
+/deepseek-ai-dsh-repeat-tool-reminder/model-experience/first-threshold-context-message/token-effect:
+  en: 111c6d779b73194b
+  zh: 09b0e7073308ba91
+/deepseek-ai-dsh-repeat-tool-reminder/model-experience/first-threshold-context-message/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: 51155536aab03002
+/deepseek-ai-dsh-repeat-tool-reminder/model-experience/later-threshold-context-message:
+  en: edfa41e2478fb579
+  zh: 76b87439f3bef43c
+/deepseek-ai-dsh-repeat-tool-reminder/model-experience/later-threshold-context-message/what-the-model-sees:
+  en: cddb7a41c335141f
+  zh: 7ea33c6570bb2bd0
+/deepseek-ai-dsh-repeat-tool-reminder/model-experience/later-threshold-context-message/what-the-model-sees/later-threshold-reminder:
+  en: 341114f2e5e9c05b
+  zh: 8938e7d0f7fc150b
+/deepseek-ai-dsh-repeat-tool-reminder/model-experience/later-threshold-context-message/token-effect:
+  en: 2e92c0d5a90c482b
+  zh: 07ba3851b725f06d
+/deepseek-ai-dsh-repeat-tool-reminder/model-experience/later-threshold-context-message/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: 51155536aab03002
+/deepseek-ai-dsh-repeat-tool-reminder/known-limitations-and-deferred-work:
+  en: 59ffa89bf74f8da2
+  zh: 7652f49b9eac40d6
+/deepseek-ai-dsh-repeat-tool-reminder/known-limitations-and-deferred-work/dev-note:
+  en: ef308dcf213685c7
+  zh: 5830b6bbeea9863f

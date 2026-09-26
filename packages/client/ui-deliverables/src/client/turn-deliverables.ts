@@ -1,13 +1,15 @@
 /**
  * Turn-scoped produced-file Definition and readers. Client-only and
- * model-free: the vocabulary comes from successful first-party mutation
- * calls, never presentation data or the closing prose.
+ * model-free: produced paths come from successful first-party mutation calls,
+ * changed files from the Host's recorded git summary, and deliveries from
+ * `present`; never from presentation data or the closing prose.
  */
 import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PresentedFile } from '@deepseek-ai/dsh-tool-present/types'
+import { isChangesEvent } from '../changes.ts'
 import { basename, isPresentedData, isPresentedFile } from '../presented.ts'
 
 /** A declared file with its authorized open coordinates. */
@@ -21,15 +23,21 @@ interface ProducedPath {
   readonly path: string
 }
 
+/** The latest `workspace/changes` announcement of one Turn; the Host serves its summary by this sequence. */
+export interface ChangesTurnData {
+  readonly seq: number
+}
+
 /** Immutable produced-file facts published against one Turn. */
 export interface DeliverablesTurnData {
   readonly produced: readonly ProducedPath[]
   readonly presented?: readonly PresentedPath[]
+  readonly changes?: ChangesTurnData
 }
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface ConversationTurnDataMap {
-    /** Successful mutation paths accumulated in this Turn. */
+    /** Successful mutation paths, recorded changed files, and deliveries accumulated in this Turn. */
     deliverables: DeliverablesTurnData
   }
 }
@@ -160,6 +168,7 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
     if (event.type === 'turn/start') return { id: String(event.data.turn), role: 'start' }
     if (event.type === 'tool/call') return { id: String(event.data.turn), role: 'update' }
     if (event.type === 'deliverables/presented') return isPresentedData(event.data) ? { id: String(event.data.turn), role: 'update' } : null
+    if (event.type === 'workspace/changes') return isChangesEvent(event.data) ? { id: String(event.data.turn), role: 'update' } : null
     if (event.type === 'tool/result' && isAppendSurfaceEvent(event)) {
       return { id: String(event.data.turn), role: 'update' }
     }
@@ -170,6 +179,7 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
     return { turn: match.event.data.turn, calls: new Map(), produced: [] }
   },
   update: (context, match) => {
+    if (match.event.type === 'workspace/changes') return { ...context.state, changes: { seq: match.event.seq } }
     if (match.event.type === 'deliverables/presented') {
       const { files } = match.event.data
       const seq = match.event.seq
@@ -190,8 +200,7 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
       return { ...context.state, calls }
     }
     if (match.event.type !== 'tool/result') return context.state
-    const result = match.event.data.message.content[0]
-    if (result.isError === true) return context.state
+    if (match.event.data.message.isError === true) return context.state
     const callId = String(match.event.data.message.source.callId)
     const path = context.state.calls.get(callId)
     return path === null || path === undefined
@@ -204,14 +213,28 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
       && previous.turn === context.state.turn
       && previous.key === 'deliverables'
       && previous.value.produced === context.state.produced
-      && previous.value.presented === context.state.presented) return previous
+      && previous.value.presented === context.state.presented
+      && previous.value.changes === context.state.changes) return previous
     return {
       kind: 'turn',
       turn: context.state.turn,
       key: 'deliverables',
-      value: { produced: context.state.produced, ...context.state.presented === undefined ? {} : { presented: context.state.presented } },
+      value: {
+        produced: context.state.produced,
+        ...context.state.presented === undefined ? {} : { presented: context.state.presented },
+        ...context.state.changes === undefined ? {} : { changes: context.state.changes },
+      },
     }
   },
+}
+
+/**
+ * The turn's latest change announcement.
+ * @param owner - closing turn.
+ * @returns the announcement, or null when the Host recorded none.
+ */
+export function changesForClosing(owner: TurnTailOwnerProps): ChangesTurnData | null {
+  return owner.turn.data.get('deliverables')?.changes ?? null
 }
 
 /**

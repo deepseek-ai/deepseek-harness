@@ -14,6 +14,7 @@
     "types": ["node"]
   },
   "include": [
+    "apps/desktop/tests/**/*.client.spec.tsx",
     // Source-subpath test imports can arrive through workspace links whose
     // realpath semantics vary by host. Load package CSS declarations directly.
     "packages/client/*/src/css-modules.d.ts",
@@ -42,10 +43,15 @@
     "packages/client/*/tests/**/*.host.spec.ts"
   ],
   "references": [
+    { "path": "./tsconfig.desktop-keyboard-tests.json" },
+    { "path": "./apps/desktop/tsconfig.client.json" },
+    { "path": "./packages/experimental/client-ui-voice-input" },
+
     { "path": "./packages/client/ui-sidebar-terminal" },
     { "path": "./packages/api/terminal-controller/tsconfig.client.json" },
     // Producer-to-UI spill tests use the ptc-runtime contract with the real tool registry.
     { "path": "./packages/ptc-runtime/ptc-runtime" },
+    { "path": "./packages/client/ui-settings-account" },
     // Shared leaf: web e2e boots the real host webserver (fixture + real-host
     // smoke policy). webserver has zero workspace deps and no cordis merge,
     // so it cannot drag host-side Context augmentation into this program.
@@ -72,12 +78,14 @@
     { "path": "./packages/extensions/ui-cordis" },
     { "path": "./packages/test-support/client-runtime" },
     { "path": "./packages/test-support/remote-mock" },
+    { "path": "./packages/client/shortcuts/tsconfig.client.json" },
+    { "path": "./packages/client/ui-shortcuts" },
     { "path": "./packages/client/ui-layout" },
     { "path": "./packages/client/ui-sidebar" },
     { "path": "./packages/client/ui-brand-official" },
     { "path": "./packages/client/ui-approval" },
-    { "path": "./packages/client/ui-chat" },
-    { "path": "./packages/client/ui-conversation" },
+    { "path": "./packages/client/ui-chat/tsconfig.client.json" },
+    { "path": "./packages/client/ui-conversation/tsconfig.client.json" },
     { "path": "./packages/client/ui-tool" },
     { "path": "./packages/client/ui-deliverables/tsconfig.client.json" },
     { "path": "./packages/client/ui-workflow-run" },
@@ -90,7 +98,8 @@
     { "path": "./packages/experimental/client-ui-agent-team" },
     { "path": "./packages/client/ui-dockkit" },
     { "path": "./packages/client/ui-sidebar-right" },
-    { "path": "./packages/client/ui-sidebar-documentpreview" },
+    { "path": "./packages/client/ui-sidebar-documentpreview/tsconfig.client.json" },
+    { "path": "./packages/client/ui-sidebar-browser/tsconfig.client.json" },
     { "path": "./packages/client/ui-sidebar-files" },
     { "path": "./packages/client/ui-jobs" },
     { "path": "./packages/client/ui-schedule" },
@@ -103,18 +112,21 @@
     { "path": "./packages/client/ui-permission-presets" },
     { "path": "./packages/client/ui-plan" },
     { "path": "./packages/client/ui-settings-plugins" },
+    { "path": "./packages/client/ui-settings-shell" },
+    { "path": "./packages/client/ui-settings-agent-loop" },
+    { "path": "./packages/client/ui-settings-subagent" },
+    { "path": "./packages/client/ui-settings-web-search" },
     { "path": "./packages/client/ui-user-questions" },
     { "path": "./packages/client/ui-trajectory" },
     { "path": "./packages/session-query/session-log-export/tsconfig.client.json" },
     { "path": "./packages/client/ui-open-in-app" },
-    { "path": "./packages/client/ui-theme" },
-    { "path": "./packages/client/ui-settings" },
-    { "path": "./packages/client/ui-settings-general" },
+    { "path": "./packages/client/ui-theme/tsconfig.client.json" },
+    { "path": "./packages/client/ui-settings/tsconfig.client.json" },
+    { "path": "./packages/client/ui-settings-general/tsconfig.client.json" },
     { "path": "./packages/client/ui-settings-models" },
-    { "path": "./packages/client/ui-plugin-manager" },
+    { "path": "./packages/client/ui-plugin-manager/tsconfig.client.json" },
     { "path": "./packages/client/ui-settings-plugin-inventory" },
-    { "path": "./packages/client/ui-settings-unarchive-sessions" },
-    { "path": "./packages/client/locale" },
+    { "path": "./packages/client/locale/tsconfig.client.json" },
     { "path": "./packages/client/ui-renderer" },
     { "path": "./packages/client/ui-session" },
     { "path": "./packages/client/resources" },

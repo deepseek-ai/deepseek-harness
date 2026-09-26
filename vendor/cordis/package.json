@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/cordis",
   "description": "Meta-Framework for Modern JavaScript Applications",
-  "version": "4.0.2",
+  "version": "4.0.4",
   "publishConfig": {
     "access": "public"
   },
@@ -33,8 +33,8 @@
   "author": "Shigma <shigma10826@gmail.com>",
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis-plugin-include": "workspace:^",
-    "@deepseek-ai/cordis-plugin-loader": "workspace:^"
+    "@deepseek-ai/cordis-plugin-include": "workspace:~",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis-plugin-include": {
@@ -46,6 +46,6 @@
   },
   "dependencies": {
     "@standard-schema/spec": "^1.1.0",
-    "@deepseek-ai/cosmokit": "workspace:^"
+    "@deepseek-ai/cosmokit": "workspace:~"
   }
 }

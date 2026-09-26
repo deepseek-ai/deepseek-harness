@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-trajectory/README.md
-README.md: 63bd664b902d8d40f8a05153770306d3b03dbe4e
-README.zh.md: 89db03a99ac68065211f92ff7e47307813c1ab76
+/:
+  en: b9065ee3da8927c2
+  zh: 36a38fa86d552b46
+/deepseek-ai-dsh-client-ui-trajectory:
+  en: 60e3cab036a4a8c6
+  zh: 2a400cd0efd99284
+/deepseek-ai-dsh-client-ui-trajectory/summary:
+  en: dc75677138d05dc6
+  zh: 6e11553a5caf4716
+/deepseek-ai-dsh-client-ui-trajectory/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-trajectory/use-this-package:
+  en: 4bd17d05b8385675
+  zh: 5174e27f754f2a03
+/deepseek-ai-dsh-client-ui-trajectory/use-this-package/inspecting-records:
+  en: 89758270607a5fd4
+  zh: 0efba26195ef1f80
+/deepseek-ai-dsh-client-ui-trajectory/use-this-package/the-timing-overview:
+  en: 0331f90cbd904862
+  zh: bdc2d4ed1c3c1f5e
+/deepseek-ai-dsh-client-ui-trajectory/understand-the-implementation:
+  en: 925abc8e4b092cb3
+  zh: ebe85c5acdbea3b1
+/deepseek-ai-dsh-client-ui-trajectory/understand-the-implementation/virtual-rows:
+  en: c85e342bc7eee4e6
+  zh: 9feab66ef1755b94
+/deepseek-ai-dsh-client-ui-trajectory/understand-the-implementation/layout:
+  en: b9693a54b800d439
+  zh: cd9b84382ae0b181
+/deepseek-ai-dsh-client-ui-trajectory/further-exploration:
+  en: a324740cfbe62c1e
+  zh: 53077c3ffc69b510
+/deepseek-ai-dsh-client-ui-trajectory/model-experience:
+  en: 3120df665299c634
+  zh: 1d9f365d091d0d2a
+/deepseek-ai-dsh-client-ui-trajectory/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-client-ui-trajectory/known-limitations-and-deferred-work:
+  en: d7da620f56eb3c65
+  zh: fb030b68322b94cd
+/deepseek-ai-dsh-client-ui-trajectory/known-limitations-and-deferred-work/dev-note:
+  en: f1893e3a6c69cc58
+  zh: b6e0dfe20567c35f

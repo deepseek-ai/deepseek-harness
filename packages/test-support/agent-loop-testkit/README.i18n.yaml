@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/test-support/agent-loop-testkit/README.md
-README.md: abcd5966399998fbbeea5ac7573a9ee4085e05ca
-README.zh.md: 1ff404930dae45d6453ed4b00486e4059b9d8cff
+/:
+  en: 56bf98b380f80f74
+  zh: 4e26deb963e89c68
+/deepseek-ai-dsh-agent-loop-testkit:
+  en: 52b308fffde03f7e
+  zh: e7b7ae2c1fdc2ed4
+/deepseek-ai-dsh-agent-loop-testkit/summary:
+  en: 75e381f4663191cb
+  zh: ec2aa78d37d3459f
+/deepseek-ai-dsh-agent-loop-testkit/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-agent-loop-testkit/use-this-package:
+  en: c0e407323250d8a9
+  zh: 0d0d6c7862c3d61e
+/deepseek-ai-dsh-agent-loop-testkit/use-this-package/drive-a-production-agent:
+  en: 55af6e8dcc16bf46
+  zh: 9e1a6a7f70fde817
+/deepseek-ai-dsh-agent-loop-testkit/use-this-package/build-a-structural-agent-stub:
+  en: 0b80eeb902e129d0
+  zh: 93352ffbc3154bef
+/deepseek-ai-dsh-agent-loop-testkit/use-this-package/when-to-use-it:
+  en: 7afa2a3c8ff17664
+  zh: 6c8cad1daf3a5df3
+/deepseek-ai-dsh-agent-loop-testkit/use-this-package/what-can-go-wrong:
+  en: 41914c28f6796ea8
+  zh: 52d8f4bf3e4f447a
+/deepseek-ai-dsh-agent-loop-testkit/understand-the-implementation:
+  en: b2297e57abf5258a
+  zh: 4595256c059896ce
+/deepseek-ai-dsh-agent-loop-testkit/understand-the-implementation/design:
+  en: 8fd7577505e2efa7
+  zh: 6bbf46bcf9e3f5bc
+/deepseek-ai-dsh-agent-loop-testkit/further-exploration:
+  en: 60f39b14b0ccbcf6
+  zh: f193710189d3cc10
+/deepseek-ai-dsh-agent-loop-testkit/model-experience:
+  en: c21ad81372e78a7c
+  zh: 09aff9564389400b
+/deepseek-ai-dsh-agent-loop-testkit/model-experience/kv-cache-effect:
+  en: be3fa044c8f27bf0
+  zh: bf187c9c93627193
+/deepseek-ai-dsh-agent-loop-testkit/known-limitations-and-deferred-work:
+  en: f5d4afb4bb94709c
+  zh: 9a1a57a5efebec82
+/deepseek-ai-dsh-agent-loop-testkit/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

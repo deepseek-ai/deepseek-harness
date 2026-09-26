@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconCheckOutline14, IconChevronDownOutline14, IconChevronLeftOutline14,
-  IconChevronRightOutline14, IconChevronUpOutline14, IconCloseOutline16,
-  IconEditOutline16, MarkdownText,
+  Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronLeftOutlineRegular,
+  IconChevronRightOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
+  IconEditOutlineRegular, MarkdownText,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   planReviewOf,
@@ -37,8 +37,7 @@ export function parseRecommendedLabel(label: string): { label: string; recommend
 /** Return whether a text-field key event belongs to an active IME composition. */
 function isComposing(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
   // keyCode 229 is the legacy IME-composition signal engines emit without isComposing.
-  // oxlint-disable-next-line typescript/no-deprecated
-  return event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229
+  return event.nativeEvent.isComposing || Reflect.get(event.nativeEvent, 'keyCode') === 229
 }
 
 /** The free-text answer field shared by both question variants. */
@@ -123,7 +122,7 @@ export function QuestionComposer(props: QuestionComposerProps) {
         actions={props.actions}
       />
     )
-    : <PlanReviewPanel key={question.key} pending={question} review={review} t={props.t} />
+    : <PlanReviewPanel key={question.key} pending={question} review={review} t={props.t} renderSlot={props.renderSlot} />
 }
 
 type QuestionFlowProps =
@@ -132,7 +131,7 @@ type QuestionFlowProps =
 function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
   const questions = pending.questions
   const markdownLabels = useMemo(() => ({
-    code: { copyLabel: t('copy'), copiedLabel: t('copied') },
+    code: { copyLabel: t('copy'), copiedLabel: t('copied'), toolbarLabels: { codeLabel: t('codeBlock.title'), wrapLabel: t('codeBlock.wrap'), unwrapLabel: t('codeBlock.unwrap') } },
     footnotes: t('markdown.footnotes'),
   }), [t])
   const initialProgress = useMemo<QuestionDraftProgress>(() => ({
@@ -297,14 +296,14 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
               disabled={busy !== null}
               onClick={() => { setMinimized(current => !current) }}
             >
-              {minimized ? <IconChevronUpOutline14 /> : <IconChevronDownOutline14 />}
+              {minimized ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
             </button>
             <button
               type="button" className={css.iconButton} aria-label={t('nav.cancel')}
               title={t('nav.cancel')}
               disabled={busy !== null} onClick={cancelFlow}
             >
-              <IconCloseOutline16 />
+              <IconCloseOutlineRegular />
             </button>
           </div>
         </header>
@@ -337,7 +336,7 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
                       {question.multiSelect === true
                         ? (
                           <span className={clsx(css.checkbox, selected && css.checkboxChecked)} aria-hidden="true">
-                            {selected && <IconCheckOutline14 size={12} />}
+                            {selected && <IconCheckOutlineRegular size={12} />}
                           </span>
                         )
                         : <span className={css.number}>{optionIndex + 1}</span>}
@@ -365,12 +364,12 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
                             className={clsx(css.checkbox, draft.custom !== '' && css.checkboxChecked)}
                             aria-hidden="true"
                           >
-                            {draft.custom !== '' && <IconCheckOutline14 size={12} />}
+                            {draft.custom !== '' && <IconCheckOutlineRegular size={12} />}
                           </span>
                         )
                         : (
                           <span className={css.number} aria-hidden="true">
-                            <IconEditOutline16 size={12} />
+                            <IconEditOutlineRegular size={12} />
                           </span>
                         )}
                       <AnswerField
@@ -405,7 +404,7 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
                   disabled={index === 0 || busy !== null}
                   onClick={() => { replaceProgress(index - 1, drafts); setError(null) }}
                 >
-                  <IconChevronLeftOutline14 />
+                  <IconChevronLeftOutlineRegular />
                 </button>
                 <span className={css.progress}>{index + 1} / {questions.length}</span>
                 <button
@@ -413,7 +412,7 @@ function QuestionFlow({ pending, t, useStore, actions }: QuestionFlowProps) {
                   disabled={index === questions.length - 1 || busy !== null}
                   onClick={() => { replaceProgress(index + 1, drafts); setError(null) }}
                 >
-                  <IconChevronRightOutline14 />
+                  <IconChevronRightOutlineRegular />
                 </button>
               </div>
               <div className={css.feedback} role="status">

@@ -1,12 +1,13 @@
 /** Browser plugin for durable workflow-run Conversation Nodes. */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionTarget } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { WorkflowRunPanel, type WorkflowRunInjected } from './WorkflowRunPanel.tsx'
 import { en, NS, type WorkflowRunKey, zh } from './locales.ts'
 import { workflowRunDefinition } from './workflow-definition.ts'
@@ -19,7 +20,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Required services for Definition, keyed renderer, navigation, and copy. */
-export const inject = ['uiConversation', 'slots', 'sessions', 'locale']
+export const inject = ['uiConversation', 'uiWorkspace', 'slots', 'sessions', 'locale']
 
 /** Register the workflow Definition, dictionary, and keyed Chat renderer. */
 export function apply(ctx: ClientContext): void {
@@ -30,7 +31,7 @@ export function apply(ctx: ClientContext): void {
     key: 'workflow-run',
     locale: NS,
     inject: (): WorkflowRunInjected => ({
-      openSession: (id: SessionId) => { ctx.sessions.open(id) },
+      openSession: (target: SessionTarget) => { ctx.uiWorkspace.openSession(target) },
     }),
   }, WorkflowRunPanel))
 }

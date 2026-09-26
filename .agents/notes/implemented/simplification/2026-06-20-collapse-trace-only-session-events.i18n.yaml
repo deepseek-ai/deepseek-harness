@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-20-collapse-trace-only-session-events.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-06-20-collapse-trace-only-session-events.md
-2026-06-20-collapse-trace-only-session-events.md: f83d93a899d59eb3ebb3f22f36e32aa7865bf902
-2026-06-20-collapse-trace-only-session-events.zh.md: e53544aed0d3b88c7eb85cd1e9a4f12af7686256
+/agent-note-fold-trace-only-session-facts-into-load-bearing-events:
+  en: e7ada88fff270fa2
+  zh: 501f2d2ab2122718
+/agent-note-fold-trace-only-session-facts-into-load-bearing-events/problem:
+  en: 909f9925807d0e0a
+  zh: eba8fb3aba92caa8
+/agent-note-fold-trace-only-session-facts-into-load-bearing-events/decision:
+  en: d07841a539028e7a
+  zh: 5ebaef62105a0da8
+/agent-note-fold-trace-only-session-facts-into-load-bearing-events/alternatives-considered:
+  en: f99cc05ab13c85c3
+  zh: 93c92b3894cee7b1
+/agent-note-fold-trace-only-session-facts-into-load-bearing-events/verification:
+  en: 67e74bfc51b0a1ed
+  zh: dfdc9364ec831b9f
+/agent-note-fold-trace-only-session-facts-into-load-bearing-events/consequences:
+  en: 1c0e59938ce8408f
+  zh: 8c891d273da28f27
+/agent-note-fold-trace-only-session-facts-into-load-bearing-events/implementation-note:
+  en: 40e0c79252a438bc
+  zh: 27332c259b4bdf95

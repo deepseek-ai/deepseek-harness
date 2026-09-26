@@ -21,13 +21,11 @@ function input(session: Session, content: ContentBlock[] = [image, image]) {
 
 function marked(session: Session): boolean[] {
   const result: boolean[] = []
-  const visit = (content: readonly ContentBlock[]): void => {
-    for (const block of content) {
+  for (const message of session.deriveMessages()) {
+    for (const block of message.content) {
       if (block.type === 'image') result.push(block.offloaded === true)
-      if (block.type === 'tool-result') visit(block.content)
     }
   }
-  for (const message of session.deriveMessages()) visit(message.content)
   return result
 }
 
@@ -36,8 +34,8 @@ describe('durable image selections', () => {
     const session = createSession(SessionId('images'))
     const source = input(session, [
       { type: 'text', text: 'before' }, image,
-      { type: 'tool-result', toolCallId: ToolCallId('nested'), content: [image, { type: 'text', text: 'after' }] },
-      { type: 'tool-result', toolCallId: ToolCallId('text'), content: [{ type: 'text', text: 'unchanged' }] },
+      image, { type: 'text', text: 'after' },
+      { type: 'text', text: 'unchanged' },
       image,
     ])
     const before = session.deriveMessages()

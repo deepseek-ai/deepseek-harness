@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-15-messages-v1-base-url.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-15-messages-v1-base-url.md
-2026-09-15-messages-v1-base-url.md: 97f7294c28988e6f115963033cdac6794d70d6f3
-2026-09-15-messages-v1-base-url.zh.md: ccb8c5930dbbfa6274770cc03087b4d8077fe27b
+/agent-note-exact-v1-recognition-for-messages-base-urls:
+  en: 8e65836ea970f866
+  zh: 54ef0765d2c39be8
+/agent-note-exact-v1-recognition-for-messages-base-urls/problem:
+  en: d6d0baca328ce1cd
+  zh: 152d5c7793674ed2
+/agent-note-exact-v1-recognition-for-messages-base-urls/decision:
+  en: 037fe11400e2e666
+  zh: 5941d8f7364e45b8
+/agent-note-exact-v1-recognition-for-messages-base-urls/alternatives-considered:
+  en: 5615cd72ec115068
+  zh: 772d9a557d46c43d
+/agent-note-exact-v1-recognition-for-messages-base-urls/consequences:
+  en: 90a3b42b98cf99e0
+  zh: 50e45634f1bd5ecb

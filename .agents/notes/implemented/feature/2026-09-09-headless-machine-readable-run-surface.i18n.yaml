@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-headless-machine-readable-run-surface.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-headless-machine-readable-run-surface.md
-2026-09-09-headless-machine-readable-run-surface.md: 317f213095f86e94104c013139390cdf988f95fe
-2026-09-09-headless-machine-readable-run-surface.zh.md: 0114f87aef4f25db0887663464973bb2f762b2d5
+/agent-note-headless-machine-readable-run-surface:
+  en: bcf2251478004e35
+  zh: 70ade47c837c6bab
+/agent-note-headless-machine-readable-run-surface/problem:
+  en: 9d2c64ed47b82129
+  zh: bb0de126368e9f07
+/agent-note-headless-machine-readable-run-surface/decision:
+  en: ed08acff9c4ea030
+  zh: 484c2646de4aa5d8
+/agent-note-headless-machine-readable-run-surface/decision/command-line-contract:
+  en: 59470d5c2eba0a57
+  zh: 342c1ac9042c6b46
+/agent-note-headless-machine-readable-run-surface/decision/event-stream:
+  en: b6837e3de1305559
+  zh: 183956da3319a126
+/agent-note-headless-machine-readable-run-surface/decision/session-identity:
+  en: ebb2c5da4ea076a9
+  zh: a706416d290e7424
+/agent-note-headless-machine-readable-run-surface/consequences:
+  en: 1ba14087f533dd8e
+  zh: 66f4aa9d63a0da23
+/agent-note-headless-machine-readable-run-surface/alternatives-considered:
+  en: 42f321bd399f906e
+  zh: 3b13791afa256781

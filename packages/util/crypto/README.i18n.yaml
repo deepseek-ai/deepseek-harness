@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/crypto/README.md
-README.md: 5f35d5165603e49392b09d37f1eb5ba33c9e954f
-README.zh.md: c79f2838b0d6391c0ae5bbf06cee050245714786
+/:
+  en: c3004d7d489da8f1
+  zh: 8b6af2f3f48d5544
+/dsh-util-crypto:
+  en: 6dc993c2420066da
+  zh: d9da22117dc5dcd9
+/dsh-util-crypto/summary:
+  en: 55f117af7ba9f8fe
+  zh: 2cde7f6b69dc4bf8
+/dsh-util-crypto/table-of-contents:
+  en: cd2a60a905c978d6
+  zh: cc71d387d0cbd442
+/dsh-util-crypto/use-this-package:
+  en: 594d34627be8618a
+  zh: 68723dfafb88ac84
+/dsh-util-crypto/api:
+  en: 21d8f33a1c652edb
+  zh: 07a3629d66301d85
+/dsh-util-crypto/model-experience:
+  en: beb00a2635b78870
+  zh: d93b828c08217472
+/dsh-util-crypto/model-experience/kv-cache-effect:
+  en: 3f396619298fe1ae
+  zh: d46e51c86231d485
+/dsh-util-crypto/known-limitations-and-deferred-work:
+  en: 2c79cf7c12f39ab1
+  zh: c6f2ad3e53a62473
+/dsh-util-crypto/known-limitations-and-deferred-work/dev-note:
+  en: 214df5375bd84f76
+  zh: fa3912dd609838fb

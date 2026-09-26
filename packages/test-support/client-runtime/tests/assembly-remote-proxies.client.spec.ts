@@ -29,6 +29,17 @@ describe('remoteNamespacesOf', () => {
 })
 
 describe('remote proxies over a booted client', () => {
+  it('boots the Office Remote subset from source and routes calls through its mock', async () => {
+    const name = '@deepseek-ai/dsh-api-remotes'
+    const mock = RemoteMock.create().load(remoteDefaultResponses).unary('officeToPdf/render', ok({ bytes: 3 }))
+    const client = await TestClient.start({ roster: webApp.closure([name]) }, mock)
+    onTestFinished(() => client.dispose())
+    expect([...client.ctx.loader.entries()].map(entry => entry.options.name)).not.toContain(name)
+    const remote = (client.ctx as unknown as { remote: RemoteFace }).remote
+    await expect(remote.officeToPdf!.render!({ path: 'report.docx' })).resolves.toEqual(ok({ bytes: 3 }))
+    expect(mock.log.calls('officeToPdf/render').map(call => call.args)).toEqual([[{ path: 'report.docx' }]])
+  })
+
   async function booted(configure: (mock: RemoteMock) => void = () => {}) {
     const mock = RemoteMock.create().load(remoteDefaultResponses)
     configure(mock)
@@ -49,7 +60,7 @@ describe('remote proxies over a booted client', () => {
     expect(mock.log.calls('session/rename').map(call => call.args)).toEqual([[{ sessionId: 's1', title: 'renamed' }]])
     expect(mock.log.calls('session/cancel').map(call => call.args)).toEqual([[{ sessionId: 's1' }]])
     expect((remote.session as unknown as { then?: unknown }).then).toBeUndefined()
-    expect((remote.session as unknown as Record<symbol, unknown>)[Symbol.toStringTag]).toBeUndefined()
+    expect((remote.session as Record<symbol, unknown>)[Symbol.toStringTag]).toBeUndefined()
   }, 60_000)
 
   it('folds a call without a rule into gateway/internal and leaves the miss in the log for dispose() to report', async () => {

@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/test-support/loader-smoke/README.md
-README.md: 2b903a1a4ecd558b8839dba082b9c3ee0b9fdaa4
-README.zh.md: a207804e158745adcc5b2a41fa0892b60ad33d84
+/:
+  en: 00a7ac59f751e4d0
+  zh: 35334966b956621d
+/deepseek-ai-dsh-loader-smoke:
+  en: 28364f937b7e24e7
+  zh: 6e5d0574c5331643
+/deepseek-ai-dsh-loader-smoke/summary:
+  en: b7b36ca4623a546e
+  zh: 8c9be89d36f19423
+/deepseek-ai-dsh-loader-smoke/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-loader-smoke/use-this-package:
+  en: 682780f6cbeb85cb
+  zh: 07a2458db985471a
+/deepseek-ai-dsh-loader-smoke/use-this-package/booting-an-application-fixture:
+  en: e2144d78d4e83030
+  zh: b3e415f69dac20a2
+/deepseek-ai-dsh-loader-smoke/use-this-package/testing-a-shipped-profile:
+  en: aa24542429ab0917
+  zh: 0725fd0950e0993b
+/deepseek-ai-dsh-loader-smoke/use-this-package/driving-a-fixture-turn:
+  en: c99402b3d2219738
+  zh: cbff00f4bfb7d625
+/deepseek-ai-dsh-loader-smoke/use-this-package/source-or-built-mode:
+  en: 312abd1eddcc5015
+  zh: 4fb5c6842f4d49d1
+/deepseek-ai-dsh-loader-smoke/use-this-package/what-can-go-wrong:
+  en: cd38599b474efc54
+  zh: 353237fb992a1b1c
+/deepseek-ai-dsh-loader-smoke/understand-the-implementation:
+  en: 3ffb8df759bf5071
+  zh: a93d3dd6472d9782
+/deepseek-ai-dsh-loader-smoke/understand-the-implementation/design:
+  en: f3407557b8aafb9c
+  zh: 06c9faf218c69829
+/deepseek-ai-dsh-loader-smoke/understand-the-implementation/source-map:
+  en: 4212f963f739e76e
+  zh: 1a08bcb7654df951
+/deepseek-ai-dsh-loader-smoke/further-exploration:
+  en: f6719ecd2dbb7870
+  zh: 758b46fefe666dbd
+/deepseek-ai-dsh-loader-smoke/model-experience:
+  en: 27696a3c4d31d171
+  zh: 48b6df074e0b0911
+/deepseek-ai-dsh-loader-smoke/model-experience/kv-cache-effect:
+  en: c204a02c386ca3a0
+  zh: ce9b24304f9644aa
+/deepseek-ai-dsh-loader-smoke/known-limitations-and-deferred-work:
+  en: a3e0e21178bb00cc
+  zh: f3dc6139370330f6
+/deepseek-ai-dsh-loader-smoke/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for user-questions.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/user-questions.md
-user-questions.md: fbbfb1435586c7191e47a6eaa5b1783c9f172d48
-user-questions.zh.md: 054ca06cd3c8a85cb35d99658c325848ea780cb5
+/user-interaction:
+  en: bc5bf42af08a66aa
+  zh: a90222f49abd2d0c
+/user-interaction/question-options:
+  en: 88cceb3cf383248e
+  zh: 8e1d2627823b1ffc
+/user-interaction/presentation-intent:
+  en: aca3811ea3f0c2ef
+  zh: 91f93dc33d12e343
+/user-interaction/question-item:
+  en: 1ad4373e6fdfe4c7
+  zh: efb8d41ebe7224f8
+/user-interaction/ask-request:
+  en: e10cf6c8c9c20962
+  zh: 0b347b40c12b6b25
+/user-interaction/answer:
+  en: 4235b687a9975881
+  zh: 350d000d4bfa7400
+/user-interaction/errors:
+  en: 33cc3bf5e352e223
+  zh: 143279cc3f355453

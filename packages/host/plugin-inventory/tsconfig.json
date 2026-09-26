@@ -9,13 +9,19 @@
   ],
   "references": [
     {
+      "path": "../../boot/app-boot"
+    },
+    {
+      "path": "../../util/package-manifest"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
       "path": "../../../vendor/loader"
     },
     {
-      "path": "../../preset/agent-presets"
+      "path": "../../preset/agent-preset-registry"
     },
     {
       "path": "../../util/brand"

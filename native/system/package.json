@@ -26,7 +26,7 @@
     "release:verify-packed-install": "node ./scripts/verify-packed-install.mjs"
   },
   "devDependencies": {
-    "@deepseek-ai/node-addon-system": "workspace:*",
+    "@deepseek-ai/node-addon-system": "workspace:~",
     "@types/node": "^26.0.1",
     "tsx": "^4.20.6",
     "typescript": "^6.0.3"

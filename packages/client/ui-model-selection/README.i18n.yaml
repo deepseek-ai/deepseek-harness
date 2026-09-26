@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-model-selection/README.md
-README.md: f3c373619fec0482876d8ac540f06e188b5b34d9
-README.zh.md: b8ee9cd73bb3fd5cdf0d0ecd8559b271c5abc933
+/:
+  en: f39813648aeef5a0
+  zh: eea25094e8bfc031
+/deepseek-ai-dsh-client-ui-model-selection:
+  en: 5e007d579a0e22f0
+  zh: edfff0d021712077
+/deepseek-ai-dsh-client-ui-model-selection/summary:
+  en: 2fb361ef704528fb
+  zh: 2537d2afb4d2cb45
+/deepseek-ai-dsh-client-ui-model-selection/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-model-selection/use-this-package:
+  en: e5a1df3a4dfe5041
+  zh: 6269e73026b32a33
+/deepseek-ai-dsh-client-ui-model-selection/use-this-package/model-and-effort:
+  en: e38d0195677a7b69
+  zh: 4eea8a9b1664afd9
+/deepseek-ai-dsh-client-ui-model-selection/use-this-package/unroutable-sessions:
+  en: 7f20428c747ff052
+  zh: 975e6de728e02fa0
+/deepseek-ai-dsh-client-ui-model-selection/use-this-package/selection-failures:
+  en: 261bbf42296243af
+  zh: 72779fb7b8fbc473
+/deepseek-ai-dsh-client-ui-model-selection/understand-the-implementation:
+  en: 493088e8de6be91c
+  zh: 9ecee4605b4dbad4
+/deepseek-ai-dsh-client-ui-model-selection/further-exploration:
+  en: 14acd4692e923480
+  zh: ff89aed852aa0da8
+/deepseek-ai-dsh-client-ui-model-selection/model-experience:
+  en: 782f79ed910f426a
+  zh: 54a2e3e32a747544
+/deepseek-ai-dsh-client-ui-model-selection/model-experience/kv-cache-effect:
+  en: 68e54c00412a40d1
+  zh: 0ac96f57fd194d96
+/deepseek-ai-dsh-client-ui-model-selection/known-limitations-and-deferred-work:
+  en: 75b37954ceacd92a
+  zh: a49d0361486e35c4
+/deepseek-ai-dsh-client-ui-model-selection/known-limitations-and-deferred-work/dev-note:
+  en: 83bfc3dae3365b49
+  zh: f7dc4d0654ec83e1

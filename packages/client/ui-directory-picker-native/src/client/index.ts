@@ -1,12 +1,4 @@
-/**
- * Browser half of the native directory-picker backend: fills ui-workspace's
- * two directory-flow holes with a renderless occupant that answers each
- * `open` by driving `directoryPicker/pick` (the node half's OS chooser) and
- * reporting the one outcome — picked path, cancellation, or failure — back
- * through the owner conversation. Mounting this package therefore composes
- * both sides of the native interaction with one cordis.yml row; no client
- * code branches on a capability kind.
- */
+/** Native directory flow using the local desktop bridge or the Host's OS chooser. */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the SlotMap merge declaring the directory-flow holes.
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -26,7 +18,11 @@ export const inject = ['slots', 'uiWorkspace']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  const injected = (): NativeFlowInjected => ({ pick: () => ctx.uiWorkspace.pickDirectory() })
+  const desktop = (globalThis as typeof globalThis & {
+    __DSH_DIRECTORY_PICKER__?: NativeFlowInjected
+  }).__DSH_DIRECTORY_PICKER__
+  const pick = desktop === undefined ? () => ctx.uiWorkspace.pickDirectory() : () => desktop.pick()
+  const injected = (): NativeFlowInjected => ({ pick })
   // Both declaration lifetimes must be live before the pair installs; the
   // generator makes the two registrations one transactional effect. The
   // outer/inner nesting order is arbitrary; neither hole has precedence.

@@ -15,8 +15,13 @@ body {
      模糊、更低透明度的柔光。默认色只声明在 body 上，让表面的重绑沿继承
      传给真正消费投影的后代。 */
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l4);
-  /* blur filter */
-  --dsw-mask-blur: blur(2px);
+  /* Blocking masks dim the page; menu backgrounds retain their blur. */
+  --dsw-mask-blur: none;
+  --dsw-menu-backdrop-filter: blur(40px) saturate(150%);
+}
+
+body[data-ds-dark-theme] [data-menu-material] {
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
 }
 
 /* 派生 elevation 值逐元素声明而非从 body 继承：继承传下来的是在 body 上就

@@ -1,6 +1,79 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/shell/tool-pwsh-persistent/README.md
-README.md: 6b347dfbf8745a7bc56e2c62a5040e873bc1d8e2
-README.zh.md: ce8a6542b1f3494d47ba8dee01ba3630c280bc5e
+/:
+  en: 07c1a52a0f913391
+  zh: a0c8579b535a1782
+/deepseek-ai-dsh-tool-pwsh-persistent:
+  en: dc39535d57c8fdfc
+  zh: 953529db098cbda5
+/deepseek-ai-dsh-tool-pwsh-persistent/summary:
+  en: a0afc99c0526930b
+  zh: abce5685799601d2
+/deepseek-ai-dsh-tool-pwsh-persistent/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tool-pwsh-persistent/use-this-package:
+  en: 9739e1cfe935d4a5
+  zh: a2380d889e67b184
+/deepseek-ai-dsh-tool-pwsh-persistent/use-this-package/when-to-choose-it:
+  en: bf8a28b21acb1dbd
+  zh: 452afa796b0ae38e
+/deepseek-ai-dsh-tool-pwsh-persistent/use-this-package/minimal-configuration:
+  en: 6faae7346983f822
+  zh: c9b267634d4adffa
+/deepseek-ai-dsh-tool-pwsh-persistent/use-this-package/what-the-agent-can-rely-on:
+  en: 9f4c22b06f940caf
+  zh: 61f755cec7ff5b76
+/deepseek-ai-dsh-tool-pwsh-persistent/use-this-package/what-can-go-wrong:
+  en: 70bf2e1e8d8ccbf6
+  zh: 6c78d8c85113adf7
+/deepseek-ai-dsh-tool-pwsh-persistent/understand-the-implementation:
+  en: 8d94a7381bca3fa9
+  zh: f4bd2866fff6fa8d
+/deepseek-ai-dsh-tool-pwsh-persistent/understand-the-implementation/design-philosophy:
+  en: b8544c7025ef7f9e
+  zh: 573b0ec492dde975
+/deepseek-ai-dsh-tool-pwsh-persistent/understand-the-implementation/source-map:
+  en: bb2d17f1385fb11d
+  zh: 8e103837238ccda2
+/deepseek-ai-dsh-tool-pwsh-persistent/understand-the-implementation/command-flow:
+  en: 52f69b3256d2d2c2
+  zh: 34ce45e101760793
+/deepseek-ai-dsh-tool-pwsh-persistent/further-exploration:
+  en: e836ecbf7370bc76
+  zh: 84fed68318df81ff
+/deepseek-ai-dsh-tool-pwsh-persistent/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-pwsh-persistent/model-experience/tool-schema:
+  en: e4c7376d4f29dbd5
+  zh: 6b7a9eaf69c9ea53
+/deepseek-ai-dsh-tool-pwsh-persistent/model-experience/tool-schema/what-the-model-sees:
+  en: 9948cd040d944ea8
+  zh: 07504b24c196dfd0
+/deepseek-ai-dsh-tool-pwsh-persistent/model-experience/tool-schema/token-effect:
+  en: 120147c962cbb894
+  zh: 8952abc085cf3812
+/deepseek-ai-dsh-tool-pwsh-persistent/model-experience/tool-schema/kv-cache-effect:
+  en: 7d9323583a83cb95
+  zh: cc5daa6bce8450f8
+/deepseek-ai-dsh-tool-pwsh-persistent/model-experience/tool-results:
+  en: beaabb79f229692a
+  zh: 8573891441963be4
+/deepseek-ai-dsh-tool-pwsh-persistent/model-experience/tool-results/what-the-model-sees:
+  en: bc99957e721951de
+  zh: e384874a0f2f63e8
+/deepseek-ai-dsh-tool-pwsh-persistent/model-experience/tool-results/token-effect:
+  en: 5dea04ce6a30ad48
+  zh: c2434253dc517d3d
+/deepseek-ai-dsh-tool-pwsh-persistent/model-experience/tool-results/kv-cache-effect:
+  en: ba6a48888c3361e5
+  zh: 3a8f648053555dc9
+/deepseek-ai-dsh-tool-pwsh-persistent/known-limitations-and-deferred-work:
+  en: e2f1a18c599a82ba
+  zh: 1f00c387a4bb85a8
+/deepseek-ai-dsh-tool-pwsh-persistent/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

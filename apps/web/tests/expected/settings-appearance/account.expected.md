@@ -1,0 +1,10 @@
+- region "账号与余额":
+  - text: Radius example
+  - status: r***@example.com
+  - link "更多账号信息":
+    - /url: https://platform.deepseek.com/
+  - text: 充值余额 ¥128.50 赠金余额 ¥12.00 更多
+  - link "查询用量":
+    - /url: https://platform.deepseek.com/usage
+  - link "充值":
+    - /url: https://platform.deepseek.com/top_up

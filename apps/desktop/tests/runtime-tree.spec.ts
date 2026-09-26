@@ -54,10 +54,10 @@ it.each(['missing', 'directory'])('checks a %s Host entry only during build veri
   expect(readDesktopRuntime(dsh).release.version).toBe('1.0.0')
   await expect(verifyDesktopRuntime(dsh, '1.0.0')).rejects.toThrow(/integrity/u)
 })
-it('checks the shell version only during build verification', async () => {
+it('checks the bundled version only during build verification', async () => {
   const dsh = join(fixture(), 'dsh')
   expect(readDesktopRuntime(dsh).release.version).toBe('1.0.0')
-  await expect(verifyDesktopRuntime(dsh, '2.0.0')).rejects.toThrow(/does not match Electron/u)
+  await expect(verifyDesktopRuntime(dsh, '2.0.0')).rejects.toThrow(/bundled 1\.0\.0 is not the expected 2\.0\.0/u)
 })
 it.each([
   { schemaVersion: 2 },

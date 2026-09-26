@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/session-projection/README.md
-README.md: 2fa7ddc096e64e622c814f216a6c606de6ba1689
-README.zh.md: 565b331cd7e0f5190b6da4e54ed659d9da6d96fc
+/:
+  en: 85229e402add27cf
+  zh: 66473d34393c44db
+/deepseek-ai-dsh-session-projection:
+  en: 4de14fc97cd52942
+  zh: 7395050ab82d4f45
+/deepseek-ai-dsh-session-projection/summary:
+  en: 2a3b558f6432184f
+  zh: 205f43c59c6db2f5
+/deepseek-ai-dsh-session-projection/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-session-projection/use-this-package:
+  en: 3a15581f0b043e79
+  zh: 302fc8afe8fb45fa
+/deepseek-ai-dsh-session-projection/use-this-package/when-to-choose-it:
+  en: 90b7c26cb45be52a
+  zh: 386e294ec09607c1
+/deepseek-ai-dsh-session-projection/use-this-package/define-a-projection-unit:
+  en: 09758d1475fad86e
+  zh: 473637cb34aebe72
+/deepseek-ai-dsh-session-projection/use-this-package/register-and-read:
+  en: 5e754e67dff07b02
+  zh: 2ba1bda464abaa45
+/deepseek-ai-dsh-session-projection/use-this-package/persisted-checkpoints:
+  en: 45f1c05fb7e08180
+  zh: f8d62c749899651a
+/deepseek-ai-dsh-session-projection/understand-the-implementation:
+  en: 3397f58d6f49bfda
+  zh: efb85d382e25574d
+/deepseek-ai-dsh-session-projection/understand-the-implementation/design-concept:
+  en: 8afa0fdb49898f6d
+  zh: 6b2da34455963935
+/deepseek-ai-dsh-session-projection/understand-the-implementation/source-map:
+  en: 8b6672b48e7607d6
+  zh: 33611e7ea13219f1
+/deepseek-ai-dsh-session-projection/understand-the-implementation/drive-and-checkpoint-flow:
+  en: 00136880bb586403
+  zh: bd35f645111c068c
+/deepseek-ai-dsh-session-projection/further-exploration:
+  en: 304a03d08ea5c9f9
+  zh: 200a0505e8d11e0d
+/deepseek-ai-dsh-session-projection/model-experience:
+  en: a24045627fb43695
+  zh: a8465196c3948796
+/deepseek-ai-dsh-session-projection/model-experience/kv-cache-effect:
+  en: 8a592dae9bc946ab
+  zh: eca939995bb5f8e0
+/deepseek-ai-dsh-session-projection/known-limitations-and-deferred-work:
+  en: 8fd41113832feb7c
+  zh: d50021b135278d77
+/deepseek-ai-dsh-session-projection/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

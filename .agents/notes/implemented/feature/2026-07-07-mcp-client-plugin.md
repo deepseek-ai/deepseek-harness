@@ -145,7 +145,7 @@ A unified `execute` handler for all tools from one MCP server:
 1. Call the SDK's `callTool` with the closed-over `rawName`, model arguments, `exec.signal`, the configured timeout, and the complete discovered `toolDefinition` — the public name is never sent to the server.
 2. Preserve canonical success as `{ content: JsonValue[], structuredContent? }`; complete MCP JSON blocks remain the programmatic/PTC mode value. `isError: true` throws before any image persistence so the registry owns the failure path.
 3. Prepare a separate ordered Native projection. Text runs join with `'\n'`; resource links preserve name and URI as text; audio and embedded resources become explicit diagnostics. The SDK rejects malformed wire results. If any image exists, the bridge strictly decodes the complete batch, resolves the calling agent's latest exact route, requires an attachment store plus explicit model image input, and delegates all-member validation and ordered persistence to `AttachmentStore.saveImages()`. Any decode, capability, or storage refusal renders every image as diagnostic text and returns no partial references.
-4. Keep `output.render` synchronous and pure. The executor stages its richer projection in a generation-local `WeakMap` keyed by the exact execution; `finalizeContent` installs it only when the registry's post-execute result still has the original canonical value and fallback content. A policy block, value replacement, or content replacement remains authoritative, and a re-sync cannot let an older generation consume new execution state.
+4. The executor preserves the complete canonical MCP value and prepares ordered text/image content. `projectContent` installs that content before `tools/post-execute`, so retention sees real images. Subsequent content replacement, value replacement, and blocking remain authoritative.
 5. PTC mode receives the untouched canonical value. Its generic dispatch bridge defers a successful final content sequence containing an image through the outer `run_code` result, so MCP requires no private parent-token special case.
 6. Cancellation: `exec.signal` (from the agent loop's cancel) is passed through to the MCP SDK's `callTool`, exact-model lookup, and the pre-storage gate.
 
@@ -156,6 +156,8 @@ Build the child environment from the subprocess seam's shared `scrubbedParentEnv
 ### Disconnection / crash
 
 A per-instance connection supervisor reconnects automatically after a lost connection with bounded exponential backoff and a per-outage attempt budget, re-running discovery on success; exhaustion unregisters the server's tools and stops until reload. The [auto-reconnect Agent Note](../../archived/feature/2026-08-06-mcp-client-auto-reconnect.md) owns that decision, including the `reconnect` config block and the `reconnect.enabled: false` opt-out that restores manual HMR/restart recovery.
+
+The [multimodal retention decision](../../implemented/bug-fix/2026-09-21-multimodal-tool-result-retention.md) explains why prepared images enter content before result policies.
 
 ## Alternatives considered
 

@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-06-evidence-driven-performance-skill.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-06-evidence-driven-performance-skill.md
-2026-09-06-evidence-driven-performance-skill.md: 221287ef03386f53d61458db7a280142dfde690a
-2026-09-06-evidence-driven-performance-skill.zh.md: 90e2c1aa5778d23492bec4f2049ce158433e2363
+/agent-note-evidence-driven-performance-optimization-workflow:
+  en: 0a63ab9dc4847f40
+  zh: f8ba9a608396c47c
+/agent-note-evidence-driven-performance-optimization-workflow/problem:
+  en: 2e0cb63ef966a541
+  zh: 1853e223e530708e
+/agent-note-evidence-driven-performance-optimization-workflow/decision:
+  en: bd0e363221108421
+  zh: fc83dc1020d53f4e
+/agent-note-evidence-driven-performance-optimization-workflow/historical-evidence:
+  en: 2d913642c87e5a01
+  zh: 45fce898640c87e8
+/agent-note-evidence-driven-performance-optimization-workflow/alternatives-considered:
+  en: 70d016cd8e541933
+  zh: 2ebeb9cbeba8129e
+/agent-note-evidence-driven-performance-optimization-workflow/consequences:
+  en: 961c634c37340937
+  zh: 9a528567223f7bfa

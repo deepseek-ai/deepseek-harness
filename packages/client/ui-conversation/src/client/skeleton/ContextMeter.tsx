@@ -1,14 +1,15 @@
-/** Composer context-occupancy meter: a ring beside the send button fed by the
+/** Composer context-occupancy meter: a ring and percentage below the card fed by the
  * `contextPressure` projection, with a click-open panel of the heuristic
  * `contextBreakdown` composition (system prompt, tools, conversation).
  * Renders nothing until a provider reports both pressure and a route
  * capacity. */
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 // Type-only: the `contextPressure` / `contextBreakdown` projection key merges.
 import type {} from '@deepseek-ai/dsh-token-meter/client'
-import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Tooltip, useAnchoredPosition, useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ComposerBarProps } from '../contract/slots.ts'
 import { contextOccupancy } from '../context-occupancy.ts'
 import css from './ContextMeter.module.css'
@@ -57,8 +58,18 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
   const breakdown = useProjection('contextBreakdown')
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLSpanElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const context = contextOccupancy(pressure)
   const available = context !== null
+  const position = useAnchoredPosition({
+    open: open && available,
+    anchorRef: rootRef,
+    panelRef,
+    side: 'top',
+    gap: 8,
+    margin: 12,
+  })
+  useDismissOnOutsidePointer(rootRef, open && available, setOpen, panelRef)
 
   // A model switch can temporarily remove capacity while this component stays
   // mounted. Close the now-unavailable panel instead of preserving stale UI.
@@ -66,22 +77,13 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
     if (!available && open) setOpen(false)
   }, [available, open])
 
-  // Outside click / Escape close, one document listener while open (Menu's pattern).
   useEffect(() => {
     if (!open || !available) return
-    const onPointerDown = (e: PointerEvent): void => {
-      if (e.target instanceof Node && rootRef.current?.contains(e.target) === true) return
-      setOpen(false)
-    }
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setOpen(false)
     }
-    document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
+    return () => { document.removeEventListener('keydown', onKeyDown) }
   }, [available, open])
 
   if (context === null) return null
@@ -125,10 +127,17 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
               transform="rotate(-90 7 7)"
             />
           </svg>
+          <span>{reading}</span>
         </button>
       </Tooltip>
-      {open && (
-        <div className={css.panel} role="dialog" aria-label={t('context.used')}>
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          className={css.panel}
+          style={position ?? { visibility: 'hidden', left: 0, top: 0 }}
+          role="dialog"
+          aria-label={t('context.used')}
+        >
           <div className={css.header}>
             {/* Empty sides collapse through `.headline:empty` so the locale that
                 needs no leading (or trailing) text spends no header gap. */}
@@ -163,7 +172,8 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
               ))}
             </dl>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </span>
   )

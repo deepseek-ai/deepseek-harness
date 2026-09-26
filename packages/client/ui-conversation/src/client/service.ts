@@ -594,8 +594,12 @@ function imageMediaType(value: string): ImageMediaType {
   }
 }
 
-/** Whether a browser-declared MIME selects the image draft path (all other files upload verbatim). */
-function isImageMediaType(value: string): boolean {
+/**
+ * Whether a browser-declared MIME selects the image draft path (all other files upload verbatim).
+ * @param value - the browser's declared MIME type.
+ * @returns whether the file is an accepted raster image.
+ */
+export function isImageMediaType(value: string): boolean {
   return value === 'image/png' || value === 'image/jpeg' || value === 'image/webp' || value === 'image/gif'
 }
 

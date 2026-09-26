@@ -40,6 +40,8 @@ const LINK_MAP: Record<string, string> = {
   StreamChunk: 'subsystems/llm-streaming.md',
   TokenUsage: 'subsystems/llm-streaming.md',
   TodoItem: 'subsystems/todo.md',
+  WorkspaceChangesSummary: 'subsystems/deliverables.md',
+  PresentedFile: 'subsystems/deliverables.md',
   TurnTrigger: 'subsystems/session.md',
   TurnEndReason: 'subsystems/session.md',
   SessionTitleEventData: 'subsystems/session-title.md',
@@ -100,7 +102,7 @@ export function render(
     '',
     text.envelopeIntro,
     '',
-    ...(schema ? [renderPersistenceSchemaIndex(schema, locale)] : []),
+    ...(schema ? [renderPersistenceSchemaIndex(schema, locale, undefined, 2, 'current')] : []),
     `## ${text.envelope}`,
     '',
     '```' + FENCE,
@@ -119,7 +121,7 @@ export function render(
       lines.push(...renderEvent(e, locale))
     }
   }
-  if (schema) lines.push(renderPersistenceSchemaDefinitions(schema, locale))
+  if (schema) lines.push(renderPersistenceSchemaDefinitions(schema, locale, undefined, 2, 'current'))
   return lines.join('\n')
 }
 

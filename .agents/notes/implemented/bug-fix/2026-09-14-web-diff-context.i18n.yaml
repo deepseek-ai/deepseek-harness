@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-14-web-diff-context.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-14-web-diff-context.md
-2026-09-14-web-diff-context.md: 072af0966689d475d7fdd1df83861fa847f3745f
-2026-09-14-web-diff-context.zh.md: cd165a443451fc5ba580078b1b431a2788671dbe
+/agent-note-web-diff-cards-compare-contextual-content:
+  en: 2dc5ae1577ba6173
+  zh: 0b580f4e70eddc72
+/agent-note-web-diff-cards-compare-contextual-content/problem:
+  en: 73aa63782984835f
+  zh: 41982214968dcca8
+/agent-note-web-diff-cards-compare-contextual-content/decision:
+  en: d8c9e2af5843c87d
+  zh: 5487925fa1a66da8
+/agent-note-web-diff-cards-compare-contextual-content/alternatives-considered:
+  en: b5d00cc913db27c9
+  zh: ef72c91cff5ebcce
+/agent-note-web-diff-cards-compare-contextual-content/measurement:
+  en: 839be054edf51392
+  zh: 3d2a51e634b39eb2
+/agent-note-web-diff-cards-compare-contextual-content/consequences:
+  en: 1900b6984a59765c
+  zh: 8f3755fcdf8f2562

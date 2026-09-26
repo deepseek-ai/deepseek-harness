@@ -28,7 +28,7 @@
   flex-direction: column;
   margin: 4px 0 4px 4px;
   border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-markdown-code-block);
   font: var(--dsw-font-markdown-code-block-small);
 }
@@ -46,7 +46,7 @@
 .ioSection::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   background-clip: padding-box;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
 }
 
 .ioSection::-webkit-scrollbar-track {
@@ -85,35 +85,10 @@
 }
 
 .root {
-  position: relative; /* sweep-glare overlay anchor */
-  overflow: hidden;
   display: flex;
   align-items: center;
   height: calc(24px + var(--dsh-content-font-delta, 0px));
   min-width: 0;
-}
-
-/* Running sweep glare — same deepsuite ShimmerText pattern as ToolRow. */
-.root[data-state='running']::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 300px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--dsw-alias-bg-base) 60%, transparent) 55%,
-    transparent 100%
-  );
-  animation: dsh-bash-row-sweep 2.6s ease-out infinite;
-  pointer-events: none;
-}
-
-@keyframes dsh-bash-row-sweep {
-  0% { left: -300px; }
-  90%, 100% { left: 100%; }
 }
 
 .leading {
@@ -129,8 +104,7 @@
 }
 
 /* Same glyph-scaling rule as DisclosureRow's leading: the CSS edge overrides
-   the svg attributes so the 14px glyph follows the font-size delta; StateDot
-   (data-state) keeps its fixed figma size.
+   the svg attributes so the 14px business glyph follows the font-size delta.
    TODO: this bash header duplicates the DisclosureRow structure (and this is
    the fourth copy of the glyph rule, with DisclosureRow, MessageItem
    .compactionLeading, and MessageIconActions); migrating the bash row onto
@@ -173,6 +147,7 @@
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   color: var(--dsw-alias-label-secondary);
+  transition: color 100ms ease;
 }
 
 .sep {
@@ -193,11 +168,21 @@
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   color: var(--dsw-alias-label-tertiary);
+  transition: color 100ms ease;
+}
+
+.root:hover .title,
+.root:hover .summary:not(.errorSummary):not(.stoppedSummary) {
+  color: var(--dsw-alias-label-primary);
 }
 
 /* Error row's collapsed summary: the failure's first line in the error color. */
 .errorSummary {
   color: var(--dsw-alias-state-error-primary);
+}
+
+.stoppedSummary {
+  color: var(--dsw-alias-state-warn-label);
 }
 
 /* Hover-revealed Inspect pill under the expanded terminal's bottom-left —

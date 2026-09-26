@@ -11,8 +11,8 @@
 仅追加的事件类型。可通过声明合并扩展：插件通过 declaration merging 声明额外的事件类型。例如[压缩（compaction） seam](compaction.zh.md) 添加了 `compaction/start` / `compaction/summary` / `compaction/end`，`@deepseek-ai/dsh-hook-protocol` 为钩子桥接添加了仅记录日志的 `hook/invoked` / `hook/result` 记录。与 `compaction/*` 一样，这些都不是 `SurfaceEventType`（没有 `surfaceOp`）。生成的[持久化日志事件目录](../persistence-catalog.zh.md)列举了所有成员（核心与合并扩展的），包含其 payload、surface 标记与声明位置。
 
 ```ts type-equiv
-/** A user-role specialization of the one shared message representation. */
-interface UserMessage extends Message {
+/** A user-role specialization of the shared message representation. */
+interface UserMessage extends MessageBase {
   readonly role: 'user'
 }
 ```
@@ -53,6 +53,14 @@ interface SessionEventMap {
    * project their `content` verbatim; `source` tells them apart.
    */
   'user/message': UserMessage
+  /** An incremental agent session change admitted at the named turn and step. */
+  'developer/message': {
+    turn: number
+    step: number
+    message: DeveloperMessage
+    /** Earlier request/header defining every tool addition; required exactly when additions are present. */
+    headerSeq?: SessionSeq
+  }
   /**
    * The rendered system prompt on the model-visible surface. The loop appends
    * the first one as surface node 0 before the step's first `user/message`.
@@ -116,7 +124,7 @@ interface SessionEventMap {
     message: ToolResultMessage
     /**
      * Optional failure identity and raw user-facing reason, outside model content;
-     * allowed only when the tool-result block has `isError: true`.
+     * allowed only when the message has `isError: true`.
      */
     error?: { name: string; code: string; reason?: string }
     meta?: JsonValue
@@ -128,7 +136,7 @@ interface SessionEventMap {
   'request/header': {
     header: EpochHeader
     reason: RequestHeaderReason
-    /** A changed header also begins a distinct model-message series. */
+    /** This request begins a distinct model-message series, independently of the header reason. */
     startsSeries?: true
   }
   /**
@@ -139,19 +147,21 @@ interface SessionEventMap {
    */
   'request/context': RequestContext
   /**
-   * Marks the end of a constructor seed. Events before it have smaller seq
-   * values and came from the seed (resume, fork, or replay); this lifecycle
-   * produced none of them. This log-only event is the durable projection of
-   * {@link Session.firstLiveSeq}.
+   * Separates inherited or restored history from later lifecycle-owned work.
+   * This log-only marker need not be at {@link Session.firstLiveSeq}: a fork
+   * seed can already contain its tagged marker and child-owned synthetic
+   * closers before construction.
    *
    * A fresh fork child owns one `{ inherited: true }` marker at its exact
    * inherited-prefix cut, even when that prefix ends in an ancestor marker.
-   * The last tagged marker is the current Session's cut; untagged markers keep
-   * ordinary restore and replay lifecycle boundaries.
+   * `buildForkSeed` appends that marker before any synthetic closers; the
+   * `Session` constructor supplies it when given only the inherited prefix.
+   * The last tagged marker is the current Session's cut; untagged markers
+   * keep ordinary restore and replay lifecycle boundaries.
    *
-   * `Session`'s constructor is the only legitimate writer. The invariant
-   * companion deliberately constrains nothing here, so a plugin appending one
-   * would silently classify every live bracket before it as seed history.
+   * Only the `Session` constructor and `buildForkSeed` may create this marker.
+   * The invariant companion deliberately constrains nothing here, so a plugin
+   * appending one would silently classify every live bracket before it as seed history.
    *
    * An owner of a standalone open/close bracket (`compaction/start` …
    * `compaction/end`) reads it because seed history and live work are otherwise
@@ -170,7 +180,7 @@ interface SessionEventMap {
 
 ### 请求头事件：`request/header`
 
-请求信封（即 `EpochHeader`：调用配置 + 适配器所提供默认值的标记 + 已组装的工具 schema）会作为会话状态写入日志，因此每个对话请求都是日志的纯函数（见可重建性 Agent Note）。渲染后的系统提示词不属于请求头：它是派生历史，即 surface 第 0 号节点上的 `system/message` 事件以及任何后续的历史内系统节点（[决策](../../.agents/notes/implemented/architecture/2026-09-02-system-prompt-as-surface-node.zh.md)），因此提示词变更替换或追加一个系统节点，而请求头保持不变。带有 reason `'initial'` 或 `'resume'` 的完整 `request/header` 快照记录每个 agent loop 实例的边界；请求变化时会追加 reason 为 `'change'` 的快照；未变的信封显式开启消息序列或跟随 surface 替换时，会追加 reason 为 `'series'` 的快照。如果发生变化的快照所属请求同时开启序列，它会携带 `startsSeries: true`。普通的仅追加后续 Turn，以及同一模型消息序列内的后续 Step 与重试沿用最新快照。`foldRequestHeader(events)` 通过选择最新快照重建请求头。该事件不是 `SurfaceEventType`，不产生 LLM 消息。
+请求信封（即 `EpochHeader`：调用配置 + 适配器所提供默认值的标记 + 已组装的工具 schema）会作为会话状态写入日志，因此每个对话请求都是日志的纯函数（见可重建性 Agent Note）。渲染后的系统提示词不属于请求头：它是派生历史，即 surface 第 0 号节点上的 `system/message` 事件以及任何后续的历史内系统节点（[决策](../../.agents/notes/implemented/architecture/2026-09-02-system-prompt-as-surface-node.zh.md)），因此提示词变更替换或追加一个系统节点，而请求头保持不变。带有 reason `'initial'` 或 `'resume'` 的完整 `request/header` 快照记录每个 agent loop 实例的边界；请求变化时会追加 reason 为 `'change'` 的快照；未变的信封显式开启消息序列或跟随 surface 替换时，会追加 reason 为 `'series'` 的快照。如果 `'initial'`、`'resume'` 或 `'change'` 快照所属请求同时开启序列，它会携带 `startsSeries: true`；reason `'series'` 已记录这一事实。普通的仅追加后续 Turn，以及同一模型消息序列内的后续 Step 与重试沿用最新快照。`foldRequestHeader(events)` 通过选择最新快照重建请求头。该事件不是 `SurfaceEventType`，不产生 LLM 消息。
 
 ```ts type-equiv
 /**
@@ -186,6 +196,10 @@ interface EpochHeader {
   adapterDefaults?: LlmCallConfigAdapterDefaults
   /** Assembled tool schemas; absent for a tool-less request. */
   tools?: ToolSchema[]
+  /** Retired request text; system prompts belong to system/message events.
+   * @persistenceReserved
+   */
+  system?: never
 }
 ```
 
@@ -277,13 +291,13 @@ type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 `SessionEventType = keyof SessionEventMap`。由于 `SessionEventMap` 可通过合并扩展，对 `SessionEvent` 的 switch 语句禁止使用 `assertNever`：插件添加的变体是合法的未知值；处理已知 case 后在 `default` 中放行。
 
-每个 surface 事件都要求 `surfaceOp`；已知仅日志事件禁止两个 surface 元数据字段。原生未知或已退役的可忽略信封保持不透明。`assistant/message` 嵌入其提供方 stream，并禁止 `sourceEventSeqs`。System、user 与 tool surface 事件可以在来源归属或替换覆盖需要时引用完整、非空且唯一的较早事件集合。`tool/result` 仅在工具结果块带有 `isError: true` 时可以携带 `data.error`；失败结果的失败身份仍可省略。
+每个 surface 事件都要求 `surfaceOp`；已知仅日志事件禁止两个 surface 元数据字段。原生未知或已退役的可忽略信封保持不透明。`assistant/message` 嵌入其提供方 stream，并禁止 `sourceEventSeqs`。System、user 与 tool surface 事件可以在来源归属或替换覆盖需要时引用完整、非空且唯一的较早事件集合。`tool/result` 仅在消息带有 `isError: true` 时可以携带 `data.error`；失败结果的失败身份仍可省略。
 
 <a id="surface-types"></a>
 
 ## Surface 类型
 
-四种产生消息的类型（`SurfaceEventType`：`system/message`、`user/message`、`assistant/message`、`tool/result`）携带 surface 元数据，用来声明它们如何加入有序的派生 surface。`system/message` 承载渲染后的系统提示词：循环把第一条追加为 surface 第 0 号节点，并在提示词变化时恰好替换最新的系统节点，或在历史内路由上追加一条新的；surface 折叠拒绝任何其他覆盖第 0 号节点 `system/message` 的替换，而后续系统节点是普通历史，压缩替换可以遮蔽它。见 [session surface Agent Note](../../.agents/notes/implemented/architecture/2026-06-18-session-surface.zh.md)。
+产生消息的类型（`SurfaceEventType`：`system/message`、`developer/message`、`user/message`、`assistant/message`、`tool/result`）携带 surface 元数据，用来声明它们如何加入有序的派生 surface。`system/message` 承载渲染后的系统提示词：循环把第一条追加为 surface 第 0 号节点，并在提示词变化时恰好替换最新的系统节点，或在历史内路由上追加一条新的；surface 折叠拒绝任何其他覆盖第 0 号节点 `system/message` 的替换，而后续系统节点是普通历史，压缩替换可以遮蔽它。见 [session surface Agent Note](../../.agents/notes/implemented/architecture/2026-06-18-session-surface.zh.md)。
 
 ### `SurfaceEventType`：事件类型中产生消息的子集
 
@@ -296,6 +310,7 @@ type SessionEvent<T extends SessionEventType = SessionEventType> = {
  */
 type SurfaceEventType =
   | 'system/message'
+  | 'developer/message'
   | 'user/message'
   | 'assistant/message'
   | 'tool/result'
@@ -460,29 +475,26 @@ declare class Session {
   /** The session identity, derived from its durable header's single copy. */
   get id(): SessionId;
   /**
-   * The first seq appended IN THIS PROCESS: the length of the constructor
-   * seed (0 without one). Events with smaller seq values entered through
-   * construction — replay, fork, or resume — and were never published on the
-   * `session/event` firehose (constructor seeds do not emit). This offset marks
-   * the constructor-input boundary for lifecycle ownership and persistence
-   * adoption; consumers that need complete canonical history still start at
-   * seq 0. Distinct from {@link inheritedEventCount}, the DURABLE
-   * fork-lineage cut: a resumed session's constructor seed is its full stored
-   * log, while the inherited count keeps the original fork value — this field is the
-   * in-process construction fact.
+   * The constructor seed length (0 without one), before any marker appended
+   * during construction. Seed events never publish on `session/event`. A
+   * marker appended before the store attaches occupies this seq without
+   * publishing either; otherwise this seq is available for the next append.
    *
-   * Not persisted itself: a seeded session projects it into the log as the
-   * `session/end-seed` event, which is what a consumer reading STORED history
-   * reads. Locate the LAST such event, not necessarily one at this seq — a
-   * seed already ending in one is not re-marked, so reopening an untouched
-   * session leaves that event at a smaller seq than `firstLiveSeq`. Prefer
-   * this field in-process: it is exact before the marker reaches storage.
-   *
-   * When this lifecycle appends the marker, it occupies this seq before the
-   * store attaches and therefore does not publish either. Otherwise this seq
-   * holds an ordinary published write.
+   * This in-process offset is not persisted. A fork seed can already contain
+   * the child's inherited marker and synthetic closers, so its child-owned
+   * history starts at {@link inheritedEventCount}, before this offset. A
+   * resumed Session's seed contains its full stored log, while its inherited
+   * count keeps the durable fork cut. Consumers needing complete canonical
+   * history start at seq 0.
    */
   readonly firstLiveSeq: SessionLogOffset;
+  /**
+   * First event produced for this object lifecycle. A new fork includes its
+   * child-owned seed marker and closers; a restored Session starts after its
+   * complete stored prefix. This in-process capture offset is not persisted.
+   */
+  readonly firstLifecycleSeq: SessionLogOffset;
+
   /**
    * Create a detached session by validating and snapshotting borrowed seed
    * events and storage metadata.
@@ -619,6 +631,12 @@ declare class Session {
    */
   requestContext(): RequestContext | undefined;
   /**
+   * Fold unseen committed events into capability-independent tool history.
+   * Initial access reconstructs inherited history; later reads consume only new events.
+   * @returns an immutable snapshot for LLM request projection, including historical addition definitions.
+   */
+  toolHistory(): ToolHistory;
+  /**
    * Derive the LLM message history by walking the ordered sequences of
    * message-producing events maintained by `surfaceOp` markers. The
    * surface is the single source of derived history: every message-producing
@@ -653,7 +671,7 @@ declare class Session {
 
 - `user/message` → 一条携带确切 `content` 的 user 消息；可选 envelope 仅作为日志中的展示元数据保留。
 - `assistant/message` → 一条 assistant 消息，包含生成它的提供方和模型，以及可选的适配器私有回放状态。其嵌入式紧凑 stream 是回放、usage 与 UI 证据，而不是第二条 message。**内容为空的** `assistant/message` 也会跳过：因 max-tokens 而截断且无内容的步骤仍会记录一条 `assistant/message` 来保存 stream、usage、提供方和模型，但无内容的 assistant 轮次不得进入提供方 transcript（文本记录）。
-- `tool/result` → 一条携带 `tool-result` 块的 user 消息。
+- `tool/result` → 一条一等 tool-role 消息，携带结果内容与工具调用标识。
 - `user/message`（注入上下文，即非 `user` 来源）→ 按时间顺序在相应位置生成一条 user-role 消息，并原样承载其 `content`；其类型化 source 标明生产方，并携带所有生产方专用数据。
 
 其余所有事件（`turn/*`、`step/*`、`assistant/attempt`、插件所属的 `llm/retry`）均为结构信息，不会投影为消息。token 记账会展开每个 `assistant/message` 或 `assistant/attempt` 的嵌入式 stream，message 顶层 `usage` 存在时仍是已提交 message 的权威。失败的模型请求 attempt 因此可以保留提供方 usage，而无需虚构 assistant message。当前逻辑校验会拒绝没有提供方／模型的 request header 和 assistant 消息，而不会猜测路由；受支持的历史表示会在当前 Session 存在前，由其相邻格式迁移边归一化并校验。
@@ -702,10 +720,17 @@ interface TurnEndReasonMap {
    * the events recorded before the crash remain intact.
    */
   interrupted: { kind: 'interrupted' }
+  /**
+   * Fork-seed construction closed a turn that was still open at the fork
+   * boundary in the source session. Only fork seeds carry this marker — the
+   * loop never emits it — and the source events before the boundary remain
+   * intact in the child.
+   */
+  forked: { kind: 'forked' }
 }
 ```
 
-`max-tokens` 与模型调用中同名的 `FinishReason` 对应：只要轮次内有任何步骤以 `max-tokens` 结束，整个轮次就以 `max-tokens` 而不是 `completed` 结束（即使之后继续执行，截断事实仍优先），让消费方能够区分正常停止和截断停止。取消和错误仍是不同的结果。`interrupted` 是唯一不会由任何 loop 发出的原因：它由崩溃恢复合成（见 [persistence.md](persistence.zh.md)）。该 map 可通过合并扩展。
+`max-tokens` 与模型调用中同名的 `FinishReason` 对应：只要轮次内有任何步骤以 `max-tokens` 结束，整个轮次就以 `max-tokens` 而不是 `completed` 结束（即使之后继续执行，截断事实仍优先），让消费方能够区分正常停止和截断停止。取消和错误仍是不同的结果。loop 不会实时发出 `interrupted` 或 `forked`：崩溃恢复合成 `interrupted`（见 [persistence.md](persistence.zh.md)），而 fork 种子构造合成 `forked`。该 map 可通过合并扩展。
 
 ## 执行封闭与独立事件
 
@@ -715,7 +740,7 @@ interface TurnEndReasonMap {
 
 ## 种子结束边界：`session/end-seed`
 
-新 fork constructor 要求 seed 等于 inherited prefix，并在精确持久 cut 追加 `session/end-seed { inherited: true }`。restore 会保留该 tagged marker，并且只在完整 stored seed 尚未以 marker 结尾时追加普通 `session/end-seed {}`。两种形式都只进入 log 且不产生 message；`Session` constructor 是唯一合法 writer。
+`buildForkSeed` 在精确的 inherited-prefix cut 追加 `session/end-seed { inherited: true }`，然后添加合成的 fork 结束事件。`Session` constructor 保留该预先构造的 marker，或在 seed 仅含 inherited prefix 时追加 marker。restore 保留 tagged marker，并且只在完整 stored seed 尚未以 marker 结尾时追加普通 `session/end-seed {}`。两种形式都只进入 log 且不产生 message；只有 constructor 和 `buildForkSeed` 可以创建它们。
 
 对于 fork lineage，定位 payload 携带 `inherited: true` 的最后一个 marker；当前格式 decoding 只在 `SessionHeader.isSeeded` 为 true 时要求该 marker，并从其 seq 推导 `inheritedEventCount`。对于 lifecycle ownership，定位任一形式的最后一个 `session/end-seed`。重新打开已经以任一 marker 结尾的 seed 时，不会再追加普通 marker。
 
@@ -742,6 +767,8 @@ interface TurnEndReasonMap {
 `ModelCatalog` 是 `session/modelCatalog` 返回的 Host generation 模型目录：它携带部署默认值、可路由 provider id、成功的 provider 分组与相互隔离的 provider 失败。它不由某个 Session 派生，因此与 Session projection 分开保存。
 
 `SessionOpenWorkspacePathRequest` 携带绝对路径或已按 workspace 解析的 `path`。`SessionOpenWorkspacePathValue` 确认 Host 已接受原生交接。Session-aware Client 会在已知当前 Session cwd 时据此解析相对路径；controller 将路径原样交给打开器，并通过 Session Remote 错误词汇表报告无效请求、取消与打开器失败。 可选的 `action: "reveal"` 选择文件管理器导航；省略时使用默认应用打开。
+
+可选的 `application` 指定文件关联应用，不修改系统默认值；`workspacePathApplications({ path })` 在校验 Host 路径后返回当前关联应用、名称、图标和默认项。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -797,11 +824,17 @@ inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<SessionInspectio
 @Remote('create') create(request: SessionCreateRequest): Promise<SessionCreateValue>
 
 /**
- * Select one Session-local model after explicitly resuming the Session.
+ * Select one Session-local model after explicitly resuming the Session; save the default in the background.
  * @param request - Session identity and requested model selection.
- * @returns the normalized selection installed for the Session.
+ * @returns the normalized selection installed for the Session, without waiting for default persistence.
  */
 @Remote('selectModel') selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue>
+
+/**
+ * Select the first available account model after login when no provider API key is configured.
+ * @returns after saving the first available model or retaining the existing default.
+ */
+@Remote async initializeDefaultModel(): Promise<void>
 
 /**
  * Describe every currently routable model for Host-generation selectors.
@@ -822,13 +855,22 @@ inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<SessionInspectio
 workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 'explorer' | 'directory' | null }
 
 /**
- * Open one path prepared by a Session-aware caller on the Host desktop.
+ * Verify one path through the composed filesystem and open it on the Host desktop.
  * @param request - path after best-effort Session workspace resolution.
  * @param signal - caller lifetime; abort terminates the native command.
  * @returns confirmation after the native opener accepts the path.
- * @throws RemoteError when the request is invalid, cancelled, or the opener fails.
+ * @throws RemoteError when the request is invalid, has no verified Host mapping, is cancelled, or the opener fails.
  */
 @Remote('openWorkspacePath') async openWorkspacePath( request: SessionOpenWorkspacePathRequest, signal: AbortSignal, ): Promise<SessionOpenWorkspacePathValue>
+
+/**
+ * Query current file handlers on the serving desktop without activating an Agent.
+ * @param request - file path in Host filesystem syntax.
+ * @param signal - caller lifetime, propagated to filesystem and desktop queries.
+ * @returns OS application names, icons, and default selection; empty when desktop opening is unavailable.
+ * @throws RemoteError when the path is invalid, the query is cancelled, or native discovery fails.
+ */
+@Remote('workspacePathApplications') async workspacePathApplications( request: { readonly path: string }, signal: AbortSignal, ): Promise<readonly SessionWorkspacePathApplication[]>
 
 /**
  * Rename one Session after explicitly resuming it.
@@ -838,8 +880,10 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
 @Remote('rename') rename(request: SessionRenameRequest): Promise<SessionRenameValue>
 
 /**
- * Fork one cold-readable completed-turn prefix into a new Session.
- * @param request - source Session and optional event anchor.
+ * Fork one cold-readable exact event prefix into a new Session. An omitted
+ * boundary selects the latest completed-turn prefix; an open cut receives
+ * synthetic fork closers.
+ * @param request - source Session and optional exact inclusive event boundary.
  * @returns the new Session identity.
  */
 @Remote('fork') fork(request: SessionForkRequest): Promise<SessionForkValue>
@@ -889,6 +933,14 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  *   frames and optional cursorless assistant-stream frames.
  */
 @Remote({ mode: 'stream' }) follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame>
+
+/**
+ * Read all registered projections without activating an Agent.
+ * @param request - Session whose current values are required.
+ * @param signal - cancellation for the Session observation.
+ * @returns complete baseline, or null when the Session does not exist.
+ */
+@Remote('projections') async projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue>
 
 /**
  * Stream a complete live-control baseline followed by replacement frames.
@@ -1026,10 +1078,12 @@ get(id: SessionId): Session | undefined
 list(): Session[]
 
 /**
- * Create a live child session from a stable prefix of a live source.
+ * Create a live child session from an exact prefix of a live source.
  * `boundary` is an inclusive source event seq; omitted means the source's
- * current last event. The selected slice may end with a between-turn event
- * but must not end inside an open turn.
+ * current last event. An open tail receives synthetic tool results and
+ * step/turn closers with the forked cause. Closed steps and turns remain
+ * unchanged, including any failed tool calls already missing results.
+ * `inheritedEventCount` counts only copied source events, excluding these closers.
  *
  * @param source - Live source session object or id.
  * @param boundary - Inclusive source event seq to fork through; omitted means
@@ -1074,13 +1128,14 @@ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/sess
 
 #### `api-session/added` — emit
 
-A Session became visible to Session list consumers.
+A Session became visible or its Agent was created or disposed. Consumers upsert the summary and replace its current running and availability state.
 
 ```ts cordis-catalog
 /**
- * A Session became visible to Session list consumers.
+ * A Session became visible or its Agent was created or disposed.
+ * Consumers upsert the summary and replace its current running and availability state.
  * @mode emit
- * @param summary - initial list row for the Session.
+ * @param summary - current list row for the Session.
  */
 'api-session/added'(summary: SessionSummary): void
 ```

@@ -1,0 +1,180 @@
+{
+  "nodeVersion": "24.21.0",
+  "pythonVersion": "3.12.14",
+  "pythonRelease": "20260901",
+  "targets": {
+    "win-x64": {
+      "nodeArchive": "win-x64.zip",
+      "nodeSha256": "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541",
+      "pythonTarget": "x86_64-pc-windows-msvc",
+      "pythonSha256": "7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14",
+      "wheels": [
+        {
+          "url": "https://files.pythonhosted.org/packages/2d/57/8aeaf160312f7f489dea47ab61e430b5cb051f59a98ae68b7133ce8fa06a/numpy-2.3.5-cp312-cp312-win_amd64.whl",
+          "sha256": "86945f2ee6d10cdfd67bcb4069c1662dd711f7e2a4343db5cecec06b87cf31aa"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/75/08/67cc404b3a966b6df27b38370ddd96b3b023030b572283d035181854aac5/pandas-3.0.1-cp312-cp312-win_amd64.whl",
+          "sha256": "536232a5fe26dd989bd633e7a0c450705fdc86a207fec7254a55e9a22950fe43"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/45/89/da2f7971a317f83d807fdd4065c0af40208e59e692cc43d315a71a0e96d1/pillow-12.3.0-cp312-cp312-win_amd64.whl",
+          "sha256": "a2b55dd6b2a4c4b7d87ffa56bdb33fdc5fdb9a462173861a7bc097f17d91cb09"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/3a/5b/6ed903e4e6278a020c8a6f0dbbe78030d041840a6b4a64ea441a1e414077/lxml-6.1.3-cp312-cp312-win_amd64.whl",
+          "sha256": "3e9a00d1c2c30936f7add097c41afc5da6556c580909104aafd382cac92a855c"
+        }
+      ]
+    },
+    "mac-arm64": {
+      "nodeArchive": "darwin-arm64.tar.gz",
+      "nodeSha256": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057",
+      "pythonTarget": "aarch64-apple-darwin",
+      "pythonSha256": "81a359f1cfadd4da11766534c5913791cea55f26e1bb902cacd2a531bb1e4b2b",
+      "wheels": [
+        {
+          "url": "https://files.pythonhosted.org/packages/c5/65/df0db6c097892c9380851ab9e44b52d4f7ba576b833996e0080181c0c439/numpy-2.3.5-cp312-cp312-macosx_11_0_arm64.whl",
+          "sha256": "ee3888d9ff7c14604052b2ca5535a30216aa0a58e948cdd3eeb8d3415f638769"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/7c/f1/e2567ffc8951ab371db2e40b2fe068e36b81d8cf3260f06ae508700e5504/pandas-3.0.1-cp312-cp312-macosx_11_0_arm64.whl",
+          "sha256": "0ab749dfba921edf641d4036c4c21c0b3ea70fea478165cb98a998fb2a261955"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/d8/66/9a386a92561f402389a4fc70c18838bf6d35eb5eb5c6850b4b2dc64f5048/pillow-12.3.0-cp312-cp312-macosx_11_0_arm64.whl",
+          "sha256": "ffd0c5368496f41b0944be820fcb7a838aa6e623d250b01acf2643939c3f99d7"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/dd/1f/a180b57d9eeabaab77f9d5aa30356898ea749c4795596a8f66d1eb6bef2e/lxml-6.1.3-cp312-cp312-macosx_10_13_universal2.whl",
+          "sha256": "0c0710ac085a157b593c38fbcacd950f15c4afa8e2057527185875ab302752bc"
+        }
+      ]
+    },
+    "mac-x64": {
+      "nodeArchive": "darwin-x64.tar.gz",
+      "nodeSha256": "1462cb3b3046b815cf8ea436d3da450ec1a9f11dac7e5a46b0ada5305d7e8097",
+      "pythonTarget": "x86_64-apple-darwin",
+      "pythonSha256": "65b195c9cedc1fef6767f044f9822069adbd1bd9204d424ece4628776fdc04bb",
+      "wheels": [
+        {
+          "url": "https://files.pythonhosted.org/packages/44/37/e669fe6cbb2b96c62f6bbedc6a81c0f3b7362f6a59230b23caa673a85721/numpy-2.3.5-cp312-cp312-macosx_10_13_x86_64.whl",
+          "sha256": "74ae7b798248fe62021dbf3c914245ad45d1a6b0cb4a29ecb4b31d0bfbc4cc3e"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/37/51/b467209c08dae2c624873d7491ea47d2b47336e5403309d433ea79c38571/pandas-3.0.1-cp312-cp312-macosx_10_13_x86_64.whl",
+          "sha256": "476f84f8c20c9f5bc47252b66b4bb25e1a9fc2fa98cead96744d8116cb85771d"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/37/bf/fb3ebff8ddcb76aac5a01389251bbbb9519922a9b520d8247c1ca864a25d/pillow-12.3.0-cp312-cp312-macosx_10_13_x86_64.whl",
+          "sha256": "ba09209fbe443b4acccebe845d8a138b89a8f4fbaeedd44953490b5315d5e965"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/a8/25/070c92013a1c029a602b03560d68772313d918268667fa993da7961759c9/lxml-6.1.3-cp312-cp312-macosx_10_13_x86_64.whl",
+          "sha256": "623c8799c17128753c65699f1c3aa32402657393a9ad6db09ed8b98ddf76611d"
+        }
+      ]
+    },
+    "linux-x64": {
+      "nodeArchive": "linux-x64.tar.gz",
+      "nodeSha256": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff",
+      "pythonTarget": "x86_64-unknown-linux-gnu",
+      "pythonSha256": "72748da13197c1fb161e3afeef20a6a385ff24f2165e6e2758e47008e7faba4c",
+      "wheels": [
+        {
+          "url": "https://files.pythonhosted.org/packages/b6/23/2a1b231b8ff672b4c450dac27164a8b2ca7d9b7144f9c02d2396518352eb/numpy-2.3.5-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+          "sha256": "0d8163f43acde9a73c2a33605353a4f1bc4798745a8b1d73183b28e5b435ae28"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/3d/fe/89d77e424365280b79d99b3e1e7d606f5165af2f2ecfaf0c6d24c799d607/pandas-3.0.1-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl",
+          "sha256": "532527a701281b9dd371e2f582ed9094f4c12dd9ffb82c0c54ee28d8ac9520c4"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/84/21/a35af28dcc61f37ed850a2d64c65c701321dfbf25085e469d5559360cbbf/pillow-12.3.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+          "sha256": "78cb2c6865a35ab8ff8b75fd122f6033b92a62c82801110e48ddd6c936a45d91"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/db/36/aa413bc214dc4f785ad2b2ddd8cc99aae7062d49ab155e91e6011af00daf/lxml-6.1.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+          "sha256": "379f8a75cf6eb7eef0af074b55f49ab73b868388a98de14646abcdfa4564bb11"
+        }
+      ]
+    },
+    "linux-arm64": {
+      "nodeArchive": "linux-arm64.tar.gz",
+      "nodeSha256": "724282c3b43aec998aa9527380465b45d229e021b58035f5f4f63095eabfe5d5",
+      "pythonTarget": "aarch64-unknown-linux-gnu",
+      "pythonSha256": "577b4bec0793ad1ff0cbff9adbd0df078eddde38a4c41bf5d83ad381a85ee39d",
+      "wheels": [
+        {
+          "url": "https://files.pythonhosted.org/packages/74/78/fcd41e5a0ce4f3f7b003da85825acddae6d7ecb60cf25194741b036ca7d6/numpy-2.3.5-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+          "sha256": "8b973c57ff8e184109db042c842423ff4f60446239bd585a5131cc47f06f789d"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/d7/39/327802e0b6d693182403c144edacbc27eb82907b57062f23ef5a4c4a5ea7/pandas-3.0.1-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl",
+          "sha256": "b8e36891080b87823aff3640c78649b91b8ff6eea3c0d70aeabd72ea43ab069b"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/25/27/ac8f99618ffd3dde21db0f4d4b1d2ab00c0880595bfd17df103f7f39fd0c/pillow-12.3.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+          "sha256": "d9c7f76c0673154f044e9d78c8655fb4213f6ca31a836df48b40fe5d187717b9"
+        },
+        {
+          "url": "https://files.pythonhosted.org/packages/1e/1c/722e88883173097a1a375153e3c2447eba3060d0231522cf6596e99f4195/lxml-6.1.3-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl",
+          "sha256": "f683dc6300317700025e41d89a43e0276692ded16113a3c43eab704d605c58e5"
+        }
+      ]
+    }
+  },
+  "wheels": [
+    {
+      "url": "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+      "sha256": "a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl",
+      "sha256": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/5c/23/c7abc0ca0a1526a0774eca151daeb8de62ec457e77262b66b359c3c7679e/tzdata-2025.2-py2.py3-none-any.whl",
+      "sha256": "1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/d0/00/1e03a4989fa5795da308cd774f05b704ace555a70f9bf9d3be057b680bcf/python_docx-1.2.0-py3-none-any.whl",
+      "sha256": "3fd478f3250fbbbfd3b94fe1e985955737c145627498896a8a6bf81f4baf66c7"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/d9/4f/00be2196329ebbff56ce564aa94efb0fbc828d00de250b1980de1a34ab49/python_pptx-1.0.2-py3-none-any.whl",
+      "sha256": "160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/c0/da/977ded879c29cbd04de313843e76868e6e13408a94ed6b987245dc7c8506/openpyxl-3.1.5-py2.py3-none-any.whl",
+      "sha256": "5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/3a/0c/3662f4a66880196a590b202f0db82d919dd2f89e99a27fadef91c4a33d41/xlsxwriter-3.2.9-py3-none-any.whl",
+      "sha256": "9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl",
+      "sha256": "7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa"
+    }
+  ],
+  "pythonPackages": {
+    "numpy": "2.3.5",
+    "pandas": "3.0.1",
+    "python-dateutil": "2.9.0.post0",
+    "six": "1.17.0",
+    "tzdata": "2025.2",
+    "python-docx": "1.2.0",
+    "python-pptx": "1.0.2",
+    "openpyxl": "3.1.5",
+    "Pillow": "12.3.0",
+    "lxml": "6.1.3",
+    "XlsxWriter": "3.2.9",
+    "typing_extensions": "4.16.0",
+    "et_xmlfile": "2.0.0"
+  }
+}

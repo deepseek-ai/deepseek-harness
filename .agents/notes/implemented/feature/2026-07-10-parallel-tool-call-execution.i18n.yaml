@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-10-parallel-tool-call-execution.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-10-parallel-tool-call-execution.md
-2026-07-10-parallel-tool-call-execution.md: d5d26e03a2081569a8dba4de966201abc312d420
-2026-07-10-parallel-tool-call-execution.zh.md: 707428985c872dcbbc82f59124f0d60aef7f1090
+/agent-note-parallel-tool-call-execution-by-per-call-safety:
+  en: bbc8567dc50716d1
+  zh: 4ddef348cc74b39c
+/agent-note-parallel-tool-call-execution-by-per-call-safety/problem:
+  en: 41ffece5e72e022f
+  zh: e813a3efb9c12646
+/agent-note-parallel-tool-call-execution-by-per-call-safety/decision:
+  en: 532bb7268d9b93ce
+  zh: ad47162233222ab0
+/agent-note-parallel-tool-call-execution-by-per-call-safety/scheduling-and-ordering:
+  en: f0906d03fef98e7b
+  zh: f9e43c4c832c9a05
+/agent-note-parallel-tool-call-execution-by-per-call-safety/safety-contract:
+  en: 16c4ee08b65ead23
+  zh: df80d6e49982615b
+/agent-note-parallel-tool-call-execution-by-per-call-safety/configuration-and-declarations:
+  en: e112957ed8a48039
+  zh: 37d63f9ea4968fb2
+/agent-note-parallel-tool-call-execution-by-per-call-safety/verification:
+  en: eb5a6aa84980f0ab
+  zh: eed2680a160e8ed2
+/agent-note-parallel-tool-call-execution-by-per-call-safety/alternatives-considered:
+  en: 44f8fb5851ba4e39
+  zh: 4d75c937ac5277f7
+/agent-note-parallel-tool-call-execution-by-per-call-safety/consequences:
+  en: 5e5b2a1c7d850f83
+  zh: b63311f28eb69366

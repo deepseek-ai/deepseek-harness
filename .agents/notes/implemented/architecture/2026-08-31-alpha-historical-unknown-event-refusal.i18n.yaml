@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-31-alpha-historical-unknown-event-refusal.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-31-alpha-historical-unknown-event-refusal.md
-2026-08-31-alpha-historical-unknown-event-refusal.md: c63b36f63206e0992416239483d908b0645a98c2
-2026-08-31-alpha-historical-unknown-event-refusal.zh.md: 231c46c11486b05a69a200b857a0ea6df35b6e79
+/agent-note-alpha-session-migration-refuses-every-unknown-historical-event:
+  en: 4c7472b402f5dd38
+  zh: 1d7aa8233d13a083
+/agent-note-alpha-session-migration-refuses-every-unknown-historical-event/problem:
+  en: 8864f28d0139c490
+  zh: 2aa7b6eceb5510c0
+/agent-note-alpha-session-migration-refuses-every-unknown-historical-event/decision:
+  en: 62afb095b98209a6
+  zh: 55b3eae2a6f64989
+/agent-note-alpha-session-migration-refuses-every-unknown-historical-event/consequences:
+  en: 8416322aefd92a3d
+  zh: 6e06f732ae2f48fc
+/agent-note-alpha-session-migration-refuses-every-unknown-historical-event/alternatives-considered:
+  en: 3adeafa6fb02ab56
+  zh: daf6c67c43804da7

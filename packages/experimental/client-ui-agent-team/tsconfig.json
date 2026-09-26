@@ -8,15 +8,15 @@
   "references": [
     { "path": "../../../vendor/cordis" },
     { "path": "../agent-team" },
-    { "path": "../../api/remotes/tsconfig.client.json" },
     { "path": "../../api/session-controller/tsconfig.client.json" },
-    { "path": "../../client/locale" },
-    { "path": "../../client/ui-conversation" },
+    { "path": "../../client/locale/tsconfig.client.json" },
+    { "path": "../../client/store" },
+    { "path": "../../client/ui-conversation/tsconfig.client.json" },
     { "path": "../../client/ui-primitives" },
     { "path": "../../client/ui-renderer" },
     { "path": "../../client/ui-session" },
     { "path": "../../client/ui-slots" },
-    { "path": "../../core/session" },
-    { "path": "../../typert/protocol" }
+    { "path": "../../client/ui-workspace" },
+    { "path": "../../core/session" }
   ]
 }

@@ -10,6 +10,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SessionRetainInfo } from '@deepseek-ai/dsh-api-session-controller/client'
+import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { AgentPresetLabel } from '../src/client/AgentPresetLabel.tsx'
 import type { AgentPresetLabelProps } from '../src/client/AgentPresetLabel.tsx'
 import { AgentPresetSeat } from '../src/client/AgentPresetSeat.tsx'
@@ -23,20 +25,21 @@ afterEach(cleanup)
 const ROSTER_READY: AgentPresetSettingsState = {
   status: 'ready',
   error: null,
-  options: [{ id: 'standard', trust: 'system', name: '标准模式' }, { id: 'mine', trust: 'user' }],
+  options: [{ id: 'standard' }, { id: 'mine' }],
 }
 
 const SEAT_READY: AgentPresetSeatState = {
-  showPicker: true,
   current: 'standard',
   options: [
-    { id: 'standard', trust: 'system', name: '标准模式', description: '完整的编码 agent。' },
-    { id: 'mine', trust: 'user' },
+    { id: 'standard' },
+    { id: 'mine' },
   ],
   busy: false,
   error: null,
   introduce: false,
 }
+
+const useSessionRetainInfo = <Selected,>(selector: (value: undefined) => Selected): Selected => selector(undefined)
 
 /** The runtime's own `{name}` substitution, so a test reads the shown text. */
 function translate(key: keyof typeof en, params?: Record<string, unknown>): string {
@@ -49,15 +52,24 @@ function translate(key: keyof typeof en, params?: Record<string, unknown>): stri
 function renderSeat(
   state: Partial<AgentPresetSeatState> = {},
   select: () => Promise<string | undefined> = () => Promise.resolve(undefined),
+  session?: { id: string; retainInfo: SessionRetainInfo | undefined },
+  enabled = true,
 ) {
   const store = createSnapshotStore<AgentPresetSeatState>({ ...SEAT_READY, ...state })
+  const developerTools = createSnapshotStore(enabled)
   const actions = { load: vi.fn(() => Promise.resolve()), select: vi.fn(select), introduced: vi.fn() }
-  render(<AgentPresetSeat {...({
+  const props = {
     ...actions,
+    sessionId: session === undefined ? undefined : SessionId(session.id),
+    useDeveloperTools: bindSnapshotSelector(developerTools),
     useAgentPresetSeat: bindSnapshotSelector(store),
+    useSessionRetainInfo: session === undefined
+      ? useSessionRetainInfo
+      : <Selected,>(selector: (value: SessionRetainInfo | undefined) => Selected) => selector(session.retainInfo),
     t: translate,
-  } as unknown as AgentPresetSeatProps)} />)
-  return actions
+  } as AgentPresetSeatProps
+  render(<AgentPresetSeat {...props} />)
+  return { ...actions, developerTools }
 }
 
 function renderLabel(
@@ -81,9 +93,20 @@ function renderLabel(
 }
 
 describe('the new-session chip', () => {
-  it('renders nothing while the picker is disabled', () => {
-    renderSeat({ showPicker: false })
+  it('renders nothing while Developer tools are off', () => {
+    renderSeat({}, undefined, undefined, false)
 
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('renders only for a Session retained by the main view', () => {
+    renderSeat({}, undefined, {
+      id: 's1', retainInfo: { referenceCount: 1, retainedBy: { mainView: 1 } },
+    })
+    expect(screen.getByRole('button')).toBeTruthy()
+    cleanup()
+
+    renderSeat({}, undefined, { id: 's1', retainInfo: undefined })
     expect(screen.queryByRole('button')).toBeNull()
   })
 
@@ -107,6 +130,19 @@ describe('the new-session chip', () => {
     // in for the name.
     expect(screen.getByText(en.noDescription)).toBeTruthy()
     expect(screen.getByText('mine')).toBeTruthy()
+  })
+
+  it('closes the picker immediately when developer tools turn off without changing the staged preset', () => {
+    const actions = renderSeat()
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.getByText(en.presetStandardDescription)).toBeTruthy()
+    act(() => { actions.developerTools.set(false) })
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByText(en.presetStandardDescription)).toBeNull()
+    expect(actions.select).not.toHaveBeenCalled()
+    act(() => { actions.developerTools.set(true) })
+    expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByRole('button').textContent).toContain(en.presetStandardName)
   })
 
   it('falls back to the id when the staged preset published no name', () => {
@@ -218,7 +254,7 @@ describe('the chip introduce cue', () => {
     vi.useFakeTimers()
     const actions = renderSeat({
       current: 'creator',
-      options: [{ id: 'creator', trust: 'user', name: 'CreatorMode' }],
+      options: [{ id: 'creator', name: 'CreatorMode' }],
       introduce: true,
     })
 
@@ -244,7 +280,7 @@ describe('the chip introduce cue', () => {
     vi.useFakeTimers()
     renderSeat({
       current: 'creator',
-      options: [{ id: 'creator', trust: 'user', name: '创造模式' }],
+      options: [{ id: 'creator', name: '创造模式' }],
       introduce: true,
     })
 
@@ -260,7 +296,7 @@ describe('the chip introduce cue', () => {
     vi.useFakeTimers()
     const actions = renderSeat({
       current: 'creator',
-      options: [{ id: 'creator', trust: 'user', name: 'C' }],
+      options: [{ id: 'creator', name: 'C' }],
       introduce: true,
     })
 
@@ -281,7 +317,7 @@ describe('the chip introduce cue', () => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
     const actions = renderSeat({
       current: 'creator',
-      options: [{ id: 'creator', trust: 'user', name: '' }],
+      options: [{ id: 'creator', name: '' }],
       introduce: true,
     })
 

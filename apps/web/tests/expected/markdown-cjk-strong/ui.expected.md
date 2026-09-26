@@ -1,16 +1,14 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "CJK strong emphasis" [disabled]
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - navigation "Session hierarchy": CJK strong emphasis
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
 - text: Render adjacent CJK strong emphasis. {{clock}}
-- button "Copy":
-  - img
+- button "Copy"
+- status: Worked
+- button "Took {{duration}}" [disabled]
 - heading "CJK strong emphasis" [level=2]
 - paragraph:
   - strong: 注意：
@@ -37,26 +35,14 @@
   - strong: Warning!
   - text: 继续
 - paragraph: CJK_STRONG_DONE
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
 - text: {{clock}}
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Send message" [disabled]
-- button "1 turns 1 steps":
-  - img
-  - text: 1 turns 1 steps
+- button "1 turns 1 steps"

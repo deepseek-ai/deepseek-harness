@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import {
-  IconCodeOutline16, IconInspectOutline12, StateDot,
+  IconCodeOutlineRegular, IconInspectOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
@@ -12,6 +12,7 @@ import type { CordisRunCardFace } from './slots.ts'
 import { cordisVisibleStatus, type CordisVisibleStatus } from './status.ts'
 import type { CordisKey } from './locales.ts'
 import css from './CordisRunRow.module.css'
+import { CordisPreparingRow } from './CordisPreparingRow.tsx'
 
 /** Full Run-card props including its declared Package business-view child slot. */
 export type CordisRunRowProps = ToolCallViewProps
@@ -32,10 +33,17 @@ const READING_LABELS = {
 } as const satisfies Record<RunReading, CordisKey>
 
 /** Render one activation result and, when eligible, its Package-owned view. */
-export function CordisRunRow({
+export function CordisRunRow(props: CordisRunRowProps) {
+  if (props.phase === 'preparing') return <CordisPreparingRow {...props}
+    icon={<IconCodeOutlineRegular size={14} />} title={props.t('row.runTitle')}
+    className={css.card} rowClassName={css.row} titleClassName={css.title} />
+  return <StartedCordisRunRow {...props} />
+}
+
+function StartedCordisRunRow({
   callId, block, inspect, renderSlot, useInventory, useLoaded, useRunCards, useActiveRuns,
   onObserveRunCard, t,
-}: CordisRunRowProps) {
+}: Exclude<CordisRunRowProps, { phase: 'preparing' }>) {
   const card = cordisRunCard(block)
   const inventory = useInventory(snapshot => snapshot)
   const loaded = useLoaded(snapshot => snapshot)
@@ -81,7 +89,6 @@ export function CordisRunRow({
   const summary = card.errorSummary
     ?? (card.pluginId === null ? callId : `${card.pluginId}${card.packageId === null ? '' : ` · ${card.packageId}`}`)
   const showBusiness = reading === 'running' && key !== null
-
   return (
     <div
       className={css.card}
@@ -93,20 +100,14 @@ export function CordisRunRow({
       data-cordis-status={reading}
     >
       <div className={css.row}>
-        <span className={css.icon}>
-          {card.state === 'error'
-            ? <StateDot state="error" />
-            : card.state === 'stopped'
-              ? <StateDot state="warning" />
-              : <IconCodeOutline16 size={14} />}
-        </span>
+        <span className={css.icon}><IconCodeOutlineRegular size={14} /></span>
         <span className={css.title}>{t(card.mode === 'update' ? 'row.updateTitle' : 'row.runTitle')}</span>
         <span className={css.separator} aria-hidden />
         <span className={card.errorSummary === null ? css.summary : css.error}>{summary}</span>
         <span className={css.status}>{status}</span>
         {inspect !== undefined && (
           <button type="button" className={css.inspect} aria-label={t('action.inspect')} onClick={inspect}>
-            <IconInspectOutline12 />
+            <IconInspectOutlineRegular />
           </button>
         )}
       </div>

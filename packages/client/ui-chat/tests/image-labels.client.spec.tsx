@@ -7,6 +7,8 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { RenderMessageImages } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { AssistantMarkdown } from '../src/client/chat/AssistantMarkdown.tsx'
+import { useDetailedPresentation } from './presentation-fixture.client.ts'
+import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
 import { zh } from '../src/client/locale.ts'
 
 afterEach(cleanup)
@@ -43,7 +45,8 @@ describe('assistant image slot handoff', () => {
   it('passes one image group and its message alignment to the renderer', () => {
     const calls: MessageImagesRenderOwner[] = []
     const view = render(
-      <AssistantMarkdown
+      <AssistantMarkdown useDisclosure={useDisclosure}
+        usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'image', attachment }]}
         streaming={false}
@@ -58,7 +61,8 @@ describe('assistant image slot handoff', () => {
   it('merges consecutive image blocks into one group and splits groups at text', () => {
     const calls: MessageImagesRenderOwner[] = []
     const view = render(
-      <AssistantMarkdown
+      <AssistantMarkdown useDisclosure={useDisclosure}
+        usePresentation={useDetailedPresentation}
         t={t}
         blocks={[
           { kind: 'image', attachment },
@@ -79,7 +83,8 @@ describe('assistant image slot handoff', () => {
   it('keeps the renderer output at the image block position between text blocks', () => {
     const calls: MessageImagesRenderOwner[] = []
     const view = render(
-      <AssistantMarkdown
+      <AssistantMarkdown useDisclosure={useDisclosure}
+        usePresentation={useDetailedPresentation}
         t={t}
         blocks={[
           { kind: 'text', text: 'before' },

@@ -122,9 +122,9 @@ describe('plan mode through the agent loop', () => {
     // guidance alone (enforcement lives on the independent sandbox/approval
     // axes). The mode itself stays plan throughout.
     const result = findEvent(log, 'tool/result')
-    expect(result.data.message.content[0].isError).toBe(false)
+    expect(result.data.message.isError).toBe(false)
     expect(planActive(ctx, agent)).toBe(true)
-    expect(log.some(event => event.type === 'user/message' && event.data.source.kind === 'plugin')).toBe(false)
+    expect(log.some(event => event.type === 'user/message' && event.data.source.kind !== 'user')).toBe(false)
   })
 
   it('a user flip between turns lands at the boundary: one notice and a replaced system node with stable tool schemas', async () => {
@@ -149,7 +149,7 @@ describe('plan mode through the agent loop', () => {
 
     const log = agent.session.snapshotEvents()
     expect(planActive(ctx, agent)).toBe(true)
-    const notices = log.filter(event => event.type === 'user/message' && event.data.source.kind === 'plugin')
+    const notices = log.filter(event => event.type === 'user/message' && event.data.source.kind !== 'user')
     expect(notices).toHaveLength(1)
     expect(notices[0]?.type === 'user/message' && notices[0].data.content).toEqual([
       { type: 'text', text: 'The user switched this session to plan mode.' },
@@ -218,7 +218,7 @@ describe('plan mode through the agent loop', () => {
     expect(systemNodes[1]?.sourceEventSeqs).toEqual([systemNodes[0]?.seq])
     expect(nextStart?.seq).toBeLessThan(systemNodes[1]?.seq ?? 0)
     expect(systemText(agent)).toContain(PLAN_CONFIG.section)
-    const notice = log.find(event => event.type === 'user/message' && event.data.source.kind === 'plugin')
+    const notice = log.find(event => event.type === 'user/message' && event.data.source.kind !== 'user')
     expect(notice?.type === 'user/message' && notice.data.content).toEqual([
       { type: 'text', text: 'The user switched this session to plan mode.' },
     ])

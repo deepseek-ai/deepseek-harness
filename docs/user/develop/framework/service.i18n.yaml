@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for service.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/develop/framework/service.md
-service.md: 1bcfe2e7690d9f93b871500660e0fbe1e3439b3f
-service.zh.md: b275c3d200fb50b1fab0e762d0154477c7ca4447
+/services-and-dependencies:
+  en: 03fe9a674163a484
+  zh: 45374665fa3bb8e3
+/services-and-dependencies/what-is-a-service:
+  en: fb06be7799d75fc0
+  zh: a59fdde61e557b24
+/services-and-dependencies/consume-a-service:
+  en: 6655ebf5abce2a59
+  zh: 0c91cac86768d63e
+/services-and-dependencies/provide-a-service:
+  en: ed1d04f41f64b6ce
+  zh: e0ddcb48bf3207c1
+/services-and-dependencies/provide-a-service/extend-service:
+  en: 3de1c24498e2c62f
+  zh: 57836dc4fa8d5c9a
+/services-and-dependencies/provide-a-service/declare-its-type:
+  en: fc1a29f46715ade5
+  zh: b1edb281077df180
+/services-and-dependencies/dependency-behavior:
+  en: 6678917fe40eea55
+  zh: 6227580b94a50855
+/services-and-dependencies/dependency-behavior/required-and-optional-dependencies:
+  en: 8a98845896146946
+  zh: 2383ad4ba5d2943d
+/services-and-dependencies/dependency-behavior/when-a-service-disappears:
+  en: 689e4b95dd320122
+  zh: 674ffba2733ec745
+/services-and-dependencies/service-isolation:
+  en: cc4be89f19cb7615
+  zh: e00e86a615f59003
+/services-and-dependencies/built-in-harness-services:
+  en: 07eb5bcc03955284
+  zh: 5eec0f3c6e01c0f9
+/services-and-dependencies/next-steps:
+  en: 1537e6955eb02c62
+  zh: 6430f34e63cfa533

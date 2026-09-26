@@ -1,6 +1,37 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-19-plugin-command-registration.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-19-plugin-command-registration.md
-2026-07-19-plugin-command-registration.md: f5033c6ac52dd09371d67ba5b54f0aa2cdba8024
-2026-07-19-plugin-command-registration.zh.md: 55f3a58f0e1f4c1ee6dfd7105e968a1a466f7806
+/agent-note-plugin-owned-human-command-registration:
+  en: f1509f79bd9e2445
+  zh: 30f62b9b4f611f9d
+/agent-note-plugin-owned-human-command-registration/problem:
+  en: 628dcc0bda181677
+  zh: 71b110588f89c2b4
+/agent-note-plugin-owned-human-command-registration/decision:
+  en: acf2742722ab7c85
+  zh: e0bdbd6fd0bf51b1
+/agent-note-plugin-owned-human-command-registration/decision/registry-contract:
+  en: 1b3daffaa9a8b56e
+  zh: fa99bb6bc553cafb
+/agent-note-plugin-owned-human-command-registration/decision/scope-and-lifecycle:
+  en: 6d55a0d4b1b9606a
+  zh: 34bf959ef332630f
+/agent-note-plugin-owned-human-command-registration/decision/direct-dispatch-and-cancellation:
+  en: 074ee61a689493cb
+  zh: 580035e2a4c82d4f
+/agent-note-plugin-owned-human-command-registration/decision/tui-mapping:
+  en: 00f0f8b697d9e1ff
+  zh: 9c4ceb0024e50835
+/agent-note-plugin-owned-human-command-registration/testing:
+  en: 0679c206796636a6
+  zh: ca2cc5df6aa3aa2e
+/agent-note-plugin-owned-human-command-registration/alternatives-considered:
+  en: ffb2f060314a17b2
+  zh: e7707cf5faf80227
+/agent-note-plugin-owned-human-command-registration/consequences:
+  en: 6b8525a4ca3213a8
+  zh: 286a336a68669f72
+/agent-note-plugin-owned-human-command-registration/known-limitations-and-deferred-work:
+  en: 5e2417d5b1237526
+  zh: dbfeea7c7ac38cf0

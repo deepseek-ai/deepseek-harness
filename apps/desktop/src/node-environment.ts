@@ -1,4 +1,4 @@
-/** Electron's Node mode inherited by the Host, pnpm, and their subprocesses. */
+/** Electron Node-mode startup, with private shell launchers scoped to package installation. */
 
 import { delimiter } from 'node:path'
 
@@ -13,7 +13,6 @@ export function desktopNodeEnvironment(executable: string, bin: string | undefin
   return {
     ...environment,
     ELECTRON_RUN_AS_NODE: '1',
-    DSH_DESKTOP_NODE_EXECUTABLE: executable,
-    ...(bin === undefined ? {} : { PATH: `${bin}${delimiter}${environment.PATH ?? ''}` }),
+    ...(bin === undefined ? {} : { DSH_DESKTOP_NODE_EXECUTABLE: executable, PATH: `${bin}${delimiter}${environment.PATH ?? ''}` }),
   }
 }

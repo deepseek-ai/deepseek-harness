@@ -15,7 +15,7 @@ const win = globalThis as DshWindow
 const transportGlobal = globalThis as {
   __DSH_TRANSPORT__?: { loadBundle(url: string): Promise<void> }
 }
-const moduleFace = modulesClient as unknown as Record<string, unknown>
+const moduleFace = modulesClient as Record<string, unknown>
 
 afterEach(() => {
   vi.restoreAllMocks()

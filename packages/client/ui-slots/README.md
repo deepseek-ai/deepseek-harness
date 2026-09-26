@@ -1,5 +1,5 @@
 ---
-description: "Slot registry pure core for the dsh web client: SlotMap declaration merging, the single register composition API, four-share props types, store seats, and the renderer install contract."
+description: "Slot registry pure core for the dsh web client: ordinary extension slots, reusable Component Factories, derived props types, store seats, and the renderer install contract."
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-slots` lets web client plugins define and compose typed UI regions. Callers can add components, declare nested regions, attach scoped state, and supply business props through one compile-time-checked API. It supports single, ordered-list, keyed, and self-selecting chain composition, and reports conflicting compositions during plugin loading. Choose it for framework-neutral slot composition; pair it with `ui-renderer` when the client needs React rendering.
+`dsh-client-ui-slots` lets web client plugins define and compose typed UI regions. Ordinary Slots provide parent-owned extension positions; Component Factories provide reusable assemblies with caller-selected local Components. Both APIs derive scoped state, injection, locale, and child-render props from declaration-merged types and report conflicting definitions during plugin loading. Pair this React-free package with `ui-renderer` when the client needs rendering.
 
 ## Table of Contents
 
@@ -27,9 +27,15 @@ English | [中文](README.zh.md)
 
 Compose UI through this package whenever you write a client plugin: register a component into a slot your parent declared, or declare child slots your component renders. The four kinds cover the composition shapes — `single` (one occupant), `list` (ordered entries), `keyed` (dispatch by a key), and `chain` (entries elect themselves).
 
-### The four props shares
+### Reusable Component Factories
 
-Every registered component receives props composed from four shares: the runtime share (`owner` from the parent's renderSlot call site, plus the session standard kit and global seat), the child-render share (`renderSlot` statically narrowed to the declared children keys), the store share (the declared handle's selector hook and draft-stripped actions), and the business share (inferred from the `inject` factory's return). Components reference `ComposedProps`; they never re-type a share locally.
+Use a Component Factory when one package defines an assembly that unrelated parents render independently. Declare its complete type in `SlotFactoryMap`, install the definition with `ctx.slots.registerFactory()`, render occurrences through the injected `renderFactorySlot()`, and select each declared local Component through the call's `slots` option. The definition reads that choice through `useFactorySlot(name, fallback)`.
+
+Factory `children` remain ordinary global Slots and must match `SlotMap`, while local `slots` select one Component per occurrence. An occurrence inherits its render-position scope; `renderFactorySlot()` does not accept a Session identity. Shared Store handles use ordinary scope resolution. A Store factory stays lazy until an occurrence first materializes, then creates one handle for that render position and rejects a persistent Store spec whose key would collide across occurrences.
+
+### The five framework props shares
+
+Every registered component receives props composed from five framework shares: the runtime share (`owner` from the parent's render call site, plus the session standard kit and global seat), the child-render share (`renderSlot` statically narrowed to declared children), the Factory-render share (`renderFactorySlot`), the store share (the declared handle's selector hook and draft-stripped actions), and the business share (inferred from `inject`). Components reference the derived props aliases; they never re-type a share locally.
 
 ### Store seats
 
@@ -47,15 +53,15 @@ Declaring a slot is claiming it: the registering entry becomes the only entry al
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The design is one table: declaration = render authorization = runtime spec. `SlotMap` is declared empty here and merged by consumers via `declare module` augmentation, exactly like the standard-kit interfaces (`SessionStandardProps`, `GlobalStandardProps`), which the runtime package merges with real members.
+The ordinary Slot design is one table: declaration = render authorization = runtime spec. `SlotMap` is declared empty here and merged by consumers via `declare module` augmentation, exactly like `SlotFactoryMap` and the standard-kit interfaces (`SessionStandardProps`, `GlobalStandardProps`). Factory definitions use a separate single-definition ledger because their occurrences have no parent declaration.
 
 ### Registration and routing
 
-`SlotCore` seeds the a-priori `'root'` slot at construction and enforces load-time validation. `ChainSelect` selectors run in ascending `priority` order (ties in registration order); the first non-null return elects its entry and becomes the component's `matched` prop, and all-null falls to the owner's `renderSlotChain` fallback (`ChainRenderOpts`). Each key carries a declaration epoch that advances only on declaration and collapse; `ui-renderer` uses it for `ctx.slots.inject`, independently from ordinary entry versions.
+`SlotCore` seeds the a-priori `'root'` slot at construction and enforces load-time validation. `ChainSelect` selectors run in ascending `priority` order (ties in registration order); the first non-null return elects its entry and becomes the component's `matched` prop, and all-null falls to the owner's `renderSlotChain` fallback (`ChainRenderOpts`). Each key carries a declaration epoch that advances only on declaration and collapse; `ui-renderer` uses it for `ctx.slots.inject`, independently from ordinary entry versions. Live inspection uses strict `type: 'slot' | 'factory'` nodes and nests Factory-owned child Slots under their definition.
 
 ### The renderer contract
 
-`renderer.ts` carries the installation contract (`SlotRenderer`, `SlotRendererHost`) plus `StaleAuthorizationError`/`SlotOwnershipError`; ui-renderer owns both the implementation and its plugin-lifecycle installation. Engine products and the renderer host contract carry bare snapshot sources (`getSnapshot`/`subscribe`), never React hooks — hook binding belongs to the render machinery.
+`renderer.ts` carries the installation contract (`SlotRenderer`, `SlotRendererHost`) plus `StaleAuthorizationError`/`SlotOwnershipError`; ui-renderer owns both the implementation and its plugin-lifecycle installation. Engine products and the renderer host contract carry bare snapshot sources (`getSnapshot`/`subscribe`), never React hooks — hook binding belongs to the render machinery. Factory crashes use the ordinary supervision channel, and an idempotent effect retains per-position Store handles only after commit.
 
 </details>
 
@@ -68,6 +74,7 @@ These pages cover the engine, the renderer, and the composition model.
 
 - [ui-renderer](../ui-renderer/README.md) — the React slot renderer implementing this package's install contract.
 - [Slot system standard](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.md) — the definitive composition model.
+- [Component Factories](../../../.agents/notes/implemented/architecture/2026-09-10-component-factories-and-local-slots.md) — reusable definitions, local Component selection, and occurrence lifetimes.
 - [Web client architecture](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.md) — the loading chain and object layer this registry plugs into.
 
 -----

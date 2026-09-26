@@ -1,7 +1,7 @@
 /** One Host-generation model catalog shared by every Session selector. */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { ModelCatalog } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ModelCatalog, ModelSelection, ModelProviderGroup } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 
 /** Observable lifecycle of the shared model catalog. */
@@ -19,6 +19,17 @@ export class ModelCatalogDirectory {
     status: 'idle',
     error: null,
   })
+
+  private readonly reasoning = new Map<string, ModelProviderGroup['models'][number]['reasoning']>()
+
+  /**
+   * Read the last advertised reasoning metadata, including unavailable models.
+   * @param selection - provider and model whose effort is displayed.
+   * @returns reasoning metadata observed during this Host generation.
+   */
+  reasoningFor(selection: ModelSelection): ModelProviderGroup['models'][number]['reasoning'] {
+    return this.reasoning.get(JSON.stringify([selection.provider, selection.model]))
+  }
 
   private generation = 0
   private inflight: Promise<ModelCatalog> | undefined
@@ -47,6 +58,11 @@ export class ModelCatalogDirectory {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
       if (generation === this.generation) {
+        for (const group of response.value.groups) {
+          for (const model of group.models) {
+            this.reasoning.set(JSON.stringify([group.id, model.id]), model.reasoning)
+          }
+        }
         this.store.set({ value: response.value, status: 'ready', error: null })
       }
       return response.value
@@ -84,6 +100,7 @@ export class ModelCatalogDirectory {
 
   /** Clear Host-specific values and load the replacement Host generation. */
   resetGeneration(): void {
+    this.reasoning.clear()
     this.invalidate(true)
     void this.load().catch(() => { /* the selector exposes the shared error */ })
   }

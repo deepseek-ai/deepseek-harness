@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-20-ptc-typed-tool-returns.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-20-ptc-typed-tool-returns.md
-2026-07-20-ptc-typed-tool-returns.md: 08e760b95a40386bccc8c7a2722d289da10e3dff
-2026-07-20-ptc-typed-tool-returns.zh.md: c2883740e1eeadbf6fb2413496104ff08a9bd1f7
+/agent-note-typed-tool-returns-in-ptc-mode:
+  en: 4b7c45b382db3a40
+  zh: 96e9210446ec35ed
+/agent-note-typed-tool-returns-in-ptc-mode/problem:
+  en: cf7610bb16ff04af
+  zh: 73b00b539dbaecd9
+/agent-note-typed-tool-returns-in-ptc-mode/decision:
+  en: 55bb889404c89f4a
+  zh: f9a9091569fbf7b4
+/agent-note-typed-tool-returns-in-ptc-mode/decision/generated-sdk:
+  en: 30583e9ac6715952
+  zh: 3a85c9482abf574c
+/agent-note-typed-tool-returns-in-ptc-mode/decision/binding-values-and-failures:
+  en: ecb95cafa2dc1297
+  zh: ccdf300ca936ca12
+/agent-note-typed-tool-returns-in-ptc-mode/decision/outer-result-and-output-ledger:
+  en: d907d0a8205157e1
+  zh: 1ed99168266a7ca4
+/agent-note-typed-tool-returns-in-ptc-mode/decision/typed-handles-and-lifetime:
+  en: c5d9997ae7c7362d
+  zh: 1da8883d17d2748e
+/agent-note-typed-tool-returns-in-ptc-mode/decision/persistence-metadata-and-spill:
+  en: 4d1e5f83f15f99cc
+  zh: b7f41a084cb23745
+/agent-note-typed-tool-returns-in-ptc-mode/testing:
+  en: 728513c779f031f8
+  zh: f6d869f18add7242
+/agent-note-typed-tool-returns-in-ptc-mode/alternatives-considered:
+  en: dedd87b9b35d8fab
+  zh: 78db4c7e8c4e5f61
+/agent-note-typed-tool-returns-in-ptc-mode/consequences:
+  en: 7c2ee65532ab76f8
+  zh: 3fb074c69909d390
+/agent-note-typed-tool-returns-in-ptc-mode/known-limitations-and-deferred-work:
+  en: a42af629ad6872cc
+  zh: 41e5c0bb3de0ae4d

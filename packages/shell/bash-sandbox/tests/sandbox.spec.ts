@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import type { ShellRunResult, CollectedOutput } from '@deepseek-ai/dsh-shell'
+import type { CollectedOutput, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SANDBOX_UNAVAILABLE, SandboxProvider, SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxExecutionPolicy, SandboxMode, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
@@ -19,7 +19,17 @@ import { SandboxBashExecutor } from '@deepseek-ai/dsh-bash-sandbox'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import type { SubprocessHandle, SubprocessOutputReader } from '@deepseek-ai/dsh-subprocess'
 import { classifyDenial } from '../src/helpers.ts'
-import type { Config } from '@deepseek-ai/dsh-bash-sandbox'
+
+/** Historical foreground shorthand over the unified execute() seam. */
+async function run(x: { execute(spec: ShellExecSpec): Promise<ShellExecution> }, spec: ShellExecSpec): Promise<ShellRunResult> {
+  return (await x.execute(spec)).result()
+}
+
+/** Historical background shorthand: execute with no deadline armed. */
+function start(x: { execute(spec: ShellExecSpec): Promise<ShellExecution> }, spec: ShellExecSpec): Promise<ShellExecution> {
+  return x.execute({ ...spec, onExpiry: 'none' })
+}
+
 
 const spillDir = mkdtempSync(join(tmpdir(), 'dsh-bash-sandbox-spec-'))
 
@@ -55,7 +65,7 @@ const passthrough = (argv: readonly string[]): ConfinedArgv =>
  * per test) and the executor under test on top of it.
  */
 async function setup(
-  config: { mode?: SandboxMode; workspaceRoot?: string } & Config = {},
+  config: { mode?: SandboxMode; workspaceRoot?: string } & NonNullable<Parameters<typeof SandboxBashExecutor.Config>[0]> = {},
   behavior: (argv: readonly string[], policy: SandboxPolicy, signal?: AbortSignal) => ConfinedArgv | Promise<ConfinedArgv> = passthrough,
 ) {
   const { mode, workspaceRoot, ...execConfig } = config
@@ -93,6 +103,24 @@ function executionPolicy(mode: SandboxMode, workspaceRoot = resolve(process.cwd(
 }
 
 describe('the provider hand-off', () => {
+  it('reports caller cancellation when a failed launch result is read after abort', async () => {
+    const { ctx, bash } = await setup({}, () => passthrough(['node']))
+    const controller = new AbortController()
+    const reason = new Error('caller abandoned the failed launch')
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn').mockImplementation(() => {
+      throw Object.assign(new Error('launch refused'), { code: 'ENOENT', syscall: 'spawn node', path: 'node' })
+    })
+    try {
+      const execution = await bash.execute(bash.resolve({ command: 'true', signal: controller.signal }))
+      await execution.done
+      controller.abort(reason)
+      await expect(execution.result()).rejects.toBe(reason)
+    } finally {
+      spawn.mockRestore()
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('preserves cancellation when a pending subprocess launch later rejects', async () => {
     const { ctx, bash } = await setup({}, () => passthrough(['node']))
     const entered = Promise.withResolvers<undefined>()
@@ -108,8 +136,8 @@ describe('the provider hand-off', () => {
         terminate: () => {}, waitForExit: () => Promise.resolve(true),
       }
     })
-    const pending = bash.run(bash.resolve({ command: 'true', signal: controller.signal }))
-    const rejected = expect(pending).rejects.toBe(reason)
+    const pending = run(bash, bash.resolve({ command: 'true', signal: controller.signal }))
+    const rejected = expect(pending).resolves.toMatchObject({ aborted: true, timedOut: false })
     try {
       await entered.promise
       controller.abort(reason)
@@ -122,7 +150,7 @@ describe('the provider hand-off', () => {
     }
   })
 
-  it.each(['run', 'start'] as const)('cancels %s while confinement is pending without spawning', async (operation) => {
+  it.each(['kill', 'none'] as const)('cancels %s while confinement is pending without spawning', async (onExpiry) => {
     const entered = Promise.withResolvers<AbortSignal>()
     const response = Promise.withResolvers<ConfinedArgv>()
     const { ctx, bash } = await setup({}, (_argv, _policy, signal) => {
@@ -132,7 +160,7 @@ describe('the provider hand-off', () => {
     const spawn = vi.spyOn(ctx.subprocess, 'spawn')
     const controller = new AbortController()
     const reason = new Error('cancel pending confinement')
-    const pending = bash[operation](bash.resolve({ command: 'true', signal: controller.signal }))
+    const pending = bash.execute(bash.resolve({ onExpiry, command: 'true', signal: controller.signal }))
     const rejected = expect(pending).rejects.toBe(reason)
     try {
       const signal = await entered.promise
@@ -155,7 +183,7 @@ describe('the provider hand-off', () => {
     const { ctx, bash } = await setup({}, () => { entered.resolve(undefined); return response.promise })
     const spawn = vi.spyOn(ctx.subprocess, 'spawn')
     let published = false
-    const pending = bash.start(bash.resolve({ command: 'printf ready' })).then((process) => { published = true; return process })
+    const pending = start(bash, bash.resolve({ command: 'printf ready' })).then((process) => { published = true; return process })
     try {
       await entered.promise
       expect(published).toBe(false)
@@ -173,7 +201,7 @@ describe('the provider hand-off', () => {
 
   it('hands the provider the exact bash argv and the per-call policy, and runs the returned argv', async () => {
     const { bash, calls } = await setup()
-    const result = await bash.run(bash.resolve({ command: 'echo \'a b\' "c\'d"' }))
+    const result = await run(bash, bash.resolve({ command: 'echo \'a b\' "c\'d"' }))
     expect(result.stdout.text).toBe('a b c\'d\n')
     expect(result.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full' })
     expect(calls).toEqual([{
@@ -186,7 +214,7 @@ describe('the provider hand-off', () => {
     const returnedArgv = ['env', 'DSH_WRAP=1', 'bash', '-c', 'printf "%s" "$DSH_WRAP"']
     const { ctx, bash } = await setup({}, () => ({ argv: returnedArgv, enforcement: 'full', denialSignatures: UNIX_SIGNATURES, runnerFailureRules: RUNNER_FAILURE }))
     const spawn = vi.spyOn(ctx.subprocess, 'spawn')
-    const result = await bash.run(bash.resolve({ command: 'printf "%s" "$DSH_WRAP"' }))
+    const result = await run(bash, bash.resolve({ command: 'printf "%s" "$DSH_WRAP"' }))
     expect(result.stdout.text).toBe('1')
     expect(spawn).toHaveBeenCalledTimes(1)
     expect(spawn.mock.calls[0]?.[0].argv).toEqual(returnedArgv)
@@ -213,7 +241,7 @@ describe('the provider hand-off', () => {
     }))
 
     try {
-      const result = await bash.run(bash.resolve({
+      const result = await run(bash, bash.resolve({
         command: 'true',
         env: { BASH_ENV: hook },
         dshEnv: { DSH_ORDER_FILE: order },
@@ -227,21 +255,21 @@ describe('the provider hand-off', () => {
 
   it('workspace-write rides the policy, workspaceRoot falling back to process.cwd() when not configured', async () => {
     const { bash, calls } = await setup({ mode: 'workspace-write' })
-    const result = await bash.run(bash.resolve({ command: 'true' }))
+    const result = await run(bash, bash.resolve({ command: 'true' }))
     expect(result.sandbox).toEqual({ mode: 'workspace-write', denied: false, enforcement: 'full' })
     expect(calls[0]?.policy).toEqual({ mode: 'workspace-write', workspaceRoot: resolve(process.cwd()) })
   })
 
   it('an explicit workspaceRoot on the policy wins', async () => {
     const { calls, bash } = await setup({ mode: 'workspace-write', workspaceRoot: '/ws', cwd: tmpdir() })
-    await bash.run(bash.resolve({ command: 'true' }))
+    await run(bash, bash.resolve({ command: 'true' }))
     expect(calls[0]?.policy.workspaceRoot).toBe(resolve('/ws'))
   })
 
   it('the provider is consulted per wrap (no caching in the consumer): run and start each hand off', async () => {
     const { bash, calls } = await setup()
-    await bash.run(bash.resolve({ command: 'true' }))
-    const task = await bash.start(bash.resolve({ command: 'true' }))
+    await run(bash, bash.resolve({ command: 'true' }))
+    const task = (await start(bash, bash.resolve({ command: 'true' })))
     await task.done
     expect(calls).toHaveLength(2)
   })
@@ -252,8 +280,8 @@ describe('fail closed', () => {
   it('propagates the provider\'s structured SANDBOX_UNAVAILABLE on run() and start()', async () => {
     const { bash } = await setup({}, () => { throw new SandboxUnavailableError('read-only') })
     const spec = bash.resolve({ command: 'echo hi' })
-    await expect(bash.run(spec)).rejects.toMatchObject({ name: 'SandboxUnavailableError', code: SANDBOX_UNAVAILABLE })
-    await expect(bash.start(spec)).rejects.toThrow(SandboxUnavailableError)
+    await expect(run(bash, spec)).rejects.toMatchObject({ name: 'SandboxUnavailableError', code: SANDBOX_UNAVAILABLE })
+    await expect(start(bash, spec)).rejects.toThrow(SandboxUnavailableError)
   })
 
   it('preserves an already-aborted foreground call as cancellation', async () => {
@@ -261,7 +289,7 @@ describe('fail closed', () => {
     const controller = new AbortController()
     const reason = new Error('caller cancelled before spawn')
     controller.abort(reason)
-    await expect(bash.run(bash.resolve({ command: 'true', signal: controller.signal }))).rejects.toBe(reason)
+    await expect(run(bash, bash.resolve({ command: 'true', signal: controller.signal }))).rejects.toBe(reason)
   })
 
   it.each(RUNNER_FORMS)(
@@ -275,7 +303,7 @@ describe('fail closed', () => {
       }))
       const parent = mkdtempSync(join(tmpdir(), 'dsh-sandbox-missing-cwd-'))
       try {
-        const failure = await bash.run(bash.resolve({ command: 'true', workdir: join(parent, 'missing') }))
+        const failure = await run(bash, bash.resolve({ command: 'true', workdir: join(parent, 'missing') }))
           .catch((error: unknown) => error)
         expect(failure).toMatchObject({ code: 'ENOENT' })
         expect(failure).not.toBeInstanceOf(SandboxUnavailableError)
@@ -289,7 +317,7 @@ describe('fail closed', () => {
     const { bash } = await setup({ mode: 'danger-full-access' })
     const parent = mkdtempSync(join(tmpdir(), 'dsh-sandbox-missing-cwd-'))
     try {
-      const failure = await bash.run(bash.resolve({ command: 'true', workdir: join(parent, 'missing') }))
+      const failure = await run(bash, bash.resolve({ command: 'true', workdir: join(parent, 'missing') }))
         .catch((error: unknown) => error)
       expect(failure).toMatchObject({ code: 'ENOENT' })
       expect(failure).not.toBeInstanceOf(SandboxUnavailableError)
@@ -310,18 +338,19 @@ describe('fail closed', () => {
       throw Object.assign(new Error('spawn ENOEXEC'), { code: 'ENOEXEC', syscall: 'spawn' })
     })
 
-    const foreground = await bash.run(bash.resolve({ command: 'true' })).catch((error: unknown) => error)
+    const foreground = await run(bash, bash.resolve({ command: 'true' })).catch((error: unknown) => error)
     expect(foreground).toMatchObject({ code: 'ENOEXEC', syscall: 'spawn' })
     expect(foreground).not.toBeInstanceOf(SandboxUnavailableError)
 
-    let background: unknown
-    try {
-      await bash.start(bash.resolve({ command: 'true' }))
-    } catch (error) {
-      background = error
-    }
-    expect(background).toMatchObject({ code: 'ENOEXEC', syscall: 'spawn' })
-    expect(background).not.toBeInstanceOf(SandboxUnavailableError)
+    // Containment: the handle settles killed instead of the spawn throwing,
+    // and the projection carries the original error, never the fail-closed one.
+    const background = (await start(bash, bash.resolve({ command: 'true' })))
+    await background.done
+    expect(background.status).toBe('killed')
+    const backgroundError = await background.result().catch((error: unknown) => error)
+    expect(backgroundError).toMatchObject({ code: 'ENOEXEC', syscall: 'spawn' })
+    expect(backgroundError).not.toBeInstanceOf(SandboxUnavailableError)
+    expect(background.readOutput().delta).toContain('subprocess failed before reporting an outcome:')
   })
 
   it('classifies a synchronous SubprocessRuntime EACCES with the exact runner path', async () => {
@@ -338,10 +367,14 @@ describe('fail closed', () => {
       throw Object.assign(new Error('spawn EACCES'), { code: 'EACCES', syscall: 'spawn', path: runner })
     })
 
-    await expect(bash.run(bash.resolve({ command: 'true' })))
+    await expect(run(bash, bash.resolve({ command: 'true' })))
       .rejects.toMatchObject({ name: 'SandboxUnavailableError', code: SANDBOX_UNAVAILABLE })
-    await expect(bash.start(bash.resolve({ command: 'true' })))
-      .rejects.toThrow(expect.objectContaining({ name: 'SandboxUnavailableError', code: SANDBOX_UNAVAILABLE }))
+    // The background view of the same failure: a killed handle whose facts
+    // attribute the launch failure to the runner.
+    const background = (await start(bash, bash.resolve({ command: 'true' })))
+    await background.done
+    expect(background.status).toBe('killed')
+    expect(background.sandbox).toMatchObject({ runnerFailed: true })
   })
 
   it('keeps a synchronous cwd-owned ENOENT as the original start() error', async () => {
@@ -357,12 +390,11 @@ describe('fail closed', () => {
     const failure = Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT', syscall: `spawn ${runner}`, path: runner })
     vi.spyOn(ctx.subprocess, 'spawn').mockImplementation(() => { throw failure })
     try {
-      let thrown: unknown
-      try {
-        await bash.start(bash.resolve({ command: 'true', workdir }))
-      } catch (error) {
-        thrown = error
-      }
+      const background = (await start(bash, bash.resolve({ command: 'true', workdir })))
+      await background.done
+      expect(background.status).toBe('killed')
+      // A cwd-owned failure keeps the original error: not the runner's fault.
+      const thrown = await background.result().catch((error: unknown) => error)
       expect(thrown).toBe(failure)
       expect(thrown).not.toBeInstanceOf(SandboxUnavailableError)
     } finally {
@@ -374,7 +406,7 @@ describe('fail closed', () => {
 describe('danger-full-access', () => {
   it('runs unwrapped: the provider is never consulted, facts carry no enforcement', async () => {
     const { bash, calls } = await setup({ mode: 'danger-full-access' })
-    const result = await bash.run(bash.resolve({ command: 'echo free' }))
+    const result = await run(bash, bash.resolve({ command: 'echo free' }))
     expect(result.stdout.text).toBe('free\n')
     expect(result.sandbox).toEqual({ mode: 'danger-full-access', denied: false })
     expect(calls).toHaveLength(0)
@@ -382,7 +414,7 @@ describe('danger-full-access', () => {
 
   it('start() passes through unwrapped and stamps nothing at settle', async () => {
     const { bash, calls } = await setup({ mode: 'danger-full-access' })
-    const task = await bash.start(bash.resolve({ command: 'echo free-bg' }))
+    const task = (await start(bash, bash.resolve({ command: 'echo free-bg' })))
     await task.done
     expect(task.sandbox).toBeUndefined()
     expect(task.readOutput().delta).toContain('free-bg')
@@ -401,20 +433,20 @@ describe('per-call sandbox policy (the session and escalation carrier)', () => {
     const { bash, calls } = await setup()
     const explicit = executionPolicy('workspace-write', '/session/project')
     expect(bash.resolve({ command: 'true', sandboxPolicy: explicit }).sandboxPolicy).toEqual(explicit)
-    await bash.run(bash.resolve({ command: 'true', sandboxPolicy: explicit }))
-    await bash.run(bash.resolve({ command: 'true' }))
+    await run(bash, bash.resolve({ command: 'true', sandboxPolicy: explicit }))
+    await run(bash, bash.resolve({ command: 'true' }))
     expect(calls.map(call => call.policy)).toEqual([explicit, executionPolicy('read-only')])
   })
 
   it('an escalated run reports the mode it ACTUALLY ran under', async () => {
     const { bash } = await setup()
-    const result = await bash.run(bash.resolve({ command: 'true', sandboxPolicy: executionPolicy('workspace-write') }))
+    const result = await run(bash, bash.resolve({ command: 'true', sandboxPolicy: executionPolicy('workspace-write') }))
     expect(result.sandbox).toEqual({ mode: 'workspace-write', denied: false, enforcement: 'full' })
   })
 
   it('escalating to danger-full-access bypasses the provider entirely — the grant, not a probe, is the authority there', async () => {
     const { bash, calls } = await setup()
-    const result = await bash.run(bash.resolve({ command: 'echo free', sandboxPolicy: executionPolicy('danger-full-access') }))
+    const result = await run(bash, bash.resolve({ command: 'echo free', sandboxPolicy: executionPolicy('danger-full-access') }))
     expect(result.stdout.text).toBe('free\n')
     expect(result.sandbox).toEqual({ mode: 'danger-full-access', denied: false })
     expect(calls).toHaveLength(0)
@@ -425,8 +457,8 @@ describe('per-call sandbox policy (the session and escalation carrier)', () => {
     // once — anything keyed off the configured default would misreport the
     // escalated one at its settle stamp.
     const { bash } = await setup()
-    const escalated = await bash.start(bash.resolve({ command: 'sleep 0.3; echo "x: Permission denied" >&2; exit 1', sandboxPolicy: executionPolicy('workspace-write') }))
-    const plain = await bash.start(bash.resolve({ command: 'true' }))
+    const escalated = (await start(bash, bash.resolve({ command: 'sleep 0.3; echo "x: Permission denied" >&2; exit 1', sandboxPolicy: executionPolicy('workspace-write') })))
+    const plain = (await start(bash, bash.resolve({ command: 'true' })))
     await plain.done
     await escalated.done
     expect(escalated.sandbox).toEqual({ mode: 'workspace-write', denied: true, enforcement: 'full' })
@@ -435,7 +467,7 @@ describe('per-call sandbox policy (the session and escalation carrier)', () => {
 
   it('an escalated danger-full-access background job carries no facts (nothing confined it)', async () => {
     const { bash, calls } = await setup()
-    const task = await bash.start(bash.resolve({ command: 'echo bg-free', sandboxPolicy: executionPolicy('danger-full-access') }))
+    const task = (await start(bash, bash.resolve({ command: 'echo bg-free', sandboxPolicy: executionPolicy('danger-full-access') })))
     await task.done
     expect(task.sandbox).toBeUndefined()
     expect(task.readOutput().delta).toContain('bg-free')
@@ -478,7 +510,7 @@ describe('result facts', () => {
       denialSignatures: UNIX_SIGNATURES,
       runnerFailureRules: RUNNER_FAILURE,
     }))
-    const result = await bash.run(bash.resolve({ command: `exit ${exitCode}` }))
+    const result = await run(bash, bash.resolve({ command: `exit ${exitCode}` }))
     expect(result.exitCode).toBe(exitCode)
     expect(result.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full' })
   })
@@ -490,7 +522,7 @@ describe('result facts', () => {
       const lockedDir = join(deniedRoot, 'locked')
       mkdirSync(lockedDir)
       chmodSync(lockedDir, 0o555)
-      const result = await bash.run(bash.resolve({ command: `echo x > ${lockedDir}/f` }))
+      const result = await run(bash, bash.resolve({ command: `echo x > ${lockedDir}/f` }))
       expect(result.exitCode).not.toBe(0)
       expect(result.sandbox).toEqual({ mode: 'read-only', denied: true, enforcement: 'full' })
     } finally {
@@ -500,7 +532,7 @@ describe('result facts', () => {
 
   it('carries the provider\'s partial-enforcement fact through unchanged', async () => {
     const { bash } = await setup({}, argv => ({ argv: [...argv], enforcement: 'partial', denialSignatures: UNIX_SIGNATURES, runnerFailureRules: RUNNER_FAILURE }))
-    const result = await bash.run(bash.resolve({ command: 'true' }))
+    const result = await run(bash, bash.resolve({ command: 'true' }))
     expect(result.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'partial' })
   })
 })
@@ -515,7 +547,7 @@ describe('background sandbox facts', () => {
     }))
     const parent = mkdtempSync(join(tmpdir(), 'dsh-sandbox-missing-cwd-'))
     try {
-      const task = await bash.start(bash.resolve({ command: 'true', workdir: join(parent, 'missing') }))
+      const task = (await start(bash, bash.resolve({ command: 'true', workdir: join(parent, 'missing') })))
       await task.done
 
       expect(task.status).toBe('killed')
@@ -550,7 +582,7 @@ describe('background sandbox facts', () => {
       waitForExit: async () => true,
     } satisfies SubprocessHandle)
 
-    const task = await bash.start(bash.resolve({ command: 'true' }))
+    const task = (await start(bash, bash.resolve({ command: 'true' })))
     await task.done
 
     expect(task.readOutput().delta).toContain('subprocess failed before reporting an outcome: undefined')
@@ -563,7 +595,7 @@ describe('background sandbox facts', () => {
 
   it('stamps a settled denial: nonzero exit + permission stderr under a confined mode', async () => {
     const { bash } = await setup()
-    const task = await bash.start(bash.resolve({ command: 'echo "x: Permission denied" >&2; exit 1' }))
+    const task = (await start(bash, bash.resolve({ command: 'echo "x: Permission denied" >&2; exit 1' })))
     await task.done
     expect(task.sandbox).toEqual({ mode: 'read-only', denied: true, enforcement: 'full' })
   })
@@ -573,20 +605,20 @@ describe('background sandbox facts', () => {
     // the command never ran — the late twin of the confine-time throw, with
     // the matched fatal stderr line carried as the cause.
     const { bash } = await setup()
-    const run = bash.run(bash.resolve({ command: 'echo "fake-runner: ruleset rejected" >&2; exit 125' }))
-    await expect(run).rejects.toThrow(expect.objectContaining({ code: SANDBOX_UNAVAILABLE }))
-    await expect(run).rejects.toThrow('fake-runner: ruleset rejected')
+    const pending = run(bash, bash.resolve({ command: 'echo "fake-runner: ruleset rejected" >&2; exit 125' }))
+    await expect(pending).rejects.toThrow(expect.objectContaining({ code: SANDBOX_UNAVAILABLE }))
+    await expect(pending).rejects.toThrow('fake-runner: ruleset rejected')
   })
 
   it('a foreground runner failure outranks denial: runner error text may contain denial words', async () => {
     const { bash } = await setup()
-    await expect(bash.run(bash.resolve({ command: 'echo "fake-runner: cannot open rule path: /x: Permission denied" >&2; exit 125' })))
+    await expect(run(bash, bash.resolve({ command: 'echo "fake-runner: cannot open rule path: /x: Permission denied" >&2; exit 125' })))
       .rejects.toThrow(expect.objectContaining({ code: SANDBOX_UNAVAILABLE }))
   })
 
   it('a settled background runner failure stamps runnerFailed (no error channel remains), not denied', async () => {
     const { bash } = await setup()
-    const task = await bash.start(bash.resolve({ command: 'echo "fake-runner: cannot open rule path: /x: Permission denied" >&2; exit 125' }))
+    const task = (await start(bash, bash.resolve({ command: 'echo "fake-runner: cannot open rule path: /x: Permission denied" >&2; exit 125' })))
     await task.done
     expect(task.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full', runnerFailed: true })
   })
@@ -604,8 +636,8 @@ describe('background sandbox facts', () => {
       const wrap = wraps[Math.min(call++, wraps.length - 1)] as Pick<ConfinedArgv, 'enforcement' | 'denialSignatures'>
       return { argv: [...argv], ...wrap, runnerFailureRules: RUNNER_FAILURE }
     })
-    const slow = await bash.start(bash.resolve({ command: 'sleep 0.4; echo "x: Permission denied" >&2; exit 1' }))
-    const quick = await bash.start(bash.resolve({ command: 'true' }))
+    const slow = (await start(bash, bash.resolve({ command: 'sleep 0.4; echo "x: Permission denied" >&2; exit 1' })))
+    const quick = (await start(bash, bash.resolve({ command: 'true' })))
     await quick.done
     await slow.done
     expect(slow.sandbox).toEqual({ mode: 'read-only', denied: true, enforcement: 'partial' })
@@ -614,7 +646,7 @@ describe('background sandbox facts', () => {
 
   it('a signal-killed task is never a denial (null exit code)', async () => {
     const { bash } = await setup()
-    const task = await bash.start(bash.resolve({ command: 'echo "Permission denied" >&2; sleep 30' }))
+    const task = (await start(bash, bash.resolve({ command: 'echo "Permission denied" >&2; sleep 30' })))
     // Let the stderr land before the kill so the classifier sees the
     // signature and must still refuse it on the null exit code alone.
     await vi.waitFor(() => { expect(task.readOutput().delta).toContain('Permission denied') })
@@ -625,7 +657,7 @@ describe('background sandbox facts', () => {
 
   it('disposal kills wrapped background jobs (inherited HMR safety)', async () => {
     const { ctx, bash } = await setup()
-    const task = await bash.start(bash.resolve({ command: 'sleep 30' }))
+    const task = (await start(bash, bash.resolve({ command: 'sleep 30' })))
     await ctx.fiber.dispose()
     expect(task.status).toBe('killed')
   })

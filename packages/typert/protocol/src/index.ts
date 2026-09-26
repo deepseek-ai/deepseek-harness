@@ -5,10 +5,13 @@
  * @module @deepseek-ai/dsh-typert-protocol
  */
 
-import { Service, type Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import type { TypertContextMap } from './types.ts'
 
 export { RemoteError, remoteErrorOf } from './remote-error.ts'
+export { TYPERT_OWNED_VALUE, isTypertOwnedValue, typertOwnedValue } from './owned-value.ts'
+export type { TypertOwnedValue } from './owned-value.ts'
+export { isRemoteJsonValue, isRemoteUplinkItem } from './json-value.ts'
 
 const TYPERT_REMOTE_SEGMENT_PATTERN = /^[A-Za-z0-9_$.-]+$/
 
@@ -25,10 +28,15 @@ export type {
   InvocationDescriptor,
   InvocationParameterDescriptor,
   InvocationSourceLocation,
+  PeerId,
+  PeerScope,
   RemoteErrorCode,
   RemoteErrorDetailsMap,
   RemoteFailure,
+  RemoteInvocation,
   RemoteResult,
+  RemoteStream,
+  RemoteStreamHandle,
   TypertClientEventListener,
   TypertClientRemote,
   TypertClientContextAdapter,
@@ -98,7 +106,7 @@ export interface RemoteMethodMarker {
 
 /** Options for a non-unary Remote method. */
 export interface RemoteMethodOptions {
-  /** Deliver each Iterable item over the shared logical-stream carrier. */
+  /** `stream`: deliver each Iterable item over the shared logical-stream carrier. */
   readonly mode: 'stream'
 }
 
@@ -132,7 +140,10 @@ interface RemoteMethodDescriptorV1 {
 const REMOTE_METHOD_DESCRIPTOR = '@deepseek-ai/dsh-typert-protocol/remote-methods'
 
 /**
- * Bind one visible Service field to a Cordis key and Remote namespace.
+ * Bind one visible Service field to a Cordis key and Remote namespace. A
+ * service that owns a Cordis Context also gives its tree `ctx.invocation`,
+ * `undefined` outside a Remote call, so no `TypertRemoteService` is needed for
+ * a Host composition to read it.
  * @param service - owning Service instance, normally `this`.
  * @param serviceKey - exact Cordis service key.
  * @param options - optional distinct wire namespace.
@@ -146,6 +157,8 @@ export function bindTypertRemote<Service extends object>(
   validateName('service key', serviceKey)
   const namespace = options.namespace ?? serviceKey
   validateName('namespace', namespace)
+  const ctx: unknown = Reflect.get(service, 'ctx')
+  if (ctx instanceof Context) provideInvocationAccessor(ctx)
   return Object.freeze({ service, serviceKey, namespace })
 }
 
@@ -164,6 +177,17 @@ export abstract class TypertRemoteService<out T = never> extends Service<T> {
     super(ctx, serviceKey)
     this.typertRemote = bindTypertRemote(this, this.name, options)
   }
+}
+
+/**
+ * Make `ctx.invocation` read as `undefined` outside a Remote call instead of the
+ * reflect service's "cannot get property" error; a call-derived Context shadows
+ * the accessor with its own property. The first Remote Service constructed in a
+ * tree registers it on the root, where it outlives any one Service.
+ */
+function provideInvocationAccessor(ctx: Context): void {
+  if (Object.hasOwn(ctx.root.reflect.props, 'invocation')) return
+  ctx.root.accessor('invocation', { get: () => undefined })
 }
 
 /**

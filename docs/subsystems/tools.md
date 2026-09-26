@@ -8,7 +8,7 @@ Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index
 
 ## `ToolDefinition` — a registered tool
 
-A `ToolSchema` (the model-facing fields) plus a mandatory canonical output declaration, the `execute` function, host-only scheduler metadata, an optional final-content callback, and optional UI presenters. The registry holds these; the loop dispatches calls through them. The registry's `schemas()` builds the model-facing `ToolSchema[]` by an explicit allowlist — `output`/`execute`/`finalizeContent`/`timeoutMs`/`isConcurrencySafe`/`presentCall`/`presentResult` must never leak into a model request.
+A `ToolSchema` (the model-facing fields) plus a mandatory canonical output declaration, the `execute` function, host-only scheduler metadata, an optional final-content callback, and optional UI presenters. The registry holds these; the loop dispatches calls through them. The registry's `schemas()` builds the model-facing `ToolSchema[]` by an explicit allowlist — `output`/`execute`/`projectContent`/`finalizeContent`/`timeoutMs`/`isConcurrencySafe`/`presentCall`/`presentResult` must never leak into a model request.
 
 ```ts type-equiv
 /** Tool-owned canonical output contract used after the body returns a JSON value. */
@@ -38,6 +38,16 @@ interface ToolDefinition extends ToolSchema {
    * @returns the canonical value declared by `output.schema`.
    */
   execute(args: unknown, exec: ToolRunContext): Promise<unknown>
+  /**
+   * Install execution-prepared content before `tools/post-execute` policies.
+   * The callback is captured when the call starts and runs once for a
+   * normalized outcome entering post-execute. Policy replacements remain
+   * authoritative; pipeline failures that bypass post-execute skip projection.
+   * @param exec - immutable execution identity and arguments.
+   * @param result - normalized result before post-execute policy.
+   * @returns replacement content, or undefined to preserve the renderer output.
+   */
+  projectContent?(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined
   /**
    * Synchronous last-mile transform for model-facing content. The registry
    * snapshots this callback when execution starts and invokes it exactly once
@@ -169,7 +179,7 @@ interface ToolRestriction {
 
 ## Execution: extensible waterfalls plus monotonic policy
 
-`ctx.tools.execute()` accepts a caller-owned `ToolExecutionInput` with a required readonly `signal`, materializes its parsed JSON arguments once into a pipeline-owned `ToolExecution`, and runs that call through `tools/pre-execute` (the reorderable allow/deny/ask waterfall) → registered monotonic guards → `tools/execute` (around-dispatch wrappers) → `tools/post-execute` (inspect/replace the result) → optional definition-owned `finalizeContent` → `tools/result` (the immutable authoritative outcome). Only the `tools/execute` view may replace the required signal. The outcome is a `ToolExecutionResult`.
+`ctx.tools.execute()` accepts a caller-owned `ToolExecutionInput` with a required readonly `signal`, materializes its parsed JSON arguments once into a pipeline-owned `ToolExecution`, and runs that call through `tools/pre-execute` (the reorderable allow/deny/ask waterfall) → registered monotonic guards → `tools/execute` (around-dispatch wrappers) → `projectContent` → `tools/post-execute` (inspect/replace the result) → optional definition-owned `finalizeContent` → `tools/result` (the immutable authoritative outcome). Only the `tools/execute` view may replace the required signal. The outcome is a `ToolExecutionResult`.
 
 ```ts type-equiv
 /** Opaque call identity that permits correlation without exposing mutable execution state. */
@@ -393,14 +403,15 @@ Each interception waterfall returns a typed **Decision** (the idiom shared with 
  * model-facing reason and optional structured error identity; `cancel` selects
  * the canonical cancellation result without presenting a policy denial; `ask`
  * runs only after an approval service returns `allowed-once` and otherwise
- * denies. Input rewriting is excluded because arguments are already logged and
+ * denies; its `reason` is the audited approval reason and its optional
+ * `displayReason` is the localized prompt text. Input rewriting is excluded because arguments are already logged and
  * presented.
  */
 type PreToolDecision =
   | { kind: 'allow' }
   | { kind: 'deny'; reason: string; info?: ToolErrorInfo }
   | { kind: 'cancel' }
-  | { kind: 'ask'; reason?: string }
+  | { kind: 'ask'; reason?: string; displayReason?: { readonly en: string; readonly [locale: string]: string } }
 ```
 
 ```ts type-equiv
@@ -635,7 +646,7 @@ Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index
 
 #### `mcp-manager/status` — emit
 
-One managed server's status transitioned. Emitted for every published change while the entry exists — connection-state transitions mirrored from the instance, `disabled` when the entry is configured off, and the manager-side `failed` reasons. Not emitted for an entry removed from configuration; observers learn removals from the settings document.
+One managed server's status transitioned. Emitted for every published change while the entry exists — connection-state transitions mirrored from the instance, `disabled` when the entry is configured off, and the manager-side `failed` reasons. Not emitted for an entry removed from configuration; observers learn removals from plugin configuration.
 
 ```ts cordis-catalog
 /**
@@ -643,8 +654,8 @@ One managed server's status transitioned. Emitted for every published change whi
  * change while the entry exists — connection-state transitions mirrored
  * from the instance, `disabled` when the entry is configured off, and the
  * manager-side `failed` reasons. Not emitted for an entry removed from
- * configuration; observers learn removals from the settings document.
- * @param name - the `mcp.servers` entry key.
+ * configuration; observers learn removals from plugin configuration.
+ * @param name - the `servers` entry key.
  * @param status - the status now current for that server.
  * @mode emit
  */

@@ -1,8 +1,8 @@
 /** Read-only `cordis_define` card with Host and Client source tabs. */
 
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useState } from 'react'
 import {
-  CodeBlock, DisclosureRow, IconCodeOutline16, IconInspectOutline12, StateDot,
+  CodeBlock, DisclosureRow, IconCodeOutlineRegular, IconInspectOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
@@ -11,6 +11,7 @@ import type { CordisCardFace } from './slots.ts'
 import { cordisVisibleStatus, type CordisVisibleStatus } from './status.ts'
 import type { CordisKey } from './locales.ts'
 import css from './CordisDefineRow.module.css'
+import { CordisPreparingRow } from './CordisPreparingRow.tsx'
 
 /** Full card props composed by the keyed Tool slot. */
 export type CordisDefineRowProps = ToolCallViewProps & InjectFace<CordisCardFace> & PropsLocale<'cordis'>
@@ -34,18 +35,17 @@ function stateStatus(state: CordisToolState): CordisKey | null {
   }
 }
 
-function leadingFor(state: CordisToolState): ReactNode {
-  switch (state) {
-    case 'error': return <StateDot state="error" />
-    case 'stopped': return <StateDot state="warning" />
-    default: return <IconCodeOutline16 size={14} />
-  }
+/** Render one immutable Package definition. */
+export function CordisDefineRow(props: CordisDefineRowProps) {
+  if (props.phase === 'preparing') return <CordisPreparingRow {...props}
+    icon={<IconCodeOutlineRegular size={14} />} title={props.t('row.defineTitle')}
+    className={css.card} rowClassName={css.row} titleClassName={css.title} />
+  return <StartedCordisDefineRow {...props} />
 }
 
-/** Render one immutable Package definition. */
-export function CordisDefineRow({
+function StartedCordisDefineRow({
   callId, block, inspect, useInventory, useLoaded, t,
-}: CordisDefineRowProps) {
+}: Exclude<CordisDefineRowProps, { phase: 'preparing' }>) {
   const card = cordisDefineCard(block)
   const inventory = useInventory(snapshot => snapshot)
   const loaded = useLoaded(snapshot => snapshot)
@@ -88,7 +88,7 @@ export function CordisDefineRow({
         rowClassName={css.row}
         titleClassName={css.title}
         chevronClassName={css.chevron}
-        icon={leadingFor(card.state)}
+        icon={<IconCodeOutlineRegular size={14} />}
         title={t('row.defineTitle')}
         open={open}
         expandable={expandable}
@@ -142,6 +142,7 @@ export function CordisDefineRow({
                 aria-labelledby={`${sourcePanelId}-${activeSource}`}
               >
                 <CodeBlock
+                  toolbarLabels={{ codeLabel: t('codeBlock.title'), wrapLabel: t('codeBlock.wrap'), unwrapLabel: t('codeBlock.unwrap') }}
                   code={activeCode}
                   lang="javascript"
                   copyLabel={t('body.copy')}
@@ -160,7 +161,7 @@ export function CordisDefineRow({
           {card.pluginId !== null && <div className={css.panelHint}>{t('panel.hint')}</div>}
           {inspect !== undefined && (
             <button type="button" className={css.inspectButton} onClick={inspect}>
-              <IconInspectOutline12 />
+              <IconInspectOutlineRegular />
               {t('action.inspect')}
             </button>
           )}

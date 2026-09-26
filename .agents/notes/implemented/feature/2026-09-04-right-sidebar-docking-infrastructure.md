@@ -16,6 +16,8 @@ The right column is a per-session docking surface — split panes, tabs, floatin
 
 ### Package topology
 
+The [stable Sidebar mounting decision](../architecture/2026-09-20-sidebar-retained-tab-layout.md) owns one retained tab-content tree for docking, floating and Session switches. The engine, layout state and gesture ownership in this note remain applicable.
+
 | Package | Kind | Owns |
 |---|---|---|
 | `packages/client/ui-dockkit` | static-linked library, zero DSH dependencies | the layout engine and the React components that render and drive it; consumers compile its sources, and it keeps exactly one stylesheet because a consumer de-duplicates injected sheets by file name |
@@ -33,7 +35,7 @@ Components render a snapshot and report settled intents, one per gesture: a drag
 
 [Responsive Sidebar and tab information](../architecture/2026-09-07-sidebar-responsive-tab-info.md) supersedes this note's no-concession layout, overlay presentation and product pane limit. `ui-layout` still owns three-column geometry and pixel width preferences; the Sidebar occupant reports presentation through `ctx.layout.openRightbar(track, fullscreen)` and `closeRightbar()`, without the frame injecting the Sidebar package. Exact width rules belong to [ui-layout](../../../../packages/client/ui-layout/README.md).
 
-The right Sidebar uses one mounted content tree in normal and fullscreen modes; hiding preserves tab state, and fullscreen covers the viewport while retaining underlying column reservation. Floats still use viewport coordinates through a portal and remain open when the Sidebar closes. The product limits docking to two horizontal panes and a 20–80% divider; the generic engine keeps its own defaults.
+The right Sidebar uses one mounted content tree in normal and fullscreen modes; hiding preserves retained tab state, and fullscreen covers the viewport while retaining underlying column reservation. `DockLayout` renders stable Grid cells with fixed-position floating frames in the same tree; foreground floats remain open when the Sidebar closes. The product limits docking to two horizontal panes and a 20–80% divider; the generic engine keeps its own defaults.
 
 ### State
 
@@ -86,7 +88,7 @@ The surface renders tabs whose bodies it does not know: each tab carries a `kind
 - The Detail panel and its duplicate card presentation are gone (a net removal of roughly 1,400 lines); cards are read in place, and `inspect` opens the trajectory view.
 - The frame has no centre floor: a viewport narrower than the two edge columns squeezes the conversation toward zero instead of closing a column.
 - The kit is compiled by its consumers, so a kit change requires a shell rebuild and a page reload; there is no HMR for it.
-- The panel, the float host, and the portalled tab menu use hard-coded z-index values; the client still has no z-index token layer.
+- Docked cells, floating cells and the portalled tab menu use fixed stacking levels; floating cells use CSS paint order within their level. The client still has no global z-index token layer.
 
 ## Testing
 

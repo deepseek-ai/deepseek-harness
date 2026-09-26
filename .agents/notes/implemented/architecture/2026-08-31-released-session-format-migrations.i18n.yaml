@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-31-released-session-format-migrations.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md
-2026-08-31-released-session-format-migrations.md: d566459af64f4177ed0135813e75aaf77480823c
-2026-08-31-released-session-format-migrations.zh.md: f82b406117691197d808111f1c8aa4c722d4bab2
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages:
+  en: 1a1d3bd9c2311ed6
+  zh: 366eded1272efd63
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/problem:
+  en: a1f71d6123b80d10
+  zh: 8e05da34ba92686a
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/problem/whole-artifact-performance-failure:
+  en: 85ba92c98dd97591
+  zh: c464cdd860add9c7
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/problem/the-interfaces-prevented-local-fixes-from-composing:
+  en: e582758acd683242
+  zh: c5a5a27af1f33af7
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/decision:
+  en: 8756dc3c6235ba0b
+  zh: 8089fde062466c5c
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/decision/stage-and-context-protocol:
+  en: ed34c76e1a2c0a42
+  zh: 0efe92c6c9ea314e
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/decision/adjacent-version-ownership:
+  en: 31e5b2e26604110e
+  zh: 18d27da9b4661702
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/decision/physical-codecs-and-packed-runs:
+  en: 42e8d5405375cba7
+  zh: efd201181e47d579
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/decision/jsonl-integration:
+  en: 662859038e888672
+  zh: a1646f3ff5710e8d
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/decision/durable-format-and-publication-rules:
+  en: 6e2a76ae14612199
+  zh: 3c90fd32d292f9d0
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/problem-to-solution-mapping:
+  en: 65968c18c3d1b7e9
+  zh: 2e43d7ce1391d554
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/problem-to-solution-mapping/parent-catalog-prerequisites:
+  en: 81b40660b49dbfb0
+  zh: 67cfa3f43b6eb53e
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/problem-to-solution-mapping/catalog-scan-measurements:
+  en: 6b7a79fb81e58bac
+  zh: 51fc00eaf3a0c3dc
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/verification:
+  en: 061a112f789c9966
+  zh: e78b0b1a83837eae
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/verification/benchmark-input-and-meanings:
+  en: 3cbcde15a46b4136
+  zh: fe899549758f8ee3
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/verification/physical-decode:
+  en: 1c79e71ee17a156f
+  zh: 7563d24c9f2befe8
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/verification/historical-file-cold-open:
+  en: 09fe5e0aa4f57c6e
+  zh: a103dc631d1b0b79
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/verification/current-format-cold-open:
+  en: 60f7de284f6ded10
+  zh: 877b300503a4615d
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/verification/streaming-serial-migration-breakdown:
+  en: b9183e6c34a960dd
+  zh: d64ffecb289e7b74
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/consequences:
+  en: fa005a93cc0b0906
+  zh: 248a08f307d4c1b7
+/agent-note-released-session-formats-migrate-through-stateful-streaming-stages/alternatives-considered:
+  en: b70193af15b1a2ea
+  zh: d8a23e47e6b9cf88

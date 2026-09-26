@@ -11,7 +11,7 @@ import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
 import type { SubagentResult, SubagentRun } from './types.ts'
 
 /** Flatten a child's final output blocks to the task's final text. */
-function finalText(blocks: ContentBlock[]): string {
+function finalText(blocks: readonly ContentBlock[]): string {
   return blocks
     .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
     .map(block => block.text)
@@ -37,7 +37,7 @@ function failureDetail(result: SubagentResult): string {
 function runOutcome(result: SubagentResult): JobOutcome {
   switch (result.stopReason) {
     case 'completed':
-      return { status: 'completed', output: finalText(result.output) }
+      return { status: 'completed', result: finalText(result.output) }
     case 'aborted':
       return result.diagnostic === undefined
         ? { status: 'killed' }

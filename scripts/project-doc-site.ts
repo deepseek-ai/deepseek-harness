@@ -202,15 +202,16 @@ export function rewriteMarkdown(source: string, options: RewriteMarkdownOptions)
 }
 
 /**
- * Record the canonical edit target in VitePress frontmatter.
+ * Record canonical edit and raw-Markdown targets in VitePress frontmatter.
  *
  * @param markdown Projected Markdown content.
  * @param page Publication manifest entry for the content.
  * @returns Markdown with projection-owned frontmatter fields.
  */
-export function addProjectionFrontmatter(markdown: string, page: Pick<DocsPage, 'source' | 'outline'>): string {
+export function addProjectionFrontmatter(markdown: string, page: Pick<DocsPage, 'source' | 'outline' | 'route' | 'sidebar'>): string {
   const fields = [
     `editSource: ${JSON.stringify(page.source)}`,
+    ...(page.sidebar === null ? [] : [`rawMarkdownPath: ${JSON.stringify(page.route)}`]),
     ...(page.outline === undefined ? [] : [`outline: ${JSON.stringify(page.outline)}`]),
   ].join('\n')
   if (markdown.startsWith('---\n')) return markdown.replace('---\n', `---\n${fields}\n`)
@@ -486,7 +487,8 @@ export function rawMarkdownFiles(pages: DocsPage[] = docsPages): string[] {
  * projected over the alias route so its relative links stay correct.
  * Referenced images are copied beside the pages, keeping the same relative
  * URLs valid in both trees. Existing build files stay in place, and a name
- * collision with one fails the emission.
+ * collision with one fails the emission. Markdown files carry a UTF-8 BOM so
+ * browser navigation decodes them even when static hosting omits a charset.
  *
  * @param outDir Build output directory to emit into.
  * @param context Manifest and repository inputs, defaulting to this repository.
@@ -499,7 +501,7 @@ export function emitRawMarkdownPages(outDir: string, context: ProjectionContext 
   projectPagesInto(
     outDir,
     context,
-    (markdown, page) => rawMarkdownPageContent(markdown, page.source),
+    (markdown, page) => `\uFEFF${rawMarkdownPageContent(markdown, page.source)}`,
     [...context.pages, ...aliases],
   )
 }

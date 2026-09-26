@@ -1,0 +1,61 @@
+{
+  "ui-schedule/src/client/ClockPicker.module.css": [
+    ".option: border-radius: 10px"
+  ],
+  "ui-schedule/src/client/DatePicker.module.css": [
+    ".nav: border-radius: 8px",
+    ".cell: border-radius: 8px"
+  ],
+  "ui-schedule/src/client/PickerPopover.module.css": [
+    ".panel: border-radius: 16px"
+  ],
+  "ui-schedule/src/client/ScheduleCatalogAction.module.css": [
+    ".trigger: border-radius: 28px",
+    ".menu: border-radius: 16px",
+    ".row: border-radius: 10px",
+    ".openButton::after: border-radius: 10px",
+    ".deleteButton: border-radius: 6px"
+  ],
+  "ui-schedule/src/client/ScheduleCreateCard.module.css": [
+    ".card: border-radius: 18px",
+    ".leading: border-radius: 10px"
+  ],
+  "ui-schedule/src/client/TaskManagerPage.module.css": [
+    ".newButton: border-radius: 16px",
+    ".filterTab: border-radius: 14px",
+    ".searchField: border-radius: 12px",
+    ".row: border-radius: 12px",
+    ".notice: border-radius: 10px",
+    ".retentionRule: border-radius: 8px",
+    ".ruleRows: border-radius: 16px",
+    ".ruleValueFace: border-radius: 18px",
+    ".zoneSearch: border-radius: 7px",
+    ".ruleInput: border-radius: 18px",
+    ".ruleIntervalStepper: border-radius: 18px",
+    ".instruction: border-radius: 16px",
+    ".delivery: border-radius: 8px",
+    ".linkedSession: border-radius: 14px"
+  ],
+  "ui-schedule/src/client/TaskMenu.module.css": [
+    ".list: border-radius: 16px",
+    ".item: border-radius: 8px"
+  ],
+  "ui-settings-account/src/client/AccountNotice.module.css": [
+    ".card: border-radius: 16px"
+  ],
+  "ui-settings-account/src/client/DesktopOnboarding.module.css": [
+    ".card: border-radius: 32px",
+    ".confirmationClose: border-radius: 28px",
+    ".dialogButton: border-radius: 12px",
+    ".page .action: border-radius: 12px",
+    ".indicator: border-radius: 6px"
+  ],
+  "ui-shortcuts/src/client/Reference.module.css": [
+    ".dialog: border-radius: 24px",
+    ".close: border-radius: 28px",
+    ".searchField: border-radius: 12px",
+    ".keyBadge: border-radius: 10px",
+    ".unbound: border-radius: 10px",
+    ".recorder: border-radius: 10px"
+  ]
+}

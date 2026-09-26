@@ -1,0 +1,6 @@
+- id: tool-plugin-manager
+  disabled: false
+- id: hmr
+  disabled: false
+  config:
+    root: []

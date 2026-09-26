@@ -205,8 +205,8 @@ function invalidLeafMutations(
 function replaceAtPath(value: SessionFormatJsonValue, path: string, replacement: SessionFormatJsonValue): SessionFormatJsonValue {
   const copy = structuredClone(value)
   const keys = path.split('.')
-  let current = copy as unknown as Record<string, SessionFormatJsonValue>
-  for (const key of keys.slice(0, -1)) current = current[key] as unknown as Record<string, SessionFormatJsonValue>
+  let current = copy as Record<string, SessionFormatJsonValue>
+  for (const key of keys.slice(0, -1)) current = current[key] as Record<string, SessionFormatJsonValue>
   current[keys.at(-1) as string] = replacement
   return copy
 }

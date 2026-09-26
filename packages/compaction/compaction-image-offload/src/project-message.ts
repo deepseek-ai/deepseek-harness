@@ -24,9 +24,6 @@ export function offloadMessageImages(message: Message, indexes: readonly number[
           selected += 1
         }
         imageIndex += 1
-      } else if (block.type === 'tool-result') {
-        const content = visit(block.content)
-        if (content !== block.content) projected = { ...block, content }
       }
       if (projected !== block) next ??= blocks.slice(0, index)
       next?.push(projected)

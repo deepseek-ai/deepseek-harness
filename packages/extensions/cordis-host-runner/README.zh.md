@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-cordis-host-runner` 让动态包在本进程中可运行：模型用 `cordis_define` 记录的定义留在这里，host 半在 `node:vm` 沙箱中运行，带浏览器半的包会等待人在页面上批准或拒绝，模型也可以在这里检查实时运行时及其定义。面向模型的工具在 `@deepseek-ai/dsh-tool-cordis` 中，浏览器半经 `@deepseek-ai/dsh-cordis-client-runner` 装载。定义只存在于进程内存中，因此 DSH 重启即清空，也不会向磁盘写任何东西。唯一的配置字段 `vmTimeoutMs` 限制同步沙箱求值的时长。
+`dsh-cordis-host-runner` 提供运行时检查，并为程序调用方和浏览器控件保留进程内动态定义。Host 部分在 `node:vm` 中运行；浏览器部分使用 Client runner 和审批 UI。定义在重启后消失。Agent 通过 `tool-cordis` 发现 API，通过 Plugin Manager 安装持久化 bundle；没有模型工具创建动态定义。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在任何一个应当支持动态包的组合中挂载本插件——它支撑模型的 `cordis_*` 工具，而带浏览器半的包还需要在客户端组合中额外挂载 client runner 与 UI 包。常用路径是显式的：加载本包，按需设置 `vmTimeoutMs`，其余交给工具与浏览器。
+需要检查注册表或程序侧动态包生命周期时挂载此插件。浏览器生命周期消费者还需要 Client runner 和 UI 包。内置 Creator 流程使用已安装 bundle，不使用此定义注册表。
 
 ### 最小配置
 
@@ -43,11 +43,11 @@ kind: "package-reference"
 
 ### run 会做什么
 
-定义由 `cordis_define` 记录、由 `cordis_run` 激活。只有 host 半的包直接在本进程中激活：它的代码在沙箱中运行。带浏览器半的包变成一次请求：它一直等到有人在一个页面上允许或拒绝，或提问的轮次被取消；作答页面随后先装载 host 半、再装载浏览器半。`mode: "run"` 启动当前包或重启它，`mode: "update"` 切换到另一个包版本。`cordis_stop` 结束一次存活运行——移除该包的 handler 与任何已装载的浏览器 UI——同时保留可再次运行的定义；`cordis_undefine` 停止并忘掉它。
+程序调用方使用 `define`、`run`、`stop` 和 `undefine`；浏览器面板操作已有定义。仅含 Host 的包在本进程激活。带浏览器部分的包等待审批或取消，批准后先加载 Host 再加载 Client。`mode: "run"` 启动当前版本，`mode: "update"` 替换版本。Stop 释放运行中的 effect 并保留定义；undefine 还会移除定义。
 
 ### 定义的去向
 
-定义以会话为界、以进程为本：包只对定义它的会话可见，其他会话读取时视其为不存在，DSH 重启后一切都消失。会话日志保留一次 define 调用的参数——包括它提交的代码——以及回执；解析出的定义只存于内存注册表。浏览器半只能经一次运行到达页面，因此刷新后的页面手上什么都没有，直到有人再次运行该包。
+定义按会话隔离且仅在进程内存在：其他会话无法读取，重启会清空。历史日志保留工具参数和回执，但不会恢复注册表。浏览器页面重载后，需要再次显式运行才能加载 Client 部分。
 
 ### 信任立场
 
@@ -92,7 +92,7 @@ runner 基于两项职责划分。**注册表与沙箱是同一个服务。** `D
 
 当包级约定不够用时阅读以下页面。它们从 runner 逐步进入调用它的工具、应答它的浏览器半与生成的表面。
 
-- [工具包](../tool-cordis/README.zh.md)——调用本服务的模型侧工具。
+- [工具包](../tool-cordis/README.zh.md)——使用其检查注册表的只读工具。
 - [Client runner](../cordis-client-runner/README.zh.md)——应答运行请求并装载浏览器半代码的浏览器半。
 - [UI 包](../ui-cordis/README.zh.md)——用户批准并操作运行的面板。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-cordis-host-runner)——每个受支持配置字段。
@@ -108,7 +108,7 @@ runner 基于两项职责划分。**注册表与沙箱是同一个服务。** `D
 
 #### 模型看到的内容
 
-没有直接可见的内容：本包不注册任何工具，也不注入提示词。当一次 run 结算时，它会向所属会话发送 steering——成功时点名当前包并指示继续，用户拒绝时指示不要再次请求同一激活，技术性失败则给出原因、版本指针与「检查—修正—更新」路径。它还会通过 steering 转达结算后的渲染失败（slot、条目是否已被移除）、host guard 拒绝与 host handler 失败。面板上的停止与移除手势会注入一条 user 角色消息，说明用户做了什么。`run` 或 `stop` 的拒绝还会经调用它的工具结果到达模型。
+本包不注册工具或提示。程序侧 `run` 调用和浏览器控件可向所属会话发送结果与诊断；停止和移除操作注入用户消息。内置模型工具无法创建或更新动态定义。
 
 #### Token 影响
 
@@ -125,7 +125,7 @@ runner 基于两项职责划分。**注册表与沙箱是同一个服务。** `D
 
 这些限制说明 runner 何时需要特别小心。它们是当前包约束，不是任务积压。
 
-- **run 成功不等于 UI 渲染成功**——只要作答页面已装载浏览器半，`run` 就会返回；React 是随后才渲染的，因此抛异常的组件不可能出现在 run 回执里。该失败经 steering 与 `cordis_inspect_self` 诊断浮现。
+- **运行成功不代表 UI 已渲染**——React 在加载回执之后渲染；失败通过 steering 发送到所属会话，并显示在浏览器面板中。
 - **带浏览器半的包在没有页面连接的地方挂起**——headless 与 ACP（Agent Client Protocol）部署会把 run 一直挂到提问的轮次被取消；纯 host 包不受影响。
 - **挂起的 run 请求没有超时**——它一直等人，直到提问的轮次被取消，因此无人值守的自动化用不了带浏览器半的包。
 - **`vmTimeoutMs` 只约束同步求值**——async 的 host 半函数体会逃出该上限，这与工具集基于协作的信任立场一致。

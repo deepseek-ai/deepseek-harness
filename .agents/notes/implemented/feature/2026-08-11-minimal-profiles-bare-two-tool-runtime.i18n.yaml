@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-11-minimal-profiles-bare-two-tool-runtime.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-11-minimal-profiles-bare-two-tool-runtime.md
-2026-08-11-minimal-profiles-bare-two-tool-runtime.md: 8cfa4aa71e33317947d0661641df1e6e814f5e90
-2026-08-11-minimal-profiles-bare-two-tool-runtime.zh.md: f1f916bdde92fd104c3d879ff058b2e0474eef38
+/agent-note-minimal-profiles-use-a-bare-runtime:
+  en: b086c2a8d0fca111
+  zh: 3c81b90a2818e7ff
+/agent-note-minimal-profiles-use-a-bare-runtime/problem:
+  en: 725fe45436a65f26
+  zh: 97f96497173bec4f
+/agent-note-minimal-profiles-use-a-bare-runtime/decision:
+  en: ef9aa81743b6bc46
+  zh: 86bcf7e3a7e34f4b
+/agent-note-minimal-profiles-use-a-bare-runtime/verification:
+  en: c9d0b2145e4c1271
+  zh: 186919163b20379c
+/agent-note-minimal-profiles-use-a-bare-runtime/alternatives-considered:
+  en: 35b3346928cb6c3f
+  zh: 6e60d1073b5a95e3
+/agent-note-minimal-profiles-use-a-bare-runtime/consequences:
+  en: 462abbbe168de14c
+  zh: 13f9e257a5f18984

@@ -9,7 +9,7 @@
   height: calc(28px + var(--dsh-content-font-delta, 0px));
   padding: 6px;
   border: none;
-  border-radius: 28px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;

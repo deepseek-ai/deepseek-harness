@@ -1,0 +1,9 @@
+version: 1
+scenario: dynamic-tool-updates
+profile: headless
+composition: dynamic-tool-updates
+recording: authored
+header:
+  class: dynamic-tool-updates
+  pin: true
+  changes: 2

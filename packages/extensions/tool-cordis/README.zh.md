@@ -1,5 +1,5 @@
 ---
-description: "面向 agent（智能体）与维护者的 Cordis 运行时工具说明，用于选择、组合或排查动态包工作流。"
+description: "为开发和配置已安装 Harness 插件的 agent 提供只读运行时 API 查询。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-cordis` 让模型检查实时 Cordis 运行时，并创建、运行、停止、更新或移除包含 host 代码、浏览器代码或两者的临时动态包。包版本不可变，因此包失败后，模型可以添加新版本并更新当前运行的版本。定义只存在于进程内存中，DSH 重启即消失；本包不写仓库文件、不安装依赖，也不改 `cordis.yml`。它还会把这套工作流教给模型。请与 `@deepseek-ai/dsh-cordis-host-runner` 一同组合，后者提供沙箱与运行往返。
+编写插件代码前查询 Host 和 Client 的运行时 API。创造模式同时提供这些只读工具与 Plugin Manager，后者负责持久化 profile 变更。检查注册表由 Cordis host runner 提供；浏览器查询需要已连接的页面。
 
 ## 目录
 
@@ -17,7 +17,7 @@ kind: "package-reference"
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
 - [模型体验](#model-experience)
-- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [已知限制与待办](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
 -----
@@ -25,38 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当某个会话应当能临时扩展它自己的运行时——例如一个对当前工作有用、但不应成为仓库插件的模型编写的工具、服务或浏览器 UI——挂载本插件。请与 host runner 一同组合；没有 runner，这些工具永远不会激活，而且任何已发布的组合包都不会挂载这套工具集（web profile 已挂载 host runner 与浏览器侧组件），所以要显式地添加工具行。
-
-### 最小组合
-
-```yaml
-- name: '@deepseek-ai/dsh-cordis-host-runner'
-  config:
-    vmTimeoutMs: 5000
-- name: '@deepseek-ai/dsh-tool-cordis'
-```
-
-CLI 示例 [`apps/cli/config/examples/cordis/cordis.yml`](../../../apps/cli/config/examples/cordis/cordis.yml) 同时组合了这两者。带浏览器半的包还额外需要客户端组合里的浏览器 runner 与 UI 包；纯 host 包则两者都不需要。
-
-### 工具能做什么
-
-三个检查工具只读；四个生命周期工具定义并管理包。所有结果都是渲染成文本的 JSON。
-
-- `cordis_inspect_list`——列出 Inspect Provider（host 与 client）及其查询方法。
-- `cordis_inspect_query`——执行一次提供方查询：精确的服务方法、事件模式、builtin 签名、工具 schema、主题 token 或实时 slot 树。
-- `cordis_inspect_self`——本会话的动态插件：版本指针、最近一次运行，以及（对某个精确包而言）源码与运行时诊断。
-- `cordis_define`——登记一个包：新插件（`plugin.kind: "new"`，配 3–6 个字母的 `idPrefix`），或既有插件的新版本（`plugin.kind: "existing"`，配其 `pluginId`）。它只校验参数与语法；不运行任何东西，也不请求审批。
-- `cordis_run`——激活一个包（首次激活或重启用 `mode: "run"`，切换版本用 `mode: "update"`）。带浏览器半的包可能先返回 `awaiting-approval`，直到有人允许；工具从不等待最终结果。
-- `cordis_stop`——停止当前运行并取消任何待审批请求，保留插件与全部包版本。
-- `cordis_undefine`——停止并彻底移除一个插件及其全部包。
-
-### 典型工作流
-
-先检查、再定义、后运行：`cordis_inspect_query` 读取包要用的服务或 slot 的精确约定，`cordis_define` 记录源码（会话里会出现一张 define 卡片，指向存放运行控件的面板），`cordis_run` 激活它。当用户输入 `@pluginId` 时，本包注入一条上下文消息，钉住所引用的插件、其基准包与更新路径。技术性失败之后，用 `cordis_inspect_self` 读取诊断，向同一插件追加修正版，再更新到该版本。
-
-### 需要规划的边界
-
-定义以会话为界、以进程为本：包只在定义它的会话里可见可控，可跨后续轮次保持活跃，运行时也可能影响同一进程中的其他会话。停止、移除、卸载工具集或重启 DSH 都会清除它。沙箱隔离全局变量，但不是安全边界——对待动态包要像对待 bash 访问一样，加载本插件时也要像授予 bash 工具那样慎重。
+创造模式包含这组工具。其他组合需要在宿主组合里、提供 `cordisInspect` 的 host runner 旁挂载一次 `@deepseek-ai/dsh-tool-cordis/host`，并在每个要暴露这些工具的 agent preset 里挂载 `@deepseek-ai/dsh-tool-cordis`；仅有 preset 行不会注册任何 Host provider。调用 `cordis_inspect_list` 发现 provider，再用 `cordis_inspect_query` 查询其具体方法和类型。Host 的 `Config` provider 分页列出运行中的 Loader entry（`offset`、最多 100 的 `limit`、可选的精确插件 `name`；`total` 与 `nextOffset` 界定遍历），每个 entry 带 Loader id、patch 所寻址的树内 id 及其 Config 状态（`schema`、`absent`、`unsupported`、group 与 include 载体为 `tree`、禁用、未导入或已销毁的 entry 为 `inactive`），并把单个 entry 的原生 Config 投影为自包含的 JSON Schema 文档，同时在 profile 包查找能解析时给出该 entry 的 `packageDir`，即包 README 与构建产物 `lib/` 所在目录。通过 [Plugin Manager](../../boot/plugin-manager/README.zh.md) 安装包含插件代码或 MCP 配置的组合包。
 
 -----
 
@@ -64,28 +33,9 @@ CLI 示例 [`apps/cli/config/examples/cordis/cordis.yml`](../../../apps/cli/conf
 ## 理解实现
 
 <details>
-<summary>实现细节——点击展开</summary>
+<summary>实现细节 — 点击展开</summary>
 
-本节解释工具背后的设计；可观察行为已在[使用本包](#use-this-package)中完整说明。
-
-### 设计理念
-
-工具集基于一项职责分离原则：工具是在 runner 服务之上面向模型的轻量层。检查数据来自生成的目录与实时服务存储的交集；定义与生命周期操作委托给 `ctx.dynamicCordisRunner`，它拥有注册表、vm 沙箱与浏览器往返。工具层负责面向模型作出判断：只展示可调用的方法、只列出 host 侧可访问的键，并且每次拒绝都会提供可指导模型采取行动的错误信息。
-
-### 源码地图
-
-| 文件 | 职责 |
-|---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：工具注册、系统提示词章节、`@pluginId` 上下文注入 |
-| [`src/inspect.ts`](src/inspect.ts) | 报告渲染：把生成的 API 目录与实时服务存储相交 |
-| [`src/api-catalog.ts`](src/api-catalog.ts) | 工作区 Cordis 声明的生成投影（由 `pnpm run gen-cordis-api` 重新生成，`verify-cordis-api` 守其新鲜度） |
-| [`src/prompt.ts`](src/prompt.ts) | `tool:cordis` 系统提示词章节 |
-| [`src/providers.ts`](src/providers.ts) | 第一方 host Inspect Provider：Service、Event、Builtin、Tool |
-| [`src/present.ts`](src/present.ts) | 可安全回放的通用卡片渲染意图 |
-
-### 一次调用的流程
-
-检查调用查询 `ctx.cordisInspect`：host 提供方在本地执行，client 提供方等待第一个有效的页面应答。define 用与沙箱相同的包装器编译每一半来做语法预检，因此无法解析的代码在拿到 id 之前就被拒绝。run 委托给 runner：纯 host 包在进程内激活，带浏览器半的包挂起在 `cordis/request-run` 往返上；工具返回 runner 的回执（`awaiting-approval`、`starting` 或 `running`）。当用户写下 `@pluginId` 时，一个 `agent/pre-step` 处理器读取引用，并注入一条 user 角色的上下文消息，点明基准包与必须的后续步骤。
+Host provider 结合生成的 Service/Event 目录、经 app-boot Config 投影器投影的运行中 Loader 树，以及请求 agent 的工具注册表。Client provider 通过现有检查注册表同步清单，并从已连接页面回答查询。宿主入口持有 Host provider 的注册，preset 行持有两个工具，都通过 Cordis effect；注册表拒绝重复的 provider id，所以 provider 按进程注册一次而不是按 preset 注册。检查直接读取 provider，不维护独立运行时投影，因此不发布不变式配套插件。
 
 </details>
 
@@ -94,103 +44,34 @@ CLI 示例 [`apps/cli/config/examples/cordis/cordis.yml`](../../../apps/cli/conf
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当包级约定不够用时阅读以下页面。它们从共享工具集逐步进入 runner 内部、生成 schema 与子系统接口。
-
-- [Host runner](../cordis-host-runner/README.zh.md)——这些工具委托的注册表、沙箱与运行往返。
-- [Client runner](../cordis-client-runner/README.zh.md)——应答运行请求并装载浏览器半代码的浏览器半。
-- [UI 包](../ui-cordis/README.zh.md)——用户操作定义所用的面板与工具卡片。
-- [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-cordis)——模型收到的确切 schema。
-- [extensions 子系统](../../../docs/subsystems/extensions.zh.md)——生成的 `ctx.cordisInspect` 与 `ctx.dynamicCordisRunner` API。
-- [自引用 Cordis 工具集 Agent Note](../../../.agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.zh.md)——设计居所：沙箱语义、动态包生命周期与组合。
-
------
+- [Plugin Manager](../../boot/plugin-manager/README.zh.md) — 持久化组合包安装和启停。
+- [Cordis host runner](../cordis-host-runner/README.zh.md) — 检查注册表和现有运行时消费者。
 
 <a id="model-experience"></a>
 ## 模型体验
 
-### 工具 schema
+### 运行时检查
 
-#### 模型看到的内容
+#### 模型所见
 
-该插件可见时，会话模型会看到生成的 [`cordis_inspect_list`、`cordis_inspect_query`、`cordis_inspect_self`、`cordis_define`、`cordis_run`、`cordis_stop` 和 `cordis_undefine` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-cordis)。
-
-#### Token 影响
-
-该工具视图中的每次请求承担固定 schema 成本。
-
-#### KV Cache 影响
-
-只要该工具视图不变，前缀就保持稳定。隐藏这些定义的 scope 或插件生命周期变更，可能使从第一个变化的 schema token 起的复用失效。
-
-### 系统提示词章节
-
-#### 模型看到的内容
-
-本包注册一个系统提示词章节（`tool:cordis`，order 115），教模型何时以及如何使用动态包工作流、推荐的工具顺序与必须避免的高频错误；完整文本在 [`src/prompt.ts`](src/prompt.ts) 中。章节开头如下：
-
-##### 章节开头
-
-```markdown
-# Dynamic Cordis Plugins
-
-Dynamic Cordis plugins temporarily extend the current DSH process. A Plugin uses apply(ctx) to consume Services, listen to Events, provide Services, register model Tools, or register browser UI in Slots.
-```
+[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-cordis) 描述两个只读检查工具。插件不贡献 system prompt 段落：工具描述已说明何时调用每个工具以及查询不会调用业务方法。在 `cordis` preset 中，首轮 skill catalog 携带两个随附技能的描述，把插件、MCP、组合编辑和未指定去向的视觉请求路由到覆盖 Plugin Manager、MCP 设置、Client 打包和 slot 注册的技能。查询结果包含所请求的 API 声明、当前工具 schema、带 Config 状态的运行中 entry 目录，或单个 entry 投影后的 Config JSON Schema。
 
 #### Token 影响
 
-该插件可见时，章节渲染出的文本会在每次请求中重复。
+插件可见时，只有两个工具 schema 进入模型请求。查询结果追加到转录中；精确查询避免加载无关声明。
 
 #### KV Cache 影响
 
-只要章节文本与顺序不变，前缀就保持稳定；编辑提示词或改变其顺序可能使从第一个变化 token 起的复用失效。
+未改变的工具 schema 保持前缀稳定。查询结果追加到历史中；启用其他插件可能改变后续工具 schema。
 
-### 工具调用历史与结果
-
-#### 模型看到的内容
-
-检查输出是渲染成文本的 JSON：`cordis_inspect_list` 返回提供方目录，`cordis_inspect_query` 返回查询数据，`cordis_inspect_self` 返回插件、版本与包摘要，并在指定精确包时给出源码与诊断。define 返回该包已定义但尚未运行，并给出用于运行的 id。run 返回 `awaiting-approval`、`starting` 或 `running`，附运行 id 与版本指针。stop 与 undefine 各返回一行确认信息。每一次拒绝都是携带 runner 教学文本的工具错误，提交的程序保留在 assistant 工具调用历史中。
-
-#### Token 影响
-
-检查输出与提交的包代码取决于数据，并在压缩（compaction）前重复发送；生命周期确认文本很短。
-
-#### KV Cache 影响
-
-仅追加；新可见内容位于可复用请求前缀之后，不会使现有 KV Cache 条目失效。
-
-### cordis_run 之后的后续请求
-
-#### 模型看到的内容
-
-运行中的包可能注册工具、提示词贡献或监听器，改变其目标 scope 的后续请求；`cordis_stop` 与 `cordis_undefine` 会在完全停稳后移除这些贡献。当用户输入 `@pluginId` 时，注入的引用上下文还会增加一条 user 角色的消息，点明基准包与后续步骤。
-
-#### Token 影响
-
-间接 token 影响等于运行中包的贡献，且只在其进程内生命周期内持续。
-
-#### KV Cache 影响
-
-运行或停止提示词／工具贡献会改变后续请求前缀，并可能使从第一个变化的贡献起的复用失效；运行集合不变时，前缀保持稳定。
-
-## 已知限制与延期工作
+## 已知限制与待办
 
 <a id="known-limitations-and-deferred-work"></a>
 
-
-这些限制说明工具集何时不合适或需要特别小心。它们是当前包约束，不是任务积压。
-
-- **沙箱只用于约束诚实代码，并非安全边界**——可以触及沙箱全局变量上的 host realm helper，因此包代码可以触达 Node；加载本插件时，应当像授予 bash 工具一样慎重。
-- **只支持纯 JavaScript**——动态包代码不做任何转换：没有 TypeScript、JSX 或 import，沙箱还不提供 `require`、`setTimeout`、`fetch` 等 Node 全局变量，把文件、网络与进程工作重定向到 Cordis 服务。
-- **vm 与审批边界属于 runner**——见它的[已知限制](../cordis-host-runner/README.zh.md#known-limitations-and-deferred-work)；async 的 host 半主体可逃出 `vmTimeoutMs`。
+- Client 查询等待页面响应或取消。检查不能调用服务方法、配置插件或执行生成代码。
+- `Config.listConfigs` 只遍历 profile 的 Loader 树。Agent preset 的 `plugins` 列表挂载在独立的 preset 树中，所以只出现在 preset 声明里的插件不会被列出，除非 profile 树也挂载了它。
 
 <a id="dev-note"></a>
 ### 开发备注
 
-<details>
-<summary>维护者的工作上下文——点击展开</summary>
-
 无。
-
-</details>
-
-**运行时不变式：** 不发布伴生入口。这个面向模型的适配器没有独立 lifecycle stream；执行关系由它调用的能力 seam 负责。

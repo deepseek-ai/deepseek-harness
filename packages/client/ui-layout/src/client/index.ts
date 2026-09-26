@@ -1,7 +1,7 @@
 /**
  * Layout plugin, browser half: one register() call contributes AppFrame into
  * the runtime's built-in 'root' slot and, in the same breath, declares the
- * four child slots (declaration = exclusive render authority), seats the
+ * five child slots (declaration = exclusive render authority), seats the
  * layout store (panel geometry), and wires the panel-action service face.
  * ctx.layout selects the main panel and controls column geometry; Session
  * selection belongs to the Session Controller. A second effect seats the theme
@@ -17,6 +17,8 @@ import type { PanelInfo } from './service.ts'
 import { AppFrame } from './AppFrame.tsx'
 import { createLayoutStore } from './stores.ts'
 import { LayoutController } from './service.ts'
+import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
+import { en, zh } from './shortcut-locales.ts'
 import { ThemePresenter } from './theme-presenter.ts'
 
 // Contract exports only (export-convergence rule: cross-package consumers
@@ -38,6 +40,11 @@ declare module '@deepseek-ai/cordis' {
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** Layout keyboard command labels. */
+    'shortcuts.layout': keyof typeof zh
+  }
+
   interface GlobalStandardProps {
     /** Subscribe to the selected main panel independently of parent renders. */
     usePanelInfo: UsePanelInfo
@@ -45,7 +52,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
   interface SlotMap {
     // The 'root' entry itself is the runtime's built-in slot (declared
-    // there); these four are the frame's children, declared by the same
+    // there); these five are the frame's children, declared by the same
     // register() call that contributes AppFrame. Session owners never pass
     // sessionId: the framework injects it as a standard prop.
     /**
@@ -89,13 +96,26 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * `id` is added beside the shipped entries instead of replacing them.
      */
     'shell.overlay': { kind: 'list'; scope: 'root' }
+    /**
+     * Window-chrome seat at the frame's top-left, over every main panel.
+     * Mounted only while the sidebar column is fully hidden (macOS desktop
+     * collapse; other platforms keep the rail), so the occupant can assume the
+     * frame edge is the window edge and the macOS traffic lights sit before it.
+     * OCCUPIED by ui-sidebar's reopen/New Session controls.
+     *
+     * While the seat is mounted the frame publishes
+     * `--dsh-frame-leading-clearance` (the inline inset the seat's band
+     * occupies, measured from the frame's left edge); a main panel whose
+     * content reaches the top-left corner pads by it so nothing lands under
+     * the lights or the controls.
+     */
+    'shell.leading': { kind: 'single'; scope: 'root' }
   }
 }
 
 // OwnerShare contracts — the render-side share the slot owner supplies at
 // renderSlot. Registrants IMPORT these and compose their full component props
-// through the four-share intersection (PropsRuntime & PropsRenderSlots &
-// PropsStore & I). Conversation business state and actions arrive through
+// from the framework-derived shares. Conversation business state and actions arrive through
 // framework-standard hooks and each registrant's inject face, not owner props.
 
 /** Sidebar owner share: live column state from the frame's concession solve. */
@@ -120,21 +140,22 @@ export interface RightbarOwnerProps {
 }
 
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
-export const inject = ['slots', 'theme', 'locale']
+export const inject = ['slots', 'theme', 'locale', 'shortcuts']
 
 /**
  * Client plugin body: provide ctx.layout, then one register() call — AppFrame
- * into 'root' with the four child-slot declarations, the layout store seat,
+ * into 'root' with the five child-slot declarations, the layout store seat,
  * and the shared root instance supplying commands and the panel-info source.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
+  ctx.effect(() => ctx.locale.register('shortcuts.layout', { zh, en }), 'layout: command labels')
+  const t = ctx.locale.bind('shortcuts.layout')
+
   ctx.effect(() => {
     const handle = createLayoutStore()
     const instance = handle.create()
     const store: typeof handle = { ...handle, create: () => instance }
-    const layout = new LayoutController(instance.actions, id =>
-      ctx.slots.entries('main').some(entry => entry.options.key === id))
     const retainMainPanels = (): void => {
       instance.actions.retainMainPanels(ctx.slots.entries('main').flatMap(entry =>
         entry.options.key === undefined ? [] : [entry.options.key]))
@@ -143,7 +164,9 @@ export function apply(ctx: ClientContext): void {
       getSnapshot: () => instance.getSnapshot().panelInfo,
       subscribe: listener => instance.subscribe(listener),
     }
-    const disposePanelInfo = ctx.slots.provideRoot({ hooks: { panelInfo } })
+    const layout = new LayoutController(instance.actions, id =>
+      ctx.slots.entries('main').some(entry => entry.options.key === id), panelInfo)
+    const disposePanelInfo = ctx.slots.provideRoot({ hooks: { panelInfo: layout.panelInfo } })
     const disposeService = ctx.reflect.provide('layout', layout)
     const disposeRegistration = ctx.slots.register({
       name: 'root',
@@ -153,12 +176,26 @@ export function apply(ctx: ClientContext): void {
         'main': { kind: 'keyed', scope: 'root' },
         'rightbar': { kind: 'single', scope: 'root' },
         'shell.overlay': { kind: 'list', scope: 'root' },
+        'shell.leading': { kind: 'single', scope: 'root' },
       },
       store,
     }, AppFrame)
+    const disposeShortcut = ctx.shortcuts.register({
+      id: 'sidebar.left.toggle' as ShortcutCommandId, label: () => t('toggle'), aliases: ['sidebar', 'toggle left sidebar'],
+      defaults: {
+        'desktop:macos': { code: 'KeyB', modifiers: ['primary'] },
+        'desktop:windows': { code: 'KeyB', modifiers: ['primary'] },
+        'desktop:linux': { code: 'KeyB', modifiers: ['primary'] },
+        'web:macos': { code: 'KeyB', modifiers: ['primary', 'alt'] },
+        'web:windows': { code: 'KeyB', modifiers: ['primary', 'alt'] },
+      },
+      regions: ['page', 'editable'], modals: [],
+      resolve: () => ({ status: 'handled', run: () => { layout.toggleSidebar() } }),
+    })
     const disposePanels = ctx.slots.subscribe('main', retainMainPanels)
     retainMainPanels()
     return () => {
+      disposeShortcut()
       layout.dispose()
       disposePanels()
       disposeRegistration()

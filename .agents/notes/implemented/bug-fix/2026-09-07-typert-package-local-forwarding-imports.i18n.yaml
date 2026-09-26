@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-07-typert-package-local-forwarding-imports.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-07-typert-package-local-forwarding-imports.md
-2026-09-07-typert-package-local-forwarding-imports.md: 33e4334edef732b9c498ad2397151bd9c2c16f1f
-2026-09-07-typert-package-local-forwarding-imports.zh.md: ea4babdb4b58981fb16f499c7986279fa18dbc58
+/agent-note-follow-package-local-forwarding-modules-in-typert-references:
+  en: ebacf2fc1c764589
+  zh: c14b1752a01b2775
+/agent-note-follow-package-local-forwarding-modules-in-typert-references/problem:
+  en: 0ed0703cdd876132
+  zh: ab759d1a2137bdd8
+/agent-note-follow-package-local-forwarding-modules-in-typert-references/decision:
+  en: e828847b069ef3f8
+  zh: 95e9425c02dd8215
+/agent-note-follow-package-local-forwarding-modules-in-typert-references/alternatives-considered:
+  en: 49a0984c31c2b993
+  zh: fb6d093474130a75
+/agent-note-follow-package-local-forwarding-modules-in-typert-references/consequences:
+  en: 7e196e1cffcb31e1
+  zh: 7d096507578c1731

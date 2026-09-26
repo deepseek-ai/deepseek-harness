@@ -1,0 +1,16 @@
+/* Onboarding palette and themed materials; card geometry and animation belong to the feature. */
+body {
+  --dsw-alias-onboarding-accent: rgb(57, 100, 254);
+  --dsw-gradient-onboarding-violet-stops: #2a2fb6 33.102%, #8b76f6 50.954%, #c5c0ff 85.326%, #2a2fb6;
+  --dsw-gradient-onboarding-blue-stops: #3964fe 18.75%, #398efe 51.78%, #6dccff 86.252%, #3964fe;
+  --dsw-gradient-onboarding-cyan-stops: #0293b4 21.154%, #2dc8eb 50.954%, #aff0ff 85.326%, #0293b4;
+  --dsw-alias-onboarding-card-fill: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 80%, transparent);
+  --dsw-alias-onboarding-secondary-fill: var(--dsw-static-neutral-bluish-00);
+  --dsw-alias-onboarding-checkbox-border: color-mix(in srgb, var(--dsw-static-neutral-bluish-1000) 20%, transparent);
+}
+
+body[data-ds-dark-theme] {
+  --dsw-alias-onboarding-card-fill: color-mix(in srgb, var(--dsw-static-neutral-bluish-850) 80%, transparent);
+  --dsw-alias-onboarding-secondary-fill: rgb(72, 73, 76);
+  --dsw-alias-onboarding-checkbox-border: var(--dsw-alias-border-l2);
+}

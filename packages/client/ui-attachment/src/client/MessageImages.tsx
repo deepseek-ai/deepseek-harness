@@ -3,13 +3,14 @@ import { ImageGallery } from '../MessageImage.tsx'
 import { messageImageLabels } from './labels.ts'
 
 /** Historical message-image slot entry. */
-export function MessageImages({ images, loadImage, align, compact = false, t }: MessageImagesProps) {
+export function MessageImages({ images, loadImage, align, compact = false, thumbnail = false, t }: MessageImagesProps) {
   return (
     <ImageGallery
       images={images}
       load={loadImage}
       align={align}
       compact={compact}
+      thumbnail={thumbnail}
       labels={messageImageLabels(t)}
     />
   )

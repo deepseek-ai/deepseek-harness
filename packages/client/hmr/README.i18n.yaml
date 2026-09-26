@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/hmr/README.md
-README.md: e459da10332ffdb3af422b75f639ce25df512487
-README.zh.md: 54e2f3af63472dedbfc75c5b4400b5d93e14f311
+/:
+  en: dbe480205dbca85a
+  zh: 850b3210c588960c
+/deepseek-ai-dsh-client-hmr:
+  en: 3f8aceed1a3a4221
+  zh: d48ff0e88eefa046
+/deepseek-ai-dsh-client-hmr/summary:
+  en: 4ea7a901735da086
+  zh: 77fd5083661ceff5
+/deepseek-ai-dsh-client-hmr/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-hmr/use-this-package:
+  en: be71f36f66f316cb
+  zh: 63cd12c0ad40bd88
+/deepseek-ai-dsh-client-hmr/use-this-package/starting-the-reload-chain:
+  en: e1c5d886bc7da5bc
+  zh: da8f0c309e178b74
+/deepseek-ai-dsh-client-hmr/use-this-package/what-a-reload-does:
+  en: d3ac81d404b2d6c6
+  zh: a9f9ad9dfa685ac7
+/deepseek-ai-dsh-client-hmr/use-this-package/configuration:
+  en: 8b4b8f929cf0ba25
+  zh: 626779afc1132e4f
+/deepseek-ai-dsh-client-hmr/use-this-package/observing-success:
+  en: 751c7ff7f8a4e70d
+  zh: 34da8830a069f7f5
+/deepseek-ai-dsh-client-hmr/understand-the-implementation:
+  en: e5cdd3f10a344b10
+  zh: 70c8efd12531039d
+/deepseek-ai-dsh-client-hmr/understand-the-implementation/design-concept:
+  en: 90f8d06719b177bd
+  zh: c5a770ddcacc0f87
+/deepseek-ai-dsh-client-hmr/understand-the-implementation/the-browser-swap:
+  en: 269ff43822114dc8
+  zh: 8604c39c8050858a
+/deepseek-ai-dsh-client-hmr/understand-the-implementation/cascade-and-self-reload:
+  en: 191b6aa1dfd7de08
+  zh: f7a4e65bea2e2bd8
+/deepseek-ai-dsh-client-hmr/understand-the-implementation/failure-policy:
+  en: 5c9939cd350c136d
+  zh: 020159ec196f378f
+/deepseek-ai-dsh-client-hmr/understand-the-implementation/source-map:
+  en: 444a1c0d4b927be5
+  zh: b16ef293021b88c3
+/deepseek-ai-dsh-client-hmr/further-exploration:
+  en: 684aff651f59a12d
+  zh: 671bcfc50918508e
+/deepseek-ai-dsh-client-hmr/model-experience:
+  en: b8a047df4bc523aa
+  zh: 2cec909a451a8929
+/deepseek-ai-dsh-client-hmr/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-client-hmr/known-limitations-and-deferred-work:
+  en: 0003a3d701a7f7b1
+  zh: 9be135531742cf86
+/deepseek-ai-dsh-client-hmr/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

@@ -22,14 +22,14 @@ const EVENT_OUTPUT = {
 } as const
 /* jscpd:ignore-end */
 const SUBTREE_OUTPUT = {
-  description: 'Compact purpose/topology trees. With root, selected also contains that Slot\'s full contract and live occupants.',
+  description: 'Compact topology trees. An exact Slot includes its catalog and occupants; an exact Factory includes identity, scope, and registrant.',
 } as const
 const SUBTREE_INPUT = {
   type: 'object',
   properties: {
     root: {
       type: 'string',
-      description: 'Exact live Slot key. When supplied, selected contains the full contract for this Slot.',
+      description: 'Exact live Slot key or factory:<name>. When supplied, selected contains that declaration.',
     },
   },
   additionalProperties: false,
@@ -99,10 +99,10 @@ export function clientInspectProviders(ctx: Context): ClientCordisInspectProvide
     {
       manifest: {
         id: 'Slots',
-        description: 'Progressive live Slot inspection: compact purpose/topology trees plus one exact Slot contract.',
+        description: 'Progressive live Slot inspection with explicit Slot and Factory topology nodes.',
         methods: [{
           name: 'listSubTree',
-          description: 'Return compact live Slot trees for navigation. With root, also return the selected Slot\'s full contract and occupants.',
+          description: 'Return compact live Slot and Factory trees, plus available detail for one exact root.',
           inputSchema: SUBTREE_INPUT,
           outputSchema: SUBTREE_OUTPUT,
         }],
@@ -169,7 +169,7 @@ function readExact(input: JsonValue | undefined, field: string): string | undefi
 }
 /* jscpd:ignore-end */
 
-type LiveSlotNode = ReturnType<SlotRegistry['snapshot']>[number]
+type LiveCompositionNode = ReturnType<SlotRegistry['snapshot']>[number]
 
 const SLOT_CATALOG = new Map(CLIENT_SLOT_API.map(entry => [entry.key, entry]))
 const GUARDED_SLOT_KEYS = new Map<string, {
@@ -185,10 +185,19 @@ const GUARDED_SLOT_KEYS = new Map<string, {
   }],
 ])
 
-function compactSlotTree(node: LiveSlotNode): JsonValue {
+function compactSlotTree(node: LiveCompositionNode): JsonValue {
+  if (node.type === 'factory') {
+    return {
+      type: node.type,
+      name: node.name,
+      scope: node.scope,
+      children: node.children.map(compactSlotTree),
+    }
+  }
   const catalog = SLOT_CATALOG.get(node.name)
   const guardedKeys = catalog === undefined ? undefined : GUARDED_SLOT_KEYS.get(catalog.key)
   return {
+    type: node.type,
     name: node.name,
     kind: node.kind,
     scope: node.scope,
@@ -211,9 +220,18 @@ function compactSlotTree(node: LiveSlotNode): JsonValue {
   }
 }
 
-function inspectLiveSlot(node: LiveSlotNode): JsonValue {
+function inspectLiveSlot(node: LiveCompositionNode): JsonValue {
+  if (node.type === 'factory') {
+    return {
+      type: node.type,
+      name: node.name,
+      scope: node.scope,
+      ...node.registrant === undefined ? {} : { registrant: node.registrant },
+    }
+  }
   const catalog = SLOT_CATALOG.get(node.name)
   return {
+    type: node.type,
     name: node.name,
     kind: node.kind,
     scope: node.scope,

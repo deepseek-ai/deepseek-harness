@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-20-canonical-tool-output-contract.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-20-canonical-tool-output-contract.md
-2026-07-20-canonical-tool-output-contract.md: 4dbcac3da8381e69809b15a653cdb4987af4e0e7
-2026-07-20-canonical-tool-output-contract.zh.md: c2f4ebdfc7266495570766c69b3aa264f91172cc
+/agent-note-canonical-tool-output-contract:
+  en: 01677f7875da9579
+  zh: 41bae59177ba5125
+/agent-note-canonical-tool-output-contract/problem:
+  en: d0bc9840998f0530
+  zh: 2601671ec694a78d
+/agent-note-canonical-tool-output-contract/decision:
+  en: db088b8225a4bf3d
+  zh: bfb0caa015b2b7df
+/agent-note-canonical-tool-output-contract/alternatives-considered:
+  en: d82a0ac0461ab120
+  zh: bedea17fb4fb4f51
+/agent-note-canonical-tool-output-contract/consequences:
+  en: 32724ff8f6b3b03f
+  zh: bc7512ff05d00157

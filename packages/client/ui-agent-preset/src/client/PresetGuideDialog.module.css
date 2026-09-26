@@ -1,0 +1,146 @@
+.guideDialog {
+  box-sizing: border-box;
+  width: min(640px, 100%);
+  height: min(600px, 100%);
+  max-height: 100%;
+  padding: 0;
+  gap: 0;
+}
+
+.guideLayout {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.guideHeader {
+  flex: none;
+  padding: 24px 24px 20px 28px;
+}
+
+.guideTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.guideTitle {
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+}
+
+.guideIntro {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.guideClose {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: var(--dsw-radius-md);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.guideTabs {
+  flex: none;
+  margin: 0 28px 22px;
+}
+
+.guidePanel {
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 0 24px 24px 28px;
+  font-size: 16px;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.guidePanel:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.guidePanel h3 {
+  margin: 28px 0 10px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.guidePanel h3:first-child {
+  margin-top: 0;
+}
+
+.guidePanel p {
+  margin: 0 0 16px;
+  font-size: 16px;
+  line-height: 1.625;
+  color: var(--dsw-alias-label-primary);
+}
+
+.guidePanel blockquote {
+  margin: 10px 0 14px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.guidePanel blockquote p {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Usage pages emphasize the example input, with expected results as supporting copy. */
+.guidePanel[data-guide-page='usage'] p {
+  margin-bottom: 12px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.guidePanel[data-guide-page='usage'] h3 {
+  margin: 0;
+}
+
+.guideExample + .guideExample {
+  margin-top: 28px;
+}
+
+.guideExampleHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.guideExampleTag {
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.guidePanel[data-guide-page='usage'] blockquote {
+  margin: 8px 0;
+  padding: 12px 16px;
+}
+
+.guidePanel[data-guide-page='usage'] blockquote p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 26px;
+  color: var(--dsw-alias-label-primary);
+}

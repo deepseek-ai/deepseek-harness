@@ -34,7 +34,6 @@ interface AssistantState {
   readonly firstVisibleSeq: number | undefined
   readonly firstVisibleTime: number | undefined
   readonly firstTokenTime: number | undefined
-  readonly hidden: boolean
   readonly final: ConversationMatch | undefined
   readonly usage: unknown
 }
@@ -48,7 +47,6 @@ function initialState(turn: number, step: number): AssistantState {
     firstVisibleSeq: undefined,
     firstVisibleTime: undefined,
     firstTokenTime: undefined,
-    hidden: false,
     final: undefined,
     usage: undefined,
   }
@@ -85,7 +83,6 @@ function resetForRetry(state: AssistantState): AssistantState {
   return {
     ...initialState(state.turn, state.step),
     firstTokenTime: state.firstTokenTime,
-    hidden: true,
   }
 }
 
@@ -151,7 +148,6 @@ function updateChunk(
     ...state,
     blocks,
     visibleBlocks,
-    hidden: visibleBlocks > 0 ? false : state.hidden,
     ...visibleBlocks > 0 && state.firstVisibleSeq === undefined
       ? { firstVisibleSeq: seq, firstVisibleTime: time }
       : {},
@@ -171,7 +167,6 @@ function settleMessage(
     ...state,
     blocks,
     visibleBlocks: countVisibleBlocks(blocks),
-    hidden: false,
     final: match,
     usage: event.data.usage,
   }
@@ -264,7 +259,8 @@ function projectAssistant(context: ConversationNodeContext<AssistantState>): Ass
   const status = settled?.interrupted === true
     ? 'interrupted'
     : settled === undefined ? 'running' : 'settled'
-  const anchorSeq = settled?.seq ?? state.firstVisibleSeq ?? context.matches[0]?.event.seq ?? 0
+  const anchorSeq = (settled?.interrupted === true ? settled.seq : state.firstVisibleSeq ?? settled?.seq)
+    ?? context.matches[0]?.event.seq ?? 0
   const time = settled?.time ?? state.firstVisibleTime ?? context.matches[0]?.event.time ?? 0
   return {
     anchorSeq,
@@ -289,7 +285,7 @@ function publishedAssistantData(
   return location?.kind === 'step' ? location.step.data.get('assistant-step') : undefined
 }
 
-/** Per-step Assistant streaming/final/interruption Definition. */
+/** Per-step Assistant lifecycle; materialized keys survive cleared stream content as hidden Nodes. */
 export const assistantDefinition: ConversationNodeDefinition<AssistantState> = {
   kind: 'assistant-step',
   target: 'chat',
@@ -337,17 +333,18 @@ export const assistantDefinition: ConversationNodeDefinition<AssistantState> = {
     }
   },
   buildViewNode: (context) => {
+    const current = context.current.get('chat')
     const state = context.state ?? fallbackState(context)
-    if (state === undefined) return null
     const data = publishedAssistantData(context)
-    if (data === undefined) return null
+    if (state === undefined || data === undefined) {
+      return current == null ? null : { ...current, visibility: 'hidden' }
+    }
     const settled = data.finalNode
     const visible = settled === undefined ? state.visibleBlocks > 0 : hasVisibleContent(data.blocks)
-    if (settled === undefined && !visible) {
-      const current = context.current.get('chat')
-      if (!state.hidden || current === undefined || current === null) return null
-    }
-    const anchorSeq = settled?.seq ?? state.firstVisibleSeq ?? context.matches[0]?.event.seq ?? 0
+    if (settled === undefined && !visible && current == null) return null
+    // A successful message retains its live anchor alongside pending Tool calls.
+    const anchorSeq = (settled?.interrupted === true ? settled.seq : state.firstVisibleSeq ?? settled?.seq)
+      ?? context.matches[0]?.event.seq ?? 0
     return chatNode(context, 'assistant-step', anchorSeq, data, {
       visibility: settled?.interrupted === true || visible ? 'visible' : 'hidden',
     })

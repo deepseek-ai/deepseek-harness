@@ -1,6 +1,4 @@
-/* Official popupSelect shell card: menu-surface tokens (same family as
- * ui-primitives Menu.module.css — figma MenuDropdown r12 / hairline /
- * elevation-prominent), anchored by the conversation.input.overlay slot. */
+/* popupSelect uses the same compact translucent card as the shared Menu. */
 
 .card {
   /* The overlay anchor is a zero-height strip on the composer card's top
@@ -9,7 +7,7 @@
   bottom: calc(100% + 4px);
   left: 0;
   z-index: 100;
-  padding: 4px;
+  padding: 3px;
   display: flex;
   flex-direction: column;
   min-width: min(220px, 100%);
@@ -25,8 +23,6 @@
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   border: 0;
-  border-radius: 20px;
-  background: var(--dsw-specific-menu);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
   outline: none;
@@ -42,11 +38,11 @@
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 8px;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: var(--dsw-radius-md);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -83,7 +79,7 @@
 .detail {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
   overflow: hidden;
@@ -97,19 +93,24 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.check svg {
+  width: 14px;
+  height: 14px;
+}
+
 .status {
-  padding: 8px 10px;
-  font-size: 13px;
+  padding: 7px 8px;
+  font-size: 12px;
   color: var(--dsw-alias-label-tertiary);
 }
 
 .search {
-  margin: 2px 2px 4px;
-  padding: 6px 8px;
+  margin: 2px 2px 3px;
+  padding: 5px 7px;
   border: 0.5px solid var(--dsw-alias-border-inverted);
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--dsw-alias-label-primary);
   outline: none;
 }
@@ -117,9 +118,9 @@
 .error {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  font-size: 12px;
+  gap: 6px;
+  padding: 5px 7px;
+  font-size: 11px;
   color: var(--dsw-alias-state-error-primary);
 }
 
@@ -130,11 +131,11 @@
 }
 
 .retry {
-  padding: 2px 8px;
+  padding: 2px 7px;
   border: 0.5px solid var(--dsw-alias-border-inverted);
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
 }

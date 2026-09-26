@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/host/frontend-static/README.md
-README.md: e616c048119fc1ce75ad29b002c3298b84169af9
-README.zh.md: 6cf55bb6d82f665754767f0a8c5b9cc68d8236d6
+/:
+  en: 13405cfbbb63c41c
+  zh: 7597374eb205df97
+/deepseek-ai-dsh-host-frontend-static:
+  en: a7cd4201b26f235e
+  zh: 466d0b60950685b4
+/deepseek-ai-dsh-host-frontend-static/summary:
+  en: 788005d86b2cf415
+  zh: 5d3073e3e5144084
+/deepseek-ai-dsh-host-frontend-static/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-host-frontend-static/use-this-package:
+  en: a1ccc40c13683372
+  zh: b37e4c22f6cb83ca
+/deepseek-ai-dsh-host-frontend-static/use-this-package/minimal-configuration:
+  en: c58118ab4aba9bac
+  zh: 334fcd54edcae152
+/deepseek-ai-dsh-host-frontend-static/use-this-package/what-the-server-enforces:
+  en: 3bd43604d1195427
+  zh: 4912adee677ac589
+/deepseek-ai-dsh-host-frontend-static/use-this-package/observable-failures:
+  en: 7b6cca6ed823f515
+  zh: 30b5a5c594e8f1b8
+/deepseek-ai-dsh-host-frontend-static/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-host-frontend-static/understand-the-implementation/design-concept:
+  en: b371a886c39f0947
+  zh: b03c5f73cb6678f9
+/deepseek-ai-dsh-host-frontend-static/understand-the-implementation/the-traversal-fence:
+  en: 0ca9ccfdf4101cf1
+  zh: 5a01e561397afcb1
+/deepseek-ai-dsh-host-frontend-static/understand-the-implementation/source-map:
+  en: 6e2681b3537ebc3c
+  zh: ce272423ca550951
+/deepseek-ai-dsh-host-frontend-static/further-exploration:
+  en: d2338fa56a68ea21
+  zh: 81b84ba73f59766b
+/deepseek-ai-dsh-host-frontend-static/model-experience:
+  en: 731366616bc410a6
+  zh: ce51eb296a6efddb
+/deepseek-ai-dsh-host-frontend-static/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-host-frontend-static/known-limitations-and-deferred-work:
+  en: 1c47bab1d5936873
+  zh: 737d7188036e7bde
+/deepseek-ai-dsh-host-frontend-static/known-limitations-and-deferred-work/dev-note:
+  en: b0c11e19ebc773d3
+  zh: 897d6eaf60489227

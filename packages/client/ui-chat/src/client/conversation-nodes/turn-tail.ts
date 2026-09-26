@@ -3,15 +3,12 @@ import type {
   ConversationMatch, ConversationNodeContext, ConversationNodeDefinition, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
-import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { deriveTurnTokenUsage } from '@deepseek-ai/dsh-token-meter/client'
 import type {
   AssistantChatData, FinalAssistantChatData, TurnTailChatData,
 } from '../contract/chat-nodes.ts'
-import { deriveTurnMetrics } from '../contract/turn-metrics.ts'
 import { CHAT_SYNTHETIC_SEQ_OFFSETS, chatNode } from './common.ts'
-import { toAssistantBlocks } from './event-projection.ts'
 
 declare module '../contract/chat-nodes.ts' {
   interface ChatNodeDataMap {
@@ -32,27 +29,8 @@ interface TurnTailState {
   readonly end?: ConversationMatch
 }
 
-interface StepEvidence {
-  readonly streamedText: boolean
-  readonly finalized: boolean
-}
-
 function isSessionEvent(event: ConversationMatch['event']): event is SessionEvent {
   return event.type !== 'assistant/live-chunk'
-}
-
-function hasTextAssistant(event: Parameters<ConversationNodeDefinition['match']>[0]): boolean {
-  return event.type === 'assistant/message'
-    && event.surfaceOp === 'append'
-    && toAssistantBlocks(event.data.message.content)
-      .some(block => block.kind === 'text' && block.text.trim() !== '')
-}
-
-function chunkHasText(chunk: StreamChunk): boolean {
-  if (chunk.type === 'text-delta') return chunk.text.trim() !== ''
-  return chunk.type === 'block-end'
-    && chunk.block.type === 'text'
-    && chunk.block.text.trim() !== ''
 }
 
 function turnCoordinates(event: Parameters<ConversationNodeDefinition['match']>[0]): {
@@ -70,43 +48,6 @@ function turnCoordinates(event: Parameters<ConversationNodeDefinition['match']>[
     return { turn: event.data.turn, step: event.data.step }
   }
   return undefined
-}
-
-function closingAnchor(context: ConversationNodeContext<TurnTailState>): number {
-  let anchor = context.matches.find(match => match.event.type === 'turn/end')?.event.seq
-    ?? context.start?.event.seq
-    ?? context.matches[0]?.event.seq
-    ?? 0
-  const steps = new Map<number, StepEvidence>()
-  for (const match of context.matches) {
-    const event = match.event
-    if (event.type === 'turn/end') continue
-    const coordinates = turnCoordinates(event)
-    if (coordinates?.step === undefined) continue
-    const previous = steps.get(coordinates.step) ?? { streamedText: false, finalized: false }
-    if (event.type === 'assistant/live-chunk') {
-      steps.set(coordinates.step, {
-        ...previous,
-        streamedText: previous.streamedText || chunkHasText(event.data.chunk),
-      })
-      continue
-    }
-    if (event.type === 'assistant/message') {
-      steps.set(coordinates.step, { streamedText: false, finalized: true })
-      if (hasTextAssistant(event)) {
-        anchor = event.seq + CHAT_SYNTHETIC_SEQ_OFFSETS.finalizedFollowup
-      }
-      continue
-    }
-    if (event.type === 'llm/retry') {
-      steps.set(coordinates.step, { streamedText: false, finalized: false })
-      continue
-    }
-    if (event.type === 'step/end' && previous.streamedText && !previous.finalized) {
-      anchor = event.seq + CHAT_SYNTHETIC_SEQ_OFFSETS.interruptedFollowup
-    }
-  }
-  return anchor
 }
 
 function turnLocation(context: ConversationNodeContext<TurnTailState>): TurnLocation | undefined {
@@ -146,7 +87,6 @@ function tailData(context: ConversationNodeContext<TurnTailState>): TurnTailChat
       latestTranscriptSeq = candidate
     }
   }
-  const metrics = deriveTurnMetrics(finalized.map(candidate => candidate.finalNode)).get(end.event.data.turn)
   const tokenUsage = context.start?.event.type === 'turn/start'
     ? deriveTurnTokenUsage(context.matches.map(match => match.event).filter(isSessionEvent))
     : undefined
@@ -156,8 +96,6 @@ function tailData(context: ConversationNodeContext<TurnTailState>): TurnTailChat
     time: end.event.time,
     closing,
     branchUnavailable: closing === null || latestTranscriptSeq !== closing.finalNode.seq,
-    ...metrics?.ttftMs === undefined ? {} : { ttftMs: metrics.ttftMs },
-    ...metrics?.tokensPerSecond === undefined ? {} : { tokensPerSecond: metrics.tokensPerSecond },
     ...tokenUsage === undefined ? {} : { tokenUsage },
   }
 }
@@ -197,7 +135,7 @@ export const turnTailDefinition: ConversationNodeDefinition<TurnTailState> = {
   buildViewNode: (context) => {
     const turn = turnLocation(context)
     const data = turn?.data.get('turn-tail')
-    return data === undefined ? null : chatNode(context, 'turn-tail', closingAnchor(context), data)
+    return data === undefined ? null : chatNode(context, 'turn-tail', data.seq + CHAT_SYNTHETIC_SEQ_OFFSETS.finalizedFollowup, data)
   },
 }
 

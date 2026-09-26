@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-10-public-package-manifest.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-10-public-package-manifest.md
-2026-09-10-public-package-manifest.md: 0e6c1650a6b04e98aeba1aa6ef45df78e3f2cb44
-2026-09-10-public-package-manifest.zh.md: 9b7d15f479ca1aab7bea655b2dee43625728a442
+/agent-note-public-package-manifest-fields:
+  en: 1ea0f036c6d0ba67
+  zh: 3e885b6827315f74
+/agent-note-public-package-manifest-fields/problem:
+  en: e4bafc2b26cae6d2
+  zh: f8226b200b627c55
+/agent-note-public-package-manifest-fields/decision:
+  en: 9351e430c86c51fe
+  zh: 486496885b77824a
+/agent-note-public-package-manifest-fields/alternatives-considered:
+  en: 656ef2c1e7853d01
+  zh: 21c525fda71c6def
+/agent-note-public-package-manifest-fields/consequences:
+  en: 7221805e563eceb2
+  zh: d171144ecef841e9

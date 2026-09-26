@@ -1,6 +1,82 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/subagent/subagent-claude-code/README.md
-README.md: 20bb0847fb688c37b6508b6eb335a23f3b442922
-README.zh.md: eabdadb243acf7f5ccdd81420268b259283182dc
+/:
+  en: 098697371ce8b694
+  zh: 1cf5aee9be614a5d
+/deepseek-ai-dsh-subagent-claude-code:
+  en: 58cca9655f3f81ea
+  zh: 0a33d9a4ed461350
+/deepseek-ai-dsh-subagent-claude-code/summary:
+  en: 498d97a8dd913e53
+  zh: d76f0cd25940c540
+/deepseek-ai-dsh-subagent-claude-code/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-subagent-claude-code/use-this-package:
+  en: e46eb1b8f7054196
+  zh: fcba0b3fb2b5da93
+/deepseek-ai-dsh-subagent-claude-code/use-this-package/installing-the-bundle:
+  en: 10c373b4768ba361
+  zh: a5de572bafb2f886
+/deepseek-ai-dsh-subagent-claude-code/use-this-package/configuration:
+  en: 6c61e906830ab904
+  zh: 8464a1514cdc5a30
+/deepseek-ai-dsh-subagent-claude-code/use-this-package/exposing-the-tool:
+  en: b433b186c4e62396
+  zh: 6cbb85855238272c
+/deepseek-ai-dsh-subagent-claude-code/use-this-package/what-you-get:
+  en: 564a27820070ab0e
+  zh: 6ace69f237ac98aa
+/deepseek-ai-dsh-subagent-claude-code/use-this-package/failure-and-recovery:
+  en: 3cfe78175e68269e
+  zh: 478666ce1fcb4e59
+/deepseek-ai-dsh-subagent-claude-code/understand-the-implementation:
+  en: a04818121f31d222
+  zh: 2ed476ab086c1686
+/deepseek-ai-dsh-subagent-claude-code/understand-the-implementation/design-concept:
+  en: c01f4a013f7f1a2f
+  zh: 92221e45d438334d
+/deepseek-ai-dsh-subagent-claude-code/understand-the-implementation/source-map:
+  en: 86286514b713e50c
+  zh: 5e29ecd8d15c0c50
+/deepseek-ai-dsh-subagent-claude-code/understand-the-implementation/run-flow:
+  en: 4dd16da30209644e
+  zh: 0679197e8b6d0a67
+/deepseek-ai-dsh-subagent-claude-code/further-exploration:
+  en: 909404f216738b6f
+  zh: 491c074d2a1f6c49
+/deepseek-ai-dsh-subagent-claude-code/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-subagent-claude-code/model-experience/child-request:
+  en: 1796fa78833bfc2b
+  zh: d925d4c0d6c46552
+/deepseek-ai-dsh-subagent-claude-code/model-experience/child-request/what-the-model-sees:
+  en: 35de120a073a2b78
+  zh: 74ca577fb19027a8
+/deepseek-ai-dsh-subagent-claude-code/model-experience/child-request/token-effect:
+  en: 631f762d31c31a3d
+  zh: f32ad086756bf33d
+/deepseek-ai-dsh-subagent-claude-code/model-experience/child-request/kv-cache-effect:
+  en: 1f37a0a78ef63223
+  zh: b6543531dda88e22
+/deepseek-ai-dsh-subagent-claude-code/model-experience/parent-scheduling-and-results-indirectly:
+  en: 4c391bb16e3cd380
+  zh: ab3847efe35fa6dc
+/deepseek-ai-dsh-subagent-claude-code/model-experience/parent-scheduling-and-results-indirectly/what-the-model-sees:
+  en: a36839fc8f15c2f3
+  zh: 2a7755a8d90fb5bc
+/deepseek-ai-dsh-subagent-claude-code/model-experience/parent-scheduling-and-results-indirectly/token-effect:
+  en: 0bf99fe5b871cb64
+  zh: 6bb608e9b39ffb5b
+/deepseek-ai-dsh-subagent-claude-code/model-experience/parent-scheduling-and-results-indirectly/kv-cache-effect:
+  en: fdbb7dcbf8b37f2b
+  zh: c7bcbf1e91ffe1d4
+/deepseek-ai-dsh-subagent-claude-code/known-limitations-and-deferred-work:
+  en: 9fbe41d8185bc0bf
+  zh: 67435a4e57191729
+/deepseek-ai-dsh-subagent-claude-code/known-limitations-and-deferred-work/dev-note:
+  en: f4ee67014233d3f1
+  zh: 89f5e6b29ea18392

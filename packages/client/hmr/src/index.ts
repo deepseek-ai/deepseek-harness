@@ -50,12 +50,13 @@ type WatchedBundle = {
 /** Snapshot the executable bundle metadata that drives reloads. */
 function bundleStat(path: string): WatchedBundleStat {
   const bundle = statSync(path)
-  return { mtimeMs: bundle.mtimeMs, size: bundle.size }
+  return { mtimeMs: bundle.mtimeMs, ctimeMs: bundle.ctimeMs, size: bundle.size }
 }
 
-/** Whether the executable bundle is unchanged since the last successful re-hash. */
+/** Whether the executable bundle metadata is unchanged since its last publication. */
 function sameBundleStat(left: WatchedBundleStat, right: WatchedBundleStat): boolean {
   return left.mtimeMs === right.mtimeMs
+    && left.ctimeMs === right.ctimeMs
     && left.size === right.size
 }
 
@@ -71,10 +72,8 @@ export function apply(ctx: Context, config: Config): void {
   // --- bundle watch: one HMR-owned stat poll ------------------------------
   const watched = new Map<string, WatchedBundle>()
 
-  const rehash = (id: string, watch: WatchedBundle, current: WatchedBundleStat): void => {
+  const publish = (id: string, watch: WatchedBundle, current: WatchedBundleStat): void => {
     try {
-      // rebuilt() replaces the opaque startup rev on its first call; later
-      // calls stay silent until the completed-build entry stamp changes.
       ctx.clientModules.rebuilt(id)
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
@@ -85,6 +84,7 @@ export function apply(ctx: Context, config: Config): void {
       ctx.logger.warn(error)
     }
     watch.mtimeMs = current.mtimeMs
+    watch.ctimeMs = current.ctimeMs
     watch.size = current.size
     watch.dirty = false
   }
@@ -102,7 +102,7 @@ export function apply(ctx: Context, config: Config): void {
     }
     // The module host captured its baseline before reading the bytes in the
     // startup batch. Only a mismatch crosses into generation publication.
-    if (!sameBundleStat(current, watch)) rehash(id, watch, current)
+    if (!sameBundleStat(current, watch)) publish(id, watch, current)
   }
 
   const pollWatches = (): void => {
@@ -119,7 +119,7 @@ export function apply(ctx: Context, config: Config): void {
       // Stat-before-publication preserves a detectable older baseline for
       // writes that land during the read. The preset stamps the entry after
       // sibling chunks, so a completed build supplies the final stat change.
-      rehash(id, watch, current)
+      publish(id, watch, current)
     }
   }
 

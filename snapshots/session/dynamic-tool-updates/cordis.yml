@@ -1,0 +1,9 @@
+- id: llm-deepseek
+  config:
+    models:
+      - id: deepseek-v4-flash
+        toolUpdate: in-history
+
+- insert:
+    - id: dynamic-tool-updates
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/dynamic-tool-updates.ts'

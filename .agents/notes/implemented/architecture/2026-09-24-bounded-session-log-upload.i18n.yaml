@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-24-bounded-session-log-upload.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-24-bounded-session-log-upload.md
+/agent-note-bounded-deepseek-session-log-upload:
+  en: d35839d24f5704a7
+  zh: 8bc7e460fd3bd936
+/agent-note-bounded-deepseek-session-log-upload/problem:
+  en: b6b54d7ee8810f7e
+  zh: b0fdfa6c2c3cc224
+/agent-note-bounded-deepseek-session-log-upload/decision:
+  en: d2fe09351a82f7d6
+  zh: ad0741f63e14a8ad
+/agent-note-bounded-deepseek-session-log-upload/alternatives-considered:
+  en: 88985b4e1f5c7a4f
+  zh: 32617f7ff75ee825
+/agent-note-bounded-deepseek-session-log-upload/consequences:
+  en: e19fb6136ffd2250
+  zh: 01dacd7a44c3f837

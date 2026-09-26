@@ -43,7 +43,7 @@ export function remoteErrorOf(value: unknown): RemoteFailure | undefined {
   if (typeof value === 'object' && value !== null
     && (value as { isDSHRemoteError?: unknown }).isDSHRemoteError === true
     && typeof (value as { code?: unknown }).code === 'string') {
-    return value as unknown as RemoteFailure
+    return value as RemoteFailure
   }
   return undefined
 }

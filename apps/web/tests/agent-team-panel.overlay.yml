@@ -1,5 +1,4 @@
-# Equivalent to the two explicit Agent Teams profile layers over the scaffold's
-# stable base and Web bundles.
+# Equivalent to the Agent Teams bundle over the stable base and Web bundles.
 - id: tool-subagent-control
   disabled: true
 
@@ -28,6 +27,5 @@
         freshProvider: spawn
         forkProvider: fork
 
-- insert:
     - id: ui-agent-team
       name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'

@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 最小配置
 
-加载 web 服务与本提供方；密钥在已挂载 `ctx.credentials` 服务时从其解析，否则从进程环境解析。辅助搜索调用有独立的端点设置，使用 Anthropic 兼容基址 `https://api.deepseek.com/anthropic/v1`，并追加 `/messages`。它读取 `$DEEPSEEK_SEARCH_BASE_URL`，与会话适配器的 `$DEEPSEEK_BASE_URL` 和协议相互独立。
+加载 web 服务与本提供方；密钥在已挂载 `ctx.credentials` 服务时从其解析，否则从进程环境解析。辅助搜索调用有独立的端点设置，使用 Anthropic 兼容基址 `https://api.deepseek.com/anthropic/v1`，并追加 `/messages`。它读取 `$DEEPSEEK_SEARCH_BASE_URL`，与会话适配器的 `$DEEPSEEK_BASE_URL` 相互独立。
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
@@ -53,7 +53,7 @@ kind: "package-reference"
 | `maxTokens` | `4096` | Messages 请求生成 token 的正整数上限 |
 | `maxUses` | `5` | 每次请求使用 `web_search` 服务器工具的正整数上限 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-search-deepseek)是每个受支持字段及其 JSDoc 的穷尽式真源。上面的条目是提供方 Settings 段的 base 层；叠加其上的用户层会作用于下一次搜索，因为提供方是按次投影该段，而不是在注册时固化它。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-search-deepseek) 列出所有接受的字段。每次搜索从即时 Config 引用捕获选项。
 
 ### 搜索返回什么
 
@@ -88,14 +88,14 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：配置 schema、Settings 段安装、逐次选项投影 |
+| [`src/index.ts`](src/index.ts) | Config schema 与每次搜索的选项捕获 |
 | [`src/provider.ts`](src/provider.ts) | `DeepSeekSearchProvider`：Messages 请求分发、块解析、引用拼接、凭据解析 |
 | [`src/types.ts`](src/types.ts) | 搜索响应的 Anthropic 协议类型 |
 | — | 不发布运行时不变量配套入口；本包会在分发前发出日志事件，但没有后续的权威分发事件可与之关联；精确的请求包络相等性改由提供方边界保障。 |
 
 ### 请求流程
 
-每次搜索先把当前 Settings 段投影为提供方选项——端点、模型、密钥引用、上限——然后通过 `ctx.credentials`（或环境）解析凭据引用，追加仅用于日志的会话事件，并以原生 `web_search` 服务器工具分发 Messages 请求。响应中的 `web_search_tool_result` 块变为 `sources[]`；文本块中的 `cited_text` 条目按其 URL 拼接为 snippet；结果按 URL 去重；服务在返回路径上强制执行请求的来源上限。
+每次搜索先把当前 Config 段投影为提供方选项——端点、模型、密钥引用、上限——然后通过 `ctx.credentials`（或环境）解析凭据引用，追加仅用于日志的会话事件，并以原生 `web_search` 服务器工具分发 Messages 请求。响应中的 `web_search_tool_result` 块变为 `sources[]`；文本块中的 `cited_text` 条目按其 URL 拼接为 snippet；结果按 URL 去重；服务在返回路径上强制执行请求的来源上限。
 
 </details>
 

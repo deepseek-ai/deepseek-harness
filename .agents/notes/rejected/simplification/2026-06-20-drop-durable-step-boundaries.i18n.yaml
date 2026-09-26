@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-20-drop-durable-step-boundaries.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/rejected/simplification/2026-06-20-drop-durable-step-boundaries.md
-2026-06-20-drop-durable-step-boundaries.md: c5c4f269a378e334c4dc509d1288146d77d9a520
-2026-06-20-drop-durable-step-boundaries.zh.md: 2ee8abb3a57ed1a702530e9952d2d776c90554a4
+/agent-note-drop-durable-step-boundary-events:
+  en: 0b9830ce816f2850
+  zh: 5e937fff837261f4
+/agent-note-drop-durable-step-boundary-events/problem:
+  en: d9011152056a58c3
+  zh: 5989ef2a4f6bf5ab
+/agent-note-drop-durable-step-boundary-events/proposal:
+  en: 3ef7c3e871cde268
+  zh: fd762265542e0614
+/agent-note-drop-durable-step-boundary-events/acceptance-criteria:
+  en: 05d9927015af73ae
+  zh: a32f893355f95797
+/agent-note-drop-durable-step-boundary-events/what-we-give-up:
+  en: 280d1d43670d7b99
+  zh: 92a21a61242694c1

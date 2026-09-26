@@ -78,9 +78,9 @@ registry 的两个行为决定了「怎么尝试一次发布」。写入之间�
 
 ### workspace 内部引用走 `workspace:` 协议
 
-所有指向 workspace 成员的引用都用 `workspace:^`，由 `pnpm pack` 替换成匹配目标版本的范围：兄弟包的 `peerDependencies` 跟随族版本，指向 vendored 包的引用跟随那个包自己的版本线。Landlock 平台包保留 `workspace:*`（发布成精确版本），因为平台包与它的入口必须版本完全一致。
+所有指向 workspace 成员的引用都用 `workspace:` 协议。[发布范围策略](2026-09-22-workspace-release-ranges.zh.md)要求每个消费者的所有依赖区段对 DSH 使用精确的 `workspace:*` 引用，对 vendor/native 使用 `workspace:~` 引用，包括原生入口的可选平台包。本地 workspace 链接方式不变。
 
-`scripts/check-workspace-constraints.ts` 要求这个协议，所以新包无法再引入硬写的范围；同理，invariant companion 规则要求 `@deepseek-ai/dsh-invariants` 用 `workspace:^`。
+`scripts/check-workspace-constraints.ts` 读取 `pnpm-workspace.yaml` 声明的全部成员及根清单，按依赖目标而非消费者目录校验范围。Invariant companion 规则要求 `@deepseek-ai/dsh-invariants` 使用 `workspace:*`；依赖修复器保留 vendor/native tilde 范围。因此，发布的 DSH peer 要求匹配的发布版本，而不接纳后续兼容版本。
 
 ### 发布依赖门面使用显式策略
 
@@ -133,7 +133,7 @@ dsh 的验证会一并安装 vendored 族的 pack 产物。harness 的包把 ven
 |---|---|
 | 发布集 manifest | 去掉 `private: true`；按序列补 `publishConfig.access` 与带各自 `directory` 的 `repository` |
 | 发布集边界 | `packages/*/*`、`apps/*`、`vendor/*` 的全部成员 |
-| 依赖协议 | workspace 内部引用为 `workspace:^`，由 `check-workspace-constraints.ts` 与 invariant companion 规则强制 |
+| 依赖协议 | 每个 workspace 消费者对 DSH 目标使用 `workspace:*`，对 vendor/native 目标使用 `workspace:~` |
 | 根 `AGENTS.md` | 「vendored 包是 `private: true`」这条约定不再成立 |
 | `vendor/README.md` | 记录「`src` 加入 `cordis` 的 `files`」这条本地修改 |
 | native 三包 | `publishConfig.access: public`，且其 workflow 不传 `--access` |

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/cosmokit",
   "description": "A collection of common utilities",
-  "version": "1.8.3",
+  "version": "1.8.5",
   "publishConfig": {
     "access": "public"
   },

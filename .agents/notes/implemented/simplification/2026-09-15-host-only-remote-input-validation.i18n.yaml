@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-15-host-only-remote-input-validation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-15-host-only-remote-input-validation.md
-2026-09-15-host-only-remote-input-validation.md: 5c256fb5f5b78b646c645a44b77718fa40a62399
-2026-09-15-host-only-remote-input-validation.zh.md: 92a3f2415c6206a0513d8338bbb8d0844bf5d43d
+/agent-note-validate-remote-inputs-only-on-the-host:
+  en: 4434bfb455727454
+  zh: 776fc3b42ce339e6
+/agent-note-validate-remote-inputs-only-on-the-host/problem:
+  en: 6cddd9c31c5bf1e5
+  zh: f2730b6448f7fc26
+/agent-note-validate-remote-inputs-only-on-the-host/decision:
+  en: 6e3ef9540b02336b
+  zh: e8abe4ea84d95b95
+/agent-note-validate-remote-inputs-only-on-the-host/alternatives-considered:
+  en: 1c9ed80b25403e03
+  zh: edbc8301e50cf3a1
+/agent-note-validate-remote-inputs-only-on-the-host/consequences:
+  en: caf3ffc95133ac40
+  zh: f29864e4b636d6f7

@@ -1,6 +1,6 @@
 /**
  * The browser roster of a `dsh --profile`, read from its bundle patch files
- * the way the launcher composes them: each bundle's `dsh.bundle.patch` list is
+ * the way the launcher composes them: each bundle's `dsh.bundle.patch` file list is
  * parsed with the include plugin's YAML dialect (`entryListSchema`) and
  * composed by its `applyEntryPatches`; every enabled row whose package
  * declares `dsh.client.platform === 'web'` becomes a roster row carrying that
@@ -13,11 +13,11 @@
  * repository.
  * @module @deepseek-ai/dsh-client-test-runtime/src/assembly/bundle-roster
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
+import { evaluate, isJsExpr, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { exactPackageSpecifier, parseDshClient } from '@deepseek-ai/dsh-client-modules/client'
 import * as yaml from 'js-yaml'
@@ -41,11 +41,16 @@ interface BundleLayer {
  * Compose the browser roster of `bundles`, applied in order.
  * @param bundles - bundle package names in application order.
  * @param anchor - file whose package resolution locates the bundles; default this package.
+ * @param disabledContext - optional Loader evaluation scope for trusted `disabled` expressions.
  * @returns the roster in composition order, one row per package.
  * @throws {Error} when a bundle, its patch file, or an enabled row's package does not resolve, when the patch list
- * is not a list or does not apply as written, or when a browser row's `disabled` is a `!!js` expression.
+ * is not a list or does not apply as written, or when a browser row has an unevaluated `disabled` expression.
  */
-export function bundleRoster(bundles: readonly string[], anchor: string = fileURLToPath(import.meta.url)): ClientRoster {
+export function bundleRoster(
+  bundles: readonly string[],
+  anchor: string = fileURLToPath(import.meta.url),
+  disabledContext?: object,
+): ClientRoster {
   const layers = bundles.map(name => readLayer(name, anchor))
   const entries = applyEntryPatches([], layers.flatMap(layer => layer.patches), (message: string, ...args: unknown[]) => {
     throw new Error(`client-test-runtime: bundle patch ${describe(message, args)}`)
@@ -55,7 +60,9 @@ export function bundleRoster(bundles: readonly string[], anchor: string = fileUR
   const seen = new Set<string>()
   for (const { entry, disabled } of flattenGroups(entries)) {
     const name = exactPackageSpecifier(entry.name)
-    if (name === undefined || disabled === true || seen.has(name)) continue
+    if (name === undefined || disabled.includes(true) || seen.has(name)) continue
+    if (disabledContext !== undefined
+      && disabled.some(value => isJsExpr(value) && Boolean(evaluate(disabledContext, value.__jsExpr)))) continue
     seen.add(name)
     const manifestPath = locateManifest(anchors, name)
     if (manifestPath === undefined) {
@@ -67,7 +74,8 @@ export function bundleRoster(bundles: readonly string[], anchor: string = fileUR
     }
     const declaration = parseDshClient(name, manifest.dsh?.client)
     if (declaration === undefined || declaration.platform !== 'web') continue
-    if (disabled !== undefined && disabled !== null && typeof disabled !== 'boolean') {
+    if (disabled.some(value => value !== undefined && value !== null && typeof value !== 'boolean'
+      && !(disabledContext !== undefined && isJsExpr(value)))) {
       throw new Error(`client-test-runtime: browser row ${name} has a \`disabled\` value this reader cannot evaluate (a !!js expression)`)
     }
     rows.push({ name, inject: declaration.inject ?? [], immediately: declaration.immediately === true })
@@ -78,32 +86,37 @@ export function bundleRoster(bundles: readonly string[], anchor: string = fileUR
 function readLayer(bundle: string, anchor: string): BundleLayer {
   const manifestPath = locateManifest([anchor], bundle)
   if (manifestPath === undefined) throw new Error(`client-test-runtime: cannot resolve bundle ${bundle} from ${anchor}`)
-  const patch = readManifest(manifestPath).dsh?.bundle?.patch
-  if (typeof patch !== 'string') throw new Error(`client-test-runtime: bundle ${bundle} declares no dsh.bundle.patch in ${manifestPath}`)
-  const file = join(dirname(manifestPath), patch)
-  const parsed: unknown = yaml.load(readFileSync(file, 'utf8'), { schema: entryListSchema })
-  if (!Array.isArray(parsed)) throw new Error(`client-test-runtime: ${file} must be a top-level list of patches`)
-  return { manifestPath, patches: parsed as PatchOptions[] }
+  const declared = readManifest(manifestPath).dsh?.bundle?.patch
+  const files = typeof declared === 'string' ? [declared] : declared
+  if (!Array.isArray(files) || !files.every(file => typeof file === 'string')) {
+    throw new Error(`client-test-runtime: bundle ${bundle} declares no dsh.bundle.patch file list in ${manifestPath}`)
+  }
+  const patches = files.flatMap((patch) => {
+    const file = join(dirname(manifestPath), patch)
+    const parsed: unknown = yaml.load(readFileSync(file, 'utf8'), { schema: entryListSchema })
+    if (!Array.isArray(parsed)) throw new Error(`client-test-runtime: ${file} must be a top-level list of patches`)
+    return parsed as PatchOptions[]
+  })
+  return { manifestPath, patches }
 }
 
-/** One Loader row with the `disabled` value that governs it: its own, or the nearest enclosing group's when that is set. */
+/** One Loader row with its ancestor and own disable conditions, in outer-to-inner order. */
 interface FlatEntry {
   readonly entry: EntryOptions
-  readonly disabled: unknown
+  readonly disabled: readonly unknown[]
 }
 
 /**
  * Rows in Loader order with groups descended, as the Loader loads them: a group is never a plugin itself, and a group's
  * `disabled` disables every row beneath it.
  * @param entries - composed entries, possibly nested.
- * @param inherited - the enclosing group's `disabled` when set.
+ * @param inherited - the enclosing groups' disable conditions.
  * @returns the plugin rows.
  */
-function flattenGroups(entries: readonly EntryOptions[], inherited?: unknown): FlatEntry[] {
+function flattenGroups(entries: readonly EntryOptions[], inherited: readonly unknown[] = []): FlatEntry[] {
   const rows: FlatEntry[] = []
   for (const entry of entries) {
-    const own = (entry as { disabled?: unknown }).disabled
-    const disabled = inherited !== undefined && inherited !== null && inherited !== false ? inherited : own
+    const disabled = [...inherited, (entry as { disabled?: unknown }).disabled]
     if (entry.group === true && Array.isArray(entry.config)) {
       rows.push(...flattenGroups(entry.config as EntryOptions[], disabled))
       continue
@@ -117,12 +130,15 @@ function readManifest(path: string): PackageManifest {
   return JSON.parse(readFileSync(path, 'utf8')) as PackageManifest
 }
 
-/** Locate `<name>/package.json` on the resolution paths of any anchor, without requiring a `./package.json` export. */
+/** Resolve package manifests to real paths so linked bundles use their own dependency directories. */
 function locateManifest(anchors: readonly string[], name: string): string | undefined {
-  for (const anchor of anchors) {
-    for (const searchPath of createRequire(anchor).resolve.paths(name) ?? []) {
-      const candidate = join(searchPath, name, 'package.json')
-      if (existsSync(candidate)) return candidate
+  const paths = anchors.map(anchor => createRequire(anchor).resolve.paths(name) ?? [])
+  for (let depth = 0; depth < Math.max(...paths.map(search => search.length)); depth++) {
+    for (const search of paths) {
+      const directory = search[depth]
+      if (directory === undefined) continue
+      const candidate = join(directory, name, 'package.json')
+      if (existsSync(candidate)) return realpathSync(candidate)
     }
   }
   return undefined
@@ -134,5 +150,9 @@ function describe(message: string, args: readonly unknown[]): string {
   return message.replace(/%C/g, () => JSON.stringify(args[index++]))
 }
 
-/** The `web` profile's browser roster, composed from its bundles at import. */
-export const webApp: ClientRoster = bundleRoster(WEB_PROFILE_BUNDLES)
+const webProfileServices: Readonly<Record<string, object | undefined>> = { profileContext: { name: 'web' } }
+
+/** The `web` profile's browser roster, composed with its profile name and no business Host services. */
+export const webApp: ClientRoster = bundleRoster(WEB_PROFILE_BUNDLES, undefined, {
+  get: (name: string) => webProfileServices[name],
+})

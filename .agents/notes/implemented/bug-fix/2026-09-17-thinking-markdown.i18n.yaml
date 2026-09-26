@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-17-thinking-markdown.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-17-thinking-markdown.md
+/agent-note-compact-markdown-for-thinking:
+  en: 2b71ec7a5294e982
+  zh: 0c33248c5d07ec74
+/agent-note-compact-markdown-for-thinking/problem:
+  en: c14bd1618741736a
+  zh: dc1fff84736cb4f7
+/agent-note-compact-markdown-for-thinking/decision:
+  en: adb4f711ecf2011a
+  zh: 791f7bf3b8d23458
+/agent-note-compact-markdown-for-thinking/alternatives-considered:
+  en: d5bf82e0de012900
+  zh: a639fd02e00b5d09
+/agent-note-compact-markdown-for-thinking/consequences:
+  en: d69b13246a34047c
+  zh: 4c1a6520053261ef

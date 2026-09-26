@@ -14,6 +14,7 @@ export const NS = 'reference'
  */
 export const zh = {
   'section.files': '文件与文件夹',
+  'section.subagents': '子智能体',
   'section.sessions': '对话',
   'candidate.noCwd': '（无工作目录）',
   'crumb.root': '工作区',
@@ -38,6 +39,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
   'section.files': 'Files & folders',
+  'section.subagents': 'Subagents',
   'section.sessions': 'Sessions',
   'candidate.noCwd': '(no cwd)',
   'crumb.root': 'Workspace',

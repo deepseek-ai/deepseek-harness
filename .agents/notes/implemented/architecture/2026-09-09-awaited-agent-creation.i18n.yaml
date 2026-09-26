@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-awaited-agent-creation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-09-awaited-agent-creation.md
-2026-09-09-awaited-agent-creation.md: 27353225a8d99d038d5c61b1eea0fa67d9120a55
-2026-09-09-awaited-agent-creation.zh.md: f664e89da0794acd1d2a6c0c8a4820a7056dcac6
+/agent-note-awaited-per-agent-initialization:
+  en: 982ac05aa02da2f0
+  zh: 225f89c994efb1c4
+/agent-note-awaited-per-agent-initialization/problem:
+  en: 03e6b75365b29406
+  zh: cc880a33cf2303d0
+/agent-note-awaited-per-agent-initialization/decision:
+  en: f1db71d1fdb4388e
+  zh: 6c5a43a770f4cffd
+/agent-note-awaited-per-agent-initialization/alternatives-considered:
+  en: 466a9ebbb13f68c6
+  zh: ab88fb34786d2c2b
+/agent-note-awaited-per-agent-initialization/consequences:
+  en: d8cfe8d88ccacfc8
+  zh: 8d2aa21408e6e40e

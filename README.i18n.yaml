@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
-README.md: 36adfe913902e75ce0673adc2cb5cb692151a291
-README.zh.md: f6861b4c9490741b5e5f2d825a370766178dd9f6
+/deepseek-harness:
+  en: f68c4f080ce55ff2
+  zh: 88a76d7f7f0b260e
+/deepseek-harness/developer-preview:
+  en: 4ef4d8a71ac143f0
+  zh: 1bfc3149ba8e5543
+/deepseek-harness/run:
+  en: 4e0248e4c6474fc6
+  zh: eb2fb8d78c7d6bc0
+/deepseek-harness/run/run-from-npm:
+  en: e22005cd42e6cbad
+  zh: 0f536f4208df1d60
+/deepseek-harness/run/run-from-source:
+  en: 819e3f7c144d0d64
+  zh: de815f040975dba7
+/deepseek-harness/community-and-support:
+  en: 42848f543aff6e02
+  zh: d46a07bdc6f36629
+/deepseek-harness/contributing:
+  en: cabc2d3e9f8898bd
+  zh: 83b6d238bae29ce3
+/deepseek-harness/development:
+  en: 803ca2b11b497bed
+  zh: 8b4071eb0e7783ef
+/deepseek-harness/citation:
+  en: 6704e9e5a8d49a91
+  zh: 85c9cdd8d56f8e9d
+/deepseek-harness/license:
+  en: 926995344fc1c72b
+  zh: c92fab5abf85932f

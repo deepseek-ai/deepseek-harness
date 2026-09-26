@@ -1,5 +1,5 @@
 ---
-description: "用于在无提供方密钥的情况下测试 LLM（大语言模型）适配器与恢复策略的可通过脚本控制的 OpenAI 兼容故障服务器，面向测试作者与演示。"
+description: "用于在无提供方密钥的情况下测试 LLM（大语言模型）适配器与恢复策略的可通过脚本控制的 Messages 兼容故障服务器，面向测试作者与演示。"
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-本包为测试与演示提供可编脚本的 OpenAI 兼容 HTTP／SSE（Server-Sent Events）端点，使其无需提供方密钥即可检验模型提供方的失败与成功。每个已接受的 `/chat/completions` 请求依次消费下一个脚本行为，包括重置、停滞、畸形分片、限流、服务器错误、补全与工具调用。测试作者可以通过 `pnpm run mock:llm` 运行服务器，也可以调用 `startMockLlmServer`，后者会返回捕获的请求供断言使用。带种子的 `random` 行为支持可复现的混合故障压力运行。
+本包为测试与演示提供可编脚本的 Messages 兼容 HTTP／SSE（Server-Sent Events）端点，使其无需提供方密钥即可检验模型提供方的失败与成功。每个已接受的 `/v1/messages` 请求依次消费下一个脚本行为，包括重置、停滞、畸形分片、限流、服务器错误、补全与工具调用。测试作者可以通过 `pnpm run mock:llm` 运行服务器，也可以调用 `startMockLlmServer`，后者会返回捕获的请求供断言使用。带种子的 `random` 行为支持可复现的混合故障压力运行。
 
 ## 目录
 
@@ -39,7 +39,7 @@ pnpm run mock:llm \
   --partial-text "discard this half"
 ```
 
-将发布的 DeepSeek 适配器指向服务器；它会将 `/chat/completions` 追加到已配置 base：
+将发布的 DeepSeek 适配器指向服务器；它会向服务器 `/v1` 根路径下的 `/messages` 发送请求：
 
 ```sh
 DEEPSEEK_BASE_URL=http://127.0.0.1:8000/v1 \
@@ -88,13 +88,13 @@ pnpm run mock:llm \
 
 ### 时序与内容控制
 
-CLI 公开 `--success-text`、`--partial-text`、`--reasoning-text`、`--chunk-size`、`--chunk-delay-ms`、`--disconnect-delay-ms`、`--retry-after-ms`、`--request-id`、`--tool-name` 与 `--tool-arguments`。毫秒延迟是 Node 定时器范围内的有界整数；`retryAfterMs` 还必须为正数。库接受相同的 camel-case 选项。可选的 `apiKey` 会精确验证 `Authorization: Bearer <token>`；省略时接受任何 token。
+CLI 公开 `--success-text`、`--partial-text`、`--reasoning-text`、`--chunk-size`、`--chunk-delay-ms`、`--disconnect-delay-ms`、`--retry-after-ms`、`--request-id`、`--tool-name` 与 `--tool-arguments`。毫秒延迟是 Node 定时器范围内的有界整数；`retryAfterMs` 还必须为正数。库接受相同的 camel-case 选项。可选的 `apiKey` 会精确验证 `x-api-key: <token>`；省略时接受任何 token。
 
 ### 可能出什么问题
 
 - **脚本耗尽**——耗尽时返回结构化 HTTP 500；当一次运行需要更多请求时设置 `--repeat-last` 或加长序列。
 - **没有正权重具体行为的随机权重会被拒绝**——每个条目都必须命名现有行为，且至少一个条目带正权重。
-- **无效请求不消费脚本**——错误方法、路径、Bearer token 与畸形 JSON 会收到普通 4xx 响应，因此配置错误的客户端可能耗尽重试却不推进序列。
+- **无效请求不消费脚本**——错误方法、路径、API key 与畸形 JSON 会收到普通 4xx 响应，因此配置错误的客户端可能耗尽重试却不推进序列。
 
 -----
 
@@ -108,7 +108,7 @@ CLI 公开 `--success-text`、`--partial-text`、`--reasoning-text`、`--chunk-s
 
 ### 设计
 
-服务器建立在一个规则之上：每个已接受的 chat-completions 请求从按到达顺序排列的 FIFO 游标消费恰好一个行为，服务器从不重试或解读 harness 策略。校验先于游标推进——只有 `POST` 且路径以 `/chat/completions` 结尾、配置密钥时携带有效 Bearer token、且 JSON 正文可解析的请求才消费脚本；其余请求都收到普通 4xx。`random` 条目在请求时通过带种子的 PRNG 按配置权重解析，因此一次运行可由其打印出的种子复现。
+服务器建立在一个规则之上：每个已接受的 Messages 请求从按到达顺序排列的 FIFO 游标消费恰好一个行为，服务器从不重试或解读 harness 策略。校验先于游标推进——只有 `POST` 且路径以 `/v1/messages` 结尾、配置密钥时携带有效 API key、且 JSON 正文可解析的请求才消费脚本；其余请求都收到普通 4xx。`random` 条目在请求时通过带种子的 PRNG 按配置权重解析，因此一次运行可由其打印出的种子复现。
 
 ### 源码地图
 

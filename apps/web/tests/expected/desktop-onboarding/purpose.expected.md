@@ -1,0 +1,12 @@
+- region "你希望 DeepSeek Harness 帮你做什么？":
+  - heading "你希望 DeepSeek Harness 帮你做什么？" [level=1]:
+    - text: 你希望
+    - emphasis: DeepSeek Harness
+    - text: 帮你做什么？
+  - paragraph: 我们会根据你的选择调整界面和工具，以更适合你的工作方式。
+  - checkbox "办公与创作"
+  - text: 办公与创作 编辑文档、整理数据和制作演示文稿等
+  - checkbox "代码与开发"
+  - text: 代码与开发 修改代码、调试问题、运行命令和管理项目文件等
+  - button "上一步"
+  - button "跳过"

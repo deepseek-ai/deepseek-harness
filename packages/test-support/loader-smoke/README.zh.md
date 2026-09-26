@@ -41,11 +41,11 @@ const result = await runLoaderSmoke({
 })
 ```
 
-当场景固定一个设计好的失败面——即一次性轮次以错误结果结束——时设置 `expectedExitCode`；以任何其他方式退出（包括成功退出）都会使冒烟测试失败。
+源码 smoke 测试支持的 `dsh` 启动器时，设置 `sourceImport: 'tsx/esm'`；built 模式忽略此选项。当场景固定一个设计好的失败面——即一次性轮次以错误结果结束——时设置 `expectedExitCode`；以任何其他方式退出（包括成功退出）都会使冒烟测试失败。
 
 ### 测试交付 profile
 
-Profile 集成 driver 使用仅限仓库内部的 `tests/fixtures/production-profile.ts` helper。它通过 `loadProfile` 加载指定的已交付 profile 及其组合包 patch，物化保留的 link-mode fallback，并像 link-mode launcher 一样挂载使用原生查询的 `PluginPackages`，然后把组合包 patch 与测试 `*.patch.yml` 文件依次交给 `boot` 挂载的根 `cordis:include`。这些 patch 应只包含测试提供方或模型、隔离持久化路径及被测对象专用变更。只需要 agent loop 而不测试 profile 集成的包级单元测试改为在本地挂载 `dsh-agent-loop-testkit`。
+Profile 集成 driver 使用仅限仓库内部的 `tests/fixtures/production-profile.ts` helper。它通过 `loadProfile` 加载指定的已交付 profile 及其组合包 patch，计算 runtime resolution，并通过 `PluginPackages` 安装它，然后把组合包 patch 与测试 `*.patch.yml` 文件依次交给 `boot` 挂载的根 `cordis:include`。这些 patch 应只包含测试提供方或模型、隔离持久化路径及被测对象专用变更。只需要 agent loop 而不测试 profile 集成的包级单元测试改为在本地挂载 `dsh-agent-loop-testkit`。
 
 ### 驱动 fixture 轮次
 

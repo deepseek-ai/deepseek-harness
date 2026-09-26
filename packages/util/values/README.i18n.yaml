@@ -1,6 +1,43 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/values/README.md
-README.md: 65de6560d7491d3554dbf73f3d729c0f020d745c
-README.zh.md: 3319533566ef832c62c7d7483b6ca45f2b78c1a2
+/:
+  en: 6b543e93639271ad
+  zh: 397ce501111fc943
+/deepseek-ai-dsh-util-values:
+  en: d4e5c3dd11f4c1f4
+  zh: ac01621284cc2f99
+/deepseek-ai-dsh-util-values/summary:
+  en: 0900fbf667e6bb37
+  zh: 2ea81387d169a116
+/deepseek-ai-dsh-util-values/table-of-contents:
+  en: 80b31a934611cb4a
+  zh: 05f3f7f9cb2fd881
+/deepseek-ai-dsh-util-values/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-util-values/use-this-package/validate-or-snapshot-json-data:
+  en: dc6de9f27cc98557
+  zh: 9c2bac179e536147
+/deepseek-ai-dsh-util-values/use-this-package/publish-compare-or-retain-keyed-values:
+  en: 13628af2abe3eea6
+  zh: e284bb8d3ebe38ea
+/deepseek-ai-dsh-util-values/use-this-package/close-a-discriminated-union:
+  en: f21b7bd8040a72eb
+  zh: 19548d3e537c0b5b
+/deepseek-ai-dsh-util-values/understand-the-implementation:
+  en: 997cf0e584054ace
+  zh: 5e71d64eb1e32ddd
+/deepseek-ai-dsh-util-values/understand-the-implementation/source-map:
+  en: a3e80436a6006043
+  zh: 1de25c1bf436e494
+/deepseek-ai-dsh-util-values/further-exploration:
+  en: 3be59be736dc8e9a
+  zh: 4f419cb5db38fd12
+/deepseek-ai-dsh-util-values/known-limitations-and-deferred-work:
+  en: dc3626bb369e1230
+  zh: e292836d13ee512c
+/deepseek-ai-dsh-util-values/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

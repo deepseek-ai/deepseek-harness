@@ -84,6 +84,8 @@ ctx.tools.register(defineTool({
 
 `ctx.tools.guard(guard)` 在可扩展的 `tools/pre-execute` waterfall（瀑布式事件）之后注册单调同步守卫：返回的理由会拒绝调用，后续监听器无法把该拒绝重新变为允许。流水线事件给插件更多控制——`tools/pre-execute` 决定允许／拒绝／询问，`tools/execute` 为超时或重试包装分发，`tools/post-execute` 检查或替换结果，`tools/result` 观测冻结的最终结果。
 
+工具的 `projectContent` 在执行后策略之前安装执行期间准备的图文内容。策略仍可替换或阻止这些内容；`finalizeContent` 保留为策略之后的最终内容处理。
+
 ### Host 展示描述
 
 工具可以为 Host 本地消费方保留纯函数 `presentCall()` 与 `presentResult()` 方法。内置 Web Client 不消费这些值，而是通过 `tool.call.toolview` 选择 renderer，并从原始调用参数、结果内容、失败状态与持久 metadata 派生 card props。[Client 派生展示决策](../../../.agents/notes/implemented/architecture/2026-08-23-client-derived-tool-presentation.zh.md)负责该 transport 拆分。
@@ -126,7 +128,9 @@ ctx.tools.register(defineTool({
 
 新子调用使用 `<parent>:ptc:<n>` 标识。消费方将这些标识视为不透明值，并通过精确相等关联事件；恢复的历史标识保留原始字节。[PTC mode 决策](../../../.agents/notes/implemented/feature/2026-06-15-ptc.zh.md) 负责持久化命名与恢复规则。
 
-当已挂载运行时支持覆盖时，`run_code` 接受 `timeoutMs`；其 schema 报告配置的默认值和上限、运行时使用说明及 Session 工作目录。Node 默认值为 120,000 ms，上限为 600,000 ms，包含嵌套工具和审批等待。更宽的 `sandbox_permissions` 模式要求非空 `justification`，并在程序启动前获得审批。授权仅用于该次完整执行；常驻 Session 策略与嵌套工具保留各自权限。程序不会自动重放：显式重试被拒程序前，应检查先前已发生的效果。
+成功且包含图片的子调用结果会成为延后的 user-message 上下文，其 `source.kind` 为 `ptc-mode`。其他 additional context 保留其生产工具的归属。
+
+当已挂载运行时支持覆盖时，`run_code` 接受 `timeoutMs`；其 schema 报告配置的默认值和上限、运行时使用说明及 Session 工作目录。Node 默认值为 120,000 ms，上限为 600,000 ms，包含嵌套工具和审批等待。更宽的 `sandbox_permissions` 模式要求非空 `justification`，并在程序启动前获得审批。schema 提示模型使用当前用户的语言撰写理由。授权仅用于该次完整执行；常驻 Session 策略与嵌套工具保留各自权限。程序不会自动重放：显式重试被拒程序前，应检查先前已发生的效果。
 
 <a id="extension-points"></a>
 ### 扩展点
@@ -229,6 +233,8 @@ Program-only SDK bindings:
 - **PTC mode 的 SDK 语言由当前加载的运行时决定，且呈现方式按 agent 而非按工具**：`mode: ptc`/`both` 会拒绝组装提示词，除非 `ctx.ptcRuntime.language` 有已注册的 SDK 渲染器；同一个 agent 内不能让一个工具仅使用 Native，而另一个仅使用 PTC。
 - **PTC mode 中间值只存在于执行局部，且没有字节上限**：它们无法从会话回放重建，并可能耗尽进程或 worker 内存；只有外层 `run_code` 输出受 worker 可配置的硬上限约束。
 - **每次运行都会获得全新的 `run_code` 状态**：MVP 不采用持久 REPL 风格内核，因为跨调用状态不会出现在日志中。
+
+`defineTool()`、注册表模式投影和系统提示组装会保留 `deferLoading: true`。该标记请求延迟加载工具定义，并不意味着存在 `tool-addition` 记录；提供方执行语义的限制见 [LLM 包](../../../packages/llm/llm/README.zh.md#known-limitations-and-deferred-work)。
 
 <a id="dev-note"></a>
 ### 开发备注

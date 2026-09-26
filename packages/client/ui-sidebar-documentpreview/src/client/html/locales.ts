@@ -2,7 +2,7 @@
 export const zh = {
   title: 'HTML',
   frame: 'HTML 文档预览',
-  loading: '正在读取…',
+  loading: '文档渲染中...',
   failed: '无法预览这份 HTML 文档',
 } satisfies Record<string, string>
 
@@ -13,7 +13,7 @@ export type HtmlPreviewKey = keyof typeof zh
 export const en = {
   title: 'HTML',
   frame: 'HTML document preview',
-  loading: 'Reading…',
+  loading: 'Rendering document...',
   failed: 'This HTML document could not be previewed.',
 } satisfies Record<HtmlPreviewKey, string>
 

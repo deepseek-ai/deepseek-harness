@@ -1,6 +1,16 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for responding-to-pr-review-on-a-stack.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cookbook/responding-to-pr-review-on-a-stack.md
-responding-to-pr-review-on-a-stack.md: 61b15fd5e7b3a528957ef3c9e958aac0e11eb43b
-responding-to-pr-review-on-a-stack.zh.md: a33418d342e57dd3c920008a4b12b2f33d6f31da
+/responding-to-review-across-a-stacked-pr-chain:
+  en: f41561de1c6dbfef
+  zh: 83b863e1ac91d913
+/responding-to-review-across-a-stacked-pr-chain/ground-rules:
+  en: 5545e41aea74b5d6
+  zh: 7105f51939753a1a
+/responding-to-review-across-a-stacked-pr-chain/resolve-comments-through-the-stack:
+  en: 4d58b207c8ecbcaa
+  zh: 38673a460674b8d6
+/responding-to-review-across-a-stacked-pr-chain/verify:
+  en: 07cfbae7602fc30e
+  zh: 19782f06ee3c4a74

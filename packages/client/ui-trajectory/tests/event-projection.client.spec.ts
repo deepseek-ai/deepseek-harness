@@ -15,7 +15,7 @@ describe('Trajectory event projection', () => {
       .toEqual({ role: 'inject', label: 'AGENTS.md' })
     expect(contextProducer({ kind: 'agent-instructions', changes: 'bad' }).label)
       .toBe('agent-instructions')
-    expect(contextProducer({ kind: 'plugin', plugin: 'p' }).label).toBe('p')
+    expect(contextProducer({ kind: 'p' }).label).toBe('p')
     expect(contextProducer({ kind: 'plugin', plugin: 1 }).label).toBe('plugin')
     expect(contextProducer({ kind: 'skill-invocation', name: 's' }).label).toBe('s')
     expect(contextProducer({ kind: 'future' }).label).toBe('future')

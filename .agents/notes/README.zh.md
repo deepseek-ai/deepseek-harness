@@ -16,7 +16,7 @@
 
 文件名中的日期是该主题**首次提出**的时间（以 git 历史为准）。Agent Note 之间的交叉引用使用相对 Markdown 链接（`[topic](../../implemented/architecture/2026-…-….md)`），从不使用纯文字或编号，这样既可机械检查，也能在文件夹间移动时保持有效。
 
-活跃生命周期目录树就是工作清单：浏览其生命周期/类别文件夹，或搜索仓库即可。请勿添加集中式 `INDEX.md`；设计理由见[不设索引的 Agent Note](implemented/process/2026-07-19-remove-generated-agent-note-index.zh.md)。未来指导价值较低的已实施记录会移至下文所述、单独冻结的 [`archived/`](archived/AGENTS.md) 目录树。
+活跃生命周期目录树就是工作清单：浏览其生命周期/类别文件夹，或搜索仓库即可。请勿添加集中式 `INDEX.md`；设计理由见[不设索引的 Agent Note](implemented/process/2026-07-19-remove-generated-agent-note-index.zh.md)。具有历史决策价值但未来指导价值较低的已实施记录会移至下文所述、单独冻结的 [`archived/`](archived/AGENTS.md) 目录树。
 
 <a id="classification"></a>
 
@@ -37,19 +37,19 @@
 
 ## 归档与删除
 
-当一份 implemented Agent Note 记录的交付决策已经完整落地，且其决策依据不太可能再指导未来工作时，将其归档。如果其中的备选方案、归属边界、否定性保证、持久化语义或协议语义、安全规则，或者重新引入条件仍有价值，则继续作为活跃记录保留。绝不归档 proposed Agent Note：过时的提案应转为 rejected。仅当 rejected Agent Note 仍能避免一种可能发生的错误时保留；否则一并删除其英文、中文和伴随记录文件。请使用经过校准的 [`dsh-archive-agent-notes`](../skills/dsh-archive-agent-notes/SKILL.md) 工作流，不要根据字数、存续时间或目标配额来判断。
+仅描述小型 UI 调整或纯机械变更的 implemented Agent Note 直接删除；一并删除英文、中文和伴随记录文件，并修复或移除入站链接。局部 bug 修复、性能变更、新能力或实质行为决策，不会仅因实现规模小就符合删除条件。其他已实施记录只有在交付决策完整落地、其依据不太可能再指导未来工作，但仍具有历史决策价值时才归档。如果其中的备选方案、归属边界、否定性保证、持久化语义或协议语义、安全规则，或者重新引入条件仍有价值，则继续作为活跃记录保留。绝不归档 proposed Agent Note：过时的提案应转为 rejected。仅当 rejected Agent Note 仍能避免一种可能发生的错误时保留；否则一并删除其英文、中文和伴随记录文件。请使用经过校准的 [`dsh-archive-agent-notes`](../skills/dsh-archive-agent-notes/SKILL.md) 工作流，不要根据字数、存续时间或目标配额来判断。
 
-归档路径编码为 `archived/{class}/yyyy-mm-dd-topic-title.md`；其中有意省略 `implemented`，因为只有 implemented Agent Note 可以进入归档。归档变更会移动完整的英文、中文和伴随记录三个文件，保留 `Status: implemented`，在两种语言的文件中紧接该状态行插入相同的 `Archived: YYYY-MM-DD` 行，重新记录伴随记录，并修复或删除入站链接。归档时只允许对内容做这些更改。
+归档路径编码为 `archived/{class}/yyyy-mm-dd-topic-title.md`；其中有意省略 `implemented`，因为只有 implemented Agent Note 可以进入归档。归档变更会移动完整的英文、中文和伴随记录三个文件，保留 `Status: implemented`，在两种语言的文件中紧接该状态行插入相同的 `Archived: YYYY-MM-DD` 行，重新记录伴随记录，并修复或删除入站链接。归档时只允许对内容做这些更改。 既有标题标点、空行布局和语言切换栏措辞不阻止归档；与正文一起保留。
 
-封存后，每组归档文件都永久冻结。禁止编辑、翻译、重新格式化、更新、移动或删除，也不得将其视为当前行为的权威依据。文档门禁会跳过归档源文件，包括其中的出站链接；当活跃文档有意引用历史时，仍可链接到归档 Agent Note。[`verify-archived-agent-notes`](../../scripts/verify-archived-agent-notes.ts) 强制执行封闭的类别目录树、完整的三文件配对、归档元数据、伴随记录 hash，以及仅追加的冻结内容 manifest（元数据清单）。[归档政策 Agent Note](implemented/process/2026-07-26-frozen-agent-note-archive.zh.md) 记录了设计依据。
+封存后，每组归档文件都永久冻结。禁止编辑、翻译、重新格式化、更新、移动或删除，也不得将其视为当前行为的权威依据。文档门禁会跳过归档源文件，包括其中的出站链接；当活跃文档有意引用历史时，仍可链接到归档 Agent Note。[`verify-archived-agent-notes`](../../scripts/verify-archived-agent-notes.ts) 强制执行封闭的类别目录树、完整的三文件配对、归档元数据、伴随记录 hash，以及仅追加的冻结内容 manifest（元数据清单），但[归档说明](archived/AGENTS.md)中记录的精确封存哈希转换除外。[归档政策 Agent Note](implemented/process/2026-07-26-frozen-agent-note-archive.zh.md) 记录了设计依据。
 
 <a id="when-to-write-one"></a>
 
 ## 何时需要写一份
 
-每个非平凡变更都必须在同一 PR（Pull Request）中新增或更新至少一份 Agent Note。如果变更修改了行为、架构、跨文件或跨包约定、流程或工具、测试策略、磁盘存储格式、协议格式（wire format）或配置格式，或者维护者可能合理重新审视的其他决策，就属于非平凡变更。对未来重大工作的提案从 `proposed/` 开始；已经做出的决策从 `implemented/` 开始。选择与决策匹配的类别文件夹（见[分类](#classification)）。
+只有代码、测试和现有文档未能解释的决策理由具有长期价值时，才在同一 PR（Pull Request）中新增或更新 Agent Note。对未来重大工作的提案从 `proposed/` 开始；已经做出的决策从 `implemented/` 开始。选择与决策匹配的类别文件夹（见[分类](#classification)）。
 
-更新已经拥有该决策的 Agent Note 即可满足规则；不要创建重复记录。只有不涉及行为、约定、结构、流程或理由变化的纯机械性或局部编辑才可豁免。Agent Note 永远不会被编辑为一个*不同的决策*：用新 Agent Note 取代旧记录，并让两个记录保持互相链接，除非后续依据下方规则完全合并旧记录。编辑 `implemented/` Agent Note 以跟踪其现有决策的所在位置是必需的，而非禁止的；见 [implemented/AGENTS.md](implemented/AGENTS.md)。
+更新已经拥有该决策的 Agent Note 即可满足规则；不要创建重复记录。机械性或局部编辑均可豁免，包括局部 UI 展示和交互调整。Agent Note 永远不会被编辑为一个*不同的决策*：用新 Agent Note 取代旧记录，并让两个记录保持互相链接，除非后续依据下方规则完全合并旧记录。编辑 `implemented/` Agent Note 以跟踪其现有决策的所在位置是必需的，而非禁止的；见 [implemented/AGENTS.md](implemented/AGENTS.md)。
 
 被完全取代的 implemented Agent Note 可以合并到当前持有该决策的记录中，并删除原文件。删除前，当前记录必须保存所有独有的决策依据、备选方案、影响、必需的验证和明确指出的覆盖缺口；修复所有入站链接；并在同一变更中删除中文对侧文件和一致性记录。仅部分被取代的记录不符合此条件：保留两个记录并让它们互相链接，同时更新所有仍然适用的事实。合并不得将旧文件改写成与其相反的决策，也不得让 git 历史成为决策依据的唯一副本。
 

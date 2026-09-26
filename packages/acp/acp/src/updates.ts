@@ -70,16 +70,16 @@ export async function toolResultUpdate(
   ctx: Context,
   event: SessionEvent<'tool/result'>,
 ): Promise<SessionUpdate> {
-  const result = event.data.message.content[0]
+  const message = event.data.message
   const content: ToolCallContent[] = []
-  for (const block of result.content) {
+  for (const block of message.content) {
     const converted = await assistantBlockToAcp(ctx, block)
     if (converted !== undefined) content.push({ type: 'content' as const, content: converted })
   }
   return {
     sessionUpdate: 'tool_call_update',
-    toolCallId: result.toolCallId,
-    status: result.isError === true ? 'failed' : 'completed',
+    toolCallId: message.toolCallId,
+    status: message.isError === true ? 'failed' : 'completed',
     content,
   }
 }

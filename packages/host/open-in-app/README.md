@@ -72,6 +72,8 @@ The route paths and wire payload types are published as the browser-safe `./shar
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
+Linux desktop-entry fields and icons use the shared [native-command](../../util/native-command/README.md) helpers. Directory launchers come from this package’s installed application catalog; file handlers come from the operating system’s associations.
+
 <details>
 <summary>Implementation internals — click to expand</summary>
 

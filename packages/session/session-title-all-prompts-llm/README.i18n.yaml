@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/session-title-all-prompts-llm/README.md
-README.md: 449542440df08e21372164e67f1de24eecbbf694
-README.zh.md: 7aa8ac78287751ff1bba7e54c1c4e2a64ac5d3b4
+/:
+  en: 0718b02e4cdd4cc6
+  zh: 2b5b4a729ce4d97e
+/deepseek-ai-dsh-session-title-all-prompts-llm:
+  en: 14b9552b617bc7a9
+  zh: 9253c5d935bff697
+/deepseek-ai-dsh-session-title-all-prompts-llm/summary:
+  en: 9f64c4dd5e30f1c8
+  zh: 35cf397596083be5
+/deepseek-ai-dsh-session-title-all-prompts-llm/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-session-title-all-prompts-llm/use-this-package:
+  en: 2c0bccf753fe70eb
+  zh: 36b96a547ddddfc1
+/deepseek-ai-dsh-session-title-all-prompts-llm/use-this-package/when-titles-are-generated:
+  en: 3c9e14df96e6000e
+  zh: a13f12a3df426380
+/deepseek-ai-dsh-session-title-all-prompts-llm/use-this-package/configuration:
+  en: 1965c9ce7dedb2e7
+  zh: 9b9c9b68af995b51
+/deepseek-ai-dsh-session-title-all-prompts-llm/use-this-package/failures-and-recovery:
+  en: 6077a4665a4edb87
+  zh: 539c4e5969f9bb9b
+/deepseek-ai-dsh-session-title-all-prompts-llm/understand-the-implementation:
+  en: 506933ffa7745b7d
+  zh: a9bb6f06a32b7c18
+/deepseek-ai-dsh-session-title-all-prompts-llm/understand-the-implementation/design-concept:
+  en: 2c307e1480e5c319
+  zh: 60c7394728f7ff9c
+/deepseek-ai-dsh-session-title-all-prompts-llm/understand-the-implementation/source-map:
+  en: e7ae42597cc501a6
+  zh: 2e55e9b293b25958
+/deepseek-ai-dsh-session-title-all-prompts-llm/understand-the-implementation/scheduling:
+  en: ca23821924af2b14
+  zh: a384479d5e69b0f8
+/deepseek-ai-dsh-session-title-all-prompts-llm/further-exploration:
+  en: 05c91c92fa3b1c7d
+  zh: 8e90078647bdb018
+/deepseek-ai-dsh-session-title-all-prompts-llm/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-session-title-all-prompts-llm/model-experience/all-messages-title-request:
+  en: 42380e2d029288cf
+  zh: e9c9f21ac00e3c9d
+/deepseek-ai-dsh-session-title-all-prompts-llm/model-experience/all-messages-title-request/what-the-model-sees:
+  en: 39cb7059a3ab1fe6
+  zh: a3fd93ac52f12a43
+/deepseek-ai-dsh-session-title-all-prompts-llm/model-experience/all-messages-title-request/token-effect:
+  en: 1a075b8073c16ce3
+  zh: a51ff16156f9c137
+/deepseek-ai-dsh-session-title-all-prompts-llm/model-experience/all-messages-title-request/kv-cache-effect:
+  en: 6a70f43f38b8c075
+  zh: 2b823aff93344134
+/deepseek-ai-dsh-session-title-all-prompts-llm/known-limitations-and-deferred-work:
+  en: d0486c65afaebb85
+  zh: 186a77e0d68bd968
+/deepseek-ai-dsh-session-title-all-prompts-llm/known-limitations-and-deferred-work/dev-note:
+  en: 954d91e08a470fd6
+  zh: e11425f8ec88d40a

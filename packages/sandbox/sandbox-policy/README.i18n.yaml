@@ -1,6 +1,79 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/sandbox/sandbox-policy/README.md
-README.md: 3b00f6992c67f6caec209a42dd84622b34d64a7b
-README.zh.md: fa78849852f5dc46958fc53ca402a0aa693d5519
+/:
+  en: abf71058974a6f37
+  zh: 45c76c1d645a0e67
+/deepseek-ai-dsh-sandbox-policy:
+  en: 2d1bbc7770b371d4
+  zh: 5e0784ae0e0f3a82
+/deepseek-ai-dsh-sandbox-policy/summary:
+  en: 62e1a0a017d6bc07
+  zh: 1d9f86eb54f51b8e
+/deepseek-ai-dsh-sandbox-policy/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-sandbox-policy/use-this-package:
+  en: a75f214ba848bbd1
+  zh: 8ad35e2513b53bd1
+/deepseek-ai-dsh-sandbox-policy/use-this-package/when-to-choose-it:
+  en: 6704447e52ec295b
+  zh: 9ed812d9e29d5533
+/deepseek-ai-dsh-sandbox-policy/use-this-package/minimal-configuration:
+  en: 01c4f068b702b49e
+  zh: a78ae88d3af889fe
+/deepseek-ai-dsh-sandbox-policy/use-this-package/switching-a-session-s-mode:
+  en: 957d72691e470e5c
+  zh: c22a3a750af0e4a3
+/deepseek-ai-dsh-sandbox-policy/use-this-package/failures-and-recovery:
+  en: 9cef5f64a050f468
+  zh: 5dc42c148b2c902d
+/deepseek-ai-dsh-sandbox-policy/understand-the-implementation:
+  en: 2d560aa6681fcfb8
+  zh: e1c6361a6fa40c63
+/deepseek-ai-dsh-sandbox-policy/understand-the-implementation/resolution-precedence:
+  en: f1f38b10c23947d2
+  zh: 7a591e743d6793f5
+/deepseek-ai-dsh-sandbox-policy/understand-the-implementation/the-per-session-store:
+  en: d13dabff02f2acfd
+  zh: f593888b4ffddf36
+/deepseek-ai-dsh-sandbox-policy/understand-the-implementation/model-visible-text:
+  en: d427370cafeecb48
+  zh: 70494b8400c45655
+/deepseek-ai-dsh-sandbox-policy/understand-the-implementation/source-map:
+  en: 184d0ece30be790f
+  zh: 84a1fd1b71f5154d
+/deepseek-ai-dsh-sandbox-policy/further-exploration:
+  en: 8525667a02f4bbeb
+  zh: 2f09594fbf8d37ed
+/deepseek-ai-dsh-sandbox-policy/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-sandbox-policy/model-experience/current-file-sandbox-policy:
+  en: 593b59dbbb02bc8c
+  zh: 38fa746346e9bc06
+/deepseek-ai-dsh-sandbox-policy/model-experience/current-file-sandbox-policy/what-the-model-sees:
+  en: 4cd0e0cf93a02d2c
+  zh: 0f8ece0297cf3c0b
+/deepseek-ai-dsh-sandbox-policy/model-experience/current-file-sandbox-policy/what-the-model-sees/read-only:
+  en: 36f15579c9444eb9
+  zh: 289f3c4ce040bfe9
+/deepseek-ai-dsh-sandbox-policy/model-experience/current-file-sandbox-policy/what-the-model-sees/workspace-write:
+  en: 269d494ad304638d
+  zh: a879c1d7cc03e6ac
+/deepseek-ai-dsh-sandbox-policy/model-experience/current-file-sandbox-policy/what-the-model-sees/danger-full-access:
+  en: 4e28324a011422a1
+  zh: bf31ffce30f06a09
+/deepseek-ai-dsh-sandbox-policy/model-experience/current-file-sandbox-policy/token-effect:
+  en: e3387fb6eeba1239
+  zh: 06a47393057d3e9b
+/deepseek-ai-dsh-sandbox-policy/model-experience/current-file-sandbox-policy/kv-cache-effect:
+  en: a16a657e0e5145fb
+  zh: 4b19263a728990dc
+/deepseek-ai-dsh-sandbox-policy/known-limitations-and-deferred-work:
+  en: af363d6626eaa9b8
+  zh: 93f8d5f9519db0ae
+/deepseek-ai-dsh-sandbox-policy/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

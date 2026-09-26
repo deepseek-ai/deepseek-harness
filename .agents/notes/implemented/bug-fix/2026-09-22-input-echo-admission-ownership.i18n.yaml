@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-22-input-echo-admission-ownership.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-22-input-echo-admission-ownership.md
+/agent-note-input-echoes-retain-display-ownership-through-admission:
+  en: 987905631fdf4244
+  zh: 2b2a1db249903717
+/agent-note-input-echoes-retain-display-ownership-through-admission/problem:
+  en: a56f673056a7d913
+  zh: a06acdb9f3e1afd3
+/agent-note-input-echoes-retain-display-ownership-through-admission/decision:
+  en: b570ae20a428f554
+  zh: b3cf1ebc56fbe78c
+/agent-note-input-echoes-retain-display-ownership-through-admission/alternatives-considered:
+  en: 9ee59841301a61f4
+  zh: 7ad35e485294dce1
+/agent-note-input-echoes-retain-display-ownership-through-admission/verification:
+  en: a1373e299a536929
+  zh: 13405143c3bb9331
+/agent-note-input-echoes-retain-display-ownership-through-admission/consequences:
+  en: 027d6bae744c47e0
+  zh: c9f397bc631298b9

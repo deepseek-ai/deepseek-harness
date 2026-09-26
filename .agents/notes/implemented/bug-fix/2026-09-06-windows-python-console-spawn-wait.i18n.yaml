@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-06-windows-python-console-spawn-wait.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-06-windows-python-console-spawn-wait.md
-2026-09-06-windows-python-console-spawn-wait.md: 036062bdf459e4cbb69a6c31d3160c78ec1fad4c
-2026-09-06-windows-python-console-spawn-wait.zh.md: d0870be84066b885e1622438a9fbc277f56a6bcf
+/agent-note-wait-for-the-windows-python-console-runtime:
+  en: 97ffbd17152279cc
+  zh: 9a223670f273471b
+/agent-note-wait-for-the-windows-python-console-runtime/problem:
+  en: 26ea75714d6fbbea
+  zh: 49441436e362a868
+/agent-note-wait-for-the-windows-python-console-runtime/decision:
+  en: 6ef15038eb5e0786
+  zh: 92e319fbb8133d52
+/agent-note-wait-for-the-windows-python-console-runtime/alternatives-considered:
+  en: 2cc100a4b8724d40
+  zh: 6ba47c76f304a460
+/agent-note-wait-for-the-windows-python-console-runtime/consequences:
+  en: ec5c2a7082012ed5
+  zh: 32027ea20bd32acf

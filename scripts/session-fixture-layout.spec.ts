@@ -2,7 +2,8 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createAssistantMessage } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
-import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
+import { parseSessionLog, prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
+import { scrubSessionSnapshot } from '@deepseek-ai/dsh-session-snapshot'
 import {
   canonicalSessionFixture,
   inspectSessionFixtureLayouts,
@@ -11,6 +12,7 @@ import {
 
 const HEADER = `  {"type":"session","version":${SESSION_FORMAT_VERSION},"id":"fixture","createdAt":1,"isSeeded":false,"delegationDepth":0}  `
 const root = resolve(import.meta.dirname, '..')
+const historicalVersions = Array.from({ length: SESSION_FORMAT_VERSION }, (_, version) => version)
 const FIXTURE_MESSAGE = createAssistantMessage({
   content: [{ type: 'text', text: 'part-0part-1part-2part-3' }],
   source: { provider: 'mock', model: 'mock' },
@@ -58,6 +60,24 @@ function decodedBody(content: string): SessionEvent[] {
 }
 
 describe('canonicalSessionFixture', () => {
+  it.each([
+    { sources: [0, 1, 2] },
+    { sources: [0, 2] },
+    { sources: [2, 0, 1] },
+  ])('writes canonical snapshots preserving source reference order: $sources', ({ sources }) => {
+    const event = {
+      type: 'user/message', seq: 3, time: 15,
+      data: { id: 'fixture-user', role: 'user', source: { kind: 'user' }, content: [] },
+      sourceEventSeqs: sources, surfaceOp: 'append',
+    }
+    const raw = [HEADER, ...[...fixtureEvents(), event].map(value => JSON.stringify(value)), ''].join('\n')
+    const written = scrubSessionSnapshot(prepareSessionSnapshotFixtureForComparison(raw))
+
+    expect(canonicalSessionFixture(written)).toBe(written)
+    expect(decodedBody(written).at(-1)?.sourceEventSeqs).toEqual(sources)
+    expect(scrubSessionSnapshot(written)).toBe(written)
+  })
+
   it('preserves the header line and nested compact stream losslessly', () => {
     const canonical = canonicalSessionFixture(unpackedFixture(), 'fixture.jsonl')
     expect(canonical).toBeDefined()
@@ -130,11 +150,11 @@ describe('canonicalSessionFixture', () => {
     ].join('\n')
     const canonical = canonicalSessionFixture(source)
     expect(canonical).toBe(source)
-    expect(() => decodedBody(canonical!)).toThrow(/session snapshot line 3:.*empty optional header fields must be omitted/)
+    expect(() => decodedBody(canonical!)).toThrow(/session snapshot line 1:.*seed request\/header.*empty tools/)
   })
 
-  it.each([0, 1, 2])('preserves physically valid v%i bytes without requiring migration to current', (version) => {
-    const header = { type: 'session', version, id: 'historical', createdAt: 1, delegationDepth: 0, ...(version === 2 ? { isSeeded: false } : {}) }
+  it.each(historicalVersions)('preserves physically valid v%i bytes without requiring migration to current', (version) => {
+    const header = { type: 'session', version, id: 'historical', createdAt: 1, delegationDepth: 0, ...(version >= 2 ? { isSeeded: false } : {}) }
     const content = [
       JSON.stringify(header),
       JSON.stringify({ type: 'user/message', data: { role: 'user', id: 'historical-user', source: { kind: 'user' }, content: [] }, surfaceOp: 'append' }),
@@ -143,16 +163,16 @@ describe('canonicalSessionFixture', () => {
     expect(canonicalSessionFixture(content)).toBe(content)
   })
 
-  it.each([0, 1, 2])('rejects v%i sequence gaps and invalid source-event ranges with source line diagnostics', (version) => {
-    const header = JSON.stringify({ type: 'session', version, id: 'historical', createdAt: 1, delegationDepth: 0, ...(version === 2 ? { isSeeded: false } : {}) })
+  it.each(historicalVersions)('rejects v%i sequence gaps and invalid source-event ranges with source line diagnostics', (version) => {
+    const header = JSON.stringify({ type: 'session', version, id: 'historical', createdAt: 1, delegationDepth: 0, ...(version >= 2 ? { isSeeded: false } : {}) })
     expect(() => canonicalSessionFixture(`${header}\n{"type":"feedback/record","seq":3,"data":{"text":"gap"}}\n`, 'gap.jsonl'))
       .toThrow(/gap\.jsonl: session snapshot line 2:.*seq/)
     expect(() => canonicalSessionFixture(`${header}\n{"type":"feedback/record","data":{},"sourceEventSeqs":[[2,0]]}\n`, 'range.jsonl'))
       .toThrow(/range\.jsonl: session snapshot line 2:/)
   })
 
-  it.each([0, 1, 2])('finalizes the v%i source inherited cut', (version) => {
-    const header = { type: 'session', version, id: 'historical', createdAt: 1, delegationDepth: 0, ...(version === 2 ? { isSeeded: true } : { seedLength: 1 }) }
+  it.each(historicalVersions)('finalizes the v%i source inherited cut', (version) => {
+    const header = { type: 'session', version, id: 'historical', createdAt: 1, delegationDepth: 0, ...(version >= 2 ? { isSeeded: true } : { seedLength: 1 }) }
     expect(() => canonicalSessionFixture(`${JSON.stringify(header)}\n`, 'cut.jsonl'))
       .toThrow(/cut\.jsonl: session snapshot line 1:.*(?:inherited|seed)/)
   })

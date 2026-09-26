@@ -11,6 +11,10 @@ import type {
   ConversationViewSnapshotStore,
 } from '../contract/conversation.ts'
 import { conversationContextKey } from '../contract/conversation.ts'
+import type {
+  ConversationGroupData, ConversationGroupDefinition, ConversationGroupedView,
+} from '../contract/groups.ts'
+import { ConversationGroupStore } from './group-store.ts'
 import {
   ConversationLocationIndex, type ConversationLocationDataChange,
 } from './location-index.ts'
@@ -46,9 +50,16 @@ interface PendingMatch {
 interface ViewState {
   readonly target: string
   readonly definition: ConversationViewDefinition
+  readonly groupDefinition: ConversationGroupDefinition | undefined
   readonly isActive: ((snapshot: unknown) => boolean) | undefined
   builder: ConversationViewBuilder | undefined
   snapshot: unknown
+}
+
+interface GroupState {
+  readonly definition: ConversationGroupDefinition
+  state: unknown
+  readonly store: ConversationGroupStore<unknown>
 }
 
 const PUBLICATION_RANK: Record<ConversationPublication, number> = {
@@ -124,17 +135,10 @@ function mergeMatches(
 }
 
 function conversationMatch(
-  key: string,
   input: SessionEventLikeEntry,
   role: ConversationMatch['role'],
   location: ConversationMatch['location'],
 ): ConversationMatch {
-  if (role === 'start') {
-    if (input.type !== 'event') {
-      throw new Error(`conversation Context ${key} received a transient start Match`)
-    }
-    return { event: input.event, role, location }
-  }
   return { event: input.event, role, location }
 }
 
@@ -152,6 +156,16 @@ export interface ConversationViewDefinitions {
   entries(): readonly ConversationViewDefinition[]
 }
 
+/** Registered grouping rules consumed by the target-neutral assembler. */
+export interface ConversationGroupDefinitions {
+  /** @returns grouping Definitions in registration order. */
+  entries(): readonly ConversationGroupDefinition[]
+  /** @param target - View target. @returns its optional Group Definition. */
+  forTarget(target: string): ConversationGroupDefinition | undefined
+}
+
+const NO_GROUPS: ConversationGroupDefinitions = { entries: () => [], forTarget: () => undefined }
+
 /**
  * Session-owned incremental engine that assembles business Contexts from a
  * contiguous Event window and materializes registered view snapshots.
@@ -168,6 +182,8 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   private readonly revised = new Set<InternalContext>()
   private readonly dependents = new Map<string, Set<InternalContext>>()
   private readonly views = new Map<string, ViewState>()
+  private readonly groups = new Map<string, GroupState>()
+  private readonly pendingGroupStores = new Set<ConversationGroupStore<unknown>>()
   private readonly activeTargets = new Set<string>()
   private hasMore = false
   private replacePending = true
@@ -176,12 +192,25 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   /**
    * @param eventDefinitions - live Event Definition registry.
    * @param viewDefinitions - live view builder registry.
+   * @param groupDefinitions - optional registered grouping rules, independent of presentation modes.
    */
   constructor(
     private readonly eventDefinitions: ConversationEventDefinitions,
     private readonly viewDefinitions: ConversationViewDefinitions,
+    private readonly groupDefinitions: ConversationGroupDefinitions = NO_GROUPS,
   ) {
     this.resetViewBuilders()
+  }
+
+  /**
+   * Read the current open turn without activating a View.
+   * @returns the latest turn number when its start is loaded and it remains open, otherwise undefined.
+   */
+  openTurn(): number | undefined {
+    const snapshot = this.locationIndex.snapshot()
+    const latest = snapshot.turnOrder.at(-1)
+    const turn = latest === undefined ? undefined : snapshot.turns.get(latest)
+    return turn?.status === 'open' && turn.start !== undefined ? turn.turn : undefined
   }
 
   /**
@@ -244,6 +273,8 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
 
   /**
    * Retire one Assistant attempt's transient matches and apply its optional durable settlement.
+   * Empty Contexts retain their keys and published nodes until the loaded window is rebuilt;
+   * Definitions may hide those nodes when no start remains instead of withdrawing their identities.
    * @param attemptId - process-local attempt whose transient presentation ended.
    * @param entry - durable message or attempt event committed for the stream.
    * @returns highest requested publication cadence.
@@ -333,28 +364,24 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     if (!this.replacePending && this.dirty.size === 0 && !this.timelineDirty) return false
     if (this.replacePending) {
       this.replaceLocationData()
-      let published = false
+      const updated: ViewState[] = []
+      const changedTurns = this.locationIndex.takeChangedTurns()
       for (const target of this.activeTargets) {
         const view = this.views.get(target)
         if (view === undefined) continue
-        const builder = view.builder ?? view.definition.create()
-        view.builder = builder
-        view.snapshot = builder.replace({
-          nodes: this.buildTargetNodes(target, this.contextsByTarget.get(target)),
-          timeline: this.locationIndex.snapshot(),
-        })
-        published = true
+        this.updateView(view, true, this.buildTargetNodes(target, this.contextsByTarget.get(target)), changedTurns)
+        updated.push(view)
       }
-      this.locationIndex.publishData()
       this.replacePending = false
       this.dirty.clear()
       this.dirtyByTarget.clear()
       this.timelineDirty = false
-      return published
+      return this.publishViews(updated)
     }
 
-    let published = false
+    const updated: ViewState[] = []
     if (this.applyDirtyLocationData()) this.timelineDirty = true
+    const changedTurns = this.locationIndex.takeChangedTurns()
     const timelineDirty = this.timelineDirty
     for (const target of this.activeTargets) {
       const view = this.views.get(target)
@@ -363,17 +390,13 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
       if (builder === undefined) continue
       const upserts = this.buildTargetUpserts(target, this.dirtyByTarget.get(target))
       if (upserts.length === 0 && !timelineDirty) continue
-      view.snapshot = builder.apply({
-        upserts,
-        timeline: this.locationIndex.snapshot(),
-      })
-      published = true
+      this.updateView(view, false, upserts, changedTurns)
+      updated.push(view)
     }
-    this.locationIndex.publishData()
     this.dirty.clear()
     this.dirtyByTarget.clear()
     this.timelineDirty = false
-    return published
+    return this.publishViews(updated)
   }
 
   /**
@@ -389,6 +412,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     this.activeTargets.add(target)
     if (view === undefined) return published
     this.replaceView(view)
+    this.publishViews([view])
     return true
   }
 
@@ -405,6 +429,12 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     target: Target,
   ): ConversationViewSnapshotMap[Target] | undefined {
     return this.snapshot(target) as ConversationViewSnapshotMap[Target] | undefined
+  }
+
+  grouped<Target extends string>(
+    target: Target,
+  ): ConversationGroupedView<ConversationGroupData<Target>> | undefined {
+    return this.groups.get(target)?.store as ConversationGroupedView<ConversationGroupData<Target>> | undefined
   }
 
   /**
@@ -437,7 +467,6 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     return this.dispatchInput(input, (definition, id, role) => {
       const key = conversationContextKey(definition.kind, id)
       const match = conversationMatch(
-        key,
         input,
         role,
         this.locationIndex.locationOf(input.event),
@@ -509,12 +538,9 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   ): ConversationPublication {
     const key = conversationContextKey(definition.kind, id)
     let context = this.contexts.get(key)
-    if (role === 'start' && context?.start !== undefined) {
-      throw new Error(`conversation Context ${key} received more than one start Match`)
-    }
     context ??= this.createContext(definition, id, key)
+    const starting = role === 'start' && context.start === undefined
     const match = conversationMatch(
-      key,
       input,
       role,
       this.locationIndex.locationOf(input.event),
@@ -523,11 +549,11 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     if (previous !== undefined && previous.event.seq >= input.event.seq) {
       throw new Error(`conversation Context ${key} received non-appended Match ${input.event.seq}`)
     }
-    if (role === 'start' && context.matches.length > 0) {
+    if (starting && context.matches.length > 0) {
       throw new Error(`conversation Context ${key} received an update before its start Match`)
     }
     context.matches.push(match)
-    if (match.role === 'start') {
+    if (starting && match.role === 'start') {
       context.startSeq = input.event.seq
       context.start = match
       this.indexStartedContext(context)
@@ -536,7 +562,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     owners.add(context)
     this.contextsBySeq.set(input.event.seq, owners)
 
-    if (match.role === 'start') {
+    if (starting) {
       this.replayContext(context)
     } else if (context.state !== undefined) {
       const typed = contextSnapshot(context) as ConversationNodeContext & { readonly state: unknown }
@@ -552,23 +578,15 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     pending: ReadonlyMap<string, readonly PendingMatch[]>,
     affected: Set<InternalContext>,
   ): void {
-    const startsByKind = new Map<string, InternalContext[]>()
     for (const [key, entries] of pending) {
       const first = entries[0]
       if (first === undefined) continue
       let context = this.contexts.get(key)
       context ??= this.createContext(first.definition, first.id, key)
-      let discoveredStart: ConversationStartMatch | undefined
       const additions = entries
         .map((entry) => {
           if (entry.definition !== context.definition || entry.id !== context.id) {
             throw new Error(`conversation Context ${key} received inconsistent Definition identity`)
-          }
-          if (entry.match.role === 'start') {
-            if (discoveredStart !== undefined || context.start !== undefined) {
-              throw new Error(`conversation Context ${key} received more than one start Match`)
-            }
-            discoveredStart = entry.match
           }
           const owners = this.contextsBySeq.get(entry.match.event.seq) ?? new Set<InternalContext>()
           owners.add(context)
@@ -577,32 +595,45 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
         })
         .sort((left, right) => left.event.seq - right.event.seq)
       context.matches = mergeMatches(context.key, additions, context.matches)
-      if (discoveredStart !== undefined) {
-        context.start = discoveredStart
-        context.startSeq = discoveredStart.event.seq
-        const starts = startsByKind.get(context.kind) ?? []
-        starts.push(context)
-        startsByKind.set(context.kind, starts)
-      }
-      if (context.start !== undefined && context.matches[0] !== context.start) {
-        throw new Error(`conversation Context ${context.key} received an update before its start Match`)
-      }
       affected.add(context)
       this.markDirty(context)
     }
-    for (const [kind, contexts] of startsByKind) this.indexStartedContexts(kind, contexts)
   }
 
   private replayContexts(contexts: ReadonlySet<InternalContext>): void {
+    this.refreshStarts(contexts)
     const ordered = [...contexts].sort((left, right) =>
       (left.startSeq ?? Number.POSITIVE_INFINITY) - (right.startSeq ?? Number.POSITIVE_INFINITY))
     for (const context of ordered) {
       if (context.start === undefined) {
         context.state = undefined
+        this.replaceDependencies(context, new Map())
+        context.revision++
+        this.revised.add(context)
         this.markDirty(context)
         continue
       }
       this.replayContext(context)
+    }
+  }
+
+  private refreshStarts(contexts: ReadonlySet<InternalContext>): void {
+    const changed = new Set<InternalContext>()
+    const startsByKind = new Map<string, InternalContext[]>()
+    for (const context of contexts) {
+      const start = context.matches.find(match => match.role === 'start')
+      if (start === context.start) continue
+      context.start = start
+      context.startSeq = start?.event.seq
+      changed.add(context)
+      const starts = startsByKind.get(context.kind) ?? []
+      if (start !== undefined) starts.push(context)
+      startsByKind.set(context.kind, starts)
+    }
+    for (const [kind, starts] of startsByKind) {
+      const existing = this.contextsByKind.get(kind) ?? []
+      this.contextsByKind.set(kind, existing.filter(context => !changed.has(context)))
+      this.indexStartedContexts(kind, starts)
     }
   }
 
@@ -626,7 +657,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     this.replaceDependencies(context, dependencies)
     for (let index = 1; index < context.matches.length; index++) {
       const match = context.matches[index]
-      if (match === undefined || match.role !== 'update') continue
+      if (match === undefined) continue
       const typed = contextSnapshot(context) as ConversationNodeContext & { readonly state: unknown }
       context.state = requireState(
         context.definition,
@@ -827,12 +858,55 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   }
 
   private replaceView(view: ViewState): void {
+    this.updateView(view, true, this.buildTargetNodes(view.target, this.contextsByTarget.get(view.target)), [])
+  }
+
+  private updateView(
+    view: ViewState,
+    replacing: boolean,
+    nodes: readonly ConversationViewNode[],
+    changedTurns: readonly number[],
+  ): void {
     const builder = view.builder ?? view.definition.create()
+    const definition = view.groupDefinition
+    if (definition !== undefined && builder.groupInput === undefined) {
+      throw new Error(`conversation group target "${view.target}" requires builder.groupInput()`)
+    }
     view.builder = builder
-    view.snapshot = builder.replace({
-      nodes: this.buildTargetNodes(view.target, this.contextsByTarget.get(view.target)),
-      timeline: this.locationIndex.snapshot(),
-    })
+    const timeline = this.locationIndex.snapshot()
+    const snapshot = replacing
+      ? builder.replace({ nodes, timeline, changedTurns })
+      : builder.apply({ upserts: nodes, timeline, changedTurns })
+    if (definition !== undefined && builder.groupInput !== undefined) {
+      let context = this.groups.get(view.target)
+      const initial = context === undefined
+      if (context === undefined) {
+        context = { definition, state: definition.create(), store: new ConversationGroupStore() }
+      }
+      const input = builder.groupInput()
+      context.state = definition.update(context, input)
+      const change = definition.buildGroups(context)
+      if ((initial || input.kind === 'replace')
+        && (change === null || change.entries === undefined || change.groups.kind !== 'replace')) {
+        throw new Error(`conversation group target "${view.target}" requires complete grouping for replacement input`)
+      }
+      if (change !== null) {
+        context.store.prepareAndInstall(change, input.readNode)
+        this.pendingGroupStores.add(context.store)
+      }
+      this.groups.set(view.target, context)
+    }
+    view.snapshot = snapshot
+  }
+
+  private publishViews(updated: readonly ViewState[]): boolean {
+    const changed = updated.length > 0 || this.pendingGroupStores.size > 0
+    const stores = [...this.pendingGroupStores]
+    this.pendingGroupStores.clear()
+    for (const view of updated) view.builder?.publish?.()
+    for (const store of stores) store.publish()
+    this.locationIndex.publishData()
+    return changed
   }
 
   private buildTargetNodes(
@@ -925,11 +999,21 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   }
 
   private resetViewBuilders(): void {
+    const definitions = this.viewDefinitions.entries()
+    const targets = new Set(definitions.map(definition => definition.target))
+    for (const [target, group] of this.groups) {
+      if (!targets.has(target) || this.groupDefinitions.forTarget(target) !== group.definition) {
+        group.store.clear()
+        this.pendingGroupStores.add(group.store)
+        this.groups.delete(target)
+      }
+    }
     this.views.clear()
-    for (const definition of this.viewDefinitions.entries()) {
+    for (const definition of definitions) {
       const view: ViewState = {
         target: definition.target,
         definition,
+        groupDefinition: this.groupDefinitions.forTarget(definition.target),
         isActive: definition.isActive === undefined
           ? undefined
           : snapshot => definition.isActive?.(snapshot) === true,

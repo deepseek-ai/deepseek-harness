@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-11-production-blame-approval-weight.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-11-production-blame-approval-weight.md
-2026-09-11-production-blame-approval-weight.md: d9a223c2f332cc110ddd8f6a3f592febe0072987
-2026-09-11-production-blame-approval-weight.zh.md: f4dfc9d4fc5cefcccadb2785f58893ec92043ba7
+/agent-note-weight-approvals-by-changed-production-line-ownership:
+  en: 40516dee2915ffc3
+  zh: 3d58358bc7110df2
+/agent-note-weight-approvals-by-changed-production-line-ownership/problem:
+  en: 2dbd821b8d65b054
+  zh: 9bef2993db51a00d
+/agent-note-weight-approvals-by-changed-production-line-ownership/decision:
+  en: 7dc225f91538ace1
+  zh: a22d05ffd8d32b6d
+/agent-note-weight-approvals-by-changed-production-line-ownership/alternatives-considered:
+  en: 5e8af03e3ff6018a
+  zh: 6b518c8eee8c5172
+/agent-note-weight-approvals-by-changed-production-line-ownership/consequences:
+  en: 08495483b77771be
+  zh: a798d4af0eda55fe
+/agent-note-weight-approvals-by-changed-production-line-ownership/verification:
+  en: cb604625373372b9
+  zh: f9056d20ab612537

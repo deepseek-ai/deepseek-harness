@@ -20,7 +20,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
  * text into the same streamed fallback.
  */
 export class AssistantOutputFold {
-  private message: ContentBlock[] | undefined
+  private message: readonly ContentBlock[] | undefined
   private partial: string[] = []
 
   /**
@@ -52,7 +52,7 @@ export class AssistantOutputFold {
    * @returns the last non-empty assistant message, else the accumulated
    *   streamed text, or `undefined` when the child produced neither.
    */
-  collect(): ContentBlock[] | undefined {
+  collect(): readonly ContentBlock[] | undefined {
     if (this.message !== undefined) return this.message
     const text = this.partial.join('')
     return text.length > 0 ? [{ type: 'text', text }] : undefined
@@ -64,7 +64,7 @@ export class AssistantOutputFold {
  * @param events - the child-owned events (after any seed or epoch boundary).
  * @returns the selected output, or `undefined` when the child produced none.
  */
-export function finalAssistantOutput(events: readonly SessionEvent[]): ContentBlock[] | undefined {
+export function finalAssistantOutput(events: readonly SessionEvent[]): readonly ContentBlock[] | undefined {
   // TODO: this folds the complete suffix once per run/epoch settlement. If a
   // long continuable epoch ever profiles hot here, scan backward with early
   // exit for the last non-empty message and fold text deltas only on the

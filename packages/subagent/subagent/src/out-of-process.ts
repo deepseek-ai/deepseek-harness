@@ -166,7 +166,7 @@ export interface RunResultSettlement {
   /** The turn attempt (typically racing local cancellation); returns the terminal result. */
   attempt: () => Promise<SubagentResult>
   /** Snapshot the provider exposes when cancellation or failure wins settlement. */
-  collectOutput: () => ContentBlock[]
+  collectOutput: () => readonly ContentBlock[]
   /** Snapshot safe provider-authored detail when a failure wins settlement. */
   collectDiagnostic?: (() => string | undefined) | undefined
   /** Whether local cancellation settled before the attempt's outcome is observed. */

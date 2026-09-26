@@ -187,7 +187,7 @@
 }
 
 .stringToggle:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -271,7 +271,7 @@
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 3px;
+  border-radius: var(--dsw-radius-xs);
   color: var(--dsw-alias-label-secondary);
   background: transparent;
   cursor: pointer;
@@ -286,7 +286,7 @@
 }
 
 .actionButton:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 

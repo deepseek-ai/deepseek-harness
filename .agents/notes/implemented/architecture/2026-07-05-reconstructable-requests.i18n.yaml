@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-05-reconstructable-requests.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-05-reconstructable-requests.md
-2026-07-05-reconstructable-requests.md: f47d0938b91edf6c9b544223ac44925f02dd8c1f
-2026-07-05-reconstructable-requests.zh.md: d2499a6264a3e6bebf31944d8eb056265e082c68
+/agent-note-every-llm-request-is-reconstructable-from-the-session-log:
+  en: 115dd45f40b0d7d8
+  zh: 536b5a0399e7d06a
+/agent-note-every-llm-request-is-reconstructable-from-the-session-log/problem:
+  en: f8f31da854a5fe2e
+  zh: ef88856c2c7bdfb8
+/agent-note-every-llm-request-is-reconstructable-from-the-session-log/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-every-llm-request-is-reconstructable-from-the-session-log/decision/the-principle:
+  en: 6da15cf986d59a91
+  zh: 40282908b54295f9
+/agent-note-every-llm-request-is-reconstructable-from-the-session-log/decision/the-mechanism:
+  en: 7d86e5058dbab2fb
+  zh: 9a97481325c8eded
+/agent-note-every-llm-request-is-reconstructable-from-the-session-log/decision/the-minicode-shape-adopted-with-the-event-log-as-the-source:
+  en: e5f2ffaa3d7de0cc
+  zh: 5ba6b36787a0e189
+/agent-note-every-llm-request-is-reconstructable-from-the-session-log/alternatives-considered:
+  en: 96f19ecf38fae991
+  zh: 9692252135ef3476
+/agent-note-every-llm-request-is-reconstructable-from-the-session-log/consequences:
+  en: 0d2e97bc421e67cc
+  zh: 0a000a69b8cc4b4e

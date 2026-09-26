@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-14-unattended-browser-terminal-reclamation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-14-unattended-browser-terminal-reclamation.md
-2026-09-14-unattended-browser-terminal-reclamation.md: 6eca6faa222ed744b8ebd4ef59b2dbaec25fd8ce
-2026-09-14-unattended-browser-terminal-reclamation.zh.md: 9065fe53a7d7970c4523beaffb08b3df30a4944f
+/agent-note-two-hour-reclamation-of-unattended-browser-terminals:
+  en: 7d9283383e551b42
+  zh: c9d9ed029a0afcf2
+/agent-note-two-hour-reclamation-of-unattended-browser-terminals/problem:
+  en: bd5cfc222df1a98c
+  zh: b58a3570a98298ee
+/agent-note-two-hour-reclamation-of-unattended-browser-terminals/decision:
+  en: 079c8a1e95099239
+  zh: 613d888fd7bf6b61
+/agent-note-two-hour-reclamation-of-unattended-browser-terminals/alternatives-considered:
+  en: 165fedee22bdb52e
+  zh: 6b9b7054ddb2a3a9
+/agent-note-two-hour-reclamation-of-unattended-browser-terminals/consequences:
+  en: ded45621bb710e52
+  zh: f5f9624fa5f608e8

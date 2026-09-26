@@ -8,7 +8,7 @@
  * click echo.
  */
 import {
-  IconChevronDownOutline14, IconChevronUpOutline14,
+  IconChevronDownOutlineRegular, IconChevronUpOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { FONT_SIZE_MAX, FONT_SIZE_MIN } from '../theme-settings.ts'
@@ -51,7 +51,7 @@ export function FontSizeRow({ t, setFontSize, useStore }: FontSizeRowComponentPr
               disabled={fontSize >= FONT_SIZE_MAX}
               onClick={() => { setFontSize(fontSize + 1) }}
             >
-              <IconChevronUpOutline14 size={9} />
+              <IconChevronUpOutlineRegular size={9} />
             </button>
             <button
               type="button"
@@ -60,7 +60,7 @@ export function FontSizeRow({ t, setFontSize, useStore }: FontSizeRowComponentPr
               disabled={fontSize <= FONT_SIZE_MIN}
               onClick={() => { setFontSize(fontSize - 1) }}
             >
-              <IconChevronDownOutline14 size={9} />
+              <IconChevronDownOutlineRegular size={9} />
             </button>
           </span>
         </div>

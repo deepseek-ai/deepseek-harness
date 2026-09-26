@@ -195,12 +195,12 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
 
   /**
    * The diagnostic the next scheduleReconnect reports for a lost established
-   * connection; set by the health ping so its failure is not flattened to the
+   * connection; set by the health check so its failure is not flattened to the
    * generic close text.
    */
   let pendingDownReason: string | undefined
 
-  /** Armed while a generation is established: one liveness ping per interval. */
+  /** Armed while a generation is established: one health check per interval. */
   let healthTimer: NodeJS.Timeout | undefined
 
   function stopHealthCheck(): void {
@@ -211,26 +211,27 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   }
 
   /**
-   * Chain the next liveness ping on the established generation. Stdio deaths
+   * Chain the next health check on the established generation. Stdio deaths
    * already close the transport, but Streamable HTTP has no connection between
-   * requests, so only this ping turns a silently dead server into the
-   * onclose-driven reconnect path. The next ping arms only after the previous
-   * one settles, and the interval doubles as each ping's answer budget.
+   * requests, so only this check turns a silently dead server into the
+   * onclose-driven reconnect path. The next check arms only after the previous
+   * one settles, and the interval doubles as each check's answer budget.
    */
   function armHealthPing(generation: Client): void {
     stopHealthCheck()
     healthTimer = setTimeout(() => {
       healthTimer = undefined
+      const check = generation.getProtocolEra() === 'modern' ? generation.discover() : generation.ping()
       void withDeadline(
-        generation.ping(),
+        check.then(() => undefined),
         config.healthCheckIntervalMs,
-        `${label}: health ping timed out after ${config.healthCheckIntervalMs}ms`,
+        `${label}: health check timed out after ${config.healthCheckIntervalMs}ms`,
       ).then(
         () => { if (isCurrent(generation)) armHealthPing(generation) },
         (error: unknown) => {
           if (!isCurrent(generation)) return
           pendingDownReason = describeError(error)
-          ctx.logger.warn(`${label}: health ping failed: ${describeError(error)} — closing the connection to reconnect`)
+          ctx.logger.warn(`${label}: health check failed: ${describeError(error)} — closing the connection to reconnect`)
           // A close that completes reaches generationDown through onclose; a
           // transport too broken to close still must not strand the supervisor.
           generation.close().catch(() => { generationDown(generation) })
@@ -277,7 +278,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   function scheduleReconnect(): void {
     const lostEstablishedConnection = connectedAt !== undefined
     // A lost established connection carries no thrown error; the close signal
-    // itself — or the health ping failure that forced it — is the most recent
+    // itself — or the health check failure that forced it — is the most recent
     // failure the status can report.
     if (lostEstablishedConnection) lastErrorText = pendingDownReason ?? 'connection closed'
     pendingDownReason = undefined

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-20-config-schema-dump-validation-policy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-20-config-schema-dump-validation-policy.md
+/agent-note-config-schema-dump-validation-policy:
+  en: 3934f170891561da
+  zh: 3f54f8a830b766ee
+/agent-note-config-schema-dump-validation-policy/problem:
+  en: c0baf581702ed4e8
+  zh: eb9ab134045c2e18
+/agent-note-config-schema-dump-validation-policy/decision:
+  en: 047d67040b39f999
+  zh: f7eccdb59e9e72bd
+/agent-note-config-schema-dump-validation-policy/alternatives-considered:
+  en: be0e67675b0a6bf3
+  zh: 361c7fd4eb482f3a
+/agent-note-config-schema-dump-validation-policy/consequences:
+  en: 5df3531b64f09edd
+  zh: 03e1a9f15248b171

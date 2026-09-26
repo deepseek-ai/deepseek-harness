@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/skill/skill-filesystem/README.md
-README.md: 55ec66938f53fc282a51f9bf140ed2c999a937b7
-README.zh.md: f5ffb1f60b3fd908077038ae9479661266cdd160
+/:
+  en: ef9fab89ad1a57aa
+  zh: 6d434e8a3dae16ca
+/deepseek-ai-dsh-skill-filesystem:
+  en: e0af59069c89278b
+  zh: 913d0088b2a7296d
+/deepseek-ai-dsh-skill-filesystem/summary:
+  en: ef659bb1fd748f41
+  zh: 9d40999be52526f5
+/deepseek-ai-dsh-skill-filesystem/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-skill-filesystem/use-this-package:
+  en: 2fcfbaea3c62a766
+  zh: 27c917ba822329e5
+/deepseek-ai-dsh-skill-filesystem/use-this-package/when-to-choose-it:
+  en: 012a123601c7d8f2
+  zh: 0e13f5e0d2e4ea7a
+/deepseek-ai-dsh-skill-filesystem/use-this-package/skill-format:
+  en: 78ac4e731c6a24c1
+  zh: e8c33db4aa0cc527
+/deepseek-ai-dsh-skill-filesystem/use-this-package/roots-and-priority:
+  en: 265594f30ba5d848
+  zh: 5de6a94864cab8d6
+/deepseek-ai-dsh-skill-filesystem/use-this-package/mount-and-configure:
+  en: 5e7a4ff37f33f8a5
+  zh: 2f6dd45e696cb92b
+/deepseek-ai-dsh-skill-filesystem/use-this-package/change-detection:
+  en: 77acbd43e89b6043
+  zh: 8169bbbc55f3f114
+/deepseek-ai-dsh-skill-filesystem/use-this-package/observable-success-and-failures:
+  en: 272693c35012ffb5
+  zh: bbbe788b11ef567f
+/deepseek-ai-dsh-skill-filesystem/understand-the-implementation:
+  en: a95eb63f5a570c79
+  zh: cd964a36cf8a3715
+/deepseek-ai-dsh-skill-filesystem/understand-the-implementation/design-concept:
+  en: 8529fb4c1989d5fc
+  zh: 115372aaa959dc6c
+/deepseek-ai-dsh-skill-filesystem/understand-the-implementation/source-map:
+  en: 1b1bc2d6b523f308
+  zh: f7d0c0e0ab1adcf0
+/deepseek-ai-dsh-skill-filesystem/understand-the-implementation/discovery-flow:
+  en: 7e26750408a63587
+  zh: 9eed631a7bdf00ae
+/deepseek-ai-dsh-skill-filesystem/understand-the-implementation/watching-and-invalidation:
+  en: e1f03485692f61a0
+  zh: 7c3ce24eacc3a047
+/deepseek-ai-dsh-skill-filesystem/further-exploration:
+  en: 4d1bb82d69fadd8a
+  zh: 91f6f8fb6533c976
+/deepseek-ai-dsh-skill-filesystem/model-experience:
+  en: 2276cca067cd120a
+  zh: 9986d49d39228243
+/deepseek-ai-dsh-skill-filesystem/model-experience/kv-cache-effect:
+  en: 14ddbda337682082
+  zh: 2e4dc3c26b45f62c
+/deepseek-ai-dsh-skill-filesystem/known-limitations-and-deferred-work:
+  en: a7f37a7b9e54945d
+  zh: b9d3b15027757301
+/deepseek-ai-dsh-skill-filesystem/known-limitations-and-deferred-work/dev-note:
+  en: 53584bc8292df1f9
+  zh: 921253cd64aa7511

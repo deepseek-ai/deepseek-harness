@@ -3,7 +3,16 @@
 import { desktopErrorState } from './startup-error.ts'
 
 /** Backend availability presented by the desktop window. */
-export type DesktopBackendState = { readonly phase: 'starting' } | { readonly phase: 'ready' } | { readonly phase: 'error'; readonly message: string }
+export type DesktopBackendState =
+  | { readonly phase: 'starting' }
+  | { readonly phase: 'ready' }
+  /** `message` is the rendered text; `failure` is the original error so a crash report keeps its stack, properties, and cause. */
+  | { readonly phase: 'error'; readonly message: string; readonly failure: unknown }
+
+/** The error state for one failure: rendered message plus the failure itself. */
+function errorState(failure: unknown): DesktopBackendState {
+  return { ...desktopErrorState(failure), failure }
+}
 
 /** Child lifecycle owned by the desktop backend controller. */
 export interface DesktopBackendHost {
@@ -80,7 +89,7 @@ export class DesktopBackendController<Host extends DesktopBackendHost> {
         try { await this.cleanup(attempt) } catch (cleanupError) {
           if (cleanupError !== error) failure = new AggregateError([error, cleanupError], 'desktop backend startup and cleanup failed')
         }
-        if (!cancelled) this.update(desktopErrorState(failure))
+        if (!cancelled) this.update(errorState(failure))
         throw failure
       }
     }).finally(() => { if (this.pending === pending) this.pending = undefined })
@@ -132,9 +141,9 @@ export class DesktopBackendController<Host extends DesktopBackendHost> {
     if (this.current.phase !== 'ready') return
     attempt.cancelled = true
     const cleanup = this.cleanup(attempt)
-    this.update(desktopErrorState(error))
+    this.update(errorState(error))
     void cleanup.catch((cleanupError: unknown) => {
-      if (this.attempt === attempt) this.update(desktopErrorState(new AggregateError([error, cleanupError], 'Desktop backend failed and could not stop')))
+      if (this.attempt === attempt) this.update(errorState(new AggregateError([error, cleanupError], 'Desktop backend failed and could not stop')))
     })
   }
 

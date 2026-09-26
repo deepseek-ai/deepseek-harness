@@ -28,3 +28,6 @@
       config:
         freshProvider: spawn
         forkProvider: fork
+
+    - id: ui-agent-team
+      name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'

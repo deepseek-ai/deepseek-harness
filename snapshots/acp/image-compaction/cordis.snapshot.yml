@@ -3,7 +3,7 @@
 # so the strict read_image gate accepts the route and the tool result carries
 # the durable image block.
 - id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   disabled: true
 
 - id: acp
@@ -48,7 +48,7 @@
                 # Route-priced request images at the provider cap; the small
                 # context window turns that visual pressure into an automatic
                 # compaction the text-only heuristic would not trigger.
-                contextWindow: 11600
+                contextWindow: 10022
                 imageRequestTokens: 384
 
 - id: attachment-local
@@ -61,6 +61,8 @@
 - id: compaction-basic
   name: '@deepseek-ai/dsh-compaction-basic'
   config:
+    headroomTokens: 0
+    maxTokens: 8192
     retainTokens: 100
 
 - insert:

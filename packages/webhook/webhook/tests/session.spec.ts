@@ -98,10 +98,10 @@ function harness(options: HarnessOptions = {}): SessionHarness {
         if (options.failAt === 'preset-resolve') throw new Error('preset resolve failed')
         return { id: name }
       },
-      async standingKeyFor(name: string) {
+      async acquireScope(name: string) {
         calls.push(`standing:${name}`)
         if (options.failAt === 'standing') throw new Error('standing failed')
-        return {}
+        return { key: {}, [Symbol.asyncDispose]: async () => {} }
       },
       async mount(_agentCtx: unknown, name: string) {
         calls.push(`mount:${name}`)
@@ -247,11 +247,11 @@ describe('webhook Session creation', () => {
       reasoningEffort: ReasoningEffortId('other-model-effort'),
     }))).resolves.toMatchObject({ reasoningEffort: 'other-model-effort' })
 
-    const routed = await request(undefined, async () => ({
+    const routed: unknown = await request(undefined, async () => ({
       provider: 'default-provider',
       model: 'default-model',
       reasoningEffort: ReasoningEffortId('inherited'),
-    })) as unknown
+    }))
     expect(routed).toEqual({
       provider: 'default-provider',
       model: 'default-model',

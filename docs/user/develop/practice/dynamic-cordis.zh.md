@@ -1,15 +1,15 @@
-# 用 Cordis 工具扩展运行中的智能体
+# 通过提示词配置持久化插件
 
 [English](dynamic-cordis.md) | 中文
 
-本实战指南启用 [`@deepseek-ai/dsh-tool-cordis`](../../../../packages/extensions/tool-cordis/README.zh.md)。智能体可以检查当前 Cordis 进程，并在内存中挂载或卸载模型编写的插件。临时插件会在卸载或进程退出时消失，并可能影响同一进程中的其他会话。
+创造模式提供 [Plugin Manager](../../../../packages/boot/plugin-manager/README.zh.md) 和只读[运行时检查](../../../../packages/extensions/tool-cordis/README.zh.md)。插件配置属于当前 profile，影响其会话，并在进程重启后保留。
 
-## 运行
+## 连接 MCP 服务器
 
-使用仓库内 overlay 启动浏览器界面：
+启动 Web profile 并选择创造模式。准备一个可访问且提供 `ping` 的 Streamable HTTP MCP 服务器，将其实际端点填入以下提示词：
 
-```sh
-pnpm dsh web --patch apps/cli/config/examples/cordis/cordis.yml
-```
+> 将 `<endpoint>` 处的 MCP 服务器配置到当前 profile，命名为 `demo`。立即启用它的工具，然后调用它的 ping 工具并告诉我结果。
 
-该命令需要模型凭据。[Cordis 工具参考](../../../../packages/extensions/tool-cordis/README.zh.md)定义了四类约定：工具参数、存续时间、清理行为和安全性。
+agent 编写纯配置组合包，在 patch 中插入 `@deepseek-ai/dsh-mcp-client`，再通过 `plugin_manager install_bundle` 安装。启用 HMR 时，工具会出现在同一个运行中的会话里。同时检查管理结果（`application: applied`）和成功的 `mcp__demo__ping` 调用。返回 `restart-required` 的已保存条目尚未激活；失败条目需要修复配置。
+
+修改配置前先读取组合包 patch。使用 Plugin Manager 停用条目或移除组合包。可接受的配置及连接失败行为见 [MCP client 参考](../../../../packages/mcp/mcp-client/README.zh.md)。

@@ -27,7 +27,7 @@ Only the first two modes can be sent to a provider. A `danger-full-access` consu
 type ConfinedSandboxMode = Exclude<SandboxMode, 'danger-full-access'>
 ```
 
-Enforcement is a reported fact. `full` means the backend governs every file effect promised by the mode; `partial` means an active backend or older kernel ABI governs only a subset, so consumers that require the absolute promise must reject or surface that distinction. Older Landlock ABIs and the Windows ACL runner's Everyone/hard-link boundaries are current partial cases.
+Enforcement is a reported fact. `full` means the backend governs every file effect promised by the mode; `partial` means an active backend or older kernel ABI governs only a subset, so consumers that require the absolute promise must reject or surface that distinction. Older Landlock ABIs and the Windows ACL runner's hard-link, unconfined-read, and AppContainer-ACL boundaries are current partial cases.
 
 ```ts type-equiv
 /**

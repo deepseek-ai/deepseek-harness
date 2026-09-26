@@ -10,9 +10,9 @@ Installed packages belong to the running profile, while Settings is a modal over
 
 ## Decision
 
-**Management is a sidebar entry; configuration stays in Settings.** `ui-plugin-manager` registers a `sidebar.panellist` entry and the `main` panel it opens under `plugins`. The page manages the profile's bundles and their rows through the [plugin manager](2026-09-14-current-profile-plugin-management.md) Remote, displays install output and confirms uninstalls. The page lists installed bundles only. The Settings Plugins section keeps the global configuration cards beside the read-only Plugin list tab, where the installation's own bundles (`dsh-base`, `dsh-web-app`) are inspected; both of that tab's groups start collapsed, and the tab carries no management controls of its own.
+**Management is a sidebar entry.** `ui-plugin-manager` registers a `sidebar.panellist` entry and the `main` panel it opens under `plugins`. The page manages the profile's bundles and their rows through the [plugin manager](2026-09-14-current-profile-plugin-management.md) Remote, displays install output and confirms uninstalls. It lists installed bundles and installation-provided optional bundles. Settings keeps the read-only plugin inventory, including the installation's own bundles (`dsh-base`, `dsh-web-app`); both inventory groups start collapsed, and the inventory carries no management controls. Configuration placement follows the [plugin configuration decision](2026-09-16-plugin-configuration-on-the-plugins-page.md).
 
-**One store follows Host state.** The manager controller joins `listBundles` with `listPlugins` into one view per bundle, decides availability from the inventory's `managementAvailable`, refreshes after management operations, on `plugin-manager/changed`, and on reconnect, and keeps installation progress under the owning job. Configuration cards use the existing global settings bindings.
+**One store follows Host state.** The manager controller joins `listBundles` with `listPlugins` into one view per bundle, decides availability from the inventory's `managementAvailable`, refreshes after management operations, on `plugin-manager/changed`, and on reconnect, and keeps installation progress under the owning job. Configuration forms use the existing global settings bindings.
 
 **Installation results belong to a request.** The dialog generates a fresh request id for every install or retry and filters Host progress, logs, and responses by that id. A cancellation acknowledgement can arrive before the original add response, so that response cannot settle a subsequent retry. Cancellation uses the manager's explicit cleanup acknowledgement; local RPC cancellation and connection loss never imply that pnpm has stopped. The application phase closes the cancellation window.
 
@@ -20,11 +20,11 @@ Installed packages belong to the running profile, while Settings is a modal over
 
 **A settings section that opens the management page.** Rejected: the dialog covers the main column, so such an entry would have to close Settings to show the page.
 
-**Configuration on the plugin's page.** Rejected for now, for the reasons in the decision; it becomes a link from the plugin's page once Settings can be opened on one section.
+**Configuration placement.** The [plugin configuration decision](2026-09-16-plugin-configuration-on-the-plugins-page.md) owns this choice and its alternatives; sidebar navigation and installation-request ownership remain independent of it.
 
 ## Consequences
 
-The web bundle's panel list is no longer empty: the **Plugins** entry sits between New Session and the workspaces. The Settings Plugins section keeps two tabs: the configuration page and the read-only Plugin list. `apps/web/tests/plugin-manager.e2e.ts` reaches the manager through the sidebar, and the `plugin-config` and `settings-chrome` scenarios and goldens follow.
+The web bundle's **Plugins** sidebar entry opens profile management. Settings exposes the read-only inventory, while plugin forms live on the Plugins page. `apps/web/tests/plugin-manager.e2e.ts` reaches the manager through the sidebar; `plugin-config` and `settings-chrome` exercise the forms and read-only inventory respectively.
 
 ## Testing
 

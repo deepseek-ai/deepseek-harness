@@ -524,7 +524,7 @@ export function parseToolSchemasSnapshot(snapshot: string): ToolSchemasSnapshot 
 /**
  * Restore one sidecar schema set into a tokenized pinned header.
  *
- * @param header The parsed request header carrying `tools: "{{tools}}"`.
+ * @param header The parsed request header carrying a tools token or ordered tool names matching the sidecar.
  * @param schemas The complete schemas for this full header snapshot.
  * @returns A copy of the header with its complete schemas restored.
  */
@@ -532,8 +532,15 @@ export function restorePinnedToolSchemas(header: unknown, schemas: readonly unkn
   if (header === null || typeof header !== 'object' || Array.isArray(header)) {
     throw new Error('acp-snapshot: pinned request header must be an object')
   }
-  if ((header as { tools?: unknown }).tools !== TOOLS_TOKEN) {
-    throw new Error(`acp-snapshot: pinned request header tools must equal ${TOOLS_TOKEN}`)
+  const tools = (header as { tools?: unknown }).tools
+  const namesMatch = Array.isArray(tools) && tools.length === schemas.length
+    && tools.every((name, index) => {
+      const schema = schemas[index]
+      return typeof name === 'string' && schema !== null && typeof schema === 'object'
+        && 'name' in schema && schema.name === name
+    })
+  if (tools !== TOOLS_TOKEN && !namesMatch) {
+    throw new Error(`acp-snapshot: pinned request header tools must equal ${TOOLS_TOKEN} or the ordered sidecar tool names`)
   }
   return { ...header, tools: schemas }
 }
@@ -646,6 +653,7 @@ function surfaceEventMessage(record: Record<string, unknown>): Record<string, un
       message = data
       break
     case 'system/message':
+    case 'developer/message':
     case 'assistant/message':
     case 'tool/result':
       message = data.message
@@ -762,7 +770,7 @@ export function stabilizeFixtureMessageIds(logs: readonly string[], fixtures: re
 /** One packed row's member times, or `undefined` for an ordinary record. */
 function packedTimes(record: Record<string, unknown>): number[] | undefined {
   if (!PACKED_CHUNK_ROW_TYPES.has(record.type as string)) return undefined
-  const row = record as unknown as { time0?: number; data: { dt: number[] } }
+  const row = record as { time0?: number; data: { dt: number[] } }
   const times = [row.time0 ?? 0]
   for (const gap of row.data.dt) times.push((times[times.length - 1] as number) + gap)
   return times
@@ -837,6 +845,32 @@ export function refreshFixtureReplacements(logs: HarvestedLog[], fixtures: strin
   return replacements
 }
 
+/**
+ * Check raw parent/child clocks before normalization, or preserve their equality during refresh.
+ * @param logs - one scenario's parent and child logs with shared Session ids.
+ * @param policy - validate live output, or align refreshed catalogs to the retained child headers.
+ * @returns logs with only conflicting catalog creation times replaced under preserve-headers.
+ */
+export function reconcileCatalogCreationTimes(logs: readonly string[], policy: 'validate' | 'preserve-headers'): string[] {
+  const headers = new Map(logs.map((log) => {
+    const header = parseJsonlRecords(log)[0]
+    return [header?.['id'], header] as const
+  }))
+  return logs.map(log => log.split('\n').map((line) => {
+    if (line.length === 0) return line
+    const record = JSON.parse(line) as Record<string, unknown>
+    if (record.type !== 'subagent/catalog' || !isRecord(record.data)) return line
+    const child = headers.get(record.data.childId)
+    // Partial harvested corpora need not retain every cataloged child log.
+    if (child === undefined || record.data.childCreatedAt === child.createdAt) return line
+    if (policy === 'validate') {
+      throw new Error(`catalog child ${String(record.data.childId)} creation time ${String(record.data.childCreatedAt)} disagrees with child header ${String(child.createdAt)}`)
+    }
+    record.data.childCreatedAt = child.createdAt
+    return JSON.stringify(record)
+  }).join('\n'))
+}
+
 function preserveFixtureVolatiles(record: Record<string, unknown>, existing: Record<string, unknown> | undefined): void {
   if (existing === undefined || existing.type !== record.type) return
   if (record.type === 'session') {
@@ -864,7 +898,7 @@ function preservePackedMemberTimes(
   existingMembers: Record<string, unknown>[],
 ): void {
   if (!PACKED_CHUNK_ROW_TYPES.has(record.type as string)) return
-  const row = record as unknown as { time0: number; data: { dt: number[] } }
+  const row = record as { time0: number; data: { dt: number[] } }
   const firstTime = existingMembers[0]?.time
   if (!Number.isSafeInteger(firstTime)) return
   row.time0 = firstTime as number
@@ -1308,6 +1342,7 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           ...scenario.configPath !== undefined ? { configPath: scenario.configPath } : {},
         })
 
+        reconcileCatalogCreationTimes(result.sessionLogs.map(log => log.content), 'validate')
         for (const log of result.sessionLogs) {
           expect(unknownToolCallIds(log.content), `session ${log.id}: snapshot scenarios must not accept UNKNOWN_TOOL`)
             .toEqual([])
@@ -1361,7 +1396,9 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
               ctx,
             ))))
             : result.sessionLogs.map(log => scrubSessionSnapshot(portableFixture(log.content)))
-          const outputFixtures = redactSessionSnapshotIds(stabilizeFixtureMessageIds(freshFixtures, existingFixtures))
+          const outputFixtures = redactSessionSnapshotIds(stabilizeFixtureMessageIds(
+            reconcileCatalogCreationTimes(freshFixtures, 'preserve-headers'), existingFixtures,
+          ))
           await Promise.all(outputFixtures.map((fixture, index) =>
             writeFile(join(dir, outputFixtureFiles[index] as string), fixture)))
           fixtureFiles = outputFixtureFiles
@@ -1439,8 +1476,8 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
             sessionIds: fixtureContexts.flatMap(context => context.sessionIds),
             cwd: (fixtureContexts[0] as NormalizeContext).cwd,
           }
-          const actualSnapshots = normalizeSessionSnapshots(harvested, ctx)
-          const expectedSnapshots = normalizeSessionSnapshots(fixtures, fixtureCtx)
+          const actualSnapshots = normalizeSessionSnapshots(harvested, ctx, { nativeWriterOutput: true })
+          const expectedSnapshots = normalizeSessionSnapshots(fixtures, fixtureCtx, { nativeWriterOutput: true })
           for (const [index, actual] of actualSnapshots.entries()) {
             expect(actual, `${fixtureFiles[index]} mismatch`).toEqual(expectedSnapshots[index])
           }

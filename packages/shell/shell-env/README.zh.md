@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-shell-env` 提供每次模型 shell 调用——bash 或 pwsh——所运行的受信 `DSH_*` 环境：内置事实如 `DSH_HOME`、`DSH_SHELL=1` 与 agent（智能体）的 `DSH_SESSION_ID`。插件作者可以注册自己的事实，带声明键、按每次执行收集，并随插件释放；重复所有权或未声明的运行时键会明确报错，而不是静默覆盖。注册表不会改变模型看到的其他任何内容——shell 工具拥有各自的 schema 与提示词。任何挂载了模型 shell 工具的组合都适合选择它；配置只决定 Harness 主目录。
+`dsh-shell-env` 提供每次模型 shell 调用——bash 或 pwsh——所运行的受信 `DSH_*` 环境：内置事实如 `DSH_HOME`、`DSH_SHELL=1`、agent（智能体）的 `DSH_SESSION_ID`，以及所启动 profile 的 `DSH_PROFILE` 与 `DSH_PROFILE_DIR`。插件作者可以注册自己的事实，带声明键、按每次执行收集，并随插件释放；重复所有权或未声明的运行时键会明确报错，而不是静默覆盖。注册表不会改变模型看到的其他任何内容——shell 工具拥有各自的 schema 与提示词。任何挂载了模型 shell 工具的组合都适合选择它；配置只决定 Harness 主目录。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 每次 shell 调用都会收到什么
 
-每次调用都会收到 `DSH_HOME`（Harness 主目录的绝对路径）、`DSH_SHELL=1`，agent 调用还会收到 `DSH_SESSION_ID`（调用方会话的 id）。
+每次调用都会收到 `DSH_HOME`（Harness 主目录的绝对路径）、`DSH_SHELL=1`，agent 调用还会收到 `DSH_SESSION_ID`（调用方会话的 id）。启动器提供了 profile 上下文时，每次调用还会收到 `DSH_PROFILE`（profile 名）与 `DSH_PROFILE_DIR`（其绝对目录；其 `node_modules` 只存放 profile 自行安装的包，harness 自带的组合包从 dsh 安装目录解析）；不带 profile 启动的组合则两者都没有。
 
 ### 添加你自己的环境事实
 
@@ -64,7 +64,7 @@ contributor 必须声明它返回的每个键；返回未声明或非字符串�
 
 ### 可能出什么问题
 
-两个 contributor 声明同一个键，或 contributor 声称拥有保留内置键（`DSH_HOME`、`DSH_SHELL`、`DSH_SESSION_ID`），都会导致插件加载时明确报错。`DSH_*` 键必须全大写并带下划线（例如 `DSH_REGION`），缺少描述也会让注册失败。
+两个 contributor 声明同一个键，或 contributor 声称拥有保留内置键（`DSH_HOME`、`DSH_SHELL`、`DSH_SESSION_ID`、`DSH_PROFILE`、`DSH_PROFILE_DIR`），都会导致插件加载时明确报错。`DSH_*` 键必须全大写并带下划线（例如 `DSH_REGION`），缺少描述也会让注册失败。
 
 -----
 
@@ -80,7 +80,7 @@ contributor 必须声明它返回的每个键；返回未声明或非字符串�
 
 - **受信命名空间，每次调用重建。** 环境是归 Harness 所有的 `DSH_*` 命名空间：shell 执行器丢弃继承的 `DSH_*` 值，并为每次执行合并注册表的当前快照，因此嵌套 harness 与并发的父子 agent 无法泄漏陈旧身份，`process.env` 也永不被修改。
 - **声明所有权，冲突明确报错。** contributor 预先声明键，使重复所有权在第一条命令之前就被发现；resolver 只能返回已声明的键。
-- **内置键留在这里。** `DSH_HOME`、`DSH_SHELL` 与 `DSH_SESSION_ID` 为注册表保留；contributor 不能声称拥有它们。
+- **内置键留在这里。** `DSH_HOME`、`DSH_SHELL`、`DSH_SESSION_ID`、`DSH_PROFILE` 与 `DSH_PROFILE_DIR` 为注册表保留；contributor 不能声称拥有它们。
 
 ### 源码地图
 
@@ -127,7 +127,7 @@ contributor 必须声明它返回的每个键；返回未声明或非字符串�
 
 这些限制说明注册表何时不合适或需要小心使用。它们是当前包约束，不是任务积压。
 
-- **`list()` 只枚举插件贡献的变量**——注册表自有的内置键（`DSH_HOME`、`DSH_SHELL`、`DSH_SESSION_ID`）不包含在内，因此诊断、提示词或 UI 代码不得把 `list()` 当作完整的环境目录。
+- **`list()` 只枚举插件贡献的变量**——注册表自有的内置键（`DSH_HOME`、`DSH_SHELL`、`DSH_SESSION_ID`、`DSH_PROFILE`、`DSH_PROFILE_DIR`）不包含在内，因此诊断、提示词或 UI 代码不得把 `list()` 当作完整的环境目录。
 
 <a id="dev-note"></a>
 ### 开发备注

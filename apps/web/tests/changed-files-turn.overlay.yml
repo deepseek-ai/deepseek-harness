@@ -1,0 +1,5 @@
+# This transcript includes the no-desktop state on every test platform, so the
+# card header stays a label and rows preview in the Sidebar.
+- id: session-controller
+  config:
+    nativeOpen: false

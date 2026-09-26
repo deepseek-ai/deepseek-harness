@@ -40,7 +40,7 @@ export function assertSessionWireEvent(value: unknown): asserts value is Session
     throw new Error(`${subject} has an invalid envelope`)
   }
   // Event names and payloads are merge-extensible; only event-local owner rules run here.
-  const current = event as unknown as SessionEvent
+  const current = event as SessionEvent
   validateSurfaceMetadata(current)
   validateSessionEventData(current, subject)
 }

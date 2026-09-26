@@ -2,7 +2,7 @@
 
 [English](deepseek-llm-api-wire-extensions.md) | 中文
 
-本参考文档定义 [`@deepseek-ai/dsh-llm-deepseek`](../packages/llm/llm-deepseek/README.zh.md) 在 `deepseek-official` Messages 与 Chat Completions 请求中发送的全部 DeepSeek Harness 特有 HTTP 标头和附加 JSON 字段。本文不重复定义 DeepSeek 上游 API 持有的字段。提供方无关的 LLM（大语言模型）接口与 `llm-pi-ai` 均不实现这些扩展。
+本参考定义 [`@deepseek-ai/dsh-llm-deepseek`](../packages/llm/llm-deepseek/README.zh.md) 在 `deepseek-official` Messages 请求中发送的全部 DeepSeek Harness 专用 HTTP 标头与附加 JSON 字段。它不重新定义上游 DeepSeek API 自有字段。提供方无关的 LLM 接口与 `llm-pi-ai` 不实现这些扩展。
 
 适配器将这些扩展发送至已解析的 `baseURL`，包括已配置的网关。扩展位于 `messages`、系统提示词和工具 schema 之外，因此不会增加模型输入 token，也不会改变模型可见前缀。
 
@@ -34,7 +34,7 @@
 
 适配器先序列化包括确切 `messages` 在内的完整基础正文，再让已注册提供方准备字段。提供方会收到该不可变正文、请求取消信号，以及可选的 `sessionId` 和辅助调用 `purpose`。提供方返回 `undefined` 时，本次请求会省略其字段。
 
-系统将已准备的 JSON 值与提供方持有的状态分离，再将其作为基础字段的顶层同级成员合并，并序列化到同一个 HTTP 正文中。准备失败或冲突会阻止请求。组合未挂载注册表时，适配器发送未经扩展的基础正文。
+系统将已准备的 JSON 值与提供方持有的状态分离，再将其作为基础字段的顶层同级成员合并，并序列化到同一个 HTTP 正文中。准备失败或冲突会阻止请求。合并后的正文无法序列化时，适配器发送不含任何扩展字段的基础正文，跳过接受事务，让贡献方在之后的请求中重发自身状态，并记录被省略的字段名。组合未挂载注册表时，适配器发送未经扩展的基础正文。
 
 已配置端点返回 HTTP 2xx 后，适配器会在读取 SSE 正文之前运行已准备的 `accept()` 事务。传输失败和非 2xx 响应不会接受任何贡献。即使端点返回 2xx，接受失败仍会使模型请求失败。接受仅记录端点级 HTTP 成功，不表示 SSE 流已完整结束，也不表示端点已持久化扩展。
 
@@ -73,7 +73,7 @@
 
 ## `dsh_session_log`
 
-[`@deepseek-ai/dsh-session-log-deepseek`](../packages/session/session-log-deepseek/README.zh.md) 贡献权威会话日志的一段连续后缀。该字段默认启用。它适用于携带存活会话且至少存在一个事件的请求；直接请求、陈旧会话 id 或空日志会省略该字段，组合可用 `enabled: false` 禁用它。下方示例使用逻辑 Session 格式 2 仅为说明协议字段，并不标识[当前写入格式](session-format-status.zh.md)。
+[`@deepseek-ai/dsh-session-log-deepseek`](../packages/session/session-log-deepseek/README.zh.md) 贡献权威会话日志的一段连续后缀。该字段默认启用。它适用于携带存活会话且至少存在一个事件的请求；直接请求、陈旧会话 id 或空日志会省略该字段，第一条待发事件本身超过 `maxBytes` 或无法序列化的请求也会省略该字段；组合可用 `enabled: false` 禁用它。下方示例使用逻辑 Session 格式 2 仅为说明协议字段，并不标识[当前写入格式](session-format-status.zh.md)。
 
 ```json
 {
@@ -110,7 +110,7 @@
 | `throughSeq` | 非负整数 | 本次请求所表示的最大序号 |
 | `events` | 数组 | 从 `afterSeq + 1` 到 `throughSeq` 的连续事件 |
 
-首次上传使用 `afterSeq: -1`，并携带当前的完整日志。此后每次上传都从同一会话 id 的最大已接受水位（watermark）之后开始。发送方为每次请求仅快照一次事件数组；快照后的追加内容属于后续请求。
+首次上传使用 `afterSeq: -1`，此后每次上传都从同一会话 id 的最大已接受水位（watermark）之后开始。每次上传携带从该位置起、序列化后能放进 `maxBytes` 的最长连续事件段；`maxBytes` 默认 8 MiB，按 UTF-8 字节计算，包括 header 与数值字段，因此超过上限的积压会分多次已接受的请求传完。发送方为每次请求仅快照一次事件数组；快照后的追加内容属于后续请求。
 
 ### Session 协议 header
 
@@ -151,12 +151,12 @@
 
 `delivery-accepted` 表示已配置端点为包含该字段的 LLM 请求返回 HTTP 2xx。它不表示 SSE 已完整结束，也不表示远端已经持久化。该事件的 `throughSeq` 必须标识一项更早的事件，`sessionId` 标识已发送后缀所属的 Session，`sessionFormatVersion` 则把水位绑定到该逻辑 generation。缺少该字段表示历史格式 v0。
 
-发送方只会为当前 Session id 与格式 generation 折叠最大的匹配 `throughSeq`，因此并发已接受请求无法使游标倒退，其他 generation 的水位也不能授权当前后缀。恢复后的进程会从持久日志重建游标。fork 会忽略命名其他 Session 的继承水位，因此先发送自身完整的继承前缀，再以子会话 id 推进。水位事件自身属于下一段未发送后缀。
+发送方只会为当前 Session id 与格式 generation 折叠最大的匹配 `throughSeq`，因此并发已接受请求无法使游标倒退，其他 generation 的水位也不能授权当前后缀。恢复后的进程会从持久日志重建游标。fork 会忽略命名其他 Session 的继承水位，因此从序号零开始、按 `maxBytes` 分多次请求上传自身的继承前缀，再以子会话 id 推进。水位事件自身属于下一段未发送后缀。
 
-传输失败和非 2xx 响应不会追加水位。端点接受后、本地持久化前发生崩溃时，系统可能重新发送已接受范围；不确定性只会产生重复，绝不会产生序号缺口。系统没有独立上传存储、大小上限或截断路径。
+传输失败、非 2xx 响应，以及序列化失败后不带扩展字段发出的请求，都不会追加水位。端点接受后、本地持久化前发生崩溃时，系统可能重新发送已接受范围；不确定性只会产生重复，绝不会产生序号缺口。系统没有独立上传存储或截断路径；`maxBytes` 负责限制每次请求的字段大小。
 
 ## 暴露内容与接收方要求
 
 请求标头会暴露 Harness 应用版本、一个匿名 Harness-home 身份和可选的会话身份。`dsh_plugin_packages` 会暴露存活 npm 包的名称与版本。除非组合禁用该字段，`dsh_session_log` 可能暴露会话工作目录、系统提示词快照、用户与 Assistant 内容、嵌入式 Assistant stream、失败 attempt 输出、工具参数与结果、压缩摘要、反馈和插件持有的事件。适配器 API key 不是会话事件，因此不会进入该字段。通过 `baseURL` 选择的网关会收到与官方端点相同的值。
 
-接收方按名称定位扩展字段，按各字段自己的 `version` 分派，保留不同的包版本，并忽略 JSON 成员顺序。会话日志接收方必须先校验连续序号范围，再解释事件类型。遇到不带 `ignorable: true` 的未知权威事件时，接收方无法进行无损重建。即使缺少注册表或某项贡献，基础请求仍然可用；字段缺失表示该项贡献不适用于本次请求。
+接收方按名称定位扩展字段，按各字段自己的 `version` 分派，保留不同的包版本，并忽略 JSON 成员顺序。会话日志接收方必须先校验连续序号范围，再解释事件类型。遇到不带 `ignorable: true` 的未知权威事件时，接收方无法进行无损重建。即使缺少注册表或某项贡献，基础请求仍然可用；字段缺失表示该项贡献不适用于本次请求。会话日志积压补传期间，`throughSeq` 落后于会话的最新事件，因此 2xx 并不表示接收方已持有当前完整日志。

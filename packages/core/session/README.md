@@ -47,11 +47,13 @@ session.append('user/message', { role: 'user', content: [{ type: 'text', text: '
 session.deriveMessages()         // the derived model history
 ```
 
-Surface events (`system/message`, `user/message`, `assistant/message`, `tool/result`) require `surfaceOp` in both typed events and append input. A replacement uses exactly `{ op: 'replace', startSeq, endSeq }`, with inclusive `SessionSeq` endpoints in current surface order. An Assistant message embeds its exact compact provider stream and forbids `sourceEventSeqs`. Known log-only events forbid both metadata fields and never produce a message.
+Surface events (`system/message`, `developer/message`, `user/message`, `assistant/message`, `tool/result`) require `surfaceOp` in both typed events and append input. A replacement uses exactly `{ op: 'replace', startSeq, endSeq }`, with inclusive `SessionSeq` endpoints in current surface order. An Assistant message embeds its exact compact provider stream and forbids `sourceEventSeqs`. Known log-only events forbid both metadata fields and never produce a message.
+
+`developer/message` stores tool-addition names and a `headerSeq` reference to an earlier `request/header`. The reference is required exactly when additions are present, and each name must identify exactly one complete schema in that header. Removals name the tool without a header reference. Historical headers remain available across restart, fork, and surface replacement; the current registry and latest header do not select an earlier addition's definition. `sourceEventSeqs` continues to describe derivation and replaced nodes.
 
 Plugins declare content-changing events with `@messageProjection` and register a pure definition through `ctx.sessions.registerMessageProjection()`. Session calls the definition before accepting an event and caches its immutable message updates. Missing definitions reject append and restore; unloading a used definition also blocks cached reads. Detached constructors and `foldSurface(events, projections)` require explicit definitions. Reconstructors pass the fold's `projectedMessages` to `deriveEventMessage()`; live instance methods apply the same projections automatically. [Plugin-owned message projections](../../../.agents/notes/implemented/architecture/2026-09-11-plugin-owned-message-projections.md) defines ownership and offline assembly.
 
-Append, seed/restore, and event adoption/snapshot reject any `header.system` and exactly empty optional request-header fields (`tools: []`, `adapterDefaults: {}`) instead of normalizing input. Tool-result `data.error` is allowed only when `message.content[0].isError === true`; failure identity remains optional. Rejected appends do not change the log, derived state, or event feed. Adoption validates event-local metadata but not referenced history or replacement membership.
+Append, seed/restore, and event adoption/snapshot reject any `header.system` and exactly empty optional request-header fields (`tools: []`, `adapterDefaults: {}`) instead of normalizing input. Tool-result `data.error` is allowed only when the first-class message has `isError === true`; failure identity remains optional. Rejected appends do not change the log, derived state, or event feed. Adoption validates event-local metadata but not referenced history or replacement membership.
 
 `system/message` holds the rendered system prompt: the first one is surface node 0, the prepared call capability governs admission, with a non-empty rendering consolidated at the first system node on an incapable route or appended after cached history inside a continuing `in-history` series; empty system nodes project to no message, so clearing the prompt requires logged empty replacements of all active system nodes, not just the latest; the surface fold rejects a replacement covering node 0 while it is a `system/message` unless the replacing event is itself a `system/message` over exactly that node, while later system nodes carry no protection and a compaction range may shadow them ([decision](../../../.agents/notes/implemented/architecture/2026-09-02-system-prompt-as-surface-node.md)).
 
@@ -63,7 +65,7 @@ Session log positions use two numeric types. `SessionSeq` identifies an existing
 
 ### Fork a session
 
-`ctx.sessions.fork(source, boundary?, childSessionId?)` selects source events through an inclusive `boundary` seq (default: the current last event), requires the prefix to end outside an open turn, and creates a live child session with lineage metadata. A tool-time delegation that must branch mid-turn clips to a completed prefix instead.
+`ctx.sessions.fork(source, boundary?, childSessionId?)` copies an exact inclusive event prefix (default: the last event) from a live source. `buildForkSeed` in `dsh-session/fork` places an inherited marker after the copied events, adds missing error tool results only for the open step, and closes that step and turn with a `forked` reason. Closed steps and turns remain unchanged, including historical missing results. The marker and closers belong to the child; `inheritedEventCount` counts only the copied prefix.
 
 The logical `SessionHeader.isSeeded` field reports whether fork history exists without exposing a positional integer. `Session.inheritedEventCount` retains the exact checked `SessionLogOffset`; `ownEvents()` returns events at and after that cut, and `isOwnSeq(seq)` accepts only an existing child-owned position. A low-level seeded constructor must supply an explicit `seed` and `inheritedEventCount` because the constructor seed can contain child-owned setup events after the inherited prefix.
 
@@ -107,7 +109,7 @@ Every append uses the shared iterative `snapshotJsonValue()` pass, which reads, 
 
 ### Derived history
 
-`deriveMessages()` caches deep-frozen projections and returns a fresh array per call. The four surface event types (`system/message`, `user/message`, `assistant/message`, `tool/result`) supply their recorded message identities and content; an empty-content system node projects to no message. Plugin-owned projections change derived content without mutating recorded messages. Replacements and projection decisions invalidate the cache. Embedded Assistant streams and `assistant/attempt` events remain replay and diagnostic data only.
+`deriveMessages()` caches deep-frozen projections and returns a fresh array per call. The surface event types (`system/message`, `developer/message`, `user/message`, `assistant/message`, `tool/result`) supply their recorded message identities and content; empty-content system and developer nodes project to no message. Plugin-owned projections change derived content without mutating recorded messages. Replacements and projection decisions invalidate the cache. Embedded Assistant streams and `assistant/attempt` events remain replay and diagnostic data only.
 
 ### The request header
 
@@ -137,7 +139,7 @@ The package-level contract is enough for most consumers; read these when you nee
 
 #### What the model sees
 
-The model receives the complete messages from `system/message`, `user/message`, `assistant/message`, and `tool/result` surface entries with logged projections applied, the system prompt first. Identities, roles, sources, and unmodified blocks retain their original values; projections never mint identities. Direct prompts and injected context remain separate `user/message` events whose sources preserve their attribution. Embedded streams, `assistant/attempt`, boundaries, and other log-only facts add no message.
+The model receives the complete messages from `system/message`, `developer/message`, `user/message`, `assistant/message`, and `tool/result` surface entries with logged projections applied, the system prompt first. Identities, roles, sources, and unmodified blocks retain their original values; projections never mint identities. Direct prompts and injected context remain separate `user/message` events whose sources preserve their attribution. Embedded streams, `assistant/attempt`, boundaries, and other log-only facts add no message.
 
 #### Token effect
 
@@ -147,11 +149,11 @@ Appended surface entries are resent on later steps. A `replace` surface operatio
 
 Appended surface entries preserve reusable prefixes. A `replace` operation invalidates reuse from the first shadowed message even though the underlying event log stays append-only.
 
-### Crash-repair result
+### Crash-repair and fork results
 
 #### What the model sees
 
-If recovery finds an assistant tool request with no durable `tool/call`, its synthetic `TOOL_NOT_STARTED` result says `The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.` If a durable `tool/call` has no result, its `TOOL_OUTCOME_UNKNOWN` result says `The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.`
+If recovery finds an assistant tool request with no durable `tool/call`, its synthetic `TOOL_NOT_STARTED` result says `The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.` If a durable `tool/call` has no result, its `TOOL_OUTCOME_UNKNOWN` result says `The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.` Fork-generated results describe only the inherited records: the parent may have started or completed a call after the selected event. `TOOL_NOT_STARTED` means the prefix contains no start record; `TOOL_OUTCOME_UNKNOWN` means it contains a start but no result. Both tell the model to retry only read-only or idempotent operations without further checks; operations with side effects require external verification or user input. See the [fork decision](../../../.agents/notes/implemented/feature/2026-08-18-arbitrary-seq-session-fork.md).
 
 #### Token effect
 
@@ -165,7 +167,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The session reconstructs the tool schemas and call config that the loop actually sent; the system prompt is part of `deriveMessages()` as surface node 0 and, after an in-history update, as the latest system node. Header events add no message to history and hold no copy of the prompt.
+The session reconstructs active tool schemas and call config from request headers; provider-specific deferred and retained declarations are derived at dispatch. `toolHistory()` caches a stateful fold over committed headers and developer messages, consuming only unseen events on subsequent reads. It resolves additions through their historical `headerSeq`, returns immutable snapshots, and restarts declarations on an explicit request series or a changed retained definition. Restoring a retained name with an unchanged definition continues the series; the recorded addition re-offers it. Both loop requests and compaction calls use this state. Headers lacking matching update records use complete active declarations. Same-name schema changes are allowed and invalidate prefix reuse even on `in-history` routes; registration-time rejection against historical tools is deferred ([rationale](../../../.agents/notes/implemented/architecture/2026-09-20-dynamic-tool-updates.md)). The system prompt remains part of `deriveMessages()`; header events add no message or prompt copy.
 
 #### Token effect
 
@@ -182,8 +184,8 @@ Logging causes no invalidation, and exact reconstruction preserves request-prefi
 
 These limits define when the session store needs special care. They are current package constraints, not a task backlog.
 
-- **`fork()` cuts only at stable boundaries of live sessions** — the selected prefix must end outside an open turn and the source must be in the store; forking a persisted-but-unloaded session is excluded from the fork API.
-- **`SESSION_FORMAT_VERSION` names the [current logical representation](../../../docs/session-format-status.md)** — the current reader rejects retired `header.system` and validates `system/message` payloads and protected-head rewrites. Historical headers and events belong to adjacent format packages; the adjacent migration chain converts supported history before constructing `Session`, and the write-open path publishes only the current-format successor. Equal-version unknown events require the envelope's explicit `ignorable` marker, which does not promise safe structural migration ([mechanism](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md)).
+- **Live-source Store API** — persisted-but-unloaded sources use the Host observation path. Fork closes only the open tail and does not repair missing results in previously closed steps.
+- **`SESSION_FORMAT_VERSION` names the [current logical representation](../../../docs/session-format-status.md)** — the current reader rejects retired `header.system` and validates `system/message` payloads and protected-head rewrites. Historical headers and events belong to adjacent format packages; the [adjacent migration chain](../../session/session-format-catalog/README.md) converts supported history before constructing `Session`, and the write-open path publishes only the current-format successor. Equal-version unknown events require the envelope's explicit `ignorable` marker, which does not promise safe structural migration ([mechanism](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md)).
 - **`TurnEndReasonMap` omits the ACP-named `refusal` / `max_turn_requests` variants** — producer-gated: they land when an adapter or the loop first emits them.
 - **No session tree beyond fork** — a pi-style entry tree over branched sessions is deferred unless a consumer needs more than boundary-based forking.
 

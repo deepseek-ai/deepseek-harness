@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-10-after-call-compaction-pressure-and-overflow-recovery.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-10-after-call-compaction-pressure-and-overflow-recovery.md
-2026-07-10-after-call-compaction-pressure-and-overflow-recovery.md: 89c8917484c11057ff2e6b55e2311e83f724f7ed
-2026-07-10-after-call-compaction-pressure-and-overflow-recovery.zh.md: 48f954f2c4720894548ecab387965d3a3d1799b0
+/agent-note-after-call-compaction-pressure-and-context-overflow-recovery:
+  en: 8bfe0d8b79d9840f
+  zh: 6921dc88e5ef9c83
+/agent-note-after-call-compaction-pressure-and-context-overflow-recovery/problem:
+  en: 036da3e545debe29
+  zh: 82e031a3120ca36c
+/agent-note-after-call-compaction-pressure-and-context-overflow-recovery/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-after-call-compaction-pressure-and-context-overflow-recovery/decision/successful-pressure-runs-at-the-next-pre-step-boundary:
+  en: 5f5a656b38730ec6
+  zh: aece66b85cc610cf
+/agent-note-after-call-compaction-pressure-and-context-overflow-recovery/decision/request-recovery-is-limited-to-the-final-model-boundary:
+  en: fb7da851bf6a020e
+  zh: b40dc932d6c3101c
+/agent-note-after-call-compaction-pressure-and-context-overflow-recovery/decision/compactionengine-exposes-intent-not-token-accounting:
+  en: be9505b3d73c7f6b
+  zh: ed753f1afec2787a
+/agent-note-after-call-compaction-pressure-and-context-overflow-recovery/testing:
+  en: b0e1704bd3724301
+  zh: 2279353ff615f183
+/agent-note-after-call-compaction-pressure-and-context-overflow-recovery/alternatives-considered:
+  en: 3cb5363732ef5758
+  zh: 07746411cc80878f
+/agent-note-after-call-compaction-pressure-and-context-overflow-recovery/consequences:
+  en: dfe515fb04127eb5
+  zh: 1924b2e1e9997910

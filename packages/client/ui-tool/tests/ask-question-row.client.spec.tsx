@@ -7,6 +7,7 @@
  * fallbacks on malformed results.
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -32,17 +33,17 @@ const resultNode = (argsRaw: string, resultText: string | null, over?: Partial<T
 })
 
 const runningCall = (argsRaw: string) =>
-  ({ callId: 'c1', name: 'ask_user_question', argsRaw, turn: 1, step: 1, time: 1_000, subCalls: [] })
+  ({ phase: 'start' as const, callId: 'c1', name: 'ask_user_question', argsRaw, turn: 1, step: 1, time: 1_000, subCalls: [] })
 
 const t = makeTranslate(zh, commonZh)
 
-function rowProps(block: unknown): Parameters<typeof AskQuestionRow>[0] {
+function rowProps(block: Parameters<typeof AskQuestionRow>[0]['block']): Parameters<typeof AskQuestionRow>[0] {
   return {
-    callId: 'c1', toolName: 'ask_user_question', block, t,
+    useDisclosure, callId: 'c1', toolName: 'ask_user_question', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), t,
     openFile: vi.fn(),
     sessionId: 's1',
     useSessions: () => undefined,
-  } as unknown as Parameters<typeof AskQuestionRow>[0]
+  } as Parameters<typeof AskQuestionRow>[0]
 }
 
 const answers = (entries: unknown[]): string => JSON.stringify({ answers: entries })
@@ -97,7 +98,7 @@ describe('AskQuestionRow', () => {
       ],
     }))} />)
 
-    expect(screen.getByText(`ask_user_question · ${READABLE_ARGS}`)).toBeTruthy()
+    expect(screen.getByText(READABLE_ARGS)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { expanded: false }))
     expect(view.container.querySelector('[class*="ioCard"]')).not.toBeNull()
     expect(view.container.textContent).toContain('"type": "reasoning"')
@@ -123,7 +124,7 @@ describe('AskQuestionRow', () => {
     { label: 'empty result content', text: null },
   ])('settled result falls back to the generic summary on $label', ({ text }) => {
     render(<AskQuestionRow {...rowProps(resultNode(ARGS, text))} />)
-    expect(screen.getByText(`ask_user_question · ${ARGS}`)).toBeTruthy()
+    expect(screen.getByText(ARGS)).toBeTruthy()
   })
 
   it.each([
@@ -211,19 +212,21 @@ describe('AskQuestionRow', () => {
     const view = render(<AskQuestionRow {...rowProps(resultNode(ARGS, null,
       { isError: true, error: { name: 'Interrupted', code: 'interrupted' } }))} />)
     expect(view.container.querySelector('[data-state="stopped"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-state="stopped"] svg')).not.toBeNull()
     expect(screen.queryByText('已取消')).toBeNull()
-    expect(screen.getByText(`ask_user_question · ${ARGS}`)).toBeTruthy()
+    expect(screen.getByText(ARGS)).toBeTruthy()
   })
 
   it('other tool errors keep the generic summary with the error state', () => {
     const view = render(<AskQuestionRow {...rowProps(resultNode(ARGS, null, { isError: true }))} />)
     expect(view.container.querySelector('[data-state="error"]')).not.toBeNull()
-    expect(screen.getByText(`ask_user_question · ${ARGS}`)).toBeTruthy()
+    expect(view.container.querySelector('[data-state="error"] svg')).not.toBeNull()
+    expect(screen.getByText(ARGS)).toBeTruthy()
   })
 
   it('window-truncated result (call head lost) falls back to the callId summary', () => {
     render(<AskQuestionRow {...rowProps(resultNode('', null, { call: null }))} />)
-    expect(screen.getByText('ask_user_question · c1')).toBeTruthy()
+    expect(screen.getByText('c1')).toBeTruthy()
   })
 
   it('leading toggle expands the raw args body', () => {

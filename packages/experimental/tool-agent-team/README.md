@@ -57,11 +57,11 @@ Try it by asking the Lead model: "create a teammate named reviewer to check the 
 The nine tools group into four capabilities:
 
 - **Create a teammate** — `spawn_teammate` takes a name, a description, and the initial task; only the Lead can call it.
-- **Send messages** — `send_message` steers a running member at its nearest step boundary, starts an idle member, and cold-resumes an inactive teammate.
-- **See and wait** — `list_agents` shows the roster with live status; `wait_agent` waits for the next team change; `interrupt_agent` stops a teammate's current turn (Lead only).
+- **Send messages** — `send_message` steers a running member at its nearest step boundary, starts or resumes an inactive member.
+- **See and wait** — `list_agents` returns each member’s `target` and availability; `wait_agent` waits for the next team change; `interrupt_agent` stops a teammate's current turn (Lead only).
 - **Manage the task board** — `team_task_create`, `team_task_list`, `team_task_get`, and `team_task_update` add, browse, read, and update shared tasks.
 
-Any member can message any other member and use the task board; only the Lead creates and interrupts teammates. Task updates keep the domain's owner and revision checks, so an outdated edit is rejected instead of overwriting newer work.
+Creation and listing results identify members by `target`, with no member Session ID. Use that value in message and interrupt calls or the task tools’ `owner` parameter; task `ownerName` uses the same value. `inactive` means no turn is executing, whether the member is loaded or must be resumed; it does not describe task completion or outcome. `provisioning` and `failed` describe member creation. Any member can message any other member and use the task board; only the Lead creates and interrupts teammates. Task updates keep the domain's owner and revision checks, so an outdated edit is rejected instead of overwriting newer work.
 
 ### What success and failure look like
 
@@ -125,7 +125,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-One shared system policy states the explicit-delegation requirement, shared-cwd behavior, filesystem stale-version recovery, Bash/formatter/codegen risk, task and write-scope coordination, Steer delivery, the no-retry mailbox rule, and the Lead's duty to wait before answering. All nine Team schemas are identical for Leads and teammates; execution enforces Lead-only operations. `spawn_teammate` prefixes its initial user message with `<system-reminder>\nYou are teammate "<name>".\n</system-reminder>`, followed by a blank line and the task. The prefix contains no Team id and works when runtime context is disabled. Forks inherit history without an additional Lead identity message.
+One shared system policy states the explicit-delegation requirement, shared-cwd behavior, filesystem stale-version recovery, Bash/formatter/codegen risk, task and write-scope coordination, Steer delivery, the no-retry mailbox rule, and the Lead's duty to wait before answering. All nine Team schemas are identical for Leads and teammates; execution enforces Lead-only operations. `spawn_teammate` prefixes its initial user message with `<system-reminder>\nYou are teammate "<name>".\nYour Team Lead is named "lead".\nUse list_agents({}) to find your teammates and their names.\nTo message your Team Lead, use send_message({ target: "lead", message: "..." }).\nTo message another teammate, use send_message({ target: "<teammate name>", message: "..." }).\n</system-reminder>`, followed by a blank line and the task. The prefix contains no Team id and works when runtime context is disabled. Forks inherit history without an additional Lead identity message.
 
 #### Token effect
 

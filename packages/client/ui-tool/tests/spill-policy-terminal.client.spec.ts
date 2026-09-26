@@ -4,6 +4,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunSpec, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
+import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { SpillLocator, SpillStore, type SaveTextSpill, type SpillRef } from '@deepseek-ai/dsh-spill'
@@ -34,13 +35,13 @@ class MemorySpillStore extends SpillStore {
 
 const shellArgs = { command: 'fixture-output', description: 'Return shell output fixture' }
 
-async function executeShell(text: string, nested: boolean, name = 'bash', maxInlineBytes = 256) {
+async function executeShell(text: string, nested: boolean, name = 'bash', maxInlineTokens = 256) {
   const ctx = new Context()
   try {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime, { mode: 'both' })
     await ctx.plugin(MemorySpillStore)
-    await ctx.plugin(SpillPolicy, { maxInlineBytes })
+    await ctx.plugin(SpillPolicy, { maxInlineTokens })
     if (nested) {
       // The real registry and spill policy own nested output; evaluator execution has its own process suite.
       class BindingRuntime extends PtcRuntime {
@@ -136,7 +137,7 @@ describe.each([
       expect(block.content).toHaveLength(1)
       const preview = block.content[0]!
       if (preview.type !== 'text') throw new Error('expected a plain-text spill preview')
-      expect(Buffer.byteLength(preview.text, 'utf8')).toBeLessThanOrEqual(256)
+      expect(estimateContent(block.content)).toBeLessThanOrEqual(256)
       expect(preview.text).toContain('HEAD')
       if (marker !== '') expect(preview.text).toContain(marker)
       expect(terminalCardModel(block)).toBeNull()
@@ -146,7 +147,7 @@ describe.each([
     it('keeps a notice-only result generic when no preview fits', async () => {
       const original = '雪'.repeat(1_000) + '\n[exit code: 9]'
       const notice = formatSpillNotice({ kind: 'exact', count: Buffer.byteLength(original, 'utf8') }, spillReference)
-      const { block, saves } = await executeShell(original, nested, name, Buffer.byteLength(notice, 'utf8'))
+      const { block, saves } = await executeShell(original, nested, name, estimateContent([{ type: 'text', text: notice }]))
       expect(block.content).toEqual([{ type: 'text', text: notice }])
       expect(saves).toHaveLength(1)
       expect(saves[0]!.bytes).toEqual(Buffer.from(original, 'utf8'))

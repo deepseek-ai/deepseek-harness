@@ -1,0 +1,9 @@
+/* The Turn tail's created-task stack: adjacent cards sit 10px apart, and the
+   stack keeps the 4px vertical offset the cards' own margins used to state
+   against the closing prose around them. */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0;
+}

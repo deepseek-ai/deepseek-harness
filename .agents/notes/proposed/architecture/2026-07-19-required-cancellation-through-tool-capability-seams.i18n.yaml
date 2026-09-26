@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-19-required-cancellation-through-tool-capability-seams.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-07-19-required-cancellation-through-tool-capability-seams.md
-2026-07-19-required-cancellation-through-tool-capability-seams.md: 722eefc3c79d3c1c589696bc1876d10ccbce77ea
-2026-07-19-required-cancellation-through-tool-capability-seams.zh.md: 80d751e22cebd16d878f09ae9a5c15996c337603
+/agent-note-required-cancellation-through-tool-reachable-capability-seams:
+  en: 7999f4da8ee4fe80
+  zh: ea49c90e2bbaacb8
+/agent-note-required-cancellation-through-tool-reachable-capability-seams/problem:
+  en: c244ddd6aadf87ad
+  zh: d30d623e9bf25c6b
+/agent-note-required-cancellation-through-tool-reachable-capability-seams/proposal:
+  en: 20ed2d4cacc14f0c
+  zh: 19ee19bcf3596048
+/agent-note-required-cancellation-through-tool-reachable-capability-seams/proposal/scope-boundary:
+  en: c9df2c946d26f728
+  zh: cc5bcd1710a864ef
+/agent-note-required-cancellation-through-tool-reachable-capability-seams/alternatives-considered:
+  en: 0f2e31037bb1071c
+  zh: 6c654c553300ceb5
+/agent-note-required-cancellation-through-tool-reachable-capability-seams/acceptance-criteria:
+  en: a439a907dc6b2457
+  zh: a693d1b8bb05b67f
+/agent-note-required-cancellation-through-tool-reachable-capability-seams/risks:
+  en: c071970c88e73cb7
+  zh: 58eaf135ac19ecc9

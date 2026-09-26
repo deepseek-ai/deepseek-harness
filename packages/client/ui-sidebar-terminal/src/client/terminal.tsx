@@ -2,7 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { Button, IconPlusOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TerminalViewState, TerminalView } from '@deepseek-ai/dsh-api-terminal-controller/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
@@ -29,7 +29,7 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }: Ter
   useEffect(() => model.mount(), [model])
   if (state === undefined) return null
   const newTerminal = <Button variant="primary" size={state.issue === 'missingTerminal' ? 'md' : 'sm'}
-    icon={<span className={css.actionIcon} aria-hidden="true"><IconPlusOutline16 /></span>}
+    icon={<span className={css.actionIcon} aria-hidden="true"><IconPlusOutlineRegular /></span>}
     onClick={() => { tab.actions.openTab('terminal', { replaceTab: true }) }}>
     {t('new')}
   </Button>

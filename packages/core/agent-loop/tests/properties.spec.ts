@@ -74,7 +74,7 @@ function recordStatus(ctx: Context, agent: Agent): { seen: string[]; dispose: ()
 function userMessageTexts(agent: Agent): string[] {
   return agent.session.snapshotEvents()
     .filter(e => e.type === 'user/message')
-    .map(e => (e.data as { content: { type: string; text?: string }[] }).content.map(b => b.text ?? '').join(''))
+    .map(e => e.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join(''))
 }
 
 function turnNumbers(agent: Agent): number[] {

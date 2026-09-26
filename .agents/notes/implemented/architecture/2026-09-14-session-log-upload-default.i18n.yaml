@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-14-session-log-upload-default.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-14-session-log-upload-default.md
-2026-09-14-session-log-upload-default.md: c1e7c9e050d1b1809ff3abba03fe4e17a3779daa
-2026-09-14-session-log-upload-default.zh.md: d7b6e64098eca3fe07c43272fcba18a3790182e2
+/agent-note-default-deepseek-session-log-upload:
+  en: fcb31f3679ced0e2
+  zh: 0e07b8a08f7e004f
+/agent-note-default-deepseek-session-log-upload/problem:
+  en: f9721b730c7e70c7
+  zh: 367e7839912cb726
+/agent-note-default-deepseek-session-log-upload/decision:
+  en: ec3b05fb70ae490f
+  zh: 59b0691e327855b4
+/agent-note-default-deepseek-session-log-upload/alternatives-considered:
+  en: 4cc4b61d76f84ff3
+  zh: bdd29ea66037f744
+/agent-note-default-deepseek-session-log-upload/consequences:
+  en: 31d0c8deb33dbe3f
+  zh: 8af3905630c629a0

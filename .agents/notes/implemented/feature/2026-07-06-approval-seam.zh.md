@@ -55,7 +55,7 @@ tool/result      "escalated" — this one call ran under the wider mode; the gra
 
 应答者是 `approval/request` waterfall 监听器。零监听器会直接落到 `unavailable`；识别该 agent 的监听器占用先到先得的决策槽，而不识别的监听器必须调用 `next()` 委派。监听器会随其 fiber 一同 dispose（资源释放），因此卸载通道后，请求会在故障时默认被拒绝。由于兄弟插件的注册顺序不确定，部署应组合一个终端应答者，并保留 `prepend` 给「决策或委派」门禁。
 
-`ApprovalRequest` 携带发起请求的 `agent`、`toolName`、可选的精确 `callId`、人类可读的 `reason` 和可选的 `signal`。它使用 `ToolCallId` brand 而不导入依赖本 seam 的 `dsh-tools`。通道适配器可按 `callId` 关联任何更丰富的调用状态；审批请求本身不重复携带工具参数。
+`ApprovalRequest` 携带发起请求的 `agent`、`toolName`、可选的精确 `callId`、人类可读的 `reason`、可选的本地化 `displayReason` 和可选的 `signal`。它使用 `ToolCallId` brand 而不导入依赖本 seam 的 `dsh-tools`。通道适配器可按 `callId` 关联任何更丰富的调用状态；审批请求本身不重复携带工具参数。
 
 #### dsh-tools 中的 Ask 路由
 

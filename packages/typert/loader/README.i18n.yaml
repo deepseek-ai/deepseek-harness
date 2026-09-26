@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/typert/loader/README.md
-README.md: c45fbdebe7c2a05491515c3679ca2a3338285ca1
-README.zh.md: 9cb6ae6da5da30292d74e05932cd147090aa4dc8
+/:
+  en: 3fa30a143acc79d7
+  zh: 0c6fe79fba20f26f
+/deepseek-ai-dsh-typert-loader:
+  en: a36dc226bf1f8372
+  zh: 043fb410e2037c71
+/deepseek-ai-dsh-typert-loader/summary:
+  en: be19cf069f29d225
+  zh: d2e50148ebe20bcc
+/deepseek-ai-dsh-typert-loader/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-typert-loader/use-this-package:
+  en: a755161460d28bd2
+  zh: 15db6beb30e87926
+/deepseek-ai-dsh-typert-loader/use-this-package/minimal-configuration:
+  en: 881670b2d7dfb04d
+  zh: fbf612e945aaf066
+/deepseek-ai-dsh-typert-loader/use-this-package/what-gets-registered:
+  en: 01318fcba39e9b0f
+  zh: c5f6528a91b335ac
+/deepseek-ai-dsh-typert-loader/use-this-package/observable-behavior-and-failures:
+  en: 01494e9fbd469ec8
+  zh: 3025d870c0f36e2b
+/deepseek-ai-dsh-typert-loader/understand-the-implementation:
+  en: 519c0242ef4d9e21
+  zh: a72967feb0ea1b41
+/deepseek-ai-dsh-typert-loader/understand-the-implementation/design-concept:
+  en: 03fc077e58271e18
+  zh: 20f8fc02008cee5e
+/deepseek-ai-dsh-typert-loader/understand-the-implementation/manifest-validation:
+  en: eb246aef15ea0532
+  zh: 7a4a7bcc788b3ba3
+/deepseek-ai-dsh-typert-loader/understand-the-implementation/caching-and-ownership:
+  en: 38e781e052fdf44e
+  zh: d8f6b4d119bf9856
+/deepseek-ai-dsh-typert-loader/understand-the-implementation/source-map:
+  en: 40a8a6723d33b335
+  zh: 5b806e49b6279818
+/deepseek-ai-dsh-typert-loader/further-exploration:
+  en: 9665bb4850bb92de
+  zh: 508eaf81dee2a10b
+/deepseek-ai-dsh-typert-loader/model-experience:
+  en: d3555a846d0b19a6
+  zh: eb4815fbd81a3561
+/deepseek-ai-dsh-typert-loader/model-experience/kv-cache-effect:
+  en: f8a0ad3d0fc0eb32
+  zh: 7649a694b279f5f3
+/deepseek-ai-dsh-typert-loader/known-limitations-and-deferred-work:
+  en: a7e281826b58b218
+  zh: b4347c965151a1a9
+/deepseek-ai-dsh-typert-loader/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

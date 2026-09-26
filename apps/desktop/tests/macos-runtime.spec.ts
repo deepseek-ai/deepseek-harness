@@ -47,14 +47,18 @@ it('awaits other signers before rejecting and permitting output cleanup', async 
   expect(verifyMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'b.node'), identity)
 })
 
-it('grants JIT only to the standalone Node interpreter', async () => {
+it('grants JIT only to the standalone Node interpreter and native Office helpers', async () => {
   const path = root()
   mkdirSync(join(path, 'dependencies/node/bin'), { recursive: true })
   const node = join(path, 'dependencies/node/bin/node')
   const addon = join(path, 'addon.node')
-  for (const file of [node, addon]) writeFileSync(file, Buffer.from('cffaedfe00000000', 'hex'))
+  const helpers = ['arm64', 'x64'].map(arch => join(path, 'node_modules/@deepseek-ai', `libreoffice-kit-darwin-${arch}`, 'bin/libreoffice-kit'))
+  for (const helper of helpers) mkdirSync(join(helper, '..'), { recursive: true })
+  for (const file of [node, addon, ...helpers]) writeFileSync(file, Buffer.from('cffaedfe00000000', 'hex'))
   await signMacOSRuntime(path, 'com.example.app', identity)
-  expect(signMacOSRuntimeCode).toHaveBeenCalledWith(node, expect.any(String), identity,
-    join(import.meta.dirname, '../scripts/node-entitlements.plist'))
+  for (const file of [node, ...helpers]) {
+    expect(signMacOSRuntimeCode).toHaveBeenCalledWith(file, expect.any(String), identity,
+      join(import.meta.dirname, '../scripts/jit-entitlements.plist'))
+  }
   expect(signMacOSRuntimeCode).toHaveBeenCalledWith(addon, expect.any(String), identity, undefined)
 })

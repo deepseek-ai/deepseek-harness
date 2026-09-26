@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-19-cooperative-tool-cancellation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-19-cooperative-tool-cancellation.md
-2026-07-19-cooperative-tool-cancellation.md: 5ca2b44b24a4af189df27c6f724021a7bf290e2b
-2026-07-19-cooperative-tool-cancellation.zh.md: d6d49fb44c5d5629729a8b5b4bad07ea9b2f7ee9
+/agent-note-cooperative-tool-cancellation-at-the-registry-boundary:
+  en: 84c827aa3baa331a
+  zh: 10cad03e58b10e31
+/agent-note-cooperative-tool-cancellation-at-the-registry-boundary/problem:
+  en: e386b22491b468c1
+  zh: 82015f5145b679cd
+/agent-note-cooperative-tool-cancellation-at-the-registry-boundary/decision:
+  en: ca66d3b6af50be10
+  zh: f054b10d0c965e82
+/agent-note-cooperative-tool-cancellation-at-the-registry-boundary/decision/mutability-follows-the-pipeline-stage:
+  en: 0e1399cad4151f87
+  zh: 960fa0ccbe0f8fea
+/agent-note-cooperative-tool-cancellation-at-the-registry-boundary/decision/cancellation-codes-record-whether-dispatch-occurred:
+  en: c787fba8731ac147
+  zh: 21b5968ae6f8cd59
+/agent-note-cooperative-tool-cancellation-at-the-registry-boundary/decision/pre-aborted-entry-short-circuits-after-materialization:
+  en: 53362db6a0c71698
+  zh: 311de45ca26d3fdc
+/agent-note-cooperative-tool-cancellation-at-the-registry-boundary/decision/started-work-still-reaches-quiescence:
+  en: 26e4b71366bebd1b
+  zh: 10598e12b28c586e
+/agent-note-cooperative-tool-cancellation-at-the-registry-boundary/verification:
+  en: fbd101d4576afa92
+  zh: 35f5d3c2f6cad6a8
+/agent-note-cooperative-tool-cancellation-at-the-registry-boundary/alternatives-considered:
+  en: 1f205f1a78d4fd5b
+  zh: 6c17e35da2909302
+/agent-note-cooperative-tool-cancellation-at-the-registry-boundary/consequences:
+  en: 24a9ad2c4c7c86b5
+  zh: debdd29d272e07ea

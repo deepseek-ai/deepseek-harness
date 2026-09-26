@@ -1,29 +1,34 @@
 /** Tool UI slot declarations and their composed component props. */
 import type {
-  HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
+  HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, SlotHookFactory,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
-import type { OpenFileOptions, ToolCallBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type {
+  AssistantChatData, OpenFileOptions, PreparingToolCall, StartedToolCall,
+  ToolResultNode, UseDisclosure,
+} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { MessageImageLoader, MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
-     * Keyed atomic Tool call view, dispatched by the wire Tool name. Register
-     * with `key: '<tool name>'` to own how one tool's calls render inside a
-     * turn — the key domain is open (any wire tool name, including a tool your
-     * own package registered), so there is no compile-time key set to pick
-     * from and a typo simply never renders.
+     * Keyed Tool call view dispatched by wire Tool name. Any name is allowed,
+     * including tools registered by your package. Register with
+     * `key: '<tool name>'`; a typo never renders.
      *
-     * A key the shipped composition already covers is replaced, not shared;
-     * an unclaimed key falls back to the generic tool row, so registering is
-     * additive for your own tool and a takeover for a shipped one. The owner
-     * passes the call's identity, its frozen running-or-settled node, and the
-     * expansion state (see ToolCallOwnerProps), so the view stays a pure
-     * function of what the turn already knows.
+     * Registering an occupied key replaces its view; unclaimed keys use the
+     * generic row. The owner supplies the call identity and frozen running
+     * or settled node through explicit phase props. Preparing blocks have no dispatched
+     * arguments; useToolCallArgumentsPartial optionally subscribes to their raw prefix.
      */
-    'tool.call.toolview': { kind: 'keyed'; scope: 'session'; owner: ToolCallOwnerProps }
+    'tool.call.toolview': {
+      kind: 'keyed'
+      scope: 'session'
+      owner: ToolCallOwnerProps
+      hookContext: ToolCallHookContext
+      inject: ToolCallInjected
+    }
     /**
      * Durable images of a settled image-bearing Tool call, rendered through
      * the attachment presentation plugin. The Tool layer never imports an
@@ -41,6 +46,23 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
+/** Subscribe to this preparing call's raw argument prefix; other phases return an empty string. */
+export type UseToolCallArgumentsPartial = () => string
+
+/** Call-local sources supplied by the Tool tree to the slot's Hook binding. */
+export interface ToolCallHookContext {
+  readonly callId: string
+  /** This call's Step source, present only while preparing. */
+  readonly assistant: HostObservable<Readonly<AssistantChatData> | undefined> | undefined
+}
+
+/** Framework-bound subscriptions available to atomic Tool views on demand. */
+export interface ToolCallInjected {
+  hooks: {
+    toolCallArgumentsPartial: SlotHookFactory<'tool.call.toolview', UseToolCallArgumentsPartial>
+  }
+}
+
 /** Owner currency of the Tool image gallery slot: references plus the loader. */
 export interface ToolImagesOwnerProps {
   /** Durable references or submission-echo previews in result order. */
@@ -52,36 +74,39 @@ export interface ToolImagesOwnerProps {
 }
 
 /** Standard owner currency supplied to every atomic Tool view. */
-export interface ToolCallOwnerProps {
-  /** Tool call identity, stable across running and settled forms. */
+export interface ToolCallCommonProps {
+  /** Stable Hook; each invocation owns its open state and subscribes to enclosing-Turn resets. */
+  useDisclosure: UseDisclosure
+  /** Call identity, stable across all stages. */
   callId: string
   /** Wire Tool name and keyed dispatch value. */
   toolName: string
-  /** Frozen running call or settled result node. */
-  block: ToolCallBlock
   /** Session workspace root for relative summaries. */
   cwd?: string | undefined
   /** Host account home; POSIX home-rooted summaries display as `~`. */
   home?: string | undefined
-  /**
-   * Open a Tool argument path. A view that knows which line the call was about
-   * passes it, and the opened surface lands there.
-   */
+  /** Open an argument path at its optional requested line. */
   openFile: (path: string, options?: OpenFileOptions) => void
-  /**
-   * Session-authorized image loader for the `tool.call.images` slot, supplied
-   * by the chat node that owns this call. A composed chat node always
-   * supplies it (`ChatNodeOwnerProps.loadImage` is required), so the tool
-   * layer never imports an attachment implementation nor handles URL
-   * authorization.
-   */
+  /** Chat-supplied, session-authorized loader for durable images; Tool views do not manage attachment URLs. */
   loadImage: MessageImageLoader
   /** Inspect this call in the trajectory view when available. */
   inspect?: (() => void) | undefined
 }
 
+/** Stage-specific tool data; only start/result expose the dispatched call material. */
+export type ToolCallPhaseProps =
+  | { readonly phase: 'preparing'; readonly block: PreparingToolCall }
+  | { readonly phase: 'start'; readonly block: StartedToolCall }
+  | { readonly phase: 'result'; readonly block: ToolResultNode }
+
+/** Common owner callbacks and the data admitted at the current tool stage. */
+export type ToolCallOwnerProps = ToolCallCommonProps & ToolCallPhaseProps
+
 /** Full props of a registered atomic Tool view. */
 export type ToolCallViewProps = PropsRuntime<'tool.call.toolview'>
+
+/** Existing argument/result business components exclude the preparation stage. */
+export type StartedToolCallViewProps = Exclude<ToolCallViewProps, { readonly phase: 'preparing' }>
 
 /** Injected Host description for POSIX home-path display. */
 export type ToolHostInfoInjected = {
@@ -96,7 +121,7 @@ export type ToolHostInfoInjected = {
   }
 }
 
-/** Full props of the Tool call-tree renderer registered as a `tool-call` Chat Node. */
+/** Full props of the Tool call-tree renderer registered as a tool-call Chat Node. */
 export type ToolTreeProps = PropsRuntime<'conversation.chat.node', 'tool-call'>
   & PropsRenderSlots<'tool.call.toolview'>
   & PropsLocale<'conversation'>

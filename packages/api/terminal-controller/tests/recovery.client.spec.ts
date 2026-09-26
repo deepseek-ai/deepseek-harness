@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { streamMethod } from '@deepseek-ai/dsh-remote-mock'
 import { RemoteStream, type ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 import type {} from '@deepseek-ai/dsh-api-terminal-controller/remote'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -29,25 +30,25 @@ function storage() {
 
 function fixture() {
   const remote: TerminalRemote = {
-    retain: vi.fn<TerminalRemote['retain']>(async function* (_session, _id, signal) {
+    retain: vi.fn<TerminalRemote['retain']>(streamMethod<TerminalRemote['retain']>(async function* (_session, _id, signal) {
       yield { type: 'retained' }
       await new Promise<void>((resolve) => {
         if (signal?.aborted) resolve()
         else signal?.addEventListener('abort', () => { resolve() }, { once: true })
       })
-    }),
+    })),
     shells: vi.fn<TerminalRemote['shells']>(async () => success([info.shell])),
     environment: vi.fn<TerminalRemote['environment']>(async () => success(environment)), list: vi.fn<TerminalRemote['list']>(async () => success([])),
     create: vi.fn<TerminalRemote['create']>(async (_session, request) => success({ ...info, id: request.id })),
     close: vi.fn<TerminalRemote['close']>(async () => success(undefined)), rename: vi.fn<TerminalRemote['rename']>(async () => success(undefined)),
     write: vi.fn<TerminalRemote['write']>(async () => success(undefined)), resize: vi.fn<TerminalRemote['resize']>(async () => success(undefined)),
-    follow: vi.fn<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
+    follow: vi.fn<TerminalRemote['follow']>(streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
       yield { type: 'snapshot', sequence: 0, screen: 'retained', info: { ...info, id, controllerId } }
       await new Promise<void>((resolve) => {
         if (signal?.aborted) resolve()
         else signal?.addEventListener('abort', () => { resolve() }, { once: true })
       })
-    }),
+    })),
   }
   const gateway: Pick<ClientRemote, '$stream'> = { $stream: options => new RemoteStream({ generation: createSnapshotStore(undefined) }, options) }
   function view() {
@@ -489,7 +490,7 @@ it('waits for both active and detached stream finalizers during plugin disposal 
   const finished = [Promise.withResolvers<undefined>(), Promise.withResolvers<undefined>()]
   cleanups.push(() => { for (const barrier of release) barrier.resolve(undefined) })
   let index = 0
-  vi.mocked(h.remote.follow).mockImplementation(async function* (_session, id, controllerId, signal) {
+  vi.mocked(h.remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
     const current = index++
     try {
       yield { type: 'snapshot', sequence: 0, screen: 'screen', info: { ...info, id, controllerId } }
@@ -502,7 +503,7 @@ it('waits for both active and detached stream finalizers during plugin disposal 
       await release[current]!.promise
       finished[current]!.resolve(undefined)
     }
-  })
+  }))
   const model = service.view(sessionId, 'tab', 'tab')
   model.mount()
   await model.refresh()
@@ -625,14 +626,14 @@ it('waits for the window hold acknowledgement before restoring an output attachm
   const h = fixture()
   vi.mocked(h.remote.list).mockResolvedValue(success([info]))
   const acknowledge = Promise.withResolvers<undefined>()
-  vi.mocked(h.remote.retain).mockImplementation(async function* (_session, _id, signal) {
+  vi.mocked(h.remote.retain).mockImplementation(streamMethod<TerminalRemote['retain']>(async function* (_session, _id, signal) {
     await acknowledge.promise
     yield { type: 'retained' }
     await new Promise<void>((resolve) => {
       if (signal?.aborted) resolve()
       else signal?.addEventListener('abort', () => { resolve() }, { once: true })
     })
-  })
+  }))
   const { service } = await h.service()
   service.retainTabs([{ sessionId, tabId: 'restored', contentId: 'restored' }])
   const model = service.view(sessionId, 'restored', 'restored')

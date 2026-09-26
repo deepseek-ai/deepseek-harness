@@ -10,11 +10,13 @@ Status: implemented
 
 浏览器必须遵守[可继续 subagent 约定](../../implemented/feature/2026-07-28-continuable-subagent-conversations.zh.md)：一个可继续 child 在进程内最多只能有一项 Activation，只能通过确切的存活直接 parent 接受后续工作，并将 agent inbox 用作唯一的 FIFO。查看历史不得创建 Activation。inbox 消息一经接受，HTTP 调用方既不拥有其执行过程，也不会获得取消句柄。
 
-UI 还必须保留[持久化目录](../../archived/feature/2026-07-22-durable-subagent-catalog-and-list-agents.md)的成员、mode 与 diagnostic。共享服务报告采用实时优先规则的语料活动状态，而 Web 投影会将其替换为确切 child Agent driver 的 `running` 或 `inactive` 状态。这两种活动状态都不是持久化结果，也不承诺继续执行会成功。
+UI 还必须保留[持久化目录](../architecture/2026-09-01-parent-owned-subagent-catalog.zh.md)的成员与 mode。Web 投影会添加确切 child Agent driver 的 `running` 或 `inactive` 状态。这两种活动状态都不是持久化结果，也不承诺继续执行会成功。
 
 ## 决策
 
 Web 产品通过页头的当前 title 谱系区域公开选中会话中由会话支撑的直接 subagent。用户可以懒加载展开后代目录，并在现有对话区域中打开任一 mode。one-shot child 永久只读。可继续 child 只有在其确切直接 parent agent 存活时才接受用户后续消息；否则，其持久化 transcript 仍然可读，并附带恢复说明。
+
+同一个页头行还可以把 child 作为 `dsh-resource://subagentchat/session/<childSessionId>?parent=<parentSessionId>&mode=<mode>` 在右侧 Sidebar 打开。打开时优先使用独立分栏；无法分栏时回退到当前分栏。Sidebar tab 使用共享 Conversation Component Factory 渲染并省略宽度控制，因此主对话与嵌入式对话共用一套组装，而不共享布局界面。
 
 每个打开的 child 都携带目录派生地址 `{ parentSessionId, childSessionId, mode }`。选择专用历史与提示词传输的是包含 mode 的地址，而不是谱系或粗粒度 origin 标记。历史操作会从持久化存储读取会话，而不触发激活。可继续提示词通过 `subagent.prompt` 携带 Queue 或 Steer 投递，并在 inbox 接受消息时以 `{ messageId }` 成功返回；它不会公开 Activation、等待完成或返回结果。相邻 Agent 的模型消息使用单独拥有的固定 Steer 操作。
 
@@ -26,20 +28,20 @@ Web 产品通过页头的当前 title 谱系区域公开选中会话中由会话
 
 ## 设计上下文
 
-Figma 中的 [subagent 列表](https://www.figma.com/design/jRBBK7zBgcszdVWQ0Fh5J8/Harness?node-id=383-14602&p=f)、[层级展开](https://www.figma.com/design/jRBBK7zBgcszdVWQ0Fh5J8/Harness?node-id=383-15917&p=f)与 [child 对话](https://www.figma.com/design/jRBBK7zBgcszdVWQ0Fh5J8/Harness?node-id=388-18584&p=f)画框是非规范性的交互与视觉参考。本记录负责生命周期、协议与失败语义。
+Figma 中的 subagent 列表、层级展开与 child 对话画框是非规范性的交互与视觉参考。本记录负责生命周期、协议与失败语义。
 
 | 设计意图 | 已交付约定 |
 | --- | --- |
-| 会话页头可打开紧凑的 child 列表。 | 触发器会汇总仅含 subagent 的完整后代谱系；树按服务顺序显示每个直接目录条目，包括已禁用的 diagnostic。 |
+| 会话页头可打开紧凑的 child 列表。 | 触发器统计 parent catalog service 返回的健康直接条目。 |
 | 选择一行会复用对话 UI。 | 已寻址历史绝不激活 child；只有 parent 存活的可继续行才保留普通输入框。 |
-| 嵌套 agent 会逐层展开。 | 每行携带一层 `hasChildren` 快照；展开时会立即预留已知直接后代行，随后仍只加载该行的直接目录，并保留其自身的 parent 地址。 |
+| 嵌套 agent 会逐层展开。 | row 在自身 catalog 成功加载为空前保持可展开；展开时只加载该直接 catalog，并保留 row 的 parent 地址。 |
 | 条目显示 label、状态、token 用量与活跃耗时，同时避免侧边栏条目重复。 | mode 与 `running`／`inactive` 活动状态会同时以文字和视觉呈现；可选 title、持久化 token 用量与活跃轮次耗时来自列表保留的投影值。紧凑耗时从一天起省略更小的单位，而悬停和无障碍名称仍保留精确的整秒数。`SessionHeader.origin` 会移除重复的导航条目，但不授予任何能力。 |
 
 ## 产品约定
 
-只有当完整的直接目录空响应与会话摘要投影相符，二者均表明没有已知的 subagent 后代时，才不显示后代数量控件。普通会话会用斜杠分隔当前 title 和该数量控件。每一级 subagent 面包屑都将紧凑的 12px title 与固定显示的双向箭头组合成一个控件：当前面包屑使用主标签颜色和 500 字重，祖先则使用三级标签颜色和 400 字重。悬停组合控件 150ms 后会打开其直接 parent 目录；浮层菜单具有短暂的跨越宽限时间，ArrowDown 保留为键盘入口。点击祖先会取消待触发的悬停、关闭已打开的目录，并且只向上导航。每个直接 parent 目录都可切换 sibling，并会加粗其选中行；目录 label 优先于会话摘要 title，缺失的每个切换器目录都会自动刷新。只有当前 subagent 会追加自己的后代数量控件。过长的 title 会在固定箭头之前截断。数量触发器会统计经不间断的 `origin: 'subagent'` 谱系可达的每个已知会话摘要后代，在普通 fork 处停止，并在任一计入统计的后代处于 `running` 时显示活动仍在进行。由于普通侧边栏行会隐藏 origin 为 subagent 的会话，Workspace 浏览器会在每个可见的普通行上索引同一条不间断谱系：任何运行中的后代都会让该行显示蓝色活动指示器，并在悬停与无障碍文本中给出确切数量，同时不会把空闲 parent 描述为正在运行。普通 fork 会开启单独的聚合子树。待处理交互优先于 parent 的运行中状态；二者无论哪一项存在都会保持为主要状态，而后代活动则成为悬停与无障碍状态中的第二项。两者均不存在时，后代活动优先于未查看的完成提醒；最后一个运行中的后代停止后，该提醒会恢复。每个健康的直接目录行都携带读取时的 `hasChildren` 提示，该值只根据持久化 `origin: 'subagent'` 的直接谱系 header 派生；正常的健康与 diagnostic subagent 候选都会携带该标记，而普通 fork 不会。该预查不读取任何后代事件日志，展开后仍以描述符支撑的目录为权威依据。当摘要在该目录尚不存在时或在一次陈旧的空响应后确认已有后代时，该操作会保持可见，并且在打开它以刷新目录之前仅显示禁用的加载行；仅由摘要支撑的行绝不会提供导航能力。UI 会在交互前就省略已知叶子节点的展开控件；该提示不承诺 child 会一直是叶子。已展开的直接目录加载期间，已知谱系会为每个直接后代预留一行禁用的加载行，而不会递归获取后代目录。随后树会呈现可继续与 one-shot 行；one-shot 的可选 label 缺失时，回退到其会话 id。损坏、不受支持或不可用的候选仍以禁用的 diagnostic 行显示。
+直接 catalog 有子项或读取失败时显示 child 数量控件；空目录缺席、加载中或成功读取为空时均隐藏该控件。普通会话会用斜杠分隔当前 title 和该控件。每一级 subagent 面包屑都将紧凑的 12px title 与固定显示的双向箭头组合成一个控件：当前面包屑使用主标签颜色和 500 字重，祖先则使用三级标签颜色和 400 字重。悬停组合控件 150ms 后会打开其直接 parent 目录；浮层菜单具有短暂的跨越宽限时间，ArrowDown 保留为键盘入口。点击祖先会取消待触发的悬停、关闭已打开的目录，并且只向上导航。每个直接 parent 目录都可切换 sibling，并会加粗其选中行；目录 label 优先于可选的会话摘要 title，缺失的切换器目录在交互时加载。只有当前 subagent 会追加自己的直接 child 数量控件。过长的 title 会在固定箭头之前截断。触发器报告直接 catalog 的总数与运行数。普通侧边栏 row 隐藏 origin 为 subagent 的 Session，并从同一份已加载 catalog map 读取直接运行 child 数；Session summary 提供 activity，但绝不创建 membership。运行中的直接 child 使用共享的三级灰色 ongoing loading。待处理交互优先于 parent 的运行中状态；二者无论哪一项存在都会保持为主要状态，而直接 child activity 则成为悬停与无障碍状态中的第二项。普通 Workspace 行存在待处理的审批、计划审阅或问题时，会用紧凑的「待批准」「计划待审」或「待回答」替换相对时间；悬停与无障碍详情仍保留完整状态和相对时间。两种主要状态均不存在时，直接 child activity 优先于未查看的完成提醒；最后一个运行中的直接 child 停止后，该提醒会恢复。tree row 在 child catalog 缺席、加载中或失败时保持可展开，只有 catalog 成功加载为空后才成为已知叶子。加载时显示通用提示，不会从 summary 生成占位 row。tree 会呈现 continuable 与 one-shot row；one-shot 的可选 label 缺失时，回退到其 Session id。
 
-`running` 表示在 Host 采样边界，确切 child Agent driver 正在处理工作；`inactive` 表示该 driver 空闲或不存在。UI 不会把任一值解释为成功、失败、取消、完成状态或可恢复性。`subagent.list` 提供当前 driver 状态基线，`host/session-status` 会就地更新已知活动状态，请求内回放会阻止更早发起但尚未完成的列表响应覆盖较新的状态转换，`host/session-removed` 则会使已知行恢复为 `inactive`；重连时会读取新的基线。直接 subagent 的 `host/session-added` 帧会立即把任何已加载的 parent 行翻转为 `hasChildren: true`，并使这项正向提示不被更早发起但尚未完成的目录响应覆盖；受影响分支打开期间，成员、label、mode、diagnostic 与权威快照仍需要通过去抖动的 `subagent.list` 刷新来更新。消息投递时仍以提示词响应为权威依据。
+`running` 表示子 Agent driver 正在处理工作；`inactive` 表示该 driver 空闲或不存在。Session 列表基线与状态事件提供活动状态，移除事件将完成的子代理标为 inactive 并保留其展示 projection。共享的父 `subagentCatalog` projection 提供成员关系。初始读取与推送值进入同一个 projection store，较新序号优先。[projection 消费决策](../simplification/2026-09-08-web-subagent-catalog-projections.zh.md) 说明加载、重连与同步取舍。提示词响应仍是投递时的权威依据。
 
 健康行会复用列表镜像中保留的标准会话投影。token 用量数值会汇总持久化日志中四个互不重叠的 `tokenUsage` 桶。`subagentTiming` 会在每个描述符处重置，使继承的 fork 种子不会计入 child 总量；它会累加已完成的 `turn/start` → `turn/end` 时段，并携带未结束轮次同一切面的 `active.since` 和 `active.through` 边界。该轮次保持未结束期间，现有会话事件会推进 `active.through`；菜单不会增加单独的计时器或日志读取，且仅在有已知后代处于运行状态时才推进其本地时钟。不足一天时，菜单会以整秒格式化时间；达到一天后的视觉值最多保留两个相邻单位，其中月份按近似 30 天计算，年份按近似 365 天计算，而悬停信息与无障碍名称会保留精确的天／小时／分钟／秒耗时。对 inactive 行，菜单以 `active.through` 为被中断未结束轮次的上界，因此陈旧投影绝不会借用更新的会话元数据，且重新打开菜单绝不会让已完成工作重新计时。这两项指标都不蕴含持久化结果语义。
 
@@ -51,17 +53,17 @@ one-shot 行始终会用文案替代输入框，说明执行记录为只读。�
 
 ## 宿主适配器与协议约定
 
-`@deepseek-ai/dsh-subagent` 拥有浏览器安全的生成 `subagent` Remote 命名空间：
+Session Controller 负责 catalog 与 history read；`@deepseek-ai/dsh-subagent` 负责 continuation control：
 
-- `subagent.list` 接受 `parentSessionId`，调用 `ctx.subagents.listChildren(parentSessionId, signal)`，返回完整有序的条目以及每个健康行的布尔 `hasChildren` 快照，把每个健康行的语料活动状态替换为其确切 Agent driver 是否正在运行，并说明当前能否从 `ctx.agents` 解析出确切 parent。
-- `subagent.history` 接受包含 mode 的完整地址与普通页参数。它对照直接目录校验 child 与 mode，通过 `ctx.sessionQuery.readSession()` 读取，再次检查直接谱系，并在不发布 agent 的情况下返回普通原始事件、渲染意图、分页与由 Host 计算的会话投影基线。
+- `session.projections` 接受 `sessionId`，返回一次 live-preferred Session observation 的完整 projection 基线，不激活 Agent。Client 将基线写入标准 projection store；subagent 消费者选择 `subagentCatalog`。父 Agent 可用性来自 Session 列表摘要与生命周期事件。
+- `session.page` 与 `session.follow` 接受包含 mode 的完整地址。它们在观察到的 cut 上校验 child header、直接 parent、descriptor identity 与 mode，随后在不发布 Agent 的情况下返回普通 raw event、pagination、live reconciliation 与 Host projection baseline。
 - `subagent.prompt` 只接受 `mode: 'continuable'` 地址、`delivery: 'queue' | 'steer'` 与上传形态的 `PromptContentPart[]`；Host 在投递前把图片部分准入并持久化为持久引用（[图片投递](../../archived/bug-fix/2026-08-27-steer-followup-image-delivery.md)）。它要求确切的存活 parent，重新校验目录地址，使用 continuation manager 共享的人类投递准入，并返回已接受的 `MessageId`。
 
-网关会将 parent 缺失、目录条目缺失或为 diagnostic、child 不可恢复或未授权、请求取消、图片准入或图片能力拒绝（`subagent/attachment-invalid`）以及继续执行准入暂时不可用等失败映射为类型化 RPC 错误。它不会公开描述符或提供方细节。list／prompt 竞态属于正常情况：权威依据是提示词操作的结果，而不是更早的可用性或活动快照。
+网关会将 parent 或目录条目缺失、child 不可恢复或未授权、请求取消、图片准入或图片能力拒绝（`subagent/attachment-invalid`）以及继续执行准入暂时不可用等失败映射为类型化 RPC 错误。它不会公开描述符或提供方细节。list／prompt 竞态属于正常情况：权威依据是提示词操作的结果，而不是更早的可用性或活动快照。
 
-查看持久化历史本身不会创建 mux 订阅。当后续消息物化冷态 child Activation 时，现有 Host 与 mux 流会发布其生命周期与事件。重新连接时，系统通过 `subagent.history` 重建已寻址窗口。
+查看持久化历史本身不会创建 Agent。当后续消息物化冷态 child Activation 时，现有 Host 与 Session journal stream 会发布其生命周期与事件。重新连接时，系统通过 `session.follow` 重建已寻址窗口。
 
-普通 `session.history` 路由对于普通会话和 subagent 会话同样只执行观察，但它既不携带目录地址，也不授予继续执行权限。每条需要 Agent 的普通路由都会在恢复冷会话前经过共享所有权栅栏；`session.cancel` 保留该栅栏。`session.updateQueue` 只有一个目标本地例外：目标是在线 child，且其当前 projection identity 为 continuable 并来自自身的非 seed suffix；one-shot、缺失、未知、损坏、仅含 seed identity 或冷 child 仍受栅栏阻挡。
+普通 `session.page` 与 `session.follow` 地址对于普通会话和 subagent 会话同样只执行观察，但它既不携带目录地址，也不授予继续执行权限。每条需要 Agent 的普通路由都会在恢复冷会话前经过共享所有权栅栏；`session.cancel` 保留该栅栏。`session.updateQueue` 只有一个目标本地例外：目标是在线 child，且其当前 projection identity 为 continuable 并来自自身的非 seed suffix；one-shot、缺失、未知、损坏、仅含 seed identity 或冷 child 仍受栅栏阻挡。
 
 适配器仍位于生成的 Remote 命名空间之后；`dsh-host-webserver` 仍作为载体。浏览器代码通过现有连接包导入约定，绝不直接访问宿主 `ctx`，从而保持[已归档的 GUI RPC 分层决策](../../archived/architecture/2026-07-19-gui-layering-and-rpc-protocol.md)。
 
@@ -71,7 +73,7 @@ one-shot 行始终会用文案替代输入框，说明执行记录为只读。�
 
 目录通过标准 `useSessions` 快照传递。组件局部状态负责菜单可见性、已展开分支、焦点与悬停计时器。`ui-conversation` 为当前普通 title 和每一级 subagent 面包屑声明谱系 slot，传入纯数据形式的面包屑身份与显示文本，并为祖先传入向上导航回调；普通 title 由 render site 保留为回退。`@deepseek-ai/dsh-client-ui-subagent` 以直接 parent 目录导航占用每个谱系 slot，并根据普通 owner props 选择按原因区分的只读编辑器。组件只接收派生 props 与回调，绝不接收 `ctx`。
 
-每个进程内 subagent child 都会在发布前写入 `SessionHeader.origin: 'subagent'`。会话列表摘要与增量 Host 帧会投影该字段，使分组和扁平侧边栏省略重复的 child 行，同时保留普通 fork。同一条现有的 `host/session-added` 帧还会把已加载的直接 parent 行标记为可展开，而无需引入目录事件流。描述符 mode 与目录校验仍然是导航、继续执行和授权的权威依据。
+每个进程内 subagent child 都会在发布前写入 `SessionHeader.origin: 'subagent'`。会话列表摘要与增量 Host 帧会投影该字段，使分组和扁平侧边栏省略重复的 child 行，同时保留普通 fork。parent catalog projection 拥有 membership 与 tree structure 权威；descriptor identity 与精确 parent check 拥有 addressed history 与 continuation validation 权威。
 
 该包现有的 `@label` source 仍然是独立的面向模型纯文本输入。它不会将 label 解析为地址，也不会获得继续执行语义。
 
@@ -95,23 +97,23 @@ one-shot 行始终会用文案替代输入框，说明执行记录为只读。�
 
 **根据谱系推断 mode 或侧边栏过滤。** 不予采纳，因为普通 fork 共享 `parentSession`。由描述符支撑的目录负责提供 mode；单独的 `origin` 标记只是低成本的导航分类器。
 
-**构建预先加载的递归树或专用目录流。** 就当前规模而言不予采纳。仅用于页头的一层可展开性预查会在不读取后代事件的情况下保证点击前的稳定性，而展开仍是懒加载式权威直接 child 读取；现有 Host 帧会更新活动状态、恢复 parent 行的可展开性，并触发有界的成员刷新。
+**构建预先加载的递归树或专用目录流。** 就当前规模而言不予采纳。展开控件按需加载缺失目录，现有 control 帧传递完整 projection 更新。
 
 **让 child 在 parent 消失后仍能独立交互。** 不予采纳，因为独立生命周期与用户所有权需要 side session 语义。
 
 ## 测试
 
-- 宿主协议测试固定 schema（包括必需的布尔可展开性）、id 回显、mode 校验、非激活式历史、确切 parent 强制要求、FIFO 准入回执、取消与脱敏后的失败映射。
+- 宿主协议测试固定健康的直接 catalog schema、id 回显、mode 校验、非激活式历史、确切 parent 强制要求、FIFO 准入回执、取消与脱敏后的失败映射。
 - 通用 Host 测试固定在不发布 Agent 的情况下读取已附加与冷态历史及执行 fork、冷态投影归并、按描述符／origin／运行时 owner 拒绝、拒绝显式 id 接纳，以及直接队列控制栅栏。
-- 客户端对象测试固定已保留与已恢复的地址、one-shot 只读与取消拒绝、历史路由、可继续提示词与中断路由、屏蔽绑定到 agent 的模型控件、实时活动状态翻转（包括在途响应回放与 detach 回退）、subagent parent 可展开性翻转与成员刷新。
-- jsdom 测试固定普通 title 分隔符、逐级合并的 subagent title 切换热区、嵌套 title 的 12px 字号、当前与祖先样式、选中行字重、目录 label 优先级、悬停延迟、向上点击抑制、保留箭头的截断、后代聚合计数与活动状态、侧边栏活动在嵌套谱系中的传播与普通 fork 边界、行状态优先级、token 用量总计、精确到秒的运行中耗时与冻结后 inactive 耗时、采用自适应单位的长耗时及其精确无障碍文本、目录缺失或为陈旧空目录时由摘要支撑的根操作、已知加载行的形态、混合 mode 行、点击前的叶子展开控件、diagnostic、后代懒加载展开、直接 parent 地址、键盘行为与两种只读原因。
-- 无密钥的组装 Web 快照包含一个具有持久化 token 用量的 inactive 可继续 child、一个具有确定性长耗时的 inactive one-shot sibling 和一个持久化 grandchild；它会固定触发器在一次陈旧的空目录响应后仍显示三个后代，并固定 token 用量与计时行、自适应长耗时呈现及聚合 `running` 状态转换，在不激活的情况下展开、打开持久化历史、准入一条用户 FIFO 后续消息、归并 child mux 事件，并证明 one-shot 历史仍然只读。另一个独立的组装场景会在 LLM seam 处保持一个真实的 child Agent 轮次进行中，同时固定页头和可见空闲 owner 行中的聚合运行状态，随后在 teardown 期间取消该轮次。
+- 客户端对象测试固定已保留与已恢复的地址、one-shot 只读与取消拒绝、历史路由、可继续提示词与中断路由、屏蔽绑定到 agent 的模型控件、来自 Session 摘要与 Agent 销毁的实时活动状态、权威 catalog membership 与成员刷新。
+- jsdom 测试固定普通 title 分隔符、逐级合并的 subagent title 切换热区、嵌套 title 的 12px 字号、当前与祖先样式、选中行字重、目录 label 优先级、悬停延迟、向上点击抑制、保留箭头的截断、catalog 直接计数与 activity、侧边栏直接 child activity、行状态优先级、token 用量总计、精确到秒的运行中耗时与冻结后 inactive 耗时、采用自适应单位的长耗时及其精确无障碍文本、通用加载提示、混合 mode row、ready-empty 叶子判定、descendant 懒加载展开、直接 parent 地址、键盘行为与两种只读原因。
+- 无密钥的组装 Web 快照包含一个具有持久化 token 用量的 inactive 可继续 child、一个具有确定性长耗时的 inactive one-shot sibling 和一个持久化 grandchild；它会固定直接 catalog 数量、token 用量与计时行、自适应长耗时呈现及嵌套懒加载，在不激活的情况下打开持久化历史、准入一条用户 FIFO 后续消息、归并 child mux 事件，并证明 one-shot 历史仍然只读。另一个独立的组装场景会在 LLM seam 处保持一个真实的 child Agent 轮次进行中，同时固定页头和可见空闲 owner row 中的直接运行状态，随后在 teardown 期间取消该轮次。
 - 导航测试固定仅含 subagent 的面包屑导航、从 subagent 创建 fork 时的 Workspace 归属，以及 `origin: 'subagent'` 侧边栏过滤，同时不隐藏普通 fork。
 
 ## 后果
 
-- 目录读取可能重新扫描持久化谱系与每个直接候选的描述符日志，但可展开性只复用该追踪中已有的后代 header；Web 活动基线会为每个健康行增加一次 Agent 注册表查找，随后使用现有实时帧，而 token 用量与耗时会复用投影基线和推送，无需按行读取日志，成员刷新则保持去抖动和单次并发。
-- parent 可用性、child 活动状态与 `hasChildren` 都是快照。列出之后，发布、dispose（资源释放）、其他发送方或其他进程都可能抢先改变状态；类型化提示词失败仍属预期行为。
+- catalog read 只 fold 所选 parent 的 catalog projection。Web activity 来自 Session 摘要；token 用量与耗时复用 projection baseline 和 push，无需按 row 读取日志，投影读取保持 single-flight。
+- parent 可用性与 child activity 都是快照。列出之后，发布、dispose（资源释放）、其他发送方或其他进程都可能抢先改变状态；类型化提示词失败仍属预期行为。
 - child 可能在历史获取与 mux 订阅之间发布，因此现有序号归并也涵盖从冷态转为存活的已寻址路径。
 - 持久化 origin 会为 child header 与列表投影添加一个有意保持弱约束的产品分类字段；它不能变成授权捷径。
 - 除对正在运行的可继续 child 的当前轮次 Stop（[中断约定](2026-08-06-continuable-subagent-interrupt.zh.md)）之外，UI 不提供 child 取消、持久化结果、Activation 身份、删除或可独立交互的离线 mode，其文案不得暗示这些能力已经存在。活跃轮次耗时度量的是已记录工作，而非 Activation 驻留时间。

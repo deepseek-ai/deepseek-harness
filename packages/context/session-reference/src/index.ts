@@ -11,13 +11,13 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { createUserMessage, freezeMessage, LlmError } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, LlmResolvedModelInfo, UserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 // Type-only: the `title` projection key plus the live registry and durable
 // cache Context merges — the two projection faces discovery labels from.
 import type { ProjectionSnapshot } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type {} from '@deepseek-ai/dsh-session-title'
+import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { SessionRecord, SessionSurfaceSnapshot } from '@deepseek-ai/dsh-session-query'
 import { prepareReferenceOmission, REFERENCE_WARNING } from './spill.ts'
@@ -179,14 +179,13 @@ export class SessionReferenceResolver extends TypertRemoteService {
   /**
    * List reference candidates, ranked by working-directory affinity.
    *
-   * Discovery runs at keystroke rate, so a title only ever comes from a
-   * projection read: see {@link SessionReferenceResolver.projectedTitle} for
-   * which sessions can answer one and which fall back to their id.
+   * Discovery runs at keystroke rate, so titles and subagent labels only ever
+   * come from projection reads; sessions without either fall back to their id.
    * @param agent - target agent; self is excluded and its cwd drives ranking.
-   * @param query - optional case-insensitive session-id/cwd/title substring.
+   * @param query - optional case-insensitive session-id/cwd/title/display-title substring.
    * @param limit - optional positive result cap.
    * @param signal - optional cancellation boundary for host autocomplete teardown.
-   * @returns candidates labeled by latest title or, when absent, session id.
+   * @returns candidates with canonical mention labels and presentation titles.
    */
   async listCandidates(
     agent: Agent,
@@ -203,22 +202,20 @@ export class SessionReferenceResolver extends TypertRemoteService {
     const records = (await settleWithCancellation(this.ctx.sessionQuery.listSessions(signal), signal))
       .filter(record => record.header.id !== agent.id)
       .map((record, index) => ({ record, index }))
-    const labelled = records.map(({ record, index }) => ({
-      record,
-      index,
-      label: this.projectedTitle(record) ?? record.header.id,
-    }))
-    return labelled.filter(({ record, label }) => {
+    const labelled = records.map(({ record, index }) => ({ record, index, ...this.projectedLabels(record) }))
+    return labelled.filter(({ record, label, displayTitle }) => {
       if (needle === '') return true
       return record.header.id.toLocaleLowerCase().includes(needle)
         || record.header.cwd?.toLocaleLowerCase().includes(needle) === true
         || label.toLocaleLowerCase().includes(needle)
+        || displayTitle.toLocaleLowerCase().includes(needle)
     }).sort((a, b) => candidateRank(a.record.header.cwd, targetCwd) - candidateRank(b.record.header.cwd, targetCwd)
       || a.index - b.index)
       .slice(0, limit)
-      .map(({ record, label }) => ({
+      .map(({ record, label, displayTitle }) => ({
         sessionId: record.header.id,
         label,
+        displayTitle,
         ...record.header.cwd === undefined ? {} : { cwd: record.header.cwd },
         sameWorkspace: record.header.cwd !== undefined && record.header.cwd === targetCwd,
         createdAt: record.header.createdAt,
@@ -226,7 +223,7 @@ export class SessionReferenceResolver extends TypertRemoteService {
   }
 
   /**
-   * The title a session's projections can answer without reading its log.
+   * The mention label and display title a Session's projections can answer without reading its log.
    *
    * Attachment is decided by the store at read time, not by the listing:
    * a session that attached in between would otherwise be answered from a
@@ -241,24 +238,25 @@ export class SessionReferenceResolver extends TypertRemoteService {
    * Nothing else is attempted. Folding a title from a log costs the whole
    * log, and this call sits under every keystroke of `@` completion. A
    * session that no projection can answer for — one persisted before the
-   * cache was composed, or seeded straight to disk — is labeled by its id
-   * and cannot be found by its title until it is opened once, which
-   * checkpoints it.
+   * cache was composed — is labeled by its id and cannot be found by its
+   * title until it is opened once, which checkpoints it.
    * @param record - the listed session, live or cold.
-   * @returns the projected title, or undefined when no projection holds one.
+   * @returns the title-backed mention label and the subagent-label-first display title.
    */
-  private projectedTitle(record: SessionRecord): string | undefined {
+  private projectedLabels(record: SessionRecord): { label: string; displayTitle: string } {
     const attached = this.ctx.get('sessions')?.get(record.header.id)
     const projections = this.ctx.get('sessionProjections')
-    if (attached !== undefined && projections !== undefined) {
-      return titleOf(projections.snapshot(attached, ['title']))
+    const snapshot = attached !== undefined && projections !== undefined
+      ? projections.snapshot(attached, ['title', 'subagent'])
+      : this.ctx.get('sessionProjectionCache')?.cachedSnapshot(record.header, ['title', 'subagent'])
+    const label = titleOf(snapshot) ?? record.header.id
+    const subagent = snapshot?.values.subagent
+    return {
+      label,
+      displayTitle: subagent === undefined || subagent === null
+        ? label
+        : subagent.label ?? label,
     }
-    if (record.header.isSeeded) return undefined
-    return titleOf(this.ctx.get('sessionProjectionCache')?.cachedSnapshot(
-      record.header,
-      SessionLogOffset(0),
-      ['title'],
-    ))
   }
 
   /**
@@ -279,7 +277,10 @@ export class SessionReferenceResolver extends TypertRemoteService {
     const candidates = await this.listCandidates(agent, query, this.config.candidateLimit, signal)
     return candidates.map(candidate => ({
       ...candidate,
-      mention: formatSessionReferenceMention({ sessionId: candidate.sessionId, label: candidate.label }),
+      mention: formatSessionReferenceMention({
+        sessionId: candidate.sessionId,
+        label: candidate.displayTitle ?? candidate.label,
+      }),
     }))
   }
 

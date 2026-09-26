@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-16-harness-level-loop.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-16-harness-level-loop.md
-2026-07-16-harness-level-loop.md: 54adc1aad63e8968c9e0d276a075cd42abf021fd
-2026-07-16-harness-level-loop.zh.md: 9e1a7e73fbf1fab1807b59b3b7816cdfcc6f45df
+/agent-note-harness-level-goal-based-execution:
+  en: 20d103f4160b124d
+  zh: 36e888ebeec1d366
+/agent-note-harness-level-goal-based-execution/problem:
+  en: b0294f40b8915f39
+  zh: 786bcecd8e0df343
+/agent-note-harness-level-goal-based-execution/decision:
+  en: f9d2e5774bca2d5b
+  zh: 375683705a21f16c
+/agent-note-harness-level-goal-based-execution/decision/vocabulary-and-policy-boundary:
+  en: 213a55ec1ef4dd58
+  zh: 56076b8524188153
+/agent-note-harness-level-goal-based-execution/decision/package-topology-and-owning-verbs:
+  en: fb8e9df7705a2293
+  zh: ffe7040bdad4fa64
+/agent-note-harness-level-goal-based-execution/decision/durable-goal-state-and-live-authority:
+  en: ef386ad58ff3bcaf
+  zh: 9517886000faf515
+/agent-note-harness-level-goal-based-execution/decision/same-session-continuation:
+  en: 669447319e89b06a
+  zh: 2a08e6a8622aabd1
+/agent-note-harness-level-goal-based-execution/decision/human-and-model-interactions:
+  en: 8923f16b40a2f331
+  zh: 697417b21f475c1e
+/agent-note-harness-level-goal-based-execution/decision/fresh-agent-ralph-execution:
+  en: 3cc9d8fee8dfbd41
+  zh: 2c4bf8aab739b0e8
+/agent-note-harness-level-goal-based-execution/decision/external-design-lineage:
+  en: 4a7b290a2649720c
+  zh: 1a2f32667061e7b4
+/agent-note-harness-level-goal-based-execution/decision/verification:
+  en: cb538a23eb170008
+  zh: fdd00c5ca70918a1
+/agent-note-harness-level-goal-based-execution/alternatives-considered:
+  en: 5f4c2ba58601587c
+  zh: a7e2028dd8bc23c1
+/agent-note-harness-level-goal-based-execution/consequences:
+  en: 31d109628ee650f4
+  zh: 2278dd884e6a088a
+/agent-note-harness-level-goal-based-execution/known-limitations-and-deferred-work:
+  en: 2bc0e7709c516ed0
+  zh: 614b4ddf8ca6ebc6

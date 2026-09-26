@@ -1,0 +1,107 @@
+/* Month calendar inside the shared picker card. */
+.calendar {
+  flex-direction: column;
+  gap: 4px;
+  width: 232px;
+  padding: 8px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.title {
+  flex: 1 1 auto;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.nav {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.nav:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.nav:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+/* The right column's own 13px step: the panel has no inherited type scale. */
+.weekday {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  cursor: pointer;
+  outline: none;
+}
+
+.cell:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.cell:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+/* Today keeps a hairline ring; the picked day takes the active chip fill. */
+.cell[aria-current='date'] {
+  box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l3);
+}
+
+.selected {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-button-ghost-active-fill);
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-button-ghost-active-border);
+}
+
+.blank {
+  height: 28px;
+}

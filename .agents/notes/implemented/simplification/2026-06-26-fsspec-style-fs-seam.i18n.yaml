@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-26-fsspec-style-fs-seam.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-06-26-fsspec-style-fs-seam.md
-2026-06-26-fsspec-style-fs-seam.md: 138d6d4d74d162ab2149350a76fc72dc31c1818e
-2026-06-26-fsspec-style-fs-seam.zh.md: bc7a3756dbf08673cfa63693a68aba1eb73da323
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin:
+  en: 181df186598c42fc
+  zh: 07b7687434105955
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin/problem:
+  en: 4069760b095aa1b6
+  zh: ea8baf0050362519
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin/decision:
+  en: 6f6dc20965bb9948
+  zh: 5a858a0359f96a98
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin/provider-contract:
+  en: a04b6ceab91aa265
+  zh: 5fae55161f754f4d
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin/policy-contract:
+  en: bd54f18f4665b1ec
+  zh: eee54b7890c9d8be
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin/tool-contract:
+  en: b517106d3e0ac7ef
+  zh: 2b128d7af26ebed2
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin/concurrency-boundary:
+  en: 6a459d121a49988c
+  zh: 048de517a0f952b6
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin/supersedes:
+  en: 780789585ce58330
+  zh: 7b4b8d171dfdefae
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin/verification:
+  en: ee6e0f4922f991af
+  zh: 3ce55e7b7d0fd431
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin/later-extension:
+  en: b56210bf2c8f8dec
+  zh: 27decb39624c0ef7
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin/alternatives-considered:
+  en: 3d169e07a912cbab
+  zh: d8a550835cfe7801
+/agent-note-split-the-filesystem-seam-provider-text-mutations-plus-the-dsh-fs-observation-policy-plugin/consequences:
+  en: 70264e0d9422b871
+  zh: ae93add503e8a9bc

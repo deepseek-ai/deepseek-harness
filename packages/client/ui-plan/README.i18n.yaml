@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-plan/README.md
-README.md: 4ff275834ec069315580c205b8fd0bf0dee9cfeb
-README.zh.md: 588698b273bc52b1e601c7010516c24a9248e543
+/:
+  en: 1d5e0e4466f12e0f
+  zh: 14072627e89bc20b
+/deepseek-ai-dsh-client-ui-plan:
+  en: f46ee364440007a7
+  zh: 9c22512041f3c3cb
+/deepseek-ai-dsh-client-ui-plan/summary:
+  en: 958c2c8bf80759a0
+  zh: 57ffbbfa1bcbdff4
+/deepseek-ai-dsh-client-ui-plan/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-plan/use-this-package:
+  en: a601a3266523473b
+  zh: 9bac0234a7897b0e
+/deepseek-ai-dsh-client-ui-plan/use-this-package/what-the-chip-shows:
+  en: 1622db30d5378225
+  zh: 819c9cdb59d010a8
+/deepseek-ai-dsh-client-ui-plan/use-this-package/reading-submitted-plans:
+  en: 1d2fecc23c658516
+  zh: 24a894dc2bbb1b78
+/deepseek-ai-dsh-client-ui-plan/use-this-package/failures:
+  en: a13078ade4ef3b9d
+  zh: 2c8b3e8b62ad5652
+/deepseek-ai-dsh-client-ui-plan/understand-the-implementation:
+  en: 1360fc232aee29e7
+  zh: 0beca76c9214a079
+/deepseek-ai-dsh-client-ui-plan/further-exploration:
+  en: 59f62ef6269abf82
+  zh: c8b4ee607be1e432
+/deepseek-ai-dsh-client-ui-plan/model-experience:
+  en: 7258ebe3500a48fa
+  zh: 033220a5061618bc
+/deepseek-ai-dsh-client-ui-plan/model-experience/kv-cache-effect:
+  en: 0eeecf007103b9ba
+  zh: 4a105d4b5ec85547
+/deepseek-ai-dsh-client-ui-plan/known-limitations-and-deferred-work:
+  en: f74784ddad90a7e1
+  zh: 638ce5a243e6b5cc
+/deepseek-ai-dsh-client-ui-plan/known-limitations-and-deferred-work/dev-note:
+  en: c95ae111420d6513
+  zh: 9d58639022d2ab36

@@ -61,7 +61,7 @@ interface Bench {
     failure: DynamicCordisRenderFailure
   }[]
   /**
-   * Report one entry crash the way the renderer's boundary does: the runner
+   * Report one Slot entry or Factory crash the way the renderer's boundary does: the runner
    * subscribed through the supervision seam, and this calls what it registered.
    */
   crash: (slot: string, entry: unknown, error: unknown, abdicated?: boolean) => void
@@ -382,6 +382,10 @@ describe('render failures', () => {
     inject: ['slots'],
     apply(ctx) { ctx.slots.register({ name: 'root' }, () => null) },
   }`
+  const FACTORY_CONTRIBUTOR = `return {
+    inject: ['slots'],
+    apply(ctx) { ctx.slots.registerFactory({ name: 'dynamic.factory', scope: 'root' }, () => null) },
+  }`
 
   it('reports a crash of an entry it seated, under the session the run was for', async () => {
     const bench = await boot()
@@ -411,11 +415,28 @@ describe('render failures', () => {
     expect(bench.reported[0]?.failure.abdicated).toBe(false)
   })
 
+  it('reports a crash of a Factory definition it seated without retiring it', async () => {
+    const bench = await boot()
+    await bench.runner.load(half({ code: FACTORY_CONTRIBUTOR }))
+    const core = (bench.slots as unknown as {
+      _core: { factory(name: string): unknown }
+    })._core
+    const definition = core.factory('dynamic.factory')
+    bench.crash('factory:dynamic.factory', definition, new Error('factory boom'), false)
+
+    expect(bench.reported[0]).toMatchObject({
+      failure: {
+        slot: 'factory:dynamic.factory',
+        message: 'your component in Factory "dynamic.factory" crashed while React rendered it: factory boom',
+        abdicated: false,
+      },
+    })
+  })
+
   it('ignores a crash of an entry no dynamic package seated', async () => {
     const bench = await boot()
     await bench.runner.load(half({ code: CONTRIBUTOR }))
-    // Factory UI crashing is not this runner's business, and neither is an entry
-    // whose component cannot even be indexed by identity.
+    // An entry whose component was not claimed by a dynamic package is not this runner's business.
     bench.crash('root', { component: () => null }, new Error('boom'))
     bench.crash('root', { component: 'not-a-component' }, new Error('boom'))
     bench.crash('root', { component: null }, new Error('boom'))

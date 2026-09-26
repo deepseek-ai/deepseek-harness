@@ -10,7 +10,10 @@
  * keep-alive group logon SID + Everyone; Authenticated Users, INTERACTIVE,
  * and LOCAL are absent from both lists — see the seam's dual-list contract
  * in `packages/sandbox/sandbox-local` and the package README's Modes section
- * for the complete boundary). The write SID is the per-WORKSPACE identity
+ * for the complete boundary). The intersection covers only the object's own
+ * access check, so the token is also lowered to Low integrity and every
+ * granted directory carries a Low no-write-up label and the ambient-delete
+ * deny the `acl` module documents. The write SID is the per-WORKSPACE identity
  * ({@link workspaceWriteSid}): deterministic from the canonical workspace
  * path, so the workspace-root ACE materializes once per workspace per
  * machine and every later provision hits the exact-ACE skip — the
@@ -49,7 +52,7 @@ import { allocPtrSlot, decodePtr, isNullPtr, throwLastError, win32 } from './ffi
 import type { NativePtr, Win32Bindings } from './ffi.ts'
 import { assertPrivateTempDisjoint } from './path-boundary.ts'
 import { drainPipe, spawnSandboxed, spawnSandboxedInherited, waitForExit } from './spawn.ts'
-import { createRestrictedToken, findLogonSid, makeWellKnownSid, openCurrentProcessToken, setTokenDefaultDaclGrant } from './token.ts'
+import { createRestrictedToken, findLogonSid, makeWellKnownSid, openCurrentProcessToken, restrictTokenIntegrity, setTokenDefaultDaclGrant } from './token.ts'
 import * as abi from './win32-abi.ts'
 
 export { AclWriteGrant } from './grant.ts'
@@ -256,30 +259,34 @@ export class AclSandbox {
       // provision would re-propagate the whole tree) and the temp ACE is
       // REVOCABLE (dispose() removes it before the private directory is
       // deleted; the ambient temp root is never granted).
+      // The Low label SID and the world SID the grants deny and label with.
+      const lowLabelSid = makeWellKnownSid(api, abi.WinLowLabelSid)
+      const worldSid = makeWellKnownSid(api, abi.WinWorldSid)
+      this.sidAllocations.push(lowLabelSid, worldSid)
+
       if (this.manageDacls) {
         if (this.writeSidPtr !== undefined) {
           for (const path of this.writableDirs) {
-            grantWrite(api, path, this.writeSidPtr)
+            grantWrite(api, path, this.writeSidPtr, lowLabelSid, worldSid)
           }
           if (tempDir !== null && this.tempWriteSidPtr !== undefined) {
             // Record BEFORE granting: grantWrite can throw after a successful
             // apply (a LocalFree failure), and the fail-closed catch must still
             // revoke that path (revoking an ungranted path is a no-op merge).
             this.grantedPaths.push({ path: tempDir, sidPtr: this.tempWriteSidPtr })
-            grantWrite(api, tempDir, this.tempWriteSidPtr)
+            grantWrite(api, tempDir, this.tempWriteSidPtr, lowLabelSid, worldSid)
           }
         }
       }
       const logonSid = findLogonSid(api, currentToken)
       this.sidAllocations.push(logonSid)
-      const worldSid = makeWellKnownSid(api, abi.WinWorldSid)
-      this.sidAllocations.push(worldSid)
       const writeSids = [this.writeSidPtr, this.tempWriteSidPtr].filter((sid): sid is NativePtr => sid !== undefined)
       restrictedToken = createRestrictedToken(
         api, currentToken, logonSid, writeSids,
         { world: worldSid },
         this.mode,
       )
+      restrictTokenIntegrity(api, restrictedToken, lowLabelSid)
       this.token = restrictedToken
       // The restricted token's default DACL still names only the user's
       // ambient SIDs — none of the restricting SIDs. Every NEW object the

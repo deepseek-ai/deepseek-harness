@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
 import {
   type NormalizeContext,
   extractSnapshotSpillPaths,
@@ -706,7 +708,7 @@ describe('normalizeSessionSnapshot', () => {
           message: {
             id: 'v2-to-v3-system-590b72aa4994fd6d3c6e61bb4bf5bf2f80bae0bc7564d388378ba4f51b816fd6',
             role: 'system',
-            source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' },
+            source: { kind: 'system-prompt' },
             content: [],
           },
         },
@@ -753,7 +755,74 @@ describe('normalizeSessionSnapshot', () => {
       .toThrow('session snapshot must start with a session header')
   })
 
-  it('preserves delivery and captured-source generations after artifact migration', () => {
+  function deliveryLog(version: number, deliveryVersion = version, id = 'delivery'): string {
+    return [
+      { type: 'session', version, id, createdAt: 1, isSeeded: false, delegationDepth: 0 },
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      {
+        type: 'session-log-deepseek/delivery-accepted', seq: 1, time: 2,
+        data: { sessionId: id, throughSeq: 0, sessionFormatVersion: deliveryVersion },
+      },
+    ].map(record => JSON.stringify(record)).join('\n') + '\n'
+  }
+
+  it('compares each strictly restored input using its own native delivery generation', () => {
+    const [historical, current] = normalizeSessionSnapshots(
+      [deliveryLog(3), deliveryLog(SESSION_FORMAT_VERSION)], ctx, { nativeWriterOutput: true },
+    )
+    expect(historical).toBe(current)
+    expect(current).toContain('"sessionFormatVersion":"{{sourceSessionFormatVersion}}"')
+    expect(normalizeSessionSnapshot(deliveryLog(SESSION_FORMAT_VERSION), ctx))
+      .toContain(`"sessionFormatVersion":${SESSION_FORMAT_VERSION}`)
+  })
+
+  it('keeps source-versus-migrated-artifact delivery comparison generation-exact by default', () => {
+    const source = deliveryLog(3)
+    const target = prepareSessionSnapshotFixtureForComparison(source)
+    const [historical, migrated] = normalizeSessionSnapshots([source, target], ctx)
+    expect(historical).toBe(migrated)
+    expect(migrated).toContain('"sessionFormatVersion":3')
+  })
+
+  it('keeps a wrong native delivery generation distinguishable from historical writer output', () => {
+    const [historical, staleCurrent] = normalizeSessionSnapshots(
+      [deliveryLog(3), deliveryLog(SESSION_FORMAT_VERSION, 3)], ctx, { nativeWriterOutput: true },
+    )
+    expect(staleCurrent).not.toBe(historical)
+    expect(staleCurrent).toContain('"sessionFormatVersion":3')
+  })
+
+  it('refuses source delivery claiming V4 before creating comparison tokens', () => {
+    expect(() => normalizeSessionSnapshots([deliveryLog(3, 4)], ctx, { nativeWriterOutput: true }))
+      .toThrow('format v3 delivery marker claims target format v4')
+  })
+
+  it('retains future delivery generations without renaming their event identity', () => {
+    const source = deliveryLog(3, 99, 'recorded-session')
+    const target = prepareSessionSnapshotFixtureForComparison(source)
+    const marker = JSON.parse(target.trimEnd().split('\n').at(-1)!) as unknown
+    expect(marker).toEqual({
+      type: 'session-log-deepseek/delivery-accepted', seq: 1, time: 2,
+      data: { sessionId: 'recorded-session', throughSeq: 0, sessionFormatVersion: 99 },
+    })
+    const [historical, migrated] = normalizeSessionSnapshots([source, target], ctx, { nativeWriterOutput: true })
+    expect(historical).toBe(migrated)
+    expect(historical).toContain('"sessionFormatVersion":99')
+    expect(historical).not.toContain('{{sourceSessionFormatVersion}}')
+  })
+
+  it('keeps captured generations and delivery lookalikes numeric in versioned inputs', () => {
+    const log = deliveryLog(SESSION_FORMAT_VERSION) + JSON.stringify({
+      type: 'custom/event', seq: 2, time: 3, ignorable: true,
+      data: { capturedFormatVersion: SESSION_FORMAT_VERSION, sessionFormatVersion: SESSION_FORMAT_VERSION },
+    }) + '\n'
+    const [normalized] = normalizeSessionSnapshots([log], ctx, { nativeWriterOutput: true })
+    expect(normalized).toContain(JSON.stringify({
+      capturedFormatVersion: SESSION_FORMAT_VERSION, sessionFormatVersion: SESSION_FORMAT_VERSION,
+    }))
+  })
+
+  it('preserves delivery and captured-source generations without a validated source generation', () => {
     const event = (version: number): string => JSON.stringify({
       type: 'session-log-deepseek/delivery-accepted',
       data: { sessionId: 's', throughSeq: 4, sessionFormatVersion: version },
@@ -1087,6 +1156,17 @@ describe('scrubModelRequestBulk', () => {
 })
 
 describe('scrubSessionSnapshot', () => {
+  it('writes expanded source-event references and remains idempotent', () => {
+    const input = [
+      { type: 'session', id: 's' },
+      { type: 'assistant/message', sourceEventSeqs: [[1, 3], 5], surfaceOp: 'append', data: { turn: 1, step: 1 } },
+    ].map(record => JSON.stringify(record)).join('\n')
+
+    const output = scrubSessionSnapshot(input)
+    expect(output).toContain('"sourceEventSeqs":[1,2,3,5]')
+    expect(scrubSessionSnapshot(output)).toBe(output)
+  })
+
   it('writes stable feedback clocks while retaining notes and version identity', () => {
     const input = [
       { type: 'session', id: 's' },
@@ -1151,6 +1231,23 @@ describe('scrubSystemPrompts', () => {
 })
 
 describe('scrubToolSchemas', () => {
+  it('retains historical tool names when developer messages reference declarations', () => {
+    const header = JSON.stringify({ type: 'request/header', data: { header: { tools: [
+      { name: 'search', description: 'Full schema', parameters: {} },
+      { name: 'fetch', description: 'Fetch schema', parameters: {} },
+    ] } } })
+    const update = JSON.stringify({ type: 'developer/message', data: {
+      headerSeq: 0, message: { content: [{ type: 'tool-addition', toolName: 'fetch' }] },
+    } })
+    const out = scrubToolSchemas(`${header}\n${update}\n`)
+    expect(JSON.parse(out.split('\n')[0]!)).toEqual({
+      type: 'request/header', data: { header: { tools: ['search', 'fetch'] } },
+    })
+    expect(out.split('\n')[1]).toBe(update)
+    expect(out).not.toContain('Full schema')
+    expect(scrubToolSchemas(out)).toBe(out)
+  })
+
   it('scrubs only tool-schema payloads while keeping prompts verbatim', () => {
     const header = JSON.stringify({
       type: 'request/header', seq: 1, time: 2,

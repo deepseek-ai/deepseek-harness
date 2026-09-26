@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-16-sandbox-same-mode.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-16-sandbox-same-mode.md
+/agent-note-repeated-sandbox-modes-need-no-approval:
+  en: 85325770757063d8
+  zh: 9c55052551299ddf
+/agent-note-repeated-sandbox-modes-need-no-approval/problem:
+  en: 0d5832fd63b9cd7b
+  zh: f07b20a91b92de25
+/agent-note-repeated-sandbox-modes-need-no-approval/decision:
+  en: b102948c4acbdd96
+  zh: 7220f043716d571c
+/agent-note-repeated-sandbox-modes-need-no-approval/alternatives-considered:
+  en: fb337915525ed95c
+  zh: d0584f998f0a3b8f
+/agent-note-repeated-sandbox-modes-need-no-approval/consequences:
+  en: bde9f3b22f5159c2
+  zh: 105c24546f0943bb

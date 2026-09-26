@@ -6,4 +6,4 @@ Plugin initialization failed
 If application files are missing or damaged, close the application and reinstall it. Your tasks are stored separately.
 Exit
 Restart
-Disable all third-party plugins and restart
+Disable third-party plugins, back up profile patch, and restart

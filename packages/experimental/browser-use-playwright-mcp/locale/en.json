@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Browser Use (Playwright)",
+    "description": "Let the model browse and operate web pages through Playwright MCP in a launched Chromium."
+  }
+}

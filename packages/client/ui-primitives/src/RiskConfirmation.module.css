@@ -1,6 +1,6 @@
 .confirmation {
   width: min(440px, 100%);
-  max-height: calc(100vh - 48px);
+  max-height: 100%;
   overflow: hidden;
 }
 
@@ -56,7 +56,7 @@
 }
 
 .acknowledgement input:focus-visible {
-  outline: 2px solid var(--dsw-alias-border-l4);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 

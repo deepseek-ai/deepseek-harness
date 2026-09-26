@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-11-initial.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-09-11-initial.md
-2026-09-11-initial.md: a919aba314a7e94242ab831a588e2112997edd8f
-2026-09-11-initial.zh.md: e37d0c48219e8ac4d5d30d84cca441c150210a0b
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/initial-persistence-type-baseline:
+  en: 20020fb3f2a53b66
+  zh: 98aed11422799717
+/initial-persistence-type-baseline/summary:
+  en: 0d176ac18dbd47d8
+  zh: 7f83b2b9e7b81455
+/initial-persistence-type-baseline/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/initial-persistence-type-baseline/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/initial-persistence-type-baseline/compatibility:
+  en: 8b8755f4a777f974
+  zh: 273fd0d7637e39e6
+/initial-persistence-type-baseline/verification:
+  en: 74d67f0c3e2ae717
+  zh: 993cb7b95ed09852
+/initial-persistence-type-baseline/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

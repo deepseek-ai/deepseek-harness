@@ -24,17 +24,17 @@ const LOCAL_REV = 'local'
 
 /**
  * Synthesize the raw `WebBootGraph` for `rows`: one `application` batch
- * holding every row, `rev: 'local'`, placeholder `/plugins/<name>/client.js`
- * URLs, since every module is seeded in process and never fetched. Validation
- * stays with the production `parseBootManifest` inside the module system:
- * duplicate names and an empty roster are rejected there, not here.
+ * holding every row, `rev: 'local'`, placeholder `plugins/<name>/client.js`
+ * references, since every module is seeded in process and never fetched.
+ * Validation stays with the production `parseBootManifest` inside the module
+ * system: duplicate names and an empty roster are rejected there, not here.
  * @param rows - roster rows in composition order.
  * @returns the unparsed graph, as `createClientModuleSystem` consumes it.
  */
 export function graphFromRoster(rows: readonly ClientRosterRow[]): WebBootGraph {
   const entries: WebBootEntry[] = rows.map(row => ({
     id: row.name,
-    url: `/plugins/${row.name}/client.js`,
+    url: `plugins/${row.name}/client.js`,
     rev: LOCAL_REV,
     ...(row.inject.length > 0 ? { inject: [...row.inject] } : {}),
     ...(row.immediately ? { immediately: true } : {}),
@@ -44,7 +44,7 @@ export function graphFromRoster(rows: readonly ClientRosterRow[]): WebBootGraph 
     entries,
     batches: [{
       phase: 'application',
-      url: '/plugins/local.js',
+      url: 'plugins/local.js',
       rev: LOCAL_REV,
       entries: entries.map(entry => entry.id),
     }],

@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-29-terminal-llm-stream-failures.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-29-terminal-llm-stream-failures.md
-2026-07-29-terminal-llm-stream-failures.md: c5d160c5dffe6171dd79714f2402f3bd6ca4d3fc
-2026-07-29-terminal-llm-stream-failures.zh.md: 297898d8f94ae4f00ab1c5fef192ce633aee99cd
+/agent-note-terminal-llm-stream-failures:
+  en: 6195cb1d9b4dd423
+  zh: 0c93d3a39e2bc1f4
+/agent-note-terminal-llm-stream-failures/problem:
+  en: 41363fca57ae20e6
+  zh: 1d05eeeecaafa7f3
+/agent-note-terminal-llm-stream-failures/decision:
+  en: c3bfde5f736f8b27
+  zh: f51ebb4089df6406
+/agent-note-terminal-llm-stream-failures/alternatives-considered:
+  en: 46153a92b2135aae
+  zh: 0b8fdaf1f7edeb77
+/agent-note-terminal-llm-stream-failures/consequences:
+  en: 9bf05473682c5cef
+  zh: b93f32470eb08cf4

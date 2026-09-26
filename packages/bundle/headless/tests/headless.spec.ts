@@ -13,7 +13,7 @@ import type {
   ResumeAgentOptions,
 } from '@deepseek-ai/dsh-agent'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
-import { LlmAttemptId, ToolCallId, createAssistantMessage, createToolResultMessage, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { LlmAttemptId, ToolCallId, createAssistantMessage, createToolResultMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Session, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
@@ -112,7 +112,7 @@ function appendTurn(
   })
 }
 
-/** Append the preset-selection event owned by dsh-agent-presets. */
+/** Append the preset-selection event owned by dsh-agent-preset-registry. */
 function selectPreset(session: Session, agentPreset: string): void {
   const target = session as unknown as { append(type: string, data: unknown): void }
   target.append('agent-preset/selected', { agentPreset })
@@ -263,8 +263,8 @@ describe('headless runner', () => {
     const test = await bench({
       before(session) {
         const setupMessage = {
-          role: 'user', content: [{ type: 'text', text: 'setup' }], source: { kind: 'user' }, id: 'setup',
-        } as UserMessage
+          role: 'user', content: [{ type: 'text', text: 'setup' }], source: { kind: 'user' }, id: brandString<MessageId>('setup'),
+        } satisfies UserMessage
         appendTurn(session, 0, setupMessage, 'pre-task noise', true)
       },
       async afterPrompt(session, message) {
@@ -607,8 +607,8 @@ describe('headless runner', () => {
     })
     const session = test.ctx.sessions.create(brandString<SessionId>('session-exact'), { meta: { cwd: process.cwd() } })
     const history = {
-      role: 'user', content: [{ type: 'text', text: 'earlier' }], source: { kind: 'user' }, id: 'history',
-    } as UserMessage
+      role: 'user', content: [{ type: 'text', text: 'earlier' }], source: { kind: 'user' }, id: brandString<MessageId>('history'),
+    } satisfies UserMessage
     appendTurn(session, 0, history, 'earlier answer', true)
     const before = session.seq
     expect(await test.run()).toMatchObject({ code: 0, out: 'resumed answer\n', err: '' })
@@ -789,8 +789,8 @@ describe('headless runner', () => {
     const test = await bench({
       before(session) {
         const history = {
-          role: 'user', content: [{ type: 'text', text: 'earlier' }], source: { kind: 'user' }, id: 'history',
-        } as UserMessage
+          role: 'user', content: [{ type: 'text', text: 'earlier' }], source: { kind: 'user' }, id: brandString<MessageId>('history'),
+        } satisfies UserMessage
         appendTurn(session, 0, history, 'earlier answer', true)
         selectPreset(session, 'minimal')
       },
@@ -845,8 +845,8 @@ describe('headless runner', () => {
     const test = await bench({
       before(session) {
         const history = {
-          role: 'user', content: [{ type: 'text', text: 'earlier' }], source: { kind: 'user' }, id: 'history',
-        } as UserMessage
+          role: 'user', content: [{ type: 'text', text: 'earlier' }], source: { kind: 'user' }, id: brandString<MessageId>('history'),
+        } satisfies UserMessage
         appendTurn(session, 0, history, 'earlier answer', true)
         capturedLength = session.seq
         Object.defineProperty(session, 'eventAt', { value: () => undefined })

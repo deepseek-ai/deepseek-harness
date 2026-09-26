@@ -37,7 +37,8 @@ class CliMockAdapter extends LlmAdapter {
       yield { type: 'finish', reason: { kind: 'error', failure: { code: 'SERVER', message: 'CLI mock provider failed' } } }
       return
     }
-    const toolResult = options.messages.at(-1)?.content.find(block => block.type === 'tool-result')
+    const last = options.messages.at(-1)
+    const toolResult = last?.role === 'tool' ? last : undefined
     if (toolResult === undefined) {
       const reasoning = 'Inspecting the task before the tool call.'
       const args = JSON.stringify({ command: SHELL_COMMAND, description: 'Prove the CLI tool round trip.' })

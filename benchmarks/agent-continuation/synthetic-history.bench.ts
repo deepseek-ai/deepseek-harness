@@ -23,7 +23,7 @@ for (const [name, generate] of [
     session.append('turn/start', { turn })
     session.append('step/start', { turn, step: 1 })
     const replacement = session.append('system/message', {
-      turn, step: 1, message: createSystemMessage('Next synthetic prompt', '@deepseek-ai/dsh-system-prompt'),
+      turn, step: 1, message: createSystemMessage('Next synthetic prompt'),
     }, { surfaceOp: { op: 'replace', startSeq: head, endSeq: head }, sourceEventSeqs: [head] })
     const restored = Session.create(SessionId(header.id), parseSessionLog([
       JSON.stringify(header), ...session.snapshotEvents().map(event => JSON.stringify(event)),

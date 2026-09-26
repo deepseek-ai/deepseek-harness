@@ -15,6 +15,7 @@ export {
   approveEscalation,
   escalationHintMarker,
   sandboxDenialMarker,
+  sandboxPermissionsDescription,
   validateEscalationArgs,
 } from './escalation.ts'
 export type { EscalationApproval, EscalationApprover, EscalationOutcome, EscalationRequest } from './escalation.ts'

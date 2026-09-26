@@ -25,11 +25,15 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-会话页头保留当前会话 title 作为谱系面包屑，并在会话存在 subagent 后代时，于页头操作行之前追加 `/` 数量触发器；触发器打开后代目录，统计仅含 subagent 的完整谱系、在普通 fork 处停止，并在任一计入统计的后代处于 `running` 时显示活动仍在进行。选择任意深度，即可用该子会话的确切 `{parentSessionId, childSessionId, mode}` 地址打开其对话。
+会话页头把当前会话标题作为谱系面包屑；当会话的直接目录有子项或读取失败时，后代数量触发器渲染在页头操作区的最前方，不带任何面包屑分隔符。目录缺席、空目录加载中或成功加载为空时，均隐藏数量触发器。触发器打开该直接目录，报告总数与运行数，并且只在行展开时加载嵌套目录。选择任意深度，即可用该子会话的确切 `{parentSessionId, childSessionId, mode}` 地址打开其对话；也可以使用行尾箭头在右侧 Sidebar 打开同一地址，并在空间允许时优先使用独立分栏。
+
+本包注册 `dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=<mode>` 资源与 builtin Sidebar tab 类型。资源直接根据地址保留 child 的 `SessionReference`，不刷新 parent 目录，并在 tab 记录关闭时释放 reference。tab 通过 `sidebar.chat.conversation` 渲染共享 `conversation.content` Factory，把局部 View 固定为 Chat，并省略主 Conversation 的 Header 与宽度控制。
 
 ### 浏览目录
 
-行显示 mode、`running`/`inactive` 活动状态与由日志支撑的可选 title；尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id；损坏、不受支持或不可用的行仍保持可读但禁用。
+悬停触发器 150ms 后打开目录；指针离开触发器和目录后，经过 120ms 关闭。点击后代数量触发器会固定目录，直到点击外部，或在触发器或树内按 Escape 关闭。点击面包屑标题会导航至对应会话。
+
+行显示 mode、活动状态与由日志支撑的可选 title；running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的 14px 列宽，并将较小的圆点居中，使 title 与 loading 状态对齐。紧凑的页头触发器会垂直居中活动图标与数量，并保留 4px 水平间距。尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id。只有一行自身的目录加载为空后，它才是已知叶子。
 
 ### 续接对话
 
@@ -51,15 +55,21 @@ kind: "package-reference"
 
 ### 目录派生
 
-页头谱系 renderer 通过标准 `useSessions` 钩子读取 `subagentsByParent` 与会话摘要。紧凑树仍以直接目录为权威依据：每个健康行的 `hasChildren` 提示在交互前决定是否显示展开控件；每层目录仅在其中至少一个健康行是分支时才预留展开列；展开分支时会立即为每个已知直接后代预留一行禁用的加载行，随后再用该 child 的权威目录懒加载结果替换。每个可见分支都会上报给运行时，使成员帧只在树正被消费的位置触发去抖动刷新。
+页头谱系 renderer 通过标准 `useSessions` 钩子读取 `projectionsBySession`。renderer 从每个 Session 的共享值中选择 `subagentCatalog`，用于成员关系、展开控件与数量；活动状态优先使用统一 UI status，缺少时使用 Session 摘要；摘要提供标题与用量。展开行会按需加载初始目录。实时 projection 帧更新所有已加载层级，无需菜单订阅或重复成员查询。行在目录缺席、加载中或失败时保持可展开，并在目录就绪且为空后成为已知叶子。
 
-### 耗时与 token
+打开目录下拉菜单不会请求其根目录。展开子节点目录或重试失败读取时调用 `refreshProjection`；共享投影值的变化会自动更新显示。
 
-token 用量总计为四个互不重叠的 `tokenUsage` 桶之和。耗时会累加已完成的 `subagentTiming` 轮次，仅在运行中 child 存在未结束轮次时每秒递增一次，并在 child 变为 inactive 后冻结；被中断的未结束轮次以其同一切面的 `active.through` 为上界，绝不使用更新的会话元数据。
+面包屑地址从 Provider 所绑定的 Session 地址和已加载的 parent 目录推导，也包括从未选中过的祖先。
+
+### 耗时、完成状态与 token
+
+每个可见目录层在包含运行中 child 时独立推进时钟；折叠该层或关闭菜单会释放时钟。token 用量总计为四个互不重叠的 `tokenUsage` 桶之和。`subagentTiming` 投影会累加已结束轮次的耗时，并记录最近一个已结束轮次是否以 `completed` 结束；新轮次开始时会清除该完成状态，直到自身的 `turn/end` 到达。耗时仅在运行中 child 存在未结束轮次时每秒递增一次，并在 child 变为 inactive 后冻结；被中断的未结束轮次以其同一切面的 `active.through` 为上界，绝不使用更新的会话元数据。
 
 ### 编辑器选举
 
 one-shot child 始终选用只读编辑器。可继续 child 仅在其确切 parent 不可用且 child 未在运行时选用只读编辑器；否则普通编辑器的会话会经 `subagents/prompt` 路由提示词。本包绝不接收宿主上下文，也不调用面向模型的工具。
+
+模式未知的目录项仍可见、可点击，没有标签时显示子会话 id。读取子历史并确认受支持模式前，输入区保持只读；读取失败在该子会话中报告。
 
 </details>
 
@@ -102,7 +112,7 @@ one-shot child 始终选用只读编辑器。可继续 child 仅在其确切 par
 
 这些限制定义目录能显示什么、`@` 引用意味着什么；它们是当前包约束。
 
-- **目录没有持久化结果**：活动状态与计时无法区分完成、失败或取消，且 UI 不公开 Activation 身份；停止能力仅限编辑器上针对运行中可继续 child 的当前轮次 Stop。
+- **非完成的 inactive 结果仍合并显示**：目录能区分最近一次正常完成与其他 inactive 状态，但不区分失败、取消、拒绝、token 耗尽或尚无已结束轮次的 child；UI 不公开 Activation 身份，停止能力仅限编辑器上针对运行中可继续 child 的当前轮次 Stop。
 - **`@` 引用仍是显示标题文本**：重复或改名后的 label 会有歧义，因此它们刻意不获得继续执行语义。
 
 <a id="dev-note"></a>

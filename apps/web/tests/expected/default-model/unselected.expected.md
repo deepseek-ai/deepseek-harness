@@ -1,0 +1,5 @@
+- textbox "描述你想要构建的内容, / 调用指令, @ 文件或对话"
+- button "添加文件或调用指令"
+- button "访问模式，当前：工作区内修改": 工作区内修改
+- button "选择模型，当前 acme-gateway/acme-large": acme-gateway/acme-large
+- button "发送消息" [disabled]

@@ -59,12 +59,15 @@ JSONL record
   → v0-to-v1 stage
   → v1-to-v2 stage
   → v2-to-v3 stage
+  → v3-to-v4 stage
   → current event collector
 ```
 
 Chain 中不存在 `flatMap`、spread expansion、中间 event array 或 scheduler。只有在每个 migration stage 都已获得直接消费 compact run 的机会后，最终 event collector 才会展开它。
 
 ### 相邻版本所有权
+
+[V3 到 V4 规范](../../../../packages/session/session-format-v3-to-v4/README.zh.md#v3-to-v4-specification)规定父目录补全：它推进 header 版本，保留已接纳的事件与继承切点，并根据子 Session 证据追加缺失的自身目录记录。它复用 V2→V3 中冻结的 V3 codec。按 generation 校验 delivery 可防止历史确认仅因 header 变化而获得当前水位含义；更早的 migration edge 保留各自的来源准入策略。
 
 [V2 到 V3 投递保护](../../../../packages/session/session-format-v2-to-v3/README.zh.md#delivery-guards)防止源代中被忽略的标记仅因头部变化就成为有效上传水位。Python 发布冒烟测试独立于跨代 golden 比较，按源代码中的 `SESSION_FORMAT_VERSION` 检查生成日志，因此文件名与 header 自洽不能掩盖过期 writer。
 
@@ -76,7 +79,7 @@ Chain 中不存在 `flatMap`、spread expansion、中间 event array 或 schedul
 
 源继承数量在 EOF 前可能未知：V2 从种子标记推导它，而 V1→V2 可以改变事件数量。迁移链将这种缺失传递给下一个 Stage，而不伪造数量。[V2 到 V3 继承规则](../../../../packages/session/session-format-v2-to-v3/README.zh.md#sequence-references)支持此情况；需要 header 提供数量的旧 Stage 仍在数量缺失时拒绝。这使有种子的多跳恢复无需保留中间产物数组。
 
-[版本与发布状态参考](../../../../docs/session-format-status.zh.md)拥有已发布格式记录，并指明代码中的写入器真源。已发布格式保留其语义；迁移期间已提交代际的字节保持不变。后续结构性变更必须按[版本规则](2026-08-10-session-log-version-mechanism.zh.md)添加下一条相邻迁移边，而非修改已发布转换。普通事件新增遵循该规则的必需事件拒绝机制，而非自动分配版本。当前格式文件不会重新执行入边迁移；集成测试使用隔离、可丢弃的 home 和未变更的历史输入。
+[版本与发布状态参考](../../../../docs/session-format-status.zh.md)拥有已发布格式记录，并指明代码中的写入器真源。已发布格式保留其语义；迁移期间已提交代际的字节保持不变。对已发布目标格式的破坏性变更必须按[版本规则](2026-08-10-session-log-version-mechanism.zh.md)添加下一条相邻迁移边。传入转换器修复影响之后的历史转换，不影响已有目标格式文件；[cookbook](../../../../docs/cookbook/adding-a-session-format-version.zh.md)拥有兼容性评审和 alpha 支持政策。普通事件新增遵循该规则的必需事件拒绝机制，而非自动分配版本。集成测试使用隔离、可丢弃的 home 和未变更的历史输入。
 
 [已提交语料清单](../../../../packages/test-support/llm-replay/tests/session-format-corpus-inventory.ts) 按源路径、代际与精确拒绝原因标识有意不支持的历史转换。保留这些产物不能迫使迁移改变时序，也不能允许统一跳过：每个清单中的产物仍必须抛出类型化迁移拒绝，未列入的产物必须还原。原生当前代际 fixture 不经过入边，因此不能被归为不支持。没有版本 header 的测试框架协议示例保持为独立的显式类别。语料测试在还原成功和拒绝后都检查源字节；它不通过改写历史证据来满足当前 reader。
 
@@ -85,6 +88,8 @@ Chain 中不存在 `flatMap`、spread expansion、中间 event array 或 schedul
 每个 released codec 会用显式 `strict` 或 `recoverable` 策略创建 row decoder。Decoder 每次通过不同的 context 方法校验并 emit 一个 event 或 codec-owned `SessionFormatEventRun`。v0-to-v1 与 v1-to-v2 都实现 `transformEvent()` 和 `transformRun()`，因此 packed Assistant chunk 可以直接到达 folding edge，无需先变成数百万个普通事件。
 
 v0-to-v1 除了有限的 released-v0 归一化外，会保留逻辑 header、seq、引用、时间戳与 payload。它转换已移除的 `steering/message` 与 `compact/*` 事件名称，接受出现在对应 `step/end` 之后的已发布 `llm/retry`，按 turn／step／provider／policy chain 为缺失的 `llm/retry.retryId` 确定性补值，并为省略 id 的旧 compaction group 确定性补充同一个 `compactionId`。v1-to-v2 负责 attempt folding 与引用重写，并且只 emit 已结算的 v2 event。它会把旧的 goal 来源 user message 拆成 `goal/change` 与原本的模型可见 message。它还会为一种有限的已发布 restart 插入 interrupted `turn/end`：一个没有 open step 的 open turn 后出现非空 `next-turn` inbox splice，随后直接开始编号连续的下一轮。
+
+V3-to-V4 边对直接写成 V3 的日志应用同样的有限 restart 修复。将修复保留在迁入边，可以维持[原生 V4 生命周期校验](2026-09-17-native-v4-read-validation.zh.md)；若在那里接受重复 start，新日志也会允许生产者损坏。插入事件要求重映射本地引用与继承截点，而捕获代际保留原坐标。[格式规范](../../../../packages/session/session-format-v3-to-v4/README.zh.md#sequence-references)负责定义具体证据和字段。
 
 Catalog 为 production、Worker、fixture 与 replay 暴露同一个 `createRestore()`。Recovery policy 与最终 validation policy 在 restore 创建时一次确定。Historical production 使用 recoverable source parsing 与 transformed-current validation；这种策略会在迁移后校验已发布 current 结果，而已经是 current 的输入只接受 codec 校验。Worker 与 fixture verification 使用 strict parsing 与已安装 current 格式的完整 restoration。Migration stage 或 transformed-current validation 的拒绝会保持为 `SessionFormatUnsupportedMigrationError`；物理解码失败仍是 corruption。Test support 只保留 fixture 自身需要的 token 和 envelope materialization。
 
@@ -96,9 +101,13 @@ Current encode 以单条 record 为单位。Provider 在主线程每个 slice �
 
 发布的 `lib/worker.cjs` 将 JavaScript workspace 依赖一起打包，使每个新 verifier 无需解析并编译它们的运行时模块图。Worker 只通过普通 request/result 消息通信，与 host 不共享 service 或 class identity，因此可以这样处理。Host build 应用现有 TypeScript 与 Typert 转换；Client pass 跳过这个 Node-only package，不会用未经转换的源代码覆盖 worker。Native add-on 保持 external。Verification、scheduler admission、termination 与 durable publication 仍在 writable open 返回前完成。Built-worker 冒烟测试把 package manifest 与 worker 复制到隔离的临时 package，移除环境中的模块搜索路径，接受有效 generation，并拒绝错误的 event count。
 
+[浏览器 preview 打包器](../../../../packages/experimental/webworker-packer/README.zh.md)在 Node 中为随包 Session 数据准备当前代际后继，并使用同一根目录中直属子 Session 的 descriptor 作为父目录证据。浏览器 host 未实现 `node:worker_threads`，因此打包阶段的准备同时保留不可变 fixture 代际与运行时 JSONL 的 Worker 校验要求。
+
 Preparation 会把 cancellation 传给 source read，并在现有的约 500 ms Decode yield 边界观察它。`publish()` 一旦开始，encode、Worker verification 与 publication 不接收 caller cancellation，并运行到终态；write open 会在之后再次检查 caller signal。已经发布的 generation 绝不会回滚。
 
 Stage pipeline 终止于一份 prepared current artifact。[历史 Session 只读迁移准备](2026-09-05-read-only-session-migration-preparation.zh.md)定义 read open 如何立即消费该 artifact，以及 write open 如何在返回 append 权限前完成 encode、verification 与 publication。
+
+批量 V4 迁移命令在有界任务队列中共享一个 JSONL persistence Context，保留 backend 的双 Worker 校验上限，以及复用近期已解码日志的缓存。子 Session 并发发布可能改变父 Session 选中的子代际；普通修订检查会拒绝这次尝试。命令只把这种源变化错误延后到初始队列清空后串行重试一次，重新收集证据，不放宽发布检查，也不重试无关失败。
 
 ### Durable format 与 publication 规则
 
@@ -121,6 +130,44 @@ POSIX publication 使用 hard-link creation 加目录 sync；Windows 使用 no-o
 | Bulk current encode 构造完整 string/Buffer | 单条 record encoder、1 MiB input slice、4 MiB write batch | 限制分配与主线程 slice |
 | 主线程重复执行完整 verification | 最多两个 complete-generation Worker | Verification CPU 不占用主线程 |
 | Production 与 fixture 使用不同 migration API | Catalog `createRestore()` 加显式 policy | 只保留一套 decoder/chain 实现 |
+
+### 父目录前置事实
+
+本段的运行时子会话错误处理部分由[逐会话目录准备](../bug-fix/2026-09-19-session-local-subagent-migration.zh.md)取代：打开父会话仍通过读取直属子会话补齐目录，但不可读子会话不再阻断健康父历史。V3→V4 使用保留的直属子 Session header 和自身 descriptor 补齐父 Session 的子代理发现记录。存储将紧凑的 descriptor 证据提供给 catalog 组装处，由其绑定到 V3→V4 stage 工厂；Stage 等待父 Session 的最终继承截点确定后，才校验目录 payload 并导出可获得的自身发现事实。嵌套的 seed 标记丢弃继承目录候选，不解释其 payload。已有目录记录允许 descriptor 不可用，包括在首次 step 之前失败的子 Session。Descriptor v1 表示 continuable 模式；v2/v3 显式记录模式。可获得且明确的发现字段必须与父目录一致；新增完整记录要求一个受支持的 descriptor。Descriptor 缺失、版本不受支持或存在多个时，保留日志与未知模式成员关系，不编造发现字段，理由见[不完整子目录证据](../bug-fix/2026-09-19-v3-incomplete-child-catalog-evidence.zh.md)。JSONL 在准备、复用和发布时重新检查关联成员与来源修订。不可读或不支持的 header 不参与发现；读取已识别子会话失败时，其 header 身份保留为未知模式成员关系。来源变化使准备缓存失效；只读打开自动重试一次，写打开则拒绝发布。诊断保留出错子日志的路径，并区分不支持的迁移证据与畸形子数据。收集器将子解码和 descriptor 失败报告为带子路径的警告；取消与来源一致性检查仍中止准备。仅支持 V0–V3 的目录避免递归迁移子 Session。当前 V4 读取跳过该扫描，但会执行与严格恢复相同的自身目录字段、唯一性及当前投递归属检查。见[格式规范](../../../../packages/session/session-format-v3-to-v4/README.zh.md)。
+
+原始父子迁移测试保留 24 个历史创建时间冲突作为拒绝证据。独立的内存对照只对齐子创建时间，证明恢复保留事件，包括已发布但没有 descriptor 的子 Session。Headless/ACP 与 SDK 快照适配器在规范化之前校验实时父子时钟，并在刷新时保持两者相等；已提交的前代文件保持不变。
+
+历史格式的公开修订号组合父日志物理修订号与每个所选规范路径及其文件系统修订号的指纹。仅父日志令牌无法标识子日志提供的目录变化；全库指纹让 `stat`/`list` 保持只读元数据，也纳入不可读或不支持的成员，无需新增持久化索引。无关变化也会使历史缓存失效，获取令牌需要扫描根目录。当前格式令牌仍只取决于自身文件。准备缓存保留父日志物理修订号，并独立校验子成员集合与修订。
+
+通用格式接口只传递正在恢复的 artifact。每个父 Session 的 catalog 组装将 V3→V4 声明替换为捕获已收集子 Session 证据的闭包，并复用生成的 codec、迁移与校验清单。每次父 Session 准备只编译一条短迁移链，每次恢复拥有独立的 stage 状态。在组装处绑定证据，使通用恢复选项和 stage 输入不必携带子 Session 证据，同时保留存储对发现与来源重验的所有权。静态 header 和原生当前格式读取不需要子 Session 证据；未绑定的历史正文恢复会拒绝，不会假定子 Session 集合为空。
+
+<a id="catalog-scan-measurements"></a>
+### 目录扫描测量
+
+包内[诊断脚本](../../../../packages/session/session-persistence-jsonl/tests/catalog-migration.perf.ts)测量一个原始 V3 父日志、四个各有 1,000 条事件的直属子日志，以及 0/100/1,000 个只有 header 的无关 V3 Session。每个样本在新进程中创建独立临时日志库与 Cordis 上下文，按 stat → 冷读 → 缓存读取 → 写入发布 → 当前格式热读顺序执行，最后释放上下文并删除文件。脚本在普通 Node 下使用已构建的工作区导出；创建夹具不计入测量区间。这些结果是夹具创建后的文件系统缓存热态观察，不代表磁盘冷读延迟，也不是性能门禁。
+
+以下为 macOS arm64、Node v26.0.0 下各规模的全部三个样本，单位为毫秒。只读打开不发布后继：即使解码结果已缓存，成员扫描仍与日志库规模成正比。1,000 个无关日志时，中位数分别为 stat 84.14 ms、冷读 237.97 ms、缓存读取 110.98 ms、发布 268.46 ms，以及同进程当前格式读取 0.41 ms。这些测量记录成本，不证明性能提升，也不设跨主机阈值。
+
+| 无关 Session | 历史 stat | 冷读 | 缓存读取 | 发布 | 当前格式热读 |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 5.17 | 19.00 | 1.36 | 42.88 | 0.47 |
+| 0 | 3.30 | 14.87 | 1.45 | 35.75 | 0.41 |
+| 0 | 3.18 | 16.71 | 1.50 | 34.51 | 0.47 |
+| 100 | 29.44 | 77.48 | 17.01 | 60.66 | 0.43 |
+| 100 | 12.42 | 42.71 | 13.69 | 60.19 | 0.43 |
+| 100 | 11.19 | 41.06 | 12.61 | 57.18 | 0.39 |
+| 1000 | 84.14 | 237.97 | 109.86 | 284.96 | 0.48 |
+| 1000 | 99.41 | 259.88 | 123.50 | 268.46 | 0.41 |
+| 1000 | 75.40 | 236.64 | 110.98 | 247.69 | 0.39 |
+
+在仓库根目录构建运行时后执行：
+
+```sh
+pnpm run build:lib:host
+cd packages/session/session-persistence-jsonl
+node --input-type=module -e 'import { build } from "tsdown"; await build({ config: false, entry: ["tests/catalog-migration.perf.ts"], outDir: ".artifacts/perf", tsconfig: false, dts: false, deps: { neverBundle: [/^@deepseek-ai\//], onlyBundle: false } })'
+node .artifacts/perf/catalog-migration.perf.mjs
+```
 
 ## 验证
 

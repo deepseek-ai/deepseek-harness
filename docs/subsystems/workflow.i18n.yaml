@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for workflow.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/workflow.md
-workflow.md: 8f56774699eebd5f0a287aee3fcd08eef82ec045
-workflow.zh.md: dd24f920f6e04ba9c8721235919962ce15f84a82
+/workflow:
+  en: ba4972edc6ffa75b
+  zh: cd93b733e5c524a6
+/workflow/the-start-request:
+  en: 6c8755833293a36c
+  zh: a0f061387fe0d3a6
+/workflow/the-workflow-s-identity-workflowmeta:
+  en: ab33fd965499d38c
+  zh: d32893a2a7edd7d6
+/workflow/the-terminal-result-workflowresult:
+  en: acaa0abbacaa752b
+  zh: c8588e520a56c851
+/workflow/a-live-run-workflowrun:
+  en: a86b204323005042
+  zh: 82b691e28ed4dcd3
+/workflow/failure-discipline-workflowerror-fatal:
+  en: 4d390801bb07374c
+  zh: 1099f053c2ee26ec
+/workflow/events:
+  en: de123821a128c1d1
+  zh: e50bcaea2812575a
+/workflow/durable-chat-records:
+  en: 59896f51d9696ffa
+  zh: a12b33117f60d1fe

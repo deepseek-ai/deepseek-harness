@@ -9,7 +9,7 @@ const MAX_SUBAGENT_DIAGNOSTIC_BYTES = 4_096
 
 describe('outcome mapping helpers', () => {
   it.each([
-    ['completed', { status: 'completed', output: 'partial' }],
+    ['completed', { status: 'completed', result: 'partial' }],
     ['aborted', { status: 'killed' }],
     ['error', { status: 'failed', detail: 'error' }],
     ['max-tokens', { status: 'failed', detail: 'max-tokens' }],
@@ -34,7 +34,7 @@ describe('outcome mapping helpers', () => {
       dispose() { order.push('dispose'); return Promise.resolve() },
     })
     order.push('reported')
-    expect(completed).toEqual({ status: 'completed', output: 'ok' })
+    expect(completed).toEqual({ status: 'completed', result: 'ok' })
     expect(order).toEqual(['dispose', 'reported'])
 
     // An infrastructure rejection still disposes and reports failed.

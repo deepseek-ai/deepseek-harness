@@ -96,7 +96,7 @@ function stubWorker(): {
   const { worker, sent, deliver } = stubWorker()
   const tunnel = new WorkerTunnel(worker)
   const response = tunnel.fetch('/api/session.list', { method: 'POST', body: '{"a":1}' })
-  const request = sent[0] as unknown as { t: string; id: number; method: string; url: string; body: ArrayBuffer }
+  const request = sent[0] as { t: string; id: number; method: string; url: string; body: ArrayBuffer }
   check('the request frame carries method and absolute url', [request.t, request.id, request.method, request.url],
     ['req', 1, 'POST', 'http://localhost:4173/api/session.list'])
   check('the request body travels as bytes', new TextDecoder().decode(request.body), '{"a":1}')
@@ -275,4 +275,93 @@ function stubWorker(): {
     message: 'web-preview tunnel: worker failed: worker crashed',
     dshRemoteStreamFailure: { kind: 'carrier' },
   })
+}
+
+// A stream posts each uplink item, then the uplink end, under the stream's id.
+{
+  const { worker, sent, deliver } = stubWorker()
+  const tunnel = new WorkerTunnel(worker)
+  const uplink = (async function *(): AsyncGenerator<string> {
+    yield 'a'
+    yield 'b'
+  })()
+  const stream = tunnel.open('job/attach', { args: {} }, new AbortController().signal, uplink)[Symbol.asyncIterator]()
+  const first = stream.next()
+  await settled(() => sent.length === 4)
+  check('a stream posts uplink items and the uplink end', sent, [
+    { t: 'stream-open', id: 1, endpoint: 'job/attach', payload: { args: {} } },
+    { t: 'stream-uplink-item', id: 1, value: 'a' },
+    { t: 'stream-uplink-item', id: 1, value: 'b' },
+    { t: 'stream-uplink-end', id: 1 },
+  ])
+  deliver({ t: 'stream-item', id: 1, value: 'echo:a' })
+  check('the downlink still yields Host items', await first, { value: 'echo:a', done: false })
+  const ended = stream.next()
+  deliver({ t: 'stream-end', id: 1 })
+  check('a duplex stream ends without an abort frame', [await ended, sent.length], [{ done: true, value: undefined }, 4])
+}
+
+// A failing uplink fails the downlink and aborts the worker side of the stream.
+{
+  const { worker, sent } = stubWorker()
+  const tunnel = new WorkerTunnel(worker)
+  const uplink = (async function *(): AsyncGenerator<string> {
+    yield 'a'
+    throw new Error('uplink exploded')
+  })()
+  const failure = await tunnel.open('job/attach', {}, new AbortController().signal, uplink)[Symbol.asyncIterator]().next()
+    .then(() => 'resolved', (error: unknown) => (error as Error).message)
+  check('an uplink failure fails the downlink', failure, 'uplink exploded')
+  check('an uplink failure aborts the worker stream', sent.map(frame => frame.t), ['stream-open', 'stream-uplink-item', 'abort'])
+}
+
+// The downlink ending first stops the uplink pump and releases the caller's iterator.
+{
+  const { worker, sent, deliver } = stubWorker()
+  const tunnel = new WorkerTunnel(worker)
+  let released = false
+  const uplink: AsyncIterable<string> = {
+    [Symbol.asyncIterator]: () => ({
+      next: () => new Promise<IteratorResult<string>>(() => {}),
+      return: async (): Promise<IteratorResult<string>> => {
+        released = true
+        return { value: undefined, done: true }
+      },
+    }),
+  }
+  const stream = tunnel.open('job/attach', {}, new AbortController().signal, uplink)[Symbol.asyncIterator]()
+  const ended = stream.next()
+  deliver({ t: 'stream-end', id: 1 })
+  check('the downlink ends while the uplink is idle', await ended, { done: true, value: undefined })
+  await settled(() => released)
+  check('the caller iterator is released without an uplink end', [released, sent.map(frame => frame.t)], [true, ['stream-open']])
+}
+
+// A terminal frame releases the caller's uplink iterator in the receive path, before the consumer reads it.
+{
+  const { worker, deliver } = stubWorker()
+  const tunnel = new WorkerTunnel(worker)
+  let released = false
+  const uplink: AsyncIterable<string> = {
+    [Symbol.asyncIterator]: () => ({
+      next: () => new Promise<IteratorResult<string>>(() => {}),
+      return: async (): Promise<IteratorResult<string>> => {
+        released = true
+        return { value: undefined, done: true }
+      },
+    }),
+  }
+  const stream = tunnel.open('job/attach', {}, new AbortController().signal, uplink)[Symbol.asyncIterator]()
+  const ended = stream.next()
+  deliver({ t: 'stream-end', id: 1 })
+  check('a terminal frame releases the uplink before the consumer reads', released, true)
+  check('the downlink then ends', await ended, { done: true, value: undefined })
+}
+
+/** Wait, in small hops, for a condition that a concurrent pump settles. */
+async function settled(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 200 && !condition(); attempt += 1) {
+    await new Promise<void>((resolve) => { setTimeout(resolve, 1) })
+  }
+  if (!condition()) throw new Error('fixture condition did not settle')
 }

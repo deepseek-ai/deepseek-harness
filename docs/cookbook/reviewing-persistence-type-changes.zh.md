@@ -33,8 +33,18 @@ pnpm --silent run verify-persistence-changes --json
 
 阅读报告中的根、路径、变更种类和版本要求。被引用类型可能影响多个事件摘要；检查每个受影响的根。在历史覆盖新 schema 之前，验证会失败。陈旧生成清单也会导致验证失败；记录命令会刷新它。若重排字段或联合类型分支后 `changes` 为空，运行 `pnpm run gen-persistence-catalog` 并重新检查。即使复制的声明或源码位置产生目录 diff，未变的摘要也无需新增确认记录。
 
+要独立于确认历史评审 PR，先将 base 和 head 的目录保存为本地 JSON 文件，再运行：
+
+```sh
+pnpm --silent run persistence-review --before .artifacts/base.schema.json --after docs/persistence-schema.json
+```
+
+在报告旁记录这些文件对应的 commit。添加 `--json` 可获取结构化输出。此只读比较将共享变更与受影响的根类型归组，使用实际字面量 `kind`/`form` 值代替联合类型位置。无法唯一匹配的候选项保留为独立的新增与删除。兼容性部分复制每个根类型的权威分类结果；结构说明不替代确认检查。当前目录标签和声明名称是描述元数据；结构锚点和指纹标识类型。
+
 <a id="acknowledge"></a>
 ## 1. 记录变更
+
+先检查[已接受基线](../session-format-status.zh.md#finalization-record)，保留其锁定记录。向后兼容的演进使用新的同版本确认记录；记录破坏性变更之前，先实现更高的写入器版本。
 
 编写包含 `en` 和 `zh` 的本地 JSON 文件，两者分别包含 `summary`、`compatibility` 和 `verification` 字符串。以下输入描述一个经过验证的钩子审计字段从必选改为可选的变更。用你所做变更的事实替换说明和测试证据；CLI（命令行界面）不会证明这些声明。
 
@@ -87,7 +97,7 @@ pnpm run doc-sync
 pnpm --silent run persistence-changes --update 2026-09-11-poc-optional --prose .artifacts/persistence-change.prose.json --json
 ```
 
-命令刷新机器声明、schema、目录和配对。没有 `--prose` 时，它保留已有说明。更新会拒绝初始基线和被其他记录依赖的记录。目录本身无法识别哪些记录已获审阅接受：保留已接受历史，并创建后继。
+命令刷新机器声明、schema、目录和配对。没有 `--prose` 时，它保留已有说明。更新会拒绝初始基线、其他记录所依赖的记录，以及已被定稿检查点锁定的记录。定稿检查点之外，目录不会推断审阅接受状态：保留已接受历史，并创建后继。
 
 集成产生竞争末端记录时，根据剩余历史更新尚未接受的记录，再重新评估最终差异。无关根的确认无需刷新。[机制决策](../../.agents/notes/implemented/process/2026-09-11-persistence-type-history.zh.md)解释为何保留完整快照和逐根前驱。
 

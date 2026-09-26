@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-24-web-config-tree-boot-and-transport-layering.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-24-web-config-tree-boot-and-transport-layering.md
-2026-07-24-web-config-tree-boot-and-transport-layering.md: c8a1db3cd7bd715d8912b22a0b41a9ef660c1316
-2026-07-24-web-config-tree-boot-and-transport-layering.zh.md: 41fcf65b06829199c203faa806bd17a310b68bcf
+/agent-note-dsh-web-config-tree-boot-and-the-web-transport-layering:
+  en: 2d06ffcaaeb373e7
+  zh: 01822cfd7339167f
+/agent-note-dsh-web-config-tree-boot-and-the-web-transport-layering/problem:
+  en: e5d603f77bff9dd7
+  zh: c9e9a64f0a4db3c9
+/agent-note-dsh-web-config-tree-boot-and-the-web-transport-layering/decision:
+  en: 866ebaaf4fe1e0d1
+  zh: 8075a708c9042941
+/agent-note-dsh-web-config-tree-boot-and-the-web-transport-layering/consequences:
+  en: 47f8a6beba1f320b
+  zh: 5f444699dc52cabf
+/agent-note-dsh-web-config-tree-boot-and-the-web-transport-layering/alternatives-considered:
+  en: bf6fbf972eab0700
+  zh: 0f3449e5e6ace7e2

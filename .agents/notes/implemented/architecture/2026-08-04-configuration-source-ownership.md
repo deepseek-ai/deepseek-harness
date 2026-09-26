@@ -4,6 +4,8 @@ Status: implemented
 
 English | [中文](2026-08-04-configuration-source-ownership.zh.md)
 
+The non-secret settings tier below is superseded by [profile-owned live configuration](2026-09-19-profile-owned-live-configuration.md). Credential ordering and environment restrictions remain current.
+
 ## Problem
 
 `$DSH_HOME/.env` had just [become an ordinary environment layer](../../archived/architecture/2026-08-04-credentials-yaml-and-user-environment-layer.md), which left the harness resolving user-facing values from a flattened `process.env` that could no longer say where a value came from. Three consequences followed.

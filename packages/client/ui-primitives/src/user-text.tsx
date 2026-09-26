@@ -1,8 +1,8 @@
 /**
  * Display projection of reference forms in sent user text (bubble and queue
  * rows). The logged model text remains the single truth; this is presentation
- * only, and every part renders inline so a single-line message never breaks
- * across lines. Four decoration sources, by precedence: the wire session form
+ * only. Inline references follow the consumer's wrapping policy and keep long
+ * labels within its width. Four decoration sources, by precedence: the wire session form
  * `@[label](dsh-session:...)` folds to its label; exact session labels
  * supplied by an adjacent recall decorate their bare `@label` mention; plain
  * `@name` word-boundary tokens decorate by shape alone; and a plain `/name`
@@ -16,7 +16,7 @@
  */
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
-import { ReferenceIcon } from './ReferenceIcon.tsx'
+import { ReferenceIconRegular } from './ReferenceIcon.tsx'
 import css from './user-text.module.css'
 import markdownCss from './markdown/MarkdownText.module.css'
 
@@ -120,7 +120,7 @@ export function projectUserText(
           : label.slice(1).replace(/^"|"$/gu, '').split(/[\\/]/u).filter(Boolean).at(-1) ?? label.slice(1))
     const contents = <>
       {referenceKind !== undefined && (
-        <ReferenceIcon kind={referenceKind} size={16} className={css.refIcon} />
+        <ReferenceIconRegular kind={referenceKind} size={16} className={css.refIcon} />
       )}
       {displayLabel}
     </>

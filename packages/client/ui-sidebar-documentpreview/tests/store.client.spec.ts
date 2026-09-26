@@ -74,7 +74,7 @@ describe('text store', () => {
     instance.actions.navigated(TAB_1, 3)
     instance.actions.reset(TAB_1)
     expect(instance.getSnapshot().byTab[TAB_1]).toEqual({
-      ...fresh(), scrollTop: 120, wrap: false, revision: 3,
+      ...fresh(), loadRevision: 1, scrollTop: 120, wrap: false, revision: 3,
     })
   })
 

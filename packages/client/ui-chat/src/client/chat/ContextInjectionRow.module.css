@@ -56,9 +56,13 @@
   overflow: auto;
   padding: 10px 16px 12px 12px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-markdown-code-block);
   color: var(--dsw-alias-label-tertiary);
   /* Figma 10:2482 code text: the form bodies inherit it from the scrollport. */
   font: 400 11px/16px var(--ds-font-family-code);
+}
+
+.toolChanges {
+  white-space: nowrap;
 }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
-import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
+import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import {
   ComposerSubmissionPolicy, DEFAULT_BUSY_ENTER_BEHAVIOR, resolveSubmitMode,
 } from '../src/client/input/submission-policy.ts'
@@ -36,7 +36,7 @@ describe('ComposerSubmissionPolicy', () => {
   })
 
   it('writes an explicit change through the scope after publishing it locally', () => {
-    const host = stubSettingsScope<ConversationSettings>()
+    const host = stubConfigForm<ConversationSettings>()
     const observed: string[] = []
     let liveBehavior = (): string => 'unconstructed'
     const scope: typeof host.scope = {
@@ -55,7 +55,7 @@ describe('ComposerSubmissionPolicy', () => {
   })
 
   it('adopts a Host preference without writing it back and leaves an identical write untouched', () => {
-    const host = stubSettingsScope<ConversationSettings>()
+    const host = stubConfigForm<ConversationSettings>()
     const policy = new ComposerSubmissionPolicy(host.scope)
     host.publish({ status: 'ready', value: { busyEnter: 'steer' }, revision: 1, writable: true })
     expect(policy.busyEnter.getSnapshot()).toBe('steer')
@@ -66,7 +66,7 @@ describe('ComposerSubmissionPolicy', () => {
   })
 
   it('adopts a section already standing at construction', () => {
-    const host = stubSettingsScope<ConversationSettings>()
+    const host = stubConfigForm<ConversationSettings>()
     host.publish({ status: 'ready', value: { busyEnter: 'steer' }, revision: 1, writable: true })
     const policy = new ComposerSubmissionPolicy(host.scope)
     expect(policy.busyEnter.getSnapshot()).toBe('steer')

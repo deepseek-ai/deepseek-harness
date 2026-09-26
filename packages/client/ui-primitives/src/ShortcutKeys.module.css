@@ -1,0 +1,33 @@
+.keys {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.key {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+}
+
+.tooltip { color: inherit; font-size: 11px; line-height: 14px; gap: 2px; }
+.tooltip .key {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 2px;
+  border-radius: 4px;
+  border: 0;
+  background: var(--dsw-alias-tooltip-key-bg);
+}
+
+.separator { font: inherit; }
+
+.joined { box-sizing: border-box; height: 16px; padding: 0 4px; border-radius: 4px; background: var(--dsw-alias-tooltip-key-bg); }
+.joined .key { min-width: 0; height: auto; padding: 0; border: 0; background: transparent; }

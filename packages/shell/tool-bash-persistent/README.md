@@ -56,7 +56,7 @@ Commands share one shell per agent, so state persists until an `exit`, a timeout
 
 ### What can go wrong
 
-A call without an owning agent session fails with `bash requires an owning agent session`, and a composition without a PTY backend activates the tool but fails its first call with `no PTY backend registered for "shell"`. An interactive foreground child (for example a REPL) returns early with partial output only where the backend proves its stdin wait; elsewhere the call runs to `timeoutMs`, which closes the uncertain shell and reports the reset. Cancellation also resets and discards the result, even when a complete status marker is already observable.
+A call without an owning agent session fails with `bash requires an owning agent session`, and a composition without a PTY backend activates the tool but fails its first call with `no PTY backend registered for "shell"`. An interactive foreground child (for example a REPL) returns early with partial output only where the backend proves its stdin wait; elsewhere the call runs to `timeoutMs`, which closes the uncertain shell and reports the reset. Cancellation also resets and discards the result, even when a complete status marker is already observable. After cleanup settles, ToolRuntime publishes `Error: tool call aborted` with code `ABORTED`; cancellation reasons are not rendered as command output. A queued cancelled call sends no command.
 
 -----
 

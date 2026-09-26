@@ -5,6 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -16,6 +17,12 @@ import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import AgentLoop, { CONFIGURED_AGENT_IDENTITIES_KEY } from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'test': { kind: 'test' } & ContextFormed
+  }
+}
 
 const dirs: string[] = []
 afterEach(async () => { for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true }) })
@@ -214,7 +221,7 @@ describe('config-driven session id', () => {
       cleanupStarted.resolve(undefined)
       await cleanupGate.promise
     })
-    first.inject(createUserMessage({ content: [{ type: 'text', text: 'persist before cancellation' }], source: { kind: 'plugin', plugin: 'test' } }))
+    first.inject(createUserMessage({ content: [{ type: 'text', text: 'persist before cancellation' }], source: { kind: 'test' } }))
     await ctx.sessions.flush(first.session)
     expect(JSON.stringify(await readStoredEvents(ctx, sessionId)))
       .toContain('persist before cancellation')
@@ -373,10 +380,7 @@ describe('config-driven session id', () => {
 
     const resumeEffect = loopFiber.getEffects().find(effect => effect.label === 'agentLoop.resume(main)')
     expect(resumeEffect?.children.map(child => child.label)).toEqual(['ctx.plugin()'])
-    // Exactly one plugin effect sits at the fiber's own level — the optional
-    // settings wiring, whose `ctx.inject` cordis labels like any other plugin.
-    // A resumed agent joining it there is the regression this pins.
-    expect(loopFiber.getEffects().filter(effect => effect.label === 'ctx.plugin()')).toHaveLength(1)
+    expect(loopFiber.getEffects().filter(effect => effect.label === 'ctx.plugin()')).toHaveLength(0)
 
     await loopFiber.dispose()
   })

@@ -1,0 +1,57 @@
+## Collapsed
+
+- banner:
+  - navigation "Session hierarchy": {{workspace}}
+  - button "More actions"
+  - button "Open right sidebar"
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+- text: Clean up the stale build log. {{clock}}
+- button "Copy"
+- status: Worked
+- button "Took {{duration}}" [expanded]
+- button "Called tools" [expanded]
+- text: Failed
+- 'button "Tool call Error: the user rejected tool \"mystery\""'
+- text: Failed
+- 'button "Tool call Error: Auto review of tool \"mystery\" failed; its body was not executed: auto-review: reviewer ended with error UNKNOWN: provider unavailable"'
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands"
+- 'button "Access mode, current: Auto review EXP"':
+  - text: Auto review
+  - superscript: EXP
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
+- button "Send message" [disabled]
+- button "1 turns 2 steps"
+
+## Expanded
+
+- banner:
+  - navigation "Session hierarchy": {{workspace}}
+  - button "More actions"
+  - button "Open right sidebar"
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+- text: Clean up the stale build log. {{clock}}
+- button "Copy"
+- status: Worked
+- button "Took {{duration}}" [expanded]
+- button "Called tools" [expanded]
+- text: Failed
+- 'button "Tool call Error: the user rejected tool \"mystery\"" [expanded]'
+- text: "IN { \"target\": \"old-build.log\" } OUT Error: the user rejected tool \"mystery\""
+- button "Inspect"
+- text: Failed
+- 'button "Tool call Error: Auto review of tool \"mystery\" failed; its body was not executed: auto-review: reviewer ended with error UNKNOWN: provider unavailable" [expanded]'
+- text: "IN { \"target\": \"notes.txt\" } OUT Error: Auto review of tool \"mystery\" failed; its body was not executed: auto-review: reviewer ended with error UNKNOWN: provider unavailable"
+- button "Inspect"
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands"
+- 'button "Access mode, current: Auto review EXP"':
+  - text: Auto review
+  - superscript: EXP
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
+- button "Send message" [disabled]
+- button "1 turns 2 steps"

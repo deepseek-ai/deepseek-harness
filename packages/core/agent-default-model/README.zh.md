@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-agent-default-model` 在会话未指定模型时，为新创建的 agent 提供共享的默认提供方与模型。使用它可以为所有受支持的 agent 入口统一选择起始模型，其中包括 `dsh --profile headless`。设置可用时，用户可以覆盖已配置的选择（包括推理（reasoning）强度），保存的更改会在后续读取中生效。该默认值作用于整个进程；按会话选择模型仍由创建 agent 的入口负责。
+为会话未指定模型的新 agent 提供共享默认 provider 和模型。Provider、模型和推理强度都是即时 Config 字段。保存的选择更新当前 profile patch，并用于后续读取；会话级选择仍由入口负责。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 配置默认值
 
-组合配置项是默认值的基础：它要求提供方与模型，并且不依赖任何设置提供方也能使用。
+组合要求提供 provider 和模型。即使没有挂载配置编辑器，消费者也可读取即时引用。
 
 ```yaml
 - name: '@deepseek-ai/dsh-agent-default-model'
@@ -43,7 +43,7 @@ kind: "package-reference"
 | `provider` | 必填 | 新 agent 使用的已注册提供方路由 |
 | `model` | 必填 | 新 agent 使用的、由提供方持有的模型 id |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-default-model)是所有受支持字段的完整参考。`reasoningEffort` 刻意不是配置字段：它属于设置层，因此完整保存的选择可以在下一个选定的模型没有推理强度时清除旧值，而组合配置值会再次被继承。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-default-model) 列出所有接受的字段。`reasoningEffort` 是可选的；保存不含此字段的选择，会从 profile 的完整配置覆盖中移除此字段。
 
 ### 读取与更改默认值
 
@@ -54,7 +54,7 @@ const selection = ctx.agentDefaultModel.currentSelection()
 await ctx.agentDefaultModel.saveSelection({ provider, model, reasoningEffort: 'high' })
 ```
 
-未挂载设置提供方时，`saveSelection()` 不执行任何操作，组合配置项仍为当前值。该服务不校验目录成员关系：提供方路由可以服务未在目录中公布的模型；发起模型请求的消费方负责可用性诊断。
+没有配置编辑器时，`saveSelection()` 不执行写入。此服务不验证目录成员资格；发起模型请求的消费者负责可用性诊断。
 
 -----
 
@@ -68,18 +68,18 @@ await ctx.agentDefaultModel.saveSelection({ provider, model, reasoningEffort: 'h
 
 ### 设计理念
 
-该服务是一个组合配置项，带有由设置支撑的数据源。插件配置提供基础 `{ provider, model }`；挂载设置提供方后，`agent-default-model` 设置分节成为实时数据源，所有消费方都通过 `currentSelection()` 读取，因此写入设置后无需在注册层面重建。`reasoningEffort` 只存在于设置 schema 中：配置不能携带它，因为新选择清除推理强度后，该值必须保持清除，而不能再次从组合配置中继承。
+此服务保留已验证的 Config 引用，并在 `currentSelection()` 中读取。`saveSelection()` 捕获提交值，并按提交顺序串行写入 profile，包括调用重叠的情况。每个调用方收到各自的写入失败；一次写入被拒绝不会阻止后续保存。消费者优先使用会话级选择。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：`AgentDefaultModelConfig` 服务、设置分节安装、`currentSelection`/`saveSelection` |
-| — | 未发布运行时不变式配套项；唯一的可变值关系由设置校验负责。 |
+| [`src/index.ts`](src/index.ts) | 即时默认选择与 profile 写入 |
+| — | 不发布 invariant 配套模块，因为 Config 引用是唯一由此包维护的值。 |
 
 ### 行为说明
 
-两个公开方法都只是对该数据源进行简单读写：`currentSelection()` 返回一个全新、独立的对象，因此调用方可以持有它，而不会与服务状态共享引用；`saveSelection()` 在存在 `ctx.settings` 时写入完整选择。
+`currentSelection()` 返回分离的选择值。已捕获的选择保持稳定，后续操作则读取更新后的 Config 引用。
 
 </details>
 
@@ -114,7 +114,7 @@ await ctx.agentDefaultModel.saveSelection({ provider, model, reasoningEffort: 'h
 这些限制界定该服务的范围。它们是当前包约束，不是任务积压。
 
 - **单一的进程级默认值**——该服务只拥有一个默认值；按会话的模型选择仍由入口负责。
-- **没有设置提供方时无法保留**——未挂载设置提供方时，`saveSelection()` 无法为后续 agent 保留选择。
+- **持久化需要 profile 配置编辑器**——没有编辑器时，保存默认值不会保留选择。
 
 <a id="dev-note"></a>
 ### 开发备注

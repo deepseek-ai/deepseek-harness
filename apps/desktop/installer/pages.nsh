@@ -167,6 +167,9 @@ Function InstallerCreate
     System::Call 'user32::SetPropW(p $HWNDPARENT, w "HarnessInstaller.Ready", p 1)'
     ShowWindow $InstallerDialog 5
     ShowWindow $HWNDPARENT 5
+    ${If} $InstallerPhase == "welcome"
+        System::Call '$PLUGINSDIR\window-frame.dll::InstallerPresentWelcome(p $HWNDPARENT) i.r0 ?c'
+    ${EndIf}
     nsDialogs::Show
     ${NSD_KillTimer} InstallerValidateEditedPath
     ${NSD_FreeImage} $InstallerImage

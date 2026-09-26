@@ -1,56 +1,30 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "Read the attached file with" [disabled]
-  - img
+  - navigation "Session hierarchy": Read the attached file with
   - text: Standard mode
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
 - text: poem.txt TXT 16B
 - button "reference-1.png, click to view original":
   - img "reference-1.png"
 - text: Read the attached file with the read tool, reply with exactly the single word it contains, and stop. {{clock}}
-- button "Copy":
-  - img
-- button "1 tool call":
-  - text: 1 tool call
-  - img
+- button "Copy"
+- status: Worked
+- button "Took {{duration}}"
 - paragraph: UPLOAD_ROUND_OK
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
-- button "Usage 17.3K tok":
-  - img
-  - text: Usage 17.3K tok
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
+- button "Usage 17.3K tok"
 - text: {{clock}}
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash-Vision-Exp, reasoning effort high":
-  - text: DeepSeek-V4-Flash-Vision-Exp high
-  - img
-- button "1% of context used"
+- button "Select model, current DeepSeek-V4-Flash-Vision-Exp, reasoning effort high": DeepSeek-V4-Flash-Vision-Exp high
 - button "Send message" [disabled]
-- button "1 turns 2 steps · {{throughput}} tok/s":
-  - img
-  - text: 1 turns 2 steps{{throughput}} tok/s
-- button "17.3K tok · Cache hit 51%":
-  - img
-  - text: 17.3K tokCache hit 51%
+- button "1 turns 2 steps · {{throughput}} tok/s": 1 turns 2 steps{{throughput}} tok/s
+- button "17.3K tok · Cache hit 51%": 17.3K tokCache hit 51%
+- button "1% of context used": 1%

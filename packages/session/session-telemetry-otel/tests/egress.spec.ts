@@ -1,3 +1,4 @@
+import OTel from '@deepseek-ai/dsh-otel'
 import { createServer, type Server } from 'node:http'
 import { once } from 'node:events'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -80,6 +81,7 @@ describe('session-telemetry-otel egress', () => {
       captures.length = 0
       const disposeProxy = await installProxyFromEnvironment(proxyEnv(), () => undefined)
       const ctx = new Context()
+      ctx.plugin(OTel)
       try {
         // The positive control proves a fetch-based exporter would reach the proxy.
         const response = await fetch(collectorUrl)

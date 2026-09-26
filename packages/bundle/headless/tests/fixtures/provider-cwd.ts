@@ -9,6 +9,7 @@ interface Config { root: string }
 
 /** Empty provider-owned workspace; no operation accesses the host filesystem. */
 export default class ProviderCwdFileSystem extends FileSystem {
+  override watch(): never { throw new Error('Fixture does not support watching') }
   static inject = ['sandboxPolicy']
   static Config: schema<Config> = schema.object({ root: schema.string().required() })
   private readonly config: Config

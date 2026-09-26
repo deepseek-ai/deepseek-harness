@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-15-model-agent-availability-and-team-targets.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-15-model-agent-availability-and-team-targets.md
+/agent-note-model-agent-availability-and-team-targets:
+  en: 7c8722f7b156cd8c
+  zh: aad147cf37021d82
+/agent-note-model-agent-availability-and-team-targets/problem:
+  en: 66cc6cea878418a6
+  zh: 5df1e5508e10fc02
+/agent-note-model-agent-availability-and-team-targets/decision:
+  en: 044f44c456540021
+  zh: 975794704c37186f
+/agent-note-model-agent-availability-and-team-targets/alternatives-considered:
+  en: a19b8766bcff7e49
+  zh: 0851603e9c8315c6
+/agent-note-model-agent-availability-and-team-targets/consequences:
+  en: 9b622b43322a407e
+  zh: ffe2e0199ba85b5e

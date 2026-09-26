@@ -22,6 +22,12 @@ const workspaceRoot = resolve(import.meta.dirname, '../../../..')
 let cached: ReturnType<typeof projectCordisCatalog> | undefined
 const projection = (): ReturnType<typeof projectCordisCatalog> =>
   (cached ??= projectCordisCatalog(workspaceRoot, CORDIS_CATALOG_POLICY))
+let cachedClient: ReturnType<typeof projectCordisCatalog> | undefined
+const clientProjection = (): ReturnType<typeof projectCordisCatalog> =>
+  (cachedClient ??= projectCordisCatalog(workspaceRoot, {
+    ...CORDIS_CATALOG_POLICY,
+    runtimeDeclarationMaxChars: 4_096,
+  }, 'client'))
 
 const SOURCE_LINK_POLICY: CordisCatalogPolicy = {
   linkedTypePages: {},
@@ -83,6 +89,32 @@ describe('Typert-backed Cordis catalog', () => {
     expect(projector.renderRuntimeApi(model)).toBe(
       expected('packages/extensions/tool-cordis/src/api-catalog.ts'),
     )
+  })
+
+  it('includes referenced framework enums in the runtime declaration closure', () => {
+    const { projector, model } = projection()
+    const rendered = projector.renderRuntimeApi(model)
+    expect(rendered).toContain("name: 'FiberState'")
+    expect(rendered).toContain('enum FiberState')
+    expect(rendered).toContain('ACTIVE,')
+  })
+
+  it('keeps the Slots service declaration and its referenced types within the display budget', { timeout: 480_000 }, () => {
+    const { projector, model } = clientProjection()
+    const slots = model.services.find(service => service.key === 'slots')
+    if (slots === undefined) throw new Error('Client slots service is missing')
+    const rendered = projector.renderRuntimeApi({
+      services: [{
+        ...slots,
+        methods: slots.methods.filter(method => /\b(?:inject|register|registerFactory)\b/u.test(method.signature)),
+      }],
+      events: [],
+    })
+    const slotCoreStart = rendered.indexOf("name: 'SlotCore'")
+    const slotCoreEnd = rendered.indexOf('\n  },', slotCoreStart)
+    expect(rendered.slice(slotCoreStart, slotCoreEnd)).not.toContain('truncated')
+    expect(rendered).toContain("name: 'StoredEntry'")
+    expect(rendered).toContain("name: 'SlotLabel'")
   })
 
   it('resolves each key to the declaration a caller meets, and drops keys no plugin provides', { timeout: 480_000 }, () => {

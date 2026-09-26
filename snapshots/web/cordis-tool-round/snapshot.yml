@@ -1,8 +1,11 @@
 version: 1
 scenario: cordis-tool-round
 profile: web
-composition: web-cordis
-recording: live
+composition: historical-cordis
+recording: authored
+sessionFormat:
+  version: 3
+  coverage: [retired-tools]
 header:
   class: web-cordis
   pin: true

@@ -33,7 +33,7 @@ jobs:
   # vm-backup pool and re-running the failed jobs is the entire switch —
   # see .agents/notes/implemented/process/2026-07-26-ci-failover-runbook.md.
   # Setting the variable to 'blacksmith' instead routes the same jobs onto
-  # Blacksmith's hosted runners at the matching vCPU size (see
+  # Blacksmith's hosted runners sized per workload (see
   # .agents/notes/implemented/process/2026-09-09-blacksmith-failover-leg.md). The
   # in-house pool's readiness is re-proven on every master push by the
   # serial-linux-selfhosted standby lane in ci-master.yml. The Windows failover
@@ -42,14 +42,15 @@ jobs:
   node-24:
     if: github.event_name == 'pull_request'
     runs-on: >-
-      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-16vcpu-ubuntu-2404'
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-8vcpu-ubuntu-2404'
           || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'dsh-ubuntu-24-04-16core' }}
     name: node 24 / static
     env:
-      DSH_GATE_CONCURRENCY: '8'
+      # Shared hosts expose host CPUs, not an isolated allocation.
+      DSH_GATE_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
       # Stop the aggregate at the first blocking gate failure so a red run
       # does not keep burning enterprise runner time on the remaining gates.
       DSH_GATE_FAIL_FAST: '1'
@@ -116,11 +117,10 @@ jobs:
           || 'dsh-ubuntu-24-04-16core' }}
     name: node 24 / coverage
     env:
-      # Partitioning replaces the instrumented share; this budget gives the
-      # exempt-heavy gate two workers on both hosted and failover runners.
-      DSH_COVERAGE_MAX_WORKERS: '6'
-      DSH_COVERAGE_PARTITIONS: '4'
-      DSH_GATE_CONCURRENCY: '3'
+      # Shared hosts expose host CPUs, not an isolated allocation.
+      DSH_COVERAGE_MAX_WORKERS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '6' || '' }}
+      DSH_COVERAGE_PARTITIONS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '4' || '' }}
+      DSH_GATE_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '3' || '' }}
       # Managed-scope teardown cases run past the default per-test budget when
       # this lane's partitions, workers, and sibling gates share one host: the
       # disposal cases in subprocess-local and bash-sandbox exceeded 5000ms on
@@ -246,17 +246,17 @@ jobs:
           || 'dsh-ubuntu-24-04-16core' }}
     name: node 24 / snapshots and artifacts
     env:
-      DSH_GATE_CONCURRENCY: '10'
+      # Shared hosts expose host CPUs, not an isolated allocation.
+      DSH_GATE_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '10' || '' }}
+      DSH_OXLINT_THREADS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
+      DSH_PUBLINT_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
+      DSH_WEB_SNAPSHOT_WORKERS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '6' || '' }}
+      DSH_SNAPSHOT_MAX_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '' }}
       DSH_NODE_COMPAT_SKIP_TYPECHECK: '1'
-      DSH_OXLINT_THREADS: '8'
-      DSH_PUBLINT_CONCURRENCY: '8'
-      DSH_WEB_SNAPSHOT_WORKERS: '6'
       # A failing gate aborts its running siblings: a failing build stops the
       # independent Node compatibility smoke, and a failing reader (e.g.
       # publint) stops the remaining artifact consumers.
       DSH_GATE_FAIL_FAST: '1'
-      # Failover halves snapshot concurrency for the shared 64-core VM.
-      DSH_SNAPSHOT_MAX_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '32' }}
     steps:
       # Runner cleanup owns tool caches and fixtures, including cancelled runs.
       - name: Use runner-owned temporary storage
@@ -344,18 +344,21 @@ jobs:
                       r'https://\1/', source.read_text()))
           PY
 
-      - name: Install Playwright Chromium and hosted dependencies
+      - name: Install Playwright Chromium, WebKit, and hosted dependencies
         if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
         # Ephemeral runner images can carry Ubuntu mirrors whose HTTP endpoints are unreachable.
         run: |
           sudo find /etc/apt -maxdepth 2 -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i -E 's@http://([a-z]{2}\.)?archive\.ubuntu\.com/ubuntu@https://archive.ubuntu.com/ubuntu@g; s@http://security\.ubuntu\.com/ubuntu@https://security.ubuntu.com/ubuntu@g' {} +
-          pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps chromium
+          pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps chromium webkit
 
       # The persistent VM image owns Playwright's Linux system packages; do
       # not mutate the shared host with apt on every failover run.
-      - name: Install Playwright Chromium on the failover VM
+      - name: Install Playwright Chromium and WebKit on the failover VM
         if: vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]'
-        run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install chromium
+        run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install chromium webkit
+
+      - name: Build and execute the Linux Office runtime
+        run: CI=true pnpm run prepare:primary-runtime --target linux-x64 --output "$RUNNER_TEMP/office-runtime" --cache "$RUNNER_TEMP/office-runtime-downloads"
 
       - name: Run compatibility, snapshot, and artifact gates
         run: pnpm run check:ci:consumers
@@ -491,12 +494,12 @@ jobs:
     secrets:
       DEEPSEEK_API_KEY_EXTERNAL: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
 
-  # Every pull request also gets real Windows-kernel signals. The former
-  # monolithic windows-native job is split into smaller jobs so one slow
-  # coverage gate does not hold up build/static results, while the total
-  # per-job process count stays lower. Observational checks are non-blocking.
+  # Native builds and process tests block pull requests independently of coverage.
+  # Observational checks reuse the successful build and remain non-blocking.
   # Dependabot PRs are excluded from the self-hosted pool and stay queued for
   # the hosted runner.
+  # Blacksmith uses 2 vCPU for file-serial native tests and 16 for coverage
+  # and the shared build/observational workspace.
   windows-build:
     if: github.event_name == 'pull_request'
     runs-on: >-
@@ -505,7 +508,7 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "dsh-win-ci", "windows"]')
           || 'dsh-windows-2025-16core' }}
-    name: windows node 24 / build
+    name: windows node 24 / build & observational
     timeout-minutes: 60
     env:
       # A failing build or site aborts the sibling gate on the same runner.
@@ -541,6 +544,23 @@ jobs:
       - name: Run blocking Windows builds
         shell: pwsh
         run: pnpm run check:ci:windows-blocking
+      - name: Run Windows observational gates on built artifacts
+        id: observational
+        continue-on-error: true
+        timeout-minutes: 15
+        shell: pwsh
+        env:
+          DSH_GATE_FAIL_FAST: ''
+          DSH_PUBLINT_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
+        run: pnpm run check:ci:windows-observational-ready
+      - name: Report Windows observational failures
+        continue-on-error: true
+        if: steps.observational.outcome == 'failure'
+        shell: pwsh
+        run: |
+          $message = 'Windows observational checks failed; see the observational step for diagnostics.'
+          Write-Output "::warning::$message"
+          $message | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
   windows-coverage:
     if: github.event_name == 'pull_request'
@@ -553,10 +573,11 @@ jobs:
     name: windows node 24 / coverage
     timeout-minutes: 120
     env:
-      DSH_COVERAGE_MAX_WORKERS: '6'
-      DSH_COVERAGE_PARTITIONS: '4'
+      # Shared hosts expose host CPUs, not an isolated allocation.
+      DSH_COVERAGE_MAX_WORKERS: ${{ vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '6' || '' }}
+      DSH_COVERAGE_PARTITIONS: ${{ vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '4' || '' }}
+      DSH_GATE_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '3' || '' }}
       DSH_COVERAGE_TEST_TIMEOUT_MS: '90000'
-      DSH_GATE_CONCURRENCY: '3'
       # A gate failure aborts the sibling gate instead of waiting out its
       # multi-minute instrumented run.
       DSH_GATE_FAIL_FAST: '1'
@@ -622,7 +643,7 @@ jobs:
   windows-native-tests:
     if: github.event_name == 'pull_request'
     runs-on: >-
-      ${{ vars.DSH_CI_FAILOVER_WINDOWS == 'blacksmith' && 'blacksmith-16vcpu-windows-2025'
+      ${{ vars.DSH_CI_FAILOVER_WINDOWS == 'blacksmith' && 'blacksmith-2vcpu-windows-2025'
           || vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted'
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "dsh-win-ci", "windows"]')
@@ -667,51 +688,6 @@ jobs:
           packages/workflow/workflow-ptc/tests/workflow-ptc.spec.ts
           packages/workflow/tool-ralph/tests/integration.spec.ts
           packages/subprocess/subprocess-local/tests/process-exit.spec.ts
-
-  windows-observational:
-    if: github.event_name == 'pull_request'
-    continue-on-error: true
-    runs-on: >-
-      ${{ vars.DSH_CI_FAILOVER_WINDOWS == 'blacksmith' && 'blacksmith-16vcpu-windows-2025'
-          || vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted'
-          && github.event.pull_request.user.login != 'dependabot[bot]'
-          && fromJSON('["self-hosted", "dsh-win-ci", "windows"]')
-          || 'dsh-windows-2025-16core' }}
-    name: windows node 24 / observational
-    timeout-minutes: 60
-    env:
-      DSH_PUBLINT_CONCURRENCY: '8'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - name: Enable Developer Mode (symlink support)
-        shell: pwsh
-        run: >-
-          reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
-          /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
-      - uses: pnpm/action-setup@v4
-        with:
-          dest: ${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.PRIMARY_NODE_VERSION }}
-      - name: Install (immutable)
-        shell: pwsh
-        # See 2026-08-30-windows-refs-store-block-clone-install for the
-        # ReFS block-clone rationale; detect the workspace filesystem and
-        # pass --package-import-method=clone only on ReFS.
-        run: >-
-          $drive = (Split-Path -Qualifier $env:GITHUB_WORKSPACE).TrimEnd(':');
-          $fs = (Get-Volume -DriveLetter $drive).FileSystem;
-          if ($fs -eq 'ReFS') {
-            corepack pnpm install --frozen-lockfile --package-import-method=clone
-          } else {
-            pnpm install --frozen-lockfile
-          }
-      - name: Run Windows observational gates
-        shell: pwsh
-        run: pnpm run check:ci:windows-observational
 
   # Single stable required check for branch protection: require "all checks
   # passed" instead of enumerating matrix legs whose names change as lanes and

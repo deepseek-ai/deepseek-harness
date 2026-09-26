@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/host/directory-picker-auto/README.md
-README.md: a36d7e115f78089b85c79ae8036d7199df74b821
-README.zh.md: 283f8c5bcbfabfa4fdeafc73283ff140ac1697fe
+/:
+  en: 347a16b9a8de1f7c
+  zh: 5fb4c04b69c2f947
+/deepseek-ai-dsh-host-directory-picker-auto:
+  en: 919d44a5781ac8be
+  zh: 0e7a812a5af49125
+/deepseek-ai-dsh-host-directory-picker-auto/summary:
+  en: e50d48e63294e9c5
+  zh: b53e3aeb1fa4b892
+/deepseek-ai-dsh-host-directory-picker-auto/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-host-directory-picker-auto/use-this-package:
+  en: 9ed11c3e0a03da01
+  zh: ffa5e373dfc99bb8
+/deepseek-ai-dsh-host-directory-picker-auto/use-this-package/how-the-choice-is-made:
+  en: b7705f6a53ed31f3
+  zh: 561d3b42170a513a
+/deepseek-ai-dsh-host-directory-picker-auto/use-this-package/what-you-get:
+  en: 6571c17daecc1e29
+  zh: d70089d67e41a32e
+/deepseek-ai-dsh-host-directory-picker-auto/use-this-package/pinning-an-interaction:
+  en: a7e61292ef261aa8
+  zh: ae8bb5a1ada21d21
+/deepseek-ai-dsh-host-directory-picker-auto/use-this-package/observable-failures:
+  en: 764e80ffbfd4d19e
+  zh: dd2f61b462023031
+/deepseek-ai-dsh-host-directory-picker-auto/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-host-directory-picker-auto/understand-the-implementation/design-concept:
+  en: abc8d3962e4580c3
+  zh: 4442dde69faf680f
+/deepseek-ai-dsh-host-directory-picker-auto/understand-the-implementation/the-resolution-table:
+  en: 70aa594193336a2a
+  zh: 9ff39c2878e8f471
+/deepseek-ai-dsh-host-directory-picker-auto/understand-the-implementation/source-map:
+  en: 43a0268a54380a72
+  zh: a8f8cd0c3f502e6b
+/deepseek-ai-dsh-host-directory-picker-auto/further-exploration:
+  en: 5c8908d5c957548a
+  zh: f3671fbb2f2490d9
+/deepseek-ai-dsh-host-directory-picker-auto/model-experience:
+  en: 4cf1e8312ed3f5e6
+  zh: 5410cb77865fca9e
+/deepseek-ai-dsh-host-directory-picker-auto/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-host-directory-picker-auto/known-limitations-and-deferred-work:
+  en: 2caf1f412c050856
+  zh: 0e71bc66bc54bbb4
+/deepseek-ai-dsh-host-directory-picker-auto/known-limitations-and-deferred-work/dev-note:
+  en: ac7266ba5ad8bd79
+  zh: d9143a2061a07cfd

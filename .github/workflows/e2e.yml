@@ -109,6 +109,9 @@ jobs:
       - name: Build (lib for the e2e example bins)
         run: pnpm run build:official
 
+      - name: Prepare Office runtime
+        run: pnpm run prepare:primary-runtime --target linux-x64 --output .cache/e2e-office
+
       # Real-API end-to-end tests only. The keyless gates (lint/typecheck/
       # coverage/snapshot/etc.) already run in ci.yml (pull requests) and
       # ci-master.yml (master push standby).
@@ -118,6 +121,7 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
           DEEPSEEK_BASE_URL: https://api.deepseek.com/anthropic
+          DSH_PRIMARY_RUNTIME: ${{ github.workspace }}/.cache/e2e-office/primary-runtime
           DSH_E2E_MAX_WORKERS: 4
           DSH_EXAMPLE_MODE: lib
         run: pnpm run test:e2e

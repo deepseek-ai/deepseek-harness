@@ -4,7 +4,9 @@
     "rootDir": "src",
     "outDir": "lib/types"
   },
-  "include": ["src"],
+  "include": [
+    "src"
+  ],
   "references": [
     {
       "path": "../../../vendor/cosmokit"
@@ -29,6 +31,15 @@
     },
     {
       "path": "../../core/tools"
+    },
+    {
+      "path": "../../attachment/attachment"
+    },
+    {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../llm/token-meter"
     }
   ]
 }

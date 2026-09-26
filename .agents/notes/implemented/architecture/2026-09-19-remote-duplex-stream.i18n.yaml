@@ -1,0 +1,142 @@
+# Bilingual-pair consistency record for 2026-09-19-remote-duplex-stream.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-19-remote-duplex-stream.md
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context:
+  en: c52d4b55f470a50f
+  zh: d2d446516b1011bc
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem:
+  en: 70a969dce3283824
+  zh: 18c61bf840a6518a
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem/current-state:
+  en: 8fb06638898de59e
+  zh: 79ed0cfe79e40be1
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem/three-unrelated-uplink-mechanisms:
+  en: 386be7b691ab63e7
+  zh: 935e0db22ae1cf5d
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem/concrete-costs:
+  en: f374976b43645d15
+  zh: 26b2c7aaafa41fba
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem/relation-to-background-jobs:
+  en: 5e67475010d52ddb
+  zh: ce23aad2d4aa0d67
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem/goals:
+  en: 1f8e6d20dd4b2bf7
+  zh: c6939e72e9bac277
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision:
+  en: a15c7c13f167e5ac
+  zh: ff261e3705c47ff0
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/in-one-sentence:
+  en: 943208904785f7eb
+  zh: bda1969132a16101
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/terms:
+  en: 401703adbd9cc1c2
+  zh: 56d960c0b6fdff57
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/type-signatures:
+  en: 5f9cd00890b6f4c3
+  zh: 600ecba7e60b63f6
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/host-face:
+  en: 37f59749e1703ca8
+  zh: d220eded761d83c0
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/host-face/how-the-invocation-context-reaches-the-method:
+  en: a7180d3c194cf9d9
+  zh: 0dd7833e0e5d0a71
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/peerscope:
+  en: 202aa6e8e8b04bd6
+  zh: b1fc897c09074a7c
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/client-face:
+  en: 9f10347a73402b8b
+  zh: b939c7a254a8e579
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/wire-frames:
+  en: 490c19bf403bc76f
+  zh: 55ad5cff840d0421
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/logical-stream-state-machine:
+  en: 438963f156ea05b1
+  zh: e738fca49b9bc1cc
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/logical-stream-state-machine/host-side:
+  en: 959d7f191895af71
+  zh: 9b70e5e36233e301
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/logical-stream-state-machine/client-side:
+  en: 6a6f94f54a29c1ed
+  zh: 1306602bae8a219b
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/half-close-and-termination:
+  en: 52e2097ea66452e8
+  zh: 0cc058365773a792
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/cancellation-wait-lifetime:
+  en: a21405b6607345a7
+  zh: 70b3be4327ab59d5
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/ordering-guarantees:
+  en: d176a388014d0bf8
+  zh: db4a4988dcb36690
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/backpressure:
+  en: 607a1afd89892d15
+  zh: a0aa85124340458c
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/security-and-validation:
+  en: 46a0c0b3ce1e5671
+  zh: 7743707de42b1d1d
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/in-process-and-worker-carriers:
+  en: ec339e57dc2c0603
+  zh: 3570be8c094ea24c
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/decision/relation-to-events:
+  en: a011793e5a4400ed
+  zh: df8b20115f0348b8
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/type-and-wire-definitions:
+  en: b8a63bcefdea2704
+  zh: d2aa576cf736b1b7
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/type-and-wire-definitions/typert-protocol-packages-typert-protocol-src:
+  en: e1b2ae30d8a8a62d
+  zh: 8790a068aa3a10e9
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/type-and-wire-definitions/typert-generator-packages-typert-generator-src:
+  en: 3b0b1398141b9a3d
+  zh: 6a96f6785c59dad3
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/type-and-wire-definitions/two-names-one-entry-point:
+  en: 59188926c8e586de
+  zh: 3298be0413d14274
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/type-and-wire-definitions/gateway-host-packages-api-gateway-src:
+  en: 9c8122ce6048a432
+  zh: 58f28ebe6d484a9d
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/type-and-wire-definitions/gateway-host-mux-stream-server-ts:
+  en: eb4b18a979c0665d
+  zh: 148bf697825ddc49
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/type-and-wire-definitions/gateway-client-packages-api-gateway-src-client:
+  en: 26dcd8bebdc8d974
+  zh: e74bcef7c549e70c
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/placement:
+  en: 41128746334320c7
+  zh: 558a676340aae3a2
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/key-sequences:
+  en: 130e4f9ec7296a10
+  zh: 2a5aa1302a8db61a
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/key-sequences/open-uplink-half-close-downlink-end:
+  en: 3e8f671254c2b462
+  zh: d2dba924dfc0f09e
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/key-sequences/client-dispose:
+  en: a5b474d42af07bd9
+  zh: df2bd41480beb07e
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/key-sequences/inbox-overflow:
+  en: 32b009b9d90dc36c
+  zh: 52590ffa9bf9f90b
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/boundary-matrix:
+  en: c6a08daa98e3c189
+  zh: 0c9dbe16f4cdaa79
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/error-codes:
+  en: 7da8cacc0a6892f2
+  zh: e22ca8d3d9161568
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/minimal-echo-method:
+  en: b42ab0932f8b31b4
+  zh: 7fed8cb5b6e36788
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/alternatives-considered:
+  en: 04e72789417d6e3a
+  zh: b57c5cc68dff45a5
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/consequences:
+  en: 07524e0c2dc22ad5
+  zh: 5bf4f27160d78b43
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/testing:
+  en: 5c8188930b9d4fdb
+  zh: 1d94e6563cedde13
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/deferred:
+  en: 3b99a327464edc3e
+  zh: dcffdc75369925dc
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/related:
+  en: f8995f478dc1d478
+  zh: 96621e80a4d3cefc

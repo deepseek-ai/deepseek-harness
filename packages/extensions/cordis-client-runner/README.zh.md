@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-cordis-client-runner` 让页面运行动态 Cordis 包的浏览器半：它应答 host 的运行请求、把浏览器半源码装载进页面成为活插件，并在 host 撤回该次运行时把它移除。人可以批准或拒绝一次运行——也可以直接启动一次——而本包回报的结果变成模型读到的 `cordis_run` 工具结果。激活时什么都不装载，刷新后也不恢复；一页只在有人应答运行请求或在此主动要求时，才运行动态包。
+`dsh-cordis-client-runner` 为程序调用方和现有浏览器控件运行进程内动态包的浏览器部分。它在请求获批或用户显式操作后加载定义，并在 Host 撤销运行时移除定义。页面刷新不会恢复定义。Creator UI 插件通过 Plugin Manager 使用已安装的 Client 模块。
 
 ## 目录
 
@@ -66,6 +66,10 @@ kind: "package-reference"
 | [`src/client/providers.ts`](src/client/providers.ts) | 第一方 client Inspect Provider（slots、theme、events） |
 | [`src/client/timer.ts`](src/client/timer.ts) | 动态包注入的 client 定时器服务 |
 
+### 查询槽位输入
+
+Slots provider 的精确 `listSubTree` 查询包含带说明的 owner 字段及顶层别名、交叉类型和联合类型声明。嵌套字段的值类型只列出引用名称，因此查询 Tool 视图可以获得共享回调和阶段联合，而不会展开完整 Session 类型图。
+
 ### 一次 run 如何执行
 
 一条 `cordis/request-run` 事件问这一页要不要运行某个定义。作答的一方——审批后的页面，或按下运行的用户——驱动编排：先 host 半（host 半失败会在浏览器动作之前短路），再取源码，再浏览器半，最后一次结算带上发生的一切。浏览器半源码作为 async 函数体求值，符号面就是参数；返回的插件经 guard 包装后通过 loader 挂载；结算报告已装载的 revision，或失败阶段加闭包、guard 或 fiber 的消息。`host.call` 经 Remote namespace 路由；省略的入参以 `null` 过线，而生成 codec 拒收的载荷会变成一条点名「哪次调用 + 约定是什么」的教学错误。
@@ -80,7 +84,7 @@ kind: "package-reference"
 当包级约定不够用时阅读以下页面。它们从浏览器半逐步进入发问的 host、其运行被应答的工具，以及渲染它的界面。
 
 - [Host runner](../cordis-host-runner/README.zh.md)——本包应答的注册表与运行往返。
-- [工具包](../tool-cordis/README.zh.md)——运行请求到达本页的模型侧工具。
+- [工具包](../tool-cordis/README.zh.md)——只读运行时 API 发现。
 - [UI 包](../ui-cordis/README.zh.md)——操作这个面的面板与卡片。
 - [extensions 子系统](../../../docs/subsystems/extensions.zh.md)——生成的 `ctx.dynamicCordisRunner` API 与 `cordis/*` 事件。
 - [客户端外壳与动态包 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-15-client-shells-and-dynamic-packages.zh.md)——浏览器半的包归属与构建面。
@@ -90,25 +94,25 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-### 由模型发起那次 run 的最终回答
+### Host 转发的运行结果
 
 #### 模型看到的内容
 
-本包自己不贡献任何工具、提示词或上下文；它撰写并到达模型的第一样内容，是为一次 `cordis/request-run` 往返发回的回答——host 把它变成那个被阻塞的 `cordis_run` 的结果。成功时带上已装载的 revision，以及（当浏览器半挂在这一页没有的服务上时）那些服务的名字。失败时带一个 reason：用户拒绝的 `rejected`、`host-half-failed` 或 `client-half-failed`；后者还带上本包自己的文本——出错阶段（`evaluate`、`module-import` 或 `activate`）加上闭包、guard 或 fiber 的消息。guard 的教学错误（未声明的服务、被遮蔽的浏览器全局、返回值里没有 `apply`）正是经这个字段到达模型的。而装载之后、React 渲染时才发生的崩溃，走下面那条独立的事后通道。
+本包不提供工具或提示。它以激活成功、缺失服务、拒绝或 Host/Client 失败响应 `cordis/request-run`。发送给会话的任何消息由 Host runner 负责。
 
 #### Token 影响
 
-有条件且有界：每次 run 请求最多一个回答，花在 host 本来就会发出的那个 `cordis_run` 结果里。文本随数据而定（某个定义自己的错误消息），本包跨请求不留存任何东西——一页后续的装载失败是页面本地诊断，在模型侧没有任何承载物。
+有条件且有界：每次 run 请求最多一个回答，花在 host 本来就会发出的那个 `run` 结果里。文本随数据而定（某个定义自己的错误消息），本包跨请求不留存任何东西——一页后续的装载失败是页面本地诊断，在模型侧没有任何承载物。
 
 #### KV Cache 影响
 
-只追加。回答只作为「本来就在途的那次请求」的工具结果到达模型、延长历史尾部；本包撰写的内容不会重写或重排更早的请求 token，因此原本可复用的前缀仍然可复用。同一定义的多次运行各自产出各自的结果，而不是替换更早那一个。
+Host steering 追加到会话历史；本包不改写更早的消息。
 
 ### run 落定之后的渲染期失败
 
 #### 模型看到的内容
 
-一个装载得干干净净的浏览器半，仍可能在 React 渲染时崩溃，而那次崩溃发生在 run 已经被回答之后——否则模型只会被告知「ok」，永远学不到。凡是本页落座过的包，其 entry 边界的每一次崩溃都会发回 host（`reportRenderFailure`）：点名槽位、说明这次崩溃是否已把 entry 从格位上摘掉（`abdicated`：包的 UI 是没了、而不只是坏了），以及一条写给作者的 message。host 每包只留最后一条，用它 steer 所属会话，并经由 `cordis_inspect_self` 暴露；这条通道上的任何东西都不会进入 run 的最终回答。
+React 可能在加载成功后失败。Client 报告其拥有的每个 entry 失败，包括 slot、消息及 entry 是否已移除。Host 保留最新失败并向所属会话发送 steering；页面也显示本地失败。
 
 #### Token 影响
 

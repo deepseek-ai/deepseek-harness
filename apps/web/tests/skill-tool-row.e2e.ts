@@ -8,11 +8,12 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
-  launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
+  launchWebScaffold, seedSession, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
 
-const FIXTURE = fileURLToPath(new URL('../../../snapshots/session/skill-load/session.v3.jsonl', import.meta.url))
+// Any generation path names the role; the owner's highest committed generation replays.
+const FIXTURE = fileURLToPath(new URL('../../../snapshots/session/skill-load/session.v4.jsonl', import.meta.url))
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/skill-tool-row', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/skill-tool-row/ui.expected.md', import.meta.url))
 const MODE = webSnapshotMode()
@@ -26,7 +27,7 @@ describe.skipIf(MODE === 'record')('web e2e: dedicated Skill tool row', () => {
   let tripwire: ReturnType<typeof watchConsole>
 
   beforeAll(async () => {
-    const fixture = await readFile(FIXTURE, 'utf8')
+    const fixture = await readFile(await selectedSessionFixture(FIXTURE), 'utf8')
     expect(fixtureUserPrompts(fixture)).toEqual([PROMPT])
     scaffold = await launchWebScaffold({})
     await seedSession(scaffold, fixture, SEED_ID)
@@ -65,17 +66,58 @@ describe.skipIf(MODE === 'record')('web e2e: dedicated Skill tool row', () => {
     const output = call.locator('pre')
     await output.waitFor()
     expect(await output.textContent()).toContain('<skill_content name="editing-cordis-compositions">')
-    expect(await output.textContent()).toContain('Each Bundle registers its dormant default provider and exclusively uses its pinned package-local platform CLI')
+    expect(await output.textContent()).toContain('Agent presets are ordinary `@deepseek-ai/dsh-agent-preset` declarations carried by bundle patches.')
     expect(await output.evaluate(element => getComputedStyle(element.parentElement!).maxHeight)).toBe('260px')
 
     const snapshot = (await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd))
       .replace(/\b\d{1,2}\/\d{1,2}(?= \{\{clock\}\})/g, '{{date}}')
-      .replace(/\{\{date\}\} (?=\{\{clock\}\} Ran for)/g, '')
       .split(SEED_ID).join('{{seededId}}')
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   }, 60_000)
+
+  it('keeps the collapsed Skill line on the global ToolCall font-size axis', async () => {
+    const call = page.locator('[data-tool="skill"]')
+    const toggle = call.getByRole('button', { name: 'Skill editing-cordis-compositions' })
+    if (await toggle.getAttribute('aria-expanded') === 'true') await toggle.click()
+    await expect.poll(() => toggle.getAttribute('aria-expanded')).toBe('false')
+    const row = call.locator(':scope > div').first()
+    const title = call.getByText('Skill', { exact: true })
+    const summary = call.getByText('editing-cordis-compositions', { exact: true })
+
+    expect(await title.evaluate(element => getComputedStyle(element).fontSize)).toBe('13px')
+
+    const previous = await page.evaluate(() => ({
+      fontSize: {
+        value: document.body.style.getPropertyValue('--dsh-content-font-size-secondary'),
+        priority: document.body.style.getPropertyPriority('--dsh-content-font-size-secondary'),
+      },
+      delta: {
+        value: document.body.style.getPropertyValue('--dsh-content-font-delta'),
+        priority: document.body.style.getPropertyPriority('--dsh-content-font-delta'),
+      },
+    }))
+    await page.evaluate(() => {
+      document.body.style.setProperty('--dsh-content-font-size-secondary', '15px')
+      document.body.style.setProperty('--dsh-content-font-delta', '2px')
+    })
+    try {
+      expect(await title.evaluate(element => getComputedStyle(element).fontSize)).toBe('15px')
+      expect(await summary.evaluate(element => getComputedStyle(element).fontSize)).toBe('15px')
+      expect(await row.evaluate(element => getComputedStyle(element).height)).toBe('26px')
+      expect(await row.locator('svg').first().evaluate(element => getComputedStyle(element).width)).toBe('16px')
+    } finally {
+      await page.evaluate((saved) => {
+        const restore = (name: string, entry: { value: string; priority: string }): void => {
+          if (entry.value === '') document.body.style.removeProperty(name)
+          else document.body.style.setProperty(name, entry.value, entry.priority)
+        }
+        restore('--dsh-content-font-size-secondary', saved.fontSize)
+        restore('--dsh-content-font-delta', saved.delta)
+      }, previous)
+    }
+  })
 
   it('keeps its snapshot inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, ['ui.expected.md'])

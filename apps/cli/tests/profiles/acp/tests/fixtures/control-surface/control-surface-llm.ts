@@ -43,12 +43,12 @@ class ControlSurfaceAdapter extends LlmAdapter {
   }
 
   override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    const lastUserIndex = options.messages.findLastIndex(message => message.source.kind === 'user')
+    const lastUserIndex = options.messages.findLastIndex(message => message.role === 'user' && message.source?.kind === 'user')
     const current = options.messages.slice(lastUserIndex)
     const userText = current.flatMap(message => message.content)
       .flatMap(block => block.type === 'text' ? [block.text] : [])
       .join('')
-    const hasToolResult = current.some(message => message.content.some(block => block.type === 'tool-result'))
+    const hasToolResult = current.some(message => message.role === 'tool')
     if (!hasToolResult) {
       const callId = ToolCallId(userText.includes('cancel') ? 'control-cancel-add' : 'control-add')
       yield { type: 'block-start', index: 0, blockType: 'reasoning' }

@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 创建与检查会话
 
-`ctx.sessions.create()` 构建绑定到调用方 fiber 的实时会话；`get(id)` 与 `list()` 查找会话，`fork()` 从实时会话的稳定前缀创建子会话。
+`ctx.sessions.create()` 构建绑定到调用方 fiber 的实时会话；`get(id)` 与 `list()` 查找会话，`fork()` 从实时会话的精确前缀创建子会话。
 
 ```text
 const session = ctx.sessions.create(sessionId, { meta: { cwd: '/workspace' } })
@@ -47,11 +47,13 @@ session.append('user/message', { role: 'user', content: [{ type: 'text', text: '
 session.deriveMessages()         // the derived model history
 ```
 
-表层事件（`system/message`、`user/message`、`assistant/message`、`tool/result`）在类型化事件与追加输入中都必须带有 `surfaceOp`。替换操作仅接受 `{ op: 'replace', startSeq, endSeq }`，端点为包含边界的 `SessionSeq`，按当前 surface 顺序解释。assistant 消息会嵌入精确、紧凑的提供方流，并禁止 `sourceEventSeqs`。已知仅日志事件禁止这两个元数据字段，且从不产生消息。
+表层事件（`system/message`、`developer/message`、`user/message`、`assistant/message`、`tool/result`）在类型化事件与追加输入中都必须带有 `surfaceOp`。替换操作仅接受 `{ op: 'replace', startSeq, endSeq }`，端点为包含边界的 `SessionSeq`，按当前 surface 顺序解释。assistant 消息会嵌入精确、紧凑的提供方流，并禁止 `sourceEventSeqs`。已知仅日志事件禁止这两个元数据字段，且从不产生消息。
+
+`developer/message` 存储工具添加名称，以及指向更早 `request/header` 的 `headerSeq` 引用。仅在存在添加块时必须携带该引用，每个名称必须在所引用的请求头中恰好对应一个完整模式。移除块仅记录工具名称，不携带请求头引用。重启、fork 和 surface 替换保留历史请求头；较早添加的定义不由当前注册表或最新请求头决定。`sourceEventSeqs` 继续描述派生来源及被替换节点。
 
 插件用 `@messageProjection` 声明修改内容的事件，并通过 `ctx.sessions.registerMessageProjection()` 注册纯处理器。Session 在接受事件前调用处理器，并缓存其不可变消息更新。缺少处理器时拒绝追加和恢复，卸载已经使用的处理器后也会拒绝读取缓存。独立构造函数和 `foldSurface(events, projections)` 必须显式接收处理器。重建函数将折叠结果的 `projectedMessages` 传给 `deriveEventMessage()`，实时实例方法自动应用相同的投影。[插件拥有消息投影](../../../.agents/notes/implemented/architecture/2026-09-11-plugin-owned-message-projections.zh.md)说明职责划分和离线装配。
 
-追加、seed/restore 与事件 adoption/snapshot 会拒绝任何 `header.system` 及恰好为空的可选请求头字段（`tools: []`、`adapterDefaults: {}`），而不规范化输入。工具结果的 `data.error` 仅在 `message.content[0].isError === true` 时允许存在；失败标识仍是可选的。被拒绝的追加不会改变日志、派生状态或事件流。Adoption 校验事件局部元数据，但不校验所引用的历史或替换端点是否属于 surface。
+追加、seed/restore 与事件 adoption/snapshot 会拒绝任何 `header.system` 及恰好为空的可选请求头字段（`tools: []`、`adapterDefaults: {}`），而不规范化输入。工具结果的 `data.error` 仅在一等消息的 `isError === true` 时允许存在；失败标识仍是可选的。被拒绝的追加不会改变日志、派生状态或事件流。Adoption 校验事件局部元数据，但不校验所引用的历史或替换端点是否属于 surface。
 
 `system/message` 承载渲染后的系统提示词：第一条是 surface 第 0 号节点，准入依据已准备调用的能力，不具备能力的路由将非空渲染文本归并到首个系统节点，延续中的 `in-history` 序列则在缓存历史之后追加；空系统节点不投影为消息，因此清除提示词必须为所有生效的系统节点记录空内容替换，而非仅替换最新节点；当第 0 号节点是 `system/message` 时，surface 折叠拒绝覆盖它的替换，除非替换事件本身是恰好覆盖该节点的 `system/message`，而后续系统节点不受保护，压缩范围可以遮蔽它们（[决策](../../../.agents/notes/implemented/architecture/2026-09-02-system-prompt-as-surface-node.zh.md)）。
 
@@ -63,7 +65,7 @@ session.deriveMessages()         // the derived model history
 
 ### 派生会话的 fork
 
-`ctx.sessions.fork(source, boundary?, childSessionId?)` 选取截至 `boundary` 事件序号（含该事件）的源事件（默认：当前最后一个事件），要求所选前缀结束时没有开放轮次，再创建带谱系元数据的实时子会话。必须在轮次中途分支的工具时委派会裁剪到已完成前缀。
+`ctx.sessions.fork(source, boundary?, childSessionId?)` 从实时源会话复制包含切点的精确事件前缀（默认：最后一个事件）。`dsh-session/fork` 的 `buildForkSeed` 在复制事件之后放置继承标记，仅为开放步骤补缺失的错误工具结果，并以 `forked` 原因关闭步骤和轮次。已关闭的步骤与轮次保持原样，包括历史缺失结果。标记和结束事件属于子会话；`inheritedEventCount` 只统计复制的前缀。
 
 逻辑 `SessionHeader.isSeeded` 字段报告是否存在 fork 历史，而不公开位置整数。`Session.inheritedEventCount` 保留经过校验的精确 `SessionLogOffset`；`ownEvents()` 返回从该切点开始的事件，`isOwnSeq(seq)` 只接受已存在且由子会话拥有的位置。底层带 seed 构造必须显式提供 `seed` 与 `inheritedEventCount`，因为构造 seed 可以在继承前缀之后包含子会话自有的设置事件。
 
@@ -107,7 +109,7 @@ session.deriveMessages()         // the derived model history
 
 ### 派生历史
 
-`deriveMessages()` 缓存深度冻结的派生消息，每次调用返回新数组。四种 surface 事件类型（`system/message`、`user/message`、`assistant/message`、`tool/result`）提供记录的消息身份和内容，空内容的系统节点不派生消息。插件拥有的投影修改派生内容，不修改记录的消息。替换和投影决策使缓存失效。嵌入式 Assistant stream 与 `assistant/attempt` 事件只保留回放和诊断数据。
+`deriveMessages()` 缓存深度冻结的派生消息，每次调用返回新数组。surface 事件类型（`system/message`、`developer/message`、`user/message`、`assistant/message`、`tool/result`）提供记录的消息身份和内容，空内容的 system 和 developer 节点不派生消息。插件拥有的投影修改派生内容，不修改记录的消息。替换和投影决策使缓存失效。嵌入式 Assistant stream 与 `assistant/attempt` 事件只保留回放和诊断数据。
 
 ### 请求头
 
@@ -137,7 +139,7 @@ session.deriveMessages()         // the derived model history
 
 #### 模型看到什么
 
-模型会接收 `system/message`、`user/message`、`assistant/message` 与 `tool/result` surface 条目中的消息，并应用日志中的投影，系统提示词在先。消息标识、角色、来源及未修改的内容块保持不变，投影不生成标识。直接提示词与注入上下文仍是独立的 `user/message` 事件，各事件的来源保留其出处。嵌入式 stream、`assistant/attempt`、边界与其他仅日志事实不添加消息。
+模型会接收 `system/message`、`developer/message`、`user/message`、`assistant/message` 与 `tool/result` surface 条目中的消息，并应用日志中的投影，系统提示词在先。消息标识、角色、来源及未修改的内容块保持不变，投影不生成标识。直接提示词与注入上下文仍是独立的 `user/message` 事件，各事件的来源保留其出处。嵌入式 stream、`assistant/attempt`、边界与其他仅日志事实不添加消息。
 
 #### Token 影响
 
@@ -153,6 +155,8 @@ session.deriveMessages()         // the derived model history
 
 如果恢复发现 assistant 工具请求没有持久 `tool/call`，其合成 `TOOL_NOT_STARTED` 结果内容为 `The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.`。如果持久 `tool/call` 没有结果，其 `TOOL_OUTCOME_UNKNOWN` 结果内容为 `The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.`。
 
+Fork 生成的结果只描述继承记录：父会话可能已经在所选事件之后启动或完成调用。`TOOL_NOT_STARTED` 表示前缀中没有启动记录；`TOOL_OUTCOME_UNKNOWN` 表示有启动记录但没有结果。两者都要求模型仅对只读或幂等操作直接重试；有副作用的操作需要先验证外部状态或询问用户。参见 [fork 决策](../../../.agents/notes/implemented/feature/2026-08-18-arbitrary-seq-session-fork.zh.md)。
+
 #### Token 影响
 
 未受损会话的 token 增量为零。恢复时，每个修复后的调用都会添加保留的、针对具体风险的错误文本。
@@ -165,7 +169,7 @@ session.deriveMessages()         // the derived model history
 
 #### 模型看到什么
 
-会话会重建循环实际发送的工具 schema 与调用配置；系统提示词作为 surface 第 0 号节点、并在历史内更新之后作为最新的系统节点，属于 `deriveMessages()` 的一部分。请求头事件不向历史加入任何消息，也不持有提示词的副本。
+会话从请求头重建有效工具模式和调用配置；提供方专用的延迟声明与保留声明在分发时派生。`toolHistory()` 缓存对已提交请求头和 developer 消息的有状态归约，后续读取仅处理新增事件。它通过历史 `headerSeq` 解析添加定义，返回不可变快照，并在显式新请求序列或保留定义发生变化时重新建立声明。以未变化的定义恢复保留名称时序列继续，由记录的添加重新提供该工具。循环请求和压缩调用均使用此状态。 请求头缺少对应更新记录时，使用完整有效声明。 允许同名工具的 schema 变化，即使在 `in-history` 路由上也会使前缀复用失效；注册时对照历史工具进行拒绝检查留待后续实现（[原因](../../../.agents/notes/implemented/architecture/2026-09-20-dynamic-tool-updates.zh.md)）。系统提示词仍属于 `deriveMessages()`；请求头事件不添加消息或提示词副本。
 
 #### Token 影响
 
@@ -182,8 +186,8 @@ session.deriveMessages()         // the derived model history
 
 这些限制说明会话存储何时需要特别留意。它们是当前包约束，不是任务积压。
 
-- **`fork()` 仅在实时会话的稳定边界处切分**：所选前缀结束时不得有开放轮次，且源会话必须位于存储中；fork API 不支持对已持久化但未加载的会话进行 fork。
-- **`SESSION_FORMAT_VERSION` 命名[当前逻辑表示](../../../docs/session-format-status.zh.md)**——当前读取器拒绝已退役的 `header.system`，并校验 `system/message` 载荷与受保护头节点的重写。历史 header 与事件归相邻格式包所有；相邻迁移链在构造 `Session` 前转换受支持的历史，写打开只发布当前格式的后继代际。同版本未知事件要求信封显式带有 `ignorable` 标记，但这不保证结构迁移的安全性（[机制](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.zh.md)）。
+- **Store API 仅接受活跃源会话** — 已持久化但未加载的源会话通过 Host 观察路径处理。Fork 仅闭合开放尾部，不修复先前已闭合步骤中缺失的结果。
+- **`SESSION_FORMAT_VERSION` 命名[当前逻辑表示](../../../docs/session-format-status.zh.md)**——当前读取器拒绝已退役的 `header.system`，并校验 `system/message` 载荷与受保护头节点的重写。历史 header 与事件归相邻格式包所有；[相邻迁移链](../../session/session-format-catalog/README.zh.md)在构造 `Session` 前转换受支持的历史，写打开只发布当前格式的后继代际。同版本未知事件要求信封显式带有 `ignorable` 标记，但这不保证结构迁移的安全性（[机制](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.zh.md)）。
 - **`TurnEndReasonMap` 不含 ACP（Agent Client Protocol）命名的 `refusal`／`max_turn_requests` 变体**：受生产方约束；只有当适配器或循环首次产生这些变体时才加入。
 - **fork 之外没有会话树**：基于分支会话的 pi 风格条目树被推迟，除非消费方需要超越基于边界的 forking 的能力。
 

@@ -7,7 +7,7 @@ import type {
   Agent, AgentOptions, AgentSetup, ModelSelection as AgentModelSelection, ModelSelectionRef,
 } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence'
@@ -58,7 +58,7 @@ export class ApiSessionPresetConflict extends Error {
 }
 
 /** Failures produced while resolving one ordinary Session identity to its live Agent. */
-export type ApiSessionAgentError = RemoteError<'session/not-found' | 'session/agent-busy' | 'gateway/internal'>
+export type ApiSessionAgentError = RemoteError<'session/not-found' | 'session/agent-busy' | 'session/writer-held' | 'gateway/internal'>
 
 /** Result of resolving one ordinary Session identity to its live Agent. */
 export type ApiSessionAgentResult =
@@ -214,6 +214,9 @@ export class ApiSessionAgentController {
       const racedSession = this.ctx.sessions.get(sessionId)
       if (racedSession !== undefined && hasApiSessionSubagentOwner(this.ctx, racedSession, undefined)) {
         return { error: apiSessionSubagentOwnershipError(sessionId) }
+      }
+      if (error instanceof Error && error.name === 'SessionAlreadyOwnedError') {
+        return { error: new RemoteError('session/writer-held', error.message, { sessionId }) }
       }
       return {
         error: new RemoteError(

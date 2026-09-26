@@ -9,6 +9,15 @@ export const PRESENT_OPEN_PATH = '/api/present.open'
 /** Authenticated desktop availability and destination metadata. */
 export const PRESENT_HOST_PATH = '/api/present.host'
 
+/**
+ * Browser-relative form of {@link PRESENT_OPEN_PATH}; see
+ * .agents/notes/implemented/architecture/2026-09-14-web-document-relative-app-routes.md.
+ */
+export const PRESENT_OPEN_ROUTE = PRESENT_OPEN_PATH.slice(1)
+
+/** Browser-relative form of {@link PRESENT_HOST_PATH}. */
+export const PRESENT_HOST_ROUTE = PRESENT_HOST_PATH.slice(1)
+
 /** Native file action selected by an explicit user gesture. */
 export type PresentedAction = 'open' | 'reveal'
 
@@ -49,10 +58,10 @@ export function isPresentedFile(value: unknown): value is PresentedFile {
  * @param sessionId - owning Session.
  * @param seq - deliverables/presented event sequence.
  * @param index - original index in the event's files array.
- * @returns same-origin file action URL.
+ * @returns document-relative file action route.
  */
 export function presentedFileUrl(sessionId: SessionId, seq: number, index: number): string {
-  return `${PRESENT_OPEN_PATH}?${new URLSearchParams({ sessionId, seq: String(seq), index: String(index) })}`
+  return `${PRESENT_OPEN_ROUTE}?${new URLSearchParams({ sessionId, seq: String(seq), index: String(index) })}`
 }
 
 /**

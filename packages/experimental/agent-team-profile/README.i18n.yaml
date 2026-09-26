@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/agent-team-profile/README.md
-README.md: 9aa294991d76d63a596c1d9afed2f9991f424f20
-README.zh.md: 98db275bbf583b02d1f370008345fa68882dbba1
+/:
+  en: e263a0edd266210f
+  zh: c5779bf7f64631d3
+/deepseek-ai-dsh-experimental-agent-team-profile:
+  en: 3deb4b95d9e58c8d
+  zh: 0ba043a54428445e
+/deepseek-ai-dsh-experimental-agent-team-profile/summary:
+  en: 3ca34df3ee31841d
+  zh: a413140d89be2d05
+/deepseek-ai-dsh-experimental-agent-team-profile/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-experimental-agent-team-profile/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-experimental-agent-team-profile/use-this-package/install-into-a-profile:
+  en: 97ef5916c04bf2a1
+  zh: 51f9d2bc3fca7936
+/deepseek-ai-dsh-experimental-agent-team-profile/use-this-package/what-you-get:
+  en: f0e95e60095fc5cb
+  zh: 8c36603b423475d0
+/deepseek-ai-dsh-experimental-agent-team-profile/understand-the-implementation:
+  en: dbfca16ca57c0723
+  zh: 38ccf89793e21f68
+/deepseek-ai-dsh-experimental-agent-team-profile/further-exploration:
+  en: 76e92afc23c0ec7c
+  zh: 7bd671bd557a91ee
+/deepseek-ai-dsh-experimental-agent-team-profile/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-agent-team-profile/model-experience/team-policy-and-tools:
+  en: 8e1e365ff3b0dfb2
+  zh: c6c91fbf1e1df934
+/deepseek-ai-dsh-experimental-agent-team-profile/model-experience/team-policy-and-tools/what-the-model-sees:
+  en: f54dc1725b90365b
+  zh: 5a505996f7684231
+/deepseek-ai-dsh-experimental-agent-team-profile/model-experience/team-policy-and-tools/token-effect:
+  en: da8c178179ba50ba
+  zh: c53d5863bc14be79
+/deepseek-ai-dsh-experimental-agent-team-profile/model-experience/team-policy-and-tools/kv-cache-effect:
+  en: e331337b094aacde
+  zh: bb2e5df5ebeb9305
+/deepseek-ai-dsh-experimental-agent-team-profile/known-limitations-and-deferred-work:
+  en: 0413821c2fc20bea
+  zh: 53e135425dd82e12
+/deepseek-ai-dsh-experimental-agent-team-profile/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

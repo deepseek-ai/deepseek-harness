@@ -6,6 +6,8 @@ Slots are the Web Client's typed React composition system. [`dsh-client-ui-slots
 
 This page documents slot ownership, component inputs, extension APIs, and the shipped hierarchy. The surrounding boot, Remote, Client model, and Conversation paths are in [Web Client architecture](web-client.md).
 
+`plugins.bundle.config` supplies bundle detail configuration, keyed by npm package name. `plugins.bundle.activation` renders optional guidance after user-requested enablement, with owner callbacks to dismiss or open that bundle’s details. `conversation.input.activity` supplies one action between the model selector and Send, with toolbar expansion released on unmount.
+
 ## Declaration and lifecycle
 
 `SlotMap` is the compile-time registry. A package declaration-merges the key, cardinality, scope, owner props, keyed props, and optional slot-level inject face. The runtime declaration is the matching `children` entry on the component that owns the render location.
@@ -52,8 +54,8 @@ The slot declaration fixes two independent axes.
 | cardinality | `keyed` | The owner dispatches an `entryKey`; the matching cell renders with any key-specific props. |
 | cardinality | `chain` | Each entry supplies a pure `select(owner)` function. The first non-null result in priority order renders and receives that result as `matched`; otherwise the owner fallback renders. |
 | scope | `root` | One root-scoped component and store instance. |
-| scope | `session-maybe` | Follows current selection but stays renderable without a Session; Session values are optional. |
-| scope | `session` | Requires a resolved Session binding and receives definite Session values. |
+| scope | `session-maybe` | Inherits the surrounding Provider binding but stays renderable without one; Session values are optional. |
+| scope | `session` | Requires a resolved surrounding Provider binding and receives definite Session values. |
 
 `priority` is a shadowing rank for `single`, `list`, and `keyed` cells and an election order for `chain`. Lower values run or render first. Ordinary additive contributions should choose a fresh list `id` or keyed `key`; intentionally reusing a shipped cell replaces its presentation.
 
@@ -70,7 +72,7 @@ A registered component receives inputs assembled at its binding site. Components
 | localized `t` function | the registration's `locale` namespace | `PropsLocale<N>` |
 | selected chain value | the registration's `select` result | `matched` through `ComposedProps` |
 
-`SessionProvider` is also present in `PropsRenderSlots` when an entry declares a strict Session child. It binds that subtree to the current Session identity and remounts the body when the identity changes.
+`SessionProvider` is also present in `PropsRenderSlots` when an entry declares a `session` or `session-maybe` child. With no `session` prop it inherits the surrounding binding; an explicit `SessionReference` or `undefined` overrides only that subtree. The Provider does not key its whole body. A strict `session` entry remounts when its binding generation changes. A blank `session-maybe` entry adopts its first binding without remounting, then remounts for a later generation or a return to absence.
 
 Components never receive `ctx`. Parent-owned point-in-time values enter through the owner argument to `renderSlot`; shared view state uses a declared store; services and model objects stay in the `apply` closure and are projected into callbacks or observable sources.
 
@@ -80,7 +82,7 @@ The shipped adapters add these standard props. They are available according to t
 
 | Availability | Props | Owner |
 |---|---|---|
-| every scope | `useSessions`, `useSessionPendingInteraction` | `ui-session` |
+| every scope | `useSessions`, `useSessionStatus`, `useSessionRetainInfo` | `ui-session` |
 | every scope | `useWorkspaces` | `ui-workspace` |
 | every scope | `usePanelInfo` | `ui-layout` |
 | `session` | `sessionId`, `useSession`, `useProjection` | `ui-session` |
@@ -116,7 +118,9 @@ root
 │  ├─ sidebar.panellist
 │  ├─ sidebar.footer.action
 │  ├─ sidebar.workspaces
-│  │  └─ sidebar.workspaces.directoryFlow
+│  │  ├─ sidebar.workspaces.directoryFlow
+│  │  ├─ sidebar.workspaces.session.menu.item
+│  │  └─ sidebar.workspaces.session.row.action
 │  └─ sidebar.settings
 │     ├─ settings.trigger
 │     ├─ settings.header
@@ -128,8 +132,13 @@ root
 │        ├─ settings.models.provider-card
 │        ├─ settings.models.footer
 │        └─ settings.plugins.tab
-│           └─ settings.plugin.item
 ├─ main
+│  ├─ plugins.item
+│  ├─ plugins.bundle.config
+│  ├─ plugins.row.config
+│  ├─ plugins.detail.actions
+│  ├─ plugins.detail.badge
+│  ├─ plugins.detail.section
 │  └─ main.conversation
 │     ├─ conversation.session
 │     │  └─ conversation.view
@@ -142,14 +151,16 @@ root
 │     │     │     └─ tool.view.cordis
 │     │     ├─ conversation.message.images
 │     │     └─ conversation.trajectory.images
-│     ├─ conversation.session.header
-│     │  ├─ conversation.session.header.lineage
-│     │  ├─ conversation.session.header.leading
-│     │  ├─ conversation.session.header.actions
-│     │  ├─ conversation.session.header.utilities
-│     │  └─ conversation.session.header.corner
+│     ├─ conversation.header
+│     │  ├─ conversation.header.leading
+│     │  └─ conversation.session.header
+│     │     ├─ conversation.session.header.lineage
+│     │     ├─ conversation.session.header.actions
+│     │     ├─ conversation.session.header.utilities
+│     │     └─ conversation.session.header.corner
 │     ├─ conversation.composer
-│     │  └─ conversation.approval.detail
+│     │  ├─ conversation.approval.detail
+│     │  └─ conversation.plan-review.actions
 │     ├─ conversation.composer.bar
 │     │  ├─ conversation.input.attachments
 │     │  ├─ conversation.input.permission
@@ -171,7 +182,9 @@ root
 │     │  └─ sidebar.right.tab.guide.entry
 │     ├─ sidebar.right.pane.tab.title
 │     └─ sidebar.right.tab.menu.item
+├─ shell.leading
 └─ shell.overlay
+   └─ shell.quota-notice
 ```
 
 The generated Client inspect catalog is the exhaustive contract for each key: cardinality, scope, owner props, standard props, current occupants, declaration owner, and replacement risk. A running dynamic package can query the live tree and an exact key with `cordis_inspect what:"client"`; the source catalog is generated from `SlotMap` declarations and `slots.register()` call sites by `pnpm run gen-client-catalog`.

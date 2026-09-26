@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `@deepseek-ai/dsh-llm` to stream model calls through configured provider adapters, discover models, and resolve model capabilities and call defaults. Every dispatched request remains reconstructable from the session log. Requests are deep-frozen before dispatch, so extensions and adapters can read them but cannot rewrite them. Each stream is one provider attempt: provider-specific translation stays with its adapter, while the optional `@deepseek-ai/dsh-llm-retry` package re-runs failed requests. Streams always end with a terminal result, so callers can handle success, failure, and cancellation consistently.
+Use `@deepseek-ai/dsh-llm` to stream model calls through configured provider adapters, discover models, and resolve model capabilities and call defaults. Callers must keep all model-visible input reconstructable from the session log. Loop-built requests arrive deep-frozen, so extensions and adapters cannot rewrite them. Each stream is one provider attempt: provider-specific translation stays with its adapter, while the optional `@deepseek-ai/dsh-llm-retry` package re-runs failed requests. Streams always end with a terminal result, so callers can handle success, failure, and cancellation consistently.
 
 ## Table of Contents
 
@@ -25,6 +25,8 @@ Use `@deepseek-ai/dsh-llm` to stream model calls through configured provider ada
 <a id="use-this-package"></a>
 ## Use this package
 
+`listModels` describes models offered by catalog-driven interfaces. Core resolution and streaming can still accept unlisted ids. The GUI requires catalog membership for selection and submission; adapters intended for GUI use must implement `listModels` and advertise their available models. The base implementation returns an empty list and therefore offers no GUI models.
+
 Any composition that calls a model provider — an agent loop, a session-title generator, a compaction summarizer — streams its requests through this service. Mount it together with at least one provider adapter; the service itself has no configuration and no provider wire code.
 
 ### When to choose it
@@ -37,7 +39,7 @@ Mount the service and at least one adapter, then select the provider by name in 
 
 ```yaml
 - name: '@deepseek-ai/dsh-llm'
-- name: '@deepseek-ai/dsh-llm-deepseek'
+- name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   config:
     apiKeyEnv: DEEPSEEK_API_KEY
 ```
@@ -48,7 +50,7 @@ A stream returns token-level chunks and always ends with one terminal `finish` c
 for await (const chunk of ctx.llm.stream({
   provider: 'deepseek-official',
   model: 'deepseek-v4-flash',
-  messages: [createUserMessage({ content: [{ type: 'text', text: 'Hello' }] })],
+  messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
 })) {
   // chunks: block-start, text-delta, ..., usage, finish
 }
@@ -56,18 +58,20 @@ for await (const chunk of ctx.llm.stream({
 
 After a successful mount, `ctx.llm.listProviders()` reports the registered routes in registration order.
 
+`GenerateOptions.messages` accepts durable `Message` values and request-only `RequestUserInput` values. Request-only inputs carry user-role content with no `id` or `source`; Session writes and Agent delivery still require durable messages. Callers keep auxiliary inputs unchanged until the stream settles. A caller that records its exact request, such as session-title generation, must use durable messages.
+
 ### What you can do
 
 - **Stream one model call** — `ctx.llm.stream(options)` yields raw chunks (token-level deltas) for any registered provider and model; consumers assemble them with `BlockAssembler`.
 - **Register provider adapters** — an adapter owns one or more provider routes, and its registration captures that route's retry policy; registering the same route twice fails with `DUPLICATE_ADAPTER`.
 - **Expose and activate providers through configuration** — adapters declare configurable-provider routes plus a settings namespace, so configuration surfaces can activate dormant providers and edit connection facts without a restart. `LlmConfigurableProvider.error` reports a configuration diagnostic for repair; unaffected models can remain serviceable.
-- **Discover and resolve models** — list the models an adapter advertises, interrogate an endpoint for the models it serves, and resolve one exact model's context window, output default, reasoning efforts, input modalities, and system prompt update mode: `LlmResolvedModelInfo.systemPromptUpdate` is `'in-history'` when the model reads the latest `system` message at any position as the effective system prompt and absent when only a leading system message is read; `normalizeModelInfo` rejects any other value with `INVALID_MODEL_INFO`.
+- **Discover and resolve models** — List the models an adapter advertises, interrogate an endpoint for the models it serves (candidates carry optional `inputModalities`; absence means unknown), and resolve one exact model's context window, output default, reasoning efforts, input modalities, and system prompt update mode: `LlmResolvedModelInfo.systemPromptUpdate` is `'in-history'` when the model reads the latest `system` message at any position as the effective system prompt and absent when only a leading system message is read; `normalizeModelInfo` rejects any other value with `INVALID_MODEL_INFO`.
 - **Validate call config** — an explicit or configured reasoning effort is checked against the exact model before any provider I/O, and an adapter-configured output cap is materialized when the request omits one.
 - **Read an embedded Assistant stream without expanding it** — `assistantStreamFirstTokenTime` (first token), `assistantStreamHasVisibleContent` (any visible content), and `assistantStreamHasVisibleText` (any visible text) answer their questions from the compact records with early exit; `lastAssistantStreamChunk` scans backward to the last raw chunk of one type, `assistantStreamChunks` and `joinAssistantStreamText` scan the whole stream, and `assembleAssistantStream` feeds a `BlockAssembler` one joined delta per run with the same blocks, usage, and replay state as the per-member expansion. `runFirstTokenTime` and `runFirstVisibleTime` do the early-exit scan for one packed run, and `isTokenDelta`, `isVisibleChunk`, and `chunkHasVisibleText` define the token and visibility rules for a single chunk. `expandAssistantStream` remains the validating path for records read at a durable boundary; it is not memoized, because a retained expansion costs roughly ten times the compact stream for as long as the event lives.
 
 ### Failures and recovery
 
-Every stream ends in exactly one terminal `finish` chunk: `{ kind: 'error', failure }` on failure, `{ kind: 'aborted', failure }` on cancellation. Failures carry stable codes such as `NO_ADAPTER`, `MISSING_CREDENTIAL`, `AUTH`, `RATE_LIMIT`, and `CONTEXT_WINDOW_EXCEEDED`; consumers route on the code, never on message text. A request naming an unregistered provider fails with `NO_ADAPTER`, and a malformed credential fails with `INVALID_CREDENTIAL` instead of surfacing as an opaque fetch error. This service never re-runs a request: retrying is the job of `dsh-llm-retry` at the agent's failed-step extension point.
+Every stream ends in exactly one terminal `finish` chunk: `{ kind: 'error', failure }` on failure, `{ kind: 'aborted', failure }` on cancellation. Failures carry stable codes such as `NO_ADAPTER`, `MISSING_CREDENTIAL`, `AUTH`, `RATE_LIMIT`, and `CONTEXT_WINDOW_EXCEEDED`; consumers route on the code, never on message text. `QUOTA` is provider-neutral exhaustion, while `ACCOUNT_QUOTA` is reserved for a first-party account balance that the current product can replenish. A request naming an unregistered provider fails with `NO_ADAPTER`, and a malformed credential fails with `INVALID_CREDENTIAL` instead of surfacing as an opaque fetch error. This service never re-runs a request: retrying is the job of `dsh-llm-retry` at the agent's failed-step extension point.
 
 -----
 
@@ -81,7 +85,7 @@ This section explains the design behind the service; the observable behavior is 
 
 ### Design philosophy
 
-The service is built on one separation: **the logical contract is provider-neutral, adapters own the wire.** It defines the canonical message, content-block, and stream-chunk vocabulary once, and every provider adapter translates only its own wire format into that vocabulary. The registry is the topology owner — adapter routes, configurable-provider entries, and discovery offers all register here and are disposed with their fiber — while a request stays a pure function of the session log: loop-built requests arrive deep-frozen, so listeners and adapters read them and never rewrite them.
+The service is built on one separation: **the logical contract is provider-neutral, adapters own the wire.** It defines the canonical message, content-block, and stream-chunk vocabulary once, and every provider adapter translates only its own wire format into that vocabulary. The registry is the topology owner — adapter routes, configurable-provider entries, and discovery offers all register here and are disposed with their fiber — while an agent-loop request stays a pure function of the session log: loop-built requests arrive deep-frozen, so listeners and adapters read them and never rewrite them.
 
 ### Source map
 
@@ -101,13 +105,13 @@ The service is built on one separation: **the logical contract is provider-neutr
 
 ### Main flow
 
-A request is validated against its exact model's capability — context window, output default, reasoning efforts, input modalities, and `systemPromptUpdate` mode — and any adapter-configured defaults are materialized, then the whole request is deep-frozen. `prepareCall()` binds those facts, detached context, and retry policy to the exact adapter generation that performs terminal dispatch, so HMR or dynamic settings cannot combine one generation's image capability with another generation's endpoint. An image-capable adapter projects durable references into route-specific request versions; `resolveImageAttachmentAccess()` separately maps an attachment provider's optional host object into the current tool execution world without changing the request image or its `variantId`. A text-only route receives deterministic per-image placeholders, including nested tool-result images, without rewriting append-only session history. Durable `FileBlock` references never reach any adapter: request assembly replaces each one, nested tool-result occurrences included, with deterministic handle text naming the file and its saved read-only path, resolved through the mounted attachment and filesystem providers. `ctx.llm.fileRequestText(ref)` exposes that exact synchronous projection to request measurement. An image occurrence derived with `offloaded: true` reaches every route as placeholder text through `projectOffloadedImages()`. An image-capable route whose retained occurrences exceed its `LlmImageRequestBudget` at their exact bytes fails with `IMAGE_OFFLOAD_REQUIRED` naming the additional oldest occurrences (`requiredImageOffload()`), never with an unlogged projection; `dsh-compaction-image-offload` logs the selected occurrences in one `image/offload` event and retries. Adapters that charge visual tokens declare per-route `imageRequestPricing`, which `ctx.llm.imageRequestPricing(provider, model)` resolves synchronously for the token meter. Dispatch goes through the `llm/stream` waterfall, then chunks return as token-level deltas and every adapter outcome reaches the consumer as one terminal `finish` chunk.
+A request is validated against its exact model's capability — context window, output default, reasoning efforts, input modalities, and `systemPromptUpdate` mode — and any adapter-configured defaults are materialized. The runtime preserves freezing for already-frozen input; hand-built callers own input immutability. `prepareCall()` binds those facts, detached context, and retry policy to the exact adapter generation that performs terminal dispatch, so HMR or dynamic settings cannot combine one generation's image capability with another generation's endpoint. An image-capable adapter projects durable references into route-specific request versions; `resolveImageAttachmentAccess()` separately maps an attachment provider's optional host object into the current tool execution world without changing the request image or its `variantId`. A text-only route receives deterministic per-image placeholders, including tool-role result images, without rewriting append-only session history. Durable `FileBlock` references never reach any adapter: request assembly replaces each one, including tool-role result occurrences, with deterministic handle text naming the file and its saved read-only path, resolved through the mounted attachment and filesystem providers. `ctx.llm.fileRequestText(ref)` exposes that exact synchronous projection to request measurement. An image occurrence derived with `offloaded: true` reaches every route as placeholder text through `projectOffloadedImages()`. An image-capable route whose retained occurrences exceed its `LlmImageRequestBudget` at their exact bytes fails with `IMAGE_OFFLOAD_REQUIRED` naming the additional oldest occurrences (`requiredImageOffload()`), never with an unlogged projection; `dsh-compaction-image-offload` logs the selected occurrences in one `image/offload` event and retries. Adapters that charge visual tokens declare per-route `imageRequestPricing`, which `ctx.llm.imageRequestPricing(provider, model)` resolves synchronously for the token meter. Dispatch goes through the `llm/stream` waterfall, then chunks return as token-level deltas and every adapter outcome reaches the consumer as one terminal `finish` chunk.
 
-File detection reads current content, including nested tool results, on every request without caching message identities or freeze state. The [file-scan decision](../../../.agents/notes/implemented/simplification/2026-09-07-file-content-scan.md) records the measured traversal cost.
+File detection reads current content, including tool-role result content, on every request without caching message identities or freeze state. The [file-scan decision](../../../.agents/notes/implemented/simplification/2026-09-07-file-content-scan.md) records the measured traversal cost.
 
 ### Invariants
 
-- **Model-visible ⟺ logged** — anything that reaches a provider request is reconstructable from the session log; loop-built requests are deep-frozen and never rewritten.
+- **Model-visible ⟺ logged** — callers must keep every provider request's model-visible input reconstructable from the session log; loop-built requests arrive deep-frozen and cannot be rewritten.
 - **Replay state travels only within one adapter** — assistant replay state rides along only when the same adapter instance owns the historical and target routes; otherwise it is dropped before dispatch.
 - **Prepared calls are one-shot** — a prepared call can be dispatched exactly once, and its call-config fields must match the prepared config.
 - **Image projection follows the captured route** — durable `ImageBlock` references become route-specific request versions only for image-capable models; text-only models receive stable placeholders.
@@ -125,7 +129,7 @@ File detection reads current content, including nested tool results, on every re
 Read these pages when the package-level contract is not enough. They move from the shared types to the concrete adapters, the retry executor, and the measurement service.
 
 - [LLM streaming subsystem](../../../docs/subsystems/llm-streaming.md) — the message and block types, compact Assistant stream records, the `StreamChunk` protocol, and the adapter contract.
-- [llm-deepseek adapter](../llm-deepseek/README.md) — the direct DeepSeek chat-completions implementation.
+- [llm-deepseek adapter](../llm-deepseek/README.md) — the direct DeepSeek Messages implementation.
 - [llm-pi-ai adapter](../llm-pi-ai/README.md) — the pi-ai-backed multi-provider implementation.
 - [llm-retry](../llm-retry/README.md) — the retry executor that re-runs failed model requests.
 - [Token meter](../token-meter/README.md) — replay-aware request and context pressure measurement.
@@ -152,9 +156,10 @@ These limits define where this service stops and other packages or future work b
 
 - **No retry execution, caching, or rate limiting ships in this service** — provider registration stores the retry policy, but a stream remains a single provider attempt; `@deepseek-ai/dsh-llm-retry` executes the policy at durable agent-step boundaries.
 - **`GenerateOptions` sampling is `temperature`/`maxTokens`/`stop` only** — no `tool_choice`, `top_p`, or penalty fields; the vocabulary grows when a producer lands ([dropped inert knobs](../../../.agents/notes/archived/simplification/2026-07-04-drop-inert-request-knobs.md)).
-- **Producer-gated variants stay out until produced** — `prefill`, per-tool `strict`, block `cache` hints, and the `agent` message-source variant have no producer ([Agent Note](../../../.agents/notes/archived/simplification/2026-07-04-prune-producerless-vocabulary-variants.md)).
+- **Variants normally require a producer** — `prefill`, per-tool `strict`, block `cache` hints, and the `agent` message-source variant have no producer ([Agent Note](../../../.agents/notes/archived/simplification/2026-07-04-prune-producerless-vocabulary-variants.md)).
 - **`BlockAssembler` handles core block kinds only** — a plugin-added block type whose stream is never closed by `block-end` makes `blocks()` throw.
 - **`GenerateOptions.sessionId` is a locally-declared brand** — importing dsh-session's `SessionId` would create a dependency cycle.
+- **Tool updates require session history** — `GenerateOptions.tools` contains active definitions. `toolHistory` supplies the initial declarations and historically resolved additions from `Session.toolHistory()`. At adapter dispatch, `projectToolUpdates` constructs deferred declarations and retains removed definitions for `in-history`; `addition-only` omits removed definitions and removal messages. Unsupported routes receive active tools without developer messages or `deferLoading`. Missing history or a request prefix omitting recorded updates falls back to current declarations without developer messages. Explicitly deferred baseline tools remain deferred until their first retained addition block; declaring a deferred tool does not activate it.
 
 <a id="dev-note"></a>
 ### Dev Note

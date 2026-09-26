@@ -1,0 +1,24 @@
+{
+  // The native/renderer integration fixture imports only Cordis-free Desktop modules.
+  "extends": "./tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "lib/desktop-keyboard-test-types",
+    "emitDeclarationOnly": true,
+    "types": ["node"]
+  },
+  "files": [
+    "apps/desktop/tests/keyboard.spec.ts",
+    "apps/desktop/src/keyboard.ts",
+    "apps/desktop/src/keybindings.ts",
+    "apps/desktop/src/browser-guests.ts",
+    "apps/desktop/src/ipc.ts",
+    "apps/desktop/src/update-overlay.ts"
+  ],
+  "include": [],
+  "references": [
+    { "path": "./packages/client/shortcuts/tsconfig.client.json" },
+    { "path": "./packages/client/ui-sidebar-browser/tsconfig.client.json" },
+    { "path": "./packages/util/atomic-write" }
+  ]
+}

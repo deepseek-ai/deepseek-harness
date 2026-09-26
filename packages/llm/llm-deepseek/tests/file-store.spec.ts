@@ -4,9 +4,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
-import { DeepSeekFileStore, MAX_IMAGE_BYTES } from '../src/common/file-store.ts'
-import { DeepSeekFileId } from '../src/common/file-id.ts'
-import { deepSeekFileScope, DeepSeekUploadIndex } from '../src/common/upload-index.ts'
+import { DeepSeekFileStore, MAX_IMAGE_BYTES } from '../src/file-store.ts'
+import { DeepSeekFileId } from '../src/file-id.ts'
+import { deepSeekFileScope, DeepSeekUploadIndex } from '../src/upload-index.ts'
 
 const REF: ImageAttachmentRef = {
   attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
@@ -27,7 +27,7 @@ const VERSION: RequestImageAttachment = {
   space: 'srgb',
   hasAlpha: true,
 }
-const CONNECTION = { protocol: 'chat-completions' as const, baseURL: 'https://api.deepseek.com', apiKey: 'key' }
+const CONNECTION = { baseURL: 'https://api.deepseek.com', headers: { 'x-api-key': 'key' } }
 const POLICY = { expiresAfterSeconds: 604_800, refreshMarginSeconds: 3_600, quotaCleanupBatch: 100 }
 const NOW = 1_700_000_000_000
 
@@ -50,17 +50,16 @@ function uploadFetch(now: () => number = () => NOW) {
       const createdAt = now() / 1_000
       return new Response(JSON.stringify({
         id: `file-api-${uploads}`,
-        object: 'file',
-        bytes: 3,
-        created_at: createdAt,
+        type: 'file',
+        size_bytes: 3,
+        created_at: new Date(createdAt * 1_000).toISOString(),
         filename: `dsh-${'a'.repeat(16)}-${'b'.repeat(8)}.png`,
-        purpose: 'user_data',
-        expires_at: createdAt + POLICY.expiresAfterSeconds,
+        mime_type: 'image/png',
       }), { status: 200 })
     }
     if (init?.method === 'DELETE') {
       const id = requestUrl(_url).split('/').at(-1)
-      return new Response(JSON.stringify({ id, object: 'file', deleted: true }), { status: 200 })
+      return new Response(JSON.stringify({ id, type: 'file_deleted' }), { status: 200 })
     }
     throw new Error('unexpected Files API request')
   }) as typeof fetch
@@ -68,42 +67,50 @@ function uploadFetch(now: () => number = () => NOW) {
 }
 
 describe('DeepSeekFileStore', () => {
-  it('separates native Files reuse, invalidation, and expiry from the chat namespace', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'dsh-native-file-store-'))
+  it('isolates credential values and header kinds while reusing reordered headers', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-file-credentials-'))
+    roots.push(dir)
+    const remote = uploadFetch(() => NOW)
+    const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
+    const store = new DeepSeekFileStore({ index, fetch: remote.fetchImpl, now: () => NOW })
+    const first = await store.ensureUploaded(VERSION, CONNECTION, POLICY)
+    const account = await store.ensureUploaded(VERSION, { ...CONNECTION, headers: { 'x-dsh-auth-token': 'key' } }, POLICY)
+    const replacement = await store.ensureUploaded(VERSION, { ...CONNECTION, headers: { 'x-api-key': 'new-key' } }, POLICY)
+    expect(new Set([first.record.scope, account.record.scope, replacement.record.scope]).size).toBe(3)
+    const combined = await store.ensureUploaded(VERSION, { ...CONNECTION, headers: { a: 'one', b: 'two' } }, POLICY)
+    const reordered = await store.ensureUploaded(VERSION, { ...CONNECTION, headers: { b: 'two', a: 'one' } }, POLICY)
+    expect(reordered.record).toEqual(combined.record)
+    expect(remote.uploads()).toBe(4)
+  })
+
+  it('reuses equivalent API roots and isolates other endpoints across invalidation and expiry', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-file-scope-'))
     roots.push(dir)
     let now = NOW
-    let uploads = 0
-    const fetchImpl: typeof fetch = async (input, init) => {
-      if (init?.method !== 'POST') throw new Error('only uploads expected')
-      uploads++
-      const common = { id: `file-${uploads}`, filename: 'dsh-image.png' }
-      return new Response(JSON.stringify(requestUrl(input).includes('/v1/files')
-        ? { ...common, type: 'file', size_bytes: VERSION.bytes, created_at: new Date(now).toISOString(), mime_type: VERSION.mediaType }
-        : { ...common, object: 'file', bytes: VERSION.bytes, created_at: now / 1_000, expires_at: now / 1_000 + POLICY.expiresAfterSeconds, purpose: 'user_data' }))
-    }
+    const remote = uploadFetch(() => now)
     const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
-    const store = new DeepSeekFileStore({ index, fetch: fetchImpl, now: () => now })
-    const native = { ...CONNECTION, protocol: 'messages' as const }
-    const chat = await store.ensureUploaded(VERSION, CONNECTION, POLICY)
-    const first = await store.ensureUploaded(VERSION, native, POLICY)
-    expect(first.record.scope).toBe(deepSeekFileScope(`${CONNECTION.baseURL}/v1`, CONNECTION.apiKey))
-    expect(first.record.scope).not.toBe(chat.record.scope)
-    expect((await store.ensureUploaded(VERSION, { ...native, baseURL: `${native.baseURL}/v1/` }, POLICY)).record).toEqual(first.record)
-    const reopened = new DeepSeekFileStore({ index, fetch: fetchImpl, now: () => now })
-    expect((await reopened.ensureUploaded(VERSION, native, POLICY)).record).toEqual(first.record)
-    await reopened.invalidate(VERSION, chat.record.fileId, native)
-    expect((await reopened.ensureUploaded(VERSION, native, POLICY)).record).toEqual(first.record)
-    expect(uploads).toBe(2)
-    await reopened.invalidate(VERSION, first.record.fileId, native)
-    const replacement = await reopened.ensureUploaded(VERSION, native, POLICY)
+    const store = new DeepSeekFileStore({ index, fetch: remote.fetchImpl, now: () => now })
+    const alternate = { ...CONNECTION, baseURL: 'https://other.example' }
+    const other = await store.ensureUploaded(VERSION, alternate, POLICY)
+    const first = await store.ensureUploaded(VERSION, CONNECTION, POLICY)
+    expect(first.record.scope).toBe(deepSeekFileScope(`${CONNECTION.baseURL}/v1`, JSON.stringify(Object.entries(CONNECTION.headers))))
+    expect(first.record.scope).not.toBe(other.record.scope)
+    expect((await store.ensureUploaded(VERSION, { ...CONNECTION, baseURL: `${CONNECTION.baseURL}/v1/` }, POLICY)).record).toEqual(first.record)
+    const reopened = new DeepSeekFileStore({ index, fetch: remote.fetchImpl, now: () => now })
+    expect((await reopened.ensureUploaded(VERSION, CONNECTION, POLICY)).record).toEqual(first.record)
+    await reopened.invalidate([{ variantId: VERSION.variantId, fileId: other.record.fileId }], CONNECTION)
+    expect((await reopened.ensureUploaded(VERSION, CONNECTION, POLICY)).record).toEqual(first.record)
+    expect(remote.uploads()).toBe(2)
+    await reopened.invalidate([{ variantId: VERSION.variantId, fileId: first.record.fileId }], CONNECTION)
+    const replacement = await reopened.ensureUploaded(VERSION, CONNECTION, POLICY)
     expect(replacement.record.fileId).not.toBe(first.record.fileId)
-    expect((await reopened.ensureUploaded(VERSION, CONNECTION, POLICY)).record).toEqual(chat.record)
-    expect(uploads).toBe(3)
+    expect((await reopened.ensureUploaded(VERSION, alternate, POLICY)).record).toEqual(other.record)
+    expect(remote.uploads()).toBe(3)
     now = replacement.record.expiresAt - POLICY.refreshMarginSeconds * 1_000
-    const refreshed = await reopened.ensureUploaded(VERSION, native, POLICY)
+    const refreshed = await reopened.ensureUploaded(VERSION, CONNECTION, POLICY)
     expect(refreshed.record.fileId).not.toBe(replacement.record.fileId)
     expect(refreshed.record.expiresAt).toBe(now + POLICY.expiresAfterSeconds * 1_000)
-    expect(uploads).toBe(4)
+    expect(remote.uploads()).toBe(4)
   })
 
   it('reclaims the oldest owned native file across descending pages before retrying an upload', async () => {
@@ -135,7 +142,7 @@ describe('DeepSeekFileStore', () => {
         : { data: [file('oldest-owned', 3_000), file('foreign', 4_000, 'user-file.png')], has_more: false }))
     }
     const store = new DeepSeekFileStore({ index: new DeepSeekUploadIndex(join(dir, 'index.json')), fetch: fetchImpl, now: () => NOW })
-    await expect(store.ensureUploaded(VERSION, { ...CONNECTION, protocol: 'messages' }, { ...POLICY, quotaCleanupBatch: 1 })).resolves.toMatchObject({ record: { fileId: 'file-uploaded' } })
+    await expect(store.ensureUploaded(VERSION, CONNECTION, { ...POLICY, quotaCleanupBatch: 1 })).resolves.toMatchObject({ record: { fileId: 'file-uploaded' } })
     expect(cursors).toEqual([null, 'middle'])
     expect(deleted).toEqual(['oldest-owned'])
     expect(uploads).toBe(2)
@@ -192,12 +199,11 @@ describe('DeepSeekFileStore', () => {
     expect(uploadSignal?.aborted).toBe(false)
     complete?.(new Response(JSON.stringify({
       id: 'file-api-shared',
-      object: 'file',
-      bytes: 3,
-      created_at: NOW / 1_000,
+      type: 'file',
+      size_bytes: 3,
+      created_at: new Date(NOW).toISOString(),
       filename: `dsh-${'a'.repeat(16)}-${'b'.repeat(8)}.png`,
-      purpose: 'user_data',
-      expires_at: NOW / 1_000 + POLICY.expiresAfterSeconds,
+      mime_type: 'image/png',
     }), { status: 200 }))
     await expect(completed).resolves.toMatchObject({ record: { fileId: 'file-api-shared' } })
   })
@@ -273,9 +279,8 @@ describe('DeepSeekFileStore', () => {
         })
       }
       return Promise.resolve(new Response(JSON.stringify({
-        id: 'file-api-retry', object: 'file', bytes: 3, created_at: NOW / 1_000,
-        filename: 'dsh-retry.png', purpose: 'user_data',
-        expires_at: NOW / 1_000 + POLICY.expiresAfterSeconds,
+        id: 'file-api-retry', type: 'file', size_bytes: 3, created_at: new Date(NOW).toISOString(),
+        filename: 'dsh-retry.png', mime_type: 'image/png',
       }), { status: 200 }))
     }) as typeof fetch
     const store = new DeepSeekFileStore({
@@ -295,11 +300,11 @@ describe('DeepSeekFileStore', () => {
     await expect(retried).resolves.toMatchObject({ record: { fileId: 'file-api-retry' } })
   })
 
-  it.each(['chat-completions', 'messages'] as const)('rejects a request version above the %s per-image limit before transport', async (protocol) => {
+  it('rejects a request version above the per-image limit before transport', async () => {
     const fetchImpl = vi.fn() as typeof fetch
     const store = new DeepSeekFileStore({ now: () => NOW, fetch: fetchImpl })
     const oversized = { ...VERSION, bytes: MAX_IMAGE_BYTES + 1 }
-    await expect(store.ensureUploaded(oversized, { ...CONNECTION, protocol }, POLICY))
+    await expect(store.ensureUploaded(oversized, CONNECTION, POLICY))
       .rejects.toMatchObject({ code: 'INVALID_REQUEST', message: 'DeepSeek image exceeds the 32 MiB per-image limit.' })
     expect(fetchImpl).not.toHaveBeenCalled()
   })
@@ -329,9 +334,8 @@ describe('DeepSeekFileStore', () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-file-store-'))
     roots.push(dir)
     const fetchImpl = vi.fn(() => Promise.resolve(new Response(JSON.stringify({
-      id: 'file-api-wrong-size', object: 'file', bytes: 2, created_at: NOW / 1_000,
-      filename: 'dsh-wrong.png', purpose: 'user_data',
-      expires_at: NOW / 1_000 + POLICY.expiresAfterSeconds,
+      id: 'file-api-wrong-size', type: 'file', size_bytes: 2, created_at: new Date(NOW).toISOString(),
+      filename: 'dsh-wrong.png', mime_type: 'image/png',
     }), { status: 200 }))) as typeof fetch
     const store = new DeepSeekFileStore({
       index: new DeepSeekUploadIndex(join(dir, 'index.json')),
@@ -377,7 +381,7 @@ describe('DeepSeekFileStore', () => {
     })
   })
 
-  it('reuses local expires_at above the refresh margin and uploads again at the margin', async () => {
+  it('reuses the local expiry above the refresh margin and uploads again at the margin', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-file-store-'))
     roots.push(dir)
     const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
@@ -418,7 +422,7 @@ describe('DeepSeekFileStore', () => {
     vi.spyOn(index, 'commit').mockResolvedValue({
       accepted: false,
       record: {
-        scope: deepSeekFileScope(CONNECTION.baseURL, CONNECTION.apiKey),
+        scope: deepSeekFileScope(`${CONNECTION.baseURL}/v1`, JSON.stringify(Object.entries(CONNECTION.headers))),
         attachmentId: VERSION.attachment.attachmentId,
         variantId: VERSION.variantId,
         fileId: DeepSeekFileId('file-api-winner'),
@@ -452,22 +456,20 @@ describe('DeepSeekFileStore', () => {
           error: { message: 'stored file quota exceeded', code: 'file_quota' },
         }), { status: 400 }))
         return Promise.resolve(new Response(JSON.stringify({
-          id: 'file-api-recovered', object: 'file', bytes: 3, created_at: NOW / 1_000,
-          filename: 'dsh-recovered.png', purpose: 'user_data',
-          expires_at: NOW / 1_000 + POLICY.expiresAfterSeconds,
+          id: 'file-api-recovered', type: 'file', size_bytes: 3, created_at: new Date(NOW).toISOString(),
+          filename: 'dsh-recovered.png', mime_type: 'image/png',
         }), { status: 200 }))
       }
       if (init?.method === 'DELETE') {
         return Promise.resolve(new Response(JSON.stringify({
-          id: 'file-api-old', object: 'file', deleted: true,
+          id: 'file-api-old', type: 'file_deleted',
         }), { status: 200 }))
       }
-      expect(new URL(requestUrl(input)).pathname).toBe('/files')
+      expect(new URL(requestUrl(input)).pathname).toBe('/v1/files')
       return Promise.resolve(new Response(JSON.stringify({
-        object: 'list',
         data: [{
-          id: 'file-api-old', object: 'file', bytes: 3, created_at: NOW / 1_000,
-          filename: 'dsh-old.png', purpose: 'user_data',
+          id: 'file-api-old', type: 'file', size_bytes: 3, created_at: new Date(NOW).toISOString(),
+          filename: 'dsh-old.png', mime_type: 'image/png',
         }],
         first_id: 'file-api-old', last_id: 'file-api-old', has_more: false,
       }), { status: 200 }))
@@ -492,10 +494,9 @@ describe('DeepSeekFileStore', () => {
         error: { message: 'file count quota exceeded', code: 'file_quota' },
       }), { status: 400 }))
       return Promise.resolve(new Response(JSON.stringify({
-        object: 'list',
         data: [{
-          id: 'file-api-foreign', object: 'file', bytes: 3, created_at: NOW / 1_000,
-          filename: 'foreign.png', purpose: 'user_data',
+          id: 'file-api-foreign', type: 'file', size_bytes: 3, created_at: new Date(NOW).toISOString(),
+          filename: 'foreign.png', mime_type: 'image/png',
         }],
         has_more: false,
       }), { status: 200 }))
@@ -518,20 +519,19 @@ describe('DeepSeekFileStore', () => {
       if (init?.method === 'DELETE') {
         const id = target.pathname.split('/').at(-1) ?? ''
         deleted.add(id)
-        return new Response(JSON.stringify({ id, object: 'file', deleted: true }), { status: 200 })
+        return new Response(JSON.stringify({ id, type: 'file_deleted' }), { status: 200 })
       }
-      const after = target.searchParams.get('after')
+      const after = target.searchParams.get('after_id')
       if (after !== null && deleted.has(after)) throw new Error('deleted cursor cannot be reused')
       const id = after === null ? 'file-api-oldest' : 'file-api-next'
       return new Response(JSON.stringify({
-        object: 'list',
         data: [{
           id,
-          object: 'file',
-          bytes: 3,
-          created_at: NOW / 1_000,
+          type: 'file',
+          size_bytes: 3,
+          created_at: new Date(NOW).toISOString(),
           filename: `dsh-${id}.png`,
-          purpose: 'user_data',
+          mime_type: 'image/png',
         }],
         first_id: id,
         last_id: id,
@@ -556,12 +556,12 @@ describe('DeepSeekFileStore', () => {
       const fetchImpl = vi.fn((input: string | URL | Request, init?: RequestInit) => {
         if (init?.method === 'DELETE') {
           const id = requestUrl(input).split('/').at(-1)
-          return Promise.resolve(new Response(JSON.stringify({ id, object: 'file', deleted: true }), { status: 200 }))
+          return Promise.resolve(new Response(JSON.stringify({ id, type: 'file_deleted' }), { status: 200 }))
         }
         page += 1
         const lastId = mode === 'missing' ? undefined : 'file-api-same'
         return Promise.resolve(new Response(JSON.stringify({
-          object: 'list', data: [], has_more: true,
+          data: [], has_more: true,
           ...lastId === undefined ? {} : { last_id: lastId },
         }), { status: 200 }))
       }) as typeof fetch

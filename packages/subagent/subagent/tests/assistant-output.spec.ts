@@ -26,15 +26,13 @@ function toolResult(text: string): SessionEvent {
     type: 'tool/result',
     data: {
       message: {
-        content: [{
-          type: 'tool-result',
-          toolCallId: 'call-1',
-          content: [{ type: 'text', text }],
-          isError: false,
-        }],
+        role: 'tool',
+        toolCallId: 'call-1',
+        content: [{ type: 'text', text }],
+        isError: false,
       },
     },
-  } as SessionEvent
+  } as unknown as SessionEvent
 }
 
 describe('finalAssistantOutput', () => {

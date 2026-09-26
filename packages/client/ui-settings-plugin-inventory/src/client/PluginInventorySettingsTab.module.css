@@ -27,9 +27,15 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
+.statusWithDot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .failure button {
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   padding: 4px 10px;
   background: transparent;
   color: var(--dsw-alias-label-primary);
@@ -61,7 +67,7 @@
   width: 100%;
   height: 36px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-md);
   padding: 0 34px 0 36px;
   outline: none;
   background: var(--dsw-alias-bg-layer-1);
@@ -75,8 +81,8 @@
 }
 
 .search input:focus-visible {
-  border-color: var(--dsw-alias-state-business-primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent);
+  border-color: var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)) 18%, transparent);
 }
 
 .catalogHeading {
@@ -112,15 +118,13 @@
 .card {
   min-width: 0;
   overflow: hidden;
-  border: 0;
-  box-shadow: var(--dsw-elevation-stroke);
-  border-radius: 14px;
-  background: var(--dsw-alias-bg-layer-3);
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke);
+  border-radius: var(--dsw-radius-xl);
+  background: var(--dsw-alias-settings-card-fill);
 }
 
 .card[data-open='true'] {
-  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
-  box-shadow: var(--dsw-elevation-panel);
+  border-color: var(--dsw-alias-border-l3);
 }
 
 .cardContent {
@@ -145,7 +149,7 @@
 }
 
 .cardContent:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }
 
@@ -172,13 +176,20 @@
   font-weight: 600;
 }
 
+/* The Loader entry id keeps one size in the card subtitle and the row it expands into;
+   the collapsed subtitle stays on the quieter label tier, while the expanded row carries
+   the card's primary value. */
+.cardIdentity,
+.entryValue {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .cardIdentity {
   display: block;
   width: 100%;
   color: var(--dsw-alias-label-tertiary);
-  font-family: var(--ds-font-family-code);
-  font-size: 11px;
-  line-height: 16px;
 }
 
 .cardTrailing {
@@ -233,7 +244,7 @@
 }
 
 .groupToggle:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
@@ -276,7 +287,7 @@
   height: 36px;
   white-space: nowrap;
   border: none;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   padding: 0 14px;
   background: var(--dsw-alias-bg-module-platform);
   color: var(--dsw-alias-label-primary);
@@ -291,7 +302,7 @@
 }
 
 .switcher:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
@@ -315,7 +326,7 @@
 
 .brokenNote {
   margin: 0;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-lg);
   padding: 8px 10px;
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
   color: var(--dsw-alias-state-error-primary);
@@ -377,9 +388,6 @@
   display: block;
   overflow-wrap: anywhere;
   color: var(--dsw-alias-label-primary);
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 18px;
 }
 
 .details {

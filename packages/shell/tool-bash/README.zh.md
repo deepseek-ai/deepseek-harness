@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-bash` 让 agent（智能体）运行一次性 `bash` 命令，并接收 stdout、stderr 与退出标记。每次调用都使用全新 shell，因此 cwd、变量和函数不会保留；`run_in_background` 可启动长时间运行的工作，agent 能用 `job_output` 检查、用 `job_kill` 停止。命令会收到受管 `DSH_*` 环境；沙箱拒绝后，可携带更宽的 `sandbox_permissions`、一句 `justification` 并经用户批准重试一次。非零退出会作为结果报告，因此由 agent 决定如何响应；请使用 `dsh-bash-local` 或 `dsh-bash-sandbox` 等执行器，并加载 `dsh-shell-env`。
+`dsh-tool-bash` 运行 Bash 命令并返回 stdout、stderr 与退出标记。每次调用使用全新 shell；cwd、变量和函数不会保留。组合中有 job 注册表时，每条命令从启动起就是一个 job：`run_in_background` 立即返回 id，超过超时仍在运行的前台命令返回同一个 id，`job_output`/`job_kill` 收集并停止它。命令获得受管 `DSH_*` 环境；沙箱拒绝可携带更宽的 `sandbox_permissions`、一句 `justification` 与用户批准重试一次。非零退出是供 agent（智能体）解读的结果。请将 `dsh-bash-local` 或 `dsh-bash-sandbox` 等执行器与 `dsh-shell-env` 一起挂载。
 
 ## 目录
 
@@ -41,11 +41,12 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-tool-jobs'
 ```
 
-唯一的配置字段用于开关后台支持。
+配置字段决定后台能力面。
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `enableRunInBackground` | `true` | 暴露 `run_in_background`；为 `false` 时拒绝强制后台调用 |
+| `enableRunInBackground` | `true` | 组合中有 job 注册表时暴露 `run_in_background`；为 `false` 时拒绝强制后台调用 |
+| `promoteOnTimeout` | `true` | 到达超时的前台命令继续作为它的后台任务运行，而不是杀掉它 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-bash)是每个受支持字段及其 JSDoc 的穷尽式真源；生成的[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-bash)携带完整参数 schema。
 
@@ -56,11 +57,15 @@ kind: "package-reference"
 <a id="running-long-commands-in-the-background"></a>
 ### 后台运行长时间命令
 
-传入 `run_in_background: true` 会准入任务并立即返回 job id；限制准备可能仍在进行，且不设后台执行超时。进程可用前输出为空。任务取消会中止准备并停止随后返回的进程；启动失败使已准入任务以失败状态结算。agent 用 `job_output` 读取输出（除非 `wait: true`，否则非阻塞）、用 `job_list` 列出任务、用 `job_kill` 停止任务；完成的任务会在会话内通知拥有它的 agent。后台支持需要挂载通用任务运行时（`dsh-jobs-local`）及其控制工具（`dsh-tool-jobs`）。
+传入 `run_in_background: true` 会准入任务并立即返回 job id；限制准备可能仍在进行，且不设后台执行超时。进程可用前输出为空。任务取消会中止准备并停止随后返回的进程；启动失败使已准入任务以失败状态结算。agent 用 `job_output` 读取输出（除非 `wait: true`，否则非阻塞）、用 `job_list` 列出任务、用 `job_kill` 停止任务；完成的任务会在会话内通知拥有它的 agent。后台支持需要挂载通用任务运行时（`dsh-jobs-local`）及其控制工具（`dsh-tool-jobs`）。后台 job 把运行的非消费 `observed` 读取器交给 job 注册表作为拉式源；注册表按自己的节奏（`dsh-jobs-local` 的 `pumpPollMs`）把它们泵入 job 的输出环，Web 客户端由此流式看到实时输出，模型的 `job_output` 读取则经另一个游标消费同一份字节。读取器抛错只记录一次，该流就此停止，job 继续跑到自己的结算。输出环是尽力而为的实时预览：stdout 与 stderr 按轮询轮次复制，同一个轮询窗口内两条流的写入会先 stdout 后 stderr 出现，而不是按写入顺序。
+
+### 前台命令即任务
+
+组合中有 job 注册表时，前台命令一启动就登记到 `ctx.jobs`，调用等待该任务：命令在运行期间始终被列出、经 `job.list` 与 `job.follow` 流式观看，并可从 Web 任务列表停止。在超时内完成的命令返回普通前台结果，其任务记录随结果一起离开注册表，模型从不看到 id。超过超时仍在运行的命令继续作为它本来就是的那个任务运行，调用返回 `[still running after <timeoutMs>ms; moved to background job <id>]` 加任务交接指引，并以一次消费式读取带上目前为止的输出——`job_output` 恰好从此处接续。来自调用之外的杀停（人在界面上停止任务）会让前台结果在信号标记之前带上 `[stopped: <reason>]`，模型读到的是原因而不是命令失败；取消调用本身则杀掉任务。登记是尽力而为的：`promoteOnTimeout: false`、缺少 job 注册表，或注册表在启动时拒绝该任务（持有者的任务上限、没有控制器）都会改为在执行器的 deadline 杀下运行命令，`timeoutMs` 参数描述也只在交接语义成立时才宣传它。
 
 ### 沙箱执行与升权
 
-当已挂载的执行器约束命令（例如 `dsh-bash-sandbox`）时，被阻止的文件操作会报告为 `[sandbox: file access denied under <mode> mode]`——这是策略拒绝，不是命令失败。模型随后可以在同一轮次中用 `sandbox_permissions`（满足需要的最窄更宽模式）与一句 `justification` 重试完全相同的命令一次；该重试引发的审批提示就是用户同意的方式。升权绝不能预先推测：没有真实拒绝依据的请求，或没有严格宽于当前模式的请求，都会直接失败且不执行任何操作；被拒绝的升权对该命令即为最终结果。
+当已挂载的执行器约束命令（例如 `dsh-bash-sandbox`）时，被阻止的文件操作会报告为 `[sandbox: file access denied under <mode> mode]`——这是策略拒绝，不是命令失败。模型随后可以在同一轮次中用 `sandbox_permissions`（满足需要的最窄更宽模式）与一句 `justification` 重试完全相同的命令一次；该重试引发的审批提示就是用户同意的方式。只有发生真实拒绝后才请求更宽权限；被拒绝的升权对该命令即为最终结果。重复当前模式无需审批即可执行，更窄目标则在执行前失败。未提供 `sandbox_permissions` 时，`justification` 可以省略、为空字符串或仅含空白；未指定模式却提供非空理由会被拒绝。重复当前生效模式时也可省略理由或提供空白理由。请求不同模式时必须提供非空理由；升权仍需审批。
 
 ### 可能出什么问题
 
@@ -81,14 +86,14 @@ kind: "package-reference"
 - **shell seam 的模型侧消费方。** 本工具是 bash 能力的消费方角色：它注册 `bash` schema、渲染结果并解析每次调用的策略，进程机制归执行器 seam 所有。
 - **请求只来自命名参数。** 工具从不暴露 `stdin`、`env` 或 `stdoutMaxBytes`；它只用命令／workdir／超时／信号字段加上注册表收集的 `dshEnv` 构建每个请求，因此模型提供的键无法替换受管值。
 - **非零退出只报告、不失败。** 只有基础设施故障（spawn 错误、中止）才会作为工具错误暴露；模型解读退出码与标记。
-- **后台工作归任务运行时。** 后台调用把进程句柄注册到 `ctx.jobs`；job id、所有权、完成通知与释放都是运行时的职责，本工具只把 bash 退出与沙箱事实映射为任务输出。
+- **组合了任务运行时，每条命令都归它。** 调用一启动就把进程句柄注册到 `ctx.jobs`，无论是模型要求后台还是工具在等待它；job id、所有权、完成通知与释放都是运行时的职责，本工具只把 bash 退出与沙箱事实映射为任务输出。没有注册表时工具只做前台，并随注册表的出现与消失在两种注册之间切换。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：工具注册、提示词区段、参数校验、升权、请求组装 |
-| [`src/background.ts`](src/background.ts) | 管理异步 shell 准备，并将进程结算映射为任务结果 |
+| [`src/background.ts`](src/background.ts) | 管理异步 shell 准备、将进程结算映射为任务结果，并把输出环读取渲染为进程读取 |
 | [`src/render.ts`](src/render.ts) | 模型侧结果文本：流、标记、截断通知 |
 | — | 不发布运行时不变式伴生入口；环境注册表在每次变更和读取时校验所有权及收集值，且不发布可供伴生入口交叉核对的独立快照；执行关系由能力 seam 负责。 |
 
@@ -146,7 +151,7 @@ Check the [exit code: N] marker on every bash result; investigate failures befor
 
 #### 模型看到什么
 
-模型会看到生成的 [`bash` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-bash)。仅当本生产方启用 `run_in_background` 时，该字段才会出现；仅当已挂载执行器声明支持沙箱时，`sandbox_permissions` 和 `justification` 才会出现。按 agent 作用域限制工具可以移除该 agent 的定义。
+模型会看到生成的 [`bash` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-bash)。仅当本生产方启用 `run_in_background` 且组合中有 job 注册表时，该字段才会出现；仅当已挂载执行器声明支持沙箱时，`sandbox_permissions` 和 `justification` 才会出现；理由字段提示模型使用用户当前提问的语言。按 agent 作用域限制工具可以移除该 agent 的定义。
 
 #### Token 影响
 
@@ -160,7 +165,7 @@ Check the [exit code: N] marker on every bash result; investigate failures befor
 
 #### 模型看到什么
 
-renderer 输出依数据而定的 stdout 尾部，再输出可选的 `[stderr]` 和 stderr 尾部。没有输出时，它精确输出 `(no output)`。条件行精确为 `[output truncated; full output: <path-or-(unavailable)>]`、`[sandbox: file access denied under <mode> mode]`、`[timed out after <timeoutMs>ms]`、`[killed by signal: <signal>]` 与 `[exit code: <exitCode>]`；沙箱升权与 runner 故障行原文列于 [`dsh-bash-sandbox`](../bash-sandbox/README.zh.md)。
+renderer 输出依数据而定的 stdout 尾部，再输出可选的 `[stderr]` 和 stderr 尾部。没有输出时，它精确输出 `(no output)`。条件行精确为 `[output truncated; full output: <path-or-(unavailable)>]`、`[sandbox: file access denied under <mode> mode]`、`[timed out after <timeoutMs>ms]`、`[stopped: <reason>]`、`[killed by signal: <signal>]` 与 `[exit code: <exitCode>]`；沙箱升权与 runner 故障行原文列于 [`dsh-bash-sandbox`](../bash-sandbox/README.zh.md)。
 
 #### Token 影响
 
@@ -207,7 +212,8 @@ renderer 输出依数据而定的 stdout 尾部，再输出可选的 `[stderr]` 
 
 - **回放的退出 pill 从结果文本解析**——输出最后一行恰好是 `[exit code: N]` / `[killed by signal: …]` 时，会话回放会显示错误的 pill 并从卡片正文丢失该行，因为解析把它当作要消费的标记；这是仅影响显示的已知残留。
 - **`bash` 工具不参与 `timeout-policy` 预算**——它保留执行器自有的 `BASH_TIMEOUT` 路径，见[工具调用超时策略 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-07-tool-call-timeout-policy.zh.md)。
-- **后台进程没有执行器超时**——工作不再需要时，调用方必须使用 `job_kill`，或依赖持有者／服务的释放。
+- **后台进程没有执行器超时**——工作不再需要时，调用方必须使用 `job_kill`，或依赖持有者／服务的释放；登记为任务的前台命令同样没有，它的超时只限定等待时长。
+- **任务列表会显示每条运行中的前台命令**——完成的命令随结果离开，但 Web 任务列表尚未标出哪些运行中的行仍有工具调用在等待。
 
 <a id="dev-note"></a>
 ### 开发备注

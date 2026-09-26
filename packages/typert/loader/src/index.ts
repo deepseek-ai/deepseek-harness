@@ -273,6 +273,11 @@ function requireStrictCodec(pkgName: string, value: unknown, subject: string): v
     throw new Error(`typert-loader: ${pkgName} ${subject} must use a strict codec`)
   }
   requireString(pkgName, codec, 'typeSymbol', subject)
+  for (const method of ['decode', 'encode']) {
+    if (codec[method] !== undefined && typeof codec[method] !== 'function') {
+      throw new Error(`typert-loader: ${pkgName} ${subject} ${method} must be a function`)
+    }
+  }
   if (typeof codec.create !== 'function') {
     throw new Error(`typert-loader: ${pkgName} ${subject} has no create() factory`)
   }

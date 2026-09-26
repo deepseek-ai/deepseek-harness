@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-06-host-backed-web-preferences.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-06-host-backed-web-preferences.md
-2026-08-06-host-backed-web-preferences.md: 4ccd5cfe092e01fb266d51d5fc84b7cf1556214c
-2026-08-06-host-backed-web-preferences.zh.md: fbfdda432821eba1d32cab781340fd5f7802c61d
+/agent-note-persist-web-user-preferences-through-host-settings:
+  en: da28d8677a4d9f9c
+  zh: a5311ab734f576d3
+/agent-note-persist-web-user-preferences-through-host-settings/problem:
+  en: 18b583ecb58b9e06
+  zh: 55570d758b75852a
+/agent-note-persist-web-user-preferences-through-host-settings/decision:
+  en: 2846c0d0f8615da7
+  zh: 511d61ea4ea6efa6
+/agent-note-persist-web-user-preferences-through-host-settings/alternatives-considered:
+  en: a91ebb47ec1ee356
+  zh: d5ce0b7f48195093
+/agent-note-persist-web-user-preferences-through-host-settings/consequences:
+  en: 7defab72acfd5e78
+  zh: 566cbbd3eb3cd9e3

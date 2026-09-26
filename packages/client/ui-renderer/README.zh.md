@@ -1,5 +1,5 @@
 ---
-description: "浏览器 UI 渲染器：React slot 绑定、ctx.uiRenderer 与 dsh Web 客户端组装后的应用根。"
+description: "浏览器 UI 渲染器：普通 Slot 与可复用 Component Factory 的 React 绑定、ctx.uiRenderer 与组装后的 dsh Web 应用根。"
 kind: "package-reference"
 ---
 
@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 对业务插件
 
-业务插件通过 slot 系统注册组件；渲染器在 outlet 处把运行时的会话与 Workspace observable source 绑定为 selector 钩子。插件通过其组合 props 收到标准会话 props（session id、对话快照钩子）——它绝不导入渲染器，也不触碰 React 内部机制。
+业务插件注册普通 Slot entry 或可复用 Component Factory；渲染器在渲染位置把运行时的会话与 Workspace observable source 绑定为 selector 钩子。插件通过推导出的 Component props 收到标准 scope props——它绝不导入渲染器，也不触碰 React 内部机制。每个由 renderer 创建的 Component 都能渲染 Factory occurrence，Factory 也能暴露由调用方选择的局部 Component，而无需在包之间共享实现值。
 
 -----
 
@@ -51,7 +51,7 @@ kind: "package-reference"
 
 ### Slot 绑定
 
-`createSlotRenderer` 把 slot 注册表连接到 React：条目列表成为响应式 source，每个 outlet 经已安装的渲染器渲染。业务插件通过带类型的 slot `hooks` 传递裸 observable source；渲染器经 uSES 适配器在 outlet 处完成绑定。
+`createSlotRenderer` 把 slot 注册表连接到 React：普通 entry list 与 Factory definition 成为响应式 source，每个 outlet 或 occurrence 经已安装的渲染器渲染。业务插件通过带类型的 `hooks` 传递裸 observable source；渲染器经 uSES 适配器在渲染位置完成绑定。Factory Store factory 保持 lazy，直到 occurrence 首次物化时才创建 handle；其 exclusive handle 拒绝持久化，渲染期记录保持弱引用，幂等 effect 仅强引用 mounted occurrences，同时在 effect replay 期间保留 identity。Factory 错误使用普通监督通道且不会 abdicate 共享 definition：definition 及其 fallback 局部 Component 的失败归属 definition，调用方所选局部 Component 的失败归属调用方 registration，每个边界随自身 scope incarnation 重置。
 
 ### 身份
 
@@ -71,6 +71,7 @@ React、React DOM、Cordis、ui-slots 与 ui-primitives 通过 Web 外壳的静�
 - [ui-session](../ui-session/README.zh.md)——提供本渲染器所绑定标准会话 source 与钩子的适配器。
 - [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——加载链、对象层与分层红线。
 - [slot 系统标准](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.zh.md)——权威组合模型。
+- [Component Factory](../../../.agents/notes/implemented/architecture/2026-09-10-component-factories-and-local-slots.zh.md)——可复用 definitions、局部 Component 选择与 occurrence 生命周期。
 
 -----
 

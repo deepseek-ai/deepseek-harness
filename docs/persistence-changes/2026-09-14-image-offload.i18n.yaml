@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-14-image-offload.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-09-14-image-offload.md
-2026-09-14-image-offload.md: 1d4f47f5a25cc9dd39ad16f111af7f30d906a297
-2026-09-14-image-offload.zh.md: b184b32e96d04a425eda6faf9f5d50f815a9c32a
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-09-14-image-offload:
+  en: 7628bc0bd8620f3d
+  zh: 3fc5d55ce02d199c
+/2026-09-14-image-offload/summary:
+  en: 798e2d62e41e244c
+  zh: 49cbb41d2f8e0760
+/2026-09-14-image-offload/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-09-14-image-offload/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-09-14-image-offload/compatibility:
+  en: 746db8940f232b0a
+  zh: 1cf1e720bdb4bbb9
+/2026-09-14-image-offload/verification:
+  en: e9e881607a71fba6
+  zh: 8f6eb03617cd6133
+/2026-09-14-image-offload/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

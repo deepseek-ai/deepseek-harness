@@ -79,13 +79,17 @@ files:
 
 ### 分析与 face
 
-Host 与 Client 是两个独立的 TypeScript 程序。直接项目引用确定编译器 face 的成员归属，`dsh.client` 包子路径则确定运行时 face 的贡献；`package.json#exports` 划定所有跨包公开边界，跨 face 的边只能来自导入或重新导出。解析到本包内部模块的相对导入会沿该模块的重新导出继续追踪，直到出现包说明符，因此包内转发模块保留原始声明引用；解析到其他包的相对导入会失败。`check` 模式遇到语法或语义诊断、缺失的公开类型标注、跨包私有引用，以及模型无法无损保留的可达声明合并时都会失败；`write` 模式插入类型检查器推导出的标注，并返回无诊断的 check 模式模型。NPM 依赖拥有的类型继续以 `external` 引用表示，不会被展开。
+Host 与 Client 是两个独立的 TypeScript 程序。直接项目引用确定编译器 face 的成员归属，`dsh.client` 包子路径则确定运行时 face 的贡献；`package.json#exports` 划定所有跨包公开边界，跨 face 的边只能来自导入或重新导出。解析到本包内部模块的相对导入会沿该模块的重新导出继续追踪，直到出现包说明符，因此包内转发模块保留原始声明引用；解析到其他包的相对导入会失败。`check` 模式遇到语法或语义诊断、缺失的公开类型标注、跨包私有引用，以及模型无法无损保留的可达声明合并时都会失败；`write` 模式插入类型检查器推导出的标注，并返回无诊断的 check 模式模型。NPM 依赖拥有的类型继续以 `external` 引用表示，不会被展开。流方法的返回类型可以是 `Iterable<Out>`、`AsyncIterable<Out>` 或协议包的 `RemoteStream<Out, In>`，后者与标准库包装器一样按符号名与声明所在包识别；第二个类型参数不为 `never` 时产出描述符的上行编解码器，生成的 Client 签名则返回 `RemoteStreamHandle<Out, In>`。
 
 ### 生成与发布约定
 
 `FaceModelEmitter` 输出包含只缓存成功结果的 Zod schema factory 与 `TYPERT` 贡献的可执行 JavaScript，以及把 factory 通过包的公开导出标注为返回 `z.ZodType<SourceType>` 的声明文件；不支持的 Zod 投影会失败。含 Remote 方法的 Host face 还会额外为 Client 生成 Host Remote 约定的 `typert.remote-client.*` 投影。`WorkspaceTypertGenerator` 校验每个贡献方的 `package.json`：`./typert` 与 `./client/typert`（存在 Remote 方法时还有 `./remote`）必须指向精确的生成文件，且 `files` 清单必须包含它们。
 
+[一元二进制结果](../protocol/README.zh.md)在泛型类型解析后被识别。其 codec 校验字节数组类型与 JSON 元数据，不遍历、复制或冻结字节载荷；生成的 Client 声明保留原有元数据类型，并将字节的底层缓冲区收窄为 `ArrayBuffer`。
+
 ### 目录投影
+
+运行时类型闭包索引导出的 workspace 声明和被引用的框架 enum。Vendor 声明不参与业务 API 发现；公共结果引用其中 enum 时，目录仍提供其定义。
 
 根导出包含本仓库 Cordis 目录使用的模型驱动提取逻辑、完整性检查与确定性文本渲染器。它们接受 `CordisCatalogPolicy`；由仓库持有的类型链接、基础类型／豁免分类与继承的 Cordis 条目仍位于 `scripts/gen-cordis-catalog.ts`，由调用方显式传入，因此本包只包含投影机制，不会隐式复制仓库的文档分类体系。
 

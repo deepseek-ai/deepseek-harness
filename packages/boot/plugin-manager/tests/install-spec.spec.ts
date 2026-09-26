@@ -17,11 +17,16 @@ describe('parseInstallSpec', () => {
     expect(parseInstallSpec('/packs/dsh-x-1.0.0.tgz')).toEqual({ kind: 'tarball', spec: '/packs/dsh-x-1.0.0.tgz', path: '/packs/dsh-x-1.0.0.tgz' })
   })
 
-  it('reads git hosts and tarball URLs', () => {
-    for (const spec of ['github:someone/dsh-plugin', 'gitlab:a/b#main', 'git+ssh://git@github.com/a/b.git', 'git://host/a/b', 'git@github.com:a/b.git', 'https://github.com/a/b', 'https://github.com/a/b.git#v1']) {
-      expect(parseInstallSpec(spec)).toEqual({ kind: 'git', spec })
+  it('reads git hosts and tarball URLs, naming the host the spec itself is fetched from', () => {
+    const hosts: Record<string, string> = {
+      'github:someone/dsh-plugin': 'github.com', 'gitlab:a/b#main': 'gitlab.com', 'bitbucket:a/b': 'bitbucket.org', 'gist:0123abcd': 'gist.github.com',
+      'git+ssh://git@github.com/a/b.git': 'github.com', 'git://host/a/b': 'host', 'git@github.com:a/b.git': 'github.com',
+      'https://github.com/a/b': 'github.com', 'https://github.com/a/b.git#v1': 'github.com', 'git+https://Git.Example.com:8443/a/b.git': 'git.example.com:8443',
     }
-    expect(parseInstallSpec('https://cdn.example.com/x/y/z/dsh-x-1.0.0.tgz')).toEqual({ kind: 'tarball', spec: 'https://cdn.example.com/x/y/z/dsh-x-1.0.0.tgz' })
+    for (const [spec, host] of Object.entries(hosts)) {
+      expect(parseInstallSpec(spec)).toEqual({ kind: 'git', spec, host })
+    }
+    expect(parseInstallSpec('https://cdn.example.com/x/y/z/dsh-x-1.0.0.tgz')).toEqual({ kind: 'tarball', spec: 'https://cdn.example.com/x/y/z/dsh-x-1.0.0.tgz', host: 'cdn.example.com' })
   })
 
   it('refuses what neither the registry nor pnpm would take, naming why', () => {
@@ -51,6 +56,10 @@ describe('parseInstallSpec', () => {
 })
 
 describe('classifyInstallFailure', () => {
+  it.each([401, 403, 404])('leaves Git HTTP %s responses out of connection recovery', (status) => {
+    expect(classifyInstallFailure({ log: `fatal: unable to access 'https://github.com/acme/private.git/': The requested URL returned error: ${String(status)}` })).toBe('unknown')
+  })
+
   it('names the run\'s end before reading its output, then the most specific code in the output', () => {
     expect(classifyInstallFailure({ log: 'ENOSPC', timedOut: true })).toBe('timeout')
     expect(classifyInstallFailure({ log: '', cause: Object.assign(new Error('spawn pnpm ENOENT'), { code: 'ENOENT' }) })).toBe('pnpm-missing')
@@ -65,6 +74,9 @@ describe('classifyInstallFailure', () => {
     expect(classifyInstallFailure({ log: 'ECONNRESET' })).toBe('network')
     expect(classifyInstallFailure({ log: 'ERR_PNPM_FETCH_502  GET https://registry/x: Bad Gateway' })).toBe('network')
     expect(classifyInstallFailure({ log: 'fatal: unable to access https://github.com/a/b/: Could not resolve host' })).toBe('network')
+    // An offline cache miss is no registry's failure, so it is not one another registry could change.
+    expect(classifyInstallFailure({ log: 'ERR_PNPM_NO_OFFLINE_META  Failed to resolve x@1 in package mirror' })).toBe('unknown')
+    expect(classifyInstallFailure({ log: 'npm error code FETCH_ERROR\nnpm error errno FETCH_ERROR' })).toBe('network')
     expect(classifyInstallFailure({ log: 'exited with 1', cause: new Error('no code') })).toBe('unknown')
     expect(classifyInstallFailure({ log: '' })).toBe('unknown')
   })

@@ -16,7 +16,7 @@ export const name = 'team-invariant'
 /** Invariant registry required by the companion. */
 export const inject = ['invariants']
 
-/** Validate candidate Team events against the projected committed prefix. */
+/** Validate candidate Team events against the projected committed prefix; `apply` never mutates the committed state. */
 const install: InvariantInstaller = Object.assign((ctx: Context, fail: InvariantFailure) => {
   ctx.on('internal/dispatch', (_mode, eventName, args) => {
     if (eventName !== 'session/event') return
@@ -24,7 +24,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
     /* v8 ignore next -- non-Team Session events have no Agent Teams invariant. */
     if (!isTeamEvent(event)) return
     const state = ctx.sessionProjections.stateOf(session, 'agentTeam') as TeamProjectionState
-    const candidate = teamProjectionDefinition.apply(structuredClone(state), event)
+    const candidate = teamProjectionDefinition.apply(state, event)
     if (candidate.failure !== undefined) {
       fail(`session event ${event.seq} violates the Agent Teams stream: ${candidate.failure}`)
     }

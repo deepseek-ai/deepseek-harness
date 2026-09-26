@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Auto Authorization Review",
+    "description": "Add an Auto review permission mode that uses the model to assess authorization before each tool call."
+  }
+}

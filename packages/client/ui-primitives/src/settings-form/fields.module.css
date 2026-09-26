@@ -1,0 +1,145 @@
+/* Settings form fields: label, control, override badge, and hint. */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+}
+
+.field + .field {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.labelGroup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.labelGroup > .label {
+  flex: 0 1 auto;
+}
+
+.helpButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.helpButton:hover,
+.helpButton[aria-expanded='true'] {
+  background: var(--dsw-alias-bg-layer-4);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.helpButton:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.help {
+  padding: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.help > p {
+  margin: 0;
+}
+
+.help > p + p {
+  margin-top: 8px;
+}
+
+.badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reset {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.reset:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+}
+
+.reset:disabled {
+  cursor: default;
+}
+
+.input {
+  height: 34px;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.input:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+.invalid {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}

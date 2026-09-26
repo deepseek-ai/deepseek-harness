@@ -1,50 +1,29 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "Reply with a one-sentence description" [disabled]
-  - img
+  - navigation "Session hierarchy": Reply with a one-sentence description
   - text: Standard mode
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
 - text: Reply with a one-sentence description of event sourcing, then stop. {{clock}}
-- button "Copy":
-  - img
-- button "Context injection @deepseek-ai/dsh-system-prompt":
-  - img
-  - img
-  - text: Context injection @deepseek-ai/dsh-system-prompt
-- paragraph: partial
+- button "Copy"
 - status: Deep diving...
+- button "Deep diving for {{duration}}" [disabled] [expanded]
+- paragraph: partial
 - button "2 queued messages" [disabled] [expanded]
 - list:
   - listitem:
     - text: Queue item to remove
-    - button "Edit queued message":
-      - img
-    - button "Remove queued message":
-      - img
-    - button "Steer queued message":
-      - img
+    - button "Edit queued message"
+    - button "Remove queued message"
+    - button "Steer queued message"
   - listitem:
     - textbox "Edit queued message": Edited queue item
-    - button "Save queued message":
-      - img
-    - tooltip "Save queued message"
-    - button "Cancel editing":
-      - img
+    - button "Save queued message"
+    - button "Cancel editing"
 - textbox "Cmd/Ctrl+Enter steers all queued messages"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Stop generating"

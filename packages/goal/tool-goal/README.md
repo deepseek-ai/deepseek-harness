@@ -109,12 +109,12 @@ The tools are the model-facing half of the goal surface; read these pages for th
 
 #### What the model sees
 
-A fixed goal policy says when semantic human intent warrants creation, requires exact read-before-update refs, explains rearming after resume/fork, and limits completion/blocking claims. Durable paused resume is rejected at execution with `GOAL_TOOL_RESUME_PAUSED`; the user-facing goal control owns that transition. The configured threshold is interpolated into that guidance.
+A fixed goal policy allows inferring goal intent in any language, explains rearming after resume/fork, and limits completion/blocking claims; creation scope and read-before-update refs live in the tool definitions. Durable paused resume is rejected at execution with `GOAL_TOOL_RESUME_PAUSED`; the user-facing goal control owns that transition. The configured threshold is interpolated into that guidance.
 
 ##### Goal policy
 
 ```markdown
-Use goal tools for one long-running completion objective in the current session. create_goal may infer goal intent from a direct human request in any language; do not create a goal for routine single-turn work. Call get_goal before update_goal and copy its exact goal_id and revision. After session resume or fork, an active goal is disarmed: when a human asks to continue or resume in any wording or language, use update_goal action resume to rearm it. Mark complete only when the objective is actually achieved. Mark blocked only after the same blocking condition persists for at least 3 consecutive goal rounds, and report that concrete condition in blocked_reason; difficulty, uncertainty, or useful remaining work is not blocked.
+create_goal may infer goal intent from a direct human request in any language. After session resume or fork, an active goal is disarmed: when a human asks to continue or resume in any wording or language, use update_goal action resume to rearm it. Mark complete only when the objective is actually achieved. Mark blocked only after the same blocking condition persists for at least 3 consecutive goal rounds, and report that concrete condition in blocked_reason; difficulty, uncertainty, or useful remaining work is not blocked.
 ```
 
 #### Token effect

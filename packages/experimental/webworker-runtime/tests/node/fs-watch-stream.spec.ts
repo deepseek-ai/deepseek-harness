@@ -301,7 +301,7 @@ describe('file streams', () => {
       once(event: string, listener: (...args: unknown[]) => void): unknown
       destroy(): unknown
     }
-    const streams = [nativeRead, nativeWrite, workerRead, workerWrite] as unknown as CloseableStream[]
+    const streams = [nativeRead, nativeWrite, workerRead, workerWrite] as CloseableStream[]
     const closed = streams.map(stream => new Promise<void>((resolve) => {
       stream.once('error', () => {})
       stream.once('close', () => { resolve() })

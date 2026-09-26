@@ -347,7 +347,8 @@ function mergePartitionRecords(
   const map = coverageLibrary.createCoverageMap({})
   for (const record of records) {
     if (canonicalize) canonicalizeEndOfLineColumns({ data: record })
-    map.merge(JSON.parse(JSON.stringify(record)) as unknown)
+    const serializedRecord: unknown = JSON.parse(JSON.stringify(record))
+    map.merge(serializedRecord)
   }
   return map.fileCoverageFor(CANONICALIZED_FILE)
 }

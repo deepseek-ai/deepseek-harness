@@ -2,11 +2,10 @@
  * Pure parsing and structural helpers for the bilingual-document pairing
  * gate. Kept separate from the CLI so corpus discovery and signature behavior
  * can be regression-tested without reading or mutating the repository tree.
- * Also the one home of the generated-region grammar and the pair-record
- * primitives, shared by the pairing gate and the region-injecting generators.
+ * Also the one home of the generated-region grammar, shared by the pairing
+ * gate and the region-injecting generators.
  */
 
-import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
@@ -25,102 +24,81 @@ const GENERATED_REGION_END_LINE = /^<!-- END GENERATED (\S+) -->$/
 /** Loose marker detector: any line that LOOKS like a region marker must parse as one. */
 const GENERATED_REGION_MARKER_HINT = /^<!-- (?:BEGIN|END) GENERATED /
 
+/** One generated region: its slug, marker line indices, and text (markers included). */
+export interface GeneratedRegion {
+  slug: string
+  /** Zero-based line index of the BEGIN marker. */
+  begin: number
+  /** Zero-based line index of the END marker. */
+  end: number
+  text: string
+}
+
 /**
- * Extract every generated region (markers included) and the document with
- * those regions removed. Regions are line-delimited: a marker occupies its
- * whole line, must be a complete well-formed marker, and the closing slug
- * must match the opener. The stripped form is what "human content" means for
- * the region-aware pair-record guard.
+ * Locate every generated region. Regions are line-delimited: a marker occupies
+ * its whole line, must be a complete well-formed marker, and the closing slug
+ * must match the opener.
  *
  * @param content - Full Markdown document text.
- * @returns The regions in document order and the region-free remainder.
+ * @returns The regions in document order.
  * @throws Error on an unopened END, unclosed BEGIN, nested BEGIN, malformed
  *   marker line, or a closing slug that does not match its opener.
  */
-export function partitionGeneratedRegions(content: string): { regions: string[]; stripped: string } {
+export function generatedRegions(content: string): GeneratedRegion[] {
   const lines = content.split('\n')
-  const regions: string[] = []
-  const kept: string[] = []
-  let open: { slug: string; lines: string[] } | null = null
-  for (const line of lines) {
+  const regions: GeneratedRegion[] = []
+  let open: { slug: string; begin: number } | null = null
+  for (const [index, line] of lines.entries()) {
     const begin = GENERATED_REGION_BEGIN_LINE.exec(line)
     if (begin?.[1]) {
       if (open) throw new Error('generated region BEGIN marker nested inside an open region')
-      open = { slug: begin[1], lines: [line] }
+      open = { slug: begin[1], begin: index }
       continue
     }
     const end = GENERATED_REGION_END_LINE.exec(line)
     if (end?.[1]) {
       if (!open) throw new Error('generated region END marker without a BEGIN')
       if (end[1] !== open.slug) throw new Error(`generated region END slug '${end[1]}' does not match its BEGIN slug '${open.slug}'`)
-      open.lines.push(line)
-      regions.push(open.lines.join('\n'))
+      regions.push({ ...open, end: index, text: lines.slice(open.begin, index + 1).join('\n') })
       open = null
       continue
     }
     if (GENERATED_REGION_MARKER_HINT.test(line)) {
       throw new Error(`malformed generated region marker line: ${JSON.stringify(line)}`)
     }
-    if (open) open.lines.push(line)
-    else kept.push(line)
   }
   if (open) throw new Error('generated region BEGIN marker without an END')
-  return { regions, stripped: kept.join('\n') }
+  return regions
 }
 
 /**
- * Full git blob hash of file content (what `git hash-object` prints).
- * @param content - Exact file bytes.
- * @returns The 40-hex-digit SHA-1 blob hash.
+ * Wrap generated Markdown in the marker lines of one region.
+ *
+ * @param slug - Region slug, unique within its page.
+ * @param body - Region content without markers.
+ * @returns The marker-delimited region text.
  */
-export function blobHash(content: Buffer): string {
-  const hash = createHash('sha1')
-  hash.update(`blob ${content.byteLength}\0`)
-  hash.update(content)
-  return hash.digest('hex')
+export function renderGeneratedRegion(slug: string, body: string): string {
+  return [`<!-- BEGIN GENERATED ${slug} -->`, body, `<!-- END GENERATED ${slug} -->`].join('\n')
 }
 
-const PAIR_META_LINE = /^([^:#]+\.md): ([0-9a-f]{40})$/
-
 /**
- * Parse a `foo.i18n.yaml` consistency record into basename → recorded blob
- * hash, or undefined when any non-comment line deviates from the exact
- * `<basename>.md: <40-hex>` format or repeats a key. Consumers must
- * additionally require exactly the two expected basenames — a renamed key is
- * a malformed record, never a silently-missing entry.
- * @param content - Sidecar file text.
- * @returns The recorded map, or undefined for a malformed record.
+ * Replace the one region in a page whose slug matches a freshly rendered region.
+ *
+ * @param content - The page's current full Markdown text.
+ * @param region - The rendered marker-delimited region.
+ * @returns The page text with that region replaced.
+ * @throws Error when the page does not contain exactly one region with that slug.
  */
-export function parsePairMeta(content: string): Map<string, string> | undefined {
-  const out = new Map<string, string>()
-  for (const line of content.split('\n')) {
-    if (line === '' || line.startsWith('#')) continue
-    const match = PAIR_META_LINE.exec(line)
-    if (!match?.[1] || !match[2]) return undefined
-    if (out.has(match[1])) return undefined
-    out.set(match[1], match[2])
+export function spliceGeneratedRegion(content: string, region: string): string {
+  const slug = generatedRegions(region)[0]?.slug
+  const matches = generatedRegions(content).filter(candidate => candidate.slug === slug)
+  const match = matches[0]
+  if (slug === undefined || matches.length !== 1 || match === undefined) {
+    throw new Error(`expected exactly 1 generated region '${slug ?? '?'}', found ${matches.length}; add its BEGIN/END markers once`)
   }
-  return out
-}
-
-/**
- * Render a `foo.i18n.yaml` consistency record.
- * @param source - Repo-relative English path.
- * @param sourceHash - Blob hash of the English side.
- * @param zh - Repo-relative Chinese path.
- * @param zhHash - Blob hash of the Chinese side.
- * @returns The exact sidecar file content.
- */
-export function renderPairMeta(source: string, sourceHash: string, zh: string, zhHash: string): string {
-  return [
-    '# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each',
-    '# side as of the last confirmed-consistent state. Both languages carry equal authority;',
-    '# after editing either side, bring the other along and re-record with:',
-    `#   pnpm run verify-translation-pairing --write ${source}`,
-    `${basename(source)}: ${sourceHash}`,
-    `${basename(zh)}: ${zhHash}`,
-    '',
-  ].join('\n')
+  const lines = content.split('\n')
+  return [...lines.slice(0, match.begin), region, ...lines.slice(match.end + 1)].join('\n')
 }
 
 /** Validated fields of `scripts/translation-pairing.manifest.json`. */
@@ -165,8 +143,7 @@ export const TRANSLATION_SCOPE_GLOB_EXCLUDES = [
   '**/.pytest_cache/**',
   'apps/web/dist/**',
   '.artifacts/**',
-  'python/sdk-runtime/src/deepseek_harness_runtime/runtime/deepseek-harness-sdk-runtime-*/**',
-  'python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/**',
+  'python/sdk-runtime/src/deepseek_harness_runtime/runtime/**',
   'vendor/**',
 ]
 
@@ -177,8 +154,7 @@ function isTranslationSourceExcluded(file: string): boolean {
       || segment.startsWith('.doc-typecheck-')
     || segment.startsWith('.node-next-types-'))
     || file.startsWith('apps/web/dist/')
-    || file.startsWith('python/sdk-runtime/src/deepseek_harness_runtime/runtime/deepseek-harness-sdk-runtime-')
-    || file.startsWith('python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/')
+    || file.startsWith('python/sdk-runtime/src/deepseek_harness_runtime/runtime/')
 }
 
 /** Whether one discovered Markdown or sidecar path belongs to the bilingual source corpus. */

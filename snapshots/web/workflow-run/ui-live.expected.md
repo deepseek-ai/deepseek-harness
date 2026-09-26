@@ -1,6 +1,2 @@
-- button "snapshot-flow 1 member Running" [expanded]:
-  - img
-  - text: snapshot-flow 1 member Running
-- button "Run 1 member Running 1":
-  - img
-  - text: Run 1 member Running 1
+- button "snapshot-flow 1 member Running" [expanded]
+- button "Run 1 member Running 1"

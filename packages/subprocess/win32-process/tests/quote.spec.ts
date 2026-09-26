@@ -42,8 +42,8 @@ describe.skipIf(!isWin32)('CommandLineToArgvW round-trip', () => {
     const lstrlenW = kernel32.func('__stdcall', 'lstrlenW', 'int', [PVOID])
     const localFree = kernel32.func('__stdcall', 'LocalFree', PVOID, [PVOID])
     const parse = (commandLine: string): string[] => {
-      const countSlot = koffi.alloc('int', 1) as unknown
-      const argvBlock = commandLineToArgvW(commandLine, countSlot) as unknown
+      const countSlot: unknown = koffi.alloc('int', 1)
+      const argvBlock: unknown = commandLineToArgvW(commandLine, countSlot)
       try {
         if (argvBlock === null) throw new Error('CommandLineToArgvW returned NULL')
         const count = koffi.decode(countSlot, 0, 'int') as number

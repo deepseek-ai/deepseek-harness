@@ -3,7 +3,7 @@
 # 1 ms zero-jitter retry policy as the live sibling. The app patch still
 # restates its whole config for raw JSONL persistence and the recorded model.
 - id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   disabled: true
 
 - id: agent-default-model

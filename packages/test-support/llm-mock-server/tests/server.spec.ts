@@ -18,24 +18,24 @@ async function start(
   return server
 }
 
-function chat(
+function messages(
   server: MockLlmServer,
   options: { path?: string; key?: string; body?: string; signal?: AbortSignal } = {},
 ): Promise<Response> {
-  return fetch(`${server.baseURL}${options.path ?? '/v1/chat/completions'}`, {
+  return fetch(`${server.baseURL}${options.path ?? '/v1/messages'}`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      ...options.key === undefined ? {} : { authorization: `Bearer ${options.key}` },
+      ...options.key === undefined ? {} : { 'x-api-key': options.key },
     },
     body: options.body ?? JSON.stringify({ model: 'mock', messages: [], stream: true }),
     ...options.signal === undefined ? {} : { signal: options.signal },
   })
 }
 
-function rawChat(server: MockLlmServer, chunks: readonly Buffer[]): Promise<void> {
+function rawMessages(server: MockLlmServer, chunks: readonly Buffer[]): Promise<void> {
   return new Promise((resolve, reject) => {
-    const outgoing = request(`${server.baseURL}/v1/chat/completions`, {
+    const outgoing = request(`${server.baseURL}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
     }, (response) => {
@@ -59,22 +59,22 @@ describe('mock LLM server wire behaviors', () => {
       onEvent: (event) => { events.push(event) },
     })
 
-    const response = await chat(server, { key: 'mock-key' })
+    const response = await messages(server, { key: 'mock-key' })
     const body = await response.text()
 
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toContain('text/event-stream')
-    expect(body).toContain('"content":"rec"')
-    expect(body).toContain('"content":"ove"')
-    expect(body).toContain('"content":"red"')
-    expect(body).toContain('"finish_reason":"stop"')
-    expect(body).toContain('data: [DONE]')
+    expect(body).toContain('"text":"rec"')
+    expect(body).toContain('"text":"ove"')
+    expect(body).toContain('"text":"red"')
+    expect(body).toContain('"stop_reason":"end_turn"')
+    expect(body).toContain('"type":"message_stop"')
     expect(server.requests).toEqual([expect.objectContaining({
       attempt: 1,
       behavior: 'success',
-      path: '/v1/chat/completions',
+      path: '/v1/messages',
       body: { model: 'mock', messages: [], stream: true },
-      chunksSent: 5,
+      chunksSent: 8,
       outcome: 'completed',
     })])
     expect(events).toEqual([
@@ -83,7 +83,7 @@ describe('mock LLM server wire behaviors', () => {
         attempt: 1,
         scriptBehavior: 'success',
         behavior: 'success',
-        path: '/v1/chat/completions',
+        path: '/v1/messages',
       },
       {
         type: 'result',
@@ -91,39 +91,39 @@ describe('mock LLM server wire behaviors', () => {
         scriptBehavior: 'success',
         behavior: 'success',
         outcome: 'completed',
-        chunksSent: 5,
+        chunksSent: 8,
       },
     ])
   })
 
-  it('supports root paths and intentionally ignores telemetry observer failures', async () => {
+  it('supports gateway prefixes and intentionally ignores telemetry observer failures', async () => {
     const server = await start(['empty'], {
       onEvent() {
         throw new Error('observer failed')
       },
     })
-    const response = await chat(server, { path: '/chat/completions' })
+    const response = await messages(server, { path: '/anthropic/v1/messages' })
 
     expect(response.status).toBe(200)
-    expect(await response.text()).toContain('data: [DONE]')
-    expect(server.requests[0]).toMatchObject({ path: '/chat/completions', outcome: 'completed' })
+    expect(await response.text()).toContain('"type":"message_stop"')
+    expect(server.requests[0]).toMatchObject({ path: '/anthropic/v1/messages', outcome: 'completed' })
   })
 
   it.each([
     ['empty_body', 0, ''] as const,
     ['stream_eof', 1, '"role":"assistant"'] as const,
-    ['partial_eof', 1, 'discarded partial response'] as const,
+    ['partial_eof', 3, 'discarded partial response'] as const,
     ['malformed_json', 2, 'data: {not-json'] as const,
-    ['malformed_event', 2, '"choices":[null]'] as const,
+    ['malformed_event', 2, '"content_block":null'] as const,
   ])('serves %s without inventing a terminal completion', async (behavior, chunks, marker) => {
     const server = await start([behavior], { chunkSize: 100 })
-    const response = await chat(server)
+    const response = await messages(server)
     const body = await response.text()
 
     expect(response.status).toBe(200)
     expect(body).toContain(marker)
     if (behavior !== 'malformed_json' && behavior !== 'malformed_event') {
-      expect(body).not.toContain('[DONE]')
+      expect(body).not.toContain('message_stop')
     }
     expect(server.requests[0]).toMatchObject({ behavior, chunksSent: chunks, outcome: 'completed' })
   })
@@ -137,7 +137,7 @@ describe('mock LLM server wire behaviors', () => {
 
     let headersReceived = false
     await expect((async () => {
-      const response = await chat(server)
+      const response = await messages(server)
       headersReceived = true
       await response.text()
     })()).rejects.toThrow()
@@ -145,7 +145,7 @@ describe('mock LLM server wire behaviors', () => {
     expect(headersReceived).toBe(receivesHeaders)
     expect(server.requests[0]).toMatchObject({
       behavior,
-      chunksSent: behavior === 'partial_disconnect' ? 1 : 0,
+      chunksSent: behavior === 'partial_disconnect' ? 3 : 0,
       outcome: 'reset',
     })
   })
@@ -153,7 +153,7 @@ describe('mock LLM server wire behaviors', () => {
   it('holds a stalled stream until the client aborts and server close remains idempotent', async () => {
     const server = await start(['stall'])
     const controller = new AbortController()
-    const response = await chat(server, { signal: controller.signal })
+    const response = await messages(server, { signal: controller.signal })
 
     expect(response.status).toBe(200)
     expect(server.requests[0]).toMatchObject({ behavior: 'stall', outcome: 'stalled' })
@@ -180,7 +180,7 @@ describe('mock LLM server wire behaviors', () => {
       },
     })
     const controller = new AbortController()
-    const response = await chat(server, { signal: controller.signal })
+    const response = await messages(server, { signal: controller.signal })
     controller.abort()
     await expect(response.text()).rejects.toThrow()
     await result.promise
@@ -197,7 +197,7 @@ describe('mock LLM server wire behaviors', () => {
     const characterOffset = encoded.indexOf(Buffer.from('你'))
     expect(characterOffset).toBeGreaterThanOrEqual(0)
 
-    await rawChat(server, [
+    await rawMessages(server, [
       encoded.subarray(0, characterOffset + 1),
       encoded.subarray(characterOffset + 1),
     ])
@@ -209,7 +209,7 @@ describe('mock LLM server wire behaviors', () => {
     const server = await start(['success'], { host: '::1' })
 
     expect(server.baseURL).toMatch(/^http:\/\/\[::1\]:\d+$/)
-    expect((await chat(server)).status).toBe(200)
+    expect((await messages(server)).status).toBe(200)
   })
 
   it('emits reasoning, tool calls, max-token finishes, slow chunks, and a wrong content type', async () => {
@@ -231,17 +231,17 @@ describe('mock LLM server wire behaviors', () => {
     const bodies: string[] = []
     const contentTypes: Array<string | null> = []
     for (let index = 0; index < 5; index += 1) {
-      const response = await chat(server)
+      const response = await messages(server)
       contentTypes.push(response.headers.get('content-type'))
       bodies.push(await response.text())
     }
 
-    expect(bodies[0]).toContain('"reasoning_content":"th"')
+    expect(bodies[0]).toContain('"thinking":"th"')
     expect(bodies[1]).toContain('"name":"lookup"')
-    expect(bodies[1]).toContain('"arguments":"{\\"id"')
-    expect(bodies[1]).toContain('"finish_reason":"tool_calls"')
-    expect(bodies[2]).toContain('"finish_reason":"length"')
-    expect(bodies[3]).toContain('"finish_reason":"stop"')
+    expect(bodies[1]).toContain('"partial_json":"{\\"id"')
+    expect(bodies[1]).toContain('"stop_reason":"tool_use"')
+    expect(bodies[2]).toContain('"stop_reason":"max_tokens"')
+    expect(bodies[3]).toContain('"stop_reason":"end_turn"')
     expect(contentTypes[4]).toBe('application/json')
     expect(server.requests).toHaveLength(5)
     expect(server.requests.every(record => record.outcome === 'completed')).toBe(true)
@@ -257,7 +257,7 @@ describe('mock LLM server wire behaviors', () => {
     ['quota_exceeded', 429, 'insufficient_quota'] as const,
   ])('serves %s as a structured HTTP error', async (behavior, status, marker) => {
     const server = await start([behavior], { retryAfterMs: 1_001, requestId: 'mock-request-1' })
-    const response = await chat(server)
+    const response = await messages(server)
     const body = await response.text()
 
     expect(response.status).toBe(status)
@@ -270,15 +270,15 @@ describe('mock LLM server wire behaviors', () => {
 
   it('fails loud on script exhaustion and can explicitly repeat the final behavior', async () => {
     const exhausted = await start(['success'], { successText: 'once' })
-    await (await chat(exhausted)).text()
-    const exhaustedResponse = await chat(exhausted)
+    await (await messages(exhausted)).text()
+    const exhaustedResponse = await messages(exhausted)
     expect(exhaustedResponse.status).toBe(500)
     expect(await exhaustedResponse.text()).toContain('mock script exhausted')
     expect(exhausted.requests.map(record => record.behavior)).toEqual(['success', 'script_exhausted'])
 
     const repeating = await start(['empty'], { repeatLast: true })
-    await (await chat(repeating)).text()
-    await (await chat(repeating)).text()
+    await (await messages(repeating)).text()
+    await (await messages(repeating)).text()
     expect(repeating.requests.map(record => record.behavior)).toEqual(['empty', 'empty'])
   })
 
@@ -295,8 +295,8 @@ describe('mock LLM server wire behaviors', () => {
     running.push(first, second)
 
     for (let attempt = 0; attempt < 12; attempt += 1) {
-      await (await chat(first)).text()
-      await (await chat(second)).text()
+      await (await messages(first)).text()
+      await (await messages(second)).text()
     }
 
     const firstChoices = first.requests.map(record => record.behavior)
@@ -307,12 +307,12 @@ describe('mock LLM server wire behaviors', () => {
     expect(first.requests.every(record => record.scriptBehavior === 'random')).toBe(true)
   })
 
-  it('rejects invalid method, route, bearer token, and JSON without consuming the script', async () => {
+  it('rejects invalid method, route, API key, and JSON without consuming the script', async () => {
     const server = await start(['success'], { apiKey: 'expected' })
-    const method = await fetch(`${server.baseURL}/v1/chat/completions`)
-    const route = await fetch(`${server.baseURL}/v1/other`, { method: 'POST', body: '{}' })
-    const auth = await chat(server, { key: 'wrong' })
-    const json = await chat(server, { key: 'expected', body: '{' })
+    const method = await fetch(`${server.baseURL}/v1/messages`)
+    const route = await fetch(`${server.baseURL}/chat/completions`, { method: 'POST', body: '{}' })
+    const auth = await messages(server, { key: 'wrong' })
+    const json = await messages(server, { key: 'expected', body: '{' })
 
     expect(method.status).toBe(405)
     expect(method.headers.get('allow')).toBe('POST')
@@ -321,9 +321,9 @@ describe('mock LLM server wire behaviors', () => {
     expect(json.status).toBe(400)
     expect(server.requests).toHaveLength(0)
 
-    const emptyRequest = await fetch(`${server.baseURL}/v1/chat/completions`, {
+    const emptyRequest = await fetch(`${server.baseURL}/v1/messages`, {
       method: 'POST',
-      headers: { authorization: 'Bearer expected' },
+      headers: { 'x-api-key': 'expected' },
     })
     expect(emptyRequest.status).toBe(200)
     expect(server.requests[0]?.behavior).toBe('success')

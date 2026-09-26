@@ -103,20 +103,49 @@ describe('ComposerAttachments', () => {
     expect(view.queryByRole('status')).toBeNull()
 
     const image = attachment('dropped').file
-    const dataTransfer = { types: ['Files'], files: [image], dropEffect: 'none' }
+    const dataTransfer = { types: ['Files'], files: [image], items: [], dropEffect: 'none' }
     expect(fireEvent.dragEnter(document.body, { dataTransfer })).toBe(false)
     expect(view.getByRole('status').textContent).toContain('文件或图片拖动到此处即可添加')
     expect(view.getByRole('status').textContent).toContain('图片限制：最多 20 张，每张 5MB')
     expect(fireEvent.dragOver(document.body, { dataTransfer })).toBe(false)
     expect(dataTransfer.dropEffect).toBe('copy')
     expect(fireEvent.drop(document.body, { dataTransfer })).toBe(false)
-    expect(onAddFiles).toHaveBeenCalledWith([image])
+    expect(onAddFiles).toHaveBeenCalledWith([image], new Set())
     expect(view.queryByRole('status')).toBeNull()
+  })
+
+  it('reports dropped directories from the entry API beside the dropped files', () => {
+    const onAddFiles = vi.fn()
+    render(<ComposerAttachments {...props({ onAddFiles })} />)
+    const folder = new File([], 'project')
+    const note = new File([Uint8Array.of(1)], 'notes.md', { type: 'text/markdown' })
+    const entry = (isDirectory: boolean | null, file: File) => ({
+      kind: 'file', getAsFile: () => new File([], file.name), webkitGetAsEntry: () => (isDirectory === null ? null : { isDirectory }),
+    })
+    fireEvent.drop(document.body, {
+      dataTransfer: {
+        types: ['Files'],
+        files: [folder, note],
+        items: [entry(true, folder), entry(false, note), { kind: 'string', getAsFile: () => null }],
+        dropEffect: 'none',
+      },
+    })
+    expect(onAddFiles).toHaveBeenCalledWith([folder, note], new Set([folder]))
+    // An entry API that answers nothing, or a browser without it, reports no directories.
+    fireEvent.drop(document.body, {
+      dataTransfer: {
+        types: ['Files'],
+        files: [note],
+        items: [entry(null, note), { kind: 'file', getAsFile: () => note }, entry(true, folder)],
+        dropEffect: 'none',
+      },
+    })
+    expect(onAddFiles).toHaveBeenLastCalledWith([note], new Set())
   })
 
   it('tracks nested file drags and clears an aborted drag', () => {
     const view = render(<ComposerAttachments {...props()} />)
-    const dataTransfer = { types: ['Files'], files: [], dropEffect: 'none' }
+    const dataTransfer = { types: ['Files'], files: [], items: [], dropEffect: 'none' }
     fireEvent.dragLeave(document.body, {
       dataTransfer: { types: ['text/plain'], files: [], dropEffect: 'none' },
     })
@@ -144,7 +173,7 @@ describe('ComposerAttachments', () => {
     const onAddFiles = vi.fn()
     const view = render(<ComposerAttachments {...props({ canAcceptDrop: false, onAddFiles })} />)
     const image = attachment('blocked').file
-    const dataTransfer = { types: ['Files'], files: [image], dropEffect: 'copy' }
+    const dataTransfer = { types: ['Files'], files: [image], items: [], dropEffect: 'copy' }
     fireEvent.dragEnter(document.body, { dataTransfer })
     expect(view.getByRole('status').textContent).toBe('当前无法添加文件或图片')
     fireEvent.dragOver(document.body, { dataTransfer })

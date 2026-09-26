@@ -13,5 +13,5 @@ set "DSH_DESKTOP_WINDOWS_TOKEN_PIN="
 set "DSH_DESKTOP_WINDOWS_KEY_CONTAINER="
 set "DSH_DESKTOP_WINDOWS_SIGN_TARGET="
 set "DSH_DESKTOP_WINDOWS_SIGN_APPEND="
-set "signTool=" & set "certificateFile=" & set "tokenPin=" & set "keyContainer=" & set "targetFile=" & set "appendSignature=" & "%signTool%" sign /v /fd sha256 /f "%certificateFile%" /kc "[{{%tokenPin%}}]=%keyContainer%" /csp "eToken Base Cryptographic Provider" %appendSignature% /tr http://timestamp.digicert.com /td sha256 "%targetFile%"
+set "signTool=" & set "certificateFile=" & set "tokenPin=" & set "keyContainer=" & set "targetFile=" & set "appendSignature=" & "%signTool%" sign /v /fd sha256 /f "%certificateFile%" /kc "[{{%tokenPin%}}]=%keyContainer%" /csp "eToken Base Cryptographic Provider" %appendSignature% "%targetFile%"
 exit /b %errorlevel%

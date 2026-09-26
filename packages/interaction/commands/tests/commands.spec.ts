@@ -299,7 +299,7 @@ describe('CommandRuntime', () => {
     [{ ...command('bad-handler'), handler: undefined }, /handler/],
   ] as const)('rejects invalid definition %#', async (definition, expected) => {
     const ctx = await mount()
-    expect(() => ctx.commands.register(definition as unknown as CommandDefinition)).toThrow(expected)
+    expect(() => ctx.commands.register(definition as CommandDefinition)).toThrow(expected)
   })
 
   it('logs a paired command/run + command/done around a successful handler', async () => {

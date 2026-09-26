@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-snapshot",
   "description": "Session-log snapshot core with an ACP protocol adapter, expected-output normalization, and fixture invariants",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -28,31 +28,31 @@
   "license": "MIT",
   "dependencies": {
     "@agentclientprotocol/sdk": "1.4.0",
-    "@deepseek-ai/cordis-plugin-include": "workspace:*",
-    "@deepseek-ai/dsh-llm-replay": "workspace:^",
+    "@deepseek-ai/cordis-plugin-include": "workspace:~",
+    "@deepseek-ai/dsh-llm-replay": "workspace:*",
     "@deepseek-ai/dsh-loader-smoke": "workspace:*",
-    "@deepseek-ai/dsh-session-format": "workspace:^",
+    "@deepseek-ai/dsh-session-format": "workspace:*",
     "js-yaml": "^4.2.0",
     "vitest": "^4.1.8"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-session": "workspace:^",
-    "@deepseek-ai/dsh-http-proxy": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-http-proxy": "workspace:*"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-agent": "workspace:^",
-    "@deepseek-ai/dsh-agent-loop": "workspace:^",
-    "@deepseek-ai/dsh-compaction": "workspace:^",
-    "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/dsh-sandbox": "workspace:^",
-    "@deepseek-ai/dsh-sandbox-policy": "workspace:^",
-    "@deepseek-ai/dsh-session": "workspace:^",
-    "@deepseek-ai/dsh-subagent": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^",
-    "@deepseek-ai/dsh-user-questions": "workspace:^",
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-agent-loop": "workspace:*",
+    "@deepseek-ai/dsh-compaction": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-sandbox": "workspace:*",
+    "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-subagent": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-user-questions": "workspace:*",
     "@types/js-yaml": "^4.0.9",
-    "@deepseek-ai/dsh-http-proxy": "workspace:^"
+    "@deepseek-ai/dsh-http-proxy": "workspace:*"
   }
 }

@@ -15,17 +15,15 @@
      (see ui-theme styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-  /* A 10px draggable rail carries a quiet 4px thumb, inset from the card's
+  /* A 6px draggable rail carries a quiet 2px thumb, inset from the card's
      rounded ends. ui-theme's global scrollbar sheet renders these values. */
-  --dsh-scrollbar-width: 10px;
-  --dsh-scrollbar-thumb-border: 3px;
+  --dsh-scrollbar-width: 6px;
+  --dsh-scrollbar-thumb-border: 2px;
   --dsh-scrollbar-track-margin: 12px;
   padding: 4px;
   display: flex;
   flex-direction: column;
   border: 0;
-  border-radius: 20px;
-  background: var(--dsw-specific-menu);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
 }
@@ -53,16 +51,16 @@
 .item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
+  min-height: 34px;
+  padding: 6px 8px;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   cursor: pointer;
-  font-size: 14px;
-  line-height: 22px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--dsw-alias-label-primary);
   text-align: left;
 }
@@ -75,26 +73,31 @@
 
 .sectionTitle {
   flex: none;
-  min-height: 26px;
-  padding: 6px 10px 2px;
+  min-height: 23px;
+  padding: 5px 8px 2px;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  line-height: 18px;
+  line-height: 16px;
 }
 
 .sectionTitle:not(:first-child) {
-  margin-top: 4px;
+  margin-top: 3px;
 }
 
 .itemIcon {
   display: inline-flex;
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   align-items: center;
   justify-content: center;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-menu-icon);
+}
+
+.itemIcon svg {
+  width: 14px;
+  height: 14px;
 }
 
 .itemName {
@@ -114,6 +117,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 /* Right-aligned so every description ends at the same edge and the titles
@@ -126,6 +131,8 @@
   white-space: nowrap;
   text-align: right;
   color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 /* Trailing seat on drillable rows (directories): the Tab keycap hint plus the
@@ -134,7 +141,7 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   margin-left: auto;
 }
 
@@ -144,20 +151,20 @@
 .drillHintText {
   display: none;
   color: var(--dsw-alias-label-caption);
-  font-size: 11px;
-  line-height: 18px;
+  font-size: 10px;
+  line-height: 16px;
   white-space: nowrap;
 }
 
 .drillHint {
   display: none;
-  padding: 0 5px;
-  border-radius: 4px;
+  padding: 0 4px;
+  border-radius: var(--dsw-radius-xs);
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-caption);
   font-family: inherit;
-  font-size: 11px;
-  line-height: 18px;
+  font-size: 10px;
+  line-height: 16px;
 }
 
 .item.active .drillHintText,
@@ -171,11 +178,10 @@
   flex: none;
   display: inline-grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  /* label-caption, the quiet tint the composer's access-mode chevron uses. */
-  color: var(--dsw-alias-label-caption);
+  width: 18px;
+  height: 18px;
+  border-radius: var(--dsw-radius-xs);
+  color: var(--dsw-alias-menu-icon);
 }
 
 .drill:hover {
@@ -186,9 +192,9 @@
 /* Heading row above a source group: non-interactive small grey text,
  * padding aligned with items (mirrors ui-primitives Menu .label). */
 .groupTitle {
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 16px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 15px;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -198,16 +204,15 @@
 .skeletonRow {
   display: flex;
   align-items: center;
-  /* border-box so min-height matches the .item buttons, whose UA default
-     box-sizing already counts the same 8px paddings inside their 40px. */
+  /* border-box keeps the skeleton row aligned with the compact item buttons. */
   box-sizing: border-box;
-  min-height: 40px;
-  padding: 8px 10px;
+  min-height: 34px;
+  padding: 6px 8px;
 }
 
 .skeletonBar {
-  height: 20px;
-  border-radius: 4px;
+  height: 18px;
+  border-radius: var(--dsw-radius-xs);
   background: var(--dsw-alias-bg-skeleton);
   animation: dsh-menu-skeleton 2s cubic-bezier(0.36, 0, 0.64, 1) infinite;
 }
@@ -219,16 +224,15 @@
 }
 
 /* Breadcrumb header of a drilled source: pinned outside .viewport so the
-   descent stays reversible while the candidate list scrolls under it.
-   4px sides + the crumb's own 6px = the first crumb's text sits at 10px,
-   flush with .sectionTitle and the item icons. */
+   descent stays reversible while the candidate list scrolls under it. The
+   compact shell and crumb padding align its text with item content. */
 .crumbs {
   flex: none;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 2px;
-  padding: 4px 4px 6px;
+  padding: 3px 3px 5px;
   margin-bottom: 2px;
   /* l1, not border-inverted (the menu frame's dark-only stroke): the divider
      needs to survive light mode too; in dark both resolve to white/0.06. */
@@ -240,15 +244,15 @@
   flex: 0 1 auto;
   max-width: 40%;
   overflow: hidden;
-  padding: 2px 6px;
+  padding: 2px 5px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
   font-family: inherit;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 11px;
+  line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -266,5 +270,5 @@
 .crumbSeparator {
   flex: none;
   display: inline-flex;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-menu-icon);
 }

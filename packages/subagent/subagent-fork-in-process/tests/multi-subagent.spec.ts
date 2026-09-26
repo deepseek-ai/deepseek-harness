@@ -45,7 +45,7 @@ async function setup(script: Script) {
   return { ctx, parent }
 }
 
-function text(blocks: { type: string; text?: string }[]): string {
+function text(blocks: readonly { type: string; text?: string }[]): string {
   return blocks.filter(b => b.type === 'text').map(b => b.text).join('')
 }
 

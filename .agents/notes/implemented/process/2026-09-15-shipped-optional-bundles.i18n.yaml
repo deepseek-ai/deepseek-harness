@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-15-shipped-optional-bundles.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-15-shipped-optional-bundles.md
-2026-09-15-shipped-optional-bundles.md: 6de3eb7d39b86a2e5dd6db756d2bf6561aeb8ed4
-2026-09-15-shipped-optional-bundles.zh.md: 05c23c7c0cdd6a146b938370fec64377652e31d4
+/agent-note-ship-optional-bundles-with-the-installation:
+  en: a35c5daebeaa4b1e
+  zh: a74f44bb23f0571c
+/agent-note-ship-optional-bundles-with-the-installation/problem:
+  en: dc43ba84345e1405
+  zh: dbc03572ab7710d2
+/agent-note-ship-optional-bundles-with-the-installation/decision:
+  en: d64020c4ca4957e1
+  zh: 241b3b851234b6f0
+/agent-note-ship-optional-bundles-with-the-installation/alternatives-considered:
+  en: 05c19f616009bee8
+  zh: af318640481351f0
+/agent-note-ship-optional-bundles-with-the-installation/consequences:
+  en: 4a9d3a049a605150
+  zh: 67b50bbc9f7f4bb0

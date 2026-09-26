@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-08-self-referential-cordis-toolset.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md
-2026-07-08-self-referential-cordis-toolset.md: d8ae7d26666964c24245021249473d4160b35220
-2026-07-08-self-referential-cordis-toolset.zh.md: d6fac5b59d1d057ea11b607cba115ceb1c37664a
+/agent-note-cordis-runtime-inspection-and-runner-isolation:
+  en: d96c123d1989b22b
+  zh: 4a53cdd763955f19
+/agent-note-cordis-runtime-inspection-and-runner-isolation/problem:
+  en: 29d1465c348331e9
+  zh: 25dbc885f5d7ee7d
+/agent-note-cordis-runtime-inspection-and-runner-isolation/decision:
+  en: 8a4cbb660f2409d7
+  zh: 2219e39468e6baee
+/agent-note-cordis-runtime-inspection-and-runner-isolation/alternatives-considered:
+  en: 637137a3b035c211
+  zh: 5a667bfe2446a5f8
+/agent-note-cordis-runtime-inspection-and-runner-isolation/consequences:
+  en: a21f854954e01db6
+  zh: c16bbe7c3580b394

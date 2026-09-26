@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-09-10-component-factories-and-local-slots.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-10-component-factories-and-local-slots.md
+/agent-note-reusable-component-factories-with-local-slots:
+  en: c59d9a681b69c8e0
+  zh: 987e95099a9bbe2a
+/agent-note-reusable-component-factories-with-local-slots/problem:
+  en: ba5734b4b97a73b5
+  zh: 29f3fc9b7b88f25a
+/agent-note-reusable-component-factories-with-local-slots/decision:
+  en: 21aa3e44ee63ef30
+  zh: dbbed5107b354ff1
+/agent-note-reusable-component-factories-with-local-slots/decision/opposite-registration-directions:
+  en: cbe40f4b1db77180
+  zh: d471b9b15c1180a8
+/agent-note-reusable-component-factories-with-local-slots/decision/definition-and-occurrence-lifecycle:
+  en: 5b1dbbc3cdadb743
+  zh: 8efdfb12b80d305d
+/agent-note-reusable-component-factories-with-local-slots/decision/local-slots-and-ordinary-children:
+  en: 4efed23287a0332e
+  zh: fa4079f4e47dd3f3
+/agent-note-reusable-component-factories-with-local-slots/decision/first-shipped-use:
+  en: 39d1d419e793b2d9
+  zh: e5aa14bace690f52
+/agent-note-reusable-component-factories-with-local-slots/decision/type-and-runtime-enforcement:
+  en: dfa80b7d19335a1f
+  zh: 19fddd013bac8cee
+/agent-note-reusable-component-factories-with-local-slots/alternatives-considered:
+  en: b20072038b089ea9
+  zh: 129aa0705c030356
+/agent-note-reusable-component-factories-with-local-slots/consequences:
+  en: 14271ca39d681ca6
+  zh: 76bceb0182164a6d

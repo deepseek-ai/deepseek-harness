@@ -37,9 +37,11 @@ if (!isJsonValue(input)) throw new TypeError('expected lossless JSON')
 const snapshot = snapshotJsonValue(input) as JsonValue
 ```
 
-### 发布或比较值
+### 发布、比较或保留键控值
 
 `deepFreeze(value)` 原地冻结对象图并返回同一个值。它遍历可枚举字符串键的子项，并刻意让活跃 `AbortSignal` 对象保持可变。`deepEqualJson(a, b)` 按结构比较 JSON 兼容数组与记录；调用方必须先校验恶意或不受约束的值，再进行比较。
+
+`WeakMapWithValues<Key, Value>` 组合弱对象键查找与强引用且保持插入顺序的 `values` set。每个 value 只属于一个 key。owner 必须在对应生命周期边界调用 `delete(key)` 或 `clear()`；该集合不执行自动清理。
 
 ### 封闭可辨识联合类型
 
@@ -53,13 +55,13 @@ const snapshot = snapshotJsonValue(input) as JsonValue
 <details>
 <summary>实现细节——点击展开</summary>
 
-JSON 校验器使用显式工作栈，并只跟踪当前祖先链，因此深层嵌套值不会消耗 JavaScript 调用栈，重复但无循环的引用仍然有效。快照写入使用自有数据属性，包括 `__proto__` 等名称。其他 helper 的结果只取决于传入参数，不在调用之间保留状态。
+JSON 校验器使用显式工作栈，并只跟踪当前祖先链，因此深层嵌套值不会消耗 JavaScript 调用栈，重复但无循环的引用仍然有效。快照写入使用自有数据属性，包括 `__proto__` 等名称。值操作的结果只取决于传入参数；`WeakMapWithValues` 仅保存实例自有的关联。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | JSON 值类型、校验与快照遍历、结构相等、深度冻结和穷尽联合类型失败 |
+| [`src/index.ts`](src/index.ts) | JSON 值类型、校验与快照遍历、结构相等、深度冻结、弱键/强值关联和穷尽联合类型失败 |
 | — | 不发布运行时不变量伴生入口；这些值操作没有共享运行时状态，其代数行为由单元测试覆盖。 |
 
 </details>
@@ -81,6 +83,7 @@ JSON 校验器使用显式工作栈，并只跟踪当前祖先链，因此深层
 
 - **`deepEqualJson` 假定输入兼容 JSON**——它不是通用对象比较器，不为 prototype、symbol、accessor、循环、map 或 set 定义语义。
 - **`deepFreeze` 沿可枚举字符串键遍历子项**——它不会把任意宿主对象变成不可变数据，并会刻意跳过活跃 `AbortSignal` 实例。
+- **`WeakMapWithValues` 要求显式清理且 value 唯一**——value 会保持强引用，直到 owner 删除其 key 或清空集合；同一 value 不得由多个 key 共享。
 
 <a id="dev-note"></a>
 ### 开发备注

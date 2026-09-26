@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-27-outbound-proxy-policy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-27-outbound-proxy-policy.md
-2026-08-27-outbound-proxy-policy.md: e588ff751fd18762fbe5e24aa17f9bbbc4ff8deb
-2026-08-27-outbound-proxy-policy.zh.md: 57faea256120f5f76ecc4dab1bd8709003672fd0
+/agent-note-one-outbound-proxy-policy-installed-before-anything-can-request:
+  en: b19652a0e1cc1826
+  zh: 4d3511e4f0db5b9d
+/agent-note-one-outbound-proxy-policy-installed-before-anything-can-request/problem:
+  en: 70e5f3ed33010c98
+  zh: 5437d943953f5a40
+/agent-note-one-outbound-proxy-policy-installed-before-anything-can-request/decision:
+  en: efe23161a54f70c5
+  zh: e24ee097918b2724
+/agent-note-one-outbound-proxy-policy-installed-before-anything-can-request/alternatives-considered:
+  en: df44eb15557b95fe
+  zh: b757e53da4c0a99f
+/agent-note-one-outbound-proxy-policy-installed-before-anything-can-request/consequences:
+  en: 6a4acbab915f1bd1
+  zh: 2c8ffd62ba74ff96
+/agent-note-one-outbound-proxy-policy-installed-before-anything-can-request/testing:
+  en: 0d7eaa666c94a5cd
+  zh: 210fa098f154d137

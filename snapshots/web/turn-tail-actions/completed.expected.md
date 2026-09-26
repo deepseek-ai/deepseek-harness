@@ -1,53 +1,27 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "Begin your reply with the" [disabled]
-  - img
+  - navigation "Session hierarchy": Begin your reply with the
   - text: Standard mode
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
 - text: Begin your reply with the plain sentence "Reading the workspace now." as text, and in that same message call the bash tool with the command "echo alpha". After the tool result, reply with the single word DONE and stop. {{clock}}
-- button "Copy":
-  - img
-- button "1 tool call · 1 message":
-  - text: 1 tool call · 1 message
-  - img
+- button "Copy"
+- status: Worked
+- button "Took {{duration}}"
 - paragraph: DONE
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
-- button "Usage 15.8K tok":
-  - img
-  - text: Usage 15.8K tok
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
+- button "Usage 15.8K tok"
 - text: {{clock}}
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
-- button "6% of context used"
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Send message" [disabled]
-- button "1 turns 2 steps · {{throughput}} tok/s":
-  - img
-  - text: 1 turns 2 steps{{throughput}} tok/s
-- button "15.8K tok · Cache hit 50%":
-  - img
-  - text: 15.8K tokCache hit 50%
+- button "1 turns 2 steps · {{throughput}} tok/s": 1 turns 2 steps{{throughput}} tok/s
+- button "15.8K tok · Cache hit 50%": 15.8K tokCache hit 50%
+- button "6% of context used": 6%

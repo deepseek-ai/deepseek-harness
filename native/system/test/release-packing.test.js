@@ -46,7 +46,7 @@ function fixture(t) {
   writeJson('packages/entry/package.json', {
     name: '@fixture/native', version: '1.2.3', type: 'module', repository: repository('entry'),
     exports: { '.': './lib/index.js' }, files: ['lib/'],
-    optionalDependencies: { '@fixture/native-linux-x64': 'workspace:*' },
+    optionalDependencies: { '@fixture/native-linux-x64': 'workspace:~' },
     scripts: { prepack: 'node ../../scripts/verify-entry-lib.mjs' },
   });
   fs.mkdirSync(path.join(dir, 'packages/entry/lib'));
@@ -102,7 +102,7 @@ for (const workflow of [false, true]) {
     }
     assert.equal(manifests[0].repository.directory, 'native/system/packages/linux-x64');
     assert.equal(manifests[1].repository.directory, 'native/system/packages/entry');
-    assert.equal(manifests[1].optionalDependencies['@fixture/native-linux-x64'], '1.2.3');
+    assert.equal(manifests[1].optionalDependencies['@fixture/native-linux-x64'], '~1.2.3');
     assert.equal(tarFile(f.dir, files[1], 'LICENSE').toString(), workspaceLicense);
     assert.deepEqual(tarFile(f.dir, files[0], 'bin/landlock-run'), f.binary);
     const extracted = path.join(f.dir, 'extracted');

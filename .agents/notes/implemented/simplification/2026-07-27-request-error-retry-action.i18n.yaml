@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-27-request-error-retry-action.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-07-27-request-error-retry-action.md
-2026-07-27-request-error-retry-action.md: 9853d7d0439093afd3e7a611e360a6b32517ca4c
-2026-07-27-request-error-retry-action.zh.md: e0c4749b7ed6bddcbc44f3ab512df542f33831bd
+/agent-note-request-error-retry-action:
+  en: 672e3acc184e72f7
+  zh: 10334d48de7dcc0e
+/agent-note-request-error-retry-action/problem:
+  en: 8b9476349def23b6
+  zh: e3b034bae896e24b
+/agent-note-request-error-retry-action/decision:
+  en: 3937a99236b23d80
+  zh: ec5e9cb21744e3ae
+/agent-note-request-error-retry-action/alternatives-considered:
+  en: 8f50ac6497dfd03e
+  zh: 4f1d07901132a184
+/agent-note-request-error-retry-action/consequences:
+  en: 3e60793a09964f5a
+  zh: b28626761a229d85

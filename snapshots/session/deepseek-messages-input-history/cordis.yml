@@ -1,0 +1,3 @@
+- insert:
+    - id: messages-input-history-snapshot
+      name: '../../../packages/llm/llm-deepseek/tests/fixtures/input-history.ts'

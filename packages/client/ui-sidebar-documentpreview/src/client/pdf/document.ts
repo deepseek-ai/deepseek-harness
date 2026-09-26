@@ -1,5 +1,5 @@
 /** Canvas rendering with cancellation and page cleanup, shared by the PDF body and real-library smoke. */
-import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
+import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from 'pdfjs-dist'
 
 /** The document operations used by one mounted PDF body. */
 export type PdfDocument = Pick<PDFDocumentProxy, 'numPages' | 'getPage'>
@@ -21,6 +21,12 @@ export interface PdfPageSize {
   readonly height: number
 }
 
+/** Optional DOM text rendering that shares the canvas page's cleanup barrier. */
+export type RenderPdfText = (page: PDFPageProxy, viewport: PageViewport) => {
+  readonly promise: Promise<void>
+  cancel(): void
+}
+
 /**
  * Render one page into an exclusively owned canvas. Cancellation cannot write
  * dimensions after a delayed getPage; active render tasks are cancelled and
@@ -29,7 +35,8 @@ export interface PdfPageSize {
  * @param pageNumber - 1-based selected page.
  * @param canvas - canvas owned by this render only.
  * @param signal - render lifetime.
- * @param pixelRatio - display pixel ratio.
+ * @param pixelRatio - device pixel ratio multiplied by the settled document zoom.
+ * @param renderText - optional selectable text layer sharing this page and viewport.
  * @returns the page's CSS dimensions after rendering completes.
  */
 export async function renderPdfPage(
@@ -38,6 +45,7 @@ export async function renderPdfPage(
   canvas: HTMLCanvasElement,
   signal: AbortSignal,
   pixelRatio: number,
+  renderText?: RenderPdfText,
 ): Promise<PdfPageSize> {
   signal.throwIfAborted()
   const page: PDFPageProxy = await document.getPage(pageNumber)
@@ -55,13 +63,25 @@ export async function renderPdfPage(
       viewport,
       transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0],
     })
-    const cancel = (): void => { task.cancel() }
+    let text: ReturnType<RenderPdfText> | undefined
+    let cancelled = false
+    const cancel = (): void => {
+      if (cancelled) return
+      cancelled = true
+      task.cancel()
+      text?.cancel()
+    }
     signal.addEventListener('abort', cancel, { once: true })
     try {
+      text = renderText?.(page, viewport)
       if (signal.aborted) cancel()
-      await task.promise
+      await Promise.all([task.promise, text?.promise])
       signal.throwIfAborted()
       return { width: viewport.width, height: viewport.height }
+    } catch (error) {
+      cancel()
+      await Promise.allSettled([task.promise, text?.promise])
+      throw error
     } finally {
       signal.removeEventListener('abort', cancel)
     }

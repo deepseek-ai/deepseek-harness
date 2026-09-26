@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-10-compact-tool-details.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-10-compact-tool-details.md
+/agent-note-compact-tool-details-from-recorded-results:
+  en: 7495c26039484440
+  zh: d1907caf1f139054
+/agent-note-compact-tool-details-from-recorded-results/problem:
+  en: e4ce66f2cdb08516
+  zh: 3f45374f23fa8f3b
+/agent-note-compact-tool-details-from-recorded-results/decision:
+  en: 668e06f5146a78de
+  zh: 4af1edf74eb8121c
+/agent-note-compact-tool-details-from-recorded-results/alternatives-considered:
+  en: 1f0bf45e4ecc0bfa
+  zh: c46b173dc7ee180b
+/agent-note-compact-tool-details-from-recorded-results/consequences:
+  en: e02acb07b752c285
+  zh: b29f9a5ad44ff10f

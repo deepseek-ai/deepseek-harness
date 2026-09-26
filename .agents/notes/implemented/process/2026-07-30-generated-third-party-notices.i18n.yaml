@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-30-generated-third-party-notices.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-30-generated-third-party-notices.md
-2026-07-30-generated-third-party-notices.md: 41ac0c75ca55c81f2055c867bd029ee7e4a350f9
-2026-07-30-generated-third-party-notices.zh.md: 4097831828287e7180cf37d713fa4694ae028b31
+/agent-note-generated-third-party-notices:
+  en: 762fe10c2750eb0a
+  zh: 24f5efdf4cc1755e
+/agent-note-generated-third-party-notices/problem:
+  en: e6929494e60041a2
+  zh: 15bec8e8baabcab2
+/agent-note-generated-third-party-notices/decision:
+  en: 4d9ab23559067da3
+  zh: 8de95de194393187
+/agent-note-generated-third-party-notices/testing:
+  en: 194f87f780991068
+  zh: 58096d2339576d20
+/agent-note-generated-third-party-notices/alternatives-considered:
+  en: 093ddc027e296bf0
+  zh: 6b9e64d99dcefa11
+/agent-note-generated-third-party-notices/consequences:
+  en: 860b806c5d393c98
+  zh: 51b4ca11e2d3802a

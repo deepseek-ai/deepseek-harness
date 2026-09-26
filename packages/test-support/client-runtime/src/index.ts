@@ -28,14 +28,17 @@ import { createSlotRenderer as createRenderer } from '@deepseek-ai/dsh-client-ui
 import {
   apply as applyUiSession, inject as uiSessionInject,
 } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { PanelInfo } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {
   ChildrenDecl, ComposedProps, HostObservable, OwnerOf, RenderOpts, SlotComponent, SlotMap, SlotRenderer,
-  SlotRendererHost, SnapshotSelectorHook, StoreInstanceLike,
+  ScopedStandardSourceBinding, SessionProviderComponent, SlotEntryDef, SlotFactoryMap, SlotRendererHost, SlotSpec,
+  SnapshotSelectorHook, StoredFactory, StoreInstanceLike,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { registerDomSnapshotSerializer } from './snapshot.ts'
+import { TestRemote } from './remote.ts'
 import { TestSessions } from './sessions.ts'
 import { TestWorkspaces } from './workspaces.ts'
 import type { Stabilizer } from './fixtures.ts'
@@ -43,8 +46,8 @@ import type { Stabilizer } from './fixtures.ts'
 export type { UseSession } from '@deepseek-ai/dsh-client-ui-session/client'
 export { domSnapshotSerializer, registerDomSnapshotSerializer } from './snapshot.ts'
 export { FixtureSession, TestSessions } from './sessions.ts'
-export { stubSettingsScope } from './settings-scope.ts'
-export type { StubSettingsScope } from './settings-scope.ts'
+export { stubConfigForm } from './config-form.ts'
+export type { StubConfigForm } from './config-form.ts'
 export { TestWorkspaces } from './workspaces.ts'
 export { RemoteError, TestRemote } from './remote.ts'
 export {
@@ -76,6 +79,11 @@ export function createSlotRenderer(): SlotRenderer {
 /** Erased register face for the internal root call (the public declaration contract holds the typing). */
 type ErasedRegister = (options: object, component: unknown) => () => void
 
+/** Per-view render options; the caller owns the explicitly supplied Session reference. */
+export interface SlotTestRenderOptions extends RenderOpts {
+  readonly session?: SessionReference | undefined
+}
+
 /**
  * One rendered slot's local view, from {@link SlotTestRuntime.renderSlot}:
  * the renderer's own `[data-slot]` outlet anchor is the snapshot root
@@ -92,8 +100,9 @@ export interface SlotView<K extends keyof SlotMap & string> {
    * Replace the owner props and flush the re-render (the render-site update:
    * in production the owner recomputes the share and React re-renders).
    * @param owner - the next owner props share.
+   * @param opts - replacement render options and borrowed reference; omission keeps this view's options.
    */
-  update(owner: OwnerOf<K>): void
+  update(owner: OwnerOf<K>, opts?: SlotTestRenderOptions): void
 }
 
 /**
@@ -123,7 +132,7 @@ export interface TestFileUpload {
  * {@link SlotView.update} drive React through the standard uSES boundary.
  */
 class OwnerPropsCell {
-  private readonly owners = new Map<string, { owner: object; opts: RenderOpts | undefined }>()
+  private readonly owners = new Map<string, { owner: object; opts: SlotTestRenderOptions | undefined }>()
   private readonly listeners = new Set<() => void>()
   private version = 0
 
@@ -147,14 +156,14 @@ class OwnerPropsCell {
    * @param owner - owner props share.
    * @param opts - explicit keyed or list selection for the render site.
    */
-  set(key: string, owner: object, opts?: RenderOpts): void {
+  set(key: string, owner: object, opts?: SlotTestRenderOptions): void {
     this.owners.set(key, { owner, opts })
     this.version += 1
     for (const fn of [...this.listeners]) fn()
   }
 
   /** Keys with supplied owner props, in first-supply order. */
-  entries(): readonly (readonly [string, { owner: object; opts: RenderOpts | undefined }])[] {
+  entries(): readonly (readonly [string, { owner: object; opts: SlotTestRenderOptions | undefined }])[] {
     return [...this.owners.entries()]
   }
 }
@@ -188,7 +197,7 @@ export class TestRoot {
     await this.stabilize(() => {
       // Erased hop (same pattern as SlotRegistry's own implementation arm);
       // the declaration signature above is the typed contract.
-      this.disposeEntry = (this.slots.register as unknown as ErasedRegister)({ name: 'root', children }, frame)
+      this.disposeEntry = (this.slots.register as ErasedRegister)({ name: 'root', children }, frame)
     })
   }
 
@@ -212,8 +221,10 @@ export class SlotTestRuntime {
   readonly slots: SlotRegistry
   /** The test-owned 'root' occupant. */
   readonly root: TestRoot
-  /** Sessions double (list/current observable, cells, scopes, behavior faces). */
+  /** Fixture catalog, explicit references, scoped contexts, and behavior faces. */
   readonly sessions: TestSessions
+  /** One Remote double shared by every feature mounted in this runtime. */
+  readonly remote: TestRemote
   /** Workspaces double (list observable, recorded intent actions). */
   readonly workspaces: TestWorkspaces
   /** Test-owned panel selection used by the framework's usePanelInfo hook. */
@@ -241,6 +252,7 @@ export class SlotTestRuntime {
     this.slots = slots
     this.root = new TestRoot(slots, this.stabilizer)
     this.sessions = new TestSessions(this.stabilizer, ctx)
+    this.remote = new TestRemote(ctx)
     this.workspaces = new TestWorkspaces(this.stabilizer)
     this.fileUpload = {
       upload: () => Promise.reject(new Error('client test runtime: file upload is not stubbed')),
@@ -340,13 +352,25 @@ export class SlotTestRuntime {
   async declare(children: ChildrenDecl): Promise<void> {
     for (const key of Object.keys(children)) this.autoDeclared.add(key)
     const cell = this.ownerCell
-    const AutoFrame = (props: { renderSlot: (key: string, owner: object, opts?: RenderOpts) => ReactNode }) => {
+    const AutoFrame = (props: {
+      renderSlot: (key: string, owner: object, opts?: RenderOpts) => ReactNode
+      SessionProvider: SessionProviderComponent
+    }) => {
       useSyncExternalStore(cell.subscribe, cell.getVersion)
       // Keyed Fragments only: the renderer's outlet anchor is the one
       // `[data-slot]` element — the frame adding its own would nest
       // duplicate anchors under the same key.
-      return createElement(Fragment, null, cell.entries().map(([key, { owner, opts }]) =>
-        createElement(Fragment, { key }, props.renderSlot(key, owner, opts))))
+      return createElement(Fragment, null, cell.entries().map(([key, { owner, opts }]) => {
+        const body = props.renderSlot(key, owner, opts)
+        const spec = children[key as keyof typeof children] as SlotSpec<SlotEntryDef>
+        if (spec.scope === 'root') return createElement(Fragment, { key }, body)
+        return createElement(props.SessionProvider, {
+          key,
+          session: opts?.session,
+          children: body,
+          ...spec.scope === 'session-maybe' ? { empty: () => body } : {},
+        })
+      }))
     }
     await this.root.declare(children as never, AutoFrame as never)
   }
@@ -359,17 +383,23 @@ export class SlotTestRuntime {
    * slot of the same tree.
    * @param key - a key declared through {@link SlotTestRuntime.declare}.
    * @param owner - owner props share for the render site.
-   * @param opts - explicit keyed or list selection; retained by view updates.
+   * @param opts - explicit entry selection and borrowed Session reference; retained by view updates.
    * @returns the slot-local view (snapshot container, scoped queries, owner updates).
    */
-  renderSlot<K extends keyof SlotMap & string>(key: K, owner: OwnerOf<K>, opts?: RenderOpts): SlotView<K> {
+  renderSlot<K extends keyof SlotMap & string>(
+    key: K,
+    owner: OwnerOf<K>,
+    opts?: SlotTestRenderOptions,
+  ): SlotView<K> {
     if (!this.autoDeclared.has(key)) {
       throw new Error(`renderSlot('${key}') without declare() — declare the key first (or use root.declare for a custom frame)`)
     }
-    const install = (next: object): void => {
+    let options = opts
+    const install = (next: object, nextOptions = options): void => {
+      options = nextOptions
       // Synchronous cell write inside act: the frame re-renders through uSES.
       act(() => {
-        this.ownerCell.set(key, next, opts)
+        this.ownerCell.set(key, next, options)
       })
     }
     install(owner)
@@ -387,24 +417,38 @@ export class SlotTestRuntime {
    * {@link SlotTestRuntime.renderRoot} — the host face exists only inside the
    * installed renderer, exactly as in production.
    * @param key - slot key whose first entry declares the store.
-   * @param scopeKey - session id for session-scope slots; omit for root scope.
+   * @param session - retained Session reference for session-scope slots; omit for root scope.
    * @returns the live store instance.
    */
-  storeOf(key: keyof SlotMap & string, scopeKey?: string): StoreInstanceLike {
+  storeOf(key: keyof SlotMap & string, session?: SessionReference): StoreInstanceLike {
     if (this.host === undefined) {
       throw new Error('storeOf before renderRoot() — the host face exists only inside the installed renderer')
     }
     const entry = this.host.entriesOf(key)[0]
     if (entry === undefined) throw new Error(`storeOf('${key}'): no registration on the ledger`)
-    const scopeBinding = scopeKey === undefined
+    const adapter = session === undefined ? undefined : this.host.scope('session')
+    const resolved = session === undefined ? undefined : adapter?.bindingSource(session).getSnapshot()
+    const scopeBinding = resolved?.key === undefined
       ? undefined
-      : this.host.scope('session')?.resolve(scopeKey)
-    if (scopeKey !== undefined && scopeBinding === undefined) {
-      throw new Error(`storeOf('${key}'): no live Session binding for '${scopeKey}'`)
+      : resolved as ScopedStandardSourceBinding
+    if (session !== undefined && scopeBinding === undefined) {
+      throw new Error(`storeOf('${key}'): no live Session binding for '${session.sessionId}'`)
     }
     const instance = this.host.storeOf(entry, scopeBinding)
     if (instance === undefined) throw new Error(`storeOf('${key}'): the entry declares no store`)
     return instance
+  }
+
+  /**
+   * Read one registered Factory definition for direct contract assertions.
+   * @param name - registered Factory name.
+   * @returns the live Factory definition.
+   */
+  factoryOf(name: keyof SlotFactoryMap & string): StoredFactory {
+    if (this.host === undefined) throw new Error('factoryOf before renderRoot()')
+    const definition = this.host.factoryOf(name)
+    if (definition === undefined) throw new Error(`factoryOf('${name}'): no definition`)
+    return definition
   }
 
   /**
@@ -432,6 +476,7 @@ export class SlotTestRuntime {
     this.disposeWorkspaceSource()
     this.disposePanelInfoSource()
     await this.sessions.disposeScopes()
+    await this.stabilizer(() => this.ctx.fiber.dispose())
     localStorage.clear()
   }
 }

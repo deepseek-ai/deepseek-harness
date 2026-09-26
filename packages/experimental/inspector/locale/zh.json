@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "调试检查器",
+    "description": "通过一个允许执行代码并捕获 Host 网络请求（含密钥）的本机回环端点，在 Chrome DevTools 中检查运行中的 Host 及其浏览器 Client。面向开发者；仅 Web 可用；启用后需刷新已打开的页面。"
+  }
+}

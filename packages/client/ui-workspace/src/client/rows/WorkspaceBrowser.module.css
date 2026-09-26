@@ -1,6 +1,6 @@
 .root {
   --dsh-session-list-edge-inset: var(--dsh-sidebar-inline-padding);
-  --dsh-session-list-scrollbar-width: 8px;
+  --dsh-session-list-scrollbar-width: 5px;
   --dsh-session-list-scrollbar-offset: 2px;
   flex: 1;
   min-height: 0;
@@ -22,16 +22,30 @@
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 50%;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   padding: 0;
   background: transparent;
   cursor: pointer;
   color: var(--dsw-alias-label-secondary);
 }
 
+/* The action cluster animates its width and the search pill rounds its corners,
+ * so both clip an outer ring; these controls keep theirs inside instead. */
+.iconButton:focus-visible,
+.searchButton:focus-visible,
+.clearButton:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
 .iconButton:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* View-options dropdown card: labels are short, so a content-sized card reads
+   cramped and its width shifts with the locale — hold a stable floor. */
+.viewOptionsMenu {
+  min-width: 200px;
 }
 
 /* Section header: title, an inline search control, and the two trailing
@@ -46,7 +60,7 @@
   padding-left: 4px;
   margin-bottom: 4px;
   box-sizing: border-box;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
 }
@@ -139,8 +153,7 @@
   padding: 0;
   box-sizing: border-box;
   border: none;
-  border-radius: 50%;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   cursor: text;
   color: var(--dsw-alias-label-secondary);
@@ -158,7 +171,7 @@
   margin-inline: -2px;
   padding: 0 4px 0 0;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-caption);
 }
@@ -171,8 +184,7 @@
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 50%;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   padding: 0;
   background: transparent;
   cursor: pointer;
@@ -225,8 +237,7 @@
   width: 24px;
   height: 24px;
   border: none;
-  border-radius: 50%;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   padding: 0;
   background: transparent;
   cursor: pointer;
@@ -256,7 +267,7 @@
   width: 36px;
   height: 36px;
   /* Rail hovers share the shell rail's 12px rounding. */
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -268,7 +279,7 @@
   gap: 0;
   /* The collapsed search frame clips its button's hover, so it must carry the
      rail's 12px rounding itself. */
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   border-color: transparent;
   background: transparent;
 }
@@ -276,7 +287,7 @@
 .rail .searchButton {
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -341,7 +352,7 @@
 }
 
 /* List: the only scrolling region. Block children keep their design heights
-   under content overflow. The 2px edge offset, stable 8px themed scrollbar,
+   under content overflow. The 2px edge offset, stable 5px themed scrollbar,
    and remaining padding equal the shell's right inset, with or without
    overflow, so moving the bar does not move the rows. */
 .list {
@@ -368,16 +379,64 @@
   margin-top: 2px;
 }
 
-.searchStatus,
-.searchWarning {
+.searchStatus {
   padding: 10px 12px;
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
 }
 
-.searchWarning {
-  color: var(--dsw-alias-label-secondary);
+/* Pending content search: skeleton rows on searchResultRow metrics — a round
+   leading glyph beside a title bar and a wider snippet bar, breathing through
+   opacity (same pulse as the input-trigger menu skeleton). */
+.skeletonRow {
+  display: flex;
+  /* Top alignment lines the 16px dot up with the equally tall title bar;
+     the paddings center the 35px content in the 48px row. */
+  align-items: flex-start;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 6px 8px 7px;
+}
+
+.skeletonDot {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  corner-shape: round;
+}
+
+.skeletonBars {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skeletonDot,
+.skeletonBar {
+  background: var(--dsw-alias-bg-skeleton);
+  animation: search-skeleton 2s cubic-bezier(0.36, 0, 0.64, 1) infinite;
+}
+
+.skeletonBar {
+  width: 65%;
+  height: 16px;
+  border-radius: var(--dsw-radius-xs);
+}
+
+.skeletonBarWide {
+  width: 90%;
+  height: 13px;
+}
+
+@keyframes search-skeleton {
+  0% { opacity: 1; }
+  40% { opacity: 0.6; }
+  80%, 100% { opacity: 1; }
 }
 
 /* One workspace section: header row + a compact expanded session run. */
@@ -441,8 +500,8 @@
   width: 100%;
   height: 28px;
   border: none;
-  border-radius: 8px;
-  padding: 0 12px 0 28px;
+  border-radius: var(--dsw-radius-sm);
+  padding: 0 12px 0 calc(28px + var(--dsh-workspace-indent, 0px));
   background: transparent;
   cursor: pointer;
   text-align: left;
@@ -465,6 +524,33 @@
   font-size: 13px;
 }
 
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 80px;
+  padding: 0 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.emptyState > svg {
+  margin-bottom: 4px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.emptyAction {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-link);
+}
+
 /* Rename dialog form (same figma dialog family as the create modals). */
 .renameInput {
   box-sizing: border-box;
@@ -472,7 +558,7 @@
   height: 44px;
   padding: 7px 14px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 22px;
+  border-radius: var(--dsw-radius-lg);
   outline: none;
   background: transparent;
   font-size: 14px;
@@ -502,8 +588,26 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+/* The stop-and-archive dialog's list of work that will be stopped. */
+.archiveActivity {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.archiveActivity li {
+  overflow-wrap: anywhere;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wide {
+    animation: none;
+  }
+
+  .skeletonDot,
+  .skeletonBar {
     animation: none;
   }
 

@@ -40,7 +40,8 @@ function harness() {
     const occurrence = domain.occurrence(SESSION, { id: tabId })
     navigationSources.set(tabId, occurrence.navigation)
     return tabInfoFactory(standard, {
-      tabId, title: false, fullscreen: false, signal: occurrence.signal, actions: occurrence.tabActions, useStore, useTabNavigation,
+      tabId, title: false, fullscreen: false, active: true, shortcuts: [],
+      signal: occurrence.signal, actions: occurrence.tabActions, useStore, useTabNavigation,
     })
   }
   const open = (beforeCommit?: (tabId: TabId) => void): TabId => {

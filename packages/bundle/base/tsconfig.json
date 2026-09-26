@@ -10,6 +10,12 @@
   "references": [
     {
       "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../boot/config-editor"
+    },
+    {
+      "path": "../../settings/settings"
     }
   ]
 }

@@ -1,6 +1,43 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-permission-presets/README.md
-README.md: 190c907293bbe7a0c07fc255cc56338bed6bcf32
-README.zh.md: c6e3b9c4b9d5f036b15f9ae84c8acade3a62c183
+/:
+  en: bef3c4170b3887a8
+  zh: eb1b5ac2e6e04f5f
+/deepseek-ai-dsh-client-ui-permission-presets:
+  en: 8320c8f78c0809ce
+  zh: 74b8ded4da556e81
+/deepseek-ai-dsh-client-ui-permission-presets/summary:
+  en: 2591adc4721c0564
+  zh: 311292f58621adb6
+/deepseek-ai-dsh-client-ui-permission-presets/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-permission-presets/use-this-package:
+  en: 91606bff7da02253
+  zh: ef68e813d64c89be
+/deepseek-ai-dsh-client-ui-permission-presets/use-this-package/the-picker:
+  en: d851eab85fe002bd
+  zh: 0fdf6eeb1cbd609b
+/deepseek-ai-dsh-client-ui-permission-presets/use-this-package/the-settings-row:
+  en: 5067f6aa12496225
+  zh: cfa6796684f97535
+/deepseek-ai-dsh-client-ui-permission-presets/understand-the-implementation:
+  en: 4089d5bebf3e8bf0
+  zh: bc5c3652b0612784
+/deepseek-ai-dsh-client-ui-permission-presets/further-exploration:
+  en: 9bdbdea03d0e2a96
+  zh: cc3bf480a0706ef2
+/deepseek-ai-dsh-client-ui-permission-presets/model-experience:
+  en: 114f37b90a58cffa
+  zh: dc99a48a72c975e6
+/deepseek-ai-dsh-client-ui-permission-presets/model-experience/kv-cache-effect:
+  en: f25206808c8d84c5
+  zh: 4fcbc876952d240d
+/deepseek-ai-dsh-client-ui-permission-presets/known-limitations-and-deferred-work:
+  en: 08cdc0ad196d12c1
+  zh: 1b65f5d30e219197
+/deepseek-ai-dsh-client-ui-permission-presets/known-limitations-and-deferred-work/dev-note:
+  en: febc49a55a454923
+  zh: b72c74e467fd6407

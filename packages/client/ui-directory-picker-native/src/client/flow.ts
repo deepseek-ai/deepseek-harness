@@ -8,9 +8,9 @@ import type { ReactElement } from 'react'
 // Type-only: the owner contract of the directory-flow holes.
 import type { DirectoryFlowOwnerProps } from '@deepseek-ai/dsh-client-ui-workspace/client'
 
-/** Injected face: the wire call the flow drives (bound in apply's closure). */
+/** Injected face: the native chooser call the flow drives (bound in apply's closure). */
 export interface NativeFlowInjected {
-  /** Ask the local Host to open its native single-directory chooser. */
+  /** Open the local desktop or Host single-directory chooser. */
   pick: () => Promise<string | null>
 }
 
@@ -31,11 +31,11 @@ export function NativeDirectoryFlow(props: DirectoryFlowOwnerProps & NativeFlowI
   outcome.current = props
   // Unmount (HMR replacing the occupant) discards settlements wholesale: the
   // dead instance must neither adopt a path nor drive the owner's error
-  // surface. The wire carries no per-request abort, so the host-side chooser
+  // surface. The wire carries no per-request abort, so the native chooser
   // survives until answered — its answer just lands nowhere; the replacement
   // instance re-arms under the owner's still-open request. An injected-face
   // identity change alone (re-registration) keeps the pending settlement:
-  // the chooser on the host display is still the same dialog.
+  // the native chooser is still the same dialog.
   const alive = useRef(true)
   useEffect(() => {
     // StrictMode's development replay runs the cleanup once before the real

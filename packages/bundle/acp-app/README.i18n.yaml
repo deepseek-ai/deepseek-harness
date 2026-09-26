@@ -1,6 +1,43 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/bundle/acp-app/README.md
-README.md: c770e25bbcf19cd22b7bc3850eb38923f00b86e1
-README.zh.md: 3f87f92b9333f0f48d8d7171ce084d95f6bf9a56
+/:
+  en: 54af04fe07d4168b
+  zh: e4ceb9a3f653e74b
+/deepseek-ai-dsh-acp-app:
+  en: 7bc0c99f44486156
+  zh: 9e77e6431619bcca
+/deepseek-ai-dsh-acp-app/summary:
+  en: a9c25b4f78fe815e
+  zh: 404b80450b716e56
+/deepseek-ai-dsh-acp-app/table-of-contents:
+  en: 636fbd365057be75
+  zh: d12fd8759c7e62e5
+/deepseek-ai-dsh-acp-app/use-this-package:
+  en: 253968fa459a1fe0
+  zh: 419ff64d21b0f8d4
+/deepseek-ai-dsh-acp-app/standard-automation-workflow:
+  en: a275f648857abadb
+  zh: 128eec8a97db5542
+/deepseek-ai-dsh-acp-app/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-acp-app/model-experience/acp-coding-agent-persona:
+  en: a7451ee84e5e156a
+  zh: a7451ee84e5e156a
+/deepseek-ai-dsh-acp-app/model-experience/acp-coding-agent-persona/what-the-model-sees:
+  en: bc0db4c628a1e547
+  zh: 740d07803bca3ce4
+/deepseek-ai-dsh-acp-app/model-experience/acp-coding-agent-persona/token-effect:
+  en: 371d28831239e0a8
+  zh: 0d2678654607b657
+/deepseek-ai-dsh-acp-app/model-experience/acp-coding-agent-persona/kv-cache-effect:
+  en: 8a5d250256381538
+  zh: 0578eaa7f774753e
+/deepseek-ai-dsh-acp-app/known-limitations-and-deferred-work:
+  en: e5e9b2ef3b75e6f6
+  zh: f34d43d5dd68ab60
+/deepseek-ai-dsh-acp-app/known-limitations-and-deferred-work/dev-note:
+  en: 8bc6c774f783517d
+  zh: d1643c271de867ae

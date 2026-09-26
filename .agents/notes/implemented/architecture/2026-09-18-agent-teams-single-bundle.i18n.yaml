@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-18-agent-teams-single-bundle.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-18-agent-teams-single-bundle.md
+/agent-note-enable-agent-teams-with-one-bundle:
+  en: c595b526791a8dfd
+  zh: 61f4bf6948e41bee
+/agent-note-enable-agent-teams-with-one-bundle/problem:
+  en: 8dd802c775d24e42
+  zh: 53cf2818dd93181e
+/agent-note-enable-agent-teams-with-one-bundle/decision:
+  en: d513c3239b59b2ee
+  zh: 7692b7ae43befc9d
+/agent-note-enable-agent-teams-with-one-bundle/alternatives-considered:
+  en: 32952c4e1b6f486d
+  zh: 6c9b91eaf0460d30
+/agent-note-enable-agent-teams-with-one-bundle/consequences:
+  en: be92cb1ce7c86cb6
+  zh: 0da06f76df72f97e
+/agent-note-enable-agent-teams-with-one-bundle/verification:
+  en: 8fc694c4c84401f1
+  zh: 6540462f6896bef7

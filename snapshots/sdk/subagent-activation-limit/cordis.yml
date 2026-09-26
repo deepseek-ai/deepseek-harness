@@ -1,0 +1,8 @@
+- id: subagent
+  name: '@deepseek-ai/dsh-subagent'
+  config:
+    maxActiveSubagents: 8
+
+- insert:
+    - id: subagent-activation-limit
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/subagent-activation-limit.ts'

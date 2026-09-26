@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-31-web-workspace-file-links.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-31-web-workspace-file-links.md
-2026-07-31-web-workspace-file-links.md: 1fd58deafa99f6c84371d2a2c3975eae86522ac2
-2026-07-31-web-workspace-file-links.zh.md: 8cb1d06562398a832fed0743a7c06894d0a4212b
+/agent-note-opening-a-produced-file-from-the-web-ui:
+  en: bdfcd62110aaefa2
+  zh: 92981f1fe8ca52c9
+/agent-note-opening-a-produced-file-from-the-web-ui/problem:
+  en: 06ba78ace240645c
+  zh: 07a46477d41ddcee
+/agent-note-opening-a-produced-file-from-the-web-ui/decision:
+  en: a3d6e9aa14dc6fb8
+  zh: d9696d46eb4a348d
+/agent-note-opening-a-produced-file-from-the-web-ui/alternatives-considered:
+  en: ba9603055aea84aa
+  zh: 3ab217f1b1ccb3b6
+/agent-note-opening-a-produced-file-from-the-web-ui/consequences:
+  en: aa460548654a89a5
+  zh: ebb8e51f5cd18f0b

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-18-volatile-config-references.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-18-volatile-config-references.md
+/agent-note-volatile-configuration-references:
+  en: 6a5845c609acc131
+  zh: f63fc95d58f06272
+/agent-note-volatile-configuration-references/problem:
+  en: da97e9a3eabc9a36
+  zh: bca53a3021689d06
+/agent-note-volatile-configuration-references/decision:
+  en: 5798a8dd943987b1
+  zh: 090d2b49958c3158
+/agent-note-volatile-configuration-references/alternatives-considered:
+  en: cf68e95cde8ff288
+  zh: 817667d5c8c93056
+/agent-note-volatile-configuration-references/consequences:
+  en: 7941168bdfa2dc96
+  zh: 29385474a4902a8a

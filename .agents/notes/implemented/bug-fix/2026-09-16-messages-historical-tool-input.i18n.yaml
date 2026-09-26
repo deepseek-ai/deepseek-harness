@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-16-messages-historical-tool-input.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-16-messages-historical-tool-input.md
+/agent-note-replay-malformed-historical-tool-input-through-messages:
+  en: 88cdfca30918b47f
+  zh: 1203d380805f81e4
+/agent-note-replay-malformed-historical-tool-input-through-messages/problem:
+  en: b9f848905bb31969
+  zh: 7c56aab1a15cfc85
+/agent-note-replay-malformed-historical-tool-input-through-messages/decision:
+  en: ee7c586820c28e54
+  zh: fced4d6c50c7d227
+/agent-note-replay-malformed-historical-tool-input-through-messages/alternatives-considered:
+  en: c7d7275282a83780
+  zh: c0c570f156ac546f
+/agent-note-replay-malformed-historical-tool-input-through-messages/consequences:
+  en: 4d1447eb8ea0f7f4
+  zh: cf232f6bb1d60d4e

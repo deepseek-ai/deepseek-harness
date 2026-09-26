@@ -1,50 +1,26 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "Use the bash tool to" [disabled]
-  - img
+  - navigation "Session hierarchy": Use the bash tool to
   - text: Standard mode
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
 - text: "Use the bash tool to run exactly: echo WEB_E2E_OK. Then reply with the single word DONE and stop. {{clock}}"
-- button "Copy":
-  - img
-- button "1 tool call":
-  - text: 1 tool call
-  - img
+- button "Copy"
+- status: Worked
+- button "Took {{duration}}"
 - paragraph: DONE
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
 - text: {{clock}}
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
-- button "6% of context used"
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Send message" [disabled]
-- button "1 turns 2 steps · {{throughput}} tok/s":
-  - img
-  - text: 1 turns 2 steps{{throughput}} tok/s
-- button "15.8K tok · Cache hit 99%":
-  - img
-  - text: 15.8K tokCache hit 99%
+- button "1 turns 2 steps · {{throughput}} tok/s": 1 turns 2 steps{{throughput}} tok/s
+- button "15.8K tok · Cache hit 99%": 15.8K tokCache hit 99%
+- button "6% of context used": 6%

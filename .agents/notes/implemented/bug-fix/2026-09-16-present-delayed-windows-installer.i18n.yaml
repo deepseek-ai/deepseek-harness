@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-16-present-delayed-windows-installer.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-16-present-delayed-windows-installer.md
+/agent-note-present-delayed-windows-installer:
+  en: 4451eeb66010bc3d
+  zh: 7b5e60d779a9eb41
+/agent-note-present-delayed-windows-installer/problem:
+  en: 7835e64ac8ea1825
+  zh: aac3b323204b08b9
+/agent-note-present-delayed-windows-installer/decision:
+  en: adea34850b8df240
+  zh: da68a90a4144092f
+/agent-note-present-delayed-windows-installer/alternatives-considered:
+  en: 66f936fe39452162
+  zh: 4d0e192fb37afffe
+/agent-note-present-delayed-windows-installer/consequences:
+  en: 6431f3c88199ecaf
+  zh: 9f30f647fdab4e64

@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/bundle/base/README.md
-README.md: f9cc3e4d03a0d71d1f598d97633c0f89f7700b42
-README.zh.md: 2e98bb710502b62ad87f04ae768833487b4b5787
+/:
+  en: 21c1b63e74134d34
+  zh: 78c69828d5930a86
+/deepseek-ai-dsh-base:
+  en: 501b1b61d4739d2a
+  zh: 5faba14f2480be3b
+/deepseek-ai-dsh-base/summary:
+  en: 5c15f68a65aadc7d
+  zh: 7ac9ace622e161ae
+/deepseek-ai-dsh-base/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-base/use-this-package:
+  en: 4c0d7045f95ff79c
+  zh: 456bb24bd1d35db1
+/deepseek-ai-dsh-base/use-this-package/a-minimal-custom-profile:
+  en: 0f971f7ac7c09139
+  zh: ceb866da681c709c
+/deepseek-ai-dsh-base/use-this-package/what-you-get:
+  en: 7ee3a3def76e0ce6
+  zh: b53b1fdc78cf0339
+/deepseek-ai-dsh-base/use-this-package/shell-tools-per-platform:
+  en: 2dce12f82d6ee955
+  zh: d4599eb899a3cd88
+/deepseek-ai-dsh-base/use-this-package/changing-the-defaults:
+  en: 96a55abd5f7007dd
+  zh: d94f020708c38a17
+/deepseek-ai-dsh-base/understand-the-implementation:
+  en: 094cfca8e26a0042
+  zh: de435e3e38420c01
+/deepseek-ai-dsh-base/understand-the-implementation/composition-mechanics:
+  en: fd37bc66e39ac5e7
+  zh: 1a039afb8bf2d517
+/deepseek-ai-dsh-base/understand-the-implementation/platform-gating:
+  en: 8c2444fa7b237783
+  zh: 82002a8b9ddf5942
+/deepseek-ai-dsh-base/understand-the-implementation/source-map:
+  en: 3aaf655b9c93534b
+  zh: 5a1b627cc6385a17
+/deepseek-ai-dsh-base/understand-the-implementation/invariant-ownership:
+  en: 533299d7bd555e61
+  zh: 0aed404f790ea447
+/deepseek-ai-dsh-base/further-exploration:
+  en: 39701b25b209fb67
+  zh: 2b7ce98365f1ecfc
+/deepseek-ai-dsh-base/model-experience:
+  en: f6c4d2609b5f4bb6
+  zh: 869a9565a133fb01
+/deepseek-ai-dsh-base/model-experience/kv-cache-effect:
+  en: e6e907c99df7cd0a
+  zh: f19f2f84a5f95177
+/deepseek-ai-dsh-base/known-limitations-and-deferred-work:
+  en: ce8558ab18184bf2
+  zh: 3b3fb98cf1bd4652
+/deepseek-ai-dsh-base/known-limitations-and-deferred-work/dev-note:
+  en: ca037cb236aa841a
+  zh: e06f3899be43b572

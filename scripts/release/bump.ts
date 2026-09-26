@@ -19,7 +19,7 @@ import { globSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, matchesGlob } from 'node:path'
 import { parseArgs } from 'node:util'
 import { releaseFamily, type ReleaseFamily, type ReleaseMember } from './families.ts'
-import { capture, isEntry } from './process.ts'
+import { capture, isEntry, pnpmCommand } from './process.ts'
 
 /** Files npm publishes whether or not `files` lists them. */
 const ALWAYS_PUBLISHED = ['package.json', 'README*', 'LICENSE*', 'LICENCE*'] as const
@@ -392,7 +392,8 @@ function main(): void {
   const dryRun = values['dry-run']
   if (!dryRun) {
     for (const entry of planned) writeVersion(root, entry.manifestPath, entry.from, entry.to)
-    capture('pnpm', ['install', '--lockfile-only'])
+    const [pnpm, ...pnpmArgs] = pnpmCommand()
+    capture(pnpm, [...pnpmArgs, 'install', '--lockfile-only'])
   }
 
   const summary = sharedVersion

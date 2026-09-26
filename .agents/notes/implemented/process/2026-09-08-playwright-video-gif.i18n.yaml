@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-08-playwright-video-gif.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-08-playwright-video-gif.md
-2026-09-08-playwright-video-gif.md: 44db04814900d4813f1d39521e4e84e7d0b8d1b8
-2026-09-08-playwright-video-gif.zh.md: 4922d739f0ff760afe12fe1a624abc1d1c4cd81f
+/agent-note-playwright-video-captures-continuous-browser-demos:
+  en: fcca6f069dc51b80
+  zh: e9d171b6c84f92a7
+/agent-note-playwright-video-captures-continuous-browser-demos/problem:
+  en: 967fed211899587e
+  zh: 0062f7ca29211105
+/agent-note-playwright-video-captures-continuous-browser-demos/decision:
+  en: 5f9e88a564fd6b8a
+  zh: b78164f92167dada
+/agent-note-playwright-video-captures-continuous-browser-demos/alternatives-considered:
+  en: 221e89bafcb152d4
+  zh: b33816c680dc450f
+/agent-note-playwright-video-captures-continuous-browser-demos/consequences:
+  en: e5c9eb6df05801ba
+  zh: 786cd7775bfceb9e

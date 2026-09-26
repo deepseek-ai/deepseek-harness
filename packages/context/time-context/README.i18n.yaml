@@ -1,6 +1,70 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/context/time-context/README.md
-README.md: ea6f480b51dddc72f2be1a480053b47045a3f60b
-README.zh.md: 600a8870860ee1558758d2eaf71220dbcabf9588
+/:
+  en: aeab1f35e53d97e6
+  zh: 24cef3129256b53e
+/deepseek-ai-dsh-time-context:
+  en: ec051915b3d81cda
+  zh: 3a0ef832e3a5e419
+/deepseek-ai-dsh-time-context/summary:
+  en: 8160d6d20a8bc98c
+  zh: b7010a1edf57079b
+/deepseek-ai-dsh-time-context/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-time-context/use-this-package:
+  en: dedd1cdaec7140f1
+  zh: 9399f5b677ff8f34
+/deepseek-ai-dsh-time-context/use-this-package/what-the-model-gets:
+  en: 104b5d5609b00f33
+  zh: f6115b4eaa24bda7
+/deepseek-ai-dsh-time-context/use-this-package/configuration:
+  en: e6ac1f330c18c69c
+  zh: 9e969a5b377ba62a
+/deepseek-ai-dsh-time-context/use-this-package/choosing-the-zone:
+  en: 7eed0d784ad7381b
+  zh: 47a849df0ce80105
+/deepseek-ai-dsh-time-context/understand-the-implementation:
+  en: 2d21fa2aad5a729d
+  zh: cfbfada0eb647435
+/deepseek-ai-dsh-time-context/understand-the-implementation/design-concept:
+  en: f2c19187501f7027
+  zh: 48d31d0ea9bd8b16
+/deepseek-ai-dsh-time-context/understand-the-implementation/source-map:
+  en: 05a0a4627013d3d2
+  zh: 281429e6ef7f26ec
+/deepseek-ai-dsh-time-context/understand-the-implementation/main-flow:
+  en: ae9f13873dde5271
+  zh: 873f32e67f8b202b
+/deepseek-ai-dsh-time-context/further-exploration:
+  en: e1cd55f40edbb7ed
+  zh: 8a2abf22ef859841
+/deepseek-ai-dsh-time-context/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-time-context/model-experience/preparation-time-temporal-context:
+  en: 2d7737ecbb6d396a
+  zh: d143ab388368b54e
+/deepseek-ai-dsh-time-context/model-experience/preparation-time-temporal-context/what-the-model-sees:
+  en: 945a84da62e8ff62
+  zh: 935dc3f93f862f3f
+/deepseek-ai-dsh-time-context/model-experience/preparation-time-temporal-context/what-the-model-sees/first-step:
+  en: 58d49c94906946dd
+  zh: e42ca0fe4ec2878d
+/deepseek-ai-dsh-time-context/model-experience/preparation-time-temporal-context/what-the-model-sees/later-steps:
+  en: d583e2c01b797bef
+  zh: 74b908a4fd7972e7
+/deepseek-ai-dsh-time-context/model-experience/preparation-time-temporal-context/token-effect:
+  en: fc72bbd239df14db
+  zh: 750a04f8d4f1b6db
+/deepseek-ai-dsh-time-context/model-experience/preparation-time-temporal-context/kv-cache-effect:
+  en: 2fbf2175168e8244
+  zh: f681f89596f500f5
+/deepseek-ai-dsh-time-context/known-limitations-and-deferred-work:
+  en: 8fcf131f1f00626b
+  zh: a99b928aca0b1fab
+/deepseek-ai-dsh-time-context/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

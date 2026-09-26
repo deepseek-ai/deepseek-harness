@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-16-shared-subagent-settings-card.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-16-shared-subagent-settings-card.md
+/agent-note-shared-subagent-settings-card:
+  en: 63fcf9d6ab8a601d
+  zh: 0f824893329679f2
+/agent-note-shared-subagent-settings-card/problem:
+  en: a63f47c29f3a6305
+  zh: 9f2150e9a9c5bc4b
+/agent-note-shared-subagent-settings-card/decision:
+  en: 2c4056b23e053d3a
+  zh: d46c391f9b5be135
+/agent-note-shared-subagent-settings-card/alternatives-considered:
+  en: 8674979fbd8197f1
+  zh: 6c2169803839f70b
+/agent-note-shared-subagent-settings-card/consequences:
+  en: 4a3671620dfa64b6
+  zh: eb6eb20e864f77a1
+/agent-note-shared-subagent-settings-card/verification:
+  en: 8d9956c13fb6658b
+  zh: 3d95564e51595bca

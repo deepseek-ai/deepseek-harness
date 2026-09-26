@@ -1,7 +1,7 @@
 /** Shared trajectory record data and formatting contracts. */
 
 import type { HTMLAttributes } from 'react'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ConversationPromptSnapshot } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { TrajectoryTranslate } from './locales.ts'
 
@@ -30,6 +30,8 @@ export interface TrajectorySourceBlock {
   type: string
   content: string
   attachment?: ImageAttachmentRef
+  /** Ordinary file metadata; never passed to the image loader. */
+  file?: FileAttachmentRef
   callId?: string
   toolName?: string
 }

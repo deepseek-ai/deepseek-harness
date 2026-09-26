@@ -1,0 +1,61 @@
+# Agent preset minimal: one `@deepseek-ai/dsh-agent-preset` declaration inserted
+# after the web patch. Edits saved from the Web editor override this row's
+# `config.plugins` by id from the profile patch.
+- insert:
+    - id: preset-minimal
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: minimal
+        order: 3
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: You are a helpful software engineer assistant.
+              complete: true
+              includeRuntimeContext: false
+          - id: persistent-shell
+            name: cordis:group
+            group: true
+            isolate:
+              terminals: true
+            config:
+              - id: pty
+                name: '@deepseek-ai/dsh-terminal'
+              - id: terminal-bash
+                name: '@deepseek-ai/dsh-terminal-bash'
+                disabled: !!js process.platform === 'win32'
+                config:
+                  timeoutMs: 300000
+              - id: persistent-bash
+                name: '@deepseek-ai/dsh-tool-bash-persistent'
+                disabled: !!js process.platform === 'win32'
+                config:
+                  timeoutMs: 300000
+                  description: |-
+                    Run commands in a bash shell
+                    * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+                    * Network access depends on the task environment. Prefer configured mirrors/proxies when they are available.
+                    * State is persistent across command calls and discussions with the user.
+                    * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.
+                    * Please avoid commands that may produce a very large amount of output.
+                    * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.
+              - id: terminal-pwsh
+                name: '@deepseek-ai/dsh-terminal-bash'
+                disabled: !!js process.platform !== 'win32'
+                config:
+                  shellDialect: pwsh
+                  timeoutMs: 300000
+              - id: persistent-pwsh
+                name: '@deepseek-ai/dsh-tool-pwsh-persistent'
+                disabled: !!js process.platform !== 'win32'
+                config:
+                  timeoutMs: 300000
+                  description: |-
+                    Run commands in a PowerShell shell
+                    * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+                    * You don't have access to the internet via this tool.
+                    * State is persistent across command calls and discussions with the user.
+                    * Use native Windows paths (C:\...) and $env:NAME variables; this is PowerShell, not bash.
+                    * Please avoid commands that may produce a very large amount of output.
+                    * Please run long lived commands in the background, e.g. 'Start-Job' or start a server with Start-Process.

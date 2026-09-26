@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/sandbox/sandbox-windows-acl/README.md
-README.md: 30eaea27b9f8a0ebd1691348c9e6f87706891866
-README.zh.md: eeb65e5db1044eb75e0c13c5f3c76667432dc485
+/:
+  en: 14d3fdd57b94c86f
+  zh: abcd3b4f9dd908fa
+/deepseek-ai-dsh-sandbox-windows-acl:
+  en: e7cdbd2652fe80ab
+  zh: 04e1d187313a0bd5
+/deepseek-ai-dsh-sandbox-windows-acl/summary:
+  en: 777921135c23ee55
+  zh: 7c726cc63995d443
+/deepseek-ai-dsh-sandbox-windows-acl/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-sandbox-windows-acl/use-this-package:
+  en: 58b220faa66b2f05
+  zh: dda42e4197d80bfe
+/deepseek-ai-dsh-sandbox-windows-acl/use-this-package/when-to-choose-it:
+  en: 510d0b1ef7db159d
+  zh: dc2cf25b3db14c63
+/deepseek-ai-dsh-sandbox-windows-acl/use-this-package/direct-api:
+  en: 16596607bbccc2a3
+  zh: 30bc370a5281bf0d
+/deepseek-ai-dsh-sandbox-windows-acl/use-this-package/what-confinement-gives-you:
+  en: 289e65bddf20dd79
+  zh: 44b9fcedf944546a
+/deepseek-ai-dsh-sandbox-windows-acl/use-this-package/failures-and-recovery:
+  en: f93372e784cda63e
+  zh: f8371114f3481550
+/deepseek-ai-dsh-sandbox-windows-acl/understand-the-implementation:
+  en: c2cde86c85c2c619
+  zh: a29a114e591f9d3f
+/deepseek-ai-dsh-sandbox-windows-acl/understand-the-implementation/mechanism:
+  en: a37ea37f2d527693
+  zh: 749b5a263d0e1534
+/deepseek-ai-dsh-sandbox-windows-acl/understand-the-implementation/modes-and-token-lists:
+  en: 9c8d9af84f9abd99
+  zh: 1c82b355aa5f210f
+/deepseek-ai-dsh-sandbox-windows-acl/understand-the-implementation/the-confinement-runner:
+  en: 0847de0e53e50061
+  zh: 90fa3dcaf080c3be
+/deepseek-ai-dsh-sandbox-windows-acl/understand-the-implementation/verified-boundaries:
+  en: ad02570eae90037f
+  zh: fd78c2318de18dda
+/deepseek-ai-dsh-sandbox-windows-acl/understand-the-implementation/header-verification-and-source-map:
+  en: c19df6b7a756b779
+  zh: b8267b26bd191d97
+/deepseek-ai-dsh-sandbox-windows-acl/further-exploration:
+  en: 7850da9522bf984b
+  zh: a9f2273a85bafcf9
+/deepseek-ai-dsh-sandbox-windows-acl/model-experience:
+  en: c94416e26fec28cd
+  zh: a16f435e8afbdf30
+/deepseek-ai-dsh-sandbox-windows-acl/model-experience/kv-cache-effect:
+  en: 796af37d6f6add68
+  zh: 1e0dc5a58e5456be
+/deepseek-ai-dsh-sandbox-windows-acl/known-limitations-and-deferred-work:
+  en: 2b6b967c62766d47
+  zh: 0faf9ec390504967
+/deepseek-ai-dsh-sandbox-windows-acl/known-limitations-and-deferred-work/dev-note:
+  en: cc273320f6a1beaf
+  zh: 5c57a312ddc50651
+/deepseek-ai-dsh-sandbox-windows-acl/known-limitations-and-deferred-work/dev-note/future-warnings-and-cleanup-surfaces:
+  en: 4c65be775f25c367
+  zh: 467b2ce99030dcf5

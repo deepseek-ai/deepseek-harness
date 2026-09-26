@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/sandbox/sandbox-local/README.md
-README.md: 15da8baaa3ab7ce476f5c45c6207657915fd7815
-README.zh.md: 0e55553e1ff18ae6e91563c34eb30f4dab61f45c
+/:
+  en: f172767891b86bf4
+  zh: e66e1cc8c96cc259
+/deepseek-ai-dsh-sandbox-local:
+  en: 2331db3e4dfa8f89
+  zh: 0182771f7e1b1cd4
+/deepseek-ai-dsh-sandbox-local/summary:
+  en: e8341fe6e38c08f6
+  zh: e38d6ff18fd2b701
+/deepseek-ai-dsh-sandbox-local/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-sandbox-local/use-this-package:
+  en: 3759ad594d0a27fb
+  zh: 722010d952b9f87f
+/deepseek-ai-dsh-sandbox-local/use-this-package/when-to-choose-it:
+  en: 722ad601000b13c7
+  zh: d2723f3743fe160b
+/deepseek-ai-dsh-sandbox-local/use-this-package/minimal-configuration:
+  en: 5d5ac6aaea69b3db
+  zh: 8049d91463b6347d
+/deepseek-ai-dsh-sandbox-local/use-this-package/confined-execution-and-enforcement:
+  en: 7282c9ec77fd6f01
+  zh: 10e385a9489105e3
+/deepseek-ai-dsh-sandbox-local/use-this-package/failures-and-recovery:
+  en: 3808edb37dde5761
+  zh: a8fef8a4fd33e364
+/deepseek-ai-dsh-sandbox-local/understand-the-implementation:
+  en: 15db6ec303151ccc
+  zh: 91f62c1f64192f92
+/deepseek-ai-dsh-sandbox-local/understand-the-implementation/runner-selection:
+  en: f0c44248c2ca6acc
+  zh: 554e9f706671d222
+/deepseek-ai-dsh-sandbox-local/understand-the-implementation/platform-profiles:
+  en: e87ee1858b20e643
+  zh: fabdc6db8264dc11
+/deepseek-ai-dsh-sandbox-local/understand-the-implementation/denial-and-runner-failure-dialects:
+  en: 62adfc9229c656cc
+  zh: 11b1534b6d61e5de
+/deepseek-ai-dsh-sandbox-local/understand-the-implementation/source-map:
+  en: 8ab5bcc8dd97df3c
+  zh: ee7a6a237a142cbd
+/deepseek-ai-dsh-sandbox-local/further-exploration:
+  en: 53e91b8be78bed12
+  zh: 70f382c800dc191a
+/deepseek-ai-dsh-sandbox-local/model-experience:
+  en: 40d918676086c7fe
+  zh: d36023a60b28fd58
+/deepseek-ai-dsh-sandbox-local/model-experience/kv-cache-effect:
+  en: e290ccc9b3c92c08
+  zh: 469589ac12cdadab
+/deepseek-ai-dsh-sandbox-local/known-limitations-and-deferred-work:
+  en: b2a6a72e340bc620
+  zh: 9d9b2894850a131d
+/deepseek-ai-dsh-sandbox-local/known-limitations-and-deferred-work/dev-note:
+  en: cc273320f6a1beaf
+  zh: 5c57a312ddc50651
+/deepseek-ai-dsh-sandbox-local/known-limitations-and-deferred-work/dev-note/future-environment-coherent-groups:
+  en: d50bceeb4301cd97
+  zh: d1c834aa2057b6e5

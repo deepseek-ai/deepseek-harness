@@ -99,6 +99,18 @@ function scopedInvocation(): InvocationDescriptor {
 }
 
 describe('TypertRegistry', () => {
+  it('retains generated result decoders until the contribution is disposed', async () => {
+    const ctx = await makeCtx()
+    const decode = (value: unknown) => value
+    const descriptor: InvocationDescriptor = {
+      ...invocation(), result: { mode: 'strict', typeSymbol: 'fixture#bytes', create: () => ({ parse: decode }), decode },
+    }
+    const dispose = ctx.typert.register({ ...toolsContribution(), invocations: [descriptor] })
+    expect(ctx.typert.local.get('goals/create')?.result).toBe(descriptor.result)
+    await dispose()
+    expect(ctx.typert.local.get('goals/create')).toBeUndefined()
+  })
+
   it('registers and queries generated schemas separately from package reflection', async () => {
     const ctx = await makeCtx()
     const contribution = toolsContribution()
@@ -500,9 +512,25 @@ describe('TypertRegistry', () => {
     }
     const dispose = ctx.typert.remotes.register({ package: '@fixture/strict', descriptors: [strictInvocation] })
     await dispose()
+    const uplinkInvocation: InvocationDescriptor = {
+      ...strictInvocation,
+      id: '@fixture/remote#attach',
+      method: 'attach',
+      mode: 'stream',
+      uplink: { codec: strict },
+    }
+    const disposeUplink = ctx.typert.remotes.register({ package: '@fixture/uplink', descriptors: [uplinkInvocation] })
+    await disposeUplink()
 
+    const bogusMode: string = 'duplex'
     const malformed: readonly [InvocationDescriptor, string][] = [
       [{ ...invocation(), id: '' }, 'invocation id'],
+      [{ ...invocation(), mode: bogusMode as 'stream' }, 'mode must be "stream"'],
+      [{
+        ...invocation(),
+        mode: 'stream',
+        uplink: { codec: { mode: 'strict', typeSymbol: '', create: () => z.string() } },
+      }, 'uplink type symbol'],
       [{ ...invocation(), namespace: 'bad/name' }, 'namespace'],
       [{ ...invocation(), implementation: 'bad/name' }, 'implementation method'],
       [{

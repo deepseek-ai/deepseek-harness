@@ -1,0 +1,18 @@
+[
+  {
+    "role": "hide",
+    "label": "Hide DeepSeek Harness"
+  },
+  {
+    "role": "hideOthers",
+    "label": "Hide Others"
+  },
+  {
+    "role": "unhide",
+    "label": "Show All"
+  },
+  {
+    "role": "quit",
+    "label": "Quit DeepSeek Harness"
+  }
+]

@@ -14,7 +14,7 @@ Session 格式 V3 使用一种规范事件信封。每个 `system/message`、`us
 
 `SurfaceOp` 恰好为 `'append'` 或 `{ op: 'replace', startSeq, endSeq }`，端点使用 `SessionSeq`，不接受别名或额外键。两个端点都早于替换事件，并按当前 surface 顺序而非数值序号顺序标识闭区间。Session 接纳还验证当前成员关系、端点顺序、完整引用覆盖与仅修改内容的单节点工具结果替换。`shadowedRange.start/end` 等压缩（compaction）载荷字段与折叠结果字段保留各自名称；这不是对载荷进行递归重命名。
 
-当前接纳拒绝任何 `request/header.header.system` 以及恰好为空的 `tools: []` 或 `adapterDefaults: {}`。系统提示词属于 `system/message`；`request/header` 仍是请求非历史状态的快照。写入方省略两个空可选字段。仅含空白的系统内容、`config.stop: []`、嵌套 header/source/data 扩展与嵌套工具 schema 值保持原样。带有 `data.error` 的 `tool/result` 要求 `message.content[0].isError === true`；失败结果不必携带错误身份。当前读取与迁移均不会根据矛盾元数据推断错误结果。
+当前接纳拒绝任何 `request/header.header.system` 以及恰好为空的 `tools: []` 或 `adapterDefaults: {}`。系统提示词属于 `system/message`；`request/header` 仍是请求非历史状态的快照。写入方省略两个空可选字段。仅含空白的系统内容、`config.stop: []`、嵌套 header/source/data 扩展与嵌套工具 schema 值保持原样。带有 `data.error` 的 `tool/result` 要求 `message.isError === true`；失败结果不必携带错误身份。当前读取与迁移均不会根据矛盾元数据推断错误结果。
 
 ### 校验所有权
 

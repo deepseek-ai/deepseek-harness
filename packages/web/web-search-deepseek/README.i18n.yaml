@@ -1,6 +1,85 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/web/web-search-deepseek/README.md
-README.md: 1fa8153b55e40edc869d6d332e3c35a46de0cd1b
-README.zh.md: a38c1e126a23033cd40ef468f98b35d7cc56d869
+/:
+  en: d3ed4f8639422b9d
+  zh: 35c2ac10b0158bd3
+/deepseek-ai-dsh-web-search-deepseek:
+  en: d2c50aae9d869902
+  zh: ee9f3f0ff575cbf9
+/deepseek-ai-dsh-web-search-deepseek/summary:
+  en: b5aa65b385b55fac
+  zh: 8ca37926bec97052
+/deepseek-ai-dsh-web-search-deepseek/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-web-search-deepseek/use-this-package:
+  en: e0d352d6402d9d3b
+  zh: a449234557ef8bd6
+/deepseek-ai-dsh-web-search-deepseek/use-this-package/when-to-choose-it:
+  en: 942798c9aa6ba90f
+  zh: 800ddd760ff4ae0b
+/deepseek-ai-dsh-web-search-deepseek/use-this-package/minimal-configuration:
+  en: edd0d2c2f18d0277
+  zh: e3921e7e080a16a5
+/deepseek-ai-dsh-web-search-deepseek/use-this-package/what-a-search-returns:
+  en: e30442c90365357b
+  zh: 9c9e2f1182963a8a
+/deepseek-ai-dsh-web-search-deepseek/use-this-package/request-logging:
+  en: 467b8238cf7e140c
+  zh: 85a519c8811557aa
+/deepseek-ai-dsh-web-search-deepseek/use-this-package/failures-and-recovery:
+  en: 8b9211a88d2927dd
+  zh: a2b6bbaa8c4e1996
+/deepseek-ai-dsh-web-search-deepseek/understand-the-implementation:
+  en: 9842c69ad3636bb3
+  zh: 3cdc3f816cbdd0cb
+/deepseek-ai-dsh-web-search-deepseek/understand-the-implementation/design-philosophy:
+  en: 39d77f6c18cc791c
+  zh: d03a8d0a4e4addb2
+/deepseek-ai-dsh-web-search-deepseek/understand-the-implementation/source-map:
+  en: d354ae3f0f21f7c6
+  zh: 95eb16d30d9c7a9c
+/deepseek-ai-dsh-web-search-deepseek/understand-the-implementation/request-flow:
+  en: e2462cb33430dc4c
+  zh: c31579cf224dcda2
+/deepseek-ai-dsh-web-search-deepseek/further-exploration:
+  en: 59a97f197c044508
+  zh: de191dd060c31801
+/deepseek-ai-dsh-web-search-deepseek/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-web-search-deepseek/model-experience/auxiliary-deepseek-search-request:
+  en: 722e4bf02953e236
+  zh: b3432958beb7b60f
+/deepseek-ai-dsh-web-search-deepseek/model-experience/auxiliary-deepseek-search-request/what-the-model-sees:
+  en: cac44ad2353afadd
+  zh: 23b27f833e47bf7e
+/deepseek-ai-dsh-web-search-deepseek/model-experience/auxiliary-deepseek-search-request/token-effect:
+  en: f244b4dd6c9e6ad4
+  zh: 50f2434d5119296b
+/deepseek-ai-dsh-web-search-deepseek/model-experience/auxiliary-deepseek-search-request/kv-cache-effect:
+  en: 2bac9662f1792a79
+  zh: 556d9baabd79f9cb
+/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-result-indirectly:
+  en: 666f5753c99783ab
+  zh: b44328e99bcc45c9
+/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-result-indirectly/what-the-model-sees:
+  en: d438b6d9bc0dcc3c
+  zh: 93a311af5a178113
+/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-result-indirectly/token-effect:
+  en: 01ec43a9b616139d
+  zh: 0a5b7c28fde34bcf
+/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-result-indirectly/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: f681f89596f500f5
+/deepseek-ai-dsh-web-search-deepseek/known-limitations-and-deferred-work:
+  en: c9fa522bcfa7bfef
+  zh: f95aeb879603bb62
+/deepseek-ai-dsh-web-search-deepseek/known-limitations-and-deferred-work/dev-note:
+  en: 7f775cc79dbce94b
+  zh: 12b8f68f9e7c48ca
+/deepseek-ai-dsh-web-search-deepseek/known-limitations-and-deferred-work/dev-note/future-dedicated-retrieval-endpoint:
+  en: 5cfe3e3773c0abe7
+  zh: a97e11f22b7a0434

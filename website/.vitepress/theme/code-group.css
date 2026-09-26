@@ -1,0 +1,10 @@
+.vp-code-group input:focus-visible + label {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: -4px;
+  border-radius: 4px;
+}
+
+/* Search excerpts have no tab controls; every matching command stays visible. */
+.VPLocalSearchBox .vp-code-group .blocks > div {
+  display: block;
+}

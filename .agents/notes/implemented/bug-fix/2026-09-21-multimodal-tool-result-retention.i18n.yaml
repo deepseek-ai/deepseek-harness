@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-21-multimodal-tool-result-retention.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-21-multimodal-tool-result-retention.md
+/agent-note-multimodal-tool-result-retention:
+  en: aa04c4148785f8ca
+  zh: b08c44c8484ea5d2
+/agent-note-multimodal-tool-result-retention/problem:
+  en: 9e8765ea40441f36
+  zh: 3ca2616499d3c9fc
+/agent-note-multimodal-tool-result-retention/decision:
+  en: a65eeedad585fc4b
+  zh: 82aae7ef0148282b
+/agent-note-multimodal-tool-result-retention/alternatives-considered:
+  en: c670e96a46c93540
+  zh: efccc4d3423e5ac0
+/agent-note-multimodal-tool-result-retention/consequences:
+  en: 7fdf51600bb0ffd7
+  zh: 0ad7f06887b1c859

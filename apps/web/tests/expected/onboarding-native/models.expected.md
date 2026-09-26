@@ -1,0 +1,20 @@
+- dialog "设置":
+  - navigation:
+    - text: 设置
+    - button "通用设置"
+    - button "模型"
+    - button "内置插件"
+    - button "Agent 预设"
+  - button "打开配置文件"
+  - button "关闭"
+  - heading "模型" [level=2]
+  - paragraph: 填入各提供商的 API 密钥即可使用其模型。
+  - list:
+    - listitem:
+      - text: DeepSeek deepseek-official API 密钥
+      - textbox "API 密钥":
+        - /placeholder: 输入 API 密钥
+      - group: 自定义设置
+      - button "取消"
+      - button "保存"
+  - button "添加模型提供商"

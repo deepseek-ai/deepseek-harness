@@ -1,3 +1,4 @@
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 /** Sidebar shell slot registration and its Session/layout callbacks. */
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
@@ -33,6 +34,7 @@ async function bench(declare = true) {
   await ctx.plugin(SlotRegistry).await()
   const layout = { toggleSidebar: vi.fn(), selectPanel: vi.fn() }
   const uiWorkspace = { startSession: vi.fn() }
+  ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
   ctx.provide('layout', layout)
   ctx.provide('uiWorkspace', uiWorkspace as never)
   ctx.provide('locale', new LocaleRuntime(ctx))
@@ -42,7 +44,7 @@ async function bench(declare = true) {
       { name: 'root', children: {
         'sidebar': { kind: 'single', scope: 'root' },
         'main': { kind: 'keyed', scope: 'root' },
-        'conversation.session.header.leading': { kind: 'single', scope: 'session' },
+        'shell.leading': { kind: 'single', scope: 'root' },
       } },
       SidebarFrame,
     )
@@ -56,7 +58,7 @@ describe('ui-sidebar apply', () => {
   })
 
   it('declares only the services it uses', () => {
-    expect(inject).toEqual(['slots', 'layout', 'uiWorkspace', 'locale'])
+    expect(inject).toEqual(['slots', 'layout', 'uiWorkspace', 'locale', 'shortcuts'])
   })
 
   it('registers the shell and declares its child seats', async () => {
@@ -71,8 +73,8 @@ describe('ui-sidebar apply', () => {
     expect(b.slots.spec('sidebar.panellist')).toEqual({ kind: 'list', scope: 'root' })
     // Copy rides the standard locale seat, not the inject face.
     expect(b.slots.entries('sidebar')[0]!.locale).toBe('sidebar')
-    // The header leading occupant reuses the shell's inject face and locale.
-    const leading = b.slots.entries('conversation.session.header.leading')
+    // The window-chrome occupant reuses the shell's inject face and locale.
+    const leading = b.slots.entries('shell.leading')
     expect(leading).toHaveLength(1)
     expect(leading[0]!.component).toBe(HeaderLeadingControls)
     expect(leading[0]!.locale).toBe('sidebar')
@@ -145,7 +147,7 @@ describe('ui-sidebar apply', () => {
     await fiber.await()
     await fiber.dispose()
     expect(b.slots.entries('sidebar')).toHaveLength(0)
-    expect(b.slots.entries('conversation.session.header.leading')).toHaveLength(0)
+    expect(b.slots.entries('shell.leading')).toHaveLength(0)
     expect(b.slots.spec('sidebar.brand.mark')).toBeUndefined()
     expect(b.slots.spec('sidebar.brand.name')).toBeUndefined()
     expect(b.slots.spec('sidebar.workspaces')).toBeUndefined()

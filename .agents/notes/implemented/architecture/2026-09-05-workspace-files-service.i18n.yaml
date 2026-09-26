@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-05-workspace-files-service.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-05-workspace-files-service.md
-2026-09-05-workspace-files-service.md: 40157508a83abc61245845a1dbe4f1749e175563
-2026-09-05-workspace-files-service.zh.md: 51de0ad5b644f27e30557ea6b11ba62b8ef9a715
+/agent-note-workspace-file-service:
+  en: 4f48d3f949d8e3eb
+  zh: 4060f4e66c36439e
+/agent-note-workspace-file-service/problem:
+  en: 55d969715a48c9b3
+  zh: 755dab7523cd01c2
+/agent-note-workspace-file-service/decision:
+  en: 6ab2a1f635cfc87c
+  zh: 369e3ed9b6cdc159
+/agent-note-workspace-file-service/decision/package-topology:
+  en: 59c3648960630ff8
+  zh: 1891f8659e660e45
+/agent-note-workspace-file-service/decision/the-workspacefiles-file-operations:
+  en: efdecd9cf80c03e7
+  zh: 5ea40e48ab0559a2
+/agent-note-workspace-file-service/decision/paths-on-the-wire:
+  en: 7b5a96adc08177bc
+  zh: ae4692e5e62e7de0
+/agent-note-workspace-file-service/decision/file-checks-and-workspace-containment:
+  en: 1b588f346590a0fd
+  zh: 1cdac02b967b157f
+/agent-note-workspace-file-service/decision/failures:
+  en: 0e419dd7bdcf38ba
+  zh: 6cb588a77593913c
+/agent-note-workspace-file-service/decision/configuration:
+  en: 796ee295af0895bd
+  zh: 4dfa113ed19f5f9a
+/agent-note-workspace-file-service/decision/the-readbyterange-seam-in-dsh-fs:
+  en: 24d84843c56a012a
+  zh: 058f959527589302
+/agent-note-workspace-file-service/decision/the-client-file-provider:
+  en: 0d42d4716dde706f
+  zh: 4e95b8af2df232b6
+/agent-note-workspace-file-service/decision/related-notes:
+  en: 6e8cfa03b5222af6
+  zh: efdf8f17757fc378
+/agent-note-workspace-file-service/alternatives-considered:
+  en: 3d598eb6d03d05e5
+  zh: 7dac0b7af471a651
+/agent-note-workspace-file-service/consequences:
+  en: 246bb7aed62f6c9b
+  zh: debf6d4129ee477b
+/agent-note-workspace-file-service/testing:
+  en: 776c380b6150065e
+  zh: df3f0f1050966ff7
+/agent-note-workspace-file-service/deferred:
+  en: b033218338ca0122
+  zh: aa48fa67f9eb36c3

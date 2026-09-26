@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-message-feedback/README.md
-README.md: b37278e8d115a2ad61bb17ef8d884b0d888cd6a7
-README.zh.md: cd233061640f5e52ea9ca54ffe973bff3b957197
+/:
+  en: 8aef97e8b41fcc4b
+  zh: 2a28ff708de40cef
+/deepseek-ai-dsh-client-ui-message-feedback:
+  en: eef16395a28d7264
+  zh: 8b3daf739cdbc512
+/deepseek-ai-dsh-client-ui-message-feedback/summary:
+  en: 32b117b659c93b6d
+  zh: 88e019f2f682cb6b
+/deepseek-ai-dsh-client-ui-message-feedback/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-message-feedback/use-this-package:
+  en: e0127a604ff4aebb
+  zh: 38f1b3db30f81b22
+/deepseek-ai-dsh-client-ui-message-feedback/use-this-package/failures:
+  en: f060de7d9f44b058
+  zh: 60770de36be6e90f
+/deepseek-ai-dsh-client-ui-message-feedback/understand-the-implementation:
+  en: 61260495346ceb3e
+  zh: 32e05d3eb82fcaf2
+/deepseek-ai-dsh-client-ui-message-feedback/further-exploration:
+  en: 47906e09b597c666
+  zh: f729475bcc21f4ec
+/deepseek-ai-dsh-client-ui-message-feedback/model-experience:
+  en: a063165cbba41ab6
+  zh: 0a5ab1eaea93fce9
+/deepseek-ai-dsh-client-ui-message-feedback/model-experience/kv-cache-effect:
+  en: 184078637480a33b
+  zh: 4016876c67533dee
+/deepseek-ai-dsh-client-ui-message-feedback/known-limitations-and-deferred-work:
+  en: 17939bf926bf384b
+  zh: d4cb01a03076f761
+/deepseek-ai-dsh-client-ui-message-feedback/known-limitations-and-deferred-work/dev-note:
+  en: 9b670f2a6e0fc0b4
+  zh: 3eb9ed838ad61571

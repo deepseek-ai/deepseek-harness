@@ -90,12 +90,11 @@ describe('default Web bundle input isolation', () => {
   })
 
   it('allows experimental code in the separately emitted preview entry', async () => {
-    await expect(fixture().run()).resolves.toMatchObject({
-      output: expect.arrayContaining([
-        expect.objectContaining({ type: 'asset', fileName: 'index.html' }),
-        expect.objectContaining({ type: 'chunk', name: 'bootstrap' }),
-      ]) as unknown,
-    })
+    const output: unknown = expect.arrayContaining([
+      expect.objectContaining({ type: 'asset', fileName: 'index.html' }),
+      expect.objectContaining({ type: 'chunk', name: 'bootstrap' }),
+    ])
+    await expect(fixture().run()).resolves.toMatchObject({ output })
   })
 
   it.each([

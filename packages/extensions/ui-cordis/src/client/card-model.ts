@@ -1,11 +1,11 @@
 /** Replay-stable view models for Cordis lifecycle Tool calls. */
 
-import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
+import type { StartedToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type {
   CordisDynamicPackageId, CordisDynamicPluginId, CordisDynamicPluginRunId, CordisDynamicRunMode,
 } from './events.ts'
 
-type Block = ToolCallViewProps['block']
+type Block = StartedToolCallViewProps['block']
 
 /** Lifecycle of the tool call itself. */
 export type CordisToolState = 'running' | 'ok' | 'error' | 'stopped'
@@ -60,7 +60,7 @@ function objectAt(source: Record<string, unknown>, key: string): Record<string, 
 
 function parseArgs(argsRaw: string): Record<string, unknown> | null {
   try {
-    const parsed = JSON.parse(argsRaw) as unknown
+    const parsed: unknown = JSON.parse(argsRaw)
     return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : null
   } catch {
     // Running calls can expose a truncated JSON prefix.

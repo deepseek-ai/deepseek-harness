@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/shell/README.md
-README.md: 0d07e6551050ac58eaadd16233595abbf8f5fb5f
-README.zh.md: 71bb622ba2d3cee44b1959f17d99ad849d742482
+/:
+  en: d6cefb5c7640e7e6
+  zh: 55d41fa2f53300e6
+/shell-bash-capability-family:
+  en: 712a3d4fac6a470d
+  zh: bd628a49105b1532
+/shell-bash-capability-family/summary:
+  en: d1a8ea04bb48ab49
+  zh: 14e06126bf109289
+/shell-bash-capability-family/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/shell-bash-capability-family/packages:
+  en: e37d8906d04f2bc5
+  zh: e6a672011f17fe73
+/shell-bash-capability-family/related-documentation:
+  en: afe5d0c108398796
+  zh: 07912a7804b7d19f
+/shell-bash-capability-family/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

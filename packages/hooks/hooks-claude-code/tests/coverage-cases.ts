@@ -1,4 +1,5 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,6 +17,12 @@ import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import SubagentRuntime, { SubagentRunId } from '@deepseek-ai/dsh-subagent'
 import * as HooksClaude from '@deepseek-ai/dsh-hooks-claude-code'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'policy': { kind: 'policy' } & ContextFormed
+  }
+}
 
 const testToolSignal = new AbortController().signal
 
@@ -278,7 +285,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
       const result = events(agent).find(e => e.type === 'tool/result')
-      expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('blocked by PreToolUse hook'))).toBe(true)
+      expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('blocked by PreToolUse hook'))).toBe(true)
     })
 
     it('PostToolUse deny with EMPTY stderr + no context uses the default feedback', async () => {
@@ -292,7 +299,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
       const result = events(agent).find(e => e.type === 'tool/result')
-      expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('blocked by PostToolUse hook'))).toBe(true)
+      expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('blocked by PostToolUse hook'))).toBe(true)
     })
 
     it('SubagentStop with no registered child runs the hook cleanly (fire-and-forget)', async () => {
@@ -338,7 +345,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       await waitForIdle(ctx, agent)
       // ask (no reason) → degrades to deny with the registry's generic message.
       expect(ran).toBe(false)
-      expect(events(agent).some(e => e.type === 'tool/result' && e.data.message.content[0].isError)).toBe(true)
+      expect(events(agent).some(e => e.type === 'tool/result' && e.data.message.isError)).toBe(true)
     })
 
     it('a recorded clean exit-0 hook with no stderr omits exitCode-extra/stderrSummary fields', async () => {
@@ -408,7 +415,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
       const result = events(agent).find(e => e.type === 'tool/result')
-      expect(result?.type === 'tool/result' && result.data.message.content[0].isError).toBe(true)
+      expect(result?.type === 'tool/result' && result.data.message.isError).toBe(true)
     })
   })
 
@@ -444,8 +451,8 @@ export function defineCoverageCases(group: CoverageGroup): void {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
       const result = events(agent).find(e => e.type === 'tool/result')
-      expect(result?.type === 'tool/result' && result.data.message.content[0].isError).toBe(true)
-      expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('bad'))).toBe(true)
+      expect(result?.type === 'tool/result' && result.data.message.isError).toBe(true)
+      expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('bad'))).toBe(true)
       // additionalContext also injected (the block + context arm).
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user' && e.data.content.some(b => b.type === 'text' && b.text.includes('context too')))).toBe(true)
     })
@@ -525,7 +532,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
           content: [{ type: 'text' as const, text: 'rewritten-prompt' }],
         }, createUserMessage({
           content: [{ type: 'text' as const, text: 'from-downstream' }],
-          source: { kind: 'plugin' as const, plugin: 'policy' },
+          source: { kind: 'policy' as const },
         })],
       }))
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
@@ -540,8 +547,8 @@ export function defineCoverageCases(group: CoverageGroup): void {
       expect(userMsg?.type === 'user/message' && userMsg.data.content.some(b => b.type === 'text' && b.text === 'rewritten-prompt')).toBe(true)
       const contexts = events(agent).filter(event => event.type === 'user/message' && event.data.source.kind !== 'user')
       expect(contexts.map(event => event.type === 'user/message' && event.data.source)).toEqual([
-        { kind: 'plugin', plugin: 'policy' },
-        { kind: 'plugin', plugin: 'hooks-claude-code' },
+        { kind: 'policy' },
+        { kind: 'hooks-claude-code' },
       ])
     })
 
@@ -559,7 +566,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
       const result = events(agent).find(e => e.type === 'tool/result')
-      expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text === 'rewritten-result')).toBe(true)
+      expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text === 'rewritten-result')).toBe(true)
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user' && e.data.content.some(b => b.type === 'text' && b.text.includes('bridge-note')))).toBe(true)
     })
 
@@ -574,7 +581,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
         kind: 'accept' as const,
         additionalContexts: [createUserMessage({
           content: [{ type: 'text' as const, text: 'downstream-note' }],
-          source: { kind: 'plugin' as const, plugin: 'policy' },
+          source: { kind: 'policy' as const },
         })],
       }))
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
@@ -583,8 +590,8 @@ export function defineCoverageCases(group: CoverageGroup): void {
 
       const contexts = events(agent).filter(event => event.type === 'user/message' && event.data.source.kind !== 'user')
       expect(contexts.map(event => event.type === 'user/message' && event.data.source)).toEqual([
-        { kind: 'plugin', plugin: 'hooks-claude-code' },
-        { kind: 'plugin', plugin: 'policy' },
+        { kind: 'hooks-claude-code' },
+        { kind: 'policy' },
       ])
     })
 
@@ -603,8 +610,8 @@ export function defineCoverageCases(group: CoverageGroup): void {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
       const result = events(agent).find(e => e.type === 'tool/result')
-      expect(result?.type === 'tool/result' && result.data.message.content[0].isError).toBe(true)
-      expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('downstream-block'))).toBe(true)
+      expect(result?.type === 'tool/result' && result.data.message.isError).toBe(true)
+      expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('downstream-block'))).toBe(true)
       // the bridge's context still landed (folded onto the block)
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user' && e.data.content.some(b => b.type === 'text' && b.text.includes('bridge-note')))).toBe(true)
     })
@@ -621,7 +628,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       // Force the executor to reject (an infrastructure fault) so runHook's catch
       // yields a HookOutput with exitCode undefined → the `exitCode` spread false arm.
       const bash = ctx.shell
-      bash.run = (() => Promise.reject(new Error('executor down')))
+      bash.execute = (() => ({ result: () => Promise.reject(new Error('executor down')) }) as never)
       ctx.tools.register(defineContentToolFixture({ name: 'echo', description: 'e', parameters: {}, async execute() { return [{ type: 'text', text: 'ok' }] } }))
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))

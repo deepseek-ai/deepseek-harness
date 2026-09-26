@@ -297,7 +297,7 @@ type AgentCancelCause =
   | { readonly kind: 'disposed' }
 ```
 
-The cause is a TypeScript-enforced same-process input. An active cancellation holder copies it into the runtime-only `AbortSignal.reason`; a signal grants cooperating listeners no classification authority. Durable `turn/end` records the outcome as `{ kind: 'aborted', reason: TurnEndCancelCause }`, so the cancel cause lands in the terminal result.
+The cause is a TypeScript-enforced same-process input. An active cancellation holder exposes that same object as the runtime-only `AbortSignal.reason`; a signal grants cooperating listeners no classification authority. Durable `turn/end` records the outcome as `{ kind: 'aborted', reason: TurnEndCancelCause }`, so the cancel cause lands in the terminal result.
 
 The [event taxonomy](../architecture.md#events) owns the `agent/*` lifecycle, checkpoint, and waterfall contracts. Turn and step boundaries are durable session events rather than agent emits.
 
@@ -421,7 +421,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.agentDefaultModel` — `AgentDefaultModelConfig`
 
-Owns the default model selection independently of any Host or transport. The composition entry remains usable without a settings provider; when one is mounted, its user layer is read live.
+Owns the default model selection independently of any Host or transport. Each operation reads the owning Config references.
 
 ```ts cordis-catalog
 /**
@@ -431,10 +431,11 @@ Owns the default model selection independently of any Host or transport. The com
 currentSelection(): ModelSelection
 
 /**
- * Save the complete default model selection. A deployment without a settings
- * provider keeps its composition entry.
+ * Save the complete default model selection. A deployment without a configuration
+ * editor keeps its composition entry. Saves commit in submission order; a failed
+ * save rejects its caller without blocking later saves.
  * @param next - resolved selection accepted by an entry point.
- * @returns fulfillment after the optional settings write settles.
+ * @returns fulfillment after the optional profile write settles.
  */
 async saveSelection(next: ModelSelection): Promise<void>
 ```
@@ -481,248 +482,97 @@ Types: [SessionHeader](persistence.md)
 
 Source: [`packages/core/agent-loop/src/index.ts`](../../packages/core/agent-loop/src/index.ts)
 
-<a id="ctxagentpresets--agentpresets"></a>
+<a id="ctxagentpresets--agentpresetregistry"></a>
 
-### `ctx.agentPresets` — `AgentPresets`
+### `ctx.agentPresets` — `AgentPresetRegistry`
 
-Registry over the deployment's agent presets.
-
-Discovery is unmemoized: `list()` and `resolve()` re-read the roots on every call so a preset authored while the process runs is visible immediately, and a preset deleted underneath a picker disappears from the next read.
+Registry of YAML-declared presets and the revisions live Agents retain.
 
 ```ts cordis-catalog
-/**
- * Every preset the configured roots currently supply.
- * @returns the presets, first-root-wins per id.
+/** Register and eagerly load a definition; activation failure remains visible in the roster.
+ * @param definition Parsed configuration supplied by the declaring plugin.
+ * @returns Definition disposer after activation or its diagnostic settles; the declaring plugin owns it.
+ */
+async register(definition: PresetDefinition): Promise<() => Promise<void>>
+
+/** Read every declared preset, including activation failures.
+ * @returns Display metadata and loading diagnostics.
  */
 async list(): Promise<AgentPreset[]>
 
-/**
- * The roster off the Host: {@link list} projected to path-free rows, with
- * the policy-effective default marked, this deployment's authoring
- * capability, and its mode-selection policy beside it.
- *
- * Whether a client can open a preset's directory is the Host's own opener
- * capability, not a roster property — a caller needing both joins them.
- * @returns the rows, authoring capability, and effective selection policy.
+/** Read the selection roster.
+ * @returns Current presets, each marked when it is the default.
  */
 @Remote('list') async remoteExportList(): Promise<AgentPresetRoster>
 
-/**
- * Every preset's composition as flattened plugin rows, for plugin-listing
- * surfaces beside the roster's own picker.
- *
- * A preset with a live standing mount answers from its newest generation's
- * Loader entries — the composition new sessions join — even when the file
- * behind it has since been edited into an unreadable state: the mount is
- * what sessions actually run, so the broken verdict only applies to a
- * preset nothing composed. One never composed since boot answers from its
- * file, with `!!js` disabled gates evaluated against the Loader context so
- * both answers reflect the same host. Reading never mounts: an unmounted
- * preset is parsed, not composed, so listing a preset's plugins cannot
- * activate them early. A composition that stopped reading between
- * discovery's health verdict and this read is reported broken with the
- * raced reason rather than dropped.
- * @returns one composition per roster preset, in roster order.
- */
-async compositionInventory(): Promise<AgentPresetComposition[]>
-
-/**
- * Resolve one preset by id.
- *
- * A broken preset resolves — deleting one, reading one, and reporting one
- * all need the row — and the mounting paths refuse it AFTER resolution
- * through {@link resolveMountable}.
- * @param id - the preset id, or `undefined` for {@link defaultId}.
- * @returns the resolved preset.
- * @throws when no configured root supplies that id.
+/** Resolve an identity without starting an Agent.
+ * @param id Explicit preset or the current default.
+ * @returns Current metadata, including failure when activation failed.
  */
 async resolve(id?: string): Promise<AgentPreset>
 
-/**
- * Compose one agent from a preset: ensure the preset's standing mount, then
- * parent the agent's scope key to it so the mount's registrations and
- * listeners cover this agent.
- *
- * Call from the agent factory's `setup(agentCtx)`; a rejection there rolls
- * the agent creation back, so a broken preset never yields a half-composed
- * session.
- * @param agentCtx - the agent's scope context.
- * @param id - the preset id, or `undefined` for {@link defaultId}.
- * @returns the preset that was composed, for the caller to record.
- * @throws when the preset is unknown or its composition is unusable.
+/** Read one declaration's child plugin list as YAML, for viewing only.
+ * @param agentPreset Preset identity.
+ * @returns The declared composition beside its published metadata.
  */
-async mount(agentCtx: Context, id?: string): Promise<AgentPreset>
+@Remote('read') readDocument(agentPreset: string): Promise<AgentPresetDocument>
 
-/**
- * Join one agent to the SAME standing composition another already runs on.
- *
- * This is how a child agent inherits its parent's capabilities. It is a bind,
- * not a mount: the parent's generation is already composed, so the child gets
- * that exact instance — the same plugin objects, the same tool registrations,
- * the same prompt sections. Re-resolving the parent's preset by id instead
- * would re-read the roster, and a composition file edited since the parent
- * started would hand the child a DIFFERENT generation than the one its
- * parent's history was produced under (and a preset deleted since would fail
- * the child outright while its parent keeps running).
- *
- * Synchronous, and with no composition failure mode of its own — it reads no
- * roster, mounts nothing, and touches no file — which is what lets a child
- * creation window use it: the two in-process subagent drivers compose their
- * children inside a synchronous `setup`. It still rejects a caller error, as
- * the `@throws` below record.
- *
- * A parent that joined no preset — a rosterless deployment — yields no join
- * and no error: there, the model-facing rows sit in the host composition and
- * the child already sees them through the global layer.
- * @param agentCtx - the joining agent's scope context.
- * @param parentCtx - the scope context of the agent whose composition to join.
- * @returns the preset id joined, or undefined when the parent joined none.
- * @throws when `agentCtx` carries no scope, or has already joined a preset.
+/** Bind an unpublished Agent to the current preset revision.
+ * @param ctx Agent context from its setup callback.
+ * @param id Requested preset, or the default.
+ * @returns Bound preset identity.
  */
-composeFrom(agentCtx: Context, parentCtx: Context): string | undefined
+async mount(ctx: Context, id?: string): Promise<AgentPreset>
 
-/**
- * The preset one live agent runs on.
- *
- * Read from the live scope chain rather than from the session, so it answers
- * for an agent whose session has not recorded a preset yet — a child agent
- * whose durable header is being built from its parent's composition.
- * @param agentCtx - the agent's scope context.
- * @returns the preset id, or undefined when the agent joined none.
+/** Join a child to the exact revision retained by its parent.
+ * @param ctx Child Agent context.
+ * @param parent Parent Agent context.
+ * @returns Inherited preset id, or undefined in a preset-free composition.
  */
-composedPreset(agentCtx: Context): string | undefined
+composeFrom(ctx: Context, parent: Context): string | undefined
 
-/**
- * Read one preset's composition text.
- * @param id - the preset id.
- * @returns the composition exactly as stored.
- * @throws when no configured root supplies that id.
+/** Read the preset a live Agent uses.
+ * @param ctx Agent context.
+ * @returns Its preset id, if bound.
  */
-async read(id: string): Promise<string>
+composedPreset(ctx: Context): string | undefined
 
-/**
- * One preset's composition text with the roster row it belongs to.
- * @param agentPreset - the preset id.
- * @returns the composition beside its trust and published metadata.
- * @throws {RemoteError} `gateway/bad-request` for an empty id, or
- * `agent-preset/not-found` when no configured root supplies it.
- */
-@Remote('read') async readDocument(agentPreset: string): Promise<AgentPresetDocument>
-
-/**
- * Create a locally authored preset by copying an existing one whole.
- *
- * Copy is the only authoring write. Composition text never crosses this
- * seam: the source is named by id and its directory is copied as it stands,
- * so the copy is exactly as loadable as its source and authoring grants no
- * capability the roster did not already carry. The copy is NOT mounted to
- * validate — a source that mounts today yields a copy that mounts today.
- * @param from - the preset the copy starts from; shipped presets are the
- * primary source, so any trust is accepted.
- * @param id - the new preset's id, which becomes its directory name.
- * @param name - display name for the copy; absent falls back to the id.
- * @throws when the source is unknown, the id is unusable or already taken,
- * or the deployment configures no writable root.
- */
-async copy(from: string, id: string, name?: string): Promise<void>
-
-/**
- * Copy one preset through the Remote API.
- * @param from - the source preset id.
- * @param id - the new preset id.
- * @param name - the copy's optional display name.
- * @returns once the copy is stored.
- * @throws {RemoteError} with the corresponding stable preset code and
- * details when the copy is refused.
- */
-@Remote('copy') async remoteExportCopy(from: string, id: string, name?: string): Promise<void>
-
-/**
- * Delete a locally authored preset.
- *
- * @param id - the preset id.
- * @throws when the preset is unknown or ships with the deployment.
- */
-async remove(id: string): Promise<void>
-
-/**
- * Delete one preset through the Remote API.
- * @param id - the preset id.
- * @returns once the preset is deleted.
- * @throws {RemoteError} with the corresponding stable preset code and
- * details when deletion is refused.
- */
-@Remote('deletePreset') async remoteExportDelete(id: string): Promise<void>
-
-/**
- * One agent's instance of a service its preset mounted.
- *
- * A preset publishes services behind `isolate` realms, which are invisible
- * outside the group that declares them — including to the host. This is how a
- * caller holding the agent reads one anyway: a request that is ABOUT a
- * session but arrives from outside it, which is every browser RPC.
- *
- * Read addressing only. A host row that `inject`s a service cannot use this,
- * because injection resolves before any session exists and has no agent to
- * key by; such a service belongs on the host plane instead.
- * @param agent - the agent whose composition to look inside.
- * @param name - the service name as the preset's rows resolve it.
- * @returns the agent's instance, or undefined when its preset mounts none.
+/** Read a service supplied inside an Agent's isolated preset group.
+ * @param agent Agent whose composition is queried.
+ * @param name Cordis service name.
+ * @returns The service, or undefined.
  */
 serviceFor<K extends string & keyof Context>(agent: { ctx: Context }, name: K): Context[K] | undefined
 
-/**
- * Re-link one agent to a different preset's standing composition.
- *
- * Only valid while the agent has produced nothing: swapping tools mid
- * conversation would leave logged tool calls the new composition cannot
- * make. The CALLER owns that check — this method does not read session
- * history.
- *
- * The swap is a parent re-link, not an unmount: standing mounts are shared
- * and permanent, so the old composition stays for its other agents and the
- * new one is ensured BEFORE the link moves. An unknown or unusable preset
- * therefore throws with the agent exactly as it was — there is no torn-down
- * state to restore. The re-link runs through the binding this roster kept
- * from the agent's mount — dsh-scope's only re-link authority. An agent
- * that never composed one has nothing to re-link: the switch is then the
- * agent's first bind, exactly a mount. A committed re-link emits
- * `tools/change` because changing the parent scope changes the Agent's
- * resolved tool set without adding or removing registry entries.
- * @param agentCtx - the agent's scope context.
- * @param id - the preset to compose the agent from instead.
- * @returns the preset now installed.
- * @throws when the preset is unknown or its composition is unusable.
+/** Rebind a blank Agent; the caller owns the blank-session check.
+ * @param ctx Agent context.
+ * @param id Requested preset.
+ * @returns The bound identity.
  */
-async recompose(agentCtx: Context, id: string): Promise<AgentPreset>
+async recompose(ctx: Context, id: string): Promise<AgentPreset>
 
-/**
- * Compose a blank session's agent from a different preset and record it.
- * @param agent - the session's live agent, resolved from the wire identity.
- * @param agentPreset - the preset to compose the agent from instead.
- * @returns the preset id that was recorded.
- * @throws {RemoteError} with `gateway/bad-request`, `agent-preset/locked`,
- * `agent-preset/not-found`, or `agent-preset/invalid` when refused.
+/** Select a preset before a session starts its first turn.
+ * @param agent Target Agent.
+ * @param agentPreset Requested identity.
+ * @returns Committed preset identity.
  */
 @Remote('select') async select(agent: Agent, agentPreset: string): Promise<string>
 
-/**
- * The standing scope key of one preset, for a host reader with no agent.
- *
- * A cold transcript read resolves tool presenters against the composition
- * the session recorded, and the standing mount makes that possible without
- * resuming anything: ensuring the mount composes plugins but starts no
- * agent, no session, and no turn.
- * @param id - the preset id, or `undefined` for {@link defaultId}.
- * @returns the standing scope key readers pass as a registry view scope.
- * @throws when the preset is unknown or its composition is unusable.
+/** Read current registrations for cold transcript presentation.
+ * @param id Preset identity or the default.
+ * @returns A revision lease; dispose it after the scoped read completes.
  */
-async standingKeyFor(id?: string): Promise<ScopeKey>
+async acquireScope(id?: string): Promise<{ key: ScopeKey } & AsyncDisposable>
+
+/** Read plugin rows without creating an Agent.
+ * @returns Current declaration metadata and activation states.
+ */
+compositionInventory(): Promise<AgentPresetComposition[]>
 ```
 
 Types: [ScopeKey](scope.md)
 
-Source: [`packages/preset/agent-presets/src/index.ts`](../../packages/preset/agent-presets/src/index.ts)
+Source: [`packages/preset/agent-preset-registry/src/index.ts`](../../packages/preset/agent-preset-registry/src/index.ts)
 
 <a id="ctxagents--agentregistry"></a>
 
@@ -1251,5 +1101,5 @@ One session committed a different agent preset to its durable log. Consumers inv
 'agent-preset/selected'(sessionId: SessionId, agentPreset: string): void
 ```
 
-Source: [`packages/preset/agent-presets/src/types.ts`](../../packages/preset/agent-presets/src/types.ts)
+Source: [`packages/preset/agent-preset-registry/src/types.ts`](../../packages/preset/agent-preset-registry/src/types.ts)
 <!-- END GENERATED cordis-surface -->

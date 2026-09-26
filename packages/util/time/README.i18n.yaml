@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/time/README.md
-README.md: 788d7310f5f5aaed572f415212ed7fceeb6dce9d
-README.zh.md: 48f9d60919b3ddd46d158a501c7488ab423d44b1
+/:
+  en: 1816778111548561
+  zh: 460c67cc44e59372
+/dsh-util-time:
+  en: bc299a9b8fe7717f
+  zh: 896661ee0c4edf25
+/dsh-util-time/summary:
+  en: f37c9eb6571622ac
+  zh: d782978ff11bd40f
+/dsh-util-time/table-of-contents:
+  en: cd2a60a905c978d6
+  zh: cc71d387d0cbd442
+/dsh-util-time/use-this-package:
+  en: 1472cf19b0bd7447
+  zh: 73bf36759bc2d492
+/dsh-util-time/api:
+  en: cbb4b726e939fc03
+  zh: e9df4a7487433146
+/dsh-util-time/model-experience:
+  en: 02d997b5c1318f27
+  zh: 5c55d060adea756d
+/dsh-util-time/model-experience/kv-cache-effect:
+  en: f63edbd9621eee70
+  zh: 5e3982508b32b039
+/dsh-util-time/known-limitations-and-deferred-work:
+  en: 130db809b9a6db90
+  zh: 5b0b72ada5b131dd
+/dsh-util-time/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

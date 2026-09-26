@@ -57,7 +57,7 @@ describe('session-log-download real Loader composition', () => {
     })
     await context.loader.await()
 
-    const session = (context.get('sessions') as unknown as SessionStore)
+    const session = (context.get('sessions') as SessionStore)
       .create(SessionId('loader-session-export'), { meta: { createdAt: 1 } })
     const agent = { session, status: 'idle', options: {} } as unknown as Agent
     expect(context.commands.list(agent)).toContainEqual({

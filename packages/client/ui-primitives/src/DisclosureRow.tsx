@@ -1,6 +1,7 @@
-import { type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { memo, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { IconChevronDownOutline14 } from './icons/index.tsx'
+import { IconChevronDownOutlineRegular, IconChevronUpOutlineRegular } from './icons/index.tsx'
+import { TextShimmer } from './TextShimmer.tsx'
 import css from './DisclosureRow.module.css'
 
 /** Shared 24px disclosure chrome for compact flow rows. */
@@ -10,6 +11,8 @@ export interface DisclosureRowProps {
   open: boolean
   expandable: boolean
   onToggle: () => void
+  /** Animate the title while its owning operation is running. */
+  running?: boolean | undefined
   /** Makes the complete title row the disclosure target. */
   expandOnRowClick?: boolean | undefined
   /** Replaces the collapsed icon with a chevron while the row is hovered. */
@@ -27,15 +30,17 @@ export interface DisclosureRowProps {
 
 /**
  * Render one disclosure header and its controlled expanded content.
+ * Shallow prop comparison requires stable callbacks and React nodes to skip unchanged renders.
  * @param props - Visual content, controlled state, and interaction policy.
  * @returns the disclosure row.
  */
-export function DisclosureRow({
+export const DisclosureRow = memo(function DisclosureRow({
   icon,
   title,
   open,
   expandable,
   onToggle,
+  running = false,
   expandOnRowClick = false,
   previewChevron = expandable,
   keepContentWhenOpen = false,
@@ -61,12 +66,12 @@ export function DisclosureRow({
     ? (
       <>
         <span className={css.iconIdle}>{icon}</span>
-        <IconChevronDownOutline14 className={clsx(chevronClassName, css.chevronHover)} />
+        <IconChevronDownOutlineRegular className={clsx(chevronClassName, css.chevronHover)} />
       </>
     )
     : icon
   const leading = open
-    ? <IconChevronDownOutline14 className={chevronClassName} />
+    ? <IconChevronUpOutlineRegular className={chevronClassName} />
     : collapsedLeading
 
   return (
@@ -95,10 +100,10 @@ export function DisclosureRow({
             {leading}
           </span>
         )}
-        <span className={clsx(css.title, titleClassName)}>{title}</span>
+        <TextShimmer className={clsx(css.title, titleClassName)} active={running}>{title}</TextShimmer>
         {(keepContentWhenOpen || !open) && collapsedContent}
       </div>
       {open && children}
     </div>
   )
-}
+})

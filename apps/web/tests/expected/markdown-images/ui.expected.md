@@ -1,48 +1,50 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "Markdown image policy" [disabled]
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - navigation "Session hierarchy": Markdown image policy
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
 - text: Show the Markdown image policy. {{clock}}
-- button "Copy":
-  - img
+- button "Copy"
+- status: Worked
+- button "Took {{duration}}" [disabled]
 - heading "Markdown images" [level=2]
 - paragraph:
-  - img "Remote test image"
-- paragraph: Local test image
+  - 'button "View full image: Remote test image"':
+    - img "Remote test image"
 - paragraph:
-  - img "Workspace test image"
-- paragraph: Oversized image
+  - 'button "View full image: Local test image"':
+    - img "Local test image"
 - paragraph:
-  - img "Outside workspace image"
-- paragraph: Missing image
-- paragraph: {{cwd}}/corrupt.png
+  - 'button "View full image: Workspace test image"':
+    - img "Workspace test image"
+- paragraph:
+  - button "View comparison"
+- paragraph:
+  - 'button "View full image: Space path"':
+    - img "Space path"
+- paragraph:
+  - 'button "View full image: Encoded path"':
+    - img "Encoded path"
+- paragraph:
+  - 'button "View full image: Encoded filename"':
+    - img "Encoded filename"
+- paragraph: Image preview unavailable · Oversized image
+- paragraph:
+  - 'button "View full image: Outside workspace image"':
+    - img "Outside workspace image"
+- paragraph: Image preview unavailable · Missing image
+- paragraph: Image preview unavailable · {{cwd}}/corrupt.png
 - paragraph: REMOTE_IMAGE_DONE
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
 - text: {{clock}}
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Send message" [disabled]
-- button "1 turns 1 steps":
-  - img
-  - text: 1 turns 1 steps
+- button "1 turns 1 steps"

@@ -12,6 +12,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render } from '@testing-library/react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Context } from '@deepseek-ai/cordis'
+import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import {
   SlotOwnershipError, StaleAuthorizationError,
   type ActionsDecl, type SessionProviderComponent, type SlotEntryDef,
@@ -86,7 +88,6 @@ function observable<T>(initial: T) {
  * ledger; session bindings are identity-stable per id.
  */
 function makeHost() {
-  const scopeCtx = new Context()
   const entries = new Map<string, StoredEntry[]>()
   const specs = new Map<string, DeclaredSpec>()
   const versions = new Map<string, number>()
@@ -102,9 +103,11 @@ function makeHost() {
     keyedHooks: {},
     props: { sessionId: undefined },
   }
+  const absent = observable<StandardSourceBinding>(absentBinding)
   const currentBinding = observable<StandardSourceBinding>(absentBinding)
+  const targets = new Map<string, SessionReference>()
+  const bindingSources = new Map<string, ReturnType<typeof observable<StandardSourceBinding>>>()
   let currentId: string | undefined
-  const bindings = new Map<string, ScopedStandardSourceBinding>()
   const sessionSources = new Map<string, ReturnType<typeof observable<unknown>>>()
   const root = observable<StandardSourceBinding>({
     key: undefined,
@@ -114,7 +117,7 @@ function makeHost() {
   })
   const sessionAdapter: SlotScopeAdapter = {
     current: currentBinding,
-    resolve: key => bindings.get(key),
+    bindingSource: target => target === undefined ? absent : bindingSources.get(target.sessionId)!,
     renderArea: (binding, { empty, children }) => binding.key === undefined
       ? <>{empty?.() ?? null}</>
       : <>{children}</>,
@@ -157,6 +160,7 @@ function makeHost() {
       abdicated.add(entry)
       bump(key)
     },
+    reportFactoryError: () => {},
     specOf: key => specs.get(key),
     isLive: entry => live.has(entry),
     storeOf: (entry, scopeBinding) => {
@@ -177,6 +181,12 @@ function makeHost() {
       }
       return instance
     },
+    factoryStoreOf: () => undefined,
+    retainFactoryOccurrence: () => () => {},
+    subscribeFactory: () => () => {},
+    getFactoryVersion: () => 0,
+    factoryOf: () => undefined,
+    isFactoryLive: () => false,
     root,
     scopeRevision,
     scope: () => activeScopeAdapter,
@@ -185,12 +195,11 @@ function makeHost() {
     host,
     list,
     workspaces,
-    // Driver surface: set(id) publishes the resolved binding (or the absent
-    // projection) through the scope adapter.
     current: {
+      getSnapshot: () => currentId === undefined ? undefined : targets.get(currentId),
       set: (id: string | undefined) => {
         currentId = id
-        currentBinding.set((id === undefined ? undefined : bindings.get(id)) ?? absentBinding)
+        currentBinding.set(id === undefined ? absentBinding : bindingSources.get(id)?.getSnapshot() ?? absentBinding)
       },
     },
     declare: (key: string, spec: DeclaredSpec) => { specs.set(key, spec); bump(key) },
@@ -217,13 +226,14 @@ function makeHost() {
       const session = observable<unknown>(initial)
       const binding: ScopedStandardSourceBinding = {
         key: id,
-        ctx: scopeCtx,
+        ctx: new Context(),
         hooks: { session },
         keyedHooks: {},
         props: { sessionId: id },
       }
       sessionSources.set(id, session)
-      bindings.set(id, binding)
+      targets.set(id, { sessionId: id } as SessionReference)
+      bindingSources.set(id, observable<StandardSourceBinding>(binding))
       if (currentId === id) currentBinding.set(binding)
       return binding
     },
@@ -276,9 +286,14 @@ const chainEntryOf = (partial: {
 })
 
 /** Mount a root entry whose component renders `body` with its kit renderSlotChain. */
-function mountChainRoot(h: Fake, children: Record<string, DeclaredSpec>, body: (renderSlotChain: RenderSlotChainFn) => ReactNode) {
+function mountChainRoot(
+  h: Fake,
+  children: Record<string, DeclaredSpec>,
+  body: (renderSlotChain: RenderSlotChainFn, Provider: SessionProviderComponent) => ReactNode,
+) {
   const dispose = h.add('root', {
-    component: (props: { renderSlotChain: RenderSlotChainFn }) => <>{body(props.renderSlotChain)}</>,
+    component: (props: { renderSlotChain: RenderSlotChainFn; SessionProvider: SessionProviderComponent }) =>
+      <>{body(props.renderSlotChain, props.SessionProvider)}</>,
     children,
   })
   const renderer = createSlotRenderer()
@@ -612,11 +627,14 @@ describe('overlay chains (ChainRenderOpts.overlay)', () => {
     h.add('k.chain', chainEntryOf({ component: () => <b>never</b>, select }))
     let fallbackOnly = true
     const { view } = mountChainRoot(h, { 'k.chain': CHAIN_SESSION },
-      renderSlotChain => renderSlotChain(
-        'k.chain',
-        {},
-        { fallback: <input aria-label="resident" />, fallbackOnly, overlay: true },
-      ))
+      (renderSlotChain, Provider) => {
+        const content = renderSlotChain(
+          'k.chain',
+          {},
+          { fallback: <input aria-label="resident" />, fallbackOnly, overlay: true },
+        )
+        return <Provider session={h.current.getSnapshot()} empty={() => content}>{content}</Provider>
+      })
     const input = view.getByRole('textbox', { name: 'resident' })
     expect(select).not.toHaveBeenCalled()
 
@@ -803,6 +821,7 @@ describe('standard-kit synthesis', () => {
     h.declare('k.session', SINGLE_SESSION)
     h.declare('k.single', SINGLE_ROOT)
     h.addSession('s1')
+    h.current.set('s1')
     h.add('k.session', { component: ({ sessionId }: { sessionId?: string }) => <b>{sessionId}</b> })
     const rootSeen: AnyProps[] = []
     // Root entry uses its INJECTED provider seat (no value import of SessionProvider).
@@ -812,7 +831,7 @@ describe('standard-kit synthesis', () => {
         const Provider = props['SessionProvider'] as SessionProviderComponent
         const renderSlot = props['renderSlot'] as RenderSlotFn
         return (
-          <Provider empty={() => <i>empty</i>}>
+          <Provider session={h.current.getSnapshot()} empty={() => <i>empty</i>}>
             {renderSlot('k.session', {})}
           </Provider>
         )
@@ -820,8 +839,6 @@ describe('standard-kit synthesis', () => {
       children: { 'k.session': SINGLE_SESSION },
     })
     const view = render(<>{createSlotRenderer().renderRoot(h.host, {})}</>)
-    expect(view.container.textContent).toBe('empty')
-    act(() => { h.current.set('s1') })
     expect(view.container.textContent).toBe('s1')
 
     // Entries whose children are all root-scope get no provider seat.
@@ -1078,7 +1095,8 @@ describe('session-maybe adoption identity', () => {
         return <b>{`${sessionId ?? 'blank'}#${mount}`}</b>
       },
     })
-    const { view } = mountRoot(h, { 'k.maybe': SINGLE_MAYBE }, renderSlot => renderSlot('k.maybe', {}))
+    const { view } = mountRoot(h, { 'k.maybe': SINGLE_MAYBE }, renderSlot =>
+      renderSlot('k.maybe', {}))
     return { view, seen }
   }
 
@@ -1140,9 +1158,11 @@ describe('session-maybe adoption identity', () => {
       props: { sessionId: 'replacement' },
     }
     act(() => {
+      const source = observable<StandardSourceBinding>(binding)
       h.replaceScope({
-        current: observable(binding),
-        resolve: key => key === binding.key ? binding : undefined,
+        current: source,
+        bindingSource: () => source,
+        renderArea: (_binding, { children }) => <>{children}</>,
       })
     })
     expect(view.container.textContent).toBe('replacement#1')

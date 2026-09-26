@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/session-telemetry/README.md
-README.md: ba503adf55409ada47dc89b68ee37029ab0381d6
-README.zh.md: 5e7237ddac46f4eaab2850186153158e3d36b99a
+/:
+  en: 5c553664bfb6ebaa
+  zh: 0ad10e1597cb65bc
+/deepseek-ai-dsh-session-telemetry:
+  en: f38756c64b49af33
+  zh: 837746cfd00d13ea
+/deepseek-ai-dsh-session-telemetry/summary:
+  en: 2ee6fcb4e68f6c9b
+  zh: 8ddc8d1f3c645757
+/deepseek-ai-dsh-session-telemetry/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-session-telemetry/use-this-package:
+  en: f103da7913199503
+  zh: 623f7a102c451289
+/deepseek-ai-dsh-session-telemetry/use-this-package/choosing-and-mounting-a-backend:
+  en: cc1b92c9563ec9e9
+  zh: 6e80c5e002a6c83d
+/deepseek-ai-dsh-session-telemetry/use-this-package/the-backend-contract:
+  en: e3cc8ee7774a0ad5
+  zh: 3c039339870b8cf9
+/deepseek-ai-dsh-session-telemetry/use-this-package/what-gets-captured:
+  en: 5b7fbbe1c55997e8
+  zh: d62d9118fd8df2f4
+/deepseek-ai-dsh-session-telemetry/use-this-package/the-sharing-disclosure:
+  en: 5c325a8aaadf17c7
+  zh: 5c493d2333f82b28
+/deepseek-ai-dsh-session-telemetry/use-this-package/redacting-records:
+  en: 22ed345bf7746611
+  zh: a57d2eaa878c8cce
+/deepseek-ai-dsh-session-telemetry/understand-the-implementation:
+  en: cad1e9d195916553
+  zh: 2192f3ce5e2196bd
+/deepseek-ai-dsh-session-telemetry/understand-the-implementation/design-concept:
+  en: 56c449be11e6bac1
+  zh: 6b62969e93313c3e
+/deepseek-ai-dsh-session-telemetry/understand-the-implementation/source-map:
+  en: 5dc345ec3dda38b8
+  zh: 189d673734a2c20e
+/deepseek-ai-dsh-session-telemetry/understand-the-implementation/capture-flow:
+  en: f86c2777668ae89e
+  zh: 710c28c18f3f4402
+/deepseek-ai-dsh-session-telemetry/understand-the-implementation/the-handoff-cursor:
+  en: c213358e20f27173
+  zh: 84a5501335891f0b
+/deepseek-ai-dsh-session-telemetry/further-exploration:
+  en: 12c383ffe3448557
+  zh: e78cbffe565ce340
+/deepseek-ai-dsh-session-telemetry/model-experience:
+  en: 6a6b429828997572
+  zh: bde61df9dab8f840
+/deepseek-ai-dsh-session-telemetry/model-experience/kv-cache-effect:
+  en: 7593cf5d0d2cedd6
+  zh: f57cc48a1b5cbfa9
+/deepseek-ai-dsh-session-telemetry/known-limitations-and-deferred-work:
+  en: dc950b1f59a057ec
+  zh: 6f353d426b03abb1
+/deepseek-ai-dsh-session-telemetry/known-limitations-and-deferred-work/dev-note:
+  en: e10a3d2c84d710a6
+  zh: 910927bba4d34a85

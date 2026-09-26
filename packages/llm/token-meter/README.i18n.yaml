@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/llm/token-meter/README.md
-README.md: 37b9614a6c684a27d44b8b8bb65108029d58612f
-README.zh.md: f2fb79132ec7deded9051a85db90cc1995a5f336
+/:
+  en: 6eda56ef696001df
+  zh: 13f961071e8609a7
+/deepseek-ai-dsh-token-meter:
+  en: e51cc1114d193318
+  zh: f45cbb692bc8de69
+/deepseek-ai-dsh-token-meter/summary:
+  en: 106e3eda9a85bdd1
+  zh: 051bc764bf7a1912
+/deepseek-ai-dsh-token-meter/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-token-meter/use-this-package:
+  en: 5907ef1472773a47
+  zh: 06f1e988290a32c6
+/deepseek-ai-dsh-token-meter/use-this-package/when-to-choose-it:
+  en: e8c4cd1e945f86ba
+  zh: 133c1f1a85179d30
+/deepseek-ai-dsh-token-meter/use-this-package/measuring-pressure:
+  en: 58de3b364ab5af6b
+  zh: c5440af43d321e56
+/deepseek-ai-dsh-token-meter/use-this-package/session-projections:
+  en: 0a4c3ae2763be227
+  zh: 0e2c5a77f9b4b94f
+/deepseek-ai-dsh-token-meter/use-this-package/composition:
+  en: 1a0b7f49e01cba08
+  zh: 666213a1024767c5
+/deepseek-ai-dsh-token-meter/use-this-package/reading-the-numbers:
+  en: 7950203e0c146123
+  zh: 4fe421b2268f12a9
+/deepseek-ai-dsh-token-meter/understand-the-implementation:
+  en: 9630d7e26193a512
+  zh: 94222c2a487c4b8c
+/deepseek-ai-dsh-token-meter/understand-the-implementation/design-philosophy:
+  en: 921a2c40433abc06
+  zh: 5172de58e8724be8
+/deepseek-ai-dsh-token-meter/understand-the-implementation/source-map:
+  en: 0bea6321416c49d4
+  zh: 5446b39910df9829
+/deepseek-ai-dsh-token-meter/understand-the-implementation/fold-flow:
+  en: c97959d84cf8a1a4
+  zh: f17570caa42a1a8e
+/deepseek-ai-dsh-token-meter/understand-the-implementation/projection-semantics:
+  en: 91930cc59e849205
+  zh: a530fcc3d57133bc
+/deepseek-ai-dsh-token-meter/further-exploration:
+  en: 32cf70f8c66ca097
+  zh: a7daf5e0732f31c3
+/deepseek-ai-dsh-token-meter/model-experience:
+  en: 8aae37ff5ed5fc76
+  zh: 5773d20de3acfb4f
+/deepseek-ai-dsh-token-meter/model-experience/kv-cache-effect:
+  en: 40294c1c31b74824
+  zh: c2284876b56d2dbc
+/deepseek-ai-dsh-token-meter/known-limitations-and-deferred-work:
+  en: a8c57e6f8c5009a2
+  zh: 5975018d14bfbdbb
+/deepseek-ai-dsh-token-meter/known-limitations-and-deferred-work/dev-note:
+  en: ce725ee5fe2ebaa3
+  zh: 0cd07dddbf4011c0

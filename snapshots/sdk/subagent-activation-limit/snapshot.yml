@@ -1,0 +1,14 @@
+version: 1
+scenario: subagent-activation-limit
+profile: sdk
+composition: subagent-activation-limit
+recording: authored
+header:
+  class: subagent-activation-limit
+  pin: true
+  systemPromptSource: session/text-turn
+  toolSchemasSource: session/text-turn
+  childSystemPrompts: [1]
+  childToolSchemas: [1]
+replay:
+  override: true

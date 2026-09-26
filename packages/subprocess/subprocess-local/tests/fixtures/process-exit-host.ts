@@ -27,10 +27,13 @@ async function waitForFile(path: string): Promise<void> {
   }
 }
 
-const listenersBefore = process.listenerCount('exit')
+const listenersBefore = new Set(process.listeners('exit'))
 const ctx = new Context()
 const fiber = await ctx.plugin(LocalSubprocessRuntime)
-const listenersAfterLoad = process.listenerCount('exit')
+const ownedListeners = process.listeners('exit').filter(listener => !listenersBefore.has(listener))
+// Independent process-lifetime listeners may be installed after this provider.
+const unrelatedListener = (): void => {}
+if (trigger === 'dispose') process.once('exit', unrelatedListener)
 if (kind === 'ordinary') {
   ctx.subprocess.spawn({
     argv: [process.execPath, managedTree, treeState],
@@ -63,9 +66,9 @@ await waitForFile(proceed)
 if (trigger === 'dispose') {
   await fiber.dispose()
   await writeFile(join(root, 'dispose.json'), JSON.stringify({
-    listenersBefore,
-    listenersAfterLoad,
-    listenersAfterDispose: process.listenerCount('exit'),
+    ownedListenersAfterLoad: ownedListeners.length,
+    ownedListenersAfterDispose: ownedListeners.filter(listener => process.listeners('exit').includes(listener)).length,
+    unrelatedListenerPreserved: process.listeners('exit').includes(unrelatedListener),
   }))
 } else if (trigger === 'direct') {
   process.exit(23)

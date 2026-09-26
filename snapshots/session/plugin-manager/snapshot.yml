@@ -3,6 +3,7 @@ scenario: plugin-manager
 profile: headless
 composition: plugin-manager
 recording: live
+permission: danger-full-access
 header:
   class: plugin-manager
   pin: true

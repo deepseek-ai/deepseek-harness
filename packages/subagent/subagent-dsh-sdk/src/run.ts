@@ -303,7 +303,7 @@ export async function startSdkRun(request: SubagentStartRequest, spec: SdkRunSpe
     if (notification.method !== 'session.event' || notification.params.sessionId !== childSessionId) return
     fold.push(notification.params.event as SessionEvent)
   }
-  const collectOutput = (): ContentBlock[] => fold.collect() ?? []
+  const collectOutput = (): readonly ContentBlock[] => fold.collect() ?? []
   const teardown = async (): Promise<void> => {
     try {
       await harness.close()

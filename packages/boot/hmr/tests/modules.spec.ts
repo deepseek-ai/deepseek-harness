@@ -7,6 +7,7 @@ import NodeModule, { createRequire } from 'node:module'
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import Loader, { type ModuleJob, type ModuleLoader } from '@deepseek-ai/cordis-plugin-loader'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
+import z from '@deepseek-ai/schemastery'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import Hmr from '../src/index.ts'
 
@@ -85,6 +86,31 @@ it.each(['v1', 'v2'] as const)('replaces a %s module and retains the latest Load
   await entry.update({ config: { value: 'next' } })
   await ctx.loader.await()
   expect(mounted.at(-1)).toBe('after:next')
+})
+
+it('replaces volatile references on code HMR after an in-place config update', async () => {
+  const { ctx, module, imports, reload } = await fixture()
+  const Config = z.object({ value: z.string().volatile() })
+  const configs: ReturnType<typeof Config>[] = []
+  const before = { Config, apply(_ctx: Context, config: ReturnType<typeof Config>) { configs.push(config) } }
+  const after = { Config, apply(_ctx: Context, config: ReturnType<typeof Config>) { configs.push(config) } }
+  const job = module('volatile.mjs', before)
+  const entry = ctx.loader.resolve(await ctx.loader.create({ name: job.url, config: { value: 'initial' } }))
+  await ctx.loader.await()
+  await entry.update({ config: { value: 'current' } })
+  await ctx.loader.await()
+  expect(configs).toHaveLength(1)
+  const old = configs[0]!.value
+  expect(old.get()).toBe('current')
+  imports.set(job.url, after)
+  reload.stashed.add(job.url)
+  await reload.partialReload()
+  expect(configs).toHaveLength(2)
+  expect(configs[1]!.value).not.toBe(old)
+  expect(configs[1]!.value.get()).toBe('current')
+  await entry.update({ config: { value: 'after-reload' } })
+  expect(configs[1]!.value.get()).toBe('after-reload')
+  expect(old.get()).toBe('current')
 })
 
 it('reactivates a source-replaced consumer after provider and consumer configuration changes', async () => {

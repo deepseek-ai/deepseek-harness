@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for 2026-09-19-projection-cache-listing-identity-and-cached-rows.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-19-projection-cache-listing-identity-and-cached-rows.md
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows:
+  en: 04813e762d48995c
+  zh: b0ed6656adc7c5f0
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/problem:
+  en: 2e7f99c81fbc941f
+  zh: b0fac7cd5eb86ffe
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/problem/mechanism:
+  en: 36d24e92eedf8cea
+  zh: 5dafc5758ee0f380
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/problem/the-cache-s-two-uses-and-where-validation-lives:
+  en: 055ead18162ca1cd
+  zh: 9046bf04229e45d1
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/problem/the-client-store-cannot-guarantee-that-connected-data-replaces-hints:
+  en: 597b346459a9d8b0
+  zh: f7282a40061d645c
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/decision:
+  en: a15c7c13f167e5ac
+  zh: a15c7c13f167e5ac
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/decision/two-read-faces-the-cut-is-compared-only-on-the-fold-face:
+  en: 30bb0f92e2ba046b
+  zh: 25ae7e78a5887643
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/decision/why-the-read-only-face-may-skip-the-cut:
+  en: 1138b58239be186b
+  zh: cf5fc5f1d3f21bd3
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/decision/consumers:
+  en: 743f2dceda3072aa
+  zh: f4d53ddc13a4127e
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/decision/the-client-store-separates-cached-and-sequenced-rows:
+  en: 8a4e9e9ac2ada06f
+  zh: b5884535cd934f72
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/decision/what-stays-untouched:
+  en: 1cefba02bbfb2647
+  zh: 5a96942565ab9d72
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/decision/worst-case-walked-through:
+  en: 396d75331b3b0143
+  zh: 2eb41ac09de87de0
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/alternatives-considered:
+  en: d71031c0dc256d80
+  zh: 753c948a90a0c9ad
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/consequences:
+  en: 525ea6842ad2e19a
+  zh: 595da1db20255617
+/agent-note-projection-cache-read-only-face-matches-the-lifecycle-identity-the-client-store-separates-cached-and-sequenced-rows/testing:
+  en: 8faa78adc442992c
+  zh: 29cb78232985fd47

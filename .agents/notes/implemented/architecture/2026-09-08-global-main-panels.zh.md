@@ -10,13 +10,13 @@ Status: implemented
 
 ## 决策
 
-布局声明 root 作用域的 keyed `main` slot。保留的 `conversation` key 属于 Conversation 插件，其 `main.conversation` 子 slot 保留可选的会话绑定。其他主面板条目不获得隐式会话绑定。
+布局声明 root 作用域的 keyed `main` slot。保留的 `conversation` key 属于 Conversation。`ui-session` 根据 `uiWorkspace` 的 `mainView` 所有权标记得出根 Session binding；`main.conversation` 及其关联右 Sidebar 继承该 Provider binding。其他主面板条目不获得隐式会话绑定。[Client 会话引用](2026-09-15-client-session-references.zh.md)拥有引用获取与来源元数据；本篇拥有全局面板选择。
 
 侧栏拥有 root 作用域的 `sidebar.panellist` list。每个 list 条目提供图标，以及与主面板条目匹配的 id；字符串或随语言变化的标签提供普通可见文字、无障碍名称和折叠提示。本决定落地时默认组合不注册面板条目，因此空列表没有 DOM 或间距；现在 web bundle 的插件管理器注册了第一个条目（[插件管理移到 Web 侧栏](2026-09-09-plugin-management-in-the-web-sidebar.zh.md)）。选中操作检查实时主面板条目，对缺失的 key 报错而不替换当前面板。
 
 渲染器与布局控制器共享一个直接创建的 root 存储。其 `panelInfo` 和 `layoutInfo` 对象保持独立的引用。框架提供 `usePanelInfo`；各行和中央内容订阅所需的选中态值，AppFrame 仅读取布局信息。右侧 Sidebar 的 root 控制器决定是否挂载其会话子树，并把最终所需的列宽报告给框架。
 
-`uiWorkspace.openSession(id)` 先选中会话，再将中央区域切回 Conversation，包括再次选中同一个会话的情况。`openWorkspace` 和 `forkSession` 使用布局的 `beginNavigation()` abort signal 与自身 service 生命周期，只提交最新导航。工作区准备回调仅在请求仍有效时同步搬移草稿。请求过期会阻止晚到的 UI 提交，但不阻止会话创建。面板导航既不取消保留的会话，也不写入会话事件。
+`uiWorkspace.openSession(target)` 先获取显式目标，再替换主引用并让中央区域返回 Conversation。`openWorkspace` 和 `forkSession` 保留布局既有的 `beginNavigation()` 信号与服务生命周期。`openWorkspace` 在获取完成后、替换主引用前执行既有的同步准备动作。请求被替代会阻止迟到的 UI 提交，不阻止会话创建。直接打开会话不增加全局导航取消。面板导航既不释放所持主会话，也不写入会话事件。
 
 DOM 焦点不是导航选中态。搜索和目录选择控件可以获得焦点，同时保留全局面板及其侧栏行的选中态；打开会话才改变中央区域的选中态。
 

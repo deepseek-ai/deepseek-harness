@@ -4,6 +4,8 @@ English | [中文](web-client.zh.md)
 
 The Web Client is a browser-side Cordis application assembled from independently loaded plugins. Its architecture has four reusable foundations: [Client Modules](client-modules.md) loads the plugin graph, the [API Gateway](../api-gateway.md) provides typed Host communication, [Slots](slots.md) composes React UI, and [Conversation](conversation.md) turns a Session history window into target-owned views. This page connects those systems and defines where Client models and feature packages belong.
 
+[Keyboard shortcuts](../../packages/client/shortcuts/README.md) owns window-local command registration and physical-key dispatch; [the shortcut reference](../../packages/client/ui-shortcuts/README.md) presents available commands and local input actions. Command owners declare each runtime/platform default and share their existing actions with mouse controls. The shared modal primitive arbitrates top-layer Escape and restores focus.
+
 ## Layers and ownership
 
 | Layer | Main owners | Responsibility |
@@ -11,7 +13,7 @@ The Web Client is a browser-side Cordis application assembled from independently
 | Host application | business services and `packages/api/*-controller` Host entries | Own authoritative state, persistence, mutation ordering, access policy, and stream production. |
 | Transport and API assembly | `client/connection`, `api/gateway`, `api/remotes` | Establish a Client generation, expose generated `ctx.remote` methods and streams, forward selected Cordis events, and carry cancellation and results. |
 | Client models | `api/session-controller/client`, `api/workspace-controller/client` | Maintain React-free mirrors of Host state, resolve stream/unary races, own object identities and subscriptions, and expose narrow command services. |
-| UI adapters | `client/ui-session`, `client/ui-workspace` | Convert model observables into root or Session-scoped standard Slot sources without taking ownership of business state. |
+| UI adapters | `client/ui-session`, `client/ui-workspace` | Convert model observables into root or Provider-bound Session Slot sources and own view-level navigation and status policy. |
 | Conversation data | `client/ui-conversation`, target packages such as `ui-chat` and `ui-trajectory` | Assemble standard events and compact historical Assistant runs into independent target snapshots and own the shared conversation shell and input flow. |
 | Composition and rendering | `client/ui-slots`, `client/ui-renderer`, `client/ui-layout`, feature UI packages | Declare extension locations, derive component props, bind observables to React hooks, and mount the final tree. |
 
@@ -27,7 +29,7 @@ The Web boot kernel creates the module system, prefetches `immediately` entries,
 
 Host business services annotate callable methods with Typert Remote decorators. Host generation emits strict descriptors, runtime codecs, declaration merges, and source maps. The Client-side `api-remotes` assembly selects those generated contributions and mounts concrete methods under `ctx.remote.<namespace>` and Session-scoped `agentCtx.remote.<namespace>`. Feature packages depend on the generated service face, not the Gateway implementation or a Host package's runtime entry.
 
-The Connection owns request correlation, the `/api` carrier, trust checks, exact Fetch routes, and connection generations. API Gateway owns Remote dispatch, cancellation, logical streams, and selected Host event forwarding. Controller operations belong on generated Remote methods or explicit Remote streams; feature-owned downloads register exact Fetch routes. The [API Gateway reference](../api-gateway.md) defines generation and invocation, while the [Connection README](../../packages/client/connection/README.md) defines the physical carrier and trust policy.
+The Connection owns request URL resolution, correlation, the `/api` carrier, trust checks, exact Fetch routes, and connection generations. API Gateway owns Remote dispatch, cancellation, logical streams, and selected Host event forwarding. Controller operations belong on generated Remote methods or explicit Remote streams; feature-owned downloads register exact Fetch routes. The [API Gateway reference](../api-gateway.md) defines generation and invocation, while the [Connection README](../../packages/client/connection/README.md) defines the physical carrier and trust policy.
 
 The internal `$events` logical stream is the Connection generation source. Its opening `ready` frame carries the Host home used for path display and establishes the generation after Host listeners are attached, before any controller begins a baseline read. `ctx.remote.$on()` delivers allowlisted ordinary events to the root Client Context and scoped waterfall events to the resolved Session Context; a waterfall listener returns a result, calls `next()`, or rejects.
 
@@ -37,23 +39,25 @@ Each API controller package owns a paired Host and Client face. The Host side ow
 
 ### Sessions
 
-[`api/session-controller`](../../packages/api/session-controller/README.md) exposes Host commands for list, search, creation, selection data, prompt, queue, cancellation, pagination, and follow/control streams. Its Client side is organized as `ClientSessions → SessionManager → Session`:
+[`api/session-controller`](../../packages/api/session-controller/README.md) exposes Host commands for list, search, creation, prompt, queue, cancellation, pagination, and follow/control streams. Its Client side is organized as `ClientSessions → SessionManager → Session`:
 
-- `ClientSessions` provides `ctx.sessions`, owns Session scopes and stable `SessionBinding` objects, and projects the selected list state.
-- `SessionManager` owns the list baseline, live list/control updates, lazy Session instances, queues, projection stores, subagent catalogs, and conflict ordering between pulls and later updates.
+- `ClientSessions` provides `ctx.sessions`, owns references, source counts, Session scopes, and stable `SessionBinding` objects, and projects catalog state without selecting a global current Session.
+- `SessionManager` owns the list baseline, live list/control updates, lazy Session instances, projection stores, subagent catalogs, and conflict ordering between pulls and later updates.
 - Each `Session` owns one contiguous logical-event window represented by `SessionEventLikeEntry` values, paging, follow, prompt/control state, and the observable snapshot consumed by adapters.
 
-The durable event path opens `follow()`, whose first frame contains the current header, tail page, cursor, and complete projection baseline. History records have an explicit `event` or `chunks` discriminator and an aligned inner `event`; the journal validates each inclusive logical sequence range before the Client retains the records as `SessionEventLikeEntry` values without per-record conversion. Each physical generation atomically replaces the retained window from that snapshot; standard live events then append by sequence. `page()` is reserved for older history and gap repair. The transient control stream starts every generation with a complete baseline and then applies queue, job, and projection updates.
+The durable event path opens `follow()`, whose first frame contains the current header, tail page, cursor, and complete projection baseline. History records have an explicit `event` or `chunks` discriminator and an aligned inner `event`; the journal validates each inclusive logical sequence range before the Client retains the records as `SessionEventLikeEntry` values without per-record conversion. Each physical generation atomically replaces the retained window from that snapshot; standard live events then append by sequence. `page()` is reserved for older history and gap repair. The transient control stream starts every generation with a complete baseline and then applies projection updates.
 
 ### Workspaces
 
-[`api/workspace-controller`](../../packages/api/workspace-controller/README.md) keeps Workspace mutation policy and the authoritative follow feed on the Host. `ClientWorkspaceModel` owns the browser rows, order, archived Session ids, command echoes, and stream/unary race resolution. Every stream generation starts with a complete baseline followed by `upsert`, `remove`, `order`, and `archived` increments; reconnect replaces the model from the new baseline. `WorkspaceController` exposes that model as `ctx.workspaces`, while `ui-workspace` contributes `useWorkspaces` and navigation callbacks to the UI. The archived Session ids filter every grouping surface and feed the archived-sessions Settings page, which joins the set with the loaded Session summaries and offers one Unarchive action per row; a restore calls the `workspace.unarchiveSession` Remote, and the complete returned set reaches every Client through the `archived` increment.
+[`api/workspace-controller`](../../packages/api/workspace-controller/README.md) keeps Workspace mutation policy and the authoritative follow feed on the Host. `ClientWorkspaceModel` owns browser rows, Workspace order, archived and pinned Session id arrays, command echoes, and stream/unary race resolution. Every stream generation starts with a complete baseline followed by `upsert`, `remove`, `order`, `archived`, and `pinned` increments; reconnect replaces the model from the new baseline. `WorkspaceController` exposes that model as `ctx.workspaces`, while `ui-workspace` contributes `useWorkspaces` and navigation callbacks. The sidebar's `ArchivedFilter` controls default-hidden, shown, or archived-only rows in lists and search. Archived rows retain their ordering slots, render grayed, and cannot open until restored through the row or search-result Unarchive action. Restoration calls `workspace.unarchiveSession`, and its complete archive set reaches Clients through the unary response and `archived` increment. Session display order stays browser-local and includes hidden archives; pinning moves a Session within that full order, while unpinning does not restore its earlier position.
 
 This pairing is not a second source of business truth. Host controllers decide durable state and mutation outcomes; Client models maintain the latest usable local projection, preserve object identity where useful to rendering, and encode how delayed responses and replacement baselines merge.
 
 ## Conversation and presentation
 
-`ui-session` installs the `session` scope adapter and publishes `useSessions`, `useSession`, `sessionId`, and `useProjection`. Domain adapters add further standard sources without putting React hooks on the model objects.
+Web and desktop share the [Coding Tools preference](../../packages/client/ui-settings/README.md#use-this-package). It controls diagnostic Views, new-session preset selection, changed-file cards, and the builtin HTML preview policy without changing Session records.
+
+`ui-session` installs the Session scope adapter and publishes `useSessions`, `useSessionStatus`, `useSessionRetainInfo`, `useSession`, `sessionId`, and `useProjection`. `SessionProvider` inherits an outer binding or binds an explicit `SessionReference`, so concurrent subtrees can target different Sessions. Domain adapters add further standard sources without putting React hooks on the model objects.
 
 `ui-conversation` binds once to each `SessionBinding.eventSource`. Its event registry correlates durable Session events and Client-only `assistant/live-chunk` updates into stable business Contexts, and its view registry materializes target snapshots. Chat Assistant, Trajectory Assistant, and Turn Tail interpret both live chunks and the compact streams embedded in durable settlements, so reconnect and paged history reproduce the same Assistant state without durable token rows. `ui-chat` and `ui-trajectory` register separate Definitions and builders: they may interpret the same event family, but they do not import or share each other's final display model. The shell selects a registered view and passes its snapshot through standard hooks and Slots. [Conversation](conversation.md) defines Context identity, replay, Location data, target builders, and keyed renderers.
 
@@ -64,7 +68,8 @@ This pairing is not a second source of business truth. Host controllers decide d
 | Path | Sequence |
 |---|---|
 | durable Session display | Host Session log → packed Remote `follow`/`page` history → Client `SessionEventLikeEntry` window → Conversation Contexts → target snapshot (`chat`, `trajectory`, or another registered target) → Slot view → React |
-| transient Session control | Host control baseline → Remote snapshot stream → `SessionManager` queue/job/projection stores → Session and list snapshots → standard hooks → components |
+| transient Session control | Host control baseline → Remote snapshot stream → `SessionManager` projection stores → Session and list snapshots → standard hooks → components |
+| Background jobs | Host job registry → `job.list` / `job.follow` → [`ClientJobs`](../../packages/api/job-controller/README.md) roster and output views → job list and panels |
 | Workspace state | Host Workspace baseline and increments → `ClientWorkspaceModel` → `ctx.workspaces.list` → `useWorkspaces` → sidebar, hero, and navigation entries |
 | scoped interaction | Host Cordis waterfall → API Remotes `$events` → `ctx.remote.$on()` on the Session Context → owning UI package → result or `next()` |
 | user command | component callback → registration inject face or Slot owner → `ctx.sessions`, `ctx.workspaces`, or generated scoped Remote → Host Controller → authoritative update → stream or event projection back to the Client |

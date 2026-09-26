@@ -18,8 +18,8 @@ import css from './GuideBody.module.css'
 export function CompassGlyph({ size = 16, className }: IconProps): ReactNode {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" className={className}>
-      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M 10.9 5.1 L 9.1 9.1 L 5.1 10.9 L 6.9 6.9 Z" fill="currentColor" />
+      <path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z" stroke="currentColor" />
+      <path d="M10.6101 5.39014L8.99014 8.99014L5.39014 10.6101L7.01014 7.01014L10.6101 5.39014Z" fill="currentColor" />
     </svg>
   )
 }
@@ -35,19 +35,8 @@ export function CompassGlyph({ size = 16, className }: IconProps): ReactNode {
 export function CubeGlyph({ size = 16, className }: IconProps): ReactNode {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" className={className}>
-      <path
-        d="M 8 2.5 L 12.9 5.2 V 10.8 L 8 13.5 L 3.1 10.8 V 5.2 Z"
-        stroke="currentColor"
-        strokeWidth="1.1"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 3.1 5.2 L 8 7.9 L 12.9 5.2 M 8 7.9 V 13.5"
-        stroke="currentColor"
-        strokeWidth="1.1"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
+      <path d="M7.99998 2.5L12.9 5.2V10.8L7.99998 13.5L3.09998 10.8V5.2L7.99998 2.5Z" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M3.09998 5.19995L7.99998 7.89995M7.99998 7.89995L12.9 5.19995M7.99998 7.89995V13.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

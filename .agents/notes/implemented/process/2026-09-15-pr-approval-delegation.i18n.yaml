@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-15-pr-approval-delegation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-15-pr-approval-delegation.md
-2026-09-15-pr-approval-delegation.md: 4dcf0e8a8d23d66da11381586e376fdf39d23635
-2026-09-15-pr-approval-delegation.zh.md: bf21724d672aaf534bfe94540b76878177eeb57e
+/agent-note-pr-scoped-approval-delegation:
+  en: 3fa5881b5ca14a79
+  zh: 99dbde5fae7cdd6a
+/agent-note-pr-scoped-approval-delegation/problem:
+  en: 5fe2f3b3cb7ce046
+  zh: ed27d4efc995b8b5
+/agent-note-pr-scoped-approval-delegation/decision:
+  en: 41c5c90b82d323c6
+  zh: 55d5ed09d88bb821
+/agent-note-pr-scoped-approval-delegation/alternatives-considered:
+  en: a6006217cb29613a
+  zh: 83968328096f1d91
+/agent-note-pr-scoped-approval-delegation/consequences:
+  en: e761c382b4431212
+  zh: 43bb475b646c85eb

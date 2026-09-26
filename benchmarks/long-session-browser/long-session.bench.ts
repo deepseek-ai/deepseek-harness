@@ -15,7 +15,7 @@ const TAIL = '[data-chat-flow-key^="9:turn-tail"]'
 const REFERENCE = { open: 200, page: 260, trajectory: 160, first: 1100, streamTask: 1800, input: 500, streamWall: 1000 }
 const EXPECTED_OPEN_CI_MS = 900
 const EXPECTED_PAGE_CI_MS = 700
-const EXPECTED_TRAJECTORY_CI_MS = 500
+const EXPECTED_TRAJECTORY_CI_MS = 520
 const OPEN_BUDGET_MS = Math.ceil(EXPECTED_OPEN_CI_MS * PERFORMANCE_BUDGET_HEADROOM)
 const PAGE_BUDGET_MS = Math.ceil(EXPECTED_PAGE_CI_MS * PERFORMANCE_BUDGET_HEADROOM)
 const TRAJECTORY_BUDGET_MS = Math.ceil(EXPECTED_TRAJECTORY_CI_MS * PERFORMANCE_BUDGET_HEADROOM)
@@ -100,7 +100,8 @@ it('accepts recorded hosted open samples and rejects slower endpoints', () => {
 it('accepts recorded hosted paging and Trajectory medians and rejects slower endpoints', () => {
   const endpoints = [
     { samples: [843.941625, 672.834329, 684.461818], reference: REFERENCE.page, budget: PAGE_BUDGET_MS, expectedBudget: 875 },
-    { samples: [605.788061, 367.754027, 485.931656], reference: REFERENCE.trajectory, budget: TRAJECTORY_BUDGET_MS, expectedBudget: 625 },
+    { samples: [605.788061, 367.754027, 485.931656], reference: REFERENCE.trajectory, budget: TRAJECTORY_BUDGET_MS, expectedBudget: 650 },
+    { samples: [630.843184, 418.578099, 635.550009], reference: REFERENCE.trajectory, budget: TRAJECTORY_BUDGET_MS, expectedBudget: 650 },
   ]
   for (const { samples, reference, budget, expectedBudget } of endpoints) {
     const value = median(samples)

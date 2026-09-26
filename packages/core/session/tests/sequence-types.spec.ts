@@ -107,6 +107,23 @@ describe('Session log positions', () => {
     expect(child.isOwnSeq(SessionSeq(3))).toBe(true)
   })
 
+  it('accepts child closers after the inherited marker and rejects a later inherited marker', () => {
+    const id = SessionId('marked-fork')
+    const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id, createdAt: 1, isSeeded: true }
+    const seed = [
+      { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
+      { type: 'session/end-seed', seq: SessionSeq(1), time: 2, data: { inherited: true } },
+      { type: 'turn/end', seq: SessionSeq(2), time: 3, data: { turn: 1, reason: { kind: 'forked' } } },
+    ] as const
+    const child = Session.create(id, seed, header, SessionLogOffset(1))
+    expect(child.snapshotEvents()).toEqual(seed)
+    expect(child.ownEvents().map(event => event.type)).toEqual(['session/end-seed', 'turn/end'])
+    expect(child.firstLiveSeq).toBe(3)
+    expect(() => Session.create(id, [...seed, {
+      type: 'session/end-seed', seq: SessionSeq(3), time: 4, data: { inherited: true },
+    }], header, SessionLogOffset(1))).toThrow('final inherited marker')
+  })
+
   it('requires a separately supplied inherited cut for a seeded header', () => {
     const id = SessionId('missing-cut')
     expect(() => Session.create(id, [], {

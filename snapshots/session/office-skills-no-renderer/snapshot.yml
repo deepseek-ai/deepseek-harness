@@ -1,0 +1,12 @@
+version: 1
+scenario: office-skills-no-renderer
+profile: headless
+composition: office-skills-no-renderer
+recording: live
+header:
+  class: office-skills-no-renderer
+  pin: true
+  systemPromptSource: office-skills
+  toolSchemasSource: office-skills
+workspace:
+  setup: office-skills

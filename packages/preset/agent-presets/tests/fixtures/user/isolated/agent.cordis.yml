@@ -1,9 +1,0 @@
-# Accepted: the same provider behind an entry-local realm never reaches the
-# root realm, so it is per-session rather than process-global.
-- id: svc
-  name: ../../plugins/global-service.js
-  isolate:
-    fixtureIsolatedSvc: true
-  config:
-    service: fixtureIsolatedSvc
-    label: ISOLATED

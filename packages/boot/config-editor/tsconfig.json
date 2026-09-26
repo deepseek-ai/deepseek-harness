@@ -1,0 +1,30 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/loader"
+    },
+    {
+      "path": "../hmr"
+    },
+    {
+      "path": "../app-boot"
+    },
+    {
+      "path": "../../util/atomic-write"
+    },
+    {
+      "path": "../../../vendor/include"
+    }
+  ]
+}

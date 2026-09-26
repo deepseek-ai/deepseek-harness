@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'">
+    <title></title>
+    <link rel="stylesheet" href="update-dialog.css">
+    <link rel="stylesheet" href="mandatory-update.css">
+  </head>
+  <body class="update-dialog">
+    <main role="alertdialog" aria-modal="true" aria-labelledby="title" aria-describedby="detail">
+      <header><h1 id="title"></h1></header>
+      <p id="detail"></p>
+      <p id="version"></p>
+      <p id="status" role="status" aria-live="polite"></p>
+      <progress id="progress" max="100" value="0" hidden></progress>
+      <p id="error" role="alert" hidden></p>
+      <details id="technical-details" hidden>
+        <summary id="technical-details-label"></summary>
+        <pre id="technical-details-content" tabindex="0"></pre>
+      </details>
+      <div id="actions">
+        <button id="update" class="primary" type="button" hidden></button>
+        <button id="refresh" type="button"></button>
+        <button id="page" type="button"></button>
+        <button id="later" type="button" hidden></button>
+      </div>
+      <div id="fallback" hidden>
+        <p><span id="browser-message"></span> <button id="copy" type="button"></button></p>
+        <p id="copy-message" role="status"></p>
+        <label id="manual-copy" hidden><span id="address-label"></span><textarea id="address" readonly rows="3" spellcheck="false"></textarea></label>
+      </div>
+    </main>
+    <script src="mandatory-update-frame.js"></script>
+    <script src="mandatory-update.js"></script>
+  </body>
+</html>

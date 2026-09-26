@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-22-fire-and-forget-webhook-sessions.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-22-fire-and-forget-webhook-sessions.md
-2026-08-22-fire-and-forget-webhook-sessions.md: 08f718b8063c7ca0d78e93f547c0e0c33c183d07
-2026-08-22-fire-and-forget-webhook-sessions.zh.md: f015d993e61864bbc21d9d55fc331c25118fbde3
+/agent-note-fire-and-forget-webhook-sessions:
+  en: adb18c2b0d575306
+  zh: 2605913ffe5bafaa
+/agent-note-fire-and-forget-webhook-sessions/problem:
+  en: 394e062b7e8f31a0
+  zh: bcb26075cf62115c
+/agent-note-fire-and-forget-webhook-sessions/decision:
+  en: 08ff83adfec1a7da
+  zh: 871b9998631f22ac
+/agent-note-fire-and-forget-webhook-sessions/provider-adapters:
+  en: 8eb2865f18fcf018
+  zh: 1b73dfd634a8c07a
+/agent-note-fire-and-forget-webhook-sessions/session-creation:
+  en: fbc57974dd81bf5a
+  zh: 1a4810df6b7a776f
+/agent-note-fire-and-forget-webhook-sessions/alternatives-considered:
+  en: 59634068f7c22476
+  zh: 844472f7a5e9de91
+/agent-note-fire-and-forget-webhook-sessions/verification:
+  en: e2a3192fc68b1ade
+  zh: 63c2b07bf5f32696
+/agent-note-fire-and-forget-webhook-sessions/consequences:
+  en: 8b40a7c91834a281
+  zh: 882125d8070d77c1

@@ -14,6 +14,8 @@ Client Session 既维护传输窗口、连接状态和待处理交互，也在�
 
 ## 决策
 
+start 的瞬态创建入口、同 ID 多次 start 及工具准备阶段以[工具调用三阶段](2026-09-22-tool-call-three-phases.zh.md)为准；本记录的其他节点组装职责继续适用。
+
 Client Runtime 提供 target-neutral 的 Conversation Node 组装引擎，业务插件注册 Event Definition，视图插件注册 per-Session View Builder。`ui-conversation` 注册第一批内建 Definition 和 `chat` builder；Session 只负责把当前连续 `SessionEventLikeEntry` window 送入引擎并发布它的 snapshot，且不解释具体 conversation 业务。entry 的外层 discriminator 区分标准与 packed record，两者都携带字段对齐的内部 `SessionEventLike`，供 Definition dispatch。
 
 本 Note 保留实现后仍有价值的方案推导、逐业务适配、职责、算法和取舍。
@@ -291,7 +293,7 @@ Chat `order` 的结构性变化仍可能重排当前可见 key；纯 data 更新
 
 Inbox 展示了“每条 Event 都是一个 start-only 瞬间态 Context”，不是所有业务都需要 start/update 配对。每个 next-step state 通过 Reader 与前一个同 kind Context 形成连续 fold，而非给整个 Inbox 人工制造生命周期 ID。state 自身共享不可变 pending splice 节点和一个当前 claimed-batch Set；未消费的 next-turn input 不进入 Conversation，因为 Chat 与 Trajectory 都不读取它来分类。
 
-Request Prompt 展示了如何在不共享 target State 的前提下共用纯解释逻辑：Chat 与 Trajectory 各自在自己的 Definition 中调用 `inspectRequestPrompt()`。该函数规范化完整 header，并判定面向模型的 system/tool 差异；随后每个 target 自行选择产物。Chat 会物化非空的初始 system 字段、真实 system 变化，以及每个显式开启消息序列或紧随表层替换的 `series` 快照。未变化的 `resume` 会留在 Trajectory 和重建状态中，但前序 header 已加载时不会重复可见的 Chat 行。普通的仅追加后续 Turn 不会再次写入未变 header。一个 Step 中的首条 header 遵循提供方信封，而不是 header Event 位置：step one 使用所属 Turn start，后续 step 使用各自的 Step start，把 system 字段放到该请求的 user-role 消息之前；同一 Step 的后续 header 保留在开启新序列的表层改写之后。部分窗口未包含前序 header 时，非 `initial` header 会保留在自身 Event 并保守渲染。prepend 补入相同的前序 header 后，内容未变的 resume 会隐藏但不撤回其稳定 Node key；真实变化仍然可见。每条 header 都是完整快照，因此已加载窗口中的首条 `resume`、`change` 或 `series` header 无需凭空构造与未加载历史的比较，也能渲染其 system 字段（[resume 展示决策](../bug-fix/2026-09-03-resume-headers-do-not-repeat-system-prompts.zh.md)）。
+Request Prompt 展示了如何在不共享 target State 的前提下共用纯解释逻辑：Chat 与 Trajectory 各自在自己的 Definition 中调用 `inspectRequestPrompt()`。该函数规范化完整 header，并判定面向模型的 system/tool 差异；随后每个 target 自行选择产物。Chat 会物化非空的初始 system 字段、真实 system 变化，以及每个显式开启消息序列或紧随表层替换的 `series` 快照。即使 system 文本未变化，resume header 仍保留 Chat prompt 卡片。普通的仅追加后续 Turn 不会再次写入未变 header。一个 Step 中的首条 header 遵循提供方信封，而不是 header Event 位置：step one 使用所属 Turn start，后续 step 使用各自的 Step start，把 system 字段放到该请求的 user-role 消息之前；同一 Step 的后续 header 保留在开启新序列的表层改写之后。部分窗口未包含前序 header 时，非 `initial` header 会保留在自身 Event 并保守渲染。prepend 补入相同的前序 header 后，内容未变的 `change` header 可以隐藏，但不撤回其稳定 Node key；resume 和显式序列起点的卡片仍然可见。每条 header 都是完整快照，因此已加载窗口中的首条 `resume`、`change` 或 `series` header 无需凭空构造与未加载历史的比较，也能渲染其 system 字段（[request-prompt Definition](../../../../packages/client/ui-chat/src/client/conversation-nodes/request-prompt.ts)）。
 
 Retry、Assistant 和 Turn Tail 展示了同一 Event 被多个 Definition 独立认领。每个 Definition 只更新自己的 State，最终分别生成原子 Chat Node。
 

@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/attachment/attachment/README.md
-README.md: d2a667e2d12deadc5e82a83cca6565f0b5a6aae0
-README.zh.md: b5598eb8ccca39d8b5be346c585fd84d3dd38468
+/:
+  en: c8448ea82a8ce005
+  zh: 24444a57de8c007c
+/deepseek-ai-dsh-attachment:
+  en: 564edd7bc6bd7aaa
+  zh: 6b3f7eff2ac2dbb2
+/deepseek-ai-dsh-attachment/summary:
+  en: ecfee6cc000f679e
+  zh: fadcee31cbd4becb
+/deepseek-ai-dsh-attachment/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-attachment/use-this-package:
+  en: f51a5528232ac43b
+  zh: 931041df996b39d2
+/deepseek-ai-dsh-attachment/use-this-package/attach-images-to-a-prompt:
+  en: b440422892839de9
+  zh: 0290b366b5a4ef88
+/deepseek-ai-dsh-attachment/use-this-package/attach-any-other-file-to-a-prompt:
+  en: d5019c6ae76c0bcf
+  zh: b7aeaf7e6920ff10
+/deepseek-ai-dsh-attachment/use-this-package/pass-attachments-to-commands:
+  en: 8a0fa64e84aa4450
+  zh: ed2ac44ef20250d4
+/deepseek-ai-dsh-attachment/use-this-package/reuse-images-across-the-session:
+  en: c99e4e088be92c4f
+  zh: 34997ecb9a420d08
+/deepseek-ai-dsh-attachment/use-this-package/what-can-go-wrong:
+  en: b35e2f7f17269ae1
+  zh: 57cf0ef9fee6c7e1
+/deepseek-ai-dsh-attachment/understand-the-implementation:
+  en: 25d9c7d6c0899d23
+  zh: ad8380d14810ff1c
+/deepseek-ai-dsh-attachment/understand-the-implementation/design-decisions:
+  en: af7deef72fd2fa93
+  zh: f217d52ce3971135
+/deepseek-ai-dsh-attachment/understand-the-implementation/service-operations:
+  en: 4a35cdba790c3b8b
+  zh: 08d4a18bbad4b182
+/deepseek-ai-dsh-attachment/understand-the-implementation/source-map:
+  en: a196e1f4cf9895ae
+  zh: 39b430b53d30297e
+/deepseek-ai-dsh-attachment/further-exploration:
+  en: 0f179d9ab84a962a
+  zh: 4a1d0722a3309f4a
+/deepseek-ai-dsh-attachment/model-experience:
+  en: 3a9fc2cc8896a2db
+  zh: 256ffa52315cb597
+/deepseek-ai-dsh-attachment/model-experience/kv-cache-effect:
+  en: 2fcaf6d01d42da7c
+  zh: 81e61690b955dd18
+/deepseek-ai-dsh-attachment/known-limitations-and-deferred-work:
+  en: d1ee04ac73471377
+  zh: 1abf40510951d5c2
+/deepseek-ai-dsh-attachment/known-limitations-and-deferred-work/dev-note:
+  en: d56846da29ad869c
+  zh: 41e655e01351fd1d
+/deepseek-ai-dsh-attachment/known-limitations-and-deferred-work/dev-note/future-reference-aware-garbage-collection:
+  en: 20c22bbf4263d41e
+  zh: f85699e18a0e5f43
+/deepseek-ai-dsh-attachment/known-limitations-and-deferred-work/dev-note/future-audio-video-and-assistant-side-output:
+  en: 85353325b14af5a8
+  zh: c03fb041c2daee7e

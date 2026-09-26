@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-与 `ui-input-trigger` 及 `ui-conversation` 一起挂载本插件；`/` source 随即出现在触发菜单中，业务包经 `ctx.commandUi` 注册自己的命令表面。键入 `/model` 打开已注册的弹窗；带参数声明的宿主命令打开其输入或直接执行。composer 的 `+` 按钮与键入的 `/` 打开同一个菜单：「添加」小节（文件、目标、计划、反馈）与「指令」小节（压缩、权限、模型、下载日志）按使用频次排列，每行带图标、本地化的标题与说明，本地化标题与命令名不同时还显示命令名作为别名。
+与 `ui-input-trigger` 及 `ui-conversation` 一起挂载本插件；`/` source 随即出现在触发菜单中，业务包经 `ctx.commandUi` 注册自己的命令表面。键入 `/model` 打开已注册的弹窗；带参数声明的宿主命令打开其输入或直接执行。弹窗持有 composer 焦点：键入即在已加载的行上本地筛选，`↑`／`↓` 在行间移动，回车与 `Tab` 接受高亮行，Escape 与 `Shift+Tab` 把焦点还给 composer。高亮落在选项标记为会话当前值的行上，因此在刚打开的弹窗上接受即确认当前值。composer 的 `+` 按钮与键入的 `/` 打开同一个菜单：「添加」小节（文件、目标、计划、反馈）与「指令」小节（压缩、权限、模型、下载日志）按使用频次排列，每行带图标、本地化的标题与说明，本地化标题与命令名不同时还显示命令名作为别名。
 
 ### 种类与装饰
 
@@ -44,10 +44,14 @@ composer 携带图片或通用文件提交时，只有声明了 `input.attachmen
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
+菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。
+
 <details>
 <summary>实现细节——点击展开</summary>
 
 `src/client/contract.ts` 定义贡献项和装饰的注册接口，以及 `dismiss(name)`：它关闭该命令已打开的弹窗与确认对话框，中止待完成的选项加载，阻止晚到结果重新打开弹窗，并保留 composer 草稿。`CommandDirectory` 负责会话级协议缓存，并通过 `resolution.ts` 解析输入命令；该模块负责内置命令标识匹配和本地化输入写法。`matchSpace` 同步读取就绪缓存，`matchEnter` 等待缓存就绪，预热失败或取消时拒绝。转发的目录和连接事件使缓存失效。宿主执行匹配的命令后，本浏览器发布 `command/executed`，其他客户端只观察持久命令事件。`PopupSelectController` 负责弹窗状态，`PopupSelectView` 占据输入浮层。`presentation.ts` 负责行标题、图标和分节，展示与解析辅助函数均留在插件内部。
+
+每次命令目录拉取都要求客户端已持有该会话，并等待首次历史打开成功后才发送 `commands.list`。临时的 `commandCatalog` 引用持续持有会话，直到拉取结束。未被持有的会话或打开失败会直接拒绝，不发送 RPC，因此后台目录刷新不会重新打开已关闭的会话。
 
 </details>
 

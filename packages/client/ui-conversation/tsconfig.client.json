@@ -1,0 +1,109 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/session-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/workspace-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../attachment/attachment"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../ui-slots"
+    },
+    {
+      "path": "../ui-primitives"
+    },
+    {
+      "path": "../store"
+    },
+    {
+      "path": "../ui-layout"
+    },
+    {
+      "path": "../ui-renderer"
+    },
+    {
+      "path": "../ui-session"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../interaction/commands"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../llm/llm-retry"
+    },
+    {
+      "path": "../../workspace/workspace"
+    },
+    {
+      "path": "../../llm/token-meter"
+    },
+    {
+      "path": "../../plan/plan-mode"
+    },
+    {
+      "path": "../../goal/goal"
+    },
+    {
+      "path": "../../todo/tool-todo"
+    },
+    {
+      "path": "../locale/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-settings/tsconfig.client.json"
+    },
+    {
+      "path": "../../util/crypto"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../../util/workspace-path"
+    },
+    {
+      "path": "../../settings/settings"
+    },
+    {
+      "path": "../../context/file-reference"
+    },
+    {
+      "path": "../shortcuts/tsconfig.client.json"
+    }
+  ],
+  "exclude": [
+    "src/index.ts"
+  ]
+}

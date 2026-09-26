@@ -1,6 +1,43 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-06-manager-owned-subagent-settlement-delivery.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-06-manager-owned-subagent-settlement-delivery.md
-2026-08-06-manager-owned-subagent-settlement-delivery.md: 5553d4c06a6776f0ef025e19ae7f4f67fe277a56
-2026-08-06-manager-owned-subagent-settlement-delivery.zh.md: 6d7ee756ad531e123508e8667adc4e5f99c2b9ea
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager:
+  en: e8e4fec15acfe5d4
+  zh: 6dac0279cf244edc
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/problem:
+  en: 325f283354af59f6
+  zh: 059179e883da78c2
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/decision:
+  en: 472a34f28ed5200a
+  zh: 70dcbbd2e26dc32f
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/decision/closing-text:
+  en: 229151705efda8a9
+  zh: b4e94b52280a2076
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/decision/runtime-source:
+  en: b2e4931dfb6c21b1
+  zh: 9bf619cd5b697e68
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/decision/two-ordering-rules-and-why-the-manager-owns-them:
+  en: 34fad866d5c6377b
+  zh: e865e2cb70c3e00a
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/decision/establishment-holds-ownership-open:
+  en: bcaf3f22ba44fa01
+  zh: d7b0968990f41a66
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/decision/scheduling:
+  en: 3d1862329727a379
+  zh: 92fcf4ffd366ea30
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/decision/the-epoch-s-own-log-is-the-whole-account:
+  en: f444a596a75f0180
+  zh: ec9c0b61a38a3458
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/decision/snapshot-coverage:
+  en: 9e50e4014df1d5b0
+  zh: 1a111b53a149a21b
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/alternatives-considered:
+  en: dd3073a05a8e13bd
+  zh: e58debc18a591077
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/consequences:
+  en: 10ebfbc70ff94e20
+  zh: c32a335007de89d1
+/agent-note-settlement-delivery-belongs-to-the-continuation-manager/consequences/accepted-risks:
+  en: 615cd09443411b4d
+  zh: f74b5dcab43975d3

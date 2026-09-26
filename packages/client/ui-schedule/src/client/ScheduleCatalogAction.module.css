@@ -1,41 +1,35 @@
 .root {
   position: relative;
+  /* Sets the reminder entry slightly apart from the utility to its left, which
+     sits at the header cluster's own tighter rhythm. */
+  margin-left: 4px;
 }
 
+/* Icon-only entry: the 28px round target used by the header's other icon
+   buttons, with the reminder count carried by the accessible name only. */
 .trigger {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 4px;
-  min-height: 28px;
-  padding: 3px 2px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: 28px;
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
   cursor: pointer;
 }
 
 .trigger:hover,
 .trigger:focus-visible {
   color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .trigger svg {
   flex: none;
-}
-
-.trigger > svg:last-child {
-  transition: transform 120ms ease;
-}
-
-.triggerOpen {
-  transform: rotate(180deg);
-}
-
-.count {
-  margin-left: 2px;
 }
 
 .menu {
@@ -44,17 +38,18 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   width: 336px;
   max-width: min(336px, calc(100vw - 32px));
   max-height: min(420px, calc(100vh - 140px));
   margin: 0;
-  padding: 4px;
+  padding: 3px;
   overflow: auto;
   list-style: none;
   border: 0;
-  border-radius: 20px;
+  border-radius: 16px;
   background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
@@ -63,65 +58,132 @@
 
 .row {
   display: flex;
-  flex-direction: column;
+  align-items: start;
   flex-shrink: 0;
-  gap: 3px;
+  gap: 2px;
   box-sizing: border-box;
   width: 100%;
-  min-height: 54px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 10px;
   color: var(--dsw-alias-label-primary);
+}
+
+/* A task row is one whole-row opener, so the row itself carries the hover
+   surface; the status, error, and deletion notices stay inert. */
+.rowTask {
+  position: relative;
+}
+
+.rowTask:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .rowOverdue {
   background: var(--dsw-alias-state-warn-tertiary);
 }
 
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
+.rowOverdue:hover {
+  background: var(--dsw-alias-state-warn-tertiary);
 }
 
-.statusDot {
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 50%;
-  corner-shape: round;
-  background: var(--dsw-alias-state-business-primary);
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
-.rowOverdue .status {
-  color: var(--dsw-alias-state-warn-label);
-}
-
-.rowOverdue .statusDot {
-  background: var(--dsw-alias-state-warn-primary);
-}
-
-.prompt {
+.title {
   font-size: 13px;
   line-height: 18px;
   overflow-wrap: anywhere;
   white-space: normal;
 }
 
-.metadata {
+/* The name is the row's detail opener, so it keeps the row's own text styles. */
+.openButton {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The opener's hit area covers its whole row; the delete button, positioned
+   later in the row, stacks above it and keeps its own click. */
+.openButton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+}
+
+.openButton:focus-visible {
+  outline: none;
+}
+
+.openButton:focus-visible::after {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.metadata,
+.nextRun {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 10px;
+  line-height: 15px;
 }
 
-.relativeOverdue {
+.metadataOverdue {
   color: var(--dsw-alias-state-warn-label);
+}
+
+/* The next target states its own line and takes the frequency line's rule above. */
+
+/* The countdown beside the absolute next run keeps the line's own ink; the
+   popover is narrow, so an unbreakable stamp still wraps. */
+.nextRunRelative {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.deleteButton {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.deleteButton:hover,
+.deleteButton:focus-visible {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.deleteButton:disabled {
+  cursor: wait;
+}
+
+/* The open entry keeps the same quiet gray as its hover state. */
+.trigger[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
 }

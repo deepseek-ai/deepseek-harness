@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-05-nonofficial-feedback-otel.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-05-nonofficial-feedback-otel.md
-2026-09-05-nonofficial-feedback-otel.md: 8225d8bea030c4f09b60fd1a228f0425e9489d39
-2026-09-05-nonofficial-feedback-otel.zh.md: e8ea48b3fe2f228ef57ae1a20f92100dfc333f9c
+/agent-note-explicit-feedback-only-upload-through-opentelemetry:
+  en: 96caaaf6a4efc8cf
+  zh: 2ef629917f3f2567
+/agent-note-explicit-feedback-only-upload-through-opentelemetry/problem:
+  en: 7849f56f36e297e8
+  zh: b98da01a1fd5d974
+/agent-note-explicit-feedback-only-upload-through-opentelemetry/decision:
+  en: c4558bdfc95ee2f2
+  zh: 4fc88ffa4512b66a
+/agent-note-explicit-feedback-only-upload-through-opentelemetry/alternatives-considered:
+  en: 21376ce3ebef2662
+  zh: d3168b64bdf093bf
+/agent-note-explicit-feedback-only-upload-through-opentelemetry/consequences:
+  en: 7daf3ebf1bfd2124
+  zh: f2cec93e3069a973

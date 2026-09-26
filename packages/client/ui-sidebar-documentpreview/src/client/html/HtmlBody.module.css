@@ -13,12 +13,3 @@
   color: var(--dsw-alias-label-secondary);
   white-space: normal;
 }
-
-/* The packing wait fills the still-empty body and centres, like the image
-   renderer's status. */
-.opening {
-  justify-content: center;
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 100%;
-}

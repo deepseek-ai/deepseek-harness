@@ -38,17 +38,34 @@ export class TestRemote {
    * @param ctx - the spec's root Context.
    * @param namespaces - scripted namespace faces reached as `ctx.remote.<name>`.
    */
-  constructor(ctx: Context, namespaces: Readonly<Record<string, object>> = {}) {
+  constructor(private readonly ctx: Context, namespaces: Readonly<Record<string, object>> = {}) {
+    this.validateNamespaces(namespaces)
+    ctx.provide('remote', this)
+    this.installNamespaces(namespaces)
+  }
+
+  /**
+   * Add scripted namespace faces to this Remote service.
+   * @param namespaces - scripted namespace faces reached as `ctx.remote.<name>`.
+   */
+  provideNamespaces(namespaces: Readonly<Record<string, object>>): void {
+    this.validateNamespaces(namespaces)
+    this.installNamespaces(namespaces)
+  }
+
+  private validateNamespaces(namespaces: Readonly<Record<string, object>>): void {
     for (const name of Object.keys(namespaces)) {
       // A namespace named after one of the double's own members would replace
       // it, and `$mount`'s rejection is the contract a spec relies on.
-      if (name in TestRemote.prototype || name === 'subscriptions' || name === '$host') {
+      if (name in this) {
         throw new TypeError(`TestRemote: scripted namespace "${name}" would shadow the double's own member`)
       }
     }
+  }
+
+  private installNamespaces(namespaces: Readonly<Record<string, object>>): void {
     Object.assign(this, namespaces)
-    ctx.provide('remote', this)
-    for (const [name, face] of Object.entries(namespaces)) ctx.provide(`remote.${name}`, face)
+    for (const [name, face] of Object.entries(namespaces)) this.ctx.provide(`remote.${name}`, face)
   }
 
   /**

@@ -28,7 +28,7 @@ export function syntheticHistory(): string {
     session.append('turn/start', { turn })
     session.append('step/start', { turn, step: 1 })
     if (turn === 1) session.append('system/message', {
-      turn, step: 1, message: createSystemMessage('', '@deepseek-ai/dsh-system-prompt'),
+      turn, step: 1, message: createSystemMessage(''),
     }, { surfaceOp: 'append' })
     const user = session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'Review synthetic change ' + String(turn) + ': 检查增量渲染。 '.repeat(30) }],

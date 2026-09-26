@@ -1,6 +1,88 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/interaction/user-approval/README.md
-README.md: b06a98cccad9733f3b062faee9a5ca26dff8282b
-README.zh.md: 32c6cef1ce16c6834d0b2d6439790765924c198c
+/:
+  en: 515e991a5671711d
+  zh: 194d48a8da9b51b0
+/deepseek-ai-dsh-user-approval:
+  en: 548c7fcc396775de
+  zh: ad82c4872acbf83a
+/deepseek-ai-dsh-user-approval/summary:
+  en: 9b438f002e664c9e
+  zh: 1f1adf3db6a56ddc
+/deepseek-ai-dsh-user-approval/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-user-approval/use-this-package:
+  en: dd034141bc1a7634
+  zh: a44f1f90dac2a444
+/deepseek-ai-dsh-user-approval/use-this-package/composing-answerers:
+  en: 3618ddc3386e65f0
+  zh: d6c0ac91aae122bb
+/deepseek-ai-dsh-user-approval/use-this-package/setting-the-policy:
+  en: d4ef1901ac78b431
+  zh: 822b97f8bed1b2c9
+/deepseek-ai-dsh-user-approval/use-this-package/requesting-a-decision:
+  en: dc465de82799bab0
+  zh: 51144cc77bb15689
+/deepseek-ai-dsh-user-approval/use-this-package/what-the-model-and-user-see:
+  en: 016bf3cd1891d3d7
+  zh: 33e7e5ffaf95f5e7
+/deepseek-ai-dsh-user-approval/understand-the-implementation:
+  en: d07be7ba08baf010
+  zh: 665e68e9188e5d60
+/deepseek-ai-dsh-user-approval/understand-the-implementation/source-map:
+  en: 3abbfecbac6271f1
+  zh: b14f235a230f561e
+/deepseek-ai-dsh-user-approval/understand-the-implementation/dispatch:
+  en: 38c3646e45d3dddd
+  zh: 3363dde8c786d6b2
+/deepseek-ai-dsh-user-approval/understand-the-implementation/policy-and-the-runtime-context-snapshot:
+  en: a8df8823aa0b015d
+  zh: ed0906f11645e7fd
+/deepseek-ai-dsh-user-approval/understand-the-implementation/audit:
+  en: 2b8650dcd0032440
+  zh: 3e1f3070924b6052
+/deepseek-ai-dsh-user-approval/further-exploration:
+  en: cb43cb6a03fdc26a
+  zh: e150e41d99be0d45
+/deepseek-ai-dsh-user-approval/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-user-approval/model-experience/current-approval-policy-context:
+  en: d23980f003b42fbb
+  zh: 532f0174de5d87b5
+/deepseek-ai-dsh-user-approval/model-experience/current-approval-policy-context/what-the-model-sees:
+  en: a38775858ccd61f3
+  zh: c19c76827be7aabf
+/deepseek-ai-dsh-user-approval/model-experience/current-approval-policy-context/what-the-model-sees/ask-policy-contribution:
+  en: b9f1262c97ec7568
+  zh: 8a6613695f896f70
+/deepseek-ai-dsh-user-approval/model-experience/current-approval-policy-context/what-the-model-sees/never-policy-contribution:
+  en: f13f09fc2466513b
+  zh: 4a755a682551c481
+/deepseek-ai-dsh-user-approval/model-experience/current-approval-policy-context/token-effect:
+  en: e96807422bdce44d
+  zh: 9fdcfafcc96bd004
+/deepseek-ai-dsh-user-approval/model-experience/current-approval-policy-context/kv-cache-effect:
+  en: b4bac06588fdd1c3
+  zh: 60271562fdd52f72
+/deepseek-ai-dsh-user-approval/model-experience/tool-outcome:
+  en: 54c140b4a1b4a5bc
+  zh: 8573891441963be4
+/deepseek-ai-dsh-user-approval/model-experience/tool-outcome/what-the-model-sees:
+  en: fd0c40c0a6b4c967
+  zh: c7e18063e11080e9
+/deepseek-ai-dsh-user-approval/model-experience/tool-outcome/token-effect:
+  en: 972a63ca590fecde
+  zh: 217b63d98365dbdb
+/deepseek-ai-dsh-user-approval/model-experience/tool-outcome/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: 4db81881ebdcfcc4
+/deepseek-ai-dsh-user-approval/known-limitations-and-deferred-work:
+  en: c6928515ff91ee7e
+  zh: c23bd844b4907f12
+/deepseek-ai-dsh-user-approval/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

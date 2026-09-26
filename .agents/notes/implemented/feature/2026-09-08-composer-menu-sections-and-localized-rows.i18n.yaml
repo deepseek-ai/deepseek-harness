@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-08-composer-menu-sections-and-localized-rows.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-08-composer-menu-sections-and-localized-rows.md
-2026-09-08-composer-menu-sections-and-localized-rows.md: 3cccb3c038ae4c358860f09533e966e9121b987e
-2026-09-08-composer-menu-sections-and-localized-rows.zh.md: 31c879b17ac6788bfade50a3245903c3e2e56224
+/agent-note-composer-menu-sections-localized-rows-and-the-file-row:
+  en: c917d19351c56a78
+  zh: f443c8b88e4f71dd
+/agent-note-composer-menu-sections-localized-rows-and-the-file-row/problem:
+  en: 3047bf5dd9f33e93
+  zh: 34b017add5329b49
+/agent-note-composer-menu-sections-localized-rows-and-the-file-row/decision:
+  en: 7f9b8265d826561e
+  zh: e2eca2e3f58d296f
+/agent-note-composer-menu-sections-localized-rows-and-the-file-row/alternatives-considered:
+  en: a7806a39ab7a1bac
+  zh: 421815a13d53e306
+/agent-note-composer-menu-sections-localized-rows-and-the-file-row/consequences:
+  en: 8d4daba9e67cdfaa
+  zh: 6ef43f58f9abf3bc

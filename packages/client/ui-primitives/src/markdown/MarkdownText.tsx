@@ -13,6 +13,7 @@
 
 import { memo, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
+import clsx from 'clsx'
 import { IncrementalMarkdownParser } from './incremental.ts'
 import { parseGfm, parseGfmWithMath } from './parse.ts'
 import {
@@ -156,20 +157,29 @@ class StreamingRenderer {
  * identity discards the streaming render cache mid-message. `fileMentions`
  * links inline-code tokens its resolver recognizes as real files, and
  * `pathImages` rewrites image destinations that are local file paths into
- * displayable URLs its resolver vouches for; both vocabularies are the
+ * displayable URLs its resolver vouches for. Those two vocabularies are the
  * single streaming gate — they apply to settled renders only, because a
  * streaming message's vocabulary is not final and frozen cached elements
- * must not bake in handlers that could go stale.
- * @returns A GFM document with TeX math rendered through KaTeX; raw HTML,
- * relative links, and unsafe protocols are disabled, while absolute HTTP(S)
- * images render directly.
+ * must not bake in handlers that could go stale. A surrounding
+ * `MarkdownDelegateProvider` can delegate ordinary HTTP(S) activation while
+ * modified clicks retain native behavior. `variant="compact"` uses secondary
+ * text sizing, uniform bold headings, and tight block spacing; the default
+ * `body` variant uses the full document typography.
+ * The provider's `openFile` enables local Markdown links in settled messages,
+ * including `#L24` and `#L24-L30` destinations (ranges open at their first line).
+ * @returns A GFM document with TeX math rendered through KaTeX; raw HTML and
+ * unsafe protocols are disabled. Local links without an opener remain text;
+ * absolute HTTP(S) images render directly.
  */
-export const MarkdownText = memo(function MarkdownText({ text, streaming = false, labels, fileMentions, pathImages }: {
+export const MarkdownText = memo(function MarkdownText({
+  text, streaming = false, labels, fileMentions, pathImages, variant = 'body',
+}: {
   text: string
   streaming?: boolean
   labels: MarkdownLabels
   fileMentions?: MarkdownFileMentions | undefined
   pathImages?: MarkdownPathImages | undefined
+  variant?: 'body' | 'compact'
 }) {
   const streamRef = useRef<StreamingRenderer | null>(null)
   const streamLabelsRef = useRef<MarkdownLabels>(labels)
@@ -184,5 +194,6 @@ export const MarkdownText = memo(function MarkdownText({ text, streaming = false
     }
     return streamRef.current.render(text)
   }, [text, streaming, labels, fileMentions, pathImages])
-  return <div className={css.markdown}>{children}</div>
+  return <div className={clsx(css.markdown, variant === 'compact' && css.compact)}
+    data-markdown-variant={variant === 'compact' ? variant : undefined}>{children}</div>
 })

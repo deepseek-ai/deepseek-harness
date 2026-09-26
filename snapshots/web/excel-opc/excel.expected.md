@@ -1,0 +1,22 @@
+# Independent-writer Excel previews
+
+- comments.xlsx: 数据 opened; Item copied
+- table.xlsx: 数据 opened; Item copied
+- prefix.xlsx: 数据 opened; Item copied
+- part-name.xlsx: 数据 opened; Item copied
+- relative.xlsx: 数据 opened; Item copied
+- combined.xlsx: 数据 opened; Item copied
+- strict.xlsx: 数据 opened; Item copied
+- case-root.xlsx: 数据 opened; Item copied
+- case-parts.xlsx: 数据 opened; Item copied
+- orphan-drawing.xlsx: 数据 opened; Item copied
+- rich.xlsx: 数据 opened; Item copied
+- utf16-sheet.xlsx: 数据 opened; Item copied
+- utf16-metadata.xlsx: 数据 opened; Item copied
+- workbook-path.xlsx: 数据 opened; Item copied
+- styles-path.xlsx: 数据 opened; Item copied
+- strings-path.xlsx: 数据 opened; Item copied
+- cdata.xlsx: 数据 opened; Item copied
+- parts-path.xlsx: 数据 opened; Item copied
+- Relocated workbook: hidden sheet omitted
+- Relocated workbook notice: This preview does not support charts, images, shapes, conditional formatting in this workbook. Open it in a system application for the full experience.

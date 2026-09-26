@@ -27,6 +27,8 @@ kind: "package-reference"
 
 当组合需要通过 pi-ai 的提供方目录、或通过 pi-ai 已安装目录未描述的网关路由模型请求时挂载本插件。`providers` 字典就是整个配置面：每个键都是请求用 `GenerateOptions.provider` 选择的提供方路由名。
 
+适配器接受 LLM 服务的[仅供请求使用的 user 输入](../llm/README.zh.md#use-this-package)，并可将其与持久历史混用。user 身份与来源不会进入 pi-ai 内容；assistant 回放元数据和工具调用关联仍由持久消息携带。
+
 ### 何时选择
 
 当同一组合服务多个提供方、某条路由需要 pi-ai 目录默认值并修正少数字段、或必须通过自有端点与协议到达手工声明网关时，选择本适配器。当部署不需要其他提供方时，选择 `dsh-llm-deepseek` 直连 DeepSeek 路由。两个适配器可以同时挂载，因为它们的路由名不冲突；注册其他适配器已拥有的路由会导致插件加载失败。
@@ -104,17 +106,17 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每�
 
 ### 运行时更改配置
 
-profile 通过可选 settings seam 每次操作重新读取：base 与用户的 `llm-pi-ai:` 设置分节按提供方合并，因此用户可以新增路由、覆盖组合路由的一个字段或把路由指向另一个代理，全部在下一个请求生效、无需重启。适配器无法服务的分节会在写入处被拒绝——`settings.mutate` 回答 `settings-rejected`——之后失效的已存储分节会保留 namespace 最后有效值。当路由集合或某路由的重试策略变化时，插件会原子地重新注册：冲突路由会让此前路由继续服务。
+每次操作捕获当前 `providers` Config 引用。新增或修改的 provider 配置在表单持久化前验证；未更改的目录故障仍可编辑。路由集合或重试策略变化时原子更新注册；如果其他适配器已拥有所请求的路由，则保留先前路由。
 
 ### 从端点发现模型
 
-插件会回答「该提供方可以提供哪些模型？」，供配置界面正在编辑或起草的路由使用。已安装目录提供的路由直接由目录回答，不发网络请求；只有目录未描述的路由才会经网络询问。`openai-completions` 与 `openai-responses` 使用带 bearer 鉴权的 `GET {baseURL}/models`，`anthropic-messages` 则以 `x-api-key` 和 `anthropic-version` 使用原生 `GET /v1/models?limit=1000` 语义；其列表 URL 接受带或不带末尾 `/v1` 的 API 根地址，因为网关文档两种写法都会发布，且只有该列表 URL 会归一化这一段，模型请求收到的仍是配置原样的 `baseURL`。已配置且具名的路由会在 Host 内部提供已存凭据与 profile `headers`，因此通过 `settings.yaml` 或 Cordis 配置设置的部署标头可以到达模型发现请求，但不会成为发现请求或 Models 页面的字段；表单中新键入的密钥仍优先于已存凭据。解析器接受标准 `data` 数组或富信息 `models` 对象，并归一化每个候选的 id、显示名、上下文窗口与最大输出 token 数；Anthropic 的 `max_input_tokens` 与 `max_tokens` 会进入相同容量字段，即使对象条目点名了另一个规范 id，对象键仍是请求 id，原始类型的对象属性会被忽略，缺失的显示名则回退到该请求 id。回答是界面可以提供给用户采纳的候选元数据——不存储任何内容，`settings.yaml` 仍然是决定路由服务内容的唯一事实。
+插件会回答「该提供方可以提供哪些模型？」，供配置界面正在编辑或起草的路由使用。已安装目录提供的路由直接由目录回答，不发网络请求，并将其 `input` 数组保留为发现结果的 `inputModalities`；只有目录未描述的路由才会经网络询问。`openai-completions` 与 `openai-responses` 使用带 bearer 鉴权的 `GET {baseURL}/models`，`anthropic-messages` 则以 `x-api-key` 和 `anthropic-version` 使用原生 `GET /v1/models?limit=1000` 语义；其列表 URL 接受带或不带末尾 `/v1` 的 API 根地址，因为网关文档两种写法都会发布，且只有该列表 URL 会归一化这一段，模型请求收到的仍是配置原样的 `baseURL`。已配置且具名的路由会在 Host 内部提供已存凭据与 profile `headers`，因此通过 `cordis.patch.yml` 或 Cordis 配置设置的部署标头可以到达模型发现请求，但不会成为发现请求或 Models 页面的字段；表单中新键入的密钥仍优先于已存凭据。解析器接受标准 `data` 数组或富信息 `models` 对象，并归一化每个候选的 id、显示名、上下文窗口与最大输出 token 数；Anthropic 的 `max_input_tokens` 与 `max_tokens` 会进入相同容量字段，即使对象条目点名了另一个规范 id，对象键仍是请求 id，原始类型的对象属性会被忽略，缺失的显示名则回退到该请求 id。回答是界面可以提供给用户采纳的候选元数据——不存储任何内容，`cordis.patch.yml` 仍然是决定路由服务内容的唯一事实。
 
 ### 失败与恢复
 
 pi-ai 不提供的路由需要 `api`、`baseURL` 与非空 `models` 列表；无法服务的 profile 会在写入处被拒绝，并点名路由与模型。失败携带稳定 code：无法使用的凭据以 `INVALID_CREDENTIAL` 失败并点名路由与引用，`apiKeyEnv` 引用解析为空的路由以 `MISSING_CREDENTIAL` 失败，未配置模型以 `UNKNOWN_MODEL` 失败，终止性提供方失败则区分 `QUOTA` 与暂时性 `RATE_LIMIT`。`GenerateOptions.stop` 以 `UNSUPPORTED_OPTION` 被拒绝，因为 pi-ai 的通用流式 UI 无法跨提供方保证它。
 
-Settings 写入会在合并组合层与用户层后严格校验每个新增或修改的提供方。命名空间注册时，已存储配置的目录解析错误会保留命名空间与提供方行，并通过 `LlmConfigurableProvider.error` 优先返回首个模型诊断，无模型诊断时返回路由错误；未修改的错误提供方不会阻止其他编辑。可解析的模型仍可选择，无法解析的模型保留在可编辑配置中，直接请求时会在网络 I/O 前以 `INVALID_CONFIG` 失败。修复或删除错误配置会清除诊断。Schema 与 profile 自身的约束错误仍会拒绝加载。后续外部文件编辑会校验变化的提供方，失败时保留最后一次接受的分节。
+Config 更新严格验证发生变化的 provider。初始加载将已存储的目录故障保留为可编辑的 provider 诊断；未更改的故障 provider 不阻止其他编辑。可用模型仍可选择，无法解析的模型在网络 I/O 前失败。修复或删除问题配置会清除其诊断。
 
 只修改 `displayName`、`apiKeyEnv` 或 `baseURL` 而未解决提供方的模型配置错误时，保存仍会被拒绝。例如，OpenRouter 路由的模型 `111` 缺少 `api` 时，不能单独保存路由名称的修改：需要在同一份编辑草稿中修复或删除该模型，再保存完整的提供方配置。中间修复状态保留在草稿中，直到整条提供方配置通过校验；其他提供方可以独立保存。
 
@@ -136,7 +138,7 @@ Settings 写入会在合并组合层与用户层后严格校验每个新增或�
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：profile 解析、settings 接线、目录与路由注册 |
+| [`src/index.ts`](src/index.ts) | Config 快照、目录及路由注册 |
 | [`src/auth.ts`](src/auth.ts) | 覆盖 harness 凭据平面的凭据存储与 ambient auth context |
 | [`src/login.ts`](src/login.ts) | 面向提供登录的已安装提供方的授权流程 |
 | [`src/config.ts`](src/config.ts) | Profile schema、解析与可服务性校验 |
@@ -154,7 +156,7 @@ Settings 写入会在合并组合层与用户层后严格校验每个新增或�
 
 ### 回放与词汇
 
-成功 assistant 响应会存储带版本的、无损 JSON 回放状态，与产生它们的提供方和模型放在一起——响应级事实加每个流式块一条逐块条目。请求时，`LlmRuntime` 仅当同一适配器实例拥有两条路由时才传递回放状态；适配器校验它并恢复原生响应 id、提供方签名与可选的 `providerThinkingLevel` effort 元数据，缺失的 effort 元数据仍保持缺失。回放会对照 assistant 来源校验请求模型身份，并在提供方解析别名或回退时单独恢复 Anthropic 响应模型。无法使用的状态会降级为提供方无关内容而不是让请求失败。pi-ai 工具调用参数是解析后的对象，因此适配器解析输入并重新字符串化输出，以符合 harness 原始 JSON 约定；pi-ai 流内错误事件映射为终止 `finish` 分片。
+成功 assistant 响应会存储带版本的、无损 JSON 回放状态，与产生它们的提供方和模型放在一起——响应级事实加每个流式块一条逐块条目。请求时，`LlmRuntime` 仅当同一适配器实例拥有两条路由时才传递回放状态；适配器校验它并恢复原生响应 id、提供方签名与可选的 `providerThinkingLevel` effort 元数据，缺失的 effort 元数据仍保持缺失。回放会对照 assistant 来源校验请求模型身份，并在提供方解析别名或回退时单独恢复 Anthropic 响应模型。回放状态缺失或无法使用时会降级为提供方无关内容，并保留 assistant 来源中必需的提供方和模型。pi-ai 工具调用参数是解析后的对象，因此适配器解析输入并重新字符串化输出，以符合 harness 原始 JSON 约定；pi-ai 流内错误事件映射为终止 `finish` 分片。
 
 </details>
 
@@ -215,10 +217,10 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 - **`maxRequestImageBytes` 只计算 base64 图片载荷**，文本、工具、描述符与 JSON 结构在该上限之外，因此它必须留有余量地低于网关请求体上限。
 - **登录只存在于发起它的进程中**——授权尝试不持久，因此登录中途刷新页面会放弃它，用户需要重新开始。退出登录是对已存储记录执行 `deleteRecord`，只在本地忘记它，不会告知签发方。
 - **提供方原生发现经本插件的 ambient context 回答**——不点名凭据的路由交由目录提供方自身解析，它会询问环境值（`AZURE_OPENAI_API_KEY`、`AWS_PROFILE` 及各提供方自有集合）与本地凭据文件。两个问题都在这里得到回答：凭据 seam 先于进程环境被查询，文件存在性则针对宿主进程的文件系统以 `~` 展开后检查。它做不到的是*读取*凭据文件内容——自行解析 `~/.aws/credentials` 的提供方会直接读取，不经该 seam。
-- **设置可以新增或覆盖路由，不能移除组合路由**——用户层覆盖组合 base，因此删除 `cordis.yml` 提供的提供方属于组合变更。
-- **分层合并对字典键没有删除**——base 声明的 `reasoningEfforts` 等级、`modelOverrides` 条目或 `compat` 字段可以被用户层覆盖，但不能被移除。
+- **重置恢复继承配置**——重置下层 profile 提供的路由会恢复该路由。
+- **完整替换 Config 可以移除继承的字典条目**——字段重置则恢复其继承值。
 - **`headers` 可以携带 redactor 永远看不到的凭据**——profile 解析会拒绝 Fetch 无法表示的名称与值，但该字典仍是纯字符串；以 `apiKeyEnv` 引用存储凭据。
-- **路由目录不会自行刷新**——目录就是 `settings.yaml` 的内容；这里没有任何机制向提供方查询它提供的模型。
+- **发现操作不更改已配置模型**——需显式将发现结果采纳到路由配置中。
 - **Anthropic 模型发现最多读取 1,000 个模型**——请求使用 API 的最大页大小，但不会遍历 `has_more`；第一页之外的条目需要手工添加。
 - **每条路由一种协议格式**——混合协议目录路由无法承载另一协议格式的模型；把提供方拆到两个路由键是变通办法。
 - **模态声明不受校验**——声明 `image` 而其网关不支持的模型会在提示词准入后被提供方拒绝。持久图片仍留在历史中，同一误声明模型可能再次失败；切换到纯文本模型仍然可行，因为共享 LLM 运行时会针对该请求把图片引用投影为稳定文本。
@@ -227,6 +229,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 - **只有历史中首条 `system` 消息会成为 pi-ai 的 `systemPrompt`**——pi-ai 只有一个系统槽位，因此后续的 `system` 消息，或在同时设置了 `GenerateOptions.system` 时的首条消息，会在原位置折叠为 `user` 消息；系统提示词的提供方专属放置遵循 pi-ai，而非 harness 自有的协议覆盖。system 或 assistant 历史中的图片（包括首条系统消息中的图片）在两条转换路径上都会以 `UNSUPPORTED_CONTENT` 失败。
 - **提供方 HTTP 状态不可用**——pi-ai 错误事件不跨提供方暴露稳定 HTTP 状态。
 - **重试策略由提供方自有，而非 SDK 重试**——pi-ai SDK 重试保持禁用，因此持久 agent（智能体）步骤与 `llm/retry` 事件拥有每个可见尝试，直接 `ctx.llm.stream()` 调用仍是单次尝试。
+- **流式工具调用参数只在调用结束时解析一次**——安装的 pi-ai 带有 [`patches/@earendil-works__pi-ai@0.85.1.patch`](../../../patches/@earendil-works__pi-ai@0.85.1.patch)，它移除了每个流适配器中对整段累计参数 JSON 的逐 delta 重新解析（上游 [earendil-works/pi#9265](https://github.com/earendil-works/pi/issues/9265)）；未打补丁时，数 MB 的参数流会在事件循环上消耗 O(n²) CPU，并使进程内所有会话停滞。在 `toolcall_end` 之前，pi-ai partial 的工具调用 `arguments` 保持为 `{}`；本适配器只读取 delta 字符串与最终参数。每次升级 pi-ai 时都要重新应用或撤销该补丁。
 
 <a id="dev-note"></a>
 ### 开发备注

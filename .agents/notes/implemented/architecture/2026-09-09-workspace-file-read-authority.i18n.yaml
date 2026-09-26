@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-workspace-file-read-authority.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-09-workspace-file-read-authority.md
-2026-09-09-workspace-file-read-authority.md: 35ac15f5e463910be3b3a0cfe7b80dc69c129ad3
-2026-09-09-workspace-file-read-authority.zh.md: 559a59af0bfa988ff880fad22470397e4e74f296
+/agent-note-workspace-file-read-authority:
+  en: 7ca22246a308d511
+  zh: c51c7343db9c8cfa
+/agent-note-workspace-file-read-authority/problem:
+  en: ee5703dcce5d81c5
+  zh: 6c1aec04723d211b
+/agent-note-workspace-file-read-authority/decision:
+  en: 92dbdf6087e00f04
+  zh: 2c8720a081d492f9
+/agent-note-workspace-file-read-authority/alternatives-considered:
+  en: 329e575be02d7392
+  zh: a78f428b36d40f59
+/agent-note-workspace-file-read-authority/consequences:
+  en: 5596ccd54a474e24
+  zh: d31721c8d39b7fdc

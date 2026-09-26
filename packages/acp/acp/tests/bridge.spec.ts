@@ -304,7 +304,7 @@ describe('automation-only ACP bridge', () => {
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const agent = harness.ctx.agents.get(SessionId(created.sessionId))!
-    agent.session.append('session/title', { title: 'materialized', messageSeqs: [], source: { kind: 'fallback' } })
+    agent.session.append('session/title', { title: 'materialized', messageSeqs: [], source: { kind: 'user' } })
     await harness.client.closeSession({ sessionId: created.sessionId })
 
     const resumed = await harness.client.resumeSession({ sessionId: created.sessionId, cwd: process.cwd() })

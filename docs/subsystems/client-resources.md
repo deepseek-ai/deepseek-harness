@@ -15,6 +15,7 @@ A resource address is a `dsh-resource://<type>/…` URL. The host names the prot
 | `dsh-resource://file/session/s1/notes/a.md` | `file` | the metadata of `notes/a.md` under session `s1`'s workspace root, when the `file` provider is registered |
 | `dsh-resource://file/absolute/home/me/notes.md` | `file` | parseable but fails with `workspace-file/unknown-workspace`: no authorizing Session, and neither current nor Tab Session is borrowed |
 | `DSH-RESOURCE://File/session/s1/a` | `file` | a distinct record: addresses compare as strings, and `openResource` accepts only the canonical lower-case spelling that `fileAddressFor` emits |
+| `dsh-resource://subagentchat/session/c1?parent=p1&mode=continuable` | `subagentchat` | an addressed subagent Conversation whose value owns a `SessionReference` until the resource closes |
 | `sidebar://guide` | — | `none`: a navigation address |
 | `/home/me/notes.md` | — | `none`: not a URL |
 
@@ -84,7 +85,7 @@ A consumer presents `failed` itself: the model keeps the last value beside the f
 
 A resource is alive while it has a holder: a subscribed `useResource`, or a pin. `ctx.resources.pin(address, signal)` keeps a resource open without subscribing until `signal` aborts, and an already-aborted signal pins nothing; the right Sidebar pins every open tab record's address for the record's life, so switching tabs unmounts a body without closing its stream. The first holder opens the provider's stream; the last release aborts it, discards the value, and returns the snapshot to `loading` (provider present) or `none` (absent). A frame the provider yields after that release is dropped, and the iterator is returned. `ctx.resources.source(address)` is the bare observable behind the hook, reference-stable per address, for callers outside React; reading its snapshot does not hold the resource ([lifecycle](../../packages/client/resources/README.md#lifecycle)).
 
-Streams carry metadata, not content. The `file` provider's value is `WorkspaceFileStat { absolutePath, version, bytes? }`: the first frame comes from Host `stat`, and later observations update the version. A consumer reads content through the Workspace Files Remote namespace; Preview owns refresh independently per tab ([`dsh-api-workspace-files`](../../packages/api/workspace-files/README.md)).
+Most streams carry metadata rather than content. The `file` provider's value is `WorkspaceFileStat { absolutePath, version, bytes? }`: the first frame comes from Host `stat`, and later observations update the version. A consumer reads content through the Workspace Files Remote namespace; Preview owns refresh independently per tab ([`dsh-api-workspace-files`](../../packages/api/workspace-files/README.md)). The `subagentchat` provider retains the addressed Session and yields its `SessionReference`, then releases that reference when the resource signal aborts.
 
 ## Limits
 

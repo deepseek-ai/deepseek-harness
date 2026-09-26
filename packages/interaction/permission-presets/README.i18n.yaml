@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/interaction/permission-presets/README.md
-README.md: 1cee5bd48cf0bee5fb5792e81bc279785a102368
-README.zh.md: 2ce5995d69ced6af4a30205ab86920f52c617988
+/:
+  en: a4e18d5b27337d71
+  zh: 2220eba5dfcdb1f3
+/deepseek-ai-dsh-permission-presets:
+  en: 083e8c1dbc2c401a
+  zh: 07b62096a7a24447
+/deepseek-ai-dsh-permission-presets/summary:
+  en: 75a5c477313feb23
+  zh: 9e036411e14edf1b
+/deepseek-ai-dsh-permission-presets/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-permission-presets/use-this-package:
+  en: 0b93409c92e2a769
+  zh: 4b4e10636760bb15
+/deepseek-ai-dsh-permission-presets/use-this-package/configuring-presets:
+  en: 3b3fe69be228870a
+  zh: af3f146f86615ad4
+/deepseek-ai-dsh-permission-presets/use-this-package/switching-presets:
+  en: ede3169d799a7578
+  zh: cb88e3ade597e486
+/deepseek-ai-dsh-permission-presets/use-this-package/what-users-see:
+  en: 628a5bdd956e206c
+  zh: 172be9a9748d65ce
+/deepseek-ai-dsh-permission-presets/use-this-package/session-defaults:
+  en: 88218998b169a203
+  zh: 7a3646ff0ca28549
+/deepseek-ai-dsh-permission-presets/understand-the-implementation:
+  en: f5c37bc882b3f0d1
+  zh: 8203bea78976aefc
+/deepseek-ai-dsh-permission-presets/understand-the-implementation/source-map:
+  en: c240ef830a066e26
+  zh: 423ae941bed7e96c
+/deepseek-ai-dsh-permission-presets/understand-the-implementation/write-path:
+  en: b01849a5fa73aae9
+  zh: cbd7fcf50117502b
+/deepseek-ai-dsh-permission-presets/understand-the-implementation/read-side-and-custom:
+  en: c9ca792038f44654
+  zh: 83cc2641c800c114
+/deepseek-ai-dsh-permission-presets/understand-the-implementation/session-pinning-and-blank-reuse:
+  en: 893cea88bce22903
+  zh: 2431e19ced670511
+/deepseek-ai-dsh-permission-presets/understand-the-implementation/catalog-projection-and-optional-command:
+  en: 2e79bec74274b054
+  zh: 256526ab1b4b55e9
+/deepseek-ai-dsh-permission-presets/further-exploration:
+  en: 0b3c08b2e640c16d
+  zh: 5ace374ef319b67f
+/deepseek-ai-dsh-permission-presets/model-experience:
+  en: e57a5ed554b4e882
+  zh: 6a464902171cb659
+/deepseek-ai-dsh-permission-presets/model-experience/kv-cache-effect:
+  en: 40294c1c31b74824
+  zh: ef3368fe16abff21
+/deepseek-ai-dsh-permission-presets/known-limitations-and-deferred-work:
+  en: 8f245d69661be63f
+  zh: d14108248083eaa5
+/deepseek-ai-dsh-permission-presets/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

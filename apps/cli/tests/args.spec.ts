@@ -61,7 +61,7 @@ describe('parseDshArgs', () => {
       [], ['task', 'words'], ['--help'], ['-h'], ['web'],
       ['--patch', 'a.yml', '--patch', 'b.yml'],
       ['--from-default-profile', 'web', '--help'],
-      ['--dump-config'], ['--dump-default-config'],
+      ['--dump-config'], ['--dump-default-config'], ['--dump-config-schema'],
       ['--patch', 'a.yml', '--resume', 'id', '--patch', 'late.yml'],
       ['--', '--help'], ['--', '--', 'task'],
       ['plugin'], ['--', 'plugin'],
@@ -141,6 +141,44 @@ describe('parseDshArgs', () => {
       .toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: false, patches: [] })
     expect(parse(['web', '--dump-default-config']))
       .toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: true, patches: [] })
+  })
+
+  it('routes schema dumps with ordered overlays and explicit initialization', () => {
+    expect(parse(['--profile', 'web', '--dump-config-schema']))
+      .toEqual({ mode: 'dump-config-schema', profile: 'web', patches: [] })
+    expect(parse(['rescue', '--from-default-profile', 'web', '--patch', 'first.yml', '--dump-config-schema', '--patch', 'second.json']))
+      .toEqual({
+        mode: 'dump-config-schema',
+        profile: 'rescue',
+        fromDefaultProfile: 'web',
+        patches: ['first.yml', 'second.json'],
+      })
+    expect(parse(['web', '--port', '8080', '--dump-config-schema']))
+      .toMatchObject({ mode: 'profile', args: ['--port', '8080', '--dump-config-schema'] })
+  })
+
+  it.each([
+    ['--dump-config', '--dump-default-config'],
+    ['--dump-config', '--dump-config-schema'],
+    ['--dump-default-config', '--dump-config-schema'],
+    ['--dump-config', '--dump-default-config', '--dump-config-schema'],
+  ])('rejects competing dump flags %j', (...flags: string[]) => {
+    expect(exitCode(['web', ...flags])).toBe(1)
+    expect(exitCode(['--profile', 'web', ...flags.toReversed()])).toBe(1)
+  })
+
+  it.each([
+    ['--dump-config-schema'],
+    ['desktop', '--dump-config-schema'],
+    ['--profile', 'Desktop', '--dump-config-schema'],
+    ['web', '--dump-config-schema', 'task'],
+    ['web', '--dump-config-schema', '--port', '8080'],
+    ['web', '--dump-config-schema', '--help'],
+    ['web', '--dump-config-schema', '--', '--patch', 'late.yml'],
+    ['web', '--dump-config-schema', '--patch='],
+    ['rescue', '--dump-config-schema', '--from-default-profile='],
+  ])('rejects invalid schema dump inputs %j', (...argv: string[]) => {
+    expect(exitCode(argv)).toBe(1)
   })
 
   it('rejects missing profile, removed flags, and contradictory inputs', () => {

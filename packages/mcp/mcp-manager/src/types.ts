@@ -24,7 +24,7 @@ export type McpManagedServerStatus =
 
 /** One managed server as a management surface lists it. */
 export interface McpManagedServerView {
-  /** The `mcp.servers` key; also the instance's `serverName` tool namespace. */
+  /** The `servers` key; also the instance's `serverName` tool namespace. */
   name: string
   /** Configured transport. */
   transport: 'stdio' | 'streamable-http'
@@ -47,8 +47,8 @@ declare module '@deepseek-ai/cordis' {
      * change while the entry exists — connection-state transitions mirrored
      * from the instance, `disabled` when the entry is configured off, and the
      * manager-side `failed` reasons. Not emitted for an entry removed from
-     * configuration; observers learn removals from the settings document.
-     * @param name - the `mcp.servers` entry key.
+     * configuration; observers learn removals from plugin configuration.
+     * @param name - the `servers` entry key.
      * @param status - the status now current for that server.
      * @mode emit
      */

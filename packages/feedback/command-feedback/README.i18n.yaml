@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/feedback/command-feedback/README.md
-README.md: 92d8511c181c2955c3db967ba95284b5b9d76c5e
-README.zh.md: 4f698f735d8cc1c178ca50ef8805dc34a4fbd34f
+/:
+  en: 6fde8a2c01a13756
+  zh: 63b06f1e5373a1f0
+/deepseek-ai-dsh-command-feedback:
+  en: ba9f49666fd040a4
+  zh: 9b2ab90df6a7d96a
+/deepseek-ai-dsh-command-feedback/summary:
+  en: b3803d4fff915e52
+  zh: d2584d750443fd91
+/deepseek-ai-dsh-command-feedback/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-command-feedback/use-this-package:
+  en: 2e9c7334f5ed57b3
+  zh: 8c25b5a898fb5895
+/deepseek-ai-dsh-command-feedback/use-this-package/the-feedback-command:
+  en: 645ee72ee1af491d
+  zh: 32b86c39307093e3
+/deepseek-ai-dsh-command-feedback/use-this-package/the-web-feedback-dialog:
+  en: 21fae542942446d2
+  zh: 34d83535891dabee
+/deepseek-ai-dsh-command-feedback/use-this-package/recording-feedback-from-your-own-ui:
+  en: c6ee98ae5229d76f
+  zh: e058dae4cb5dd254
+/deepseek-ai-dsh-command-feedback/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-command-feedback/understand-the-implementation/design-concept:
+  en: 8363f597c28788d2
+  zh: 9dda2a864a01f4ce
+/deepseek-ai-dsh-command-feedback/understand-the-implementation/how-a-remark-is-recorded:
+  en: 0c6ceecbb1f45224
+  zh: 8138bb0fd3e68317
+/deepseek-ai-dsh-command-feedback/understand-the-implementation/source-map:
+  en: 4fd622508f032a28
+  zh: fa336bcbaabca58e
+/deepseek-ai-dsh-command-feedback/further-exploration:
+  en: 3f3b9c53cd589403
+  zh: 13ca15c564be3521
+/deepseek-ai-dsh-command-feedback/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-command-feedback/model-experience/human-feedback-capture:
+  en: 987bab29bbe8ec43
+  zh: 725efc45361172b5
+/deepseek-ai-dsh-command-feedback/model-experience/human-feedback-capture/what-the-model-sees:
+  en: 6ad8e2a4f961d2f4
+  zh: b510d05a74d6df0c
+/deepseek-ai-dsh-command-feedback/model-experience/human-feedback-capture/token-effect:
+  en: 1fcbd4d84eff267f
+  zh: 8da9902c44bf8dc4
+/deepseek-ai-dsh-command-feedback/model-experience/human-feedback-capture/kv-cache-effect:
+  en: c72e7dfee7b0957a
+  zh: b122fce5efccfafa
+/deepseek-ai-dsh-command-feedback/known-limitations-and-deferred-work:
+  en: b45e656a009e37b7
+  zh: 4949bd712564ee54
+/deepseek-ai-dsh-command-feedback/known-limitations-and-deferred-work/dev-note:
+  en: b4bf58d55f599bc2
+  zh: fea7a6b69b0266e1

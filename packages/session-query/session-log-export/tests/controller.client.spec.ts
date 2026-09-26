@@ -21,14 +21,12 @@ describe('SessionLogDownloadController', () => {
     await controller.download(SID)
 
     expect(fetcher).toHaveBeenCalledOnce()
-    const [url, init] = fetcher.mock.calls[0] as unknown as [URL, RequestInit]
-    expect(url.pathname).toBe('/api/session.export')
-    expect(url.searchParams.get('sessionId')).toBe(SID)
-    expect(url.searchParams.get('includeDescendants')).toBe('true')
+    const [route, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit]
+    expect(route).toBe(`api/session.export?sessionId=${SID}&includeDescendants=true`)
     expect(init.method).toBe('HEAD')
     expect(init.signal).toBeInstanceOf(AbortSignal)
     expect(save).toHaveBeenCalledWith(
-      url.toString(),
+      route,
       'dsh-session-session-export-controller.zip',
     )
     expect(controller.store.getSnapshot().bySession[SID]).toEqual({
@@ -99,8 +97,7 @@ describe('SessionLogDownloadController', () => {
     await controller.dispose()
   })
 
-  it('uses the null-origin fallback and default browser operations', async () => {
-    vi.stubGlobal('location', { origin: 'null' })
+  it('requests the document-relative route through the default carrier', async () => {
     const fetcher = vi.fn(async (_input: string | URL, _init?: RequestInit) => new Response('zip'))
     vi.stubGlobal('fetch', fetcher)
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
@@ -108,7 +105,7 @@ describe('SessionLogDownloadController', () => {
 
     await controller.download(SID)
 
-    expect((fetcher.mock.calls[0]?.[0] as URL).origin).toBe('http://dsh.internal')
+    expect(fetcher.mock.calls[0]?.[0]).toBe(`api/session.export?sessionId=${SID}&includeDescendants=true`)
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ method: 'HEAD' })
     expect(click).toHaveBeenCalledOnce()
   })
@@ -133,14 +130,14 @@ describe('SessionLogDownloadController', () => {
 })
 
 describe('browser download helpers', () => {
-  it('sanitizes the archive filename and hands the URL to a download anchor', () => {
+  it('sanitizes the archive filename and hands the relative route to a download anchor', () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 
     expect(sessionLogZipFilename('a/b' as SessionId)).toBe('dsh-session-a_b.zip')
-    downloadUrl('http://host/api/session.export?sessionId=a', 'archive.zip')
+    downloadUrl('api/session.export?sessionId=a', 'archive.zip')
     expect(click).toHaveBeenCalledOnce()
     const anchor = click.mock.instances[0] as HTMLAnchorElement
-    expect(anchor.href).toBe('http://host/api/session.export?sessionId=a')
+    expect(anchor.getAttribute('href')).toBe('api/session.export?sessionId=a')
     expect(anchor.download).toBe('archive.zip')
   })
 })

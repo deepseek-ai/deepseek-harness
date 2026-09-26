@@ -1,0 +1,78 @@
+- dialog "Keyboard shortcuts":
+  - banner:
+    - heading "Keyboard shortcuts" [level=2]
+    - button "Close keyboard shortcuts"
+  - search "Search shortcuts":
+    - searchbox "Search shortcuts"
+  - region "Application":
+    - list:
+      - listitem:
+        - button "Edit shortcut for Open keyboard shortcuts"
+        - text: Open keyboard shortcuts ⌘ /
+      - listitem:
+        - button "Edit shortcut for New Session"
+        - text: New Session ⌥ ⌘ N
+      - listitem:
+        - button "Edit shortcut for Toggle left sidebar"
+        - text: Toggle left sidebar ⌥ ⌘ B
+      - listitem:
+        - button "Edit shortcut for Search sessions"
+        - text: Search sessions ⌥ ⌘ K
+      - listitem:
+        - button "Edit shortcut for Add workspace"
+        - text: Add workspace ⌥ ⌘ O
+      - listitem:
+        - button "Edit shortcut for Rename session"
+        - text: Rename session ⇧ ⌘ R
+      - listitem:
+        - button "Edit shortcut for Fork session"
+        - text: Fork session ⇧ ⌘ F
+      - listitem:
+        - button "Edit shortcut for Archive session"
+        - text: Archive session ⌥ ⌘ A
+      - listitem:
+        - button "Edit shortcut for Open settings"
+        - text: Open settings ⌘ ,
+      - listitem:
+        - button "Edit shortcut for Toggle right sidebar"
+        - text: Toggle right sidebar ⇧ ⌘ B
+      - listitem:
+        - button "Edit shortcut for Workspace files"
+        - text: Workspace files ⌥ ⌘ P
+      - listitem:
+        - button "Edit shortcut for New terminal"
+        - text: "New terminal ⌃ `"
+      - listitem:
+        - button "Edit shortcut for Split"
+        - text: Split ⌘ \
+      - listitem:
+        - button "Edit shortcut for Toggle panel fullscreen"
+        - text: Toggle panel fullscreen ⌥ ⌘ Enter
+      - listitem:
+        - button "Edit shortcut for Refresh current page"
+        - text: Refresh current page No shortcut
+      - listitem:
+        - button "Edit shortcut for Close current page or window"
+        - text: Close current page or window ⌥ ⌘ W
+  - region "Message input":
+    - heading "Message input" [level=3]
+    - list:
+      - listitem: Use the complementary Queue / Steer action ⌘ Enter
+      - listitem: Open reference menu @
+      - listitem: New line ⇧ Enter
+      - listitem: Send message Enter
+      - listitem: Open command menu /
+      - listitem: Stop generating Esc Esc
+  - region "Menus and dialogs":
+    - heading "Menus and dialogs" [level=3]
+    - list:
+      - listitem: Close menu or top dialog Esc
+      - listitem: Move menu selection ↑ ↓
+      - listitem: Select menu item Enter
+  - region "Approval area":
+    - heading "Approval area" [level=3]
+    - list:
+      - listitem: Allow once Enter
+      - listitem: Reject Esc
+  - contentinfo:
+    - button "Restore all defaults" [disabled]

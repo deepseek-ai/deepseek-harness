@@ -3,6 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId, type UserMessage } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import GoalService, {
@@ -13,6 +14,13 @@ import GoalService, {
 } from '@deepseek-ai/dsh-goal'
 import type { GoalChangeMeta, GoalRef, GoalSnapshotChangeMeta } from '@deepseek-ai/dsh-goal'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'test': { kind: 'test' } & ContextFormed
+    'ordinary-user-message': { kind: 'ordinary-user-message' } & ContextFormed
+  }
+}
 
 interface StubAgent {
   agent: Agent
@@ -618,7 +626,7 @@ describe('goal replay validation', () => {
     expect(foldGoal(session.snapshotEvents())).toMatchObject({ goal: { id: change.goal.id, revision: 1 } })
     const message = createUserMessage({
       content: [{ type: 'text', text: 'unrelated pending context' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'test' },
     })
     const inbox = stubAgentForSession(session).agent.inbox
     inbox.append('next-step', message)
@@ -639,10 +647,10 @@ describe('goal replay validation', () => {
     const session = Session.create(SessionId('unrelated'))
     appendInjection(session, createUserMessage({
       content: [{ type: 'text', text: 'other' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'test' },
     }))
     expect(foldGoal(session.snapshotEvents())).toEqual({ roundsStarted: 0 })
-    const source = { kind: 'plugin', plugin: 'ordinary-user-message' } as const
+    const source = { kind: 'ordinary-user-message' } as const
     const turn = nextTurn(session)
     session.append('turn/start', { turn })
     session.append('user/message', createUserMessage({

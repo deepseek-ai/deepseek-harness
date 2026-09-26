@@ -62,7 +62,7 @@ kind: "package-reference"
 
 ### 失败与恢复
 
-失败带有稳定的 `SessionQueryError.code` 类型。你会遇到的包括：id 不存在时 `SESSION_QUERY_SESSION_NOT_FOUND`；同一会话的实时与持久化观察在不可变 header 上不一致时 `SESSION_QUERY_SOURCE_CONFLICT`；已挂载持久化不可读时 `SESSION_QUERY_PERSISTENCE_FAILED`；持久化记录未通过 Session 校验时 `SESSION_QUERY_CORRUPT_SESSION`；加载的日志破坏表层约定时 `SESSION_QUERY_INVALID_SURFACE`。针对已知实时会话的读取从不查询持久化，因此后端故障不会让当前内存历史变得不可读。
+失败带有稳定的 `SessionQueryError.code` 类型。你会遇到的包括：id 不存在时 `SESSION_QUERY_SESSION_NOT_FOUND`；同一会话的实时与持久化观察在不可变 header 上不一致时 `SESSION_QUERY_SOURCE_CONFLICT`；已挂载持久化不可读时 `SESSION_QUERY_PERSISTENCE_FAILED`；持久化记录未通过 Session 校验，或实时或 prepared 观察的投影计算失败时 `SESSION_QUERY_CORRUPT_SESSION`；加载的日志破坏表层约定时 `SESSION_QUERY_INVALID_SURFACE`。投影失败会将原始错误保留为 `cause`。针对已知实时会话的读取从不查询持久化，因此后端故障不会让当前内存历史变得不可读。
 
 -----
 

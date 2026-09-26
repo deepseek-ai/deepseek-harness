@@ -535,6 +535,14 @@ describe('validateTypertManifest', () => {
     const descriptor = strictInvocation()
     const manifest = { ...base, invocations: [descriptor] }
     expect(validateTypertManifest('pkg', manifest)).toBe(manifest)
+    const decoded = { ...descriptor, result: { ...descriptor.result, decode: (value: unknown) => value } }
+    expect(validateTypertManifest('pkg', { ...base, invocations: [decoded] }).invocations).toEqual([decoded])
+    expect(() => validateTypertManifest('pkg', {
+      ...base, invocations: [{ ...decoded, result: { ...decoded.result, decode: true } }],
+    })).toThrow('decode must be a function')
+    expect(() => validateTypertManifest('pkg', {
+      ...base, invocations: [{ ...decoded, result: { ...decoded.result, encode: true } }],
+    })).toThrow('encode must be a function')
     const cancellable = { ...descriptor, cancellation: { parameter: 'signal' } }
     expect(validateTypertManifest('pkg', { ...base, invocations: [cancellable] }).invocations)
       .toEqual([cancellable])

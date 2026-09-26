@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-30-web-remote-markdown-images.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-30-web-remote-markdown-images.md
-2026-07-30-web-remote-markdown-images.md: 23dc699aab87597b7b5bfee83d0d745d4798303e
-2026-07-30-web-remote-markdown-images.zh.md: 54db9b25e9f558d77c84bb67c05fadea2c9086ac
+/agent-note-remote-web-markdown-images:
+  en: a11eadff0703761d
+  zh: 59841eaf2993b7c4
+/agent-note-remote-web-markdown-images/problem:
+  en: 97447c93b654eda7
+  zh: 456a3ceed4967d0a
+/agent-note-remote-web-markdown-images/decision:
+  en: 8dfbdb81dff9cae3
+  zh: 217042998b65c158
+/agent-note-remote-web-markdown-images/alternatives-considered:
+  en: 32a4116e8ffc4b16
+  zh: 59dd991fede9ac71
+/agent-note-remote-web-markdown-images/consequences:
+  en: 12b97c75c5d19308
+  zh: ee8102b7d01e579b

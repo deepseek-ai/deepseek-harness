@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/webworker-packer/README.md
-README.md: 90723b7718393ed32005bd6146764044a8ec80b1
-README.zh.md: 9d7df43bf2b49d7b4a0438fcdb96fdbe44cc326a
+/:
+  en: 5bf871fc6ff3da7c
+  zh: eae970e01432a92a
+/deepseek-ai-dsh-experimental-webworker-packer:
+  en: 7ecd0d6282f6ccf1
+  zh: 782c000a57a5e3d8
+/deepseek-ai-dsh-experimental-webworker-packer/summary:
+  en: 2cafd7568fd7ba2d
+  zh: 8879b809950a6034
+/deepseek-ai-dsh-experimental-webworker-packer/table-of-contents:
+  en: 4e53164159b5ce41
+  zh: 89582dc0294d0776
+/deepseek-ai-dsh-experimental-webworker-packer/use-this-package:
+  en: c0795340638d1eb3
+  zh: 5e6ece80b713eb79
+/deepseek-ai-dsh-experimental-webworker-packer/model-experience:
+  en: e16b355530dadc1c
+  zh: 8488e03b253b7b33
+/deepseek-ai-dsh-experimental-webworker-packer/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: 64715dc7e6d02f71
+/deepseek-ai-dsh-experimental-webworker-packer/known-limitations-and-deferred-work:
+  en: 6cd07b34072a2d61
+  zh: 44c4017e727c19ff
+/deepseek-ai-dsh-experimental-webworker-packer/known-limitations-and-deferred-work/dev-note:
+  en: 46176f90f22845c7
+  zh: 8e6ba8ba2958fba3

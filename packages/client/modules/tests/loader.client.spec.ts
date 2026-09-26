@@ -10,12 +10,14 @@ import {
 
 const MODULES_ID = '@deepseek-ai/dsh-client-modules'
 
-const comboUrl = (ids: readonly string[], rev: string): string =>
-  `/plugins/??${ids.map(id => `${id}/client.js`).join(',')}&rev=${rev}`
-const chunkUrl = (id: string, fileName: string, rev = '0'): string =>
-  `/plugins/${id}/${fileName}?rev=${rev}`
-const BOOTSTRAP_URL = comboUrl([MODULES_ID], 'bootstrap')
-const APPLICATION_URL = comboUrl(['a', 'b'], 'application')
+// The host composes graph rows and batch descriptors as app-directory-relative
+// browser references, so these fixtures carry the same form.
+const comboReference = (ids: readonly string[], rev: string): string =>
+  `plugins/??${ids.map(id => `${id}/client.js`).join(',')}&rev=${rev}`
+const chunkReference = (id: string, fileName: string, rev = '0'): string =>
+  `plugins/${id}/${fileName}?rev=${rev}`
+const BOOTSTRAP_URL = comboReference([MODULES_ID], 'bootstrap')
+const APPLICATION_URL = comboReference(['a', 'b'], 'application')
 const win = globalThis as DshWindow
 const bootstrapExports = { apply, createClientModuleSystem }
 
@@ -30,7 +32,7 @@ afterEach(() => {
 const row = (id: string, fields: Partial<BootModuleRow> = {}): BootModuleRow =>
   ({
     id,
-    url: comboUrl([id], '0'),
+    url: comboReference([id], '0'),
     initialUrl: id === MODULES_ID ? BOOTSTRAP_URL : APPLICATION_URL,
     rev: '0',
     inject: [],
@@ -74,18 +76,27 @@ function bench(
     pending?: ClientBundleRegistration[]
     defaultTransport?: boolean
     chunks?: Record<string, Factory | null>
+    /** Remaining transport rejections per URL (the `<script>` error event). */
+    transportFailures?: Record<string, number>
+    /** URLs whose script loads but registers only the listed ids (a runtime throw after those registrations). */
+    registerOnly?: Record<string, string[]>
   } = {},
 ): Bench {
   const fetched: string[] = []
   const gates = new Map<string, () => void>()
   const target = registrationTarget(opts.pending)
   win.__ModuleLoader__ = target
+  const transportFailures = { ...opts.transportFailures }
   const loadBundle = async (url: string): Promise<void> => {
     fetched.push(url)
     if (opts.gated?.includes(url) === true) {
       await new Promise<void>((resolve) => { gates.set(url, resolve) })
     }
-    const sibling = /^\/plugins\/(.+)\/(client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js)\?rev=[^&]+$/.exec(url)
+    if ((transportFailures[url] ?? 0) > 0) {
+      transportFailures[url] = (transportFailures[url] as number) - 1
+      throw new Error(`client-modules: bundle script ${url} failed to load`)
+    }
+    const sibling = /^plugins\/(.+)\/(client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js)\?rev=[^&]+$/.exec(url)
     if (sibling !== null) {
       const id = sibling[1] as string
       const chunk = sibling[2] as string
@@ -103,7 +114,9 @@ function bench(
     const singleId = combo?.split(',').length === 1 && combo.endsWith('/client.js')
       ? combo.slice(0, -'/client.js'.length)
       : undefined
+    const only = opts.registerOnly?.[url]
     for (const id of batchIds ?? (singleId === undefined ? [] : [singleId])) {
+      if (only !== undefined && !only.includes(id)) continue
       const factory = bundles[id]
       if (factory != null) win.__ModuleLoader__?.load({ id, factory })
     }
@@ -248,7 +261,7 @@ describe('lazy CJS arrival', () => {
     const second = await entry.load()
     expect(first).toBe(second)
     expect(first).toEqual({ marker: 'terminal' })
-    expect(b.fetched).toEqual([APPLICATION_URL, chunkUrl('a', 'client.terminal.js')])
+    expect(b.fetched).toEqual([APPLICATION_URL, chunkReference('a', 'client.terminal.js')])
   })
 
   it('loads a package-local chunk with the revision that invalidated its entry', async () => {
@@ -265,9 +278,9 @@ describe('lazy CJS arrival', () => {
     await second.load()
     expect(b.fetched).toEqual([
       APPLICATION_URL,
-      chunkUrl('a', 'client.terminal.js'),
-      comboUrl(['a'], 'rebuilt'),
-      chunkUrl('a', 'client.terminal.js', 'rebuilt'),
+      chunkReference('a', 'client.terminal.js'),
+      comboReference(['a'], 'rebuilt'),
+      chunkReference('a', 'client.terminal.js', 'rebuilt'),
     ])
   })
 
@@ -292,7 +305,7 @@ describe('lazy CJS arrival', () => {
   })
 
   it('shares one in-flight package-local chunk transport', async () => {
-    const url = chunkUrl('a', 'client.terminal.js')
+    const url = chunkReference('a', 'client.terminal.js')
     const b = bench([row('a')], {
       a: req => ({ load: () => req.async('./client.terminal.js') }),
     }, {
@@ -318,11 +331,11 @@ describe('lazy CJS arrival', () => {
     const stale = await b.loader.import('a', '', {}) as { load: () => Promise<unknown> }
     b.loader.invalidate('a', 'rebuilt')
     await stale.load()
-    expect(b.fetched.at(-1)).toBe(chunkUrl('a', 'client.terminal.js', 'rebuilt'))
+    expect(b.fetched.at(-1)).toBe(chunkReference('a', 'client.terminal.js', 'rebuilt'))
   })
 
   it('discards a chunk that arrives after its owner generation was invalidated', async () => {
-    const staleUrl = chunkUrl('a', 'client.terminal.js')
+    const staleUrl = chunkReference('a', 'client.terminal.js')
     const b = bench([row('a')], {
       a: req => ({ load: () => req.async('./client.terminal.js') }),
     }, {
@@ -337,7 +350,135 @@ describe('lazy CJS arrival', () => {
     b.gates.get(staleUrl)?.()
 
     await expect(staleLoad).resolves.toEqual({ marker: 'terminal' })
-    expect(b.fetched).toContain(chunkUrl('a', 'client.terminal.js', 'rebuilt'))
+    expect(b.fetched).toContain(chunkReference('a', 'client.terminal.js', 'rebuilt'))
+  })
+})
+
+describe('bundle arrival recovery', () => {
+  const single = (id: string): string => comboReference([id], '0')
+
+  it('retries a batch once after a transport failure and shares the retry across its rows', async () => {
+    const b = bench([row('a'), row('b')], { a: () => ({ a: 1 }), b: () => ({ b: 2 }) }, {
+      transportFailures: { [APPLICATION_URL]: 1 },
+    })
+    const [a, c] = await Promise.all([b.loader.import('a', '', {}), b.loader.import('b', '', {})])
+    expect(a).toEqual({ a: 1 })
+    expect(c).toEqual({ b: 2 })
+    expect(b.fetched).toEqual([APPLICATION_URL, APPLICATION_URL])
+  })
+
+  it('falls back to each missing row\'s one-resource URL when the batch keeps failing, without re-fetching the batch per row', async () => {
+    const b = bench([row('a'), row('b')], { a: () => ({ a: 1 }), b: () => ({ b: 2 }) }, {
+      transportFailures: { [APPLICATION_URL]: 5 },
+    })
+    const [a, c] = await Promise.all([b.loader.import('a', '', {}), b.loader.import('b', '', {})])
+    expect(a).toEqual({ a: 1 })
+    expect(c).toEqual({ b: 2 })
+    expect(b.fetched.filter(url => url === APPLICATION_URL)).toHaveLength(2)
+    expect(b.fetched.slice(2).sort()).toEqual([single('a'), single('b')].sort())
+    expect(b.loader.importError('a')).toBeUndefined()
+  })
+
+  it('does not re-execute a batch that loaded without registering; the missing row loads alone', async () => {
+    const b = bench([row('a')], { a: () => ({ a: 1 }) }, { registerOnly: { [APPLICATION_URL]: [] } })
+    expect(await b.loader.import('a', '', {})).toEqual({ a: 1 })
+    expect(b.fetched).toEqual([APPLICATION_URL, single('a')])
+  })
+
+  it('after a partially registering batch, loads only the missing row and never duplicates the registered one', async () => {
+    const b = bench([row('a'), row('b')], { a: () => ({ a: 1 }), b: () => ({ b: 2 }) }, {
+      registerOnly: { [APPLICATION_URL]: ['a'] },
+    })
+    expect(await b.loader.import('b', '', {})).toEqual({ b: 2 })
+    expect(b.fetched).toEqual([APPLICATION_URL, single('b')])
+    expect(await b.loader.import('a', '', {})).toEqual({ a: 1 })
+    expect(b.fetched).toHaveLength(2)
+  })
+
+  it('never re-executes a batch that already ran, even when its first importer was one of the rows it did register', async () => {
+    const b = bench([row('a'), row('b')], { a: () => ({ a: 1 }), b: () => ({ b: 2 }) }, {
+      registerOnly: { [APPLICATION_URL]: ['a'] },
+    })
+    expect(await b.loader.import('a', '', {})).toEqual({ a: 1 })
+    expect(b.fetched).toEqual([APPLICATION_URL])
+    expect(await b.loader.import('b', '', {})).toEqual({ b: 2 })
+    expect(b.fetched).toEqual([APPLICATION_URL, single('b')])
+  })
+
+  it('reports every attempt when the one-resource fallback fails too', async () => {
+    const b = bench([row('a')], { a: () => ({ a: 1 }) }, {
+      transportFailures: { [APPLICATION_URL]: 2, [single('a')]: 1 },
+    })
+    const failure: unknown = await b.loader.import('a', '', {}).then(() => undefined, (error: unknown) => error)
+    if (!(failure instanceof Error)) throw new Error('import resolved')
+    expect(failure.message).toContain('could not load "a"')
+    const batchAttempts = failure.message.split(`${APPLICATION_URL}: client-modules: bundle script`).length - 1
+    expect(batchAttempts).toBe(2)
+    expect(failure.message).toContain(`${single('a')}: client-modules: bundle script`)
+    expect(b.fetched).toEqual([APPLICATION_URL, APPLICATION_URL, single('a')])
+  })
+
+  it('a one-resource URL that fails stays retryable on the next import instead of being remembered as a failed batch', async () => {
+    const reloadUrl = comboReference(['a'], '1')
+    const b = bench([row('a')], { a: () => ({ a: 1 }) }, { transportFailures: { [reloadUrl]: 2 } })
+    expect(await b.loader.import('a', '', {})).toEqual({ a: 1 })
+    b.loader.invalidate('a', '1')
+    await expect(b.loader.import('a', '', {})).rejects.toThrow('could not load "a"')
+    expect(await b.loader.import('a', '', {})).toEqual({ a: 1 })
+    expect(b.fetched).toEqual([APPLICATION_URL, reloadUrl, reloadUrl, reloadUrl])
+  })
+})
+
+describe('import error record', () => {
+  it('records the transport failure of a row and clears it once the row imports', async () => {
+    const b = bench([row('a')], { a: () => ({ a: 1 }) }, {
+      transportFailures: { [APPLICATION_URL]: 2, [comboReference(['a'], '0')]: 1 },
+    })
+    await expect(b.loader.import('a', '', {})).rejects.toThrow()
+    expect(b.loader.importError('a')?.message).toContain('could not load "a"')
+    expect(b.loader.importError('a/client')).toBe(b.loader.importError('a'))
+    expect(await b.loader.import('a', '', {})).toEqual({ a: 1 })
+    expect(b.loader.importError('a')).toBeUndefined()
+  })
+
+  it('records a factory that throws during materialization, which no arrival record could see', async () => {
+    const b = bench([row('a')], { a: () => { throw new Error('factory exploded') } })
+    await expect(b.loader.import('a', '', {})).rejects.toThrow('factory exploded')
+    expect(b.loader.importError('a')?.message).toBe('factory exploded')
+  })
+
+  it('names the failed dependency in the consumer\'s record so a cascade reads as a chain', async () => {
+    const b = bench([row('dep'), row('consumer', { inject: ['dep'] })], { dep: () => ({}), consumer: () => ({}) }, {
+      registerOnly: { [APPLICATION_URL]: ['consumer'] },
+      transportFailures: { [comboReference(['dep'], '0')]: 1 },
+    })
+    await expect(b.loader.import('consumer', '', {})).rejects.toThrow(
+      '"consumer" not loaded because dependency "dep" failed: client-modules: could not load "dep"',
+    )
+    expect(b.loader.importError('consumer')?.message).toContain('dependency "dep" failed')
+    expect(b.loader.importError('dep')).toBeUndefined()
+    expect(b.loader.importError('consumer')?.cause).toBeInstanceOf(Error)
+  })
+
+  it('records a non-Error thrown by a factory as an Error carrying its text', async () => {
+    const b = bench([row('a')], { a: () => { throw 'factory rejected a string' } })
+    await expect(b.loader.import('a', '', {})).rejects.toBe('factory rejected a string')
+    expect(b.loader.importError('a')).toBeInstanceOf(Error)
+    expect(b.loader.importError('a')?.message).toBe('factory rejected a string')
+  })
+
+  it('records a prefetch failure and invalidate clears the record', async () => {
+    const b = bench([row('a')], { a: null })
+    await expect(b.loader.prefetch('a')).rejects.toThrow('without registering "a"')
+    expect(b.loader.importError('a')).toBeDefined()
+    b.loader.invalidate('a')
+    expect(b.loader.importError('a')).toBeUndefined()
+  })
+
+  it('has no record for a row that never failed or is unknown', () => {
+    const b = bench([row('a')], { a: () => ({}) })
+    expect(b.loader.importError('a')).toBeUndefined()
+    expect(b.loader.importError('nope')).toBeUndefined()
   })
 })
 
@@ -472,7 +613,7 @@ describe('failure modes', () => {
   })
 
   it('rejects a graph row whose one-resource URL cannot address sibling chunks', async () => {
-    const b = bench([row('a', { url: '/plugins/a/client.js?rev=0' })], {
+    const b = bench([row('a', { url: 'plugins/a/client.js?rev=0' })], {
       a: req => ({ load: () => req.async('./client.terminal.js') }),
     })
     const entry = await b.loader.import('a', '', {}) as { load: () => Promise<unknown> }
@@ -529,14 +670,14 @@ describe('boot manifest wire', () => {
     const manifest = parseBootManifest({
       rev: 'graph',
       entries: [
-        { id: 'a', url: '/plugins/a/client.js', rev: '1', inject: ['b'] },
-        { id: 'b', url: '/plugins/b/client.js', rev: '2', external: ['react'] },
+        { id: 'a', url: 'plugins/a/client.js', rev: '1', inject: ['b'] },
+        { id: 'b', url: 'plugins/b/client.js', rev: '2', external: ['react'] },
       ],
-      batches: [{ phase: 'application', url: '/batch.js', rev: 'batch', entries: ['a', 'b'] }],
+      batches: [{ phase: 'application', url: 'batch.js', rev: 'batch', entries: ['a', 'b'] }],
     })
     expect(manifest.modules).toEqual([
-      { id: 'a', url: '/plugins/a/client.js', initialUrl: '/batch.js', rev: '1', inject: ['b'], external: [] },
-      { id: 'b', url: '/plugins/b/client.js', initialUrl: '/batch.js', rev: '2', inject: [], external: ['react'] },
+      { id: 'a', url: 'plugins/a/client.js', initialUrl: 'batch.js', rev: '1', inject: ['b'], external: [] },
+      { id: 'b', url: 'plugins/b/client.js', initialUrl: 'batch.js', rev: '2', inject: [], external: ['react'] },
     ])
   })
 
@@ -636,7 +777,7 @@ describe('HMR reset', () => {
     expect(b.loader.loadCache.has('a')).toBe(false)
     await b.loader.prefetch('a')
     const second = await b.loader.import('a', '', {})
-    expect(b.fetched).toEqual([APPLICATION_URL, comboUrl(['a'], '1')])
+    expect(b.fetched).toEqual([APPLICATION_URL, comboReference(['a'], '1')])
     expect((first as { generation: number }).generation).toBe(1)
     expect((second as { generation: number }).generation).toBe(2)
   })
@@ -666,7 +807,7 @@ describe('HMR reset', () => {
     await b.loader.import('a', '', {})
     b.loader.invalidate('a')
     await b.loader.prefetch('a')
-    expect(b.fetched).toEqual([APPLICATION_URL, comboUrl(['a'], '0')])
+    expect(b.fetched).toEqual([APPLICATION_URL, comboReference(['a'], '0')])
   })
 })
 

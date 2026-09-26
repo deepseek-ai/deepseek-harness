@@ -8,10 +8,6 @@
 
 *.pdf binary
 
-# Pairing records are generated from the three confirmed owner-blob pairs.
-# The worktree-local installer registers the fail-closed driver command.
-*.i18n.yaml merge=dsh-translation-pairing
-
 # The persistence catalog is the readable projection of these generated schemas.
 docs/persistence-schema.json linguist-generated=true
 docs/persistence-changes/*.schema.json linguist-generated=true

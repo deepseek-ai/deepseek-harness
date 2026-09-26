@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-present-filesystem-access.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-present-filesystem-access.md
-2026-09-09-present-filesystem-access.md: 5c9d5bec47c73ac1c5952b887d56e582148a4cea
-2026-09-09-present-filesystem-access.zh.md: 6387f07b17276b3455d19d650b4ae031a7efda4c
+/agent-note-present-follows-session-filesystem-access:
+  en: 33cf0a75284f8392
+  zh: 5299af2f77bf6fd8
+/agent-note-present-follows-session-filesystem-access/problem:
+  en: dda1953cb567c3dc
+  zh: 3c447175454c844a
+/agent-note-present-follows-session-filesystem-access/decision:
+  en: 2668dd51b07e2653
+  zh: 3cd895017f568c42
+/agent-note-present-follows-session-filesystem-access/alternatives-considered:
+  en: 85336cd165610ddf
+  zh: 75608e3bfeab5dc5
+/agent-note-present-follows-session-filesystem-access/consequences:
+  en: e31784fe619d4d1c
+  zh: 7cadc3941a0c7b33

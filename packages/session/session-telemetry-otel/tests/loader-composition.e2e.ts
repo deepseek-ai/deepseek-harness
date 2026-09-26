@@ -4,6 +4,7 @@
  * only the redacted authorized prefix; the canonical log keeps every event.
  */
 
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -24,6 +25,7 @@ const FIXTURE_SECRET = 'sk-e2efixture1234567890'
 const FIXTURE_PLACEHOLDER = '[E2E-REDACTED]'
 
 interface OtlpLogRecord {
+  eventName: string
   attributes?: { key: string; value: Record<string, unknown> }[]
   body?: unknown
 }
@@ -102,6 +104,17 @@ describe('session-telemetry-otel through the production headless profile', () =>
 
     const records = allRecords(output.captures)
     expect(records.length).toBeGreaterThan(0)
+    for (const { record } of records) {
+      expect(record.eventName).toBe('session-log')
+      expect(record.attributes?.find(attribute => attribute.key === 'sessionId')?.value.stringValue).toBeTypeOf('string')
+      const content = record.attributes?.find(attribute => attribute.key === 'content')?.value.stringValue
+      expect(typeof content).toBe('string')
+      const event = JSON.parse(content as string) as SessionEvent
+      expect(event.type).toBeTypeOf('string')
+      expect(event.seq).toBeTypeOf('number')
+      expect(event.time).toBeTypeOf('number')
+      expect(event).toHaveProperty('data')
+    }
 
     const types = eventTypes(output.captures)
     for (const expected of ['turn/start', 'user/message', 'tool/call', 'tool/result', 'assistant/message', 'turn/end']) {

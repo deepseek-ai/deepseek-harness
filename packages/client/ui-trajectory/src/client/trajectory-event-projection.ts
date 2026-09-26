@@ -66,8 +66,6 @@ export function contextProducer(source: unknown): ContextProducerView {
       return { role: 'recall', label: joined(collect(record, 'references', 'label')) ?? kind }
     case 'agent-instructions':
       return { role: 'inject', label: joined(collect(record, 'changes', 'path')) ?? kind }
-    case 'plugin':
-      return { role: 'inject', label: readString(record, 'plugin') ?? kind }
     case 'skill-invocation':
       return { role: 'inject', label: readString(record, 'name') ?? kind }
     default:

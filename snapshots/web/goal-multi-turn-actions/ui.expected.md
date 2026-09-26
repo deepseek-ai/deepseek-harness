@@ -1,12 +1,8 @@
 - banner:
-  - navigation "Session hierarchy":
-    - button "workspace" [disabled]
-  - img
+  - navigation "Session hierarchy": workspace
   - text: Standard mode
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -14,46 +10,36 @@
   - button "Jump to turn 1"
   - button "Jump to turn 2"
 - group "Command input": /goal 做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的
-- 'button "goal Goal created Status: active Objective: 做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的 Rounds: 0/256 Activation: armed Commands: /goal edit <objective>, /goal pause, /goal clear"':
-  - img
-  - img
-  - text: "goal Goal created Status: active Objective: 做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的 Rounds: 0/256 Activation: armed Commands: /goal edit <objective>, /goal pause, /goal clear"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
-- button "6 tool calls":
-  - text: 6 tool calls
-  - img
+- 'button "goal Goal created Status: active Objective: 做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的 Rounds: 0/256 Activation: armed Commands: /goal edit <objective>, /goal pause, /goal clear"'
+- button "Continuing goal {{clock}}":
+  - text: Continuing goal
+  - time: {{clock}}
+- status: Worked
+- button "Took {{duration}}"
 - paragraph:
   - strong: Turn 1 / 2
   - text: — 随机选中的包：
   - code: packages/context/session-reference
   - text: 📦
+- text: Code block
+- button "Wrap lines" [pressed]
 - button "Copy"
 - code: session-reference ├── README.md ├── package.json ├── src │ ├── index.ts │ └── uri.ts └── tests └── session-reference.spec.ts
+- text: Code block
+- button "Wrap lines" [pressed]
 - button "Copy"
 - code: "session-reference/ ├── README.md # 包说明文档 ├── package.json # 包元数据与依赖声明 ├── src/ │ ├── index.ts # 入口，导出公共 API │ └── uri.ts # 会话引用 URI 相关实现 └── tests/ └── session-reference.spec.ts # 单元测试"
 - paragraph: 这是一个很典型的轻量 TypeScript 包结构：入口 + 实现 + 测试。这一轮到此结束，等系统开启下一个 turn。
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
 - text: {{clock}}
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
-- button "5 tool calls · 2 messages":
-  - text: 5 tool calls · 2 messages
-  - img
+- button "Continuing goal {{clock}}":
+  - text: Continuing goal
+  - time: {{clock}}
+- status: Worked
+- button "Took {{duration}}"
 - paragraph: 两个 turn 都完成了 ✅
 - paragraph:
   - strong: 总结：
@@ -62,14 +48,16 @@
     - strong: Turn 1
     - text: — 随机选中
     - code: packages/context/session-reference
-    - text: ，输出了文件结构：
+    - text: ，输出了文件结构： Code block
+    - button "Wrap lines" [pressed]
     - button "Copy"
     - code: session-reference/ ├── README.md ├── package.json ├── src/ │ ├── index.ts │ └── uri.ts └── tests/ └── session-reference.spec.ts
   - listitem:
     - strong: Turn 2
     - text: — 随机选中
     - code: packages/llm/token-meter
-    - text: ，输出了文件结构：
+    - text: ，输出了文件结构： Code block
+    - button "Wrap lines" [pressed]
     - button "Copy"
     - code: token-meter/ ├── README.md ├── package.json ├── src/ │ └── index.ts └── tests/ └── token-meter.spec.ts
 - paragraph:
@@ -102,31 +90,17 @@
   - text: 、
   - code: skill-filesystem
   - text: ）的结构，或者其他格式的输出（比如带文件大小的树形图），随时告诉我。
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
 - tooltip "Branch into a new conversation"
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
 - text: {{clock}}
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
-- button "9% of context used"
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Send message" [disabled]
-- button "2 turns 12 steps · {{throughput}} tok/s":
-  - img
-  - text: 2 turns 12 steps{{throughput}} tok/s
-- button "115K tok · Cache hit 91%":
-  - img
-  - text: 115K tokCache hit 91%
+- button "2 turns 12 steps · {{throughput}} tok/s": 2 turns 12 steps{{throughput}} tok/s
+- button "115K tok · Cache hit 91%": 115K tokCache hit 91%
+- button "9% of context used": 9%

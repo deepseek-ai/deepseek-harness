@@ -11,6 +11,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { PlanProjection } from '@deepseek-ai/dsh-plan-mode/client'
 import { PlanChip, type PlanChipProps } from '../src/client/PlanModeControl.tsx'
+import css from '../src/client/PlanModeControl.module.css'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { zh } from '../src/client/locales.ts'
 
@@ -32,7 +33,7 @@ function setup(
   return { store, exitPlanMode, view }
 }
 
-const chip = () => screen.getByRole('button', { name: 'plan mode 已开启，按下关闭' })
+const chip = () => screen.getByRole('button', { name: '计划模式已开启，按下关闭' })
 
 describe('PlanChip', () => {
   it('renders nothing for an absent capability or a default-mode target', () => {
@@ -48,10 +49,25 @@ describe('PlanChip', () => {
 
   it('renders the Plan status for active and pending-entry targets', () => {
     setup({ active: true, pending: false })
-    expect(chip().textContent).toBe('Plan')
+    expect(chip().textContent).toBe('计划')
     cleanup()
     setup({ active: false, pending: true })
-    expect(chip().textContent).toBe('Plan')
+    expect(chip().textContent).toBe('计划')
+  })
+
+  it('leads with the plan glyph and swaps in the circled close only while hovered', () => {
+    setup({ active: true, pending: false })
+    // Glyph-then-label like the sibling access-mode trigger; the two glyphs
+    // share one slot and CSS shows exactly one of them, so no trailing cross.
+    const glyphs = chip().querySelectorAll('svg')
+    expect(glyphs).toHaveLength(2)
+    const slot = glyphs[0]!.parentElement!
+    expect(slot).toBe(chip().firstElementChild)
+    expect(slot.getAttribute('aria-hidden')).toBe('true')
+    expect(glyphs[0]!.classList.contains(css.restGlyph!)).toBe(true)
+    expect(glyphs[1]!.classList.contains(css.hoverGlyph!)).toBe(true)
+    expect(glyphs[1]!.parentElement).toBe(slot)
+    expect(chip().lastChild?.textContent).toBe('计划')
   })
 
   it('executes /plan off once and follows the projection down', async () => {
@@ -65,7 +81,7 @@ describe('PlanChip', () => {
     resolve(null)
     store.set({ value: { active: true, pending: true } })
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'plan mode 已开启，按下关闭' })).toBeNull()
+      expect(screen.queryByRole('button', { name: '计划模式已开启，按下关闭' })).toBeNull()
     })
   })
 
@@ -81,7 +97,7 @@ describe('PlanChip', () => {
       .mockRejectedValueOnce('socket closed')
     setup({ active: true, pending: false }, exitPlanMode)
     fireEvent.click(chip())
-    expect((await screen.findByText('退出 plan mode 失败')).getAttribute('title')).toBe('host said no')
+    expect((await screen.findByText('退出计划模式失败')).getAttribute('title')).toBe('host said no')
     expect(chip()).toBeTruthy()
 
     fireEvent.click(chip())

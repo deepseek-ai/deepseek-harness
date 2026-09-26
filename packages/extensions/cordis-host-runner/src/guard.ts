@@ -564,7 +564,7 @@ export function sandboxDefineTool(options: unknown): ToolDefinition {
   const rawExecute = options.execute as (args: unknown, exec: unknown) => Promise<unknown>
   const rawRender = output.render as (args: unknown, value: unknown) => unknown
   const rawPresentationMeta = output.presentationMeta as ((args: unknown, value: unknown) => unknown) | undefined
-  const erasedDefineTool = defineTool as unknown as (definition: unknown) => ToolDefinition
+  const erasedDefineTool = defineTool as (definition: unknown) => ToolDefinition
   const tool = erasedDefineTool({
     ...options,
     parameters: normalized.spec,
@@ -685,10 +685,10 @@ function denyContext(value: unknown, service: string, reportFailure: (error: Err
 function guardedService(service: object, name: string, reportFailure: (error: Error) => void): unknown {
   return new Proxy(service, {
     get(target, prop) {
-      const value = Reflect.get(target, prop, target) as unknown
+      const value: unknown = Reflect.get(target, prop, target)
       if (typeof value !== 'function') return denyContext(value, name, reportFailure)
       return (...args: unknown[]): unknown => {
-        const result = Reflect.apply(value, target, args) as unknown
+        const result: unknown = Reflect.apply(value, target, args)
         if (result instanceof Promise) return result.then(v => denyContext(v, name, reportFailure))
         return denyContext(result, name, reportFailure)
       }
@@ -776,7 +776,7 @@ function sandboxContext(ctx: Context, reportFailure: (error: Error) => void): Co
     has: (_target, prop) => prop === 'tools' || prop === 'get'
       || (typeof prop === 'string'
         && ((CTX_VERBS.has(prop) && (!TIMER_VERBS.has(prop) || declared.has('timer'))) || declared.has(prop))),
-  }) as unknown as Context
+  }) as Context
   /* jscpd:ignore-end */
 }
 

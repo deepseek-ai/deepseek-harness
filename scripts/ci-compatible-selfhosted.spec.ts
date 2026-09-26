@@ -35,7 +35,7 @@ function evaluate(expression: string, context: Record<string, unknown>): unknown
   const body = expression.trim().slice(3, -2)
   return runInNewContext(body, {
     ...context, fromJSON: JSON.parse,
-  }, { timeout: 1000 }) as unknown
+  }, { timeout: 1000 })
 }
 
 function route(options: { mode?: string; author?: string; repository?: string; fork?: boolean; actor?: string } = {}): unknown {

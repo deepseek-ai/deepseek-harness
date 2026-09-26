@@ -1,8 +1,8 @@
 /**
- * MCP server manager (`ctx.mcpServers`): one settings-driven fleet of
- * `dsh-mcp-client` instances. The `mcp` settings namespace (`mcp.servers.*`)
- * is the single source of truth — the manager's own composition entry supplies
- * the base layer, the user document layers over it, and every committed change
+ * MCP server manager (`ctx.mcpServers`): one Config-driven fleet of
+ * `dsh-mcp-client` instances. Volatile `Config.servers` supplies the resolved
+ * server set. Settings exposes it under the owning Loader entry id, with
+ * profile inheritance and revision checks. Every committed configuration change
  * reconciles the live instance set: new entries mount, removed or disabled
  * entries unmount, and a changed entry is rebuilt. Connection handling stays
  * entirely in mcp-client; the manager owns entry resolution, instance
@@ -17,7 +17,7 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
-import type { Fiber } from '@deepseek-ai/cordis'
+import type { Fiber, Volatile, VolatileSnapshot } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
@@ -33,11 +33,9 @@ import type { McpManagedServerStatus, McpManagedServerView } from './types.ts'
 import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-credentials'
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 export type { McpManagedServerStatus, McpManagedServerView } from './types.ts'
-
-/** Settings namespace owned by this manager. */
-export const MCP_SETTINGS_NAMESPACE = 'mcp'
 
 /**
  * One managed server entry. Deliberately flat rather than a per-transport
@@ -66,16 +64,16 @@ export interface McpManagedServerEntry {
   toolCallTimeoutMs?: number
   /** Per-attempt startup budget override in milliseconds; omission uses the mcp-client default. */
   startupTimeoutMs?: number
-  /** Liveness-ping spacing override in milliseconds; omission uses the mcp-client default. */
+  /** Health-check spacing override in milliseconds; omission uses the mcp-client default. */
   healthCheckIntervalMs?: number
   /** Reconnect policy; the schema fills the mcp-client defaults. */
   reconnect: ReconnectConfig
 }
 
-/** Manager configuration: the composition-base server set. */
+/** Manager configuration with live server entries. */
 export interface Config {
   /** Managed servers keyed by `serverName`. */
-  servers: Record<string, McpManagedServerEntry>
+  servers: Volatile<Record<string, McpManagedServerEntry>>
 }
 
 type EntryInput = Omit<McpManagedServerEntry, 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'reconnect'>
@@ -101,8 +99,8 @@ const ServerEntrySchema = z.object({
 
 
 /** Fields of one entry that may carry template tokens, with their config paths. */
-function templatedStrings(name: string, entry: McpManagedServerEntry): Array<[value: string, where: string]> {
-  const path = `${MCP_SETTINGS_NAMESPACE}.servers.${name}`
+function templatedStrings(name: string, entry: VolatileSnapshot<McpManagedServerEntry>): Array<[value: string, where: string]> {
+  const path = `servers.${name}`
   if (entry.transport === 'stdio') {
     return [
       [entry.command, `${path}.command`],
@@ -126,8 +124,8 @@ function templatedStrings(name: string, entry: McpManagedServerEntry): Array<[va
  * @param config - the resolved manager configuration.
  */
 function validateServers(config: Config): void {
-  for (const [name, entry] of Object.entries(config.servers)) {
-    const path = `${MCP_SETTINGS_NAMESPACE}.servers.${name}`
+  for (const [name, entry] of Object.entries(config.servers.get())) {
+    const path = `servers.${name}`
     if (!SERVER_NAME_PATTERN.test(name)) {
       throw new Error(`${path}: server name must match ${String(SERVER_NAME_PATTERN)} — rename the entry key`)
     }
@@ -178,7 +176,7 @@ interface ResolvedEntryStrings {
 /** One mounted (or mounting) instance owned by the manager. */
 interface ManagedRecord {
   /** Resolved entry the instance was built from, for change detection. */
-  entrySnapshot: McpManagedServerEntry
+  entrySnapshot: VolatileSnapshot<McpManagedServerEntry>
   /** The child mcp-client fiber. */
   handle: Fiber
   /** Set when unmount begins: late activation callbacks must publish nothing. */
@@ -200,17 +198,14 @@ declare module '@deepseek-ai/cordis' {
  * interleave one instance's unmount/mount.
  */
 export default class McpServerManager extends Service {
-  /** Schema for {@link Config}; doubles as the `mcp` settings-section schema. */
+  /** Schema for {@link Config}; Settings exposes its volatile fields. */
   static Config = z.object({
-    servers: z.dict(ServerEntrySchema).default({}),
-  }) as unknown as z<ConfigInput, Config>
+    servers: z.dict(ServerEntrySchema).default({}).volatile(),
+  }) as z<ConfigInput, Config>
 
   static inject = ['tools']
 
-  /** Entry keys composed by the deployment; these rows are not deletable. */
-  private readonly baseServers: ReadonlySet<string>
-  /** Authoritative configuration source: the settings scope once attached, the entry config otherwise. */
-  private currentConfig: () => Config
+  private readonly ownerContext: Context
   private readonly instances = new Map<string, ManagedRecord>()
   private readonly statuses = new Map<string, McpManagedServerStatus>()
   /** Settled operation tail serializing every lifecycle operation. */
@@ -219,19 +214,18 @@ export default class McpServerManager extends Service {
   private stopped = false
 
   /**
-   * Validate the composed base servers and adopt them as the initial source.
+   * Validate the resolved server configuration.
    * @param ctx - the manager's plugin context; children mount under its fiber.
-   * @param config - resolved manager configuration (the composition base layer).
+   * @param config - resolved manager configuration with live references.
    */
   constructor(ctx: Context, public config: Config) {
     super(ctx, 'mcpServers')
+    this.ownerContext = ctx
     validateServers(config)
-    this.baseServers = new Set(Object.keys(config.servers))
-    this.currentConfig = () => this.config
   }
 
   /**
-   * Attach the optional settings section, arm credential-rotation restarts,
+   * Validate Config updates, arm credential-rotation restarts,
    * and reconcile the initial server set. Teardown unmounts every instance so
    * the registered tools are gone once the manager's disposal completes.
    */
@@ -247,7 +241,7 @@ export default class McpServerManager extends Service {
       // Affectedness is read from the raw configuration, not from mounted
       // instances: a server whose earlier mount failed on this very credential
       // has no instance, and configuring the credential is what heals it.
-      for (const [name, entry] of Object.entries(this.currentConfig().servers)) {
+      for (const [name, entry] of Object.entries(this.config.servers.get())) {
         if (!entry.enabled) continue
         const referenced = templatedStrings(name, entry)
           .some(([value]) => credentialRefsIn(value).includes(refText))
@@ -256,16 +250,14 @@ export default class McpServerManager extends Service {
         this.schedule(() => this.remount(name), `credential rebuild of "${name}"`)
       }
     })
-    this.ctx.inject(['settings'], (settingsCtx) => {
-      settingsCtx.settings.installSection(this.ctx, MCP_SETTINGS_NAMESPACE, McpServerManager.Config, this.config, {
-        setSource: (current) => {
-          this.currentConfig = current
-        },
-        onChange: () => {
-          this.schedule(() => this.reconcileOnce(), 'settings reconcile')
-        },
-        validate: validateServers,
-      })
+    const owner = this.ctx.fiber
+    this.ctx.on('internal/config', function (this: Fiber, _raw, next) {
+      const raw: unknown = next()
+      if (this === owner) validateServers(McpServerManager.Config(raw as ConfigInput))
+      return raw
+    })
+    this.ctx.on('loader/volatile-update', () => {
+      this.schedule(() => this.reconcileOnce(), 'config reconcile')
     })
     // The service is visible to dependents only once this fiber is ACTIVE, and
     // the status event asserts a reachable manager, so the first reconcile
@@ -287,11 +279,14 @@ export default class McpServerManager extends Service {
    * @returns one view per configured entry, in document order.
    */
   list(): McpManagedServerView[] {
-    return Object.entries(this.currentConfig().servers).map(([name, entry]) => ({
+    const ns = this.ownerContext.fiber.entry?.options.id
+    const descriptor = ns === undefined ? undefined : this.ownerContext.get('settings')?.describe().find(section => section.ns === ns)
+    const inherited = descriptor?.base as Required<ConfigInput> | undefined
+    return Object.entries(this.config.servers.get()).map(([name, entry]) => ({
       name,
       transport: entry.transport,
       enabled: entry.enabled,
-      deletable: !this.baseServers.has(name),
+      deletable: inherited !== undefined && !Object.hasOwn(inherited.servers, name),
       status: this.statuses.get(name)
         ?? (entry.enabled ? { state: 'connecting', attempt: 0 } : { state: 'disabled' }),
     }))
@@ -307,8 +302,8 @@ export default class McpServerManager extends Service {
    */
   async restart(name: string): Promise<void> {
     await this.enqueue(async () => {
-      if (this.currentConfig().servers[name] === undefined) {
-        throw new Error(`mcp-manager: unknown server "${name}" — it is not configured under ${MCP_SETTINGS_NAMESPACE}.servers`)
+      if (this.config.servers.get()[name] === undefined) {
+        throw new Error(`mcp-manager: unknown server "${name}" — it is not configured under servers`)
       }
       await this.remount(name)
     })
@@ -324,9 +319,9 @@ export default class McpServerManager extends Service {
    * @throws when no entry of that name is configured or its templates do not resolve.
    */
   async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult> {
-    const entry = this.currentConfig().servers[name]
+    const entry = this.config.servers.get()[name]
     if (entry === undefined) {
-      throw new Error(`mcp-manager: unknown server "${name}" — it is not configured under ${MCP_SETTINGS_NAMESPACE}.servers`)
+      throw new Error(`mcp-manager: unknown server "${name}" — it is not configured under servers`)
     }
     const resolved = await this.resolveEntry(name, entry)
     return probeServer(this.toClientConfig(name, entry, resolved), options)
@@ -354,7 +349,7 @@ export default class McpServerManager extends Service {
 
   /** Reconcile the live instance set against the current configuration. */
   private async reconcileOnce(): Promise<void> {
-    const servers = this.currentConfig().servers
+    const servers = this.config.servers.get()
     for (const [name, record] of [...this.instances]) {
       const entry = servers[name]
       if (entry !== undefined && entry.enabled && deepEqualJson(entry, record.entrySnapshot)) continue
@@ -377,7 +372,7 @@ export default class McpServerManager extends Service {
   private async remount(name: string): Promise<void> {
     const record = this.instances.get(name)
     if (record !== undefined) await this.unmount(name, record)
-    const entry = this.currentConfig().servers[name]
+    const entry = this.config.servers.get()[name]
     if (entry === undefined) return
     if (!entry.enabled) {
       this.setStatus(name, { state: 'disabled' })
@@ -387,7 +382,7 @@ export default class McpServerManager extends Service {
   }
 
   /** Mount one enabled entry: resolve templates, plug a child instance, attach its status. */
-  private async mount(name: string, entry: McpManagedServerEntry): Promise<void> {
+  private async mount(name: string, entry: VolatileSnapshot<McpManagedServerEntry>): Promise<void> {
     this.setStatus(name, { state: 'connecting', attempt: 0 })
     let resolved: ResolvedEntryStrings
     try {
@@ -401,7 +396,7 @@ export default class McpServerManager extends Service {
     // and that reconcile would unmount whatever is started here. The guard
     // only spares a deleted or changed entry the brief child spawn/dial; it
     // is not what prevents orphans.
-    if (!deepEqualJson(this.currentConfig().servers[name], entry)) return
+    if (!deepEqualJson(this.config.servers.get()[name], entry)) return
     const record: ManagedRecord = {
       entrySnapshot: structuredClone(entry),
       handle: this.ctx.plugin(McpClient, this.toClientConfig(name, entry, resolved)),
@@ -462,7 +457,7 @@ export default class McpServerManager extends Service {
     // finishing while the service is torn down; nothing may emit for a
     // manager that is no longer live.
     if (this.stopped) return
-    if (this.currentConfig().servers[name] === undefined) return
+    if (this.config.servers.get()[name] === undefined) return
     const previous = this.statuses.get(name)
     if (previous !== undefined && deepEqualJson(previous, status)) return
     this.statuses.set(name, status)
@@ -494,12 +489,12 @@ export default class McpServerManager extends Service {
   }
 
   /** Resolve every templated string of one entry. */
-  private async resolveEntry(name: string, entry: McpManagedServerEntry): Promise<ResolvedEntryStrings> {
+  private async resolveEntry(name: string, entry: VolatileSnapshot<McpManagedServerEntry>): Promise<ResolvedEntryStrings> {
     const sources = this.templateSources()
     const resolveOne = async (value: string, where: string): Promise<string> => {
       return (await resolveTemplateString(value, where, sources)).value
     }
-    const path = `${MCP_SETTINGS_NAMESPACE}.servers.${name}`
+    const path = `servers.${name}`
     if (entry.transport === 'stdio') {
       const env: Record<string, string> = {}
       for (const [key, value] of Object.entries(entry.env)) {
@@ -538,7 +533,7 @@ export default class McpServerManager extends Service {
    * plugin activation, owns failure surfacing — and omitted timeouts defer to
    * mcp-client's own defaults instead of restating them here.
    */
-  private toClientConfig(name: string, entry: McpManagedServerEntry, resolved: ResolvedEntryStrings): McpClient.Config {
+  private toClientConfig(name: string, entry: VolatileSnapshot<McpManagedServerEntry>, resolved: ResolvedEntryStrings): McpClient.Config {
     const shared = {
       serverName: name,
       failOnStartupError: false as const,

@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/computer-use-cua-driver-mcp/README.md
-README.md: 33d5e0fbf8db31d86a930c7c3591da1bf71a4cb0
-README.zh.md: 2c2dbee631975a22b5c47e3e657fc55ae0c46bb1
+/:
+  en: 9402e76135b1a640
+  zh: 13645ec9b9fe38de
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp:
+  en: fe768d365d632bea
+  zh: ae1292e093f21696
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/summary:
+  en: 44777c18cdaf3b1a
+  zh: c9074f5857539122
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 725b47765ee8f30b
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/use-this-package:
+  en: 07f6fe5e50a3ed88
+  zh: 0f3e118e03e0b6fe
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/use-this-package/minimal-configuration:
+  en: b73f3616a2a0aa12
+  zh: e7836f13cb53fc25
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/use-this-package/activation-and-ownership:
+  en: 425155bfbc7c6c3c
+  zh: 6b567b3595388b2e
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/understand-the-implementation:
+  en: 95f7a180b2b3eb6e
+  zh: b5916cec6c4d4ad5
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/understand-the-implementation/verify-an-installed-driver:
+  en: a25c4307524e25cf
+  zh: 38ff4f5fd45b0ffb
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/further-exploration:
+  en: 5a79315997f340fe
+  zh: 789fe8364326ea09
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/model-experience/cua-driver-tools-and-screenshots:
+  en: 9d221bfceb3efcf9
+  zh: 3ee738cd4d24157e
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/model-experience/cua-driver-tools-and-screenshots/what-the-model-sees:
+  en: 721e7cd3fba61ad4
+  zh: da2b6d63450101dc
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/model-experience/cua-driver-tools-and-screenshots/token-effect:
+  en: fd697825fdf78c9b
+  zh: 973cf9a0caaaa558
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/model-experience/cua-driver-tools-and-screenshots/kv-cache-effect:
+  en: 7064d248c94a5c4c
+  zh: 18abcf5142c078c7
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/known-limitations-and-deferred-work:
+  en: 05cd04a9e26e5f7a
+  zh: 93b56f484d315355
+/deepseek-ai-dsh-experimental-computer-use-cua-driver-mcp/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

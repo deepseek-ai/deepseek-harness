@@ -25,11 +25,15 @@ Use this package to browse every subagent conversation beneath a parent session,
 <a id="use-this-package"></a>
 ## Use this package
 
-The session header keeps the current session title as the lineage breadcrumb and, when the session has subagent descendants, appends a `/` count trigger before the header's action row; the trigger opens the descendant catalog, counts the complete subagent-only lineage, stops at ordinary forks, and shows ongoing activity when any counted descendant is running. Select any depth to open that child's conversation with its exact `{parentSessionId, childSessionId, mode}` address.
+The session header keeps the current session title as the lineage breadcrumb; when the session's direct catalog has entries or a read has failed, the descendant-count trigger renders at the start of the header actions band, with no breadcrumb separator. An absent catalog, an empty loading catalog, or a successfully loaded empty catalog hides the count trigger. The trigger opens that direct catalog, reports its total and running counts, and loads nested catalogs only when their rows expand. Select any depth to open that child's conversation with its exact `{parentSessionId, childSessionId, mode}` address, or use the row's trailing arrow to open the same address in the right Sidebar, preferring a separate pane when room permits.
+
+This package registers the `dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=<mode>` resource and builtin Sidebar tab type. The resource retains the child `SessionReference` directly from its address without refreshing the parent catalog, and releases the reference when the tab record closes. The tab renders the shared `conversation.content` Factory through `sidebar.chat.conversation`, fixes the local View to Chat, and omits the main Conversation header and width controls.
 
 ### Browsing the tree
 
-Rows display mode plus `running`/`inactive` activity and an optional log-backed title; the trailing column stacks total durable provider usage above active-turn duration. Keyboard navigation works with ArrowRight/ArrowLeft to expand and collapse branches and ArrowUp/ArrowDown, Home, End, and Escape to navigate or close the tree. An unlabeled one-shot row falls back to its session id; corrupt, unsupported, or unavailable rows remain readable but disabled.
+Hovering a trigger opens its catalog after 150ms; leaving both trigger and catalog closes it after 120ms. Clicking the descendant-count trigger pins its catalog until outside click or Escape from the trigger or tree. Breadcrumb-title clicks navigate to the corresponding conversation.
+
+Rows display mode plus activity and an optional log-backed title; running uses the shared ongoing loader, an inactive child whose latest closed turn completed normally uses the shared success dot, and other inactive children use the shared idle dot. Every row reserves the same 14px status column, centering smaller dots so titles align with the loader state. The compact header trigger vertically centers its activity glyph and count with a 4px gap. The trailing column stacks total durable provider usage above active-turn duration. Keyboard navigation works with ArrowRight/ArrowLeft to expand and collapse branches and ArrowUp/ArrowDown, Home, End, and Escape to navigate or close the tree. An unlabeled one-shot row falls back to its session id. A row is a known leaf only after its own catalog loads empty.
 
 ### Continuing a conversation
 
@@ -51,15 +55,21 @@ The catalog and composer behavior are specified by the [Web subagent conversatio
 
 ### Catalog derivation
 
-The header lineage renderer reads `subagentsByParent` and session summaries through the standard `useSessions` hook. The compact tree remains direct-catalog authoritative: each healthy row's `hasChildren` hint determines disclosure before interaction, a catalog level reserves the disclosure column only when at least one healthy row is a branch, and expanding a branch immediately reserves one disabled loading row per known direct descendant before lazily replacing them with that child's authoritative catalog. Every visible branch is reported to the runtime so membership frames cause a debounced refresh only where the tree is being consumed.
+The header lineage renderer reads `projectionsBySession` through the standard `useSessions` hook. The renderer selects `subagentCatalog` from each Session’s shared values for membership, disclosure, and counts; Activity prefers the unified UI status and falls back to Session summaries; summaries supply titles and usage. Expanding a row loads its initial catalog when needed. Live projection frames update every loaded level without menu subscriptions or repeated membership queries. A row remains expandable while its catalog is absent, loading, or failed, and becomes a known leaf after a ready empty catalog.
 
-### Duration and tokens
+Opening a catalog dropdown does not request its root catalog. Child-catalog expansion and failed-read retries call `refreshProjection`; shared projection-value changes update the display automatically.
 
-Token totals sum the four disjoint `tokenUsage` buckets. Duration sums completed `subagentTiming` turns, advances once per second only for an open turn on a running child, and freezes after the child becomes inactive; an interrupted open turn is bounded by its same-cut `active.through`, never by newer session metadata.
+Breadcrumb addresses derive from the Provider-bound Session address and loaded parent catalogs, including never-selected ancestors.
+
+### Duration, completion, and tokens
+
+Each visible catalog level advances its own clock while it contains a running child; collapsing the level or closing the menu releases that clock. Token totals sum the four disjoint `tokenUsage` buckets. The `subagentTiming` projection sums completed-turn duration and records whether the latest closed turn ended with `completed`; opening another turn clears that completion until its own `turn/end`. Duration advances once per second only for an open turn on a running child and freezes after the child becomes inactive; an interrupted open turn is bounded by its same-cut `active.through`, never by newer session metadata.
 
 ### Composer election
 
 One-shot children always elect a read-only composer. A continuable child elects one only when its exact parent is unavailable and the child is not running; otherwise the ordinary composer's Session routes prompts through `subagents/prompt`. This package never receives host context or calls a model-facing tool.
+
+Unknown-mode catalog rows remain visible and clickable, using the child id when no label is available. Their composer is read-only until child history establishes a supported mode; a read failure is reported in the child conversation.
 
 </details>
 
@@ -102,7 +112,7 @@ Append-only. This package never edits earlier request tokens.
 
 These limits define what the catalog can show and what `@` references mean; they are current package constraints.
 
-- **The catalog has no durable outcome** — activity and timing do not distinguish completion, failure, or cancellation, and the UI exposes no Activation identity; stopping is limited to the composer's current-turn Stop for a running continuable child.
+- **Non-completed inactive outcomes remain grouped** — the catalog distinguishes a latest normal completion from other inactive states, but does not distinguish failure, cancellation, refusal, token exhaustion, or a child with no closed turn; the UI exposes no Activation identity, and stopping is limited to the composer's current-turn Stop for a running continuable child.
 - **`@` references remain display-title text** — duplicate or renamed labels are ambiguous, so they intentionally do not acquire continuation semantics.
 
 <a id="dev-note"></a>

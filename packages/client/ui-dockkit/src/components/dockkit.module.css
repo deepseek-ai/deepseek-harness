@@ -129,6 +129,82 @@
   min-height: 0;
 }
 
+/* Every tab remains a sibling. Explicit tracks determine placement; order only
+   changes painting, so raising a float never moves a connected DOM ancestor. */
+.tabLayout {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.tabCell,
+.emptyTabHost {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  z-index: var(--dsh-dockkit-dock-layer, 10);
+}
+
+.tabCell[hidden] {
+  display: none;
+}
+
+/* A zero-sized Grid item supplies a stacking context, not a containing block
+   for its fixed child. Floats share one layer and use Grid paint order within it. */
+.floatingCell {
+  width: 0;
+  height: 0;
+  z-index: var(--dsh-dockkit-float-layer, 60);
+}
+
+.tabHost {
+  min-width: 0;
+  min-height: 0;
+  pointer-events: auto;
+}
+
+.tabHost:not(.float),
+.emptyTabHost {
+  background: var(--dsw-alias-bg-base);
+}
+
+.tabCell[data-dockkit-host='dock'][data-dockkit-column='0'] > .tabHost {
+  border-left: 0.5px solid var(--dsw-alias-border-l4);
+}
+
+.tabHostHeader {
+  flex: none;
+}
+
+.tabHostBody {
+  position: relative;
+  min-width: 0;
+}
+
+.tabLayoutDivider {
+  width: 0;
+  cursor: col-resize;
+  z-index: calc(var(--dsh-dockkit-dock-layer, 10) + 1);
+  pointer-events: auto;
+}
+
+.tabLayoutDivider::before {
+  top: 0;
+  bottom: 0;
+  left: -0.25px;
+  width: 0.5px;
+}
+
+.tabLayoutDivider::after {
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+  background: linear-gradient(to bottom, transparent, var(--dsw-alias-label-caption) 50%, transparent) center / 1px 100% no-repeat;
+}
+
 /* A body that overflows scrolls inside its pane; nothing escapes the pane. */
 .pane {
   display: flex;
@@ -137,6 +213,11 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.pane:focus,
+.float:focus {
+  outline: none;
 }
 
 /* A 38px row whose 28px content band sits at its bottom: chips fill the band,
@@ -221,6 +302,25 @@
   margin-left: 4px;
 }
 
+/* macOS desktop: an embedder may pin this surface at the window's top edge (the
+   right sidebar does, in both presentations). The strip row is marked
+   `data-window-drag` in markup (TabPanel), so ui-web base.css's single darwin
+   rule drags it over its own box; the chip run, the strip-end chrome, the pane
+   body, and the split divider subtract their whole boxes so tabs, controls,
+   content, and the resize grab stay usable wherever they overlap that row. The
+   divider must be named here: it is a plain div, so ui-web base.css's
+   interactive-element subtraction never matches it. A floating pane subtracts its
+   own box the same way, so the strip row never drags the window over it. Hidden
+   surfaces contribute nothing: Blink skips non-visible boxes when it collects
+   draggable regions. */
+:global(html[data-platform='darwin']) .stripTabs,
+:global(html[data-platform='darwin']) .stripChrome,
+:global(html[data-platform='darwin']) .paneBody,
+:global(html[data-platform='darwin']) .float,
+:global(html[data-platform='darwin']) .divider {
+  -webkit-app-region: no-drag;
+}
+
 /* The slot between two chips: a 10px box with a hairline down its centre.
    Targeted by a drag, the same box draws the caret instead, so the chips
    around it never move. */
@@ -240,8 +340,8 @@
   background: var(--dsw-alias-border-l4);
 }
 
-/* The active chip is a filled capsule and needs no rule against it: the two
-   slots beside it go blank, so the row reads as the capsule between bare
+/* The active chip is a filled tab and needs no rule against it: the two
+   slots beside it go blank, so the row reads as the tab between bare
    chips. A caret in either slot still draws. */
 .tabActive + .slot:not(.slotCaret)::before,
 .slot:not(.slotCaret):has(+ .tabActive)::before {
@@ -254,7 +354,7 @@
   background: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
 }
 
-/* The chip: a 28px capsule whose title runs to the right inset. The close
+/* The chip: a 28px tab whose title runs to the right inset. The close
    control is not in the flow — it sits over the title's last 14px and shows
    while the chip is active, hovered, or holds focus — so a chip is the same
    width with and without it and nothing shifts on hover. */
@@ -271,7 +371,7 @@
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: 1;
   white-space: nowrap;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
   touch-action: none;
   user-select: none;
@@ -328,7 +428,7 @@
   line-height: 1;
   background: transparent;
   border: none;
-  border-radius: 20px;
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
   opacity: 0;
   /* Hidden means untouchable too: without this a touch press on the chip's
@@ -345,7 +445,7 @@
   pointer-events: auto;
 }
 
-/* The chip's height and corner, so it reads as one more capsule in the row. */
+/* The chip's height and corner, so it reads as one more tab in the row. */
 .addTab {
   display: flex;
   flex: none;
@@ -358,7 +458,7 @@
   line-height: 1;
   background: transparent;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
 }
 
@@ -376,13 +476,13 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* The active chip is the filled capsule, in the tag fill; the rest are bare text. */
+/* The active chip is the filled tab, in the tag fill; the rest are bare text. */
 .tabActive {
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-markdown-tag);
 }
 
-/* A pane's lone unclosable chip is a label, not a choice: no capsule, no
+/* A pane's lone unclosable chip is a label, not a choice: no tab, no
    hover fill — the primary ink on the pane's own ground. Its title never
    yields to a close control, so it keeps the clipped fade alone. */
 .tab.tabQuiet,
@@ -420,7 +520,7 @@
   line-height: 1;
   background: transparent;
   border: none;
-  border-radius: 28px;
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
 }
 
@@ -451,9 +551,7 @@
   flex-direction: column;
   min-width: 96px;
   padding: 4px;
-  background: var(--dsw-alias-bg-layer-3);
   border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
 }
 
 .menu:not(:has([role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio'])) {
@@ -461,13 +559,13 @@
 }
 
 .menuItem {
-  padding: 5px 8px;
+  padding: 4px 7px;
   color: var(--dsw-alias-label-primary);
-  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
   text-align: left;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-md);
   cursor: pointer;
 }
 
@@ -572,7 +670,7 @@
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
   border: 1.5px dashed var(--dsw-alias-border-l2);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   transition: color 120ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out;
   animation: dockHintIn 140ms ease-out;
 }
@@ -649,7 +747,7 @@
      to its own corners. */
   overflow: hidden;
   background: var(--dsw-alias-bg-layer-2);
-  border-radius: 20px;
+  border-radius: var(--dsw-radius-panel);
   /* The menu's shadow with the stroke rebound one step lighter than the
      default (l2): the panel reads as the same kind of raised surface, and the
      shadow's hairline outlines it, so the frame draws no border of its own. */
@@ -706,20 +804,18 @@
   touch-action: none;
 }
 
-/* The grip is a quarter arc concentric with the frame's 20px corner (16px
-   radius at a 4px inset), so it reads as part of the frame. It shows only
-   while the pointer is over the panel — an idle panel keeps a clean corner —
-   and `:active` keeps it lit while a drag holds the pointer capture. */
+/* The grip follows the floating panel's corner with a 4px inset. Pointer
+   hover and an active drag reveal it. */
 .floatResize::after {
   content: '';
   position: absolute;
   right: 4px;
   bottom: 4px;
-  width: 16px;
-  height: 16px;
+  width: calc(var(--dsw-radius-panel) - 4px);
+  height: calc(var(--dsw-radius-panel) - 4px);
   border-right: 1.5px solid var(--dsw-alias-label-caption);
   border-bottom: 1.5px solid var(--dsw-alias-label-caption);
-  border-bottom-right-radius: 16px;
+  border-bottom-right-radius: calc(var(--dsw-radius-panel) - 4px);
   opacity: 0;
   transition: opacity 120ms ease-out;
 }

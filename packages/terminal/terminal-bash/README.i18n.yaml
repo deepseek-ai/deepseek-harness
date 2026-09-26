@@ -1,6 +1,91 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/terminal/terminal-bash/README.md
-README.md: 466a42f46844d16b85d8754df0bd910361e2e401
-README.zh.md: 7ca41883f6c807102c75b25e531187a7ab148cbf
+/:
+  en: 7451cb97579aa088
+  zh: 836bff293fae7bd3
+/deepseek-ai-dsh-terminal-bash:
+  en: 70eb464a6754f633
+  zh: f7ad67d8a9eb7195
+/deepseek-ai-dsh-terminal-bash/summary:
+  en: b50ba02f6602a1fd
+  zh: 1c954a0e0999280d
+/deepseek-ai-dsh-terminal-bash/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-terminal-bash/use-this-package:
+  en: 13e1b604a235290e
+  zh: 5292c92ffe20537e
+/deepseek-ai-dsh-terminal-bash/use-this-package/when-to-choose-it:
+  en: f4304ced55e55d4f
+  zh: 739d7a16691e4cc0
+/deepseek-ai-dsh-terminal-bash/use-this-package/composition:
+  en: 71449ef1985b2f1b
+  zh: 562e9b5ef73cd5e1
+/deepseek-ai-dsh-terminal-bash/use-this-package/configuration:
+  en: 229375735e02e80a
+  zh: 347c617ae312643a
+/deepseek-ai-dsh-terminal-bash/use-this-package/shell-dialects-and-readiness:
+  en: bab340c3347f1794
+  zh: a4c32b651fea000d
+/deepseek-ai-dsh-terminal-bash/use-this-package/sandboxing-and-safe-operation:
+  en: 39e0f0b429b024a7
+  zh: 440171193664d13b
+/deepseek-ai-dsh-terminal-bash/use-this-package/observable-outcomes-and-failures:
+  en: 71726aa75e303acd
+  zh: 4dc311eeed75fa09
+/deepseek-ai-dsh-terminal-bash/understand-the-implementation:
+  en: 97f4f07114f5a995
+  zh: d30b07058a3103c7
+/deepseek-ai-dsh-terminal-bash/understand-the-implementation/design-concept:
+  en: 5808eba7c8ff1993
+  zh: c85f1ab0a869c177
+/deepseek-ai-dsh-terminal-bash/understand-the-implementation/source-map:
+  en: 9a525f7a7228a09b
+  zh: d57537edfacc9f8b
+/deepseek-ai-dsh-terminal-bash/understand-the-implementation/readiness-model:
+  en: a768d621c2ea2585
+  zh: 8213317da48766e3
+/deepseek-ai-dsh-terminal-bash/understand-the-implementation/send-cancellation-and-teardown:
+  en: 025325caab883327
+  zh: 1decfdea61e95ae1
+/deepseek-ai-dsh-terminal-bash/understand-the-implementation/sandbox-mode-fence:
+  en: a88b693ec539ac28
+  zh: a309bbe671166027
+/deepseek-ai-dsh-terminal-bash/further-exploration:
+  en: 648ee87712ed5c66
+  zh: 6444df8b1fabbc17
+/deepseek-ai-dsh-terminal-bash/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-terminal-bash/model-experience/indirect-consumer:
+  en: a601a3c4f5b848cd
+  zh: ec617f79f706aaa1
+/deepseek-ai-dsh-terminal-bash/model-experience/indirect-consumer/what-the-model-sees:
+  en: ffd1d7a3a65ce703
+  zh: 6e892fb3aa6ac293
+/deepseek-ai-dsh-terminal-bash/model-experience/indirect-consumer/token-effect:
+  en: 41bd9bec80350376
+  zh: bdd2db111e86282f
+/deepseek-ai-dsh-terminal-bash/model-experience/indirect-consumer/kv-cache-effect:
+  en: 4ded19a792b5b94a
+  zh: 82029b44250df6a0
+/deepseek-ai-dsh-terminal-bash/model-experience/sandbox-policy-context:
+  en: 0342db1221081250
+  zh: 6a510f03982e2d56
+/deepseek-ai-dsh-terminal-bash/model-experience/sandbox-policy-context/what-the-model-sees:
+  en: d9cc7077b03fa969
+  zh: 91af4f3451603759
+/deepseek-ai-dsh-terminal-bash/model-experience/sandbox-policy-context/token-effect:
+  en: d3b7f8f648fd0aa4
+  zh: 954f662ddafaedbb
+/deepseek-ai-dsh-terminal-bash/model-experience/sandbox-policy-context/kv-cache-effect:
+  en: 5e4dc482b93e2b06
+  zh: 5b56af99bcfd74ed
+/deepseek-ai-dsh-terminal-bash/known-limitations-and-deferred-work:
+  en: 2dc221de0d3a76a7
+  zh: 822cef044e765459
+/deepseek-ai-dsh-terminal-bash/known-limitations-and-deferred-work/dev-note:
+  en: 979c4600ed8a81d5
+  zh: 4016ea615f638036

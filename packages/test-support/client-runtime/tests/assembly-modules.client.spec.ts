@@ -25,8 +25,8 @@ const row = (name: string, immediately = false) => ({ name, inject: [], immediat
 function graph(names: readonly string[]): WebBootGraph {
   return {
     rev: 'local',
-    entries: names.map(id => ({ id, url: `/plugins/${id}/client.js`, rev: 'local' })),
-    batches: [{ phase: 'application', url: '/plugins/all.js', rev: 'local', entries: [...names] }],
+    entries: names.map(id => ({ id, url: `plugins/${id}/client.js`, rev: 'local' })),
+    batches: [{ phase: 'application', url: 'plugins/all.js', rev: 'local', entries: [...names] }],
   }
 }
 
@@ -77,8 +77,12 @@ describe('createInProcessModules', () => {
 
   it('rejects loudly instead of fetching when a graph row has no loaded module', async () => {
     const system = createInProcessModules(graph(['ghost']), new Map())
-    await expect(system.prefetch('ghost')).rejects.toThrow('in-process modules never load bundles (/plugins/all.js)')
-    await expect(system.import('ghost', '', {})).rejects.toThrow('in-process modules never load bundles (/plugins/all.js)')
+    // The module system retries the batch once and then tries the row's one-resource URL; every attempt is refused.
+    const first: unknown = await system.prefetch('ghost').then(() => undefined, (error: unknown) => error)
+    if (!(first instanceof Error)) throw new Error('prefetch resolved')
+    expect(first.message).toContain('in-process modules never load bundles (plugins/all.js)')
+    expect(first.message).toContain('in-process modules never load bundles (plugins/ghost/client.js)')
+    await expect(system.import('ghost', '', {})).rejects.toThrow('in-process modules never load bundles (plugins/ghost/client.js)')
   })
 
   it('exposes the graph parsed by the production validator as its manifest', () => {

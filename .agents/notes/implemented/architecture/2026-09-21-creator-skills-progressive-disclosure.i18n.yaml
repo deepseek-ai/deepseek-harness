@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-21-creator-skills-progressive-disclosure.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-21-creator-skills-progressive-disclosure.md
+/agent-note-creator-skills-disclose-progressively-and-may-read-sources:
+  en: 374f4a41f3026e59
+  zh: 4e7f90d18b03fd14
+/agent-note-creator-skills-disclose-progressively-and-may-read-sources/problem:
+  en: 1808717550a5e7ba
+  zh: e18dd5a813a2398d
+/agent-note-creator-skills-disclose-progressively-and-may-read-sources/decision:
+  en: b83fb74f03ca75a7
+  zh: e4f6b1c73ef96787
+/agent-note-creator-skills-disclose-progressively-and-may-read-sources/alternatives-considered:
+  en: d36d4f610925060a
+  zh: c0ed56b6c631789e
+/agent-note-creator-skills-disclose-progressively-and-may-read-sources/consequences:
+  en: ed908afe74adf3bc
+  zh: 62a3cfba359dfbb6

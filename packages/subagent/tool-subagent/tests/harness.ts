@@ -116,6 +116,6 @@ export function callSubagent(
 }
 
 /** Join text blocks from one rendered tool result. */
-export function text(result: { content: { type: string; text?: string }[] }): string {
+export function text(result: { content: readonly { type: string; text?: string }[] }): string {
   return result.content.filter(block => block.type === 'text').map(block => block.text).join('')
 }

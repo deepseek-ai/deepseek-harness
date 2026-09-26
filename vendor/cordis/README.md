@@ -99,3 +99,7 @@ yarn lint
 The monorepo uses Yakumo to build and test all packages. Most examples in the
 docs use public APIs from `cordis`; loader examples additionally use
 `@cordisjs/plugin-loader` and `@cordisjs/plugin-include`.
+
+## Volatile configuration
+
+Schemas may return `Volatile<T>` references, whose values are read through `.get()`. Cordis exports the consumer types; Loader commits volatile-only changes into the running references without restarting and notifies the owning fiber through `loader/volatile-update`. Direct `fiber.update()` retains its existing update waterfall and default restart.

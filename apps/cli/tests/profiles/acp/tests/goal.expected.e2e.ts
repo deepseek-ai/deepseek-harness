@@ -87,7 +87,7 @@ describe('same-session goal snapshot through the ACP automation driver', () => {
     const log = result.sessionLogs[0]
     if (log === undefined) throw new Error('goal snapshot did not persist its session')
     const records = parseJsonl(log.content)
-    const events = records.slice(1) as unknown as SessionEvent[]
+    const events = records.slice(1) as SessionEvent[]
     const calls = events.filter(event => event.type === 'tool/call').map(event => event.data.name)
     expect(calls).toEqual(['create_goal', 'get_goal'])
     const rounds = events.flatMap(event => event.type === 'user/message' && event.data.source.kind === 'goal'
@@ -136,7 +136,7 @@ describe('same-session goal snapshot through the ACP automation driver', () => {
     const log = result.sessionLogs[0]
     if (log === undefined) throw new Error('goal wrap-up snapshot did not persist its session')
     const records = parseJsonl(log.content)
-    const events = records.slice(1) as unknown as SessionEvent[]
+    const events = records.slice(1) as SessionEvent[]
     const calls = events.filter(event => event.type === 'tool/call').map(event => event.data.name)
     expect(calls).toEqual(['create_goal', 'update_goal'])
     expect(foldGoal(events)).toMatchObject({
@@ -150,7 +150,7 @@ describe('same-session goal snapshot through the ACP automation driver', () => {
     // The wrap-up instruction is one plugin-sourced context injected after the
     // terminal tool result, and the model still answers inside the same turn.
     const wrapups = events.filter(event => event.type === 'user/message'
-      && event.data.source.kind === 'plugin' && event.data.source.plugin === 'tool-goal')
+      && event.data.source.kind === 'tool-goal')
     expect(wrapups).toHaveLength(1)
     const wrapupText = wrapups.map(event => event.type === 'user/message' ? event.data.content : [])[0]
     expect(JSON.stringify(wrapupText)).toContain('<goal_complete>')

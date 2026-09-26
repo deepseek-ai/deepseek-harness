@@ -3,6 +3,9 @@ import clsx from 'clsx'
 import { structuredPatch } from 'diff'
 import { FoldToggle } from './FoldToggle.tsx'
 import { writeClipboard } from './clipboard.ts'
+import { CodeToolbar, type CodeToolbarLabels } from './CodeToolbar.tsx'
+import { languageForPath } from './code-highlighting.ts'
+import cardCss from './CodeCard.module.css'
 import css from './DiffBlock.module.css'
 
 /** Output lines shown before the height cap collapses the middle. */
@@ -33,14 +36,13 @@ export interface DiffBlockProps {
 }
 
 /** Localized chrome for {@link DiffBlock}. */
-export interface DiffBlockLabels {
+export interface DiffBlockLabels extends CodeToolbarLabels {
   copy: string
   copied: string
   collapseAria: string
   expandAria: (hidden: number) => string
   collapse: string
   expand: (hidden: number) => string
-  files: (count: number) => string
 }
 
 /** A single rendered body line and its role, so the height cap slices a flat list. */
@@ -82,7 +84,7 @@ function localHunks(diff: DiffHunk) {
  * comparisons exceeding the edit limit count both complete fragments as replaced.
  * Text follows {@link contentLines}'s terminator rule.
  * @param diffs - the hunks to count.
- * @returns the +/- totals for summaries and the card footer.
+ * @returns the +/- totals for tool summaries.
  */
 export function diffTotals(diffs: DiffHunk[]): { added: number; removed: number } {
   let added = 0
@@ -99,18 +101,16 @@ export function diffTotals(diffs: DiffHunk[]): { added: number; removed: number 
 }
 
 /**
- * Flatten local patches into rows and count only added and removed lines.
+ * Flatten local patches into rows.
  * A path header opens each new file. A `⋯` gap separates consecutive same-file
- * fragments and distant patches within a fragment. File counts use distinct paths.
+ * fragments and distant patches within a fragment.
  * @param diffs - the hunks to render.
- * @returns the body rows, the +/- totals, and the distinct-file count.
+ * @returns the body rows.
  */
-function buildRows(diffs: DiffHunk[]): { rows: DiffRow[]; added: number; removed: number; files: number } {
+function buildRows(diffs: DiffHunk[]): DiffRow[] {
   const rows: DiffRow[] = []
-  const paths = new Set<string>()
   let prevPath: string | undefined
   for (const diff of diffs) {
-    paths.add(diff.path)
     if (diff.path !== prevPath) rows.push({ kind: 'path', text: diff.path })
     else rows.push({ kind: 'gap', text: '⋯' })
     prevPath = diff.path
@@ -122,12 +122,7 @@ function buildRows(diffs: DiffHunk[]): { rows: DiffRow[]; added: number; removed
       }
     }
   }
-  return {
-    rows,
-    added: rows.filter(row => row.kind === 'add').length,
-    removed: rows.filter(row => row.kind === 'del').length,
-    files: paths.size,
-  }
+  return rows
 }
 
 /**
@@ -171,9 +166,12 @@ function copyText(rows: DiffRow[]): string {
  * @returns the diff block element.
  */
 export function DiffBlock({ diffs, labels, maxLines = DEFAULT_DIFF_MAX_LINES, className }: DiffBlockProps) {
-  const { rows, added, removed, files } = useMemo(() => buildRows(diffs), [diffs])
+  const rows = useMemo(() => buildRows(diffs), [diffs])
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [wrapped, setWrapped] = useState(false)
+  const firstLanguage = diffs[0] === undefined ? undefined : languageForPath(diffs[0].path)
+  const language = diffs.every(diff => languageForPath(diff.path) === firstLanguage) ? firstLanguage : undefined
 
   const onCopy = useCallback(() => {
     if (copied) return
@@ -198,10 +196,9 @@ export function DiffBlock({ diffs, labels, maxLines = DEFAULT_DIFF_MAX_LINES, cl
   const tail = capped ? rows.slice(rows.length - tailLines) : []
 
   return (
-    <div className={clsx(css.block, className)} data-diff="">
-      <button type="button" className={css.copyButton} onClick={onCopy}>
-        {copied ? labels.copied : labels.copy}
-      </button>
+    <div className={clsx(cardCss.card, css.block, className)} data-diff="" data-code-wrap={wrapped}>
+      <CodeToolbar lang={language} labels={labels} copyLabel={labels.copy} copiedLabel={labels.copied}
+        copied={copied} wrapped={wrapped} onCopy={onCopy} onWrap={() => { setWrapped(value => !value) }} />
       <div className={css.body}>
         {head.map((row, index) => (
           <div key={index} className={clsx(css.line, ROW_CLASS[row.kind])}>{row.text}</div>
@@ -219,7 +216,6 @@ export function DiffBlock({ diffs, labels, maxLines = DEFAULT_DIFF_MAX_LINES, cl
           <div key={index} className={clsx(css.line, ROW_CLASS[row.kind])}>{row.text}</div>
         ))}
       </div>
-      <div className={css.footer}>└ +{added} -{removed} · {labels.files(files)}</div>
     </div>
   )
 }

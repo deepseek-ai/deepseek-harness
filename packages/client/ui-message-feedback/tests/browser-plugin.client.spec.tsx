@@ -164,6 +164,20 @@ describe('ui-message-feedback browser plugin', () => {
     expect(b.dialogEntry()!.inject!(sid('s2')).hooks.dialog.getSnapshot()).toMatchObject({ target: null, toast: 0 })
   })
 
+  it('opens the shared Session dialog through feedbackUi without recording anything', async () => {
+    const b = await bench()
+    await b.fiber.await()
+    const dialog = b.dialogEntry()!.inject!(sid('s1'))
+    b.ctx.feedbackUi.openSession(sid('s1'))
+    expect(dialog.hooks.dialog.getSnapshot().target).toEqual({ kind: 'session' })
+    expect(b.dialogEntry()!.inject!(sid('s2')).hooks.dialog.getSnapshot().target).toBeNull()
+    expect(b.calls).toEqual([])
+    dialog.dismiss()
+    expect(b.calls).toEqual([])
+    await b.fiber.dispose()
+    expect(b.ctx.get('feedbackUi')).toBeUndefined()
+  })
+
   it('records a Session remark through the sessionFeedback Remote and a message judgment through put', async () => {
     const b = await bench()
     await b.fiber.await()

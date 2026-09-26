@@ -26,7 +26,7 @@ describe('BlockAssembler', () => {
     ])
     expect(assembler.usage).toEqual({ inputTokens: 10, outputTokens: 5 })
     expect(assembler.finish).toEqual({ kind: 'tool-calls' })
-    expect(assembler.message().role).toBe('assistant')
+    expect(assembler.message({ provider: 'mock', model: 'mock' }).role).toBe('assistant')
   })
 
   it('records the completed block from block-end', () => {

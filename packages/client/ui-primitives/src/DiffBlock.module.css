@@ -1,79 +1,58 @@
 .block {
-  --dsl-diff-radius: 12px;
-  --dsl-diff-line-height: 22px;
-
-  position: relative;
-  margin: 16px 0;
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-markdown-code-block);
-  border-radius: var(--dsl-diff-radius);
-}
-
-/* The copy control floats in the top-right corner over the body, so the card
-   has no empty banner row above its first diff line (the TUI diff card has no
-   banner either — only the footer). The block is position: relative, so this
-   anchors to the card. */
-.copyButton {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  z-index: 1;
-  background-color: transparent;
-  border: none;
-  padding: 0;
-  margin: 0;
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-  font: var(--dsw-font-xs-13);
+  overflow: hidden;
 }
 
 .body {
-  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr);
+  padding: 6px 0 20px;
   font: var(--dsw-font-markdown-code-block);
   overflow-x: auto;
-  overflow-y: hidden;
 }
 
-/* No wrapping, no word-break: a diff is read by its indentation. */
 .line {
-  min-height: var(--dsl-diff-line-height);
+  box-sizing: border-box;
+  min-height: 1lh;
+  padding: 0 22px;
   white-space: pre;
 }
 
-/* A file header: the path in the primary tone, set apart by weight. The copy
-   button floats over this first row's top-right corner, so reserve space at the
-   line's end for it — a long path scrolls under the button otherwise, and the
-   button's hit area would eat clicks on the path's tail. */
-.path {
-  color: var(--dsw-alias-label-primary);
-  font-weight: 600;
-  padding-right: 56px;
+.block[data-code-wrap='true'] .body {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-/* A same-file second hunk's separator (a scattered edit), in the dim tone. */
+.block[data-code-wrap='true'] .line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.path {
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 500;
+}
+
 .gap {
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* The diff's own meaning-carrying colors: removed on the error token, added on
-   the success token. A `- `/`+ ` prefix is drawn here so a copied line and the
-   shown line agree, and so the sign reads without relying on color alone. */
 .del::before {
   content: '- ';
-  color: var(--dsw-alias-state-error-primary);
 }
 
 .del {
   color: var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-code-diff-deleted);
+  box-shadow: inset 3px 0 0 var(--dsw-alias-state-error-primary);
 }
 
 .add::before {
   content: '+ ';
-  color: var(--dsw-alias-state-success-primary);
 }
 
 .add {
   color: var(--dsw-alias-state-success-primary);
+  background: var(--dsw-alias-code-diff-added);
+  box-shadow: inset 3px 0 0 var(--dsw-alias-state-success-primary);
 }
 
 .context {
@@ -87,9 +66,9 @@
 .expand {
   display: block;
   width: 100%;
-  padding: 0;
+  padding: 0 22px;
   border: none;
-  background-color: transparent;
+  background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
   font: inherit;
@@ -98,12 +77,4 @@
 
 .expand:hover {
   color: var(--dsw-alias-label-secondary);
-}
-
-/* The change summary, dim under the body: `└ +A -R · N file(s)`, the same
-   footer the TUI transcript's diff card draws. */
-.footer {
-  padding: 0 14px 12px;
-  font: var(--dsw-font-markdown-code-block);
-  color: var(--dsw-alias-label-tertiary);
 }

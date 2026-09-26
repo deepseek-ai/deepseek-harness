@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-20-unify-agent-and-session-id.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-06-20-unify-agent-and-session-id.md
-2026-06-20-unify-agent-and-session-id.md: 4084912f95aa2354e815a1b4c05cd7f90bd3c315
-2026-06-20-unify-agent-and-session-id.zh.md: 3adba379f12a46e6f151e6777e0a63f4b16e9cd6
+/agent-note-unify-the-agent-id-and-the-session-id:
+  en: a3b5f1ad744e332a
+  zh: f56748eb6f1c1e8f
+/agent-note-unify-the-agent-id-and-the-session-id/problem:
+  en: 13081f69bc061561
+  zh: 6062223de9302202
+/agent-note-unify-the-agent-id-and-the-session-id/decision:
+  en: 58fe3d6c1fbe5aff
+  zh: 564332602546955e
+/agent-note-unify-the-agent-id-and-the-session-id/alternatives-considered:
+  en: 5dba32bffc8ba6f4
+  zh: 4e0d6f084e94eaa3
+/agent-note-unify-the-agent-id-and-the-session-id/verification:
+  en: bb4f738c649a2d9f
+  zh: dd46752393643444
+/agent-note-unify-the-agent-id-and-the-session-id/consequences:
+  en: 38daf65318d286fb
+  zh: 620933bffd049c42

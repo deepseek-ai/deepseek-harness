@@ -20,16 +20,16 @@ test('counts only the same account and excludes the current PR and deleted accou
   assert.equal(count, 1)
 })
 
-test('follows cursors, deduplicates overlapping pages, and stops at 150', async () => {
+test('follows cursors, deduplicates overlapping pages, and stops at 100', async () => {
   let calls = 0
   const count = await countMergedAuthorPulls(pull, async (path, { body }) => {
     calls++
-    if (calls === 1) return page(Array.from({ length: 100 }, (_, i) => entry(i + 1)), true, 'next')
+    if (calls === 1) return page(Array.from({ length: 100 }, (_, i) => entry(i + 1, i < 50 ? pull.authorId : 'another-id')), true, 'next')
     assert.equal(calls, 2)
     assert.equal(body.variables.after, 'next')
-    return page(Array.from({ length: 100 }, (_, i) => entry(i + 100)), true, 'unused')
+    return page(Array.from({ length: 100 }, (_, i) => entry(i + 51)), true, 'unused')
   })
-  assert.equal(count, 150)
+  assert.equal(count, 100)
   assert.equal(calls, 2)
 })
 

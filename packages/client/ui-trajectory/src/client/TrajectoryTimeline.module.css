@@ -98,7 +98,7 @@
 }
 
 .earlierHistory:focus-visible {
-  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2);
+  box-shadow: inset 0 0 0 1px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
 }
 
 .empty {
@@ -111,7 +111,7 @@
 }
 
 .track:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 

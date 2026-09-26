@@ -18,8 +18,7 @@ import { fileURLToPath } from 'node:url'
 import yaml from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { evaluate } from '@deepseek-ai/cordis-plugin-loader'
-import { SHIPPED_PRESET_ROOT } from '@deepseek-ai/dsh-agent-presets'
-import { composeEntries, initProfile, loadProfile, PROFILES_DIR } from '@deepseek-ai/dsh-app-boot'
+import { bundlePatchPaths, composeEntries, initProfile, loadProfile, PROFILES_DIR } from '@deepseek-ai/dsh-app-boot'
 
 /**
  * The effective disabled state of one row on one platform: a `!!js` expression
@@ -102,13 +101,15 @@ describe('the shipped shell composition (real bundle layers)', () => {
 })
 
 describe('shipped agent presets gate both shell tools by platform', () => {
-  const presetRoot = SHIPPED_PRESET_ROOT
+  const webBundle = fileURLToPath(new URL('../../../packages/bundle/web-app/', import.meta.url))
+  const webManifest = JSON.parse(readFileSync(join(webBundle, 'package.json'), 'utf8')) as { dsh: { bundle: { patch: string[] } } }
+  const presetRows = composeEntries([bundlePatchPaths(webBundle, webManifest.dsh.bundle).flatMap(file =>
+    yaml.load(readFileSync(file, 'utf8'), { schema: entryListSchema }) as import('@deepseek-ai/cordis-plugin-include').PatchOptions[])])
+
+  const definitions = presetRows.filter(row => row.name === '@deepseek-ai/dsh-agent-preset').map(row => row.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition)
 
   it.each(['standard', 'ptc', 'cordis'])('preset %s gates its shell tool rows by platform', (preset) => {
-    const entries: unknown = yaml.load(
-      readFileSync(join(presetRoot, preset, 'agent.cordis.yml'), 'utf8'),
-      { schema: entryListSchema },
-    )
+    const entries: unknown = definitions.find(row => row.id === preset)!.plugins
     if (!Array.isArray(entries)) throw new TypeError(`preset ${preset} must parse to an entry array`)
     for (const [id, win32] of [['tool-bash', true], ['tool-pwsh', false]] as const) {
       const row = entries.find((entry): entry is Record<string, unknown> => (
@@ -124,10 +125,7 @@ describe('shipped agent presets gate both shell tools by platform', () => {
   })
 
   it('minimal mounts no shell tool row and gates its persistent shell stack by platform', () => {
-    const entries: unknown = yaml.load(
-      readFileSync(join(presetRoot, 'minimal', 'agent.cordis.yml'), 'utf8'),
-      { schema: entryListSchema },
-    )
+    const entries: unknown = definitions.find(row => row.id === 'minimal')!.plugins
     if (!Array.isArray(entries)) throw new TypeError('minimal preset must parse to an entry array')
     for (const id of ['tool-bash', 'tool-pwsh']) {
       expect(entries.some(entry => (

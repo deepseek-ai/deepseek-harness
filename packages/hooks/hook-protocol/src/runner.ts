@@ -65,7 +65,7 @@ export interface RunHookResult {
  * @returns the decoded output plus the run's wall-clock duration.
  */
 export async function runHook(
-  bash: ShellExecutor,
+  bash: Pick<ShellExecutor, 'resolve' | 'execute'>,
   hook: CommandHook,
   options: RunHookOptions,
   now: () => number,
@@ -84,7 +84,7 @@ export async function runHook(
   }
 
   try {
-    const result = await bash.run(bash.resolve(request))
+    const result = await (await bash.execute(bash.resolve(request))).result()
     // ShellRunResult.exitCode is `number | null` (null = died by signal); the
     // protocol's exit-code contract is numeric, so a signal death maps to
     // `undefined` (a non-blocking error — no clean exit code to act on).

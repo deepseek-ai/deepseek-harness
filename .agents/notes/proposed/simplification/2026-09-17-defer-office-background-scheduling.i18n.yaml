@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-17-defer-office-background-scheduling.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/simplification/2026-09-17-defer-office-background-scheduling.md
+/agent-note-defer-office-background-scheduling-until-a-consumer-needs-it:
+  en: 9966b1c4fdb2585b
+  zh: 4eb24c283facf38d
+/agent-note-defer-office-background-scheduling-until-a-consumer-needs-it/problem:
+  en: bb725ab25ff39f86
+  zh: d198514119b31a61
+/agent-note-defer-office-background-scheduling-until-a-consumer-needs-it/proposal:
+  en: e33db390dbbcc86c
+  zh: 890df8891260103a
+/agent-note-defer-office-background-scheduling-until-a-consumer-needs-it/alternatives-considered:
+  en: 597346036314c907
+  zh: 91661d961623c7cd
+/agent-note-defer-office-background-scheduling-until-a-consumer-needs-it/acceptance-criteria:
+  en: b475d4e83972fa02
+  zh: 43de8f23a9346708
+/agent-note-defer-office-background-scheduling-until-a-consumer-needs-it/risks:
+  en: 4c2324c00381cbc7
+  zh: dfe6d1068ac7560c

@@ -30,6 +30,7 @@ const REPLY = `${OPEN_REPLY}\n\`\`\``
 
 /** Deterministic model response held after each visible fence-growth frame. */
 class StreamingFenceAdapter extends LlmAdapter {
+  override async listModels(provider: string) { return [{ provider, id: MODEL, name: `${provider}/${MODEL}` }] }
   private resolveFirstPaused!: () => void
   private resolveFirstContinuation!: () => void
   private resolveSecondPaused!: () => void
@@ -85,7 +86,7 @@ async function fenceTree(block: ReturnType<Page['locator']>): Promise<FenceTree>
     const pre = element.querySelector<HTMLPreElement>('pre.shiki')
     if (pre === null) throw new Error('streaming fence did not render through the shiki arm')
     return {
-      language: element.querySelector('[class*="infostring"]')?.textContent ?? '',
+      language: element.querySelector('[data-code-block-banner] [class*="language"]')?.textContent ?? '',
       pre: {
         className: pre.className,
         style: pre.style.cssText,

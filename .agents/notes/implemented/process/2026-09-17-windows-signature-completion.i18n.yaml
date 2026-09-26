@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-17-windows-signature-completion.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-17-windows-signature-completion.md
+/agent-note-separate-windows-hardware-signing-from-timestamp-completion:
+  en: 1e28eec77c3e64c0
+  zh: 59e5a5cd5b377949
+/agent-note-separate-windows-hardware-signing-from-timestamp-completion/problem:
+  en: 7fbde4e99b78b965
+  zh: 9137ec46c0645b25
+/agent-note-separate-windows-hardware-signing-from-timestamp-completion/decision:
+  en: deb7b785a51ef40f
+  zh: 751965c28a9c303f
+/agent-note-separate-windows-hardware-signing-from-timestamp-completion/alternatives-considered:
+  en: ee16de94898ac51e
+  zh: c6f1de465d8bb261
+/agent-note-separate-windows-hardware-signing-from-timestamp-completion/consequences:
+  en: 9e228d85054ce3e8
+  zh: f5d6af6411bc3b13

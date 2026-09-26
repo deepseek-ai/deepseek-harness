@@ -26,9 +26,9 @@ const contexts = new Set<Context>()
 
 /** Detached durable Team read through the same projection definition as the service. */
 function durable(agent: Agent): {
-  members: TeamMemberSnapshot[]
-  tasks: TeamTaskSnapshot[]
-  pendingMessages: TeamMessageSnapshot[]
+  members: readonly TeamMemberSnapshot[]
+  tasks: readonly TeamTaskSnapshot[]
+  pendingMessages: readonly TeamMessageSnapshot[]
 } {
   let projected = teamProjectionDefinition.init(agent.session.header)
   for (const event of agent.session.snapshotEvents()) projected = teamProjectionDefinition.apply(projected, event)

@@ -22,7 +22,7 @@ function ctxWith(describeCall: unknown) {
 }
 
 function view(ns: string, revision = 0): SettingsNamespaceView {
-  return { ns, schema: {}, value: { field: ns }, applies: 'live', secrets: [], revision }
+  return { ns, schema: {}, value: { field: ns }, autoGenerate: true, applies: 'live', secrets: [], revision }
 }
 
 function described(namespaces: SettingsNamespaceView[]): Answer<SettingsDescribeView> {

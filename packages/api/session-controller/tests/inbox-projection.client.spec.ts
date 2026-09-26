@@ -63,8 +63,9 @@ describe('Inbox projection intake', () => {
       const empty = { 'next-turn': [], 'next-step': [] }
       const stale = { ...empty, 'next-turn': [message('removed', 'already removed')] }
       const result = ok({ items: [{
-        sessionId: SID, updatedAt: 1, running: false, blank: false,
-        projections: { asOfSeq: 21, values: { inbox: empty } },
+        sessionId: SID, updatedAt: 1, running: false, blank: false, agentAvailable: false,
+        // The Session is attached: the Host's live registry served the block.
+        projections: { kind: 'sequenced' as const, asOfSeq: 21, values: { inbox: empty } },
       }] })
       let refreshed: Promise<void> | undefined
 
@@ -78,7 +79,7 @@ describe('Inbox projection intake', () => {
 
         manager.handleControlFrame({
           type: 'baseline',
-          value: { jobs: {}, projections: { [SID]: {
+          value: { projections: { [SID]: {
             asOfSeq: 20, values: key === 'included' ? { inbox: stale } : {},
           } } },
         })
@@ -106,12 +107,12 @@ describe('Inbox projection intake', () => {
       manager.handleControlFrame({ ...inboxFrame({ ...empty, 'next-turn': [ghost] }), seq: 20 })
       manager.handleControlFrame({ ...inboxFrame(empty), sessionId: hiddenSessionId, seq: 20 })
       const face = manager.get(SID).projections.faceOf('inbox')
-      const baseline = { type: 'baseline', value: { jobs: {}, projections: {} } } as const
+      const baseline = { type: 'baseline', value: { projections: {} } } as const
       const result = ok({ items: [
-        { sessionId: SID, updatedAt: 1, running: false, blank: false,
-          projections: { asOfSeq: 1, values: { inbox: empty } } },
-        { sessionId: hiddenSessionId, updatedAt: 1, running: false, blank: false,
-          projections: { asOfSeq: 1, values: { inbox: restored } } },
+        { sessionId: SID, updatedAt: 1, running: false, blank: false, agentAvailable: false,
+          projections: { kind: 'cached' as const, asOfSeq: 1, values: { inbox: empty } } },
+        { sessionId: hiddenSessionId, updatedAt: 1, running: false, blank: false, agentAvailable: false,
+          projections: { kind: 'cached' as const, asOfSeq: 1, values: { inbox: restored } } },
       ] })
       let refreshed: Promise<void> | undefined
 

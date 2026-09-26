@@ -1,26 +1,8 @@
-/* Ongoing blue has no alias token (state-business-primary is the 500 step,
- * not this 450) — component-level var pinned to the static scale instead. */
-.dot,
-.matrix {
-  --dsh-state-ongoing: var(--dsw-static-deepseek-450);
-}
-
-/* Solid states: same-color halo via a 0.10-opacity outer layer (::before)
- * with a 6/10-scale solid core. Layer color rides currentColor set per state. */
+/* Solid states keep the 10px layout slot but paint one 6px currentColor core. */
 .dot {
   position: relative;
   display: inline-block;
   flex: none;
-}
-
-.dot::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  corner-shape: round;
-  background: currentColor;
-  opacity: 0.1;
 }
 
 .dot::after {
@@ -44,30 +26,75 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-/* Idle is the absence of activity, not a fourth outcome: it stays on the
- * tertiary label color so it recedes beside the three outcome colors. */
+/* Idle is the absence of activity and uses the theme's neutral state step. */
 .dot[data-state='idle'] {
+  color: var(--dsw-alias-state-idle-primary);
+}
+
+/* Ongoing is the sole non-dot state: a quiet full ring sits behind a centered
+ * breathing arc while the complete glyph rotates continuously. Both animations
+ * share one 1.5s period so pinning their start times aligns them together. */
+.spinner {
+  flex: none;
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* Pixel chase: each outer cell holds a discrete brightness step (flat keyframe
- * holds, no tweening — the retro feel), peaking when the chase hits it and
- * decaying over the next three cells. Phase offsets come from per-rect
- * animation-delay (index * -125ms) set inline by the component. */
-.matrix {
-  flex: none;
-  color: var(--dsh-state-ongoing);
+.spinnerMotion {
+  transform-origin: center;
+  animation: dsh-state-dot-spin 1.5s linear infinite;
 }
 
-.cell {
-  fill: currentColor;
-  opacity: 0.15;
-  animation: dsh-state-dot-chase 1s infinite;
+.spinnerTrack,
+.spinnerArc {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 
-@keyframes dsh-state-dot-chase {
-  0%, 12.4% { opacity: 1; }
-  12.5%, 24.9% { opacity: 0.6; }
-  25%, 37.4% { opacity: 0.35; }
-  37.5%, 100% { opacity: 0.15; }
+.spinnerTrack {
+  opacity: 0.25;
 }
+
+.spinnerArc {
+  stroke-dasharray: 12 150;
+  animation: dsh-state-dot-dash 1.5s ease-in-out infinite;
+}
+
+@keyframes dsh-state-dot-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes dsh-state-dot-dash {
+  0% {
+    stroke-dasharray: 12 150;
+    stroke-dashoffset: 0;
+  }
+
+  50% {
+    stroke-dasharray: 24 150;
+    stroke-dashoffset: -6;
+  }
+
+  100% {
+    stroke-dasharray: 12 150;
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinnerMotion,
+  .spinnerArc {
+    animation: none;
+  }
+
+  .spinnerArc {
+    stroke-dasharray: 18 150;
+    stroke-dashoffset: -3;
+  }
+}
+
+.step { display: inline-flex; flex: none; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 50%; corner-shape: round; border: 1.5px solid var(--dsw-alias-label-tertiary); color: var(--dsw-alias-label-primary-foreground); }
+.step[data-state='done'] { border-color: var(--dsw-alias-state-success-primary); background: var(--dsw-alias-state-success-primary); }
+.step[data-state='error'] { border-color: var(--dsw-alias-state-error-primary); background: var(--dsw-alias-state-error-primary); }
+.step[data-state='warning'] { border-color: var(--dsw-alias-state-warn-primary); }

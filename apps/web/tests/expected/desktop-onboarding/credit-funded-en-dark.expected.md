@@ -1,0 +1,7 @@
+- region "Add credits":
+  - heading "Add credits" [level=1]
+  - paragraph: DeepSeek Harness charges credits based on the tokens used by models and tools. Add credits in advance to keep your tasks running without interruption. Your balance is only used while the agent is working on a task.
+  - button "Continue"
+  - button "Add credits"
+  - button "Back"
+  - button "Skip"

@@ -1,3 +1,2 @@
 - button "New terminal Run commands in the Session workspace"
-- button "Choose shell" [expanded]:
-  - img
+- button "Choose shell" [expanded]

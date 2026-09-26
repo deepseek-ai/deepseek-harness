@@ -1,0 +1,18 @@
+{
+  "web-light": {
+    "fill": "rgba(0, 0, 0, 0.24)",
+    "blur": "none"
+  },
+  "web-dark": {
+    "fill": "rgba(0, 0, 0, 0.5)",
+    "blur": "none"
+  },
+  "darwin-light": {
+    "fill": "rgba(0, 0, 0, 0.24)",
+    "blur": "none"
+  },
+  "darwin-dark": {
+    "fill": "rgba(0, 0, 0, 0.5)",
+    "blur": "none"
+  }
+}

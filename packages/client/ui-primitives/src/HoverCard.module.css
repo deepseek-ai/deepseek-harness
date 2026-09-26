@@ -5,11 +5,7 @@
   display: block;
 }
 
-/* Preview card (figma session hover card): 244 wide, r12, pad 12/16, the
- * menu card's elevation. Surface is #2C2C2E in both themes (figma value,
- * light/dark identical), so a component-level variable, not a theme token.
- * Hit-testable on purpose: resting the pointer on the card holds it open
- * (HoverCard's grace close), which a `pointer-events: none` card cannot do. */
+/* The preview remains hit-testable so pointer entry cancels the grace close. */
 .card {
   --dsw-hovercard-bg: #2C2C2E;
   position: fixed;
@@ -17,7 +13,7 @@
   box-sizing: border-box;
   width: 244px;
   padding: 12px 16px;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-hovercard-bg);
   box-shadow: var(--dsw-shadow-lv3);
 }
@@ -27,7 +23,7 @@
 }
 
 .copyable:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
@@ -51,4 +47,44 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-elevation-panel);
+  opacity: 1;
+  transition: opacity var(--dsh-hover-preview-fade) linear;
+}
+
+@starting-style {
+  .preview { opacity: 0; }
+}
+
+.preview[data-closing] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview { transition: none; }
+}
+
+.inline { display: inline; }
+.media {
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  overflow: auto;
+  padding: 8px;
+  border: 0;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  box-shadow: var(--dsw-elevation-panel);
 }

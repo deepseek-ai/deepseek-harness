@@ -2,6 +2,10 @@
 
 Status: implemented
 
+Superseded: the roster this note put on the session control stream (`jobsBySession`, `onJobsChanged`) now streams from the job controller's `job.list` into `ctx.jobs` — see [the jobs seam consolidation](../architecture/2026-09-03-jobs-seam-consolidation.md). The display decisions below (one roster, sections, durations, no kill control) still hold.
+
+Update: the output phase this note deferred now ships as the per-job observation record on `ctx.jobs` — see [jobs absorb the record](../architecture/2026-09-01-jobs-absorb-activity-record.md).
+
 English | [中文](2026-08-08-web-background-job-display.zh.md)
 
 ## Problem
@@ -64,7 +68,7 @@ The listener is owner-granular rather than task-granular. The only consumer push
 
 `onJobDone` is not a subset of this. It delivers the terminal record with the exact owner `Agent` under first-wins semantics that `dsh-tool-jobs` couples to `reported`; `onJobsChanged` is pure observation with no delivery meaning and marks nothing reported. Listener throws are contained and never awaited, matching `onJobDone`, and each registration is an effect on the calling fiber.
 
-Service disposal deliberately announces nothing. Every `onJobsChanged` registration is an effect on the registry's own fiber, so the listeners are already gone by the time teardown clears the store; an observer learns the registry left through its own disposal, not through a final empty set.
+Service disposal announces each removal: after the registry has cancelled and awaited its jobs, it drops every record and emits one `removed` event per job, so a subscriber on a longer-lived fiber sees the roster empty out instead of keeping a stale set (a subscriber on the registry's own fiber is already gone by then).
 
 ### The Session Controller carrier
 
@@ -87,7 +91,7 @@ Two replacement points keep it honest. Each control-stream generation clears the
 
 ### The header action
 
-[`@deepseek-ai/dsh-client-ui-jobs`](../../../../packages/client/ui-jobs/README.md) registers one entry in `conversation.session.header.actions`, ordered after the subagent catalog. Its own README owns the presentation contract; the decisions worth recording here are that the control does not render at all until the session has a task, that the live badge is omitted at zero so a history-only session keeps a quiet entry point, and that settled rows stay visible because a failed task's `detail` is the only place its failure is legible.
+`@deepseek-ai/dsh-client-ui-jobs` registers one entry in `conversation.session.header.actions`, ordered between the preset label and the subagent catalog (`order: 20` against the catalog's 30). Its own README owns the presentation contract; the decisions worth recording here are that the control does not render at all until the session has a task, that the live badge is omitted at zero so a history-only session keeps a quiet entry point, and that settled rows stay visible because a failed task's `detail` is the only place its failure is legible.
 
 A running one-shot background subagent therefore appears both there and in the subagent catalog. The two answer different questions — the catalog navigates into the child's transcript, this list is the only handle a cancellation can ever attach to — and suppressing `kind: 'subagent'` here would leave the cancellation phase with no entry point for exactly those tasks.
 
@@ -95,7 +99,7 @@ A running one-shot background subagent therefore appears both there and in the s
 
 **No web path calls `ctx.jobs.read()`.** It consumes the single output cursor, so a browser read would silently take bytes the model's `job_output` will never see. This is an invariant worth a test rather than a convention, because the failure is invisible at the call site.
 
-**No cancellation.** That phase owes a decision the seam does not currently answer: `kill()` marks terminal delivery reported, so a human interrupt written against the `kill()` contract would leave the model believing its task is still running.
+**No cancellation.** That phase owed a decision the seam then did not answer: `kill()` marked terminal delivery reported, so a human interrupt written against the `kill()` contract would leave the model believing its task is still running. The [human job kill note](2026-08-26-human-job-kill.md) later resolved it: `kill` now takes an explicit `reported` claim, and the web stop control passes `reported: false` so the completion notice stays due.
 
 **No output watermark on the frame.** The output phase's delta channel is where an anchor field earns its place; one added now would have no reader.
 
@@ -117,7 +121,7 @@ A running one-shot background subagent therefore appears both there and in the s
 
 The [web e2e scenario](../../../../apps/web/tests/background-job-list.e2e.ts) is the end-to-end proof and runs keyless: a real `run_in_background` bash call registers with `ctx.jobs`, the header count and row appear with no user interaction, and killing the task through the registry flips the open list to its producer detail. It asserts the whole delivery path rather than any single layer.
 
-Below it, [`jobs-local`](../../../../packages/jobs/jobs-local/tests/jobs.spec.ts) pins the change feed at all four commit points, its containment of a throwing observer, and its removal on both explicit disposal and fiber teardown; [`control-jobs`](../../../../packages/api/session-controller/tests/control-jobs.host.spec.ts) pins the complete baseline, three change pushes, dropped internal fields, unowned fan-out, no-resume guarantee, registry-absent composition, and the prohibition on consuming model output; and the client suites pin baseline replacement, the last-wins fold, the absent-key representation, removal cleanup, and the component's ordering, duration, and dismissal behavior.
+Below it, [`jobs-local`](../../../../packages/jobs/jobs-local/tests/jobs.spec.ts) pins the change feed at all four commit points, its containment of a throwing observer, and its removal on both explicit disposal and fiber teardown; [`rows`](../../../../packages/api/job-controller/tests/rows.host.spec.ts) pins the roster stream that replaced the control-stream fan-out: the complete visible set on open, a refresh after each lifecycle commit and none per append, owner removal, and a clean abort; and the client suites pin baseline replacement, the last-wins fold, the absent-key representation, removal cleanup, and the component's ordering, duration, and dismissal behavior.
 
 ## Consequences
 
@@ -129,7 +133,7 @@ Below it, [`jobs-local`](../../../../packages/jobs/jobs-local/tests/jobs.spec.ts
 
 **Settled rows accumulate.** The registry retains settled tasks until owner disposal, so a long session with many background commands grows a long list. Capping the settled tail is a presentation change, not a protocol one, if it becomes a real complaint.
 
-**`stopping` is rarely visible.** Only the model's `job_kill` produces it, so the state is rendered but rarely seen until human cancellation lands. It is in the union now because leaving a status out would have made that phase a wire change.
+**`stopping` is visible on every kill path.** The model's `job_kill` and the web stop control both produce it; carrying it in the union from the start is what kept the human-kill phase off the wire format.
 
 **Two entry points for one running subagent.** Accepted deliberately, and bounded to one-shot background delegations. If it reads as noise in practice, the fix is presentational — the catalog row can cite the task rather than the task list hiding the kind.
 

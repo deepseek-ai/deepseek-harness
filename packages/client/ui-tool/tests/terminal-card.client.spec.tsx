@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { StartedToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -44,8 +45,8 @@ const shellArgs = (over: Record<string, unknown> = {}): string => JSON.stringify
   command: 'ls -la', description: 'List files', ...over,
 })
 
-const running = (over?: Partial<RunningToolCall>): RunningToolCall => ({
-  callId: 'c1', name: 'bash', argsRaw: ARGS,
+const running = (over?: Partial<StartedToolCall>): StartedToolCall => ({
+  phase: 'start' as const, callId: 'c1', name: 'bash', argsRaw: ARGS,
   turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
 })
 
@@ -291,9 +292,9 @@ describe('terminalCardModel', () => {
 })
 
 describe('chat row terminal body', () => {
-  const ownerProps = (block: RunningToolCall | ToolResultNode): GenericToolCardProps => ({
+  const ownerProps = (block: StartedToolCall | ToolResultNode): GenericToolCardProps => ({
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
-    callId: 'c1', toolName: 'bash', block, openFile: vi.fn(), t,
+    useDisclosure, callId: 'c1', toolName: 'bash', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), t,
   })
 
   /** The whole summary row is the expand toggle (ToolRow's unified interaction). */
@@ -405,18 +406,16 @@ describe('chat row terminal body', () => {
 describe('BashRow terminal card', () => {
   const list = () => createSnapshotStore<SessionListState>({
     ids: [SID],
-    byId: { [SID]: { id: SID, displayTitle: 'r', running: false, blank: false, updatedAt: 0 } },
-    current: undefined,
+    byId: { [SID]: { id: SID, displayTitle: 'r', running: false, retainedBy: {}, blank: false, updatedAt: 0 } },
     phase: 'ready',
-    subagentsByParent: {}, jobsBySession: {},
-    currentAddress: undefined,
+    projectionsBySession: {},
   })
 
-  const rowProps = (block: RunningToolCall | ToolResultNode): BashRowProps => ({
-    callId: 'c1', toolName: 'bash', block, openFile: vi.fn(),
+  const rowProps = (block: StartedToolCall | ToolResultNode): BashRowProps => ({
+    useDisclosure, callId: 'c1', toolName: 'bash', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(),
     sessionId: SID, useSessions: bindSnapshotSelector(list()),
     t,
-  } as unknown as BashRowProps)
+  } as BashRowProps)
 
   it('collapses to the summary row; the whole row toggles the command output', () => {
     const view = render(<BashRow {...rowProps(settled())} />)
@@ -431,9 +430,8 @@ describe('BashRow terminal card', () => {
     expect(view.getByText('List files')).toBeTruthy()
   })
 
-  // The row's leading StateDot and the card's run-state dot describe the same
-  // command, so a running row whose card claimed 'done' would be a contradiction
-  // the reader sees on one line.
+  // The row's running state and the card's run-state dot describe the same
+  // command, so a running row whose card claimed 'done' would contradict itself.
   it('agrees with the summary row about the run state', () => {
     const runningView = render(<BashRow {...rowProps(running())} />)
     expect(runningView.container.querySelector('[data-variant="bash"]')?.getAttribute('data-state')).toBe('running')
@@ -451,6 +449,7 @@ describe('BashRow terminal card', () => {
       content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
     }))} />)
     expect(view.container.querySelector('[data-variant="bash"]')?.getAttribute('data-state')).toBe('error')
+    expect(view.container.querySelector('[class*="_errorSummary_"]')?.textContent).toBe('List files')
   })
 
   it('shows the call description as the terminal summary', () => {

@@ -1,7 +1,7 @@
 # Keyless twin of subagent-acp-diagnostic.cordis.yml: keep the real ACP child
 # permission-denial path and replace only the external parent model adapter.
 - id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   disabled: true
 
 - insert:

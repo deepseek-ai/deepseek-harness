@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-08-18-arbitrary-seq-session-fork.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-arbitrary-seq-session-fork.md
+/agent-note-exact-event-session-forks-with-shared-crash-repair:
+  en: f75e952184cae150
+  zh: 32c2519c85aa6822
+/agent-note-exact-event-session-forks-with-shared-crash-repair/problem:
+  en: e01b73d9d4b50c50
+  zh: 14f7816869b76241
+/agent-note-exact-event-session-forks-with-shared-crash-repair/decision:
+  en: 0b7afc12950ce308
+  zh: 384d26f698a344a7
+/agent-note-exact-event-session-forks-with-shared-crash-repair/alternatives-considered:
+  en: 49544ba70825c8e9
+  zh: 41c7dceb9241fc5a
+/agent-note-exact-event-session-forks-with-shared-crash-repair/consequences:
+  en: a829fc736a132d89
+  zh: 03b116766bd44d64
+/agent-note-exact-event-session-forks-with-shared-crash-repair/testing:
+  en: f15e826fa12a4f55
+  zh: fe053fa01304e072

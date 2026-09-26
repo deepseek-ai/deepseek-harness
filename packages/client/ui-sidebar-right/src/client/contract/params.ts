@@ -5,7 +5,7 @@
  * resource type — the segment after `dsh-resource://` — and filled by the
  * package that owns that type (the `file` provider adds `file: { line?: number }`);
  * `SidebarRightTabParamsMap` is keyed by tab kind and filled by a page type that
- * takes parameters (neither shipped page does). Values are JSON-shaped by
+ * takes parameters (the Browser page adds `browser: { url?: string }`). Values are JSON-shaped by
  * convention; nothing validates them at run time, because caller and body meet
  * at a typed same-process boundary. A body narrows `navigation.params` by the
  * scheme and type of `navigation.address`.

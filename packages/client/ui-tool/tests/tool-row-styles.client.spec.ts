@@ -22,6 +22,14 @@ function declarations(selector: string): string[] {
 }
 
 describe('ToolRow.module.css summary line', () => {
+  it.each([
+    ['ToolRow', '../src/client/tool/components/ToolRow.module.css'],
+    ['BashRow', '../src/client/tool/toolviews/bash-sample.module.css'],
+  ] as const)('%s keeps stopped and error summaries outside hover darkening', (_name, path) => {
+    const sheet = readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
+    expect(sheet).toContain('.summary:not(.errorSummary):not(.stoppedSummary)')
+  })
+
   it('keeps the summary suffix on one line and unshrunk', () => {
     // `flex: none` stops the box shrinking, not the text wrapping: without
     // `nowrap`, a row too narrow for title + separator + suffix wraps the `+n`

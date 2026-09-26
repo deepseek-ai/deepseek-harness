@@ -1,6 +1,73 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session-query/session-log-export/README.md
-README.md: 8697b0c2c105c928f5325f953b7fb663ae68e18e
-README.zh.md: fe60c6ab8cc8d2d5e7515416bb72624584c11b9d
+/:
+  en: 3b67077a6dfacd19
+  zh: e5b78d039d310dc2
+/deepseek-ai-dsh-session-log-export:
+  en: eea87f5da57ff494
+  zh: db388203522b840f
+/deepseek-ai-dsh-session-log-export/summary:
+  en: 26be400b3e9f7bb7
+  zh: b6e78f1f417a0e4e
+/deepseek-ai-dsh-session-log-export/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-session-log-export/use-this-package:
+  en: 1135b03eb3423c74
+  zh: 2fd2a18d503df70c
+/deepseek-ai-dsh-session-log-export/use-this-package/when-to-choose-it:
+  en: 2b9dbec4877d332e
+  zh: dcf6638938eedb01
+/deepseek-ai-dsh-session-log-export/use-this-package/composition:
+  en: 2fef1fe4411cc5da
+  zh: cff5dbcc4901402b
+/deepseek-ai-dsh-session-log-export/use-this-package/configuration:
+  en: 377a0d8860c46f63
+  zh: 9eb7698f813b2fa3
+/deepseek-ai-dsh-session-log-export/use-this-package/command-contract:
+  en: 26329688b9a924a7
+  zh: 94e21c10fdcfc1ac
+/deepseek-ai-dsh-session-log-export/use-this-package/what-to-expect:
+  en: 44be1f1d1903d12a
+  zh: c8f1eb5b92b71a30
+/deepseek-ai-dsh-session-log-export/use-this-package/failures:
+  en: 3fc8985946d67024
+  zh: 5bb40a4b531d68f4
+/deepseek-ai-dsh-session-log-export/understand-the-implementation:
+  en: 7cb82a6851405f95
+  zh: b8c525170d19dc6c
+/deepseek-ai-dsh-session-log-export/understand-the-implementation/design-split:
+  en: d135d90a02c6d829
+  zh: 587d7ff2d17b056b
+/deepseek-ai-dsh-session-log-export/understand-the-implementation/download-flow:
+  en: 028ea3bff05250ba
+  zh: 63250c4d3369ebbd
+/deepseek-ai-dsh-session-log-export/further-exploration:
+  en: 8eef7e6c58c9f962
+  zh: 6c720c91c7f26299
+/deepseek-ai-dsh-session-log-export/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-session-log-export/model-experience/human-export-control:
+  en: 55c1a61a041a2aeb
+  zh: 48e05043cc42304f
+/deepseek-ai-dsh-session-log-export/model-experience/human-export-control/what-the-model-sees:
+  en: 6b3c3cfc5d68d5f9
+  zh: b1689c57ee3b4ccb
+/deepseek-ai-dsh-session-log-export/model-experience/human-export-control/token-effect:
+  en: 380535e564a4ea2c
+  zh: 2672eac76afd90f5
+/deepseek-ai-dsh-session-log-export/model-experience/human-export-control/kv-cache-effect:
+  en: 78163c30fdf0b43d
+  zh: 165043e307b38cb3
+/deepseek-ai-dsh-session-log-export/known-limitations-and-deferred-work:
+  en: 9978d234cbfe7e73
+  zh: 9ba0b12300ff4d38
+/deepseek-ai-dsh-session-log-export/known-limitations-and-deferred-work/dev-note:
+  en: 4ee4d24c26c127bf
+  zh: 1facdfbfa3ccefbc
+/deepseek-ai-dsh-session-log-export/known-limitations-and-deferred-work/dev-note/future-export-destinations-beyond-the-browser:
+  en: 226726899a479680
+  zh: 26f72519513d4782

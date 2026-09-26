@@ -1,0 +1,51 @@
+{
+  "unit": {
+    "name": "schedule",
+    "version": 1
+  },
+  "global": null,
+  "tables": {
+    "tasks": {
+      "preview-daily-digest": {
+        "sessionId": "preview-showcase",
+        "record": {
+          "id": "preview-daily-digest",
+          "kind": "daily",
+          "title": "Daily preview digest",
+          "prompt": "Summarize the preview workspace changes and their verification status.",
+          "time": "09:00:00.000",
+          "timeZone": "Asia/Shanghai",
+          "scheduledAt": "2099-01-01T01:00:00.000Z"
+        },
+        "status": "active",
+        "deliveryHistory": {
+          "earlierRecordsUnavailable": false,
+          "records": [
+            {
+              "scheduledAt": "2098-12-31T01:00:00.000Z",
+              "deliveredAt": "2098-12-31T01:00:01.000Z",
+              "messageId": "preview-daily-digest-receipt",
+              "prompt": "Summarize the preview workspace changes and their verification status."
+            }
+          ]
+        },
+        "lastDelivery": {
+          "scheduledAt": "2098-12-31T01:00:00.000Z",
+          "deliveredAt": "2098-12-31T01:00:01.000Z",
+          "messageId": "preview-daily-digest-receipt"
+        }
+      },
+      "preview-release-window": {
+        "sessionId": "preview-showcase",
+        "record": {
+          "id": "preview-release-window",
+          "kind": "at",
+          "title": "Preview release window",
+          "prompt": "Remind the preview owner that the release window opens.",
+          "scheduledAt": "2099-01-02T00:00:00.000Z"
+        },
+        "status": "active"
+      }
+    }
+  }
+}

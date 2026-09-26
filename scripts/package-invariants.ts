@@ -133,12 +133,12 @@ function checkManifest(
     owner.packageName,
     manifest.dsh,
   )
-  const expectedRange = 'workspace:^'
+  const expectedRange = 'workspace:*'
   const peerRange = manifest.peerDependencies?.['@deepseek-ai/dsh-invariants']
   if (developmentOnlyInvariant ? peerRange !== undefined : peerRange !== expectedRange) {
     addViolation(violations, owner.manifestPath, developmentOnlyInvariant
       ? '@deepseek-ai/dsh-invariants must not be a peerDependency under this package dependency policy'
-      : '@deepseek-ai/dsh-invariants must be a workspace:^ peerDependency')
+      : '@deepseek-ai/dsh-invariants must be a workspace:* peerDependency')
   }
   if (manifest.devDependencies?.['@deepseek-ai/dsh-invariants'] !== expectedRange) {
     addViolation(

@@ -134,6 +134,14 @@ describe('client slot projection', () => {
       .toContain('built in')
   })
 
+  it('names the Factory definition that declares an ordinary child seat', () => {
+    const factory = registration({ key: 'demo.factory', children: ['demo.seat'], factory: true })
+    const [entry] = resolveSlotEntries([declaration()], [factory], OWNER_TYPES, kits)
+    expect(entry?.declaredBy)
+      .toContain("factory 'demo.factory' (client-demo)")
+    expect(entry?.occupants).toEqual([])
+  })
+
   it('reports an open keyed domain and the keys already taken', () => {
     const [entry] = resolveSlotEntries(
       [declaration({ kind: 'keyed' })],
@@ -175,6 +183,37 @@ describe('client slot projection', () => {
     expect(entry?.example).toContain("ctx.slots.inject('demo.seat'")
     expect(entry?.example).toContain("id: 'my-entry'")
   })
+
+  it('expands composed owner aliases without expanding their field value types', () => {
+    const types = new Map(OWNER_TYPES)
+    for (const [name, text] of [
+      ['Phase', "export type Phase = { phase: 'preparing'; block: BigSnapshot } | { phase: 'start'; block: BigSnapshot }"],
+      ['Owner', 'export type Owner = DemoOwnerProps & (Phase | Alias)'],
+      ['Alias', 'export type Alias = Owner'],
+      ['BigSnapshot', 'export interface BigSnapshot { history: string[] }'],
+    ] as const) types.set(name, { name, text, source: 'owner.ts:1' })
+    const [entry] = resolveSlotEntries([declaration({ ownerType: 'Owner' })], [], types, kits)
+    expect(entry?.ownerProps).toHaveLength(4)
+    expect(entry?.ownerProps.join('\n')).toContain('width: number')
+    expect(entry?.ownerProps.join('\n')).toContain("phase: 'preparing'")
+    expect(entry?.ownerProps.join('\n')).not.toContain('history: string[]')
+    expect(entry?.ownerPropsReferences).toEqual(['BigSnapshot'])
+  })
+
+  it('keeps generic owner arguments as references instead of expanding unselected fields', () => {
+    const types = new Map(OWNER_TYPES)
+    types.set('Owner', { name: 'Owner', text: "export type Owner = Pick<DemoOwnerProps, 'width'>", source: 'owner.ts:1' })
+    const [entry] = resolveSlotEntries([declaration({ ownerType: 'Owner' })], [], types, kits)
+    expect(entry?.ownerProps).toHaveLength(1)
+    expect(entry?.ownerPropsReferences).toEqual(['DemoOwnerProps'])
+  })
+
+  it('uses an authored example when a slot interaction needs more than generic markup', () => {
+    const [entry] = resolveSlotEntries([
+      declaration({ jsDoc: '/** A seat.\n * @example\n * return { custom: true }\n */' }),
+    ], [], OWNER_TYPES, kits)
+    expect(entry?.example).toBe('return { custom: true }')
+  })
 })
 
 describe('the per-slot report budget', () => {
@@ -210,5 +249,16 @@ describe('the real workspace surface', () => {
     const root = entries.find(entry => entry.key === 'root')
     expect(root?.replaceRisk).toBe('shadows-shipped-ui')
     expect(root?.occupants.join(' ')).toContain('AppFrame')
+    expect(entries.find(entry => entry.key === 'conversation.session')?.declaredBy)
+      .toContain("factory 'conversation.content' (client-ui-conversation)")
+    const tool = entries.find(entry => entry.key === 'tool.call.toolview')!
+    const owner = tool.ownerProps.join('\n')
+    for (const field of ['callId', 'toolName', 'useDisclosure', 'cwd', 'home', 'openFile', 'loadImage', 'inspect']) {
+      expect(owner).toMatch(new RegExp(`\\b${field}\\??:`))
+    }
+    for (const phase of ['preparing', 'start', 'result']) expect(owner).toContain(`phase: '${phase}'`)
+    expect(owner).not.toContain('truncated')
+    expect(tool.ownerPropsReferences).not.toContain('ToolCallCommonProps')
+    expect(tool.ownerPropsReferences).not.toContain('ToolCallPhaseProps')
   })
 })

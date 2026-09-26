@@ -1,0 +1,30 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../llm"
+    },
+    {
+      "path": "../llm-deepseek"
+    },
+    {
+      "path": "../../util/launch-environment"
+    },
+    {
+      "path": "../../credentials/deepseek-account"
+    },
+    {
+      "path": "../../../vendor/loader"
+    }
+  ]
+}

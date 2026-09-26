@@ -1,9 +1,22 @@
+.frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  /* Floating controls query this frame outside the clipped transcript. */
+  container-type: inline-size;
+}
+
 .root {
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
   flex: 1 1 auto;
+
+  overflow-x: visible;
+  overflow-y: clip;
 }
 
 .scroll {
@@ -20,6 +33,12 @@
   container-type: inline-size;
 }
 
+.root[data-chat-following-tail] .scroll,
+:global([data-conversation-scroll]):has(.root[data-chat-following-tail]) {
+  overflow-anchor: none;
+}
+
+:global([data-conversation-scroll]) .frame,
 :global([data-conversation-scroll]) .root {
   flex: 0 0 auto;
   min-height: auto;
@@ -63,78 +82,18 @@
   --dsh-chat-flow-gap: 8px;
 }
 
-/* A keyed renderer may intentionally decline its row after dispatch (the
-   completed-turn tail does this when it owns neither actions nor extensions).
-   An empty flex item must not consume the column gap. */
+/* Empty Seats retain ordered layout positions for Turn lookup without
+   contributing height or the sibling gap. */
 .flowItem:empty {
-  display: none;
+  height: 0;
 }
 
 .callRow {
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
 }
 
 /* Selection still sets data-selected for details linkage; no outline —
    tool rows match Think chrome (no selected ring). */
-
-/* Turn activity keeps the former loader's one-line footprint. A pale
-   brand-blue band sweeps from left to right; reduced-motion keeps it static. */
-.turnStatus {
-  align-self: flex-start;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  height: calc(26px + var(--dsh-content-font-delta, 0px));
-  font: var(--dsw-font-s-strong-14);
-  /* The status line reads at the body size: the fixed 14 token supplies the
-     family/weight, the axis supplies the size. At default that is 14px text
-     on a 22px line inside a 26px row; both box heights shift by the same
-     delta, preserving the 8px (22 − 14) leading and the 4px (26 − 22) row
-     padding at every size. */
-  font-size: var(--dsh-content-font-size, 14px);
-  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
-  white-space: nowrap;
-  background: linear-gradient(
-    90deg,
-    var(--dsw-static-deepseek-500) 0%,
-    var(--dsw-static-deepseek-500) 40%,
-    var(--dsw-static-deepseek-200) 50%,
-    var(--dsw-static-deepseek-500) 60%,
-    var(--dsw-static-deepseek-500) 100%
-  );
-  background-position: 100% 0;
-  background-size: 250% 100%;
-  background-clip: text;
-  color: transparent;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: dsh-turn-status-shimmer 1.8s linear infinite;
-}
-
-.turnStatusClock {
-  margin-left: 8px;
-  font: var(--dsw-font-xs-13);
-  font-size: var(--dsh-content-font-size-secondary, 13px);
-  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-  color: var(--dsw-alias-label-caption);
-  -webkit-text-fill-color: var(--dsw-alias-label-caption);
-}
-
-@keyframes dsh-turn-status-shimmer {
-  to {
-    background-position: 0 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .turnStatus {
-    background-position: 0 0;
-    background-size: 100% 100%;
-    animation: none;
-  }
-}
 
 .hint {
   color: var(--dsw-alias-label-tertiary);
@@ -155,7 +114,7 @@
 
 .older button {
   border: none;
-  border-radius: 14px;
+  border-radius: var(--dsw-radius-sm);
   padding: 4px 12px;
   font-size: 12px;
   color: var(--dsw-alias-label-secondary);
@@ -168,12 +127,13 @@
   opacity: 0.6;
 }
 
-/* Back-to-bottom: zero-height sticky slot so the control does not extend
-   scrollHeight; the button translates up into the viewport. Under the
-   conversation host, clearance sits above the sticky composer stack. */
+/* Floating controls sit outside the clipped transcript. A standalone Chat
+   anchors them to its frame; the shared host supplies the sticky scrollport. */
 .toBottomSlot {
-  position: sticky;
+  position: absolute;
+  right: 0;
   bottom: 16px;
+  left: 0;
   /* Above the sticky composer (z-index 7) so the control stays clickable and
      visible over the input card. Exception: while an @/slash menu is open the
      seat lifts to 9 (ui-conversation ConversationRoot) so the menu is never
@@ -182,11 +142,15 @@
   height: 0;
   display: flex;
   justify-content: flex-end;
-  padding-right: max(0px, calc((100% - var(--dsh-chat-content-width)) / 2));
+  padding-right: max(
+    calc(var(--dsh-composer-side-clearance) + 16px),
+    calc((100% - var(--dsh-chat-content-width)) / 2)
+  );
   pointer-events: none;
 }
 
 :global([data-conversation-scroll]) .toBottomSlot {
+  position: sticky;
   /* Clears the sticky composer stack (docks + input card + stats): the live
      height rides --dsh-composer-height (ConversationRoot's seat observer) so
      the control follows a growing textarea; the fallback covers the first

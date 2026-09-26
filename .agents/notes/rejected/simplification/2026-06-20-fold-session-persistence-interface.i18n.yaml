@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-20-fold-session-persistence-interface.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/rejected/simplification/2026-06-20-fold-session-persistence-interface.md
-2026-06-20-fold-session-persistence-interface.md: 58c6aa8f5b3b77f146e18d285ebf3fe1e36b0778
-2026-06-20-fold-session-persistence-interface.zh.md: 9fb53d16fced3d17ee0a76a05df04628ac9d8c95
+/agent-note-fold-the-persistence-interface-into-dsh-session:
+  en: ec1120bc953f18db
+  zh: 905c9fcee9a2ab8c
+/agent-note-fold-the-persistence-interface-into-dsh-session/problem:
+  en: 132b1c96f4d271a0
+  zh: 52f235f23160cb1b
+/agent-note-fold-the-persistence-interface-into-dsh-session/proposal:
+  en: 8eecfc7bd6c83608
+  zh: 658fc8e8eac425b7
+/agent-note-fold-the-persistence-interface-into-dsh-session/acceptance-criteria:
+  en: a141343494939ee4
+  zh: 2b9a95f1aadd319f
+/agent-note-fold-the-persistence-interface-into-dsh-session/what-we-give-up:
+  en: 595671143eb17f28
+  zh: a6f019fb64ba3a90

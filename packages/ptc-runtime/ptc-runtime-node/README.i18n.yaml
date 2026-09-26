@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/ptc-runtime/ptc-runtime-node/README.md
-README.md: f8f7b5535ba8ed1594b898d410df04e24f5dc8ef
-README.zh.md: dd4e33e70f05ae3917f128e33bf26af5d1a915c4
+/:
+  en: 0743cf05fedb8321
+  zh: 7ad0cfa1b6b8a46b
+/deepseek-ai-dsh-ptc-runtime-node:
+  en: 7e1a8657a212c70b
+  zh: afb7a8c6a3afd718
+/deepseek-ai-dsh-ptc-runtime-node/summary:
+  en: 4d6be30d9289a58e
+  zh: b1b2b4d773d32029
+/deepseek-ai-dsh-ptc-runtime-node/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 725b47765ee8f30b
+/deepseek-ai-dsh-ptc-runtime-node/use-this-package:
+  en: 246231cf2a529550
+  zh: 2b4ed96194acc639
+/deepseek-ai-dsh-ptc-runtime-node/use-this-package/configuration:
+  en: e5bca585d02f08ca
+  zh: a2e9a32fe4052d90
+/deepseek-ai-dsh-ptc-runtime-node/use-this-package/execution-and-results:
+  en: 6d65b39223ca9f7a
+  zh: 96f96341ecab1317
+/deepseek-ai-dsh-ptc-runtime-node/use-this-package/deadlines-and-cancellation:
+  en: 803c1a6e876c68e6
+  zh: 646232ebc4770680
+/deepseek-ai-dsh-ptc-runtime-node/use-this-package/failures:
+  en: 7682e50f9dcfa25c
+  zh: ddcb3502e12be06f
+/deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation:
+  en: 9020b491a39e4bf5
+  zh: bcd1b2b1a3bde7f3
+/deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/launch-and-control:
+  en: 45527dad94dd9362
+  zh: c1e1179391e89a3f
+/deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/source-and-built-bootstraps:
+  en: c01071304a9d563a
+  zh: 2938a64b13a257d8
+/deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/source-map:
+  en: a6702856dec3d449
+  zh: 0c442a74c8005571
+/deepseek-ai-dsh-ptc-runtime-node/further-exploration:
+  en: ac2e2ae13d3f1394
+  zh: 5d08b9c658fcf83a
+/deepseek-ai-dsh-ptc-runtime-node/model-experience:
+  en: 860e85b43c71bd0e
+  zh: 69b0fb05f9c5e43c
+/deepseek-ai-dsh-ptc-runtime-node/model-experience/kv-cache-effect:
+  en: 40294c1c31b74824
+  zh: d91e7b78c0619c7e
+/deepseek-ai-dsh-ptc-runtime-node/known-limitations-and-deferred-work:
+  en: 88eac5d4119c11f6
+  zh: ba0861bf07c5e9df
+/deepseek-ai-dsh-ptc-runtime-node/known-limitations-and-deferred-work/dev-note:
+  en: 6373aba4e08f7205
+  zh: 2a8c33d1f2839df4

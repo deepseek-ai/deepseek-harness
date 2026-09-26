@@ -16,10 +16,13 @@ import { dirname, join } from 'node:path'
 import { createDevelopmentProjectMetadata } from '../src/project-manager.ts'
 import type { DesktopRelease } from '../src/release.ts'
 import { DESKTOP_RUNTIME_FILE, type DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
+import type { DesktopAutoUpdateTarget } from './desktop-auto-update-environment.mjs'
+import { desktopTargetPlatform } from './desktop-build-paths.mjs'
 
 interface PackageManifest {
   readonly name?: string
   readonly version?: string
+  readonly dependencies?: Readonly<Record<string, string>>
 }
 
 /** Inputs whose locations differ between the launcher and isolated tests. */
@@ -34,6 +37,8 @@ export interface DevelopmentProjectOptions {
   readonly dependencyDir: string
   /** Release identity written into the disposable project metadata. */
   readonly release: DesktopRelease
+  /** Build target whose prepared payload the disposable project runs against. */
+  readonly target: DesktopAutoUpdateTarget
 }
 
 function readManifest(path: string): PackageManifest {
@@ -86,9 +91,35 @@ function mirrorDependencyLinks(sourceRoot: string, destinationRoot: string): str
   return names
 }
 
+/** Configured workspace plugins must resolve from the profile even when pnpm does not hoist them. */
+function mirrorWorkspaceDependencies(roots: readonly string[], destinationRoot: string): string[] {
+  const names: string[] = []
+  const visited = new Set<string>()
+  const visit = (directory: string): void => {
+    const source = realpathSync(directory)
+    if (visited.has(source)) return
+    visited.add(source)
+    const manifest = readManifest(join(source, 'package.json'))
+    for (const [name, specifier] of Object.entries(manifest.dependencies ?? {})) {
+      if (!specifier.startsWith('workspace:')) continue
+      const dependency = join(source, 'node_modules', ...name.split('/'))
+      if (!existsSync(dependency)) {
+        throw new Error(`desktop development: ${name} is missing from ${source}; run pnpm install`)
+      }
+      const destination = join(destinationRoot, ...name.split('/'))
+      removeOwnedPath(destination)
+      linkDirectory(dependency, destination)
+      names.push(name)
+      visit(dependency)
+    }
+  }
+  for (const directory of roots) visit(directory)
+  return names
+}
+
 /**
  * Replace one disposable project with links to the current built workspace.
- * @param options - Project destination, CLI package, and release identity.
+ * @param options - Project destination, CLI package, release identity, and build target.
  * @returns the absolute project directory supplied by the caller.
  */
 export function prepareDevelopmentProject(options: DevelopmentProjectOptions): string {
@@ -117,7 +148,10 @@ export function prepareDevelopmentProject(options: DevelopmentProjectOptions): s
   createDevelopmentProjectMetadata(options.projectDir, options.release)
   const destinationModules = join(options.projectDir, 'node_modules')
   mkdirSync(destinationModules, { recursive: true })
-  const names = mirrorDependencyLinks(options.dependencyDir, destinationModules)
+  const names = [
+    ...mirrorDependencyLinks(options.dependencyDir, destinationModules),
+    ...mirrorWorkspaceDependencies([options.cliDir, options.hostDir], destinationModules),
+  ]
   const dshLink = join(destinationModules, '@deepseek-ai', 'dsh')
   removeOwnedPath(dshLink)
   linkDirectory(options.cliDir, dshLink)
@@ -129,7 +163,7 @@ export function prepareDevelopmentProject(options: DevelopmentProjectOptions): s
     return typeof manifest.version === 'string' ? [{ name, version: manifest.version, path: `node_modules/${name}` }] : []
   })
   const runtime: DesktopRuntimeDescriptor = { schemaVersion: 1, release: options.release,
-    platform: process.platform, arch: process.arch, sharedPackages, files: [] }
+    ...desktopTargetPlatform(options.target), sharedPackages, files: [] }
   writeFileSync(join(options.projectDir, DESKTOP_RUNTIME_FILE), `${JSON.stringify(runtime, undefined, 2)}\n`)
   return options.projectDir
 }

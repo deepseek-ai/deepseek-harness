@@ -36,6 +36,9 @@ import { apply as registerHtml } from './html/index.ts'
 import { apply as registerImage } from './image/index.ts'
 import { apply as registerPdf } from './pdf/index.ts'
 import { apply as registerCode } from './code/index.ts'
+import { apply as registerOffice } from './office/index.ts'
+import { apply as registerExcel } from './excel/index.ts'
+import { Config } from '../config.ts'
 
 // Values stay package-private unless another package needs them; the plugin
 // surface is `apply`, `inject`, and the store factory another registration may
@@ -43,7 +46,7 @@ import { apply as registerCode } from './code/index.ts'
 export type { SidebarDocumentPreviewKey } from './locales.ts'
 export type { TextPreviewProps } from './TextPreview.tsx'
 export type { TextInjected } from './face.ts'
-export type { ReadWorkspaceFilePage, SessionFile, WorkspaceFilesReadRemote } from './rpc.ts'
+export type { ReadDocumentBytes, DocumentFileBytes, ReadWorkspaceFilePage, SessionFile, WorkspaceFilesReadRemote } from './rpc.ts'
 export type { TextPage, TextState, TextStore, TextTabState } from './store.ts'
 export type { DocumentContent, DocumentPreviewProps, DocumentTextPage } from './document/contract.ts'
 export type { DocumentLoadMode, DocumentPreviewDefinition } from './document/registry.ts'
@@ -74,15 +77,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /**
  * Required browser services: the tab registry, the slot registry, copy, and the
- * Remote carrier with its `workspaceFiles` namespace.
+ * workspace Remote for bytes and paged text reads.
  */
-export const inject = ['slots', 'locale', 'sidebarRightTabs', 'remote', 'remote.workspaceFiles']
+export const inject = ['slots', 'locale', 'sidebarRightTabs', 'remote', 'remote.workspaceFiles', 'configForms', 'resources']
 
 /**
  * Client plugin body: register the type, its dictionaries, its body, and its chip title.
- * @param ctx - client root context carrying the registry, the slots, copy, and the Remote face.
+ * @param ctx - client root context carrying the registry, slots, copy, and file readers.
  */
 export function apply(ctx: ClientContext): void {
+  const config = Config((globalThis as { __DSH_DOCUMENT_PREVIEW_CONFIG__?: unknown }).__DSH_DOCUMENT_PREVIEW_CONFIG__ ?? {})
   const previews = new DocumentPreviewRegistry()
   const disposePreviews = ctx.reflect.provide('documentPreviews', previews)
   ctx.effect(() => disposePreviews)
@@ -92,7 +96,8 @@ export function apply(ctx: ClientContext): void {
   const store = createTextStore()
   const face = textFace(
     createReadPage(ctx.remote),
-    (file, signal) => ctx.remote.workspaceFiles.readAll(file.sessionId, file.path, signal),
+    (file, signal) => ctx.remote.workspaceFiles.readBytes(file.sessionId, file.path, {}, signal),
+    ctx.resources,
   )
   const source = { getSnapshot: previews.getSnapshot, subscribe: previews.subscribe }
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
@@ -100,8 +105,13 @@ export function apply(ctx: ClientContext): void {
       name: 'sidebar.right.pane.tab', key: TEXTPREVIEW_ID, locale: NS, store,
       children: {
         'sidebar.right.tab.document': { kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } } },
+        'sidebar.right.tab.document.actions': { kind: 'list', scope: 'session' },
+        'sidebar.right.tab.document.unpreviewable': { kind: 'list', scope: 'session' },
+        'sidebar.right.tab.document.action': { kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } } },
       },
-      inject: (sessionId, actions): TextPreviewInjected => ({ ...face(sessionId, actions), hooks: { documentPreviews: source } }),
+      inject: (sessionId, actions): TextPreviewInjected => ({
+        ...face(sessionId, actions), hooks: { documentPreviews: source },
+      }),
     },
     TextPreview,
   )), 'ui-sidebar-documentpreview: text body')
@@ -114,5 +124,7 @@ export function apply(ctx: ClientContext): void {
   registerHtml(ctx)
   registerImage(ctx)
   registerPdf(ctx)
+  registerOffice(ctx, config.office)
+  registerExcel(ctx, config.excel)
   registerCode(ctx)
 }

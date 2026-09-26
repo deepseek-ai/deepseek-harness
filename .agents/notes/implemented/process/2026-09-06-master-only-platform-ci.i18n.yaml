@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-06-master-only-platform-ci.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-06-master-only-platform-ci.md
-2026-09-06-master-only-platform-ci.md: fcdc413d644c1129635a7f33fe80bdec1b4a0b7a
-2026-09-06-master-only-platform-ci.zh.md: 4fb55d5e95f8fe75e6d1efb8b57295b8e8469e8d
+/agent-note-master-only-platform-ci:
+  en: fed101c5775cbbcd
+  zh: b407efdb4c46cfe2
+/agent-note-master-only-platform-ci/problem:
+  en: 85cf39297a859208
+  zh: c959bf7f94ebc50b
+/agent-note-master-only-platform-ci/decision:
+  en: 98b8ecd3b4cfe5e5
+  zh: 2c622950ea7afd42
+/agent-note-master-only-platform-ci/alternatives-considered:
+  en: 71ce7f8bb8a31323
+  zh: 45f97b72eb9c6971
+/agent-note-master-only-platform-ci/consequences:
+  en: 523bbd6a59c120bf
+  zh: a9d834b5c32a911f

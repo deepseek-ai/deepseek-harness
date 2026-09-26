@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { IconCheckOutline16, IconLoadingOutline16, IconRefreshOutline14 } from './icons/index.tsx'
+import { IconCheckOutlineRegular, IconRefreshOutlineRegular } from './icons/index.tsx'
+import { StateDot } from './StateDot.tsx'
 import css from './ConnectionIndicator.module.css'
 
 /** Visual state rendered by {@link ConnectionIndicator}. */
@@ -63,7 +64,7 @@ export function ConnectionIndicator({
         role="status"
         aria-label={recoveredLabel}
       >
-        <span className={css.icon} aria-hidden="true"><IconCheckOutline16 size={14} /></span>
+        <span className={css.icon} aria-hidden="true"><IconCheckOutlineRegular size={14} /></span>
         <span className={css.label}>{recoveredLabel}</span>
       </div>
     )
@@ -80,8 +81,8 @@ export function ConnectionIndicator({
     >
       <span className={css.icon} aria-hidden="true">
         {connecting
-          ? <IconLoadingOutline16 size={14} className={css.spinner} />
-          : <IconRefreshOutline14 size={14} />}
+          ? <StateDot state="ongoing" />
+          : <IconRefreshOutlineRegular size={14} />}
       </span>
       <span className={css.label}>
         {connecting

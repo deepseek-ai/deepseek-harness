@@ -89,6 +89,28 @@ describe('module identity through the loader', () => {
     expect(require('tty')).toBe(require('node:tty'))
   })
 
+  it('shares promise stream helpers and observes completion and errors through the loader', async () => {
+    const require = loaderRequire()
+    const stream = require('node:stream') as typeof import('node:stream')
+    const promises = require('node:stream/promises') as typeof import('node:stream/promises')
+    expect(require('stream/promises')).toBe(promises)
+    expect(promises.finished).toBe(stream.promises.finished)
+    expect(promises.pipeline).toBe(stream.promises.pipeline)
+
+    const output = new stream.Writable({ write(_chunk, _encoding, callback) { callback() } })
+    const baseline = output.listenerCount('error')
+    const completed = promises.finished(output, { cleanup: true })
+    output.end('done')
+    await completed
+    expect(output.listenerCount('error')).toBe(baseline)
+
+    const failed = new stream.Writable({ write(_chunk, _encoding, callback) { callback(new Error('write failed')) } })
+    const rejected = expect(promises.finished(failed, { cleanup: true })).rejects.toThrow('write failed')
+    failed.end('broken')
+    await rejected
+    expect(failed.listenerCount('error')).toBe(0)
+  })
+
   it('reports that worker file descriptors are not terminals', () => {
     const tty = loaderRequire()('tty') as { isatty(fd: number): boolean }
     expect(tty.isatty(2)).toBe(false)

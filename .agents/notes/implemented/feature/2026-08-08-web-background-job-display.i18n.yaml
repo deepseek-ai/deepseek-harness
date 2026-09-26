@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-08-web-background-job-display.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-08-web-background-job-display.md
-2026-08-08-web-background-job-display.md: 4b8396c1c0504ddf8494a03c22b9af094c4eed17
-2026-08-08-web-background-job-display.zh.md: 03a43b87c47d0ef4d9c08d32facd91ceb76dda38
+/agent-note-web-background-job-display:
+  en: 78eff738bc5ed554
+  zh: c8a8a83853fa806b
+/agent-note-web-background-job-display/problem:
+  en: 41ddca92193cbbf1
+  zh: ec8f39ad20044d1c
+/agent-note-web-background-job-display/decision:
+  en: 50058c6557e05f15
+  zh: bbf35bb475474cd8
+/agent-note-web-background-job-display/decision/wire-shape:
+  en: 4d6b92cbfde80add
+  zh: d32e0421100eeb71
+/agent-note-web-background-job-display/decision/the-task-registry-change-feed:
+  en: a7a9416ab3b325dc
+  zh: 448820bad0224785
+/agent-note-web-background-job-display/decision/the-session-controller-carrier:
+  en: e9ef574e65e8fb7d
+  zh: d1a6e446c48a0921
+/agent-note-web-background-job-display/decision/the-client-mirror:
+  en: 6185994020e639ee
+  zh: df9b464f95c0f3e2
+/agent-note-web-background-job-display/decision/the-header-action:
+  en: 8985aa8f6ade32c3
+  zh: 94ea0844ed8649b5
+/agent-note-web-background-job-display/decision/what-this-deliberately-does-not-do:
+  en: c9ff2d1fec1459d9
+  zh: b28a573ca9fbb1c2
+/agent-note-web-background-job-display/alternatives-considered:
+  en: a648d1748674d866
+  zh: 0f68b82476121c38
+/agent-note-web-background-job-display/testing:
+  en: f41d5017ea4beabb
+  zh: cb216dd1d802ebe2
+/agent-note-web-background-job-display/consequences:
+  en: 5204e04c3ed02d53
+  zh: 9eaa9b52b69be7b2

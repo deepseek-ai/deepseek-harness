@@ -1,6 +1,37 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for core.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/core.md
-core.md: bba024e8ee4cb89ceac4698bf66f060c7f74dcd6
-core.zh.md: 2e04d5a9a078f3411b2a0d338835ec7d71296f10
+/core:
+  en: f6ae07d8902e8edf
+  zh: c92fef531c6da331
+/core/the-spine-package-by-package:
+  en: c90cb23528ddb6c8
+  zh: 62724b7255b586b6
+/core/creation-and-ownership:
+  en: ab09a38b4e1f0883
+  zh: 81e2d14c4036ab6c
+/core/the-agent-handle:
+  en: c21787347d8e2b14
+  zh: 25bc9cb60ee1520a
+/core/initiating-agent:
+  en: 6c8c47ac78de2dde
+  zh: c9d527a25a85d1d9
+/core/interception-decisions:
+  en: 6fccceb0a5f1cad9
+  zh: f43c30c2386d8cc8
+/core/sessions:
+  en: 9a38f693a00fa80d
+  zh: d0f66664ac85ae64
+/core/tooldefinition:
+  en: d926a9b80aada2e5
+  zh: e34e6f43bdfd8920
+/core/repo-wide-type-patterns:
+  en: 057db6d8bf356c0f
+  zh: 1441b39e5142b0bf
+/core/repo-wide-type-patterns/the-map-derived-union-pattern:
+  en: 84c039e929edb897
+  zh: 84241bb993f23ef2
+/core/repo-wide-type-patterns/branded-ids:
+  en: 10f8ac0f97e7c54a
+  zh: 75cd2311aabfe464

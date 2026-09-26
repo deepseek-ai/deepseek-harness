@@ -18,6 +18,7 @@
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { once } from 'node:events'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -27,7 +28,7 @@ import { chromium } from 'playwright'
 import type { Browser } from 'playwright'
 import { expect, it } from 'vitest'
 import {
-  composeProfile, configTrees, indexWorkspacePackages, packVfsImage, packVfsOverlay,
+  composeProfile, configTrees, indexWorkspacePackages, packVfsImage, packPreviewFixture,
   previewFixtures, WRAPPER_CONTRACT,
 } from '@deepseek-ai/dsh-experimental-webworker-packer'
 import {
@@ -39,7 +40,7 @@ import {
   buildVfsExampleFiles,
 } from '../../../packages/experimental/webworker-runtime/tests/vfs-example-fixture.ts'
 import { captureStableAria, compareOrRefreshGolden, webSnapshotMode } from './scaffold.ts'
-import { newEnglishPage, REPO_ROOT, saveFailureShot } from './support.ts'
+import { expandOwningTurnProcess, newEnglishPage, REPO_ROOT, saveFailureShot } from './support.ts'
 
 const DIST_ROOT = fileURLToPath(new URL('../dist', import.meta.url))
 
@@ -118,9 +119,9 @@ function requirePreviewPages(): void {
  * The base image, fixture manifest, and overlays to serve. `pnpm run build`
  * emits the pages but only `build:preview` packs the image, so this lane packs
  * a missing image rather than skipping the deployment it accepts. The example
- * overlay pairs its committed Session generations with the generator-owned
- * current projection cache. The worker therefore exercises historical reads
- * without relying on a stale cache schema. Generated files land in a temp
+ * overlay retains its committed Session generations, prepares current successors
+ * through the Node catalog, and supplies the generator-owned current projection cache.
+ * Generated files land in a temp
  * directory, never in `dist/`: the
  * client-artifact digest record treats `dist/` as build-owned, so a test write
  * there fails the record check for every later consumer.
@@ -161,7 +162,7 @@ function requireVfsAssets(): PreviewAssets {
     const trees = fixture.id === 'vfs-example'
       ? [...fixture.trees, { mount: 'home/storages', directory: cacheDirectory }]
       : fixture.trees
-    writeAsset(relativePath, packVfsOverlay(trees).image)
+    writeAsset(relativePath, packPreviewFixture(trees).image)
     return {
       id: fixture.id,
       label: fixture.label,
@@ -211,7 +212,8 @@ async function respond(
  */
 async function serveDist(overrides: ReadonlyMap<string, string>): Promise<Site> {
   const server = createServer((request, response) => { void respond(request, response, overrides) })
-  await new Promise<void>((listening) => { server.listen(0, '127.0.0.1', listening) })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('preview boot: the static server bound no port')
   return {
@@ -377,16 +379,22 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
       // Settings and credentials both answer over the Remote carrier, so this
       // half of the sweep posts the generated endpoints directly like the
       // session read above.
-      const settings = await remote<{ namespaces: { ns: string; revision: number }[] }>(
+      interface Setting { ns: string; revision: number; value: Record<string, unknown>; user: Record<string, unknown> }
+      const settings = await remote<{ writable: boolean; namespaces: Setting[] }>(
         'settings/describe', {},
       )
-      const shell = settings.namespaces.find(namespace => namespace.ns === 'shell')
-      if (shell === undefined) throw new Error('settings/describe omitted the shell namespace')
-      await remote('settings/update', {
-        ns: 'shell',
+      const shell = settings.namespaces.find(namespace => namespace.ns === 'bash-sandbox')
+      if (shell === undefined) throw new Error('settings/describe omitted the bash-sandbox namespace')
+      const saved = await remote<Setting>('settings/update', {
+        ns: 'bash-sandbox',
         patch: { timeoutMs: 61_000 },
         expectedRevision: shell.revision,
       })
+      const reread = await remote<{ namespaces: Setting[] }>('settings/describe', {})
+      const reset = await remote<Setting>('settings/mutate', {
+        ns: 'bash-sandbox', ops: [{ op: 'unset', path: ['timeoutMs'] }], expectedRevision: saved.revision,
+      })
+      await remote('settings/update', { ns: 'ui-theme', patch: { fontSize: 17 } })
       await remote('credentials/set', { ref: 'PREVIEW_TEST_SECRET', value: 'worker-only' })
       const credentials = await remote<Record<string, { configured: boolean }>>(
         'credentials/describe',
@@ -395,6 +403,13 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
       await remote('credentials/unset', { ref: 'PREVIEW_TEST_SECRET' })
       await new Promise((resolve) => { setTimeout(resolve, 250) })
       return {
+        settingsWritable: settings.writable,
+        settingIds: settings.namespaces.map(namespace => namespace.ns),
+        savedTimeout: saved.value.timeoutMs,
+        rereadTimeout: reread.namespaces.find(namespace => namespace.ns === 'bash-sandbox')?.value.timeoutMs,
+        resetTimeout: reset.value.timeoutMs,
+        initialTimeout: shell.value.timeoutMs,
+        resetOverrides: reset.user,
         renamedTitle: secondRename.title,
         renameAdvanced: secondRename.seq > firstRename.seq,
         skillCount: skills.skills.length,
@@ -404,6 +419,16 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
       seededSessionId: VFS_EXAMPLE_SESSION_IDS.main,
       seededSessionTitle: SHOWCASE_TITLE,
     })
+    expect(exercised.settingsWritable).toBe(true)
+    expect(exercised.settingIds).toEqual(expect.arrayContaining([
+      'bash-sandbox', 'locale', 'ui-theme', 'ui-chat', 'ui-conversation', 'ui-settings', 'ui-settings-general',
+    ]))
+    expect(exercised.savedTimeout).toBe(61_000)
+    expect(exercised.rereadTimeout).toBe(61_000)
+    expect(exercised.resetTimeout).toBe(exercised.initialTimeout)
+    expect(exercised.resetOverrides).not.toHaveProperty('timeoutMs')
+    await expect.poll(() => page.evaluate(() => document.body.style.getPropertyValue('--dsh-content-font-size')))
+      .toBe('17px')
     expect(exercised.renamedTitle).toBe(SHOWCASE_TITLE)
     expect(exercised.renameAdvanced).toBe(true)
     expect(exercised.skillCount).toBeGreaterThan(0)
@@ -412,16 +437,23 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
     const sessions = page.getByRole('tree', { name: 'Sessions' })
     const showcase = sessions.getByRole('treeitem').filter({ hasText: SHOWCASE_TITLE })
     await expect.poll(() => showcase.count(), { timeout: 15_000 }).toBe(1)
+    expect(await showcase.locator('[data-session-schedule-mark]').count()).toBe(0)
     await showcase.click()
     await page.getByText(SHOWCASE_TAIL, { exact: true }).waitFor({ timeout: 30_000 })
+    expect(await page.locator('[data-schedule-reminder-entry]').count()).toBe(0)
 
     expect(await page.getByText(SHOWCASE_OLDEST, { exact: true }).count()).toBe(0)
+    // Complete Turns can fold while earlier history is still unloaded.
+    const readTool = page.locator('[data-chat-call-id="preview-read"]')
+    await readTool.waitFor({ state: 'attached' })
+    expect(await readTool.isVisible()).toBe(false)
+    await expandOwningTurnProcess(page, readTool)
     await page.getByRole('button', { name: 'PREVIEW.md', exact: true }).waitFor()
     await page.getByRole('button', { name: 'src/preview.ts', exact: true }).waitFor()
     await page.getByText('Update to-do list', { exact: true }).waitFor()
     await page.getByText('Error: ENOENT: no such file, open missing.txt', { exact: true }).waitFor()
 
-    const subagents = page.getByRole('button', { name: '2 subagents' })
+    const subagents = page.getByRole('button', { name: '2 subagents', exact: true })
     await subagents.waitFor({ timeout: 15_000 })
     await subagents.hover()
     const catalog = page.getByRole('tree', { name: 'Subagent sessions' })

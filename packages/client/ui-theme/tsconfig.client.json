@@ -1,0 +1,43 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../locale/tsconfig.client.json"
+    },
+    {
+      "path": "../store"
+    },
+    {
+      "path": "../ui-renderer"
+    },
+    {
+      "path": "../ui-primitives"
+    },
+    {
+      "path": "../ui-slots"
+    },
+    {
+      "path": "../../host/webserver"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../ui-settings/tsconfig.client.json"
+    }
+  ],
+  "exclude": [
+    "src/index.ts"
+  ]
+}

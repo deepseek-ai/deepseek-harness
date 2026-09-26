@@ -83,6 +83,7 @@
    left/bottom offsets are measured from the trigger before paint. */
 .panel {
   position: fixed;
+  isolation: isolate;
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -92,12 +93,22 @@
   overflow: hidden;
   border: 0;
   border-radius: 12px;
-  background: var(--dsw-specific-menu);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
   /* Only `.body` scrolls; the header remains fixed above it. */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.panel::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  content: '';
+  pointer-events: none;
 }
 
 .header {
@@ -199,34 +210,11 @@
   flex: none;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   height: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
-  background: var(--dsw-alias-button-ghost-active-fill);
   font-size: 11px;
   line-height: 20px;
   color: var(--dsw-alias-label-caption);
-}
-
-.row[data-cordis-status='idle'] .rowStatus {
-  background: var(--dsw-alias-button-ghost-active-fill);
-  color: var(--dsw-alias-label-caption);
-}
-
-.row[data-cordis-status='awaiting-approval'] .rowStatus,
-.row[data-cordis-status='client-pending'] .rowStatus {
-  background: var(--dsw-alias-state-warn-tertiary);
-  color: var(--dsw-alias-state-warn-label);
-}
-
-.row[data-cordis-status='failed'] .rowStatus {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
-  color: var(--dsw-alias-state-error-primary);
-}
-
-.row[data-cordis-status='running'] .rowStatus {
-  background: var(--dsw-alias-state-success-tertiary);
-  color: var(--dsw-alias-state-success-primary);
 }
 
 .rowDetail {

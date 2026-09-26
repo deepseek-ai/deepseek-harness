@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-24-separate-context-injection-from-turn-execution.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-24-separate-context-injection-from-turn-execution.md
-2026-07-24-separate-context-injection-from-turn-execution.md: d22d3966767ae9888f2140141b1c7743792184c0
-2026-07-24-separate-context-injection-from-turn-execution.zh.md: 2c567511b21891ada3e0027f666d1163861fb090
+/agent-note-separate-context-injection-from-turn-execution:
+  en: f0090d5d271cbd9d
+  zh: 7ff28e03f1273093
+/agent-note-separate-context-injection-from-turn-execution/problem:
+  en: 2eefc25e17f62a90
+  zh: 81bc7ff2649b2704
+/agent-note-separate-context-injection-from-turn-execution/decision:
+  en: 83dba9117127cbb4
+  zh: 2b6b428a1c97d3b1
+/agent-note-separate-context-injection-from-turn-execution/injection-lifecycle:
+  en: 16005492be54cb4f
+  zh: db460e0ebf838d54
+/agent-note-separate-context-injection-from-turn-execution/extension-and-caller-semantics:
+  en: e184d8cd9676e24f
+  zh: 22465b570ae35f59
+/agent-note-separate-context-injection-from-turn-execution/alternatives-considered:
+  en: 0efad389c38dfe95
+  zh: 13dd73de20226540
+/agent-note-separate-context-injection-from-turn-execution/verification:
+  en: 3f3db450a3fc5848
+  zh: b2027393d570339d
+/agent-note-separate-context-injection-from-turn-execution/consequences:
+  en: 71079e4dede5e12f
+  zh: deb46b5a4f151678

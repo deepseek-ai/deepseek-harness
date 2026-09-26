@@ -1,6 +1,43 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-30-queued-manual-compaction.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-30-queued-manual-compaction.md
-2026-07-30-queued-manual-compaction.md: 3efd1a490148b34b0ee76800ed795dfaab280743
-2026-07-30-queued-manual-compaction.zh.md: 2da3f494afcdb0e0db47a0adb2e2a6101f7ef2e6
+/agent-note-queued-manual-compaction-with-one-durable-lock:
+  en: 45504a64618db51a
+  zh: f8dfebaf42ee4ddf
+/agent-note-queued-manual-compaction-with-one-durable-lock/problem:
+  en: ffd033e0cea4b612
+  zh: 63fa18871f038eb7
+/agent-note-queued-manual-compaction-with-one-durable-lock/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-queued-manual-compaction-with-one-durable-lock/decision/compact-is-a-command-over-a-backend-independent-seam:
+  en: a8631732e038e08d
+  zh: 68cb705f38ddfa57
+/agent-note-queued-manual-compaction-with-one-durable-lock/decision/idle-maintenance-is-synchronously-claimed:
+  en: a11c700f32838561
+  zh: c20636c5f7efabaf
+/agent-note-queued-manual-compaction-with-one-durable-lock/decision/one-parameterized-transaction-owns-every-bracket:
+  en: 7b75672fafc370c9
+  zh: 4fb473856c9c7265
+/agent-note-queued-manual-compaction-with-one-durable-lock/decision/bracket-first-deliberately-differs-from-the-surveyed-implementations:
+  en: 309671a79b437033
+  zh: 86e0f366aed73c35
+/agent-note-queued-manual-compaction-with-one-durable-lock/decision/markers-are-time-points-not-an-event-container:
+  en: e9d8043178dc946f
+  zh: 56808150ba2ab275
+/agent-note-queued-manual-compaction-with-one-durable-lock/decision/end-seed-distinguishes-live-and-stale-orphans:
+  en: cc767e216225e117
+  zh: 4ec7dbc179f96c37
+/agent-note-queued-manual-compaction-with-one-durable-lock/decision/reference-implementation-boundaries:
+  en: 97b121c53b8f3b68
+  zh: 13d86db92c30bef1
+/agent-note-queued-manual-compaction-with-one-durable-lock/alternatives-considered:
+  en: f1c5bae090425598
+  zh: 60a30f851d85dfb0
+/agent-note-queued-manual-compaction-with-one-durable-lock/verification:
+  en: 37587419460fcf36
+  zh: e45c752f93d5a87e
+/agent-note-queued-manual-compaction-with-one-durable-lock/consequences:
+  en: b8c71ea1d1db7b8e
+  zh: 0d276bb8317ada91

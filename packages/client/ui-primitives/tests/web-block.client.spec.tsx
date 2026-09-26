@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
-import { WebBlock as LocalizedWebBlock } from '../src/index.ts'
+import { LinkIconMedium, WebBlock as LocalizedWebBlock } from '../src/index.ts'
 import type {
   WebFetchBlockProps, WebSearchBlockProps, WebSourceView,
 } from '../src/index.ts'
@@ -27,6 +27,12 @@ function WebBlock(props: WebBlockProps) {
 }
 
 afterEach(cleanup)
+
+/** The path data of the mark a `url` link leads with for one destination. */
+function glyphMark(href: string | undefined): string | null {
+  const { container } = render(<LinkIconMedium kind="url" href={href} />)
+  return container.querySelector('path')!.getAttribute('d')
+}
 
 function sources(count: number): WebSourceView[] {
   return Array.from({ length: count }, (_value, index) => ({
@@ -100,6 +106,20 @@ describe('WebBlock search card', () => {
     expect(anchor.getAttribute('href')).toBe('https://example.com/a')
     expect(anchor.getAttribute('target')).toBe('_blank')
     expect(anchor.getAttribute('rel')).toBe('noopener noreferrer')
+  })
+
+  it("leads a source and a fetched url on a known site with that site's mark", () => {
+    /** The mark a link leads with, as its path data. */
+    const mark = (element: Element): string | null => element.querySelector('a svg path')!.getAttribute('d')
+    const view = render(<WebBlock kind="search" truncated={false} sources={[
+      { url: 'https://github.com/org/repo', title: 'Repo' },
+    ]} />)
+    expect(mark(view.container)).toBe(glyphMark('https://github.com/a'))
+    // An unmapped host keeps the globe, as does the fetch card's URL.
+    expect(mark(render(<WebBlock kind="search" sources={sources(1)} truncated={false} />).container))
+      .toBe(glyphMark(undefined))
+    expect(mark(render(<WebBlock kind="fetch" url="https://news.ycombinator.com/item?id=1" statusCode={200} truncated={false} />).container))
+      .toBe(glyphMark('https://news.ycombinator.com/item?id=2'))
   })
 
   it('renders a non-http url as plain text with no href, and its raw text label when unparseable', () => {

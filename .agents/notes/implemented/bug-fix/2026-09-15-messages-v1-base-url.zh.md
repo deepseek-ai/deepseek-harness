@@ -12,7 +12,7 @@ Messages 传输会在配置的基址后追加 Anthropic 标准 `/v1` 命名空�
 
 共享 Messages API 所有者移除末尾斜线，仅把严格等于 `v1` 的最后路径段视为已有 API 版本。它保留该根地址并追加 `/messages` 或 `/files`；其他基址均追加 `/v1/messages` 或 `/v1/files`。缓存文件上传也使用同一个解析后的根地址划分作用域。因此，官方 `https://api.deepseek.com/anthropic` 基址解析为 `/anthropic/v1`，显式 `/anthropic/v1` 基址保持不变。
 
-Chat Completions 保留独立的 URL 行为。Messages 规则不会推断对 `v1beta`、`v2`、`v4` 或其他版本式后缀的支持；包含这些路径段的部署会在其下获得标准 `/v1` 命名空间。
+Messages 规则不推断 `v1beta`、`v2`、`v4` 或其他类似版本后缀的支持；包含这些路径段的部署会在其下接收标准 `/v1` 命名空间。
 
 ## 考虑过的替代方案
 

@@ -12,12 +12,19 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as SessionTurnOutlinePlugin from '@deepseek-ai/dsh-session-turn-outline'
 import { turnOutlineProjectionDefinition } from '@deepseek-ai/dsh-session-turn-outline/src/projection.ts'
 import type { TurnOutlineEntry, TurnOutlineState } from '@deepseek-ai/dsh-session-turn-outline/types'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'test-injector': { kind: 'test-injector' } & ContextFormed
+  }
+}
 
 async function harness(withOutlinePlugin: boolean): Promise<{ ctx: Context; session: Session }> {
   const ctx = new Context()
@@ -136,7 +143,7 @@ describe('turn outline projection unit', () => {
     session.append('turn/start', { turn: 1 })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'injected context' }],
-      source: { kind: 'plugin', plugin: 'test-injector', form: 'relay' },
+      source: { kind: 'test-injector', form: 'relay' },
     }), { surfaceOp: 'append' })
     expect(outlineOf(ctx, session)).toEqual([
       { turn: 1, seq: 1, prompt: '', response: '' },

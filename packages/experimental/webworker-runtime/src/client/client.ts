@@ -13,6 +13,8 @@ import type {
   TunnelRequestId,
   TunnelStreamEndFrame,
   TunnelStreamErrorFrame,
+  TunnelStreamUplinkEndFrame,
+  TunnelStreamUplinkItemFrame,
   TunnelStreamItemFrame,
   TunnelStreamOpenFrame,
 } from '../transport/frames.ts'
@@ -32,6 +34,19 @@ interface PendingUnary {
 }
 
 type LogicalStreamFrame = TunnelStreamItemFrame | TunnelStreamEndFrame | TunnelStreamErrorFrame
+
+interface UplinkPump {
+  /** Settles once the pump has stopped posting frames. */
+  readonly done: Promise<void>
+  /** Interrupt the pump, including a read blocked on the caller's iterator, and return that iterator at once. */
+  stop(): void
+}
+
+/** One open logical stream: its downlink inbox and, once the open frame is posted, its uplink pump. */
+interface LogicalStream {
+  readonly inbox: LogicalStreamInbox
+  pump: UplinkPump | undefined
+}
 
 interface TunnelStreamFailureMarker {
   readonly kind: 'remote' | 'carrier'
@@ -143,7 +158,7 @@ export class WorkerTunnel {
   private nextId = 1
   private readonly unary = new Map<TunnelRequestId, PendingUnary>()
   private readonly bodyStreams = new Map<TunnelRequestId, ReadableStreamDefaultController<Uint8Array>>()
-  private readonly logicalStreams = new Map<TunnelRequestId, LogicalStreamInbox>()
+  private readonly logicalStreams = new Map<TunnelRequestId, LogicalStream>()
   /**
    * In-flight request descriptions, so a refusal names what was refused.
    *
@@ -178,7 +193,7 @@ export class WorkerTunnel {
         kind: 'carrier',
         message: `web-preview tunnel: worker failed: ${event.message}`,
       }, { cause: reason })
-      for (const inbox of this.logicalStreams.values()) inbox.fail(failure)
+      for (const { inbox } of this.logicalStreams.values()) inbox.fail(failure)
       this.logicalStreams.clear()
       for (const release of this.releases.values()) release()
       this.releases.clear()
@@ -234,17 +249,19 @@ export class WorkerTunnel {
    * @param endpoint - canonical Gateway Remote endpoint.
    * @param payload - decoded endpoint payload.
    * @param signal - logical-stream cancellation.
+   * @param uplink - the stream's uplink, posted as `stream-uplink-item` frames and closed with `stream-uplink-end`.
    * @returns decoded stream values from the worker Host.
    */
-  async *open(endpoint: string, payload: unknown, signal: AbortSignal): AsyncGenerator {
+  async *open(endpoint: string, payload: unknown, signal: AbortSignal, uplink?: AsyncIterable<unknown>): AsyncGenerator {
     signal.throwIfAborted()
     const id = this.nextId++
     const inbox = new LogicalStreamInbox()
+    const stream: LogicalStream = { inbox, pump: undefined }
     let opened = false
     let terminal = false
     const onAbort = (): void => { inbox.fail(signal.reason) }
     signal.addEventListener('abort', onAbort, { once: true })
-    this.logicalStreams.set(id, inbox)
+    this.logicalStreams.set(id, stream)
     this.inFlight.set(id, `STREAM ${endpoint}`)
     try {
       const frame: TunnelStreamOpenFrame = { t: 'stream-open', id, endpoint, payload }
@@ -257,6 +274,7 @@ export class WorkerTunnel {
           message: `web-preview tunnel: failed to open Remote stream ${endpoint}`,
         }, { cause })
       }
+      if (uplink !== undefined) stream.pump = this.pumpUplink(id, uplink, signal, inbox)
       while (true) {
         const response = await inbox.next()
         signal.throwIfAborted()
@@ -272,8 +290,65 @@ export class WorkerTunnel {
       signal.removeEventListener('abort', onAbort)
       this.logicalStreams.delete(id)
       this.inFlight.delete(id)
+      stream.pump?.stop()
       if (opened && !terminal) this.abortWorkerOperation(id)
+      if (stream.pump !== undefined) await stream.pump.done
     }
+  }
+
+  /**
+   * Post the caller's uplink items for one logical stream. A failing uplink
+   * fails the downlink, and the enclosing `open` then aborts the worker side.
+   * `stop()` interrupts a pump blocked on `uplink.next()` and returns the
+   * caller's iterator at once, so a handle's queue closes and `send()` throws
+   * from then on; a generator blocked in `next()` completes that return only
+   * once it yields, so it is not awaited.
+   */
+  private pumpUplink(
+    id: TunnelRequestId,
+    uplink: AsyncIterable<unknown>,
+    signal: AbortSignal,
+    inbox: LogicalStreamInbox,
+  ): UplinkPump {
+    const interrupt = Promise.withResolvers<IteratorReturnResult<undefined>>()
+    const iterator = uplink[Symbol.asyncIterator]()
+    const state = { active: true, released: false }
+    const release = (): void => {
+      if (state.released) return
+      state.released = true
+      void Promise.resolve(iterator.return?.()).catch(() => undefined)
+    }
+    const done = this.forwardUplink(id, iterator, interrupt.promise, () => state.active && !signal.aborted)
+      .then((exhausted) => { state.released ||= exhausted }, (error: unknown) => { inbox.fail(error) })
+      .then(release)
+    return {
+      done,
+      stop: () => {
+        state.active = false
+        interrupt.resolve({ value: undefined, done: true })
+        release()
+      },
+    }
+  }
+
+  /**
+   * Post items until the caller's iterator ends, the pump is stopped, or the page aborts the stream.
+   * @returns whether the caller's iterator was exhausted and the uplink end posted.
+   */
+  private async forwardUplink(
+    id: TunnelRequestId,
+    iterator: AsyncIterator<unknown>,
+    interrupt: Promise<IteratorReturnResult<undefined>>,
+    isActive: () => boolean,
+  ): Promise<boolean> {
+    for (;;) {
+      const next = await Promise.race([iterator.next(), interrupt])
+      if (!isActive()) return false
+      if (next.done === true) break
+      this.worker.postMessage({ t: 'stream-uplink-item', id, value: next.value } satisfies TunnelStreamUplinkItemFrame)
+    }
+    this.worker.postMessage({ t: 'stream-uplink-end', id } satisfies TunnelStreamUplinkEndFrame)
+    return true
   }
 
   /**
@@ -294,7 +369,8 @@ export class WorkerTunnel {
    * The image packs each bundle with a trailing `sourceURL` naming its image
    * path, so the blob shows under that name in the debugger instead of as an
    * anonymous blob entry.
-   * @param url - Graph combo URL (`/plugins/??<id>/client.js&rev=...`).
+   * @param url - Graph combo reference (`plugins/??<id>/client.js&rev=...`), which
+   * this tunnel resolves against the page origin it maps from.
    */
   async loadBundle(url: string): Promise<void> {
     const response = await this.fetch(url)
@@ -471,7 +547,11 @@ export class WorkerTunnel {
       case 'stream-item':
       case 'stream-end':
       case 'stream-error': {
-        this.logicalStreams.get(frame.id)?.push(frame)
+        const stream = this.logicalStreams.get(frame.id)
+        if (stream === undefined) return
+        stream.inbox.push(frame)
+        // A terminal frame ends the uplink now, not on the consumer's next read.
+        if (frame.t !== 'stream-item') stream.pump?.stop()
         return
       }
       default: {

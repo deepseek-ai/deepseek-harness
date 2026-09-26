@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-09-20-sidebar-retained-tab-layout.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-20-sidebar-retained-tab-layout.md
+/agent-note-stable-sidebar-tab-mounting-and-session-retention:
+  en: 79bf4b50c50b52d4
+  zh: cfd15cdb020ef7c8
+/agent-note-stable-sidebar-tab-mounting-and-session-retention/problem:
+  en: fd5b83cd022f1696
+  zh: fd14a1bc7f5d9119
+/agent-note-stable-sidebar-tab-mounting-and-session-retention/decision:
+  en: 3e604325fdf0e8b5
+  zh: ddf00764a68532d4
+/agent-note-stable-sidebar-tab-mounting-and-session-retention/decision/layout-ownership:
+  en: 7095df7c949b8e3c
+  zh: e7410e44eaa97797
+/agent-note-stable-sidebar-tab-mounting-and-session-retention/decision/session-and-tab-lifetime:
+  en: 60a4450a1a4f398c
+  zh: cc0054505b973c91
+/agent-note-stable-sidebar-tab-mounting-and-session-retention/decision/provider-responsibilities:
+  en: a34c228751a1a329
+  zh: 8e8b962b55e7c68e
+/agent-note-stable-sidebar-tab-mounting-and-session-retention/decision/retention-versus-recovery:
+  en: aabfa99401aa0f73
+  zh: 465ebf723c4393aa
+/agent-note-stable-sidebar-tab-mounting-and-session-retention/alternatives-considered:
+  en: 84cfe7613657bfdb
+  zh: 4a0a499eb5d36d22
+/agent-note-stable-sidebar-tab-mounting-and-session-retention/consequences:
+  en: 9569f8398823e0da
+  zh: 9b95fb2f5d53b963
+/agent-note-stable-sidebar-tab-mounting-and-session-retention/verification:
+  en: 8d6fd48c494ba5f6
+  zh: 1aa02f822f58d73b

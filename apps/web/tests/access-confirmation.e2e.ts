@@ -73,7 +73,7 @@ describe('web e2e: experimental Auto and Full access confirmation', () => {
     const currentMenuBox = await currentMenu.boundingBox()
     expect(currentTriggerBox).not.toBeNull()
     expect(currentMenuBox).not.toBeNull()
-    expect(Math.abs(currentMenuBox!.width - 218)).toBeLessThan(1)
+    expect(Math.abs(currentMenuBox!.width - 144)).toBeLessThan(1)
     expect(currentMenuBox!.width).toBeGreaterThan(currentTriggerBox!.width)
     expect(Math.abs(currentTriggerBox!.y - currentMenuBox!.y - currentMenuBox!.height - 4)).toBeLessThan(1)
 
@@ -183,7 +183,7 @@ describe('web e2e: experimental Auto and Full access confirmation', () => {
     await menu.waitFor()
     await captureAutoReviewState(page, 'experimental-narrow-menu')
     const menuBox = (await menu.boundingBox())!
-    expect(menuBox.width).toBeGreaterThanOrEqual(218)
+    expect(menuBox.width).toBeGreaterThanOrEqual(144)
     expect(menuBox.width).toBeLessThanOrEqual(360)
     expect(menuBox.x).toBeGreaterThanOrEqual(0)
     expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(420)

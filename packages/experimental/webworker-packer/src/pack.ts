@@ -349,6 +349,15 @@ function debuggerNamer(workspaces: ReadonlyMap<string, string>, resolveFrom: str
   }
 }
 
+/** Declaration-only condition trees add no runtime roots; explicit imports still resolve normally. */
+function isDeclarationOnlyExport(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false
+  if (Array.isArray(value)) return value.length > 0 && value.every(isDeclarationOnlyExport)
+  const conditions = Object.entries(value)
+  return conditions.length > 0 && conditions.every(([condition, target]) =>
+    condition === 'types' || condition.startsWith('types@') || isDeclarationOnlyExport(target))
+}
+
 function sweepImage(
   files: ImageFiles,
   options: PackOptions,
@@ -383,11 +392,13 @@ function sweepImage(
     } catch {
       continue
     }
-    // Every non-wildcard face is a root; a face resolving onto a page asset is
-    // kept untransformed below rather than excluded here.
+    // Every non-wildcard runtime face is a root; a face resolving onto a page
+    // asset is kept untransformed below rather than excluded here.
     const subpaths = manifest.exports === undefined
       ? ['.']
-      : Object.keys(manifest.exports).filter(key => key.startsWith('.') && !key.includes('*'))
+      : Object.entries(manifest.exports)
+        .filter(([key, target]) => key.startsWith('.') && !key.includes('*') && !isDeclarationOnlyExport(target))
+        .map(([key]) => key)
     for (const subpath of subpaths) {
       queue.push({ specifier: subpath === '.' ? name : `${name}/${subpath.slice(2)}`, from: root, importer: `workspace face ${name}` })
     }

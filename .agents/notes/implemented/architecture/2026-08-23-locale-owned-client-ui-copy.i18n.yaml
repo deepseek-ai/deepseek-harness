@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-23-locale-owned-client-ui-copy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.md
-2026-08-23-locale-owned-client-ui-copy.md: bc4d8efbce1f246f712e3afe6af40d1518e8cb17
-2026-08-23-locale-owned-client-ui-copy.zh.md: ce996a4aafc392e739bec2eccd8714cfeff7d8e9
+/agent-note-locale-owned-client-ui-copy:
+  en: 048ebc19d489b40d
+  zh: 681d1c4167f0101f
+/agent-note-locale-owned-client-ui-copy/problem:
+  en: b007d31d9998b878
+  zh: 857921e0d57288f9
+/agent-note-locale-owned-client-ui-copy/decision:
+  en: 8a5e0abec93fcb91
+  zh: bf9fe95e48fc7eb6
+/agent-note-locale-owned-client-ui-copy/verification:
+  en: bc9daa07456e8496
+  zh: 9edeae0d970cc6b2
+/agent-note-locale-owned-client-ui-copy/alternatives-considered:
+  en: b04fd6aaa9b4fff5
+  zh: 7551d86cad9a862a
+/agent-note-locale-owned-client-ui-copy/consequences:
+  en: fd435e249b7409e1
+  zh: e0b147cfcb565516

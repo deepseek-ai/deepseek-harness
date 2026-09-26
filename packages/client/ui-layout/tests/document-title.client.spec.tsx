@@ -18,12 +18,9 @@ function titleSources() {
   const sessionId = 'session-title' as SessionId
   const sessions = createSnapshotStore<SessionListState>({
     ids: [sessionId],
-    byId: { [sessionId]: { id: sessionId, displayTitle: 'Test', running: false, blank: false, updatedAt: 1 } },
-    current: sessionId,
+    byId: { [sessionId]: { id: sessionId, displayTitle: 'Test', running: false, retainedBy: { mainView: 1 }, blank: false, updatedAt: 1 } },
     phase: 'ready',
-    subagentsByParent: {},
-    jobsBySession: {},
-    currentAddress: undefined,
+    projectionsBySession: {},
   })
   const panelInfo = createSnapshotStore<PanelInfo>({ activePanelId: null })
   return {
@@ -42,7 +39,13 @@ describe('DocumentTitle', () => {
     expect(document.title).toBe('First title — DeepSeek Harness')
     act(() => { sessions.update((state) => { state.byId[sessionId]!.title = 'Revised title' }) })
     expect(document.title).toBe('Revised title — DeepSeek Harness')
-    act(() => { sessions.update((state) => { state.current = undefined }) })
+    act(() => {
+      const state = sessions.getSnapshot()
+      sessions.set({
+        ...state,
+        byId: { ...state.byId, [sessionId]: { ...state.byId[sessionId]!, retainedBy: {} } },
+      })
+    })
     expect(document.title).toBe('DeepSeek Harness')
     mounted.unmount()
     expect(document.title).toBe('DeepSeek Harness')
@@ -68,7 +71,7 @@ describe('DocumentTitle', () => {
     expect(document.title).toBe('Product')
     act(() => { panelInfo.set({ activePanelId: 'panel-b' as MainPanelId }) })
     expect(document.title).toBe('Product')
-    expect(sessions.getSnapshot().current).toBe(sessionId)
+    expect(sessions.getSnapshot().byId[sessionId]?.retainedBy.mainView).toBe(1)
     act(() => { panelInfo.set({ activePanelId: null }) })
     expect(document.title).toBe('Updated title — Product')
   })

@@ -28,6 +28,7 @@
     { "path": "../../util/crypto" },
     { "path": "../../util/workspace-path" },
     { "path": "../../workspace/workspace" },
-    { "path": "../../typert/protocol" }
+    { "path": "../../typert/protocol" },
+    { "path": "../../util/native-command" }
   ]
 }

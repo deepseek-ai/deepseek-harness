@@ -19,6 +19,9 @@
 set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
+# The scratch tree has no Git metadata or Windows Git executable.
+DSH_CLIENT_COMMIT_HASH="$(git -C "$repo_root" rev-parse HEAD)"
+export DSH_CLIENT_COMMIT_HASH
 node_major="${DSH_WINE_NODE_MAJOR:-${PRIMARY_NODE_VERSION:-24}}"
 cache_dir="${DSH_WINE_GATE_CACHE_DIR:-$repo_root/.cache/wine-windows}"
 
@@ -239,12 +242,14 @@ cat "$scratch/logs/smoke.log"
 grep -q '^smoke: win32 x64' "$scratch/logs/smoke.log" || { echo 'wine-windows-gates: Windows Node smoke did not report win32 x64' >&2; exit 1; }
 
 # ---- the two blocking surfaces, concurrently ------------------------------
-# The build preserves the face order from package.json: compile and bundle the
-# Host face before compiling and bundling the Client face.
+# The build mirrors the root build:lib:host and build:lib:client scripts:
+# compile and bundle the Host face, bundle apps/desktop from the Host lib/
+# outputs, then compile and bundle the Client face.
 # Both statuses are captured so one failure cannot hide the other's result.
 build_gate() {
   wine_node "$scratch/logs/host-tsc.log" --max-old-space-size=4096 "$tsc_js" -b tsconfig.host.json --pretty false || return $?
   wine_node "$scratch/logs/host-tsdown.log" "$tsdown_js" --env.DSH_BUILD_FACE host || return $?
+  (cd apps/desktop && wine_node "$scratch/logs/desktop-tsdown.log" "../../$tsdown_js") || return $?
   wine_node "$scratch/logs/client-tsc.log" "$tsc_js" -b tsconfig.client.json --pretty false || return $?
   wine_node "$scratch/logs/client-tsdown.log" "$tsdown_js" --env.DSH_BUILD_FACE client
 }
@@ -272,9 +277,10 @@ report() {
     for log in "$@"; do tail -n 200 "$log" >&2 || true; done
   fi
 }
-report 'build (Host tsc/tsdown, Client tsc/tsdown)' "$build_status" \
+report 'build (Host tsc/tsdown, desktop tsdown, Client tsc/tsdown)' "$build_status" \
   "$scratch/logs/host-tsc.log" \
   "$scratch/logs/host-tsdown.log" \
+  "$scratch/logs/desktop-tsdown.log" \
   "$scratch/logs/client-tsc.log" \
   "$scratch/logs/client-tsdown.log"
 report 'production site (vitepress build)' "$site_status" "$scratch/logs/site.log"

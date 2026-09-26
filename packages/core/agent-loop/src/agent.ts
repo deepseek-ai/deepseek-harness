@@ -20,13 +20,14 @@ import type { GenerateOptions, LlmCallConfig, Message, PreparedLlmCall } from '@
 import {
   LlmError,
   createAssistantMessage,
+  createDeveloperMessage,
   errorChain,
   markAgentLoopRequest,
 } from '@deepseek-ai/dsh-llm'
-import { deepFreeze } from '@deepseek-ai/dsh-util-values'
+import { assertNever, deepFreeze } from '@deepseek-ai/dsh-util-values'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import type { EpochHeader, RequestContext, Session, SessionId, TurnEndReason, UserMessage } from '@deepseek-ai/dsh-session'
+import type { EpochHeader, RequestContext, Session, SessionId, SessionSeq, TurnEndReason, UserMessage } from '@deepseek-ai/dsh-session'
 import { canonicalHeader, headerEquals } from '@deepseek-ai/dsh-session'
 import { joinContextSections, renderContextSections, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
@@ -66,6 +67,31 @@ function requestProposal(header: EpochHeader): LlmCallConfig {
   if (header.adapterDefaults.reasoningEffort === true) delete proposal.reasoningEffort
   if (header.adapterDefaults.maxTokens === true) delete proposal.maxTokens
   return proposal
+}
+
+/**
+ * Read the cause `cancel()` passed when aborting a loop-owned signal, copying
+ * only the fields `turn/end` records. The live reason stays the caller's
+ * object, and Node's fetch assigns a `stack` onto it that `Session.append`
+ * would either log or reject as data JSON cannot hold.
+ * @param signal - a turn or maintenance signal this loop owns.
+ * @returns the copied cause, or undefined while the signal is still live.
+ */
+function abortedCancelCause(signal: AbortSignal): AgentCancelCause | undefined {
+  if (!signal.aborted) return undefined
+  // `cancel()` is the only aborter of the signals this loop owns.
+  const cause = signal.reason as AgentCancelCause
+  switch (cause.kind) {
+    case 'user':
+    case 'parent':
+    case 'disposed':
+      return { kind: cause.kind }
+    case 'hook':
+      return { kind: 'hook', reason: cause.reason }
+    /* v8 ignore next -- cancel accepts the closed AgentCancelCause union */
+    default:
+      return assertNever(cause)
+  }
 }
 
 /** Drives one session through turn and step boundaries. */
@@ -170,7 +196,7 @@ export class ReactLoopAgent implements Agent {
         return await job(maintenance.abort.signal)
       } finally {
         this.setPhase({ kind: 'idle', lastTurn: maintenance.lastTurn })
-        const cause = maintenance.abort.signal.reason as AgentCancelCause | undefined
+        const cause = abortedCancelCause(maintenance.abort.signal)
         if (cause?.kind !== 'disposed' && maintenance.wakeRequested && this.inbox.hasPending) this.wakeDriver()
         done.resolve()
       }
@@ -190,7 +216,7 @@ export class ReactLoopAgent implements Agent {
       // Maintenance and aborted drivers cannot deliver the wake: latch it for
       // replay at convergence. Live drivers claim queued work themselves;
       // disposal never latches, so teardown waits on no model turn.
-      const reason = this.phase.abort.signal.reason as AgentCancelCause | undefined
+      const reason = abortedCancelCause(this.phase.abort.signal)
       if (reason?.kind !== 'disposed' && (this.phase.kind === 'maintenance' || wakeAfterAbort)) {
         this.phase.wakeRequested = true
       }
@@ -321,8 +347,10 @@ export class ReactLoopAgent implements Agent {
         target = 'next-step'
       }
     } catch (error: unknown) {
-      if (signal.aborted) {
-        turnEnds = { kind: 'aborted', reason: signal.reason as AgentCancelCause }
+      // A cause is present exactly while the signal is aborted.
+      const cause = abortedCancelCause(signal)
+      if (cause !== undefined) {
+        turnEnds = { kind: 'aborted', reason: cause }
         throw error
       }
       // Every failure is structured: an `LlmError` keeps its facts, anything
@@ -366,7 +394,7 @@ export class ReactLoopAgent implements Agent {
         inHistory: preparedCall?.systemPromptUpdate === 'in-history',
         startsSeries: startsRequestSeries
           || this.requestSurfaceGeneration !== this.session.surface.contentGeneration
-          || this.toolsChanged(assembly.tools),
+          || (preparedCall?.toolUpdate === undefined && this.toolsChanged(assembly.tools)),
       })
       for (const { message, intent } of commits) {
         this.session.append('system/message', { turn, step, message }, intent)
@@ -377,7 +405,7 @@ export class ReactLoopAgent implements Agent {
         }
       }
       firstAttempt = false
-      const request = this.buildRequest(config, preparedCall, assembly.tools, startsRequestSeries, signal)
+      const request = this.buildRequest(config, preparedCall, assembly.tools, { turn, step }, startsRequestSeries, signal)
       const live = new AssistantStreamAttempt(
         this.session.id,
         ++this.assistantAttemptCounter,
@@ -555,6 +583,7 @@ export class ReactLoopAgent implements Agent {
     config: LlmCallConfig,
     preparedCall: PreparedLlmCall | undefined,
     tools: GenerateOptions['tools'] & object,
+    position: { turn: number; step: number },
     startsRequestSeries: boolean,
     signal: AbortSignal,
   ): GenerateOptions {
@@ -568,17 +597,38 @@ export class ReactLoopAgent implements Agent {
     const baseline = this.session.requestHeader()
     const startsSeries = startsRequestSeries
       || this.requestSurfaceGeneration !== surfaceGeneration
+    let headerSeq: SessionSeq | undefined
     if (!this.requestHeaderLogged) {
-      this.session.append('request/header', { header, reason: baseline === undefined ? 'initial' : 'resume' })
+      // Compaction during the first resumed pre-step must still mark a new series.
+      headerSeq = this.session.append('request/header', {
+        header,
+        reason: baseline === undefined ? 'initial' : 'resume',
+        ...startsSeries ? { startsSeries: true } : {},
+      }).seq
       this.requestHeaderLogged = true
     } else if (baseline === undefined || !headerEquals(baseline, header)) {
-      this.session.append('request/header', {
+      headerSeq = this.session.append('request/header', {
         header,
         reason: 'change',
         ...startsSeries ? { startsSeries: true } : {},
-      })
+      }).seq
     } else if (startsSeries) {
       this.session.append('request/header', { header, reason: 'series' })
+    }
+    if (baseline !== undefined && headerSeq !== undefined) {
+      const previousNames = new Set(baseline.tools?.map(tool => tool.name))
+      const currentNames = new Set(tools.map(tool => tool.name))
+      const additions = tools.filter(tool => !previousNames.has(tool.name))
+        .map(tool => ({ type: 'tool-addition' as const, toolName: tool.name }))
+      const removals = (baseline.tools ?? []).filter(tool => !currentNames.has(tool.name))
+        .map(tool => ({ type: 'tool-removal' as const, toolName: tool.name }))
+      if (additions.length > 0 || removals.length > 0) {
+        session.append('developer/message', {
+          ...position,
+          message: createDeveloperMessage({ source: { kind: 'tool-registry' }, content: [...additions, ...removals] }),
+          ...additions.length > 0 ? { headerSeq } : {},
+        }, { surfaceOp: 'append' })
+      }
     }
     this.requestSurfaceGeneration = surfaceGeneration
 
@@ -611,6 +661,7 @@ export class ReactLoopAgent implements Agent {
     const request = markAgentLoopRequest(Object.freeze({
       ...header.config,
       messages: boundaryMessages,
+      toolHistory: session.toolHistory(),
       ...header.tools !== undefined ? { tools: header.tools } : {},
       sessionId: this.session.id,
       signal,

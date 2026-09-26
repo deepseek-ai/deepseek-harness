@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-10-deepseek-image-token-calculator-v41.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-10-deepseek-image-token-calculator-v41.md
-2026-09-10-deepseek-image-token-calculator-v41.md: 668738221ebe3e634be7e4fe9d07c9627e0ceb4a
-2026-09-10-deepseek-image-token-calculator-v41.zh.md: a483282c6da667c2b8e32accb091e065419d44fc
+/agent-note-deepseek-image-token-estimator-on-the-v41-calculator:
+  en: 3e0b96f522d5e2c9
+  zh: a05009e8f9cbe5d4
+/agent-note-deepseek-image-token-estimator-on-the-v41-calculator/problem:
+  en: c47a183a3192d1ae
+  zh: bbc157ff44423dd3
+/agent-note-deepseek-image-token-estimator-on-the-v41-calculator/decision:
+  en: 17f8c045d3222266
+  zh: aead3e0de01980d9
+/agent-note-deepseek-image-token-estimator-on-the-v41-calculator/alternatives-considered:
+  en: 8f5bb52220ead193
+  zh: f267fda075b19963
+/agent-note-deepseek-image-token-estimator-on-the-v41-calculator/consequences:
+  en: 0a41bb795e221c3f
+  zh: b4840b79c78691cf

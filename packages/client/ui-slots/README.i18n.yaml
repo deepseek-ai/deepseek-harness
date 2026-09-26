@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-slots/README.md
-README.md: d38fe059693f7b15d060b0a52c97edd0b5e050c9
-README.zh.md: 968470edd20d75b7c6bf8f7c8fca898764af757e
+/:
+  en: 5a5d547e129dd834
+  zh: 40cd5d61ef91e908
+/deepseek-ai-dsh-client-ui-slots:
+  en: e708fcaf0caa1989
+  zh: 7b9d19291b159f7b
+/deepseek-ai-dsh-client-ui-slots/summary:
+  en: 486631f9cc7b5d6f
+  zh: 61fdcd066fcd1402
+/deepseek-ai-dsh-client-ui-slots/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-slots/use-this-package:
+  en: 05691d44a0c6c48f
+  zh: 434033d5761297f3
+/deepseek-ai-dsh-client-ui-slots/use-this-package/reusable-component-factories:
+  en: 301de67bf2779ae6
+  zh: 6e9d405ee1063d53
+/deepseek-ai-dsh-client-ui-slots/use-this-package/the-five-framework-props-shares:
+  en: 45e2933a5e084956
+  zh: 938deedaf489f892
+/deepseek-ai-dsh-client-ui-slots/use-this-package/store-seats:
+  en: 0d1c2948112841ec
+  zh: fc5a998cea485024
+/deepseek-ai-dsh-client-ui-slots/use-this-package/declaration-discipline:
+  en: 8a41014931ffccd5
+  zh: 615f93335a682b01
+/deepseek-ai-dsh-client-ui-slots/understand-the-implementation:
+  en: 983e6c0e71105f65
+  zh: 75af8d36dd8223fd
+/deepseek-ai-dsh-client-ui-slots/understand-the-implementation/registration-and-routing:
+  en: 0638aaadacadb6f1
+  zh: cb6324ef5c9e1ade
+/deepseek-ai-dsh-client-ui-slots/understand-the-implementation/the-renderer-contract:
+  en: 2b6058e98fb1efe7
+  zh: f32e37c8381809b9
+/deepseek-ai-dsh-client-ui-slots/further-exploration:
+  en: f4e5bbcf18e26c32
+  zh: 075486785ab5d453
+/deepseek-ai-dsh-client-ui-slots/model-experience:
+  en: 3120df665299c634
+  zh: 67bb5e1fe59dae19
+/deepseek-ai-dsh-client-ui-slots/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-client-ui-slots/known-limitations-and-deferred-work:
+  en: 093b1c5076ddfd6d
+  zh: 3069c423115492fe
+/deepseek-ai-dsh-client-ui-slots/known-limitations-and-deferred-work/dev-note:
+  en: 89e67d6054319245
+  zh: b55de4cfddf136a5

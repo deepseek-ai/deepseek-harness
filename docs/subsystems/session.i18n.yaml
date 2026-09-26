@@ -1,6 +1,67 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for session.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/session.md
-session.md: 7c7e244bfca17c8e22cabe45fc69126113b685d6
-session.zh.md: fecae92809bdba93588e163447d372c7a42d0260
+/sessions:
+  en: 28fb7eb8f758fdf0
+  zh: a36d6f03e331ad86
+/sessions/sessioneventmap-the-event-vocabulary:
+  en: 541354f6468e117d
+  zh: 2d7a665bad828a02
+/sessions/sessioneventmap-the-event-vocabulary/the-request-header-event-request-header:
+  en: 6eb931fcb2f4ab8d
+  zh: d822a83384cc1fee
+/sessions/sessioneventmap-the-event-vocabulary/the-route-capacity-event-request-context:
+  en: e6bf2297344b77e3
+  zh: f99beedebc892f6a
+/sessions/sessionevent-t-one-log-entry:
+  en: 622d333d9d903795
+  zh: fdc9ee663330f01e
+/sessions/surface-types:
+  en: 55fa7be0643afc08
+  zh: 0bc544886c68cdb3
+/sessions/surface-types/surfaceeventtype-the-message-producing-subset-of-event-types:
+  en: 2f1b6a16a4ee7cc1
+  zh: 7f16b568c4aa940f
+/sessions/surface-types/surfaceop-how-an-event-entered-the-surface:
+  en: 8fcc967516a13692
+  zh: d3978d3b8d02c566
+/sessions/surface-types/surfaceintent-the-parameter-to-session-append:
+  en: c65cc976acad9005
+  zh: 3efd10779881cba5
+/sessions/surface-types/plugin-owned-message-projections:
+  en: f1f73607d650620f
+  zh: b3ef72f19fb5ee3d
+/sessions/surface-types/sessionsurface-the-live-readonly-surface-projection:
+  en: 350259099d8d60c9
+  zh: 7b25db461748c04e
+/sessions/surface-types/surfacefoldreplacement-and-surfacefoldresult-a-complete-surface-replay:
+  en: 13820e0611b2e141
+  zh: 2aafb1e5e3dc42f6
+/sessions/session-public-api:
+  en: 04e9982948d9560d
+  zh: 221961cadebc6fb1
+/sessions/derived-history-derivemessages-and-deriveeventmessage:
+  en: 6e48ebd63b85f473
+  zh: c8ab986e975bbce2
+/sessions/live-session-fork-api:
+  en: e779481af02174c6
+  zh: 848a6a0a797c7d29
+/sessions/why-a-turn-ended-turnendreasonmap:
+  en: 966cc60273fb3911
+  zh: de5123ea9dbb0df2
+/sessions/execution-enclosure-and-standalone-events:
+  en: 5d33a4901131123a
+  zh: c774d7d32cb2dcfe
+/sessions/the-end-seed-boundary-session-end-seed:
+  en: 63b4059793255ca3
+  zh: 6bc7891c320249f4
+/sessions/plugin-contributed-log-only-events:
+  en: 6b895a381f28a41c
+  zh: b2fe46ba9b5304c4
+/sessions/durability-contract:
+  en: 62e3e4fbcba292a3
+  zh: cb6dcaf531621e85
+/sessions/remote-catalog-and-workspace-opening:
+  en: dd27307e0d7c893c
+  zh: b77d2a749b7b641c

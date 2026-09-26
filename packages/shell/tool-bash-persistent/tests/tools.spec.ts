@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -25,6 +25,7 @@ let callNumber = 0
 
 afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
+  vi.restoreAllMocks()
 })
 
 async function agent(ctx: Context, cwd: string | undefined): Promise<Agent> {
@@ -113,6 +114,7 @@ class StubPtySession implements TerminalBackendSession {
   pendingText = ''
   historyTruncated = false
   throwOnSend = false
+  largeOutput = 'x'.repeat(100)
 
   constructor(mode: StubMode) {
     this.mode = mode
@@ -205,7 +207,7 @@ class StubPtySession implements TerminalBackendSession {
       return this.operation(Promise.resolve(this.result(output, 'stdin_read')))
     }
     const commandOutput = this.mode === 'large'
-      ? 'x'.repeat(100)
+      ? this.largeOutput
       : this.mode === 'nonzero' ? '' : 'hello from stub'
     const exitCode = this.mode === 'nonzero' ? 7 : 0
     const output = `${start ?? ''}\n${commandOutput}\n${end ?? ''}${exitCode}\n${this.motd}`
@@ -403,6 +405,20 @@ describe('tool-bash-persistent', () => {
     expect(stub.sessions[2]?.closed).toEqual(['external cleanup'])
   })
 
+  it('clips a split surrogate pair instead of leaving a lone half', async () => {
+    const { ctx, owner, stub } = await setup({ backendType: 'stub', maxOutputChars: 10 })
+    await call(ctx, owner, 'warm up')
+    const session = stub.sessions[0]!
+    session.mode = 'large'
+    // The tenth code unit is the emoji's high surrogate.
+    session.largeOutput = `${'x'.repeat(9)}😀tail`
+
+    const rendered = text(await call(ctx, owner, 'emoji'))
+
+    expect(rendered.startsWith(`${'x'.repeat(9)}<response clipped>`)).toBe(true)
+    expect(rendered).not.toContain('\uD83D')
+  })
+
   it('waits for status digits after a torn completion marker', async () => {
     const { ctx, owner, stub } = await setup({ backendType: 'stub', maxOutputChars: 1_000 })
     await call(ctx, owner, 'warm up')
@@ -510,16 +526,162 @@ describe('tool-bash-persistent', () => {
       const controller = new AbortController()
       const cancelled = call(ctx, owner, 'hang', controller.signal)
       const queued = call(ctx, owner, 'after cancellation')
-      setTimeout(() => {
-        controller.abort(new Error('caller stopped'))
-      }, 5)
+      try {
+        await expect.poll(() => stub.sessions[0]!.sends).toBe(3)
+        controller.abort({ kind: 'user' })
 
-      expect((await cancelled).isError).toBe(true)
-      expect(text(await queued)).toBe('hello from stub\n[Command finished with exit code 0]')
-      expect(stub.sessions[0]?.closed).toContain('persistent bash command aborted')
-      expect(stub.sessions).toHaveLength(2)
+        const result = await cancelled
+        expect(result).toMatchObject({
+          isError: true,
+          error: { message: 'tool call aborted', info: { name: 'AbortError', code: 'ABORTED' } },
+        })
+        expect(text(result)).toBe('Error: tool call aborted')
+        expect(text(await queued)).toBe('hello from stub\n[Command finished with exit code 0]')
+        expect(stub.sessions[0]?.closed).toContain('persistent bash command aborted')
+        expect(stub.sessions).toHaveLength(2)
+      } finally {
+        controller.abort({ kind: 'user' })
+        await Promise.all([cancelled, queued])
+      }
     },
   )
+
+  it('settles an aborted queued call without sending it to a replacement shell', async () => {
+    const { ctx, owner, stub } = await setup({ backendType: 'stub' })
+    await call(ctx, owner, 'warm up')
+    const session = stub.sessions[0]!
+    session.mode = 'wait-for-abort'
+    const runningController = new AbortController()
+    // Dispatch observation distinguishes the tool's queue from cancellation before tool entry.
+    const execute = vi.spyOn(ctx.tools.get('bash', owner)!, 'execute')
+    const queuedController = new AbortController()
+    const running = call(ctx, owner, 'hang', runningController.signal)
+    const queued = call(ctx, owner, 'never sent', queuedController.signal)
+    try {
+      await expect.poll(() => session.sends).toBe(3)
+      await expect.poll(() => execute.mock.calls.length).toBe(2)
+      queuedController.abort({ kind: 'user' })
+      runningController.abort({ kind: 'user' })
+      const result = await queued
+      expect(text(result)).toBe('Error: tool call aborted')
+      expect(result.error?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
+      expect(session.sends).toBe(3)
+      expect(stub.sessions).toHaveLength(1)
+      expect(session.closed).toContain('persistent bash command aborted')
+    } finally {
+      runningController.abort({ kind: 'user' })
+      queuedController.abort({ kind: 'user' })
+      await Promise.all([running, queued])
+    }
+  })
+
+
+  it('settles cancellation during the first spawn and releases queued work', async () => {
+    const { ctx, owner, stub } = await setup()
+    const started = Promise.withResolvers<undefined>()
+    const finishSpawn = Promise.withResolvers<undefined>()
+    const spawn = stub.backend.spawn.bind(stub.backend)
+    vi.spyOn(stub.backend, 'spawn').mockImplementationOnce(async (spec) => {
+      started.resolve(undefined)
+      await finishSpawn.promise
+      spec.signal?.throwIfAborted()
+      return spawn(spec)
+    })
+    const controller = new AbortController()
+    const cancelled = call(ctx, owner, 'never started', controller.signal)
+    const queued = call(ctx, owner, 'after cancellation')
+    try {
+      await started.promise
+      controller.abort({ kind: 'user' })
+      finishSpawn.resolve(undefined)
+      const result = await cancelled
+      expect(text(result)).toBe('Error: tool call aborted')
+      expect(result.error?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
+      expect(text(await queued)).toBe('hello from stub\n[Command finished with exit code 0]')
+      expect(stub.sessions).toHaveLength(1)
+    } finally {
+      controller.abort({ kind: 'user' })
+      finishSpawn.resolve(undefined)
+      await Promise.all([cancelled, queued])
+    }
+  })
+
+  it('waits for rollback when a cancelled spawn returns a shell', async () => {
+    const { ctx, owner, stub } = await setup()
+    const started = Promise.withResolvers<undefined>()
+    const finishSpawn = Promise.withResolvers<TerminalBackendSession>()
+    const closing = Promise.withResolvers<undefined>()
+    const finishClose = Promise.withResolvers<undefined>()
+    const session = new StubPtySession('normal')
+    const close = session.close.bind(session)
+    vi.spyOn(session, 'close').mockImplementation(async (reason) => {
+      closing.resolve(undefined)
+      await finishClose.promise
+      await close(reason)
+    })
+    vi.spyOn(stub.backend, 'spawn').mockImplementationOnce(() => {
+      started.resolve(undefined)
+      return finishSpawn.promise
+    })
+    const controller = new AbortController()
+    let settled = false
+    const cancelled = call(ctx, owner, 'never initialized', controller.signal).then((result) => {
+      settled = true
+      return result
+    })
+    try {
+      await started.promise
+      controller.abort({ kind: 'user' })
+      finishSpawn.resolve(session)
+      await closing.promise
+      expect(settled).toBe(false)
+      expect(session.sends).toBe(0)
+      finishClose.resolve(undefined)
+      const result = await cancelled
+      expect(text(result)).toBe('Error: tool call aborted')
+      expect(result.error?.info?.code).toBe('ABORTED')
+      expect(session.closed).toContain('PTY spawn rolled back')
+      expect(ctx.terminals.list(owner)).toEqual([])
+    } finally {
+      controller.abort({ kind: 'user' })
+      finishSpawn.resolve(session)
+      finishClose.resolve(undefined)
+      await cancelled
+    }
+  })
+
+  it.each(['initialization', 'command', 'cleanup'] as const)('preserves a distinct %s failure during cancellation', async (phase) => {
+    const { ctx, owner } = await setup()
+    if (phase === 'command') await call(ctx, owner, 'warm up')
+    const controller = new AbortController()
+    const failure = new Error(`${phase} failed`)
+    vi.spyOn(ctx.terminals, 'startSend').mockImplementationOnce(() => {
+      controller.abort({ kind: 'user' })
+      throw phase === 'cleanup' ? new Error('initialization failed') : failure
+    })
+    if (phase === 'cleanup') vi.spyOn(ctx.terminals, 'kill').mockRejectedValueOnce(failure)
+    const result = await call(ctx, owner, 'fails', controller.signal)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toBe(`Error: ${phase} failed`)
+    expect(result.error?.info?.code).not.toBe('ABORTED')
+  })
+
+  it('keeps a spawn deadline failure distinct from caller cancellation', async () => {
+    const { ctx, owner, stub } = await setup({ backendType: 'stub', timeoutMs: 10 })
+    const spawn = stub.backend.spawn.bind(stub.backend)
+    vi.spyOn(stub.backend, 'spawn').mockImplementationOnce(async (spec) => {
+      await new Promise<void>((resolve) => { spec.signal!.addEventListener('abort', () => { resolve() }, { once: true }) })
+      spec.signal?.throwIfAborted()
+      return spawn(spec)
+    })
+    const controller = new AbortController()
+    const result = await call(ctx, owner, 'never started', controller.signal)
+    expect(controller.signal.aborted).toBe(false)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('PERSISTENT_BASH_TIMEOUT')
+    expect(result.error?.info?.code).not.toBe('ABORTED')
+    expect(stub.sessions).toEqual([])
+  })
 
   it.each(['init-exit', 'init-timeout'] as const)(
     'fails initialization and closes the unusable shell for %s',

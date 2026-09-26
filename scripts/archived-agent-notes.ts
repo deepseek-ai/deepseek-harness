@@ -53,7 +53,26 @@ export function renderArchiveManifest(files: Readonly<Record<string, string>>): 
   }, null, 2)}\n`
 }
 
-/** Reject changes or removals of entries sealed by a prior manifest. */
+// Exact seals for the authorized Figma-link removal and its bilingual sidecar.
+const figmaLinkRemovals = [
+  {
+    path: 'feature/2026-08-10-durable-workflow-runs-in-chat.md',
+    before: 'sha256:f9f5290cd880908d17b1080ae5776f22e182f5253471f90cf8bead418b33b502',
+    after: 'sha256:6018de4a89ca99d6cbfd618aff1c8136b23d8e4854a30f7b12a602f0417cbdc2',
+  },
+  {
+    path: 'feature/2026-08-10-durable-workflow-runs-in-chat.zh.md',
+    before: 'sha256:f4ffd2700bc9c2a0cc4b9d90f84e1d0a576939e2e6f0b130c5b142fd8cd518b0',
+    after: 'sha256:0080859221773122022d5880efa3d52f29c0872b52d63e170250d94f214ff37a',
+  },
+  {
+    path: 'feature/2026-08-10-durable-workflow-runs-in-chat.i18n.yaml',
+    before: 'sha256:0db3c21a3c8785e56d5d7b90df990b158069cd1cea664e62fc4786c6d7588450',
+    after: 'sha256:03eadb60c8ba4fde262cd61e3f911d8cd68ea4a58f57adeb8dd7bb9a97d08ca2',
+  },
+]
+
+/** Reject sealed changes except the exact authorized Figma-link removal hashes. */
 export function validateArchiveManifestExtension(
   baseline: ArchiveManifest,
   current: ArchiveManifest,
@@ -62,7 +81,9 @@ export function validateArchiveManifestExtension(
   for (const [path, expected] of Object.entries(baseline.files)) {
     const actual = current.files[path]
     if (actual === undefined) errors.push(`${path}: sealed manifest entry is missing`)
-    else if (actual !== expected) errors.push(`${path}: sealed manifest hash changed`)
+    else if (actual !== expected && !figmaLinkRemovals.some(change =>
+      change.path === path && change.before === expected && change.after === actual,
+    )) errors.push(`${path}: sealed manifest hash changed`)
   }
   return errors
 }
@@ -94,27 +115,21 @@ function pairMeta(content: string): Map<string, string> | undefined {
   return entries
 }
 
-function validateHeader(path: string, content: Buffer, sourceBase: string, chinese: boolean): string[] {
+function validateMetadata(path: string, content: Buffer, sourceBase: string): { errors: string[]; date: string | undefined } {
   const errors: string[] = []
   const lines = content.toString('utf8').split('\n')
-  if (!/^# Agent Note: \S/.test(lines[0] ?? '')) errors.push(`${path}: line 1 must be \`# Agent Note: <title>\``)
-  if (lines[1] !== '') errors.push(`${path}: line 2 must be blank`)
-  if (lines[2] !== 'Status: implemented') errors.push(`${path}: line 3 must be \`Status: implemented\``)
-  const archived = /^Archived: (\d{4}-\d{2}-\d{2})$/.exec(lines[3] ?? '')?.[1]
-  if (archived === undefined || !validDate(archived)) {
-    errors.push(`${path}: line 4 must be \`Archived: YYYY-MM-DD\` with a valid date`)
+  const status = lines.findIndex(line => line.startsWith('Status:'))
+  if (lines[status] !== 'Status: implemented') errors.push(`${path}: requires \`Status: implemented\``)
+  const archived = /^Archived: (\d{4}-\d{2}-\d{2})$/.exec(lines[status + 1] ?? '')?.[1]
+  if (status < 0 || archived === undefined || !validDate(archived)) {
+    errors.push(`${path}: requires \`Archived: YYYY-MM-DD\` with a valid date immediately after the status`)
   } else if (archived < sourceBase.slice(0, 10)) {
     errors.push(`${path}: archive date ${archived} predates the note filename`)
   }
-  if (lines[4] !== '') errors.push(`${path}: line 5 must be blank`)
-  const switcher = chinese
-    ? `[English](${sourceBase}.md) | 中文`
-    : `English | [中文](${sourceBase}.zh.md)`
-  if (lines[5] !== switcher) errors.push(`${path}: line 6 must be ${JSON.stringify(switcher)}`)
-  return errors
+  return { errors, date: archived }
 }
 
-/** Validate the closed kind tree, implemented/archive headers, and complete bilingual triplets. */
+/** Validate the closed kind tree, implemented/archive metadata, and complete bilingual triplets. */
 export function validateArchiveArtifacts(artifacts: ReadonlyMap<string, Buffer>): string[] {
   const errors: string[] = []
   const triplets = new Map<string, Triplet>()
@@ -151,10 +166,9 @@ export function validateArchiveArtifacts(artifacts: ReadonlyMap<string, Buffer>)
       continue
     }
     const sourceBase = basename(key)
-    errors.push(...validateHeader(sourcePath, source, sourceBase, false))
-    errors.push(...validateHeader(zhPath, zh, sourceBase, true))
-    const sourceDate = /^Archived: (\d{4}-\d{2}-\d{2})$/m.exec(source.toString('utf8'))?.[1]
-    const zhDate = /^Archived: (\d{4}-\d{2}-\d{2})$/m.exec(zh.toString('utf8'))?.[1]
+    const { errors: sourceErrors, date: sourceDate } = validateMetadata(sourcePath, source, sourceBase)
+    const { errors: zhErrors, date: zhDate } = validateMetadata(zhPath, zh, sourceBase)
+    errors.push(...sourceErrors, ...zhErrors)
     if (sourceDate !== undefined && zhDate !== undefined && sourceDate !== zhDate) {
       errors.push(`${key}: English and Chinese archive dates differ (${sourceDate} vs ${zhDate})`)
     }

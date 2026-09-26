@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-26-remove-packed-session-fixture-migrator.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/process/2026-07-26-remove-packed-session-fixture-migrator.md
-2026-07-26-remove-packed-session-fixture-migrator.md: 0a29ef98828ac07d291392d637b0508937c9a9a6
-2026-07-26-remove-packed-session-fixture-migrator.zh.md: aa9aece710587cef6c84ad9cf078821a2506deb1
+/agent-note-remove-the-packed-session-fixture-branch-migrator:
+  en: 0a308bd6231fb8ad
+  zh: c72bd0f6f327fadd
+/agent-note-remove-the-packed-session-fixture-branch-migrator/problem:
+  en: 26671139b244f2ad
+  zh: fb2bbcc283b6f108
+/agent-note-remove-the-packed-session-fixture-branch-migrator/proposal:
+  en: 6e9555d667a64807
+  zh: 7d7d59ae0f8859c9
+/agent-note-remove-the-packed-session-fixture-branch-migrator/alternatives-considered:
+  en: 7066942e7b78faba
+  zh: 6174e50357d868c5
+/agent-note-remove-the-packed-session-fixture-branch-migrator/acceptance-criteria:
+  en: 2ea0da4f97ecec97
+  zh: 308aed4607df56af
+/agent-note-remove-the-packed-session-fixture-branch-migrator/risks:
+  en: ee7d26eb7287179b
+  zh: 96f2cf320cc1adc8

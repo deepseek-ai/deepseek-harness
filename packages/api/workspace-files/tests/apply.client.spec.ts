@@ -7,12 +7,13 @@ import type { ResourceProvider } from '@deepseek-ai/dsh-client-resources/client'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { apply, inject } from '../src/client/index.ts'
-import { FakeRemote, settle } from './fake-remote.client.ts'
+import { FakeRemote } from './fake-remote.client.ts'
 
 describe('workspace-files client apply', () => {
   it('registers the file provider over ctx.remote, and unregisters it with the fiber', async () => {
     const ctx = new Context()
     const remote = new FakeRemote()
+    remote.autoReady = false
     const controller = new AbortController()
     const pulls: Array<Promise<unknown>> = []
     ctx.provide('remote', remote as never)
@@ -34,6 +35,7 @@ describe('workspace-files client apply', () => {
     const fiber = ctx.plugin({ inject: [...inject], apply })
     onTestFinished(async () => {
       await fiber.dispose()
+      await remote.dispose()
       await Promise.all(pulls)
     })
     await fiber.await()
@@ -43,13 +45,21 @@ describe('workspace-files client apply', () => {
     // A session address reaches the Host with its relative or absolute path.
     pulls.push(registered[0]!.open(sessionFileAddress('s1', 'a.txt'), { signal })[Symbol.asyncIterator]().next())
     pulls.push(registered[0]!.open(sessionFileAddress('s1', '/etc/hosts'), { signal })[Symbol.asyncIterator]().next())
-    await settle()
+    await Promise.all([remote.waitForChanges(0), remote.waitForChanges(1)])
+    expect(remote.opened.map(watch => [watch.sessionId, watch.path])).toEqual([['s1', 'a.txt'], ['s1', '/etc/hosts']])
+    expect(remote.stats).toEqual([])
+    await remote.ready(0)
+    await remote.waitForStat(0)
+    expect(remote.stats.map(pending => [pending.sessionId, pending.path])).toEqual([['s1', 'a.txt']])
+    await remote.ready(1)
+    await remote.waitForStat(1)
     expect(remote.stats.map(pending => [pending.sessionId, pending.path])).toEqual([['s1', 'a.txt'], ['s1', '/etc/hosts']])
-    expect(remote.opened).toHaveLength(1)
+    expect(remote.opened).toHaveLength(2)
 
     await fiber.dispose()
     await Promise.all(pulls)
     expect(released).toBe(1)
-    expect(remote.opened[0]!.source.aborted).toBe(true)
+    expect(remote.opened.map(watch => watch.source.aborted)).toEqual([true, true])
+    expect(remote.disposed).toHaveLength(2)
   })
 })

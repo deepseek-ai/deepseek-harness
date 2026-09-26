@@ -2,7 +2,7 @@
 
 English | [中文](api-gateway.zh.md)
 
-This is the current-state reference for the Typert API Gateway. It describes how business services declare unary Remote methods, how the build generates Host and Client contracts, and how calls reuse the Connection RPC and `/api` route. Session events, incremental data, and other streaming protocols are outside this document's scope; they may use the same Connection but do not use Remote method descriptors.
+This is the current-state reference for the Typert API Gateway. It describes how business services declare unary and stream Remote methods, how the build generates Host and Client contracts, and how calls reuse the Connection RPC and `/api` route. Session events, incremental data, and other streaming protocols are outside this document's scope; they may use the same Connection but do not use Remote method descriptors.
 
 ## Programming model
 
@@ -55,6 +55,8 @@ export class GoalService extends TypertRemoteService {
 
 Remote methods may return a value synchronously or return a Promise. For cooperative cancellation, the final parameter in the Host signature must be `signal: AbortSignal` using the global type; it is recorded in the descriptor instead of entering `args`, while the generated Client method accepts an optional final `AbortSignal`.
 
+`@Remote({ mode: 'stream' })` marks a method that returns `Iterable`, `AsyncIterable`, or `RemoteStream<Out, In>`: the Gateway delivers each yielded item, a value the Host method produced, over its multiplexed `/api/remote.mux` WebSocket or an in-process carrier, and the generated Client method returns a `RemoteStreamHandle<Out, In>` that iterates the items and exposes `send`, `end`, and `dispose` for the Client-to-Host uplink of the same logical stream. The second type argument of `RemoteStream<Out, In>` declares the uplink item type; the Gateway validates each item the Client sends, because it arrives from the browser, with the generated `In` codec before the Host method reads it through `this.ctx.invocation.uplink<In>()`. The uplink enters neither `args` nor the parameter list; the [Gateway README](../packages/api/gateway/README.md) owns the frame, half-close, cancellation, and inbox-bound contracts.
+
 The Client uses concrete functions on ordinary objects, not a JavaScript Proxy. Direct and scoped calls appear under `ctx.remote.<namespace>` and `agentCtx.remote.<namespace>`. Each namespace is a traced Cordis child Service registered as `remote.<namespace>`; the Client assembly mounts contributions through `ctx.remote.$mount()`, and the namespace unloads after its last method is withdrawn. Dependency declarations belong to the actual caller: only a business package that reads `ctx.remote.<namespace>` or `agentCtx.remote.<namespace>` declares both `remote` and `remote.<namespace>` in its own `inject`; assemblies that only mount contributions and higher-level runtimes that do not call that namespace do not declare the namespace dependency on the business package's behalf. When an `@Remote` method has exactly one lookup parameter and a same-named `TypertContextMap` uses the same wire identity, the generated scoped signature omits that identity parameter. `@RemoteScope` generates only the scoped invocation interface.
 
 ```ts ignore-check
@@ -96,7 +98,7 @@ The API Gateway package owns the Host dispatcher and Client Remote endpoint as p
 
 The root build runs `build:lib:host`, `build:lib:client`, and `build:web` in order. The Host lib phase first runs `tsc -b tsconfig.host.json`, then `tsdown --env.DSH_BUILD_FACE host`; the normal Host Project Reference graph compiles the Typert generator, which runs during this tsdown pass with the Host aggregate as its only `ts.Program` seed. The Client lib phase then runs `tsc -b tsconfig.client.json` and `tsdown --env.DSH_BUILD_FACE client`, consuming the newly generated Remote Client declarations and runtime contributions without starting Typert again.
 
-Both tsdown passes receive the complete workspace and bundle only JavaScript emitted to `lib/types` by the corresponding tsc phase. The root config does not scan Client artifacts, classify package names, or pass a maintained filter to tsdown; package-local configs return entries for the current phase based on `DSH_BUILD_FACE`. An ordinary Client plugin produces both its Node loader entry and browser bundle during the Client phase.
+Both tsdown passes match `vendor/*`, `packages/*/*`, and `apps/cli`, the Host pass also `apps/desktop-host` ([build order](development.md#typescript-project-layout)), and both bundle only JavaScript emitted to `lib/types` by the corresponding tsc phase. The root config does not scan Client artifacts, classify package names, or pass a maintained filter to tsdown; package-local configs return entries for the current phase based on `DSH_BUILD_FACE`. An ordinary Client plugin produces both its Node loader entry and browser bundle during the Client phase.
 
 `api/remotes`, `api/gateway`, `api/session-controller`, and `api/workspace-controller` (plus `client/connection`) split TypeScript faces. `api/remotes`' Client project depends on `/remote` declarations generated for business packages during Host tsdown; root aggregates and direct consumers must reference each split package's `tsconfig.host.json` or `tsconfig.client.json` respectively. `api-remotes`' `clientBundle(..., { hostPhase: true })` produces its Host entry during Host tsdown and leaves only the browser entry for Client tsdown. The Agent/Session lookup policy lives in `@deepseek-ai/dsh-api-session-controller`, not in `api-remotes`.
 
@@ -120,9 +122,9 @@ Strict analysis requires a Remote to be a public, non-static instance method wit
 
 Remote calls use the Connection's `/api` route. The Client Remote calls `connection.rpc.call('/api', '<namespace>/<method>', { args }, signal)`; the HTTP carrier maps this to `POST /api/<namespace>/<method>`, with a payload containing only a named `args` object.
 
-The Connection performs the unified trust check for `/api` before the HTTP bridge, then dispatches inside the shared FetchHandler. The Typert Gateway claims only two-segment endpoints that have a strict descriptor or active SRC marker; feature-owned exact Fetch routes handle non-JSON responses, and other requests return 404. The Connection owns transport, RPC ids, response envelopes, and request cancellation, while the Gateway owns only the Remote data protocol and business dispatch. Replacing the Connection carrier does not require changes to Remote descriptors or the Client programming interface.
+The Connection performs the unified trust check for `/api` before the HTTP bridge, then dispatches inside the shared FetchHandler. The Typert Gateway claims only two-segment endpoints that have a strict descriptor or active SRC marker; it projects binary Remote fields into JSON-compatible metadata and result-relative byte attachments, which Connection frames as multipart responses. Feature-owned exact Fetch routes handle responses outside the RPC envelope, and other requests return 404. Connection owns transport, RPC ids, response envelopes, and request cancellation, while Gateway owns the Remote data protocol and business dispatch. Replacing the Connection carrier does not require changes to Remote descriptors or the Client programming interface.
 
-For every call, the Gateway resolves the descriptor and live service from the current registries instead of caching business objects. It requires the fields in `args` to match the descriptor exactly, validates wire values with codecs, resolves objects or receivers through registered lookup or Context providers, invokes the service method targeted by the binding, and validates the return value. A missing provider, unknown identity, binding mismatch, missing or extra argument, schema failure, or missing method fails before entering or after leaving business code.
+For every call, the Gateway resolves the descriptor and live service from the current registries instead of caching business objects. It requires the fields in `args` to match the descriptor exactly, validates wire values with codecs, resolves objects or receivers through registered lookup or Context providers, and invokes the service method targeted by the binding. The Client Gateway validates decoded binary results with the generated result codec; ordinary JSON results retain their existing handling. A missing provider, unknown identity, binding mismatch, missing or extra argument, schema failure, or missing method fails before entering or after leaving business code.
 
 The lookup provider's `register()` supplies both the stable declaration and the default resolver; `configure()` supplies a resolver owned by Host composition that may execute asynchronously and is scoped to an effect lifetime. Configuration may precede provider mounting; without a provider, invocation still fails with `gateway/lookup-unavailable`, and unloading the configuration restores the provider's default policy. The Session Controller owns the standard resolver semantics for `agent` and `session`: it reuses a live Agent, automatically resumes ordinary cold sessions, deduplicates concurrent resumes, and rejects identities owned by subagent routing; the `session` lookup returns that Agent's Session. A resume failure and an ownership fence raise a `RemoteError` carrying their own code, `session/not-found` or `session/agent-busy`, which the Gateway encodes onto the wire unchanged; only an unclassified throw folds into `gateway/internal`.
 
@@ -138,14 +140,13 @@ SRC solves only dispatch for a Host process running from source. The Client does
 
 ## Development mode
 
-Web development prepares current Host, Client, and Web artifacts with `pnpm run build`, then runs the source Host and the Client plugin watcher in separate terminals:
+Web development runs one command, which builds current Host, Client, and Web artifacts, starts the source Host, and keeps Client bundles rebuilt:
 
 ```sh
-pnpm dsh web
 pnpm run dev:web
 ```
 
-`dsh` starts the Host source through tsx, so the Host can use the SRC fallback; `dev:web` watches only Client plugins with a `dsh.client` declaration and rewrites their `lib/client.js`. It does not analyze Host decorators or generate Remote Client DTS.
+`dsh` starts the Host source through tsx, so the Host can use the SRC fallback; the `dev:web` watchers rebuild the client-face type emit, Client plugin and library bundles, and the Web shell on source edits. They do not analyze Host decorators or generate Remote Client DTS; only the complete build that `dev:web` runs first (or `pnpm run build`) does.
 
 Changing only a Remote method's implementation body without changing its contract does not require regenerating the Typert files. After adding or removing a decorator or changing an export name, namespace, parameter, return value, lookup, Context, or cancellation signature, rerun the ordered lib build so the Host generates the strict contract before the Client compiles and bundles the new contribution:
 
@@ -157,8 +158,8 @@ The running Client watcher consumes these generated files when it rebundles. If 
 
 ## Boundaries
 
-Remote handles only unary method calls with one request and one result. Session event streams, pagination, incremental reduce, projection, and entity substreams require a separate data protocol and registration model; even when they reuse the Connection, they must not masquerade as Remote methods or enter invocation descriptors.
+Remote handles unary method calls with one request and one result, and stream methods whose items flow Host → Client while the Client's items reach the running Host method through `this.ctx.invocation.uplink()`. Session event streams, pagination, incremental reduce, projection, and entity substreams still require a separate data protocol and registration model; even when they reuse the Connection, they must not masquerade as Remote methods or enter invocation descriptors.
 
-The API layers are organized as `remotes → gateway → connection → webserver`. The BFF and Typert RPC layers live under `packages/api`; Connection and WebServer live at `packages/client/connection` and `packages/host/webserver`. A feature that needs a streamed or browser-native response registers an exact Connection Fetch route instead of defining a Remote method.
+The API layers are organized as `remotes → gateway → connection → webserver`. The BFF and Typert RPC layers live under `packages/api`; Connection and WebServer live at `packages/client/connection` and `packages/host/webserver`. Unary results containing `Uint8Array`, including nested fields and array entries, use [binary Remote transfer](../.agents/notes/implemented/architecture/2026-09-17-workspace-file-binary-transfer.md). A feature that needs a response outside the RPC envelope registers an exact Connection Fetch route.
 
 Lookup policy is configured per key, so all `agent` or `session` parameters share the cold-resume behavior. Accepting live objects only would require an explicit per-parameter or per-endpoint policy, which does not exist; the business method must not guess whether the object came from restoration.

@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/runtime-diagnostics/invariants/README.md
-README.md: 3841ca14f2236ddba1976926c13242b6f92bc16f
-README.zh.md: 913a72bc1711c025b8a8259c8929dfe957fc0354
+/:
+  en: 42e5357bcc6d4525
+  zh: 59891074b3705f9e
+/deepseek-ai-dsh-invariants:
+  en: 355d61820fca8c0b
+  zh: c272797e46060b16
+/deepseek-ai-dsh-invariants/summary:
+  en: cb7b0a0d555fafa6
+  zh: 23522958d2c367dd
+/deepseek-ai-dsh-invariants/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-invariants/use-this-package:
+  en: f0ff84f9852dca9b
+  zh: dd4ea4390478f0b7
+/deepseek-ai-dsh-invariants/use-this-package/when-to-use-it:
+  en: 597ae83b2c71897a
+  zh: f740fc18cbd3122f
+/deepseek-ai-dsh-invariants/use-this-package/enabling-checks-and-selecting-packages:
+  en: ca8d647080cfb8c6
+  zh: bbcc004ed3e81fae
+/deepseek-ai-dsh-invariants/use-this-package/which-checks-run:
+  en: 9bb18846b6eeb906
+  zh: fb79a5d6a71988fd
+/deepseek-ai-dsh-invariants/use-this-package/adding-a-companion-to-a-custom-composition:
+  en: 25319ae89e0d6f21
+  zh: e447f24be7b6a2d1
+/deepseek-ai-dsh-invariants/use-this-package/when-a-check-fails:
+  en: 74ced4bc91ead262
+  zh: 966b5e607f507aee
+/deepseek-ai-dsh-invariants/understand-the-implementation:
+  en: 5b23215f6331afac
+  zh: e2beea6daa73b614
+/deepseek-ai-dsh-invariants/understand-the-implementation/design-philosophy:
+  en: 556effb42afcaefd
+  zh: ff23afa308434b73
+/deepseek-ai-dsh-invariants/understand-the-implementation/source-map:
+  en: 08ade90614209295
+  zh: d4862b249cb44379
+/deepseek-ai-dsh-invariants/understand-the-implementation/selection-and-registration-lifecycle:
+  en: 314e6dd14cc9228b
+  zh: da047ded06701b40
+/deepseek-ai-dsh-invariants/further-exploration:
+  en: 7ed5b0b9908a611f
+  zh: 76a8c00915ccda49
+/deepseek-ai-dsh-invariants/model-experience:
+  en: 269727a21a370a19
+  zh: 9b9ab038146410cb
+/deepseek-ai-dsh-invariants/model-experience/kv-cache-effect:
+  en: dffdf5a0451054bb
+  zh: 2a4a419d5b52f85e
+/deepseek-ai-dsh-invariants/known-limitations-and-deferred-work:
+  en: 668ce3dea799676e
+  zh: 1970fbd1fa11ae17
+/deepseek-ai-dsh-invariants/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

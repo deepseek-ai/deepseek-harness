@@ -1,6 +1,91 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/core/agent/README.md
-README.md: 8ba3dc730790acb0f792173e9ee01d2dc954957e
-README.zh.md: 0718ae5f3f73b1fd0bb5b600de3a08c50e67421e
+/:
+  en: b6bcf3c8b941d336
+  zh: 28b5d2aa43fdd026
+/deepseek-ai-dsh-agent:
+  en: e6513350f94898d8
+  zh: feb04fc389801a62
+/deepseek-ai-dsh-agent/summary:
+  en: 717e7d19a6f72e56
+  zh: 152c18689fe4f377
+/deepseek-ai-dsh-agent/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-agent/use-this-package:
+  en: b48322540e229083
+  zh: 05aec0854397f4c3
+/deepseek-ai-dsh-agent/use-this-package/create-or-resume-an-agent:
+  en: e305441a5a4a9b44
+  zh: 3e997b12ce0ce04c
+/deepseek-ai-dsh-agent/use-this-package/drive-an-agent-s-conversation:
+  en: 71e258897e2e7d73
+  zh: abf0991012faa17e
+/deepseek-ai-dsh-agent/use-this-package/scope-registrations-to-one-agent:
+  en: 2594a1e02adea801
+  zh: cae8860369728efb
+/deepseek-ai-dsh-agent/use-this-package/intercept-or-observe-work-in-flight:
+  en: fb42e501ef88a040
+  zh: 8822f29727d14bef
+/deepseek-ai-dsh-agent/understand-the-implementation:
+  en: ce7e776e9d516bdb
+  zh: 59d2751743db7795
+/deepseek-ai-dsh-agent/understand-the-implementation/design-concept:
+  en: 7c850051d2857bfa
+  zh: 4cab817553114e15
+/deepseek-ai-dsh-agent/understand-the-implementation/step-admission:
+  en: 348b9ecd0890c585
+  zh: d0f73d28d0d2c6f1
+/deepseek-ai-dsh-agent/understand-the-implementation/durable-inbox:
+  en: f6802c7f94f623b3
+  zh: cc3885db80765970
+/deepseek-ai-dsh-agent/understand-the-implementation/source-map:
+  en: c08cf19efc131171
+  zh: 7e9f7b6a85e0aa1d
+/deepseek-ai-dsh-agent/understand-the-implementation/registry-and-lifecycle:
+  en: df92e97cedd0d02e
+  zh: f6040c145bffd933
+/deepseek-ai-dsh-agent/understand-the-implementation/initiator-scope:
+  en: 3ca29c07144b36db
+  zh: 93580213b3de2004
+/deepseek-ai-dsh-agent/understand-the-implementation/ownership-invariants:
+  en: e48eae6c7de88cf8
+  zh: 1f5b37bdb0e53788
+/deepseek-ai-dsh-agent/further-exploration:
+  en: 4ef57cfafa344581
+  zh: 73575876bfdc7a18
+/deepseek-ai-dsh-agent/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-agent/model-experience/user-steering-and-injected-messages:
+  en: 962c598672b0eed6
+  zh: d05b3bc936685ad3
+/deepseek-ai-dsh-agent/model-experience/user-steering-and-injected-messages/what-the-model-sees:
+  en: 55fcf97dbcb7a41e
+  zh: 691c0ab3ea41f6f0
+/deepseek-ai-dsh-agent/model-experience/user-steering-and-injected-messages/token-effect:
+  en: 5f428bfadaf4394b
+  zh: 03308df9fd3492a7
+/deepseek-ai-dsh-agent/model-experience/user-steering-and-injected-messages/kv-cache-effect:
+  en: 75dc61fe240860f0
+  zh: 621720291d1b4bd3
+/deepseek-ai-dsh-agent/model-experience/agent-scoped-request-composition:
+  en: 215fc35b0f30e38a
+  zh: 21788ec980c300ea
+/deepseek-ai-dsh-agent/model-experience/agent-scoped-request-composition/what-the-model-sees:
+  en: 057babd515991736
+  zh: acf0c05c490b689c
+/deepseek-ai-dsh-agent/model-experience/agent-scoped-request-composition/token-effect:
+  en: dfebf42b629656d9
+  zh: 9369ace52f58a579
+/deepseek-ai-dsh-agent/model-experience/agent-scoped-request-composition/kv-cache-effect:
+  en: 07a408b32e49ecaf
+  zh: 9684b80cb3c0e75c
+/deepseek-ai-dsh-agent/known-limitations-and-deferred-work:
+  en: 00a2d12980ffe756
+  zh: c8bf69d06d165b36
+/deepseek-ai-dsh-agent/known-limitations-and-deferred-work/dev-note:
+  en: 217405c92be96543
+  zh: 7bc21e6842079a57

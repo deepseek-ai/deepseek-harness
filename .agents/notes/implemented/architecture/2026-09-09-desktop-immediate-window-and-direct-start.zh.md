@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-09-09-desktop-immediate-window-and-direct-start.md) | 中文
 
-profile 修改与恢复遵循[直接修改 profile 决策](2026-09-09-desktop-in-place-profile.zh.md)。
+插件管理和原生恢复遵循[共享 Web 薄壳决策](2026-09-10-desktop-web-wrapper.zh.md)。
 
 ## 问题
 
@@ -16,9 +16,9 @@ Electron 在 profile 校准或 Host 启动前创建带打包 Web 加载页的主
 
 致命错误展示遵循[原生 Desktop 恢复](2026-09-15-desktop-native-fatal-recovery.zh.md)。窗口展示时机、直接启动 Host 和关闭所有权仍由本文规定。
 
-Desktop 原位准备 profile 后，通过[共享 Web runner](2026-09-10-desktop-web-wrapper.zh.md)启动实际 Host。就绪消息提供认证 Host URL 与启动注入。壳使用该 URL 换取 Host cookie，转发应用 HTTP 请求，并仅为归属的应用 origin 认证直接 WebSocket 请求。这一载体适配保留 Web 路由与流语义，同时允许静态 HTML 在 Host 之前显示。包变更保留 pnpm 生命周期脚本与锁。失败保留部分变更以供显式修复，不会自动回滚 profile。
+Desktop 原位准备 profile 后，通过[共享 Web runner](2026-09-10-desktop-web-wrapper.zh.md)启动实际 Host。就绪信息提供认证后的 Host URL 和启动注入。桌面壳用该 URL 换取 Host cookie，转发应用 HTTP 请求，并仅为所属应用源认证直接 WebSocket 请求。此承载适配保留 Web 路由和流语义，同时允许静态 HTML 在 Host 就绪前显示。
 
-本决策部分取代[打包决策](2026-08-25-electron-desktop-packaging-and-updates.zh.md)和[内置运行时决策](2026-09-08-desktop-bundled-runtime-and-external-plugins.zh.md)中的 staging 后端探针与延迟创建主窗口。这两份记录仍保留发布、签名、传输、资源归属与依赖事务的理由。完整运行时文件验证仍属于打包操作。
+本决策部分取代[打包决策](2026-08-25-electron-desktop-packaging-and-updates.zh.md)和[内置运行时决策](2026-09-08-desktop-bundled-runtime-and-external-plugins.zh.md)中的 staging 后端探针与延迟创建主窗口。这两份记录仍保留发布、签名、传输与资源归属的理由。完整运行时文件验证仍属于打包操作。
 
 ## 考虑过的替代方案
 
@@ -30,4 +30,4 @@ Desktop 原位准备 profile 后，通过[共享 Web runner](2026-09-10-desktop-
 
 用户可以在产品 UI 可用前看到启动进度并从失败中恢复。窗口能够响应不代表后端已经就绪，启动延迟仍需通过已安装产物测量。激活失败后，profile 修改保留在原位。
 
-验证覆盖 Host 延迟时可见的加载页、新 profile 只启动一次服务进程、同一窗口中的失败与重试、恢复期间的插件管理，以及子进程正在启动时关闭应用。安装后 GUI 证据补充生命周期与事务测试。
+验证覆盖 Host 延迟时可见的加载页、新 profile 仅启动一次服务、同一窗口中的失败与重试、原生恢复，以及子进程启动时关闭。安装后 GUI 证据补充生命周期测试。

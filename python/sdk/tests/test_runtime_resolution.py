@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import deepseek_harness_runtime as runtime
 import pytest
+from deepseek_harness_runtime._resources import validate_resources
 
 from deepseek_harness_runtime import (
     RUNTIME_MODE_ENV_VAR,
@@ -19,9 +22,86 @@ from deepseek_harness_runtime import (
 )
 
 
+def _resource_sidecars(executable: Path, native_targets: tuple[str, ...] = ("darwin-arm64", "darwin-x64", "win32-x64")) -> Path:
+    office = executable.with_name(f"{executable.name.removesuffix('.exe')}-office")
+    tag = executable.name.removeprefix("deepseek-harness-sdk-runtime-").removesuffix(".exe")
+    native = tag.replace("win-", "win32-").replace("macos-", "darwin-")
+    engine = native if native in native_targets else "wasm"
+    for required in ("@deepseek-ai/libreoffice-kit/package.json", f"@deepseek-ai/libreoffice-kit-{engine}/prebuilds.json"):
+        path = office / "node_modules" / required
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}")
+    adapter = office / "node_modules/@deepseek-ai/libreoffice-kit/package.json"
+    adapter.write_text(json.dumps({"optionalDependencies": {
+        f"@deepseek-ai/libreoffice-kit-{target}": "0.0.1" for target in (*native_targets, "wasm")
+    }}), encoding="utf-8")
+    resources = executable.with_name(tag)
+    manifest = resources / "primary-runtime/runtime.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"platform": native.rsplit("-", 1)[0], "arch": tag.rsplit("-", 1)[1],
+                                    "python": "3.12.14", "pythonPackages": {"numpy": "2.3.5"}}))
+    python = resources / "primary-runtime/dependencies/python" / ("python.exe" if tag.startswith("win-") else "bin/python3")
+    python.parent.mkdir(parents=True)
+    python.touch()
+    python.chmod(0o755)
+    node = resources / "primary-runtime/dependencies/node/bin" / ("node.exe" if tag.startswith("win-") else "node")
+    node.parent.mkdir(parents=True)
+    node.touch()
+    node.chmod(0o755)
+    packages = python.parent if tag.startswith("win-") else python.parent.parent
+    (packages / ("Lib/site-packages" if tag.startswith("win-") else "lib/python3.12/site-packages")).mkdir(parents=True)
+    for file in ["scripts/check_office.py", *(f"office-{kind}/SKILL.md" for kind in ("docx", "pptx", "xlsx"))]:
+        path = resources / "office-skills" / file
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    return office
+
+
 def test_unknown_explicit_mode_fails_loud() -> None:
     with pytest.raises(ValueError, match="expected 'exe' or 'node'"):
         resolve_bundled_launch_args("bogus")
+
+
+@pytest.mark.parametrize("target", ["linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "win-x64"])
+@pytest.mark.parametrize("invalid", [None, "manifest", "platform", "python", "skills", "packages", "mode", "node", "node-mode"])
+def test_authoring_resources_validate_installed_and_wheel_payloads(tmp_path: Path, target: str, invalid: str | None) -> None:
+    executable = tmp_path / f"deepseek-harness-sdk-runtime-{target}"
+    _resource_sidecars(executable)
+    root = tmp_path / target
+    python = root / "primary-runtime/dependencies/python" / ("python.exe" if target == "win-x64" else "bin/python3")
+    node = root / "primary-runtime/dependencies/node/bin" / ("node.exe" if target == "win-x64" else "node")
+    if invalid in ("mode", "node-mode") and target == "win-x64":
+        pytest.skip("Windows executables do not require a POSIX executable bit")
+    if invalid == "manifest":
+        (root / "primary-runtime/runtime.json").unlink()
+    elif invalid == "platform":
+        manifest_path = root / "primary-runtime/runtime.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["arch"] = "wrong"
+        manifest_path.write_text(json.dumps(manifest))
+    elif invalid == "node":
+        node.unlink()
+    elif invalid == "node-mode":
+        node.chmod(0o644)
+    elif invalid == "python":
+        python.unlink()
+    elif invalid == "skills":
+        (root / "office-skills/office-docx/SKILL.md").unlink()
+    elif invalid == "packages":
+        next(root.rglob("site-packages")).rmdir()
+    elif invalid == "mode":
+        python.chmod(0o644)
+    archive_path = tmp_path / "payload.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        for path in root.rglob("*"):
+            archive.write(path, str(path.relative_to(root)).replace("\\", "/"))
+    with zipfile.ZipFile(archive_path) as archive:
+        for candidate in (root, zipfile.Path(archive)):
+            if invalid is None:
+                validate_resources(candidate, target)
+            else:
+                with pytest.raises((ValueError, FileNotFoundError)):
+                    validate_resources(candidate, target)
 
 
 def test_unknown_env_mode_fails_loud(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -47,6 +127,7 @@ def test_runtime_requires_spawn_helper_only_on_macos(
     linux = runtime_dir / "deepseek-harness-sdk-runtime-linux-x64"
     linux.touch()
     Path(f"{linux}-rg").touch()
+    _resource_sidecars(linux)
     macos = runtime_dir / "deepseek-harness-sdk-runtime-macos-arm64"
     macos.touch()
     Path(f"{macos}-rg").touch()
@@ -67,6 +148,7 @@ def test_windows_runtime_uses_exe_payload_and_exe_sidecar(
     executable = runtime_dir / "deepseek-harness-sdk-runtime-win-x64.exe"
     executable.touch()
     (runtime_dir / "deepseek-harness-sdk-runtime-win-x64-rg.exe").touch()
+    _resource_sidecars(executable)
     monkeypatch.setattr(runtime, "bundled_package_dir", lambda: tmp_path)
     monkeypatch.setattr(runtime, "_current_platform_tag", lambda: "win-x64")
 
@@ -100,6 +182,25 @@ def test_runtime_requires_ripgrep_sidecar(
     monkeypatch.setattr(runtime, "_current_platform_tag", lambda: "linux-x64")
 
     with pytest.raises(FileNotFoundError, match="ripgrep sidecar"):
+        runtime.bundled_runtime_path()
+
+
+def test_runtime_requires_complete_resource_sidecars(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executable = tmp_path / "runtime" / "deepseek-harness-sdk-runtime-linux-x64"
+    executable.parent.mkdir()
+    executable.touch()
+    Path(f"{executable}-rg").touch()
+    monkeypatch.setattr(runtime, "bundled_package_dir", lambda: tmp_path)
+    monkeypatch.setattr(runtime, "_current_platform_tag", lambda: "linux-x64")
+
+    with pytest.raises(FileNotFoundError, match="Office sidecar"):
+        runtime.bundled_runtime_path()
+    office = _resource_sidecars(executable)
+    assert runtime.bundled_runtime_path() == executable
+    (office / "node_modules/@deepseek-ai/libreoffice-kit-wasm/prebuilds.json").unlink()
+    with pytest.raises(FileNotFoundError, match="Office sidecar"):
         runtime.bundled_runtime_path()
 
 
@@ -195,3 +296,31 @@ def test_windows_console_branch_preserves_real_child_io_and_completion(tmp_path:
     assert result.stdout == "stdout-中文\n"
     assert result.stderr == "stderr-中文\n"
     assert sentinel.read_text() == "done"
+
+
+@pytest.mark.parametrize("target,native_targets", [
+    ("linux-x64", ()), ("linux-arm64", ()),
+    ("macos-arm64", ("darwin-arm64",)), ("macos-x64", ("darwin-x64",)), ("win-x64", ("win32-x64",)),
+    ("linux-x64", ("linux-x64",)), ("macos-arm64", ()),
+])
+def test_runtime_requires_its_platform_office_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target: str, native_targets: tuple[str, ...],
+) -> None:
+    extension = ".exe" if target.startswith("win-") else ""
+    executable = tmp_path / "runtime" / f"deepseek-harness-sdk-runtime-{target}{extension}"
+    executable.parent.mkdir()
+    executable.touch()
+    executable.with_name(f"{executable.stem}-rg{extension}").touch()
+    if target.startswith("macos-"):
+        Path(f"{executable}-spawn-helper").touch()
+    office = _resource_sidecars(executable, native_targets)
+    monkeypatch.setattr(runtime, "bundled_package_dir", lambda: tmp_path)
+    monkeypatch.setattr(runtime, "_current_platform_tag", lambda: target)
+    assert runtime.bundled_runtime_path() == executable
+    engine = next(office.glob("node_modules/@deepseek-ai/libreoffice-kit-*/prebuilds.json"))
+    engine.unlink()
+    foreign = office / "node_modules/@deepseek-ai" / ("libreoffice-kit-darwin-arm64" if engine.parent.name == "libreoffice-kit-wasm" else "libreoffice-kit-wasm") / "prebuilds.json"
+    foreign.parent.mkdir(parents=True, exist_ok=True)
+    foreign.write_text("{}")
+    with pytest.raises(FileNotFoundError, match="Office sidecar"):
+        runtime.bundled_runtime_path()

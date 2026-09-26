@@ -8,7 +8,7 @@
  * @module @deepseek-ai/dsh-session/surface
  */
 
-import type { Message } from '@deepseek-ai/dsh-llm'
+import type { Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset, SessionSeq } from './types.ts'
 import { KNOWN_SESSION_EVENT_TYPES, MESSAGE_PROJECTION_EVENT_TYPES } from './known-event-types.ts'
 import type {
@@ -49,6 +49,7 @@ export interface SessionMessageProjection<T extends SessionEventType = SessionEv
 /** Runtime counterpart of the message-producing event union. */
 const SURFACE_EVENT_TYPES = new Set<string>([
   'system/message',
+  'developer/message',
   'user/message',
   'assistant/message',
   'tool/result',
@@ -57,7 +58,7 @@ const SURFACE_EVENT_TYPES = new Set<string>([
 /**
  * Whether an event type can join the model-visible surface.
  * @param type - event type to test.
- * @returns true for one of the four message-producing event types.
+ * @returns true for one of the message-producing event types.
  */
 export function isSurfaceEligibleType(type: string): boolean {
   return SURFACE_EVENT_TYPES.has(type)
@@ -107,7 +108,7 @@ export function isReplacementSurfaceEvent(
 /**
  * Project a single event into the LLM message it derives to, or null when it
  * produces none — a non-surface event (attempt, boundary, log-only record) or an
- * empty-content assistant/message (which exists only to host usage). A caller
+ * empty-content system, developer, or assistant message. A caller
  * reconstructing model input supplies the same prefix's `projectedMessages`
  * from {@link foldSurface}; without that map this function reads original
  * event content. Session instance methods apply the live projection. Messages
@@ -137,12 +138,11 @@ export function deriveEventMessage(
     case 'user/message': {
       return event.data
     }
-    // An empty-content message projects to no wire message. For
-    // system/message the node records "no system prompt" while keeping its
-    // surface position; for assistant/message the event exists only to host a
-    // max-tokens step's usage and must not inject a content-less assistant
-    // turn into the provider transcript.
+    // Empty system and developer nodes retain their surface positions without
+    // adding wire messages. An empty assistant event hosts a max-tokens step's
+    // usage and must not inject a content-less turn into the provider transcript.
     case 'system/message':
+    case 'developer/message':
     case 'assistant/message': {
       if (event.data.message.content.length === 0) return null
       return event.data.message
@@ -163,17 +163,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Reject noncanonical request-header fields and contradictory tool failure metadata.
+ * Reject noncanonical request-header fields, developer roles/content, and contradictory tool failure metadata.
  * This does not validate complete event payloads or embedded provider streams.
  * @param event - event whose locally related payload fields are inspected.
  * @param subject - event location to include in validation errors.
- * @throws when request data/header is not an object, optional header fields are empty, or tool failure metadata contradicts its message.
+ * @throws when request-header fields, developer roles/content, or tool failure metadata are invalid.
  */
 export function validateSessionEventData(
   event: Pick<SessionEvent, 'type' | 'data'>,
   subject: string,
 ): void {
   const data: unknown = event.data
+  if (SURFACE_EVENT_TYPES.has(event.type) && isRecord(data)) {
+    const message = event.type === 'user/message' ? data : data['message']
+    if (isRecord(message)) {
+      if ((event.type === 'developer/message') !== (message['role'] === 'developer')) {
+        throw new Error(`${subject} developer/message and developer role must occur together`)
+      }
+      if (message['role'] !== 'developer' && Array.isArray(message['content'])
+        && message['content'].some((block: unknown) => isRecord(block)
+          && (block['type'] === 'tool-addition' || block['type'] === 'tool-removal'))) {
+        throw new Error(`${subject} tool-change blocks require developer role`)
+      }
+      if (event.type === 'developer/message' && Array.isArray(message['content'])) {
+        let hasAdditions = false
+        for (const block of message['content']) {
+          if (!isRecord(block) || (block['type'] !== 'tool-addition' && block['type'] !== 'tool-removal')) continue
+          if (typeof block['toolName'] !== 'string' || block['toolName'].length === 0) {
+            throw new Error(`${subject} ${block['type']} requires a nonempty toolName`)
+          }
+          if (block['type'] === 'tool-addition') {
+            hasAdditions = true
+            if (Object.hasOwn(block, 'tool')) throw new Error(`${subject} tool-addition must omit inline tool definitions`)
+          }
+        }
+        if (hasAdditions ? !isEventSeq(data['headerSeq']) : Object.hasOwn(data, 'headerSeq')) {
+          throw new Error(`${subject} requires headerSeq exactly when tool additions are present`)
+        }
+      }
+    }
+  }
   if (event.type === 'request/header') {
     if (!isRecord(data)) throw new Error(`${subject} data must be an object`)
     const header = data['header']
@@ -190,10 +219,8 @@ export function validateSessionEventData(
     if (!isRecord(data)) throw new Error(`${subject} data must be an object`)
     if (data['error'] === undefined) return
     const message = data['message']
-    const content = isRecord(message) ? message['content'] : undefined
-    const block: unknown = Array.isArray(content) ? content[0] : undefined
-    if (!isRecord(block) || block['isError'] !== true) {
-      throw new Error(`${subject} error requires message content[0].isError === true`)
+    if (!isRecord(message) || message['isError'] !== true) {
+      throw new Error(`${subject} error requires message.isError === true`)
     }
   }
 }
@@ -343,6 +370,36 @@ function assertSourceEventReferences(
   }
 }
 
+/** Resolve tool additions against their immutable historical request header. */
+function assertDeveloperHeader(
+  event: SessionEvent,
+  events: readonly SessionEvent[],
+  baseSeq: SessionLogOffset,
+): void {
+  if (event.type !== 'developer/message') return
+  validateSessionEventData(event, `developer/message at seq ${event.seq}`)
+  if (event.data.headerSeq === undefined) return
+  const headerSeq = event.data.headerSeq
+  const headerEvent = events[headerSeq - baseSeq]
+  if (headerSeq >= event.seq || headerEvent?.type !== 'request/header') {
+    throw new Error('developer/message headerSeq must reference an earlier request/header')
+  }
+  for (const block of event.data.message.content) {
+    if (block.type !== 'tool-addition') continue
+    const definitions = headerEvent.data.header.tools?.filter(tool => tool.name === block.toolName) ?? []
+    if (definitions.length !== 1) {
+      throw new Error(`developer/message tool-addition "${block.toolName}" must name exactly one tool in headerSeq ${headerSeq}`)
+    }
+    const definition = definitions[0] as ToolSchema
+    if (typeof definition.description !== 'string' || !isRecord(definition.parameters)) {
+      throw new Error(`developer/message tool-addition "${block.toolName}" requires a complete tool definition in headerSeq ${headerSeq}`)
+    }
+    if (Object.hasOwn(definition, 'deferLoading') && definition.deferLoading !== true) {
+      throw new Error('developer/message referenced tool deferLoading must be true when present')
+    }
+  }
+}
+
 /**
  * Validate one event's surface metadata without checking membership in a log or surface.
  * @param event - event whose marker and source sequence values are inspected.
@@ -419,15 +476,13 @@ function assertToolResultRewrite(
     }
     const originalRest = { ...original.data } as Record<string, unknown>
     const replacementRest = { ...event.data } as Record<string, unknown>
-    const originalResult = original.data.message.content[0]
-    const replacementResult = event.data.message.content[0]
     originalRest['message'] = {
       ...original.data.message,
-      content: [{ ...originalResult, content: null }],
+      content: null,
     }
     replacementRest['message'] = {
       ...event.data.message,
-      content: [{ ...replacementResult, content: null }],
+      content: null,
     }
     if (!isDeepEqualJson(originalRest, replacementRest)) {
       throw new Error('tool/result surface replacement may change only content')
@@ -470,6 +525,7 @@ function planSurfaceEvent(
     throw new Error(`session event seq ${event.seq} is not contiguous; expected ${expectedSeq}`)
   }
   const surfaceOp = validateSurfaceMetadata(event)
+  assertDeveloperHeader(event, events, baseSeq)
   const projection = projections.find(item => item.type === event.type)
   if (projection !== undefined) {
     return { kind: 'project', projection, messages: projection.project(event, {

@@ -143,7 +143,7 @@ Session and descriptor persistence survive restart. Activation state, Agent inbo
 
 This version covers continuable in-process children and leaves one-shot delegation unchanged. Remote providers require a separate Activation handle with equivalent authenticated control and child-first quiescence contracts before they can support the same behavior.
 
-It adds no host-user continuation, subagent steering operation, durable mailbox, cross-process lease, automatic replay of interrupted inbox work, team authority, workflow authority, public residency query, new live-Activation or descendant limit, or runtime cache; the later [current-turn interrupt](2026-08-06-continuable-subagent-interrupt.md) added the one public stop operation on top of this lifecycle. Existing delegation-depth policy remains unchanged. Optional child-to-parent reporting is a later consumer of this lifecycle rather than part of the base continuable capability.
+It adds no host-user continuation, subagent steering operation, durable mailbox, cross-process lease, automatic replay of interrupted inbox work, team authority, workflow authority, public residency query, or runtime cache; the later [current-turn interrupt](2026-08-06-continuable-subagent-interrupt.md) added the one public stop operation on top of this lifecycle. Existing delegation-depth policy remains unchanged. Optional child-to-parent reporting is a later consumer of this lifecycle rather than part of the base continuable capability.
 
 ## Alternatives considered
 
@@ -203,7 +203,7 @@ The implementation pins these behaviors:
 
 Removing Jobs gives up generic background-work inspection, result collection, and exact Task cancellation. If those product features become requirements, they need a request ticket or inbox capability that does not reintroduce a second execution queue.
 
-Retaining an Activation while descendants run consumes Agent resources proportional to the unfinished ownership graph. The existing delegation-depth policy still bounds nesting, but this version adds no live-Activation or total-descendant limit; settled historical Sessions retain no `AgentHandle`.
+Retaining an Activation while descendants run consumes Agent resources proportional to the unfinished ownership graph. The existing delegation-depth policy still bounds nesting, and [shared Activation capacity](2026-09-15-continuable-activation-capacity.md) bounds live continuable descendants; settled historical Sessions retain no `AgentHandle`.
 
 The process-local inbox and ownership graph do not coordinate two harness processes. Deployments allowing concurrent access to one persistence store still require a durable lease and mailbox protocol.
 

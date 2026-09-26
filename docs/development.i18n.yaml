@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for development.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/development.md
-development.md: ce8f1e7746562e696c96e6359ec9fcfde596d6e2
-development.zh.md: 85e95946dfd7210201f0807880d5ed1a92859356
+/development-guide:
+  en: dd46df776b6c0a69
+  zh: 1a46cfc92cca2266
+/development-guide/setup-tutorial:
+  en: 5207d17725c07a27
+  zh: 258884c4300ac63a
+/development-guide/setup-tutorial/prerequisites:
+  en: 6078798f0fda1347
+  zh: ea73704c4ec4f2a9
+/development-guide/setup-tutorial/windows-and-wsl-2:
+  en: e86be579be6f1813
+  zh: 14f6a220337d0861
+/development-guide/setup-tutorial/first-time-setup:
+  en: f82b635837db9627
+  zh: ca23888533b0ffc1
+/development-guide/contributor-reference:
+  en: 3221d1076554001f
+  zh: 29f166be6a5c04d9
+/development-guide/contributor-reference/typescript-project-layout:
+  en: de9ab4baab0c5c91
+  zh: cde7e8ab4f698fcb
+/development-guide/contributor-reference/environment-variables:
+  en: dba2c72ee6ffa930
+  zh: b65c27fbb9129ec8
+/development-guide/contributor-reference/git-integrations:
+  en: dc98eda4f4021feb
+  zh: b08766708803cf10
+/development-guide/contributor-reference/ci-gates:
+  en: 731fcaffe9210a72
+  zh: d682e221a71b0ef6
+/development-guide/contributor-reference/daily-commands:
+  en: 08aa6ec1cdabfeb7
+  zh: dcce5ae9d3c829d0
+/development-guide/contributor-reference/profile-runs:
+  en: 7ce6264a6a06dc4a
+  zh: e12b684f2bef942b
+/development-guide/contributor-reference/application-commands:
+  en: 28a029c8768f0880
+  zh: 67c17256e046624e
+/development-guide/contributor-reference/todo-markers:
+  en: 85b38f78d87fc88f
+  zh: 00d5eb625e7dfb61
+/development-guide/contributor-reference/documenting-types-verbatim-ts-type-equiv:
+  en: 9d578b6797be921b
+  zh: 823cbfcfd9a75c17

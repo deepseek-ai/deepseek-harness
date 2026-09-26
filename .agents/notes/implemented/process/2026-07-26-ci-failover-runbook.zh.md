@@ -20,7 +20,7 @@ Status: implemented
 
 ### 自有池是什么
 
-`vm-backup`：一台共享虚拟机，运行多个常驻 systemd 管理的运行器实例。注册实例共享 CPU、内存和磁盘；实例数量不代表独立机器数量。其镜像必须预装 Playwright Chromium 的 Linux 系统软件包；CI 会下载锁文件选定的浏览器，但绝不在这台持久化共享主机上运行 `apt`。切换前先看 `serial / linux (self-hosted standby)` 最近一次运行：其聚合流程包含浏览器回放，因此绿色热备同时验证常规容量和这项浏览器先决条件。
+`vm-backup`：一台共享虚拟机，运行多个常驻 systemd 管理的运行器实例。注册实例共享 CPU、内存和磁盘；实例数量不代表独立机器数量。其镜像必须预装 Playwright Chromium 和 WebKit 所需的 Linux 系统软件包；CI 会下载锁文件选定的浏览器，但绝不在这台持久化共享主机上运行 `apt`。切换前先看 `serial / linux (self-hosted standby)` 最近一次运行：其聚合流程包含浏览器回放，因此绿色热备同时验证常规容量和这项浏览器先决条件。
 
 #### Windows 池
 
@@ -32,7 +32,7 @@ Status: implemented
 
 1. 仓库 **Settings → Secrets and variables → Actions → Variables → New repository variable**：名称 `DSH_CI_FAILOVER_LINUX`（Linux 池故障）或 `DSH_CI_FAILOVER_WINDOWS`（Windows 池故障），值 `selfhosted`。
 2. 重新触发必需作业，使其重新解析运行器池。已经为托管标签**排队**的作业不会重定向，也无法原地 re-run，因此对于本手册所述的无限排队故障，应取消卡住的运行并 re-run all jobs，或推送一个新提交；“Re-run failed jobs”只有在作业真正失败（而非仍在排队）时才有用。
-3. 切换到此完成。在 `selfhosted` 的 Linux 故障切换取值下，工作流还会把 `DSH_SNAPSHOT_MAX_CONCURRENCY` 降为 12，以限制共享虚拟机上的争抢，并跳过托管路径的 pnpm 缓存恢复，因为虚拟机的持久 store 会直接提供热安装。覆盖率在两个 Linux 池上都使用 4 个单 worker 插桩分区与 2 个豁免 worker。Windows 开关没有并发或缓存分支；它只重定向原生 Windows 作业的运行器池。
+3. 切换到此完成。在 `selfhosted` 的 Linux 故障切换取值下，工作流还会把 `DSH_SNAPSHOT_MAX_CONCURRENCY` 降为 12，以限制共享虚拟机上的争抢，并跳过托管路径的 pnpm 缓存恢复，因为虚拟机的持久 store 会直接提供热安装。自托管覆盖率使用 4 个单 worker 插桩分区与 2 个豁免 worker；独占的托管运行器根据可用 CPU 计算默认 worker 数。Windows 开关选择原生 Windows 运行器池，并在共享的自托管运行器上保留显式 worker 限制。
 
 **Dependabot 例外。**两个开关的 `selfhosted` 腿都刻意排除 `dependabot[bot]`：自托管故障切换期间，Dependabot 拉取请求继续在托管池排队，而不是把依赖项提供的代码放到持久化虚拟机上执行。故障期间 Dependabot PR 持续排队是预期行为而非切换失败；托管池恢复后它会自行完成。`blacksmith` 取值下的分支不带此类排除，因为 Blacksmith 运行器是临时的（见 [blacksmith 故障切换支路笔记](2026-09-09-blacksmith-failover-leg.zh.md)）。
 

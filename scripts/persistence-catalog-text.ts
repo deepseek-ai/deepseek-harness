@@ -19,6 +19,9 @@ const english = {
   optional: 'optional', required: 'required', rest: 'rest', index: 'index signature',
   emptyObject: 'Object with no declared properties.', arrayPrefix: 'Array of ', arraySuffix: '.',
   oneOf: 'One of:', opaque: ' (opaque)', opaqueExplanation: ": the declaration does not expose the stored value's internal fields.",
+  sourceCompatibility: 'Source compatibility: ', attributionAdditions: 'Attribution-only additions: ',
+  sourceColumns: '| kind | Form property | Other required fields | Full definition |',
+  notDeclared: 'not declared', none: 'none',
 }
 
 const chinese: Record<keyof typeof english, string> = {
@@ -37,6 +40,9 @@ const chinese: Record<keyof typeof english, string> = {
   optional: '可选', required: '必需', rest: '剩余项', index: '索引签名',
   emptyObject: '无已声明属性的对象。', arrayPrefix: '', arraySuffix: ' 的数组。',
   oneOf: '以下类型之一：', opaque: '（不透明）', opaqueExplanation: '：此声明未暴露存储值的内部字段。',
+  sourceCompatibility: '消息源兼容策略：', attributionAdditions: '仅表示归属的新增 kind：',
+  sourceColumns: '| kind | form 属性 | 其他必需字段 | 完整定义 |',
+  notDeclared: '未声明', none: '无',
 }
 
 /** Complete translated prose; adding an English key requires its Chinese counterpart. */

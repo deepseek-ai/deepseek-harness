@@ -1,911 +1,1254 @@
 /**
- * ic_ds_* icon set for the dsh web UI. All glyphs ride currentColor (filled
- * or stroked) and take {size, className}. Batch A mirrors the deepsuite icon
- * library (same figma source); batch B glyphs are harness-only figma
- * extracts; the product glyphs at the end are hand-authored.
+ * Shared current-color product icons. Names identify the glyph and weight;
+ * rendered size remains a prop instead of part of the component name.
  */
+import { useId } from 'react'
 import type { IconProps } from './props.ts'
+import {
+  BrowseOutlineArtwork, ChatLinesOutlineArtwork, CodeBracketsArtwork, FolderCloseArtwork,
+  GlobeOutlineArtwork, NewChatOutlineArtwork,
+} from './shared-artwork.tsx'
 
 export type { IconProps } from './props.ts'
 
-/** ic_ds_new_chat_outline_16 */
-export const IconNewChatOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M8.00003 0.3237C3.76075 0.3237 0.32373 3.76072 0.32373 8C0.32373 9.17603 0.589121 10.2922 1.0632 11.2901L1.35291 11.8989L2.5705 11.3205L2.28079 10.7117C1.89079 9.89074 1.67301 8.97167 1.67301 8C1.67301 4.50546 4.50549 1.67298 8.00003 1.67298C11.4946 1.67298 14.3271 4.50546 14.3271 8C14.3271 11.4945 11.4946 14.327 8.00003 14.327C7.28473 14.327 6.76077 14.277 6.29621 14.1487C5.83857 14.0224 5.40441 13.8109 4.88514 13.4488C4.12569 12.919 3.03778 12.7316 2.141 13.2978L2.12682 13.307L2.11264 13.3171L1.34886 13.854L1.79659 15.188L2.86122 14.4384C3.19068 14.2305 3.68325 14.2542 4.11326 14.5539C4.72789 14.9826 5.30042 15.2724 5.93762 15.4484C6.56803 15.6224 7.22776 15.6763 8.00003 15.6763C12.2393 15.6763 15.6763 12.2393 15.6763 8C15.6763 3.76072 12.2393 0.3237 8.00003 0.3237ZM7.32033 4.82535V7.32536H4.82538V8.67464H7.32033V11.1747H8.6696V8.67464H11.1747V7.32536H8.6696V4.82535H7.32033Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_search_outline_16 */
-export const IconSearchOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M11.894845 6.647401C11.894845 3.725463 9.534486 1.356779 6.623219 1.35657C3.711786 1.35657 1.351635 3.725338 1.351635 6.647401C1.351843 9.569296 3.711911 11.938273 6.623219 11.938273C9.534361 11.938064 11.894637 9.569171 11.894845 6.647401ZM13.245462 6.647401C13.245254 10.317935 10.280401 13.293613 6.623219 13.293821C2.965871 13.293821 0.000204 10.31806 0 6.647401C0 2.976574 2.965746 0 6.623219 0C10.280526 0.000205 13.245462 2.9767 13.245462 6.647401Z"
-      fill="currentColor"
-    />
-    <path
-      d="M16.000417 15.041079L15.044449 16.000433L11.530434 12.473588L12.486298 11.514234L16.000417 15.041079Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_globe_outline_14 — meridian globe (harness-only figma extract). */
-export const IconGlobeOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M7.00018 0.353516C10.6708 0.353535 13.6468 3.32958 13.6469 7.00018C13.6468 10.6708 10.6708 13.6468 7.00018 13.6469C3.32957 13.6468 0.353535 10.6708 0.353516 7.00018C0.353535 3.32957 3.32957 0.353531 7.00018 0.353516ZM5.44643 7.59661C5.49463 8.97506 5.70762 10.191 6.02136 11.0793C6.20141 11.5891 6.40328 11.9585 6.59898 12.1889C6.79501 12.4196 6.93213 12.454 7.00018 12.454C7.06822 12.454 7.20533 12.4197 7.40138 12.1889C7.59708 11.9585 7.79895 11.589 7.979 11.0793C8.29274 10.191 8.50574 8.97506 8.55394 7.59661H5.44643ZM1.57861 7.59661C1.80785 9.70467 3.2386 11.4509 5.1715 12.1388C5.07135 11.9317 4.97972 11.7098 4.89746 11.477C4.53084 10.4391 4.30224 9.0828 4.25357 7.59661H1.57861ZM9.74679 7.59661C9.69813 9.0828 9.46952 10.4391 9.1029 11.477C9.0206 11.7099 8.92818 11.9316 8.82797 12.1388C10.7613 11.4511 12.1925 9.70496 12.4218 7.59661H9.74679ZM5.1706 1.8616C3.23814 2.54963 1.80876 4.29604 1.5795 6.40376H4.25357C4.30224 4.91756 4.53083 3.56129 4.89746 2.5234C4.97968 2.29066 5.07051 2.0686 5.1706 1.8616ZM7.00018 1.54637C6.93213 1.54638 6.79503 1.5807 6.59898 1.81145C6.40332 2.04177 6.20139 2.41058 6.02136 2.92012C5.70754 3.80851 5.49461 5.02499 5.44643 6.40376H8.55394C8.50575 5.025 8.29282 3.80851 7.979 2.92012C7.79898 2.41059 7.59705 2.04177 7.40138 1.81145C7.20531 1.58067 7.06823 1.54637 7.00018 1.54637ZM8.82887 1.8616C8.92902 2.0687 9.02064 2.29053 9.1029 2.5234C9.46953 3.56129 9.69812 4.91756 9.74679 6.40376H12.4209C12.1916 4.29575 10.7618 2.54943 8.82887 1.8616Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_settings_outline_14 */
-export const IconSettingsOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <g clipPath="url(#clip0_2580_121189)">
-      <path
-        d="M12.1192 4.91016C11.9392 4.52714 11.7007 4.1292 11.4483 3.78809C11.385 3.70258 11.3517 3.68409 11.2462 3.67383C10.7419 3.6248 10.2318 3.69454 9.72662 3.64551C9.29108 3.60318 8.93739 3.40341 8.67682 3.05176C8.38762 2.66127 8.19217 2.20926 7.90338 1.81934C7.83985 1.73359 7.80848 1.71542 7.70221 1.70508C7.24758 1.6609 6.7511 1.66104 6.29791 1.70508C6.19164 1.71542 6.16027 1.73359 6.09674 1.81934C5.80775 2.20954 5.61248 2.66131 5.3233 3.05176C5.06273 3.40341 4.70904 3.60318 4.2735 3.64551C3.76831 3.69454 3.25825 3.6248 2.75397 3.67383C2.6484 3.68409 2.61509 3.70258 2.55182 3.78809C2.30019 4.12814 2.06125 4.52646 1.88092 4.91016C1.83256 5.01309 1.83242 5.04912 1.88092 5.15235C2.07954 5.57482 2.37449 5.94529 2.5733 6.36817C2.76971 6.78606 2.76964 7.21293 2.5733 7.63086C2.37462 8.05374 2.07947 8.42453 1.88092 8.84668C1.83235 8.95004 1.83257 8.98695 1.88092 9.08985C2.06098 9.47285 2.2994 9.87079 2.55182 10.2119C2.61509 10.2974 2.6484 10.3159 2.75397 10.3262C3.25879 10.3753 3.76834 10.3055 4.2735 10.3545C4.70904 10.3968 5.06273 10.5966 5.3233 10.9482C5.6125 11.3387 5.80795 11.7907 6.09674 12.1807C6.16027 12.2664 6.19164 12.2846 6.29791 12.2949C6.7511 12.339 7.24758 12.3391 7.70221 12.2949C7.80848 12.2846 7.83985 12.2664 7.90338 12.1807C8.19237 11.7905 8.38764 11.3387 8.67682 10.9482C8.93739 10.5966 9.29108 10.3968 9.72662 10.3545C10.2318 10.3055 10.7419 10.3752 11.2462 10.3262C11.3517 10.3159 11.385 10.2974 11.4483 10.2119C11.7007 9.87079 11.9391 9.47285 12.1192 9.08985C12.1675 8.98695 12.1678 8.95004 12.1192 8.84668C11.9205 8.42428 11.6255 8.05377 11.4268 7.63086C11.2305 7.21293 11.2304 6.78606 11.4268 6.36817C11.6256 5.94531 11.9207 5.5746 12.1192 5.15235C12.1677 5.04912 12.1676 5.01309 12.1192 4.91016ZM13.2051 5.66309C13.0064 6.08573 12.7114 6.45579 12.5128 6.87793C12.4642 6.98123 12.4645 7.01829 12.5128 7.1211C12.7112 7.54328 13.0064 7.91405 13.2051 8.33692C13.4015 8.75487 13.4015 9.18169 13.2051 9.59961C12.9911 10.0551 12.7109 10.5221 12.4122 10.9258C12.1522 11.277 11.7974 11.4782 11.3624 11.5205C10.8573 11.5696 10.3477 11.4999 9.84283 11.5488C9.73621 11.5592 9.70429 11.5772 9.64069 11.6631C9.35229 12.0526 9.15705 12.5044 8.86823 12.8945C8.60854 13.2452 8.25275 13.447 7.81842 13.4893C7.28749 13.5409 6.71096 13.5407 6.1817 13.4893C5.74737 13.447 5.39158 13.2452 5.1319 12.8945C4.84312 12.5045 4.64808 12.0529 4.35944 11.6631C4.29583 11.5772 4.26392 11.5592 4.15729 11.5488C3.65283 11.5 3.14295 11.5696 2.63776 11.5205C2.20274 11.4782 1.84796 11.277 1.58795 10.9258C1.28834 10.5209 1.00864 10.0543 0.794982 9.59961C0.598644 9.18169 0.598598 8.75487 0.794982 8.33692C0.993688 7.91405 1.28889 7.54328 1.48737 7.1211C1.53567 7.01829 1.53593 6.98123 1.48737 6.87793C1.28887 6.45603 0.993667 6.08569 0.794982 5.66309C0.598535 5.24516 0.59869 4.81829 0.794982 4.40039C1.00898 3.94492 1.28922 3.47791 1.58795 3.07422C1.84796 2.723 2.20274 2.5218 2.63776 2.47949C3.14295 2.43038 3.65283 2.50003 4.15729 2.45117C4.26391 2.44081 4.29583 2.4228 4.35944 2.33692C4.64783 1.94742 4.84308 1.49557 5.1319 1.10547C5.39158 0.754835 5.74737 0.553005 6.1817 0.510744C6.71263 0.459147 7.28917 0.459309 7.81842 0.510744C8.25275 0.553005 8.60854 0.754835 8.86823 1.10547C9.157 1.49551 9.35204 1.94708 9.64069 2.33692C9.70429 2.4228 9.73621 2.44081 9.84283 2.45117C10.3477 2.50007 10.8573 2.43039 11.3624 2.47949C11.7974 2.5218 12.1522 2.723 12.4122 3.07422C12.7118 3.47909 12.9915 3.94567 13.2051 4.40039C13.4014 4.81829 13.4016 5.24516 13.2051 5.66309Z"
-        fill="currentColor"
-      />
-      <path
-        d="M7.9317 7C7.9317 6.48569 7.51438 6.06836 7.00006 6.06836C6.48575 6.06836 6.06842 6.48569 6.06842 7C6.06842 7.51432 6.48575 7.93164 7.00006 7.93164C7.51438 7.93164 7.9317 7.51432 7.9317 7ZM9.13092 7C9.13092 8.17706 8.17712 9.13086 7.00006 9.13086C5.823 9.13086 4.8692 8.17706 4.8692 7C4.8692 5.82294 5.823 4.86914 7.00006 4.86914C8.17712 4.86914 9.13092 5.82294 9.13092 7Z"
-        fill="currentColor"
-      />
-    </g>
-    <defs>
-      <clipPath id="clip0_2580_121189">
-        <rect width={14} height={14} fill="currentColor" />
-      </clipPath>
-    </defs>
-  </svg>
-)
-
-/** ic_ds_settings_outline_16 */
-export const IconSettingsOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <g clipPath="url(#clip0_1450_63327)">
-      <path
-        d="M14.0861 5.51366C13.8717 5.0575 13.588 4.58542 13.2889 4.18108C13.208 4.07172 13.1596 4.04373 13.0243 4.03054C12.4277 3.97255 11.8245 4.05527 11.2269 3.9972C10.7224 3.94816 10.3133 3.71661 10.0115 3.30919C9.66986 2.84777 9.43973 2.31343 9.09824 1.85234C9.01771 1.74365 8.96805 1.71589 8.83354 1.70282C8.29432 1.65044 7.70402 1.65061 7.16656 1.70282C7.03205 1.71589 6.98239 1.74365 6.90186 1.85234C6.56067 2.31303 6.33025 2.84774 5.98855 3.30919C5.68681 3.71661 5.27774 3.94816 4.77317 3.9972C4.17564 4.05527 3.57239 3.97255 2.97585 4.03054C2.84046 4.04373 2.79208 4.07172 2.71115 4.18108C2.41212 4.58542 2.12835 5.0575 1.91403 5.51366C1.85299 5.64359 1.85286 5.7018 1.91403 5.8319C2.14865 6.33077 2.49748 6.76892 2.73237 7.26854C2.9594 7.7515 2.96041 8.24717 2.73338 8.73044C2.49837 9.23061 2.14891 9.66837 1.91403 10.1681C1.85291 10.2982 1.85299 10.3564 1.91403 10.4863C2.12856 10.9429 2.41185 11.4142 2.71115 11.8189C2.79208 11.9283 2.84046 11.9563 2.97585 11.9694C3.57239 12.0274 4.17564 11.9447 4.77317 12.0028C5.27774 12.0518 5.68681 12.2834 5.98855 12.6908C6.33024 13.1522 6.56037 13.6866 6.90186 14.1476C6.98239 14.2563 7.03205 14.2841 7.16656 14.2972C7.70402 14.3494 8.29432 14.3495 8.83354 14.2972C8.96805 14.2841 9.01771 14.2563 9.09824 14.1476C9.43944 13.687 9.66985 13.1522 10.0115 12.6908C10.3133 12.2834 10.7224 12.0518 11.2269 12.0028C11.8244 11.9447 12.4271 12.0275 13.0243 11.9694C13.1596 11.9563 13.208 11.9283 13.2889 11.8189C13.5891 11.4131 13.872 10.942 14.0861 10.4863C14.1471 10.3564 14.1472 10.2982 14.0861 10.1681C13.8513 9.66861 13.5017 9.23061 13.2667 8.73044C13.0397 8.24717 13.0407 7.7515 13.2677 7.26854C13.5026 6.7689 13.8513 6.33106 14.0861 5.8319C14.1472 5.7018 14.1471 5.64359 14.0861 5.51366ZM15.3035 6.40373C15.0685 6.90359 14.7188 7.34119 14.4841 7.84037C14.4231 7.97025 14.423 8.02855 14.4841 8.15861C14.7189 8.65833 15.0685 9.09611 15.3035 9.59626C15.5308 10.0801 15.5308 10.5744 15.3035 11.0582C15.052 11.5933 14.7225 12.1426 14.37 12.6191C14.0685 13.0265 13.6581 13.259 13.1536 13.3081C12.5566 13.366 11.9541 13.2835 11.3573 13.3414C11.2228 13.3545 11.1731 13.3823 11.0926 13.491C10.7511 13.9521 10.521 14.4864 10.1793 14.9478C9.87828 15.3542 9.46719 15.5869 8.96387 15.6358C8.34008 15.6964 7.66194 15.6966 7.03623 15.6358C6.53291 15.5869 6.12182 15.3542 5.82084 14.9478C5.47911 14.4863 5.24878 13.9517 4.90753 13.491C4.82701 13.3823 4.77734 13.3545 4.64284 13.3414C4.04647 13.2835 3.44373 13.366 2.84653 13.3081C2.34201 13.259 1.93164 13.0265 1.63013 12.6191C1.27867 12.144 0.948453 11.5941 0.696621 11.0582C0.469315 10.5744 0.469279 10.0801 0.696621 9.59626C0.931628 9.09613 1.2813 8.65807 1.51597 8.15861C1.57708 8.02855 1.57702 7.97025 1.51597 7.84037C1.28117 7.34095 0.931635 6.9036 0.696621 6.40373C0.469213 5.91992 0.469367 5.42562 0.696621 4.94183C0.948441 4.40587 1.27868 3.85598 1.63013 3.38092C1.93164 2.97349 2.34201 2.74095 2.84653 2.6919C3.44353 2.63397 4.04599 2.71649 4.64284 2.65856C4.77734 2.64549 4.82701 2.61774 4.90753 2.50904C5.24905 2.04792 5.47913 1.51362 5.82084 1.05219C6.12182 0.645806 6.53291 0.413119 7.03623 0.364178C7.66002 0.303556 8.33816 0.303369 8.96387 0.364178C9.46719 0.413119 9.87828 0.645806 10.1793 1.05219C10.521 1.51365 10.7513 2.04828 11.0926 2.50904C11.1731 2.61774 11.2228 2.64549 11.3573 2.65856C11.9541 2.71649 12.5566 2.63397 13.1536 2.6919C13.6581 2.74095 14.0685 2.97349 14.37 3.38092C14.7214 3.85598 15.0517 4.40587 15.3035 4.94183C15.5307 5.42562 15.5309 5.91992 15.3035 6.40373Z"
-        fill="currentColor"
-      />
-      <path
-        d="M9.13764 7.99999C9.13764 7.3715 8.62855 6.8624 8.00005 6.8624C7.37155 6.8624 6.86246 7.3715 6.86246 7.99999C6.86246 8.62849 7.37155 9.13759 8.00005 9.13759C8.62855 9.13759 9.13764 8.62849 9.13764 7.99999ZM10.4834 7.99999C10.4834 9.37126 9.37132 10.4833 8.00005 10.4833C6.62878 10.4833 5.51674 9.37126 5.51674 7.99999C5.51674 6.62873 6.62878 5.51669 8.00005 5.51669C9.37132 5.51669 10.4834 6.62873 10.4834 7.99999Z"
-        fill="currentColor"
-      />
-    </g>
-    <defs>
-      <clipPath id="clip0_1450_63327">
-        <rect width={16} height={16} fill="currentColor" />
-      </clipPath>
-    </defs>
-  </svg>
-)
-
-/** ic_ds_panel_left_outline_16 */
-export const IconPanelLeftOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M9.67272 0.522841C10.8339 0.522841 11.76 0.522714 12.4963 0.602493C13.2453 0.683657 13.8789 0.854248 14.4264 1.25197C14.7504 1.48739 15.0355 1.77247 15.2709 2.0965C15.6686 2.64394 15.8392 3.27758 15.9204 4.02655C16.0002 4.7629 16 5.68895 16 6.85014V9.14986C16 10.3111 16.0002 11.2371 15.9204 11.9735C15.8392 12.7224 15.6686 13.3561 15.2709 13.9035C15.0355 14.2275 14.7504 14.5126 14.4264 14.748C13.8789 15.1458 13.2453 15.3163 12.4963 15.3975C11.76 15.4773 10.8339 15.4772 9.67272 15.4772H6.3273C5.16611 15.4772 4.24006 15.4773 3.50371 15.3975C2.75474 15.3163 2.1211 15.1458 1.57366 14.748C1.24963 14.5126 0.964549 14.2275 0.729131 13.9035C0.331407 13.3561 0.160817 12.7224 0.0796529 11.9735C-0.000126137 11.2371 1.25338e-09 10.3111 1.25338e-09 9.14986V6.85014C1.25329e-09 5.68895 -0.000126137 4.7629 0.0796529 4.02655C0.160817 3.27758 0.331407 2.64394 0.729131 2.0965C0.964549 1.77247 1.24963 1.48739 1.57366 1.25197C2.1211 0.854248 2.75474 0.683657 3.50371 0.602493C4.24006 0.522714 5.16611 0.522841 6.3273 0.522841H9.67272ZM5.54303 1.88715V14.1118C5.78636 14.1128 6.04709 14.1169 6.3273 14.1169H9.67272C10.8639 14.1169 11.7032 14.1164 12.3493 14.0465C12.9824 13.9779 13.3497 13.8494 13.6268 13.6482C13.8354 13.4966 14.0195 13.3125 14.1711 13.1039C14.3723 12.8268 14.5007 12.4595 14.5693 11.8264C14.6393 11.1803 14.6398 10.341 14.6398 9.14986V6.85014C14.6398 5.65896 14.6393 4.81967 14.5693 4.1736C14.5007 3.54048 14.3723 3.17318 14.1711 2.89609C14.0195 2.68747 13.8354 2.50337 13.6268 2.35179C13.3497 2.1506 12.9824 2.02212 12.3493 1.95353C11.7032 1.88358 10.8639 1.88307 9.67272 1.88307H6.3273C6.04709 1.88307 5.78636 1.8862 5.54303 1.88715ZM4.1828 1.91166C3.99125 1.9216 3.8148 1.93577 3.65076 1.95353C3.01764 2.02212 2.65034 2.1506 2.37325 2.35179C2.16463 2.50337 1.98052 2.68747 1.82895 2.89609C1.62776 3.17318 1.49928 3.54048 1.43069 4.1736C1.36074 4.81967 1.36023 5.65896 1.36023 6.85014V9.14986C1.36023 10.341 1.36074 11.1803 1.43069 11.8264C1.49928 12.4595 1.62776 12.8268 1.82895 13.1039C1.98052 13.3125 2.16463 13.4966 2.37325 13.6482C2.65034 13.8494 3.01764 13.9779 3.65076 14.0465C3.81478 14.0642 3.99127 14.0774 4.1828 14.0873V1.91166Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_ellipsis_outline_16 */
-export const IconEllipsisOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M4.55146 8.00001C4.55146 8.63513 4.03659 9.15001 3.40146 9.15001C2.76634 9.15001 2.25146 8.63513 2.25146 8.00001C2.25146 7.36488 2.76634 6.85001 3.40146 6.85001C4.03659 6.85001 4.55146 7.36488 4.55146 8.00001Z"
-      fill="currentColor"
-    />
-    <path
-      d="M9.1476 8.00001C9.1476 8.63513 8.63273 9.15001 7.9976 9.15001C7.36248 9.15001 6.8476 8.63513 6.8476 8.00001C6.8476 7.36488 7.36248 6.85001 7.9976 6.85001C8.63273 6.85001 9.1476 7.36488 9.1476 8.00001Z"
-      fill="currentColor"
-    />
-    <path
-      d="M13.7486 8.00001C13.7486 8.63513 13.2338 9.15001 12.5986 9.15001C11.9635 9.15001 11.4486 8.63513 11.4486 8.00001C11.4486 7.36488 11.9635 6.85001 12.5986 6.85001C13.2338 6.85001 13.7486 7.36488 13.7486 8.00001Z"
-      fill="currentColor"
-    />
+interface WeightedIconProps extends IconProps {
+  strokeWidth: number
+}
+
+/** Shared shield contour used by composite icons outside this module. */
+export const SHIELD_OUTLINE_PATH = 'M6.80132 2.14853C7.70663 1.80917 8.70422 1.80919 9.60952 2.14859L14.1296 3.84317V7.11961C14.1296 11.6089 10.7615 13.5975 8.20543 14.5779C5.64931 13.5975 2.28052 11.6089 2.28052 7.11961V3.84317L6.80132 2.14853Z'
+
+/** Regular stroke width used by the product icon set. */
+export const ICON_REGULAR_STROKE = 1
+
+/** Medium stroke width used by emphasized product icons. */
+export const ICON_MEDIUM_STROKE = 1.3
+
+/** Regular one-pixel IconNewChatOutline artwork. */
+export const IconNewChatOutlineRegular = (props: IconProps) => (
+  <NewChatOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconNewChatOutline artwork with a 1.3px stroke. */
+export const IconNewChatOutlineMedium = (props: IconProps) => (
+  <NewChatOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconSearchOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M6.58727 11.8586C9.55061 11.8586 11.9529 9.45637 11.9529 6.49304C11.9529 3.5297 9.55061 1.12744 6.58727 1.12744C3.62394 1.12744 1.22168 3.5297 1.22168 6.49304C1.22168 9.45637 3.62394 11.8586 6.58727 11.8586Z" stroke="currentColor" />
+    <path d="M10.2991 10.3933L14.7783 14.8725" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconSearchOutline artwork. */
+export const IconSearchOutlineRegular = (props: IconProps) => (
+  <IconSearchOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconSearchOutline artwork with a 1.3px stroke. */
+export const IconSearchOutlineMedium = (props: IconProps) => (
+  <IconSearchOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+/** Regular one-pixel IconGlobeOutline artwork. */
+export const IconGlobeOutlineRegular = (props: IconProps) => (
+  <GlobeOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconGlobeOutline artwork with a 1.3px stroke. */
+export const IconGlobeOutlineMedium = (props: IconProps) => (
+  <GlobeOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconSettingsOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M8 9.75012C8.9665 9.75012 9.75 8.96662 9.75 8.00012C9.75 7.03362 8.9665 6.25012 8 6.25012C7.0335 6.25012 6.25 7.03362 6.25 8.00012C6.25 8.96662 7.0335 9.75012 8 9.75012Z" stroke="currentColor" />
+    <path d="M13.0107 7.79377C12.9505 7.89401 12.9205 7.94413 12.9205 7.99951C12.9205 8.0549 12.9505 8.10502 13.0106 8.20528L13.9849 9.83006C14.045 9.93029 14.0751 9.9804 14.0751 10.0358C14.0751 10.0911 14.045 10.1413 13.9849 10.2415L13.0037 11.8777C12.9468 11.9726 12.9184 12.0201 12.8725 12.0461C12.8267 12.072 12.7713 12.072 12.6607 12.072H10.6704C10.5598 12.072 10.5045 12.072 10.4586 12.098C10.4128 12.1239 10.3843 12.1714 10.3274 12.2662L9.33825 13.9142C9.28133 14.009 9.25287 14.0564 9.20703 14.0823C9.16118 14.1083 9.10588 14.1083 8.99529 14.1083H7.00486C6.89426 14.1083 6.83896 14.1083 6.79312 14.0823C6.74727 14.0564 6.71881 14.009 6.6619 13.9142L5.67273 12.2662C5.61581 12.1714 5.58735 12.1239 5.54151 12.098C5.49566 12.072 5.44036 12.072 5.32977 12.072H3.33945C3.2288 12.072 3.17347 12.072 3.12761 12.0461C3.08176 12.0201 3.0533 11.9726 2.9964 11.8777L2.0152 10.2415C1.9551 10.1413 1.92505 10.0911 1.92505 10.0358C1.92505 9.9804 1.9551 9.93029 2.0152 9.83006L2.98951 8.20528C3.04963 8.10502 3.07969 8.0549 3.07969 7.99951C3.07968 7.94413 3.04961 7.89401 2.98946 7.79377L2.01529 6.17011C1.95514 6.06987 1.92507 6.01975 1.92507 5.96437C1.92506 5.90899 1.95512 5.85886 2.01524 5.7586L2.9964 4.1224C3.0533 4.0275 3.08176 3.98005 3.12761 3.95408C3.17347 3.92811 3.2288 3.92811 3.33945 3.92811H5.32977C5.44036 3.92811 5.49566 3.92811 5.54151 3.90216C5.58735 3.87621 5.61581 3.82879 5.67273 3.73397L6.6619 2.08599C6.71881 1.99116 6.74727 1.94375 6.79312 1.9178C6.83896 1.89185 6.89426 1.89185 7.00486 1.89185H8.99529C9.10588 1.89185 9.16118 1.89185 9.20703 1.9178C9.25287 1.94375 9.28133 1.99116 9.33825 2.08599L10.3274 3.73397C10.3843 3.82879 10.4128 3.87621 10.4586 3.90216C10.5045 3.92811 10.5598 3.92811 10.6704 3.92811H12.6607C12.7713 3.92811 12.8267 3.92811 12.8725 3.95408C12.9184 3.98005 12.9468 4.0275 13.0037 4.1224L13.9849 5.7586C14.045 5.85886 14.0751 5.90899 14.0751 5.96437C14.0751 6.01975 14.045 6.06987 13.9849 6.17011L13.0107 7.79377Z" stroke="currentColor" strokeMiterlimit="10" />
+  </svg>
+)
+
+/** Regular one-pixel IconSettingsOutline artwork. */
+export const IconSettingsOutlineRegular = (props: IconProps) => (
+  <IconSettingsOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconSettingsOutline artwork with a 1.3px stroke. */
+export const IconSettingsOutlineMedium = (props: IconProps) => (
+  <IconSettingsOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconPanelLeftOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z" stroke="currentColor" />
+    <path d="M5.5 1.5V14.5" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconPanelLeftOutline artwork. */
+export const IconPanelLeftOutlineRegular = (props: IconProps) => (
+  <IconPanelLeftOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconPanelLeftOutline artwork with a 1.3px stroke. */
+export const IconPanelLeftOutlineMedium = (props: IconProps) => (
+  <IconPanelLeftOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconEllipsisOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M3 9C3.55228 9 4 8.55228 4 8C4 7.44772 3.55228 7 3 7C2.44772 7 2 7.44772 2 8C2 8.55228 2.44772 9 3 9Z" fill="currentColor" />
+    <path d="M8 9C8.55228 9 9 8.55228 9 8C9 7.44772 8.55228 7 8 7C7.44772 7 7 7.44772 7 8C7 8.55228 7.44772 9 8 9Z" fill="currentColor" />
+    <path d="M13 9C13.5523 9 14 8.55228 14 8C14 7.44772 13.5523 7 13 7C12.4477 7 12 7.44772 12 8C12 8.55228 12.4477 9 13 9Z" fill="currentColor" />
+  </svg>
+)
+
+/** Regular IconEllipsisOutline artwork; its fill-only geometry is weight-independent. */
+export const IconEllipsisOutlineRegular = (props: IconProps) => (
+  <IconEllipsisOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconEllipsisOutline artwork; it matches Regular because the geometry is fill-only. */
+export const IconEllipsisOutlineMedium = (props: IconProps) => (
+  <IconEllipsisOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconPlusOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M8 2V14" stroke="currentColor" />
+    <path d="M2 8H14" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconPlusOutline artwork. */
+export const IconPlusOutlineRegular = (props: IconProps) => (
+  <IconPlusOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconPlusOutline artwork with a 1.3px stroke. */
+export const IconPlusOutlineMedium = (props: IconProps) => (
+  <IconPlusOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconCheckOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M2.25 8.5L5.49732 11.7473C5.90519 12.1552 6.57263 12.1344 6.95426 11.7018L13.75 4" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconCheckOutline artwork. */
+export const IconCheckOutlineRegular = (props: IconProps) => (
+  <IconCheckOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconCheckOutline artwork with a 1.3px stroke. */
+export const IconCheckOutlineMedium = (props: IconProps) => (
+  <IconCheckOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconBranchOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M1.01503 8.0001L5.6964 8.0001C6.41913 8.0001 6.78049 8.0001 7.12115 7.91951C7.4232 7.84804 7.71233 7.73014 7.97821 7.57C8.27809 7.38939 8.5364 7.13669 9.05303 6.63129L11.3281 4.40564" stroke="currentColor" />
+    <path d="M1.01221 7.9999L5.6964 7.9999C6.41913 7.9999 6.78049 7.9999 7.12115 8.08049C7.4232 8.15196 7.71233 8.26986 7.97821 8.43C8.27809 8.61061 8.5364 8.86331 9.05303 9.36871L11.3281 11.5944" stroke="currentColor" />
+    <circle cx="12.4502" cy="3.3079" r="1.56962" stroke="currentColor" />
+    <circle cx="12.4502" cy="12.6921" r="1.56962" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconBranchOutline artwork. */
+export const IconBranchOutlineRegular = (props: IconProps) => (
+  <IconBranchOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconBranchOutline artwork with a 1.3px stroke. */
+export const IconBranchOutlineMedium = (props: IconProps) => (
+  <IconBranchOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconChevronDownOutlineArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconChevronDownOutline artwork. */
+export const IconChevronDownOutlineRegular = (props: IconProps) => (
+  <IconChevronDownOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconChevronDownOutline artwork with a 1.3px stroke. */
+export const IconChevronDownOutlineMedium = (props: IconProps) => (
+  <IconChevronDownOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconChevronLeftOutlineArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M10 4L6.70711 7.29289C6.31658 7.68342 6.31658 8.31658 6.70711 8.70711L10 12" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconChevronLeftOutline artwork. */
+export const IconChevronLeftOutlineRegular = (props: IconProps) => (
+  <IconChevronLeftOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconChevronLeftOutline artwork with a 1.3px stroke. */
+export const IconChevronLeftOutlineMedium = (props: IconProps) => (
+  <IconChevronLeftOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconChevronRightOutlineArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M6 12L9.29289 8.70711C9.68342 8.31658 9.68342 7.68342 9.29289 7.29289L6 4" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconChevronRightOutline artwork. */
+export const IconChevronRightOutlineRegular = (props: IconProps) => (
+  <IconChevronRightOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconChevronRightOutline artwork with a 1.3px stroke. */
+export const IconChevronRightOutlineMedium = (props: IconProps) => (
+  <IconChevronRightOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconTriangleRightFillArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M5.5 4.5C5.5 4.40714 5.52586 4.31612 5.57467 4.23713C5.62349 4.15815 5.69334 4.09431 5.77639 4.05279C5.85945 4.01126 5.95242 3.99368 6.0449 4.00202C6.13738 4.01036 6.22572 4.04429 6.3 4.1L10.967 7.6C11.0291 7.64657 11.0795 7.70697 11.1142 7.77639C11.1489 7.84582 11.167 7.92238 11.167 8C11.167 8.07762 11.1489 8.15418 11.1142 8.22361C11.0795 8.29303 11.0291 8.35343 10.967 8.4L6.3 11.9C6.22572 11.9557 6.13738 11.9896 6.0449 11.998C5.95242 12.0063 5.85945 11.9887 5.77639 11.9472C5.69334 11.9057 5.62349 11.8419 5.57467 11.7629C5.52586 11.6839 5.5 11.5929 5.5 11.5V4.5Z" fill="currentColor" />
+  </svg>
+)
+
+/** Regular IconTriangleRightFill artwork; its fill-only geometry is weight-independent. */
+export const IconTriangleRightFillRegular = (props: IconProps) => (
+  <IconTriangleRightFillArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconTriangleRightFill artwork; it matches Regular because the geometry is fill-only. */
+export const IconTriangleRightFillMedium = (props: IconProps) => (
+  <IconTriangleRightFillArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconChevronUpOutlineArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M12 10L8.70711 6.70711C8.31658 6.31658 7.68342 6.31658 7.29289 6.70711L4 10" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconChevronUpOutline artwork. */
+export const IconChevronUpOutlineRegular = (props: IconProps) => (
+  <IconChevronUpOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconChevronUpOutline artwork with a 1.3px stroke. */
+export const IconChevronUpOutlineMedium = (props: IconProps) => (
+  <IconChevronUpOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconCloseOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M2.5 2.5L13.5 13.5" stroke="currentColor" />
+    <path d="M13.5 2.5L2.5 13.5" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconCloseOutline artwork. */
+export const IconCloseOutlineRegular = (props: IconProps) => (
+  <IconCloseOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconCloseOutline artwork with a 1.3px stroke. */
+export const IconCloseOutlineMedium = (props: IconProps) => (
+  <IconCloseOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconCloseFillArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M3.5 3.5L12.5 12.5" stroke="currentColor" />
+    <path d="M12.5 3.5L3.5 12.5" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconCloseFill artwork. */
+export const IconCloseFillRegular = (props: IconProps) => (
+  <IconCloseFillArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconCloseFill artwork with a 1.3px stroke. */
+export const IconCloseFillMedium = (props: IconProps) => (
+  <IconCloseFillArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+// A 7-unit disc with the cross knocked out of it (even-odd), so the cross
+// takes the color of whatever sits behind the glyph.
+const IconCloseCircleFillArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path fillRule="evenodd" clipRule="evenodd" d="M15 8A7 7 0 1 1 1 8A7 7 0 1 1 15 8ZM6.409 10.652L5.348 9.591L6.939 8L5.348 6.409L6.409 5.348L8 6.939L9.591 5.348L10.652 6.409L9.061 8L10.652 9.591L9.591 10.652L8 9.061Z" fill="currentColor" />
+  </svg>
+)
+
+/** Regular IconCloseCircleFill artwork (cross knocked out of a filled disc); its fill-only geometry is weight-independent. */
+export const IconCloseCircleFillRegular = (props: IconProps) => (
+  <IconCloseCircleFillArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconCloseCircleFill artwork; it matches Regular because the geometry is fill-only. */
+export const IconCloseCircleFillMedium = (props: IconProps) => (
+  <IconCloseCircleFillArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconCopyOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <rect x="1.52075" y="4.07373" width="10.3932" height="10.3932" rx="2" stroke="currentColor" />
+    <path d="M11.9792 1.53296C13.36 1.53296 14.4792 2.65225 14.4792 4.03296V9.42847C14.4792 10.3756 13.9521 11.1987 13.1755 11.6228V10.3298C13.3652 10.0787 13.4792 9.7674 13.4792 9.42847V4.03296C13.4792 3.20453 12.8077 2.53296 11.9792 2.53296H6.58374C6.27966 2.53301 5.99684 2.6235 5.7605 2.77905H4.42358C4.85652 2.03463 5.66056 1.53304 6.58374 1.53296H11.9792Z" fill="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconCopyOutline artwork. */
+export const IconCopyOutlineRegular = (props: IconProps) => (
+  <IconCopyOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconCopyOutline artwork with a 1.3px stroke. */
+export const IconCopyOutlineMedium = (props: IconProps) => (
+  <IconCopyOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconRefreshOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M14.5001 8C14.5 9.28552 14.1188 10.5422 13.4045 11.611C12.6903 12.6799 11.6752 13.5129 10.4875 14.0049C9.29982 14.4968 7.99295 14.6255 6.73212 14.3747C5.4713 14.124 4.31314 13.505 3.4041 12.596C2.49514 11.687 1.87614 10.5288 1.62537 9.26798C1.37459 8.00716 1.50331 6.70028 1.99525 5.51261C2.48719 4.32494 3.32025 3.30981 4.3891 2.59557C5.45795 1.88134 6.71458 1.50008 8.0001 1.5C9.9001 1.5 11.7001 2.3 13.0001 3.6L14.5001 5.1" stroke="currentColor" />
+    <path d="M14.4999 1.5V5.1H10.8999" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconRefreshOutline artwork. */
+export const IconRefreshOutlineRegular = (props: IconProps) => (
+  <IconRefreshOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_plus_outline_16 */
-export const IconPlusOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M8.64453 1.5V7.34961H14.5V8.65039H8.64453V14.5H7.34473V8.65039H1.5V7.34961H7.34473V1.5H8.64453Z"
-      fill="currentColor"
-    />
+/** Medium IconRefreshOutline artwork with a 1.3px stroke. */
+export const IconRefreshOutlineMedium = (props: IconProps) => (
+  <IconRefreshOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconLikeOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M13.537 8.12098L12.3983 12.8455C12.1818 13.7438 11.378 14.3769 10.454 14.3769L9.35595 14.3769H7.43799H5.16577C3.50892 14.3769 2.16577 13.0337 2.16577 11.3769V7.88668C2.16577 7.33439 2.61349 6.88668 3.16577 6.88668H4.02665C5.84943 6.88668 7.38083 3.28711 7.67689 2.54578C7.71259 2.45639 7.73501 2.36373 7.77922 2.27824C7.86506 2.11221 8.08228 1.87578 8.59039 2.07775C10.3291 2.76886 9.23144 6.04071 8.96955 6.75058C8.94502 6.81707 8.99495 6.88668 9.06581 6.88668H12.5648C13.2119 6.88668 13.6886 7.49192 13.537 8.12098Z" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconLikeOutline artwork. */
+export const IconLikeOutlineRegular = (props: IconProps) => (
+  <IconLikeOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconLikeOutline artwork with a 1.3px stroke. */
+export const IconLikeOutlineMedium = (props: IconProps) => (
+  <IconLikeOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_check_outline_16 */
-export const IconCheckOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M15.0498 3.92579L8.49512 12.3818C8.25774 12.6881 8.04517 12.9645 7.84668 13.1689C7.63957 13.3823 7.38732 13.5841 7.04492 13.6719C6.86373 13.7183 6.6757 13.7346 6.48926 13.7197C6.13666 13.6915 5.8528 13.5355 5.6123 13.3604C5.38201 13.1926 5.12573 12.9567 4.83984 12.6953L1.03125 9.21289L1.96875 8.1875L5.77734 11.6699C6.08684 11.9529 6.27773 12.1249 6.43066 12.2363C6.50183 12.2882 6.54699 12.3135 6.57324 12.3252C6.58525 12.3305 6.59269 12.3322 6.5957 12.333C6.59802 12.3336 6.59961 12.334 6.59961 12.334C6.63317 12.3367 6.66758 12.3335 6.7002 12.3252C6.7002 12.3252 6.70211 12.3251 6.7041 12.3242C6.70698 12.3229 6.71348 12.319 6.72461 12.3115C6.74849 12.2956 6.78843 12.2642 6.84961 12.2012C6.98138 12.0654 7.13957 11.8628 7.39648 11.5313L13.9502 3.07422L15.0498 3.92579Z"
-      fill="currentColor"
-    />
+const IconLikeFillArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M13.537 8.12098L12.3983 12.8455C12.1818 13.7438 11.378 14.3769 10.454 14.3769L9.35595 14.3769H7.43799H5.16577C3.50892 14.3769 2.16577 13.0337 2.16577 11.3769V7.88668C2.16577 7.33439 2.61349 6.88668 3.16577 6.88668H4.02665C5.84943 6.88668 7.38083 3.28711 7.67689 2.54578C7.71259 2.45639 7.73501 2.36373 7.77922 2.27824C7.86506 2.11221 8.08228 1.87578 8.59039 2.07775C10.3291 2.76886 9.23144 6.04071 8.96955 6.75058C8.94502 6.81707 8.99495 6.88668 9.06581 6.88668H12.5648C13.2119 6.88668 13.6886 7.49192 13.537 8.12098Z" fill="currentColor" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconLikeFill artwork. */
+export const IconLikeFillRegular = (props: IconProps) => (
+  <IconLikeFillArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconLikeFill artwork with a 1.3px stroke. */
+export const IconLikeFillMedium = (props: IconProps) => (
+  <IconLikeFillArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_check_outline_14 */
-export const IconCheckOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M11.5635 4.58984L7.61426 9.07715C7.35154 9.37561 7.11346 9.64812 6.89453 9.84668C6.66593 10.054 6.38519 10.2506 6.01465 10.3164C5.82079 10.3508 5.62207 10.3529 5.42773 10.3213C5.0561 10.2609 4.77266 10.0674 4.54102 9.86328C4.31926 9.66791 4.07752 9.39911 3.81055 9.10449L2.44531 7.59863L3.55664 6.59082L4.92188 8.09766C5.21256 8.41844 5.38878 8.61191 5.53223 8.73828C5.61022 8.80699 5.65253 8.83192 5.66895 8.83984C5.69648 8.84429 5.72449 8.84467 5.75195 8.83984C5.72657 8.84451 5.75564 8.85422 5.88672 8.73535C6.02833 8.60692 6.20225 8.41088 6.48828 8.08594L10.4385 3.59961L11.5635 4.58984Z"
-      fill="currentColor"
-    />
+const IconDislikeOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M2.46302 8.06749L3.60171 3.34299C3.81822 2.44467 4.62196 1.81162 5.546 1.8116L6.64406 1.81158L8.56202 1.81158L10.8342 1.81158C12.4911 1.81158 13.8342 3.15473 13.8342 4.81158L13.8342 8.3018C13.8342 8.85408 13.3865 9.3018 12.8342 9.3018L11.9734 9.3018C10.1506 9.3018 8.61918 12.9014 8.32311 13.6427C8.28741 13.7321 8.26499 13.8247 8.22078 13.9102C8.13494 14.0763 7.91772 14.3127 7.40961 14.1107C5.67089 13.4196 6.76856 10.1478 7.03045 9.43789C7.05498 9.37141 7.00505 9.3018 6.93419 9.3018L3.43519 9.3018C2.78811 9.3018 2.31141 8.69656 2.46302 8.06749Z" stroke="currentColor" />
   </svg>
 )
 
-/** ic_ds_branch_outline_16 */
-export const IconBranchOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M13.0762 1.37207C14.0846 1.37228 14.9021 2.19077 14.9023 3.19922C14.9022 4.20772 14.0847 5.02518 13.0762 5.02539C12.2967 5.02539 11.6325 4.53691 11.3701 3.84961H4.35547C4.79397 4.26458 5.15861 4.7644 5.41699 5.33496L7.10645 9.06738C7.88526 10.7875 9.55104 11.9228 11.4189 12.0371C11.7085 11.4109 12.3411 10.9756 13.0762 10.9756C14.0843 10.9759 14.9023 11.7936 14.9023 12.8018C14.9023 13.81 14.0843 14.6277 13.0762 14.6279C12.2534 14.6279 11.5574 14.0832 11.3291 13.335C8.9868 13.1879 6.89981 11.7612 5.92285 9.60352L4.23242 5.87109C3.67503 4.64033 2.44878 3.84961 1.09766 3.84961V2.54883C1.10665 2.54883 1.11601 2.54975 1.125 2.5498L11.3701 2.54883C11.6326 1.86151 12.2969 1.37207 13.0762 1.37207ZM13.0762 12.2764C12.7858 12.2764 12.5508 12.5114 12.5508 12.8018C12.5508 13.0921 12.7858 13.3281 13.0762 13.3281C13.3664 13.3279 13.6025 13.092 13.6025 12.8018C13.6025 12.5115 13.3664 12.2766 13.0762 12.2764ZM13.0762 2.67285C12.7855 2.67285 12.55 2.90861 12.5498 3.19922C12.5499 3.48987 12.7855 3.72559 13.0762 3.72559C13.3667 3.72538 13.6024 3.48975 13.6025 3.19922C13.6023 2.90874 13.3666 2.67306 13.0762 2.67285Z"
-      fill="currentColor"
-    />
+/** Regular one-pixel IconDislikeOutline artwork. */
+export const IconDislikeOutlineRegular = (props: IconProps) => (
+  <IconDislikeOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconDislikeOutline artwork with a 1.3px stroke. */
+export const IconDislikeOutlineMedium = (props: IconProps) => (
+  <IconDislikeOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconDislikeFillArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M2.46302 8.06749L3.60171 3.34299C3.81822 2.44467 4.62196 1.81162 5.546 1.8116L6.64406 1.81158L8.56202 1.81158L10.8342 1.81158C12.4911 1.81158 13.8342 3.15473 13.8342 4.81158L13.8342 8.3018C13.8342 8.85408 13.3865 9.3018 12.8342 9.3018L11.9734 9.3018C10.1506 9.3018 8.61918 12.9014 8.32311 13.6427C8.28741 13.7321 8.26499 13.8247 8.22078 13.9102C8.13494 14.0763 7.91772 14.3127 7.40961 14.1107C5.67089 13.4196 6.76856 10.1478 7.03045 9.43789C7.05498 9.37141 7.00505 9.3018 6.93419 9.3018L3.43519 9.3018C2.78811 9.3018 2.31141 8.69656 2.46302 8.06749Z" fill="currentColor" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconDislikeFill artwork. */
+export const IconDislikeFillRegular = (props: IconProps) => (
+  <IconDislikeFillArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconDislikeFill artwork with a 1.3px stroke. */
+export const IconDislikeFillMedium = (props: IconProps) => (
+  <IconDislikeFillArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_chevron_down_outline_14 */
-export const IconChevronDownOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z"
-      fill="currentColor"
-    />
+const IconShareOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M14.1256 7.58723C14.3483 7.81942 14.3482 8.18589 14.1254 8.41799L8.6646 14.1077C8.53985 14.2377 8.32031 14.1494 8.32031 13.9692L8.32035 10.2039C8.32035 10.1943 8.31534 10.1864 8.30592 10.1849C8.08306 10.148 5.30067 9.7729 1.50993 13.2904C1.49711 13.3023 1.47561 13.2943 1.4757 13.2768C1.49273 9.87168 3.42001 5.07166 8.29999 5.05835C8.31103 5.05832 8.32035 5.04937 8.32035 5.03832L8.32031 2.03109C8.32031 1.85088 8.53993 1.76259 8.66466 1.89266L14.1256 7.58723Z" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconShareOutline artwork. */
+export const IconShareOutlineRegular = (props: IconProps) => (
+  <IconShareOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconShareOutline artwork with a 1.3px stroke. */
+export const IconShareOutlineMedium = (props: IconProps) => (
+  <IconShareOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_chevron_left_outline_14 */
-export const IconChevronLeftOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M8.5 2.15137L8.07617 2.57617L5.34863 5.30273C5.09294 5.55843 4.86618 5.78438 4.70215 5.98828C4.53117 6.20088 4.38244 6.44405 4.33398 6.75C4.30778 6.91565 4.30778 7.08435 4.33398 7.25C4.38244 7.55595 4.53117 7.79912 4.70215 8.01172C4.86618 8.21561 5.09294 8.44157 5.34863 8.69727L8.07617 11.4238L8.5 11.8486L9.34863 11L8.92383 10.5762L6.19727 7.84863C5.92268 7.57405 5.75151 7.40124 5.6377 7.25977C5.53096 7.12709 5.52187 7.07728 5.51953 7.0625C5.51297 7.02105 5.51297 6.97895 5.51953 6.9375C5.52187 6.92272 5.53096 6.87291 5.6377 6.74023C5.75152 6.59876 5.92268 6.42595 6.19727 6.15137L8.92383 3.42383L9.34863 3L8.5 2.15137Z"
-      fill="currentColor"
-    />
+const IconDeliverDocArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M6.15479 4.91687H9.84543" stroke="currentColor" />
+    <path d="M11.8798 9.55347V2.71525C11.8798 2.37416 11.564 2.09766 11.1744 2.09766H4.82577C4.43618 2.09766 4.12036 2.37416 4.12036 2.71525V9.55347" stroke="currentColor" />
+    <path d="M2.28735 13.8022V8.84792C2.28735 8.77514 2.36262 8.72673 2.42884 8.75693L13.2936 13.7112C13.3914 13.7558 13.3596 13.9022 13.2521 13.9022H2.38735C2.33213 13.9022 2.28735 13.8575 2.28735 13.8022Z" stroke="currentColor" />
+    <path d="M7.46929 10.979L13.5783 8.7416C13.6435 8.7177 13.7126 8.76601 13.7126 8.83551L13.7125 13.8022C13.7125 13.8574 13.6678 13.9022 13.6125 13.9022H7.99999" stroke="currentColor" />
+    <path d="M6.15479 7.2395H9.05644" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconDeliverDoc artwork. */
+export const IconDeliverDocRegular = (props: IconProps) => (
+  <IconDeliverDocArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconDeliverDoc artwork with a 1.3px stroke. */
+export const IconDeliverDocMedium = (props: IconProps) => (
+  <IconDeliverDocArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_chevron_right_outline_14 */
-export const IconChevronRightOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M5.5 2.15137L5.92383 2.57617L8.65137 5.30273C8.90706 5.55843 9.13382 5.78438 9.29785 5.98828C9.46883 6.20088 9.61756 6.44405 9.66602 6.75C9.69222 6.91565 9.69222 7.08435 9.66602 7.25C9.61756 7.55595 9.46883 7.79912 9.29785 8.01172C9.13382 8.21561 8.90706 8.44157 8.65137 8.69727L5.92383 11.4238L5.5 11.8486L4.65137 11L5.07617 10.5762L7.80273 7.84863C8.07732 7.57405 8.24849 7.40124 8.3623 7.25977C8.46904 7.12709 8.47813 7.07728 8.48047 7.0625C8.48703 7.02105 8.48703 6.97895 8.48047 6.9375C8.47813 6.92272 8.46904 6.87291 8.3623 6.74023C8.24848 6.59876 8.07732 6.42595 7.80273 6.15137L5.07617 3.42383L4.65137 3L5.5 2.15137Z"
-      fill="currentColor"
-    />
+const IconEditOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M8.85596 2.69971H4.19971C3.37141 2.69971 2.69992 3.37146 2.69971 4.19971V11.8003C2.69992 12.6285 3.37141 13.3003 4.19971 13.3003H11.8003C12.6283 13.2999 13.3001 12.6283 13.3003 11.8003V7.89893H14.3003V11.8003C14.3001 13.1806 13.1806 14.2999 11.8003 14.3003H4.19971C2.81913 14.3003 1.69992 13.1808 1.69971 11.8003V4.19971C1.69992 2.81918 2.81913 1.69971 4.19971 1.69971H8.85596V2.69971Z" fill="currentColor" />
+    <path d="M7.7849 8.23878L13.888 2.13574" stroke="currentColor" />
   </svg>
 )
 
-/** ic_ds_triangle_right_fill_14 — tree expand arrow; points right, consumers rotate it 90° for the open state. */
-export const IconTriangleRightFill14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M4.25 2.82782L4.25 11.1722C4.25 11.6622 4.84243 11.9076 5.18891 11.5611L9.36109 7.38891C9.57588 7.17412 9.57588 6.82588 9.36109 6.61109L5.18891 2.43891C4.84243 2.09243 4.25 2.33782 4.25 2.82782Z"
-      fill="currentColor"
-    />
+/** Regular one-pixel IconEditOutline artwork. */
+export const IconEditOutlineRegular = (props: IconProps) => (
+  <IconEditOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconEditOutline artwork with a 1.3px stroke. */
+export const IconEditOutlineMedium = (props: IconProps) => (
+  <IconEditOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconThinkOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M10.7554 5.24466C13.9891 8.4783 15.3769 12.3333 13.8552 13.8551C12.3335 15.3768 8.4785 13.989 5.24478 10.7553C2.01111 7.52165 0.623307 3.66664 2.14504 2.14491C3.66676 0.623189 7.52178 2.01099 10.7554 5.24466Z" stroke="currentColor" />
+    <path d="M10.7554 10.7553C7.52178 13.989 3.66676 15.3768 2.14504 13.8551C0.623307 12.3333 2.01111 8.4783 5.24478 5.24466C8.4785 2.01099 12.3335 0.623189 13.8552 2.14491C15.3769 3.66664 13.9891 7.52165 10.7554 10.7553Z" stroke="currentColor" />
+    <path d="M8.9587 8.00025C8.9587 8.52835 8.5306 8.95655 8.0024 8.95655C7.47429 8.95655 7.04614 8.52835 7.04614 8.00025C7.04614 7.47209 7.47429 7.04395 8.0024 7.04395C8.5306 7.04395 8.9587 7.47209 8.9587 8.00025Z" fill="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconThinkOutline artwork. */
+export const IconThinkOutlineRegular = (props: IconProps) => (
+  <IconThinkOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_chevron_up_outline_14 */
-export const IconChevronUpOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M2.15137 8.5L2.57617 8.07617L5.30273 5.34863C5.55843 5.09294 5.78438 4.86618 5.98828 4.70215C6.20088 4.53117 6.44405 4.38244 6.75 4.33398C6.91565 4.30778 7.08435 4.30778 7.25 4.33398C7.55595 4.38244 7.79912 4.53117 8.01172 4.70215C8.21561 4.86618 8.44157 5.09294 8.69727 5.34863L11.4238 8.07617L11.8486 8.5L11 9.34863L10.5762 8.92383L7.84863 6.19727C7.57405 5.92269 7.40124 5.75152 7.25977 5.6377C7.12709 5.53096 7.07728 5.52187 7.0625 5.51953C7.02105 5.51297 6.97895 5.51297 6.9375 5.51953C6.92272 5.52187 6.87291 5.53096 6.74023 5.6377C6.59876 5.75152 6.42595 5.92268 6.15137 6.19727L3.42383 8.92383L3 9.34863L2.15137 8.5Z"
-      fill="currentColor"
-    />
+/** Medium IconThinkOutline artwork with a 1.3px stroke. */
+export const IconThinkOutlineMedium = (props: IconProps) => (
+  <IconThinkOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconAgentPresetOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M6.51867 12.3282C7.29816 12.6011 8.16475 12.6514 9.02269 12.4216C9.57879 12.2726 10.0784 12.0185 10.5087 11.6888C10.7819 12.0555 11.1606 12.3304 11.5913 12.4805C10.9688 13.029 10.2149 13.4478 9.35911 13.6771C8.13946 14.0038 6.90632 13.8971 5.82126 13.4533C6.15821 13.1562 6.4021 12.7652 6.51867 12.3282ZM9.17629 2.89409C11.1101 3.34433 12.739 4.81872 13.2889 6.87043C13.4219 7.3665 13.4811 7.8649 13.4774 8.35466C13.0924 8.13213 12.6422 8.01837 12.1741 8.05276L12.1711 8.05257C12.1539 7.77199 12.109 7.48889 12.0334 7.20684C11.6363 5.72533 10.5048 4.6372 9.13549 4.22844C9.25559 3.87667 9.29214 3.49087 9.22309 3.09892C9.2108 3.02922 9.19451 2.96108 9.17629 2.89409ZM4.7311 3.89107L4.78302 4.11879C4.87648 4.4488 5.04146 4.74263 5.25579 4.98896C3.98078 6.01355 3.35848 7.72904 3.8089 9.41059C3.81828 9.44559 3.82866 9.48025 3.83885 9.51479C3.38217 9.61268 2.98548 9.84137 2.68107 10.1556C2.63414 10.022 2.5897 9.88632 2.55244 9.74726C1.93301 7.43489 2.86717 5.07173 4.71504 3.76697L4.7311 3.89107Z" fill="currentColor" />
+    <path d="M7.99136 5.28105C8.87501 5.28105 9.59136 4.56471 9.59136 3.68105C9.59136 2.7974 8.87501 2.08105 7.99136 2.08105C7.1077 2.08105 6.39136 2.7974 6.39136 3.68105C6.39136 4.56471 7.1077 5.28105 7.99136 5.28105Z" stroke="currentColor" />
+    <path d="M3.94009 12.9417C4.82374 12.9417 5.54009 12.2254 5.54009 11.3417C5.54009 10.458 4.82374 9.7417 3.94009 9.7417C3.05643 9.7417 2.34009 10.458 2.34009 11.3417C2.34009 12.2254 3.05643 12.9417 3.94009 12.9417Z" stroke="currentColor" />
+    <path d="M12.0851 12.9417C12.9688 12.9417 13.6851 12.2254 13.6851 11.3417C13.6851 10.458 12.9688 9.7417 12.0851 9.7417C11.2015 9.7417 10.4851 10.458 10.4851 11.3417C10.4851 12.2254 11.2015 12.9417 12.0851 12.9417Z" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconAgentPresetOutline artwork. */
+export const IconAgentPresetOutlineRegular = (props: IconProps) => (
+  <IconAgentPresetOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconAgentPresetOutline artwork with a 1.3px stroke. */
+export const IconAgentPresetOutlineMedium = (props: IconProps) => (
+  <IconAgentPresetOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+/** Regular one-pixel IconBrowseOutline artwork. */
+export const IconBrowseOutlineRegular = (props: IconProps) => (
+  <BrowseOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_close_outline_16 */
-export const IconCloseOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M14.1168 13.197L13.197 14.1167L1.8833 2.80303L2.80309 1.88324L14.1168 13.197Z"
-      fill="currentColor"
-    />
-    <path
-      d="M13.197 1.88326L14.1168 2.80305L2.80309 14.1168L1.8833 13.197L13.197 1.88326Z"
-      fill="currentColor"
-    />
+/** Medium IconBrowseOutline artwork with a 1.3px stroke. */
+export const IconBrowseOutlineMedium = (props: IconProps) => (
+  <BrowseOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconContextInjectionOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M5 2.5H3.5C3.23478 2.5 2.98043 2.60536 2.79289 2.79289C2.60536 2.98043 2.5 3.23478 2.5 3.5V13.5C2.5 13.7652 2.60536 14.0196 2.79289 14.2071C2.98043 14.3946 3.23478 14.5 3.5 14.5H12.5C12.7652 14.5 13.0196 14.3946 13.2071 14.2071C13.3946 14.0196 13.5 13.7652 13.5 13.5V3.5C13.5 3.23478 13.3946 2.98043 13.2071 2.79289C13.0196 2.60536 12.7652 2.5 12.5 2.5H11" stroke="currentColor" />
+    <path d="M8 0.5V7.5" stroke="currentColor" />
+    <path d="M5.5 5L8 7.5L10.5 5" stroke="currentColor" />
+    <path d="M5.5 11H10.5" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconContextInjectionOutline artwork. */
+export const IconContextInjectionOutlineRegular = (props: IconProps) => (
+  <IconContextInjectionOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconContextInjectionOutline artwork with a 1.3px stroke. */
+export const IconContextInjectionOutlineMedium = (props: IconProps) => (
+  <IconContextInjectionOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_close_fill_14 */
-export const IconCloseFill14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M10.6074 4.40278L8.00975 6.99973L10.6074 9.59739L9.59736 10.6074L6.9997 8.00978L4.40274 10.6074L3.3927 9.59739L5.98966 6.99973L3.3927 4.40278L4.40274 3.39273L6.9997 5.98969L9.59736 3.39273L10.6074 4.40278Z"
-      fill="currentColor"
-    />
+const IconLinkOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M6.59961 9.40051C6.82779 9.6334 7.10015 9.81842 7.40074 9.94472C7.70132 10.071 8.02409 10.1361 8.35013 10.1361C8.67618 10.1361 8.99894 10.071 9.29953 9.94472C9.60011 9.81842 9.87247 9.6334 10.1007 9.40051L12.9015 6.59967C13.3658 6.13541 13.6266 5.50572 13.6266 4.84915C13.6266 4.19258 13.3658 3.56289 12.9015 3.09863C12.4372 2.63436 11.8075 2.37354 11.151 2.37354C10.4944 2.37354 9.86472 2.63436 9.40045 3.09863L9.05034 3.44873" stroke="currentColor" />
+    <path d="M9.40051 6.59959C9.17233 6.3667 8.89997 6.18169 8.59939 6.05538C8.2988 5.92907 7.97603 5.86401 7.64999 5.86401C7.32395 5.86401 7.00118 5.92907 6.70059 6.05538C6.40001 6.18169 6.12765 6.3667 5.89946 6.59959L3.09863 9.40043C2.63436 9.8647 2.37354 10.4944 2.37354 11.151C2.37354 11.8075 2.63436 12.4372 3.09863 12.9015C3.56289 13.3657 4.19258 13.6266 4.84915 13.6266C5.50572 13.6266 6.13541 13.3657 6.59967 12.9015L6.94978 12.5514" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconLinkOutline artwork. */
+export const IconLinkOutlineRegular = (props: IconProps) => (
+  <IconLinkOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_copy_outline_16 */
-export const IconCopyOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M6.14929 4.02032C7.11197 4.02032 7.87983 4.02016 8.49597 4.07598C9.12128 4.13269 9.65792 4.25188 10.1415 4.53106C10.7202 4.8653 11.2008 5.3459 11.535 5.92462C11.8142 6.40818 11.9334 6.94481 11.9901 7.57012C12.0459 8.18625 12.0458 8.95419 12.0458 9.9168C12.0458 10.8795 12.0459 11.6473 11.9901 12.2635C11.9334 12.8888 11.8142 13.4254 11.535 13.909C11.2008 14.4877 10.7202 14.9683 10.1415 15.3025C9.65792 15.5817 9.12128 15.7009 8.49597 15.7576C7.87984 15.8134 7.11196 15.8133 6.14929 15.8133C5.18667 15.8133 4.41874 15.8134 3.80261 15.7576C3.1773 15.7009 2.64067 15.5817 2.1571 15.3025C1.5784 14.9683 1.09778 14.4877 0.76355 13.909C0.484366 13.4254 0.365184 12.8888 0.308472 12.2635C0.252649 11.6473 0.252808 10.8795 0.252808 9.9168C0.252808 8.95418 0.252664 8.18625 0.308472 7.57012C0.365184 6.94481 0.484366 6.40818 0.76355 5.92462C1.09777 5.34589 1.57839 4.86529 2.1571 4.53106C2.64067 4.25188 3.1773 4.13269 3.80261 4.07598C4.41874 4.02017 5.18666 4.02032 6.14929 4.02032ZM6.14929 5.37774C5.16181 5.37774 4.46634 5.37761 3.92566 5.42657C3.39434 5.47472 3.07859 5.56574 2.83582 5.70587C2.4632 5.92106 2.15354 6.2307 1.93835 6.60333C1.79823 6.8461 1.70721 7.16185 1.65906 7.69317C1.6101 8.23385 1.61023 8.92933 1.61023 9.9168C1.61023 10.9043 1.61009 11.5998 1.65906 12.1404C1.70721 12.6717 1.79823 12.9875 1.93835 13.2303C2.15356 13.6029 2.46321 13.9126 2.83582 14.1277C3.07859 14.2679 3.39434 14.3589 3.92566 14.407C4.46634 14.456 5.16182 14.4559 6.14929 14.4559C7.13682 14.4559 7.83224 14.456 8.37292 14.407C8.90425 14.3589 9.21999 14.2679 9.46277 14.1277C9.83535 13.9126 10.145 13.6029 10.3602 13.2303C10.5004 12.9875 10.5914 12.6717 10.6395 12.1404C10.6885 11.5998 10.6884 10.9043 10.6884 9.9168C10.6884 8.92934 10.6885 8.23384 10.6395 7.69317C10.5914 7.16185 10.5004 6.8461 10.3602 6.60333C10.1451 6.23071 9.83536 5.92107 9.46277 5.70587C9.21999 5.56574 8.90424 5.47472 8.37292 5.42657C7.83224 5.3776 7.13682 5.37774 6.14929 5.37774ZM9.80164 0.367975C10.7638 0.367975 11.5314 0.36788 12.1473 0.423639C12.7726 0.480307 13.3093 0.598759 13.7928 0.877741C14.3717 1.21192 14.8521 1.69355 15.1864 2.27227C15.4655 2.75574 15.5857 3.29164 15.6425 3.9168C15.6983 4.53301 15.6971 5.3016 15.6971 6.26446V7.82989C15.6971 8.29264 15.6989 8.58993 15.6649 8.84844C15.4668 10.3525 14.401 11.5738 12.9833 11.9988V10.5467C13.6973 10.1903 14.2105 9.49662 14.3192 8.67169C14.3387 8.52347 14.3407 8.3358 14.3407 7.82989V6.26446C14.3407 5.27706 14.3398 4.58149 14.2909 4.04083C14.2428 3.50968 14.1526 3.19372 14.0126 2.95098C13.7974 2.57849 13.4876 2.26869 13.1151 2.05352C12.8724 1.91347 12.5564 1.82237 12.0253 1.77423C11.4847 1.72528 10.7888 1.7254 9.80164 1.7254H7.71472C6.7562 1.72558 5.92665 2.27697 5.52332 3.07891H4.07019C4.54221 1.51132 5.9932 0.368186 7.71472 0.367975H9.80164Z"
-      fill="currentColor"
-    />
+/** Medium IconLinkOutline artwork with a 1.3px stroke. */
+export const IconLinkOutlineMedium = (props: IconProps) => (
+  <IconLinkOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconRightUpOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M11.7256 2.77441C12.5538 2.77469 13.2256 3.44616 13.2256 4.27441V10.1416H12.2256V4.27441C12.2256 3.99844 12.0015 3.77469 11.7256 3.77441H5.7207V2.77441H11.7256Z" fill="currentColor" />
+    <path d="M2.77441 13.2255L12.3756 3.62427" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconRightUpOutline artwork. */
+export const IconRightUpOutlineRegular = (props: IconProps) => (
+  <IconRightUpOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconRightUpOutline artwork with a 1.3px stroke. */
+export const IconRightUpOutlineMedium = (props: IconProps) => (
+  <IconRightUpOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_refresh_outline_16, inset 10%: the exported glyph fills its box edge
- * to edge, one visual size above the neighbouring 16px glyphs. */
-export const IconRefreshOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      transform="translate(0.8 0.8) scale(0.9)"
-      d="M7.92136 0.349152C10.3744 0.349234 12.5564 1.5052 13.9557 3.29894L15.1281 2.12759C15.3303 1.92546 15.6767 2.06943 15.6767 2.35538V5.53923C15.6766 5.71626 15.5329 5.85976 15.3559 5.86002H12.171C11.8854 5.8597 11.7426 5.51465 11.9443 5.31249L12.9641 4.29056C11.8237 2.74305 9.98908 1.74106 7.92136 1.74097C4.46436 1.74097 1.66233 4.543 1.66233 8C1.66233 11.457 4.46436 14.259 7.92136 14.259C11.3782 14.2589 14.1804 11.4569 14.1804 8H15.5722C15.5722 12.2251 12.1465 15.6507 7.92136 15.6508C3.69614 15.6508 0.270508 12.2252 0.270508 8C0.270508 3.77478 3.69614 0.349152 7.92136 0.349152Z"
-      fill="currentColor"
-    />
+const IconEnhanceOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M1.98486 2.95374H14.0151" stroke="currentColor" />
+    <path d="M1.98486 6.31787H14.0151" stroke="currentColor" />
+    <path d="M1.98486 9.68213H14.0151" stroke="currentColor" />
+    <path d="M1.98486 13.0463H8.4627" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconEnhanceOutline artwork. */
+export const IconEnhanceOutlineRegular = (props: IconProps) => (
+  <IconEnhanceOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconEnhanceOutline artwork with a 1.3px stroke. */
+export const IconEnhanceOutlineMedium = (props: IconProps) => (
+  <IconEnhanceOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_refresh_outline_14 */
-export const IconRefreshOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M1.272 6.21348C1.70645 3.08888 4.59169 0.908064 7.71634 1.34239C8.95495 1.51469 10.0438 2.07331 10.8814 2.87755L11.9458 1.81407C12.1347 1.6255 12.4572 1.75911 12.4575 2.02598V5.08751C12.4574 5.25303 12.3233 5.38731 12.1577 5.38731H9.0972C8.82993 5.38731 8.69629 5.06361 8.88528 4.87462L10.0327 3.72618C9.3732 3.09994 8.52006 2.66569 7.5513 2.53087C5.08313 2.18779 2.80376 3.91044 2.46048 6.37852C2.11747 8.84665 3.84009 11.1261 6.30814 11.4693C8.77612 11.8121 11.0557 10.0896 11.399 7.62169L11.9937 7.70372L12.5874 7.78673C12.153 10.9112 9.26756 13.0919 6.1431 12.6578C3.01854 12.2234 0.837738 9.33809 1.272 6.21348Z"
-      fill="currentColor"
-    />
+const IconTrashOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M1.28149 3.88831H14.7187" stroke="currentColor" />
+    <path d="M5.41602 3.88833V2.47962C5.41602 2.29282 5.52492 2.11366 5.71876 1.98157C5.9126 1.84948 6.17551 1.77527 6.44964 1.77527H9.55053C9.82466 1.77527 10.0876 1.84948 10.2814 1.98157C10.4753 2.11366 10.5842 2.29282 10.5842 2.47962V3.88833" stroke="currentColor" />
+    <path d="M2.57349 3.88831L3.19366 13.2943C3.21937 13.5502 3.33952 13.7872 3.53065 13.9593C3.72178 14.1313 3.97016 14.2259 4.22729 14.2246H11.7728C12.0299 14.2259 12.2783 14.1313 12.4694 13.9593C12.6605 13.7872 12.7807 13.5502 12.8064 13.2943L13.4266 3.88831" stroke="currentColor" />
+    <path d="M6.44946 6.98926V11.1238" stroke="currentColor" />
+    <path d="M9.55054 6.98926V11.1238" stroke="currentColor" />
   </svg>
 )
 
-/** ic_ds_like_outline_16 */
-export const IconLikeOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M8.27868 0.811572C8.81991 0.142194 9.79022 0.0421835 10.4538 0.557601L10.5823 0.669306L10.6066 0.693544L10.6097 0.695652L10.6392 0.725159C11.355 1.44679 11.6337 2.49468 11.3716 3.47669L11.3706 3.48091L11.3611 3.51674L11.3601 3.51885L10.889 5.22604C10.8796 5.25997 10.8707 5.29157 10.8627 5.32088C10.8934 5.32095 10.927 5.32194 10.9628 5.32194H11.9007C12.4264 5.32194 12.7831 5.319 13.0651 5.36725C14.8182 5.66719 15.9851 7.34568 15.6565 9.09357C15.6036 9.37487 15.477 9.7092 15.294 10.2022L14.3371 12.7798C14.1402 13.3104 13.9774 13.7518 13.8102 14.1024C13.6376 14.4645 13.4386 14.7793 13.1442 15.0424C12.9712 15.197 12.7802 15.3303 12.5751 15.4386C12.226 15.6231 11.8608 15.7 11.4612 15.7358C11.0743 15.7705 10.6035 15.7695 10.0375 15.7695H4.87377C4.08053 15.7695 3.42928 15.7702 2.90734 15.7137C2.37212 15.6557 1.88991 15.5311 1.46676 15.2237C1.22415 15.0474 1.01078 14.8339 0.834466 14.5914C0.527021 14.1682 0.401373 13.686 0.343384 13.1508C0.286822 12.6287 0.287531 11.9769 0.287531 11.1833V9.51405C0.287531 8.84778 0.281347 8.36714 0.399237 7.9565C0.671152 7.00935 1.41115 6.26832 2.35829 5.99638C2.76894 5.87849 3.24958 5.88573 3.91585 5.88573C4.11983 5.88573 4.14548 5.88319 4.16244 5.88046C4.23532 5.86863 4.30409 5.83663 4.35845 5.78667C4.3711 5.77504 4.38761 5.75604 4.51442 5.59488L8.25655 0.838972L8.2576 0.837918L8.27868 0.811572ZM1.69122 11.1833C1.69122 12.0082 1.69217 12.5711 1.73865 13.0001C1.78371 13.4157 1.86473 13.6221 1.96943 13.7662C2.0592 13.8898 2.16733 13.9989 2.29085 14.0887C2.43501 14.1934 2.64216 14.2744 3.05803 14.3195C3.45897 14.3629 3.97637 14.3656 4.7157 14.3659C4.30801 13.8053 4.06453 13.1171 4.06444 12.371V8.59406H5.46813V12.371C5.46838 13.4733 6.36166 14.3669 7.46407 14.3669H10.0375C10.6286 14.3669 11.0269 14.3663 11.3369 14.3385C11.6339 14.3118 11.7956 14.2638 11.9196 14.1983C12.0241 14.1431 12.1213 14.0747 12.2094 13.996C12.314 13.9025 12.4151 13.7678 12.5435 13.4986C12.6774 13.2176 12.8162 12.845 13.0219 12.2909L13.9788 9.71322C14.1848 9.15816 14.2531 8.96731 14.2781 8.83433C14.4618 7.85692 13.8093 6.91895 12.8291 6.75092C12.6957 6.7281 12.4928 6.72458 11.9007 6.72458H10.9628C10.7737 6.72458 10.5693 6.72657 10.4 6.70666C10.2211 6.68562 9.96702 6.63024 9.74771 6.43161C9.64454 6.33811 9.55957 6.2261 9.4969 6.10177C9.3639 5.83784 9.37799 5.57899 9.40521 5.40097C9.431 5.23261 9.48672 5.03616 9.53694 4.85404L10.008 3.14579L10.0175 3.11102C10.1488 2.61338 10.0078 2.08338 9.64654 1.71681L9.6086 1.67887L9.55064 1.64304C9.48795 1.62043 9.41425 1.63814 9.36938 1.69362L9.35779 1.70627L9.35884 1.70732L5.61672 6.46217C5.51822 6.58735 5.42237 6.7133 5.30689 6.81942C5.05075 7.05471 4.73126 7.20939 4.38796 7.26519C4.23315 7.29032 4.07513 7.28837 3.91585 7.28837C3.15356 7.28837 2.91916 7.2957 2.7461 7.34528C2.26364 7.48379 1.88564 7.86081 1.74708 8.34325C1.69738 8.51636 1.69122 8.7511 1.69122 9.51405V11.1833Z"
-      fill="currentColor"
-    />
+/** Regular one-pixel IconTrashOutline artwork. */
+export const IconTrashOutlineRegular = (props: IconProps) => (
+  <IconTrashOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconTrashOutline artwork with a 1.3px stroke. */
+export const IconTrashOutlineMedium = (props: IconProps) => (
+  <IconTrashOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconWarningOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M8 14.5C11.5899 14.5 14.5 11.5899 14.5 8C14.5 4.41015 11.5899 1.5 8 1.5C4.41015 1.5 1.5 4.41015 1.5 8C1.5 11.5899 4.41015 14.5 8 14.5Z" stroke="currentColor" />
+    <path d="M8 4.29199V9.79199" stroke="currentColor" />
+    <path d="M8 10.708V11.708" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconWarningOutline artwork. */
+export const IconWarningOutlineRegular = (props: IconProps) => (
+  <IconWarningOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_like_fill_16 */
-export const IconLikeFill16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M14.0593 12.922L15.0976 10.1247C15.3087 9.5559 15.4143 9.27138 15.4566 9.04658C15.7349 7.56751 14.7472 6.14737 13.2637 5.89357C13.0382 5.85499 12.7348 5.85499 12.1281 5.85499H11.1099C10.6615 5.85499 10.4372 5.85499 10.3034 5.73376C10.2607 5.69508 10.2255 5.64885 10.1995 5.5974C10.1182 5.43613 10.1778 5.21997 10.297 4.78765L10.8081 2.93419L10.819 2.89456C11.0336 2.09024 10.8051 1.23244 10.2189 0.64139L10.1898 0.612405L10.1692 0.592068C9.77357 0.210076 9.13559 0.249344 8.78983 0.676966L8.77186 0.699678L4.71076 5.86083C4.52965 6.09101 4.38573 6.35138 4.38573 6.64427V12.7431C4.38573 14.3601 5.69654 15.6709 7.31351 15.6709L10.1068 15.6709C11.3628 15.6709 11.9908 15.6709 12.5043 15.3995C12.6723 15.3107 12.8289 15.2018 12.9706 15.0752C13.4037 14.6882 13.6222 14.0995 14.0593 12.922Z"
-      fill="currentColor"
-    />
-    <path
-      d="M2.91388 13.2113C2.91388 14.6907 4.08499 15.5536 4.08499 15.5536H2.65606C1.46328 15.5536 0.496338 14.5866 0.496338 13.3938V8.34439C0.496338 7.15161 1.46328 6.18467 2.65606 6.18467H2.91388V13.2113Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_dislike_outline_16 */
-export const IconDislikeOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M7.72451 15.1086C7.18929 15.7705 6.22975 15.8694 5.57357 15.3597L5.44643 15.2492L5.42247 15.2253L5.41934 15.2232L5.39016 15.194C4.68239 14.4804 4.40679 13.4441 4.66589 12.473L4.66693 12.4689L4.67631 12.4334L4.67735 12.4314L5.14318 10.7431C5.15243 10.7096 5.1613 10.6783 5.16923 10.6493C5.13878 10.6493 5.10558 10.6483 5.07023 10.6483H4.14274C3.62288 10.6483 3.27015 10.6512 2.9912 10.6035C1.25757 10.3069 0.103662 8.64702 0.42863 6.91854C0.480965 6.64037 0.606164 6.30975 0.787119 5.82223L1.73336 3.27321C1.92812 2.74852 2.08912 2.31209 2.25442 1.96535C2.42515 1.60724 2.62191 1.29594 2.91304 1.03578C3.08408 0.882951 3.273 0.751121 3.47579 0.643944C3.82102 0.461504 4.18214 0.38551 4.57731 0.350066C4.95993 0.315784 5.42553 0.316718 5.98521 0.316718H11.0916C11.876 0.316718 12.52 0.31607 13.0362 0.37195C13.5655 0.429293 14.0423 0.552534 14.4608 0.856536C14.7007 1.03085 14.9117 1.24193 15.086 1.48181C15.3901 1.90027 15.5143 2.37709 15.5717 2.90638C15.6276 3.42269 15.6269 4.06721 15.6269 4.85202V6.50274C15.6269 7.1616 15.633 7.6369 15.5164 8.04299C15.2475 8.97962 14.5158 9.71242 13.5791 9.98133C13.173 10.0979 12.6977 10.0908 12.0389 10.0908C11.8372 10.0908 11.8118 10.0933 11.795 10.096C11.723 10.1077 11.6549 10.1393 11.6012 10.1887C11.5887 10.2002 11.5724 10.219 11.447 10.3784L7.74639 15.0815L7.74535 15.0825L7.72451 15.1086ZM14.2388 4.85202C14.2388 4.03628 14.2379 3.47965 14.1919 3.05541C14.1473 2.64443 14.0672 2.4403 13.9637 2.29779C13.8749 2.17562 13.768 2.06769 13.6458 1.9789C13.5033 1.87532 13.2984 1.79523 12.8872 1.75067C12.4907 1.70773 11.979 1.70511 11.2479 1.70482C11.6511 2.25917 11.8918 2.93968 11.8919 3.67755V7.41251H10.5038V3.67755C10.5036 2.58745 9.62023 1.70378 8.53007 1.70378H5.98521C5.40065 1.70378 5.00679 1.70442 4.70028 1.73192C4.40651 1.7583 4.24662 1.80571 4.12399 1.87052C4.02069 1.92511 3.92452 1.99276 3.8374 2.07061C3.73401 2.16306 3.634 2.2962 3.50705 2.56249C3.37462 2.84027 3.23734 3.20873 3.03393 3.75675L2.08768 6.30578C1.88395 6.85467 1.81646 7.0434 1.79172 7.1749C1.61005 8.14146 2.25533 9.06902 3.22464 9.23517C3.35654 9.25774 3.55717 9.26123 4.14274 9.26123H5.07023C5.25717 9.26123 5.4593 9.25926 5.62672 9.27894C5.80364 9.29975 6.05492 9.35452 6.27179 9.55094C6.37381 9.6434 6.45784 9.75417 6.51982 9.87712C6.65133 10.1381 6.6374 10.3941 6.61048 10.5701C6.58498 10.7366 6.52988 10.9309 6.48022 11.111L6.01439 12.8003L6.00501 12.8347C5.87513 13.3268 6.01464 13.8509 6.37184 14.2134L6.40935 14.2509L6.46667 14.2863C6.52866 14.3087 6.60155 14.2912 6.64591 14.2363L6.65738 14.2238L6.65633 14.2228L10.3569 9.52072C10.4543 9.39693 10.5491 9.27238 10.6633 9.16744C10.9166 8.93476 11.2325 8.7818 11.572 8.72662C11.7251 8.70177 11.8814 8.70369 12.0389 8.70369C12.7927 8.70369 13.0245 8.69645 13.1956 8.64742C13.6727 8.51045 14.0465 8.13761 14.1836 7.66053C14.2327 7.48935 14.2388 7.25721 14.2388 6.50274V4.85202Z"
-      fill="currentColor"
-    />
+/** Medium IconWarningOutline artwork with a 1.3px stroke. */
+export const IconWarningOutlineMedium = (props: IconProps) => (
+  <IconWarningOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconCheckCircleFillArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M28.1936 14.6936L19.8066 23.0806C19.2373 23.65 18.7159 24.1742 18.24 24.5571C17.7389 24.9602 17.1365 25.3359 16.3657 25.458C15.9581 25.5225 15.5428 25.5225 15.1353 25.458C14.3645 25.3359 13.7621 24.9602 13.261 24.5571C12.7851 24.1742 12.2637 23.65 11.6943 23.0806L7.80737 19.1936L10.1936 16.8074L14.0806 20.6943C14.7033 21.317 15.0763 21.6873 15.377 21.9292C15.6523 22.1507 15.7109 22.1325 15.6626 22.1248C15.7208 22.1339 15.7802 22.1339 15.8384 22.1248C15.7901 22.1325 15.8486 22.1507 16.124 21.9292C16.4247 21.6873 16.7977 21.317 17.4204 20.6943L25.8074 12.3074L28.1936 14.6936Z" fill="currentColor" />
+    <path d="M32.8496 18.0005C32.8496 9.79906 26.2019 3.15137 18.0005 3.15137C9.79906 3.15137 3.15137 9.79906 3.15137 18.0005C3.15137 26.2019 9.79906 32.8496 18.0005 32.8496C26.2019 32.8496 32.8496 26.2019 32.8496 18.0005ZM35.7764 18.0005C35.7764 27.8173 27.8173 35.7764 18.0005 35.7764C8.18363 35.7764 0.224609 27.8173 0.224609 18.0005C0.224609 8.18363 8.18363 0.224609 18.0005 0.224609C27.8173 0.224609 35.7764 8.18363 35.7764 18.0005Z" fill="currentColor" />
   </svg>
+)
+
+/** Regular IconCheckCircleFill artwork (circled check); its fill-only geometry is weight-independent. */
+export const IconCheckCircleFillRegular = (props: IconProps) => (
+  <IconCheckCircleFillArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconCheckCircleFill artwork; it matches Regular because the geometry is fill-only. */
+export const IconCheckCircleFillMedium = (props: IconProps) => (
+  <IconCheckCircleFillArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
-
-/** ic_ds_dislike_fill_16 */
-export const IconDislikeFill16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M1.92838 3.06811L0.88799 5.87104C0.676449 6.44097 0.570628 6.72606 0.52825 6.95131C0.249414 8.43336 1.2391 9.85637 2.72555 10.1107C2.95149 10.1493 3.25549 10.1493 3.86348 10.1493H4.88371C5.33306 10.1493 5.55774 10.1493 5.69187 10.2708C5.73467 10.3096 5.76994 10.3559 5.79593 10.4074C5.87738 10.569 5.81766 10.7856 5.69821 11.2188L5.18609 13.076L5.17522 13.1157C4.9602 13.9217 5.1891 14.7812 5.7765 15.3735L5.80568 15.4025L5.82635 15.4229C6.22273 15.8056 6.862 15.7663 7.20846 15.3378L7.22647 15.315L11.2958 10.1435C11.4772 9.91284 11.6214 9.65195 11.6214 9.35847V3.24734C11.6214 1.62711 10.308 0.313655 8.68776 0.313655L5.88886 0.313654C4.63032 0.313654 4.00105 0.313654 3.48649 0.585577C3.31815 0.674536 3.16127 0.783647 3.01929 0.910507C2.58531 1.29828 2.36633 1.88824 1.92838 3.06811Z"
-      fill="currentColor"
-    />
-    <path
-      d="M13.0963 2.77815C13.0963 1.29585 11.9228 0.431205 11.9228 0.431205H13.3546C14.5498 0.431205 15.5187 1.4001 15.5187 2.59529V7.65491C15.5187 8.8501 14.5498 9.81899 13.3546 9.81899H13.0963V2.77815Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_share_outline_16 */
-export const IconShareOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M7.95889 1.52285C7.95888 0.826234 8.76055 0.467983 9.27669 0.875208L9.37524 0.967191L15.1317 7.18358C15.5582 7.64419 15.5582 8.35614 15.1317 8.81676L9.37524 15.0331C8.87034 15.578 7.95888 15.2205 7.95889 14.4775V10.8207C7.10614 10.8432 6.31361 10.9316 5.45468 11.2515C4.39484 11.6463 3.18248 12.413 1.64676 13.9425C1.4533 14.135 1.18329 14.1696 0.969086 14.0908C0.74748 14.0091 0.547307 13.7879 0.54859 13.4844L0.55516 13.1315C0.618924 11.3494 1.11153 9.29838 2.27656 7.63787C3.45289 5.96147 5.29554 4.71635 7.95889 4.54797V1.52285ZM9.20911 5.13366C9.20899 5.50567 8.9031 5.77687 8.56523 5.77755C5.99383 5.78282 4.33736 6.8762 3.29964 8.35496C2.54519 9.43014 2.10739 10.7283 1.9152 11.9939C3.04749 11.0323 4.0569 10.4385 5.01917 10.0801C6.29638 9.60449 7.4406 9.56343 8.56429 9.56295C8.9178 9.5628 9.20894 9.84909 9.20911 10.2068L9.20817 13.3737L14.1837 8.00017L9.20817 2.62571L9.20911 5.13366Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_edit_outline_16 */
-export const IconEditOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M9.94076 1.34942C10.7047 0.90231 11.6503 0.902415 12.4143 1.34942C12.7061 1.52015 12.9688 1.79118 13.3104 2.13284C13.6521 2.47448 13.9231 2.73721 14.0939 3.02894C14.5408 3.79294 14.5409 4.73856 14.0939 5.50251C13.9231 5.79415 13.652 6.05704 13.3104 6.39861L6.65932 13.0497C6.28068 13.4284 6.00695 13.7108 5.66543 13.9097C5.32391 14.1085 4.94315 14.2074 4.42705 14.3498L3.24394 14.6761C2.77527 14.8054 2.34538 14.9262 2.00131 14.9684C1.65196 15.0112 1.17964 15.0013 0.810764 14.6325C0.441921 14.2637 0.432107 13.7913 0.47486 13.442C0.517035 13.0979 0.6379 12.668 0.767181 12.1993L1.09352 11.0162C1.23588 10.5001 1.33481 10.1193 1.5336 9.77784C1.7325 9.43632 2.0149 9.1626 2.39355 8.78395L9.04466 2.13284C9.38625 1.79126 9.64911 1.52016 9.94076 1.34942ZM15.5427 14.8398H7.55223L8.96707 13.425H15.5427V14.8398ZM3.39382 9.78422C2.965 10.213 2.84244 10.3436 2.75709 10.49C2.67183 10.6366 2.61862 10.8079 2.45733 11.3925L2.13099 12.5756C2.00183 13.0439 1.92194 13.3419 1.88863 13.5536C2.10041 13.5204 2.39872 13.4416 2.86764 13.3123L4.05075 12.9859C4.63544 12.8246 4.80669 12.7715 4.95323 12.6862C5.09968 12.6008 5.23022 12.4783 5.65905 12.0494L10.721 6.98644L8.45577 4.72121L3.39382 9.78422ZM11.7 2.57079C11.3774 2.38198 10.9777 2.38198 10.6551 2.57079C10.5602 2.62647 10.4487 2.72931 10.0449 3.13311L9.45604 3.72094L11.7213 5.98617L12.3102 5.39833C12.7139 4.99457 12.8168 4.88307 12.8725 4.78818C13.0613 4.46561 13.0612 4.06585 12.8725 3.74326C12.8169 3.64827 12.7146 3.53752 12.3102 3.13311C11.9057 2.72863 11.795 2.6264 11.7 2.57079Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_think_outline_14 */
-export const IconThinkOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M7.06431 5.93342C7.68763 5.93342 8.19307 6.43904 8.19322 7.06233C8.19322 7.68573 7.68772 8.19123 7.06431 8.19123C6.44099 8.19113 5.9354 7.68567 5.9354 7.06233C5.93555 6.43911 6.44108 5.93353 7.06431 5.93342Z"
-      fill="currentColor"
-    />
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M8.6815 0.963693C10.1169 0.447019 11.6266 0.374829 12.5633 1.31135C13.5 2.24805 13.4277 3.75776 12.911 5.19319C12.7126 5.74431 12.4386 6.31796 12.0965 6.89729C12.4969 7.54638 12.8141 8.19018 13.036 8.80647C13.5527 10.2419 13.6251 11.7516 12.6883 12.6883C11.7516 13.625 10.242 13.5527 8.8065 13.036C8.19022 12.8141 7.54641 12.4969 6.89732 12.0965C6.31797 12.4386 5.74435 12.7125 5.19322 12.911C3.75777 13.4276 2.2481 13.5 1.31138 12.5633C0.374859 11.6266 0.447049 10.1168 0.963724 8.68147C1.17185 8.10338 1.46321 7.50063 1.82896 6.8924C1.52182 6.35711 1.27235 5.82825 1.08872 5.31819C0.572068 3.88278 0.499714 2.37306 1.43638 1.43635C2.37308 0.499655 3.8828 0.572044 5.31822 1.08869C5.82828 1.27232 6.35715 1.5218 6.89243 1.82893C7.50066 1.46318 8.10341 1.17181 8.6815 0.963693ZM11.3573 8.01154C10.9083 8.62253 10.3901 9.22873 9.80943 9.8094C9.22877 10.3901 8.62255 10.9083 8.01158 11.3572C8.4257 11.5841 8.8287 11.7688 9.21275 11.9071C10.5456 12.3868 11.4246 12.2547 11.8397 11.8397C12.2548 11.4246 12.3869 10.5456 11.9071 9.21272C11.7688 8.82866 11.5841 8.42568 11.3573 8.01154ZM2.56529 8.02912C2.37344 8.39322 2.21495 8.74796 2.09263 9.08772C1.61291 10.4204 1.74512 11.2995 2.16001 11.7147C2.57505 12.1297 3.45415 12.2618 4.78697 11.7821C5.11057 11.6656 5.44786 11.5164 5.7938 11.3367C5.249 10.9223 4.70922 10.4533 4.19029 9.9344C3.57578 9.31987 3.03169 8.67633 2.56529 8.02912ZM6.90708 3.2469C6.24065 3.70479 5.5646 4.26321 4.91392 4.91389C4.26325 5.56456 3.70482 6.24063 3.24693 6.90705C3.72674 7.63325 4.32777 8.37459 5.03892 9.08576C5.64943 9.69627 6.28183 10.2265 6.90806 10.6678C7.59368 10.2025 8.2908 9.63076 8.96079 8.96076C9.6308 8.29075 10.2025 7.59366 10.6678 6.90803C10.2265 6.2818 9.69631 5.6494 9.08579 5.03889C8.37462 4.32773 7.63328 3.72672 6.90708 3.2469ZM11.7147 2.15998C11.2996 1.74509 10.4204 1.61288 9.08775 2.0926C8.74835 2.21479 8.39382 2.37271 8.03013 2.56428C8.67728 3.03065 9.31995 3.5758 9.93443 4.19026C10.4534 4.7092 10.9223 5.24896 11.3368 5.79377C11.5164 5.44785 11.6656 5.11052 11.7821 4.78694C12.2618 3.45416 12.1297 2.57502 11.7147 2.15998ZM4.91197 2.2176C3.57922 1.73788 2.70004 1.86995 2.28501 2.28498C1.87001 2.70003 1.73791 3.5792 2.21763 4.91194C2.31709 5.18822 2.44112 5.47427 2.58677 5.7674C3.01931 5.1887 3.51474 4.6158 4.06529 4.06526C4.61584 3.5147 5.18872 3.01928 5.76743 2.58674C5.47431 2.4411 5.18824 2.31706 4.91197 2.2176Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_think_outline_16 */
-export const IconThinkOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M8.00192 6.64454C8.75026 6.64454 9.35732 7.25169 9.35739 8.00001C9.35739 8.74838 8.7503 9.35548 8.00192 9.35548C7.25367 9.35533 6.64743 8.74829 6.64743 8.00001C6.6475 7.25178 7.25371 6.64468 8.00192 6.64454Z"
-      fill="currentColor"
-    />
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M9.97165 1.29981C11.5853 0.718916 13.271 0.642197 14.3144 1.68555C15.3577 2.72902 15.2811 4.41466 14.7002 6.02833C14.4707 6.66561 14.1504 7.32937 13.75 8.00001C14.1504 8.67062 14.4707 9.33444 14.7002 9.97169C15.2811 11.5854 15.3578 13.271 14.3144 14.3145C13.271 15.3579 11.5854 15.2811 9.97165 14.7002C9.3344 14.4708 8.67059 14.1505 7.99997 13.75C7.32933 14.1505 6.66558 14.4708 6.02829 14.7002C4.41461 15.2811 2.72899 15.3578 1.68552 14.3145C0.642155 13.271 0.71887 11.5854 1.29977 9.97169C1.52915 9.33454 1.84865 8.67049 2.24899 8.00001C1.84866 7.32953 1.52915 6.66544 1.29977 6.02833C0.718852 4.41459 0.64207 2.729 1.68552 1.68555C2.72897 0.642112 4.41456 0.718887 6.02829 1.29981C6.66541 1.52918 7.32949 1.8487 7.99997 2.24903C8.67045 1.84869 9.33451 1.52919 9.97165 1.29981ZM12.9404 9.2129C12.4391 9.893 11.8616 10.5681 11.2148 11.2149C10.568 11.8616 9.89296 12.4391 9.21286 12.9404C9.62532 13.1579 10.0271 13.338 10.4121 13.4766C11.9146 14.0174 12.9172 13.8738 13.3955 13.3955C13.8737 12.9173 14.0174 11.9146 13.4765 10.4121C13.3379 10.0271 13.1578 9.62535 12.9404 9.2129ZM3.05856 9.2129C2.84121 9.62523 2.66197 10.0272 2.52341 10.4121C1.98252 11.9146 2.12627 12.9172 2.60446 13.3955C3.08278 13.8737 4.08544 14.0174 5.58786 13.4766C5.97264 13.338 6.37389 13.1577 6.7861 12.9404C6.10624 12.4393 5.43168 11.8614 4.78513 11.2149C4.13823 10.5679 3.55992 9.89313 3.05856 9.2129ZM7.99899 3.792C7.23179 4.31419 6.45306 4.95512 5.70407 5.70411C4.95509 6.45309 4.31415 7.23184 3.79196 7.99903C4.3143 8.76666 4.95471 9.54653 5.70407 10.2959C6.45309 11.0449 7.23271 11.6848 7.99997 12.207C8.76725 11.6848 9.54683 11.0449 10.2959 10.2959C11.0449 9.54686 11.6848 8.76729 12.207 8.00001C11.6848 7.23275 11.0449 6.45312 10.2959 5.70411C9.5465 4.95475 8.76662 4.31434 7.99899 3.792ZM5.58786 2.52344C4.08533 1.98255 3.08272 2.12625 2.60446 2.6045C2.12621 3.08275 1.98252 4.08536 2.52341 5.5879C2.66189 5.97253 2.8414 6.37409 3.05856 6.78614C3.55983 6.10611 4.1384 5.43189 4.78513 4.78516C5.43186 4.13843 6.10606 3.55987 6.7861 3.0586C6.37405 2.84144 5.97249 2.66192 5.58786 2.52344ZM13.3955 2.6045C12.9172 2.12631 11.9146 1.98257 10.4121 2.52344C10.0272 2.66201 9.62519 2.84125 9.21286 3.0586C9.8931 3.55996 10.5679 4.13827 11.2148 4.78516C11.8614 5.43172 12.4392 6.10627 12.9404 6.78614C13.1577 6.37393 13.338 5.97267 13.4765 5.5879C14.0174 4.08549 13.8736 3.08281 13.3955 2.6045Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_agent_preset_outline_16 (figma extract): node interiors knock out to transparency via mask, so the glyph sits on any fill. */
-export const IconAgentPresetOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <mask id="mask0_agent_preset_16" maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16">
-      <rect width="16" height="16" fill="white" />
-      <circle cx="7.9995" cy="3.28319" r="1.712" fill="black" />
-      <circle cx="3.51122" cy="11.3855" r="1.712" fill="black" />
-      <circle cx="12.4878" cy="11.3855" r="1.712" fill="black" />
-    </mask>
-    <path
-      mask="url(#mask0_agent_preset_16)"
-      d="M12.2881 11.0425C12.6002 11.3723 13.0413 11.5786 13.5312 11.5786L13.5342 11.5776C13.1476 12.3233 12.6119 12.9785 11.9639 13.5005C10.9327 14.3309 9.6199 14.8286 8.19336 14.8286C7.29864 14.8285 6.45056 14.6313 5.6875 14.2808C6.08309 14.0281 6.36707 13.6189 6.45215 13.1392C6.99022 13.3561 7.57767 13.476 8.19336 13.4761C9.30019 13.4761 10.3157 13.0915 11.1152 12.4478C11.5935 12.0626 11.9924 11.5848 12.2881 11.0425ZM4.14746 4.36475C4.25569 4.83228 4.55488 5.2247 4.95898 5.4585C4.07956 6.30639 3.53144 7.49605 3.53125 8.81396C3.53125 9.69534 3.77613 10.5202 4.20117 11.2231C3.74959 11.3817 3.38395 11.7232 3.19531 12.1597C2.5541 11.2032 2.17969 10.052 2.17969 8.81396C2.17989 7.05087 2.93868 5.4646 4.14746 4.36475ZM8.19336 2.80029C8.85717 2.80029 9.49784 2.90834 10.0967 3.10791C12.3237 3.85044 13.9725 5.86061 14.1846 8.28369C13.9832 8.20048 13.7627 8.15382 13.5312 8.15381C13.2802 8.15381 13.042 8.20907 12.8271 8.30615C12.6281 6.47264 11.3666 4.95616 9.66895 4.39014C9.2063 4.236 8.70989 4.15186 8.19336 4.15186C7.96112 4.15189 7.7329 4.16981 7.50977 4.20264C7.51947 4.12886 7.52637 4.05348 7.52637 3.97705C7.52628 3.56604 7.3811 3.18914 7.13965 2.89404C7.48183 2.83352 7.83381 2.80033 8.19336 2.80029Z"
-      fill="currentColor"
-    />
-    <path
-      d="M9.1123 3.28271C9.11205 2.66858 8.61322 2.17041 7.99902 2.17041C7.38504 2.17067 6.88697 2.66874 6.88672 3.28271C6.88672 3.89691 7.38489 4.39574 7.99902 4.396C8.61338 4.396 9.1123 3.89707 9.1123 3.28271ZM10.3115 3.28271C10.3115 4.55981 9.27612 5.59521 7.99902 5.59521C6.72214 5.59496 5.6875 4.55965 5.6875 3.28271C5.68776 2.00599 6.7223 0.971447 7.99902 0.971191C9.27596 0.971191 10.3113 2.00584 10.3115 3.28271Z"
-      fill="currentColor"
-    />
-    <path
-      d="M4.62402 11.385C4.62377 10.7709 4.12494 10.2727 3.51074 10.2727C2.89676 10.273 2.39869 10.771 2.39844 11.385C2.39844 11.9992 2.89661 12.498 3.51074 12.4983C4.1251 12.4983 4.62402 11.9994 4.62402 11.385ZM5.82324 11.385C5.82324 12.6621 4.78784 13.6975 3.51074 13.6975C2.23386 13.6973 1.19922 12.6619 1.19922 11.385C1.19947 10.1083 2.23402 9.07374 3.51074 9.07349C4.78768 9.07349 5.82299 10.1081 5.82324 11.385Z"
-      fill="currentColor"
-    />
-    <path
-      d="M13.6006 11.385C13.6003 10.7709 13.1015 10.2727 12.4873 10.2727C11.8733 10.273 11.3753 10.771 11.375 11.385C11.375 11.9992 11.8732 12.498 12.4873 12.4983C13.1017 12.4983 13.6006 11.9994 13.6006 11.385ZM14.7998 11.385C14.7998 12.6621 13.7644 13.6975 12.4873 13.6975C11.2104 13.6973 10.1758 12.6619 10.1758 11.385C10.176 10.1083 11.2106 9.07374 12.4873 9.07349C13.7642 9.07349 14.7995 10.1081 14.7998 11.385Z"
-      fill="currentColor"
-    />
+
+const IconWarningTriangleOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6.87 2.6a1.33 1.33 0 0 1 2.26 0l5.34 9.33A1.33 1.33 0 0 1 13.33 14H2.67a1.33 1.33 0 0 1-1.14-2.07Z" stroke="currentColor" />
+    <path d="M8 6v3m0 2.33h.01" stroke="currentColor" />
   </svg>
 )
 
-/** ic_ds_browse_outline_16 */
-export const IconBrowseOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M11.2426 4.80473V6.10551H4.75819V4.80473H11.2426Z" fill="currentColor" />
-    <path d="M9.40858 7.84478V9.14557H4.75819V7.84478H9.40858Z" fill="currentColor" />
-    <path
-      d="M9.23438 0.546389C10.1941 0.546389 10.9683 0.544914 11.5859 0.611819C12.2161 0.680096 12.7634 0.825745 13.2393 1.17139C13.5172 1.3733 13.7619 1.61812 13.9639 1.896C14.3096 2.37183 14.4551 2.91922 14.5234 3.54932C14.5903 4.16686 14.5889 4.94133 14.5889 5.90088V10.0981C14.5889 11.0576 14.5903 11.8321 14.5234 12.4497C14.4552 13.0798 14.3094 13.6272 13.9639 14.103C13.7619 14.381 13.5172 14.6257 13.2393 14.8276C12.7633 15.1734 12.2163 15.3189 11.5859 15.3872C10.9683 15.4541 10.1942 15.4536 9.23438 15.4536H6.76563C5.80591 15.4536 5.03168 15.4541 4.41407 15.3872C3.78385 15.3189 3.23665 15.1734 2.76074 14.8276C2.48291 14.6257 2.23802 14.3809 2.03614 14.103C1.69066 13.6272 1.54483 13.0798 1.47657 12.4497C1.40973 11.8321 1.41114 11.0576 1.41114 10.0981V5.90088C1.41113 4.94132 1.40966 4.16686 1.47657 3.54932C1.54488 2.91921 1.69042 2.37184 2.03614 1.896C2.2381 1.61807 2.4828 1.37333 2.76074 1.17139C3.23665 0.825682 3.78386 0.680109 4.41407 0.611819C5.03168 0.544905 5.80591 0.546389 6.76563 0.546389H9.23438ZM6.76563 1.896C5.77586 1.896 5.0876 1.89738 4.55957 1.95459C4.0443 2.01043 3.76214 2.11349 3.55469 2.26416C3.39135 2.38284 3.24761 2.52662 3.12891 2.68994C2.97821 2.89736 2.8752 3.17967 2.81934 3.69483C2.76214 4.22279 2.76075 4.91131 2.76074 5.90088V10.0981C2.76074 11.0876 2.76221 11.7762 2.81934 12.3042C2.87516 12.8194 2.97829 13.1026 3.12891 13.3101C3.24754 13.4733 3.39147 13.6172 3.55469 13.7358C3.76213 13.8865 4.04438 13.9896 4.55957 14.0454C5.0876 14.1026 5.77586 14.103 6.76563 14.103H9.23438C10.2242 14.103 10.9124 14.1026 11.4404 14.0454C11.9556 13.9896 12.2379 13.8865 12.4453 13.7358C12.6086 13.6172 12.7525 13.4733 12.8711 13.3101C13.0217 13.1026 13.1248 12.8195 13.1807 12.3042C13.2378 11.7762 13.2393 11.0876 13.2393 10.0981V5.90088C13.2393 4.91131 13.2379 4.22279 13.1807 3.69483C13.1248 3.17969 13.0218 2.89736 12.8711 2.68994C12.7524 2.52667 12.6086 2.38281 12.4453 2.26416C12.2379 2.11355 11.9556 2.01041 11.4404 1.95459C10.9124 1.8974 10.2241 1.896 9.23438 1.896H6.76563Z"
-      fill="currentColor"
-    />
-  </svg>
-)
+/** Regular rounded warning triangle with an exclamation mark. */
+export const IconWarningTriangleOutlineRegular = (props: IconProps) => (
+  <IconWarningTriangleOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
 
-/** ic_ds_context_injection_outline_16 (figma extract): browse document frame with an open top and an arrow dropping in. */
-export const IconContextInjectionOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M11.9512 1.13281C12.401 1.20666 12.8093 1.34164 13.1738 1.60645C13.4282 1.79137 13.6521 2.01609 13.8369 2.27051C14.1574 2.71187 14.2892 3.21614 14.3506 3.78223C14.4105 4.33532 14.4102 5.02658 14.4102 5.87305V10.0273C14.4102 10.8738 14.4105 11.5651 14.3506 12.1182C14.2892 12.6843 14.1574 13.1885 13.8369 13.6299C13.652 13.8843 13.4282 14.109 13.1738 14.2939C12.7324 14.6146 12.2273 14.7462 11.6611 14.8076C11.1081 14.8675 10.4166 14.8672 9.57031 14.8672H6.43164C5.58533 14.8672 4.89387 14.8675 4.34082 14.8076C3.77474 14.7463 3.27046 14.6144 2.8291 14.2939C2.57453 14.109 2.35003 13.8844 2.16504 13.6299C1.84444 13.1885 1.71272 12.6844 1.65137 12.1182C1.59147 11.5651 1.5918 10.8738 1.5918 10.0273V5.87305C1.5918 5.02655 1.59146 4.33533 1.65137 3.78223C1.71272 3.21606 1.84443 2.71191 2.16504 2.27051C2.35003 2.01596 2.57453 1.79141 2.8291 1.60645C3.19332 1.34202 3.60062 1.20669 4.0498 1.13281V2.56445C3.87191 2.61154 3.74906 2.66836 3.65137 2.73926C3.51583 2.83777 3.3964 2.95726 3.29785 3.09277C3.1794 3.25581 3.09143 3.4856 3.04297 3.93262C2.9931 4.39287 2.99219 4.99529 2.99219 5.87305V10.0273C2.99219 10.905 2.99312 11.5075 3.04297 11.9678C3.09142 12.4147 3.17943 12.6446 3.29785 12.8076C3.3964 12.9431 3.51583 13.0626 3.65137 13.1611C3.81441 13.2795 4.04437 13.3676 4.49121 13.416C4.95142 13.4658 5.55411 13.4668 6.43164 13.4668H9.57031C10.4479 13.4668 11.0505 13.4659 11.5107 13.416C11.9576 13.3675 12.1876 13.2796 12.3506 13.1611C12.4861 13.0626 12.6056 12.9431 12.7041 12.8076C12.8224 12.6446 12.9106 12.4146 12.959 11.9678C13.0088 11.5075 13.0098 10.905 13.0098 10.0273V5.87305C13.0098 4.99532 13.0088 4.39286 12.959 3.93262C12.9105 3.48579 12.8225 3.2558 12.7041 3.09277C12.6056 2.95727 12.4861 2.83778 12.3506 2.73926C12.2527 2.66816 12.1296 2.61064 11.9512 2.56348V1.13281Z"
-      fill="currentColor"
-    />
-    <path d="M9.32227 11.4141H4.95508V10.2148H9.32227V11.4141Z" fill="currentColor" />
-    <path d="M11.0439 8.90039H4.95508V7.70117H11.0439V8.90039Z" fill="currentColor" />
-    <path
-      d="M8.59961 3.75781L9.70996 2.64746L10.5586 3.49609L8.49512 5.55957C8.22173 5.83266 7.77816 5.83285 7.50488 5.55957L5.44141 3.49512L6.28906 2.64746L7.40039 3.75781V1.09668H8.59961V3.75781Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_link_outline_14 */
-export const IconLinkOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M8.19727 5.86969C9.2092 6.90067 9.20969 8.55271 8.19727 9.58338L6.88871 10.8919C5.85801 11.9039 4.20584 11.9037 3.17502 10.8919L3.10873 10.8243C2.09622 9.7934 2.09626 8.14148 3.10873 7.11058L4.36757 5.85174C4.28261 6.33758 4.30355 6.84354 4.44077 7.33362L3.89249 7.88053C3.30043 8.48348 3.30108 9.4507 3.89318 10.0536L3.94566 10.1061C4.54861 10.698 5.51521 10.6981 6.11808 10.1061L7.41283 8.81275C8.00484 8.21002 8.00504 7.24267 7.41352 6.63964L7.35966 6.58716C7.21975 6.44976 7.05995 6.34434 6.89009 6.27089L7.70009 5.4609C7.85176 5.55768 7.99607 5.67091 8.1296 5.80202L8.19727 5.86969Z"
-      fill="currentColor"
-    />
-    <path
-      d="M5.80913 8.12648C4.79584 7.09547 4.79591 5.44245 5.80913 4.41141C5.81733 4.40304 5.82707 4.39209 5.8409 4.37826L7.07833 3.14082C7.09224 3.12693 7.10311 3.11729 7.11148 3.10906C8.14253 2.09591 9.79557 2.09579 10.8266 3.10906L10.8908 3.17328C11.9041 4.20425 11.9039 5.85727 10.8908 6.88835L9.63193 8.14581C9.70566 7.66581 9.67564 7.16895 9.53456 6.68948L10.1063 6.11772C10.6989 5.51458 10.6992 4.54691 10.1063 3.94391L10.0552 3.8942C9.45215 3.30157 8.48446 3.30151 7.88142 3.8942L6.59358 5.18204C6.00081 5.78507 6.00092 6.75274 6.59358 7.35584L6.6433 7.40694C6.77998 7.54132 6.93555 7.64528 7.10112 7.71837L6.29251 8.52699C6.14446 8.43127 6.00395 8.31906 5.87335 8.1907L5.80913 8.12648Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_link_outline_16 */
-export const IconLinkOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M9.94133 6.50173C11.3218 7.99603 11.3218 10.3011 9.94128 11.7954C9.88691 11.8542 9.82125 11.9196 9.72099 12.0198L7.75707 13.9838C7.65709 14.0838 7.592 14.1491 7.53334 14.2034C6.03906 15.5843 3.7327 15.5854 2.23827 14.2048C2.17933 14.1503 2.11374 14.0844 2.01315 13.9838C1.91318 13.8839 1.84922 13.8188 1.79495 13.7601C0.413857 12.2657 0.413909 9.95948 1.795 8.46503C1.84923 8.4064 1.91335 8.34115 2.01321 8.24129L3.79275 6.46313C3.71814 7.08101 3.75236 7.71445 3.90115 8.33518L3.00344 9.23151C2.89398 9.34097 2.8535 9.38307 2.82251 9.41658C1.93771 10.3744 1.93704 11.8514 2.82179 12.8092C2.85279 12.8427 2.89383 12.884 3.0034 12.9936C3.11272 13.1029 3.15429 13.1442 3.18777 13.1752C4.14561 14.0603 5.62381 14.0608 6.58178 13.1758C6.61532 13.1448 6.65722 13.1032 6.76685 12.9935L8.73077 11.0296C8.83999 10.9204 8.88142 10.8787 8.91238 10.8452C9.79744 9.88728 9.7969 8.40911 8.91173 7.45124C8.88074 7.41775 8.83944 7.3762 8.73011 7.26687C8.62082 7.15757 8.58061 7.11623 8.54712 7.08526C8.37347 6.92477 8.18243 6.79361 7.98088 6.69165L9.00289 5.66964C9.17506 5.78373 9.34035 5.91265 9.49663 6.05703C9.55538 6.11135 9.62026 6.17652 9.72036 6.27662C9.82094 6.3772 9.88686 6.4428 9.94133 6.50173Z"
-      fill="currentColor"
-    />
-    <path
-      d="M6.06816 9.49196C4.68626 7.99724 4.68667 5.68942 6.06885 4.19487C6.12268 4.13671 6.18789 4.07306 6.28706 3.9739L8.24541 2.01416C8.34478 1.91479 8.41018 1.85055 8.46845 1.79665C9.96301 0.414902 12.2689 0.414922 13.7635 1.79665C13.8217 1.85051 13.8866 1.91559 13.9858 2.01486C14.0849 2.11394 14.1502 2.17769 14.204 2.23583C15.5861 3.7304 15.5866 6.03823 14.2047 7.53291C14.1508 7.59125 14.0854 7.65638 13.9858 7.75595L12.1994 9.54098C12.2614 8.92982 12.2185 8.30587 12.0634 7.69657L12.9956 6.76573C13.1044 6.65692 13.1458 6.61529 13.1765 6.58205C14.0621 5.62404 14.0621 4.1454 13.1765 3.18738C13.1458 3.15419 13.104 3.1135 12.9956 3.00508C12.8877 2.89716 12.8471 2.85551 12.814 2.82485C11.8559 1.9389 10.376 1.93886 9.41794 2.82485C9.38479 2.85554 9.34381 2.89622 9.23564 3.00439L7.27728 4.96413C7.16875 5.07265 7.12708 5.11322 7.09636 5.14643C6.21074 6.10441 6.21153 7.58236 7.09705 8.5404C7.12775 8.57357 7.16826 8.61575 7.27659 8.72408C7.38456 8.83205 7.42647 8.87227 7.45958 8.90293C7.62849 9.0591 7.81309 9.1881 8.00856 9.28894L6.98795 10.3095C6.82111 10.1978 6.66052 10.0715 6.50872 9.93114C6.45057 9.87733 6.38547 9.81341 6.28637 9.71431C6.1871 9.61504 6.12202 9.55018 6.06816 9.49196Z"
-      fill="currentColor"
-    />
-  </svg>
+/** Medium rounded warning triangle with an exclamation mark. */
+export const IconWarningTriangleOutlineMedium = (props: IconProps) => (
+  <IconWarningTriangleOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_right_up_outline_14 */
-export const IconRightUpOutline14 = ({ size = 8, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M6.54199 8.62824C6.54199 8.44193 6.54146 8.28829 6.53906 8.15851L1.11719 13.5814L0.728516 13.1927L0.339844 12.803L5.76172 7.38019C5.63201 7.3778 5.47812 7.37824 5.29199 7.37824H1.43555V6.27863H5.29199C5.65471 6.27863 5.97167 6.27814 6.22852 6.30597C6.49541 6.33493 6.76232 6.3998 7.00293 6.57452C7.13452 6.67013 7.25108 6.78571 7.34668 6.9173C7.52157 7.15808 7.5863 7.4256 7.61523 7.69269C7.64305 7.94948 7.64258 8.26562 7.64258 8.62824V12.4857H6.54199V8.62824Z"
-      fill="currentColor"
-    />
+const IconUserOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M8 8.25C9.51878 8.25 10.75 7.01878 10.75 5.5C10.75 3.98122 9.51878 2.75 8 2.75C6.48122 2.75 5.25 3.98122 5.25 5.5C5.25 7.01878 6.48122 8.25 8 8.25Z" stroke="currentColor" />
+    <path d="M2.5 14.5C2.5 11.5 5.25 10.25 8 10.25C10.75 10.25 13.5 11.5 13.5 14.5" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconUserOutline artwork. */
+export const IconUserOutlineRegular = (props: IconProps) => (
+  <IconUserOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_right_up_outline_16 */
-export const IconRightUpOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M11.3822 6.28945C11.3822 6.02863 11.3815 5.81352 11.3781 5.63184L3.7875 13.2238L3.24336 12.6797L2.69922 12.1342L10.2898 4.54219C10.1083 4.53884 9.89281 4.53945 9.63223 4.53945H4.2332V3H9.63223C10.14 3 10.5838 2.99932 10.9434 3.03828C11.317 3.07882 11.6907 3.16965 12.0275 3.41426C12.2118 3.5481 12.3749 3.70992 12.5088 3.89414C12.7536 4.23123 12.8443 4.60576 12.8848 4.97969C12.9237 5.3392 12.923 5.78179 12.923 6.28945V11.6898H11.3822V6.28945Z"
-      fill="currentColor"
-    />
+/** Medium IconUserOutline artwork with a 1.3px stroke. */
+export const IconUserOutlineMedium = (props: IconProps) => (
+  <IconUserOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconUsersOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M6 8.25C7.51878 8.25 8.75 7.01878 8.75 5.5C8.75 3.98122 7.51878 2.75 6 2.75C4.48122 2.75 3.25 3.98122 3.25 5.5C3.25 7.01878 4.48122 8.25 6 8.25Z" stroke="currentColor" />
+    <path d="M1 14.5C1 11.5 3.5 10.25 6 10.25C8.5 10.25 11 11.5 11 14.5" stroke="currentColor" />
+    <path d="M10.5 2.9C11.65 3.35 12.45 4.35 12.45 5.5C12.45 6.65 11.65 7.65 10.5 8.1" stroke="currentColor" />
+    <path d="M12.4 10.6C13.9 11.3 15 12.6 15 14.5" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconUsersOutline artwork: a front person with a second person behind. */
+export const IconUsersOutlineRegular = (props: IconProps) => (
+  <IconUsersOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconUsersOutline artwork with a 1.3px stroke. */
+export const IconUsersOutlineMedium = (props: IconProps) => (
+  <IconUsersOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_enhance_outline_16 */
-export const IconEnhanceOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M14.9943 1.92389V3.32428H1.00598V1.92389H14.9943Z" fill="currentColor" />
-    <path d="M14.9943 5.50784V6.90823H1.00598V5.50784H14.9943Z" fill="currentColor" />
-    <path d="M14.9943 9.09177V10.4922H1.00598V9.09177H14.9943Z" fill="currentColor" />
-    <path d="M8.93274 12.6757V14.0761H1.00598V12.6757H8.93274Z" fill="currentColor" />
+const IconPaperPlaneOutlineArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M4.74024 9.11029L1.82882 7.79865C1.75022 7.76323 1.75026 7.65161 1.82889 7.61626L12.9665 2.60943C13.0354 2.57846 13.1125 2.63213 13.1073 2.70749L12.3914 13.1388C12.3864 13.2117 12.3073 13.2548 12.2433 13.2194L6.12677 9.83657" stroke="currentColor" />
+    <path d="M8.44336 11.0825L6.2832 13.2843C6.22048 13.3482 6.11182 13.3038 6.11182 13.2143V9.86772C6.11182 9.84165 6.122 9.8166 6.1402 9.79793L12.972 2.78748" stroke="currentColor" />
   </svg>
-)
-
-/** ic_ds_trash_outline_16 */
-export const IconTrashOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M14.4782 4.84067L14.2138 10.1152C14.1102 12.1872 14.067 13.0115 13.3866 13.9607C13.1044 14.3546 12.7498 14.6912 12.3424 14.9535C11.8239 15.2872 11.2415 15.4316 10.5585 15.4998C9.88727 15.5668 9.04946 15.5656 7.99998 15.5656C6.95051 15.5656 6.1127 15.5668 5.44142 15.4998C4.75851 15.4316 4.17602 15.2872 3.65753 14.9535C3.25012 14.6912 2.89559 14.3546 2.61332 13.9607C1.93296 13.0115 1.88979 12.1872 1.78619 10.1152L1.52179 4.84067L2.89006 4.77277L3.15343 10.0463C3.26221 12.2218 3.32452 12.6015 3.72646 13.1624C3.90825 13.4161 4.13686 13.6334 4.39927 13.8023C4.66204 13.9714 5.00263 14.0792 5.57825 14.1367C6.16562 14.1953 6.92298 14.1963 7.99998 14.1963C9.07699 14.1963 9.83434 14.1953 10.4217 14.1367C10.9973 14.0792 11.3379 13.9714 11.6007 13.8023C11.8631 13.6334 12.0917 13.4161 12.2735 13.1624C12.6755 12.6015 12.7378 12.2218 12.8465 10.0463L13.1099 4.77277L14.4782 4.84067ZM5.43011 6.22849H6.7994V11.3909H5.43011V6.22849ZM9.20056 6.22849H10.5699V11.3909H9.20056V6.22849ZM8.53597 0.434431C9.17976 0.434431 9.6522 0.426926 10.0966 0.571258C10.2357 0.616451 10.3717 0.672554 10.502 0.738948C10.9182 0.951107 11.2464 1.29099 11.7015 1.74612L12.4978 2.54136H15.3742V3.91169H0.625732V2.54136H3.50218L4.29845 1.74612C4.75358 1.29099 5.08174 0.951107 5.49801 0.738948C5.62831 0.672554 5.76425 0.616451 5.90334 0.571258C6.34776 0.426926 6.82021 0.434431 7.46399 0.434431H8.53597ZM7.46399 1.80476C6.73208 1.80476 6.51641 1.81187 6.32617 1.87369C6.25545 1.89667 6.18668 1.92533 6.12041 1.95907C5.96398 2.03878 5.82348 2.16253 5.44142 2.54136H10.5585C10.1765 2.16253 10.036 2.03878 9.87955 1.95907C9.81329 1.92533 9.74452 1.89667 9.6738 1.87369C9.48356 1.81187 9.26789 1.80476 8.53597 1.80476H7.46399Z"
-      fill="currentColor"
-    />
+)
+
+/** Regular one-pixel IconPaperPlaneOutline artwork. */
+export const IconPaperPlaneOutlineRegular = (props: IconProps) => (
+  <IconPaperPlaneOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconPaperPlaneOutline artwork with a 1.3px stroke. */
+export const IconPaperPlaneOutlineMedium = (props: IconProps) => (
+  <IconPaperPlaneOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconStopFillArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M12.5 2.5H3.5C2.94772 2.5 2.5 2.94772 2.5 3.5V12.5C2.5 13.0523 2.94772 13.5 3.5 13.5H12.5C13.0523 13.5 13.5 13.0523 13.5 12.5V3.5C13.5 2.94772 13.0523 2.5 12.5 2.5Z" fill="currentColor" />
   </svg>
+)
+
+/** Regular IconStopFill artwork; its fill-only geometry is weight-independent. */
+export const IconStopFillRegular = (props: IconProps) => (
+  <IconStopFillArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_warning_outline_16 */
-export const IconWarningOutline16 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M6.3002 3.32843L7.69986 3.32843L7.69986 7.79657H6.3002L6.3002 3.32843Z"
-      fill="currentColor"
-    />
-    <path d="M6.3002 9.01935H7.69986V10.6711H6.3002V9.01935Z" fill="currentColor" />
-    <path
-      d="M12.6328 6.99976C12.6328 3.88874 10.111 1.36694 7 1.36694C3.88899 1.36695 1.3672 3.88875 1.36719 6.99976C1.36719 10.1108 3.88899 12.6326 7 12.6326C10.111 12.6326 12.6328 10.1108 12.6328 6.99976ZM13.8582 6.99976C13.8582 10.7873 10.7876 13.8579 7 13.8579C3.21244 13.8579 0.141846 10.7873 0.141846 6.99976C0.141857 3.2122 3.21245 0.141612 7 0.141602C10.7876 0.141602 13.8581 3.21219 13.8582 6.99976Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_user_outline_16 */
-export const IconUserOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M11.0307 5.46369C11.0305 3.78995 9.6734 2.43357 7.99961 2.43357C6.32601 2.43379 4.96972 3.79009 4.96949 5.46369C4.96949 7.13748 6.32587 8.49455 7.99961 8.49477C9.67354 8.49477 11.0307 7.13762 11.0307 5.46369ZM12.3163 5.46369C12.3163 7.84777 10.3837 9.78042 7.99961 9.78042C5.61572 9.7802 3.68288 7.84763 3.68288 5.46369C3.6831 3.07993 5.61586 1.14718 7.99961 1.14695C10.3836 1.14695 12.3161 3.0798 12.3163 5.46369Z"
-      fill="currentColor"
-    />
-    <path
-      d="M8.00002 10.3316C11.7343 10.3316 14.1864 11.8997 15.0387 14.4445L14.4292 14.6483L13.8197 14.8531C13.1955 12.9893 11.3673 11.6182 8.00002 11.6182C4.63277 11.6182 2.80455 12.9893 2.18031 14.8531L1.5708 14.6483L0.961304 14.4445C1.81368 11.8997 4.26579 10.3316 8.00002 10.3316Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_paper_plane_outline_14 */
-export const IconPaperPlaneOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M11.8249 1.11733C12.4401 0.929305 13.0795 1.42149 13.0238 2.08968L12.2321 11.5935C12.1751 12.2735 11.4312 12.6646 10.8386 12.3263L7.99539 10.7011L6.0967 12.7005L6.07413 12.7248L6.04808 12.7465C5.55601 13.1565 4.80867 12.8069 4.80833 12.1665V8.69211C4.80843 8.44469 4.90686 8.20727 5.08181 8.0323L9.79684 3.31641L2.46775 6.6988L4.10251 7.35253L3.67364 8.42559L1.57874 7.5878V7.5852C0.807611 7.2988 0.757207 6.21577 1.5145 5.86622L11.7025 1.16421L11.8249 1.11733ZM5.96474 11.1603L6.9614 10.1107L5.96474 9.54118V11.1603ZM6.32937 8.41864L11.1086 11.149L11.791 2.95698L6.32937 8.41864Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_stop_fill_16 */
-export const IconStopFill16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M2 4.88C2 3.68009 2 3.08013 2.30557 2.65954C2.40426 2.52371 2.52371 2.40426 2.65954 2.30557C3.08013 2 3.68009 2 4.88 2H11.12C12.3199 2 12.9199 2 13.3405 2.30557C13.4763 2.40426 13.5957 2.52371 13.6944 2.65954C14 3.08013 14 3.68009 14 4.88V11.12C14 12.3199 14 12.9199 13.6944 13.3405C13.5957 13.4763 13.4763 13.5957 13.3405 13.6944C12.9199 14 12.3199 14 11.12 14H4.88C3.68009 14 3.08013 14 2.65954 13.6944C2.52371 13.5957 2.40426 13.4763 2.30557 13.3405C2 12.9199 2 12.3199 2 11.12V4.88Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** ic_ds_paperclip_outline_16 */
-export const IconPaperclipOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M5.5498 9.75V5H6.9502V9.75C6.9502 10.3299 7.4201 10.7998 8 10.7998C8.5799 10.7998 9.0498 10.3299 9.0498 9.75V4.5C9.0498 2.9536 7.7964 1.7002 6.25 1.7002C4.7036 1.7002 3.4502 2.9536 3.4502 4.5V9.75C3.4502 12.2629 5.4871 14.2998 8 14.2998C10.5129 14.2998 12.5498 12.2629 12.5498 9.75V4H13.9502V9.75C13.9502 13.0361 11.2861 15.7002 8 15.7002C4.71391 15.7002 2.0498 13.0361 2.0498 9.75V4.5C2.04981 2.1804 3.9304 0.299806 6.25 0.299805C8.5696 0.299805 10.4502 2.1804 10.4502 4.5V9.75C10.4502 11.1031 9.3531 12.2002 8 12.2002C6.6469 12.2002 5.5498 11.1031 5.5498 9.75Z"
-      fill="currentColor"
-    />
-  </svg>
-)
+/** Medium IconStopFill artwork; it matches Regular because the geometry is fill-only. */
+export const IconStopFillMedium = (props: IconProps) => (
+  <IconStopFillArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
 
-/** ic_ds_loading_outline_16 */
-export const IconLoadingOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M2.871 13.1286C0.0387669 10.2962 0.0387669 5.70383 2.871 2.87141C5.70341 0.0390029 10.2957 0.0391154 13.1282 2.87141L12.1387 3.86094C9.85292 1.57538 6.1469 1.57596 3.86123 3.86163C1.57573 6.14732 1.57573 9.85269 3.86123 12.1384C6.1469 14.424 9.85292 14.4246 12.1387 12.1391L13.1282 13.1286C10.2957 15.9609 5.70341 15.961 2.871 13.1286Z"
-      fill="currentColor"
-    />
+const IconPaperclipOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M12.75 4.5V9.5C12.75 10.7598 12.2496 11.968 11.3588 12.8588C10.468 13.7496 9.25978 14.25 8 14.25C6.74022 14.25 5.53204 13.7496 4.64124 12.8588C3.75045 11.968 3.25 10.7598 3.25 9.5V5C3.25 4.13805 3.59241 3.3114 4.2019 2.7019C4.8114 2.09241 5.63805 1.75 6.5 1.75C7.36195 1.75 8.1886 2.09241 8.7981 2.7019C9.40759 3.3114 9.75 4.13805 9.75 5V9.5C9.75 9.96413 9.56563 10.4092 9.23744 10.7374C8.90925 11.0656 8.46413 11.25 8 11.25C7.53587 11.25 7.09075 11.0656 6.76256 10.7374C6.43437 10.4092 6.25 9.96413 6.25 9.5V5.5" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconPaperclipOutline artwork. */
+export const IconPaperclipOutlineRegular = (props: IconProps) => (
+  <IconPaperclipOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconPaperclipOutline artwork with a 1.3px stroke. */
+export const IconPaperclipOutlineMedium = (props: IconProps) => (
+  <IconPaperclipOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_download_outline_16 */
-export const IconDownloadOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M15.3695 11.411L15.1234 12.8866C14.8869 14.3042 13.6603 15.3436 12.223 15.3436H3.77673C2.33958 15.3434 1.1128 14.3042 0.876343 12.8866L0.630249 11.411L2.05408 11.1747L2.29919 12.6493C2.41973 13.3713 3.04475 13.9001 3.77673 13.9003H12.223C12.9551 13.9002 13.58 13.3713 13.7006 12.6493L13.9457 11.1747L15.3695 11.411ZM8.72205 8.994C8.77717 8.93934 8.83792 8.88106 8.90271 8.81627L12.4828 5.23424L13.5043 6.25572L9.92224 9.8358C9.6395 10.1185 9.38763 10.3732 9.15857 10.5575C8.91892 10.7503 8.63953 10.9224 8.2865 10.9784C8.09711 11.0083 7.90363 11.0083 7.71423 10.9784C7.36106 10.9224 7.0809 10.7503 6.84119 10.5575C6.61215 10.3732 6.36022 10.1185 6.07751 9.8358L2.49646 6.25572L3.51697 5.23424L7.09705 8.81627C7.16219 8.88142 7.22331 8.94006 7.27869 8.99498V1.3065H8.72205V8.994Z"
-      fill="currentColor"
-    />
+const IconLoadingOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M12.596 12.596C11.687 13.5049 10.5288 14.1239 9.26798 14.3747C8.00716 14.6255 6.70028 14.4968 5.51261 14.0048C4.32494 13.5129 3.30981 12.6798 2.59557 11.611C1.88134 10.5421 1.50008 9.2855 1.5 7.99998C1.50008 6.71446 1.88134 5.45783 2.59557 4.38898C3.30981 3.32013 4.32494 2.48707 5.51261 1.99513C6.70028 1.50319 8.00716 1.37447 9.26798 1.62524C10.5288 1.87602 11.687 2.49502 12.596 3.40398" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconLoadingOutline artwork. */
+export const IconLoadingOutlineRegular = (props: IconProps) => (
+  <IconLoadingOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_play_outline_16 */
-export const IconPlayOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M14.1446 8C14.1446 4.6062 11.3938 1.85539 8 1.85539C4.6062 1.85539 1.85539 4.6062 1.85539 8C1.85539 11.3938 4.6062 14.1446 8 14.1446C11.3938 14.1446 14.1446 11.3938 14.1446 8ZM15.511 8C15.511 12.148 12.148 15.511 8 15.511C3.85202 15.511 0.489014 12.148 0.489014 8C0.489014 3.85202 3.85202 0.489014 8 0.489014C12.148 0.489014 15.511 3.85202 15.511 8Z"
-      fill="currentColor"
-    />
-    <path
-      d="M10.5617 8.42578C10.852 8.21614 10.852 7.78386 10.5617 7.57422L7.25708 5.18751C6.90974 4.93666 6.42436 5.18484 6.42436 5.61329V10.3867C6.42436 10.8152 6.90974 11.0633 7.25708 10.8125L10.5617 8.42578Z"
-      fill="currentColor"
-    />
+/** Medium IconLoadingOutline artwork with a 1.3px stroke. */
+export const IconLoadingOutlineMedium = (props: IconProps) => (
+  <IconLoadingOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconDownloadOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M8 1.95317V10.0469" stroke="currentColor" />
+    <path d="M4.25 6.29688L8 10.0469L11.75 6.29688" stroke="currentColor" />
+    <path d="M1.5 10.0469V13.158C1.5 13.3937 1.60536 13.6198 1.79289 13.7865C1.98043 13.9532 2.23478 14.0469 2.5 14.0469H13.5C13.7652 14.0469 14.0196 13.9532 14.2071 13.7865C14.3946 13.6198 14.5 13.3937 14.5 13.158V10.0469" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconDownloadOutline artwork. */
+export const IconDownloadOutlineRegular = (props: IconProps) => (
+  <IconDownloadOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconDownloadOutline artwork with a 1.3px stroke. */
+export const IconDownloadOutlineMedium = (props: IconProps) => (
+  <IconDownloadOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_pause_outline_16 */
-export const IconPauseOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M14.1448 8.00024C14.1448 4.60644 11.394 1.85563 8.00024 1.85563C4.60644 1.85563 1.85563 4.60644 1.85563 8.00024C1.85563 11.394 4.60644 14.1448 8.00024 14.1448C11.394 14.1448 14.1448 11.394 14.1448 8.00024ZM15.5112 8.00024C15.5112 12.1482 12.1482 15.5112 8.00024 15.5112C3.85226 15.5112 0.489258 12.1482 0.489258 8.00024C0.489258 3.85226 3.85226 0.489258 8.00024 0.489258C12.1482 0.489258 15.5112 3.85226 15.5112 8.00024Z"
-      fill="currentColor"
-    />
-    <path d="M7.14244 5.14258V10.8569H5.71387V5.14258H7.14244Z" fill="currentColor" />
-    <path d="M10.286 5.14258V10.8569H8.85742V5.14258H10.286Z" fill="currentColor" />
+const IconPlayOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M8 14.5C11.5899 14.5 14.5 11.5899 14.5 8C14.5 4.41015 11.5899 1.5 8 1.5C4.41015 1.5 1.5 4.41015 1.5 8C1.5 11.5899 4.41015 14.5 8 14.5Z" stroke="currentColor" />
+    <path d="M10.3329 7.91346C10.3996 7.95195 10.3996 8.04818 10.3329 8.08667L6.78304 10.1362C6.71638 10.1747 6.63304 10.1266 6.63304 10.0496L6.63304 5.95055C6.63304 5.87357 6.71638 5.82546 6.78304 5.86395L10.3329 7.91346Z" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconPlayOutline artwork. */
+export const IconPlayOutlineRegular = (props: IconProps) => (
+  <IconPlayOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_fullscreen_outline_16 */
-export const IconFullscreenOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M2.58875 12.3407L6.59167 8.33777L7.66296 9.40808L3.66003 13.411H7.99988V14.8065H3.05457C2.02633 14.8065 1.19324 13.9734 1.19324 12.9452V7.99988H2.58875V12.3407Z"
-      fill="currentColor"
-    />
-    <path
-      d="M12.9452 1.19324C13.9734 1.19324 14.8065 2.02633 14.8065 3.05457V7.99988H13.411V3.66003L9.40808 7.66296L8.33777 6.59167L12.3407 2.58875H7.99988V1.19324H12.9452Z"
-      fill="currentColor"
-    />
+/** Medium IconPlayOutline artwork with a 1.3px stroke. */
+export const IconPlayOutlineMedium = (props: IconProps) => (
+  <IconPlayOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconPauseOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M8 14.5C11.5899 14.5 14.5 11.5899 14.5 8C14.5 4.41015 11.5899 1.5 8 1.5C4.41015 1.5 1.5 4.41015 1.5 8C1.5 11.5899 4.41015 14.5 8 14.5Z" stroke="currentColor" />
+    <path d="M6.5 5V11" stroke="currentColor" />
+    <path d="M9.5 5V11" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconPauseOutline artwork. */
+export const IconPauseOutlineRegular = (props: IconProps) => (
+  <IconPauseOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconPauseOutline artwork with a 1.3px stroke. */
+export const IconPauseOutlineMedium = (props: IconProps) => (
+  <IconPauseOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_code_outline_16 */
-export const IconCodeOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M12.3368 1.53569L11.931 4.43172H14.8086V5.79673H11.7404L11.1962 9.67859H14.2839V11.0436H11.0056L10.4994 14.6529L9.14873 14.4643L9.62731 11.0436H5.75876L5.25252 14.6529L3.90186 14.4643L4.38043 11.0436H1.69141V9.67859H4.57104L5.11417 5.79673H2.21609V4.43172H5.30581L5.73724 1.34713L7.08995 1.53569L6.68414 4.43172H10.5527L10.9841 1.34713L12.3368 1.53569ZM5.94937 9.67859H9.81791L10.361 5.79673H6.49353L5.94937 9.67859Z"
-      fill="currentColor"
-    />
+const IconFullscreenOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M2.33154 9.40576V13.1685C2.3318 13.4444 2.55556 13.6685 2.83154 13.6685H6.49463V14.6685H2.83154C2.00328 14.6685 1.3318 13.9967 1.33154 13.1685V9.40576H2.33154ZM13.1685 1.33154C13.9964 1.33199 14.6683 2.00352 14.6685 2.83154V6.40576H13.6685V2.83154C13.6683 2.5558 13.4441 2.33199 13.1685 2.33154H9.49463V1.33154H13.1685Z" fill="currentColor" />
+    <path d="M9.4292 6.57077L13.914 2.08594" stroke="currentColor" />
+    <path d="M6.57077 9.4292L2.08594 13.914" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconFullscreenOutline artwork. */
+export const IconFullscreenOutlineRegular = (props: IconProps) => (
+  <IconFullscreenOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_cordis_plugin_outline_14 */
-export const IconCordisPluginOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <g clipPath="url(#clip0_1840_45990)">
-      <path
-        d="M3.03426 5.66661L1.70084 7.00003L3.0315 8.33069L2.14762 9.21457L-0.0669245 7.00003L2.15038 4.78273L3.03426 5.66661ZM7 14.067L4.77924 11.8462L5.66313 10.9623L7 12.2992L8.33342 10.9658L9.2173 11.8496L7 14.067ZM11.8489 9.21803L10.965 8.33414L12.2992 7.00003L10.9623 5.66316L11.8462 4.77927L14.0669 7.00003L11.8489 9.21803ZM8.33066 3.03153L7 1.70087L5.66589 3.03498L4.782 2.1511L7 -0.0668945L9.21454 2.14765L8.33066 3.03153Z"
-        fill="currentColor"
-      />
-      <rect x="5.98535" y="5.98535" width="2.02942" height="2.02942" fill="currentColor" />
-    </g>
-    <defs>
-      <clipPath id="clip0_1840_45990">
-        <rect width="14" height="14" fill="currentColor" />
-      </clipPath>
-    </defs>
+/** Medium IconFullscreenOutline artwork with a 1.3px stroke. */
+export const IconFullscreenOutlineMedium = (props: IconProps) => (
+  <IconFullscreenOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconCodeOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M6.27612 1.5L4.52612 14.5" stroke="currentColor" />
+    <path d="M11.4739 1.5L9.72388 14.5" stroke="currentColor" />
+    <path d="M2.39868 5.5H14.0681" stroke="currentColor" />
+    <path d="M1.93188 10.5H13.6013" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconCodeOutline artwork. */
+export const IconCodeOutlineRegular = (props: IconProps) => (
+  <IconCodeOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconCodeOutline artwork with a 1.3px stroke. */
+export const IconCodeOutlineMedium = (props: IconProps) => (
+  <IconCodeOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_api_outline (figma extract) */
-export const IconApiOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none">
-    <path transform="translate(0.6689 1.073)" d="M11.4818 5.57813C11.4818 4.45301 11.4807 3.66237 11.4075 3.05908C11.3359 2.46953 11.2024 2.13852 10.9939 1.89441C10.9247 1.81341 10.8493 1.73801 10.7683 1.66882C10.5242 1.46033 10.1932 1.32686 9.60364 1.25525C9.00034 1.18198 8.20974 1.18091 7.0846 1.18091L5.57813 1.18091C4.45301 1.18091 3.66238 1.18198 3.05908 1.25525C2.46953 1.32686 2.13852 1.46033 1.89441 1.66882C1.81341 1.73801 1.73801 1.81341 1.66882 1.89441C1.46033 2.13852 1.32686 2.46953 1.25525 3.05908C1.18198 3.66238 1.18091 4.45301 1.18091 5.57813L1.18091 6.2771C1.18091 7.40218 1.18197 8.19288 1.25525 8.79614C1.32687 9.38553 1.46036 9.71674 1.66882 9.96082C1.73797 10.0417 1.81347 10.1173 1.89441 10.1864C2.13851 10.3948 2.46965 10.5275 3.05908 10.5991C3.66238 10.6724 4.45298 10.6735 5.57813 10.6735L7.0846 10.6735C8.20977 10.6735 9.00033 10.6724 9.60364 10.5991C10.1931 10.5275 10.5242 10.3948 10.7683 10.1864C10.8493 10.1173 10.9247 10.0417 10.9939 9.96082C11.2024 9.71674 11.3358 9.38553 11.4075 8.79614C11.4808 8.19288 11.4818 7.40218 11.4818 6.2771L11.4818 5.57813ZM12.6627 6.2771C12.6627 7.37222 12.6637 8.247 12.5798 8.93799C12.4942 9.64284 12.3133 10.2359 11.8928 10.7282C11.7834 10.8562 11.6637 10.9751 11.5356 11.0845C11.0434 11.5049 10.4511 11.6867 9.74634 11.7723C9.05525 11.8563 8.17999 11.8552 7.0846 11.8552L5.57813 11.8552C4.48273 11.8552 3.60747 11.8563 2.91638 11.7723C2.21157 11.6867 1.61933 11.5049 1.12708 11.0845C0.99901 10.9751 0.879281 10.8562 0.769898 10.7282C0.349454 10.2359 0.168506 9.64284 0.0828864 8.93799C-0.00101964 8.247 4.88512e-07 7.37222 6.47206e-07 6.2771L6.47206e-07 5.57813C6.47206e-07 4.48273 -0.00106163 3.60747 0.0828864 2.91638C0.168502 2.21168 0.349594 1.61928 0.769898 1.12708C0.879302 0.998981 0.998981 0.879302 1.12708 0.769898C1.61928 0.349594 2.21168 0.168502 2.91638 0.0828864C3.60747 -0.00106163 4.48273 6.47206e-07 5.57813 6.47206e-07L7.0846 6.47206e-07C8.17999 6.47206e-07 9.05525 -0.00106163 9.74634 0.0828864C10.451 0.168505 11.0434 0.349587 11.5356 0.769898C11.6637 0.879302 11.7834 0.998981 11.8928 1.12708C12.3131 1.61928 12.4942 2.21169 12.5798 2.91638C12.6638 3.60747 12.6627 4.48273 12.6627 5.57813L12.6627 6.2771Z" fill="currentColor"/>
-    <path transform="translate(0.6689 1.073)" d="M6.02607 5.50955L6.44306 5.9274L3.84284 8.52762L3.425 8.11063L3.00715 7.69278L4.77253 5.9274L3.00715 4.16202L3.84284 3.32633L6.02607 5.50955Z" fill="currentColor"/>
-    <path transform="translate(0.6689 1.073)" d="M9.23789 7.35397L9.23789 8.53488L6.96238 8.53488L6.96238 7.35397L9.23789 7.35397Z" fill="currentColor"/>
+const IconCordisPluginOutlineArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M3.16143 6.59068L1.75205 8.00006L3.10619 9.35419L2.39908 10.0613L0.832948 8.49517C0.559581 8.2218 0.559582 7.77831 0.832948 7.50494L2.45432 5.88357L3.16143 6.59068ZM8.49511 15.1671C8.22176 15.4405 7.77826 15.4404 7.50489 15.1671L5.93461 13.5968L6.64172 12.8897L8 14.248L9.40938 12.8386L10.1165 13.5457L8.49511 15.1671ZM15.1671 7.50494C15.4403 7.7782 15.4401 8.22179 15.1671 8.49517L13.652 10.0102L12.9449 9.30309L14.248 8.00006L12.8897 6.64178L13.5968 5.93467L15.1671 7.50494ZM9.35414 3.10624L8 1.7521L6.69696 3.05514L5.98986 2.34803L7.50489 0.833003C7.77828 0.559981 8.22186 0.559752 8.49511 0.833003L10.0612 2.39913L9.35414 3.10624Z" fill="currentColor" />
+    <circle cx="8" cy="8" r="1.76221" stroke="currentColor" />
   </svg>
 )
 
-/** ic_ds_personalization_outline_16 (figma extract) */
-export const IconPersonalizationOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none">
-    <path transform="translate(1.292 1.3)" d="M10.3232 9.18164C11.2868 9.18164 12.0985 9.82833 12.3506 10.7109L13.415 10.7109L13.415 11.8711L12.3496 11.8711C12.0971 12.7532 11.2864 13.3994 10.3232 13.3994C9.36031 13.3992 8.55012 12.7531 8.29785 11.8711L0 11.8711L0 10.7109L8.29688 10.7109C8.54876 9.82845 9.35988 9.18186 10.3232 9.18164ZM10.3232 10.3418C9.7999 10.3421 9.37534 10.7667 9.375 11.29C9.375 11.8137 9.79969 12.239 10.3232 12.2393C10.847 12.2393 11.2725 11.8138 11.2725 11.29C11.2721 10.7666 10.8468 10.3418 10.3232 10.3418ZM12.4326 11.291C12.4326 11.3549 12.4284 11.418 12.4229 11.4805C12.4287 11.4181 12.4326 11.355 12.4326 11.291ZM8.21484 11.2832C8.21484 11.2856 8.21484 11.2886 8.21484 11.291L8.21484 11.29C8.21484 11.2878 8.21484 11.2855 8.21484 11.2832ZM3.08301 4.59082C4.04605 4.59095 4.85696 5.23717 5.10938 6.11914L13.415 6.11914L13.415 7.2793L5.11035 7.2793C4.85833 8.16202 4.04648 8.80846 3.08301 8.80859C2.11972 8.80843 1.30963 8.16179 1.05762 7.2793L0 7.2793L0 6.11914L1.05762 6.11914C1.30994 5.23728 2.12006 4.59098 3.08301 4.59082ZM3.08301 5.75098C2.55962 5.75117 2.13512 6.17587 2.13477 6.69922C2.13477 7.22287 2.5594 7.64824 3.08301 7.64844C3.60665 7.64828 4.03223 7.2229 4.03223 6.69922C4.03187 6.17585 3.60643 5.75113 3.08301 5.75098ZM5.19238 6.69922C5.19238 6.763 5.18816 6.82633 5.18262 6.88867C5.18846 6.82629 5.19238 6.76313 5.19238 6.69922C5.19236 6.63495 5.18853 6.57152 5.18262 6.50879C5.18826 6.57154 5.19236 6.635 5.19238 6.69922ZM0.982422 6.52344C0.977382 6.58136 0.97463 6.63999 0.974609 6.69922C0.974609 6.75775 0.977496 6.81579 0.982422 6.87305C0.977758 6.81579 0.974609 6.75767 0.974609 6.69922C0.974628 6.64 0.977618 6.58142 0.982422 6.52344ZM10.3232 0C11.2869 0 12.0986 0.646596 12.3506 1.5293L13.415 1.5293L13.415 2.68945L12.3496 2.68945C12.363 2.64266 12.3754 2.59488 12.3857 2.54688C12.1838 3.50118 11.3376 4.21777 10.3232 4.21777C9.36037 4.21756 8.55018 3.57139 8.29785 2.68945L0 2.68945L0 1.5293L8.29688 1.5293C8.5487 0.646717 9.35981 0.00021854 10.3232 0ZM10.3232 1.16016C9.79984 1.16042 9.37524 1.58499 9.375 2.1084C9.375 2.63201 9.79969 3.05735 10.3232 3.05762C10.847 3.05762 11.2725 2.63217 11.2725 2.1084C11.2722 1.58483 10.8469 1.16016 10.3232 1.16016ZM12.4229 2.29883C12.4287 2.23641 12.4326 2.17331 12.4326 2.10938C12.4326 2.17327 12.4284 2.23638 12.4229 2.29883ZM8.21484 2.10938L8.21484 2.1084L8.21484 2.10938ZM8.22266 1.93359C8.21785 1.98897 8.21506 2.04499 8.21484 2.10156C8.21503 2.04501 8.2181 1.98902 8.22266 1.93359ZM8.22266 11.1162C8.2179 11.1713 8.21507 11.227 8.21484 11.2832C8.21504 11.227 8.21814 11.1713 8.22266 11.1162Z" fill="currentColor"/>
+/** Regular one-pixel IconCordisPluginOutline artwork. */
+export const IconCordisPluginOutlineRegular = (props: IconProps) => (
+  <IconCordisPluginOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconCordisPluginOutline artwork with a 1.3px stroke. */
+export const IconCordisPluginOutlineMedium = (props: IconProps) => (
+  <IconCordisPluginOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconApiOutlineArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M3 4L7 8L3 12" stroke="currentColor" />
+    <path d="M9 12H13" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconApiOutline artwork. */
+export const IconApiOutlineRegular = (props: IconProps) => (
+  <IconApiOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_project_add_outline_16 (figma extract) */
-export const IconProjectAddOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none">
-    <path transform="translate(9.52 2.52)" d="M3.55246 0L3.55246 2.44252L6 2.44252L6 3.55748L3.55246 3.55748L3.55246 6L2.43834 6L2.43834 3.55748L0 3.55748L0 2.44252L2.43834 2.44252L2.43834 0L3.55246 0Z" fill="currentColor"/>
-    <path transform="translate(0.3496 2.35)" d="M4.76367 0C5.36861 1.80598e-05 5.93113 0.310294 6.25488 0.821289L6.78027 1.64941C6.79685 1.67558 6.81791 1.69775 6.83887 1.71973C6.72186 2.15521 6.65702 2.61192 6.65137 3.08301C6.25601 2.96045 5.90909 2.70478 5.68164 2.3457L5.15723 1.5166C5.07183 1.38189 4.92318 1.3008 4.76367 1.30078L2.32422 1.30078C1.7589 1.30078 1.30078 1.7589 1.30078 2.32422L1.30078 10.1338C1.30078 10.6991 1.7589 11.1572 2.32422 11.1572L11.9766 11.1572C12.5419 11.1572 13 10.6991 13 10.1338L13 8.58398C13.4545 8.5135 13.8903 8.38748 14.3008 8.21289L14.3008 10.1338C14.3008 11.4171 13.2598 12.458 11.9766 12.458L2.32422 12.458C1.04093 12.458 0 11.4171 0 10.1338L0 2.32422C0 1.04093 1.04093 0 2.32422 0L4.76367 0Z" fill="currentColor"/>
-  </svg>
-)
-
-/**
- * folder_open_16, outline layer only: the duotone original above reads a rung
- * heavier than the …Outline16 family, so an icon-button row mixing them looks
- * mismatched — this is the same geometry without the 20%-opacity inner fill.
- */
-export const IconFolderOpenOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none">
-    <path d="M5.19629 1.57104C5.81144 1.5711 6.38623 1.8786 6.72754 2.39038L7.19922 3.09839C7.28454 3.22635 7.42824 3.30344 7.58203 3.30347H12.1699C13.5039 3.30348 14.5859 4.38548 14.5859 5.71948V6.62671C15.2694 7.02689 15.6605 7.85012 15.4385 8.68726L14.3848 12.658C14.1037 13.7164 13.1449 14.4527 12.0498 14.4529H2.91699C1.51651 14.4529 0.451662 13.2814 0.501954 11.9519V3.98706C0.501954 2.65305 1.58396 1.57104 2.91797 1.57104H5.19629ZM3.7793 7.75562C3.30994 7.75562 2.89883 8.07153 2.77832 8.52515L1.91602 11.7722C1.74167 12.4291 2.23734 13.073 2.91699 13.073H12.0498C12.5191 13.0728 12.9304 12.757 13.0508 12.3035L14.1045 8.33374C14.1819 8.04202 13.9619 7.756 13.6602 7.75562H3.7793ZM2.91797 2.9519C2.34625 2.9519 1.88281 3.41534 1.88281 3.98706V7.2937C2.33068 6.7269 3.02249 6.37476 3.7793 6.37476H13.2051V5.71948C13.2051 5.14777 12.7416 4.68434 12.1699 4.68433H7.58203C6.96675 4.6843 6.39209 4.37595 6.05078 3.86401L5.5791 3.15601C5.49379 3.02821 5.34995 2.95196 5.19629 2.9519H2.91797Z" fill="currentColor"/>
-  </svg>
+/** Medium IconApiOutline artwork with a 1.3px stroke. */
+export const IconApiOutlineMedium = (props: IconProps) => (
+  <IconApiOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** folder_open_16 (figma extract): outline at full ink + 20%-opacity inner fill riding the same currentColor. */
-export const IconFolderOpen16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none">
-    <path d="M5.19629 1.57104C5.81144 1.5711 6.38623 1.8786 6.72754 2.39038L7.19922 3.09839C7.28454 3.22635 7.42824 3.30344 7.58203 3.30347H12.1699C13.5039 3.30348 14.5859 4.38548 14.5859 5.71948V6.62671C15.2694 7.02689 15.6605 7.85012 15.4385 8.68726L14.3848 12.658C14.1037 13.7164 13.1449 14.4527 12.0498 14.4529H2.91699C1.51651 14.4529 0.451662 13.2814 0.501954 11.9519V3.98706C0.501954 2.65305 1.58396 1.57104 2.91797 1.57104H5.19629ZM3.7793 7.75562C3.30994 7.75562 2.89883 8.07153 2.77832 8.52515L1.91602 11.7722C1.74167 12.4291 2.23734 13.073 2.91699 13.073H12.0498C12.5191 13.0728 12.9304 12.757 13.0508 12.3035L14.1045 8.33374C14.1819 8.04202 13.9619 7.756 13.6602 7.75562H3.7793ZM2.91797 2.9519C2.34625 2.9519 1.88281 3.41534 1.88281 3.98706V7.2937C2.33068 6.7269 3.02249 6.37476 3.7793 6.37476H13.2051V5.71948C13.2051 5.14777 12.7416 4.68434 12.1699 4.68433H7.58203C6.96675 4.6843 6.39209 4.37595 6.05078 3.86401L5.5791 3.15601C5.49379 3.02821 5.34995 2.95196 5.19629 2.9519H2.91797Z" fill="currentColor"/>
-    <path opacity="0.2" d="M13.6602 7.75525C13.9618 7.7556 14.1815 8.04179 14.1045 8.33337L13.0508 12.3031C12.9304 12.7567 12.5191 13.0725 12.0498 13.0726H2.91701C2.23744 13.0725 1.7417 12.4287 1.91603 11.7719L2.77834 8.52478C2.89898 8.07146 3.31018 7.75532 3.77931 7.75525H13.6602ZM5.1963 2.95154C5.34985 2.95159 5.49377 3.02803 5.57912 3.15564L6.0508 3.86365C6.39205 4.37553 6.96685 4.68385 7.58205 4.68396H12.1699C12.7416 4.68396 13.2049 5.14754 13.2051 5.71912V6.37439H3.77931C3.02267 6.37444 2.33067 6.72671 1.88283 7.29333V3.98669C1.88299 3.4152 2.34649 2.95168 2.91798 2.95154H5.1963Z" fill="currentColor"/>
+const IconPersonalizationOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M3.25 7.16357C3.20417 7.32247 3.17778 7.48993 3.17773 7.66357C3.17773 7.83698 3.20336 8.00486 3.24902 8.16357H1.85742V7.16357H3.25ZM14.1426 8.16357H6.71484C6.76052 8.00485 6.78613 7.837 6.78613 7.66357C6.78609 7.48991 6.75971 7.32249 6.71387 7.16357H14.1426V8.16357Z" fill="currentColor" />
+    <path d="M9.1377 11.9092C9.08596 12.0666 9.05668 12.2344 9.05664 12.4092C9.05664 12.5838 9.08606 12.7518 9.1377 12.9092H1.85742V11.9092H9.1377ZM14.1426 12.9092H12.1816C12.2332 12.7519 12.2617 12.5838 12.2617 12.4092C12.2617 12.2345 12.2333 12.0666 12.1816 11.9092H14.1426V12.9092Z" fill="currentColor" />
+    <path d="M9.1123 3.09106C9.06138 3.24865 9.03324 3.41653 9.0332 3.59106C9.0332 3.76549 9.06148 3.93355 9.1123 4.09106H1.85742V3.09106H9.1123ZM14.1426 4.09106H12.207C12.2578 3.93358 12.2861 3.76545 12.2861 3.59106C12.2861 3.41657 12.2579 3.24862 12.207 3.09106H14.1426V4.09106Z" fill="currentColor" />
+    <circle cx="4.97065" cy="7.66401" r="1.35151" stroke="currentColor" />
+    <circle cx="10.6596" cy="12.4091" r="1.35151" stroke="currentColor" />
+    <circle cx="10.6596" cy="3.59101" r="1.35151" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconPersonalizationOutline artwork. */
+export const IconPersonalizationOutlineRegular = (props: IconProps) => (
+  <IconPersonalizationOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** folder_close_16 (figma extract) */
-export const IconFolderClose16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none">
-    <path transform="translate(1.5 2.429)" d="M5.05582 0.518756L4.50669 0.86654L5.05582 0.518756ZM13 9.4837L13.65 9.4837L13.65 3.53962L13 3.53962L12.35 3.53962L12.35 9.4837L13 9.4837ZM11.3264 1.86603L11.3264 1.21603L6.52313 1.21603L6.52313 1.86603L6.52313 2.51603L11.3264 2.51603L11.3264 1.86603ZM5.58054 1.34727L6.12968 0.999489L5.60495 0.170972L5.05582 0.518756L4.50669 0.86654L5.03141 1.69506L5.58054 1.34727ZM4.11323 1.23058e-13L4.11323 -0.65L1.67359 -0.65L1.67359 5.00699e-14L1.67359 0.65L4.11323 0.65L4.11323 1.23058e-13ZM0 1.67359L-0.65 1.67359L-0.65 9.4837L0 9.4837L0.65 9.4837L0.65 1.67359L0 1.67359ZM11.3264 11.1573L11.3264 10.5073L1.67359 10.5073L1.67359 11.1573L1.67359 11.8073L11.3264 11.8073L11.3264 11.1573ZM0 9.4837L-0.65 9.4837C-0.65 10.767 0.390308 11.8073 1.67359 11.8073L1.67359 11.1573L1.67359 10.5073C1.10828 10.5073 0.65 10.049 0.65 9.4837L0 9.4837ZM1.67359 5.00699e-14L1.67359 -0.65C0.390307 -0.65 -0.65 0.390309 -0.65 1.67359L0 1.67359L0.65 1.67359C0.65 1.10828 1.10828 0.65 1.67359 0.65L1.67359 5.00699e-14ZM5.05582 0.518756L5.60495 0.170972C5.28121 -0.340193 4.71829 -0.65 4.11323 -0.65L4.11323 1.23058e-13L4.11323 0.65C4.27282 0.65 4.4213 0.731715 4.50669 0.86654L5.05582 0.518756ZM6.52313 1.86603L6.52313 1.21603C6.36354 1.21603 6.21507 1.13431 6.12968 0.999489L5.58054 1.34727L5.03141 1.69506C5.35515 2.20622 5.91808 2.51603 6.52313 2.51603L6.52313 1.86603ZM13 3.53962L13.65 3.53962C13.65 2.25634 12.6097 1.21603 11.3264 1.21603L11.3264 1.86603L11.3264 2.51603C11.8917 2.51603 12.35 2.97431 12.35 3.53962L13 3.53962ZM13 9.4837L12.35 9.4837C12.35 10.049 11.8917 10.5073 11.3264 10.5073L11.3264 11.1573L11.3264 11.8073C12.6097 11.8073 13.65 10.767 13.65 9.4837L13 9.4837Z" fill="currentColor"/>
+/** Medium IconPersonalizationOutline artwork with a 1.3px stroke. */
+export const IconPersonalizationOutlineMedium = (props: IconProps) => (
+  <IconPersonalizationOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconProjectAddOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M5.54492 2.06738C5.91034 2.06754 6.26318 2.20149 6.53711 2.44336L7.94043 3.68164V4.7998C7.71462 4.74105 7.50367 4.63139 7.32617 4.47461L5.87598 3.19238C5.78477 3.11185 5.66658 3.06754 5.54492 3.06738H2.94922C2.67322 3.06738 2.44946 3.29145 2.44922 3.56738V12.4326C2.44927 12.7087 2.67311 12.9326 2.94922 12.9326H12.9326C13.2086 12.9325 13.4326 12.7086 13.4326 12.4326V8.53613H14.4326V12.4326C14.4326 13.2609 13.7609 13.9325 12.9326 13.9326H2.94922C2.12083 13.9326 1.44927 13.261 1.44922 12.4326V3.56738C1.44946 2.73916 2.12094 2.06738 2.94922 2.06738H5.54492Z" fill="currentColor" />
+    <path d="M9.75977 4.50208H14.5509" stroke="currentColor" />
+    <path d="M12.1492 6.89758L12.1492 2.10642" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconProjectAddOutline artwork. */
+export const IconProjectAddOutlineRegular = (props: IconProps) => (
+  <IconProjectAddOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconProjectAddOutline artwork with a 1.3px stroke. */
+export const IconProjectAddOutlineMedium = (props: IconProps) => (
+  <IconProjectAddOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** tree_corner_8x10 (figma extract; session-tree "L" connector, stroke geometry pre-expanded) */
-export const IconTreeCorner8x10 = ({ size = 10, className }: IconProps) => (
-  <svg width={(size * 8) / 10} height={size} className={className} viewBox="-0.5 0 8.5 10.5" fill="none">
-    <path d="M0 0L-0.5 0L-0.5 7L0 7L0.5 7L0.5 0L0 0ZM3 10L3 10.5L8 10.5L8 10L8 9.5L3 9.5L3 10ZM0 7L-0.5 7C-0.5 8.933 1.067 10.5 3 10.5L3 10L3 9.5C1.61929 9.5 0.5 8.38071 0.5 7L0 7Z" fill="currentColor"/>
+const IconFolderOpenOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M12.3994 13.5986H2.04956C1.49728 13.5986 1.04956 13.1509 1.04956 12.5986V3.40137C1.04956 2.84908 1.49728 2.40137 2.04956 2.40137H4.76632C5.01016 2.40137 5.24561 2.49046 5.42836 2.6519L6.94088 3.98799C7.12364 4.14943 7.35908 4.23852 7.60293 4.23852H12.3994C12.9517 4.23852 13.3994 4.68624 13.3994 5.23852V7.16991" stroke="currentColor" />
+    <path d="M2.55911 7.93683C2.67584 7.49906 3.07229 7.19446 3.52536 7.19446H13.6491C14.3061 7.19446 14.7846 7.81725 14.6153 8.45209L13.4411 12.856C13.3244 13.2938 12.9279 13.5984 12.4748 13.5984H2.35113C1.69411 13.5984 1.21562 12.9756 1.38489 12.3407L2.55911 7.93683Z" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconFolderOpenOutline artwork. */
+export const IconFolderOpenOutlineRegular = (props: IconProps) => (
+  <IconFolderOpenOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_light_outline_16 */
-export const IconLightOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M11.3496 8C11.3496 6.14985 9.85015 4.65039 8 4.65039C6.14985 4.65039 4.65039 6.14985 4.65039 8C4.65039 9.85015 6.14985 11.3496 8 11.3496C9.85015 11.3496 11.3496 9.85015 11.3496 8ZM12.6504 8C12.6504 10.5681 10.5681 12.6504 8 12.6504C5.43188 12.6504 3.34961 10.5681 3.34961 8C3.34961 5.43188 5.43188 3.34961 8 3.34961C10.5681 3.34961 12.6504 5.43188 12.6504 8Z"
-      fill="currentColor"
-    />
-    <path d="M8.65039 0.5V2.5H7.34961V0.5H8.65039Z" fill="currentColor" />
-    <path d="M8.65039 13.5V15.5H7.34961V13.5H8.65039Z" fill="currentColor" />
-    <path
-      d="M3.15808 2.24035L4.57229 3.65456L3.6525 4.57435L2.23829 3.16014L3.15808 2.24035Z"
-      fill="currentColor"
-    />
-    <path
-      d="M12.3505 11.4327L13.7647 12.8469L12.8449 13.7667L11.4307 12.3525L12.3505 11.4327Z"
-      fill="currentColor"
-    />
-    <path
-      d="M2.24537 12.8469L3.65958 11.4327L4.57937 12.3525L3.16516 13.7667L2.24537 12.8469Z"
-      fill="currentColor"
-    />
-    <path
-      d="M11.4377 3.65455L12.852 2.24033L13.7718 3.16012L12.3575 4.57434L11.4377 3.65455Z"
-      fill="currentColor"
-    />
-    <path d="M0.5 7.35461H2.5V8.6554H0.5L0.5 7.35461Z" fill="currentColor" />
-    <path d="M13.5 7.35461H15.5V8.6554H13.5V7.35461Z" fill="currentColor" />
+/** Medium IconFolderOpenOutline artwork with a 1.3px stroke. */
+export const IconFolderOpenOutlineMedium = (props: IconProps) => (
+  <IconFolderOpenOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconFolderOpenArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M2.55912 7.93683C2.67584 7.49906 3.0723 7.19446 3.52536 7.19446H13.6491C14.3061 7.19446 14.7846 7.81725 14.6153 8.45209L13.4411 12.856C13.3244 13.2938 12.9279 13.5984 12.4748 13.5984H2.35113C1.69411 13.5984 1.21562 12.9756 1.38489 12.3407L2.55912 7.93683Z" fill="currentColor" opacity="0.16" />
+    <path d="M13.6491 6.69446C14.6346 6.69453 15.3522 7.62895 15.0983 8.58118L13.9245 12.9845C13.7494 13.6412 13.1539 14.0988 12.4743 14.0988H2.35126C1.36574 14.0988 0.648153 13.1643 0.902044 12.212L2.07587 7.80774C2.25102 7.15128 2.84567 6.69455 3.52509 6.69446H13.6491ZM3.52509 7.69446C3.29865 7.69455 3.10004 7.84674 3.04169 8.06555L1.86786 12.4698C1.78345 12.7872 2.02285 13.0988 2.35126 13.0988H12.4743C12.7007 13.0988 12.8992 12.9463 12.9577 12.7277L14.1325 8.32336C14.2171 8.00598 13.9776 7.69453 13.6491 7.69446H3.52509Z" fill="currentColor" />
+    <path d="M4.7666 1.90137C5.13227 1.90144 5.48571 2.03525 5.75977 2.27734L7.27246 3.61328C7.36379 3.69382 7.48174 3.73828 7.60352 3.73828H12.3994C13.2276 3.73841 13.8993 4.41005 13.8994 5.23828V6.7168C13.8183 6.70327 13.735 6.69436 13.6494 6.69434H12.8994V5.23828C12.8993 4.96233 12.6754 4.73841 12.3994 4.73828H7.60352C7.23781 4.73828 6.88446 4.60438 6.61035 4.3623L5.09766 3.02637C5.00636 2.94576 4.88838 2.90144 4.7666 2.90137H2.0498C1.77366 2.90137 1.5498 3.12523 1.5498 3.40137V9.78223L0.902344 12.2119C0.648452 13.1642 1.36604 14.0986 2.35156 14.0986H2.0498C1.2214 14.0986 0.549838 13.427 0.549805 12.5986V3.40137C0.549805 2.57294 1.22138 1.90137 2.0498 1.90137H4.7666Z" fill="currentColor" />
   </svg>
+)
+
+/** Regular IconFolderOpen artwork; its fill-only geometry is weight-independent. */
+export const IconFolderOpenRegular = (props: IconProps) => (
+  <IconFolderOpenArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconFolderOpen artwork; it matches Regular because the geometry is fill-only. */
+export const IconFolderOpenMedium = (props: IconProps) => (
+  <IconFolderOpenArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+/** Regular one-pixel IconFolderClose artwork. */
+export const IconFolderCloseRegular = (props: IconProps) => (
+  <FolderCloseArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconFolderClose artwork with a 1.3px stroke. */
+export const IconFolderCloseMedium = (props: IconProps) => (
+  <FolderCloseArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_dark_outline_16 */
-export const IconDarkOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M13.2764 9.52324C12.5607 9.97754 11.7177 10.242 10.7812 10.242C8.11386 10.2419 5.95042 8.07997 5.9502 5.41289C5.9502 4.48128 6.21453 3.61071 6.67188 2.87285C4.30332 3.4658 2.54992 5.60845 2.5498 8.16093C2.5498 11.1712 4.99103 13.6102 8 13.6102C10.5383 13.6102 12.6709 11.8724 13.2764 9.52324ZM7.05078 5.41289C7.051 7.47224 8.72116 9.1423 10.7812 9.14238C11.9248 9.14238 12.887 8.63397 13.5781 7.8084C13.7266 7.63106 13.9701 7.56547 14.1875 7.64433C14.4049 7.72329 14.5497 7.9297 14.5498 8.16093C14.5498 11.7766 11.6161 14.7098 8 14.7098C4.38402 14.7098 1.4502 11.7792 1.4502 8.16093C1.45033 4.54322 4.3812 1.61015 8 1.61015C8.23027 1.61015 8.43585 1.75352 8.51562 1.96953C8.59536 2.18554 8.53241 2.42829 8.35742 2.57793C7.55573 3.26311 7.05078 4.27876 7.05078 5.41289Z"
-      fill="currentColor"
-    />
+const IconTreeCornerArtwork = ({ size = 10, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={(size * 8) / 10} height={size} className={className} viewBox="0 0 9 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M0.5 0V7C0.5 7.79565 0.81607 8.55871 1.37868 9.12132C1.94129 9.68393 2.70435 10 3.5 10H8.5" stroke="currentColor" />
   </svg>
 )
 
-/** ic_ds_followsystem_outline_16 */
-export const IconFollowsystemOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12.1665 13.5811V14.7803H3.66651V13.5811H12.1665Z" fill="currentColor" />
-    <path
-      d="M13.4453 7.02379C13.4453 6.04702 13.4452 5.3616 13.3887 4.83434C13.3333 4.31828 13.2302 4.02378 13.0723 3.80309C12.9446 3.62475 12.7877 3.46883 12.6094 3.34117C12.3887 3.18328 12.0942 3.08007 11.5781 3.02477C11.0508 2.96829 10.3655 2.96715 9.38867 2.96715H6.61035C5.63359 2.96715 4.94816 2.96827 4.4209 3.02477C3.90486 3.0801 3.61034 3.18321 3.38965 3.34117C3.21143 3.46878 3.05534 3.62487 2.92774 3.80309C2.76977 4.02377 2.66667 4.3183 2.61133 4.83434C2.55483 5.3616 2.55371 6.04702 2.55371 7.02379C2.55371 8.0006 2.55485 8.68596 2.61133 9.21324C2.66663 9.72936 2.76983 10.0238 2.92774 10.2445C3.0554 10.4228 3.21131 10.5797 3.38965 10.7074C3.61034 10.8654 3.90484 10.9685 4.4209 11.0238C4.94816 11.0803 5.63359 11.0804 6.61035 11.0804H9.38867C10.3654 11.0804 11.0508 11.0803 11.5781 11.0238C12.0941 10.9685 12.3887 10.8652 12.6094 10.7074C12.7877 10.5797 12.9446 10.4229 13.0723 10.2445C13.2301 10.0238 13.3334 9.72927 13.3887 9.21324C13.4452 8.68596 13.4453 8.00058 13.4453 7.02379ZM14.6455 7.02379C14.6455 7.97428 14.646 8.73509 14.5811 9.34117C14.5149 9.95828 14.3756 10.4858 14.0479 10.9437C13.8436 11.229 13.5938 11.4788 13.3086 11.683C12.8507 12.0108 12.3232 12.15 11.7061 12.2162C11.1 12.2811 10.3391 12.2806 9.38867 12.2806H6.61035C5.66018 12.2806 4.89991 12.2811 4.29395 12.2162C3.67684 12.15 3.14935 12.0108 2.69141 11.683C2.40613 11.4788 2.15639 11.229 1.95215 10.9437C1.62436 10.4858 1.4841 9.95828 1.41797 9.34117C1.35305 8.73511 1.35449 7.97424 1.35449 7.02379C1.35449 6.07366 1.35308 5.31333 1.41797 4.70738C1.4841 4.09028 1.62436 3.56279 1.95215 3.10485C2.15638 2.81956 2.40613 2.56982 2.69141 2.36559C3.14935 2.03779 3.67684 1.89753 4.29395 1.83141C4.8999 1.76652 5.66022 1.76793 6.61035 1.76793H9.38867C10.3391 1.76793 11.1 1.76649 11.7061 1.83141C12.3232 1.89753 12.8507 2.03779 13.3086 2.36559C13.5939 2.56982 13.8436 2.81957 14.0479 3.10485C14.3756 3.56279 14.5149 4.09028 14.5811 4.70738C14.646 5.31335 14.6455 6.07362 14.6455 7.02379Z"
-      fill="currentColor"
-    />
+/** Regular one-pixel IconTreeCorner artwork. */
+export const IconTreeCornerRegular = (props: IconProps) => (
+  <IconTreeCornerArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconTreeCorner artwork with a 1.3px stroke. */
+export const IconTreeCornerMedium = (props: IconProps) => (
+  <IconTreeCornerArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconLightOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M8.00007 11.8117C10.1052 11.8117 11.8117 10.1052 11.8117 8.00007C11.8117 5.89499 10.1052 4.18848 8.00007 4.18848C5.89499 4.18848 4.18848 5.89499 4.18848 8.00007C4.18848 10.1052 5.89499 11.8117 8.00007 11.8117Z" stroke="currentColor" />
+    <path d="M13.3899 8H15.1499" stroke="currentColor" />
+    <path d="M11.8115 11.8115L13.0556 13.0556" stroke="currentColor" />
+    <path d="M8 13.3901V15.1501" stroke="currentColor" />
+    <path d="M4.18868 11.8115L2.94458 13.0556" stroke="currentColor" />
+    <path d="M2.6101 8H0.850098" stroke="currentColor" />
+    <path d="M4.18868 4.18856L2.94458 2.94446" stroke="currentColor" />
+    <path d="M8 2.6101V0.850098" stroke="currentColor" />
+    <path d="M11.8115 4.18856L13.0556 2.94446" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconLightOutline artwork. */
+export const IconLightOutlineRegular = (props: IconProps) => (
+  <IconLightOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_data_outline_16 */
-export const IconDataOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M12.0997 8.54554C12.2905 8.54989 12.3541 8.58056 12.4535 8.74614L12.8849 9.46387C12.9851 9.63071 13.0464 9.66013 13.2388 9.66447H14.1138C14.3417 9.66448 14.3512 9.66937 14.4686 9.86507L14.892 10.5717C14.9942 10.7422 14.9948 10.8247 14.892 10.9961L14.4756 11.6906C14.3741 11.8677 14.3694 11.9379 14.4756 12.115L14.892 12.8096C14.9942 12.9801 14.9947 13.0625 14.892 13.234L14.4686 13.9406C14.3643 14.1028 14.3063 14.1354 14.1138 14.1412H13.2388C13.0465 14.1456 12.985 14.1752 12.8849 14.3418L12.4535 15.0595C12.353 15.2195 12.2895 15.2558 12.0997 15.2601H11.2237C10.9962 15.2601 10.9871 15.2548 10.8699 15.0595L10.4384 14.3418C10.3383 14.175 10.2767 14.1456 10.0846 14.1412H9.2096C9.01854 14.1355 8.95761 14.1006 8.85477 13.9406L8.43139 13.234C8.32562 13.0576 8.33148 12.9862 8.43139 12.8096L8.84771 12.115C8.95165 11.9416 8.94659 11.863 8.84771 11.6906L8.43139 10.9961C8.32767 10.8232 8.33411 10.7437 8.43139 10.5717L8.85477 9.86507C8.95447 9.69891 9.01875 9.67017 9.2096 9.66447H10.0846C10.2741 9.66441 10.3414 9.62547 10.4384 9.46387L10.8699 8.74614C10.987 8.55106 10.9963 8.54554 11.2237 8.54554H12.0997ZM11.6612 10.232C11.3326 10.7798 10.8155 11.0948 10.1743 11.106C10.4443 11.61 10.4425 12.1976 10.1743 12.6987C10.803 12.7096 11.3391 13.0359 11.6612 13.5727C11.9855 13.0323 12.5131 12.7098 13.148 12.6987C12.879 12.196 12.8789 11.6086 13.148 11.106C12.5076 11.0948 11.9894 10.7794 11.6612 10.232Z"
-      fill="currentColor"
-    />
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M7.51205 0.790627C9.19055 0.790649 10.7401 1.0691 11.892 1.54364C12.4664 1.78029 12.9719 2.07885 13.3436 2.4408C13.7171 2.80467 13.9916 3.27253 13.9918 3.82384V7.90442C13.6067 7.69532 13.1907 7.53597 12.7529 7.43366V5.66454C12.4928 5.82898 12.2028 5.97601 11.892 6.10405C10.74 6.57865 9.19071 6.85706 7.51205 6.85706C5.8337 6.85703 4.285 6.57852 3.13309 6.10405C2.82215 5.97593 2.53164 5.8291 2.27121 5.66454V7.4135C2.27134 7.75678 2.6066 8.27106 3.62502 8.73405C4.58641 9.17097 5.95762 9.45591 7.50499 9.45681C7.24582 9.83133 7.03684 10.2434 6.88706 10.6826C5.44388 10.6162 4.12516 10.3216 3.11192 9.86104C2.81708 9.72698 2.53185 9.56866 2.27121 9.38928V11.2542C2.27158 11.5974 2.60697 12.1109 3.62502 12.5737C4.41933 12.9347 5.4937 13.1898 6.71569 13.2693C6.80349 13.7128 6.9513 14.1345 7.14814 14.5273C5.60324 14.4862 4.18593 14.1889 3.11192 13.7007C2.01039 13.1998 1.03366 12.3814 1.03333 11.2542V3.82384C1.03352 3.27273 1.30721 2.80461 1.68049 2.4408C2.05211 2.07893 2.55887 1.78026 3.13309 1.54364C4.28492 1.06926 5.83393 0.790683 7.51205 0.790627ZM7.51205 2.02851C5.95492 2.02857 4.57354 2.29079 3.60486 2.68979C3.11958 2.88977 2.76667 3.11253 2.5454 3.32788C2.32671 3.54101 2.2714 3.7089 2.27121 3.82384C2.27121 3.93882 2.32624 4.10625 2.5454 4.3198C2.76667 4.53527 3.11927 4.75781 3.60486 4.9579C4.5736 5.35699 5.95467 5.61914 7.51205 5.61918C9.06942 5.61918 10.4505 5.35695 11.4192 4.9579C11.9051 4.75773 12.2584 4.53536 12.4797 4.3198C12.6988 4.10627 12.7529 3.93882 12.7529 3.82384C12.7527 3.70889 12.6984 3.54104 12.4797 3.32788C12.2584 3.11239 11.9049 2.88989 11.4192 2.68979C10.4505 2.29079 9.06925 2.02853 7.51205 2.02851Z"
-      fill="currentColor"
-    />
+/** Medium IconLightOutline artwork with a 1.3px stroke. */
+export const IconLightOutlineMedium = (props: IconProps) => (
+  <IconLightOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconDarkOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M14.1127 8.70663C14.2576 8.60602 14.4627 8.71355 14.4386 8.88834C14.2901 9.96567 13.8731 10.9912 13.2229 11.8692C12.479 12.8735 11.4613 13.6421 10.2917 14.0829C9.1222 14.5236 7.85038 14.6179 6.62865 14.3543C5.40692 14.0907 4.28709 13.4805 3.40332 12.5967C2.51955 11.7129 1.90931 10.5931 1.64572 9.37135C1.38212 8.14962 1.47635 6.87779 1.91711 5.70825C2.35787 4.5387 3.12647 3.52103 4.13083 2.77714C5.00878 2.12689 6.03433 1.70994 7.11166 1.5614C7.28645 1.5373 7.39397 1.74238 7.29337 1.88734C6.68703 2.76099 6.37885 3.81241 6.42313 4.88345C6.47392 6.11194 6.98471 7.27645 7.85413 8.14587C8.72355 9.01529 9.88805 9.52608 11.1166 9.57687C12.1876 9.62114 13.239 9.31296 14.1127 8.70663Z" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconDarkOutline artwork. */
+export const IconDarkOutlineRegular = (props: IconProps) => (
+  <IconDarkOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconDarkOutline artwork with a 1.3px stroke. */
+export const IconDarkOutlineMedium = (props: IconProps) => (
+  <IconDarkOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** IconDataOutline16 without its gear: a three-tier database cylinder. */
-export const IconDatabaseOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="8" cy="3.6" rx="5.75" ry="2.4" stroke="currentColor" strokeWidth="1.25" />
-    <path d="M2.25 3.6V12.3A5.75 2.4 0 0 0 13.75 12.3V3.6" stroke="currentColor" strokeWidth="1.25" />
-    <path d="M2.25 7.95A5.75 2.4 0 0 0 13.75 7.95" stroke="currentColor" strokeWidth="1.25" />
+const IconFollowsystemOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M13.5 2.5H2.5C1.94772 2.5 1.5 2.94772 1.5 3.5V11.5C1.5 12.0523 1.94772 12.5 2.5 12.5H13.5C14.0523 12.5 14.5 12.0523 14.5 11.5V3.5C14.5 2.94772 14.0523 2.5 13.5 2.5Z" stroke="currentColor" />
+    <path d="M5 14.5H11" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconFollowsystemOutline artwork. */
+export const IconFollowsystemOutlineRegular = (props: IconProps) => (
+  <IconFollowsystemOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconFollowsystemOutline artwork with a 1.3px stroke. */
+export const IconFollowsystemOutlineMedium = (props: IconProps) => (
+  <IconFollowsystemOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** Thin-stroke clock: outlined dial with square-cut hour and minute hands. */
-export const IconClockOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="8" cy="8" r="6.375" stroke="currentColor" strokeWidth="1.25" />
-    <path d="M8 4.4V8.3L10.7 9.85" stroke="currentColor" strokeWidth="1.25" />
+const IconDataOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M7.8667 0.349609C8.96906 0.349634 10.0601 0.481272 11.0317 0.735352C11.9973 0.987845 12.8453 1.362 13.4644 1.84766C14.0744 2.32629 14.507 2.95539 14.5161 3.69336H14.5171V8.53516C14.0843 8.32076 13.6108 8.17679 13.1108 8.11816C13.1831 7.96848 13.2162 7.82856 13.2163 7.70312V5.76758C12.6269 6.16618 11.8739 6.47995 11.0317 6.7002C10.0602 6.95423 8.96896 7.08494 7.8667 7.08496C6.76461 7.08493 5.67411 6.95415 4.70264 6.7002C3.85994 6.48006 3.10694 6.1662 2.51709 5.76758V7.70312L2.521 7.78418C2.56374 8.19554 2.93361 8.74414 3.91357 9.23145C4.9281 9.73585 6.35004 10.0371 7.8667 10.0371C8.26373 10.0371 8.6543 10.0141 9.03271 9.97461C8.75596 10.3799 8.54664 10.8349 8.42041 11.3232C8.23666 11.3313 8.0518 11.3369 7.8667 11.3369C6.20108 11.3369 4.57025 11.01 3.33447 10.3955C3.04163 10.2499 2.76658 10.0836 2.51709 9.90039V11.6738C2.51728 12.1379 2.88589 12.7556 3.92236 13.292C4.93457 13.8157 6.35342 14.1289 7.8667 14.1289C8.12318 14.1289 8.37694 14.1161 8.62646 14.0986C8.82021 14.5535 9.08999 14.9682 9.41943 15.3271C8.91285 15.3934 8.39149 15.4287 7.8667 15.4287C6.19761 15.4287 4.56379 15.0869 3.32568 14.4463C2.11244 13.8185 1.21649 12.8562 1.21631 11.6738V3.76367C1.21595 3.74853 1.21438 3.733 1.21436 3.71777C1.21436 2.96917 1.65103 2.33053 2.26807 1.84668C2.88747 1.36112 3.73675 0.987685 4.70264 0.735352C5.67413 0.481376 6.76457 0.349636 7.8667 0.349609ZM7.8667 1.65039C6.86269 1.65042 5.88326 1.77028 5.03076 1.99316C4.17183 2.2176 3.50421 2.52956 3.06982 2.87012C2.65043 3.19909 2.52622 3.48898 2.51709 3.69336V3.74414C2.52719 3.94845 2.65185 4.23772 3.06982 4.56543C3.50425 4.90601 4.17172 5.21795 5.03076 5.44238C5.88326 5.66527 6.8627 5.78513 7.8667 5.78516C8.8707 5.78513 9.85015 5.66525 10.7026 5.44238C11.5611 5.21787 12.2286 4.9049 12.6626 4.56445C13.0982 4.22252 13.2163 3.9231 13.2163 3.71777L13.2104 3.63574C13.1818 3.43623 13.044 3.16941 12.6626 2.87012C12.2286 2.52957 11.5614 2.21773 10.7026 1.99316C9.85009 1.77025 8.8708 1.65041 7.8667 1.65039Z" fill="currentColor" />
+    <path d="M12.8936 10.0361L13.2061 10.5566C13.2296 10.5959 13.2651 10.6562 13.3027 10.707C13.3469 10.7666 13.4148 10.8431 13.5195 10.9023C13.6244 10.9617 13.725 10.9801 13.7988 10.9873C13.8619 10.9934 13.9318 10.9932 13.9775 10.9932H14.6162L14.8896 11.4502L14.5947 11.9443C14.5698 11.9859 14.5312 12.0483 14.5029 12.1084C14.4781 12.1611 14.4514 12.2312 14.4395 12.3164L14.4326 12.4072L14.4395 12.4971C14.4514 12.5825 14.4781 12.6532 14.5029 12.7061C14.5312 12.7661 14.5689 12.8287 14.5938 12.8701L14.8896 13.3633L14.6162 13.8213H13.9775C13.9318 13.8213 13.8619 13.821 13.7988 13.8271C13.7433 13.8326 13.6728 13.8442 13.5967 13.875L13.5195 13.9121C13.4148 13.9714 13.3469 14.0478 13.3027 14.1074C13.265 14.1583 13.2296 14.2186 13.2061 14.2578L12.8936 14.7783H12.3115L11.999 14.2578C11.9755 14.2186 11.9401 14.1583 11.9023 14.1074C11.8693 14.0628 11.823 14.0083 11.7578 13.959L11.6855 13.9121L11.6074 13.875C11.5316 13.8445 11.4615 13.8325 11.4062 13.8271C11.3432 13.821 11.2733 13.8213 11.2275 13.8213H10.5889L10.3135 13.3633L10.6104 12.8701C10.6352 12.8287 10.6739 12.7661 10.7021 12.7061C10.7352 12.6357 10.7724 12.534 10.7725 12.4072C10.7724 12.2804 10.7352 12.1788 10.7021 12.1084C10.6739 12.0483 10.6353 11.9859 10.6104 11.9443L10.3135 11.4502L10.5889 10.9932H11.2275C11.2733 10.9932 11.3432 10.9934 11.4062 10.9873C11.4801 10.9801 11.5808 10.9616 11.6855 10.9023C11.7903 10.843 11.8582 10.7666 11.9023 10.707C11.94 10.6562 11.9755 10.5959 11.999 10.5566L12.3115 10.0361H12.8936Z" stroke="currentColor" strokeMiterlimit="10" />
   </svg>
 )
 
-/** Thin-stroke gauge: dial arc open at the bottom, filled hub, square-cut needle to the upper right.
- * The dial center sits at y=8.75, not 8: the bottom opening leaves the glyph top-heavy, and the
- * 0.75 drop optically centers the drawn extent in the 16 box. */
-export const IconGaugeOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M3.49 13.26A6.375 6.375 0 1 1 12.51 13.26" stroke="currentColor" strokeWidth="1.25" />
-    <path d="M8 8.75L11.4 5.35" stroke="currentColor" strokeWidth="1.25" />
-    <circle cx="8" cy="8.75" r="1.55" fill="currentColor" />
+/** Regular one-pixel IconDataOutline artwork. */
+export const IconDataOutlineRegular = (props: IconProps) => (
+  <IconDataOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconDataOutline artwork with a 1.3px stroke. */
+export const IconDataOutlineMedium = (props: IconProps) => (
+  <IconDataOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconDatabaseOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M13.1967 5.1869C13.7232 4.77378 14.0003 4.30517 14.0001 3.82819C14.0003 3.3512 13.7232 2.88259 13.1967 2.46947C12.6702 2.05635 11.9128 1.71328 11.0006 1.47475C10.0885 1.23621 9.05371 1.11062 8.00039 1.1106C6.94707 1.11057 5.9123 1.23612 5.00009 1.47461C4.08742 1.71301 3.32948 2.05604 2.80249 2.46919C2.2755 2.88235 1.99805 3.35106 1.99805 3.82819C1.99805 4.30531 2.2755 4.77402 2.80249 5.18718C3.32948 5.60033 4.08742 5.94336 5.00009 6.18176C5.9123 6.42025 6.94707 6.5458 8.00039 6.54578C9.05371 6.54575 10.0885 6.42016 11.0006 6.18163C11.9128 5.94309 12.6702 5.60002 13.1967 5.1869Z" stroke="currentColor" />
+    <path d="M2 3.80371V11.7848" stroke="currentColor" />
+    <path d="M14 3.80371V11.7848" stroke="currentColor" />
+    <path d="M2 7.81396C2 8.60524 2.63214 9.36411 3.75736 9.92363C4.88258 10.4832 6.4087 10.7975 8 10.7975C9.5913 10.7975 11.1174 10.4832 12.2426 9.92363C13.3679 9.36411 14 8.60524 14 7.81396" stroke="currentColor" />
+    <path d="M2 11.7847C2 12.6081 2.63214 13.3977 3.75736 13.98C4.88258 14.5622 6.4087 14.8893 8 14.8893C9.5913 14.8893 11.1174 14.5622 12.2426 13.98C13.3679 13.3977 14 12.6081 14 11.7847" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconDatabaseOutline artwork. */
+export const IconDatabaseOutlineRegular = (props: IconProps) => (
+  <IconDatabaseOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconDatabaseOutline artwork with a 1.3px stroke. */
+export const IconDatabaseOutlineMedium = (props: IconProps) => (
+  <IconDatabaseOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_send_outline_14 (figma extract): thin-stroke upward send arrow. */
-export const IconSendOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M7.24707 1.01771C7.52897 1.07653 7.77619 1.19694 8.00391 1.38001C8.19202 1.53136 8.39884 1.73784 8.61914 1.95814L12.6396 5.9806L11.6299 6.99134L7.71484 3.0763V13.0001H6.28516V3.0763L2.36914 6.99134L1.35938 5.9806L5.38086 1.95814C5.60116 1.73784 5.80798 1.53136 5.99609 1.38001C6.19476 1.22027 6.4385 1.06739 6.75195 1.01771C6.91296 0.992304 7.07471 0.997504 7.24707 1.01771Z"
-      fill="currentColor"
-    />
+const IconClockOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z" stroke="currentColor" />
+    <path d="M8 4.31V8.46L11 10.08" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconClockOutline artwork. */
+export const IconClockOutlineRegular = (props: IconProps) => (
+  <IconClockOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconClockOutline artwork with a 1.3px stroke. */
+export const IconClockOutlineMedium = (props: IconProps) => (
+  <IconClockOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_queue_outline_14 (figma extract): open chat bubble with two queued lines. */
-export const IconQueueOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M7.00049 0.199829C3.24488 0.199829 0.199952 3.24408 0.199707 6.99963C0.199707 8.0414 0.434087 9.03061 0.854004 9.91467L1.11279 10.4576L2.19775 9.94202L1.94092 9.39905L1.81787 9.12268C1.5498 8.46885 1.40186 7.75171 1.40186 6.99963C1.4021 3.90808 3.90888 1.40198 7.00049 1.40198C10.0919 1.40219 12.5979 3.90821 12.5981 6.99963C12.5981 10.0913 10.0921 12.5981 7.00049 12.5983C6.36734 12.5983 5.90348 12.5535 5.49268 12.4401C5.08803 12.3283 4.7041 12.1414 4.24463 11.8209C3.57111 11.3511 2.60588 11.1855 1.81006 11.6881L1.79736 11.6959L1.78467 11.7047L1.25537 12.0778L1.65381 13.2672L2.46045 12.6989C2.75029 12.5214 3.18004 12.5442 3.55615 12.8063C4.10063 13.1861 4.60863 13.4423 5.17334 13.5983C5.73194 13.7525 6.31665 13.8004 7.00049 13.8004C10.7561 13.8002 13.8003 10.7553 13.8003 6.99963C13.8 3.24421 10.7559 0.200041 7.00049 0.199829ZM3.81201 7.47327V8.67542H7.11572V7.47327H3.81201ZM3.81201 6.34924H10.2173V5.14709H3.81201V6.34924Z"
-      fill="currentColor"
-    />
+const IconGaugeOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M3.4041 13.096C2.49514 12.187 1.87614 11.0288 1.62537 9.76798C1.37459 8.50716 1.50331 7.20028 1.99525 6.01261C2.48719 4.82494 3.32025 3.80981 4.3891 3.09557C5.45795 2.38134 6.71458 2.00008 8.0001 2C9.28563 2.00008 10.5423 2.38134 11.6111 3.09557C12.68 3.80981 13.513 4.82494 14.005 6.01261C14.4969 7.20028 14.6256 8.50716 14.3748 9.76798C14.1241 11.0288 13.5051 12.187 12.5961 13.096" stroke="currentColor" />
+    <path d="M8 8.49994L11.6114 4.88855" stroke="currentColor" />
+    <path d="M8 9.75C8.69036 9.75 9.25 9.19036 9.25 8.5C9.25 7.80964 8.69036 7.25 8 7.25C7.30964 7.25 6.75 7.80964 6.75 8.5C6.75 9.19036 7.30964 9.75 8 9.75Z" fill="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconGaugeOutline artwork. */
+export const IconGaugeOutlineRegular = (props: IconProps) => (
+  <IconGaugeOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconGaugeOutline artwork with a 1.3px stroke. */
+export const IconGaugeOutlineMedium = (props: IconProps) => (
+  <IconGaugeOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_checklist_outline_14 (figma extract): two rings + two list bars. */
-export const IconChecklistOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M13.3277 9.69629V10.976H7.28086V9.69629H13.3277Z" fill="currentColor" />
-    <path d="M13.3277 2.97256V4.25225H7.28086V2.97256H13.3277Z" fill="currentColor" />
-    <path d="M4.64512 10.336C4.64505 9.62755 4.07081 9.05322 3.3623 9.05322C2.65386 9.05329 2.07956 9.62759 2.07949 10.336C2.07949 11.0445 2.65382 11.6188 3.3623 11.6188C4.07085 11.6188 4.64512 11.0446 4.64512 10.336ZM5.92559 10.336C5.92559 11.7515 4.77777 12.8993 3.3623 12.8993C1.94689 12.8993 0.799805 11.7515 0.799805 10.336C0.799871 8.92066 1.94693 7.7736 3.3623 7.77354C4.77773 7.77354 5.92552 8.92062 5.92559 10.336Z" fill="currentColor" />
-    <path d="M4.64531 3.6123C4.6453 2.90382 4.07098 2.32949 3.3625 2.32949C2.65403 2.32951 2.0797 2.90383 2.07969 3.6123C2.07969 4.32079 2.65402 4.8951 3.3625 4.89512C4.07099 4.89512 4.64531 4.3208 4.64531 3.6123ZM5.925 3.6123C5.925 5.02772 4.77792 6.1748 3.3625 6.1748C1.9471 6.17479 0.8 5.02771 0.8 3.6123C0.800013 2.19691 1.9471 1.04982 3.3625 1.0498C4.77791 1.0498 5.92499 2.1969 5.925 3.6123Z" fill="currentColor" />
+const IconSendOutlineArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M6.97211 1.94476C7.55785 1.35914 8.50767 1.35919 9.09343 1.94476L13.921 6.77228L13.2138 7.47939L8.38632 2.65187C8.19108 2.45682 7.87443 2.45677 7.67922 2.65187L2.74397 7.58711L2.03687 6.88L6.97211 1.94476Z" fill="currentColor" />
+    <path d="M7.97571 14.5732L8.02421 2.34139" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconSendOutline artwork. */
+export const IconSendOutlineRegular = (props: IconProps) => (
+  <IconSendOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconSendOutline artwork with a 1.3px stroke. */
+export const IconSendOutlineMedium = (props: IconProps) => (
+  <IconSendOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconQueueOutlineArtwork = ({ size = 14, ...rest }: WeightedIconProps) => (
+  <ChatLinesOutlineArtwork size={size} {...rest} />
+)
+
+/** Regular one-pixel IconQueueOutline artwork. */
+export const IconQueueOutlineRegular = (props: IconProps) => (
+  <IconQueueOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconQueueOutline artwork with a 1.3px stroke. */
+export const IconQueueOutlineMedium = (props: IconProps) => (
+  <IconQueueOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** ic_ds_List_Pen_outline_16 */
-export const IconListPenOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M10.8239 3.54733V4.78443H4.63437V3.54733H10.8239Z" fill="currentColor" />
-    <path d="M10.8239 6.12629V7.36338H4.63437V6.12629H10.8239Z" fill="currentColor" />
-    <path d="M9.073 8.70524V9.94234H4.63437V8.70524H9.073Z" fill="currentColor" />
-    <path
-      d="M9.13321 0.573526C10.0076 0.573525 10.7179 0.572522 11.285 0.63397C11.8645 0.696791 12.3743 0.831648 12.8193 1.1548C13.0776 1.34246 13.3056 1.57047 13.4933 1.82875C13.8164 2.2737 13.9513 2.7836 14.0141 3.36303C14.0755 3.93015 14.0745 4.64049 14.0745 5.51485V6.1757L12.7327 7.5629V5.51485C12.7327 4.61092 12.732 3.9862 12.6803 3.5081C12.6298 3.0427 12.5379 2.79497 12.4083 2.61654C12.3033 2.47211 12.176 2.34472 12.0315 2.23977C11.8531 2.11016 11.6054 2.01823 11.14 1.96777C10.6618 1.91601 10.0372 1.91539 9.13321 1.91539H6.32658C5.42262 1.91539 4.79796 1.91604 4.31983 1.96777C3.85451 2.01819 3.60672 2.11029 3.42827 2.23977C3.28392 2.34465 3.15643 2.47223 3.0515 2.61654C2.9219 2.79496 2.82997 3.04274 2.7795 3.5081C2.72774 3.9862 2.72712 4.61092 2.72712 5.51485V10.023C2.72712 10.9273 2.72773 11.5525 2.7795 12.0307C2.82992 12.4959 2.92205 12.7429 3.0515 12.9213C3.15645 13.0657 3.28384 13.1931 3.42827 13.2981C3.60676 13.4277 3.85408 13.5206 4.31983 13.5711C4.79797 13.6228 5.42259 13.6234 6.32658 13.6234H6.87057L5.57707 14.9593C5.03527 14.9556 4.57031 14.9467 4.17476 14.9039C3.59508 14.841 3.08558 14.7063 2.64048 14.383C2.38215 14.1953 2.15422 13.9684 1.96653 13.7101C1.64319 13.2649 1.50851 12.7546 1.4457 12.1748C1.38432 11.6076 1.38525 10.8974 1.38525 10.023V5.51485C1.38525 4.64049 1.38426 3.93015 1.4457 3.36303C1.50853 2.78363 1.64341 2.27368 1.96653 1.82875C2.15417 1.57059 2.38228 1.34239 2.64048 1.1548C3.08544 0.831805 3.59533 0.696762 4.17476 0.63397C4.74193 0.572552 5.45218 0.573525 6.32658 0.573526H9.13321Z"
-      fill="currentColor"
-    />
-    <path d="M14.2193 14.9553H10.0124L11.3744 13.6134H14.2193V14.9553Z" fill="currentColor" />
-    <path
-      d="M8.24493 13.3711L7.49015 14.8806C7.40148 15.058 7.58961 15.2461 7.76695 15.1574L9.27651 14.4027L14.6147 9.09934L13.5832 8.06775L8.24493 13.3711Z"
-      fill="currentColor"
-    />
+const IconChecklistOutlineArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M3.75 6.25C4.7165 6.25 5.5 5.4665 5.5 4.5C5.5 3.5335 4.7165 2.75 3.75 2.75C2.7835 2.75 2 3.5335 2 4.5C2 5.4665 2.7835 6.25 3.75 6.25Z" stroke="currentColor" />
+    <path d="M7.5 4.5H13.5" stroke="currentColor" />
+    <path d="M3.75 13.25C4.7165 13.25 5.5 12.4665 5.5 11.5C5.5 10.5335 4.7165 9.75 3.75 9.75C2.7835 9.75 2 10.5335 2 11.5C2 12.4665 2.7835 13.25 3.75 13.25Z" stroke="currentColor" />
+    <path d="M7.5 11.5H13.5" stroke="currentColor" />
   </svg>
 )
 
-/** ic_ds_goal_outline_16 (goal strip leading glyph: dartboard with a landed arrow) */
-export const IconGoalOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M8 0C8.31451 0 8.62464 0.019379 8.92969 0.0546875C8.48228 0.403371 8.0952 0.825758 7.78809 1.30469C4.18586 1.41664 1.2998 4.37061 1.2998 8C1.2998 11.7003 4.29969 14.7002 8 14.7002C11.6297 14.7002 14.5829 11.8136 14.6943 8.21094C15.1734 7.90377 15.5956 7.51688 15.9443 7.06934C15.9797 7.37473 16 7.68512 16 8C16 12.4183 12.4183 16 8 16C3.58172 16 0 12.4183 0 8C0 3.58172 3.58172 0 8 0ZM7.0166 3.6084C7.00658 3.73765 7 3.86817 7 4C7 4.31845 7.03098 4.62973 7.08789 4.93164C5.76489 5.32438 4.7998 6.54958 4.7998 8C4.7998 9.76731 6.23269 11.2002 8 11.2002C9.45065 11.2002 10.6749 10.2345 11.0674 8.91113C11.3696 8.96818 11.6812 9 12 9C12.1315 9 12.2617 8.99239 12.3906 8.98242C11.9423 10.995 10.1477 12.5 8 12.5C5.51472 12.5 3.5 10.4853 3.5 8C3.5 5.85255 5.00435 4.05702 7.0166 3.6084Z"
-      fill="currentColor"
-    />
-    <path d="M7.5 8.62109L9.12109 7" stroke="currentColor" strokeWidth="1.3" />
-    <path
-      d="M9.08245 3.35798L11.8651 0.575334C11.895 0.545384 11.9463 0.56391 11.9502 0.606086L12.2362 3.69859C12.2384 3.72259 12.2574 3.74159 12.2814 3.74378L15.3697 4.02583C15.4119 4.02968 15.4305 4.08101 15.4005 4.11098L12.618 6.89351C12.6086 6.90289 12.5959 6.90816 12.5826 6.90816L9.11781 6.90815C9.09019 6.90816 9.06781 6.88577 9.06781 6.85816L9.06781 3.39333C9.06781 3.38007 9.07308 3.36735 9.08245 3.35798Z"
-      stroke="currentColor"
-      strokeWidth="1.3"
-    />
+/** Regular one-pixel IconChecklistOutline artwork. */
+export const IconChecklistOutlineRegular = (props: IconProps) => (
+  <IconChecklistOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconChecklistOutline artwork with a 1.3px stroke. */
+export const IconChecklistOutlineMedium = (props: IconProps) => (
+  <IconChecklistOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconListPenOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M4.9375 5.90295H11.0625" stroke="currentColor" />
+    <path d="M4.9375 9.02991H8.27841" stroke="currentColor" />
+    <path d="M12.5 1.32617C13.3039 1.32617 14 1.95171 14 2.77637V7.61328L13 8.68164V2.77637C13 2.55186 12.8007 2.32617 12.5 2.32617H3.5C3.1993 2.32617 3 2.55186 3 2.77637V13.2246C3.00044 13.4489 3.19963 13.6738 3.5 13.6738H8.32812L7.39258 14.6738H3.5C2.69637 14.6738 2.00042 14.0489 2 13.2246V2.77637C2 1.95171 2.69613 1.32617 3.5 1.32617H12.5Z" fill="currentColor" />
+    <path d="M8.97212 14.3693C9.17511 14.5723 9.37811 14.7753 9.5811 14.9783C9.67012 14.8953 9.75914 14.8123 9.84815 14.7293C11.4505 13.2352 13.0528 11.7411 14.6551 10.247C14.7441 10.164 14.8331 10.081 14.9221 9.99803C14.5989 9.6748 14.2756 9.35157 13.9524 9.02834C13.8694 9.11736 13.7864 9.20637 13.7034 9.29539C12.2093 10.8977 10.7152 12.5 9.22113 14.1023C9.13813 14.1913 9.05513 14.2803 8.97212 14.3693Z" fill="currentColor" />
+    <path d="M11.6323 13.7841C11.6323 14.0395 11.6323 14.295 11.6323 14.5504C11.6812 14.5523 11.7301 14.5543 11.779 14.5562C12.659 14.5913 13.539 14.6263 14.419 14.6614C14.4679 14.6633 14.5168 14.6653 14.5657 14.6672C14.5657 14.3339 14.5657 14.0006 14.5657 13.6672C14.5168 13.6692 14.4679 13.6711 14.419 13.6731C13.539 13.7081 12.659 13.7432 11.779 13.7783C11.7301 13.7802 11.6812 13.7821 11.6323 13.7841Z" fill="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconListPenOutline artwork. */
+export const IconListPenOutlineRegular = (props: IconProps) => (
+  <IconListPenOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** sparkle_16 (Others tool-row leading glyph; hand-authored three-star
- *  approximation — the figma 43:31850 glyph is an SF Symbols "sparkles" text glyph,
- *  not extractable as vector data) */
-export const IconSparkle16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M6.1 3.1Q6.6 7.8 11.3 8.3Q6.6 8.8 6.1 13.5Q5.6 8.8 0.9 8.3Q5.6 7.8 6.1 3.1Z" fill="currentColor" />
-    <path d="M11.9 1Q12.2 3.7 14.9 4Q12.2 4.3 11.9 7Q11.6 4.3 8.9 4Q11.6 3.7 11.9 1Z" fill="currentColor" />
-    <path d="M12.5 9.4Q12.7 11.4 14.7 11.6Q12.7 11.8 12.5 13.8Q12.3 11.8 10.3 11.6Q12.3 11.4 12.5 9.4Z" fill="currentColor" />
+/** Medium IconListPenOutline artwork with a 1.3px stroke. */
+export const IconListPenOutlineMedium = (props: IconProps) => (
+  <IconListPenOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconGoalOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M14.5001 8C14.5 9.28552 14.1188 10.5422 13.4045 11.611C12.6903 12.6799 11.6752 13.5129 10.4875 14.0049C9.29982 14.4968 7.99295 14.6255 6.73212 14.3747C5.4713 14.124 4.31314 13.505 3.4041 12.596C2.49514 11.687 1.87614 10.5288 1.62537 9.26798C1.37459 8.00716 1.50331 6.70028 1.99525 5.51261C2.48719 4.32494 3.32025 3.30981 4.3891 2.59557C5.45795 1.88134 6.71458 1.50008 8.0001 1.5" stroke="currentColor" />
+    <path d="M11.5 8C11.5001 8.69227 11.2948 9.36901 10.9102 9.94463C10.5257 10.5202 9.97901 10.9689 9.33944 11.2338C8.69986 11.4987 7.99609 11.5681 7.31712 11.433C6.63816 11.2979 6.01449 10.9645 5.52501 10.475C5.03548 9.98552 4.70209 9.36185 4.56702 8.68289C4.43195 8.00392 4.50127 7.30015 4.76619 6.66057C5.03112 6.021 5.47976 5.47436 6.05538 5.08978C6.631 4.70519 7.30774 4.49995 8.00001 4.5" stroke="currentColor" />
+    <path d="M8.00024 7.99976L11.2 4.80005" stroke="currentColor" />
+    <path d="M12.4719 5.62245C12.4246 5.66972 12.3569 5.69025 12.2913 5.67715L10.7814 5.37555C10.7022 5.35972 10.6402 5.29781 10.6244 5.2186L10.3228 3.70866C10.3097 3.6431 10.3302 3.57533 10.3775 3.52806L12.1826 1.723C12.2863 1.61929 12.4627 1.65879 12.5122 1.79684L12.9271 2.95225C12.9472 3.00847 12.9915 3.05272 13.0477 3.07291L14.2031 3.48774C14.3412 3.5373 14.3807 3.71368 14.277 3.81739L12.4719 5.62245Z" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconGoalOutline artwork. */
+export const IconGoalOutlineRegular = (props: IconProps) => (
+  <IconGoalOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconGoalOutline artwork with a 1.3px stroke. */
+export const IconGoalOutlineMedium = (props: IconProps) => (
+  <IconGoalOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** inspect_outline_12 (shared tool-row trajectory affordance glyph) */
-export const IconInspectOutline12 = ({ size = 12, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-    <path d="M16 8L10.8571 12V10.552L14.1383 8L10.8571 5.448V4L16 8ZM5.14286 10.552L1.86171 8L5.14286 5.448V4L0 8L5.14286 12V10.552ZM9.02514 4L5.59657 12H6.84057L10.2691 4H9.02514Z" fill="currentColor" />
+const IconSparkleArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M5.875 3C5.875 6.33333 7.54167 8 10.875 8C7.54167 8 5.875 9.66667 5.875 13C5.875 9.66667 4.20833 8 0.875 8C4.20833 8 5.875 6.33333 5.875 3Z" stroke="currentColor" />
+    <path d="M12.375 1.55823C12.375 3.39156 13.2917 4.30823 15.125 4.30823C13.2917 4.30823 12.375 5.22489 12.375 7.05823C12.375 5.22489 11.4583 4.30823 9.625 4.30823C11.4583 4.30823 12.375 3.39156 12.375 1.55823Z" stroke="currentColor" />
+    <path d="M12.375 10.4418C12.375 11.7751 13.0417 12.4418 14.375 12.4418C13.0417 12.4418 12.375 13.1084 12.375 14.4418C12.375 13.1084 11.7083 12.4418 10.375 12.4418C11.7083 12.4418 12.375 11.7751 12.375 10.4418Z" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconSparkle artwork. */
+export const IconSparkleRegular = (props: IconProps) => (
+  <IconSparkleArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconSparkle artwork with a 1.3px stroke. */
+export const IconSparkleMedium = (props: IconProps) => (
+  <IconSparkleArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+/** Regular one-pixel IconInspectOutline artwork. */
+export const IconInspectOutlineRegular = (props: IconProps) => (
+  <CodeBracketsArtwork {...props} size={props.size ?? 12} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconInspectOutline artwork with a 1.3px stroke. */
+export const IconInspectOutlineMedium = (props: IconProps) => (
+  <CodeBracketsArtwork {...props} size={props.size ?? 12} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** skill_outline_16 (skill tool-row glyph; document instructions + sparkle) */
-export const IconSkillOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M12.5113 15.4067C12.4395 15.6249 12.1308 15.6249 12.059 15.4067L11.643 14.1416C11.454 13.567 11.0033 13.1164 10.4288 12.9274L9.16369 12.5113C8.94544 12.4395 8.94544 12.1308 9.16369 12.059L10.4288 11.643C11.0033 11.454 11.454 11.0033 11.643 10.4288L12.059 9.16369C12.1308 8.94544 12.4395 8.94544 12.5113 9.16369L12.9274 10.4288C13.1164 11.0033 13.567 11.454 14.1416 11.643L15.4067 12.059C15.6249 12.1308 15.6249 12.4395 15.4067 12.5113L14.1416 12.9274C13.567 13.1164 13.1164 13.567 12.9274 14.1416L12.5113 15.4067Z"
-      fill="currentColor"
-    />
-    <path
-      d="M9.02246 0.546878C9.9822 0.546878 10.7564 0.545403 11.374 0.612307C12.0042 0.680586 12.5515 0.826244 13.0273 1.17188C13.3052 1.37376 13.5501 1.61868 13.752 1.89649C14.0975 2.37225 14.2432 2.91984 14.3115 3.54981C14.3784 4.16727 14.377 4.94206 14.377 5.90137V8.51367C13.9611 8.29533 13.5071 8.13985 13.0273 8.06055V5.90137C13.0273 4.9121 13.0259 4.22322 12.9688 3.69532C12.9129 3.18044 12.8098 2.89782 12.6592 2.69043C12.5406 2.52724 12.3966 2.38326 12.2334 2.26465C12.026 2.11404 11.7437 2.0109 11.2285 1.95508C10.7005 1.89789 10.0122 1.89649 9.02246 1.89649H6.55371C5.56395 1.89649 4.87569 1.89787 4.34766 1.95508C3.83242 2.01092 3.55022 2.11398 3.34278 2.26465C3.17953 2.38329 3.03564 2.52719 2.91699 2.69043C2.76642 2.89782 2.66325 3.18042 2.60742 3.69532C2.55027 4.22322 2.54883 4.9121 2.54883 5.90137V10.0986C2.54883 11.0878 2.55031 11.7768 2.60742 12.3047C2.66326 12.8196 2.76642 13.1032 2.91699 13.3105C3.03558 13.4736 3.17966 13.6178 3.34278 13.7363C3.5502 13.8869 3.83265 13.9901 4.34766 14.0459C4.87568 14.1031 5.56398 14.1035 6.55371 14.1035H8.08399C8.27443 14.6025 8.55077 15.0585 8.89551 15.4541H6.55371C5.59402 15.4541 4.81976 15.4546 4.20215 15.3877C3.57204 15.3194 3.02468 15.1738 2.54883 14.8281C2.27111 14.6263 2.02606 14.3813 1.82422 14.1035C1.47883 13.6278 1.33293 13.08 1.26465 12.4502C1.19783 11.8327 1.19922 11.0579 1.19922 10.0986V5.90137C1.19922 4.94206 1.1978 4.16727 1.26465 3.54981C1.33295 2.91984 1.47867 2.37225 1.82422 1.89649C2.02613 1.61864 2.27098 1.37379 2.54883 1.17188C3.02472 0.826181 3.57197 0.6806 4.20215 0.612307C4.81976 0.545393 5.594 0.546877 6.55371 0.546878H9.02246ZM9.19629 9.14649H4.5459V7.84571H9.19629V9.14649ZM11.0303 6.10645H4.5459V4.80567H11.0303V6.10645Z"
-      fill="currentColor"
-    />
+const IconSkillOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 17 17" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M4.57788 5.77124H10.7029" stroke="currentColor" />
+    <path d="M4.57788 8.89819H7.91879" stroke="currentColor" />
+    <path d="M12.1404 1.19446C12.9442 1.19446 13.6404 1.81999 13.6404 2.64465V8.89856H12.6404V2.64465C12.6404 2.42015 12.4411 2.19446 12.1404 2.19446H3.14038C2.83968 2.19446 2.64038 2.42015 2.64038 2.64465V13.0929C2.64082 13.3172 2.84001 13.5421 3.14038 13.5421H8.88159V14.5421H3.14038C2.33675 14.5421 1.6408 13.9172 1.64038 13.0929V2.64465C1.64038 1.81999 2.33651 1.19446 3.14038 1.19446H12.1404Z" fill="currentColor" />
+    <path d="M12.0051 15.1056C12.0051 13.6395 10.8166 12.451 9.35059 12.451C10.8166 12.451 12.0051 11.2626 12.0051 9.79651C12.0051 11.2626 13.1936 12.451 14.6597 12.451C13.1936 12.451 12.0051 13.6395 12.0051 15.1056Z" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconSkillOutline artwork. */
+export const IconSkillOutlineRegular = (props: IconProps) => (
+  <IconSkillOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
 )
 
-/** ic_ds_question_outline_14 (figma extract): ring + question glyph. */
-export const IconQuestionOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M12.5757 7.00012C12.5757 3.92085 10.0794 1.42463 7.00012 1.42456C3.9208 1.42456 1.42456 3.9208 1.42456 7.00012C1.42463 10.0794 3.92085 12.5757 7.00012 12.5757C10.0793 12.5756 12.5756 10.0793 12.5757 7.00012ZM13.8002 7.00012C13.8001 10.7559 10.7559 13.8001 7.00012 13.8002C3.2443 13.8002 0.199291 10.7559 0.199219 7.00012C0.199219 3.24426 3.24426 0.199219 7.00012 0.199219C10.7559 0.199291 13.8002 3.2443 13.8002 7.00012Z"
-      fill="currentColor"
-    />
-    <path
-      d="M6.18042 8.68184C6.18043 8.09153 6.32893 7.34655 6.92127 6.8481C7.28566 6.54148 7.76104 6.27318 8.0022 6.10811C8.28964 5.91137 8.42234 5.76562 8.48328 5.58944C8.57774 5.31609 8.53121 5.00904 8.34912 4.76741C8.17409 4.53522 7.83879 4.32222 7.28186 4.32222C5.99668 4.32225 5.46969 5.11832 5.46949 5.78939H4.24414C4.24436 4.39942 5.36327 3.09691 7.28186 3.09688C8.17773 3.09688 8.89489 3.45606 9.32752 4.02999C9.75287 4.59438 9.86938 5.32775 9.64026 5.99019C9.44847 6.5444 9.04722 6.87743 8.69434 7.11898C8.29506 7.39226 8.02318 7.52192 7.70996 7.78548C7.51943 7.94582 7.40577 8.24899 7.40577 8.68184V8.75533H6.18042V8.68184Z"
-      fill="currentColor"
-    />
-    <path d="M7.39455 9.44026V10.8109H6.16921V9.44026H7.39455Z" fill="currentColor" />
+/** Medium IconSkillOutline artwork with a 1.3px stroke. */
+export const IconSkillOutlineMedium = (props: IconProps) => (
+  <IconSkillOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconQuestionOutlineArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M8 14.5C11.5899 14.5 14.5 11.5899 14.5 8C14.5 4.41015 11.5899 1.5 8 1.5C4.41015 1.5 1.5 4.41015 1.5 8C1.5 11.5899 4.41015 14.5 8 14.5Z" stroke="currentColor" />
+    <path d="M5.75 6.69646C5.75 6.29865 5.88196 5.90976 6.12919 5.57899C6.37643 5.24821 6.72783 4.99041 7.13896 4.83817C7.5501 4.68593 8.0025 4.6461 8.43895 4.72371C8.87541 4.80132 9.27632 4.99289 9.59099 5.27419C9.90566 5.55549 10.12 5.91388 10.2068 6.30406C10.2936 6.69423 10.249 7.09866 10.0787 7.4662C9.90843 7.83373 9.62004 8.14787 9.25003 8.36889C9.19476 8.4019 9.13803 8.43262 9.08004 8.46099C8.52566 8.73217 8 9.20817 8 9.82532" stroke="currentColor" />
+    <path d="M8 10.7416V11.7416" stroke="currentColor" />
   </svg>
+)
+
+/** Regular one-pixel IconQuestionOutline artwork. */
+export const IconQuestionOutlineRegular = (props: IconProps) => (
+  <IconQuestionOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconQuestionOutline artwork with a 1.3px stroke. */
+export const IconQuestionOutlineMedium = (props: IconProps) => (
+  <IconQuestionOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
 
-/** Info companion to the question outline: the same ring with an "i" glyph. */
-export const IconInfoOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+const IconInfoOutlineArtwork = ({ size = 14, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
     <path
       d="M12.5757 7.00012C12.5757 3.92085 10.0794 1.42463 7.00012 1.42456C3.9208 1.42456 1.42456 3.9208 1.42456 7.00012C1.42463 10.0794 3.92085 12.5757 7.00012 12.5757C10.0793 12.5756 12.5756 10.0793 12.5757 7.00012ZM13.8002 7.00012C13.8001 10.7559 10.7559 13.8001 7.00012 13.8002C3.2443 13.8002 0.199291 10.7559 0.199219 7.00012C0.199219 3.24426 3.24426 0.199219 7.00012 0.199219C10.7559 0.199291 13.8002 3.2443 13.8002 7.00012Z"
       fill="currentColor"
@@ -915,108 +1258,401 @@ export const IconInfoOutline14 = ({ size = 14, className }: IconProps) => (
   </svg>
 )
 
-/** Alarm clock outline for active scheduled-task indicators. */
-export const IconAlarmClockOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg
-    aria-hidden="true"
-    width={size}
-    height={size}
-    className={className}
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path d="M3.5 2.5 1.75 4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-    <path d="M12.5 2.5 14.25 4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-    <circle cx="8" cy="8.5" r="4.75" stroke="currentColor" strokeWidth="1.25" />
-    <path d="M8 5.75V8.5L10 9.75" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="m4.75 12.25-1 1.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-    <path d="m11.25 12.25 1 1.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+/** Regular IconInfoOutline artwork; its fill-only geometry is weight-independent. */
+export const IconInfoOutlineRegular = (props: IconProps) => (
+  <IconInfoOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconInfoOutline artwork; its fill-only geometry is weight-independent. */
+export const IconInfoOutlineMedium = (props: IconProps) => (
+  <IconInfoOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconPluginPinwheelOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M7.84457 5.06199C11.6605 4.93876 14.7962 6.14848 14.8484 7.76397C14.8875 8.97461 13.1838 10.0696 10.7215 10.5942" stroke="currentColor" />
+    <path d="M5.12742 8.07731C5.00419 4.26138 6.21391 1.12568 7.8294 1.07351C9.04004 1.03441 10.135 2.73808 10.6596 5.20037" stroke="currentColor" />
+    <path d="M8.02457 10.6802C4.20865 10.8034 1.07294 9.5937 1.02077 7.97821C0.981678 6.76758 2.68535 5.67262 5.14763 5.14798" stroke="currentColor" />
+    <path d="M10.7476 7.89535C10.8708 11.7113 9.66109 14.847 8.0456 14.8991C6.83496 14.9382 5.74 13.2346 5.21536 10.7723" stroke="currentColor" />
   </svg>
 )
 
-/** ic_ds_archive_outline_20 (figma extract): lidded box + label slot. The export's
- *  0.11px stroke ring around the box contour is dropped — it restates the same
- *  contour in the same ink, which currentColor already carries. */
-export const IconArchiveOutline20 = ({ size = 20, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+/** Regular one-pixel plugin pinwheel artwork. */
+export const IconPluginPinwheelOutlineRegular = (props: IconProps) => (
+  <IconPluginPinwheelOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium plugin pinwheel artwork with a 1.3px stroke. */
+export const IconPluginPinwheelOutlineMedium = (props: IconProps) => (
+  <IconPluginPinwheelOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconAlarmClockOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 17 17" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M4.09372 11.9895L3.11865 14.0387" stroke="currentColor" />
+    <path d="M12.1392 11.9895L13.1143 14.0387" stroke="currentColor" />
+    <path d="M8.11646 4.78442V8.03442L10.6165 9.53442" stroke="currentColor" />
+    <path d="M8.11646 13.4094C11.154 13.4094 13.6165 10.947 13.6165 7.90942C13.6165 4.87186 11.154 2.40942 8.11646 2.40942C5.07889 2.40942 2.61646 4.87186 2.61646 7.90942C2.61646 10.947 5.07889 13.4094 8.11646 13.4094Z" stroke="currentColor" />
+    <path d="M1.75952 4.74323C2.30657 3.65639 3.12646 2.73047 4.12926 2.05542" stroke="currentColor" />
+    <path d="M14.3345 4.74323C13.7874 3.65639 12.9675 2.73047 11.9647 2.05542" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconAlarmClockOutline artwork. */
+export const IconAlarmClockOutlineRegular = (props: IconProps) => (
+  <IconAlarmClockOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconAlarmClockOutline artwork with a 1.3px stroke. */
+export const IconAlarmClockOutlineMedium = (props: IconProps) => (
+  <IconAlarmClockOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconArchiveOutlineArtwork = ({ size = 20, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M13.5 2.5H2.5C1.94772 2.5 1.5 2.94772 1.5 3.5V4.5C1.5 5.05228 1.94772 5.5 2.5 5.5H13.5C14.0523 5.5 14.5 5.05228 14.5 4.5V3.5C14.5 2.94772 14.0523 2.5 13.5 2.5Z" stroke="currentColor" />
+    <path d="M2.5 5.5V13.5C2.5 13.7652 2.60536 14.0196 2.79289 14.2071C2.98043 14.3946 3.23478 14.5 3.5 14.5H12.5C12.7652 14.5 13.0196 14.3946 13.2071 14.2071C13.3946 14.0196 13.5 13.7652 13.5 13.5V5.5" stroke="currentColor" />
+    <path d="M6.5 9.5H9.5" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconArchiveOutline artwork. */
+export const IconArchiveOutlineRegular = (props: IconProps) => (
+  <IconArchiveOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconArchiveOutline artwork with a 1.3px stroke. */
+export const IconArchiveOutlineMedium = (props: IconProps) => (
+  <IconArchiveOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconWrapLinesOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M2.3457 3.19299H13.6541" stroke="currentColor" />
+    <path d="M2.3457 7.46497H9.19332" stroke="currentColor" />
+    <path d="M2.3457 11.7369H6.4849" stroke="currentColor" />
+    <path d="M9.1936 7.46497H11.5183C12.6981 7.46497 13.6544 8.42132 13.6544 9.60103C13.6544 10.7808 12.6981 11.7371 11.5183 11.7371H9.1936" stroke="currentColor" />
+    <path d="M10.9505 9.7677L9.12262 11.5956C9.04452 11.6737 9.04452 11.8003 9.12262 11.8784L10.9505 13.7063" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconWrapLinesOutline artwork. */
+export const IconWrapLinesOutlineRegular = (props: IconProps) => (
+  <IconWrapLinesOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconWrapLinesOutline artwork with a 1.3px stroke. */
+export const IconWrapLinesOutlineMedium = (props: IconProps) => (
+  <IconWrapLinesOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconNowrapFillArtwork = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M2 15H1V1H2V15Z" fill="currentColor" />
+    <path d="M12.3535 7.64645C12.5487 7.84171 12.5487 8.15829 12.3535 8.35355L9.85352 10.8535L9.14648 10.1465L10.793 8.5H3.5V7.5H10.793L9.14648 5.85352L9.85352 5.14648L12.3535 7.64645Z" fill="currentColor" />
+    <path d="M15 15H14V1H15V15Z" fill="currentColor" />
+  </svg>
+)
+
+/** Regular IconNowrapFill artwork; fill-only weights render identically. */
+export const IconNowrapFillRegular = (props: IconProps) => <IconNowrapFillArtwork {...props} />
+
+/** Medium IconNowrapFill artwork; fill-only weights render identically. */
+export const IconNowrapFillMedium = (props: IconProps) => <IconNowrapFillArtwork {...props} />
+
+const IconWrapFillArtwork = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M10.9999 8C10.9999 6.89543 10.1046 6 9 6H4.5V5H9C10.6568 5 11.9999 6.34315 11.9999 8C11.9999 9.65685 10.6568 11 9 11H6.20703L6.85351 11.6465L6.14648 12.3535L4.64652 10.8536C4.45126 10.6583 4.45126 10.3417 4.64652 10.1464L6.14648 8.64648L6.85351 9.35352L6.20703 10H9C10.1046 10 10.9999 9.10457 10.9999 8Z" fill="currentColor" />
+    <path d="M2 15H1V1H2V15Z" fill="currentColor" />
+    <path d="M15 15H14V1H15V15Z" fill="currentColor" />
+  </svg>
+)
+
+/** Regular IconWrapFill artwork; fill-only weights render identically. */
+export const IconWrapFillRegular = (props: IconProps) => <IconWrapFillArtwork {...props} />
+
+/** Medium IconWrapFill artwork; fill-only weights render identically. */
+export const IconWrapFillMedium = (props: IconProps) => <IconWrapFillArtwork {...props} />
+
+const IconCompareSplitOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M6 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H6C6.55228 14.5 7 14.0523 7 13.5V2.5C7 1.94772 6.55228 1.5 6 1.5Z" stroke="currentColor" />
+    <path d="M13.5 1.5H10C9.44772 1.5 9 1.94772 9 2.5V13.5C9 14.0523 9.44772 14.5 10 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconCompareSplitOutline artwork. */
+export const IconCompareSplitOutlineRegular = (props: IconProps) => (
+  <IconCompareSplitOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconCompareSplitOutline artwork with a 1.3px stroke. */
+export const IconCompareSplitOutlineMedium = (props: IconProps) => (
+  <IconCompareSplitOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconPlanOutlineArtwork = (props: WeightedIconProps) => (
+  <IconListPenOutlineArtwork {...props} size={props.size ?? 14} />
+)
+
+/** Regular one-pixel IconPlanOutline artwork. */
+export const IconPlanOutlineRegular = (props: IconProps) => (
+  <IconPlanOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconPlanOutline artwork with a 1.3px stroke. */
+export const IconPlanOutlineMedium = (props: IconProps) => (
+  <IconPlanOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconCompactOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path opacity="0.35" d="M8 14.5C11.5899 14.5 14.5 11.5899 14.5 8C14.5 4.41015 11.5899 1.5 8 1.5C4.41015 1.5 1.5 4.41015 1.5 8C1.5 11.5899 4.41015 14.5 8 14.5Z" stroke="currentColor" />
+    <path d="M8 1.5C8.85359 1.5 9.69883 1.66813 10.4874 1.99478C11.2761 2.32144 11.9926 2.80022 12.5962 3.40381C13.1998 4.00739 13.6786 4.72394 14.0052 5.51256C14.3319 6.30117 14.5 7.14641 14.5 8" stroke="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconCompactOutline artwork. */
+export const IconCompactOutlineRegular = (props: IconProps) => (
+  <IconCompactOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconCompactOutline artwork with a 1.3px stroke. */
+export const IconCompactOutlineMedium = (props: IconProps) => (
+  <IconCompactOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconShieldOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d={SHIELD_OUTLINE_PATH} stroke="currentColor" strokeLinejoin="round" />
+  </svg>
+)
+
+/** Regular one-pixel IconShieldOutline artwork. */
+export const IconShieldOutlineRegular = (props: IconProps) => (
+  <IconShieldOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconShieldOutline artwork with a 1.3px stroke. */
+export const IconShieldOutlineMedium = (props: IconProps) => (
+  <IconShieldOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconCheckCircleOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path
+      d="M12.5303 6.53027L8.80273 10.2578C8.54967 10.5109 8.31796 10.7439 8.10645 10.9141C7.88375 11.0932 7.616 11.2602 7.27344 11.3145C7.09229 11.3431 6.90771 11.3431 6.72656 11.3145C6.384 11.2602 6.11625 11.0932 5.89355 10.9141C5.68204 10.7439 5.45033 10.5109 5.19727 10.2578L3.46973 8.53027L4.53027 7.46973L6.25781 9.19727C6.53457 9.47402 6.70036 9.63859 6.83398 9.74609C6.95637 9.84453 6.98241 9.83644 6.96094 9.83301C6.98679 9.83709 7.01321 9.83709 7.03906 9.83301C7.01759 9.83644 7.04363 9.84453 7.16602 9.74609C7.29964 9.63859 7.46543 9.47402 7.74219 9.19727L11.4697 5.46973L12.5303 6.53027Z"
+      fill="currentColor"
+    />
+    <path
+      d="M14.5996 8C14.5996 4.35492 11.6451 1.40039 8 1.40039C4.35492 1.40039 1.40039 4.35492 1.40039 8C1.40039 11.6451 4.35492 14.5996 8 14.5996C11.6451 14.5996 14.5996 11.6451 14.5996 8ZM15.9004 8C15.9004 12.363 12.363 15.9004 8 15.9004C3.63695 15.9004 0.0996094 12.363 0.0996094 8C0.0996094 3.63695 3.63695 0.0996094 8 0.0996094C12.363 0.0996094 15.9004 3.63695 15.9004 8Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+/** Regular one-pixel IconCheckCircleOutline artwork. */
+export const IconCheckCircleOutlineRegular = (props: IconProps) => (
+  <IconCheckCircleOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconCheckCircleOutline artwork with a 1.3px stroke. */
+export const IconCheckCircleOutlineMedium = (props: IconProps) => (
+  <IconCheckCircleOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconUnarchiveOutlineArtwork = ({ size = 20, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
     <path
       fillRule="evenodd"
       clipRule="evenodd"
       d="M15.8659 2.05975C17.2603 2.05995 18.3913 3.19096 18.3914 4.58527V5.4874C18.3914 6.02747 18.2192 6.52672 17.9303 6.93735C17.9336 6.96524 17.9388 6.99318 17.9388 7.02195V12.8884C17.9388 13.6345 17.9395 14.2379 17.8996 14.7254C17.8642 15.1593 17.7936 15.5499 17.6373 15.9141L17.5654 16.0685C17.278 16.6328 16.8405 17.1046 16.3038 17.434L16.0679 17.5661C15.66 17.7739 15.2196 17.8598 14.7237 17.9003C14.2362 17.9401 13.6327 17.9405 12.8867 17.9405H7.11122C6.36511 17.9405 5.76171 17.9401 5.27418 17.9003C4.84051 17.8649 4.44949 17.7952 4.08545 17.6391L3.93104 17.5661C3.36673 17.2785 2.89392 16.8414 2.56465 16.3044L2.43245 16.0685C2.22473 15.6608 2.13878 15.2211 2.09825 14.7254C2.05841 14.2379 2.05912 13.6345 2.05912 12.8884V7.02195C2.05912 6.99284 2.06422 6.96449 2.06758 6.93629C1.77931 6.52592 1.60858 6.02687 1.60858 5.4874V4.58527C1.60876 3.19084 2.73962 2.05975 4.1341 2.05975H15.8659ZM16.4984 7.92936C16.296 7.98169 16.0847 8.01288 15.8659 8.01291H4.1341C3.91478 8.01291 3.70246 7.98194 3.49955 7.92936V12.8884C3.49955 13.6582 3.50053 14.1927 3.53445 14.608C3.56769 15.0146 3.62923 15.244 3.71635 15.415L3.7925 15.5514C3.98339 15.8627 4.25749 16.1165 4.58464 16.2833L4.72529 16.3435C4.88095 16.3993 5.08638 16.4402 5.39158 16.4651C5.80685 16.4991 6.34138 16.5001 7.11122 16.5001H12.8867C13.6564 16.5001 14.1911 16.499 14.6063 16.4651C15.0128 16.432 15.2423 16.3703 15.4133 16.2833L15.5508 16.2061C15.8618 16.0152 16.116 15.7419 16.2827 15.415L16.3429 15.2732C16.3985 15.1177 16.4396 14.9128 16.4645 14.608C16.4985 14.1927 16.4984 13.6583 16.4984 12.8884V7.92936ZM4.1341 3.50019C3.53511 3.50019 3.0492 3.98631 3.04902 4.58527V5.4874C3.04902 6.08649 3.535 6.57248 4.1341 6.57248H15.8659C16.4648 6.57228 16.951 6.08638 16.951 5.4874V4.58527C16.9509 3.98644 16.4647 3.50038 15.8659 3.50019H4.1341Z"
       fill="currentColor"
     />
-    <path d="M12.7962 12.5661V11.0832H7.20548V12.5661L12.7962 12.5661Z" fill="currentColor" />
+    <path d="M10 14.1V10.1M7.85 12.05L10 9.9L12.15 12.05" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
 
-/** Line-wrapping toggle glyph. */
-export const IconWrapLinesOutline16 = ({ size = 16, className }: IconProps) => (
+/** Regular one-pixel IconUnarchiveOutline artwork. */
+export const IconUnarchiveOutlineRegular = (props: IconProps) => (
+  <IconUnarchiveOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconUnarchiveOutline artwork with a 1.3px stroke. */
+export const IconUnarchiveOutlineMedium = (props: IconProps) => (
+  <IconUnarchiveOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconPinOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M9.96976 1.70572L13.1554 3.93629L10.9019 8.12317L11.5158 11.605L10.7192 12.7427L2.52767 7.00693L3.3243 5.86922L6.80612 5.25528L9.96976 1.70572Z" stroke="currentColor" strokeLinejoin="round" />
+    <path d="M6.05285 9.47511C6.27284 9.16094 6.70586 9.08458 7.02003 9.30457C7.3342 9.52455 7.41055 9.95757 7.19057 10.2717L3.98587 14.4708L3.21223 13.9291L6.05285 9.47511Z" fill="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconPinOutline artwork. */
+export const IconPinOutlineRegular = (props: IconProps) => (
+  <IconPinOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconPinOutline artwork with a 1.3px stroke. */
+export const IconPinOutlineMedium = (props: IconProps) => (
+  <IconPinOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconPinFillArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M9.96976 1.70572L13.1554 3.93629L10.9019 8.12317L11.5158 11.605L10.7192 12.7427L2.52767 7.00693L3.3243 5.86922L6.80612 5.25528L9.96976 1.70572Z" fill="currentColor" stroke="currentColor" strokeLinejoin="round" />
+    <path d="M6.05285 9.47511C6.27284 9.16094 6.70586 9.08458 7.02003 9.30457C7.3342 9.52455 7.41055 9.95757 7.19057 10.2717L3.98587 14.4708L3.21223 13.9291L6.05285 9.47511Z" fill="currentColor" />
+  </svg>
+)
+
+/** Regular one-pixel IconPinFill artwork. */
+export const IconPinFillRegular = (props: IconProps) => (
+  <IconPinFillArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconPinFill artwork with a 1.3px stroke. */
+export const IconPinFillMedium = (props: IconProps) => (
+  <IconPinFillArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconFlatListOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
   <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none"
-    stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
-    <path d="M1.5 3.5h13M1.5 7.5h10.25a2.5 2.5 0 0 1 0 5H8m2-2-2 2 2 2M1.5 11.5h3" />
+    stroke="currentColor" strokeLinecap="round" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M6 3.5h7.5M6 8h7.5M6 12.5h7.5" />
+    <path d="M2.6 3.5h.01M2.6 8h.01M2.6 12.5h.01" />
   </svg>
 )
 
-/**
- * Plan row glyph of the composer menu (#3567): a document with three ruled
- * lines and a pencil over its corner. Drawn on a 14 grid whose content spans
- * 0.5..13.5, so at the menu's 16px render it fills the same extent as the
- * 16-grid glyphs beside it.
- */
-export const IconPlanOutline14 = ({ size = 14, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M9.56143 3.14672V4.24774H3.94716V3.14672H9.56143Z" fill="currentColor" />
-    <path d="M9.56143 5.44201V6.54304H3.94716V5.44201H9.56143Z" fill="currentColor" />
-    <path d="M7.97328 7.73731V8.83833H3.94716V7.73731H7.97328Z" fill="currentColor" />
-    <path
-      d="M8.02789 0.500001C8.82106 0.500001 9.46528 0.499108 9.97973 0.553797C10.5054 0.609708 10.9678 0.729732 11.3714 1.01734C11.6057 1.18436 11.8125 1.38729 11.9827 1.61716C12.2758 2.01317 12.3982 2.46699 12.4552 2.98269C12.5109 3.48743 12.51 4.11964 12.51 4.89782V5.48599L11.2928 6.72061V4.89782C11.2928 4.09333 11.2923 3.53731 11.2453 3.1118C11.1995 2.69759 11.1162 2.47711 10.9986 2.31831C10.9034 2.18976 10.7879 2.07638 10.6568 1.98298C10.495 1.86762 10.2704 1.7858 9.84814 1.7409C9.41445 1.69482 8.84789 1.69427 8.02789 1.69427H5.4821C4.66215 1.69427 4.09555 1.69485 3.66184 1.7409C3.23978 1.78576 3.01501 1.86773 2.85315 1.98298C2.72221 2.07632 2.60657 2.18986 2.51139 2.31831C2.39384 2.4771 2.31045 2.69763 2.26467 3.1118C2.21772 3.53731 2.21716 4.09333 2.21716 4.89782V8.91011C2.21716 9.71498 2.21771 10.2714 2.26467 10.697C2.3104 11.111 2.39397 11.3308 2.51139 11.4896C2.60659 11.6182 2.72214 11.7315 2.85315 11.825C3.01505 11.9404 3.23938 12.023 3.66184 12.0679C4.09555 12.114 4.66212 12.1146 5.4821 12.1146H5.97554L4.80224 13.3034C4.3108 13.3002 3.88905 13.2923 3.53026 13.2541C3.00445 13.1982 2.5423 13.0784 2.13857 12.7906C1.90424 12.6235 1.6975 12.4216 1.52725 12.1917C1.23396 11.7955 1.1118 11.3412 1.05483 10.8252C0.999149 10.3205 1 9.68831 1 8.91011V4.89782C1 4.11964 0.999094 3.48743 1.05483 2.98269C1.11182 2.46701 1.23416 2.01316 1.52725 1.61716C1.69745 1.3874 1.90437 1.1843 2.13857 1.01734C2.54218 0.729872 3.00468 0.609682 3.53026 0.553797C4.04472 0.499135 4.68896 0.500001 5.4821 0.500001H8.02789Z"
-      fill="currentColor"
-    />
-    <path d="M12.6413 13.2999H8.82536L10.0608 12.1056H12.6413V13.2999Z" fill="currentColor" />
-    <path
-      d="M7.22216 11.8899L6.53753 13.2335C6.4571 13.3913 6.62775 13.5587 6.78861 13.4798L8.15787 12.8081L13 8.08806L12.0643 7.16994L7.22216 11.8899Z"
-      fill="currentColor"
-    />
+/** Regular one-pixel IconFlatListOutline artwork. */
+export const IconFlatListOutlineRegular = (props: IconProps) => (
+  <IconFlatListOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconFlatListOutline artwork with a 1.3px stroke. */
+export const IconFlatListOutlineMedium = (props: IconProps) => (
+  <IconFlatListOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconWorkspaceTreeOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none"
+    stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M14 12.05c0 .8-.65 1.45-1.46 1.45H3.46C2.65 13.5 2 12.85 2 12.05v-8.1c0-.8.65-1.45 1.46-1.45h2.4c.49 0 .94.24 1.21.65l.5.73c.27.4.73.65 1.21.65h3.76c.8 0 1.46.65 1.46 1.45v6.02Z" />
+    <path d="M8.7 8.1v3M11.2 8.1v3" />
   </svg>
 )
 
-/**
- * Compact row glyph of the composer menu: the composer's context-usage ring
- * (ContextMeter) frozen at its resting look — a quiet track with one filled
- * quarter arc. A restyle of the live ring revisits this copy.
- */
-export const IconCompactOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="8" cy="8" r="6.4" stroke="currentColor" strokeWidth="1.6" opacity="0.35" />
-    <path d="M8 1.6A6.4 6.4 0 0 1 14.4 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+/** Regular one-pixel IconWorkspaceTreeOutline artwork. */
+export const IconWorkspaceTreeOutlineRegular = (props: IconProps) => (
+  <IconWorkspaceTreeOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconWorkspaceTreeOutline artwork with a 1.3px stroke. */
+export const IconWorkspaceTreeOutlineMedium = (props: IconProps) => (
+  <IconWorkspaceTreeOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconChevronsUpDownOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none"
+    stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="m5.1 6 2.9-2.9L10.9 6" />
+    <path d="m5.1 10 2.9 2.9 2.9-2.9" />
   </svg>
 )
 
-/**
- * The permission shield contour on the 16 grid (design set 1556), stroked at
- * {@link SHIELD_OUTLINE_STROKE}. The composer's permission selector composes
- * its mode marks (check, pencil, exclamation) over this same path inside one
- * svg, so the geometry lives here once.
- */
-export const SHIELD_OUTLINE_PATH = 'M8.20554 0.899994L14.7901 3.36857V7.01026C14.7901 12 11.0466 14.2103 8.20554 15.3C5.36446 14.2103 1.62012 12 1.62012 7.01026V3.36857L8.20554 0.899994Z'
+/** Regular one-pixel IconChevronsUpDownOutline artwork. */
+export const IconChevronsUpDownOutlineRegular = (props: IconProps) => (
+  <IconChevronsUpDownOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
 
-/** Stroke width of {@link SHIELD_OUTLINE_PATH}. */
-export const SHIELD_OUTLINE_STROKE = '1.31831'
+/** Medium IconChevronsUpDownOutline artwork with a 1.3px stroke. */
+export const IconChevronsUpDownOutlineMedium = (props: IconProps) => (
+  <IconChevronsUpDownOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
 
-/** Permission row glyph of the composer menu: the shield contour alone, without a mode mark. */
-export const IconShieldOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d={SHIELD_OUTLINE_PATH} stroke="currentColor" strokeWidth={SHIELD_OUTLINE_STROKE} strokeLinejoin="round" />
+const IconArchiveOffOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => {
+  // The mask carves whitespace along the slash out of the box strokes, so the
+  // id must stay unique per rendered instance.
+  const maskId = `dsh-archive-off-${useId().replaceAll(':', '')}`
+  return (
+    <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none"
+      stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" strokeWidth={strokeWidth}>
+      <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16">
+        <rect x="0" y="0" width="16" height="16" fill="white" stroke="none" />
+        <path d="m2.2 1.3 11.6 12.8" stroke="black" strokeWidth={strokeWidth + 3} />
+      </mask>
+      <g mask={`url(#${maskId})`}>
+        <rect x="1.9" y="2.1" width="12.2" height="3.4" rx="1.1" />
+        <path d="M2.95 5.7v4.8a2.9 2.9 0 0 0 2.9 2.9h4.3a2.9 2.9 0 0 0 2.9-2.9V5.7" />
+      </g>
+      <path d="m2.2 1.3 11.6 12.8" />
+    </svg>
+  )
+}
+
+/** Regular one-pixel IconArchiveOffOutline artwork. */
+export const IconArchiveOffOutlineRegular = (props: IconProps) => (
+  <IconArchiveOffOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconArchiveOffOutline artwork with a 1.3px stroke. */
+export const IconArchiveOffOutlineMedium = (props: IconProps) => (
+  <IconArchiveOffOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconArchiveCheckOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none"
+    stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" strokeWidth={strokeWidth}>
+    <rect x="1.9" y="2.1" width="12.2" height="3.4" rx="1.1" />
+    <path d="M2.95 5.7v4.8a2.9 2.9 0 0 0 2.9 2.9h4.3a2.9 2.9 0 0 0 2.9-2.9V5.7" />
+    <path d="m6 9.35 1.4 1.4 2.6-2.6" />
   </svg>
 )
 
-/** Plugin pinwheel (design handoff for the plugin manager): four interleaved arcs on the 16 grid. */
-export const IconPluginPinwheelOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M7.84457 5.06199C11.6605 4.93876 14.7962 6.14848 14.8484 7.76397C14.8875 8.97461 13.1838 10.0696 10.7215 10.5942" stroke="currentColor" strokeWidth="1.2" />
-    <path d="M5.12742 8.07731C5.00419 4.26138 6.21391 1.12568 7.8294 1.07351C9.04004 1.03441 10.135 2.73808 10.6596 5.20037" stroke="currentColor" strokeWidth="1.2" />
-    <path d="M8.02457 10.6802C4.20865 10.8034 1.07294 9.5937 1.02077 7.97821C0.981678 6.76758 2.68535 5.67262 5.14763 5.14798" stroke="currentColor" strokeWidth="1.2" />
-    <path d="M10.7476 7.89535C10.8708 11.7113 9.66109 14.847 8.0456 14.8991C6.83496 14.9382 5.74 13.2346 5.21536 10.7723" stroke="currentColor" strokeWidth="1.2" />
+/** Regular one-pixel IconArchiveCheckOutline artwork. */
+export const IconArchiveCheckOutlineRegular = (props: IconProps) => (
+  <IconArchiveCheckOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconArchiveCheckOutline artwork with a 1.3px stroke. */
+export const IconArchiveCheckOutlineMedium = (props: IconProps) => (
+  <IconArchiveCheckOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconSlidersTwoOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none"
+    stroke="currentColor" strokeLinecap="round" aria-hidden="true" strokeWidth={strokeWidth}>
+    <path d="M2.3 5h5.85M12.05 5h1.65" />
+    <circle cx="9.95" cy="5" r="1.45" />
+    <path d="M2.3 11h1.65M7.85 11h5.85" />
+    <circle cx="5.75" cy="11" r="1.45" />
   </svg>
+)
+
+/** Regular one-pixel IconSlidersTwoOutline artwork. */
+export const IconSlidersTwoOutlineRegular = (props: IconProps) => (
+  <IconSlidersTwoOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Medium IconSlidersTwoOutline artwork with a 1.3px stroke. */
+export const IconSlidersTwoOutlineMedium = (props: IconProps) => (
+  <IconSlidersTwoOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)
+
+const IconMicrophoneOutlineArtwork = ({ size = 16, className, strokeWidth }: WeightedIconProps) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth={strokeWidth} aria-hidden="true">
+    <rect x={4.5 + strokeWidth / 2} y={1 + strokeWidth / 2} width={7 - strokeWidth} height={10 - strokeWidth} rx={(7 - strokeWidth) / 2} />
+    <path d="M2.35 8.675C3.075 11.3 5.2 13.125 8 13.125C10.8 13.125 12.925 11.3 13.65 8.675M8 13.125V15" />
+  </svg>
+)
+
+/** Microphone with uniform one-pixel strokes. */
+export const IconMicrophoneOutlineRegular = (props: IconProps) => (
+  <IconMicrophoneOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Microphone with uniform 1.3px strokes. */
+export const IconMicrophoneOutlineMedium = (props: IconProps) => (
+  <IconMicrophoneOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )

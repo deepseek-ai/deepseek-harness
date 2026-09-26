@@ -1,10 +1,20 @@
 {
   "name": "@fixture/bundle",
   "version": "0.0.1",
+  "icon": "./icon.svg",
   "private": true,
-  "description": "Web e2e fixture: a bundle whose one row is an inert plugin.",
+  "description": "Registry description for the fixture bundle.",
   "type": "module",
   "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json",
+    "./search": "./search.js",
+    "./search/package.json": "./search.package.json",
+    "./review": "./review.js",
+    "./search/locale/*.json": "./locale/search/*.json",
+    "./review/locale/*.json": "./locale/review/*.json"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

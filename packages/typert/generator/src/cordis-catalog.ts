@@ -124,6 +124,8 @@ export interface CordisCatalogPolicy {
   readonly inheritedEvents: readonly InheritedEntry[]
   /** Manually curated framework context members inherited by every plugin. */
   readonly inheritedServices: readonly InheritedEntry[]
+  /** Maximum rendered characters per runtime type declaration. */
+  readonly runtimeDeclarationMaxChars?: number
 }
 
 /** Complete model-level Cordis projection used by every text renderer. */
@@ -333,17 +335,19 @@ export class CordisCatalogProjector {
   ): { name: string; declaration: string }[] {
     const declarations = new Map<string, string>()
     const ambiguous = new Set<string>()
+    const maxDeclarationChars = this.policy.runtimeDeclarationMaxChars ?? DEFAULT_MAX_DECL_CHARS
     for (const declaration of this.sourceDeclarations) {
-      if (declaration.face !== this.face.face || declaration.kind === 'enum'
-        || !/^packages\/[^/]+\/[^/]+\/src\/.+\.tsx?$/.test(declaration.location.file)) continue
+      if (declaration.face !== this.face.face
+        || (!/^packages\/[^/]+\/[^/]+\/src\/.+\.tsx?$/.test(declaration.location.file)
+          && !(declaration.kind === 'enum' && /^vendor\/[^/]+\/src\/.+\.ts$/.test(declaration.location.file)))) continue
       if (declarations.has(declaration.name)) {
         ambiguous.add(declaration.name)
         continue
       }
       declarations.set(
         declaration.name,
-        declaration.text.length > MAX_DECL_CHARS
-          ? `${declaration.text.slice(0, MAX_DECL_CHARS)} /* …truncated — full shape in source */`
+        declaration.text.length > maxDeclarationChars
+          ? `${declaration.text.slice(0, maxDeclarationChars)} /* …truncated — full shape in source */`
           : declaration.text,
       )
     }
@@ -613,7 +617,7 @@ function signatureTypeNames(renderer: TypeGraphRenderer, signature: SignatureMod
 }
 
 /** Declarations longer than this render as a truncated stub. */
-const MAX_DECL_CHARS = 1500
+const DEFAULT_MAX_DECL_CHARS = 1_500
 
 /** Render one value as a single-quoted TypeScript literal. */
 function quote(value: string): string {

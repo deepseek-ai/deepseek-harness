@@ -1,6 +1,79 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/subagent/subagent-spawn-in-process/README.md
-README.md: ce3909934efa1b2f5cc57ff046b892e3ec129444
-README.zh.md: 998b90ff0827e3cccc3be787e1941ca49aaeec0e
+/:
+  en: d510765ec1bebc28
+  zh: 35efb9f71f05f326
+/deepseek-ai-dsh-subagent-spawn-in-process:
+  en: c949befcfe1e376c
+  zh: 13c78d0fbbd323ae
+/deepseek-ai-dsh-subagent-spawn-in-process/summary:
+  en: 84d0a0acfc4251fe
+  zh: 8480ddf68e377522
+/deepseek-ai-dsh-subagent-spawn-in-process/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-subagent-spawn-in-process/use-this-package:
+  en: ca895c3af2ec6371
+  zh: 51dbe9e2fa79de30
+/deepseek-ai-dsh-subagent-spawn-in-process/use-this-package/when-to-choose-it:
+  en: 5f14443940e59bb5
+  zh: 3e8610aec21c55e8
+/deepseek-ai-dsh-subagent-spawn-in-process/use-this-package/minimal-configuration:
+  en: 3f53b0d5f4037171
+  zh: e0f2ac931cfbef95
+/deepseek-ai-dsh-subagent-spawn-in-process/use-this-package/what-a-delegation-does:
+  en: 9f4e6f31ad4d86d1
+  zh: 4ad77e0b80c6efcc
+/deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation:
+  en: 9e00b9dc2f9cf38c
+  zh: 60ce00ce6c3b5564
+/deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation/design-concept:
+  en: 80716c24d7a0ee78
+  zh: 9bead3317f5a357e
+/deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation/source-map:
+  en: 6252313b7a004fda
+  zh: 85c1b0a872d4d846
+/deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation/run-flow:
+  en: 7b55a5649bc38155
+  zh: 51fe220c84ca759a
+/deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation/ownership-and-scope:
+  en: 8af949dc29cb4a5c
+  zh: f4e4f9f9f4a4b7c9
+/deepseek-ai-dsh-subagent-spawn-in-process/further-exploration:
+  en: 742e34ea6c31adf9
+  zh: 599d993ba5a3c8f1
+/deepseek-ai-dsh-subagent-spawn-in-process/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-subagent-spawn-in-process/model-experience/child-agent-request:
+  en: 05e6180f1498fdf9
+  zh: 2b05d2b97bfa67da
+/deepseek-ai-dsh-subagent-spawn-in-process/model-experience/child-agent-request/what-the-model-sees:
+  en: 2035bdd8640e5a8a
+  zh: 5afa645d7dbe31a5
+/deepseek-ai-dsh-subagent-spawn-in-process/model-experience/child-agent-request/token-effect:
+  en: e74d21e38e4a53a9
+  zh: 6a5e3ef5fe0f4f14
+/deepseek-ai-dsh-subagent-spawn-in-process/model-experience/child-agent-request/kv-cache-effect:
+  en: 78d800b26fb3b0af
+  zh: 313169b62c29af1d
+/deepseek-ai-dsh-subagent-spawn-in-process/model-experience/parent-tool-result-indirectly:
+  en: 75d061c2151624a7
+  zh: 71e58e020b60ff90
+/deepseek-ai-dsh-subagent-spawn-in-process/model-experience/parent-tool-result-indirectly/what-the-model-sees:
+  en: 93ae79a8f38c984b
+  zh: 6ede5c4312685ff0
+/deepseek-ai-dsh-subagent-spawn-in-process/model-experience/parent-tool-result-indirectly/token-effect:
+  en: ff8045aa0f466c2a
+  zh: e38fc5c6af2ce076
+/deepseek-ai-dsh-subagent-spawn-in-process/model-experience/parent-tool-result-indirectly/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: 3d6bc05b9eadfbc2
+/deepseek-ai-dsh-subagent-spawn-in-process/known-limitations-and-deferred-work:
+  en: 68720f2a663a4aad
+  zh: a472436c5cc2b801
+/deepseek-ai-dsh-subagent-spawn-in-process/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

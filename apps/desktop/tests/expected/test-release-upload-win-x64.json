@@ -1,0 +1,16 @@
+[
+  {
+    "key": "dsh-desk/0123456789abcdef0123456789abcdef/bin/win-x64/deepseek-harness-1.2.3-win-x64.exe"
+  },
+  {
+    "key": "dsh-desk/0123456789abcdef0123456789abcdef/bin/win-x64/deepseek-harness-1.2.3-win-x64.exe.blockmap"
+  },
+  {
+    "key": "dsh-desk/0123456789abcdef0123456789abcdef/feeds/win-x64/nightly.yml",
+    "contents": "version: 1.2.3\npath: >-\n  https://desktop-updates.example.com/dsh-desk/0123456789abcdef0123456789abcdef/bin/win-x64/deepseek-harness-1.2.3-win-x64.exe\nfiles:\n  - url: >-\n      https://desktop-updates.example.com/dsh-desk/0123456789abcdef0123456789abcdef/bin/win-x64/deepseek-harness-1.2.3-win-x64.exe\n    size: 30\n    sha512: >-\n      eVumVOW1yvT3fAgGKUnliEzSfhmn8jUfzpNaUPufU1yekWrwJe8wRPC+JOrHH2Hmc/eLynwxjX1yIiER8tVOTA==\n"
+  },
+  {
+    "key": "dsh-desk/0123456789abcdef0123456789abcdef/feeds/win-x64/latest.yml",
+    "contents": "version: 1.2.3\npath: >-\n  https://desktop-updates.example.com/dsh-desk/0123456789abcdef0123456789abcdef/bin/win-x64/deepseek-harness-1.2.3-win-x64.exe\nfiles:\n  - url: >-\n      https://desktop-updates.example.com/dsh-desk/0123456789abcdef0123456789abcdef/bin/win-x64/deepseek-harness-1.2.3-win-x64.exe\n    size: 30\n    sha512: >-\n      eVumVOW1yvT3fAgGKUnliEzSfhmn8jUfzpNaUPufU1yekWrwJe8wRPC+JOrHH2Hmc/eLynwxjX1yIiER8tVOTA==\n"
+  }
+]

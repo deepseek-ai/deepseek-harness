@@ -1,0 +1,10 @@
+version: 1
+scenario: deepseek-messages-input-history
+profile: headless
+composition: deepseek-messages-input-history
+recording: authored
+header:
+  class: deepseek-messages-input-history
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

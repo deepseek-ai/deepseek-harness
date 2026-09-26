@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/browser-use-chrome-devtools-mcp/README.md
-README.md: b4ef51079d79429b570ec222f283b3c20112546b
-README.zh.md: 5ce248b9759e4fb942629fc10217bb055f1a0e65
+/:
+  en: 49dd7963da817a62
+  zh: a1a62d762aacc55d
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp:
+  en: 869b71c566f146a1
+  zh: a07644fd5ff83258
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/summary:
+  en: 2860fff1092fd887
+  zh: da67195905183d63
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: ea2227f28624a0e6
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/use-this-package:
+  en: 6257bdaa22e67fb5
+  zh: a083c080c6fadac1
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/understand-the-implementation:
+  en: 32b0f9382ebff464
+  zh: 1865ee4afa815c40
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/further-exploration:
+  en: f97bf132ae1ff7ac
+  zh: 74c01d1cbca5281a
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/model-experience/browser-tools-and-screenshots:
+  en: 1adc972910db543b
+  zh: 7a06e0d265f19499
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/model-experience/browser-tools-and-screenshots/what-the-model-sees:
+  en: 54df6ff19fe6f99b
+  zh: 8749f57c37836a69
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/model-experience/browser-tools-and-screenshots/token-effect:
+  en: bc6d5d5db77d5fc3
+  zh: bbbd79e4ae29675f
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/model-experience/browser-tools-and-screenshots/kv-cache-effect:
+  en: 86e83cc10f829b2b
+  zh: c2e61c09531a5de2
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/known-limitations-and-deferred-work:
+  en: dcbef985851db35b
+  zh: af0fa9f178377044
+/deepseek-ai-dsh-experimental-browser-use-chrome-devtools-mcp/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

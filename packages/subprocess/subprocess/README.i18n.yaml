@@ -1,6 +1,73 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/subprocess/subprocess/README.md
-README.md: 0c5a56987a44e71a174065e7bd9d3caca590d45b
-README.zh.md: 42141d9828d4720b9009be785931fdebfda21511
+/:
+  en: 04735af7a998f2ae
+  zh: ab6bf3d0f098877a
+/deepseek-ai-dsh-subprocess:
+  en: f692e3fa2c598b70
+  zh: f7d899b31647ead9
+/deepseek-ai-dsh-subprocess/summary:
+  en: 4c3e83922d6ba18c
+  zh: d794f5cb99939e6d
+/deepseek-ai-dsh-subprocess/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-subprocess/use-this-package:
+  en: a43391b5840a4c58
+  zh: a0a9c3fa577d92c0
+/deepseek-ai-dsh-subprocess/use-this-package/mounting-the-service:
+  en: 82be7c63ab95994f
+  zh: 8810e7c489b444df
+/deepseek-ai-dsh-subprocess/use-this-package/starting-a-managed-process:
+  en: 891cb74d5d35095c
+  zh: 296cb1890116fb05
+/deepseek-ai-dsh-subprocess/use-this-package/choosing-how-output-is-delivered:
+  en: c02fe7246326c164
+  zh: 1d31096e31e1feee
+/deepseek-ai-dsh-subprocess/use-this-package/using-a-control-pipe:
+  en: 0d1d6d55cd5f7ec4
+  zh: bab0c3f51ed743cb
+/deepseek-ai-dsh-subprocess/use-this-package/managing-process-lifetime:
+  en: 83d662d278184411
+  zh: 2c4e7fbe76823fa8
+/deepseek-ai-dsh-subprocess/use-this-package/running-a-terminal-session:
+  en: e3631497344c2ebd
+  zh: c4ebc7b08f0a316e
+/deepseek-ai-dsh-subprocess/use-this-package/environment-every-child-starts-from:
+  en: 4d4cbb311575d071
+  zh: 7be2d265adb661bc
+/deepseek-ai-dsh-subprocess/use-this-package/what-can-go-wrong:
+  en: 51f2f43087a1ed18
+  zh: 6d2ebb099b707df3
+/deepseek-ai-dsh-subprocess/understand-the-implementation:
+  en: 25cd344c959cfd9e
+  zh: 045880776ab82d1e
+/deepseek-ai-dsh-subprocess/understand-the-implementation/design-concept:
+  en: 07201ec2256c25f6
+  zh: 046109cfa92194f3
+/deepseek-ai-dsh-subprocess/understand-the-implementation/source-map:
+  en: 30de3ce459e02570
+  zh: ff32b0cb28da5772
+/deepseek-ai-dsh-subprocess/understand-the-implementation/data-model-and-flow:
+  en: 9998dc0a990fbcf1
+  zh: ba179617f60cb9bc
+/deepseek-ai-dsh-subprocess/understand-the-implementation/lifecycle-and-invariants:
+  en: a132325eea7cadb4
+  zh: 434cbbc61ff9cd0e
+/deepseek-ai-dsh-subprocess/further-exploration:
+  en: f560a70ff8ad00db
+  zh: 1a51eca4b30055cb
+/deepseek-ai-dsh-subprocess/model-experience:
+  en: 36d8f1820f81de29
+  zh: da18a4123bdd28b7
+/deepseek-ai-dsh-subprocess/model-experience/kv-cache-effect:
+  en: e290ccc9b3c92c08
+  zh: d75d48f485447a74
+/deepseek-ai-dsh-subprocess/known-limitations-and-deferred-work:
+  en: 0b1c46aec1ba628d
+  zh: cf2a0db9d0682155
+/deepseek-ai-dsh-subprocess/known-limitations-and-deferred-work/dev-note:
+  en: 56709c22873429b5
+  zh: c0e86c62982a3e29

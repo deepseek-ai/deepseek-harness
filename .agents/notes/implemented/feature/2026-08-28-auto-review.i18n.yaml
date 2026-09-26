@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-28-auto-review.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-28-auto-review.md
-2026-08-28-auto-review.md: 13b3769b97c27b2ef4ac5cf4f6c2c2dde6323e7f
-2026-08-28-auto-review.zh.md: bf7d70b85be43a0b9f451dd20e3bcd5c4b879cd3
+/agent-note-experimental-auto-review-before-each-tool-call:
+  en: 66cfb9da0816f4f2
+  zh: 79f66b9713964a5e
+/agent-note-experimental-auto-review-before-each-tool-call/problem:
+  en: 492ba2355360d81a
+  zh: 825c0e7ab1cf4beb
+/agent-note-experimental-auto-review-before-each-tool-call/decision:
+  en: fd4103b65b24f6e2
+  zh: 5c1a364355b7e9ab
+/agent-note-experimental-auto-review-before-each-tool-call/decision/effects-and-authority:
+  en: 55a79d8572fb4332
+  zh: f63d03d0f3bb5811
+/agent-note-experimental-auto-review-before-each-tool-call/decision/one-complete-reviewer-request:
+  en: d93bd9b8af6b0bfc
+  zh: 9514c2e5554a721e
+/agent-note-experimental-auto-review-before-each-tool-call/decision/result-and-cancellation:
+  en: 237018634b5f9dcf
+  zh: cbc49d9c1b794065
+/agent-note-experimental-auto-review-before-each-tool-call/decision/process-catalog-and-children:
+  en: c305e3506fb4febc
+  zh: aecc99cda8be3de2
+/agent-note-experimental-auto-review-before-each-tool-call/alternatives-considered:
+  en: fe97128ed05b9e43
+  zh: 4aaa344933fa89b4
+/agent-note-experimental-auto-review-before-each-tool-call/consequences:
+  en: 1aca35a6d0784f67
+  zh: 51cfa397db101600

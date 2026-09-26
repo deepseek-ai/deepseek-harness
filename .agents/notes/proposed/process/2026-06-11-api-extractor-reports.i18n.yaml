@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-11-api-extractor-reports.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/process/2026-06-11-api-extractor-reports.md
-2026-06-11-api-extractor-reports.md: 2aee524596a5b798591fecded539a8d2236a3d96
-2026-06-11-api-extractor-reports.zh.md: e62b6168efac5c8296b55ff8ee0c7861d1849d31
+/agent-note-api-extractor-reports:
+  en: 5bf55ca547e54ed9
+  zh: 62bc2de82f342803
+/agent-note-api-extractor-reports/problem:
+  en: 1155ed0bd1964b95
+  zh: 4d00955e7602b8b4
+/agent-note-api-extractor-reports/proposal:
+  en: bdf121c8a35a7cf6
+  zh: 106d7be6dba363cf
+/agent-note-api-extractor-reports/alternatives-considered:
+  en: 36a7bef28b50f0a1
+  zh: 1051720fd8c30f7a
+/agent-note-api-extractor-reports/acceptance-criteria:
+  en: b3dd74eab1781311
+  zh: 63fd46fd11656832
+/agent-note-api-extractor-reports/risks:
+  en: 21838e31d29b87fb
+  zh: c72c81ef53b090e0
+/agent-note-api-extractor-reports/why-deferred:
+  en: e2a8a7c13f4db704
+  zh: aeae101a9a77d677

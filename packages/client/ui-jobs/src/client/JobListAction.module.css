@@ -9,7 +9,7 @@
   min-height: 28px;
   padding: 3px 2px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
@@ -47,52 +47,253 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  width: 336px;
-  max-width: min(400px, calc(100vw - 32px));
-  max-height: min(420px, calc(100vh - 140px));
+  width: 500px;
+  max-width: min(560px, calc(100vw - 32px));
+  max-height: min(480px, calc(100vh - 140px));
   margin: 0;
-  padding: 4px;
+  padding: 3px;
   overflow: auto;
   list-style: none;
   border: 0;
-  border-radius: 20px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
 }
 
+/* Section labels over the live rows and the settled tail. */
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 4px 1px;
+  padding: 4px 0 3px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* The leading section needs no divider above it. */
+.sectionHeader:first-child {
+  margin-top: 0;
+  border-top: 0;
+}
+
+/* Fold toggle and clear action on the settled section line. */
+.sectionToggle,
+.sectionClear {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.sectionToggle:hover,
+.sectionToggle:focus-visible,
+.sectionClear:hover,
+.sectionClear:focus-visible {
+  background: var(--dsw-alias-fill-l1);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.sectionChevron {
+  transform: rotate(-90deg);
+  transition: transform 120ms ease;
+}
+
+.sectionChevronOpen {
+  transform: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Row plus its optional kill button; the row button keeps its full-width hit
+   area by flexing, so non-job rows render identically to before. */
+.rowLine {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+/* Live rows read as filled cards so running work outranks the settled tail;
+   the inner padding frames the row and both trailing controls on the fill,
+   and the hover wash sits on the card so the controls never escape it. */
+.rowLineLive {
+  padding: 4px 8px 4px 2px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-fill-l2);
+}
+
+.rowLineLive:hover {
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 9%, transparent);
+}
+
+/* The kind badge shares the card fill, so it pops on the menu surface instead. */
+.rowLineLive .kind {
+  background: var(--dsw-specific-menu);
+}
+
+.rowLine .row {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The card carries the hover wash; the inner row stays transparent so the
+   two washes never stack, keeping keyboard focus its own visible state. */
+.rowLineLive .row:hover {
+  background: transparent;
+}
+
+.rowLineLive .row:focus-visible {
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
+}
+
+/* The expand affordance on live rows: a persistent bordered square, so the
+   control reads as a button before hover (it lives inside the row toggle). */
+.chevronBox {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-specific-menu);
+}
+
+/* Two-press kill affordance on running job rows: same persistent square. */
+.stop {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-specific-menu);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.stop:hover,
+.stop:focus-visible {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* The armed press widens into a labeled danger pill so the confirm step is
+   legible without hover; the state-error token is the one StateDot uses. */
+.stopArmed,
+.stopArmed:hover,
+.stopArmed:focus-visible {
+  gap: 4px;
+  width: auto;
+  padding: 0 7px;
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.stopLabel {
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.stopFailed {
+  color: var(--dsw-alias-state-error-primary);
+}
+
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   box-sizing: border-box;
   width: 100%;
-  min-height: 32px;
-  padding: 6px 8px;
-  border-radius: 8px;
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
   color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 12px;
+  line-height: 17px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover,
+.row:focus-visible {
+  background: var(--dsw-alias-fill-l1);
+}
+
+/* A row with no observable output offers no interaction. */
+.rowStatic {
+  cursor: default;
+}
+
+.rowStatic:hover {
+  background: transparent;
 }
 
 .rowSettled {
   color: var(--dsw-alias-label-tertiary);
 }
 
-.rowDot {
+/* Live rows align the dot with the first text line, not the row center. */
+.row .rowDot {
   flex: none;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.primary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.secondary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .kind {
   flex: none;
-  padding: 0 6px;
-  border-radius: 5px;
+  padding: 0 5px;
+  border-radius: var(--dsw-radius-xs);
   background: var(--dsw-alias-fill-l2);
   color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  line-height: 18px;
+  font-size: 10px;
+  line-height: 16px;
 }
 
 .label {
@@ -104,23 +305,61 @@
   text-overflow: ellipsis;
 }
 
-.status,
-.duration {
-  flex: none;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 18px;
-}
-
-/* A failed job's detail is the producer's raw error text, so it has no bound;
+/* A failed task's detail is the producer's raw text, so it has no bound;
    without this it widens the row past the menu instead of eliding like .label. */
 .status {
-  max-width: 40%;
+  flex: none;
+  max-width: 60%;
   overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 16px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .duration {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 18px;
   font-variant-numeric: tabular-nums;
+}
+
+.chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.panel {
+  margin: 0 8px 8px;
+  /* Long commands and output lines wrap in full instead of ellipsizing or
+     scrolling sideways, and the output region scrolls within a fixed height
+     instead of folding its middle lines. */
+  --dsl-terminal-command-whitespace: pre-wrap;
+  --dsl-terminal-line-whitespace: pre-wrap;
+  --dsl-terminal-output-max-height: 288px;
+}
+
+/* The row carries the state dot, so the panel omits its own and reclaims the
+   dot gutter down to an ordinary content inset. The override targets the card
+   element itself because the gutter variable is declared on it — a value
+   inherited from this container would lose to that declaration. */
+.panel :global([data-terminal]) {
+  --dsl-terminal-gutter: 12px;
+}
+
+.notice {
+  margin: 0 8px 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.noticeError {
+  color: var(--dsw-alias-state-error-primary);
 }

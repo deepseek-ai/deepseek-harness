@@ -31,8 +31,8 @@ Remote 消费端投影同时包含 `.d.ts`、`.d.ts.map` 和 `.js`。`.d.ts` 只
 | `@deepseek-ai/dsh-typert-protocol` | 只声明 `ctx.typert` 的最小协议 | `TypertRemoteService`、decorator、binding 回退、descriptor、lookup/Context 和 Remote map；不依赖 compiler、Zod、Connection 或 Browser |
 | Typert registry | `ctx.typert` | 分开保存当前环境 reflection、导入的 Remote contribution、lookup provider 和 Context provider |
 | Typert generator/loader | 无新增业务服务 | 从 Host/Client Program 生成三类 `lib` 产物，并把当前环境产物注册到 `ctx.typert` |
-| API Gateway 的 Host face | `ctx.typertGateway` | 关联 Host definition 与活 Service，解码参数、解析 receiver 并调用方法 |
-| Connection | `ctx.connection` | 独占 HTTP Server/未来 WebSocket、共享 `/api` route、RPC envelope、rpcId、序列化、trust、错误传输、Typert 拦截，以及各 owner 在同一 channel 上注册的精确 Fetch route |
+| API Gateway 的 Host face | `ctx.typertGateway` | 关联 Host definition 与活 Service，解码参数、解析 receiver、调用方法，并将一元结果投影为载体无关的字段与附件 |
+| Connection | `ctx.connection` | 独占 HTTP Server/未来 WebSocket、共享 `/api` route、RPC envelope、rpcId、物理序列化、trust、错误传输、Typert 拦截，以及各 owner 在同一 channel 上注册的精确 Fetch route |
 | API Gateway 的 Client face | `ctx.remote`、`ctx.remote.<namespace>` | mount Remote contribution，把每个 namespace 实体化为可追踪的 `remote.<namespace>` 子 Service，并把规范调用交给 `ctx.connection.rpc` |
 | API Remotes | 无新增服务 | 负责 Host Agent/Session lookup 策略，并作为 Client 业务的唯一 facade，选择并挂载 `/remote` contribution，同时暴露所选 API 声明 |
 | Agent/Session owning 包 | 既有领域服务 | 同时提供静态 interface merge 与运行时 lookup/Context provider |
@@ -181,7 +181,7 @@ import type { CreateGoalRequest, CreateGoalResult } from '@deepseek-ai/dsh-goal/
 
 Remote 方法本身使用 declaration map 导航。Typert 把 `InvocationModel.location` 固定在 Host 被装饰方法的方法名 token，并在 namespace interface 的对应属性上写入 source-map segment。对于由适配器支撑的 endpoint，TypeScript editor 从 `ctx.remote.models.list` 取得生成 declaration 后，再沿 `typert.remote-client.d.ts.map` 跳到 Host Service 的 `remoteExportList` 远程出口。该出口继续显式调用不改名的存量 `list()`，map 不把 decorator、class 或整个签名误当成方法定义位置。
 
-Typert 为同一 symbol key 生成 wire Zod codec。Host Gateway 用参数与 identity codec 校验输入；Client Remote 信任生成的 TypeScript 参数与成功的 Host 结果，不执行调用 codec。复杂类型无法生成严格 codec 时，LIB 构建失败，不降级为 `unknown` 或无校验 JSON。
+Typert 为同一 symbol key 生成 wire Zod codec。Host Gateway 用参数与身份 codec 校验输入。Client Remote 信任生成的 TypeScript 参数与 JSON 成功结果。二进制成功结果在 multipart 解码后执行生成的结果 codec，具体由[二进制 Remote 传输](2026-09-17-workspace-file-binary-transfer.zh.md)规定。复杂类型若无法生成严格 codec，LIB 构建失败，不降级为 `unknown` 或未校验 JSON。
 
 Remote 方法引用的命名业务类型必须从纯类型公共 subpath 导出。如果唯一可达入口会带入 Host Service、Cordis `Context` merge 或 Host-only 实现，构建失败并要求业务包提供安全的类型出口。原始值、字面量和 Typert 明确支持的简单组合不需要额外命名。
 
@@ -514,7 +514,7 @@ SRC 弱 descriptor 不验证普通 JSON 内部结构。Host Remote 签名变化�
 
 类型 import 与运行时 contribution 是两种不同效果。`import type {}` 只扩展静态 Remote surface；真实调用环境遗漏 value contribution 时，Client Remote Service 必须以明确的「Remote 未挂载」错误失败。
 
-生成的 Host 与 Client 产物携带匹配的 Zod factory，但 Client Remote 不实例化调用 schema。规范 symbol key、同一生成模型和 Host wire 校验让两侧保持一致，而无需跨 realm 比较 schema 对象 identity。
+生成的 Host 与 Client 产物携带匹配的 Zod factory；Client Remote 仅实例化二进制结果 schema。规范 symbol key、同一生成模型和 Host wire 校验让两侧保持一致，而无需跨 realm 比较 schema 对象 identity。
 
 消费端可以导入 Host 当前未挂载的 Remote contract。类型表示「该协议能力已被消费端选择」，不保证目标进程当前存在对应 Service；运行时 endpoint 不可用必须明确失败。
 

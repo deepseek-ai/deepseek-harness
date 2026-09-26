@@ -14,6 +14,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -37,7 +38,7 @@ let spillRoot: string
 let ctx: Context
 
 const BODY = 'X'.repeat(4000) // formatted result is well over the policy cap
-const MAX_INLINE_BYTES = 1000 // leaves room for a head/tail preview beside the notice
+const MAX_INLINE_TOKENS = 250 // leaves room for a head/tail preview beside the notice
 
 beforeEach(async () => {
   vi.spyOn(publicHttpNetwork, 'resolve').mockResolvedValue([{ address: '127.0.0.1', family: 4 }])
@@ -55,12 +56,13 @@ beforeEach(async () => {
   // policy cap is what triggers the spill (the Agent Note's separation of concerns).
   await ctx.plugin(WebFetchLocal, { maxBodyChars: 500_000 })
   await ctx.plugin(LocalSpillStore, { root: spillRoot })
-  await ctx.plugin(SpillPolicy, { maxInlineBytes: MAX_INLINE_BYTES })
+  await ctx.plugin(SpillPolicy, { maxInlineTokens: MAX_INLINE_TOKENS })
   await ctx.plugin(ToolWeb)
 })
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  await ctx.fiber.dispose()
   await new Promise<void>(resolve => server.close(() => { resolve() }))
   rmSync(spillRoot, { recursive: true, force: true })
 })
@@ -80,7 +82,7 @@ describe('web_fetch spill showcase', () => {
 
     // Model-facing text is a preview + notice within the cap, NOT the full body.
     expect(text.length).toBeLessThan(BODY.length)
-    expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(MAX_INLINE_BYTES)
+    expect(estimateContent([{ type: 'text', text }])).toBeLessThanOrEqual(MAX_INLINE_TOKENS)
     expect(text).toContain(`Fetched ${base}`) // the head of the formatted result survives
     expect(text).toContain('Full formatted result stored at:')
     expect(text).toContain('Use read with offset/limit, or grep this path')

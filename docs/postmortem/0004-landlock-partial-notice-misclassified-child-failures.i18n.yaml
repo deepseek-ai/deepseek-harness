@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 0004-landlock-partial-notice-misclassified-child-failures.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/postmortem/0004-landlock-partial-notice-misclassified-child-failures.md
-0004-landlock-partial-notice-misclassified-child-failures.md: 06d39b1db8436d4cfd7ad6145782b4eb2c4d31ae
-0004-landlock-partial-notice-misclassified-child-failures.zh.md: 6fb5c727419745590847455e8ea7e9dfb1bce8d3
+/post-mortem-0004-landlock-partial-enforcement-notice-misclassified-child-failures:
+  en: b71a197449d26d2f
+  zh: 2b62b51f43516f16
+/post-mortem-0004-landlock-partial-enforcement-notice-misclassified-child-failures/executive-summary:
+  en: 2ec1637fb5a99515
+  zh: f3bca251dca064d6
+/post-mortem-0004-landlock-partial-enforcement-notice-misclassified-child-failures/summary:
+  en: 818daf81fe33bfb2
+  zh: 4c45efa374df5850
+/post-mortem-0004-landlock-partial-enforcement-notice-misclassified-child-failures/impact:
+  en: a65c52d5874b07e5
+  zh: 6f65a41eb0549528
+/post-mortem-0004-landlock-partial-enforcement-notice-misclassified-child-failures/timeline:
+  en: 43c9f047bbd0a239
+  zh: 4756c4a814e67f9e
+/post-mortem-0004-landlock-partial-enforcement-notice-misclassified-child-failures/root-cause:
+  en: 97c948a04dd4ac89
+  zh: dec9b74160efb68f
+/post-mortem-0004-landlock-partial-enforcement-notice-misclassified-child-failures/guardrails-added:
+  en: bf3bc8101efe4b0f
+  zh: 3d17794adb3f61c7
+/post-mortem-0004-landlock-partial-enforcement-notice-misclassified-child-failures/lessons:
+  en: eea3aedb5f5f4f9f
+  zh: 1c718cd06caa9f25

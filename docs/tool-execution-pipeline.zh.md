@@ -5,7 +5,7 @@
 
 [English](tool-execution-pipeline.md) | 中文
 
-此图展示策略、钩子、沙箱、文件系统守卫、结果重写、最终结果观察和 UI 渲染在不改变循环的情况下何时运行。`tools/pre-execute` waterfall（瀑布式事件）首先运行，随后是单调守卫，然后运行 `tools/execute` 和 `tools/post-execute` waterfall；这三个 waterfall 可以改写一次调用。由定义自身控制的 `finalizeContent` 和 `tools/result` 在此之后运行。
+此图展示策略、钩子、沙箱、文件系统守卫、结果重写、最终结果观察和 UI 渲染在不改变循环的情况下何时运行。`tools/pre-execute` waterfall（瀑布式事件）首先运行，随后是单调守卫，然后运行 `tools/execute` 和 `tools/post-execute` waterfall；这三个 waterfall 可以改写一次调用。由定义自身控制的 `projectContent` 在执行后策略之前安装已准备内容；`finalizeContent` 和 `tools/result` 在此之后运行。
 
 ```mermaid
 flowchart TD
@@ -20,6 +20,7 @@ flowchart TD
   toolBody["Registered tool execute() body"]
   fsGate["<code>fs/write-intent</code> or <code>fs/edit-intent</code><br/>tool-fs mutations only"]
   owned["Tool-owned session events<br/><code>todo/write</code>, <code>fs/observed</code>, <code>hook/invoked</code>, <code>hook/result</code>, <code>tool/ptc-dispatch</code>"]
+  project["ToolDefinition.projectContent<br/>execution-prepared text and images"]
   post["<code>tools/post-execute</code> waterfall<br/>accept, block, replace, add context"]
   normalized["Registry outer normalization<br/>pipeline/result snapshot throws become isError"]
   finalize["ToolDefinition.finalizeContent<br/>last content-only invariant"]
@@ -41,13 +42,15 @@ flowchart TD
   approval -->|allowed-once| guards
   approval -->|rejected, cancelled, unavailable| denied
   approval -.->|throw| normalized
-  denied --> post
+  denied --> project
   pre -.->|throw| normalized
   toolBody --> fsGate
   fsGate --> toolBody
   toolBody --> owned
   toolBody --> around
-  around --> post
+  around --> project
+  project --> post
+  project -.->|throw| normalized
   around -.->|wrapper throws| normalized
   post -.->|throw| normalized
   post --> finalize

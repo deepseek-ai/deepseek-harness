@@ -110,3 +110,15 @@ export function relativizeToCwd(text: string, cwd: string | undefined): string {
   if (text.startsWith(`${root}/`) || text.startsWith(`${root}\\`)) return text.slice(root.length + 1)
   return text
 }
+
+/**
+ * Address a decoded absolute file path through the authenticated file route.
+ * @param base - HTTP(S) application base, including its deployment prefix, or `dsh-app://app/`.
+ * @param path - Native file path; URL escapes in authored Markdown must already be decoded.
+ * @returns File URL, or undefined for unsupported transports and non-absolute paths.
+ */
+export function fileMediaUrl(base: string, path: string): string | undefined {
+  if ((!/^https?:/u.test(base) && !base.startsWith('dsh-app://app/')) || !isAbsoluteWorkspacePath(path)
+    || /^[/\\]{2}/u.test(path) || /[\u0000-\u001f\u007f]/u.test(path)) return undefined
+  return new URL(`api/file?path=${encodeURIComponent(path)}`, base).href
+}

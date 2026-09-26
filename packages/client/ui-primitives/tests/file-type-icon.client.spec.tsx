@@ -26,10 +26,15 @@ describe('classifyFileType', () => {
   it.each([
     ['src/index.TSX', 'react'],
     ['site/index.html', 'html'],
-    ['data/export.CSV', 'code'],
+    ['data/export.CSV', 'excel'],
+    ['data/export.tsv', 'excel'],
     ['shots/hero.png', 'image'],
     ['notes/README.MDX', 'markdown'],
     ['report.xlsm', 'excel'],
+    ['report.xlsb', 'excel'],
+    ['template.xltx', 'excel'],
+    ['sheet.ods', 'excel'],
+    ['template.ots', 'excel'],
     ['budget.numbers', 'excel'],
     ['deck.key', 'ppt'],
     ['letter.rtf', 'word'],
@@ -103,7 +108,7 @@ describe('FileTypeIcon', () => {
     expect(new Set(paths).size).toBe(types.length)
   })
 
-  it.each(['code', 'folder', 'html', 'image', 'video'] as const)(
+  it.each(['folder', 'html', 'image', 'video'] as const)(
     'enlarges the %s center mark without scaling the file shell',
     (type) => {
       const { container } = render(<FileTypeIcon kind={type} />)
@@ -112,7 +117,7 @@ describe('FileTypeIcon', () => {
     },
   )
 
-  it.each(['excel', 'markdown', 'pdf', 'ppt', 'word'] as const)(
+  it.each(['markdown', 'pdf', 'ppt', 'word'] as const)(
     'gives the %s center mark the larger emphasis scale',
     (type) => {
       const { container } = render(<FileTypeIcon kind={type} />)
@@ -120,6 +125,14 @@ describe('FileTypeIcon', () => {
       expect(container.querySelector('svg > path')?.getAttribute('transform')).toBeNull()
     },
   )
+
+  it('uses the supplied unscaled 1.2px table grid for spreadsheet files', () => {
+    const { container } = render(<FileTypeIcon kind="excel" />)
+    const mark = container.querySelector('[data-file-type-mark]')
+    expect(mark?.getAttribute('transform')).toBeNull()
+    expect(mark?.querySelector('path')?.getAttribute('stroke')).toBe('currentColor')
+    expect(mark?.querySelector('path')?.getAttribute('stroke-width')).toBe('1.2')
+  })
 
   it('keeps the generic file glyph without an invented center mark', () => {
     const { container } = render(<FileTypeIcon kind="other" />)

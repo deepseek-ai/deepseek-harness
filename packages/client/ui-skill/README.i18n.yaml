@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-skill/README.md
-README.md: a1e9e7047f102f2610160905727450833b540082
-README.zh.md: d7669b11fc7249c857e20f3c52f93b8bfd214281
+/:
+  en: 490d60d7bec05d21
+  zh: 72a1300893d68f31
+/deepseek-ai-dsh-client-ui-skill:
+  en: 17b91cfc2300ea2b
+  zh: 1fcd42e48e14c5ec
+/deepseek-ai-dsh-client-ui-skill/summary:
+  en: fad7bff8d3371dfc
+  zh: c546189c87d6fbf2
+/deepseek-ai-dsh-client-ui-skill/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-skill/use-this-package:
+  en: 2f17d0875048ef3c
+  zh: 6878ee4c75f2b2cf
+/deepseek-ai-dsh-client-ui-skill/use-this-package/what-the-source-offers:
+  en: 2ba1a6158c85b46e
+  zh: 9ab58ceef8743849
+/deepseek-ai-dsh-client-ui-skill/use-this-package/the-skill-tool-row:
+  en: 52c7aee8faf26795
+  zh: f68e2f17cc7e369a
+/deepseek-ai-dsh-client-ui-skill/understand-the-implementation:
+  en: df2a0ee9d2638f41
+  zh: 3b4af7e505e990ca
+/deepseek-ai-dsh-client-ui-skill/understand-the-implementation/candidate-flow:
+  en: 1a02a85859f851c7
+  zh: 03bd48b83c4a287c
+/deepseek-ai-dsh-client-ui-skill/understand-the-implementation/registration:
+  en: 1965ad3169b7fd97
+  zh: efc23c44ad1d2765
+/deepseek-ai-dsh-client-ui-skill/further-exploration:
+  en: 54198f095d0cc569
+  zh: 4eba4413e159967b
+/deepseek-ai-dsh-client-ui-skill/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-client-ui-skill/model-experience/user-explicit-skill-invocation:
+  en: ae1928252b0ea55c
+  zh: 6c78cb51c6805a2d
+/deepseek-ai-dsh-client-ui-skill/model-experience/user-explicit-skill-invocation/what-the-model-sees:
+  en: 02313760445799a2
+  zh: 46007ed9e9f35b44
+/deepseek-ai-dsh-client-ui-skill/model-experience/user-explicit-skill-invocation/token-effect:
+  en: cb759321f8c62a96
+  zh: 6d479501856d9cd6
+/deepseek-ai-dsh-client-ui-skill/model-experience/user-explicit-skill-invocation/kv-cache-effect:
+  en: da53c649077dad7e
+  zh: 845f77793f8e10a2
+/deepseek-ai-dsh-client-ui-skill/known-limitations-and-deferred-work:
+  en: aed53b17a91d4b02
+  zh: fac571e9228e69c5
+/deepseek-ai-dsh-client-ui-skill/known-limitations-and-deferred-work/dev-note:
+  en: f3cb9f98b665c2f9
+  zh: 2275c60173ce961b

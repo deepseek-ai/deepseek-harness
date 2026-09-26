@@ -6,13 +6,13 @@ Status: implemented
 
 ## 问题
 
-一台 MCP 服务器就是 `cordis.yml` 里的一条 `dsh-mcp-client` 行。这对组合钉死的服务器是对的，但与产品目标相悖：要从 Web 界面在运行时添加、修改、测试、启用、停用、删除并恢复服务器，且每台服务器的连接状态可见。Web 面被刻意设计为不能编辑 loader 条目（插件清单只读），客户端插件除日志外没有任何状态出口，激活继承了无界的 SDK 启动等待，也没有任何"不挂载就测试一份配置"的途径。对六个同类 agent 产品（Claude Code、Codex、OpenCode、Kimi Code、DeepSeek-Reasonix、Pi）的调研收敛到同一形态：配置注册表、管理门面、带"状态到动作"映射的连接状态机，密钥绝不回读到界面。
+一台 MCP 服务器就是 `cordis.yml` 里的一条 `dsh-mcp-client` 行。这对组合钉死的服务器是对的，但与产品目标相悖：要从 Web 界面在运行时添加、修改、测试、启用、停用、删除并恢复服务器，且每台服务器的连接状态可见。客户端插件除日志外没有任何状态出口，激活继承了无界的 SDK 启动等待，也没有任何"不挂载就测试一份配置"的途径。对六个同类 agent 产品（Claude Code、Codex、OpenCode、Kimi Code、DeepSeek-Reasonix、Pi）的调研收敛到同一形态：配置注册表、管理门面、带"状态到动作"映射的连接状态机，密钥绝不回读到界面。
 
 ## 决策
 
-`packages/mcp/mcp-manager` 是一个服务插件（`ctx.mcpServers`），拥有 `mcp` 设置命名空间并对一支普通 `dsh-mcp-client` 子实例编队做对账；`packages/mcp/mcp-client` 补上了管理器需要的三个原语——状态面、探测与启动预算——其重连语义不变。
+`packages/mcp/mcp-manager` 是一个服务插件（`ctx.mcpServers`），拥有 volatile `servers` 配置并对一支普通 `dsh-mcp-client` 子实例编队做对账；`packages/mcp/mcp-client` 补上了管理器需要的三个原语——状态面、探测与启动预算——其重连语义不变。
 
-**配置即设置命名空间，CRUD 不需要新 API。** 管理器经 `installSection` 注册 `mcp`：自身组合条目是基层（可被用户文档覆盖、停用，但不可删除），用户层添加与覆盖条目，管理界面的每次写入都是带 revision 围栏的普通设置变更。外部 `settings.yaml` 编辑与 Remote 写入走同一条提交后 watch 的路径。
+**配置由 volatile Config 提供，CRUD 不需要新 API。** Settings 按管理器条目的 Loader id 展示其 Config；ConfigEditor 拥有 profile 持久化、继承和 revision 检查。Settings 编辑保留继承的服务器，重置继承条目会恢复其基层值。直接编写 profile patch 会替换完整 `servers` 映射。Loader 先提交引用，再通知管理器现有的协调队列。
 
 **扁平条目 schema，跨字段校验。** 条目是带 `transport` 判别字段的扁平结构，写入期校验在写入处强制逐传输要求与拒绝（缺 `command`/`url`、跨传输字段、模板写错）——schema 合法但不可执行的条目永远不会被存下，且拒绝会点名出错字段，union 的形状错误做不到。
 
@@ -30,7 +30,7 @@ OAuth 刻意不在本次范围内：凭据记录与 authorization seam 加 MCP S
 
 ## 曾考虑的替代方案
 
-**把服务器作为 Web 可写的 loader 条目管理。** 否决：插件清单按既有决策只读，loader 条目属于组合面（preset、boot 审计）而非用户配置，settings seam 已拥有分层、校验、revision 围栏、脱敏与文件监听。
+**把每台服务器作为独立 Loader 条目管理。** 否决：管理器需要包含状态、restart 与 probe 的统一服务器列表。Settings 与 ConfigEditor 已经为其字典提供继承、校验和 revision 检查；运行期子实例不需要独立持久化条目。
 
 **把 `startConnection()` 当库调用而不挂子插件。** 否决：这会让生命周期与静态组合实例分叉，丢掉预留冲突检查，还要重造插件已在测试下证明的激活/销毁静默。
 
@@ -42,7 +42,7 @@ OAuth 刻意不在本次范围内：凭据记录与 authorization seam 加 MCP S
 
 ## 测试
 
-mcp-client 单元（`tests/status.spec.ts`、`tests/probe.spec.ts`，SDK mock）：全部状态迁移含预算耗尽、关闭重连、启动预算两个阶段、连接期即关闭的无错误中断、观察者遏制、销毁移除句柄，以及探测的阶段分类、上限、预算与关闭遏制。管理器单元（`tests/manager.spec.ts`，真 cordis + 真内存 settings/credential provider）：无 settings 时的基层回退、设置驱动的增/重建/停用/删除、restart 语义、模板解析与失败、凭据轮换重建（含治愈挂载失败的用例）、以 `failed`/`load` 浮出的 serverName 冲突、解析中途删除的中止、陈旧激活回调、销毁先解除工具再拒绝操作、排队对账输给销毁时被遏制并记录。不变量 spec 证明发出契约可以失败。真实组合（`tests/composition.spec.ts`）：Loader 启动的 `cordis.yml` 配文件设置 provider——基层服务器挂载，外部 `settings.yaml` 编辑热加第二台服务器的工具。E2E（`mcp-client.e2e.ts`，无密钥）：对真实 stdio fixture 服务器与死命令探测。覆盖率在两个包上保持逐文件 100% 门禁。
+mcp-client 单元（`tests/status.spec.ts`、`tests/probe.spec.ts`，SDK mock）：全部状态迁移含预算耗尽、关闭重连、启动预算两个阶段、连接期即关闭的无错误中断、观察者遏制、销毁移除句柄，以及探测的阶段分类、上限、预算与关闭遏制。管理器单元（`tests/manager.spec.ts`，真实 Cordis + profile 支持的 Settings 和内存 credential provider）：无 settings 时的基层回退、设置驱动的增/重建/停用/删除、restart 语义、模板解析与失败、凭据轮换重建（含治愈挂载失败的用例）、以 `failed`/`load` 浮出的 serverName 冲突、解析中途删除的中止、陈旧激活回调、销毁先解除工具再拒绝操作、排队对账输给销毁时被遏制并记录。不变量 spec 证明发出契约可以失败。真实组合（`tests/composition.spec.ts`）：Loader 启动的 profile 配置——继承服务器挂载，外部 profile patch 热加第二台服务器，Settings 编辑在重启后恢复，无效写入保持 patch 不变。E2E（`mcp-client.e2e.ts`，无密钥）：对真实 stdio fixture 服务器与死命令探测。覆盖率在两个包上保持逐文件 100% 门禁。
 
 ## 后果
 

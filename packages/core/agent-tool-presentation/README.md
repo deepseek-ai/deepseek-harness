@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-agent-tool-presentation` in an [agent preset](../../preset/agent-presets/README.md) to fix whether models see every native tool schema, only `run_code` with a generated SDK, or both forms. Each preset can choose independently, so native and PTC agents can share one process without sharing tool catalogs. Selecting `ptc` or `both` requires a compatible PTC runtime; a deployment without one rejects the preset at mount time before its first prompt. The `mode` field is required when this package is present, while omitting the package keeps the deployment default.
+Use `dsh-agent-tool-presentation` in an [agent preset](../../preset/agent-preset-registry/README.md) to fix whether models see every native tool schema, only `run_code` with a generated SDK, or both forms. Each preset can choose independently, so native and PTC agents can share one process without sharing tool catalogs. Selecting `ptc` or `both` requires a compatible PTC runtime; a deployment without one rejects the preset at mount time before its first prompt. The `mode` field is required when this package is present, while omitting the package keeps the deployment default.
 
 ## Table of Contents
 
@@ -72,7 +72,7 @@ The tool registry cannot move into a preset: its consumers are all host-plane �
 
 ### Behavior notes
 
-`native` applies immediately. A PTC mode instead waits for `ctx.ptcRuntime`, a host-plane service: a preset selecting PTC mode against a deployment composing no runtime holds this row pending, and `dsh-agent-presets` refuses the mount naming this id. `presentAs` is itself the effect, so the declaration unwinds with this row without a second wrapper owning it.
+`native` applies immediately. A PTC mode instead waits for `ctx.ptcRuntime`, a host-plane service: a preset selecting PTC mode against a deployment composing no runtime holds this row pending, and `dsh-agent-preset-registry` refuses the mount naming this id. `presentAs` is itself the effect, so the declaration unwinds with this row without a second wrapper owning it.
 
 </details>
 
@@ -84,7 +84,7 @@ The tool registry cannot move into a preset: its consumers are all host-plane �
 The package-level contract is enough for most consumers; read these when you need the surrounding domain.
 
 - [tools package](../tools/README.md) — the tool presentation modes and `presentAs` API.
-- [agent-presets package](../../preset/agent-presets/README.md) — how presets compose agents and their standing mounts.
+- [agent-presets package](../../preset/agent-preset-registry/README.md) — how presets compose agents and their standing mounts.
 - [Node ptc-runtime package](../../ptc-runtime/ptc-runtime-node/README.md) — the TypeScript runtime a PTC mode needs.
 - [PTC mode executor-collapse note](../../../.agents/notes/implemented/bug-fix/2026-08-07-ptc-executor-collapse.md) — why the announced and callable surfaces stay the same.
 - [Core group map](../README.md) — how the core packages compose.

@@ -20,7 +20,7 @@ import { CodeBody } from '../src/client/code/CodeBody.tsx'
 import type { DocumentPreviewDefinition } from '../src/client/document/registry.ts'
 import { TextBody } from '../src/client/text/TextBody.tsx'
 import { PLAIN_BODY_ID } from '../src/client/text/index.ts'
-import { ABSOLUTE_PATH, ADDRESS, PATH, SESSION, TAB_ID, failure, harness, page, settle } from './fixtures.client.ts'
+import { documentSlots, ABSOLUTE_PATH, ADDRESS, PATH, SESSION, TAB_ID, failure, harness, page, settle } from './fixtures.client.ts'
 
 const LINE_HEIGHT = 20
 
@@ -88,7 +88,7 @@ function codeProps(h: ReturnType<typeof harness>, navigation: { params?: unknown
   return {
     ...props,
     useDocumentPreviews: selector => selector([definition]),
-    renderSlot: (_key, owner) => <CodeBody {...props} {...owner as unknown as OwnerOf<'sidebar.right.tab.document'>} t={key => key} />,
+    renderSlot: documentSlots((_key, owner) => <CodeBody {...props} {...owner as unknown as OwnerOf<'sidebar.right.tab.document'>} t={key => key} />),
   }
 }
 
@@ -144,56 +144,6 @@ describe('TextPreview — pages', () => {
     view.rerender(<TextPreview {...h.props()} />)
     expect(view.container.querySelector('[data-textpreview-path]')?.textContent).toBe(ABSOLUTE_PATH)
     expect(view.container.querySelector('[data-textpreview-path]')?.getAttribute('title')).toBe(ABSOLUTE_PATH)
-  })
-
-  it('marks the path clipped while its text is wider than its box, re-reading on resize', async () => {
-    class FakeResizeObserver implements ResizeObserver {
-      static latest: FakeResizeObserver | undefined
-      readonly observe = vi.fn()
-      readonly unobserve = vi.fn()
-      readonly disconnect = vi.fn()
-      constructor(private readonly callback: ResizeObserverCallback) {
-        FakeResizeObserver.latest = this
-      }
-
-      fire(): void {
-        this.callback([], this)
-      }
-    }
-    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
-    let boxWidth = 300
-    const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth')
-    const clientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
-    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get: () => 200 })
-    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => boxWidth })
-    try {
-      const h = harness({ 1: page(1, ['one'], true) })
-      const view = render(<TextPreview {...h.props()} />)
-      await settle()
-      const path = view.container.querySelector<HTMLElement>('[data-textpreview-path]')
-      const text = path?.firstElementChild
-      expect(path?.hasAttribute('data-textpreview-path-clipped')).toBe(false)
-      const observer = FakeResizeObserver.latest
-      if (observer === undefined) throw new Error('expected the path to observe its size')
-      expect(observer.observe).toHaveBeenCalledWith(path)
-      expect(observer.observe).toHaveBeenCalledWith(text)
-
-      boxWidth = 120
-      act(() => { observer.fire() })
-      expect(path?.hasAttribute('data-textpreview-path-clipped')).toBe(true)
-
-      boxWidth = 300
-      act(() => { observer.fire() })
-      expect(path?.hasAttribute('data-textpreview-path-clipped')).toBe(false)
-      view.unmount()
-      expect(observer.disconnect).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.unstubAllGlobals()
-      for (const [name, descriptor] of [['offsetWidth', offsetWidth], ['clientWidth', clientWidth]] as const) {
-        if (descriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, name)
-        else Object.defineProperty(HTMLElement.prototype, name, descriptor)
-      }
-    }
   })
 
   it('reads the first page on first mount and draws its lines, offering the next', async () => {
@@ -253,20 +203,59 @@ describe('TextPreview — pages', () => {
   })
 
   it('says why a page failed and retries the same page', async () => {
+    const h = harness({ 1: failure('gateway/internal', { path: PATH }) })
+    const view = render(<TextPreview {...h.props()} />)
+    await settle()
+    const failed = view.container.querySelector('[data-textpreview-failed]')
+    expect(failed?.getAttribute('data-textpreview-failed')).toBe('gateway/internal')
+    expect(view.container.textContent).toContain('error.unavailable(message=boom)')
+    // Nothing read yet: the failure stands as the body, under the file's type sheet.
+    expect(failed?.querySelector('svg')).not.toBeNull()
+    expect(view.container.querySelector('[data-textpreview-more]')).toBeNull()
+    expect(view.container.querySelector('[data-slot="sidebar.right.tab.document.unpreviewable"]')).toBeNull()
+    h.script(1, page(1, ['one'], true))
+    click(view.container, '[data-textpreview-retry]')
+    await settle()
+    expect(h.read).toHaveBeenLastCalledWith(SESSION, PATH, 1, h.controller.signal)
+    expect(lines(view.container)).toEqual(['one\n'])
+    expect(view.container.querySelector('[data-textpreview-failed]')).toBeNull()
+  })
+
+  it('hands a readable file it cannot render to the unpreviewable seat instead of Retry', async () => {
     const h = harness({ 1: failure('workspace-file/not-text', { path: PATH }) })
     const view = render(<TextPreview {...h.props()} />)
     await settle()
     const failed = view.container.querySelector('[data-textpreview-failed]')
     expect(failed?.getAttribute('data-textpreview-failed')).toBe('workspace-file/not-text')
     expect(view.container.textContent).toContain('error.notText')
-    // Nothing read yet: the failure stands as the body, under the file's type sheet.
-    expect(failed?.querySelector('svg')).not.toBeNull()
-    expect(view.container.querySelector('[data-textpreview-more]')).toBeNull()
-    h.script(1, page(1, ['one'], true))
-    click(view.container, '[data-textpreview-retry]')
+    expect(view.container.querySelector('[data-textpreview-retry]')).toBeNull()
+    const seat = failed?.querySelector('[data-slot="sidebar.right.tab.document.unpreviewable"]')
+    expect(seat?.getAttribute('data-slot-path')).toBe(ABSOLUTE_PATH)
+    // The header's own handoff seat receives the same file.
+    const actions = view.container.querySelector('[data-slot="sidebar.right.tab.document.actions"]')
+    expect(actions?.getAttribute('data-slot-path')).toBe(ABSOLUTE_PATH)
+  })
+
+  it('offers neither Retry nor a handoff for a path with nothing to show', async () => {
+    const h = harness({ 1: failure('workspace-file/not-found', { path: PATH }) })
+    const view = render(<TextPreview {...h.props()} />)
     await settle()
-    expect(h.read).toHaveBeenLastCalledWith(SESSION, PATH, 1, h.controller.signal)
-    expect(lines(view.container)).toEqual(['one\n'])
+    expect(view.container.querySelector('[data-textpreview-failed]')?.getAttribute('data-textpreview-failed')).toBe('workspace-file/not-found')
+    expect(view.container.querySelector('[data-textpreview-retry]')).toBeNull()
+    expect(view.container.querySelector('[data-slot="sidebar.right.tab.document.unpreviewable"]')).toBeNull()
+  })
+
+  it('withholds the handoff seats until the file reports a Host path', async () => {
+    const h = harness({ 1: failure('workspace-file/not-text', { path: PATH }) })
+    h.setVersion(undefined)
+    const view = render(<TextPreview {...h.props()} />)
+    await settle()
+    expect(view.container.querySelector('[data-textpreview-failed]')).not.toBeNull()
+    expect(view.container.querySelector('[data-slot]')).toBeNull()
+    h.script(1, page(1, ['reloaded'], true))
+    click(view.container, '[data-textpreview-tool="reload"]')
+    await settle()
+    expect(h.read).toHaveBeenCalledTimes(2)
     expect(view.container.querySelector('[data-textpreview-failed]')).toBeNull()
   })
 
@@ -287,11 +276,12 @@ describe('TextPreview — pages', () => {
     expect(view.container.querySelector('[data-textpreview-failed]')).toBeNull()
   })
 
-  it('announces a change and, on request, re-reads the pages keeping the reader\'s place', async () => {
+  it('announces a change while automatic refresh is paused and reloads on request, keeping the reader\'s place', async () => {
     const h = harness({ 1: page(1, ['a', 'b'], true) })
     const view = render(<TextPreview {...h.props()} />)
     await settle()
     fireEvent.scroll(body(view.container), { target: { scrollTop: 50 } })
+    click(view.container, '[data-textpreview-tool="auto-refresh"]')
     h.setVersion('v2')
     view.rerender(<TextPreview {...h.props()} />)
     expect(view.container.querySelector('[data-textpreview-changed]')?.textContent).toContain('changed')
@@ -307,10 +297,40 @@ describe('TextPreview — pages', () => {
 })
 
 describe('TextPreview — the file\'s metadata', () => {
+  it('refreshes by default with the toggle hidden and catches up when automatic refresh resumes', async () => {
+    const h = harness({ 1: page(1, ['old'], true) })
+    const view = render(<TextPreview {...h.props()} />)
+    await settle()
+    const toggle = view.container.querySelector('[data-textpreview-tool="auto-refresh"]')!
+    expect(toggle.closest('[hidden]')).not.toBeNull()
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    expect(view.queryByRole('button', { name: 'autoRefresh' })).toBeNull()
+    expect(view.getByRole('button', { name: 'reload' })).toBeTruthy()
+    fireEvent.scroll(body(view.container), { target: { scrollTop: 40 } })
+    h.script(1, page(1, ['updated'], true, 'v2'))
+    h.setVersion('v2')
+    view.rerender(<TextPreview {...h.props()} />)
+    await settle()
+    expect(lines(view.container)).toEqual(['updated\n'])
+    expect(body(view.container).scrollTop).toBe(40)
+    expect(h.read).toHaveBeenCalledTimes(2)
+    fireEvent.click(toggle)
+    h.script(1, page(1, ['latest'], true, 'v3'))
+    h.setVersion('v3')
+    view.rerender(<TextPreview {...h.props()} />)
+    expect(lines(view.container)).toEqual(['updated\n'])
+    expect(h.read).toHaveBeenCalledTimes(2)
+    fireEvent.click(toggle)
+    await settle()
+    expect(lines(view.container)).toEqual(['latest\n'])
+    expect(h.read).toHaveBeenCalledTimes(3)
+  })
+
   it('does not treat the observation present at read start as a later file change', async () => {
     const h = harness({ 1: page(1, ['newer read'], true, 'v2') })
     const view = render(<TextPreview {...h.props()} />)
     await settle()
+    click(view.container, '[data-textpreview-tool="auto-refresh"]')
     expect(h.instance.getSnapshot().byTab[TAB_ID]).toMatchObject({ version: 'v2', observedVersion: 'v1' })
     expect(view.container.querySelector('[data-textpreview-changed]')).toBeNull()
     h.setVersion('v3')
@@ -326,11 +346,12 @@ describe('TextPreview — the file\'s metadata', () => {
     expect(view.container.querySelector('[data-textpreview-changed]')).not.toBeNull()
   })
 
-  it('announces metadata that changes while the first content read is still pending', async () => {
+  it('announces metadata that changes during the first read while automatic refresh is paused', async () => {
     const h = harness()
     const pending = Promise.withResolvers<ReturnType<typeof page>>()
     h.read.mockReturnValueOnce(pending.promise)
     const view = render(<TextPreview {...h.props()} />)
+    click(view.container, '[data-textpreview-tool="auto-refresh"]')
     h.setVersion('v2')
     view.rerender(<TextPreview {...h.props()} />)
     await act(async () => { pending.resolve(page(1, ['read v1'], true)); await pending.promise })
@@ -348,6 +369,8 @@ describe('TextPreview — the file\'s metadata', () => {
     const first = render(<TextPreview {...firstProps} />)
     const second = render(<TextPreview {...secondProps} />)
     await settle()
+    click(first.container, '[data-textpreview-tool="auto-refresh"]')
+    click(second.container, '[data-textpreview-tool="auto-refresh"]')
     h.setVersion('v2')
     first.rerender(<TextPreview {...firstProps} />)
     second.rerender(<TextPreview {...secondProps} />)
@@ -429,7 +452,7 @@ describe('TextPreview — navigation and view', () => {
   it('rebinds scrolling when the selected Slot body is replaced without changing the renderer id', async () => {
     const h = harness({ 1: page(1, ['a', 'b', 'c'], true) })
     const code = codeProps(h, { revision: 1 })
-    const fallback: TextPreviewProps = { ...code, renderSlot: () => <div data-late-renderer /> }
+    const fallback: TextPreviewProps = { ...code, renderSlot: documentSlots(() => <div data-late-renderer />) }
     const view = render(<TextPreview {...fallback} />)
     await settle()
     const outer = body(view.container)
@@ -465,12 +488,12 @@ describe('TextPreview — navigation and view', () => {
     const props: TextPreviewProps = {
       ...base,
       useDocumentPreviews: selector => selector(definitions),
-      renderSlot: (_key, owner, opts) => {
+      renderSlot: documentSlots((_key, owner, opts) => {
         const documentOwner = owner as unknown as OwnerOf<'sidebar.right.tab.document'>
         if (opts.entryKey === 'code') return <CodeBody {...base} {...documentOwner} t={key => key} />
         if (opts.entryKey === PLAIN_BODY_ID) return <TextBody {...base} {...documentOwner} />
         return <div data-test-no-lines />
-      },
+      }),
     }
     const view = render(<TextPreview {...props} />)
     await settle()
@@ -568,6 +591,16 @@ describe('TextPreview — navigation and view', () => {
 })
 
 describe('TextPreview — header controls', () => {
+  it('displays the document refresh binding supplied by its tab owner', async () => {
+    const h = harness({ 0: page(0, ['hello'], true) })
+    const props = h.props(), info = props.useTabInfo()
+    const view = render(<TextPreview {...props} useTabInfo={() => ({ ...info, tab: { ...info.tab,
+      refreshShortcut: { id: 'page.refresh' as never, label: 'Refresh', aliases: [], binding: null,
+        keys: ['Ctrl', 'R'], aria: 'Control+R', modified: true, conflicts: [], issue: null },
+    } })} />)
+    await settle()
+    expect(view.container.querySelector('[data-textpreview-tool="reload"]')?.getAttribute('aria-keyshortcuts')).toBe('Control+R')
+  })
   it('toggles wrap off from the header, reporting the pressed state', async () => {
     const h = harness({ 1: page(1, ['a'], true) })
     const view = render(<TextPreview {...h.props()} />)

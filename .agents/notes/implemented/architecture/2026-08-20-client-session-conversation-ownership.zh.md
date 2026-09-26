@@ -38,7 +38,7 @@ Session 与 Workspace 的 Client 对象分别归 `api/session-controller/client`
 
 Session 与 Workspace 的 React 适配分别归 `client/ui-session` 和 `client/ui-workspace`。Store engine 归 `client/store`，Slot registry、scope materialization 和 observable-to-hook 绑定归 `client/ui-renderer`。
 
-系统不提供聚合式 `client/runtime` package，也不设置替代它的总控 facade。Session history、Remote stream、分页 cursor 和重连连续性由 [Session 历史与事件传输](2026-08-18-session-history-and-event-transport.zh.md) 定义；本 Note 从 Controller 发布的 Client 对象与 source 开始。
+系统没有聚合式 `client/runtime` 包，也没有替代的中央 facade。[Session 历史与事件传输](2026-08-18-session-history-and-event-transport.zh.md)定义历史连续性。[Client 会话引用](2026-09-15-client-session-references.zh.md)拥有引用获取、精确代际生命周期、主区域所有权和统一 UI 状态；本篇拥有分层与数据源注册规则。
 
 ## 分层原则
 
@@ -55,9 +55,10 @@ UI 层可以同时读取多个 Controller 做一次导航决定，但不得把�
 | Hook | Owner | Source |
 | --- | --- | --- |
 | `useSessions` | `client/ui-session` | Session Controller 全局列表 |
-| `useSession` | `client/ui-session` | 当前 Session snapshot |
-| `useProjection` | `client/ui-session` | 当前 Session keyed projection |
-| `useSessionPendingInteraction` | `client/ui-session` | pending domain 聚合结果 |
+| `useSession` | `client/ui-session` | 已绑定会话快照 |
+| `useProjection` | `client/ui-session` | 已绑定会话的键控投影 |
+| `useSessionStatus` | `client/ui-session` | 运行状态、有效待处理请求和未读完成提醒 |
+| `useSessionRetainInfo` | `client/ui-session` | 控制器的只读引用来源计数 |
 | `useWorkspaces` | `client/ui-workspace` | Workspace Controller 列表 |
 | `useConversation` | `client/ui-conversation` | Conversation binding snapshot |
 | `useChat` | `client/ui-chat` | `chat` target source |
@@ -77,10 +78,10 @@ UI 层可以同时读取多个 Controller 做一次导航决定，但不得把�
 
 | Package | 拥有内容 | 明确不拥有 |
 | --- | --- | --- |
-| `api/session-controller/client` | Session 对象、列表、选择、命令、projection、queue、事件窗口和 Agent Context | Conversation target、React、Slot、Workspace |
+| `api/session-controller/client` | 会话对象、目录、引用、来源计数、命令、投影、事件窗口与 Agent Context | 导航、完成提醒、Conversation target、React、Slot、Workspace |
 | `api/workspace-controller/client` | Workspace 对象、顺序、归档、命令和 snapshot | React、Session 导航策略、目录 UI |
-| `client/ui-session` | Session scope、标准 source、`SessionProvider`、pending interaction 聚合 | Session transport、Conversation 组装、Approval/Question 结果 |
-| `client/ui-workspace` | Workspace hook、浏览器 UI 和跨 Controller 导航策略 | Workspace transport、Session 数据副本 |
+| `client/ui-session` | 显式会话作用域、标准数据源、`SessionProvider` 与统一 UI 状态 | 会话传输、引用所有权、Conversation 组装、Approval/Question 结果 |
+| `client/ui-workspace` | Workspace 钩子、浏览器 UI、主区域引用与跨控制器导航策略 | Workspace 传输、会话数据副本 |
 | `client/ui-conversation` | Conversation core、registry、binding、shell、input、composer、queue 和 View 导航 | Session transport、Chat/Trajectory snapshot |
 | `client/ui-chat` | Chat target、Node definitions、renderer、selection、details 和 locale | Session 生命周期、通用 View 导航、Trajectory、历史图片 cache |
 | `client/ui-trajectory` | Trajectory target、事件记录投影和检查视图 | Session snapshot、Chat snapshot |
@@ -117,9 +118,9 @@ Session 数据按以下路径进入 UI：
        useChat            useTrajectory
 ```
 
-Workspace 数据从 `ctx.remote.workspace` 进入 Workspace Controller，再由 `ui-workspace` 暴露为 `useWorkspaces`；需要跨域导航时，`ui-workspace` 临时读取 Session Controller 并发出选择或命令。
+Workspace 数据由 `ctx.remote.workspace` 进入 Workspace 控制器，再由 `ui-workspace` 通过 `useWorkspaces` 提供。`ui-workspace` 为跨领域导航读取显式目标并持有主区域引用，不把它变为默认业务 Context。
 
-Approval 与 Question 从 Host waterfall 经 `ctx.remote.$on` 到达各自 UI owner。Owner 发布 Pending 对象，`ui-session.pendingInteractions` 再把同一对象送往 Session 导航状态和 Conversation composer selection。
+Approval 与 Question 通过 `ctx.remote.$on` 从 Host waterfall 到达各自的 UI owner。各 owner 发布 Pending 对象；`ui-session.sessionStatus` 向 Workspace 标识和 Conversation composer 选择提供同一个有效对象。
 
 ## Session Controller Client
 
@@ -142,7 +143,7 @@ Approval 与 Question 从 Host waterfall 经 `ctx.remote.$on` 到达各自 UI ow
 
 Session Controller 对外提供三个互不替代的读取面：
 
-1. 全局 Session list 与 current selection source，供导航和 `useSessions` 使用。
+1. 会话目录与本地所有权数据源，由 `useSessions` 和只读引用元数据消费方使用。
 2. 每个 Session 的逻辑 binding，包含 `sessionId`、`SessionSnapshot` source、commands 与 projection sources。
 3. Conversation-facing `SessionEventSource`，只供 Conversation assemble core 使用。
 
@@ -160,9 +161,9 @@ Session Controller 对外提供三个互不替代的读取面：
 
 ### Session binding 生命周期
 
-每个 Session binding 持有自己的 Cordis Context 与 Fiber。Session Controller 创建 binding，也负责释放它。
+每个活跃会话 generation 持有 Cordis Context 与 Fiber。控制器在获取引用时创建绑定，并在最后一份引用释放或根销毁时结束该绑定。
 
-依赖 Session 的对象把清理注册到 `binding.ctx.effect()`。Binding 释放会触发 Conversation binding、UI materialization 和 scoped Slot store 的清理，不存在额外的 `onBindingRelease` 或 `onRelease` 回调协议。
+依赖会话的对象通过 `binding.ctx.effect()` 注册清理。generation 结束会清理 Conversation 绑定、UI 物化结果和作用域 Slot 存储，无需单独的 `onBindingRelease` 或 `onRelease` 回调协议。
 
 这种清理方式不要求 Session Controller 了解上层消费者名册。
 
@@ -172,12 +173,12 @@ Session Controller 对外提供三个互不替代的读取面：
 
 `client/ui-session` 是 Session Controller 与 React/Slot 系统之间唯一的 Session adapter。它提供 `ctx.uiSession`，并负责：
 
-- 观察 Session list、current selection 和 per-Session binding；
+- 观察会话目录、本地引用元数据和显式提供的绑定；
 - 安装 session 与 session-maybe scope adapter；
 - 提供 `SessionProvider` 的呈现语义；
 - 内建 session snapshot、projection 和 sessionId source；
 - 接收其他领域 package 的 Session-scoped source contribution；
-- 聚合业务 package 注册的 pending interaction。
+- 在 `sessionStatus` 中组合领域持有的待处理交互、运行事实和完成提醒。
 
 它不拥有 Session transport、event folding、Conversation target 或具体业务结果。
 
@@ -193,12 +194,12 @@ Session Controller 对外提供三个互不替代的读取面：
 
 session 与 session-maybe 使用同一个 adapter，但绑定语义不同：
 
-- strict session scope 在没有 current binding 时拒绝渲染；
+- 严格会话作用域在没有显式提供的绑定时拒绝渲染；
 - session-maybe 使用稳定 absent binding，保持 hook 调用顺序；
-- current Session 切换以 `sessionId` 为 key 重建严格 Session subtree；
-- root 与 session-maybe entry 可以跨 Session 切换常驻。
+- 精确 Context generation 改变时重新挂载已绑定子树，同一 id 的替代 generation 也如此；
+- 未绑定的 session-maybe 条目无需重新挂载即可接纳首个绑定；root 条目没有会话绑定。
 
-每个真实 materialized binding 保留 Controller binding 的 Context。`ui-session` 通过 `binding.ctx.effect()` 删除缓存项并撤销 current binding。
+每个 UI 物化结果借用控制器绑定的 Context。`ui-session` 通过 `binding.ctx.effect()` 移除该 generation 的缓存项并发布空值，不会 retain 会话。
 
 Contribution roster 变化会重建已 materialize 的 binding 并发布新的 source 集合。同一 binding 生命周期内，source identity 保持稳定，以满足 `useSyncExternalStore` 的缓存要求。
 
@@ -206,9 +207,9 @@ Contribution roster 变化会重建已 materialize 的 binding 并发布新的 s
 
 `SessionProvider` 是 `PropsRenderSlots` 根据 session-scoped child 声明派生的标准席，不是业务 component 直接 import 的 React Context。
 
-它接收普通 `ReactNode` children，不接收 `(sessionId) => ReactNode` render function；调用方直接用它包裹 `renderSlot('details', {})`。
+它接收普通 `ReactNode` children 和必填的 `session={reference | undefined}`。Provider 借用调用方持有的引用，不获取或释放它；调用方直接包住 `renderSlot('details', {})`。
 
-Session identity 通过 scope binding 和标准 `sessionId` prop 提供。Provider 只负责 absent branch 与按 Session identity 隔离 subtree，组件不得借助 Provider 回调取得 Session 数据。
+会话身份通过显式作用域绑定和标准 `sessionId` prop 到达组件。空 Provider 保持未绑定，嵌套 Provider 和 root 条目都不会回退到主区域会话。
 
 ### Pending interaction
 
@@ -220,7 +221,7 @@ Session identity 通过 scope binding 和标准 `sessionId` prop 提供。Provid
 
 `ui-session` 使用各 domain 的 precedence 选出每个 Session 当前生效的对象。较高 precedence 胜出，相同 precedence 下后遍历到的有效对象胜出。
 
-聚合结果发布为 `pendingInteractions: ObservableSnapshot<ReadonlyMap<SessionId, SessionPendingInteraction>>`，`useSessionPendingInteraction` 是其 React 读取面。
+待处理聚合是 `ui-session` 的私有实现；其有效请求原样出现在 `sessionStatus.getSnapshot().get(id)?.pendingInteraction` 中。`useSessionStatus` 是公开 UI 读取接口。
 
 Session 导航状态和 composer takeover 必须读取同一个 effective object，不得分别维护 status map 或 takeover roster。
 
@@ -242,7 +243,7 @@ Session 导航状态和 composer takeover 必须读取同一个 effective object
 
 `client/ui-workspace` 把 Workspace list source 注册为 root 标准 source `workspaces`，renderer 由此提供 `useWorkspaces`。
 
-初始选择、blank Session 复用、新建导航、并发创建合并和归档后导航属于 UI navigation policy。该 policy 可以在决定时同时读取 `ctx.workspaces` 与 `ctx.sessions`，但只调用 Controller command 和 selection action，不发布联合 snapshot。
+启动恢复、空白会话复用、新会话导航、并发创建合并与归档后的导航属于 UI 策略。`ui-workspace` 可以读取两个控制器，但把主目标和引用保存在自己的导航 owner 中，不向控制器快照写入 UI 选择。
 
 目录 picker、目录浏览和 `openPath` 属于独立目录能力，不进入 Workspace Controller。
 
@@ -286,7 +287,7 @@ Shell phase 由 Session lifecycle 与 Conversation target activity 纯合成。S
 
 ### Input 与 composer
 
-Composer chain 属于 `ui-conversation`，具体 takeover 属于业务 package。`ConversationRoot` 从 `useSessionPendingInteraction` 读取当前 Session 的 effective object，并作为 `ComposerChainProps.pendingInteraction` 交给 chain selector。
+composer chain 属于 `ui-conversation`，具体接管属于业务包。`ConversationRoot` 通过 `useSessionStatus` 读取已绑定会话的有效请求，并作为 `ComposerChainProps.pendingInteraction` 提供给 chain selector。
 
 Selector 是 owner currency 的纯函数，非 null 结果作为 `matched` 传给获选 component。Stable composer entry 与默认 composer 可以同时常驻，chain 只选择一个有效呈现。
 
@@ -334,7 +335,7 @@ Gateway 只要求 Remote Event 参数和结果是合法 JSON 传输值，不复�
 
 ### 单一 pending 投影
 
-Sidebar 与 composer 使用相同 `pendingInteractions` snapshot。导航根据 effective object 的 `kind` 显示审批、计划审阅或问题状态，composer entry 根据对象实例选择自己的面板。
+Sidebar 与 composer 消费 `sessionStatus` 中同一个有效待处理请求。导航根据其 `kind` 显示审批、计划审阅或问题状态；每个 composer 条目按对象身份选择自己的面板。
 
 同一请求 identity 同时驱动两处 UI。新请求替换同类型旧请求时使用新 key，因此 selector 与订阅者都观察到身份变化。
 
@@ -366,7 +367,7 @@ Store 只承载 draft、View selection、Chat selection、inspection request 和
 
 一个 plugin 同时提供 source 与 Slot entry 时，先注册 source，再注册 entry。Cordis 反向 disposal 先移除 entry，再移除 source，仍挂载的 entry 因而不会短暂失去必需 hook。
 
-Session binding 释放通过 `binding.ctx.effect()` 清理 UI materialization 与 scoped store。Plugin fiber 释放通过 registration disposer 清理 source、listener 和 Slot entry。
+最后一份会话引用释放后，通过 `binding.ctx.effect()` 清理 UI 物化结果和作用域存储。插件 fiber 释放通过注册 disposer 清理数据源、监听器和 Slot 条目。
 
 所有 disposer 都可重复调用，不依赖 Cordis 生命周期以外的隐式回调。
 
@@ -386,7 +387,7 @@ UI component 不接收 `ctx`。跨 package 协作使用 Cordis service、standar
 
 新增状态前先按消费语义确定唯一 owner：Host 通信、命令和实体生命周期归 API Controller；由 Session events 形成且与 target 无关的数据归 Conversation core；只服务一种 View 的投影归对应 target package；草稿、选择和面板状态归拥有该交互的 UI package。
 
-同一事实不得同时保存在 Controller snapshot、Conversation snapshot 和 Store。需要跨域决策时读取多个 source 并立即发出 command，不创建联合 snapshot，也不缓存另一领域的对象副本。
+同一个事实不能同时保存在控制器快照、Conversation 快照和存储中。跨领域导航在决策时读取数据源。UI 持有的状态数据源可以组合独立的运行、待处理请求和完成提醒事实，但必须保留领域归属与对象身份，不能复制这些领域的状态。
 
 以下信号表示 owner 选择错误：Controller 开始 import React；renderer 出现业务类型分支；组件遍历 Session events；Store 保存 Session 或 Workspace 实体；一个 target 的变化要求修改 Session Controller。
 
@@ -421,7 +422,7 @@ Target 不得读取另一个 target 的 snapshot 作为自己的数据源。可�
 5. 可处理时创建 Pending 对象，使用 publication function 发布，等待结果，并在 `finally` 中移除。
 6. 测试并发 key、precedence、用户取消、transport abort、plugin disposal 和无 Session delegation。
 
-单次请求不得注册 Slot、声明 child Slot、修改 Session snapshot 或另建状态索引。Sidebar 与 composer 都从 `useSessionPendingInteraction` 读取同一个 effective object。
+请求不注册 Slot、不声明子 Slot、不修改会话快照，也不创建独立状态索引。Sidebar 与 composer 从 `useSessionStatus` 读取同一个有效对象。
 
 ### Review 检查点
 

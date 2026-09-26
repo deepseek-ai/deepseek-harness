@@ -13,9 +13,7 @@
   margin-left: -6px;
 }
 
-/* Same pill rules as the sibling `.action` icon buttons (28px hit height,
-   15px glyph, tertiary → secondary on hover with the interactive hover
-   background), widened to carry the turn-total label. */
+/* The information pills use the action icons' resting color. */
 .trigger {
   display: inline-flex;
   align-items: center;
@@ -24,10 +22,10 @@
   height: calc(28px + var(--dsh-content-font-delta, 0px));
   padding: 6px 8px;
   border: none;
-  border-radius: 28px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
-  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
   font-variant-numeric: tabular-nums;
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   white-space: nowrap;
@@ -51,7 +49,7 @@
 .trigger:hover,
 .trigger[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-tertiary);
 }
 
 /* Narrow viewport: the pills collapse to bare icons with the sibling

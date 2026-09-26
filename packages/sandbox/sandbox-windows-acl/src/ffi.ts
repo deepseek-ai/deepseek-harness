@@ -60,6 +60,8 @@ export interface Win32Bindings extends Win32ProcessBindings {
     newToken: NativePtr,
   ): number
   setEntriesInAclW(count: number, entries: Buffer, oldAcl: NativePtr | null, newAcl: NativePtr): number
+  initializeAcl(acl: NativePtr, length: number, revision: number): number
+  addMandatoryAce(acl: NativePtr, revision: number, aceFlags: number, policy: number, sid: NativePtr): number
   setNamedSecurityInfoW(
     path: string,
     objectType: number,
@@ -67,7 +69,7 @@ export interface Win32Bindings extends Win32ProcessBindings {
     owner: null,
     group: null,
     dacl: NativePtr | null,
-    sacl: null,
+    sacl: NativePtr | null,
   ): number
   getNamedSecurityInfoW(
     path: string,
@@ -252,6 +254,8 @@ function bindings(): Win32Bindings {
       PVOID, 'uint32', 'uint32', PVOID, 'uint32', PVOID, 'uint32', PVOID, PPVOID,
     ]),
     setEntriesInAclW: bind(advapi32, 'SetEntriesInAclW', 'uint32', ['uint32', PVOID, PVOID, PPVOID]),
+    initializeAcl: bind(advapi32, 'InitializeAcl', 'int', [PVOID, 'uint32', 'uint32']),
+    addMandatoryAce: bind(advapi32, 'AddMandatoryAce', 'int', [PVOID, 'uint32', 'uint32', 'uint32', PVOID]),
     setNamedSecurityInfoW: bind(advapi32, 'SetNamedSecurityInfoW', 'uint32', [
       'str16', 'int', 'uint32', PVOID, PVOID, PVOID, PVOID,
     ]),
@@ -270,7 +274,7 @@ function bindings(): Win32Bindings {
     unlockFileEx: bind(kernel32, 'UnlockFileEx', 'int', [
       PVOID, 'uint32', 'uint32', 'uint32', PVOID,
     ]),
-  })) as unknown as Win32Bindings
+  })) as Win32Bindings
   return cached
 }
 

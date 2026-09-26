@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/host/plugin-inventory/README.md
-README.md: b64a017df28716cfd0b5c3a41f437b87b8e4f19e
-README.zh.md: a29bc402537d88fa512675bfb768502753ca7929
+/:
+  en: 94ee43dddb605a56
+  zh: 1928b76cbc58ca5a
+/deepseek-ai-dsh-host-plugin-inventory:
+  en: f176d2f67d853178
+  zh: b75160b74076f8ba
+/deepseek-ai-dsh-host-plugin-inventory/summary:
+  en: 103ae63994bb9291
+  zh: 3b2658a7a6064e4b
+/deepseek-ai-dsh-host-plugin-inventory/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-host-plugin-inventory/use-this-package:
+  en: 10bbb42c37ba25d2
+  zh: d628b1c9db7847e4
+/deepseek-ai-dsh-host-plugin-inventory/use-this-package/what-a-snapshot-contains:
+  en: c8afdb1aec1c97bd
+  zh: 0a8a765e02caab91
+/deepseek-ai-dsh-host-plugin-inventory/use-this-package/per-preset-compositions:
+  en: dfc89b14d4c0d21e
+  zh: 062b233951ed157b
+/deepseek-ai-dsh-host-plugin-inventory/use-this-package/what-you-can-and-cannot-do-with-it:
+  en: 387f87777eef7ec5
+  zh: badcd90c8840f870
+/deepseek-ai-dsh-host-plugin-inventory/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-host-plugin-inventory/understand-the-implementation/design-concept:
+  en: 48a7d7ce9170c859
+  zh: 21a44bf23d9c5c89
+/deepseek-ai-dsh-host-plugin-inventory/understand-the-implementation/the-phase-mapping:
+  en: 67fd54c8c49f6dbc
+  zh: f6743f8f5c34b886
+/deepseek-ai-dsh-host-plugin-inventory/understand-the-implementation/source-map:
+  en: facbb5472e32e362
+  zh: de793d69285e56b3
+/deepseek-ai-dsh-host-plugin-inventory/further-exploration:
+  en: 47de2da39cf6aefa
+  zh: c7e945dcba775177
+/deepseek-ai-dsh-host-plugin-inventory/model-experience:
+  en: c3e5d5439c1a56fe
+  zh: 32804643402d54ea
+/deepseek-ai-dsh-host-plugin-inventory/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-host-plugin-inventory/known-limitations-and-deferred-work:
+  en: 6c1380959d4f5b13
+  zh: dab0c5c64b88a273
+/deepseek-ai-dsh-host-plugin-inventory/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

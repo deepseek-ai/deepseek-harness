@@ -5,20 +5,19 @@
  * for goes through its injected face. The component itself only decides what to
  * draw for each absolute path and what a click means: a directory toggles, a
  * file opens through the owner's `tabActions` for a `file:` viewer to claim, and
- * anything else is shown but refuses to open. The header row is the text
- * preview's: the root's path, directories greyed and the last segment in full
- * ink, then the one control at its end, reload, which drops every listed level
- * and asks again for the expanded ones.
+ * anything else is shown but refuses to open. The header uses the shared
+ * PathLabel for the root, followed by reload for the expanded directories.
  */
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import type { ReactNode, RefObject } from 'react'
+import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type { PropsLocale, PropsRuntime, PropsStore, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  FileTypeIcon, IconFolderClose16, IconFolderOpen16, IconRefreshOutline16, classifyFileType,
+  FileTypeIcon, IconFolderCloseRegular, IconFolderOpenRegular, IconRefreshOutlineRegular, Tooltip, classifyFileType,
+  IconPauseOutlineRegular, IconPlayOutlineRegular, PathLabel,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { fileAddressFor, pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
+import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceDirectoryEntry } from '@deepseek-ai/dsh-api-workspace-files/types'
 import { childPath } from './face.ts'
 import type { FilesInjected } from './face.ts'
@@ -67,43 +66,10 @@ export function failureLine(t: TranslateNS<'sidebarFiles'>, failure: RemoteFailu
   }
 }
 
-/* jscpd:ignore-start -- the header row is the document preview's (ui-sidebar-documentpreview
-   TextPreview `usePathClipped`), copied because a plugin bundle shares runtime code
-   only through the platform modules. TODO: once the artifact and slot surfaces
-   settle, one copy in ui-primitives could serve every pane header. */
-/**
- * Keep the path row's `data-files-path-clipped` current: set while the path's
- * text is wider than its box, so the stylesheet fades the clipped start. Read
- * after each commit that can change the path or mount the header, and whenever
- * either box resizes; written to the DOM directly because it changes only how
- * the stylesheet fades what is already rendered.
- */
-function usePathClipped(
-  box: RefObject<HTMLDivElement | null>,
-  text: RefObject<HTMLSpanElement | null>,
-  path: string | undefined,
-): void {
-  useLayoutEffect(() => {
-    const outer = box.current
-    const inner = text.current
-    if (outer === null || inner === null) return undefined
-    const apply = (): void => {
-      if (inner.offsetWidth > outer.clientWidth) outer.dataset.filesPathClipped = ''
-      else delete outer.dataset.filesPathClipped
-    }
-    apply()
-    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(apply)
-    observer?.observe(outer)
-    observer?.observe(inner)
-    return () => { observer?.disconnect() }
-  }, [box, text, path])
-}
-/* jscpd:ignore-end */
-
 /** What every level shares: the tab's tree and the two gestures. */
 interface TreeContext {
   readonly state: FilesTabState
-  readonly onToggle: (path: string) => void
+  readonly onToggle: (parent: string, path: string) => void
   readonly onOpen: (path: string) => void
   readonly t: TranslateNS<'sidebarFiles'>
 }
@@ -115,8 +81,8 @@ function Entry({ parent, entry, tree }: { parent: string; entry: WorkspaceDirect
     const expanded = tree.state.expanded.includes(path)
     return (
       <li className={css.item} data-files-entry="directory" data-files-path={path}>
-        <button type="button" className={css.row} aria-expanded={expanded} onClick={() => { tree.onToggle(path) }}>
-          {expanded ? <IconFolderOpen16 className={css.icon} /> : <IconFolderClose16 className={css.icon} />}
+        <button type="button" className={css.row} aria-expanded={expanded} onClick={() => { tree.onToggle(parent, path) }}>
+          {expanded ? <IconFolderOpenRegular className={css.icon} /> : <IconFolderCloseRegular className={css.icon} />}
           <span className={css.name}>{entry.name}</span>
         </button>
         {expanded && <ul className={css.level}><Level path={path} tree={tree} /></ul>}
@@ -159,6 +125,7 @@ function Level({ path, tree }: { path: string; tree: TreeContext }): ReactNode {
   const entries = orderEntries(level.level.entries)
   return (
     <>
+      {level.failure !== undefined && <li className={css.note} data-files-row="failed">{failureLine(t, level.failure)}</li>}
       {entries.length === 0 && <li className={css.note} data-files-row="empty">{t('empty')}</li>}
       {entries.map(entry => <Entry key={entry.name} parent={path} entry={entry} tree={tree} />)}
       {level.level.truncated && <li className={css.note} data-files-row="truncated">{t('truncated')}</li>}
@@ -168,17 +135,15 @@ function Level({ path, tree }: { path: string; tree: TreeContext }): ReactNode {
 
 /** The file tree's body: the workspace root and whatever the reader has opened under it. */
 export function FilesBody({
-  useTabInfo, sessionId, useSessions, useStore, actions, start, load, toggle, t,
+  useTabInfo, sessionId, useSessions, useStore, actions, start, refresh, setAutoRefresh, toggle, t,
 }: FilesBodyProps): ReactNode {
   const { tab } = useTabInfo()
+  useEffect(() => tab.actions.bindCommands({ refresh: () => { refresh(tab.id) } }), [tab.actions, tab.id, refresh])
   const { signal, actions: tabActions } = tab
   const cwd = useSessions(sessions => sessions.byId[sessionId]?.cwd)
   const state = useStore(store => store.byTab[tab.id])
-  const pathRef = useRef<HTMLDivElement>(null)
-  const pathTextRef = useRef<HTMLSpanElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const scrollTopRef = useRef(0)
-  usePathClipped(pathRef, pathTextRef, state?.root)
   // Come back where the reader was: loaded levels outlive the body in the
   // store, so a remounted tree lays out at its full height before this runs
   // and the stored offset re-lands exactly. A fresh tree stores 0.
@@ -213,40 +178,39 @@ export function FilesBody({
   if (state === undefined) return null
   const tree: TreeContext = {
     state,
-    onToggle: (path) => { toggle(tab.id, path, state.levels[path] !== undefined, signal) },
+    onToggle: (parent, path) => { toggle(tab.id, parent, path, state.expanded, signal) },
     // Every row is under the tree's root, so its address is session-relative.
     onOpen: (path) => { tabActions.openResource(fileAddressFor(sessionId, state.root, path)) },
     t,
   }
-  // Reload drops every level and asks again for the expanded ones; a collapsed
-  // level is fetched again the next time it opens.
   const reload = (): void => {
-    actions.reset(tab.id)
-    for (const path of state.expanded) load(tab.id, path, signal)
+    refresh(tab.id)
   }
-  const { directory, name } = pathPartsOf(state.root)
   return (
     <div className={css.root} data-files-state="tree" data-files-root={state.root}>
-      {/* jscpd:ignore-start -- the text preview's header row; see `usePathClipped`. */}
       <div className={css.header}>
-        <div ref={pathRef} className={css.path} title={state.root} data-files-path>
-          <span ref={pathTextRef} className={css.pathText}>
-            {directory !== '' && <span className={css.pathDirectory}>{directory}</span>}
-            <span className={css.pathName}>{name}</span>
-          </span>
-        </div>
-        <button
-          type="button"
-          className={css.tool}
-          aria-label={t('reload')}
-          title={t('reload')}
-          data-files-reload
-          onClick={reload}
-        >
-          <IconRefreshOutline16 />
-        </button>
+        <PathLabel path={state.root} className={css.path} data-files-path />
+        <span hidden>
+          <button type="button" className={css.tool} aria-label={t('autoRefresh')}
+            aria-pressed={state.autoRefresh} data-files-auto-refresh
+            title={t(state.autoRefresh ? 'autoRefresh.disable' : 'autoRefresh.enable')}
+            onClick={() => { setAutoRefresh(tab.id, !state.autoRefresh) }}>
+            {state.autoRefresh ? <IconPauseOutlineRegular /> : <IconPlayOutlineRegular />}
+          </button>
+        </span>
+        <Tooltip label={t('reload')} shortcutKeys={tab.refreshShortcut?.keys} side="bottom" delayMs={500}>
+          <button
+            type="button"
+            className={css.tool}
+            aria-label={t('reload')}
+            aria-keyshortcuts={tab.refreshShortcut?.aria}
+            data-files-reload
+            onClick={reload}
+          >
+            <IconRefreshOutlineRegular />
+          </button>
+        </Tooltip>
       </div>
-      {/* jscpd:ignore-end */}
       <div
         ref={bodyRef}
         className={css.body}

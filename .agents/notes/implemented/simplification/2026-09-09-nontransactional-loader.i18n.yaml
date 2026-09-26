@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-nontransactional-loader.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-09-nontransactional-loader.md
-2026-09-09-nontransactional-loader.md: 6a3cb1476e1f296199067a8d048c6d7c8bba4069
-2026-09-09-nontransactional-loader.zh.md: 4e91a31ed86be4e45313e1322db8af486477aea7
+/agent-note-keep-loader-mutations-non-transactional:
+  en: 199b544883ab8736
+  zh: 4b2ad7d22985d52f
+/agent-note-keep-loader-mutations-non-transactional/problem:
+  en: d4ab65a39cf4fd7c
+  zh: 62144be9b4fd7956
+/agent-note-keep-loader-mutations-non-transactional/decision:
+  en: 9b661159de63d421
+  zh: 15697f468a90edb9
+/agent-note-keep-loader-mutations-non-transactional/alternatives-considered:
+  en: 72b871064c7ae315
+  zh: a09e5168f8124c4c
+/agent-note-keep-loader-mutations-non-transactional/consequences:
+  en: 2b1eece19252ad80
+  zh: 8c9f5faf201521e0

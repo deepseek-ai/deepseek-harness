@@ -1,6 +1,6 @@
 # Minimal live counterpart for the pwsh-tool-turn snapshot composition.
 - id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   config:
     models:
       - id: deepseek-v4-pro

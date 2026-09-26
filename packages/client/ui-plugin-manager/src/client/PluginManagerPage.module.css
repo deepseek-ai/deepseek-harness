@@ -8,7 +8,10 @@
   box-sizing: border-box;
   height: 100%;
   overflow: auto;
-  padding: 28px clamp(24px, 4vw, 48px) 48px;
+  /* Inline and bottom insets only: the 28px top inset belongs to the head row
+     (`.pageHead`, `.detailTop`). macOS window dragging is owned by a row's own box,
+     so an inset above that box leaves a top strip no drag region covers. */
+  padding: 0 clamp(24px, 4vw, 48px) 48px;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -22,6 +25,18 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  box-sizing: border-box;
+  /* The page's former top inset: the row starts at the window's top edge, so the whole
+     strip above the page content drags the window. */
+  padding-top: 28px;
+}
+
+/* macOS hiddenInset titlebar: the frame's top clearance keeps the head below
+   the window's top strip in both sidebar states so it never jumps, and the head
+   owns the window drag over its own box — clearance included — so this page's
+   top strip drags without a frame band. */
+:global([data-platform='darwin']) .pageHead {
+  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
 }
 
 .pageTitle {
@@ -61,10 +76,16 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
+.statusWithDot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .banner {
   margin: 0;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-md);
   font-size: 12px;
   line-height: 18px;
   background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary)) 12%, transparent);
@@ -111,8 +132,9 @@
 
 /* Center the status label geometrically: beside larger titles the capsule's line-box offset shows. */
 .statusTag {
-  height: 20px;
-  padding: 0 8px;
+  height: 18px;
+  padding: 0 7px;
+  font-size: 10px;
   line-height: 1;
 }
 
@@ -140,7 +162,7 @@
 }
 
 .iconButton:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -161,7 +183,7 @@
   /* The hover surface reaches 8px past the content on both sides while the
      row's content stays aligned with the page header. */
   margin: 0 -8px;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-xl);
   /* The page itself scrolls on the base surface. Anything that scrolls inside
      a card draws the l2 thumb (ui-theme styles/scrollbar.css rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
@@ -184,8 +206,12 @@
   height: 48px;
   /* The same hairline frame as the component rows below. */
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-lg);
   color: var(--dsw-alias-label-secondary);
+}
+
+.packageImage {
+  object-fit: contain;
 }
 
 .cardMain {
@@ -232,7 +258,10 @@
   border: 0;
   background: transparent;
   color: inherit;
+  /* font: inherit resets the size, so the card title's own size follows. */
   font: inherit;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -242,7 +271,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 12px;
+  border-radius: inherit;
 }
 
 .cardOpen:focus-visible {
@@ -250,7 +279,7 @@
 }
 
 .cardOpen:focus-visible::after {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
@@ -281,7 +310,7 @@
   width: 28px;
   height: 28px;
   border: 0;
-  border-radius: 28px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-caption);
   cursor: pointer;
@@ -295,6 +324,15 @@
 .iconButton:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* The toolbar's Add plugin action, one step up from the 28px sm capsule. */
+.addButton {
+  height: 32px;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 0 12px;
+  border-radius: var(--dsw-radius-md);
 }
 
 .iconWrap {
@@ -331,7 +369,7 @@
   width: 28px;
   height: 28px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-state-error-primary);
   cursor: pointer;
@@ -347,7 +385,7 @@
 }
 
 .deleteButton:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -371,15 +409,22 @@
 }
 
 .partsFilter:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
 /* Wider than the default dialog: pnpm's lines are long, and the terminal keeps them unwrapped. The card never
-   outgrows the viewport; the running screens scroll inside it so the head's controls stay reachable. */
+   outgrows the Modal's padding box and shares the settings panel's 800px height cap; the running screens
+   scroll inside it so the head's controls stay reachable. */
 .installDialog {
-  width: min(600px, 100%);
-  max-height: calc(100vh - 48px);
+  width: min(560px, 100%);
+  max-height: min(800px, 100%);
+}
+
+/* The spec screen's content scrolls inside the card when the guide is open on a short viewport; the footer stays put. */
+.installContent {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .installBody {
@@ -406,14 +451,20 @@
 }
 
 .installField input[type='text'] {
-  height: 36px;
-  padding: 0 12px;
+  height: 40px;
+  padding: 0 14px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-md);
+  outline: none;
   background: var(--dsw-alias-bg-layer-3);
   font: inherit;
   font-size: 13px;
   color: var(--dsw-alias-label-primary);
+}
+
+.installField input[type='text']:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+  box-shadow: inset 0 0 0 0.5px var(--dsw-alias-state-business-primary);
 }
 
 .installField input[aria-invalid='true'] {
@@ -426,6 +477,7 @@
   align-items: center;
   align-self: flex-start;
   gap: 4px;
+  margin-top: 4px;
   padding: 0;
   border: 0;
   background: none;
@@ -451,13 +503,12 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 8px 14px 14px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-1);
 }
 
-.guideIntro,
 .guideHint {
   margin: 0;
   font-size: 12px;
@@ -469,10 +520,10 @@
 .guideSafety {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
   background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary)) 12%, transparent);
   font-size: 12px;
   line-height: 18px;
@@ -484,19 +535,10 @@
   margin-top: 2px;
 }
 
-.guideNote {
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-layer-3);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
-}
-
 .guideList {
   display: flex;
   flex-direction: column;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -507,41 +549,196 @@
   align-items: flex-start;
   gap: 10px;
   padding: 8px 0;
-  border-top: 0.5px solid var(--dsw-alias-border-l4);
 }
 
 .guideIndex {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  justify-content: center;
   width: 20px;
   height: 20px;
   border-radius: 999px;
   corner-shape: round;
-  background: var(--dsw-alias-bg-layer-3);
+  background: var(--dsw-alias-bg-module-platform);
   font-size: 11px;
-  line-height: 20px;
-  text-align: center;
-  color: var(--dsw-alias-label-tertiary);
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
 }
 
 .guideMain {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   min-width: 0;
 }
 
 .guideTitle {
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
   color: var(--dsw-alias-label-primary);
 }
 
 .guideExample {
-  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 12px;
+  line-height: 20px;
   color: var(--dsw-alias-label-secondary);
   overflow-wrap: anywhere;
+}
+
+.guideExample code {
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.guideExampleLabel {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The row under the field: the guide's toggle on the left, the registry's on the right, both folded by default. */
+.optionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+/* The registry toggle names the registry the install asks first, so the choice reads without unfolding. */
+.registryToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.registryToggle:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+}
+
+.registryToggle:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.registryToggle[aria-expanded='true'] {
+  border-color: var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+.registryToggle[aria-expanded='true'] .guideChevron {
+  transform: rotate(180deg);
+}
+
+.registryChosen {
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The registry options float from their toggle over the dialog: pnpm's own, the configured mirrors, and a typed
+   address, with the order asked under them. Portaled and fixed, so the dialog keeps its height. */
+.registry {
+  position: fixed;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 24px));
+  margin: 0;
+  padding: 8px 10px 12px;
+  border: 0;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-2);
+  /* The neutral stroke is the elevation's hairline, not a border beside it. */
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
+  box-shadow: var(--dsw-elevation-prominent);
+  min-width: 0;
+}
+
+.registryOption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 0.5px solid transparent;
+  border-radius: var(--dsw-radius-lg);
+  cursor: pointer;
+}
+
+.registryOption[data-checked='true'] {
+  border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 40%, transparent);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+/* An offered registry is one row: the radio beside its title and the line under it. */
+label.registryOption {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.registryOption input[type='radio'] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--dsw-alias-brand-primary);
+}
+
+.registryTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.registryHint {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.registryCustomPick {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.registryCustomField {
+  height: 32px;
+  margin-left: 26px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  font: inherit;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.registryCustomField[aria-invalid='true'] {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+/* The typed address's field, refusal, and line sit under its title, past the radio and its gap. */
+.registryOption > .inputError,
+.registryOption > .registryHint {
+  margin-left: 26px;
 }
 
 /* What the check refused, under the field. */
@@ -555,7 +752,9 @@
 /* The footer's only action spans the dialog, as the primary action of a short form does. */
 .wide {
   width: 100%;
+  height: 40px;
   justify-content: center;
+  border-radius: var(--dsw-radius-md);
 }
 
 /* The installing, installed, and failed screens: a head row, the centred
@@ -567,7 +766,7 @@
   gap: 16px;
   min-width: 0;
   min-height: 0;
-  padding: 16px 20px 20px;
+  padding: 16px 20px 0;
 }
 
 /* Everything under the head: it scrolls when the runs' output makes the screen taller than the card. */
@@ -609,7 +808,7 @@
   height: 24px;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: none;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
@@ -638,12 +837,12 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.wizardIcon[data-tone='done'] {
-  color: var(--dsw-alias-state-success-primary);
+.wizardIcon[data-state='done'] {
+  color: var(--dsw-alias-state-success-secondary);
 }
 
-.wizardIcon[data-tone='failed'] {
-  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary));
+.wizardIcon[data-state='error'] {
+  color: var(--dsw-alias-state-warn-label);
 }
 
 .wizardTitle {
@@ -668,7 +867,7 @@
   gap: 6px;
   padding: 16px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   text-align: center;
 }
 
@@ -694,6 +893,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.footAction {
+  height: 32px;
+  border-radius: var(--dsw-radius-md);
 }
 
 .detailsToggle {
@@ -724,39 +928,33 @@
   min-width: 0;
 }
 
-.spinnerLarge {
-  width: 28px;
-  height: 28px;
-  border: 3px solid color-mix(in srgb, var(--dsw-alias-label-primary) 18%, transparent);
-  border-top-color: var(--dsw-alias-label-primary);
-  border-radius: 50%;
-  corner-shape: round;
-  animation: spin 900ms linear infinite;
+/* The failed screen's actions beside the details toggle: change the registry, retry. */
+.wizardActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.spinner {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  border: 2px solid color-mix(in srgb, var(--dsw-alias-label-primary) 18%, transparent);
-  border-top-color: var(--dsw-alias-label-primary);
-  border-radius: 50%;
-  corner-shape: round;
-  animation: spin 900ms linear infinite;
+/* One pnpm run of the install; once several registries were asked, a badge names each run's. */
+.run {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.attemptBadge {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0 6px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-3);
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner,
-  .spinnerLarge {
-    animation: none;
-  }
-
   .detailsChevron {
     transition: none;
   }
@@ -766,7 +964,7 @@
 .resultWarn {
   margin: 0;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-md);
   font-size: 13px;
   line-height: 20px;
   background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
@@ -784,7 +982,7 @@
   gap: 8px;
   padding: 12px 14px;
   border: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary)) 40%, transparent);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary)) 8%, transparent);
 }
 
@@ -822,7 +1020,7 @@
 .approvalList code {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-3);
   font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 12px;
@@ -857,6 +1055,24 @@
   flex-direction: column;
 }
 
+/* The head row every detail view shares: the crumb over the icon/actions row.
+   It carries the same top clearance as .pageHead — the crumb is the detail
+   views' leading content and otherwise lands under the traffic lights — and the
+   same drag ownership: it marks itself `data-window-drag`, so this row's own box
+   is the window's draggable geometry. The detail container below stays
+   content: marking it would drag the window over its text and form labels. */
+.detailTop {
+  display: flex;
+  flex-direction: column;
+  /* The same 28px top inset `.pageHead` carries, so the row starts at the window's
+     top edge and the strip above the detail content drags the window. */
+  padding-top: 28px;
+}
+
+:global([data-platform='darwin']) .detailTop {
+  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+}
+
 .crumb {
   display: inline-flex;
   align-items: center;
@@ -875,7 +1091,7 @@
 }
 
 .crumb:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
@@ -910,12 +1126,6 @@
 
 .versionTag {
   flex: none;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -926,13 +1136,13 @@
   line-height: 22px;
 }
 
-/* The package name under the title: the exact spec that installs the package
-   elsewhere, where a title of its own or a shortened name hides it. */
+/* The package or row identity under the title: the exact spec that installs the
+   package elsewhere, where a title of its own or a shortened name hides it. */
 .detailName {
   margin: 0;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-tertiary);
   overflow-wrap: anywhere;
 }
 
@@ -1016,7 +1226,7 @@
   width: 40px;
   height: 40px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-md);
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -1046,6 +1256,34 @@
   line-height: 16px;
   color: var(--dsw-alias-label-tertiary);
   overflow-wrap: anywhere;
+}
+
+/* A row with a configuration page: its name opens the page, the arrow says so. */
+.rowOpen {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowOpen:hover .rowId {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rowOpenIcon {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowOpen:hover .rowOpenIcon {
+  color: var(--dsw-alias-label-primary);
 }
 
 .rowState {

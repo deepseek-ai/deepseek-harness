@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-10-hosted-image-test-assumptions.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-10-hosted-image-test-assumptions.md
-2026-09-10-hosted-image-test-assumptions.md: e6fe4e35848c48462e7bb9c99bc898b6ebc907c9
-2026-09-10-hosted-image-test-assumptions.zh.md: 4fe8bf2a3764b0f95268e20eb379a69c7e44ced6
+/agent-note-hosted-image-assumptions-in-the-coverage-suite:
+  en: b9e6c590cb18c637
+  zh: 02591776cec956ea
+/agent-note-hosted-image-assumptions-in-the-coverage-suite/problem:
+  en: c1299114bcbbbbc2
+  zh: 1b38aa9c8b0a4eef
+/agent-note-hosted-image-assumptions-in-the-coverage-suite/decision:
+  en: 00b0e2ef25435ad3
+  zh: 9bf59f5ca765a94b
+/agent-note-hosted-image-assumptions-in-the-coverage-suite/alternatives-considered:
+  en: 7cc99ab98600ed3f
+  zh: c302b579791a403d
+/agent-note-hosted-image-assumptions-in-the-coverage-suite/consequences:
+  en: 96ad46667a025f85
+  zh: ba04b1436b82a620

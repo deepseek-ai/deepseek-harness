@@ -1,0 +1,80 @@
+/* Session-row clock mark: the row's leading decoration seat, sized like the
+ * status dot's own 16px cell so the title keeps its alignment either way. */
+.mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Task rows inside the Session hover card (surface is #2C2C2E in both themes,
+ * so these are the card's literal label colors, as in Rows.module.css). */
+.tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.taskIcon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  color: #CFD3D6;
+}
+
+.taskBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.taskName {
+  font-size: 12px;
+  line-height: 16px;
+  color: #FFFFFF;
+  overflow-wrap: break-word;
+}
+
+.taskTiming {
+  font-size: 12px;
+  line-height: 16px;
+  color: #CFD3D6;
+}
+
+/* The distance beside the absolute next run. The card's surface is the fixed
+   #2C2C2E in both themes, so its label steps are literal light grays rather than
+   the theme tokens (which flip with the surface); this one is a step below
+   `.taskTiming`. The card is narrow, so a long stamp still wraps. */
+.taskRelative {
+  color: #ADB2B8;
+  overflow-wrap: anywhere;
+}
+
+.omitted {
+  font-size: 12px;
+  line-height: 16px;
+  color: #ADB2B8;
+}
+
+/* Accessible name of the icon-only mark (same pattern as the row's status
+ * dot labels). */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-sidebar-documentpreview/tests/fuzz/README.md
+/xlsx-fuzz-diagnostics:
+  en: 580750ba716b1f3d
+  zh: 8601666a216ac81e
+/xlsx-fuzz-diagnostics/run-a-campaign:
+  en: e5260a3f702e7dd4
+  zh: b0001de8a2ef3224
+/xlsx-fuzz-diagnostics/compare-an-older-adapter:
+  en: cd8b6a20d2209f1b
+  zh: 18ebe19c492e642a
+/xlsx-fuzz-diagnostics/retained-regressions:
+  en: 006e27357ec3c841
+  zh: da85d7e9025c704f

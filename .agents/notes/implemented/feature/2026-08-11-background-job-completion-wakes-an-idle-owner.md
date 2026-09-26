@@ -2,6 +2,8 @@
 
 Status: implemented
 
+Update: the `reported` bit and `onJobDone` this note relies on left the registry with the [jobs seam consolidation](../architecture/2026-09-03-jobs-seam-consolidation.md): `dsh-tool-jobs` now keeps the delivery ledger (a wait or an accepted `job_kill` claims the task) and skips teardown settlements by their `settled` cause, so the wake-or-inject decision below stands while the mechanism it names is the tool's ledger, not a registry flag.
+
 English | [中文](2026-08-11-background-job-completion-wakes-an-idle-owner.zh.md)
 
 ## Problem
@@ -26,11 +28,11 @@ For a driver that is genuinely running, `steer()` and `inject()` are the same de
 
 Injection is correct there. A cancelled turn is a user pressing stop, and reopening one on their behalf launders an interrupt into a model request they did not ask for. The turn loop already covers the ordinary case: it cannot close while the next-step inbox holds anything, so a notice arriving before that check extends the current turn, and several tasks settling together cost one step rather than one turn each.
 
-### Waking is bounded, and the bound is not time
+### The cap on consecutive wakes is opt-in, and it is not time
 
-`maxConsecutiveWakes` (default 3) caps the turns one owner may open this way; beyond it a notice degrades to injection and waits for the next turn. Claiming any user-authored message restores the budget — claiming, not arrival, because that is the point human input actually enters a step. Notices this plugin queued never refill it.
+Waking is unbounded unless `maxConsecutiveWakes` is set. With it set, the value caps the turns one owner may open this way; beyond it a notice degrades to injection and waits for the next turn. Claiming any user-authored message restores the budget — claiming, not arrival, because that is the point human input actually enters a step. Notices this plugin queued never refill it.
 
-The bound exists because this chain is self-exciting in a way subagent settlement is not. Settlement is bounded by how many children the model spawned; a woken turn can start the background job whose completion wakes it again, with nobody watching. `dsh run` needs no separate policy: its one user message is claimed in the first turn and never repeats, so the budget is spent monotonically and the process terminates.
+The cap exists because this chain is self-exciting in a way subagent settlement is not. Settlement is bounded by how many children the model spawned; a woken turn can start the background job whose completion wakes it again, with nobody watching. It has no default because a notice past the cap stalls the session invisibly; the [unbounded-by-default decision](2026-09-22-unbounded-completion-wakes-by-default.md) records that trade-off. `dsh run` needs no separate policy either way: headless exits once the task turn goes idle, so a completion after that point has no owner to wake.
 
 `completionDelivery: quiet` restores the old lane for idle owners. It exists for deterministic transcripts; job completion independently retains `quiet | wakeup` because its bounded owner-turn policy differs from next-step subagent reports.
 
@@ -50,15 +52,15 @@ The bound exists because this chain is self-exciting in a way subagent settlemen
 
 **A general unsolicited-input queue** with priority lanes, as Claude Code uses to merge background jobs, cron, MCP push, and hooks into one drain. DSH's inbox already is that queue — durable `agent/inbox/spliced` splices over `next-turn`/`next-step` — so this would add a layer above an existing one to decide a single bit.
 
-**Refusing to reopen a turn that already produced a visible answer,** Codex's `MailboxDeliveryPhase` latch. That latch is the default this decision deliberately inverts: waking after the model has spoken is the entire point, and the wake budget is the bound instead.
+**Refusing to reopen a turn that already produced a visible answer,** Codex's `MailboxDeliveryPhase` latch. That latch is the default this decision deliberately inverts: waking after the model has spoken is the entire point, and the optional wake budget is the bound instead.
 
-**A wall-clock window** on top of the counter. For an interactive agent the slow case is the wanted one — an hour-long build finishing and the agent resuming is the feature — and `dsh run` is already bounded by the counter it cannot refill. Worth revisiting only if an unattended long-lived deployment appears.
+**A wall-clock window** on top of the counter. For an interactive agent the slow case is the wanted one — an hour-long build finishing and the agent resuming is the feature — and `dsh run` exits once its task turn goes idle regardless. Worth revisiting only if an unattended long-lived deployment appears.
 
 **Suppressing `onJobDone` entirely during owner drain,** symmetric with the service-wide `listenersClosed`. It reads cleaner and removes a signal that is not only for notices: the force-fail record and the runtime invariant both observe teardown settlements. The `reported` bit denies exactly the reporters and nothing else.
 
 ## Consequences
 
-- Default behavior changes: an idle owner now spends a model request per completion, capped at `maxConsecutiveWakes` per owner between user messages. Deployments that want the old behavior set `completionDelivery: quiet`.
+- Default behavior changes: an idle owner now spends a model request per completion, capped per owner between user messages only where `maxConsecutiveWakes` is set. Deployments that want the old behavior set `completionDelivery: quiet`.
 - The `tool-jobs` prompt section needs no edit; "You are notified in-session when a task finishes" became true rather than aspirational.
 - `JobSnapshot.reported` gains teardown as a fourth setter, documented at the Service Definition and in [the subsystem reference](../../../../docs/subsystems/jobs.md).
 - `settle()` announces completion after committing the record and publishing the visible-set change. Any listener relying on running before waiters were released or before `onJobsChanged` now runs after both.
@@ -67,7 +69,7 @@ The bound exists because this chain is self-exciting in a way subagent settlemen
 
 ### Accepted risks
 
-A spent budget is restored only by user input. An unattended agent that exhausts it collects its remaining notices whenever something else opens a turn, and nothing re-arms it in the meantime.
+Under a configured `maxConsecutiveWakes`, a spent budget is restored only by user input. An unattended agent that exhausts it collects its remaining notices whenever something else opens a turn, nothing re-arms it in the meantime, and the client shows nothing while the notice waits. This is why the cap has no default.
 
 A notice pending on an idle owner under `quiet` still dies with that owner's disposal, unchanged from before: the disposal cancel clears the unclaimed inbox and the log keeps the insert/cancel pair as the record. The [settlement delivery note](2026-08-06-manager-owned-subagent-settlement-delivery.md) owns the offline-mailbox discussion this would need.
 

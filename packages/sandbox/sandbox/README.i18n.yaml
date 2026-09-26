@@ -1,6 +1,91 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/sandbox/sandbox/README.md
-README.md: 88e873428115eb7a3880253b668a4de5b42d6e6d
-README.zh.md: b0144d12395cf01667ef7c2045a1d5f722936a4d
+/:
+  en: 4308065a46738364
+  zh: 2eb6ab7314e74976
+/deepseek-ai-dsh-sandbox:
+  en: 3d3312b2261f0a60
+  zh: 47741e2a3d90da70
+/deepseek-ai-dsh-sandbox/summary:
+  en: be0473ca1d2dbb6c
+  zh: 8c6b097438d2c2af
+/deepseek-ai-dsh-sandbox/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-sandbox/use-this-package:
+  en: 5fbf0b48effb1143
+  zh: 5c570dcc1a17e0ad
+/deepseek-ai-dsh-sandbox/use-this-package/when-to-choose-it:
+  en: 4ddc504d2626fe3e
+  zh: ceb3dd93fb3835db
+/deepseek-ai-dsh-sandbox/use-this-package/confining-a-command:
+  en: c5540889017b6a7f
+  zh: 679bfbd5254bf92d
+/deepseek-ai-dsh-sandbox/use-this-package/modes-and-enforcement:
+  en: ab093e9042b86b99
+  zh: d173df7cb3649446
+/deepseek-ai-dsh-sandbox/use-this-package/denied-calls-and-escalation:
+  en: 92cf42bad65d112c
+  zh: 60fa2cb7e9c4c556
+/deepseek-ai-dsh-sandbox/use-this-package/fail-closed-behavior:
+  en: 6bf240632a7a6bf5
+  zh: ebf414f5cf435875
+/deepseek-ai-dsh-sandbox/understand-the-implementation:
+  en: 7e13d669ecc96d59
+  zh: b5fe7ae65812d926
+/deepseek-ai-dsh-sandbox/understand-the-implementation/design-philosophy:
+  en: 0fc96495c192b513
+  zh: 38b51b9b3c208012
+/deepseek-ai-dsh-sandbox/understand-the-implementation/source-map:
+  en: 54cab3e684afb031
+  zh: b49b476d2f965985
+/deepseek-ai-dsh-sandbox/understand-the-implementation/escalation-choreography:
+  en: 1b418d41f571ab3d
+  zh: 62b289cdd6f4d272
+/deepseek-ai-dsh-sandbox/understand-the-implementation/writable-roots:
+  en: 956d3195cf7a35f8
+  zh: f83d8342e22bb7cd
+/deepseek-ai-dsh-sandbox/further-exploration:
+  en: 9f0d57097c678a25
+  zh: 58e765bf1b223215
+/deepseek-ai-dsh-sandbox/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-sandbox/model-experience/confinement-error-indirectly:
+  en: 35e1ea00601f4003
+  zh: 08152430b840ea05
+/deepseek-ai-dsh-sandbox/model-experience/confinement-error-indirectly/what-the-model-sees:
+  en: 15bcb0abf4a06983
+  zh: 801c506e47f8b063
+/deepseek-ai-dsh-sandbox/model-experience/confinement-error-indirectly/what-the-model-sees/exact-error:
+  en: e8b03df128b832a6
+  zh: dc89500c436a39cf
+/deepseek-ai-dsh-sandbox/model-experience/confinement-error-indirectly/token-effect:
+  en: 8f514efe94edfa8a
+  zh: a46f9f4cd4527f4e
+/deepseek-ai-dsh-sandbox/model-experience/confinement-error-indirectly/kv-cache-effect:
+  en: 2fbf2175168e8244
+  zh: f681f89596f500f5
+/deepseek-ai-dsh-sandbox/model-experience/escalation-request-and-outcome:
+  en: 67c621ef55ec8320
+  zh: ae4bb9162a49e9fb
+/deepseek-ai-dsh-sandbox/model-experience/escalation-request-and-outcome/what-the-model-sees:
+  en: c20128fa8f79c491
+  zh: 96173408d176b9e6
+/deepseek-ai-dsh-sandbox/model-experience/escalation-request-and-outcome/token-effect:
+  en: 1a7b54d68b045beb
+  zh: 5dc6e824110c8fd8
+/deepseek-ai-dsh-sandbox/model-experience/escalation-request-and-outcome/kv-cache-effect:
+  en: ea21ed3a768ed4b8
+  zh: 8e2f396a6875420e
+/deepseek-ai-dsh-sandbox/known-limitations-and-deferred-work:
+  en: 63ff67b6fd13b4b0
+  zh: 6c8efa9ee99ea9bf
+/deepseek-ai-dsh-sandbox/known-limitations-and-deferred-work/dev-note:
+  en: cc273320f6a1beaf
+  zh: 5c57a312ddc50651
+/deepseek-ai-dsh-sandbox/known-limitations-and-deferred-work/dev-note/future-consumers-and-environments:
+  en: a7bc10cf027a51b8
+  zh: 2562dd32d3859205

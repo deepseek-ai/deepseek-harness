@@ -18,13 +18,8 @@
       }
     ],
     "toolNames": [
-      "cordis_define",
       "cordis_inspect_list",
       "cordis_inspect_query",
-      "cordis_inspect_self",
-      "cordis_run",
-      "cordis_stop",
-      "cordis_undefine",
       "job_kill",
       "job_list",
       "job_output",
@@ -52,13 +47,8 @@
       }
     ],
     "toolNames": [
-      "cordis_define",
       "cordis_inspect_list",
       "cordis_inspect_query",
-      "cordis_inspect_self",
-      "cordis_run",
-      "cordis_stop",
-      "cordis_undefine",
       "job_kill",
       "job_list",
       "job_output",

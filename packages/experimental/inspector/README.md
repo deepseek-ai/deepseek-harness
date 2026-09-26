@@ -1,6 +1,6 @@
 ---
 description: "Experimental Chrome DevTools inspection for Host and browser Client Cordis runtimes, including Console evaluation, Sources, Network capture, Elements trees, and a CDP-independent query API."
-kind: "package-reference"
+kind: "package-bundle"
 ---
 
 # @deepseek-ai/dsh-experimental-inspector
@@ -9,9 +9,9 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this experimental inspector to inspect one running dsh Host and its browser Clients in Chrome DevTools. It exposes Host and Client Console contexts, Host Sources and debugging, captured Host fetches, and a shared Cordis tree while keeping all CDP state in a Worker.
+Inspect one running dsh Host and its browser Clients in Chrome DevTools: Host and Client Console contexts, Host Sources and debugging, captured Host fetches, and a shared Cordis tree, with all CDP state in a Worker.
 
-The package publishes under its experimental name and requires an explicit composition. The Worker never accesses live Cordis objects: the shared Host/Client collector projects them into validated snapshots before transport. Cordis also owns plugin composition, `ctx.inspector` registration, bootstrap injection, and disposal.
+The Inspector stays off the default plugin list. Install its bundle explicitly with `dsh plugin --profile web add @deepseek-ai/dsh-experimental-inspector`. Its [`cordis.patch.yml`](cordis.patch.yml) mounts the installed package; `pnpm run demo:inspector` mounts the source tree. The Host row needs a Web server. The Worker never accesses live Cordis objects: the shared collector projects them into validated snapshots before transport.
 
 ## Table of Contents
 
@@ -30,7 +30,7 @@ The package publishes under its experimental name and requires an explicit compo
 <a id="runtime-layout"></a>
 ## Runtime layout
 
-The Host plugin starts the Worker and connects a dedicated `MessagePort`. The Client plugin reads the injected `globalThis.__DSH_INSPECTOR__` bootstrap and opens a separate authenticated WebSocket directly to the Worker. Chrome DevTools connects to the Worker's CDP WebSocket. A private `node:inspector.Session` per DevTools connection attaches from the Worker to the Host main thread, so Host Console evaluation, Sources, breakpoints, and resume remain available while Host JavaScript is paused.
+The Host plugin starts the Worker and connects a dedicated `MessagePort`. The Client plugin reads the injected `globalThis.__DSH_INSPECTOR__` bootstrap and opens a separate authenticated WebSocket directly to the Worker; a page opened before the Host row was enabled has no bootstrap, fails its Client plugin with a reload instruction, and inspects only after a reload. Chrome DevTools connects to the Worker's CDP WebSocket. A private `node:inspector.Session` per DevTools connection attaches from the Worker to the Host main thread, so Host Console evaluation, Sources, breakpoints, and resume remain available while Host JavaScript is paused.
 
 The source tree follows those execution environments: `client/` and `host/` provide mirrored adapter entry paths, `worker/` contains only Worker-thread orchestration and Chrome protocol state, and `shared/` contains environment-independent Cordis and network models, normalized realm backend interfaces, and the internal bridge protocol. Worker-side Client and Host adapters are mirrored under `worker/realms/`; a Client adapter in that directory still executes in the Worker.
 

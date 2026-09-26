@@ -33,9 +33,7 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* Stepper pill + unit label. The pill reuses the selector-pill geometry
-   (h36 r18, module fill) holding the px value and an always-visible arrow
-   column; the unit sits outside the pill. */
+/* Standard-size stepper with an always-visible arrow column and an external unit label. */
 .control {
   display: inline-flex;
   align-items: center;
@@ -49,7 +47,7 @@
   justify-content: center;
   min-width: 72px;
   height: 36px;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-module-platform);
 }
 
@@ -97,7 +95,7 @@
   height: 12px;
   padding: 0;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--dsw-radius-xs);
   background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 75%, transparent);
   color: var(--dsw-alias-label-primary);
   cursor: pointer;

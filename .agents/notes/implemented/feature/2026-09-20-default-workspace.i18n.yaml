@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-20-default-workspace.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-20-default-workspace.md
+/agent-note-first-use-default-workspace:
+  en: cf68fedc85ef73ad
+  zh: a48dfa96ac11585a
+/agent-note-first-use-default-workspace/problem:
+  en: 952ca70e83872f88
+  zh: 471b4e39dba2039a
+/agent-note-first-use-default-workspace/decision:
+  en: 5f70a77db26ed9e2
+  zh: 8f6bfb84385315d4
+/agent-note-first-use-default-workspace/alternatives-considered:
+  en: 58523eb415e53e2a
+  zh: 714ddd81ef7d3262
+/agent-note-first-use-default-workspace/consequences:
+  en: ab39d4e9302a2641
+  zh: 8921bb8451ef2d0e

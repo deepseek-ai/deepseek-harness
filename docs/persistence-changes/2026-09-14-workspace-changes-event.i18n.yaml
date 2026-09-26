@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-09-14-workspace-changes-event.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-09-14-workspace-changes-event.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-09-14-workspace-changes-event:
+  en: 26ab5b62b8108a0f
+  zh: 8914ac35bb8726be
+/2026-09-14-workspace-changes-event/summary:
+  en: dc8a100acdf87cb3
+  zh: d345afd67b00a057
+/2026-09-14-workspace-changes-event/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-09-14-workspace-changes-event/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-09-14-workspace-changes-event/compatibility:
+  en: 27e62c14c209cf6c
+  zh: 16f08efcd6a12154
+/2026-09-14-workspace-changes-event/verification:
+  en: fb7f954e862c47a7
+  zh: 76ec9f48f51b17ce
+/2026-09-14-workspace-changes-event/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

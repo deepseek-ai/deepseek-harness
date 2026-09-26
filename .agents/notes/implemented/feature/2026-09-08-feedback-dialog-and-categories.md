@@ -14,9 +14,13 @@ The Web client had two disconnected feedback paths with no visible outcome. `/fe
 
 `ui-message-feedback` becomes the Web feedback surface. A per-session `FeedbackSurface` owns the message-feedback controller, a `FeedbackDialogController` for the draft, the submission, and the toast sequence, and the routing between them: a message target puts its selected judgment with the dialog's category and note through the message controller, while the Session target records through `ctx.remote.sessionFeedback`. A `FeedbackDialog` entry of `conversation.input.overlay` renders the Modal and Toast primitives from the dialog store. A decoration on the Host's `feedback` command opens the dialog for the Session from a menu pick or a bare Enter while `/feedback <text>` still reaches the Host; it uses the `action` kind in `CommandUiSpec`, which consumes the trigger token and runs a client callback without submitting anything. The later [symmetric message feedback submission](2026-09-10-symmetric-message-feedback-submission.md) decision owns the rating entry rule: either unrecorded rating opens the dialog, while clicking the recorded rating retracts it. The note popover, `clearNote`, and `clear` remain absent because the dialog is the only note editor.
 
+The Session Header's more-actions menu also opens the Session dialog through the `feedbackUi.openSession` Client service. The menu remains owned by `session-log-export`, while the existing per-session feedback controller owns the draft and submission. An observable tracks the optional feedback plugin's availability, so unloading feedback removes only its menu row and leaves export usable. Opening or dismissing the form writes no feedback event; Submit records one Session remark.
+
 The dialog is the shared Modal card at the design's width; the design's checkbox for including the conversation log is not built, because the log travels with every feedback event and is not optional. An oversized description still fails on submit with `note-too-large`; the dialog stays open with its draft and a warning toast presents the localized failure.
 
 ## Alternatives considered
+
+**A child slot for Header menu actions.** A slot would let each plugin own its menu row, but requires a shared menu-item API beyond the feedback entry requested in #4445. The optional `feedbackUi` service keeps this change local while leaving dialog state and submission in the feedback plugin.
 
 **Encode the category into the note text.** A prefix in free text is not filterable without parsing and would leak into the verbatim note that telemetry uploads; a durable id in the payload is what a consumer can group by.
 

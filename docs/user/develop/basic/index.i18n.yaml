@@ -1,6 +1,37 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for index.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/develop/basic/index.md
-index.md: 08199624e638aaf4a36b04446c39c228b2af6025
-index.zh.md: 2ea894079ffb3c5b8c4563fd535fe6e654861b1b
+/your-first-plugin:
+  en: 66684c875e13acbb
+  zh: 48b5444386cf714c
+/your-first-plugin/create-a-local-project:
+  en: 2a9ff85da3a6ea8b
+  zh: 9ac5daf1dd3e3b95
+/your-first-plugin/what-is-a-plugin:
+  en: 0bca3ea987fecb61
+  zh: b4d398b887da6648
+/your-first-plugin/create-the-plugin-file:
+  en: 80e4e9f139d4773e
+  zh: c045d63ec04a2f3d
+/your-first-plugin/register-it-in-cordis-yml:
+  en: 216e79287d237f2a
+  zh: 16e5e8ad2b1b9263
+/your-first-plugin/automatic-cleanup:
+  en: 0a1486714b9d67d7
+  zh: 544df97baa7a8c59
+/your-first-plugin/declare-dependencies:
+  en: da59e4c09e258f94
+  zh: 1b3ef70741eccb31
+/your-first-plugin/three-plugin-forms:
+  en: 155369321743b317
+  zh: e2e98be100be297b
+/your-first-plugin/three-plugin-forms/object-form:
+  en: d674c416f5b0fd14
+  zh: a2224f5fe6ceae73
+/your-first-plugin/three-plugin-forms/class-form:
+  en: 130f504f9ebacebd
+  zh: 4e91d3fa2555390d
+/your-first-plugin/next-steps:
+  en: 9836e246d8279c8b
+  zh: 681475e2251ba006

@@ -18,6 +18,8 @@ Browser approval presentation over the Agent-scoped Remote Event waterfall. The 
 
 -----
 
+Focus the approval detail region to approve with Enter or reject with Escape. The mounted plugin reserves both keys against editable shortcuts. Enter on the focused Reject button retains its native reject action. Input controls and IME candidates keep their own keys. Keyboard and pointer actions share one pending-request lock; a withdrawn or replaced request cannot accept another answer, and an earlier failed answer cannot unlock its replacement.
+
 <a id="model-experience"></a>
 ## Model Experience
 
@@ -31,7 +33,7 @@ None; approval request and response rendering does not alter a model request.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **The panel exposes transient decisions only** — it supports allow-once and reject; persistent permission policy remains owned by Host-side approval packages.
+- **The panel exposes transient decisions only** — it supports allow-once and reject; persistent permission policy remains owned by Host-side approval packages. Requester-supplied localized presentation copy follows the UI language without changing the audit reason or translating model-generated text.
 
 
 <a id="dev-note"></a>

@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write apps/desktop/tests/installed-update/network/README.md
+/:
+  en: ff33c1d52077d4b7
+  zh: d82f73667883db1d
+/test-application-network-fault:
+  en: 4aee13c0f4d9b27b
+  zh: 925cd9bf0cc662a8
+/test-application-network-fault/summary:
+  en: 04c1e1ee9a99d15f
+  zh: b618af65f0be079c
+/test-application-network-fault/table-of-contents:
+  en: 8cdb903f0292dff0
+  zh: 2d94d8b3d46e9d75
+/test-application-network-fault/prepare:
+  en: 013ceb8d01e604e2
+  zh: 9ca5a8d75e3db8b6
+/test-application-network-fault/block-and-restore:
+  en: 8754037c16032fca
+  zh: 844e28c5b3d2de26
+/test-application-network-fault/evidence-and-limitations:
+  en: 0325ef6b06fd3518
+  zh: 20123cfc13fc488e
+/test-application-network-fault/dev-note:
+  en: 10c2c43f94c40d8a
+  zh: dea0798ceb5553c1

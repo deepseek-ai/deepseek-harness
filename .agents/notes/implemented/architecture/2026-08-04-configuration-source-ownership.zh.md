@@ -4,6 +4,8 @@ Status: implemented
 
 [English](2026-08-04-configuration-source-ownership.md) | 中文
 
+下文的非秘密 settings 层已由 [profile 所属实时配置](2026-09-19-profile-owned-live-configuration.zh.md) 替代。凭据优先级与环境限制仍然适用。
+
 ## Problem
 
 `$DSH_HOME/.env` 刚刚[变成普通环境层](../../archived/architecture/2026-08-04-credentials-yaml-and-user-environment-layer.md)，这使得 harness 解析面向用户的值时面对的是一个压平的 `process.env`，再也说不清某个值来自哪里。由此产生三个后果。

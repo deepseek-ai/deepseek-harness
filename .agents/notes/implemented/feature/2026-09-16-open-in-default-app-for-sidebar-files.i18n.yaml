@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-16-open-in-default-app-for-sidebar-files.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-16-open-in-default-app-for-sidebar-files.md
+/agent-note-open-sidebar-previewed-files-in-the-default-application:
+  en: 948e52b8edac6120
+  zh: 0898da7049f15ca5
+/agent-note-open-sidebar-previewed-files-in-the-default-application/problem:
+  en: 6caae0cf235cdb1d
+  zh: e80f02c05d65598a
+/agent-note-open-sidebar-previewed-files-in-the-default-application/decision:
+  en: ebd2273122d077db
+  zh: 8a596d0a49fb4e4e
+/agent-note-open-sidebar-previewed-files-in-the-default-application/alternatives-considered:
+  en: f42e5763bf52e401
+  zh: 4b2d954904505fc9
+/agent-note-open-sidebar-previewed-files-in-the-default-application/consequences:
+  en: 618062f56d294415
+  zh: 5eb57d17854fa805

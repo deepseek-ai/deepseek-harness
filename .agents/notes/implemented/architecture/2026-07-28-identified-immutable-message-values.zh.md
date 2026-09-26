@@ -16,7 +16,7 @@ harness 曾存在多种形似消息的表示，各自采用不同的标识规则
 
 `createMessage(input)` 是角色通用的规范创建边界。它会生成 `MessageId`，将传入的角色、内容和来源与调用方对象解除引用关系，并在返回完整值前将其深度冻结。`createUserMessage({ content, source })` 为提示词和上下文生产方固定 user 角色。`createAssistantMessage({ content, source })` 同时固定 assistant 角色与模型来源类别，因此模型输出生产方只需提供内容，以及提供方、模型和可选的回放状态。所有创建辅助函数的输入都不包含 id，因此调用方不会意外地把新消息的创建伪装成已有消息的导入。`freezeMessage(message)` 是独立的导入或转换边界：它会将已有标识的消息与调用方对象解除引用关系并深度冻结，不会生成替代标识。
 
-消息辅助函数位于基础消息词汇旁的 `dsh-llm` 中，因为它们的完整约定只依赖该词汇。它们使用 `dsh-brand` 的无状态 `brandString()` 构造函数生成 `MessageId`，并在通过 `structuredClone()` 分离输入后使用 `dsh-util-values` 的共享 `deepFreeze()` 实现。`createToolResultMessage()` 与其他创建辅助函数同属此处：它将工具调用 id 与确切的 user-role 工具结果块及来源耦合起来，不依赖会话状态或事件。`dsh-session` 只消费完整消息，不负责构造它们。
+消息辅助函数位于基础消息词汇旁的 `dsh-llm` 中，因为它们的完整约定只依赖该词汇。它们使用 `dsh-brand` 的无状态 `brandString()` 构造函数生成 `MessageId`，并在通过 `structuredClone()` 分离输入后使用 `dsh-util-values` 的共享 `deepFreeze()` 实现。`createToolResultMessage()` 与其他创建辅助函数同属此处：它将工具调用 id 与携带结果内容、错误状态及来源的 tool-role 消息耦合起来，不依赖会话状态或事件。`dsh-session` 只消费完整消息，不负责构造它们。
 
 `Agent` 接口通过 `followup`、`steer` 和 `inject` 接收完整的 `UserMessage`。这些操作绝不会分配或返回标识；它们会冻结导入的值，而调用方已经持有该值的 id。inbox 领取和 `agent/pre-step` 会直接接收该消息。改写内容时会创建具有相同 id 的冻结替代值，而每个附加上下文都是单独创建的 `UserMessage`，拥有自己的 id。
 

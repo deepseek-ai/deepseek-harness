@@ -1,5 +1,5 @@
 ---
-description: "MCP 服务器管理器：面向需要在运行时通过 mcp 设置命名空间添加、修改、启停、删除、探测并观察 MCP 服务器的部署与管理界面。"
+description: "MCP 服务器管理器：面向需要在运行时通过实时插件配置添加、修改、启停、删除、探测并观察 MCP 服务器的部署与管理界面。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-mcp-manager` 把 `mcp` 设置命名空间变成一支活的 MCP 服务器编队：在 `settings.yaml` 的 `mcp.servers` 下声明服务器（或由管理界面写入），管理器为每个启用的条目挂载一个 `dsh-mcp-client` 实例，并随文档变化增加、重建、停用与移除实例，无需重启。`ctx.mcpServers` 汇总每台服务器的连接状态，`restart` 恢复重连预算耗尽的服务器，`probe` 在不触碰活动实例的情况下测试一份配置。`${env:NAME}` 与 `${credential:REF}` 模板让密钥不进入文档，轮换的凭据只重建引用它的服务器。
+`dsh-mcp-manager` 管理一组实时 MCP 服务器：在其 profile 条目的 `config.servers` 中声明服务器（或通过 Settings 编辑），管理器为每个启用的条目挂载一个 `dsh-mcp-client` 实例，并随文档变化增加、重建、停用与移除实例，无需重启。`ctx.mcpServers` 汇总每台服务器的连接状态，`restart` 恢复重连预算耗尽的服务器，`probe` 在不触碰活动实例的情况下测试一份配置。`${env:NAME}` 与 `${credential:REF}` 模板让密钥不进入文档，轮换的凭据只重建引用它的服务器。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-挂载一次管理器；此后用户设置文档的 `mcp.servers` 分节就是管理服务器的唯一入口。
+挂载一次管理器。其 volatile `config.servers` 就是服务器配置；Settings 以所属条目 id 作为命名空间（本例为 `mcp`）。
 
 ### 何时选择它
 
@@ -48,17 +48,18 @@ kind: "package-reference"
           GITHUB_TOKEN: '${credential:GITHUB_TOKEN}'
 ```
 
-用户在 `settings.yaml` 里以同样的形状添加或覆盖服务器：
+profile 的 `cordis.patch.yml` 会替换条目的完整 `servers` 映射。需要局部编辑并保留继承服务器时使用 Settings；完整替换则按以下方式指定管理器条目：
 
 ```yaml
-mcp:
-  servers:
-    internal:
-      transport: streamable-http
-      url: https://mcp.example.com/mcp
-      headers:
-        Authorization: 'Bearer ${env:MCP_TOKEN}'
-      enabled: true
+- id: mcp
+  config:
+    servers:
+      internal:
+        transport: streamable-http
+        url: https://mcp.example.com/mcp
+        headers:
+          Authorization: 'Bearer ${env:MCP_TOKEN}'
+        enabled: true
 ```
 
 | 字段 | 默认值 | 含义 |
@@ -74,9 +75,9 @@ mcp:
 
 ### 运行时管理服务器
 
-每次提交的设置变更都会对账编队：新的启用条目挂载，被移除的条目卸载，`enabled: false` 卸载实例但保留条目在列表中，其余任何字段变化只重建那一个实例、未变的同级继续运行。来自组合的基层条目可以在用户文档中覆盖或停用，但不能删除；只有用户层单独承载的条目才可移除。坏条目——缺 `command`、带跨传输字段、模板写错——在写入处被拒绝，因此文档绝不会存下管理器无法执行的服务器。
+Settings 写入经 ConfigEditor 持久化并检查 revision；Loader 更新 volatile 配置，无需重新挂载管理器。每次提交的配置变更都会对账编队：新的启用条目挂载，被移除的条目卸载，`enabled: false` 卸载实例但保留条目在列表中，其余任何字段变化只重建那一个实例、未变的同级继续运行。通过 Settings 可以覆盖或停用继承的服务器；删除继承的服务器会恢复其基层配置。只有用户层新增的服务器才可移除。坏条目——缺 `command`、带跨传输字段、模板写错——在写入处被拒绝，因此文档绝不会存下管理器无法执行的服务器。
 
-`env` 值、`headers` 值、`command`、`args`、`cwd` 与 `url` 接受 `${env:NAME}` 与 `${credential:REF}` 模板，在实例挂载时解析，设置文档因此从不携带密钥；存储值——包括模板串——对管理表面保持可读，必须隐藏的值应写成模板而不是存进文档。引用缺失会让那一台服务器失败，并给出指明修复方式的消息。存入或轮换被引用的凭据会重建使用它的服务器——包括那台因凭据当时还不存在而挂载失败的。
+`env` 值、`headers` 值、`command`、`args`、`cwd` 与 `url` 接受 `${env:NAME}` 与 `${credential:REF}` 模板，在实例挂载时解析，profile patch 因此无需保存密钥；存储值——包括模板串——对管理表面保持可读，必须隐藏的值应写成模板而不是存进文档。引用缺失会让那一台服务器失败，并给出指明修复方式的消息。存入或轮换被引用的凭据会重建使用它的服务器——包括那台因凭据当时还不存在而挂载失败的。
 
 ### 观察与恢复
 
@@ -94,7 +95,7 @@ mcp:
 
 ### 设计理念
 
-- **配置是唯一事实。** 管理器不自存服务器状态：每个决策都新读解析后的设置值（schema 默认值 → 组合基层 → 用户层），因此外部文件编辑与管理界面写入走同一条路。
+- **配置是唯一事实。** 管理器不自存服务器状态：每个决策都新读当前 volatile Config 值（schema 默认值 → 继承的 profile 配置 → 用户 patch），因此外部文件编辑与管理界面写入走同一条路。
 - **单条串行操作尾巴。** 对账、restart 与凭据重建排在一条链上，两个生命周期操作永远无法交错同一实例的卸载/挂载，销毁时先排干尾巴再收卷。
 - **整条目即身份。** 除 `enabled` 外任何字段变化都会重建实例——实例配置在 mcp-client 加载时被捕获，原地更新不存在。`enabled` 只切换是否挂载。
 - **扁平条目 schema，跨字段校验。** 写入期校验在写入处强制执行 union 本可表达的逐传输规则，拒绝时点名出错字段——union 的形状错误做不到这一点。
@@ -123,7 +124,7 @@ mcp:
 包级契约不够用时读这些页面。
 
 - [mcp-client README](../mcp-client/README.zh.md) —— 单实例桥：命名、重连策略、工具执行、状态面。
-- [Settings 包 README](../../settings/settings/README.zh.md) —— 管理器所依托的命名空间注册、分层与写入语义。
+- [Settings 包 README](../../settings/settings/README.zh.md) —— 管理器使用的 Config 表单、继承、revision 检查与 profile 写入。
 - [Credentials 组 README](../../credentials/README.zh.md) —— `${credential:…}` 模板解析的凭据引用。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-mcp-manager) —— 每个可接受的配置字段。
 - [MCP 管理器 Agent Note](../../../.agents/notes/implemented/feature/2026-08-31-mcp-manager-plugin.zh.md) —— 设计决策、同类产品调研与被否决的替代方案。

@@ -12,12 +12,12 @@
   min-width: 0;
   height: 32px;
   padding: 0 8px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-module-platform);
 }
 
 .runHeader:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }
 
@@ -80,9 +80,9 @@
 }
 
 .phaseHeader:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-md);
 }
 
 .phaseLeading {
@@ -172,7 +172,7 @@
   min-height: calc(24px + var(--dsh-content-font-delta, 0px));
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   font: inherit;
@@ -210,7 +210,7 @@
 }
 
 .memberButton:focus-visible .memberLabelWrap {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 
@@ -222,7 +222,7 @@
   height: calc(24px + var(--dsh-content-font-delta, 0px));
   align-items: center;
   padding: 0 2px;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-sm);
 }
 
 .memberLabel {

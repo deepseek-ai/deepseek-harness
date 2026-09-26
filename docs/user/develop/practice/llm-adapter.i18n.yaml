@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for llm-adapter.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/develop/practice/llm-adapter.md
-llm-adapter.md: 7e30847cdf265bca8f55aac40f73686101ec185d
-llm-adapter.zh.md: 22a3c54f45088a41362c1a8e903d2441ed4fc93b
+/llm-adapters:
+  en: 3ed9fd352e2c3edd
+  zh: f575c12bb4409a7f
+/llm-adapters/overview:
+  en: 613076de2e5c7c2d
+  zh: 9df5bf6bca93267f
+/llm-adapters/minimal-implementation:
+  en: 2eeb1c65c2b1e67b
+  zh: 0dbee75ec52aa2d5
+/llm-adapters/streamchunk-protocol:
+  en: c5b80f3ab607300c
+  zh: 6d143add0d5fc44c
+/llm-adapters/streamchunk-protocol/key-rules:
+  en: c0138e6ba95197fa
+  zh: fc1e2b8047e08d2a
+/llm-adapters/generateoptions:
+  en: 5bdb364bd44239c4
+  zh: ca0f2854069aa134
+/llm-adapters/register-an-adapter:
+  en: 8e0ac8990c049f29
+  zh: f8c3de63ee4d6757
+/llm-adapters/use-it-from-cordis-yml:
+  en: b83c91da871dca8c
+  zh: d21046627e3cb0c4
+/llm-adapters/reference-implementations:
+  en: e05d4b0a901e8ef0
+  zh: 9516cebb3e5c3692
+/llm-adapters/error-handling:
+  en: d54065c52caf7910
+  zh: 79b3ebc22a38286d

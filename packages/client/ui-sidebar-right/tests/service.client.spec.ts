@@ -61,7 +61,10 @@ function harness() {
     const surface = instance.getSnapshot().bySession[SESSION]
     if (surface !== undefined) controller.tabDomain.sync(SESSION, surface.layout)
     return controller.bind({
-      sessionId: SESSION, actions: instance.actions, surfaces: instance.getSnapshot().bySession, canSplitPane: () => room.allowed,
+      sessionId: SESSION, actions: instance.actions, surfaces: instance.getSnapshot().bySession,
+      closeWithFocus: (_paneId, close) => { close() },
+      openWithFocus: (open) => { open() },
+      canSplitPane: () => room.allowed,
     })
   }
   const titles = (): string[] => {
@@ -109,6 +112,26 @@ describe('SidebarRightController — opening', () => {
     expect(() => { controller.split() }).toThrow('no session surface is mounted')
     expect(() => { controller.float('tab1' as TabId) }).toThrow('no session surface is mounted')
     expect(() => { controller.dock('pane1' as PaneId) }).toThrow('no session surface is mounted')
+  })
+
+  it('publishes the mounted session only on real transitions of the seat binding', () => {
+    const h = harness()
+    const seen: (string | undefined)[] = []
+    const unsubscribe = h.controller.mounted.subscribe(() => { seen.push(h.controller.mounted.getSnapshot()) })
+    try {
+      expect(h.controller.mounted.getSnapshot()).toBeUndefined()
+      const first = h.publish()
+      expect(h.controller.mounted.getSnapshot()).toBe(SESSION)
+      // The seat republishes on every store commit; the same session is silent.
+      const second = h.publish()
+      expect(seen).toEqual([SESSION])
+      // A stale release — the first seat's, after a newer one took over — changes nothing.
+      first()
+      expect(h.controller.mounted.getSnapshot()).toBe(SESSION)
+      second()
+      expect(h.controller.mounted.getSnapshot()).toBeUndefined()
+      expect(seen).toEqual([SESSION, undefined])
+    } finally { unsubscribe() }
   })
 
   it('refuses an address no registered type claims, before touching the surface', () => {
@@ -167,6 +190,39 @@ describe('SidebarRightController — opening', () => {
     if (left === undefined || right === undefined) throw new Error('expected two panes')
     controller.openResource('dsh-resource://file/session/s-test/a.txt', { paneId: left })
     expect(findTabPane(layout(), tabOf('a.txt')).id).toBe(left)
+  })
+
+  it('opens new content alone in a preferred pane and falls back to the current pane at the limit', () => {
+    const { controller, publish, layout, tabOf, entries, expand } = harness()
+    expand()
+    publish()
+    const before = entries()
+    controller.openResource('dsh-resource://file/session/s-test/a.txt', { preferNewPane: true })
+    const a = tabOf('a.txt')
+    const pane = findTabPane(layout(), a)
+    expect(dockPaneIds(layout())).toHaveLength(2)
+    expect(pane.tabs).toEqual([a])
+    expect(entries()).toBe(before + 1)
+
+    publish()
+    controller.openResource('dsh-resource://file/session/s-test/b.txt', { preferNewPane: true })
+    expect(dockPaneIds(layout())).toHaveLength(2)
+    expect(findTabPane(layout(), tabOf('b.txt')).id).toBe(pane.id)
+  })
+
+  it('falls back when the pane is too narrow and reveals existing content without splitting', () => {
+    const { controller, publish, layout, tabOf, room, expand } = harness()
+    expand()
+    publish()
+    room.allowed = false
+    controller.openResource('dsh-resource://file/session/s-test/a.txt', { preferNewPane: true })
+    expect(dockPaneIds(layout())).toHaveLength(1)
+    publish()
+
+    room.allowed = true
+    controller.openResource('dsh-resource://file/session/s-test/a.txt', { preferNewPane: true })
+    expect(dockPaneIds(layout())).toHaveLength(1)
+    expect(getPane(layout(), layout().activePaneId).activeTabId).toBe(tabOf('a.txt'))
   })
 
   it('takes the replaced tab\'s pane and slot, closes it, and records one entry', () => {
@@ -462,6 +518,23 @@ describe('SidebarRightController — a tab\'s own actions', () => {
   const A_TXT = 'dsh-resource://file/session/s-test/a.txt'
   const B_TXT = 'dsh-resource://file/session/s-test/b.txt'
 
+  it('opens into an adopted store before that store has created its session surface', () => {
+    const { controller, adopt, instance, titles } = harness()
+    const releaseOwn = adopt(SESSION, instance)
+    const other = createSidebarRightStore(() => ({ kind: 'guide', title: 'seed' })).create(OTHER)
+    const releaseBinding = controller.bind({
+      sessionId: OTHER,
+      actions: other.actions,
+      surfaces: other.getSnapshot().bySession,
+      closeWithFocus: (_paneId, close) => { close() },
+      openWithFocus: (open) => { open() }, canSplitPane: () => true,
+    })
+    controller.openResourceIn(SESSION, A_TXT)
+    expect(titles()).toContain('a.txt')
+    releaseBinding()
+    releaseOwn()
+  })
+
   it('land in the session the tab is in through its own adopted store, after another session\'s seat took over', () => {
     const { controller, adopt, instance, publish, layout, expand } = harness()
     const releaseOwn = adopt(SESSION, instance)
@@ -481,7 +554,12 @@ describe('SidebarRightController — a tab\'s own actions', () => {
     other.actions.setExpanded(OTHER, true)
     const otherSurface = other.getSnapshot().bySession[OTHER]
     if (otherSurface === undefined) throw new Error('expected the other surface')
-    controller.bind({ sessionId: OTHER, actions: other.actions, surfaces: other.getSnapshot().bySession, canSplitPane: () => true })
+    controller.bind({
+      sessionId: OTHER, actions: other.actions, surfaces: other.getSnapshot().bySession,
+      closeWithFocus: (_paneId, close) => { close() },
+      openWithFocus: (open) => { open() },
+      canSplitPane: () => true,
+    })
     fromOwn.openResource(B_TXT)
     fromOwn.openTab('guide', { revealIfOpened: false })
     expect(Object.values(layout().tabs).map(tab => tab.title)).toContain('b.txt')

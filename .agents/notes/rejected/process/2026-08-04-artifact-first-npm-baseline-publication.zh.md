@@ -18,7 +18,7 @@ monorepo 中可运行的源码并不能证明发布后的包可运行。workspac
 
 目标集合只包含 `packages/*/*/package.json` 与 `apps/*/package.json` 中命名为 `@deepseek-ai/*` 的 workspace 包。根项目、`website/`、vendor、Python 与 native workspace 不属于该 NPM 基线。发现机制必须拒绝重复包名、不同基础版本、意外的 `private` 发布状态以及集合中的未知包，而不是维护另一份手工包名列表。
 
-预发布版本由包的稳定基础版本、命令启动时精确到秒的 UTC 时间戳和目标 commit 的 10 位短 SHA 组成：`<base>-<YYYYMMDDHHmmss>-<short-commit>`。dist-tag 由基础版本派生为 `dev-<base>`。例如，基础版本 `0.0.1`、时间 `2026-08-04T00:32:00Z` 和 commit `909292dd7b` 生成版本 `0.0.1-20260804003200-909292dd7b` 与 tag `dev-0.0.1`。同一 release bundle 的重试必须沿用原版本和 manifest；重新 pack 会按新的命令启动时间生成新版本。
+预发布版本由包的稳定基础版本、命令启动时精确到秒的 UTC 时间戳和目标 commit 的 10 位短 SHA 组成：`<base>-<YYYYMMDDHHmmss>-<short-commit>`。dist-tag 由基础版本派生为 `dev-<base>`。例如，基础版本 `0.0.1`、时间 `2026-08-04T00:32:00Z` 和短 SHA `<short-commit>` 生成版本 `0.0.1-20260804003200-<short-commit>` 与 tag `dev-0.0.1`。同一 release bundle 的重试必须沿用原版本和 manifest；重新 pack 会按新的命令启动时间生成新版本。
 
 pack 阶段按以下顺序执行：
 

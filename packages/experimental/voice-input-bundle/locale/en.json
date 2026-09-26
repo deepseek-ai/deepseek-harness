@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Voice input",
+    "description": "Transcribe recordings locally with SenseVoice; first use requires installing dependencies"
+  }
+}

@@ -1,0 +1,10 @@
+- id: llm-deepseek
+  config:
+    models:
+      - id: deepseek-v4-flash
+        systemPromptUpdate: in-history
+        toolUpdate: in-history
+
+- insert:
+    - id: dynamic-tool-prompt-updates
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/dynamic-tool-prompt-updates.ts'

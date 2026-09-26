@@ -12,7 +12,7 @@ The Messages transport appends the Anthropic-standard `/v1` namespace to a confi
 
 The shared Messages API owner trims trailing slashes and treats only a final path segment exactly equal to `v1` as the existing API version. It preserves that root and appends `/messages` or `/files`; every other base receives `/v1/messages` or `/v1/files`. The same resolved root scopes cached file uploads. The official `https://api.deepseek.com/anthropic` base therefore resolves to `/anthropic/v1`, and an explicit `/anthropic/v1` base remains unchanged.
 
-Chat Completions retains its independent URL behavior. The Messages rule does not infer support for `v1beta`, `v2`, `v4`, or other version-like suffixes; deployments that include those segments receive the standard `/v1` namespace beneath them.
+The Messages rule does not infer support for `v1beta`, `v2`, `v4`, or other version-like suffixes; deployments that include those segments receive the standard `/v1` namespace beneath them.
 
 ## Alternatives considered
 

@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/identity/anonymous-user-id/README.md
-README.md: c1c6950e7e51dd9cc52847dd9a3d59d6a3d0a7ee
-README.zh.md: d533c1d1de5c68ff8f8c143fa678a83d26a36d12
+/:
+  en: c515895831e237da
+  zh: 34da7fc7898352e2
+/deepseek-ai-dsh-anonymous-user-id:
+  en: 247d162b0bf2d0cb
+  zh: cd2deb79e97d92a7
+/deepseek-ai-dsh-anonymous-user-id/summary:
+  en: 5bc241dbf080664f
+  zh: b4bead686a76981b
+/deepseek-ai-dsh-anonymous-user-id/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-anonymous-user-id/use-this-package:
+  en: 4437fa00c42fcfb1
+  zh: 040a6688deda82d5
+/deepseek-ai-dsh-anonymous-user-id/use-this-package/what-the-id-does-for-you:
+  en: 0b9b81be195a834e
+  zh: 67338c5efaadae4d
+/deepseek-ai-dsh-anonymous-user-id/use-this-package/observing-and-resetting-the-id:
+  en: 44ede1e507c5ee38
+  zh: f2a21b86eb6dfe72
+/deepseek-ai-dsh-anonymous-user-id/use-this-package/using-it-in-your-own-package:
+  en: 4318cb0c4a2b41ed
+  zh: 6dfae5dc73bcb232
+/deepseek-ai-dsh-anonymous-user-id/understand-the-implementation:
+  en: 16370ef642feec6a
+  zh: a546774827234300
+/deepseek-ai-dsh-anonymous-user-id/understand-the-implementation/design-philosophy:
+  en: a2803ccc98c906bb
+  zh: b2bdb8bdaf1aca6c
+/deepseek-ai-dsh-anonymous-user-id/understand-the-implementation/source-map:
+  en: 9d5c4a91346f43ff
+  zh: d5fc162f91906d3f
+/deepseek-ai-dsh-anonymous-user-id/understand-the-implementation/the-api:
+  en: 23acd1995e7dfa39
+  zh: 18b13b5351458aab
+/deepseek-ai-dsh-anonymous-user-id/understand-the-implementation/storage-contract:
+  en: 7a5ab3467012c0c2
+  zh: 4b297e0fba2fe78b
+/deepseek-ai-dsh-anonymous-user-id/further-exploration:
+  en: 70ecfacbc9d7751b
+  zh: 705cf7bec5fc479b
+/deepseek-ai-dsh-anonymous-user-id/model-experience:
+  en: 6d953a2296ccc992
+  zh: dea7f2642a39d9b5
+/deepseek-ai-dsh-anonymous-user-id/model-experience/kv-cache-effect:
+  en: d34ef1e86eb2635d
+  zh: 0d88f82c5f062249
+/deepseek-ai-dsh-anonymous-user-id/known-limitations-and-deferred-work:
+  en: bafdb2e72f2179db
+  zh: 0210830ebafeacc5
+/deepseek-ai-dsh-anonymous-user-id/known-limitations-and-deferred-work/dev-note:
+  en: 124d523659df72f1
+  zh: 50c25ecb9268109f
+/deepseek-ai-dsh-anonymous-user-id/known-limitations-and-deferred-work/dev-note/open-file-format-evolution:
+  en: 334ca8ec1326f6fd
+  zh: da5c85b6f264cd70
+/deepseek-ai-dsh-anonymous-user-id/known-limitations-and-deferred-work/dev-note/open-invariant-observation-point:
+  en: 9bcd1765116ee52c
+  zh: 296c60cd65f3016a

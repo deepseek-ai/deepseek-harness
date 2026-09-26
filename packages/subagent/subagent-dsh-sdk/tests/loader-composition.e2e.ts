@@ -41,7 +41,7 @@ async function sessionEvents(log: string): Promise<SessionEvent[]> {
 function toolResultText(events: SessionEvent[]): string {
   const results = events.filter(event => event.type === 'tool/result')
   expect(results).toHaveLength(1)
-  return results[0]!.data.message.content[0].content
+  return results[0]!.data.message.content
     .filter(block => block.type === 'text')
     .map(block => block.text)
     .join('')
@@ -114,7 +114,7 @@ describe('SDK subagent routing and diagnostics through the production profile', 
       // process's launch directory.
       const results = events.filter(event => event.type === 'tool/result')
       expect(results).toHaveLength(1)
-      const resultText = results[0]!.data.message.content[0].content
+      const resultText = results[0]!.data.message.content
         .filter(block => block.type === 'text')
         .map(block => block.text)
         .join('')

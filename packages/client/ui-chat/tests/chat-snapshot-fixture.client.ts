@@ -7,8 +7,8 @@ import type {
 import type {
   ConversationLocationDataSource, ConversationLocationDataStore, ConversationTurnDataMap, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { TurnTokenUsage } from '../src/client/contract/chat-nodes.ts'
-import { deriveTurnMetrics } from '../src/client/contract/turn-metrics.ts'
 import {
   sameTurnNavigationItem, turnNavigationItem,
 } from '../src/client/conversation-nodes/turn-navigation.ts'
@@ -115,6 +115,10 @@ class FixtureNodeStore implements ChatNodeStore {
 
   source(key: string): ChatNodeSource {
     return cachedSource(this.sources, key, () => new FixtureSource(() => this.get(key)))
+  }
+
+  turnDataSource(): never {
+    throw new Error('turn collections require the real ChatSnapshotBuilder')
   }
 
   processSource(key: string): ChatNodeProcessSource {
@@ -274,6 +278,7 @@ export function chatSnapshotFixture(input: {
   readonly partial?: PartialAssistant | null
   readonly runningCalls?: readonly RunningToolCall[]
   readonly turnTimings?: LegacyConversationSlice['turnTimings']
+  /** Recorded ends exist without starts; missing end times follow the fixture's seq × 1000 convention. */
   readonly turnEnds?: LegacyConversationSlice['turnEnds']
   /** Per-turn usage buckets; production derives these from session events. */
   readonly turnUsages?: ReadonlyMap<number, TurnTokenUsage> | undefined
@@ -302,11 +307,12 @@ export function chatSnapshotFixture(input: {
     turns.set(turn, {
       turn,
       start: timing === undefined ? undefined : {
-        type: 'turn/start', seq: Math.max(0, (endSeq ?? 1) - 1), time: timing.startTime, turn,
-      } as never,
-      end: timing?.endTime === undefined || endSeq === undefined ? undefined : {
-        type: 'turn/end', seq: endSeq, time: timing.endTime, turn, reason: 'completed',
-      } as never,
+        type: 'turn/start', seq: SessionSeq(Math.max(0, (endSeq ?? 1) - 1)), time: timing.startTime, data: { turn },
+      },
+      end: endSeq === undefined ? undefined : {
+        type: 'turn/end', seq: SessionSeq(endSeq), time: timing?.endTime ?? endSeq * 1000,
+        data: { turn, reason: { kind: 'completed' } },
+      },
       status: endSeq === undefined ? 'open' : 'closed',
       steps: EMPTY,
       data,
@@ -402,14 +408,16 @@ export function chatSnapshotFixture(input: {
     const controlAnchor = inTurn.find(candidate => candidate.kind === 'assistant-step'
       || candidate.kind === 'tool-call'
       || candidate.kind === 'model-retry')
-    if (controlAnchor === undefined) continue
+    const turn = turns.get(turnNumber)
+    const controlAnchorSeq = controlAnchor?.anchorSeq ?? turn?.start?.seq
+    if (controlAnchorSeq === undefined) continue
     const processStart = inTurn.find(candidate => !TURN_PROCESS_INDEPENDENT_KINDS.has(candidate.kind))
       ?? controlAnchor
     const inlineReasoning = answer?.blocks.some(block => block.kind === 'reasoning' && block.text.trim() !== '') === true
     const candidate: TurnProcessSpec = {
       turn: turnNumber,
-      controlAnchorSeq: controlAnchor.anchorSeq,
-      processStartSeq: processStart.anchorSeq,
+      controlAnchorSeq,
+      processStartSeq: processStart?.anchorSeq ?? controlAnchorSeq,
       answerAnchorSeq: answer?.finalNode.seq ?? null,
       answerStep: answer?.step ?? null,
       inlineReasoning: answer !== undefined && inlineReasoning,
@@ -431,7 +439,6 @@ export function chatSnapshotFixture(input: {
       ? previousSpec
       : candidate
     dataStore.set('turn-process', spec)
-    const turn = turns.get(turnNumber)
     if (turn !== undefined) {
       nodes.push({
         key: `fixture:turn-process:${String(turnNumber)}`,
@@ -461,7 +468,6 @@ export function chatSnapshotFixture(input: {
       return (location.kind === 'turn' || location.kind === 'step')
         && location.turn.turn === turnNumber
     })
-    const metrics = deriveTurnMetrics(legacy.nodes).get(turnNumber)
     const tokenUsage = input.turnUsages?.get(turnNumber)
     const tailData = {
       turn: turnNumber,
@@ -471,8 +477,6 @@ export function chatSnapshotFixture(input: {
       branchUnavailable: closing === null
         || preceding?.kind !== 'assistant-step'
         || (preceding.data as ReturnType<typeof assistantData>).finalNode.seq !== closing.finalNode.seq,
-      ...metrics?.ttftMs === undefined ? {} : { ttftMs: metrics.ttftMs },
-      ...metrics?.tokensPerSecond === undefined ? {} : { tokensPerSecond: metrics.tokensPerSecond },
       ...tokenUsage === undefined ? {} : { tokenUsage },
     }
     dataStore.set('turn-tail', tailData)

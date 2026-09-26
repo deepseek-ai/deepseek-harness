@@ -23,8 +23,8 @@ interface ChokidarFixture {
 
 const CHOKIDAR_FIXTURES: readonly ChokidarFixture[] = [
   {
-    label: 'Chokidar 4 from settings and credentials',
-    consumerManifest: 'packages/settings/settings-file/package.json',
+    label: 'Chokidar 4 from credentials',
+    consumerManifest: 'packages/credentials/credentials-local/package.json',
     chokidarFiles: ['package.json', 'esm/package.json', 'esm/index.js', 'esm/handler.js'],
     readdirpFiles: ['package.json', 'esm/package.json', 'esm/index.js'],
   },
@@ -84,7 +84,7 @@ afterEach(async () => {
 function onceEvent<T>(watcher: import('chokidar').FSWatcher, event: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timeout = setTimeout(() => { reject(new Error(`timed out waiting for chokidar ${event}`)) }, 2_000)
-    const emitter = watcher as unknown as {
+    const emitter = watcher as {
       once(name: string, listener: (...args: unknown[]) => void): void
     }
     emitter.once(event, (...args: unknown[]) => {

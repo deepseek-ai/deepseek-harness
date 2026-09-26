@@ -10,13 +10,13 @@
 
 `dsh <name>` 是 `dsh --profile <name>` 的简写，启动位于 `$DSH_HOME/profiles/<name>` 的 profile。简写中的名称必须紧跟 `dsh`；`plugin` 仍为插件管理命令，因此启动同名 profile 时须使用 `dsh --profile plugin`。生效配置树以空根节点为起点，依次叠加 profile manifest（元数据清单）的 `dsh.profile.bundles` 列表中指定的各组合包 patch、profile 自身的 `cordis.patch.yml`、home 级的 `$DSH_HOME/cordis.patch.yml`（这是各 profile 共享的机器本地偏好，因此优先于逐 profile 配置层），以及按 argv 顺序指定的各个 `--patch <path>` 覆盖层。对同一配置行，后应用的层优先。patch 会替换目标行的整个 `config` 值，而不是深度合并其中的键；patch 也可以插入新行。最终 YAML 组合决定是否由 `dsh-hmr` 监视配置；未启用 HMR 时，更改需要重启。配置解析、schema 校验、模块解析或插件启动失败时，系统会报告错误并以非零状态退出。收到 SIGINT 或 SIGTERM 时，挂载的根节点会先 dispose（资源释放）再退出。
 
-组合包名称先从 dsh 安装目录解析，再从 profile 目录解析。因此，内置组合包（`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`、`@deepseek-ai/dsh-headless`、`@deepseek-ai/dsh-sdk-app`、`@deepseek-ai/dsh-sdk-minimal`、`@deepseek-ai/dsh-acp-app`）始终来自当前运行的 `dsh` 所属的安装；树外组合包来自 profile 中由 pnpm 管理的 `node_modules`。挂载配置行前，launcher 会按此顺序遍历安装与所选 bundle，并物化计算出的 fallback 链接。内部 runtime 与 dual 模式会在测试中消费同一份不可变 generation，但不改变 CLI 的 link 模式行为。所有模式都保留 profile 已安装包的原生优先级。
+组合包名称先从 dsh 安装目录解析，再从 profile 目录解析。因此，内置组合包（`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`、`@deepseek-ai/dsh-headless`、`@deepseek-ai/dsh-sdk-app`、`@deepseek-ai/dsh-sdk-minimal`、`@deepseek-ai/dsh-acp-app`）始终来自当前运行的 `dsh` 所属的安装；树外组合包来自 profile 中由 pnpm 管理的 `node_modules`。挂载配置行前，launcher 会按此顺序遍历安装与所选 bundle，并将生成的不可变 runtime resolution 安装到 Node 的解析器中。启动不会创建共享或 profile 自有的 fallback 链接。profile 已安装包保留原生优先级；profile 初始化和包管理器写入与运行时解析相互独立。
 
 `web`、`headless`、`sdk`、`sdk-minimal` 和 `acp` profile 首次使用时会从随附模板自动初始化（`web`：base + web-app，实时应用 patch；`headless`：base + headless，只在启动时应用 patch；`sdk`：base + sdk-app，只在启动时应用 patch；`sdk-minimal`：独立组合包，只在启动时应用 patch；`acp`：base + acp-app，只在启动时应用 patch）。其他缺失的 profile 会显式报错，并提示运行 `dsh plugin --profile <name> add <package>`。
 
 `dsh --profile <name> --from-default-profile <template>` 会在启动前，从上述五个随附模板之一初始化新的自定义目标。目标名称不能是随附 profile 名称，并且完整的目标 profile 目录必须不存在。launcher 会以独占方式领取该目录，因此残留文件和另一个并发创建者都会在不作修改的情况下被拒绝。它把模板当前的组合包列表复制进一份依赖为空、用户 patch 为空的新 manifest。它不会读取 `<template>` 指定的本地同名 profile，不会复制其依赖或 patch，也不会持久化继承字段；模板列表之后的变化不会改写新 profile。复制列表中指名的内置组合包仍从当前 dsh 安装目录解析。初始化成功不会增加 launcher 输出。
 
-profile 已经存在时，`--from-default-profile` 会被拒绝，且不会修改或启动它；去掉该选项即可使用它。残留的目标目录同样会被原样保留，此时必须改用另一个 profile 名称。未知模板或随附目标名称会在创建目标之前失败；未知模板的诊断会列出有效模板。初始化在组合包解析和应用启动之前提交，因此后续失败仍会把新 profile 留在磁盘上，重试时需要去掉创建选项。`--dump-config` 和 `--dump-default-config` 接受该选项：它们初始化目标并打印所请求的配置树，但不启动应用。
+profile 已经存在时，`--from-default-profile` 会被拒绝，且不会修改或启动它；去掉该选项即可使用它。残留的目标目录同样会被原样保留，此时必须改用另一个 profile 名称。未知模板或随附目标名称会在创建目标之前失败；未知模板的诊断会列出有效模板。初始化在组合包解析和应用启动之前提交，因此后续失败仍会把新 profile 留在磁盘上，重试时需要去掉创建选项。三种配置 dump 模式都接受该选项，并在不启动应用的情况下初始化目标。
 
 ```sh
 dsh rescue --from-default-profile web
@@ -50,7 +50,33 @@ dsh --profile web --dump-default-config
 dsh --profile web --patch ./extra.yml --dump-config
 ```
 
-`--dump-default-config` 只打印组合包各层；`--dump-config` 额外加上 profile 的 `cordis.patch.yml`、home 级的 `$DSH_HOME/cordis.patch.yml` 和 `--patch` overlay。两者都会打印注释，标明每行由哪个文件提供，以及哪些 overlay 修改过它；`!!js` 表达式保持未求值，插入行中的相对插件名以各自 patch 文件所在目录解析，找不到目标的 patch 会报告到 stderr。dump 操作会初始化缺失的 profile 文件，但不会准备 `$DSH_HOME/profiles/node_modules` 下的运行时模块 fallback。它不会运行应用的命令行参数提供方，因此展示的是解析任何应用参数之前的组合配置树；如果调用中包含应用参数，dump 会拒绝该调用。
+`--dump-default-config` 只打印组合包各层；`--dump-config` 额外加上 profile 的 `cordis.patch.yml`、home 级的 `$DSH_HOME/cordis.patch.yml` 和 `--patch` overlay。两者都会打印注释，标明每行由哪个文件提供，以及哪些 overlay 修改过它；`!!js` 表达式保持未求值，插入行中的相对插件名以各自 patch 文件所在目录解析，找不到目标的 patch 会报告到 stderr。dump 操作会初始化缺失的 profile 文件。它不会运行应用的命令行参数提供方，因此展示的是解析任何应用参数之前的组合配置树；如果调用中包含应用参数，dump 会拒绝该调用。
+
+<a id="config-schema-dump"></a>
+### 配置 schema dump
+
+`--dump-config-schema` 使用与 `--dump-config` 相同的组合包、profile、home 和 argv patch 层，支持可重复的 `--patch` 与 `--from-default-profile`。三种 dump flag 互斥，并拒绝应用参数和保留的 `desktop` profile。组合成功后，stdout 输出一份缩进排版的 JSON Schema 2020-12 文档。根 schema 描述 `--dump-config` 输出经解析后的 entry list；`$defs.patchList` 单独描述 profile/home/CLI overlay。验证该片段时应保留文档的 `$defs`。准备、patch 解析/组合或解析器设置失败时，以非零退出码结束，不输出 schema。收集或投影失败时保留部分输出并退出 1；诊断也会输出到 stderr。即使 stdout 中的 schema 有效且可用，`partial` 投影或省略非 JSON 注释也适用此退出码。schema dump 的未匹配目标警告不包含层标签；需要来源标签时，使用相同配置层运行 `--dump-config`。
+
+插件 Config 的字段、默认值、描述及支持的约束从原生 Schemastery 声明投影。普通字段内联，共享 Config 和递归使用 `$ref`。JSON Schema 的默认值是注释，不执行填值。必填字段会考虑 Schemastery 的 nullable fallback 能否通过验证。联合类型使用 `anyOf`，而原生执行仍选择首个成功分支。`secret`、`credential-ref`、`ms` 等 role 元信息及 `volatile` 实时更新元信息保留在 `x-cordis` 注释中。非法 volatile 嵌套属于 schema 定义错误；字段输入类型不会变成引用对象类型。回调验证、不支持的正则语义及其他未投影约束会标记为 partial，而不是静默丢弃。非有限数边界和非 JSON 默认值/展示注释会被省略并附上限制说明，结构字段仍可用。对象常量保留普通 nullable 成员约束，但继承属性的比较会标记为 partial。无法表示的默认值、不支持的交集及无法求解的递归默认值依赖保留未知的省略行为，仍需原生验证。
+
+使用 Cordis entry-list 方言解析 YAML：`!!js` 标量变为不执行的 `{ "__jsExpr": "..." }` 标记。普通 Config 值和 entry 的 `disabled` 接受这些标记，但不求值其结果。Group 列表和 Include 字段保持字面量。entry id 可省略；缺少非空 id 的非 insert patch 被接受为无操作，并由 Loader 警告。禁用项可以省略必需的 Config，除非 `group: true` 强制激活；disabled 表达式也使省略行为留待运行时决定。已提供的 Config 值仍接受验证。`disabled` 接受布尔值、null 和表达式标记；Loader 会把其他真值强制视为禁用，但此 schema 拒绝它们。未设置 `group: true` 的禁用 group 或 include 的子项不接受验证，因为 Loader 从不创建它们。禁用的 `group: true` 行之下的子项，以及插入到禁用 group 的 patch，都按启用状态验证，尽管 Loader 不会初始化祖先被禁用的子项。已知根树目标验证完整 Config 替换，而不是深层 partial 对象。不推断 Include 内部 id，也不推断前序 patch 新增或改变的顺序相关目标。未知插件名保持开放；同名插件解析出不同 schema 时，使用联合约束并报告歧义。
+
+根 `x-cordis` 注释包含 `profile`、`complete`、`entries`、`diagnostics` 和 `patchSchema`。配置项按遍历顺序保留 `path`、可选 `id`、`name`、`status` 和 `configRef`；状态为 `schema`、`partial`、`absent`、`unsupported` 或 `error`。可选的 `tree: "group" | "include"` 标识原生承载插件：它们可能因未导出 Config 而具有 `status: "absent"`，但 `configRef` 指向 Loader 结构定义。被检查的非法条目会获得带位置的错误，不丢弃有效的相邻条目；没有字面量名称时省略 `name`。列表容器非法或 include patch 组合失败时，在承载条目上报告诊断；组合失败后该 include 的子项不可用，不会把未应用 patch 或过滤后的子项当作最终结果。未设置 `group: true` 的禁用承载条目可以省略 config，并记录为没有子项的树。投影限制会在共享该 Config 的每个条目上重复报告。Config 缺失表示字段未知，不表示禁止配置。group 子项的发现路径追加 `/config/<index>`，include 子项追加 `/include/<index>`；后者不是根 dump 中的 JSON Pointer。存在错误诊断、`partial`/`unsupported`/`error` 条目，或同一插件名对应多个 Config 定义时，`complete` 为 false。此参考覆盖所有声明，包括禁用项：它们的导入或 include 失败可能使可启动的 profile 也被标为不完整。运行时生成的 preset/客户端树及插件启动检查不属于此参考范围；反过来，`complete` 也不保证启动成功。
+
+可能修改输入的前序 union 分支，以及可能改名或碰撞的字典键，需要放宽验证。Lazy 元数据传播可能影响当前 Config 之外的共享节点，因此该 Config 保留可获得的声明细节，同时增加不受限制的备选项，而不模拟原生修改。这些情况标记为 partial，仍需原生验证。
+
+收集会导入可信模块，也可能调用 Config getter 和 lazy builder，但绝不应用插件、执行 transform 回调或求值配置表达式。导入可能在输出前后阻塞或保留进程句柄；自动调用方应设置外部超时。dump 不强制退出，也不持有导入期间资源的释放职责。导入或 builder 对 stdout 的常规写入转向 stderr；直接写文件描述符不被拦截。profile 准备保留 YAML dump 的初始化写入。输出只有 schema 声明，没有实际配置值；声明的默认值和插件原始错误仍可能含敏感数据，分享前应检查。收集器 API 参见 [app-boot](../../../packages/boot/app-boot/README.zh.md)。
+
+输出是可重新生成的 pre-stable 参考，不是单独版本化的持久化目录。`$schema` 标识 JSON Schema 验证方言；`x-cordis` 随 dsh 版本演进。更改 dsh 或插件后应重新生成，并跟随 `$ref` 和 `configRef`，而非硬编码定义名、顺序或文本。不兼容的方言变更使用新的 `$schema`；注释变更不采用 Session 格式迁移。
+
+<a id="startup-diagnostics"></a>
+## 启动诊断
+
+必需插件激活失败时，CLI 先输出失败插件及其原始堆栈，再列出等待中的插件和缺失服务。等待列表中的必需插件排在前面。末尾的 `Full diagnostics:` 行指向直接位于 `$DSH_HOME/logs/`（默认 `~/.dsh/logs/`）下的唯一 `startup-<timestamp>-<uuid>.log` 文件。CLI 完成报告和 stderr 写入后会明确以退出码 1 结束，即使插件仍有打开的句柄；不会覆盖以前的报告，也不会自动删除它们。
+
+报告包含 DSH 和 Node 版本、平台、profile、根配置路径、每个未激活插件的模块与状态、原始错误，以及启动期间的警告和错误参数，包括尚无 Fiber 的导入错误。Node 检查输出保留嵌套原因、聚合成员、循环引用、不可枚举属性和 Symbol 属性，并关闭深度、字符串及数组长度限制。自定义检查函数被禁用，访问器只描述而不求值。收集器包含失败后的异步清理日志，并在启动结算后停止。它不会独立于已记录错误额外收集环境变量或配置内容。插件原始错误可能包含配置或凭据值；报告开头会提醒读者在分享前检查内容。报告不脱敏。
+
+在 POSIX 上，新目录和文件分别请求 `0700` 和 `0600` 权限。CLI 仅在写入成功后输出文件路径。如果日志目录或文件无法写入，stderr 会包含写入错误及完整报告，退出码仍为 1。只有可选插件激活异常时，维持正常警告输出，不创建报告。
 
 ## 插件管理
 
@@ -78,7 +104,7 @@ dsh --profile tui
 
 ## Web Profile
 
-`dsh web` 使用 profile 简写。启动器先解析自身的 flag，其余 flag 属于 web 应用，由组合包中的普通提供方解析。`--host` 和 `--port` 覆盖承载它们的那些行的组合取值，可重复的 `--trusted-host` 通过 `ctx.webRuntime.trustedHosts` 提供本次调用的 authority（部署表达式会拼接自己的 authority），`--no-open` 则只对本次调用关闭默认浏览器交接。客户端插件 HMR（热模块替换）接收器始终挂载，在单独运行的 `pnpm run dev:web` watcher 重建客户端 bundle 之前保持空闲。
+`dsh web` 使用 profile 简写。启动器先解析自身的 flag，其余 flag 属于 web 应用，由组合包中的普通提供方解析。`--host` 和 `--port` 覆盖承载它们的那些行的组合取值，可重复的 `--trusted-host` 通过 `ctx.webRuntime.trustedHosts` 提供本次调用的 authority（部署表达式会拼接自己的 authority），`--no-open` 则只对本次调用关闭默认浏览器交接。客户端插件 HMR（热模块替换）接收器始终挂载，在 `pnpm run dev:web` 重建客户端 bundle 之前保持空闲；该命令先构建一次，再启动这同一个启动器并持续重建客户端 bundle，加 `--no-serve` 则只运行 watcher、配合别处启动的 `dsh web`。
 
 ```sh
 dsh web
@@ -109,4 +135,4 @@ dsh web --help
 <a id="source-execution"></a>
 ## 源码执行
 
-请在仓库根目录中，于全新 checkout 之后及产物需要更新时单独运行 `pnpm run build`，然后使用 `pnpm dsh <args...>`。`package.json` 中的脚本不会构建，而是通过 `node --import tsx/esm` 启动 `apps/cli/src/bin.ts`，并转发所有参数。Typert Host 产物缺失时，profile 启动会因不含构建指引的模块解析错误而失败。这些 Host 产物存在后，如果前端或 Client plugin 组合包缺失，启动会失败并提示运行 `pnpm run build`。启动器不会检查产物是否为最新，因此已有的陈旧组合包可能继续运行旧版浏览器代码，直至重新构建。该进程会继承启动环境，且 `runProfile` 会在任何 entry 挂载之前从该快照解析出站代理，因此 `HTTP_PROXY`／`HTTPS_PROXY`（以及写在 `.env` 层中的代理）无需任何额外开关即可生效。安装形式会直接启动构建后的 `apps/cli/lib/bin.js`，不会重新构建仓库。
+请在仓库根目录中，于全新 checkout 之后及产物需要更新时单独运行 `pnpm run build`，然后使用 `pnpm dsh <args...>`。`package.json` 中的脚本不会构建，而是通过 `node --import tsx/esm` 启动 `apps/cli/src/bin.ts`，并转发所有参数。Typert Host 产物缺失时，profile 启动会因不含构建指引的模块解析错误而失败。这些 Host 产物存在后，如果前端或 Client plugin 组合包缺失，启动会失败并提示运行 `pnpm run build`。启动器不会检查产物是否为最新，因此已有的陈旧组合包可能继续运行旧版浏览器代码，直至重新构建。该进程会继承启动环境，且 `runProfile` 会在任何 entry 挂载之前从该快照解析出站代理，因此 `HTTP_PROXY`／`HTTPS_PROXY`（以及写在 `.env` 层中的代理）无需任何额外开关即可生效。源码入口显式选择链接式 profile 解析，使 tsx workspace 导入与 profile 插件共享模块身份。安装形式会使用 runtime profile 解析直接启动构建后的 `apps/cli/lib/bin.js`，不会重新构建仓库。

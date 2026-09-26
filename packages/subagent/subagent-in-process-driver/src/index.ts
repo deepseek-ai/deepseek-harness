@@ -223,7 +223,7 @@ function readResult(
   // `error` through `toStopReason(undefined)`, which never overstates success.
   const lastEnd = foldConsumedWork(own).end
   // The seam's canonical selection rule; a partial answer survives cancel and truncation.
-  const output: ContentBlock[] = finalAssistantOutput(own) ?? []
+  const output: readonly ContentBlock[] = finalAssistantOutput(own) ?? []
   const recorded = toStopReason(lastEnd?.data.reason)
   // Disposal can tear the owner down before the loop records its ordinary
   // `aborted` end, yielding `disposed` instead.

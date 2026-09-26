@@ -18,7 +18,7 @@ The publication flow uses an immutable release bundle as its boundary. The pack 
 
 The target set contains only `@deepseek-ai/*` workspace packages discovered from `packages/*/*/package.json` and `apps/*/package.json`. The root project, `website/`, vendor, Python, and native workspaces are outside this NPM baseline. Discovery must reject duplicate names, mixed base versions, an unexpected publication privacy state, and unknown packages in the bundle instead of relying on another hand-maintained package-name list.
 
-The prerelease version consists of the package stable base version, a second-precision UTC timestamp captured when the command starts, and the target commit's 10-character short SHA: `<base>-<YYYYMMDDHHmmss>-<short-commit>`. The dist-tag is derived as `dev-<base>`. For example, base `0.0.1`, time `2026-08-04T00:32:00Z`, and commit `909292dd7b` produce version `0.0.1-20260804003200-909292dd7b` and tag `dev-0.0.1`. Retrying one release bundle must retain its version and manifest; repacking creates a version from the new command start time.
+The prerelease version consists of the package stable base version, a second-precision UTC timestamp captured when the command starts, and the target commit's 10-character short SHA: `<base>-<YYYYMMDDHHmmss>-<short-commit>`. The dist-tag is derived as `dev-<base>`. For example, base `0.0.1`, time `2026-08-04T00:32:00Z`, and short SHA `<short-commit>` produce version `0.0.1-20260804003200-<short-commit>` and tag `dev-0.0.1`. Retrying one release bundle must retain its version and manifest; repacking creates a version from the new command start time.
 
 The pack phase runs in this order:
 

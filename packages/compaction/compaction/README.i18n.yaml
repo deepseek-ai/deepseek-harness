@@ -1,6 +1,85 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/compaction/compaction/README.md
-README.md: fecb3b6731108c493825f6fa0874ab865781fc2a
-README.zh.md: 86e6a2935c408af7e247235378a022ad855c00a0
+/:
+  en: 5c47c9629036f119
+  zh: 7730d7468a38b38d
+/deepseek-ai-dsh-compaction:
+  en: bc4cc254f61e84cb
+  zh: d08be13940dd3779
+/deepseek-ai-dsh-compaction/summary:
+  en: 8cde722f68374b24
+  zh: 11f5aff0d0ecd573
+/deepseek-ai-dsh-compaction/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-compaction/use-this-package:
+  en: 7d1dad97626dbd2e
+  zh: 075fef4e1844ad12
+/deepseek-ai-dsh-compaction/use-this-package/when-to-choose-it:
+  en: 19c39a458294769b
+  zh: fd7534068f49e2af
+/deepseek-ai-dsh-compaction/use-this-package/what-condensation-looks-like:
+  en: 0abbee3a3b929a90
+  zh: 334736dffe93488d
+/deepseek-ai-dsh-compaction/use-this-package/turning-condensation-on:
+  en: 8213b79c776f1a75
+  zh: 481c0dffd342426a
+/deepseek-ai-dsh-compaction/use-this-package/implementing-a-backend:
+  en: 280b5fda4c9b9c8b
+  zh: 764ca79fccf98279
+/deepseek-ai-dsh-compaction/use-this-package/recognizing-condensed-history:
+  en: 35502487f2850f05
+  zh: 333d2b86cc1d6eb0
+/deepseek-ai-dsh-compaction/understand-the-implementation:
+  en: 321c3dc665ea03ff
+  zh: f0fa408cde7b0454
+/deepseek-ai-dsh-compaction/understand-the-implementation/design-philosophy:
+  en: 83b841c2263c3661
+  zh: 2d75dba71717f681
+/deepseek-ai-dsh-compaction/understand-the-implementation/service-api:
+  en: d742d41c7eb5d406
+  zh: 6ff26c23eba5dd59
+/deepseek-ai-dsh-compaction/understand-the-implementation/manual-failure-taxonomy:
+  en: 81449c88ba52f445
+  zh: 2cdcce236bfbf284
+/deepseek-ai-dsh-compaction/understand-the-implementation/tool-pairing-boundaries:
+  en: 15dad68a04d6c86b
+  zh: 3b95acf1b7e503bf
+/deepseek-ai-dsh-compaction/understand-the-implementation/the-surface-contract:
+  en: 28980d8259e59700
+  zh: c452e0bb4b778824
+/deepseek-ai-dsh-compaction/understand-the-implementation/source-map:
+  en: 121139cf1878d7cf
+  zh: f8f9d8d3eb9866b5
+/deepseek-ai-dsh-compaction/understand-the-implementation/locking-and-serialization:
+  en: 68caa51bed28bada
+  zh: 3f8261f9dcba95ed
+/deepseek-ai-dsh-compaction/understand-the-implementation/events:
+  en: dc5faf71b27cc340
+  zh: 065f8339009c1a3a
+/deepseek-ai-dsh-compaction/further-exploration:
+  en: fc5c182bc45e45cf
+  zh: eb1ac9900b6e8fe2
+/deepseek-ai-dsh-compaction/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-compaction/model-experience/conversation-history-when-a-backend-is-invoked:
+  en: 94de97ed1e85db85
+  zh: c8e37d8050609e63
+/deepseek-ai-dsh-compaction/model-experience/conversation-history-when-a-backend-is-invoked/what-the-model-sees:
+  en: 3c4875a13da17814
+  zh: 9b257950a9e2c7c1
+/deepseek-ai-dsh-compaction/model-experience/conversation-history-when-a-backend-is-invoked/token-effect:
+  en: be91f4a4bbb9338b
+  zh: 2b5de31d4d7caff1
+/deepseek-ai-dsh-compaction/model-experience/conversation-history-when-a-backend-is-invoked/kv-cache-effect:
+  en: 40ba838a2309c44a
+  zh: c609fc1587a0d666
+/deepseek-ai-dsh-compaction/known-limitations-and-deferred-work:
+  en: fee9ba06d3e5f35c
+  zh: 2bb5241e2447d15d
+/deepseek-ai-dsh-compaction/known-limitations-and-deferred-work/dev-note:
+  en: 270e23ae6414aff0
+  zh: c6d219b8a547dbca

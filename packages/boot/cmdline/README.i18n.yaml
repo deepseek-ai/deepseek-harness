@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/boot/cmdline/README.md
-README.md: f0c6636b342d856b44c9d5eaffbbd4657f3e88ae
-README.zh.md: b852c59ee42824c17af2cb429c71e7ca7cd0055b
+/:
+  en: 29e1bbea853a5634
+  zh: ef6bc8af7a8ae1dc
+/deepseek-ai-dsh-cmdline:
+  en: ecfe026417c688da
+  zh: 469e8f606208139a
+/deepseek-ai-dsh-cmdline/summary:
+  en: cd0cc4458af8f563
+  zh: b2cba42fcf5c810b
+/deepseek-ai-dsh-cmdline/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-cmdline/use-this-package:
+  en: ad6f55231a2cb77d
+  zh: 9039fa43deeaa458
+/deepseek-ai-dsh-cmdline/use-this-package/the-launcher-values:
+  en: 67d2ceaa6b4dd429
+  zh: 632d9396ba760eee
+/deepseek-ai-dsh-cmdline/use-this-package/parsing-your-flags:
+  en: e88383d7638cb933
+  zh: 0d0608be857be763
+/deepseek-ai-dsh-cmdline/use-this-package/how-flags-beat-config-values:
+  en: 301e1dc64b9ffdce
+  zh: d2fbd70267fe7bda
+/deepseek-ai-dsh-cmdline/use-this-package/reading-the-same-arguments-from-several-plugins:
+  en: 9078403a8341b8d6
+  zh: 7a6af7c16924ff03
+/deepseek-ai-dsh-cmdline/understand-the-implementation:
+  en: f4a2695cb4c8a570
+  zh: 89837235d2f376cf
+/deepseek-ai-dsh-cmdline/understand-the-implementation/design-notes:
+  en: 0753fe84c14e7d0b
+  zh: acc5c2224fac229e
+/deepseek-ai-dsh-cmdline/understand-the-implementation/parsing-contract:
+  en: 720b38c4c9afeb93
+  zh: b43160d7176e5799
+/deepseek-ai-dsh-cmdline/understand-the-implementation/source-map:
+  en: 9867efd4c939077c
+  zh: 00247b7fe19bc2eb
+/deepseek-ai-dsh-cmdline/further-exploration:
+  en: 6ea3c827c59aff4c
+  zh: 2977b4cfa7f73942
+/deepseek-ai-dsh-cmdline/model-experience:
+  en: f9f5061b618b962a
+  zh: 75c6de06b1d981a0
+/deepseek-ai-dsh-cmdline/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: f57cc48a1b5cbfa9
+/deepseek-ai-dsh-cmdline/known-limitations-and-deferred-work:
+  en: ff2d1068ce4ac0cd
+  zh: 6ab1d54e99c58285
+/deepseek-ai-dsh-cmdline/known-limitations-and-deferred-work/dev-note:
+  en: d2f0d68fe29fb750
+  zh: 323d21ee73a9e3f6
+/deepseek-ai-dsh-cmdline/known-limitations-and-deferred-work/dev-note/open-parser-surface:
+  en: a82e0020f6f2eb84
+  zh: 66b1f97dc6f15370

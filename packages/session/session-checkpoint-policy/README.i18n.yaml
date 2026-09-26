@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/session-checkpoint-policy/README.md
-README.md: 0114ffb82b53d456eb0677f209bff61c82bfbd98
-README.zh.md: 2abe4d4d6ec411434ea668d83995c1a76ae9a726
+/:
+  en: c1a916a186cc8718
+  zh: df5c4fd5aa22f005
+/deepseek-ai-dsh-session-checkpoint-policy:
+  en: a81e37f590635a9f
+  zh: ad2699e68c7998c0
+/deepseek-ai-dsh-session-checkpoint-policy/summary:
+  en: 4c422b2080e00d23
+  zh: a3a19de29dee904f
+/deepseek-ai-dsh-session-checkpoint-policy/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-session-checkpoint-policy/use-this-package:
+  en: 623577d7e2cb1b9f
+  zh: 16a95159209f76de
+/deepseek-ai-dsh-session-checkpoint-policy/use-this-package/when-to-choose-it:
+  en: 228690f1706b19c6
+  zh: 9a96ab84fe16d507
+/deepseek-ai-dsh-session-checkpoint-policy/use-this-package/minimal-configuration:
+  en: 876985641b6fe16c
+  zh: fe4f99cbe91a7445
+/deepseek-ai-dsh-session-checkpoint-policy/use-this-package/what-becomes-durable:
+  en: fce6fd58119eefdd
+  zh: 835a96d079993e01
+/deepseek-ai-dsh-session-checkpoint-policy/use-this-package/observable-behavior-and-failures:
+  en: b30a5a36f9a7960c
+  zh: 283e2a5579ae280b
+/deepseek-ai-dsh-session-checkpoint-policy/understand-the-implementation:
+  en: 460ae50c9878a197
+  zh: 526a8a465de55fcd
+/deepseek-ai-dsh-session-checkpoint-policy/understand-the-implementation/design-concept:
+  en: cd40c7a1f0db9efb
+  zh: 17115c9612497465
+/deepseek-ai-dsh-session-checkpoint-policy/understand-the-implementation/source-map:
+  en: f9d06ce5e6ca68c1
+  zh: 08c4c7a170f33737
+/deepseek-ai-dsh-session-checkpoint-policy/further-exploration:
+  en: d9b34c4e3ef78f1d
+  zh: 73e98eecc32ee654
+/deepseek-ai-dsh-session-checkpoint-policy/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-session-checkpoint-policy/model-experience/interrupted-calls:
+  en: 5cb4bf82d559c081
+  zh: 649c4c50efbd84c7
+/deepseek-ai-dsh-session-checkpoint-policy/model-experience/interrupted-calls/what-the-model-sees:
+  en: 11ab6b8e058fd0f5
+  zh: 962d12789d6ee01a
+/deepseek-ai-dsh-session-checkpoint-policy/model-experience/interrupted-calls/token-effect:
+  en: f40f910529dce107
+  zh: 39564b13a8263e9b
+/deepseek-ai-dsh-session-checkpoint-policy/model-experience/interrupted-calls/kv-cache-effect:
+  en: b99544650c31f190
+  zh: a08afbc2b5d5241c
+/deepseek-ai-dsh-session-checkpoint-policy/known-limitations-and-deferred-work:
+  en: 5e4efe1b7d8a40e7
+  zh: e593b2cd8810c9a7
+/deepseek-ai-dsh-session-checkpoint-policy/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

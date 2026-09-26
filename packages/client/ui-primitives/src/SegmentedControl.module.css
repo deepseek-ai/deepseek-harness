@@ -1,0 +1,76 @@
+/* The track is the same translucent fill the hover state uses, so it reads as
+ * a place rather than a second button; the one raised part is the indicator,
+ * a white pill that slides under the selected segment. Its stroke rides inside
+ * the soft elevation shadow (border: 0), the way every elevated surface draws
+ * its edge, so the elevation gate keeps it off the alias-border set.
+ *
+ * Segments are equal-width grid tracks sized to the widest label, which is
+ * what lets one indicator be placed arithmetically: the tablist carries the
+ * segment count and the selected index as custom properties, and the indicator
+ * derives its width and offset from them instead of measuring the DOM. */
+.control {
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.indicator {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc((100% - 8px - 2px * (var(--dsh-segment-count) - 1)) / var(--dsh-segment-count));
+  height: calc(100% - 8px);
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-elevation-soft);
+  transform: translateX(calc(var(--dsh-segment-index) * (100% + 2px)));
+  transition: transform 160ms ease;
+  pointer-events: none;
+}
+
+.tab {
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  height: 28px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.tab:hover:not(:disabled),
+.tab[aria-selected='true'] {
+  color: var(--dsw-alias-label-primary);
+}
+
+.tab:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.tab:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator,
+  .tab {
+    transition: none;
+  }
+}

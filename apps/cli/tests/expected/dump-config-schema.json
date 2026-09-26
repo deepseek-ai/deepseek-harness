@@ -1,0 +1,615 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cordis configuration for profile schema-acceptance",
+  "description": "Describes the parsed entry-list YAML printed by --dump-config. Use $defs.patchList for a profile/home/CLI overlay. Parse !!js with the Cordis entry-list YAML dialect. Expression results, service dependencies, plugin startup checks, and sequence-dependent patch targets still require runtime validation.",
+  "$comment": "Bundle, profile, home, and CLI layers apply in that order. A patch config replaces the whole config. JSON Schema defaults are annotations; Schemastery validates a fallback on null/omission unless required rejects it first. Schemastery unions select the first successful branch. Root patch id constraints describe the current index, not ids introduced or changed by earlier patches. Include-local patches have a separate index. Relative plugin insertions require their source patch directory; this document does not infer future overlay locations.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/entry"
+  },
+  "$defs": {
+    "loaderExpression": {
+      "type": "object",
+      "properties": {
+        "__jsExpr": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "__jsExpr"
+      ],
+      "description": "Inert representation of a YAML !!js scalar from the Cordis entry-list parser. Its result is evaluated and validated only at runtime. Extra marker-object fields are ignored by interpolation."
+    },
+    "entryMetadata": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Entry id. Loader generates an id when an entry omits it; patches use the configured id."
+        },
+        "name": {
+          "type": "string",
+          "description": "Plugin module specifier. Inserted relative plugin paths are anchored beside their patch file."
+        },
+        "config": {},
+        "group": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Allows patch indexing and insertion into an entry-list config; does not select the plugin implementation."
+        },
+        "disabled": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "$ref": "#/$defs/loaderExpression"
+            }
+          ],
+          "description": "Boolean or !!js expression. The Loader coerces other truthy values as disabled; this schema rejects them."
+        },
+        "inject": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intercept": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "isolate": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "const": true
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "entryList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "patchList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/patch"
+      }
+    },
+    "unknownConfig": {
+      "$comment": "No projected Config schema is available; this is unknown configuration, not a prohibition on fields."
+    },
+    "includeConfig": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "YAML/JSON filename resolved relative to the owning Loader tree. This field is literal, not a !!js expression."
+        },
+        "initial": {
+          "$ref": "#/$defs/entryList"
+        },
+        "patches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/includePatch"
+          }
+        },
+        "enableLogs": {
+          "type": "boolean"
+        }
+      },
+      "description": "Native Include configuration stays literal. initial is used only when the file is absent. Included files have their own module-resolution base and patch target index."
+    },
+    "includePatch": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/entryMetadata"
+        }
+      ],
+      "properties": {
+        "insert": {
+          "$ref": "#/$defs/entryList"
+        }
+      },
+      "description": "An insert appends entries, optionally inside the group identified by id. Other patches replace supplied fields; config is replaced wholesale, not deep-merged. A truthy name asserts the existing plugin name rather than renaming it. Unknown targets and non-insert patches without a nonempty id are warned and skipped."
+    },
+    "config0": {
+      "description": "Namespace settings",
+      "default": {},
+      "anyOf": [
+        {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "label": {
+              "description": "Display label",
+              "default": "schema-default",
+              "anyOf": [
+                {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/loaderExpression"
+                }
+              ]
+            },
+            "alias": {
+              "description": "Display label",
+              "default": "schema-default",
+              "anyOf": [
+                {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/loaderExpression"
+                }
+              ]
+            },
+            "attempts": {
+              "default": 3,
+              "anyOf": [
+                {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 7
+                },
+                {
+                  "$ref": "#/$defs/loaderExpression"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/loaderExpression"
+        }
+      ]
+    },
+    "config1": {
+      "default": {},
+      "anyOf": [
+        {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "enabled": {
+              "default": true,
+              "anyOf": [
+                {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/loaderExpression"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/loaderExpression"
+        }
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/$defs/entryMetadata"
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "cordis:group"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "then": {
+            "if": {
+              "properties": {
+                "disabled": {
+                  "anyOf": [
+                    {
+                      "const": true
+                    },
+                    {
+                      "$ref": "#/$defs/loaderExpression"
+                    }
+                  ]
+                },
+                "group": {
+                  "not": {
+                    "const": true
+                  }
+                }
+              },
+              "required": [
+                "disabled"
+              ]
+            },
+            "else": {
+              "properties": {
+                "config": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/entryList"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "config"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "cordis:include"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "then": {
+            "if": {
+              "properties": {
+                "disabled": {
+                  "anyOf": [
+                    {
+                      "const": true
+                    },
+                    {
+                      "$ref": "#/$defs/loaderExpression"
+                    }
+                  ]
+                },
+                "group": {
+                  "not": {
+                    "const": true
+                  }
+                }
+              },
+              "required": [
+                "disabled"
+              ]
+            },
+            "else": {
+              "properties": {
+                "config": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/includeConfig"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "config"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "dsh-schema-acceptance-fixture/namespace"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "then": {
+            "properties": {
+              "config": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/config0"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "dsh-schema-acceptance-fixture/class"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "then": {
+            "properties": {
+              "config": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/config1"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "dsh-schema-acceptance-fixture/absent"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "then": {
+            "properties": {
+              "config": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/unknownConfig"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "description": "Loader entry. Unknown metadata and plugin names are accepted; plugin-specific validation is available only for the names collected in this profile. Distinct resolutions of one name use a union of their schemas."
+    },
+    "patch": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/entryMetadata"
+        },
+        {
+          "if": {
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "const": "schema-namespace"
+              }
+            },
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "insert"
+                  ]
+                }
+              },
+              {
+                "anyOf": [
+                  {
+                    "not": {
+                      "required": [
+                        "name"
+                      ]
+                    }
+                  },
+                  {
+                    "properties": {
+                      "name": {
+                        "enum": [
+                          "",
+                          "dsh-schema-acceptance-fixture/namespace"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "config": {
+                "$ref": "#/$defs/config0"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "const": "schema-class"
+              }
+            },
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "insert"
+                  ]
+                }
+              },
+              {
+                "anyOf": [
+                  {
+                    "not": {
+                      "required": [
+                        "name"
+                      ]
+                    }
+                  },
+                  {
+                    "properties": {
+                      "name": {
+                        "enum": [
+                          "",
+                          "dsh-schema-acceptance-fixture/class"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "config": {
+                "$ref": "#/$defs/config1"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "const": "schema-absent"
+              }
+            },
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "insert"
+                  ]
+                }
+              },
+              {
+                "anyOf": [
+                  {
+                    "not": {
+                      "required": [
+                        "name"
+                      ]
+                    }
+                  },
+                  {
+                    "properties": {
+                      "name": {
+                        "enum": [
+                          "",
+                          "dsh-schema-acceptance-fixture/absent"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "config": {
+                "$ref": "#/$defs/unknownConfig"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "insert": {
+          "$ref": "#/$defs/entryList"
+        }
+      },
+      "description": "An insert appends entries, optionally inside the group identified by id. Other patches replace supplied fields; config is replaced wholesale, not deep-merged. A truthy name asserts the existing plugin name rather than renaming it. Unknown targets and non-insert patches without a nonempty id are warned and skipped."
+    }
+  },
+  "x-cordis": {
+    "profile": "schema-acceptance",
+    "complete": true,
+    "entries": [
+      {
+        "path": "/0",
+        "id": "schema-namespace",
+        "name": "dsh-schema-acceptance-fixture/namespace",
+        "status": "schema",
+        "configRef": "#/$defs/config0"
+      },
+      {
+        "path": "/1",
+        "id": "schema-class",
+        "name": "dsh-schema-acceptance-fixture/class",
+        "status": "schema",
+        "configRef": "#/$defs/config1"
+      },
+      {
+        "path": "/2",
+        "id": "schema-absent",
+        "name": "dsh-schema-acceptance-fixture/absent",
+        "status": "absent",
+        "configRef": "#/$defs/unknownConfig"
+      }
+    ],
+    "diagnostics": [],
+    "patchSchema": "#/$defs/patchList"
+  }
+}

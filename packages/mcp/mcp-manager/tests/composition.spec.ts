@@ -1,28 +1,20 @@
-/**
- * Real-composition guard: the manager boots from a test-only cordis.yml
- * through the actual Loader + Include path beside the file settings provider,
- * mounts its composition-base server, and an external edit of settings.yaml
- * hot-adds a second server whose tools appear — the product path a Web
- * management surface drives. The MCP SDK is mocked at the module level; the
- * Loader, settings file watcher, manager, and mcp-client instances are real.
- */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+/** Real profile persistence, inherited servers, and live Loader reconciliation. */
+import { readFile, writeFile } from 'node:fs/promises'
+import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import Loader from '@deepseek-ai/cordis-plugin-loader'
-import Include from '@deepseek-ai/cordis-plugin-include'
+import Timer from '@deepseek-ai/cordis-plugin-timer'
+import Hmr from '@deepseek-ai/dsh-hmr'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import FileSettingsProvider from '@deepseek-ai/dsh-settings-file'
+import { managerProfile } from './profile-fixture.ts'
 
 const { MockClient } = vi.hoisted(() => {
   class MockClient {
     transport: object | undefined = {}
     onclose: (() => void) | undefined
     connect = vi.fn(async () => {})
+    getProtocolEra = () => 'legacy' as const
+    ping = async () => {}
     close = vi.fn(async function (this: { onclose?: () => void }) { this.onclose?.() })
     listTools = vi.fn(async () => ({ tools: [{ name: 'remote', inputSchema: { type: 'object' } }], nextCursor: undefined }))
     getServerCapabilities = () => ({ tools: {} })
@@ -42,89 +34,66 @@ vi.mock('@modelcontextprotocol/client/stdio', () => ({
   StdioClientTransport: vi.fn(function () { return { close: () => Promise.resolve() } }),
 }))
 
-import McpServerManager from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
-
-let root: string | undefined
-let context: Context | undefined
-
-afterEach(async () => {
-  await context?.fiber.dispose()
-  context = undefined
-  if (root !== undefined) await rm(root, { recursive: true, force: true })
-  root = undefined
-})
+async function registry(): Promise<Context> {
+  const ctx = new Context()
+  await ctx.plugin(SystemPrompt)
+  await ctx.plugin(ToolRuntime)
+  return ctx
+}
 
 describe('mcp-manager real composition', () => {
-  it('boots from cordis.yml, mounts the base server, and hot-adds one from a settings edit', async () => {
-    root = await mkdtemp(join(tmpdir(), 'dsh-mcp-manager-composition-'))
-    const settingsPath = join(root, 'settings.yaml')
-    await writeFile(settingsPath, '\n')
-
-    const configPath = join(root, 'cordis.yml')
-    await writeFile(configPath, [
-      '- id: system-prompt',
-      '  name: test-system-prompt',
-      '- id: tools',
-      '  name: test-tools',
-      '- id: settings',
-      "  name: '@deepseek-ai/dsh-settings-file'",
-      '  config:',
-      `    path: ${JSON.stringify(settingsPath)}`,
-      '    debounceMs: 10',
-      '- id: mcp',
-      "  name: '@deepseek-ai/dsh-mcp-manager'",
-      '  config:',
-      '    servers:',
-      '      base:',
-      '        transport: stdio',
-      '        command: echo',
-      '',
-    ].join('\n'))
-
-    const ctx = new Context()
-    context = ctx
-    ctx.baseUrl = pathToFileURL(root).href + '/'
-    await ctx.plugin(Loader)
-    ctx.loader.builtins.include = Include
-    const modules = new Map<string, unknown>([
-      ['test-system-prompt', SystemPrompt],
-      ['test-tools', ToolRuntime],
-      ['@deepseek-ai/dsh-settings-file', FileSettingsProvider],
-      ['@deepseek-ai/dsh-mcp-manager', McpServerManager],
-    ])
-    ctx.loader.internal = {
-      version: 'v2',
-      async import(specifier: string) {
-        if (!modules.has(specifier)) throw new Error(`unexpected Loader import: ${specifier}`)
-        return modules.get(specifier)
-      },
-    } as unknown as NonNullable<typeof ctx.loader.internal>
-    await ctx.loader.create({
-      name: 'cordis:include',
-      config: { path: pathToFileURL(configPath).href },
+  it('boots inherited servers, hot-adds a server from the profile patch, and restores saved edits', async () => {
+    const ctx = await registry()
+    const id = 'managed-mcp'
+    const { profile, entry, start } = await managerProfile(ctx, {
+      id, base: { servers: { base: { transport: 'stdio', command: 'echo' } } },
     })
-    await ctx.loader.await()
-
-    // Composition-base server mounts without any user layer.
-    await vi.waitFor(() => { expect(ctx.get('tools')!.get('mcp__base__remote')).toBeDefined() })
-    const manager = ctx.get('mcpServers')!
+    ctx.provide('appReady', { onReady: (listener: () => void) => { listener(); return () => {} } })
+    await ctx.plugin(Timer)
+    await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
+    await ctx.hmr.runExclusive(async () => {})
+    await vi.waitFor(() => { expect(ctx.tools.get('mcp__base__remote')).toBeDefined() })
+    const manager = ctx.mcpServers
+    const fiber = entry.fiber
     expect(manager.list()).toHaveLength(1)
 
-    // An external settings.yaml edit is the same write path the Web surface
-    // uses; the watcher publishes it and the manager mounts the new server.
-    await writeFile(settingsPath, [
-      'mcp:',
-      '  servers:',
-      '    added:',
-      '      transport: stdio',
-      '      command: echo',
-      '',
-    ].join('\n'))
-    await vi.waitFor(() => {
-      expect(ctx.get('tools')!.get('mcp__added__remote')).toBeDefined()
-    }, { timeout: 5_000 })
+    await writeFile(profile.patchPath, JSON.stringify([{ id, config: {
+      servers: { base: { transport: 'stdio', command: 'echo' }, added: { transport: 'stdio', command: 'echo' } },
+    } }]))
+    await vi.waitFor(() => { expect(ctx.tools.get('mcp__added__remote')).toBeDefined() }, { timeout: 5_000 })
+    expect(entry.fiber).toBe(fiber)
     expect(manager.list().map(view => view.name).sort()).toEqual(['added', 'base'])
     expect(manager.list().find(view => view.name === 'added')).toMatchObject({ deletable: true })
     expect(manager.list().find(view => view.name === 'base')).toMatchObject({ deletable: false })
+
+    const revision = ctx.settings.describe().find(row => row.ns === id)!.revision
+    await ctx.settings.update(id, { servers: { base: { enabled: false } } }, revision)
+    await vi.waitFor(() => { expect(ctx.tools.get('mcp__base__remote')).toBeUndefined() })
+    await expect(ctx.settings.update(id, { servers: { base: { enabled: true } } }, revision)).rejects.toThrow('changed since it was read')
+    await ctx.fiber.dispose()
+    const restored = await registry()
+    await start(restored)
+    await vi.waitFor(() => { expect(restored.tools.get('mcp__added__remote')).toBeDefined() })
+    expect(restored.mcpServers.list().find(view => view.name === 'base')).toMatchObject({ enabled: false, deletable: false })
+    await restored.settings.mutate(id, [{ op: 'unset', path: ['servers', 'base'] }])
+    await vi.waitFor(() => { expect(restored.tools.get('mcp__base__remote')).toBeDefined() })
+    await restored.settings.mutate(id, [{ op: 'unset', path: ['servers', 'added'] }])
+    await vi.waitFor(() => { expect(restored.mcpServers.list().map(view => view.name)).toEqual(['base']) })
+  })
+
+  it('rejects invalid server edits before persistence', async () => {
+    const ctx = await registry()
+    const { profile, entry } = await managerProfile(ctx, {
+      base: { servers: { base: { transport: 'stdio', command: 'echo' } } },
+    })
+    await vi.waitFor(() => { expect(ctx.tools.get('mcp__base__remote')).toBeDefined() })
+    const saved = await readFile(profile.patchPath, 'utf8')
+    const fiber = entry.fiber!
+    for (const patch of [{ command: '' }, { headers: { invalid: 'stdio' } }, { command: '${vault:INVALID}' }]) {
+      await expect(ctx.settings.update('mcp', { servers: { base: patch } })).rejects.toThrow()
+      expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
+    }
+    expect(entry.fiber).toBe(fiber)
+    expect(ctx.tools.get('mcp__base__remote')).toBeDefined()
   })
 })

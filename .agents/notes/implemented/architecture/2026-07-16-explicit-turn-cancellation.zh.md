@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-Agent 拥有仅用于运行时的 `AgentCancelCause` 联合类型 `{ kind: 'user' } | { kind: 'parent' }`；`agent.cancel()` 默认使用 `user`。TypeScript 在这个类型化的同进程边界中强制执行该词汇，不提供运行时校验器、后备行为，也不为无类型调用方提供特殊兼容性约定。活跃的 `TurnCancellation` 会把类型化判别字段复制为一个全新且已冻结的 signal 原因；空闲状态下没有可修改的持有者，也不会让后续工作预先进入取消状态。
+Agent 拥有仅用于运行时的 `AgentCancelCause` 联合类型 `{ kind: 'user' } | { kind: 'parent' } | { kind: 'hook'; reason: string } | { kind: 'disposed' }`，`agent.cancel()` 必须显式传入其一。TypeScript 在这个类型化的同进程边界中强制执行该词汇，不提供运行时校验器、后备行为，也不为无类型调用方提供特殊兼容性约定。持有者中止时携带的是调用方自己的那个对象，而非一份分离的拷贝，因此能接触到该 signal 的传输层可以向其添加属性：Node 的 fetch 会给它收到的 reason 赋一个 `stack`。所以循环在 cause 成为持久数据的那一步拷贝已声明字段。在 `cancel()` 处冻结 cause 并非可选方案——undici 是在严格模式代码中执行该赋值的，被冻结的 reason 会让 `fetch` 以 `TypeError: Cannot add property stack` 取代中止原因而拒绝。空闲状态下没有可修改的持有者，也不会让后续工作预先进入取消状态。
 
 正在运行的轮次被中断后，以粗粒度的持久化结果 `{ kind: 'aborted' }` 结束。终态事件记录轮次发生了什么，运行时 signal 标识谁请求了取消；回放不会重复保存 `user` 或 `parent`。会话 seed/load 会拒绝携带取消原因或任何其他额外字段的旧式中止记录，因此回放无法重新引入由调用方持有的取消细节。仅限进程内的 `agent/cancel-requested` 通知不会持久化；未来若有审计需求，应使用独立的持久化控制请求事件，让请求与最终结果保持为两项事实。持久化事件不包含调用栈、signal、错误对象、自由文本取消原因或后端私有细节。
 
@@ -22,7 +22,7 @@ AgentLoop 为每个待启动轮次私有地持有一个 `TurnCancellation`。它
 
 显式事件签名传递单个 payload 对象：agent 作用域事件在 payload 中携带 `agent` 和 `signal`，`next` 位于最后；其余 API 保持 `signal` 紧邻 waterfall（瀑布式事件）的最终 `next` 之前。`PreStepContext` 与 `RequestFailureContext` 已退役，其字段并入 `agent/pre-step` 与 `agent/request-error` 的 payload（[payload-object 事件](../../archived/architecture/2026-08-06-agent-event-payload-objects.md)）。进入 pre-step 时、请求配置、请求错误恢复、模型生成、工具执行、审批、轮次停止以及 subagent 或工作流请求都会收到当前 signal。钩子桥接器也必须提供 `RunHookOptions.signal`，使轮次取消能够到达 Bash 执行器由提供方管理的终止与等待边界；[原生 containment 决策](2026-08-28-subprocess-native-containment.zh.md)负责受支持本地路径上的 scope、Job 与 fallback 机制。`SystemPrompt.assemble()` 在 `AssembleContext` 中携带 `signal?: AbortSignal`，因为该对象是显式请求值，也可表示轮次之外不携带 signal 的组装。监听器可以配合该 signal 取消，但不得保留它来控制其他轮次。
 
-`ctx.agents` 仍只携带发起 Agent。环境中的 Agent 并不代表存活、当前轮次或取消权限。cause 读取器是 loop 私有的，它直接陈述机器私有的 slot 不变量（只有 `cancel()` 会中止轮次控制器，且总是携带规范的冻结 cause），而不是对 reason 做结构化再校验；不存在从任意 signal 读取 cause 的公开辅助函数。并发 Agent 会同时隔离各自的发起方身份和轮次 signal；子驱动会遮蔽父发起方，而父请求 signal 仍通过 subagent seam 传递。
+`ctx.agents` 仍只携带发起 Agent。环境中的 Agent 并不代表存活、当前轮次或取消权限。cause 读取器是 loop 私有的，它直接陈述机器私有的 slot 不变量（只有 `cancel()` 会中止轮次控制器，且总是携带类型化的 cause），而不是对 reason 做结构化再校验；不存在从任意 signal 读取 cause 的公开辅助函数。并发 Agent 会同时隔离各自的发起方身份和轮次 signal；子驱动会遮蔽父发起方，而父请求 signal 仍通过 subagent seam 传递。
 
 Agent dispose（资源释放）会在活跃持有者上请求仅用于运行时的 `{ kind: 'disposed' }` 中断。若取消已经先占用控制器的中断原因，该原因便无法改写，因此终态分类会先检查生命周期状态：资源释放结果优先，之后受支持的 `user` 或 `parent` 取消原因形成粗粒度的中止结果，其他异常保留现有错误路径。ACP（Agent Client Protocol）取消映射为 `user`；进程内 spawn 和 fork 的传播映射为 `parent`。远程 ACP subagent 保持现有协议。
 
@@ -30,7 +30,7 @@ Agent dispose（资源释放）会在活跃持有者上请求仅用于运行时�
 
 ## 验证
 
-约定测试验证类型化调用方联合类型、冻结且与调用方分离、默认行为与首次请求优先行为、粗粒度的会话 JSON 往返与旧式记录拒绝、ACP `user`、进程内 subagent `parent` 以及 dispose 优先级。AgentLoop 测试让协作式监听器在 pre-step、系统提示词组装、请求、模型流、请求错误恢复、工具执行和轮次停止处等待 signal；并断言同一轮次使用一个 signal，不同轮次使用全新的 signal，终态发布期间和持久化刷新受阻期间不存在取消权限。真实钩子桥接器测试会在报告空闲状态前取消并回收受阻的提示词钩子。
+约定测试验证类型化调用方联合类型、在 cause 成为持久数据处拷贝字段、默认行为与首次请求优先行为、粗粒度的会话 JSON 往返与旧式记录拒绝、ACP `user`、进程内 subagent `parent` 以及 dispose 优先级。AgentLoop 测试让协作式监听器在 pre-step、系统提示词组装、请求、模型流、请求错误恢复、工具执行和轮次停止处等待 signal；并断言同一轮次使用一个 signal，不同轮次使用全新的 signal，终态发布期间和持久化刷新受阻期间不存在取消权限。真实钩子桥接器测试会在报告空闲状态前取消并回收受阻的提示词钩子。
 
 发起方作用域测试断言所有钩子仍观察到同一个 Agent 且没有环境中的轮次 signal，并发 Agent 保持独立的身份与 signal，嵌套子驱动只遮蔽身份。竞态测试覆盖空闲状态取消、运行前取消、从 `running` 监听器提交替代提示词、重复取消以及取消与 dispose 竞争下的完全停稳。
 

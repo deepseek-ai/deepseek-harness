@@ -197,8 +197,10 @@ public static class InstallerCapture {
         RedrawWindow(window, IntPtr.Zero, IntPtr.Zero, 0x181);
     }
 
-    public static string Save(IntPtr window, string path) {
-        Reveal(window);
+    public static string Save(IntPtr window, string path) { return SaveNative(window, path, true); }
+
+    public static string SaveNative(IntPtr window, string path, bool waitForInstaller) {
+        if (waitForInstaller) Reveal(window);
         Rect rect;
         if (!GetWindowRect(window, out rect)) throw new InvalidOperationException("Could not read preview bounds");
         int width = rect.Right - rect.Left, height = rect.Bottom - rect.Top;

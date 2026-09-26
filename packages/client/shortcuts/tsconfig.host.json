@@ -1,0 +1,37 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
+  },
+  "include": [
+    "src/protocol.ts",
+    "src/native.ts",
+    "src/binding.ts",
+    "src/configuration.ts",
+    "src/persistence.ts",
+    "src/index.ts",
+    "src/config.ts"
+  ],
+  "references": [
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../util/crypto"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../host/webserver"
+    },
+    {
+      "path": "../../util/values"
+    }
+  ]
+}

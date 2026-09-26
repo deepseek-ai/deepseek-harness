@@ -1,0 +1,8 @@
+version: 1
+scenario: dynamic-tool-updates
+profile: sdk
+composition: dynamic-tool-updates
+recording: authored
+header:
+  class: dynamic-tool-updates
+  changes: 2

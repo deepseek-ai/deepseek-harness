@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-18-declarative-agent-presets.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-18-declarative-agent-presets.md
+/agent-note-declarative-agent-presets-and-retained-revisions:
+  en: 0a9b9ab7a29ddce9
+  zh: 10893a464cde0f97
+/agent-note-declarative-agent-presets-and-retained-revisions/problem:
+  en: 725f773bb350218e
+  zh: dd8fbc09ef48208d
+/agent-note-declarative-agent-presets-and-retained-revisions/decision:
+  en: 2a2489303fc76fc0
+  zh: 1a760e9a5edfccc8
+/agent-note-declarative-agent-presets-and-retained-revisions/alternatives-considered:
+  en: 09f40eab4659e9f6
+  zh: 7a70da0d0ae6845b
+/agent-note-declarative-agent-presets-and-retained-revisions/consequences:
+  en: 24179c31261b0942
+  zh: 651c61bb5e53fd78
+/agent-note-declarative-agent-presets-and-retained-revisions/testing:
+  en: d1a38a45212d4ebd
+  zh: 6ca7a86078515284

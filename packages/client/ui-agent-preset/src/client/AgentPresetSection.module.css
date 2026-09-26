@@ -18,43 +18,6 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.pickerPreference {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 14px 16px;
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 14px;
-  background: var(--dsw-alias-bg-module-platform);
-}
-
-.pickerPreferenceCopy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.pickerPreferenceTitleRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.pickerPreferenceTitle {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.5;
-}
-
-.pickerPreferenceDescription {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-tertiary);
-}
-
 /* Cards, not rows: a preset is a thing you pick, and the description is the
    part that tells them apart — a row would bury it beside the actions. */
 .group {
@@ -84,18 +47,16 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
-  /* Every row the same height, so a short description does not make its card
-     shorter than the one beside it. */
-  grid-auto-rows: 1fr;
+  /* Match neighboring cards within a row, without stretching shorter rows. */
   gap: 12px;
 }
 
 .card {
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 20px;
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke);
+  border-radius: var(--dsw-radius-xl);
   display: flex;
   flex-direction: column;
-  background: transparent;
+  background: var(--dsw-alias-settings-card-fill);
   transition: border-color .16s, background .16s;
 }
 
@@ -145,10 +106,10 @@
 }
 
 /* The discovery-reported reason, verbatim: it names the rows and the fix.
-   A real element rather than the icon row's `data-tip` pseudo-element, for two
-   reasons: generated content joins the card's accessible text, where this would
-   repeat what the alert already carries, and that tooltip is one `nowrap` line
-   for an icon label while this names package specifiers one per line. */
+   A real element rather than a generated tooltip, for two reasons: generated
+   content joins the card's accessible text, where this would repeat what the
+   alert already carries, and a tooltip is one `nowrap` line while this names
+   package specifiers one per line. */
 .brokenTip {
   position: absolute;
   top: calc(100% + 6px);
@@ -157,7 +118,7 @@
   width: max-content;
   max-width: 100%;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-label-primary);
   color: var(--dsw-alias-bg-layer-3);
   font-size: 11px;
@@ -184,7 +145,7 @@
 }
 
 .cardMain:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }
 
@@ -214,9 +175,9 @@
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   padding: 14px 16px 12px;
-  border-radius: 12px 12px 0 0;
+  border-radius: var(--dsw-radius-xl) var(--dsw-radius-xl) 0 0;
 }
 
 .cardMain:disabled {
@@ -224,44 +185,51 @@
 }
 
 .cardMain:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }
 
 .cardHead {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 12px;
   /* Anchors the broken badge's tooltip: the badge itself stays unpositioned so
-     its `::after` resolves against the card's own width instead of against a
+     the tooltip resolves against the card's own width instead of against a
      badge that sits partway across it. A tooltip grown from the badge would
      run past the card, and past the section for a card in the last column. */
   position: relative;
 }
 
+.cardIdentity {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .cardName {
+  min-width: 0;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
-}
-
-/* Placement only: the capsule geometry and palette come from `Tag`. */
-.inUse {
-  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Bounded to four lines. A preset publishes its own description, so one long
-   one would otherwise stretch every card in its grid row (`.cards` sizes rows
-   1fr). Clamping is CSS alone: the whole text stays in the DOM for assistive
+   one would otherwise stretch every card in its grid row. Clamping is CSS
+   alone: the whole text stays in the DOM for assistive
    tech, and the card offers it on hover when it is actually cut off. The
    description does not grow to fill the card — `-webkit-line-clamp` on a
    flex-stretched box leaves the clamp height and the box height disagreeing,
-   so `.cardId` takes the free space with an auto margin instead. */
+   so auto margins center the text between the header and footer instead. */
 .cardDesc {
+  margin-block: auto;
   font-size: 13px;
   line-height: 1.55;
   color: var(--dsw-alias-label-secondary);
-  min-height: 42px;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
@@ -271,27 +239,54 @@
 }
 
 .cardId {
-  margin-top: auto;
+  flex-shrink: 0;
+  max-width: 35%;
   font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 11px;
+  line-height: 21px;
   color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cardFoot {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 2px;
   padding: 6px 10px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
-/* Icon-only actions: the label rides `title` so the row stays quiet until
+.cardHelp {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: auto;
+}
+
+.helpButton {
+  padding: 5px 6px;
+  min-height: 28px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.helpButton:hover,
+.helpButton:focus-visible {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Icon-only actions: the label rides `data-tip` so the row stays quiet until
    someone reaches for it. */
 .iconButton {
   position: relative;
   appearance: none;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--dsw-radius-sm);
   padding: 6px;
   background: none;
   color: var(--dsw-alias-label-tertiary);
@@ -300,18 +295,13 @@
   align-items: center;
 }
 
-.iconButton:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.iconButton:hover:not(:disabled) {
+.iconButton:hover {
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
 }
 
 .iconButton:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
 }
 
@@ -322,7 +312,7 @@
   left: 50%;
   transform: translateX(-50%);
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-label-primary);
   color: var(--dsw-alias-bg-layer-3);
   font-size: 11px;
@@ -338,105 +328,18 @@
   opacity: 1;
 }
 
-.iconDanger:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
-  color: var(--dsw-alias-state-error-primary);
-}
-
-/* Where the host has no desktop opener, the row answers with the directory
-   itself — text to copy, not a control that would spawn into nothing. */
-.revealedPath {
-  margin: 0;
-  padding: 6px 16px 10px;
-  font-size: 11px;
-  color: var(--dsw-alias-label-tertiary);
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-}
-
-.revealedPath code {
-  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  color: var(--dsw-alias-label-secondary);
-  user-select: all;
-  overflow-wrap: anywhere;
-}
-
-.revealedPathLabel {
-  white-space: nowrap;
-}
-
-.secondaryButton {
-  border: none;
-  border-radius: 7px;
-  padding: 5px 8px;
-  background: none;
-  color: var(--dsw-alias-label-secondary);
-  font: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-}
-
-
-.secondaryButton:hover:not(:disabled) {
-  background: var(--dsw-alias-bg-layer-1);
-}
-
-.secondaryButton:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.fieldLabel {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.input {
-  box-sizing: border-box;
-  padding: 9px 12px;
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 10px;
-  font: inherit;
-  font-size: 13px;
-  background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-primary);
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--dsw-alias-brand-primary);
-}
-
-.input::placeholder {
-  color: var(--dsw-alias-label-dimmed);
-}
-
 .dialog {
-  width: min(560px, 100%);
+  width: min(720px, 100%);
 }
 
-.dialogFields {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* A shipped composition can be long; the dialog scrolls it rather than grow. */
+/* A declared composition can be long; the dialog scrolls it rather than grow. */
 .viewerCode {
   margin: 0;
   padding: 12px;
-  max-height: min(52vh, 480px);
+  max-height: min(60vh, 560px);
   overflow: auto;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-secondary);
   font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
@@ -454,22 +357,9 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-.deleteDialog {
-  width: min(480px, 100%);
-}
-
-.deleteConfirm:not(:disabled) {
-  border-color: var(--dsw-alias-state-error-primary);
-  color: var(--dsw-alias-state-error-primary);
-}
-
-.deleteConfirm:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
-}
-
-/* The conversational authoring entry, after the card grid in the spot the
-   create button vacated. Dashed like the Models page's add affordances: it
-   reads as a place a preset will appear, not a command. */
+/* The conversational authoring entry, after the card grid. Dashed like the
+   Models page's add affordances: it reads as a place a preset will appear,
+   not a command. */
 .creatorButton {
   box-sizing: border-box;
   align-self: stretch;
@@ -479,7 +369,7 @@
   gap: 6px;
   height: 44px;
   border: 1px dashed var(--dsw-alias-border-l3);
-  border-radius: 20px;
+  border-radius: var(--dsw-radius-lg);
   font: inherit;
   font-size: 14px;
   line-height: 22px;

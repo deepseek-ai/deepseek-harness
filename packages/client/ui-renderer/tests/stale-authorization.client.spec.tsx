@@ -35,7 +35,7 @@ function makeHost() {
   }
   const sessionAdapter: SlotScopeAdapter = {
     current: bindingSource,
-    resolve: () => undefined,
+    bindingSource: () => bindingSource,
   }
   const bump = (key: string) => {
     versions.set(key, (versions.get(key) ?? 0) + 1)
@@ -54,9 +54,16 @@ function makeHost() {
     // the raw view and crash reports never fire.
     entriesOfSlot: key => entries.get(key) ?? [],
     reportEntryError: () => {},
+    reportFactoryError: () => {},
     specOf: () => ({ kind: 'single', scope: 'root' }),
     isLive: entry => live.has(entry),
     storeOf: () => undefined,
+    factoryStoreOf: () => undefined,
+    retainFactoryOccurrence: () => () => {},
+    subscribeFactory: () => () => {},
+    getFactoryVersion: () => 0,
+    factoryOf: () => undefined,
+    isFactoryLive: () => false,
     root: bindingSource,
     scopeRevision: { getSnapshot: () => 0, subscribe: () => () => {} },
     scope: () => sessionAdapter,

@@ -1,0 +1,51 @@
+# Agent Note: Composer selection surfaces mirror the composer's Enter and Escape keys
+
+Status: implemented
+
+English | [中文](2026-09-14-composer-selection-keyboard.zh.md)
+
+## Problem
+
+Two selection surfaces inside the composer hold focus while they are open, and both left Tab to the browser.
+
+The popupSelect panel behind `/model` and `/permission` focuses its own search input and dismisses on pointer presses outside the card only. An unconsumed Tab fell through to native focus traversal and left the card open with its search input unfocused — a state no key clears. Its highlight also opened on the topmost row while the option rows mark the session's current value wherever it sits in the provider-grouped list, so the first accept selected a row the user had not chosen instead of confirming the value in use.
+
+The model seat's dropdown (`ModelSelect`, whose Effort row opens the reasoning-level pane) portals its card and moves real focus with the arrow keys. Focus stays on the trigger while the menu opens, and the walk read "focus is not on a row" as row zero before stepping, so the first forward step landed on the second row.
+
+## Decision
+
+`PopupSelectView` settles on Enter or Tab and leaves on Escape or Shift+Tab: Enter and Tab both run `select` on the filtered highlight, Escape and Shift+Tab both dismiss and return focus to the composer through the conversation's own `focus()`, which rides Lexical so the caret comes back where the draft left it rather than at the start. That method is the one addition this decision makes to the `SessionInput` face: the shell needs the composer's own focus, not a DOM focus on its contenteditable, and the owner of the caret is the only party that can restore it. Opening the trigger menu from the composer's launcher button does the same before the menu opens: the menu is a combobox over the editor, so the button cannot hold the keyboard. `↑`/`↓` walk the filtered highlight (wrapping, scrolled into view) and `←`/`→` stay native to the search input. Every one of those keys is consumed, so a row list that is not ready yet swallows Tab as a no-op rather than releasing focus out of the card.
+
+`PopupSelectController` parks the highlight on the row the loaded list marks as the current value, falling back to the top row when no row is marked or when the search retained across a retry hides it. Typing rebases the highlight to the top of the filtered rows, because a search asks for something other than the current value. Settling on a freshly opened panel therefore confirms the value in use.
+
+`ModelSelect` keeps `↑`/`↓` as its focus walk over the rows of the shown pane (wrapping; a step taken while the trigger still holds focus enters at the near end). Tab settles: it activates the row the keyboard is on, and with focus still on the trigger it enters the menu at the row of the value in use instead. Escape and Shift+Tab leave a drilled pane first and otherwise close back to the trigger. A pane switch replaces the row that had focus, so each switch names where the keyboard lands: drilling focuses the row of the value in use (its checked row, or the first row when none is marked), and returning to the root pane focuses the cell that opened the pane left. Without that handoff the focus the unmounted row left on the page body sits outside the card's subtree, where its key handling never sees a keystroke.
+
+Mouse presses on the `ModelSelect` trigger or portaled menu buttons prevent the browser’s default focus transfer: WebKit can otherwise blur the focused row and close the menu before `click`. Native `click` still owns selection and cancellation. Opening the menu or closing it through the trigger puts focus on the trigger. Selection requests return focus there before disabling the option rows, so a rejected request leaves keyboard navigation available.
+
+`Menu`, the shared anchored dropdown behind the composer's permission seat, the preset chip, file cards, and the settings rows, carries the same pairing: while its list is open, Tab settles the focused row — from the anchor's button, Tab enters the list instead — and Escape or Shift+Tab close it and return focus to the anchor's first button. Only a keyboard already on the anchor or inside the list is intercepted, so Tab presses elsewhere on the page keep the browser's traversal even while a menu is open. The row's focus fill is the row's own indication: the browser's default ring would double it, and the fill is the same one the row shows under the pointer, so the visual language stays one per state. Selecting a row hands the keyboard back to the anchor unless the owner moved it itself — a card that focuses its own preview keeps it. The arrows, Home, and End walk the list whether or not `autoFocus` is set — that option now decides only whether opening focuses the first row — the row the keyboard is on carries the same fill a hovered row gets, and closing on Escape or Shift+Tab returns focus to the anchor whenever the menu held it.
+
+A dismissed menu stays dismissed: `InputTriggerController` records the identity of the hit the user closed — Escape or Shift+Tab, a pointer dismissal, or a settling pick — and a re-track of that same token with the same query leaves the menu closed, so restoring the caret after a dismissal (or a settled command closing the surface it opened) cannot revive it. A new query or another token re-arms it.
+
+The row contracts are unchanged. Producers already mark their current row `active`, and neither surface gains a drill verb.
+
+## Alternatives considered
+
+**Tab walks the rows.** Tab as a second `↓` gives these surfaces no settle gesture on the key the composer already uses for one, and leaves Shift+Tab meaning "walk backwards" instead of the Escape the neighbouring key mirrors. The composer's own pairing — Enter/Tab settle, Escape/Shift+Tab leave — was chosen instead.
+
+**Let the panel's Tab fall through to native traversal.** The card's dismissal reacts to pointer presses alone, so the residue — open card, unfocused search input — stays until the next click.
+
+**Keep the panel's highlight on the top row.** It reinstates the fault this decision removes: accepting on a freshly opened panel acts on a row nobody chose.
+
+**Rebase the panel highlight onto the current value after a search too.** A search expresses interest in rows other than the current value; keeping the highlight on a row the query may have ranked last contradicts the query.
+
+**Open a drilled pane on its top row.** It parks the keyboard on the topmost level rather than the one in use — the same fault the parked highlight removes — so an accept gesture made without looking switches the effort instead of confirming it.
+
+**Leave the seat's Tab native.** The seat closes on blur when focus leaves the trigger and the card, so a Tab there was not a dead state. It lost because a surface whose keys mirror the composer's should not single out Tab: Tab settles there like Enter, and Shift+Tab leaves.
+
+## Verification
+
+[Seat browser evidence](../../../../apps/web/tests/declared-reasoning.e2e.ts) drives real Chromium and WebKit against the shipped bundles: both verify native mouse selection, cancellation, focus after rejected requests, and keyboard navigation. Each opens the drilled level pane, walks it with `↑`, settles a level with Tab and asserts the saved effort, then reopens the pane and asserts the keyboard lands on that level rather than the top of the list before Shift+Tab walks back to the drilled cell and closes. [Seat keyboard tests](../../../../packages/client/ui-model-selection/tests/model-select.client.spec.tsx) cover the drilled-pane handoff onto the value in use (and onto the first row when no row is marked), the handoff back onto the cell, the `↑`/`↓` walk with both wraps, Tab settling a focused row and entering the menu from the trigger, Shift+Tab leaving a pane then closing, and Tab staying native while the menu is closed. [Popup view tests](../../../../packages/client/ui-commands/tests/popup-view.client.spec.tsx) cover Tab settling the parked highlight with consumption and refocus, Shift+Tab dismissing without settling, Tab consumed while rows load without leaving the card, the arrows staying distinct from the native left/right caret, and the wrap on `↑`/`↓`. [Trigger tests](../../../../packages/client/ui-input-trigger/tests/service.client.spec.ts) cover a dismissal sticking to its hit (Escape, a pointer dismissal, and a settling pick), the same hit re-tracking closed, and a changed query re-arming the menu. [Menu tests](../../../../packages/client/ui-primitives/tests/atoms.client.spec.tsx) cover the arrow walk without `autoFocus` (entering at the near end, wrapping, and stepping over a disabled row), Escape returning focus to the anchor, Tab settling the focused row, Shift+Tab closing back to the anchor, Tab entering the list from the anchor, and an unrelated Tab staying native while the list is open. [Popup controller tests](../../../../packages/client/ui-commands/tests/popup.client.spec.ts) cover the parked highlight, its top-row fallback without a marked row, the re-park inside a search retained across a retry, and the rebase to the top row on typing. The popup panel's Tab has unit coverage only: no Web scenario drives `/model` or `/permission` yet.
+
+## Consequences
+
+Accepting on a freshly opened panel confirms the value the session already uses instead of switching it, so Tab settles nothing surprising; a Tab on a walked highlight settles that row, exactly as Enter would. Leaving either surface is Escape or Shift+Tab, and both are consumed while a surface is open, so a keyboard user steps out with Escape or Shift+Tab rather than by tabbing away. The composer's trigger menu keeps its own Tab, which settles or drills the highlighted candidate — its drill verb has no other keyboard route — while Escape and Shift+Tab leave that menu without settling, so the exit gesture never consumes the draft. The same pairing reaches every `Menu` consumer at once, so the composer's permission seat, the preset chip, file cards, and the settings dropdowns all settle on Tab and leave on Shift+Tab. The keys are recorded in each owning module's documentation and README, and the trigger menu's keys stay in the `ui-input-trigger` README.

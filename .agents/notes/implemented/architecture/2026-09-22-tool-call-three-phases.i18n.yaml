@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-09-22-tool-call-three-phases.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-22-tool-call-three-phases.md
+/agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid:
+  en: d8d1cdcedf0b5d8e
+  zh: 79e4466489558365
+/agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/problem:
+  en: 0539e5f25f594681
+  zh: 5446bd08229eab9b
+/agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/decision/one-tool-owns-three-stages:
+  en: ea65da88c3df35bb
+  zh: a71afb4683a75290
+/agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/decision/start-marks-an-initialization-candidate:
+  en: 696a180246e23391
+  zh: aeb2b1fdcfdf9631
+/agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/decision/converge-on-final-state-without-replaying-preparation:
+  en: 603cbcf3379ad4f7
+  zh: e34d87ea348c756b
+/agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/decision/shared-rows-reuse-their-existing-presentation:
+  en: 24536588cd0c979b
+  zh: 992d4c4657d6d034
+/agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/decision/relationship-to-existing-records:
+  en: bd4984f66c507785
+  zh: 4d2372fdbc4c3cec
+/agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/alternatives-considered:
+  en: 505095bec889700e
+  zh: b77c492de3e8641a
+/agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/consequences:
+  en: 3cf36b54240013da
+  zh: 67e663b431bc67d2

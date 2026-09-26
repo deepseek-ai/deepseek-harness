@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-12-prune-unused-skill-registry-api.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/rejected/simplification/2026-07-12-prune-unused-skill-registry-api.md
-2026-07-12-prune-unused-skill-registry-api.md: 23fb0163296a1cf6cd8700ad745f60e52371a3b1
-2026-07-12-prune-unused-skill-registry-api.zh.md: e1496aab7bc77dc04600a95bea8a5db3f8955053
+/agent-note-prune-unused-skill-registry-api:
+  en: ff5d0311e8e1e032
+  zh: a5c7ab3f62dc41b3
+/agent-note-prune-unused-skill-registry-api/problem:
+  en: dcd820314b04d01c
+  zh: c2131cbda05d276c
+/agent-note-prune-unused-skill-registry-api/proposal:
+  en: 803833583cc47fe4
+  zh: f9cc914a2b1acb07
+/agent-note-prune-unused-skill-registry-api/alternatives-considered:
+  en: b8f81e90df8b47c2
+  zh: 04d7b9c5fef53f6d
+/agent-note-prune-unused-skill-registry-api/acceptance-criteria:
+  en: 601e07918e345279
+  zh: 36f81302639503b5
+/agent-note-prune-unused-skill-registry-api/risks:
+  en: 81cbe6895b2dd805
+  zh: a52ce97e9e47d177

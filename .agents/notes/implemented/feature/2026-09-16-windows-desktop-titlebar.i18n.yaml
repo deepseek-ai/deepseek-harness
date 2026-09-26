@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-16-windows-desktop-titlebar.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-16-windows-desktop-titlebar.md
+/agent-note-windows-desktop-caption-and-application-menus:
+  en: 4220f3c0d8058ca7
+  zh: 4751c2cffb9b8e2a
+/agent-note-windows-desktop-caption-and-application-menus/problem:
+  en: 9a3d1b6d02197c6b
+  zh: 5eba9f9bf6928430
+/agent-note-windows-desktop-caption-and-application-menus/decision:
+  en: be4b50d09caa5d46
+  zh: 20b0572be5941b0c
+/agent-note-windows-desktop-caption-and-application-menus/alternatives-considered:
+  en: db7703a7a37ac5da
+  zh: 704a2a289b8f7cb0
+/agent-note-windows-desktop-caption-and-application-menus/consequences:
+  en: a52bfa0c00b4e26d
+  zh: c479cc99fd1bff03
+/agent-note-windows-desktop-caption-and-application-menus/testing:
+  en: d72a6473a7d385cf
+  zh: ededb7391908db38

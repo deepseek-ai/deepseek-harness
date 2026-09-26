@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-19-trim-session-query-convenience-api.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/simplification/2026-09-19-trim-session-query-convenience-api.md
+/agent-note-trim-unused-sessionquery-convenience-methods:
+  en: 0639096a41a3eeb4
+  zh: f5ff6ed78687b440
+/agent-note-trim-unused-sessionquery-convenience-methods/problem:
+  en: 62f49ae402951c28
+  zh: 95985e67cbb5b6ac
+/agent-note-trim-unused-sessionquery-convenience-methods/proposal:
+  en: 3848c7dcdbf70815
+  zh: d2ae878e6057afc8
+/agent-note-trim-unused-sessionquery-convenience-methods/alternatives-considered:
+  en: 431cc99fec52f696
+  zh: ee5bcfe54f7f703c
+/agent-note-trim-unused-sessionquery-convenience-methods/acceptance-criteria:
+  en: 44741d711dff0e30
+  zh: be1e6f9547dabc74
+/agent-note-trim-unused-sessionquery-convenience-methods/risks:
+  en: 2095fdf1f2beaa26
+  zh: 0152ac808e52fd08

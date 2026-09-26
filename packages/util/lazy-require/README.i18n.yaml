@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/lazy-require/README.md
-README.md: d75a7626da61522939f17f6caec1f5d14e6da6c6
-README.zh.md: 7d8e66f15957a990ae37ed04b627dd4a4f147fa0
+/:
+  en: e5a2fddbf7e87185
+  zh: 6a416161c9fb4a42
+/deepseek-ai-dsh-lazy-require:
+  en: 50a89d91b63bf486
+  zh: 20436f06d9e92fc0
+/deepseek-ai-dsh-lazy-require/summary:
+  en: 3a49032ebd0b88ed
+  zh: 0a54994d3ada3131
+/deepseek-ai-dsh-lazy-require/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-lazy-require/use-this-package:
+  en: fcc361ec6f3eedb6
+  zh: be2fee303fcdba1a
+/deepseek-ai-dsh-lazy-require/understand-the-implementation:
+  en: 4344e07bfc2f4ea7
+  zh: aa9127a1a2f199d8
+/deepseek-ai-dsh-lazy-require/understand-the-implementation/source-map:
+  en: 483265845e364e38
+  zh: bd45f2adbd18f020
+/deepseek-ai-dsh-lazy-require/further-exploration:
+  en: a298452c8de02534
+  zh: c8e542eb859c09db
+/deepseek-ai-dsh-lazy-require/model-experience:
+  en: 2e5c9a1971d91c2e
+  zh: f3618c564abc7f1c
+/deepseek-ai-dsh-lazy-require/model-experience/kv-cache-effect:
+  en: 4f0eadf94828e66e
+  zh: 4f8a6ec170ebbfb6
+/deepseek-ai-dsh-lazy-require/known-limitations-and-deferred-work:
+  en: 0973de93cdfa0bee
+  zh: 22e1e00a8df2f3f2
+/deepseek-ai-dsh-lazy-require/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

@@ -1,8 +1,8 @@
 /**
  * Client mirror of the Host settings document: the one `settings.describe`
  * reader in the browser. Every settings consumer derives from this store —
- * per-namespace scopes through `SettingsScopeBinder.bind`, cross-namespace
- * surfaces through the binder's shared describe face — so startup cost and
+ * shared entry forms through `ConfigForms.get`, cross-namespace
+ * surfaces through the provider's shared describe face — so startup cost and
  * freshness are properties of this class, not of how many features own a
  * preference. The Host stays the fact source: the mirror re-reads on the
  * invalidations its owning plugin subscribes to and folds write answers in

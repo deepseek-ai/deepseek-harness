@@ -65,7 +65,7 @@ describe('todo_write tool through the agent loop', () => {
 
     const log = agent.session.snapshotEvents()
     expect(findEvent(log, 'tool/call').data.name).toBe('todo_write')
-    expect(findEvent(log, 'tool/result').data.message.content[0].isError).toBe(false)
+    expect(findEvent(log, 'tool/result').data.message.isError).toBe(false)
 
     const todoEvent = findEvent(log, 'todo/write')
     expect(todoEvent.data.todos).toEqual([

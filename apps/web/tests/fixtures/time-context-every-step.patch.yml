@@ -1,0 +1,6 @@
+# Browser-zone assertions need a fresh reading after the non-browser preparation turn.
+# The Schedule rows stay disabled in the shipped composition; the scenario enables them
+# with the shipped `@deepseek-ai/dsh-experimental-schedule-bundle` patch.
+- id: time-context
+  config:
+    refreshIntervalMs: 0

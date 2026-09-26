@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-25-client-settings-locale-theme.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/rejected/architecture/2026-07-25-client-settings-locale-theme.md
-2026-07-25-client-settings-locale-theme.md: e7f4b64ab0d44492435b63a066abca9d0ae1394d
-2026-07-25-client-settings-locale-theme.zh.md: 9edd7395afd48fd7088e0c64d74d1c704a584b15
+/agent-note-client-settings-locale-and-theme-layering:
+  en: ebeba4110da742d5
+  zh: 3cfc57b1eb553185
+/agent-note-client-settings-locale-and-theme-layering/problem:
+  en: 4cec7e053c53607b
+  zh: 3796b79366e7ea58
+/agent-note-client-settings-locale-and-theme-layering/proposal:
+  en: 3dd489ca0eab19bd
+  zh: a57d5dd4d2496f04
+/agent-note-client-settings-locale-and-theme-layering/proposal/first-phase-registration-surfaces:
+  en: 7a4890dffd207a66
+  zh: 4353be1cf48bf68d
+/agent-note-client-settings-locale-and-theme-layering/proposal/slot-topology:
+  en: bc2aba013c52fca5
+  zh: 734e5ef05792bdf9
+/agent-note-client-settings-locale-and-theme-layering/proposal/slot-declarations-are-first-class-injectable-waits:
+  en: 9df71cdd33cd691d
+  zh: 9ac3eba3d89192d9
+/agent-note-client-settings-locale-and-theme-layering/proposal/service-contracts:
+  en: 30c49423999492e5
+  zh: bce71328fdd946c5
+/agent-note-client-settings-locale-and-theme-layering/alternatives-considered:
+  en: 258859f30f0b9784
+  zh: 70d48285033c3d8f
+/agent-note-client-settings-locale-and-theme-layering/acceptance-criteria:
+  en: 9ff6ce8ea22dab22
+  zh: c8dd20442b50df21
+/agent-note-client-settings-locale-and-theme-layering/risks:
+  en: fb649d6c5a86bc09
+  zh: cb5520268d365ca9

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createMessage, createSystemMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionSeq as SessionSeqType } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -19,6 +20,12 @@ import {
   estimateToolsTokens,
 } from '../src/estimate.ts'
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'test': { kind: 'test' } & ContextFormed
+  }
+}
+
 const contexts: Context[] = []
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
@@ -31,6 +38,8 @@ const TOOLS: ToolSchema[] = [{
   description: 'run a command',
   parameters: { type: 'object', properties: {} },
 }]
+
+const SYSTEM_SOURCE = { kind: 'system-prompt' } as const
 
 async function harness(): Promise<{ ctx: Context; session: Session }> {
   const ctx = new Context()
@@ -54,14 +63,12 @@ function appendUser(session: Session, text: string): SessionSeqType {
   }), { surfaceOp: 'append' }).seq
 }
 
-const SYSTEM_PLUGIN = '@deepseek-ai/dsh-system-prompt'
-
 /** Append the rendered system prompt as surface node 0, the way the loop does before the first user message. */
 function appendSystem(session: Session, text: string): SessionSeqType {
   return session.append('system/message', {
     turn: 1,
     step: 1,
-    message: createSystemMessage(text, SYSTEM_PLUGIN),
+    message: createSystemMessage(text),
   }, { surfaceOp: 'append' }).seq
 }
 
@@ -70,7 +77,7 @@ function replaceSystem(session: Session, node: SessionSeqType, text: string): Se
   return session.append('system/message', {
     turn: 1,
     step: 1,
-    message: createSystemMessage(text, SYSTEM_PLUGIN),
+    message: createSystemMessage(text),
   }, { surfaceOp: { op: 'replace', startSeq: node, endSeq: node }, sourceEventSeqs: [node] }).seq
 }
 
@@ -179,7 +186,7 @@ describe('contextBreakdown session projection', () => {
     appendSummaryMeter(ctx, session, question, followUp)
     const summary = createUserMessage({
       content: [{ type: 'text', text: 'summary' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'test' },
     })
     session.append('user/message', summary, {
       surfaceOp: { op: 'replace', startSeq: question, endSeq: followUp },
@@ -231,7 +238,7 @@ describe('contextBreakdown session projection', () => {
     const second = appendUser(session, 'and a second entry')
     const summary = createUserMessage({
       content: [{ type: 'text', text: 'summary' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'test' },
     })
     appendSummaryMeter(ctx, session, first, second)
     session.append('user/message', summary, {
@@ -279,7 +286,7 @@ describe('contextBreakdown session projection', () => {
     expect(agree()).toBe(grown)
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'summary' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'test' },
     }), {
       surfaceOp: { op: 'replace', startSeq: question, endSeq: answer },
       sourceEventSeqs: [question, answer],
@@ -313,7 +320,7 @@ describe('contextBreakdown session projection', () => {
     head = replaceSystem(session, head, 'head rewritten at a newer event seq')
     const agree = (text: string): void => {
       const view = projected(ctx, session)
-      expect(view.systemTokens).toBe(estimateSystemMessage(createSystemMessage(text, SYSTEM_PLUGIN)))
+      expect(view.systemTokens).toBe(estimateSystemMessage(createSystemMessage(text)))
       expect(view.messageTokens).toBeGreaterThanOrEqual(0)
       expect(view.systemTokens + view.messageTokens)
         .toBe(ctx.tokenMeter.measure(session).nodes.reduce((total, node) => total + node.heuristicTokens, 0))
@@ -372,7 +379,7 @@ describe('contextBreakdown session projection', () => {
     expect(Object.keys(state().nodes[0]!).sort()).toEqual(['heuristicTokens', 'seq', 'system'])
     const shadowed = [...session.surface.nodes]
     session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'summary' }], source: { kind: 'user' },
+      content: [{ type: 'text', text: 'summary' }], source: { kind: 'test' },
     }), { surfaceOp: { op: 'replace', startSeq: first, endSeq: last }, sourceEventSeqs: shadowed })
     expect(state().nodes).toHaveLength(1)
     expect(projected(ctx, session).messageTokens).toBe(10)
@@ -494,25 +501,22 @@ describe('shared estimator', () => {
     expect(estimateContent([{ type: 'text', text: 'abcd' }])).toBe(5)
     expect(estimateContent([{ type: 'reasoning', text: 'abcdefgh' }] as ContentBlock[])).toBe(6)
     expect(estimateContent([{ type: 'tool-call', id: 'c' as never, name: 'bash', arguments: '{"a":1}' }])).toBe(7)
-    expect(estimateContent([{
-      type: 'tool-result', toolCallId: 'c' as never,
-      content: [{ type: 'text', text: 'abcd' }],
-    }])).toBe(9)
+    expect(estimateContent([{ type: 'text', text: 'abcd' }])).toBe(5)
     const unknown = { type: 'mystery', payload: 'abc' } as unknown as ContentBlock
     expect(estimateContent([unknown])).toBe(4 + Math.ceil(JSON.stringify(unknown).length / 4))
   })
 
   it('prices the system node without block overhead and an empty prompt to zero', () => {
-    expect(estimateSystemMessage(createSystemMessage('', SYSTEM_PLUGIN))).toBe(0)
-    expect(estimateSystemMessage(createSystemMessage('abcdefgh', SYSTEM_PLUGIN))).toBe(6)
+    expect(estimateSystemMessage(createSystemMessage(''))).toBe(0)
+    expect(estimateSystemMessage(createSystemMessage('abcdefgh'))).toBe(6)
     // estimateMessage routes the system role to the same figure.
-    expect(estimateMessage(createSystemMessage('abcdefgh', SYSTEM_PLUGIN))).toBe(6)
+    expect(estimateMessage(createSystemMessage('abcdefgh'))).toBe(6)
     // A non-text block in a system message keeps a conservative JSON price.
     const image = { type: 'image', attachment: { attachmentId: 'a' } } as unknown as ContentBlock
     expect(estimateSystemMessage(createMessage({
       role: 'system',
       content: [{ type: 'text', text: 'abcd' }, image],
-      source: { kind: 'plugin', plugin: SYSTEM_PLUGIN },
+      source: SYSTEM_SOURCE,
     }))).toBe(Math.ceil((4 + JSON.stringify(image).length) / 4) + 4)
   })
 

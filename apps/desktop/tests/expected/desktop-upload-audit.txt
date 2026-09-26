@@ -1,0 +1,6 @@
+upload-start
+put-intent
+put-confirmed
+put-intent
+put-confirmed
+upload-complete

@@ -1,6 +1,76 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/bundle/web-app/README.md
-README.md: c35bdf219c4c231e2ffde73a592b04070f96a4bc
-README.zh.md: 9a4047525da16cfb8249e4732fc2102f95b9d89f
+/:
+  en: af2e4e5296596e8f
+  zh: 70c0b5ac93209d00
+/deepseek-ai-dsh-web-app:
+  en: f4da95d498221fcd
+  zh: 6cc704e7aa6f376d
+/deepseek-ai-dsh-web-app/summary:
+  en: 0ebb6c3ca8c0a84e
+  zh: 4d85e02c769ddae0
+/deepseek-ai-dsh-web-app/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-web-app/use-this-package:
+  en: 3bd37b85139d2fa7
+  zh: ba86c807eb83866e
+/deepseek-ai-dsh-web-app/use-this-package/starting-the-web-gui:
+  en: b7ab01cfe9fed40f
+  zh: 23703ab7727c3ab5
+/deepseek-ai-dsh-web-app/use-this-package/configuration:
+  en: cea7ecccb2a03b79
+  zh: 0af72c22e46045d3
+/deepseek-ai-dsh-web-app/use-this-package/lan-access-and-trusted-hosts:
+  en: 2522c806db384ddc
+  zh: 7e96f11194af9f9f
+/deepseek-ai-dsh-web-app/use-this-package/running-over-ssh:
+  en: 1fe96dde34f21b23
+  zh: 5689c4f4186805c1
+/deepseek-ai-dsh-web-app/use-this-package/per-session-agent-setup:
+  en: ccd6fc264b51e44b
+  zh: 3265c68477a89ec9
+/deepseek-ai-dsh-web-app/understand-the-implementation:
+  en: 4eb00d95238e3b92
+  zh: 0d6ca9e1a3e7db84
+/deepseek-ai-dsh-web-app/understand-the-implementation/patch-semantics:
+  en: f0078127aa8dd273
+  zh: c954c137599b486f
+/deepseek-ai-dsh-web-app/understand-the-implementation/readiness:
+  en: 973128fd346869df
+  zh: 54e6792f9f82a192
+/deepseek-ai-dsh-web-app/understand-the-implementation/lan-trust-sampling:
+  en: b5ed8ff0056ca9da
+  zh: fdc1fa4f14cb00b3
+/deepseek-ai-dsh-web-app/understand-the-implementation/source-map:
+  en: 0d08e95f0a5543cb
+  zh: 5a3e8e4102678cb7
+/deepseek-ai-dsh-web-app/understand-the-implementation/invariant-ownership:
+  en: 34767bb4c0471622
+  zh: e6d76e7c7a0b9ce8
+/deepseek-ai-dsh-web-app/further-exploration:
+  en: f81694f7424e2988
+  zh: 6643f9227039e228
+/deepseek-ai-dsh-web-app/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-web-app/model-experience/harness-source-and-web-surface-context:
+  en: e6febc53efe0f51d
+  zh: 9177816a8678d65d
+/deepseek-ai-dsh-web-app/model-experience/harness-source-and-web-surface-context/what-the-model-sees:
+  en: 359b949dd483477f
+  zh: 1476006614a82282
+/deepseek-ai-dsh-web-app/model-experience/harness-source-and-web-surface-context/token-effect:
+  en: 908fc84d6849a830
+  zh: 56fe5e418bab60ba
+/deepseek-ai-dsh-web-app/model-experience/harness-source-and-web-surface-context/kv-cache-effect:
+  en: da0f568d6d661c5e
+  zh: 606919b7d37c95bf
+/deepseek-ai-dsh-web-app/known-limitations-and-deferred-work:
+  en: fead2f7bcd17e1ab
+  zh: 80949c203c0a0732
+/deepseek-ai-dsh-web-app/known-limitations-and-deferred-work/dev-note:
+  en: 3f81b4f3beb74a0d
+  zh: 2e377ca40822d093

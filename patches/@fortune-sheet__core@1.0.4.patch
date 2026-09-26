@@ -1,0 +1,76 @@
+diff --git a/dist/index.esm.js b/dist/index.esm.js
+index 5c9820b1a261305d500e69eeaf350821872beaf4..819c6d2e3ffa422b1d1bf163bf56df13bd3af17e 100644
+--- a/dist/index.esm.js
++++ b/dist/index.esm.js
+@@ -62866,7 +62866,7 @@ function rangeValueToHtml(ctx, sheetId, ranges) {
+         if (_.isNil(c_value)) {
+           c_value = "";
+         }
+-        column += escapeHTMLTag(c_value);
++        column += _.escape(c_value);
+       } else {
+         var _style = "";
+         if (borderInfoCompute && borderInfoCompute["".concat(r, "_").concat(c)]) {
+@@ -73869,6 +73869,7 @@ var Canvas = /*#__PURE__*/function () {
+   }, {
+     key: "drawFreezeLine",
+     value: function drawFreezeLine(_ref2) {
++      if (this.sheetCtx.allowEdit === false) return;
+       var horizontalTop = _ref2.horizontalTop,
+         verticalLeft = _ref2.verticalLeft;
+       var renderCtx = this.canvasElement.getContext("2d");
+@@ -77244,6 +77245,16 @@ function handleGlobalWheel(ctx, e, cache, scrollbarX, scrollbarY) {
+   var _cache$searchDialog;
+   if (((_cache$searchDialog = cache.searchDialog) === null || _cache$searchDialog === void 0 ? void 0 : _cache$searchDialog.mouseEnter) && ctx.showSearch && ctx.showReplace) return;
+   if (ctx.filterContextMenu != null) return;
++  // Read-only trackpad panning follows pixel deltas on both axes without a gesture lock.
++  if (ctx.allowEdit === false && e.deltaMode === 0) {
++    scrollbarX.scrollLeft += e.deltaX;
++    scrollbarY.scrollTop += e.deltaY;
++    // Keep React scrollbar effects aligned with the browser-clamped offsets.
++    ctx.scrollLeft = scrollbarX.scrollLeft;
++    ctx.scrollTop = scrollbarY.scrollTop;
++    e.preventDefault();
++    return;
++  }
+   var scrollLeft = scrollbarX.scrollLeft;
+   var scrollTop = scrollbarY.scrollTop;
+   var visibledatacolumn_c = ctx.visibledatacolumn;
+diff --git a/dist/index.js b/dist/index.js
+index 04113a18dee9feee28e9434ee3023626c800e7d3..29e35f51fbf1c3bb16cca54ce2bda81bae4fef64 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -62876,7 +62876,7 @@ function rangeValueToHtml(ctx, sheetId, ranges) {
+         if (___default['default'].isNil(c_value)) {
+           c_value = "";
+         }
+-        column += escapeHTMLTag(c_value);
++        column += ___default['default'].escape(c_value);
+       } else {
+         var _style = "";
+         if (borderInfoCompute && borderInfoCompute["".concat(r, "_").concat(c)]) {
+@@ -73879,6 +73879,7 @@ var Canvas = /*#__PURE__*/function () {
+   }, {
+     key: "drawFreezeLine",
+     value: function drawFreezeLine(_ref2) {
++      if (this.sheetCtx.allowEdit === false) return;
+       var horizontalTop = _ref2.horizontalTop,
+         verticalLeft = _ref2.verticalLeft;
+       var renderCtx = this.canvasElement.getContext("2d");
+@@ -77254,6 +77255,16 @@ function handleGlobalWheel(ctx, e, cache, scrollbarX, scrollbarY) {
+   var _cache$searchDialog;
+   if (((_cache$searchDialog = cache.searchDialog) === null || _cache$searchDialog === void 0 ? void 0 : _cache$searchDialog.mouseEnter) && ctx.showSearch && ctx.showReplace) return;
+   if (ctx.filterContextMenu != null) return;
++  // Read-only trackpad panning follows pixel deltas on both axes without a gesture lock.
++  if (ctx.allowEdit === false && e.deltaMode === 0) {
++    scrollbarX.scrollLeft += e.deltaX;
++    scrollbarY.scrollTop += e.deltaY;
++    // Keep React scrollbar effects aligned with the browser-clamped offsets.
++    ctx.scrollLeft = scrollbarX.scrollLeft;
++    ctx.scrollTop = scrollbarY.scrollTop;
++    e.preventDefault();
++    return;
++  }
+   var scrollLeft = scrollbarX.scrollLeft;
+   var scrollTop = scrollbarY.scrollTop;
+   var visibledatacolumn_c = ctx.visibledatacolumn;

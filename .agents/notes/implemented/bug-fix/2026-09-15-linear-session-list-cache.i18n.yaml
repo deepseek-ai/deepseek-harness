@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-15-linear-session-list-cache.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-15-linear-session-list-cache.md
-2026-09-15-linear-session-list-cache.md: fb09950f77c224d2b85bb76792bdf8c3c87e33f5
-2026-09-15-linear-session-list-cache.zh.md: b877f0659fff4e1b3d48aa4250e634120ddc365f
+/agent-note-linear-session-list-cache-reconciliation:
+  en: 7b6289de90982e71
+  zh: 0c020de607402bbd
+/agent-note-linear-session-list-cache-reconciliation/problem:
+  en: b94ff168ba0310a8
+  zh: 8d9fe4af8b047c86
+/agent-note-linear-session-list-cache-reconciliation/decision:
+  en: 1d85980590014837
+  zh: 2e03befc8ac84f0e
+/agent-note-linear-session-list-cache-reconciliation/alternatives-considered:
+  en: 2085e3ccec11084a
+  zh: 55f5f5156d03e20c
+/agent-note-linear-session-list-cache-reconciliation/consequences:
+  en: 54f1788954da5704
+  zh: dad3478c7f3b46f6

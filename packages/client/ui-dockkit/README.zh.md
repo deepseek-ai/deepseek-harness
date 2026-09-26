@@ -39,6 +39,8 @@ kind: "package-reference"
 
 **组件**渲染布局快照并上报已落定的意图——每次手势一条，绝不上报拖动帧。拖动过程中在本地状态里预览，手势自身的事实留在它的闭包里；松手时净结果通过一次 `DockIntents` 调用离开——在标签条上松手上报的是按绘制顺序数出的插入槽位（被拖的 chip 也计入），由 `planPlaceTab` 换算成重排或移动。正是这一点让嵌入方能为每次手势记录恰好一条历史。标签条遵循 WAI-ARIA tabs 模式的手动激活：选中的 chip 在 Tab 键序里；左右方向键（循环）、Home、End 只在 chip 之间移动焦点而不选中；Enter 或空格选中当前聚焦的 chip，走与点击相同的意图。chip 是一个胶囊，携带唯一的控件——它的关闭按钮；上下文菜单（在 chip 上的次键按下）携带同样的关闭项加上嵌入方的条目——一个连一项都没有的菜单绝不展示——并渲染在按 chip 定位的 portal 里，因为 chip 盒会故意裁掉溢出（见下文）。chip 之后是添加控件，它请嵌入方（`DockIntents.addTab`）安放其种子 tab；嵌入方的 `canAddTab(paneId)` 按格决定是否绘制该控件。复制 tab 没有套件控件——那是嵌入方的 API——而浮出就是把拖动松手在停靠区之外。
 
+标签上下文菜单只显示关闭操作名，不显示快捷键：菜单操作针对被点击的标签，快捷键则可能作用于其他焦点分栏。无修饰键的 Esc 关闭前台标签菜单而不关闭标签，并将菜单项的焦点交还标签，不绘制焦点外轮廓线。Tab 和方向键导航保留标签页的可见焦点提示。输入法组合输入和长按重复事件不关闭菜单。
+
 <a id="embedding-it"></a>
 ## 如何嵌入
 
@@ -50,16 +52,20 @@ kind: "package-reference"
 | `TabRenderer` | 一个 tab 的正文（`renderTab`），贴着格的边缘和（不带边线的）tab 条底边绘制、自己决定留白，以及可选的 chip 或浮窗头部显示的标题（`renderTabTitle`，回退到记录的 `title`）；嵌入方按 `tab.kind` 分发 |
 | `DockIntents` | 每次手势落定的结果 |
 
-`DockController` 原样满足 `DockIntents`，所以最简单的嵌入就是把 controller 直接交给 `DockSurface`。经由自己 store 路由的嵌入方则实现同名方法。有三个 props 承载的是控制策略而非手势：`canSplit`（整面有效，即格预算；用 `splitPaneDisabled` 禁用分栏控件）、`canAddTab(paneId)`（按格，省略添加控件；不传则每格都画）与 `canCloseTab(tabId)`（按 tab，把 chip 的关闭控件和菜单的关闭项一并收起；不传则每个 tab 都可关闭）。隐藏添加控件不会移动 tab 条里的其它任何东西，收起关闭也不会移动 chip 里的任何东西——关闭控件压在标题末端之上而非并排。某格仅剩的一个 chip 在关闭被收起时画成安静样式——没有胶囊底色，没有悬停填充——因为既没有别的 tab 可供选择，也没有任何可对它做的事。套件自己再加一条策略，即下文的空间规则，它用 `splitPaneNarrow` 禁用某格的分栏控件；`onRoom(fits)` 上报其读数，让以编程方式分栏的嵌入方能遵守同一规则。
+`DockController` 原样满足 `DockIntents`，因此嵌入方可将它交给 `DockLayout` 来保活 Sidebar 布局，或交给 `DockSurface` 来渲染递归分割树。经由自己 store 路由的嵌入方则实现同名方法。有三个 props 承载的是控制策略而非手势：`canSplit`（整面有效，即格预算；用 `splitPaneDisabled` 禁用分栏控件）、`canAddTab(paneId)`（按格，省略添加控件；不传则每格都画）与 `canCloseTab(tabId)`（按 tab，把 chip 的关闭控件和菜单的关闭项一并收起；不传则每个 tab 都可关闭）。隐藏添加控件不会移动 tab 条里的其它任何东西，收起关闭也不会移动 chip 里的任何东西——关闭控件压在标题末端之上而非并排。某格仅剩的一个 chip 在关闭被收起时画成安静样式——没有胶囊底色，没有悬停填充——因为既没有别的 tab 可供选择，也没有任何可对它做的事。套件自己再加一条策略，即下文的空间规则，它用 `splitPaneNarrow` 禁用某格的分栏控件；`onRoom(fits)` 上报其读数，让以编程方式分栏的嵌入方能遵守同一规则。
 
 `dropZones="horizontal"` 提供左右两个半区提示；预算或宽度不允许再拆时，正文整格接收移动。提示是一张内缩 8px 的虚线卡片，显示该落区的图形和 `labels.dropZone[zone]`；预览层覆盖全部 tab 正文，指针所在的卡片取强调色，另一张保持安静的轮廓。`minPaneFraction` 控制预览的最小比例，`planResizeSplit` 接受相同最小值以约束提交；Sidebar使用0.2并在自己的store限制两格。通用引擎仍保留原有树与其它分割方向。 `hideSplitWhenBlocked` 在分栏被阻止时（窗格预算已满或格太窄）直接隐藏分栏控件而不是渲染禁用态，默认值为 false。
 
 tab 的 `kind` 是不透明字符串。种子 tab 是工厂（`DockControllerOptions`），因此新格里放什么由嵌入方决定，与本包无关。内容身份是二元组（`kind`、`contentId`）：`findContentTab(state, contentId, kind?)` 在任意位置找到展示它的 tab，`findPaneContentTab(state, paneId, contentId, kind?)` 在一个格内找；`planOpenContent` 会聚焦该 tab 而非再开一个，除非被告知 `revealIfOpened: false`；显式的 `index` 把新 tab 放到 tab 条的某个位置而非末尾。
 
-`DockSurface` 是停靠区。它周围的 chrome——轨道、折叠形态、任何历史控件——属于嵌入方，由嵌入方读取 `state.expanded` 后自行决定；套件不自带撤销/重做控件。嵌入方确实想放到面上的整面控件通过 `chrome` prop 传入，套件把它放在右上格 tab 条的最末端（每个横向分裂的最后一个子节点、每个纵向分裂的第一个子节点），因此停靠面不需要自己的标题行。`FloatLayer` 拥有自己的手势并以视口坐标定位浮窗，因此可以挂在任何位置，包括 portal 里。
+Sidebar 使用的 `DockLayout` 在选中项变化、跨格移动与浮动期间，把每个 tab 保留在稳定的 DOM 容器中。它接受一个停靠格或左右两个格，由 CSS Grid 计算宽度。`keepMounted(tab)` 保留已访问正文，`active` 控制 Session 可见性，不改变内容的父子关系。
+
+`DockSurface` 是独立递归渲染器的停靠区。它周围的 chrome——轨道、折叠形态、任何历史控件——属于嵌入方，由嵌入方读取 `state.expanded` 后自行决定；套件不自带撤销/重做控件。嵌入方确实想放到面上的整面控件通过 `chrome` prop 传入，套件把它放在右上格 tab 条的最末端（每个横向分裂的最后一个子节点、每个纵向分裂的第一个子节点），因此停靠面不需要自己的标题行。`FloatLayer` 拥有自己的手势并以视口坐标定位浮窗，因此可以挂在任何位置，包括 portal 里。
 
 <a id="interaction-rules-worth-keeping"></a>
 ## 值得保留的交互规则
+
+分栏控件接收嵌入方传入的本地化提示文本、`splitPaneKeys` 独立按键及 ARIA 组合。关闭控件通过 `closeTabKeys` 接收按键。禁用控件由可键盘聚焦的容器承载，说明分栏数量或宽度限制。停靠与浮动面板容器支持程序设置焦点，不进入正常 Tab 顺序，也不绘制焦点外框；内部控件保留各自的键盘焦点提示。标签导航和选择只使用无修饰键组合，输入法按键交回其所属输入区域。
 
 这些不是风格偏好；每一条都修复了在真实浏览器里发现的缺陷。
 
@@ -97,10 +103,14 @@ tab 的 `kind` 是不透明字符串。种子 tab 是工厂（`DockControllerOpt
 <a id="dev-note"></a>
 ### 开发备注
 
+菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。
+
 <details>
 <summary>维护者工作上下文——点击展开</summary>
 
 无。
+
+嵌入方为标签和浮动面板的关闭控件提供有效关闭键帽及 ARIA 组合。关闭控件在悬停和键盘聚焦时显示相同 Tooltip。分栏的上下文菜单打开时，该分栏的标签关闭 Tooltip 保持隐藏。
 
 </details>
 

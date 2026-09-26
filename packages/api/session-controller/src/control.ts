@@ -1,9 +1,7 @@
-/** Live Session jobs and projection state with reconnect baselines. */
+/** Live Session projection state with reconnect baselines. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import { Deque } from '@deepseek-ai/dsh-deque'
-import type { JobSnapshot } from '@deepseek-ai/dsh-jobs'
 import type {
   Session, SessionId,
 } from '@deepseek-ai/dsh-session'
@@ -11,7 +9,6 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {
   SessionControlBaseline,
   SessionControlFrame,
-  SessionJob,
   SessionProjectionBaseline,
   SessionProjectionValues,
 } from './types.ts'
@@ -20,7 +17,7 @@ import type {
 export class SessionControlController {
   private readonly streams = new Set<ControlQueue>()
 
-  /** @param ctx - Host context carrying live Agent, projection, and jobs services. */
+  /** @param ctx - Host context carrying live Agent and projection services. */
   constructor(private readonly ctx: Context) {
     ctx.sessionProjections.onChanged((session, key, value, seq) => {
       this.broadcast({
@@ -30,13 +27,6 @@ export class SessionControlController {
         value: value as JsonValue,
         seq,
       })
-    })
-    ctx.inject(['jobs'], (jobsCtx) => {
-      jobsCtx.jobs.onJobsChanged((owner) => { this.onJobsChanged(owner) })
-    })
-    ctx.on('session/created', (session) => {
-      const jobs = this.jobsFor(this.ctx.agents.get(session.id))
-      if (jobs.length > 0) this.broadcast({ type: 'jobs', sessionId: session.id, jobs })
     })
     ctx.effect(() => () => {
       for (const stream of this.streams) stream.end()
@@ -64,13 +54,7 @@ export class SessionControlController {
 
   private baseline(): SessionControlBaseline {
     const sessions = this.ctx.sessions.list()
-    const jobs = Object.create(null) as Record<SessionId, readonly SessionJob[]>
-    for (const session of sessions) {
-      const agent = this.ctx.agents.get(session.id)
-      jobs[session.id] = this.jobsFor(agent)
-    }
     return {
-      jobs,
       projections: this.projectionBaseline(sessions),
     }
   }
@@ -88,25 +72,6 @@ export class SessionControlController {
       }
     }
     return blocks
-  }
-
-  private onJobsChanged(owner: Agent | undefined): void {
-    if (owner !== undefined) {
-      this.broadcast({ type: 'jobs', sessionId: owner.id, jobs: this.jobsFor(owner) })
-      return
-    }
-    for (const session of this.ctx.sessions.list()) {
-      this.broadcast({
-        type: 'jobs',
-        sessionId: session.id,
-        jobs: this.jobsFor(this.ctx.agents.get(session.id)),
-      })
-    }
-  }
-
-  private jobsFor(agent: Agent | undefined): SessionJob[] {
-    const jobs = this.ctx.get('jobs')
-    return jobs === undefined ? [] : jobs.list(agent).map(jobView)
   }
 
   private broadcast(frame: SessionControlFrame): void {
@@ -152,17 +117,5 @@ class ControlQueue {
       signal.removeEventListener('abort', onAbort)
       this.end()
     }
-  }
-}
-
-function jobView(job: JobSnapshot): SessionJob {
-  return {
-    id: job.id,
-    kind: job.kind,
-    label: job.label,
-    status: job.status,
-    ...(job.detail === undefined ? {} : { detail: job.detail }),
-    startedAt: job.startedAt,
-    ...(job.finishedAt === undefined ? {} : { finishedAt: job.finishedAt }),
   }
 }

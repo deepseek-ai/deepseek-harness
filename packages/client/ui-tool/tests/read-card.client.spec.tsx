@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { Context } from '@deepseek-ai/cordis'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import type { RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { StartedToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { CHAT_READ_MAX_LINES, readCallLine, readCardModel } from '../src/client/tool/models/read-card-model.ts'
@@ -53,8 +54,8 @@ const readMeta = (over?: Partial<ReadMetaFixture>): ReadMetaFixture => ({
 
 const readContent = (body = 'export const a = 1'): string => `<path>src/a.ts</path>\n<type>file</type>\n<content>\n${body}\n</content>`
 
-const running = (over?: Partial<RunningToolCall>): RunningToolCall => ({
-  callId: 'c1', name: 'read', argsRaw: ARGS,
+const running = (over?: Partial<StartedToolCall>): StartedToolCall => ({
+  phase: 'start' as const, callId: 'c1', name: 'read', argsRaw: ARGS,
   turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
 })
 
@@ -163,9 +164,9 @@ describe('readCallLine', () => {
 })
 
 describe('GenericToolCard read body', () => {
-  const ownerProps = (block: RunningToolCall | ToolResultNode): GenericToolCardProps => ({
+  const ownerProps = (block: StartedToolCall | ToolResultNode): GenericToolCardProps => ({
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
-    callId: 'c1', toolName: 'read', block, openFile: vi.fn(), t,
+    useDisclosure, callId: 'c1', toolName: 'read', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), t,
   })
 
   /** The whole summary row is the expand toggle (ToolRow's unified interaction). */
@@ -187,7 +188,7 @@ describe('GenericToolCard read body', () => {
 
   it('a non-read tool renders the bare row with no read card', () => {
     const view = render(<GenericToolCard {...({
-      callId: 'c1', toolName: 'echo', block: settled({
+      useDisclosure, callId: 'c1', toolName: 'echo', phase: 'result' as const, block: settled({
         call: { name: 'echo', argsRaw: '{"text":"x"}' }, meta: undefined,
       }), openFile: vi.fn(), loadImage: vi.fn(() => Promise.reject(new Error('not used'))), t,
     })} />)
@@ -204,18 +205,16 @@ describe('GenericToolCard read body', () => {
 describe('ReadRow keyed toolview', () => {
   const list = () => createSnapshotStore<SessionListState>({
     ids: [SID],
-    byId: { [SID]: { id: SID, displayTitle: 'r', running: false, blank: false, updatedAt: 0, cwd: '/w/app' } },
-    current: SID,
+    byId: { [SID]: { id: SID, displayTitle: 'r', running: false, retainedBy: {}, blank: false, updatedAt: 0, cwd: '/w/app' } },
     phase: 'ready',
-    subagentsByParent: {}, jobsBySession: {},
-    currentAddress: undefined,
+    projectionsBySession: {},
   })
 
-  const rowProps = (block: RunningToolCall | ToolResultNode): Parameters<typeof ReadRow>[0] => ({
-    callId: 'c1', toolName: 'read', block, openFile: vi.fn(),
+  const rowProps = (block: StartedToolCall | ToolResultNode): Parameters<typeof ReadRow>[0] => ({
+    useDisclosure, callId: 'c1', toolName: 'read', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(),
     sessionId: SID, useSessions: bindSnapshotSelector(list()),
     t,
-  } as unknown as Parameters<typeof ReadRow>[0])
+  } as Parameters<typeof ReadRow>[0])
 
   /** The whole summary row is the expand toggle (ToolRow's unified interaction). */
   const toggleRow = (view: { container: HTMLElement }) => {
@@ -263,6 +262,7 @@ describe('ReadRow keyed toolview', () => {
       content: [{ type: 'text', text: 'ENOENT' }],
     }))} />)
     expect(view.container.querySelector('[data-variant="read"]')?.getAttribute('data-state')).toBe('error')
+    expect(view.container.querySelector('[data-state="error"] svg')).not.toBeNull()
     expect(view.container.querySelector('[data-read]')).toBeNull()
   })
 
@@ -271,6 +271,7 @@ describe('ReadRow keyed toolview', () => {
       isError: true, error: { name: 'ToolError', code: 'interrupted' },
     }))} />)
     expect(view.container.querySelector('[data-variant="read"]')?.getAttribute('data-state')).toBe('stopped')
+    expect(view.container.querySelector('[data-state="stopped"] svg')).not.toBeNull()
   })
 
   it('registers under the read key of the keyed toolview slot', () => {

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-16-windows-subprocess-console-visibility.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-16-windows-subprocess-console-visibility.md
+/agent-note-hide-windows-subprocess-console-windows-at-creation:
+  en: be47c56d2dd977d1
+  zh: 3ab8a9a18e7f545d
+/agent-note-hide-windows-subprocess-console-windows-at-creation/problem:
+  en: b76c3b25b8616076
+  zh: d14facfdf3948bc4
+/agent-note-hide-windows-subprocess-console-windows-at-creation/decision:
+  en: 56b951a948c6d007
+  zh: 301031638a642517
+/agent-note-hide-windows-subprocess-console-windows-at-creation/alternatives-considered:
+  en: 9dcf5702a5032d69
+  zh: 493c2709d441d52c
+/agent-note-hide-windows-subprocess-console-windows-at-creation/consequences:
+  en: 0bfe83068c6fe3ee
+  zh: 2bdc9eb64c6f7b66

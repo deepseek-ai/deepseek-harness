@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for shell.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/shell.md
-shell.md: de04083093a1e53aedd310f388f778638d858ce7
-shell.zh.md: d68b1b2cfba3214a23e9120f19fc9a029a181a18
+/shell-executor:
+  en: c9aba02120c42608
+  zh: f76b6b9745015993
+/shell-executor/managed-shell-environment-namespace:
+  en: f04b6ee0f2ec23d5
+  zh: 8c3104d8ce6c70e6
+/shell-executor/request-vs-spec-the-resolve-split:
+  en: a4f7d0ff18dce0c6
+  zh: d956cc599948fae8
+/shell-executor/foreground-runs-shellrunresult:
+  en: 471d328907ef0761
+  zh: d6b0b8e66e427394
+/shell-executor/file-sandbox-shellsandboxinfo:
+  en: d09036a8749423ce
+  zh: bba45a62001754ae
+/shell-executor/background-processes-shellprocess:
+  en: e5530a4d2b8f3aa3
+  zh: 72e4fd736c1a6d9d
+/shell-executor/the-service:
+  en: b850ffb5f5b75ac6
+  zh: 796e57ae77e0e41f

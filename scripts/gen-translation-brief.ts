@@ -27,6 +27,11 @@ import {
   translationStructureSignature,
 } from './translation-pairing.ts'
 import {
+  computeTranslationPairingRecord,
+  renderTranslationPairingRecord,
+  translationPairPaths,
+} from './translation-pairing-record.ts'
+import {
   changedSpanIndices,
   computeMechanicalUpdate,
   firstOccurrenceContext,
@@ -50,18 +55,6 @@ function isExcluded(file: string): boolean {
   return isTranslationPairingManifestExcluded(file, manifest)
 }
 
-/** Recorded hashes of one consistency record: basename → blob hash. */
-function parseMeta(content: string): Map<string, string> | undefined {
-  const out = new Map<string, string>()
-  for (const line of content.split('\n')) {
-    if (line === '' || line.startsWith('#')) continue
-    const match = /^([^:#]+\.md): ([0-9a-f]{40})$/.exec(line)
-    if (!match?.[1] || !match[2]) return undefined
-    out.set(match[1], match[2])
-  }
-  return out
-}
-
 function git(args: string[], allowedExitCodes: number[] = [0]): string {
   const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', maxBuffer: 1 << 26 })
   if (result.error) throw result.error
@@ -71,8 +64,28 @@ function git(args: string[], allowedExitCodes: number[] = [0]): string {
   return result.stdout
 }
 
-function blobText(hash: string): string {
-  return git(['cat-file', '-p', hash])
+/** Render the record for one pair's contents, or `undefined` when its headings do not align. */
+function recordOf(anchor: string, en: string, zh: string): string | undefined {
+  const paths = translationPairPaths(anchor)
+  try {
+    return renderTranslationPairingRecord(paths, computeTranslationPairingRecord(paths, en, zh, {
+      repoRoot: root,
+      isTranslationPairSource,
+    }))
+  } catch {
+    // A heading-count mismatch, the only computation error, means these contents were never confirmed.
+    return undefined
+  }
+}
+
+/** Both sides at the newest commit whose contents produce the confirmed record. */
+function lastConfirmed(anchor: string, zh: string, record: string): { en: string; zh: string } | undefined {
+  for (const commit of git(['log', '--format=%H', '--', anchor, zh]).split('\n').filter(Boolean)) {
+    const en = git(['show', `${commit}:${anchor}`], [0, 128])
+    const zhText = git(['show', `${commit}:${zh}`], [0, 128])
+    if (en !== '' && zhText !== '' && recordOf(anchor, en, zhText) === record) return { en, zh: zhText }
+  }
+  return undefined
 }
 
 /** Unified diff between two texts, headers stripped, via `git diff --no-index`. */
@@ -112,16 +125,18 @@ function loadPair(anchor: string): PairState | string {
   if (missing.length > 0) {
     return `${anchor}: incomplete pair (missing ${missing.join(', ')}) — a new counterpart is whole-document translation work, not a minimal update`
   }
-  const record = parseMeta(readFileSync(join(root, meta), 'utf8'))
-  const enRecorded = record?.get(basename(anchor))
-  const zhRecorded = record?.get(basename(zh))
-  if (record === undefined || enRecorded === undefined || zhRecorded === undefined) {
-    return `${meta}: malformed consistency record`
-  }
+  const record = readFileSync(join(root, meta), 'utf8')
   const enCurrent = readFileSync(join(root, anchor), 'utf8')
   const zhCurrent = readFileSync(join(root, zh), 'utf8')
-  const enLast = blobText(enRecorded)
-  const zhLast = blobText(zhRecorded)
+  if (recordOf(anchor, enCurrent, zhCurrent) === record) {
+    return { anchor, zh, meta, enDrifted: false, zhDrifted: false, enLast: enCurrent, zhLast: zhCurrent }
+  }
+  const confirmed = lastConfirmed(anchor, zh, record)
+  if (confirmed === undefined) {
+    return `${meta}: no commit of the pair produces this record — commit the confirmed pair before briefing its later edits`
+  }
+  const enLast = confirmed.en
+  const zhLast = confirmed.zh
   return {
     anchor,
     zh,

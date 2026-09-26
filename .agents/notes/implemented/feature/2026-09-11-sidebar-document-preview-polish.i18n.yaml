@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-11-sidebar-document-preview-polish.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-11-sidebar-document-preview-polish.md
-2026-09-11-sidebar-document-preview-polish.md: b78141881513167a08050afb287eb4d1bcb43995
-2026-09-11-sidebar-document-preview-polish.zh.md: 43016af0dff72ed09a19271535912ba9abd65d9c
+/agent-note-sidebar-document-preview-polish:
+  en: f6de5780a080c43b
+  zh: 43c5fe472e41c955
+/agent-note-sidebar-document-preview-polish/problem:
+  en: 4a52e0a397d95c28
+  zh: ecaeb3f570c775da
+/agent-note-sidebar-document-preview-polish/decision:
+  en: 6292b936ed7ee1bb
+  zh: 1758900c96a6811b
+/agent-note-sidebar-document-preview-polish/alternatives-considered:
+  en: e2e5b8bbd191385e
+  zh: 29b37f3ec312f5ca
+/agent-note-sidebar-document-preview-polish/consequences:
+  en: 38951cfb55e9214c
+  zh: 6ca3845e206be2da

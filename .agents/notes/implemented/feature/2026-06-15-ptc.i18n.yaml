@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-15-ptc.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-06-15-ptc.md
-2026-06-15-ptc.md: d5ed3fc79d4586d3754b7273e08970fb066fe6e9
-2026-06-15-ptc.zh.md: 1434db5c352cdb14b857dc5d4ca3bb2f5332e98e
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry:
+  en: 9506116227b22bd0
+  zh: c2d42a9f483cfbe3
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/problem:
+  en: 4b312be894531bee
+  zh: d655648ea5843ef5
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision:
+  en: 371abc68ce278a5c
+  zh: 3fa8d28213794932
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/per-program-execution-controls:
+  en: da694641e1d009de
+  zh: 9d7492d39039af66
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-registry-owns-the-mode:
+  en: 55287fedeaaee6d8
+  zh: d2afe242e84acc43
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-run-code-tool-and-the-dispatch-bridge:
+  en: 8811a9c5e28488fd
+  zh: 6937645281b79fb9
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/observability-tool-ptc-dispatch:
+  en: b8e4cf9433c7ee18
+  zh: e5f4e8d7d03d3a7b
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-ptc-runtime-seam:
+  en: 4c423f4e9cef6055
+  zh: 5c23a3637eb420c0
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-node-process-runtime:
+  en: 0b846ed33977e383
+  zh: e45158758d657f9a
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/trust-posture:
+  en: d62b41a6a5c58e5f
+  zh: ef72c5a9b32b370e
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/what-the-model-sees:
+  en: 43653fd91ab9165b
+  zh: 6ddfa853e69b2d80
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/consequences:
+  en: 761eb6c1aeb7af18
+  zh: 5434456a3d0a1b65
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/testing:
+  en: f5d287f610962a48
+  zh: 88368e1df517b087
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/alternatives-considered:
+  en: 90110f91f6f6130f
+  zh: 25d28433840f91a4
+/agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/risks:
+  en: 7743b1b621b8e6c7
+  zh: 70c33a5b306ca71c

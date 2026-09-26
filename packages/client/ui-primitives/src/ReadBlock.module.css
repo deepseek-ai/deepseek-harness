@@ -1,105 +1,37 @@
-.block {
-  --dsl-read-radius: 12px;
-  --dsl-read-line-height: 22px;
-  /* Fixed-width gutter column for the line numbers, so the content edge stays
-     put down the whole window regardless of how wide the numbers grow. */
-  --dsl-read-gutter: 48px;
-
-  position: relative;
-  margin: 16px 0;
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-markdown-code-block);
-  border-radius: var(--dsl-read-radius);
-}
-
-.banner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 9px 14px;
-  background: var(--dsw-alias-markdown-code-block-banner);
-  border-top-left-radius: var(--dsl-read-radius);
-  border-top-right-radius: var(--dsl-read-radius);
-}
-
-.label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-primary);
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.action {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  gap: 12px;
-}
-
-.count {
-  color: var(--dsw-alias-label-tertiary);
-  font: var(--dsw-font-xs-13);
-}
-
-.lang {
-  color: var(--dsw-alias-label-tertiary);
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.copyButton {
-  background-color: transparent;
-  border: none;
-  padding: 0;
-  margin: 0;
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-  font: var(--dsw-font-xs-13);
-}
-
-.body {
-  padding: 12px 0;
-  font: var(--dsw-font-markdown-code-block);
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-/* One row per file line: a fixed gutter column, then the content. No wrapping —
-   a source line's leading whitespace is meaningful and scrolls sideways. */
 .line {
   display: flex;
-  min-height: var(--dsl-read-line-height);
-  line-height: var(--dsl-read-line-height);
+  min-height: 1lh;
   white-space: pre;
 }
 
 .gutter {
   flex: none;
   width: var(--dsl-read-gutter);
-  padding-right: 14px;
+  margin-right: 12px;
   text-align: right;
   color: var(--dsw-alias-label-tertiary);
-  /* The gutter is chrome, not content: keep it out of a text selection so a
-     copy of the visible rows carries the source, not the line numbers. */
   user-select: none;
 }
 
 .content {
+  min-width: 0;
   color: var(--dsw-alias-label-primary);
+}
+
+.block[data-code-wrap='true'] .line {
+  white-space: pre-wrap;
+}
+
+.block[data-code-wrap='true'] .content {
+  overflow-wrap: anywhere;
 }
 
 .expand {
   display: block;
   width: 100%;
-  padding: 0 0 0 var(--dsl-read-gutter);
+  padding: 0 0 0 calc(var(--dsl-read-gutter) + 12px);
   border: none;
-  background-color: transparent;
+  background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
   font: inherit;

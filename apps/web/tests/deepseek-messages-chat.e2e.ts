@@ -24,7 +24,6 @@ describe.skipIf(MODE === 'record')('web e2e: DeepSeek Messages conversation', ()
   beforeAll(async () => {
     replayFixture = await selectedSessionFixture(FIXTURE, false)
     scaffold = await launchWebScaffold({
-      deepSeekMessages: true,
       replayFixture,
       paceMs: 5,
       replayProviders: [{
@@ -36,6 +35,7 @@ describe.skipIf(MODE === 'record')('web e2e: DeepSeek Messages conversation', ()
         }],
       }],
     })
+    await scaffold.ctx.agentDefaultModel.saveSelection({ provider: 'deepseek-messages', model: 'deepseek-v4-flash' })
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
     tripwire = watchConsole(page)

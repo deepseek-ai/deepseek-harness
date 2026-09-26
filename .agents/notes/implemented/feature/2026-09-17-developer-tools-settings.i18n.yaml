@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-17-developer-tools-settings.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-17-developer-tools-settings.md
+/agent-note-shared-developer-tool-settings:
+  en: 353fa09368362d0f
+  zh: b36c06c8b49833b1
+/agent-note-shared-developer-tool-settings/problem:
+  en: e22ee243b1503319
+  zh: b53c1a932d547f55
+/agent-note-shared-developer-tool-settings/decision:
+  en: 62f71b49af7b9971
+  zh: f0f12da4cb0c7fc0
+/agent-note-shared-developer-tool-settings/alternatives-considered:
+  en: df1b80e5b8d2a178
+  zh: 0136d16fc44d57bf
+/agent-note-shared-developer-tool-settings/consequences:
+  en: c1e05aebc88fc12c
+  zh: 0ace5bced7b32437

@@ -33,12 +33,12 @@ interface Config {
    * never). The names `custom` and `auto` are reserved for derived state and
    * the Auto review integration respectively.
    */
-  presets?: Record<string, PresetSpec>
+  presets: Record<string, PresetSpec>
   /**
    * Default for new sessions. When omitted, the preset matching the composed
    * sandbox and approval defaults is used.
    */
-  defaultPreset?: string
+  defaultPreset: Volatile<string | undefined>
 }
 ```
 
@@ -46,13 +46,13 @@ interface Config {
 
 ## 固定的当前会话 Auto 注册
 
-Auto integration 会在自身 effect 生命周期内调用 `registerAuto(admit)`。本服务固定 `auto` 身份以及 `danger-full-access` 加 `never` 的组合；shipped 客户端的 locale 字典拥有 Auto 的 label 与 description，而配置预设的展示信息仍归 Host 所有。调用方不能通过通用 contribution API 发布其他预设。Auto 排列在配置预设之后，绝不会进入 `permission.defaultPreset` 设置 schema，并在 effect dispose 时消失。同步 `admit` 回调会在 Auto 选择修改 Session 前，以及存储的 Auto Session 发布前运行，因此 integration 缺失或正在关闭时不会改写持久身份。
+Auto integration 会在自身 effect 生命周期内调用 `registerAuto(admit)`。本服务固定 `auto` 身份以及 `danger-full-access` 加 `ask` 的组合，已记录的 Auto 选择也匹配委派子会话固定的 `never` 策略；shipped 客户端的 locale 字典拥有 Auto 的 label 与 description，而配置预设的展示信息仍归 Host 所有。调用方不能通过通用 contribution API 发布其他预设。Auto 排列在配置预设之后，绝不会进入 `permission.defaultPreset` 设置 schema，并在 effect dispose 时消失。同步 `admit` 回调会在 Auto 选择修改 Session 前，以及存储的 Auto Session 发布前运行，因此 integration 缺失或正在关闭时不会改写持久身份。
 
 注册或移除 Auto 会发出无 payload 的 `permission-presets/catalog-changed` 通知。进程级消费方先订阅，再调用 `catalog()`；每次收到通知后重新读取完整的可选目录。`permissions` Session 投影只包含 `currentValue`，因此目录变化不会追加 Session 事件、发布 Session 投影帧或改变 Session 序列。
 
 ## 当前预设与派生的 `custom`
 
-`current(session)` 从必需的 `permissions` 投影派生实际生效的预设。该单元折叠会话的沙箱模式、审批策略和已记录选择；状态内部的缺失值回退到执行器配置的模式与审批服务配置，最后回退到 `ask`。投影 key 缺失时会显式失败。服务优先取仍然匹配的选择，其次取第一个匹配的配置条目，否则返回 `CUSTOM_PRESET`（`'custom'`）。`custom` 只是派生值：客户端可以把它显示为当前值，但它绝不是切换目标，也绝不出现在事件 payload 中。
+`current(session)` 从必需的 `permissions` 投影派生实际生效的预设。该单元折叠会话的沙箱模式、审批策略和已记录选择；状态内部的缺失值回退到执行器配置的模式与审批服务配置，最后回退到 `ask`。投影 key 缺失时会显式失败。服务优先取仍然匹配的选择（包括 `never` 审批策略下已记录的 Auto 选择），其次取第一个匹配的配置条目，否则返回 `CUSTOM_PRESET`（`'custom'`）。`custom` 只是派生值：客户端可以把它显示为当前值，但它绝不是切换目标，也绝不出现在事件 payload 中。
 
 `names` 先按声明顺序列出配置预设，再在 Auto integration 存活时列出 Auto。`catalog()` 把这些可选条目作为一份进程级快照返回。`optionOf(name)` 为可用条目（label 回退为该 key）或派生的 `custom` 展示构建选项，传入其他任何名称都会抛出异常。客户端把目录与 Session 投影合并；`custom` 可以标记当前值，但绝不会成为目录条目。
 
@@ -105,7 +105,8 @@ registerAuto(admit: () => void): () => Promise<void>
 
 /**
  * Resolve the preset matching the effective knob values. A still-matching
- * last selection wins shared-bundle ties; otherwise the first configured
+ * last selection wins shared-bundle ties, and a still-selected Auto also
+ * matches the `never` approval policy; otherwise the first configured
  * match wins. Returns
  * {@link CUSTOM_PRESET} when no available preset matches.
  * @param session - the session whose knob state is read.

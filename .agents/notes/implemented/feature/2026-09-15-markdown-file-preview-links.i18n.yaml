@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-15-markdown-file-preview-links.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-15-markdown-file-preview-links.md
+/agent-note-markdown-file-preview-links:
+  en: 98c528496f33598e
+  zh: 640619a2dfa0255e
+/agent-note-markdown-file-preview-links/problem:
+  en: ba7789f83fadbe95
+  zh: 34bcaa0aed5f5c3b
+/agent-note-markdown-file-preview-links/decision:
+  en: b986fe2640c2ebf4
+  zh: e69700b233e7bd69
+/agent-note-markdown-file-preview-links/alternatives-considered:
+  en: d8a4d6ab17eb2880
+  zh: 089419d53f71305a
+/agent-note-markdown-file-preview-links/consequences:
+  en: c0fc2dd3d860edfa
+  zh: 129aa543b4a39e10

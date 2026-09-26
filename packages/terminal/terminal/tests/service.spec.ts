@@ -350,7 +350,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
       .then(() => { disposalSettled = true })
     await new Promise(resolve => setTimeout(resolve, 0))
     const signalAbortedBeforeRelease = backendSignal?.aborted ?? false
-    const signalReasonBeforeRelease = backendSignal?.reason as unknown
+    const signalReasonBeforeRelease: unknown = backendSignal?.reason
     const disposalSettledBeforeRelease = disposalSettled
     gate.resolve(session)
 
@@ -423,7 +423,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
       (error: unknown) => error,
     )
     expect(disposalError).toMatchObject({ message: 'failed to clean up PTY lifecycle' })
-    const rollbackError = (disposalError as AggregateError).errors[0] as unknown
+    const rollbackError: unknown = (disposalError as AggregateError).errors[0]
     const cleanupErrors = (rollbackError as AggregateError).errors as unknown[]
     expect(cleanupErrors).toEqual([cleanupFailure])
   })

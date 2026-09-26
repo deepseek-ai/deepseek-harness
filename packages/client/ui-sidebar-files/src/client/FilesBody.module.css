@@ -12,13 +12,7 @@
   line-height: 1.5;
 }
 
-/* The header row, its path, and its control are the text preview's
-   (ui-sidebar-documentpreview TextPreview `.header`, `.path`, `.tool`), copied so
-   the two pane types read as one; keep the two sheets in step. TODO: once the
-   artifact and slot surfaces settle, one copy in ui-primitives could serve
-   every pane header.
-
-   One 38px row flush under the pane's strip: the root's path, then reload at
+/* One 38px row flush under the pane's strip: the root's path, then reload at
    its end. With the strip's 38px above, its rule lies where the conversation
    header's does (ui-conversation ConversationRoot `.header`, 76px with the
    same rule). */
@@ -33,38 +27,9 @@
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
-/* The path is never ellipsized. Its text sits at the left while it fits: the
-   auto margin takes the free space. Once it is wider than the box, the auto
-   margin is zero and `flex-end` holds the name at the right edge, so the
-   directories run off the left and the box clips them there, faded by the
-   mask while `data-files-path-clipped` is set. The margin plus the row's gap
-   put the text 16px clear of the first control. */
+/* The margin plus the header's gap keeps the path 16px clear of reload. */
 .path {
-  display: flex;
-  flex: 1 1 auto;
-  justify-content: flex-end;
-  min-width: 0;
   margin-right: 12px;
-  overflow: hidden;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.path[data-files-path-clipped] {
-  mask-image: linear-gradient(to right, transparent, black 28px);
-}
-
-.pathText {
-  flex: none;
-  margin-right: auto;
-}
-
-.pathDirectory {
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.pathName {
-  color: var(--dsw-alias-label-primary);
 }
 
 .body {
@@ -116,7 +81,7 @@
   text-align: left;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-md);
   cursor: pointer;
 }
 
@@ -187,7 +152,7 @@
   line-height: 1;
   background: transparent;
   border: none;
-  border-radius: 28px;
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
 }
 
@@ -197,6 +162,11 @@
 }
 
 .tool:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.tool[aria-pressed='true'] {
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-interactive-bg-hover);
 }

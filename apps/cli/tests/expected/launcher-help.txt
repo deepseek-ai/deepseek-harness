@@ -16,6 +16,8 @@ Options:
   --patch <path>                 extra patch-list overlay applied after the
                                  profile layer (repeatable)
   --dump-config                  print the composed profile tree and exit
+  --dump-config-schema           print JSON Schema for profile entries and
+                                 patches without mounting
   --dump-default-config          print the profile tree without its user layer
                                  or --patch overlays and exit
 

@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/timeout/README.md
-README.md: 80f8dc7c427ba045e36343d009a93828a45b1a69
-README.zh.md: 9d711ecfd24857e5bb83ea102dd6c3a5c86254d3
+/:
+  en: 118428acb1b2d2e4
+  zh: e5ca5ae92e8a7e4b
+/deepseek-ai-dsh-timeout:
+  en: af0ef4476e8b699f
+  zh: 1071d810d1080026
+/deepseek-ai-dsh-timeout/summary:
+  en: 13fc36a866f4ae6d
+  zh: 02a9ab4bd48e968a
+/deepseek-ai-dsh-timeout/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-timeout/use-this-package:
+  en: f000e79268bb4b39
+  zh: 82c40259b95776be
+/deepseek-ai-dsh-timeout/use-this-package/clamping-a-timeout-hint:
+  en: f8c517a0c27ebeec
+  zh: 0b6eed0130330349
+/deepseek-ai-dsh-timeout/use-this-package/running-work-under-a-deadline:
+  en: 5cfa732a396484a6
+  zh: d114cd5ea1ddeb3f
+/deepseek-ai-dsh-timeout/use-this-package/classifying-the-outcome:
+  en: 0c1e99daa88e0ea0
+  zh: fc92bc0add2e9a49
+/deepseek-ai-dsh-timeout/use-this-package/streaming-with-an-idle-watchdog:
+  en: f464a16371ff00d1
+  zh: 3c62c560c9dbc804
+/deepseek-ai-dsh-timeout/use-this-package/what-does-not-get-a-timeout:
+  en: 73e04894d01ddb23
+  zh: 4830e47cc55143ff
+/deepseek-ai-dsh-timeout/understand-the-implementation:
+  en: 6c052aa1171a2e3b
+  zh: 2a37575eb6059cc9
+/deepseek-ai-dsh-timeout/understand-the-implementation/source-map:
+  en: be1b396f4153b9d0
+  zh: a762ab1642b3431e
+/deepseek-ai-dsh-timeout/understand-the-implementation/how-a-deadline-fuses-sources:
+  en: 940080c53d1d0dac
+  zh: b86e7f51434a3f2c
+/deepseek-ai-dsh-timeout/understand-the-implementation/the-no-timeout-sentinel:
+  en: ceea0b46e6b8e15f
+  zh: de87dccf08764061
+/deepseek-ai-dsh-timeout/understand-the-implementation/why-an-idle-watchdog-rearms:
+  en: 7200cfa587c53a9c
+  zh: 09d6b67dc1a31c5e
+/deepseek-ai-dsh-timeout/further-exploration:
+  en: 4c29a947e28047ad
+  zh: d80f5ecb50b16203
+/deepseek-ai-dsh-timeout/model-experience:
+  en: 5c35c77e4625b8ac
+  zh: 8142da11ba1a6d11
+/deepseek-ai-dsh-timeout/model-experience/kv-cache-effect:
+  en: 04cc18d90bf9382d
+  zh: 2c8b75063c46c620
+/deepseek-ai-dsh-timeout/known-limitations-and-deferred-work:
+  en: cff4b9d3cfc23a97
+  zh: 9eb52fbe4c8a6c30
+/deepseek-ai-dsh-timeout/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

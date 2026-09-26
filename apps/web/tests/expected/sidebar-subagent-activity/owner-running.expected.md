@@ -1,6 +1,4 @@
 - tree "Sessions":
-  - treeitem "workspace" [expanded]:
-    - img
-    - text: workspace
+  - treeitem "workspace" [expanded]
   - treeitem "New Session" [selected]
   - treeitem "1 subagent running Delegate a background job. now"

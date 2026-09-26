@@ -1,5 +1,5 @@
 ---
-description: "The extensions group map: model-facing tools and dual-half runners for defining, running, and removing dynamic Cordis packages, for users and maintainers navigating the group."
+description: "Runtime API inspection, process-local runners, and historical Cordis cards."
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The extensions group lets an agent inspect and modify the live DSH runtime without editing repository files or configuration. It can define, run, update, stop, and remove dynamic Cordis packages from model tools or a browser panel. A package may affect the host, browser, or both, and immutable versions support controlled updates. Definitions exist only in process memory and disappear when DSH restarts. Choose the child package for model tooling, host execution, browser execution, or browser controls.
+The extensions group provides read-only runtime API discovery for agents, process-local runners for programmatic and browser consumers, and historical generated-plugin cards. Creator mode installs persistent plugins through [Plugin Manager](../boot/plugin-manager/README.md). Choose a child package for inspection, Host execution, Client execution, or browser controls.
 
 ## Table of Contents
 
@@ -24,10 +24,10 @@ The extensions group lets an agent inspect and modify the live DSH runtime witho
 
 | Package | Role | ctx key |
 |---|---|---|
-| [`tool-cordis`](tool-cordis/README.md) | Seven model-facing tools: inspect the live runtime, define, run, stop, and remove dynamic packages | registers on `ctx.tools` |
+| [`tool-cordis`](tool-cordis/README.md) | Two read-only tools for runtime API discovery | registers on `ctx.tools` |
 | [`cordis-host-runner`](cordis-host-runner/README.md) | Host half: definition registry, sandboxed host-half lifecycle, and the inspect registry that answers browser queries | provides `ctx.dynamicCordisRunner` and `ctx.cordisInspect` |
 | [`cordis-client-runner`](cordis-client-runner/README.md) | Browser half: evaluates a browser-half source into a live plugin and answers run requests | client face; provides browser `ctx.dynamicCordisRunner` |
-| [`ui-cordis`](ui-cordis/README.md) | Browser surfaces: the frame-wide panel, lifecycle tool cards, and the `@pluginId` input source | client face; registers slots |
+| [`ui-cordis`](ui-cordis/README.md) | Browser panel and historical lifecycle tool cards | client face; registers slots |
 
 -----
 
@@ -35,7 +35,7 @@ The extensions group lets an agent inspect and modify the live DSH runtime witho
 ## Related documentation
 
 - [Extensions subsystem](../../docs/subsystems/extensions.md) — the generated `ctx.cordisInspect` and `ctx.dynamicCordisRunner` service API.
-- [Generated tool catalog](../../docs/tool-catalog.md#deepseek-aidsh-tool-cordis) — the seven model-facing tool schemas.
+- [Generated tool catalog](../../docs/tool-catalog.md#deepseek-aidsh-tool-cordis) — the two read-only tool schemas.
 - [Generated configuration catalog](../../docs/config-catalog.md#deepseek-aidsh-cordis-host-runner) — the runner's accepted config fields.
 - [Self-referential Cordis toolset Agent Note](../../.agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md) — design home for sandbox semantics, lifecycle, and composition.
 - [Client shells and dynamic packages Agent Note](../../.agents/notes/implemented/architecture/2026-08-15-client-shells-and-dynamic-packages.md) — package placement and build faces for the client halves.

@@ -41,6 +41,8 @@ Compose this plugin in a browser-facing host that serves the built Web shell: it
 
 Requests are served from the dist root (the directory containing `distIndex`). The dist root and the configured index path render `index.html` with HTTP 200; any other existing file is served directly with its MIME type, and unknown extensions ship as `application/octet-stream`. A path that resolves outside the root is rejected with 403, so a crafted path cannot read files above the dist. An absent or non-file target inside the dist root — a missing file, a directory, or a missing configured index — returns an empty 404. Non-GET/HEAD requests without a matching named route are answered 405. Every successful index response is rendered through the webserver's `renderIndex`, so the boot manifest reaches the page on `/` and on the configured index path.
 
+The served HTML carries one document base, `<base href="./">`, ahead of every injected resource row, so it freezes the entry directory the page was loaded from: the shell's own app-directory-relative references and the Host's plugin-resource rows both resolve under the mount that served the page. The same index therefore serves the origin root and whatever mount a prefix-stripping proxy owns; this plugin renders it only for the dist root and the configured index path.
+
 Root and configured-index responses call `ctx.connection.authorizeIndex` before reading HTML. A valid process token receives a 303 redirect plus the persistent browser cookie; an existing valid cookie serves the index; every other index request receives the Connection-owned 401 response. Non-index files remain public static assets. Connection owns the token, cookie, expiry, and signing-record semantics.
 
 ### Observable failures
@@ -57,7 +59,7 @@ Traversal returns 403 rather than an error page. An absent or non-file target in
 
 ### Design concept
 
-The package is one function plugin around `serveStatic`: `apply` resolves the dist root from `distIndex`, builds a `renderIndex` closure that runs `ctx.webServer.renderIndex` over the raw `index.html`, and registers the fallback handler under an effect scope. The seat is single-owner by the webserver's contract — a second registration throws — and effect-scoped, so disposing the fiber releases the seat.
+The package is one function plugin around `serveStatic`: `apply` resolves the dist root from `distIndex`, builds a `renderIndex` closure that runs `ctx.webServer.renderIndex` over the raw `index.html` and splices the document base in after the opening head tag (after the raw taps, so it precedes their markup too), and registers the fallback handler under an effect scope. The seat is single-owner by the webserver's contract — a second registration throws — and effect-scoped, so disposing the fiber releases the seat.
 
 ### The traversal fence
 

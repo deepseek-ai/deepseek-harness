@@ -119,9 +119,7 @@ it('loads browser tools from cordis.yml, logs browser results, and admits the sc
   expect(JSON.stringify(extraction)).toContain('Fixture heading')
   const result = events.find(event => event.type === 'tool/result' && event.data.message.source.callId === 'screenshot')
   if (result?.type !== 'tool/result') throw new Error('Missing screenshot result')
-  const tool = result.data.message.content[0]
-  if (tool?.type !== 'tool-result') throw new Error('Missing tool result content')
-  const image = tool.content.find(block => block.type === 'image')
+  const image = result.data.message.content.find(block => block.type === 'image')
   if (image?.type !== 'image') throw new Error('Missing durable screenshot')
   const stored = await context.attachments.readImage(image.attachment)
   expect(Buffer.from(stored.data).toString('base64')).toBe(screenshotBase64)

@@ -2,55 +2,27 @@
   - heading "Select Workspace Directory" [level=2]
   - navigation:
     - button "Home"
-    - img
     - button "browse-golden"
-  - button "Edit path":
-    - img
+  - button "Edit path"
   - list:
     - listitem:
-      - button "adopted":
-        - img
-        - text: adopted
-        - img
+      - button "adopted"
     - listitem:
-      - button "alpha-ws":
-        - img
-        - text: alpha-ws
-        - img
+      - button "alpha-ws"
     - listitem:
-      - button "beta-ws":
-        - img
-        - text: beta-ws
-        - img
+      - button "beta-ws"
     - listitem:
-      - button "browse-golden":
-        - img
-        - text: browse-golden
-        - img
+      - button "browse-golden"
     - listitem:
-      - button "same-name":
-        - img
-        - text: same-name
-        - img
+      - button "same-name"
     - listitem:
-      - button "workspace":
-        - img
-        - text: workspace
-        - img
+      - button "workspace"
   - list:
     - listitem:
-      - button "alpha":
-        - img
-        - text: alpha
-        - img
+      - button "alpha"
     - listitem:
-      - button "beta":
-        - img
-        - text: beta
-        - img
-  - button "New folder":
-    - img
-    - text: New folder
+      - button "beta"
+  - button "New folder"
   - button "Show hidden files"
   - button "Cancel"
   - button "Open"

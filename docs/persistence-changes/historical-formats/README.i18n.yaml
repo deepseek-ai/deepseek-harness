@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/persistence-changes/historical-formats/README.md
-README.md: 35fa4cec9c960e8d0e047c42e35dad83992ac8d0
-README.zh.md: 7dd2af55d1d68c108d678e6e0849f7d679da929d
+/:
+  en: 1257a74512f9daed
+  zh: 74e1378126c7dd99
+/session-persistence-formats:
+  en: a740a4786e0488d6
+  zh: c17883a78695cf67
+/session-persistence-formats/summary:
+  en: f1592445394a7daf
+  zh: 2a1c5f7fa307db45
+/session-persistence-formats/table-of-contents:
+  en: 14c57f30e676f6e3
+  zh: b1a0ccf26fab3727
+/session-persistence-formats/format-references:
+  en: 45dba01dd6d69c80
+  zh: c366d1a3991118c9
+/session-persistence-formats/scope-and-evidence:
+  en: b220062139ddac1e
+  zh: 7c4c0efe05dafa9c
+/session-persistence-formats/maintain-coverage:
+  en: 0be8010f3fd20d2d
+  zh: b6e3af11c81e8702
+/session-persistence-formats/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-22-platform-browser-storage.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-22-platform-browser-storage.md
+/agent-note-account-scoped-platform-browser-storage:
+  en: ade088e230a39dd2
+  zh: 437a9be5fe2ef704
+/agent-note-account-scoped-platform-browser-storage/problem:
+  en: 84cfcf61f58fab58
+  zh: 14844d5e3d3638fe
+/agent-note-account-scoped-platform-browser-storage/decision:
+  en: 7c8ec7ea318f3689
+  zh: 2c45ac28670dfda1
+/agent-note-account-scoped-platform-browser-storage/alternatives-considered:
+  en: 101fa0ff0b01b096
+  zh: 6c6b0a4136531d6b
+/agent-note-account-scoped-platform-browser-storage/consequences:
+  en: 0aa0a16abba90b43
+  zh: 6fcb59f3ecea2e54

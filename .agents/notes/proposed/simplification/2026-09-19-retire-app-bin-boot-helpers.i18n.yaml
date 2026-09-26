@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-19-retire-app-bin-boot-helpers.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/simplification/2026-09-19-retire-app-bin-boot-helpers.md
+/agent-note-retire-app-boot-helpers-used-only-by-fixtures:
+  en: db7c1d105d67279e
+  zh: 299512664ce8a27f
+/agent-note-retire-app-boot-helpers-used-only-by-fixtures/problem:
+  en: f617e973b4e5c136
+  zh: 90a32c3023bd4bbb
+/agent-note-retire-app-boot-helpers-used-only-by-fixtures/proposal:
+  en: 9887763c3f2362ad
+  zh: 00a5fdaf4ea5f438
+/agent-note-retire-app-boot-helpers-used-only-by-fixtures/alternatives-considered:
+  en: 3fdc33ab9299103d
+  zh: 79f42a6b79d90b8a
+/agent-note-retire-app-boot-helpers-used-only-by-fixtures/acceptance-criteria:
+  en: a8cedd0cdfe6526d
+  zh: cb08fcd8117f9ddf
+/agent-note-retire-app-boot-helpers-used-only-by-fixtures/risks:
+  en: caf3a0c07667e4ae
+  zh: 41195542888a3e83

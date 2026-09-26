@@ -62,8 +62,8 @@ async function run(root: string): Promise<ProfileReport> {
       requests += result.events.filter(event => event.type === 'assistant/message').length
       for (const event of result.events) {
         if (event.type !== 'tool/result') continue
-        const result = event.data.message.content[0]
-        if (result.isError || !result.content.some(block => block.type === 'text' && block.text.includes('export const synthetic = 42;'))) {
+        const message = event.data.message
+        if (message.isError || !message.content.some(block => block.type === 'text' && block.text.includes('export const synthetic = 42;'))) {
           throw new Error('profile benchmark did not read the synthetic file')
         }
         toolCalls++

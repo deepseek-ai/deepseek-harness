@@ -1,0 +1,36 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../packages/boot/app-boot"
+    },
+    {
+      "path": "../../packages/util/home-paths"
+    },
+    {
+      "path": "../../packages/credentials/deepseek-account"
+    },
+    {
+      "path": "../../packages/api/gateway/tsconfig.host.json"
+    },
+    {
+      "path": "../../packages/client/ui-sidebar-browser/tsconfig.host.json"
+    },
+    {
+      "path": "../../packages/client/shortcuts/tsconfig.host.json"
+    },
+    {
+      "path": "../../packages/util/atomic-write"
+    }
+  ],
+  "exclude": [
+    "src/client"
+  ]
+}

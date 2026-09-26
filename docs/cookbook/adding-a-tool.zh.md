@@ -52,7 +52,7 @@ export function apply(ctx: Context) {
 
 通过 producer 配置控制 `run_in_background`，然后使用 `ctx.jobs.start({ kind, label, owner: exec.agent, run })` 注册任务。注册表会在进入 producer 主体前将已预先中止的调用判为失败；运行时会在 `run()` 启动工作前校验 owner 和任务控制器是否可用，随后提供 id、会话围栏、通用控制工具、通知和 owner cleanup。成功的后台分支会返回类型化的规范句柄，如 `{ kind: 'background', jobId }`；其 Native 渲染器可以保留 `started background job bash-1` 这类供人阅读的自然语言，但 PTC mode 绝不能通过解析该文本取得 id。
 
-producer 提供同步的 `cancel`、在资源清理后 settle 且不 reject 的 `done`，以及可选的消费式 `readOutput`（负责有界输出的格式化）。预先中止的调用属于失败，因为此时没有任务，其 id 无法满足成功输出 schema。`ctx.jobs.start()` 发布 id 后，应使用任务自有的取消信号，而不是 `exec.signal`：之后取消外层调用只会停止等待本次调用，不会终止已经发布的工作；该生命周期归 `job_kill`、owner dispose 和服务 teardown 所有。前台工作仍与 `exec.signal` 耦合。流式 producer 的示例和完整约定见[后台任务运行时 Agent Note](../../.agents/notes/implemented/architecture/2026-06-20-generic-long-running-tool-runtime.zh.md)与 `dsh-tool-bash`。
+spec 提供同步的 `cancel`、在资源清理后 settle 且不 reject 的 `done`，以及由注册表泵入 job 输出环的拉取式 `output` 源或经 starter 收到的 `JobHandle` 推送的追加；模型的消费式读取由 `dsh-tool-jobs` 从该环渲染。预先中止的调用属于失败，因为此时没有任务，其 id 无法满足成功输出 schema。`ctx.jobs.start()` 发布 id 后，应使用任务自有的取消信号，而不是 `exec.signal`：之后取消外层调用只会停止等待本次调用，不会终止已经发布的工作；该生命周期归 `job_kill`、owner dispose 和服务 teardown 所有。前台工作仍与 `exec.signal` 耦合。流式 producer 的示例和完整约定见[后台任务运行时 Agent Note](../../.agents/notes/implemented/architecture/2026-06-20-generic-long-running-tool-runtime.zh.md)与 `dsh-tool-bash`。
 
 <a id="execution-policy-and-observation"></a>
 

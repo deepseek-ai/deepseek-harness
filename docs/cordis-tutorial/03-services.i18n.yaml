@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 03-services.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cordis-tutorial/03-services.md
-03-services.md: ebfc400dbbc701a3c164c7d30c371dec879d7d73
-03-services.zh.md: 8a4881eb41a9be09f531a58b528a2b64500b209a
+/3-services:
+  en: 15915c1948e99dcd
+  zh: 769f50dcd06a1c6e
+/3-services/provide-a-service:
+  en: dafc130ada001863
+  zh: 820921c32e8ce5fe
+/3-services/consume-a-service-with-inject:
+  en: 1b4faa79ebc5e3d7
+  zh: 5170a8291e4aaf34
+/3-services/dependencies-are-tracked-after-load:
+  en: 5cadb845bd8ebdb3
+  zh: cce559c73d7bda66
+/3-services/optional-dependencies:
+  en: f765739ab1e2061a
+  zh: 71ddc054022b66a9
+/3-services/naming:
+  en: 11dfa5c4f8aed0e0
+  zh: d28f7c86f58cdf3e

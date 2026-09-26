@@ -16,6 +16,8 @@ Agent 产出的文件是最尖锐的案例。产出文件 chip 或 `read` 行的
 
 ### 包拓扑
 
+[Sidebar 稳定挂载决策](../architecture/2026-09-20-sidebar-retained-tab-layout.zh.md)负责停靠、浮动与会话切换共用的一棵保活 Tab 内容树。本文的引擎、布局状态与手势所有权仍然适用。
+
 | 包 | 形态 | 所有物 |
 |---|---|---|
 | `packages/client/ui-dockkit` | 静态链接库，零 DSH 依赖 | 布局引擎与渲染/驱动它的 React 组件；消费方编译其源码，且它只保留一张样式表，因为消费方按文件名去重注入的样式表 |
@@ -33,7 +35,7 @@ Agent 产出的文件是最尖锐的案例。产出文件 chip 或 `read` 行的
 
 [响应式 Sidebar 与标签信息](../architecture/2026-09-07-sidebar-responsive-tab-info.zh.md)取代本记录中的无让步布局、覆盖模式与产品窗格上限。`ui-layout` 仍拥有三列几何与像素宽度偏好，Sidebar 占位项通过 `ctx.layout.openRightbar(track, fullscreen)` 和 `closeRightbar()` 报告呈现方式，框架不注入 Sidebar 包。具体宽度规则见 [ui-layout](../../../../packages/client/ui-layout/README.zh.md)。
 
-右栏在普通与全屏模式下使用同一棵已挂载内容树；隐藏保留标签状态，全屏覆盖视口并保留底层列占位。浮窗仍经 portal 使用视口坐标，不随右栏关闭。产品限制为两个水平窗格与 20–80% 分割比例，通用引擎保留自己的默认值。
+右栏在普通与全屏模式下使用同一棵已挂载内容树；隐藏保留已保活的标签状态，全屏覆盖视口并保留底层列占位。`DockLayout` 在同一棵树中渲染稳定 Grid cell 与 fixed 定位的浮动 frame，前台浮窗不随右栏关闭。产品限制为两个水平窗格与 20–80% 分割比例，通用引擎保留自己的默认值。
 
 ### 状态
 
@@ -86,7 +88,7 @@ Agent 产出的文件是最尖锐的案例。产出文件 chip 或 `read` 行的
 - Detail 面板及其重复的卡片展示消失（净删约 1,400 行）；卡片就地阅读，`inspect` 打开 trajectory 视图。
 - 框架没有中列下限：视口窄于两侧列之和时会话区被挤向零，而不是关掉某一列。
 - 库由消费方编译，改库须重建壳并刷新页面；它没有 HMR。
-- 面板、浮层宿主与 portal 出去的 tab 菜单使用硬编码 z-index；客户端仍没有 z-index token 层。
+- 停靠 cell、浮动 cell 和 portal 菜单使用固定层级，浮动 cell 在所属层内通过 CSS 绘制顺序排序；客户端仍没有全局 z-index token 层。
 
 ## Testing
 

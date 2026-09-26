@@ -84,7 +84,7 @@ kind: "package-reference"
 
 当包级约定不够用时阅读以下页面；它们从 preset 组装逐步进入本行所供给的提示词注册表。
 
-- [agent-presets 包](../agent-presets/README.zh.md)——本行挂载进的 preset 组装。
+- [agent-presets 包](../agent-preset-registry/README.zh.md)——本行挂载进的 preset 组装。
 - [系统提示词子系统](../../../docs/subsystems/system-prompt.zh.md)——段落、组装，以及本行所遮蔽的人设槽位。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-persona)——每个受支持配置字段及其源声明。
 

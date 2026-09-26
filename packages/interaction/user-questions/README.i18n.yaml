@@ -1,6 +1,43 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/interaction/user-questions/README.md
-README.md: 5558c1483937982aad791f9c90e81ef9b02b9d83
-README.zh.md: 17cf9c973c82e4854c2807d85ff09cb9751bca14
+/:
+  en: 49ea5bf7d681936e
+  zh: e65549bc2fc385a4
+/deepseek-ai-dsh-user-questions:
+  en: 79d2910e509a2512
+  zh: 7af1982658f00d64
+/deepseek-ai-dsh-user-questions/summary:
+  en: d27ce8b495269248
+  zh: 691a7cc7f3d892d0
+/deepseek-ai-dsh-user-questions/table-of-contents:
+  en: ad3919bb107cc38d
+  zh: 557af29a8318b65c
+/deepseek-ai-dsh-user-questions/service-userquestionservice-ctx-key-userquestions:
+  en: 1ba3467a2588da42
+  zh: 74f6e516f71116d9
+/deepseek-ai-dsh-user-questions/service-userquestionservice-ctx-key-userquestions/public-api:
+  en: f7c183c8728b05cd
+  zh: f0104632d8eb2938
+/deepseek-ai-dsh-user-questions/service-userquestionservice-ctx-key-userquestions/key-types:
+  en: 10637ca40891d520
+  zh: 015662eb651d19cb
+/deepseek-ai-dsh-user-questions/service-userquestionservice-ctx-key-userquestions/presentation-intent:
+  en: d3809cfa854f1c02
+  zh: f9bcc88f1db8fd83
+/deepseek-ai-dsh-user-questions/role:
+  en: 1d4b9680e35350a7
+  zh: fcba25211099b880
+/deepseek-ai-dsh-user-questions/model-experience:
+  en: 95167d0c957a0ab5
+  zh: 582c04395648786c
+/deepseek-ai-dsh-user-questions/model-experience/kv-cache-effect:
+  en: 40294c1c31b74824
+  zh: cd40bdfe1a1c37dc
+/deepseek-ai-dsh-user-questions/known-limitations-and-deferred-work:
+  en: 9c2d868427856d56
+  zh: f0d19979fd90d826
+/deepseek-ai-dsh-user-questions/known-limitations-and-deferred-work/dev-note:
+  en: f5f2c82d2e085ccf
+  zh: d04ca73d1db0ef0f

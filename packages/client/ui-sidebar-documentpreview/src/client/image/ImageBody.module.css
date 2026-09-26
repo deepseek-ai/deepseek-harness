@@ -5,6 +5,7 @@
   display: flex;
   box-sizing: border-box;
   width: 100%;
+  min-width: 100%;
   height: max-content;
   min-height: 100%;
   padding: 12px;
@@ -12,22 +13,29 @@
   white-space: normal;
 }
 
-/* A wider image shrinks to the pane's width at its aspect ratio; a smaller
-   one keeps its intrinsic size. The auto margins centre it either way. */
-.image {
-  display: block;
-  flex: none;
-  width: auto;
-  max-width: 100%;
-  height: auto;
-  max-height: none;
-  margin: auto;
-  border-radius: 8px;
-  user-select: none;
+.frame:has([data-document-loading]) {
+  height: 100%;
 }
 
-.image[hidden] {
-  display: none;
+/* A wider image shrinks to the pane's width at its aspect ratio; a smaller
+   one keeps its intrinsic size. The auto margins centre it either way. */
+.surface {
+  display: block;
+  flex: none;
+  max-width: none;
+  margin: auto;
+}
+
+.surface[hidden] { display: none; }
+
+.image {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  border-radius: var(--dsw-radius-md);
+  user-select: none;
 }
 
 .status {

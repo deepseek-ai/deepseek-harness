@@ -24,7 +24,7 @@
       "path": "../store"
     },
     {
-      "path": "../ui-conversation"
+      "path": "../ui-conversation/tsconfig.client.json"
     },
     {
       "path": "../ui-dockkit"
@@ -43,6 +43,12 @@
     },
     {
       "path": "../ui-slots"
+    },
+    {
+      "path": "../shortcuts/tsconfig.client.json"
+    },
+    {
+      "path": "../../util/brand"
     }
   ]
 }

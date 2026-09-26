@@ -1,4 +1,5 @@
 import { isNullable } from './misc.ts'
+import { isVolatile } from './volatile.ts'
 
 type GlobalConstructorNames = keyof {
   [K in keyof typeof globalThis as typeof globalThis[K] extends abstract new (...args: any) => any ? K : never]: K
@@ -114,29 +115,54 @@ export function clone(source: any, refs = new Map<any, any>()) {
   return result
 }
 
-/** Deeply compare arrays, dates, regexps, buffers, and plain object fields. */
+/**
+ * Compare values recursively, treating two volatile references as equal regardless of value.
+ * Strict comparison distinguishes null/undefined, treats opaque objects by identity,
+ * compares URLs by normalized href, treats array holes as undefined, and considers distinct cyclic structures unequal.
+ * @param a - first value.
+ * @param b - second value.
+ * @param strict - whether to require strict data equality outside volatile references.
+ * @returns whether the values compare equal.
+ */
 export function deepEqual(a: any, b: any, strict?: boolean): boolean {
-  if (a === b) return true
-  if (!strict && isNullable(a) && isNullable(b)) return true
-  if (typeof a !== typeof b) return false
-  if (typeof a !== 'object') return false
-  if (!a || !b) return false
+  const ancestors = new Set<object>()
+  function compare(a: any, b: any): boolean {
+    if (a === b) return true
+    if (isVolatile(a) || isVolatile(b)) return isVolatile(a) && isVolatile(b)
+    if (!strict && isNullable(a) && isNullable(b)) return true
+    if (typeof a !== typeof b || typeof a !== 'object' || !a || !b) return false
+    if (ancestors.has(a)) return false
 
-  function check<T>(test: (x: any) => x is T, then: (a: T, b: T) => boolean) {
-    return test(a) ? test(b) ? then(a, b) : false : test(b) ? false : undefined
+    function check<T>(test: (x: any) => x is T, then: (a: T, b: T) => boolean) {
+      return test(a) ? test(b) ? then(a, b) : false : test(b) ? false : undefined
+    }
+
+    ancestors.add(a)
+    try {
+      return check(Array.isArray, (a, b) => {
+        if (a.length !== b.length) return false
+        for (let index = 0; index < a.length; index++) {
+          if (!compare(a[index], b[index])) return false
+        }
+        return true
+      })
+        ?? check(is('Date'), (a, b) => a.valueOf() === b.valueOf())
+        ?? check(is('URL'), (a, b) => a.href === b.href)
+        ?? check(is('RegExp'), (a, b) => a.source === b.source && a.flags === b.flags)
+        ?? check(isArrayBufferLike, (a, b) => {
+          if (a.byteLength !== b.byteLength) return false
+          const viewA = new Uint8Array(a)
+          const viewB = new Uint8Array(b)
+          for (let i = 0; i < viewA.length; i++) {
+            if (viewA[i] !== viewB[i]) return false
+          }
+          return true
+        })
+        ?? ((!strict || [a, b].every(value => Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null))
+          && Object.keys({ ...a, ...b }).every(key => compare(a[key], b[key])))
+    } finally {
+      ancestors.delete(a)
+    }
   }
-
-  return check(Array.isArray, (a, b) => a.length === b.length && a.every((item, index) => deepEqual(item, b[index])))
-    ?? check(is('Date'), (a, b) => a.valueOf() === b.valueOf())
-    ?? check(is('RegExp'), (a, b) => a.source === b.source && a.flags === b.flags)
-    ?? check(isArrayBufferLike, (a, b) => {
-      if (a.byteLength !== b.byteLength) return false
-      const viewA = new Uint8Array(a)
-      const viewB = new Uint8Array(b)
-      for (let i = 0; i < viewA.length; i++) {
-        if (viewA[i] !== viewB[i]) return false
-      }
-      return true
-    })
-    ?? Object.keys({ ...a, ...b }).every(key => deepEqual(a[key], b[key], strict))
+  return compare(a, b)
 }

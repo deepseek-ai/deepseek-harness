@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The context group provides plugins that add model-visible context to each request without defining any tool: workspace instruction files become guidance, `@file` mentions offer path completion, other sessions can be referenced as bounded snapshots, and the model can see the current time and the agent's tmux location. All of them are opt-in except `agent-instructions`, which `dsh-base` includes by default and a profile patch can disable. Context is durable: injected instructions and references enter session history as user-role messages, so they persist, replay, and compact like other conversation content. This page maps the group; each package README owns the per-package contract.
+The context group provides plugins that add model-visible context to each request without defining any tool: workspace instruction files become guidance, `@file` mentions offer path completion, other sessions can be referenced as bounded snapshots, and the model can see the current time and the agent's tmux location. Only `agent-instructions` (`dsh-base`) ships mounted by default; the rest are opt-in. Context is durable: injected instructions and references enter session history as user-role messages, so they persist, replay, and compact like other conversation content. This page maps the group; each package README owns the per-package contract.
 
 ## Table of Contents
 

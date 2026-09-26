@@ -8,9 +8,9 @@
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ISessions, SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
+import { WeakMapWithValues } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InputTriggerSource } from '../types.ts'
 import { InputTriggerController } from './controller.ts'
 import type { InputTriggerServiceContract } from './contract.ts'
@@ -24,14 +24,16 @@ interface LiveState {
   /** Registration order = menu group order = matchSpace/matchEnter poll order. */
   readonly sources: InputTriggerSource[]
   /** Per-session controllers; entries are deleted by their scope disposer. */
-  readonly controllers: Map<SessionId, InputTriggerController>
+  readonly controllers: WeakMapWithValues<SessionBinding, InputTriggerController>
 }
 
 /** The `ctx.inputTriggers` trigger pipeline service (root registry + controller resolution). */
 export class InputTriggerService extends Service implements InputTriggerServiceContract {
   static inject = ['sessions']
 
-  private readonly live: LiveState = { sources: [], controllers: new Map() }
+  private readonly live: LiveState = {
+    sources: [], controllers: new WeakMapWithValues(),
+  }
 
   /**
    * @param ctx - owning root context (the service registers itself as `slash`).
@@ -39,7 +41,7 @@ export class InputTriggerService extends Service implements InputTriggerServiceC
   constructor(ctx: Context) {
     super(ctx, 'inputTriggers')
     ctx.on('locale/change', () => {
-      for (const controller of this.live.controllers.values()) controller.refreshOpenMenu()
+      for (const controller of this.live.controllers.values) controller.refreshOpenMenu()
     })
   }
 
@@ -56,7 +58,7 @@ export class InputTriggerService extends Service implements InputTriggerServiceC
       throw new Error(`slash source "${src.trigger}${src.name}" is already registered`)
     }
     live.sources.push(src)
-    for (const controller of live.controllers.values()) {
+    for (const controller of live.controllers.values) {
       try {
         controller.sourceAdded(src)
       } catch (error) {
@@ -70,7 +72,7 @@ export class InputTriggerService extends Service implements InputTriggerServiceC
       const at = live.sources.indexOf(src)
       if (at < 0) return
       live.sources.splice(at, 1)
-      for (const controller of live.controllers.values()) controller.sourceRemoved(src)
+      for (const controller of live.controllers.values) controller.sourceRemoved(src)
     }
   }
 
@@ -81,26 +83,31 @@ export class InputTriggerService extends Service implements InputTriggerServiceC
    * single prewarm moment.
    * @param actx - session-scope ctx.
    * @returns the resident controller.
+   * @throws when the Context no longer belongs to a retained Session generation.
    */
   sessionOf(actx: ClientContext): InputTriggerController {
     const sessions = this.sessions()
-    const id = sessions.scopeOf(actx)
-    if (id === undefined) throw new Error('slash.sessionOf requires a session scope')
+    const session = sessions.sessionOf(actx)
+    const binding = session === undefined ? undefined : sessions.binding(session.sessionId)
+    if (binding === undefined || binding.session !== session) {
+      throw new Error('slash.sessionOf requires a retained Session scope')
+    }
+    const id = binding.sessionId
     const { live } = this
-    const existing = live.controllers.get(id)
+    const existing = live.controllers.get(binding)
     if (existing !== undefined) return existing
     const controller = new InputTriggerController({
-      actx,
+      actx: binding.ctx,
       sessionId: id,
       roster: {
         sources: trigger => live.sources.filter(s => s.trigger === trigger).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
         all: () => live.sources,
       },
     })
-    live.controllers.set(id, controller)
-    actx.effect(() => () => {
+    live.controllers.set(binding, controller)
+    binding.ctx.effect(() => () => {
       controller.dispose()
-      live.controllers.delete(id)
+      live.controllers.delete(binding)
     }, 'slash: session controller')
     return controller
   }

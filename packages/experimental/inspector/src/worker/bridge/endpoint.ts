@@ -188,7 +188,7 @@ export class InspectorEndpoint {
     this.ingestConnections.set(socket, connection)
     socket.on('message', (data) => {
       try {
-        const value = JSON.parse(rawText(data)) as unknown
+        const value: unknown = JSON.parse(rawText(data))
         if (!queryPeer.receive(value)) this.sources.receive(connection, value)
       } catch {
         connection.close(1008, 'source frame must be JSON')

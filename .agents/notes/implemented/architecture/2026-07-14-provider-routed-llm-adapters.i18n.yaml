@@ -1,6 +1,37 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-14-provider-routed-llm-adapters.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-14-provider-routed-llm-adapters.md
-2026-07-14-provider-routed-llm-adapters.md: 1001b10e18837399b41578658ffe62065e294ba8
-2026-07-14-provider-routed-llm-adapters.zh.md: c5bff0ef407c8a2c22e8cad7e7d32c58c8b0e2da
+/agent-note-provider-routed-llm-adapters-and-a-generic-pi-ai-backend:
+  en: e57698907c40f783
+  zh: 47004d8f68af1d7d
+/agent-note-provider-routed-llm-adapters-and-a-generic-pi-ai-backend/problem:
+  en: 2e51f5fa703b0677
+  zh: 385937219b88c447
+/agent-note-provider-routed-llm-adapters-and-a-generic-pi-ai-backend/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-provider-routed-llm-adapters-and-a-generic-pi-ai-backend/decision/provider-is-the-adapter-registration-key:
+  en: 4921a060c657b790
+  zh: 2f9632469c6f0b60
+/agent-note-provider-routed-llm-adapters-and-a-generic-pi-ai-backend/decision/explicit-pi-ai-provider-profiles:
+  en: 5461685553dac663
+  zh: e5c7e0ad7ac84e29
+/agent-note-provider-routed-llm-adapters-and-a-generic-pi-ai-backend/decision/recorded-assistant-route-and-replay-state:
+  en: 8439e90c9f6d7642
+  zh: daeda3ce5146c9f5
+/agent-note-provider-routed-llm-adapters-and-a-generic-pi-ai-backend/decision/propagate-the-target-through-every-request-producer:
+  en: ba1908bc1517ed23
+  zh: 1c9353a422cf74e1
+/agent-note-provider-routed-llm-adapters-and-a-generic-pi-ai-backend/alternatives-considered:
+  en: ad0d610ea92aa9b8
+  zh: fe09d62762e73f01
+/agent-note-provider-routed-llm-adapters-and-a-generic-pi-ai-backend/consequences:
+  en: a0c98bced8a5e6fb
+  zh: 23caf082a08ba507
+/agent-note-provider-routed-llm-adapters-and-a-generic-pi-ai-backend/testing:
+  en: 5a36121f12701d08
+  zh: 90f0f8ed44f7234f
+/agent-note-provider-routed-llm-adapters-and-a-generic-pi-ai-backend/risks:
+  en: 11db2a349f9f26c2
+  zh: 550d6017d8639854

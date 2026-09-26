@@ -2,7 +2,7 @@
 # the auxiliary route consumes replay.override.json with pacing so its accepted
 # title commits only after the main turn has closed.
 - id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   disabled: true
 
 - id: agent-default-model

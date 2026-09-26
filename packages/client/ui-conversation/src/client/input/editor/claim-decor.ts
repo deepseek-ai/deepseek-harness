@@ -1,15 +1,15 @@
 /**
  * Claim-token highlight: while a command claim holds, the draft's leading
- * token renders in the warn color. A TextNode transform keeps the token in
- * its own styled node (splitting when typing merges text into it), and the
+ * token renders in the business accent. A TextNode transform keeps the token
+ * in its own styled node (splitting when typing merges text into it), and the
  * shell nudges the first leaf dirty when the claim flips so entering and
  * leaving claimed restyles without a text edit.
  */
 import type { LexicalEditor, TextNode as TextNodeType } from 'lexical'
 import { $getRoot, $isElementNode, $isTextNode, TextNode } from 'lexical'
 
-/** Inline style carried by the claim-token node (the old backdrop's hlToken color). */
-const TOKEN_STYLE = 'color: var(--dsw-alias-state-warn-label)'
+/** Inline style carried by the claim-token node. */
+const TOKEN_STYLE = 'color: var(--dsw-alias-state-business-primary)'
 
 /** The document's first text leaf, or null (empty document / leading chip). */
 function firstTextLeaf(): TextNodeType | null {

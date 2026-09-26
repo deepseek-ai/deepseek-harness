@@ -53,8 +53,8 @@ const EXTENSION_TYPES: Readonly<Record<string, ClassifiedFileType>> = {
   astro: 'code',
   bat: 'code',
   cmd: 'code',
-  csv: 'code',
-  tsv: 'code',
+  csv: 'excel',
+  tsv: 'excel',
   html: 'html',
   htm: 'html',
   png: 'image',
@@ -93,6 +93,13 @@ const EXTENSION_TYPES: Readonly<Record<string, ClassifiedFileType>> = {
   xls: 'excel',
   xlsx: 'excel',
   xlsm: 'excel',
+  xlsb: 'excel',
+  xlt: 'excel',
+  xltx: 'excel',
+  xltm: 'excel',
+  ods: 'excel',
+  ots: 'excel',
+  fods: 'excel',
   numbers: 'excel',
 }
 
@@ -145,7 +152,7 @@ const LARGE_FILE_MARK_TRANSFORM = 'translate(14 16) scale(1.22) translate(-14 -1
 const FOLDER_MARK_TRANSFORM = 'translate(14 13.0693) scale(1.12) translate(-14 -13.0693)'
 
 function FileGlyph({
-  size, className, children, markTransform = FILE_MARK_TRANSFORM, muted = false,
+  size, className, children, markTransform, muted = false,
 }: IconProps & { children?: ReactNode; markTransform?: string; muted?: boolean }): ReactNode {
   return (
     <svg width={size} height={size} className={className} viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
@@ -174,25 +181,33 @@ function FolderGlyph({ size, className }: IconProps): ReactNode {
   )
 }
 
+function SpreadsheetGlyph({ size, className }: IconProps): ReactNode {
+  return (
+    <FileGlyph size={size} className={className}>
+      <path
+        d="M14 11.5H11.4C10.5599 11.5 10.1399 11.5 9.81901 11.6635C9.53677 11.8073 9.3073 12.0368 9.16349 12.319C9 12.6399 9 13.0599 9 13.9V16.5M14 11.5H16.6C17.4401 11.5 17.8601 11.5 18.181 11.6635C18.4632 11.8073 18.6927 12.0368 18.8365 12.319C19 12.6399 19 13.0599 19 13.9V16.5M14 11.5V21.5M14 21.5H16.6C17.4401 21.5 17.8601 21.5 18.181 21.3365C18.4632 21.1927 18.6927 20.9632 18.8365 20.681C19 20.3601 19 19.9401 19 19.1V16.5M14 21.5H11.4C10.5599 21.5 10.1399 21.5 9.81901 21.3365C9.53677 21.1927 9.3073 20.9632 9.16349 20.681C9 20.3601 9 19.9401 9 19.1V16.5M19 16.5H9"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+    </FileGlyph>
+  )
+}
+
 function glyph(type: TraditionalFileType, size: number, className: string | undefined): ReactNode {
   switch (type) {
     case 'code':
       return (
         <FileGlyph size={size} className={className}>
-          <path d="M8.61 16.3601L11.76 18.3901V20.1401L7 17.0601V15.6601L11.76 12.5801V14.3301L8.61 16.3601Z" fill="currentColor" />
-          <path d="M16.1918 14.3301V12.5801L20.9518 15.6601V17.0601L16.1918 20.1401V18.3901L19.3418 16.3601L16.1918 14.3301Z" fill="currentColor" />
+          <path d="M10.0053 13.126L7.0236 16.3788C6.96052 16.4476 6.96052 16.5532 7.0236 16.622L10.0053 19.8748" stroke="currentColor" strokeWidth="1.35" />
+          <path d="M17.9941 13.126L20.9759 16.3788C21.039 16.4476 21.039 16.5532 20.9759 16.622L17.9941 19.8748" stroke="currentColor" strokeWidth="1.35" />
+          <path d="M15.2652 12.957L12.7344 20.0433" stroke="currentColor" strokeWidth="1.35" />
         </FileGlyph>
       )
-    case 'excel':
-      return (
-        <FileGlyph size={size} className={className} markTransform={LARGE_FILE_MARK_TRANSFORM}>
-          <path d="M10.2932 20.5L13.3532 16.25L13.3432 17.66L10.4032 13.5H12.6332L14.5132 16.21L13.5632 16.22L15.4132 13.5H17.5532L14.6132 17.58V16.18L17.7132 20.5H15.4332L13.5232 17.65H14.4332L12.5532 20.5H10.2932Z" fill="currentColor" />
-        </FileGlyph>
-      )
+    case 'excel': return <SpreadsheetGlyph size={size} className={className} />
     case 'folder': return <FolderGlyph size={size} className={className} />
     case 'html':
       return (
-        <FileGlyph size={size} className={className}>
+        <FileGlyph size={size} className={className} markTransform={FILE_MARK_TRANSFORM}>
           <path
             fillRule="evenodd"
             clipRule="evenodd"
@@ -203,7 +218,7 @@ function glyph(type: TraditionalFileType, size: number, className: string | unde
       )
     case 'image':
       return (
-        <FileGlyph size={size} className={className}>
+        <FileGlyph size={size} className={className} markTransform={FILE_MARK_TRANSFORM}>
           <path d="M10.4212 15.9204C10.5756 15.6558 10.9579 15.6558 11.1123 15.9204L13.6493 20.2696C13.8048 20.5362 13.6125 20.8711 13.3037 20.8711H8.22974C7.92102 20.8711 7.72868 20.5362 7.88423 20.2696L10.4212 15.9204Z" fill="currentColor" />
           <path d="M15.4981 13.186C15.6505 12.9117 16.0451 12.9117 16.1975 13.186L20.1368 20.2769C20.2849 20.5435 20.0922 20.8711 19.7872 20.8711H11.9084C11.6034 20.8711 11.4107 20.5435 11.5588 20.2769L15.4981 13.186Z" fill="currentColor" />
           <path d="M11.8603 11.3997C11.8603 12.286 11.1418 13.0045 10.2555 13.0045C9.36924 13.0045 8.65076 12.286 8.65076 11.3997C8.65076 10.5134 9.36924 9.79492 10.2555 9.79492C11.1418 9.79492 11.8603 10.5134 11.8603 11.3997Z" fill="currentColor" />
@@ -230,7 +245,7 @@ function glyph(type: TraditionalFileType, size: number, className: string | unde
       )
     case 'video':
       return (
-        <FileGlyph size={size} className={className}>
+        <FileGlyph size={size} className={className} markTransform={FILE_MARK_TRANSFORM}>
           <path d="M17.5 14.634C18.1667 15.0189 18.1667 15.9811 17.5 16.366L11.5 19.8301C10.8333 20.215 10 19.7339 10 18.9641L10 12.0359C10 11.2661 10.8333 10.785 11.5 11.1699L17.5 14.634Z" fill="currentColor" />
         </FileGlyph>
       )

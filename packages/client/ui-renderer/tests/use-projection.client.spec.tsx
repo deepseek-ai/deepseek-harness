@@ -11,7 +11,10 @@
 import { describe, expect, it } from 'vitest'
 import { act, render } from '@testing-library/react'
 import { Context } from '@deepseek-ai/cordis'
-import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
+import { useSyncExternalStore } from 'react'
+import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionProviderComponent, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {
   ScopedStandardSourceBinding, SlotRendererHost, SlotScopeAdapter, StandardSourceBinding,
 } from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -39,15 +42,19 @@ function makeHost() {
     keyedHooks: { projection: undefined },
     props: { sessionId: undefined },
   }
-  const currentBinding = observable<StandardSourceBinding>(absentBinding)
+  const absentBindingSource = observable<StandardSourceBinding>(absentBinding)
+  const selected = observable<SessionReference | undefined>(undefined)
+  const bindingSources = new Map<string, ReturnType<typeof observable<StandardSourceBinding>>>()
   const cells = new Map<string, ReturnType<typeof observable<unknown>>>()
   /** Store-parallel source family: an unseen key snapshots undefined. */
   const absent = { getSnapshot: () => undefined, subscribe: () => () => {} }
   const sessionEntries: StoredEntry[] = []
   const bindings = new Map<string, SessionBinding>()
   const rootEntry: StoredEntry = {
-    component: (props: { renderSlot: (key: string, owner: object) => React.ReactNode }) =>
-      <>{props.renderSlot('k.session', {})}</>,
+    component: (props: { renderSlot: (key: string, owner: object) => React.ReactNode; SessionProvider: SessionProviderComponent }) => {
+      const reference = useSyncExternalStore(selected.subscribe, selected.getSnapshot)
+      return <props.SessionProvider session={reference}>{props.renderSlot('k.session', {})}</props.SessionProvider>
+    },
     options: {},
     children: { 'k.session': { kind: 'single', scope: 'session' } },
   }
@@ -62,6 +69,7 @@ function makeHost() {
       props: { sessionId: id },
     }
     bindings.set(id, value)
+    bindingSources.set(id, observable<StandardSourceBinding>(value))
     return value
   }
   const root = observable<StandardSourceBinding>({
@@ -71,8 +79,8 @@ function makeHost() {
     props: {},
   })
   const sessionAdapter: SlotScopeAdapter = {
-    current: currentBinding,
-    resolve: binding,
+    current: absentBindingSource,
+    bindingSource: target => target === undefined ? absentBindingSource : bindingSources.get(target.sessionId)!,
     renderArea: (scopeBinding, { empty, children }) => scopeBinding.key === undefined
       ? <>{empty?.() ?? null}</>
       : <>{children}</>,
@@ -85,9 +93,16 @@ function makeHost() {
     // the raw view and crash reports never fire.
     entriesOfSlot: key => key === 'root' ? [rootEntry] : sessionEntries,
     reportEntryError: () => {},
+    reportFactoryError: () => {},
     specOf: key => key === 'k.session' ? { kind: 'single', scope: 'session' } : undefined,
     isLive: () => true,
     storeOf: () => undefined,
+    factoryStoreOf: () => undefined,
+    retainFactoryOccurrence: () => () => {},
+    subscribeFactory: () => () => {},
+    getFactoryVersion: () => 0,
+    factoryOf: () => undefined,
+    isFactoryLive: () => false,
     root,
     scopeRevision: observable(0),
     scope: () => sessionAdapter,
@@ -98,7 +113,8 @@ function makeHost() {
     // The driver publishes the resolved binding or the absent projection.
     current: {
       set: (id: string | undefined) => {
-        currentBinding.set(id === undefined ? absentBinding : binding(id))
+        if (id !== undefined) binding(id)
+        selected.set(id === undefined ? undefined : { sessionId: id } as SessionReference)
       },
     },
     registerSession: (entry: StoredEntry) => { sessionEntries.push(entry) },

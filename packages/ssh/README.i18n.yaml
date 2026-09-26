@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/ssh/README.md
-README.md: 905c17a8e59cd95ded0fc8b299eac83f8530004e
-README.zh.md: 9833c8c087070a3ce62699a0e4c88f998491f79d
+/:
+  en: cc733bef2f8faa24
+  zh: 5af0a04d349066ce
+/ssh-posix-remote-execution-providers:
+  en: b0cf352e20ea98f7
+  zh: 2cd695d6e0710822
+/ssh-posix-remote-execution-providers/summary:
+  en: 0f6b92200d01f322
+  zh: f6da6f842ccd7f9e
+/ssh-posix-remote-execution-providers/table-of-contents:
+  en: 09848f4d056e4fc1
+  zh: 8df6139cff0288f6
+/ssh-posix-remote-execution-providers/packages:
+  en: c17835929a260861
+  zh: 6d847e8a12f62444
+/ssh-posix-remote-execution-providers/related-documentation:
+  en: 7ebd72bec519e550
+  zh: 20023cb415ddae24
+/ssh-posix-remote-execution-providers/dev-note:
+  en: 1c6c2e1fc4a5c914
+  zh: 16223cd641384c0e

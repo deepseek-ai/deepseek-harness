@@ -22,7 +22,8 @@ body {
   --dsw-static-deepseek-100: rgb(228, 237, 253);
   --dsw-static-deepseek-200: rgb(211, 226, 255);
   --dsw-static-deepseek-300: rgb(183, 200, 254);
-  --dsw-static-deepseek-400: rgb(103, 158, 254);
+  /* Brightened from the platform rgb(103, 158, 254) at the designer's request: legibility on the dark toast surface. */
+  --dsw-static-deepseek-400: rgb(122, 170, 255);
   --dsw-static-deepseek-450: rgb(86, 134, 254);
   --dsw-static-deepseek-500: rgb(65, 118, 230);
   --dsw-static-deepseek-50: rgb(237, 243, 254);
@@ -33,6 +34,8 @@ body {
   --dsw-static-green-100: rgb(230, 250, 237);
   --dsw-static-green-400: rgb(78, 209, 126);
   --dsw-static-green-500: rgb(34, 197, 94);
+  --dsw-static-green-500-a08: rgb(34 197 94 / 8%);
+  --dsw-static-green-500-a12: rgb(34 197 94 / 12%);
   --dsw-static-green-900: rgb(35, 60, 44);
   --dsw-static-neutral-00: rgb(255, 255, 255);
   --dsw-static-neutral-1000: rgb(0, 0, 0);
@@ -71,9 +74,11 @@ body {
   --dsw-static-neutral-bluish-950: rgb(21, 21, 23);
   --dsw-static-red-100: rgb(254, 226, 226);
   --dsw-static-red-400: rgb(242, 90, 90);
+  --dsw-static-red-400-a12: rgb(242 90 90 / 12%);
   --dsw-static-red-500: rgb(239, 68, 68);
   --dsw-static-red-50: rgb(254, 242, 242);
   --dsw-static-red-600: rgb(236, 19, 19);
+  --dsw-static-red-600-a08: rgb(236 19 19 / 8%);
   --dsw-static-red-900: rgb(87, 12, 12);
 }
 
@@ -98,7 +103,8 @@ body[data-ds-dark-theme] {
   --dsw-static-deepseek-100: rgb(228, 237, 253);
   --dsw-static-deepseek-200: rgb(211, 226, 255);
   --dsw-static-deepseek-300: rgb(183, 200, 254);
-  --dsw-static-deepseek-400: rgb(103, 158, 254);
+  /* Brightened from the platform rgb(103, 158, 254) at the designer's request: legibility on the dark toast surface. */
+  --dsw-static-deepseek-400: rgb(122, 170, 255);
   --dsw-static-deepseek-450: rgb(86, 134, 254);
   --dsw-static-deepseek-500: rgb(65, 118, 230);
   --dsw-static-deepseek-50: rgb(237, 243, 254);
@@ -109,6 +115,8 @@ body[data-ds-dark-theme] {
   --dsw-static-green-100: rgb(230, 250, 237);
   --dsw-static-green-400: rgb(78, 209, 126);
   --dsw-static-green-500: rgb(34, 197, 94);
+  --dsw-static-green-500-a08: rgb(34 197 94 / 8%);
+  --dsw-static-green-500-a12: rgb(34 197 94 / 12%);
   --dsw-static-green-900: rgb(35, 60, 44);
   --dsw-static-neutral-00: rgb(255, 255, 255);
   --dsw-static-neutral-1000: rgb(0, 0, 0);
@@ -147,14 +155,18 @@ body[data-ds-dark-theme] {
   --dsw-static-neutral-bluish-950: rgb(21, 21, 23);
   --dsw-static-red-100: rgb(254, 226, 226);
   --dsw-static-red-400: rgb(242, 90, 90);
+  --dsw-static-red-400-a12: rgb(242 90 90 / 12%);
   --dsw-static-red-500: rgb(239, 68, 68);
   --dsw-static-red-50: rgb(254, 242, 242);
   --dsw-static-red-600: rgb(236, 19, 19);
+  --dsw-static-red-600-a08: rgb(236 19 19 / 8%);
   --dsw-static-red-900: rgb(87, 12, 12);
 }
 
 body {
   --dsw-alias-bg-base: var(--dsw-static-neutral-bluish-00);
+  --dsw-alias-bg-document-preview: var(--dsw-static-neutral-bluish-100);
+  --dsw-alias-label-document-preview: var(--dsw-static-neutral-bluish-700);
   --dsw-alias-bg-layer-1: var(--dsw-static-neutral-bluish-00);
   --dsw-alias-bg-layer-2: var(--dsw-static-neutral-bluish-00);
   --dsw-alias-bg-layer-3: var(--dsw-static-neutral-bluish-00);
@@ -207,6 +219,7 @@ body {
   --dsw-alias-label-primary: var(--dsw-static-neutral-bluish-1000);
   --dsw-alias-label-secondary: var(--dsw-static-neutral-bluish-700);
   --dsw-alias-label-tertiary: var(--dsw-static-neutral-bluish-600);
+  --dsw-alias-menu-icon: var(--dsw-static-neutral-bluish-800);
   --dsw-alias-link: var(--dsw-static-deepseek-500);
   --dsw-alias-markdown-citation: var(--dsw-static-neutral-bluish-100);
   --dsw-alias-markdown-code-block-banner: var(--dsw-static-neutral-bluish-50);
@@ -222,8 +235,17 @@ body {
   --dsw-alias-scrollbar-hover-l2: var(--dsw-static-neutral-300);
   --dsw-alias-state-business-primary: var(--dsw-static-deepseek-500);
   --dsw-alias-state-business-tertiary: var(--dsw-static-deepseek-100);
+  --dsw-alias-code-diff-added: var(--dsw-static-green-500-a08);
+  --dsw-alias-code-diff-deleted: var(--dsw-static-red-600-a08);
+  --dsw-alias-file-diff-added-bg: rgb(230, 244, 231);
+  --dsw-alias-file-diff-added-gutter: rgb(237, 247, 237);
+  --dsw-alias-file-diff-added-marker: rgb(1, 162, 65);
+  --dsw-alias-file-diff-deleted-bg: rgb(252, 230, 226);
+  --dsw-alias-file-diff-deleted-gutter: rgb(253, 236, 233);
+  --dsw-alias-file-diff-deleted-marker: rgb(186, 39, 35);
   --dsw-alias-state-error-primary: var(--dsw-static-red-600);
   --dsw-alias-state-error-secondary: var(--dsw-static-red-400);
+  --dsw-alias-state-idle-primary: var(--dsw-static-neutral-300);
   --dsw-alias-state-success-primary: var(--dsw-static-green-500);
   --dsw-alias-state-success-secondary: var(--dsw-static-green-400);
   --dsw-alias-state-success-tertiary: var(--dsw-static-green-100);
@@ -232,12 +254,15 @@ body {
   --dsw-alias-state-warn-secondary: var(--dsw-static-amber-400);
   --dsw-alias-state-warn-tertiary: var(--dsw-static-amber-100);
   --dsw-alias-toast-bg: var(--dsw-static-neutral-bluish-800);
+  --dsw-alias-toast-label: var(--dsw-static-neutral-bluish-00);
   --dsw-alias-tooltip-bg: var(--dsw-static-neutral-bluish-850);
+  --dsw-alias-tooltip-key-bg: color-mix(in srgb, var(--dsw-alias-tooltip-bg), white 18%);
   --dsw-specific-bubble-highlight: var(--dsw-static-deepseek-200);
   --dsw-specific-bubble: var(--dsw-static-deepseek-50);
   --dsw-specific-input-major: var(--dsw-static-neutral-bluish-00);
   --dsw-specific-login-input: var(--dsw-static-neutral-bluish-50);
-  --dsw-specific-menu: var(--dsw-alias-bg-layer-3);
+  --dsw-menu-surface-fill: rgba(248, 249, 250, 0.58);
+  --dsw-specific-menu: var(--dsw-menu-surface-fill);
   --dsw-specific-selector: var(--dsw-static-neutral-bluish-60);
   --dsw-specific-sidebar-fill: var(--dsw-static-neutral-bluish-50);
   --dsw-specific-sidebar-nav-item-active-accent: var(--dsw-static-deepseek-100);
@@ -250,6 +275,8 @@ body {
 
 body[data-ds-dark-theme] {
   --dsw-alias-bg-base: var(--dsw-static-neutral-bluish-950);
+  --dsw-alias-bg-document-preview: var(--dsw-static-neutral-bluish-950);
+  --dsw-alias-label-document-preview: var(--dsw-static-neutral-bluish-300);
   --dsw-alias-bg-layer-1: var(--dsw-static-neutral-bluish-875);
   --dsw-alias-bg-layer-2: var(--dsw-static-neutral-bluish-850);
   --dsw-alias-bg-layer-3: var(--dsw-static-neutral-bluish-800);
@@ -302,6 +329,7 @@ body[data-ds-dark-theme] {
   --dsw-alias-label-primary: var(--dsw-static-neutral-bluish-50);
   --dsw-alias-label-secondary: var(--dsw-static-neutral-bluish-300);
   --dsw-alias-label-tertiary: var(--dsw-static-neutral-bluish-400);
+  --dsw-alias-menu-icon: var(--dsw-alias-label-primary-dimmed);
   --dsw-alias-link: var(--dsw-static-deepseek-400);
   --dsw-alias-markdown-citation: var(--dsw-static-neutral-bluish-800);
   --dsw-alias-markdown-code-block-banner: var(--dsw-static-neutral-bluish-850);
@@ -317,8 +345,17 @@ body[data-ds-dark-theme] {
   --dsw-alias-scrollbar-hover-l2: var(--dsw-static-neutral-550);
   --dsw-alias-state-business-primary: var(--dsw-static-deepseek-400);
   --dsw-alias-state-business-tertiary: var(--dsw-static-deepseek-800);
+  --dsw-alias-code-diff-added: var(--dsw-static-green-500-a12);
+  --dsw-alias-code-diff-deleted: var(--dsw-static-red-400-a12);
+  --dsw-alias-file-diff-added-bg: rgb(31, 49, 36);
+  --dsw-alias-file-diff-added-gutter: rgb(19, 32, 22);
+  --dsw-alias-file-diff-added-marker: rgb(65, 201, 119);
+  --dsw-alias-file-diff-deleted-bg: rgb(60, 31, 27);
+  --dsw-alias-file-diff-deleted-gutter: rgb(40, 19, 14);
+  --dsw-alias-file-diff-deleted-marker: rgb(250, 66, 62);
   --dsw-alias-state-error-primary: var(--dsw-static-red-400);
   --dsw-alias-state-error-secondary: var(--dsw-static-red-400);
+  --dsw-alias-state-idle-primary: var(--dsw-static-neutral-600);
   --dsw-alias-state-success-primary: var(--dsw-static-green-500);
   --dsw-alias-state-success-secondary: var(--dsw-static-green-400);
   --dsw-alias-state-success-tertiary: var(--dsw-static-green-900);
@@ -327,16 +364,29 @@ body[data-ds-dark-theme] {
   --dsw-alias-state-warn-secondary: var(--dsw-static-amber-400);
   --dsw-alias-state-warn-tertiary: var(--dsw-static-amber-900);
   --dsw-alias-toast-bg: var(--dsw-static-neutral-bluish-750);
+  --dsw-alias-toast-label: var(--dsw-static-neutral-bluish-00);
   --dsw-alias-tooltip-bg: var(--dsw-static-neutral-bluish-750);
+  --dsw-alias-tooltip-key-bg: color-mix(in srgb, var(--dsw-alias-tooltip-bg), white 18%);
   --dsw-specific-bubble-highlight: var(--dsw-static-neutral-bluish-750);
   --dsw-specific-bubble: var(--dsw-static-neutral-bluish-850);
   --dsw-specific-input-major: var(--dsw-static-neutral-bluish-850);
   --dsw-specific-login-input: var(--dsw-static-neutral-bluish-900);
-  --dsw-specific-menu: var(--dsw-alias-bg-layer-3);
+  --dsw-menu-surface-fill: rgba(67, 69, 74, 0.45);
+  --dsw-specific-menu: var(--dsw-menu-surface-fill);
   --dsw-specific-selector: var(--dsw-static-neutral-bluish-800);
   --dsw-specific-sidebar-fill: var(--dsw-static-neutral-bluish-900);
   --dsw-specific-sidebar-nav-item-active-accent: var(--dsw-static-neutral-bluish-800);
   --dsw-specific-sidebar-nav-item-active: var(--dsw-static-neutral-bluish-750);
   --dsw-specific-sidebar-nav-item-hover: var(--dsw-static-neutral-bluish-850);
   --dsw-specific-tip: var(--dsw-static-neutral-bluish-800);
+}
+
+/* Overlays without MenuSurface's opaque backing cannot blur page content over
+ * native vibrancy reliably, so their fill stays nearly opaque on macOS. */
+html[data-platform='darwin'] body {
+  --dsw-specific-menu: rgba(248, 249, 250, 0.94);
+}
+
+html[data-platform='darwin'] body[data-ds-dark-theme] {
+  --dsw-specific-menu: rgba(48, 49, 54, 0.94);
 }

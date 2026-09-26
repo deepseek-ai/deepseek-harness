@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/typert/registry/README.md
-README.md: 75a3d2bc495db97067818fe9c16e835e8e1f98bc
-README.zh.md: b47d735c17ca4e51f41c82916a4b402ddf84e853
+/:
+  en: c7c547de25c95016
+  zh: 983f6b8444a4bd1a
+/deepseek-ai-dsh-typert-registry:
+  en: 29e8c4fd205aba1a
+  zh: 47ebdd8757aa3d1d
+/deepseek-ai-dsh-typert-registry/summary:
+  en: 3030bf6eaf134d98
+  zh: 83169febbb6c9cbf
+/deepseek-ai-dsh-typert-registry/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-typert-registry/use-this-package:
+  en: d885ccd8f13315f1
+  zh: cea7c258f5f57e2d
+/deepseek-ai-dsh-typert-registry/use-this-package/minimal-setup:
+  en: 1ec4b304a024bb3c
+  zh: f17e796c26faabab
+/deepseek-ai-dsh-typert-registry/use-this-package/querying-schemas-and-reflection:
+  en: bc75ee0cfdd77fee
+  zh: f0fc5bfffe0cc063
+/deepseek-ai-dsh-typert-registry/use-this-package/registering-a-contribution:
+  en: 2b2f750a1b145d85
+  zh: d15c55c01af1755a
+/deepseek-ai-dsh-typert-registry/use-this-package/lookup-and-context-providers:
+  en: bc9ea8f035ec1199
+  zh: d25f1dc16cfc8654
+/deepseek-ai-dsh-typert-registry/understand-the-implementation:
+  en: 1a78dfbae50a8b0d
+  zh: dc10b4b3f3d832ed
+/deepseek-ai-dsh-typert-registry/understand-the-implementation/design-concept:
+  en: 4d50f3efeb45eaa4
+  zh: ec3575d29d5a040b
+/deepseek-ai-dsh-typert-registry/understand-the-implementation/sub-registries:
+  en: cc0deb5e1ae93fd6
+  zh: 4bb6c88213262afe
+/deepseek-ai-dsh-typert-registry/understand-the-implementation/identity-and-validation:
+  en: 4764fc33a7e16e60
+  zh: 1ddf03cbe16197da
+/deepseek-ai-dsh-typert-registry/understand-the-implementation/source-map:
+  en: ec30fd742ee246b1
+  zh: 7fff86709e5ea4a1
+/deepseek-ai-dsh-typert-registry/further-exploration:
+  en: da1350150eaff076
+  zh: c7099f0b2b31ec4f
+/deepseek-ai-dsh-typert-registry/model-experience:
+  en: c2fafdfead674c9d
+  zh: d6c506ac82390512
+/deepseek-ai-dsh-typert-registry/model-experience/kv-cache-effect:
+  en: b3c95d3ac849684a
+  zh: 6eb941bb28aa6aea
+/deepseek-ai-dsh-typert-registry/known-limitations-and-deferred-work:
+  en: f3e6c1b0ee101919
+  zh: 3fb5366a014aade7
+/deepseek-ai-dsh-typert-registry/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

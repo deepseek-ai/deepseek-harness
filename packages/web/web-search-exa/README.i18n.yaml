@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/web/web-search-exa/README.md
-README.md: 2bfa2a40adba5636abf599d2579ede961702c997
-README.zh.md: 0511710df6aa2f0a57bafc91a17672bad7bc05fb
+/:
+  en: 4b8ba0a939fdf9d4
+  zh: 8b8ddab7cef0f022
+/deepseek-ai-dsh-web-search-exa:
+  en: 1e59112a8781b6f5
+  zh: 858672d6f86534b5
+/deepseek-ai-dsh-web-search-exa/summary:
+  en: 0cd54ea674cbf9ff
+  zh: 62214ad882ff0e44
+/deepseek-ai-dsh-web-search-exa/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-web-search-exa/use-this-package:
+  en: 44ecd69ae3a9e8d3
+  zh: b5f26aa1580f90fc
+/deepseek-ai-dsh-web-search-exa/use-this-package/when-to-choose-it:
+  en: d33f61122c271792
+  zh: e097094e69b3f425
+/deepseek-ai-dsh-web-search-exa/use-this-package/minimal-configuration:
+  en: a90f952a3cb9a155
+  zh: 27c8402fb6f85be2
+/deepseek-ai-dsh-web-search-exa/use-this-package/what-a-search-returns:
+  en: 72c9eb8a1563bfd6
+  zh: 26f7069376a74090
+/deepseek-ai-dsh-web-search-exa/use-this-package/failures-and-recovery:
+  en: 5740595fa2cebf20
+  zh: 7316e46e09d8ad9f
+/deepseek-ai-dsh-web-search-exa/understand-the-implementation:
+  en: 9842c69ad3636bb3
+  zh: 3cdc3f816cbdd0cb
+/deepseek-ai-dsh-web-search-exa/understand-the-implementation/design-philosophy:
+  en: 341f17a367eca5b0
+  zh: ca3a4e4b4956892d
+/deepseek-ai-dsh-web-search-exa/understand-the-implementation/source-map:
+  en: 58dfdd4423914f34
+  zh: 82c95e00bbb88028
+/deepseek-ai-dsh-web-search-exa/understand-the-implementation/request-and-mapping-flow:
+  en: 1fe92c2ad0408273
+  zh: cc8c573e0accc8dc
+/deepseek-ai-dsh-web-search-exa/further-exploration:
+  en: 3184010b324cfe4c
+  zh: e92c26f5ae57f21b
+/deepseek-ai-dsh-web-search-exa/model-experience:
+  en: b1b5d9c71a0b07b4
+  zh: 2802bef7723b6bf4
+/deepseek-ai-dsh-web-search-exa/model-experience/kv-cache-effect:
+  en: 40294c1c31b74824
+  zh: d75d48f485447a74
+/deepseek-ai-dsh-web-search-exa/known-limitations-and-deferred-work:
+  en: 24860838d1b7462e
+  zh: 4eb921101d89c877
+/deepseek-ai-dsh-web-search-exa/known-limitations-and-deferred-work/dev-note:
+  en: 7f775cc79dbce94b
+  zh: 12b8f68f9e7c48ca
+/deepseek-ai-dsh-web-search-exa/known-limitations-and-deferred-work/dev-note/future-wider-exa-control-surface:
+  en: 7a6c72d34be40225
+  zh: b525946646a9f856

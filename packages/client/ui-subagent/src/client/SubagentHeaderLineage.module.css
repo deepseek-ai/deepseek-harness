@@ -18,7 +18,7 @@
   min-height: 28px;
   padding: 3px 2px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
@@ -55,22 +55,18 @@
   flex: none;
 }
 
-.separator {
-  color: var(--dsw-alias-label-caption);
-  font-size: 14px;
-  line-height: 20px;
-}
-
 .activitySlot {
   display: inline-flex;
   flex: none;
-  width: 10px;
-  height: 10px;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
 }
 
 .trigger:hover,
 .trigger:focus-visible {
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-primary);
 }
 
 .switcherTrigger:hover,
@@ -101,39 +97,60 @@
   width: 336px;
   max-width: min(400px, calc(100vw - 32px));
   max-height: min(560px, calc(100vh - 140px));
-  padding: 4px;
-  overflow: auto;
-  border-radius: 20px;
-  background: var(--dsw-specific-menu);
+  padding: 3px;
+  overflow: hidden;
+  border-radius: var(--dsw-radius-lg);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
 }
 
+/* The menu skin lives on a pseudo-element: backdrop-filter on the menu itself
+   would turn it into the containing block for fixed descendants, so the
+   sidebar-button Tooltip bubbles would be re-anchored into the menu and
+   clipped by its hidden overflow. */
+.menu::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+}
+
+.menuBody {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
 .node {
   position: relative;
   min-width: 0;
 }
-.menu > .node {
-  margin-left: -3px;
+.menuBody > .node {
+  margin-left: -2px;
 }
 
 .row {
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
   box-sizing: border-box;
   width: 100%;
-  min-height: 50px;
-  padding: 7px 8px 7px 11px;
+  min-height: 44px;
+  padding: 6px 7px 6px 9px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-lg);
   background: transparent;
   color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 12px;
+  line-height: 17px;
   text-align: left;
   cursor: pointer;
   outline: none;
@@ -150,36 +167,27 @@
   flex: 1;
   align-self: stretch;
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  margin: -7px -8px -7px;
-  padding: 7px 8px;
-  border-radius: 8px;
+  margin: -6px -7px -6px;
+  padding: 6px 7px;
+  border-radius: var(--dsw-radius-lg);
 }
 
-.row > :global([data-state]),
-.clickarea > :global([data-state]) {
-  margin-top: 4px;
-}
-
-.disabled {
-  color: var(--dsw-alias-label-dimmed);
-  cursor: not-allowed;
-}
-
-.disabled:hover {
-  background: transparent;
-}
-
-.loadingRow {
-  cursor: default;
+.rowActivitySlot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 17px;
 }
 
 .disclosure,
 .disclosureSpace {
   flex: none;
   width: 14px;
-  height: 18px;
+  height: 17px;
 }
 
 .disclosure {
@@ -192,6 +200,11 @@
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
   transition: transform 120ms ease;
+}
+
+.disclosure svg {
+  width: 12px;
+  height: 12px;
 }
 
 .disclosure:hover {
@@ -228,13 +241,13 @@
 .summary,
 .metrics {
   color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 10px;
+  line-height: 15px;
 }
 
 .metrics {
   display: grid;
-  grid-template-rows: 18px 16px;
+  grid-template-rows: 17px 15px;
   flex: none;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -243,17 +256,39 @@
 
 .metricToken {
   grid-row: 1;
-  line-height: 18px;
+  line-height: 17px;
 }
 
 .metricDuration {
   grid-row: 2;
 }
 
+.sidebarButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 4px 0;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.sidebarButton:hover,
+.sidebarButton:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
 .children {
   position: relative;
-  margin-left: 18px;
-  padding-left: 4px;
+  margin-left: 16px;
+  padding-left: 3px;
 }
 
 .children::before,
@@ -265,8 +300,8 @@
 }
 
 .children::before {
-  top: -26px;
-  height: 26px;
+  top: -23px;
+  height: 23px;
 }
 
 .children[aria-busy='true']::before {
@@ -276,36 +311,36 @@
 .children > .node::before {
   top: 0;
   bottom: 0;
-  left: -4px;
+  left: -3px;
 }
 
 .children > .node:last-child::before {
   bottom: auto;
-  height: 17px;
+  height: 15px;
 }
 
 .children > .node > .row::before {
   content: '';
   position: absolute;
-  top: 16px;
-  left: -4px;
-  width: 14px;
+  top: 14px;
+  left: -3px;
+  width: 12px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .notice,
 .error {
-  padding: 10px 12px;
+  padding: 8px 10px;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .error {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   color: var(--dsw-alias-state-error-primary);
 }
 
@@ -313,13 +348,18 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
+  gap: 3px;
+  padding: 3px 5px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: inherit;
   cursor: pointer;
+}
+
+.refresh svg {
+  width: 12px;
+  height: 12px;
 }
 
 .refresh:hover {

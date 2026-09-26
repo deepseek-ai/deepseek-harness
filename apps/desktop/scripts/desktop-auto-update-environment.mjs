@@ -1,6 +1,6 @@
 /** Resolve the Desktop auto-update channel and its Tencent COS destination. */
 
-import { prerelease, valid } from 'semver'
+import { valid } from 'semver'
 
 /** Environment variable that selects the Desktop update deployment. */
 export const DESKTOP_AUTO_UPDATE_ENV = 'DSH_DESKTOP_AUTO_UPDATE_ENV'
@@ -77,9 +77,7 @@ export function desktopUpdateMetadataFilename(version, platform) {
   if (platform !== 'darwin' && platform !== 'win32') {
     throw new Error(`desktop auto-update: unsupported metadata platform ${platform}`)
   }
-  const release = prerelease(version)
-  const channel = release === null ? 'latest' : String(release[0])
-  return `${channel}${platform === 'darwin' ? '-mac' : ''}.yml`
+  return `nightly${platform === 'darwin' ? '-mac' : ''}.yml`
 }
 
 /**
@@ -122,12 +120,12 @@ function httpsOrigin(value, name) {
 }
 
 /**
- * Resolve the public updater URL for one release target.
+ * Resolve the public updater URL and object prefixes for one release target.
  * @param {NodeJS.ProcessEnv} env - Packaging or upload environment.
  * @param {NodeJS.Platform} platform - Target Node.js platform.
  * @param {string} arch - Target Node.js architecture.
- * @returns {{ environment: 'test' | 'production', target: 'mac-arm64' | 'mac-x64' | 'win-x64', origin: string, publicUrl: string, keyPrefix: string }} Resolved updater configuration.
- * @throws {Error} When the test deployment lacks a valid HTTPS origin.
+ * @returns {{ environment: 'test' | 'production', target: 'mac-arm64' | 'mac-x64' | 'win-x64', origin: string, publicUrl: string, keyPrefix: string, binaryKeyPrefix: string }} Resolved updater configuration.
+ * @throws {Error} When the test deployment lacks a valid HTTPS origin or a 32-character lowercase hexadecimal release ID.
  */
 export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
   const environment = resolveDesktopAutoUpdateEnvironment(env)
@@ -139,12 +137,21 @@ export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
     if (originEnvName === undefined) throw new Error('desktop auto-update: selected deployment has no origin')
     origin = httpsOrigin(requiredEnvironmentValue(env, originEnvName), originEnvName)
   }
-  const keyPrefix = `_/harness/desktop/stable/${target}`
+  let releasePrefix = 'dsh-desk'
+  if (environment === 'test') {
+    const releaseId = requiredEnvironmentValue(env, 'DOWNLOAD_TEST_RELEASE_ID')
+    if (!/^[a-f0-9]{32}$/u.test(releaseId)) {
+      throw new Error('desktop auto-update: DOWNLOAD_TEST_RELEASE_ID must contain 32 lowercase hexadecimal characters')
+    }
+    releasePrefix += `/${releaseId}`
+  }
+  const keyPrefix = `${releasePrefix}/feeds/${target}`
   return {
     environment,
     target,
     origin,
     keyPrefix,
+    binaryKeyPrefix: `${releasePrefix}/bin/${target}`,
     publicUrl: `${origin}/${keyPrefix}/`,
   }
 }
@@ -154,8 +161,8 @@ export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
  * @param {NodeJS.ProcessEnv} env - Upload environment.
  * @param {NodeJS.Platform} platform - Target Node.js platform.
  * @param {string} arch - Target Node.js architecture.
- * @returns {{ environment: 'test' | 'production', target: 'mac-arm64' | 'mac-x64' | 'win-x64', origin: string, publicUrl: string, keyPrefix: string, bucket: string, secretIdEnvName: string, secretKeyEnvName: string }} Resolved upload configuration.
- * @throws {Error} When the selected deployment lacks a required origin or bucket, or the test origin is not HTTPS.
+ * @returns {{ environment: 'test' | 'production', target: 'mac-arm64' | 'mac-x64' | 'win-x64', origin: string, publicUrl: string, keyPrefix: string, binaryKeyPrefix: string, bucket: string, secretIdEnvName: string, secretKeyEnvName: string }} Resolved upload configuration.
+ * @throws {Error} When the selected deployment lacks a bucket or valid updater configuration.
  */
 export function resolveDesktopUploadConfig(env, platform, arch) {
   const update = resolveDesktopAutoUpdateConfig(env, platform, arch)

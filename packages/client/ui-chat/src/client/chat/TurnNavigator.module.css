@@ -1,13 +1,21 @@
-/* Zero-height sticky slot, like the back-to-bottom control: the rail floats
-   over the transcript's right gutter without extending scrollHeight. */
+/* The rail is a sibling of the clipped transcript, not its descendant. */
 .slot {
-  position: sticky;
+  position: absolute;
   top: 0;
+  right: 0;
+  left: 0;
   /* Above transcript CodeBlock banners (z-index 6). The rail band excludes
      the composer, so its preview never needs to cross the footer. */
   z-index: 7;
   height: 0;
+  /* Query the transcript's usable width while keeping the rail full-bleed. */
+  padding-inline: calc(var(--dsh-composer-side-clearance) + 16px);
+  container-type: inline-size;
   pointer-events: none;
+}
+
+:global([data-conversation-scroll]) .slot {
+  position: sticky;
 }
 
 .frame {
@@ -22,29 +30,26 @@
 
   position: absolute;
   top: calc(var(--turn-rail-band) / 2);
-  /* Flush with the scrollport edge: the slot sits inside the transcript's side
-     padding, so the rail gives that inset back and keeps 12px of its own. */
-  right: calc(12px - (var(--dsh-composer-side-clearance) + 16px));
+  right: 12px;
   width: 28px;
   /* Fixed-pitch marks never compress: a ladder taller than the band scrolls
      inside this frame instead of pushing marks under the composer or above
      the scrollport. */
-  height: min(
-    var(--turn-natural-height),
+  max-height: min(
     max(0px, calc(var(--turn-rail-band) - 64px)),
     420px
   );
+  contain: layout;
   cursor: pointer;
   pointer-events: auto;
   transform: translateY(-50%);
-  transition: height 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /* The frame's inner scroller: no visible scrollbar, no scroll chaining into
    the transcript, and gradient fades over the ends that can still scroll. */
 .scroller {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  max-height: inherit;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
@@ -74,57 +79,43 @@
 
 .marks {
   position: relative;
-  height: var(--turn-natural-height);
 }
 
-.markPosition {
+.mark {
   position: absolute;
-  top: calc(var(--turn-natural-position) + var(--turn-rail-inset));
+  top: 0;
   right: 0;
   left: 0;
   height: 10px;
-  transform: translateY(-50%);
-  transition: top 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  animation: dsh-turn-mark-enter 150ms ease-out;
-}
-
-/* The rail owns pointer input for the whole column, so a mark is a keyboard
-   destination that paints one tick — never a mouse target of its own. */
-.mark {
-  position: absolute;
-  /* As wide as the longest tick, right-aligned with it: the focus ring below
-     then wraps the tick instead of the rail's full pointer column. */
-  inset: 0 0 0 auto;
-  width: 20px;
   padding: 0;
   border: 0;
   border-radius: 8px;
   background: transparent;
   cursor: pointer;
-  pointer-events: none;
 }
 
 .mark::before {
   position: absolute;
   top: 50%;
   right: 0;
-  width: 12px;
+  width: 20px;
   height: 2px;
   border-radius: 2px;
   background: var(--dsw-alias-border-l4);
   content: '';
-  transform: translateY(-50%);
-  transition: width 140ms ease, background-color 140ms ease;
+  transform: translateY(-50%) scaleX(0.6);
+  transform-origin: right center;
+  transition: transform 140ms ease, background-color 140ms ease;
 }
 
 /* Ordered before hover/active so those states keep their stronger tick. */
 .markUnloaded::before {
-  width: 8px;
+  transform: translateY(-50%) scaleX(0.4);
   opacity: 0.6;
 }
 
 .markPreview::before {
-  width: 18px;
+  transform: translateY(-50%) scaleX(0.9);
   background: var(--dsw-alias-label-tertiary);
 }
 
@@ -133,7 +124,7 @@
 }
 
 .markActive::before {
-  width: 20px;
+  transform: translateY(-50%) scaleX(1);
   background: var(--dsw-alias-label-primary);
 }
 
@@ -141,26 +132,30 @@
    the rest of the rail never uses, and a hairline ring keeps it legible
    against a busy transcript. */
 .mark:focus-visible::before {
-  width: 20px;
-  background: var(--dsw-alias-state-business-primary);
+  transform: translateY(-50%) scaleX(1);
+  background: var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
 }
 
 .mark:focus-visible {
-  outline: 1px solid var(--dsw-alias-state-business-primary);
-  outline-offset: 2px;
+  outline: none;
+}
+
+.mark:focus-visible::after {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 20px;
+  border-radius: inherit;
+  outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  /* The scroller clips the right edge; keep the marker's ring inside it. */
+  outline-offset: -1px;
+  content: '';
 }
 
 .preview {
   position: absolute;
-  /* Centered on its mark. Mark positions live in the scrolled ladder, so the
-     frame-level preview subtracts the scroller's offset, then holds clear of
-     both frame ends. */
   top: clamp(
     0px,
-    calc(
-      var(--turn-natural-position) + var(--turn-rail-inset)
-      - var(--turn-scroll-top, 0px) - var(--turn-preview-height) / 2
-    ),
+    calc(var(--turn-preview-center) - var(--turn-preview-height) / 2),
     calc(100% - var(--turn-preview-height))
   );
   right: calc(100% + 10px);
@@ -170,7 +165,7 @@
   overflow: hidden;
   padding: 10px 12px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-lg);
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: var(--dsw-elevation-panel);
@@ -198,11 +193,6 @@
   -webkit-line-clamp: 3;
 }
 
-@keyframes dsh-turn-mark-enter {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 @keyframes dsh-turn-preview-enter {
   from { opacity: 0; transform: translateX(4px); }
   to { opacity: 1; transform: translateX(0); }
@@ -215,7 +205,7 @@
 }
 
 @container (max-width: 900px) {
-  .slot {
+  .frame {
     display: none;
   }
 }
@@ -223,7 +213,6 @@
 @media (prefers-reduced-motion: reduce) {
   .frame,
   .scroller,
-  .markPosition,
   .mark::before,
   .markBusy::before,
   .preview {

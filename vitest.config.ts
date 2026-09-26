@@ -122,7 +122,7 @@ const pwshCoverageExclusions = spawnSync(resolvePwshPath(), ['-NoLogo', '-NoProf
 
 const testIncludes = [
   'packages/*/*/tests/**/*.spec.{ts,tsx}',
-  'apps/*/tests/**/*.spec.ts',
+  'apps/*/tests/**/*.spec.{ts,tsx}',
   'scripts/**/*.spec.ts',
   'website/tests/**/*.spec.ts',
 ]
@@ -161,7 +161,7 @@ const processBoundTests = [
 export default defineConfig({
   plugins: [pathsPlugin(), standardDecoratorPlugin()],
   test: {
-    setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
+    setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts', './scripts/test-dom-environment.ts'],
     // .tsx: client component specs (jsdom via per-file @vitest-environment pragma).
     include: testIncludes,
     exclude: platformUnsupportedTests,
@@ -177,7 +177,7 @@ export default defineConfig({
           // MaybeLocal in cjs_lexer::Parse) from worker threads on macOS,
           // Linux, and Windows. Forked workers avoid that shared thread path.
           pool: 'forks',
-          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
+          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts', './scripts/test-dom-environment.ts'],
           include: testIncludes,
           exclude: [
             ...platformUnsupportedTests,
@@ -192,7 +192,7 @@ export default defineConfig({
           name: 'process-bound',
           execArgv: vitestExecArgv,
           pool: 'forks',
-          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
+          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts', './scripts/test-dom-environment.ts'],
           include: processBoundTests,
           exclude: [
             ...platformUnsupportedTests,
@@ -224,6 +224,9 @@ export default defineConfig({
         // harness the jsdom lane doesn't cover yet. TODO(gui): cover and
         // remove as the client test lane matures.
         'packages/client/ui-trajectory/src/*',
+        // Electron guest integration retains its unit specs; per-file coverage
+        // is deferred until a native Electron harness covers guest behavior.
+        'packages/client/ui-sidebar-browser/src/client/electron/**',
         // Trajectory's compact Markdown projection retains deferred branch coverage.
         'packages/client/ui-primitives/src/markdown/plain-text.ts',
         'packages/client/ui-user-questions/src/client/QuestionComposer.tsx',
@@ -302,6 +305,9 @@ export default defineConfig({
         // The Team browser entry binds its source-covered mount lifecycle to
         // the generated Team Remote contribution, which likewise exists only in lib.
         'packages/experimental/client-ui-agent-team/src/client/index.ts',
+        // The speech entry also imports generated Remote definitions; voice-input.e2e.ts
+        // exercises the built entry, while source tests cover mountVoiceInput.
+        'packages/experimental/client-ui-voice-input/src/client/index.ts',
         // Slash/command/input round: per-file gaps deferred with the same
         // client-lane debt. TODO(gui): cover and remove with the lane above.
         'packages/client/ui-commands/src/index.ts',

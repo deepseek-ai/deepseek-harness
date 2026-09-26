@@ -185,20 +185,25 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
 
   it('interrupts the live child through the parent-offline composer', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-interrupt-offline'))
-    // Simulate a parent that went offline: the catalog delivers
-    // parentAvailable: false while the child Activation stays live (the
-    // interrupt RPC itself needs no live parent — covered host-side by
-    // subagent-interrupt.e2e.ts).
-    const pattern = '**/api/subagents/list'
+    // The parent is unavailable in the Session list while the child stays live.
+    const pattern = '**/api/session/list'
     await page.route(pattern, async (route) => {
       const response = await route.fetch()
       const body = await response.json() as {
-        result: { ok: true; value: { parentAvailable: boolean } } | { ok: false }
+        result: { ok: true; value: { items: { sessionId: SessionId; agentAvailable: boolean }[] } } | { ok: false }
       }
-      if (body.result.ok) body.result.value.parentAvailable = false
+      if (body.result.ok) {
+        const summary = body.result.value.items.find(session => session.sessionId === parent.id)
+        if (summary === undefined) throw new Error('parent missing from Session list')
+        summary.agentAvailable = false
+      }
       await route.fulfill({ response, json: body })
     })
     try {
+      const warningStart = tripwire.warnings.length
+      await page.reload({ waitUntil: 'load' })
+      await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      acknowledgeReloadConnectionLoss(tripwire, warningStart)
       await page.getByRole('button', { name: /1 subagent/ }).click()
       await page.getByRole('treeitem', { name: new RegExp(LABEL) }).click()
       const input = page.getByRole('textbox', {
@@ -264,7 +269,11 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
 
   it('interrupts through subagents/interruptByParent, parks the follow-up, and resumes it FIFO', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-interrupt-flow'))
-    // Reselect the child with the truthful catalog: parent available again.
+    // A new connection reloads the truthful parent-availability hint.
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
     await page.getByRole('navigation', { name: 'Session hierarchy' })
       .getByRole('button').first().click()
     await page.getByRole('button', { name: /1 subagent/ }).click()

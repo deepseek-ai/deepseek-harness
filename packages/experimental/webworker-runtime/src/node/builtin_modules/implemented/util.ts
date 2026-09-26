@@ -31,7 +31,7 @@ export function callbackify<A extends unknown[], R>(
 ): (...args: [...A, (error: unknown, value?: R) => void]) => void {
   return (...args) => {
     const callback = args.at(-1) as (error: unknown, value?: R) => void
-    const rest = args.slice(0, -1) as unknown as A
+    const rest = args.slice(0, -1) as A
     fn(...rest).then((value) => { callback(null, value) }, (error: unknown) => { callback(error) })
   }
 }
@@ -79,7 +79,7 @@ export function format(template: unknown, ...args: unknown[]): string {
 }
 
 /**
- * Structural deep equality, as `isDeepStrictEqual` defines it for plain data.
+ * Structural deep equality over own enumerable properties, as `isDeepStrictEqual` defines it for plain data.
  * @param left - first value.
  * @param right - second value.
  * @returns true when both sides are structurally identical.
@@ -95,7 +95,7 @@ export function isDeepStrictEqual(left: unknown, right: unknown): boolean {
   const leftKeys = Object.keys(left)
   const rightKeys = Object.keys(right)
   if (leftKeys.length !== rightKeys.length) return false
-  return leftKeys.every(key => key in right
+  return leftKeys.every(key => Object.hasOwn(right, key)
     && isDeepStrictEqual((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]))
   /* jscpd:ignore-end */
 }

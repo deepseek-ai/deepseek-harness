@@ -1,6 +1,0 @@
-# Publishes into the root realm only after the mount audit ran, which only the
-# package invariant can catch.
-- id: late
-  name: ../../plugins/late-service.js
-  config:
-    service: fixtureLateSvc

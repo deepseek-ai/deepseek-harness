@@ -1,5 +1,5 @@
 ---
-description: "Web 后台任务界面：列出本会话可见任务的会话头部动作；供后台任务体验的用户与维护者阅读。"
+description: "会话头部后台任务列表：可展开的流式输出面板、进行中/已结束分组，以及无保留输出的已结束任务的静态行。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包渲染 Web GUI 的后台任务界面：一个会话头部动作，打开后以弹层列出本会话可见的任务。它经运行时提供的 `jobsBySession` 镜像读取宿主计算的注册表状态，自身不发任何 RPC。触发器只在会话至少有一个任务时出现，角标计数运行中与停止中的任务；终态行保持可见并弱化，直到注册表把它们丢弃。模型对同一批任务的视角属于 `dsh-tool-jobs`；本包是给人类看的只读投影。
+`dsh-client-ui-jobs` 在一个头部控件中展示本会话的后台任务，包括生命周期、耗时、进度与终态详情。进行中的任务和保留了输出的已结束任务提供可展开的输出面板；收起即停流。进行中的行以持续更新的时长为主行，随后展示类型与状态。已结束的行折叠在分组标题下；没有保留输出的任务保持静态，包括回答已交给模型的 subagent。
 
 ## 目录
 
@@ -25,11 +25,17 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-与运行时一起挂载本插件；只要会话至少有一个任务，任务动作就会出现在会话头部。点击打开弹层：活跃行在前按开始时间升序，随后终态行按结束时间降序，每行显示生产者 kind、标签、状态，以及一个活跃时每秒跳动、完成后冻结的已耗时。
+通过 web-app 清单加载本插件；在会话看得到至少一个 job 之前它不渲染任何东西，因此普通对话不会为未使用的能力长出控件。
 
-### 关闭与边界
+### 一 job 一行
 
-Escape 关闭列表并把焦点交还触发器，在其外部按下指针同理。列表展示的是「一个会话通过协议视图能看到什么」，因此别的会话拥有的任务在这里永不出现；进程重启会清空列表，而 transcript（文本记录）里启动这些任务的 `run_in_background` 卡片仍在。
+`ctx.jobs` 镜像的 `job.list` 流是唯一名册：每个 `JobView` 行携带生命周期、时长、实时 `progress` 行或终态 `detail`，以及其保留字节数——进行中的 job，或留有保留输出的已结束 job，就是行可展开的依据。不存在需要 join 的第二份名册。
+
+运行中的 job 行还带一个两击式停止控件：首击武装，三秒内的确认击调用 `ctx.jobs.kill`，行状态经名册流收敛（先 `stopping`，再入已结束分组，其 detail 携带 `cancelled by the user`）。该 kill 不在模型的播报台账里认领任何东西，任务的 owner agent 因此照常收到标准完成通知——模型被明确告知用户停止了它的任务，而不是留给它去猜（[决策](../../../.agents/notes/implemented/feature/2026-08-26-human-job-kill.zh.md)）。已结束分组在有进行中工作时折叠在其计数之后，并可在客户端清空。
+
+### 展开的面板
+
+展开可观察的行会从 `ctx.jobs`（由 `dsh-api-job-controller` 安装）打开该 job 的输出观测流，注入内嵌终端面板。面板复制的是命令（不是输出），命令与输出行完整换行，输出在固定高度内滚动而非折叠，且不绘制自己的运行状态点——上方的行承载状态。保留缺口与流中断在面板上方渲染为提示。
 
 -----
 
@@ -37,9 +43,15 @@ Escape 关闭列表并把焦点交还触发器，在其外部按下指针同理�
 ## 理解实现
 
 <details>
-<summary>实现细节——点击展开</summary>
+<summary>实现内幕——点击展开</summary>
 
-本包向 `conversation.session.header.actions` 贡献一个条目（`JobListAction`），数据完全来自会话控制器绑定从 `session/jobs` 帧折叠出的 `jobsBySession` 列表镜像——不发 RPC，除弹层开合外不持有任何状态。角标计数 `running` 加 `stopping`，为零时省略。行序为活跃行在前按 `startedAt` 升序、终态行按 `finishedAt` 降序，毫秒并列按启动顺序打破；缺少 `finishedAt` 的终态行读作零而不是负数，超过一小时的耗时停留在小时单位。终态行保持可见，因为失败任务的 `detail` 是其失败唯一可读之处。行为由 [Web 后台任务展示 Agent Note](../../../.agents/notes/implemented/feature/2026-08-08-web-background-job-display.zh.md) 规定。
+头部操作带里的一个 slot 条目（preset 标签之后）渲染触发器与弹出层；弹出层通过测量锚点把自己收进视口。所有数据经 `ctx.jobs` 到达——组件不持有任何传输状态。名册跟随挂载：一个 `useEffect` 在控件存活期间保持会话的 `job.list` 流打开。观测跟随可见性：另一个 `useEffect` 为展开行的 job 打开流，并在收起、卸载或弹出层关闭时关闭它。
+
+| 文件 | 角色 |
+|---|---|
+| [`src/client/JobListAction.tsx`](src/client/JobListAction.tsx) | 任务列表：分组、时长、面板 |
+| [`src/client/index.ts`](src/client/index.ts) | slot 注册与词典 |
+| [`src/client/locales.ts`](src/client/locales.ts) | `job` 命名空间文案（zh 为事实源） |
 
 </details>
 
@@ -48,42 +60,37 @@ Escape 关闭列表并把焦点交还触发器，在其外部按下指针同理�
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当任务界面本身无法满足需要时，请阅读以下页面。它们从浏览器列表进入注册表与面向模型的工具。
-
-- [dsh-tool-jobs](../../jobs/tool-jobs/README.zh.md)——同一注册表之上的面向模型任务工具。
-- [会话控制器](../../api/session-controller/README.zh.md)——折叠出本包读取的 `jobsBySession` 镜像。
-- [ui-subagent](../ui-subagent/README.zh.md)——subagent 目录，运行中的一次性后台 subagent 也会出现在那里。
-- [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——浏览器插件行如何加载并注册 slot。
+- [`dsh-api-job-controller`](../../api/job-controller/README.zh.md) —— 行、面板与停止控件背后的 `job.list`、`job.follow` 流、`job.kill` Remote 与 `ctx.jobs` 服务。
+- [`dsh-jobs`](../../jobs/jobs/README.zh.md) —— 拥有环与投影语义的注册表契约。
+- [`dsh-client-ui-primitives`](../ui-primitives/README.zh.md) —— 面板所配置的 `TerminalBlock` 表面。
 
 -----
 
 <a id="model-experience"></a>
 ## 模型体验
 
-无，因为本包为人类渲染宿主计算出的注册表状态，不触及提示词、消息、schema、流或工具结果。
+无。本包为人类渲染宿主观测到的状态与实时输出，不触碰任何提示词、消息、schema、流或工具结果。模型对同一工作的视图仍在 [`dsh-tool-jobs`](../../jobs/tool-jobs/README.zh.md)。
 
-#### KV Cache 影响
+#### KV 缓存影响
 
-无；本包从不组装或发送提供方请求。
+无；本包从不组装或发送 provider 请求。
 
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
+这些限制界定当前包约束，不是任务清单。
 
-这些限制界定了当前任务列表。它们是当前包约束，不是通用任务管理对比或任务积压。
-
-- **行是只读的**——任务的流式输出与人类发起的取消是各自独立的阶段。取消还额外欠一个 seam 没有回答的、面向模型的决策：`kill()` 会把终态投递标为已上报，所以照当前契约写出来的中断会让模型一直以为它的任务还在跑。
-- **列表不等于注册表自己的集合**——它展示的是一个会话通过协议视图能看到什么，因此别的会话拥有的任务在这里永不出现；进程重启会清空列表，而 transcript 里启动这些任务的 `run_in_background` 卡片仍在。无主任务（没有活体 `Agent` 时启动的）反过来会进入每个会话的列表，与 `list(caller)` 对每个调用方的报告一致。
+- **不渲染 channel 标签**——stdout 与 stderr 块拼接为一条流；按 channel 着色是展示层的后续工作。
 
 <a id="dev-note"></a>
 ### 开发备注
 
 <details>
-<summary>维护者的工作上下文——点击展开</summary>
+<summary>维护者工作语境——点击展开</summary>
 
 无。
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。本包只是将 `jobsBySession` 镜像以只读方式投影为一个会话头部 slot 条目，不发出 Cordis 事件，也不持有跨插件可变状态；其唯一的 slot 注册通过 HMR（热模块替换）安全性规范验证了资源释放行为。
+**运行时不变式：** 不发布伴生入口。本包只把 `ctx.jobs` 的名册与视图只读投影到一个 header slot，不发出 Cordis 事件，也不持有跨插件可变状态；其唯一的 slot 注册通过 HMR（热模块替换）安全性规范验证了资源释放行为。

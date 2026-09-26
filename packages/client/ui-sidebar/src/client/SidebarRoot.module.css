@@ -35,6 +35,89 @@
   padding: 18px 10px 6px;
 }
 
+/* The brand stays in the sidebar; fixed caption controls survive zero-width collapse. */
+:global([data-windows-titlebar]) .root .logoRow {
+  height: 40px;
+  margin: 0;
+  padding: 0;
+}
+
+:global([data-windows-titlebar]) .toggle {
+  position: fixed;
+  top: calc((var(--dsh-windows-titlebar-height) - 28px) / 2);
+  left: 12px;
+  z-index: 30;
+  -webkit-app-region: no-drag;
+}
+
+:global([data-windows-titlebar]) .root.collapsed .logoRow {
+  height: 0;
+}
+
+:global([data-windows-titlebar]) .root:not(.collapsed) .brand {
+  padding-left: 4px;
+}
+
+:global([data-windows-titlebar]) .brandIdentity {
+  transform: translateY(1px);
+}
+
+:global([data-windows-titlebar]) .brandMark {
+  transform: translateX(1px);
+}
+
+:global([data-windows-titlebar]) .brandName {
+  font-weight: 400;
+}
+
+:global([data-windows-titlebar]) .root.collapsed {
+  padding: 0;
+}
+
+:global([data-windows-titlebar]) .root:not(.collapsed) .newSession {
+  margin-top: 8px;
+  margin-left: 0;
+}
+
+:global([data-windows-titlebar]) .collapsed .panelList,
+:global([data-windows-titlebar]) .collapsed .regionArea,
+:global([data-windows-titlebar]) .collapsed .footArea {
+  display: none;
+}
+
+:global(html[data-windows-titlebar]:has([data-sidebar-collapsed='true'])) {
+  --dsh-windows-menu-start: 84px;
+}
+
+:global([data-windows-titlebar]) .collapsed .newSession {
+  position: fixed;
+  top: calc((var(--dsh-windows-titlebar-height) - 28px) / 2);
+  left: 48px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  z-index: 30;
+  -webkit-app-region: no-drag;
+}
+
+:global([data-windows-titlebar]) .railIn .iconButton,
+:global([data-windows-titlebar]) .railIn .newSession {
+  animation: none;
+}
+
+:global([data-windows-titlebar]) .collapsed .toggle,
+:global([data-windows-titlebar]) .collapsed .newSession {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  corner-shape: round;
+  color: var(--dsw-alias-label-secondary);
+}
+
+:global([data-windows-titlebar]) .collapsed .toggle .panelIcon {
+  display: inline;
+}
+
 /* Scrollbars in the column are a pointer affordance: the shell adds this
    class whenever the pointer is not inside (SidebarRoot.tsx owns the linger),
    and rebinding ui-theme's indirection pair to `transparent` takes the thumb
@@ -93,7 +176,9 @@
 
 /* macOS hiddenInset titlebar: the strip spans the column's top edge (negative
    margins cancel the root padding) so it clears the traffic lights at
-   (16, 18) and doubles as the window drag region; the toggle opts out. */
+   (16, 18). The strip marks itself `data-window-drag` in markup (SidebarRoot), so
+   its own run is the column's draggable geometry and no frame band has to match
+   the strip's height; the toggle inside subtracts via the base.css rule. */
 .topStrip {
   flex: none;
   display: flex;
@@ -102,12 +187,16 @@
   height: 52px;
   box-sizing: border-box;
   margin: -6px calc(-1 * var(--dsh-sidebar-inline-padding)) 0;
-  padding: 0 12px;
-  -webkit-app-region: drag;
+  /* The 2px foot centres the 28px toggle at y 25, level with the collapsed
+     seat (ui-layout .leadingSeat, top 11) and the conversation title row, so
+     collapse/expand never shifts it vertically. */
+  padding: 0 12px 2px;
 }
 
-.topStrip .iconButton {
-  -webkit-app-region: no-drag;
+/* Window fullscreen hides the traffic lights (html[data-fullscreen], desktop
+   preload): the toggle takes their spot at the strip's left edge. */
+:global([data-fullscreen]) .topStrip {
+  justify-content: flex-start;
 }
 
 /* The strip's full 52px foot leaves the wordmark too low; the content column
@@ -119,7 +208,15 @@
 
 /* Logo row (figma pad (4,8,4,8)): expanded keeps the panel toggle at the
    right edge; the rail gives every control the same base left anchor before
-   the shared entry translation is applied. */
+   the shared entry translation is applied. macOS hiddenInset titlebar: the row
+   is marked `data-window-drag` in markup (SidebarRoot), so ui-web base.css's
+   single darwin rule carries the drag over its own box — below the top strip
+   (40–100px: the strip's 52px foot with the row's -12px tuck). The brand rides
+   that box (SidebarRoot renders the wordmark as a plain span there, so the
+   global interactive no-drag rule never subtracts it); the dedicated New
+   Session button below keeps the pointer and keyboard paths. Safe as a drag
+   source: it precedes the sidebar's overlay slots in document order, so their
+   no-drag still wins. */
 .logoRow {
   flex: none;
   display: flex;
@@ -128,7 +225,7 @@
   gap: 8px;
   height: 60px;
   padding: 8px 0 8px 4px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -138,6 +235,9 @@
   padding: 0;
   margin-bottom: 12px;
   justify-content: flex-start;
+  /* The settled rail's 36px toggle is wider than this 35px row; the base row's clip would cut
+     the control's right edge, so the rail stops clipping once the slide has settled. */
+  overflow: visible;
 }
 
 /* Brand group (figma I133:7632): the full wordmark rides the text ink
@@ -155,6 +255,12 @@
   background: transparent;
   color: inherit;
   cursor: pointer;
+}
+
+/* On macOS the brand is a window-drag surface, not a New Session button;
+   a pointer cursor would promise a click that drags the window instead. */
+:global([data-platform='darwin']) .brand {
+  cursor: default;
 }
 
 /* Mark and name are independent slots; the shell owns their shared baseline,
@@ -210,6 +316,7 @@
 }
 
 .iconButton {
+  position: relative;
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -217,8 +324,7 @@
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 50%;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   padding: 0;
   background: transparent;
   cursor: pointer;
@@ -229,11 +335,18 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* The toggle is flush with .logoRow, which clips its own overflow, so an outward ring loses
+   the pixels that leave the row. Draw this control's ring inside its own box instead. */
+.iconButton.toggle:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
 .collapsed .iconButton {
   width: 36px;
   height: 36px;
   /* Rail hovers share the panel rows' and New Session's 12px rounding. */
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
 }
 
 /* Rail logo swap: collapsed, the toggle rests as the whale mark (brand ink,
@@ -282,17 +395,19 @@
 /* New Session: 38px bar, 12px radius (figma 133:7634 geometry, squared-off
    corners); collapsed it renders as the rail's plain icon control. */
 .newSession {
+  container-type: inline-size;
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 0;
   height: 38px;
-  padding: 8px 16px;
+  padding: 8px 12px;
   margin: 0 2px 12px;
   box-sizing: border-box;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-button-elevated-fill);
   color: var(--dsw-alias-label-primary);
   font-size: 14px;
@@ -306,15 +421,23 @@
   background: var(--dsw-alias-button-floating-hover);
 }
 
-/* macOS: the solid elevated fill reads as a foreign slab on the vibrancy
-   sidebar; letting a quarter of the material through keeps the card visible
-   while it sits in the glass. */
+/* macOS: the themed elevated fill reads as a foreign slab on the vibrancy
+   sidebar; a white wash sits in the glass like native macOS sidebar
+   controls. Dark keeps the same white ink at lower alpha. */
 :global([data-platform='darwin']) .newSession {
-  background: color-mix(in srgb, var(--dsw-alias-button-elevated-fill) 75%, transparent);
+  background: rgb(255 255 255 / 0.55);
 }
 
 :global([data-platform='darwin']) .newSession:hover {
-  background: color-mix(in srgb, var(--dsw-alias-button-floating-hover) 75%, transparent);
+  background: rgb(255 255 255 / 0.3);
+}
+
+:global([data-platform='darwin']) :global([data-ds-dark-theme]) .newSession {
+  background: rgb(255 255 255 / 0.15);
+}
+
+:global([data-platform='darwin']) :global([data-ds-dark-theme]) .newSession:hover {
+  background: rgb(255 255 255 / 0.2);
 }
 
 .collapsed .newSession {
@@ -342,6 +465,21 @@
   max-width: 0;
 }
 
+.newSessionLabelMask { flex: 1; min-width: 0; }
+.newSession:is(:hover, :focus-visible) .newSessionLabelMask:has(+ .newSessionShortcut) { overflow: hidden; mask-image: linear-gradient(to right, black calc(100% - 16px), transparent); }
+.newSessionContent { display: flex; width: 100cqw; align-items: center; justify-content: center; gap: 6px; }
+.newSessionContent > svg { flex: none; }
+
+.newSessionShortcut {
+  opacity: 0;
+  display: inline-flex;
+  flex: none;
+  pointer-events: none;
+  font-weight: 400;
+}
+
+.newSession:is(:hover, :focus-visible) .newSessionShortcut { opacity: 1; }
+
 .panelList {
   flex: none;
   display: flex;
@@ -361,7 +499,7 @@
   padding: 7px 8px;
   box-sizing: border-box;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
@@ -380,7 +518,7 @@
 }
 
 .panelRow:focus-visible {
-  outline: 2px solid var(--dsw-alias-label-primary);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }
 

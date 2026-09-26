@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-09-08-desktop-bundled-runtime-and-external-plugins.zh.md)
 
-Profile mutation and recovery follow the [in-place profile decision](2026-09-09-desktop-in-place-profile.md).
+Plugin management and native recovery follow the [shared Web wrapper decision](2026-09-10-desktop-web-wrapper.md).
 
 The [Electron runtime decision](2026-09-11-desktop-electron-node-runtime.md) supersedes the separate upstream Node executable; other decisions in this note remain applicable.
 
@@ -28,32 +28,32 @@ The [Desktop file policy](../../../../apps/desktop/scripts/runtime-file-policy.t
 
 Package-specific exclusions remove Domino tests, fs-ext compilation outputs, Koffi's Windows import library, and non-target node-pty prebuilds and debug symbols. The policy retains native executable dependencies, node-pty's ConPTY source distribution, licenses, and unrecognized assets; broad `src`, `test`, `.ts`, or `.map` exclusions could remove executable code or runtime data. Copy tests preserve sentinel assets and seal the filtered inventory; the Electron [payload smoke](../../../../apps/desktop/tests/fixtures/runtime-payload-smoke.mjs) verifies PTY output, native file seeking, FFI, image conversion, and HTML parsing. Runtime preparation still verifies every retained byte and boots the complete Host with an external plugin.
 
-The shared profile runner projects missing installation and selected-bundle dependencies within the Desktop profile. pnpm-installed packages take precedence. Links resolve to real package directories under normal Node resolution, so Host and plugin imports reaching the same export share its module instance. Distinct ESM and CommonJS conditional exports remain distinct entry points; a link cannot merge a package’s dual implementations.
+The shared profile runner supplies missing installation and selected-bundle dependencies through the runtime resolution. pnpm-installed packages take precedence. Runtime resolution delegates to the selected package paths, so Host and plugin imports reaching the same export share its module instance. Distinct ESM and CommonJS conditional exports remain distinct entry points; runtime resolution does not merge a package’s dual implementations.
 
-External plugins use normal Node package resolution. Desktop does not recursively check peer versions, duplicate packages, linked packages, or ancestor dependency resolution. These checks duplicate package-manager and loader responsibilities and reject pnpm-supported installation sources. Shared fallback links supply missing packages, but a plugin can resolve another installed copy; incompatible plugins may fail during Host startup and require recovery through the independent shell UI.
+External plugins use normal Node package resolution. Desktop does not recursively check peer versions, duplicate packages, linked packages, or ancestor dependency resolution. These checks duplicate package-manager and loader responsibilities and reject pnpm-supported installation sources. The runtime resolution supplies missing packages, but a plugin can resolve another installed copy; incompatible plugins may fail during Host startup and require recovery through the independent shell UI.
 
-The profile manifest records pnpm-installed dependencies separately from its enabled bundle list. Disabling a plugin preserves its package, lockfile entry, and user configuration. The [thin-wrapper decision](2026-09-10-desktop-web-wrapper.md) assigns initialization, bundle reconciliation, and module links to shared app-boot helpers; Desktop holds no separate link ledger or runtime-state identity.
+The profile manifest records pnpm-installed dependencies separately from its enabled bundle list. Disabling a plugin preserves its package, lockfile entry, and user configuration. The [thin-wrapper decision](2026-09-10-desktop-web-wrapper.md) assigns initialization, bundle reconciliation, and runtime module resolution to shared app-boot helpers; Desktop holds no separate link ledger or runtime-state identity.
 
 ## Transactions and upgrades
 
-First launch creates profile metadata and host links without running pnpm, preserving unrelated files. Compatible release changes or application relocation refresh links in place. Node version, platform, or architecture changes preserve installed plugins; pnpm and the loader report installation and compatibility failures.
+First launch creates profile metadata without running pnpm, preserving unrelated files. Each launch computes the runtime resolution from the current installation, including after a compatible release change or application relocation. Node version, platform, or architecture changes preserve installed plugins; pnpm and the loader report installation and compatibility failures.
 
-Native canonical paths identify shared package directories. Windows launchers can vary path casing without moving the application; string equality would trigger unnecessary profile preparation. Profile cleanup explicitly unlinks every nested directory link before removing real directories. A Windows fixture under Electron 44 reproduces recursive `fs.rmSync` deleting files through a nested junction, while bundled upstream Node 24.17 preserves them. Cleanup qualification therefore includes the real Electron runtime; Node-only tests do not establish target preservation.
+Native canonical paths identify shared package directories. Windows launchers can vary path casing without moving the application; string equality would trigger unnecessary profile preparation.
 
-Dependency mutations use ordinary pnpm add and remove commands, including their configured lifecycle scripts. Installation sources and dependency resolution belong to pnpm. Bundle declarations select automatic activation; patch validation belongs to the bundle loader. Plain dependencies remain installed without activation. The bundled pnpm reads normal user and profile settings, including registry and build permissions. Desktop supplies no runtime build allowlist, strict-build setting, version-range restriction, or fixed profile identity. Unreadable package metadata does not prevent listing, disabling, or removing a dependency. Development uses the same manager against a separate plugin profile, with workspace packages supplied by the development runtime.
+The shared [plugin manager](../../../../packages/boot/plugin-manager/README.md) owns supported package specifications, bundle validation, activation, and installation failure handling. The bundled pnpm reads normal user and profile settings. Development uses the same Web manager against a separate Desktop profile, with workspace packages supplied by the development runtime.
 
-Desktop stops the Host before package mutations and waits for pnpm exit before restarting it. Shared cleanup removes only fallback-owned links, preserving pnpm entries. The [in-place decision](2026-09-09-desktop-in-place-profile.md) owns partial failures and explicit recovery.
+The shared Web plugin manager owns package mutations and activation; Electron retains profile preparation and native recovery. The [Web wrapper decision](2026-09-10-desktop-web-wrapper.md) owns these responsibilities.
 
-The [immediate-window decision](2026-09-09-desktop-immediate-window-and-direct-start.md) owns direct Host startup and recovery in the main window. Users can update, remove, disable, or re-enable plugins and retry startup. Incompatible plugins are not silently deleted or automatically downgraded.
+The [immediate-window decision](2026-09-09-desktop-immediate-window-and-direct-start.md) owns direct Host startup. The native recovery dialog can disable third-party bundles and back up the profile patch when the Web application cannot start. Installed plugin files remain available for repair.
 
 ## Alternatives considered
 
 Full runtime verification belongs to packaging. Startup reads the resource descriptor and checks shared package records and required Host entries. The [release-validation decision](2026-09-09-desktop-build-release-validation.md) assigns release and target compatibility checks to packaging. Startup neither enumerates nor hashes installed runtime files. Reading every file before backend loading adds I/O proportional to distribution size; unusable modules instead fail when loaded. Build-time verification rejects changed, missing, extra, or linked files against the recorded inventory.
 
 - **Install the bundled offline seed at startup.** This preserves an ordinary pnpm installation procedure but repeats core extraction and installation on every affected machine. Materialized resources remove that work at the cost of more application files and release-builder responsibility.
-- **Force host dependency versions into plugins.** This unnecessarily couples ordinary plugin dependencies to the host. Shared fallback supplies missing packages while pnpm-owned entries retain independent versions.
-- **Use hardlinks.** They cannot represent directories, may not cross volumes, share writable bytes, and retain old inodes after application replacement. Directory symlinks and Windows junctions express the intended package target.
-- **Use `NODE_PATH` or preserve symlink paths.** These do not provide uniform ESM resolution or shared module identity. Normal package lookup through explicit links is directly testable.
+- **Force host dependency versions into plugins.** This unnecessarily couples ordinary plugin dependencies to the host. The runtime resolution supplies missing packages while pnpm-owned entries retain independent versions.
+- **Use hardlinks.** They cannot represent directories, may not cross volumes, share writable bytes, and retain old inodes after application replacement. Runtime resolution requires no filesystem projections.
+- **Use `NODE_PATH` or preserve symlink paths.** These do not provide uniform ESM resolution or shared module identity. The runtime resolution gives ESM and CommonJS the same package selection.
 - **Keep core packages in ASAR.** Ordinary `extraResources` preserves native loading and subprocess paths. ASAR requires separate package-resolution qualification.
 
 ## Consequences

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-15-sidebar-workspace-hierarchy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-15-sidebar-workspace-hierarchy.md
+/agent-note-sidebar-workspace-hierarchy:
+  en: 6be9fd74b0422158
+  zh: ba6dbc81479b75b5
+/agent-note-sidebar-workspace-hierarchy/problem:
+  en: dc209dd9d8c73af4
+  zh: cc5384ba15ea0be0
+/agent-note-sidebar-workspace-hierarchy/decision:
+  en: 9f34c1e903475d25
+  zh: 6b22b19f6da3d390
+/agent-note-sidebar-workspace-hierarchy/alternatives-considered:
+  en: b30322d71fc7c464
+  zh: 36b218a82690cd19
+/agent-note-sidebar-workspace-hierarchy/consequences:
+  en: bf890a80351fa883
+  zh: 05da81c7026a5204

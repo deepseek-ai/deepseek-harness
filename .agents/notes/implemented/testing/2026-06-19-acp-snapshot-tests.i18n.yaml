@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-06-19-acp-snapshot-tests.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-06-19-acp-snapshot-tests.md
-2026-06-19-acp-snapshot-tests.md: d6fd6f74342fda3e1f3c686376f521bf82546e85
-2026-06-19-acp-snapshot-tests.zh.md: dfd09f9d9036763c5fd98393f078bf1772aa0beb
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic:
+  en: 2f19b76966d5cf54
+  zh: cbaed521d650e079
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/problem:
+  en: d1738d268738633e
+  zh: ce62a5b0ff65ce8c
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/decision:
+  en: a9e85418ad5d2bbd
+  zh: 8e86b30a2a5bd049
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/decision/the-fixture-projects-the-persisted-session-jsonl:
+  en: bdd1333366edfc30
+  zh: ed8a0fbab516a62b
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/decision/replay-derives-the-model-script-from-the-log:
+  en: cb71313f2b14f855
+  zh: f85809cfd19ce6af
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/decision/the-in-memory-replay-entry-honors-the-full-llm-contract:
+  en: 5d750b82fd88597c
+  zh: 22dc6dec0d638449
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/decision/positional-replay-one-in-flight-stream:
+  en: 9ecd0c3efce1b2a1
+  zh: 51612956e0c4fc85
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/decision/recording-harvests-the-log-keyless-replay-needs-a-providerless-config:
+  en: 17239981275e59c8
+  zh: 8f7fc2d9e6abd3ee
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/decision/two-outputs-normalize-then-compare:
+  en: ee891a839a0c05e9
+  zh: 677259307e4357fa
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/decision/isolation-normalization-now-sandbox-later:
+  en: ce58ef2e3180d0d3
+  zh: 1e9354614e4d7219
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/decision/the-replay-plugin-is-its-own-package:
+  en: 6c3f938c57f4458b
+  zh: f64bb14ffb80ab90
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/decision/two-subcommands-replay-in-the-default-gate:
+  en: a50cb4cd2be177f7
+  zh: a29f45aafb83fa6c
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/alternatives-considered:
+  en: c4e83a568e8f483e
+  zh: eff19f1872565ff6
+/agent-note-acp-snapshot-tests-record-once-replay-deterministic/consequences:
+  en: ea210a6a43707447
+  zh: 8c1e2a474d595b96

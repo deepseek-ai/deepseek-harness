@@ -83,6 +83,8 @@ Two failure modes are not reconstructable from a durable Assistant settlement al
 - **An unrecorded session makes a call** — replay fails loud and tells you to re-record the scenario.
 - **A scripted placeholder matches nothing** — `{{fromRequest:<regex>}}` resolution validates the pattern and the request corpus and fails loud on no match, an invalid pattern, or an unterminated placeholder.
 
+Isolated transcript extraction supplies an explicit empty child-fact set to V3→V4. It retains recorded catalog entries but does not discover related files. Complete historical parent catalog migration belongs to JSONL persistence.
+
 -----
 
 <a id="understand-the-implementation"></a>

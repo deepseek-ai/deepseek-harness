@@ -55,6 +55,8 @@ export interface SessionFixture {
   events?: readonly SessionEventLikeEntry[]
   /** Whether the initial event window has an older page. */
   hasMore?: boolean
+  /** Optional shared initial-opening barrier for the fixture's Client generation. */
+  initialOpen?: (signal: AbortSignal) => void | Promise<void>
 }
 
 /**
@@ -109,6 +111,7 @@ export function workspaceSnapshot(): WorkspaceSnapshot {
   return {
     items: [],
     archivedSessionIds: [],
+    pinnedSessionIds: [],
     state: 'idle',
     phase: 'ready',
     error: null,

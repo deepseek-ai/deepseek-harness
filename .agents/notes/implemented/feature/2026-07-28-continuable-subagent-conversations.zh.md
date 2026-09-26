@@ -143,7 +143,7 @@ activation-owner 作用域之所以存在，是因为普通 Cordis owner effect 
 
 本版本覆盖可继续的进程内 child，一次性委派保持不变。远程提供方必须具备单独的激活 handle，以及等价的认证控制与 child-first 完全停稳约定，才能支持同样的行为。
 
-它不新增 host-user 继续执行、subagent steering 操作、持久化邮箱、跨进程 lease、中断 inbox 工作的自动回放、团队权限、工作流权限、公开驻留查询、新的在线激活数量或后代总数限制，以及运行时缓存；后来的[当前轮次中断](2026-08-06-continuable-subagent-interrupt.zh.md)在此生命周期之上补充了唯一的公开停止操作。现有委派深度策略保持不变。可选的 child 到 parent 报告是后续消费该生命周期的功能，不属于基础可继续能力。
+它不新增 host-user 继续执行、subagent steering 操作、持久化邮箱、跨进程 lease、中断 inbox 工作的自动回放、团队权限、工作流权限、公开驻留查询、以及运行时缓存；后来的[当前轮次中断](2026-08-06-continuable-subagent-interrupt.zh.md)在此生命周期之上补充了唯一的公开停止操作。现有委派深度策略保持不变。可选的 child 到 parent 报告是后续消费该生命周期的功能，不属于基础可继续能力。
 
 ## 曾考虑的替代方案
 
@@ -203,7 +203,7 @@ activation-owner 作用域之所以存在，是因为普通 Cordis owner effect 
 
 移除 Task 会放弃通用后台工作检查、结果收集和精确 Task 取消。如果这些产品功能成为需求，就需要不会重新引入第二条执行队列的请求 ticket 或 inbox 能力。
 
-在后代运行期间保留激活，会按尚未完成所有权图的规模消耗 Agent 资源。现有委派深度策略仍会限制嵌套层级，但本版本不新增在线激活数量或后代总数限制；已结算的历史会话不保留 `AgentHandle`。
+在后代运行期间保留激活，会按尚未完成所有权图的规模消耗 Agent 资源。现有委派深度策略仍会限制嵌套层级，而[共享 Activation 容量](2026-09-15-continuable-activation-capacity.zh.md)限制存活的可续接后代数；已结算的历史会话不保留 `AgentHandle`。
 
 进程内 inbox 和所有权图无法协调两个 harness 进程。允许多个进程并发访问同一持久化存储的部署，仍需要持久化 lease 和邮箱协议。
 

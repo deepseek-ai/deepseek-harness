@@ -388,7 +388,7 @@ describe('cross-process write lock', () => {
   it('a drain failure and a release failure reject close as one AggregateError', async () => {
     const root = await freshRoot()
     const backend = await mount(root)
-    const holder = await backend.create(meta('drain-and-release-fail')) as unknown as JsonlSessionHandle
+    const holder = await backend.create(meta('drain-and-release-fail')) as JsonlSessionHandle
     await holder.append([...EVENTS])
 
     vi.spyOn(backend as unknown as { persistBatch: () => Promise<void> }, 'persistBatch')

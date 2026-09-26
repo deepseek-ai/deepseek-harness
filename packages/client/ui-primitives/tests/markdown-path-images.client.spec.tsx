@@ -74,6 +74,21 @@ describe('MarkdownText local-path images', () => {
     }
   })
 
+  it('accepts only the Desktop file route from a local image resolver', () => {
+    const src = 'dsh-app://app/api/file?path=%2Ftmp%2Fgraph.png'
+    const view = render(<MarkdownText text={LOCAL_IMAGE} streaming pathImages={{ resolve: () => src }} />)
+    expect(view.container.querySelector('img')).toBeNull()
+    view.rerender(<MarkdownText text={LOCAL_IMAGE} pathImages={{ resolve: () => src }} />)
+    expect(view.getByRole('img').getAttribute('src')).toBe(src)
+    for (const result of ['dsh-app://shell/api/file?path=x', 'dsh-app://app/assets/image.png',
+      'dsh-app://app/api/file-other?path=x', 'dsh-app://app.example/api/file?path=x']) {
+      view.rerender(<MarkdownText text={LOCAL_IMAGE} pathImages={{ resolve: () => result }} />)
+      expect(view.container.querySelector('img')).toBeNull()
+    }
+    view.rerender(<MarkdownText text={`![diagram](${src})`} />)
+    expect(view.container.querySelector('img')).toBeNull()
+  })
+
   it('leaves remote images untouched even when the vocabulary maps them', () => {
     const remote = '![remote](https://example.com/a.png)'
     const pathImages: MarkdownPathImages = { resolve: () => 'https://cdn.example.com/b.png' }

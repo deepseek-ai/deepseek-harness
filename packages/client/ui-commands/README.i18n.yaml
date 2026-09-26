@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-commands/README.md
-README.md: f802179e08009cd4db8a3b786e52e81b26bb21da
-README.zh.md: 1dee58ab42d67a62099d57d4e631e440d3349f21
+/:
+  en: e85ec1ccd1b80d98
+  zh: 1272b2ae6abeabdc
+/deepseek-ai-dsh-client-ui-commands:
+  en: 095001426d586338
+  zh: 80dec4efefd726f7
+/deepseek-ai-dsh-client-ui-commands/summary:
+  en: 770b1f492ac735e7
+  zh: 5602493729149219
+/deepseek-ai-dsh-client-ui-commands/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-commands/use-this-package:
+  en: 01adce72791579fa
+  zh: 70eb55a1529038e7
+/deepseek-ai-dsh-client-ui-commands/use-this-package/kinds-and-decorations:
+  en: 86841942f6989fbb
+  zh: 901557d3a5d0528e
+/deepseek-ai-dsh-client-ui-commands/use-this-package/built-in-row-faces:
+  en: e96156be95ea87e3
+  zh: f5350db26483ec9f
+/deepseek-ai-dsh-client-ui-commands/use-this-package/attachment-carrying-submissions:
+  en: 4feecdbec0c3f39e
+  zh: 618944ecade8a3a2
+/deepseek-ai-dsh-client-ui-commands/understand-the-implementation:
+  en: 0fd2b19e41605440
+  zh: 52d5c653b877a1f0
+/deepseek-ai-dsh-client-ui-commands/further-exploration:
+  en: 409c04f534d23de7
+  zh: 165022d7a0a554eb
+/deepseek-ai-dsh-client-ui-commands/model-experience:
+  en: 3ec197644f2fe6ce
+  zh: a06a6fe8909b064f
+/deepseek-ai-dsh-client-ui-commands/model-experience/kv-cache-effect:
+  en: 08efc268737977ca
+  zh: 7772a59064ea4039
+/deepseek-ai-dsh-client-ui-commands/known-limitations-and-deferred-work:
+  en: cfce26d6a603cb7d
+  zh: 8332a8d1ad44abcf
+/deepseek-ai-dsh-client-ui-commands/known-limitations-and-deferred-work/dev-note:
+  en: 2f5e19244ac6c305
+  zh: e43b52ae5b4af798

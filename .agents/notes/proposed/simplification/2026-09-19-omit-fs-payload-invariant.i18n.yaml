@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-19-omit-fs-payload-invariant.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/simplification/2026-09-19-omit-fs-payload-invariant.md
+/agent-note-omit-the-filesystem-payload-only-invariant-companion:
+  en: 6385aa079529c4f4
+  zh: 602b99cea351125c
+/agent-note-omit-the-filesystem-payload-only-invariant-companion/problem:
+  en: 4568d53b3ef69254
+  zh: 66c9aea2ae3645e7
+/agent-note-omit-the-filesystem-payload-only-invariant-companion/proposal:
+  en: 2bfceaa480b6645d
+  zh: 3ad1060bf91ded74
+/agent-note-omit-the-filesystem-payload-only-invariant-companion/alternatives-considered:
+  en: d12fd1577a308af3
+  zh: 56271794646f5a87
+/agent-note-omit-the-filesystem-payload-only-invariant-companion/acceptance-criteria:
+  en: 253009b93ce34c5b
+  zh: 2268e0303bd025d6
+/agent-note-omit-the-filesystem-payload-only-invariant-companion/risks:
+  en: 70c52f193d72d02d
+  zh: f30844e865ac4c27

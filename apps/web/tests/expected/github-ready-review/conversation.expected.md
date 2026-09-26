@@ -1,54 +1,35 @@
 - tree "Sessions":
-  - treeitem "{{workspace}}" [expanded]:
-    - img
-    - text: {{workspace}}
-  - treeitem "Review deepseek-ai/deepseek-harness#314 Session actions for Review deepseek-ai/deepseek-harness#314" [selected]:
+  - treeitem "{{workspace}}" [expanded]
+  - treeitem "Review deepseek-ai/deepseek-harness#314 Session actions for Review deepseek-ai/deepseek-harness#314 Archive session Pin session" [selected]:
     - text: Review deepseek-ai/deepseek-harness#314
-    - button "Session actions for Review deepseek-ai/deepseek-harness#314":
-      - img
+    - button "Session actions for Review deepseek-ai/deepseek-harness#314"
+    - button "Archive session"
+    - button "Pin session"
 
 ---
 
 - banner:
-  - navigation "Session hierarchy":
-    - button "Review deepseek-ai/deepseek-harness#314" [disabled]
-  - img
+  - navigation "Session hierarchy": Review deepseek-ai/deepseek-harness#314
   - text: Standard mode
-  - button "More actions":
-    - img
-  - button "Open right sidebar":
-    - img
+  - button "More actions"
+  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
-- button "Thought for a while":
-  - text: Thought for a while
-  - img
+- button "GitHub event received {{clock}}":
+  - text: GitHub event received
+  - time: {{clock}}
+- status: Worked
+- button "Took {{duration}}" [disabled]
 - paragraph: "Review complete: no actionable findings."
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
 - text: {{clock}}
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Add files or run commands":
-  - img
+- button "Add files or run commands"
 - 'button "Access mode, current: Read Only"': Read Only
-- button "Select model, current github-webhook-review-test/reply":
-  - text: github-webhook-review-test/reply
-  - img
+- button "Select model, current github-webhook-review-test/reply": github-webhook-review-test/reply
 - button "Send message" [disabled]
-- button "1 turns 1 steps":
-  - img
-  - text: 1 turns 1 steps
+- button "1 turns 1 steps"

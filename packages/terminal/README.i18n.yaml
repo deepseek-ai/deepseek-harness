@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/terminal/README.md
-README.md: 3f63b1b1f8de3dbe9cc23b64849886cada67d4cb
-README.zh.md: a3c21d9f90fea2347abbff4c3e310011f69e21de
+/:
+  en: fdd04a148c1d980e
+  zh: 49025df3a0380a37
+/terminal-persistent-pty-capability-family:
+  en: 23811d44b564b29d
+  zh: a74d2f7625f5f6dd
+/terminal-persistent-pty-capability-family/summary:
+  en: 46a33b055e27a19a
+  zh: 63be22dcced5db81
+/terminal-persistent-pty-capability-family/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/terminal-persistent-pty-capability-family/packages:
+  en: 5e04c5c04ff4133b
+  zh: 55913a1fc3537342
+/terminal-persistent-pty-capability-family/related-documentation:
+  en: 2abf795bb34e5aea
+  zh: a268d0d5bb74e4d7
+/terminal-persistent-pty-capability-family/dev-note:
+  en: 5de1d6304e00c58f
+  zh: 8d8225361cfa29e5

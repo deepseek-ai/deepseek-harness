@@ -1,6 +1,0 @@
-# Experimental Agent Teams Web layer. Apply after dsh-web-app and the host-side
-# dsh-agent-team-profile so the browser mounts only when the Team service is present.
-
-- insert:
-    - id: ui-agent-team
-      name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'

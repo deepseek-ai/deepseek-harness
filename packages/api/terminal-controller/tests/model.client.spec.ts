@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { RemoteStream, RemoteStreamCarrierError, type ClientRemote, type RemoteStreamOptions } from '@deepseek-ai/dsh-api-gateway/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { streamMethod } from '@deepseek-ai/dsh-remote-mock'
 import type {} from '@deepseek-ai/dsh-api-terminal-controller/remote'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TerminalView, type TerminalRemote } from '../src/client/model.ts'
@@ -31,22 +32,22 @@ function failure(message: string): RemoteResult<never> {
 
 function fixture(prepareStream?: <Item>(stream: RemoteStream<Item>) => void) {
   const remote: TerminalRemote = {
-    retain: vi.fn<TerminalRemote['retain']>(async function* (_session, _id, signal) {
+    retain: vi.fn<TerminalRemote['retain']>(streamMethod<TerminalRemote['retain']>(async function* (_session, _id, signal) {
       yield { type: 'retained' }
       await new Promise<void>((resolve) => {
         if (signal?.aborted) resolve()
         else signal?.addEventListener('abort', () => { resolve() }, { once: true })
       })
-    }),
+    })),
     shells: vi.fn<TerminalRemote['shells']>(async () => success([info.shell])),
     environment: vi.fn<TerminalRemote['environment']>(async () => success(environment)), list: vi.fn<TerminalRemote['list']>(async () => success([])),
     create: vi.fn<TerminalRemote['create']>(async (_sessionId, request) => success({ ...info, id: request.id })),
     close: vi.fn<TerminalRemote['close']>(async () => success(undefined)), rename: vi.fn<TerminalRemote['rename']>(async () => success(undefined)),
     write: vi.fn<TerminalRemote['write']>(async () => success(undefined)), resize: vi.fn<TerminalRemote['resize']>(async () => success(undefined)),
-    follow: vi.fn<TerminalRemote['follow']>(async function* (_sessionId, id, attachmentId, signal) {
+    follow: vi.fn<TerminalRemote['follow']>(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, attachmentId, signal) {
       yield { type: 'snapshot', sequence: 0, screen: 'ready', info: { ...info, id, controllerId: attachmentId } }
       await untilAborted(signal)
-    }),
+    })),
   }
   const options: RemoteStreamOptions<unknown>[] = []
   const streams: { dispose(): Promise<void>; restart(): void }[] = []
@@ -103,7 +104,7 @@ it('does not let a late input failure downgrade a newer connection', async () =>
 
 it('waits for render acknowledgement before publishing subsequent output', async () => {
   const { model, remote } = fixture()
-  vi.mocked(remote.follow).mockImplementation(async function* (_sessionId, id, controllerId, signal) {
+  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId, signal) {
     const frames: TerminalFrame[] = [
       { type: 'snapshot', sequence: 0, screen: '', info: { ...info, id, controllerId } },
       { type: 'output', sequence: 1, data: 'first' },
@@ -111,7 +112,7 @@ it('waits for render acknowledgement before publishing subsequent output', async
     ]
     for (const frame of frames) yield frame
     await untilAborted(signal)
-  })
+  }))
   await mount(model)
   await expect.poll(() => model.state.getSnapshot().render?.frame.type).toBe('snapshot')
   acknowledge(model)
@@ -209,7 +210,7 @@ it.each([
   ['repeated snapshot', [{ type: 'snapshot', sequence: 4, screen: '', info }, { type: 'snapshot', sequence: 4, screen: '', info }], 'Unexpected terminal screen snapshot'],
 ] satisfies readonly (readonly [string, readonly TerminalFrame[], string])[])('refuses a malformed output stream: %s', async (_name, frames, message) => {
   const { model, remote } = fixture()
-  vi.mocked(remote.follow).mockImplementation(async function* () { yield* frames })
+  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* () { yield* frames }))
   await mount(model)
   if (frames[0]?.type === 'snapshot') {
     await expect.poll(() => model.state.getSnapshot().render).toBeDefined()
@@ -221,10 +222,10 @@ it.each([
 
 it('retains an exited screen and closes controls when its stream ends', async () => {
   const { model, remote } = fixture()
-  vi.mocked(remote.follow).mockImplementation(async function* (_sessionId, id, controllerId) {
+  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId) {
     yield { type: 'snapshot', sequence: 0, screen: 'last screen', info: { ...info, id, controllerId } }
     yield { type: 'state', info: { ...info, id, controllerId, state: 'exited', exitCode: 3 } }
-  })
+  }))
   await connected(model)
   await expect.poll(() => model.state.getSnapshot().phase).toBe('closed')
   expect(model.state.getSnapshot()).toMatchObject({ writable: false, info: { state: 'exited', exitCode: 3 }, render: { frame: { screen: 'last screen' } } })
@@ -232,9 +233,9 @@ it('retains an exited screen and closes controls when its stream ends', async ()
 
 it('reports an attachment ending while the shell is still running and permits manual reconnect', async () => {
   const { model, remote } = fixture()
-  vi.mocked(remote.follow).mockImplementationOnce(async function* (_sessionId, id, controllerId) {
+  vi.mocked(remote.follow).mockImplementationOnce(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId) {
     yield { type: 'snapshot', sequence: 0, screen: '', info: { ...info, id, controllerId } }
-  })
+  }))
   await connected(model)
   await expect.poll(() => model.state.getSnapshot().issue).toBe('attachmentEnded')
   model.connect()
@@ -243,11 +244,11 @@ it('reports an attachment ending while the shell is still running and permits ma
 
 it('publishes remote control transfer without replacing the retained screen', async () => {
   const { model, remote } = fixture()
-  vi.mocked(remote.follow).mockImplementation(async function* (_sessionId, id, controllerId, signal) {
+  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId, signal) {
     yield { type: 'snapshot', sequence: 0, screen: 'retained', info: { ...info, id, controllerId } }
     yield { type: 'state', info: { ...info, id } }
     await untilAborted(signal)
-  })
+  }))
   await connected(model)
   await expect.poll(() => model.state.getSnapshot().writable).toBe(false)
   expect(model.state.getSnapshot().render?.frame).toMatchObject({ type: 'snapshot', screen: 'retained' })
@@ -298,10 +299,10 @@ it('ignores an already delivered screen when its attachment is replaced before t
 it('ignores an already settled stream error after a newer attachment has become writable', async () => {
   const barrier = deliveryBarrier()
   const { model, remote } = fixture(barrier.prepare)
-  vi.mocked(remote.follow).mockImplementationOnce(async function* () {
+  vi.mocked(remote.follow).mockImplementationOnce(streamMethod<TerminalRemote['follow']>(async function* () {
     yield* []
     throw new Error('retired attachment failed')
-  })
+  }))
   await mount(model)
   await barrier.ready
   model.connect()
@@ -338,12 +339,12 @@ it.each(['write', 'resize'] as const)('keeps a fresh attachment writable when a 
   const { model, remote, generation } = fixture()
   generation.set({ id: 1, host: { home: '/home/fixture' } })
   const disconnected = Promise.withResolvers<undefined>()
-  vi.mocked(remote.follow).mockImplementationOnce(async function* (_sessionId, id, controllerId, signal) {
+  vi.mocked(remote.follow).mockImplementationOnce(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId, signal) {
     yield { type: 'snapshot', sequence: 0, screen: 'before disconnect', info: { ...info, id, controllerId } }
     await Promise.race([disconnected.promise, untilAborted(signal)])
     if (signal?.aborted) return
     throw new RemoteStreamCarrierError('connection lost')
-  })
+  }))
   await connected(model)
   const pending = Promise.withResolvers<RemoteResult<void>>()
   if (operation === 'write') {
@@ -516,12 +517,12 @@ it.each(['write', 'resize'] as const)('keeps the output connection when %s loses
   const transfer = Promise.withResolvers<undefined>()
   const response = Promise.withResolvers<RemoteResult<void>>()
   cleanups.push(() => { transfer.resolve(undefined); response.resolve(success(undefined)) })
-  vi.mocked(remote.follow).mockImplementation(async function* (_session, id, controllerId, signal) {
+  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
     yield { type: 'snapshot', sequence: 0, screen: 'retained screen', info: { ...info, id, controllerId } }
     await transfer.promise
     yield { type: 'state', info: { ...info, id } }
     await untilAborted(signal)
-  })
+  }))
   await connected(model)
   vi.mocked(remote[operation]).mockReturnValueOnce(response.promise)
   if (operation === 'write') model.write('before transfer')
@@ -542,12 +543,12 @@ it('keeps an exited screen when a pending input is refused after the exit state 
   const exit = Promise.withResolvers<undefined>()
   const response = Promise.withResolvers<RemoteResult<void>>()
   cleanups.push(() => { exit.resolve(undefined); response.resolve(success(undefined)) })
-  vi.mocked(remote.follow).mockImplementation(async function* (_session, id, controllerId, signal) {
+  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
     yield { type: 'snapshot', sequence: 0, screen: 'final screen', info: { ...info, id, controllerId } }
     await exit.promise
     yield { type: 'state', info: { ...info, id, state: 'exited', exitCode: 0 } }
     await untilAborted(signal)
-  })
+  }))
   await connected(model)
   vi.mocked(remote.write).mockReturnValueOnce(response.promise)
   model.write('exit race')

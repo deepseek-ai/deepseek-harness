@@ -44,6 +44,15 @@ function repository(test: TestContext) {
 }
 
 describe('maintained repository reference policy', () => {
+  it('permits only the independent kit repository and its source URLs', () => {
+    for (const suffix of ['', '.git', '/tree/main/packages/entry']) {
+      expect(findRepositoryReferences('package.json', `${organizationUrl}/libreoffice-kit${suffix}`, new Set())).toEqual([])
+    }
+    for (const suffix of ['-other', '.example', 's']) {
+      expect(findRepositoryReferences('package.json', `${organizationUrl}/libreoffice-kit${suffix}`, new Set())).toHaveLength(1)
+    }
+  })
+
   it('rejects complete and abbreviated commit identifiers in tracked, staged, and new files', (test) => {
     const fixture = repository(test)
     fixture.write('tracked.md', `release\n${fixture.commit}\n${fixture.commit.toUpperCase()}\n`)

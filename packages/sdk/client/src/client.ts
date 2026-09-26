@@ -468,7 +468,7 @@ export class HarnessClient {
 
 /** Construct the transport against a generic process for package-local fake-runtime tests. */
 export function createProcessHarnessClient(options: RuntimeProcessOptions): HarnessClient {
-  const Constructor = HarnessClient as unknown as new (
+  const Constructor = HarnessClient as new (
     publicOptions: HarnessClientOptions,
     runtime: RuntimeProcessOptions,
   ) => HarnessClient

@@ -9,8 +9,6 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the Session root standard-props merge.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-// Type-only: pulls the conversation header slot declarations.
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SidebarPanelMetadata, SidebarRootInjected } from './contract/slots.ts'
 import { HeaderLeadingControls } from './HeaderLeadingControls.tsx'
 import { SidebarRoot } from './SidebarRoot.tsx'
@@ -38,7 +36,7 @@ interface WorkspaceNavigation {
 }
 
 /** Services required by the sidebar plugin. */
-export const inject = ['slots', 'layout', 'uiWorkspace', 'locale']
+export const inject = ['slots', 'layout', 'uiWorkspace', 'locale', 'shortcuts']
 
 /** Registers the sidebar shell and its service callbacks.
  * @param ctx - Client root context.
@@ -69,7 +67,7 @@ export function apply(ctx: ClientContext): void {
     startSession: (workspaceId) => { workspaceNavigation.startSession(workspaceId) },
     toggleSidebar: () => { ctx.layout.toggleSidebar() },
     selectPanel: (id) => { ctx.layout.selectPanel(id) },
-    hooks: { panels },
+    hooks: { panels, shortcuts: ctx.shortcuts.catalog },
   })
   ctx.slots.inject('sidebar', () => ctx.slots.register({
     name: 'sidebar',
@@ -77,6 +75,7 @@ export function apply(ctx: ClientContext): void {
     children: {
       'sidebar.brand.mark': { kind: 'single', scope: 'root' },
       'sidebar.brand.name': { kind: 'single', scope: 'root' },
+      'sidebar.toggle.badge': { kind: 'single', scope: 'root' },
       'sidebar.panellist': { kind: 'list', scope: 'root' },
       'sidebar.workspaces': { kind: 'single', scope: 'root' },
       'sidebar.settings': { kind: 'single', scope: 'root' },
@@ -85,11 +84,11 @@ export function apply(ctx: ClientContext): void {
     inject: injectProps,
   }, SidebarRoot))
   // macOS desktop hides the collapsed sidebar entirely, so the open/New
-  // Session controls move into the conversation header's leading seat; the
-  // occupant reuses the shell's injected actions and shows itself purely
-  // through CSS against the AppFrame's data-sidebar-collapsed attribute.
-  ctx.slots.inject('conversation.session.header.leading', () => ctx.slots.register({
-    name: 'conversation.session.header.leading',
+  // Session controls move into the frame's window-chrome seat beside the
+  // traffic lights; the occupant reuses the shell's injected actions, and
+  // the AppFrame mounts the seat only while the column is fully hidden.
+  ctx.slots.inject('shell.leading', () => ctx.slots.register({
+    name: 'shell.leading',
     locale: NS,
     inject: injectProps,
   }, HeaderLeadingControls))

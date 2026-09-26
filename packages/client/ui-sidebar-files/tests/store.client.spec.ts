@@ -1,11 +1,4 @@
-/**
- * The tree's write set, one tab at a time.
- *
- * Two facts here are load-bearing for the body: a collapsed level keeps what it
- * loaded (reopening draws at once), and `reset` clears levels while keeping the
- * expanded set, which is what lets the reload gesture know which levels to ask
- * for again.
- */
+/** Tab-local directory caches, expansion preferences, and refresh settings. */
 import { describe, expect, it } from 'vitest'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { createFilesStore } from '../src/client/store.ts'
@@ -33,21 +26,38 @@ describe('createFilesStore', () => {
     const { actions } = store
     const getSnapshot = (): ReturnType<typeof store.getSnapshot> => store.getSnapshot()
     actions.start(TAB, ROOT)
-    expect(getSnapshot().byTab[TAB]).toEqual({ root: ROOT, levels: {}, expanded: [ROOT], scrollTop: 0 })
+    expect(getSnapshot().byTab[TAB]).toEqual({ root: ROOT, levels: {}, expanded: [ROOT], scrollTop: 0, autoRefresh: true })
   })
 
-  it('walks one level through loading, ready, and failed', () => {
+  it('shows a failed initial listing and replaces it with a successful retry', () => {
     const store = createFilesStore().create()
     const { actions } = store
     const getSnapshot = (): ReturnType<typeof store.getSnapshot> => store.getSnapshot()
     actions.start(TAB, ROOT)
     actions.loading(TAB, ROOT)
     expect(getSnapshot().byTab[TAB]!.levels[ROOT]).toEqual({ kind: 'loading' })
-    actions.loaded(TAB, ROOT, LEVEL)
-    expect(getSnapshot().byTab[TAB]!.levels[ROOT]).toEqual({ kind: 'ready', level: LEVEL })
     const failure = new RemoteError('workspace-file/not-found', 'gone', { path: ROOT })
     actions.failed(TAB, ROOT, failure)
     expect(getSnapshot().byTab[TAB]!.levels[ROOT]).toEqual({ kind: 'failed', failure })
+    actions.loading(TAB, ROOT)
+    expect(getSnapshot().byTab[TAB]!.levels[ROOT]).toEqual({ kind: 'loading' })
+    actions.loaded(TAB, ROOT, LEVEL)
+    expect(getSnapshot().byTab[TAB]!.levels[ROOT]).toEqual({ kind: 'ready', level: LEVEL })
+  })
+
+  it('retains a loaded level during refresh and beside a refresh failure', () => {
+    const store = createFilesStore().create()
+    const { actions } = store
+    actions.start(TAB, ROOT)
+    actions.loaded(TAB, ROOT, LEVEL)
+    const cached = store.getSnapshot().byTab[TAB]!.levels[ROOT]
+    actions.loading(TAB, ROOT)
+    expect(store.getSnapshot().byTab[TAB]!.levels[ROOT]).toBe(cached)
+    const failure = new RemoteError('workspace-file/not-found', 'gone', { path: ROOT })
+    actions.failed(TAB, ROOT, failure)
+    expect(store.getSnapshot().byTab[TAB]!.levels[ROOT]).toEqual({ kind: 'ready', level: LEVEL, failure })
+    actions.loaded(TAB, ROOT, LEVEL)
+    expect(store.getSnapshot().byTab[TAB]!.levels[ROOT]).toEqual({ kind: 'ready', level: LEVEL })
   })
 
   it('toggles a directory in and out of the expanded set without touching its level', () => {
@@ -61,11 +71,10 @@ describe('createFilesStore', () => {
     expect(getSnapshot().byTab[TAB]!.expanded).toEqual([ROOT, child])
     actions.toggled(TAB, child)
     expect(getSnapshot().byTab[TAB]!.expanded).toEqual([ROOT])
-    // Collapsing keeps the listing, so reopening draws without another fetch.
     expect(getSnapshot().byTab[TAB]!.levels[child]).toEqual({ kind: 'ready', level: LEVEL })
   })
 
-  it('reset drops every level and keeps the expanded set', () => {
+  it('reset drops levels while keeping expansion, scroll, and the automatic setting', () => {
     const store = createFilesStore().create()
     const { actions } = store
     const getSnapshot = (): ReturnType<typeof store.getSnapshot> => store.getSnapshot()
@@ -74,8 +83,45 @@ describe('createFilesStore', () => {
     actions.loaded(TAB, ROOT, LEVEL)
     actions.toggled(TAB, child)
     actions.loaded(TAB, child, LEVEL)
+    actions.scrolled(TAB, 120)
+    actions.autoRefresh(TAB, false)
     actions.reset(TAB)
-    expect(getSnapshot().byTab[TAB]).toEqual({ root: ROOT, levels: {}, expanded: [ROOT, child], scrollTop: 0 })
+    expect(getSnapshot().byTab[TAB]).toEqual({ root: ROOT, levels: {}, expanded: [ROOT, child], scrollTop: 120, autoRefresh: false })
+  })
+
+  it('keeps the automatic setting independent for each tab', () => {
+    const store = createFilesStore().create()
+    const other = 'tab-2' as TabId
+    store.actions.start(TAB, ROOT)
+    store.actions.start(other, ROOT)
+    store.actions.autoRefresh(TAB, false)
+    expect(store.getSnapshot().byTab[TAB]!.autoRefresh).toBe(false)
+    expect(store.getSnapshot().byTab[other]!.autoRefresh).toBe(true)
+    store.actions.autoRefresh(TAB, true)
+    expect(store.getSnapshot().byTab[TAB]!.autoRefresh).toBe(true)
+  })
+
+  it.each(['removed', 'file'] as const)('drops cached descendants and expansion when a directory is %s', (replacement) => {
+    const store = createFilesStore().create()
+    const { actions } = store
+    const child = `${ROOT}/src`
+    const grandchild = `${child}/nested`
+    const sibling = `${ROOT}/src-other`
+    actions.start(TAB, ROOT)
+    actions.loaded(TAB, ROOT, { entries: [
+      { name: 'src', type: 'directory' }, { name: 'src-other', type: 'directory' },
+    ], truncated: false })
+    for (const path of [child, grandchild, sibling]) {
+      actions.toggled(TAB, path)
+      actions.loaded(TAB, path, LEVEL)
+    }
+    actions.loaded(TAB, ROOT, { entries: replacement === 'file'
+      ? [{ name: 'src', type: 'file' }, { name: 'src-other', type: 'directory' }]
+      : [{ name: 'src-other', type: 'directory' }], truncated: false })
+    const state = store.getSnapshot().byTab[TAB]!
+    expect(state.expanded).toEqual([ROOT, sibling])
+    expect(Object.keys(state.levels)).toEqual([ROOT, sibling])
+    expect(state.levels[sibling]).toEqual({ kind: 'ready', level: LEVEL })
   })
 
   it('remembers where the body is scrolled to', () => {

@@ -233,9 +233,10 @@ describe.skipIf(process.platform === 'win32')('terminal-bash real shell', () => 
     const child = /CHILD=(\d+)/.exec(output)?.[1]
     expect(child).toBeDefined()
     const pid = Number(child)
-    expect(() => process.kill(pid, 0)).not.toThrow()
+    expect(processIsRunning(pid)).toBe(true)
     await ctx.terminals.kill(agent, created.sessionId)
-    expect(() => process.kill(pid, 0)).toThrow()
+    // Linux can retain a stopped descendant as a zombie until its parent reaps it.
+    expect(processIsRunning(pid)).toBe(false)
   }, 10_000)
 
   it('quiesces a disowned same-session descendant after the shell exits naturally', async () => {

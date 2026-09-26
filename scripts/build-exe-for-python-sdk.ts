@@ -9,9 +9,12 @@
 import { spawn } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
 import { chmod, copyFile, cp, lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
 import { resolveLinuxNodePtyAddon, resolveWindowsNodePtyAddons } from './build-exe-for-python-sdk-native-pty.ts'
+import { copyOfficeSidecar, OFFICE_ASSET_IGNORES } from './build-exe-for-python-sdk-office.ts'
+import { preparePrimaryRuntime, smokePrimaryRuntime, type PrimaryRuntimeTarget } from './primary-runtime/prepare.ts'
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -398,7 +401,7 @@ class SingleExeBuild {
 
   /** Add the executable entry and pkg assets to the staged manifest. */
   async injectPkgConfig(): Promise<void> {
-    const patch = { bin: ENTRY_BIN, pkg: { assets: ASSET_GLOBS } }
+    const patch = { bin: ENTRY_BIN, pkg: { assets: ASSET_GLOBS, ignore: OFFICE_ASSET_IGNORES } }
     const manifestPath = join(this.staging, 'package.json')
     if (this.cli.dryRun) {
       console.log(`build-exe-for-python-sdk: [dry-run] patch ${manifestPath} with ${JSON.stringify(patch)}`)
@@ -418,7 +421,7 @@ class SingleExeBuild {
   /**
    * Package one target; SEA mode accepts one target per invocation.
    * @param target - the pkg target triple to build.
-   * @returns the executable and ripgrep sidecar paths, plus the macOS spawn helper path when required.
+   * @returns the executable, resource directories, ripgrep, and required macOS spawn helper paths.
    */
   async pack(target: Target): Promise<string[]> {
     const productBase = join(this.outDir, `${OUTPUT_BASENAME}-${target.platform}-${target.arch}`)
@@ -438,8 +441,26 @@ class SingleExeBuild {
     if (!this.cli.dryRun && !existsSync(product)) {
       throw new Error(`build-exe-for-python-sdk: product ${product} is missing after the pkg run; inspect ${this.outDir}.`)
     }
+    const office = `${productBase}-office`
+    if (this.cli.dryRun) {
+      console.log(`build-exe-for-python-sdk: [dry-run] copy Office dependency closure from ${this.staging} to ${office}`)
+    } else {
+      const platform = target.platform === 'macos' ? 'darwin' : target.platform === 'win' ? 'win32' : target.platform
+      const packages = await copyOfficeSidecar(this.staging, office, { platform, arch: target.arch })
+      console.log(`build-exe-for-python-sdk: copied ${packages.length} Office packages to ${office}`)
+    }
     const ripgrep = await this.copyRipgrepSidecar(target, product)
-    if (target.platform !== 'macos') return [product, ripgrep]
+    const resources = join(this.outDir, `${target.platform}-${target.arch}`)
+    const runtimeTarget = `${target.platform === 'macos' ? 'mac' : target.platform}-${target.arch}` as PrimaryRuntimeTarget
+    if (this.cli.dryRun) {
+      console.log(`build-exe-for-python-sdk: [dry-run] prepare Python and Office skills for ${runtimeTarget} in ${resources}`)
+    } else {
+      const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { version: string }
+      await preparePrimaryRuntime({ target: runtimeTarget, output: resources,
+        cache: join(tmpdir(), 'dsh-primary-runtime-downloads'), version })
+      smokePrimaryRuntime(join(resources, 'primary-runtime'))
+    }
+    if (target.platform !== 'macos') return [product, ripgrep, office, resources]
     const spawnHelper = `${product}-spawn-helper`
     const source = join(this.staging, 'node_modules', 'node-pty', 'prebuilds', `darwin-${target.arch}`, 'spawn-helper')
     if (this.cli.dryRun) {
@@ -448,7 +469,7 @@ class SingleExeBuild {
       await copyFile(source, spawnHelper)
       await chmod(spawnHelper, 0o755)
     }
-    return [product, ripgrep, spawnHelper]
+    return [product, ripgrep, spawnHelper, office, resources]
   }
 
   /** Copy the target ripgrep binary beside the executable so Node can spawn it outside pkg's virtual filesystem. */
@@ -538,6 +559,10 @@ class SingleExeBuild {
         console.log(`  ${path}`)
         continue
       }
+      if (statSync(path).isDirectory()) {
+        console.log(`  ${path}  (resource directory)`)
+        continue
+      }
       const megabytes = statSync(path).size / (1024 * 1024)
       console.log(`  ${path}  (${megabytes.toFixed(1)} MB)`)
     }
@@ -559,7 +584,10 @@ class SingleExeBuild {
     await mkdir(destDir, { recursive: true })
     for (const path of products) {
       const destination = join(destDir, basename(path))
-      await copyFile(path, destination)
+      if (statSync(path).isDirectory()) {
+        await rm(destination, { recursive: true, force: true })
+        await cp(path, destination, { recursive: true })
+      } else await copyFile(path, destination)
       await chmod(destination, statSync(path).mode & 0o777)
       console.log(`build-exe-for-python-sdk: synced ${destination}`)
     }

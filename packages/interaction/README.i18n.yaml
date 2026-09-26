@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/interaction/README.md
-README.md: 30955da1f7d3bfbf982e569b86b55ee0f9221381
-README.zh.md: 302a4511e63534cad678730d3ed4fb84830812d1
+/:
+  en: 58d959ac012a9bbf
+  zh: 79281fff8f4fe583
+/interaction-the-human-collaboration-plane:
+  en: 3feabaefdc19a9af
+  zh: dbbb782d5a9c5556
+/interaction-the-human-collaboration-plane/summary:
+  en: b3d2ced329e2ccec
+  zh: 852f0e5f4f526ab5
+/interaction-the-human-collaboration-plane/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/interaction-the-human-collaboration-plane/packages:
+  en: ccceebf8138e3e16
+  zh: fcb20d56fed52173
+/interaction-the-human-collaboration-plane/related-documentation:
+  en: cccdb31d52ad2938
+  zh: d63855e30e60cc6d
+/interaction-the-human-collaboration-plane/dev-note:
+  en: 5de1d6304e00c58f
+  zh: 8d8225361cfa29e5

@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-22-slot-type-chain-implementation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.md
-2026-07-22-slot-type-chain-implementation.md: 98585a42f71844594da4ada19d7438a7d8321702
-2026-07-22-slot-type-chain-implementation.zh.md: d1093537ccbc5ee5ff2dc18c234233ffca39879d
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat:
+  en: 43ed5b2dfd8043fc
+  zh: 04b6fdd0435a265a
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/problem:
+  en: 4f8d6891a8ba7061
+  zh: 5a619e562e00458d
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/decision:
+  en: a81cddbebc1a97a3
+  zh: aa57738c9f08c07e
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/decision/root-is-the-only-a-priori-slot:
+  en: 43b856b4a8cf371f
+  zh: cde298ab8b8a3815
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/decision/register-is-the-single-api-children-declaration-authorization-runtime-spec:
+  en: ce28268021a38b89
+  zh: 7802540e4ef04752
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/decision/component-props-four-shares-each-from-its-own-source-of-truth:
+  en: f3fca569fa0c5168
+  zh: 647a82662f6a887d
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/decision/the-chain-kind-entries-self-nominate-first-match-renders:
+  en: 56278be7f3688805
+  zh: 16602ffbf4baef85
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/decision/the-store-seat-framework-engine-registrant-schema:
+  en: 2645acc9d29c20ec
+  zh: a8a2fd293ef5da04
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/decision/inject-the-registrant-s-business-face-on-its-own-ctx:
+  en: 66b311fad441400a
+  zh: 34f031e7f04d29e6
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/decision/data-boundary-discipline:
+  en: 07b919360c8f65be
+  zh: 4c8a9915a2ed20af
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/decision/tree-context-and-the-renderer-contract:
+  en: d77ebd3f6b166194
+  zh: 57ba9fe864908d46
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/decision/type-chain-implementation-rulings:
+  en: 752bc30428dad374
+  zh: 3d729646468ecfde
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/consequences:
+  en: 07228332f3d3c227
+  zh: 32525e1972acf156
+/agent-note-the-slot-system-standard-single-register-four-props-shares-and-the-framework-store-seat/alternatives-considered:
+  en: 2bd28715f741ac04
+  zh: 8d6a0cb78a006533

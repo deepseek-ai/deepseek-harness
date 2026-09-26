@@ -1,0 +1,1456 @@
+.page {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.listPane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The mock's `.page-scroll` with `.automation-content` inside it: the content
+   column takes the whole scroll viewport so the mock's centered 960px column
+   reaches the scrollbar, while the heading, the filters, the search field, the
+   catalog notices, and the rows scroll as one region. */
+.pageScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  /* A 9px rail carries the 5px thumb inset 2px from the pane edge (rendered by
+     ui-theme styles/scrollbar.css). */
+  --dsh-scrollbar-width: 9px;
+  --dsh-scrollbar-thumb-border: 2px;
+}
+
+/* The Plugins page's centered column: the same 960px cap and
+   clamp(24-48px) inline / 48px bottom inset, so sibling first-level pages
+   share one content frame at every width. */
+.pageContent {
+  max-width: 960px;
+  margin: 0 auto;
+  /* Inline and bottom insets only: the 28px top inset belongs to the heading
+     row, which starts at the window's top edge. */
+  padding: 0 clamp(24px, 4vw, 48px) 48px;
+}
+
+/* The page name and the creation actions on one line. */
+.pageHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  /* The column's former top inset: the row starts at the window's top edge, so
+     the whole strip above the heading belongs to the row's own box. */
+  padding-top: 28px;
+  margin-bottom: 24px;
+}
+
+/* macOS hiddenInset titlebar: the Plugins page's head carries the frame's top
+   clearance above its own 28px inset, so both pages keep the same 76px total. */
+:global([data-platform='darwin']) .pageHeading {
+  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+}
+
+/* The first-level page title, on the Plugins page's own `pageTitle` step
+   (20px/28px/500): this page and that page are sibling first-level entries, so
+   their titles share one size. The theme carries no size token for this step,
+   which is why every first-level page states the same literal. */
+.pageHeading h1 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 500;
+}
+
+/* The Plugins toolbar: the heading's trailing group on its 16px gap. */
+.creationActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+}
+
+/* The Plugins toolbar's Add-plugin step: a 32px capsule with the 13px label. */
+.newButton {
+  height: 32px;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 0 12px;
+  border-radius: 16px;
+}
+
+/* The mock's `.list-tools`: the one row of filter tabs, 8px between chips and
+   20px between the groups, with the list 14px below. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 14px;
+}
+
+.filterTabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+/* The mock's `.tab`: the filter chip's 28px box, 10px sides, 14px radius, and
+   the mock's 14px label. The selected chip takes the mock's `--hover` fill at
+   the chip's own weight instead of the atom's bordered capsule. */
+.filterTab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filterTab:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.filterTabActive {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The mock's `.searchbox`: the 40px field on the mock's 4px/12px inset, the
+   neutral hairline, the 10px radius, and the mock's `--muted` leading icon. The
+   mock brightens the border on hover and takes the brand stroke on focus
+   rather than drawing a ring around the control. */
+.searchField {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  margin: 0 0 16px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  transition: border-color 0.15s;
+}
+
+.searchField:hover {
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.searchField:focus-within {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+/* The search atom's own box would double the field's hairline, so the wrapper
+   owns the border and the atom keeps only its leading icon and input. */
+.searchField > :first-child {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.searchField > :first-child:focus-within {
+  border-color: transparent;
+}
+
+.searchField > :first-child svg {
+  width: 14px;
+  height: 14px;
+}
+
+.searchField input::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
+.searchField input:focus-visible {
+  outline: none;
+}
+
+/* The custom right-side button owns clearing the search field. */
+.searchField input::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* The mock's `.searchbox .icon-btn`: the inline clear control keeps the 28px
+   target and pulls back into the field's 12px inset. */
+.searchClear {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-right: -6px;
+  padding: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.searchClear svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The mock's `#rule-list`: the catalog notices and the rows share one column
+   with no box of their own. */
+.list {
+  display: block;
+}
+
+/* The Plugins page's `.cards` column: 2px between rows. */
+.listRows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The row's hover surface spans the page column, flush with the search
+   field's edges; the 8px inset keeps the content inside it. */
+.row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  height: auto;
+  padding: 8px;
+  border-radius: 12px;
+  text-align: left;
+  white-space: normal;
+}
+
+.row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.rowGlyph {
+  flex: none;
+  width: 16px;
+  height: 20px;
+  margin-top: 2px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowContent {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The mock's `.rule-row h3`: the primary line at the 500 weight and the mock's
+   23px leading, on one line in place of the mock's wrapping heading. */
+.rowTitle {
+  overflow: hidden;
+  font-weight: 500;
+  line-height: 23px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The mock's `.rule-row .trigger-line`: one 13px summary line 2px under the
+   name. Status, frequency, and next time stay as separate inline spans. */
+.rowSummary {
+  display: block;
+  margin-top: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 21px;
+  overflow-wrap: anywhere;
+}
+
+.metadata {
+  color: inherit;
+  font-size: 13px;
+  line-height: 21px;
+  overflow-wrap: anywhere;
+}
+
+.metadata + .metadata::before {
+  content: ' · ';
+  padding: 0 2px;
+}
+
+.selectedRow {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* An ended task reads dimmer as a whole row — its status word is gone, so the
+   lighter ink is what marks it — and returns to the usual steps while hovered
+   or selected. */
+.endedRow .rowTitle {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.endedRow .rowSummary {
+  color: var(--dsw-alias-label-caption);
+}
+
+.endedRow:hover .rowTitle,
+.endedRow.selectedRow .rowTitle {
+  color: inherit;
+}
+
+.endedRow:hover .rowSummary,
+.endedRow.selectedRow .rowSummary {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The mock's `.notice`: the catalog loading and failure text keeps the caption
+   size and the mock's 20px leading instead of the host's inherited 16px, on the
+   mock's surface box with its 12px/14px padding, 9px gap, top alignment, 10px
+   radius, and 20px below. The mock's page reset zeroes the other sides; this
+   module owns that reset for the `<p>` form of the same class. */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--dsw-specific-sidebar-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.notice p {
+  flex: 1;
+  margin: 0;
+}
+
+/* The centered state every panel without content shares: empty, deleted,
+   loading, and failure alike, on tertiary 14px/400 text with a caption-ink
+   glyph and no bold step. The list page renders its heading as an h2, the
+   others as an h3 or the failure's alert line, so all ride one declaration.
+   The children space themselves with their own margins instead of a container
+   gap. */
+.empty {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 14px;
+}
+
+.empty h2,
+.empty h3,
+.empty .emptyTitle,
+.empty p {
+  margin: 0;
+}
+
+.empty h2,
+.empty h3,
+.empty .emptyTitle {
+  margin-bottom: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 400;
+}
+
+/* The mock's `.empty .icon`: the leading glyph keeps its 24px box from the
+   render and takes the mock's 12px below, one ink step lighter than the box. */
+.emptyGlyph {
+  margin-bottom: 12px;
+  color: var(--dsw-alias-label-caption);
+}
+
+/* The mock's `.empty h3 + .btn`: the empty state's action keeps the mock's 16px
+   above. */
+.emptyAction {
+  margin-top: 16px;
+}
+
+/* The mock's `.detail` override: the panel's left edge is the `l4` hairline,
+   while the width stays the repository's 0.5px invariant. */
+.detail {
+  --detail-gutter: 24px;
+  position: relative;
+  display: flex;
+  flex: 0 0 47%;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 0.5px solid var(--dsw-alias-border-l4);
+  background: var(--dsw-alias-bg-base);
+}
+
+/* The panel takes focus programmatically for reader context (tabIndex -1);
+   without a preceding pointer event the browser would draw its default ring
+   around the whole region. */
+.detail:focus-visible {
+  outline: none;
+}
+
+/* The task tab is the whole pane, so its detail owns the pane's height. */
+.tabBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tabBody > .detail {
+  flex: 1 1 auto;
+  border-left: 0;
+}
+
+/* A tab without a task holds only its centered state, so the state takes the
+   pane's whole height and centers on both axes. */
+.tabBody > .empty {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+/* In the right-panel task tab the pane's own chrome sits above this bar, so the
+   bar states the cross size that lands its rule on the conversation header's
+   rule; the Tasks page's own detail column keeps the mock's 44px without a pane
+   above it. */
+.tabBody > .detail .detailTabsBar {
+  height: 37px;
+  min-height: 37px;
+}
+
+.tabBody > .detail .detailTab {
+  padding-bottom: 9px;
+}
+
+/* Centers the strip-end 28px icon controls on the pane strip's own controls
+   above: dockkit `.strip` keeps a 6px end inset, so the actions give back all
+   of the bar's stepped gutter beyond those 6px at every breakpoint. */
+.tabBody > .detail .detailActions {
+  margin-right: calc(6px - var(--detail-gutter));
+}
+
+/* The mock's `.detail-heading`: the name control is the first content of the
+   scrolling rule view, directly above the next-run line and with no separator
+   of its own between them. */
+.detailHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+/* The mock's `.edit-name`: the stored task name as one borderless line that
+   underlines only on hover and focus. The detail pane's primary text at 500 weight. */
+.editName {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 500;
+}
+
+.editName:hover {
+  box-shadow: 0 1px var(--dsw-alias-border-l3);
+}
+
+.editName:focus {
+  box-shadow: 0 1px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+}
+
+/* An ended task's stored name as plain text on the control's step, padded to
+   the control's 32px height so the header keeps one figure. */
+.readonlyName {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 2px 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+/* The muted line under the title, inside the scrolling area and without a
+   separator or leading glyph; 13px on the mock's 20px step and its `--muted`
+   (`label-tertiary`) colour. */
+.nextRun {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  margin-bottom: 20px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.nextRun p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The countdown beside the absolute next run reads in the same color as the
+   stamp it follows, one sentence in one step. */
+.nextRunRelative {
+  color: inherit;
+}
+
+/* The clock glyph before the task tab chip's text; the chip's title row
+   centres it on the text's line and spaces it, as the files chip does. Its ink
+   is pinned so it does not follow the chip's selected/unselected text color. */
+.tabTitleIcon {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The panel's top strip is the mock's `.detail-titlebar`: the detail views on the
+   left, their actions at its right end, on the bar's 44px height, 20px gap, and
+   `--detail-gutter` inset; the right-panel placement below states 37px so its rule
+   meets the conversation header's. The actions' -8px inset matches
+   `.detail-actions`, and the rule's token and 0.5px width are the header's own. */
+.detailTabsBar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 var(--detail-gutter);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.detailTabs {
+  display: flex;
+  flex: 1 1 auto;
+  /* The conversation header's `.tabs` strip: the same 36px gap with the tabs
+     bottom-aligned, and the padding/margin pair reserving the selected tab's
+     1px underline overhang so `overflow-x` never reads it as a second axis. */
+  align-self: flex-end;
+  gap: 36px;
+  min-width: 0;
+  padding-bottom: 1px;
+  margin-bottom: -1px;
+  overflow-x: auto;
+}
+
+.detailActions {
+  flex: none;
+  align-items: center;
+  margin-right: -8px;
+}
+
+/* The strip's icon controls are the 28px square targets other header icon
+   buttons use, not the sm capsule's 0 10px sides, on the header icon buttons'
+   quiet tertiary ink. */
+.detailIconButton {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 13/16 text with 13px below it, the Tasks page's own 44px bar, so the label
+   reads vertically centered above the strip's 0.5px rule; the embedded task
+   tab's copy of this strip states its own step. */
+.detailTab {
+  flex: none;
+  position: relative;
+  padding: 0 0 13px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.detailTab::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: transparent;
+}
+
+.detailTab[aria-selected="true"] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.detailTab[aria-selected="true"]::after {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+/* The theme's WebKit bar takes layout space: the reservation keeps the content
+   box at one width while a transient status row or the footer's session notice
+   changes this region's height. The widened rail insets the thumb from the
+   panel edge, as on the list pane. */
+.detailScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px var(--detail-gutter) 28px;
+  scrollbar-gutter: stable;
+  --dsh-scrollbar-width: 9px;
+  --dsh-scrollbar-thumb-border: 2px;
+}
+
+.detailRecords {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  scrollbar-gutter: auto;
+}
+
+.detailRecords > .notice {
+  margin: 24px var(--detail-gutter) 0;
+}
+
+.recordsPanel:not([hidden]),
+.deliveryHistory {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.retentionEnd {
+  flex: none;
+  padding: 0 var(--detail-gutter) 16px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.retentionLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.retentionInfo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.retentionInfo:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.retentionInfo:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+.retentionRule {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.retentionRule p {
+  margin: 0;
+}
+
+.retentionRule p + p {
+  margin-top: 6px;
+}
+
+/* The mock puts the border on the rows group, not on the card that carries the
+   `运行时间` heading. */
+.ruleCard {
+  margin-top: 28px;
+}
+
+/* The mock's `.automation-detail .form-section h3`: the `运行时间` heading is
+   13px tertiary ink, regular weight, and the mock's 20px leading. The 6px
+   lead-in nudges it off the card's rounded edge, as the hint below. */
+.ruleCard h3 {
+  margin: 0 0 8px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.ruleRows {
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 16px;
+}
+
+/* Escape-key guard around a dropdown: the wrapper takes no box of its own, so
+   the menu keeps its flex position while the guard sees the portaled list. */
+.menuGuard {
+  display: contents;
+}
+
+/* The searchable zone inventory is intentionally shorter than a general menu:
+   recent choices stay visible without letting the global list dominate the detail. */
+.zoneMenu.zoneMenu {
+  height: min(420px, calc(100dvh - 48px));
+  max-height: min(420px, calc(100dvh - 48px));
+}
+
+/* A stronger rule makes the unlabeled recent block read as a distinct section. */
+.zoneMenu [role='separator'] {
+  height: 0.5px;
+  margin: 6px 4px;
+  background: var(--dsw-alias-border-l3);
+}
+
+.ruleRow,
+.ruleRowMenu {
+  display: flex;
+  width: 100%;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.ruleRow {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+}
+
+/* The Escape guard is `display: contents`, so a menu row is the last DOM child
+   only through that wrapper; both selectors reach the rendered last row. */
+.ruleRows > :last-child,
+.ruleRows > :last-child > .ruleRowMenu {
+  border-bottom: 0;
+}
+
+.ruleLabel {
+  flex: none;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* The mock's `.field-control`: every value control keeps its own box on the
+   rows container's 12px padding, so the chevron, the native time control, the
+   interval input, and the Weekday pills share one right edge. */
+.ruleControl {
+  margin-right: 0;
+}
+
+.ruleRows .ruleControl:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+/* The menu trigger is the whole row so the row stays one click target, so the
+   value and the chevron sit in this face, which carries the hover fill and the
+   focus ring instead of the trigger's full-width box. */
+.ruleValue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Every value control shares the interval stepper's capsule radius: 18px caps
+   at half of this 32px face, so hover fills read as one pill family. */
+.ruleValueFace {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 18px;
+  transition: background 0.15s;
+}
+
+.ruleValue:not(:disabled):hover .ruleValueFace {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* The trigger's own ring would box the row label as well; the value face
+   carries the mock's 1px-offset brand ring instead. */
+.ruleRows .ruleValue:focus-visible {
+  outline: none;
+}
+
+.ruleValue:focus-visible .ruleValueFace {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.ruleValueFace > svg {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* An ended task keeps its values readable: tertiary rather than dimmed ink. */
+.ruleValue:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.ruleCurrent {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zoneSearch {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  outline: none;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.zoneSearch:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.ruleWeekdays {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+/* The monthly date grid reads as a calendar month: seven fixed columns on the
+   weekday pills' 4px gap, right-aligned under the row like the weekday pills. */
+.ruleMonthDays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(36px, max-content));
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+/* Stretched pills would keep their day number on the left edge, so each
+   centers its number in its cell. */
+.ruleMonthDays > * {
+  justify-self: stretch;
+  justify-content: center;
+}
+
+.ruleInput {
+  flex: 0 1 58%;
+  min-width: 0;
+  padding: 5px 8px;
+  margin-right: 0;
+  border: none;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  text-align: right;
+  transition: background 0.15s;
+}
+
+.ruleInput:not(:disabled):hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* An ended task keeps its values readable: tertiary rather than dimmed ink. */
+.ruleInput:disabled {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The elapsed-interval row keeps the quantity and its unit on one right-aligned
+   line, and the quantity sits in the settings font-size stepper pill
+   (ui-theme FontSizeRow.module.css `.stepper`): a 36px 18px-radius module-fill
+   pill whose right-edge arrow column shows on hover or focus, with the unit
+   word outside the pill. */
+.ruleInterval {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ruleIntervalStepper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  height: 36px;
+  border-radius: 18px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+/* The input sizes the pill from its digit count (`--interval-digits`, set by
+   the component), and the 26px side padding keeps every digit clear of the
+   arrow column while the value stays pill-centered. */
+.ruleIntervalInput {
+  flex: 0 1 auto;
+  box-sizing: border-box;
+  width: calc(var(--interval-digits, 1) * 1ch + 52px);
+  min-width: 72px;
+  height: 100%;
+  padding: 0 26px;
+  appearance: textfield;
+  border-radius: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* The pill replaces the native field chrome: no spin buttons, no hover fill of
+   its own, and no focus ring — the caret and the revealed arrows mark focus,
+   as in the settings stepper. */
+.ruleIntervalInput::-webkit-outer-spin-button,
+.ruleIntervalInput::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.ruleIntervalInput:not(:disabled):hover {
+  background: transparent;
+}
+
+.ruleRows .ruleIntervalInput:focus-visible {
+  outline: none;
+}
+
+.ruleIntervalArrows {
+  position: absolute;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+}
+
+.ruleIntervalStepper:hover .ruleIntervalArrows,
+.ruleIntervalStepper:focus-within .ruleIntervalArrows {
+  opacity: 1;
+}
+
+.ruleIntervalArrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 12px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 75%, transparent);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.ruleIntervalArrow:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.ruleIntervalArrow:disabled {
+  color: var(--dsw-alias-label-caption);
+  cursor: default;
+}
+
+.ruleIntervalUnit {
+  flex: none;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+}
+
+/* The Date and Time rows open their picker from a read-only value button, which
+   keeps the input's own hover fill, focus ring, and disabled tone. */
+.pickerTrigger {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.pickerTrigger:disabled {
+  cursor: default;
+}
+
+.pickerIcon {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The 6px lead-in matches the card heading above, off the rounded edge. */
+.ruleHint {
+  margin: 8px 0 0 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* The cron hint doubles as the row's rejection line, so its unreadable-expression
+   state takes the save failure's error color in place of a second message. */
+.ruleHintError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* The mock's `.automation-detail .instruction`: the editable instruction box on
+   the panel's 12px padding, 10px radius, and 24px line rhythm, with the neutral
+   `--border` hairline that only the hover state brightens. The mock inherits the
+   box's 14px text from its page base; the right-Sidebar task tab has no such
+   base, so the size is stated here rather than inherited. */
+.instruction {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  /* The box keeps its 112px resting height and grows with the instruction up
+     to 160px, where its own scrollbar takes over; without field-sizing support
+     it stays at the resting height and scrolls. */
+  min-height: 112px;
+  max-height: 160px;
+  field-sizing: content;
+  margin: 0;
+  padding: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 16px;
+  outline: 0;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 24px;
+  resize: none;
+  transition: border-color 0.15s;
+  /* The inset thumb and the vertical track margin keep the bar inside the
+     box's rounded corners (rendered by ui-theme styles/scrollbar.css). */
+  --dsh-scrollbar-width: 9px;
+  --dsh-scrollbar-thumb-border: 2px;
+  --dsh-scrollbar-track-margin: 12px;
+}
+
+.instruction:hover {
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.instruction:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+/* An ended task's stored instruction reads as plain text: no box and no edit
+   affordance, on the field's own 14px/24px step. */
+.readonlyPrompt {
+  margin: 0;
+  font-size: 14px;
+  line-height: 24px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Delivery records follow the design mock: the clock glyph owns its own column
+   and every record line starts at the text column's left edge. The mock's
+   `.history-row` inherits its 14px body text and 22px leading from the page
+   base; the right-Sidebar task tab has no such base, so the row states the
+   body step here rather than leaving it to the host. */
+.delivery {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 -8px;
+  padding: 14px 8px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* The scroll region's own 24px lead-in already spaces the first record; the
+   row's 14px on top of it read as a hole above the list. */
+.delivery:first-of-type {
+  padding-top: 0;
+}
+
+/* A timeline hairline joins consecutive rows' clock glyphs in place of row
+   separators: each row draws its own two segments 6px clear of its glyph, on
+   the glyph's centre (8px row padding + half the 16px glyph). The first row
+   omits the segment above its glyph and the last the one below, so a sole
+   record shows no line at all. The glyph sits 20px into a row (14px padding +
+   6px glyph margin), or 6px into the unpadded first row. */
+.delivery::before,
+.delivery::after {
+  position: absolute;
+  /* The glyph centre (8px row padding + half the 16px glyph) minus half the
+     hairline's own 0.5px, so the line sits exactly on the centre. */
+  left: 15.75px;
+  width: 0.5px;
+  background: var(--dsw-alias-border-l3);
+}
+
+.delivery:not(:first-of-type)::before {
+  content: '';
+  top: 0;
+  height: 14px;
+}
+
+.delivery:not(:last-of-type)::after {
+  content: '';
+  top: 42px;
+  bottom: 0;
+}
+
+.delivery:first-of-type:not(:last-of-type)::after {
+  top: 28px;
+}
+
+.deliveryGlyph {
+  flex: none;
+  margin-top: 6px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.deliveryBody {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.deliveryHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.deliveryTime {
+  display: block;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+}
+
+.confirmTitle {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Instruction text sits in the row's text column at the mock's 13px/22px and
+   shows two lines until its toggle expands it. */
+.savedPrompt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin: 6px 0 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 22px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.savedPrompt[data-expanded] {
+  display: block;
+  -webkit-line-clamp: none;
+  line-clamp: none;
+}
+
+/* The negative inline margin offsets the toggle's own padding, so its label
+   starts at the text column's left edge. */
+.savedPromptToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 2px 0 0 -6px;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.savedPromptToggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.savedPromptToggle:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+.detailActions,
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detailHeader {
+  flex-shrink: 0;
+}
+
+/* The original-Session control is a seat inside the strip's action cluster, so
+   it keeps the strip's own figure and never scrolls with the detail body. */
+.detailContext {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-width: 0;
+  max-width: 200px;
+}
+
+/* The staged-edit bar: it appears under the detail tab strip only while the
+   Run time draft differs from the stored task. */
+.saveFooter {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 20px var(--detail-gutter);
+  border-top: 0.5px solid var(--dsw-alias-border-l4);
+  background: var(--dsw-alias-bg-base);
+}
+
+.saveFooter > button {
+  height: 32px;
+  font-size: 13px;
+}
+
+.saveFooter > :last-child {
+  margin-right: -8px;
+}
+
+.saveNotice {
+  margin-right: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+/* One staged save's localized failure: it can name the task name, the
+   instruction, or a timing row, so it leads the bar that submits all three and
+   keeps that bar's gutter. */
+.saveFailure {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 12px var(--detail-gutter) 0;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.linkedSession {
+  display: flex;
+  flex: 0 1 auto;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  /* The strip's icon buttons are 28px `sm` capsules (14px), so this pill keeps
+     the same corner. */
+  border-radius: 14px;
+  text-align: left;
+}
+
+.linkedSession:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+/* The notice keeps its own line under the strip and above the staged save bar. */
+.detailNotice {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0 var(--detail-gutter) 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  background: var(--dsw-alias-bg-base);
+}
+
+.linkedSessionLabel {
+  flex-shrink: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+}
+
+.linkedSessionTarget {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The strip shows the control's label; the Session's own name stays in the DOM as
+   the control's accessible description, while the visible button carries the
+   hover title. */
+.linkedSessionName {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.confirmDialog {
+  box-sizing: border-box;
+  max-height: calc(100dvh - 48px);
+}
+
+.confirmContent {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* The confirmation dialog's own surface is elevated, so the bar drawn against
+     it takes that rung's colours; the sheet's base-surface scrollers keep the
+     shell's pair. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.confirmDialog > :last-child {
+  flex-shrink: 0;
+}
+
+.deleteButton {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.page :focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+/* Text fields match :focus-visible on pointer focus too, so the page ring
+   would flash on every click into them; their own underline and border cues
+   already mark focus, so they opt out of the ring. */
+.page .editName:focus-visible,
+.page .instruction:focus-visible {
+  outline: none;
+}
+
+/* The mock's `.automation-detail` gutter steps: 24px by default, 20px from the
+   `1100px` breakpoint down, and 16px at the narrowest one. */
+@media (max-width: 1100px) {
+  .detail {
+    --detail-gutter: 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  .hasDetails .listPane {
+    display: none;
+  }
+
+  .detail {
+    flex-basis: 100%;
+    border-left: 0;
+  }
+
+  .detailScroll {
+    padding-top: 20px;
+  }
+
+  .saveNotice {
+    display: none;
+  }
+}
+
+@media (max-width: 400px) {
+  .detail {
+    --detail-gutter: 16px;
+  }
+
+  /* The mock narrows the title strip's gap at this width and closes the
+     actions' group gap between its icon buttons. */
+  .detailTabsBar {
+    gap: 16px;
+  }
+
+  .detailActions {
+    gap: 0;
+  }
+}

@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/fs/fs-local/README.md
-README.md: e781abd2032868a3768a41eb01ce5aac52f8c835
-README.zh.md: bf21f92a48c7c9d804908ee8bc25b2be8daa8967
+/:
+  en: ce32f58ec51489e8
+  zh: d12c4665bd72e452
+/deepseek-ai-dsh-fs-local:
+  en: 4eb75bc6b409d069
+  zh: 645121e948423a0f
+/deepseek-ai-dsh-fs-local/summary:
+  en: 50148e0873cff07b
+  zh: e2b9014755eb7351
+/deepseek-ai-dsh-fs-local/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-fs-local/use-this-package:
+  en: c49313aeb4737eca
+  zh: 7b80272bbf8404e3
+/deepseek-ai-dsh-fs-local/use-this-package/when-to-choose-it:
+  en: 1bceab0cdb2e8f8e
+  zh: 7d14d0c1ad90e9e2
+/deepseek-ai-dsh-fs-local/use-this-package/minimal-configuration:
+  en: 60678d0c5fbf3c56
+  zh: 1698a9645c12578b
+/deepseek-ai-dsh-fs-local/use-this-package/what-you-can-do:
+  en: cff37f0ccf4cff2a
+  zh: d26ce57570880789
+/deepseek-ai-dsh-fs-local/understand-the-implementation:
+  en: 6ffc93e09381bd3d
+  zh: 57c3192c26a080ef
+/deepseek-ai-dsh-fs-local/understand-the-implementation/design-concept:
+  en: 197876fc5f05cdc3
+  zh: a6e7a9eb921d394b
+/deepseek-ai-dsh-fs-local/understand-the-implementation/source-map:
+  en: e69aa171af80b6b4
+  zh: 5ebf652092c70aad
+/deepseek-ai-dsh-fs-local/understand-the-implementation/write-path:
+  en: eefa5c3b69af4614
+  zh: d5ac6b2e14efe268
+/deepseek-ai-dsh-fs-local/understand-the-implementation/edit-path:
+  en: 1e130ab16c931821
+  zh: b3690b8e13292027
+/deepseek-ai-dsh-fs-local/understand-the-implementation/ownership-and-invariants:
+  en: f094e3ea30517cb4
+  zh: b213bb41b7a0201d
+/deepseek-ai-dsh-fs-local/further-exploration:
+  en: 876ca2a87a361f41
+  zh: d2855979b1d2bda9
+/deepseek-ai-dsh-fs-local/model-experience:
+  en: 72536bc0452cccaa
+  zh: 298f94b78e8364f4
+/deepseek-ai-dsh-fs-local/model-experience/kv-cache-effect:
+  en: 40294c1c31b74824
+  zh: 0857e9b4dd363e0a
+/deepseek-ai-dsh-fs-local/known-limitations-and-deferred-work:
+  en: 653e3d81d6a5f82d
+  zh: 633f47afeb0da9ba
+/deepseek-ai-dsh-fs-local/known-limitations-and-deferred-work/dev-note:
+  en: 9979632783da7b78
+  zh: c42c1feec2905268

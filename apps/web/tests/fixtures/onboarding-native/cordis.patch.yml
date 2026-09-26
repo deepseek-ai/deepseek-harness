@@ -1,0 +1,3 @@
+- id: ui-settings-models
+  config:
+    credentialOnboarding: false

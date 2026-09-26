@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconChevronLeftOutline14, IconChevronRightOutline14,
+  IconChevronLeftOutlineRegular, IconChevronRightOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './AttachmentRail.module.css'
 
@@ -32,7 +32,7 @@ const WHEEL_LINE_PX = 16
 function pageBehavior(): ScrollBehavior {
   // jsdom (the unit lane) implements no matchMedia despite lib.dom's
   // non-optional typing; the optional call keeps that lane on the default.
-  const matchMedia = (window as unknown as { matchMedia?: Window['matchMedia'] }).matchMedia
+  const matchMedia = (window as { matchMedia?: Window['matchMedia'] }).matchMedia
   return matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
 }
 
@@ -142,7 +142,7 @@ export function AttachmentRail<T extends AttachmentRailItem>({ items, labels, re
           aria-label={labels.scrollLeft}
           onClick={() => { page(-1) }}
         >
-          <IconChevronLeftOutline14 />
+          <IconChevronLeftOutlineRegular />
         </button>
       )}
       <div
@@ -163,7 +163,7 @@ export function AttachmentRail<T extends AttachmentRailItem>({ items, labels, re
           aria-label={labels.scrollRight}
           onClick={() => { page(1) }}
         >
-          <IconChevronRightOutline14 />
+          <IconChevronRightOutlineRegular />
         </button>
       )}
     </div>

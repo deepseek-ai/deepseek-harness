@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-17-one-send-one-turn.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-07-17-one-send-one-turn.md
-2026-07-17-one-send-one-turn.md: 71ea5d23c303a2e5de472ceabf9868364d916ab9
-2026-07-17-one-send-one-turn.zh.md: 8478f3fb35698087873b39773f8997ec33832f2a
+/agent-note-remove-implicit-batching-from-ordinary-sends:
+  en: 5376ddae6e8cf5b9
+  zh: 1dae892f25da755e
+/agent-note-remove-implicit-batching-from-ordinary-sends/problem:
+  en: ed05e7ef01abfafc
+  zh: 40293ad57c00f902
+/agent-note-remove-implicit-batching-from-ordinary-sends/decision:
+  en: 354fbb4e6a776538
+  zh: c78879212400bf0f
+/agent-note-remove-implicit-batching-from-ordinary-sends/alternatives-considered:
+  en: f944e18c49b30b4c
+  zh: cfcc0b18ce94f37c
+/agent-note-remove-implicit-batching-from-ordinary-sends/verification:
+  en: 9f75f226ac06ba1f
+  zh: 2ae17eda85a56324
+/agent-note-remove-implicit-batching-from-ordinary-sends/consequences:
+  en: afb9764a5345a188
+  zh: 10ee27c54cbdbbdb

@@ -1,0 +1,31 @@
+:root {
+  color-scheme: light;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: #0f1115;
+  background: transparent;
+}
+* { box-sizing: border-box; }
+body { margin: 0; height: 100vh; display: grid; place-items: center; isolation: isolate; }
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: rgb(0 0 0 / 24%); }
+main { width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: 22px 24px 24px; border-radius: 24px; background: #fff; box-shadow: 0 0 1px rgb(0 0 0 / 20%), 0 0 4px rgb(0 0 0 / 2%), 0 12px 32px rgb(0 0 0 / 8%); }
+header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+main:focus { outline: none; }
+h1 { margin: 0; min-height: 28px; font-size: 16px; font-weight: 500; line-height: 24px; overflow-wrap: anywhere; }
+p { margin: 0; font-size: 14px; line-height: 22px; white-space: pre-wrap; overflow-wrap: anywhere; }
+#actions { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; position: sticky; bottom: 0; background: #fff; }
+button { min-height: 44px; padding: 9px 16px; border: 0; border-radius: 12px; font-family: inherit; font-size: 14px; font-weight: 500; line-height: 22px; cursor: pointer; }
+.primary { background: #0f1115; color: #fff; }
+.secondary { background: #f5f5f5; color: inherit; }
+.close { display: grid; place-items: center; flex: none; width: 28px; min-height: 28px; padding: 7px; border-radius: 50%; background: transparent; }
+.close img { width: 14px; height: 14px; }
+button:hover { filter: brightness(0.95); }
+button:focus-visible, summary:focus-visible, pre:focus-visible { outline: 2px solid #4d6bfe; outline-offset: 3px; }
+details { margin-top: 12px; font-size: 13px; line-height: 20px; }
+summary { cursor: pointer; color: #5b6472; }
+pre { margin: 8px 0 0; padding: 10px; max-height: min(180px, 30vh); overflow: auto; border-radius: 8px; background: #f5f5f5; font: 12px/18px monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+button:disabled { opacity: 0.5; cursor: default; }
+[hidden] { display: none !important; }
+body.update-dialog { opacity: 0; transition: opacity 150ms ease; }
+body.update-dialog.visible { opacity: 1; }
+@starting-style { body.update-dialog.visible { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { body.update-dialog { transition: none; } }

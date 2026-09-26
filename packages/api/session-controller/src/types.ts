@@ -1,14 +1,14 @@
 /** Browser-safe request, result, and lifecycle vocabulary for the Session Remote service. */
+import type { NativeFileApplication } from '@deepseek-ai/dsh-native-command/types'
 
 import type {
   AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
 } from '@deepseek-ai/dsh-attachment'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { TextBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
-import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
@@ -49,10 +49,24 @@ export interface SessionListMetadata {
   readonly lastPromptAt: number | null
 }
 
-/** Every available cached wire value used as partial, possibly stale Session-list hints. */
+/**
+ * Every available wire value a Session-list row carries as partial, possibly
+ * stale hints. `kind` and `asOfSeq` are independent facts: `kind` says which
+ * sequence space `asOfSeq` belongs to, and therefore how a client may merge
+ * the block; `asOfSeq` is the producer's watermark in that space.
+ */
 export interface SessionProjectionHints {
+  /**
+   * `sequenced`: the Host's live registry produced the block for an attached
+   * Session, so `asOfSeq` is comparable with baselines and frames of the same
+   * connection. `cached`: a header-only listing viewed the block from the
+   * persisted projection cache, so `asOfSeq` is the stored record's own
+   * watermark and must not be compared with the connected Session's values.
+   */
+  readonly kind: 'cached' | 'sequenced'
+  /** Watermark of the block in the sequence space named by `kind`. */
   readonly asOfSeq: number
-  /** Provider-validated values present in the cache; omitted keys remain unknown. */
+  /** Provider-validated values present in the block; omitted keys remain unknown. */
   readonly values: SessionProjectionValues
 }
 
@@ -143,7 +157,7 @@ export interface ModelCatalogFailure {
 /** Host-generation model catalog and the default used by unconfigured Sessions. */
 export interface ModelCatalog {
   readonly default: ModelSelection
-  /** Provider routes currently able to serve a request, including empty catalogs. */
+  /** Provider routes with at least one currently available catalog model. */
   readonly routableProviders: readonly string[]
   readonly groups: readonly ModelProviderGroup[]
   readonly failures: readonly ModelCatalogFailure[]
@@ -154,13 +168,15 @@ export type QueueAction =
   | {
     readonly kind: 'edit'
     /** Non-empty text-only replacement content. */
-    readonly content: readonly ContentBlock[]
+    readonly content: readonly TextBlock[]
   }
   | { readonly kind: 'remove' }
   | { readonly kind: 'steer' }
 
 /** One Session list entry. */
 export interface SessionSummary {
+  /** Whether this Session currently owns a live Agent. */
+  readonly agentAvailable: boolean
   readonly sessionId: SessionId
   readonly updatedAt: number
   readonly running: boolean
@@ -185,12 +201,16 @@ export const SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS = 240
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
+    'session/provider-credentials-unavailable': Record<string, never>
+    'session/provider-models-unavailable': { readonly provider: string }
     'session/model-unavailable': { readonly provider: string; readonly model: string }
     'session/conflict': {
       readonly sessionId: SessionId
       readonly requestedCwd: string
       readonly existingCwd?: string
     }
+    'session/projections-unavailable': Record<string, never>
+    'session/writer-held': { readonly sessionId: SessionId }
     'session/agent-busy': { readonly reason: string }
     'session/invalid-time-zone': { readonly value: string }
     'session/workspace-attach-failed': { readonly sessionId: SessionId; readonly workspaceId: string }
@@ -300,6 +320,7 @@ export interface SessionRenameValue {
 /** Session fork request. */
 export interface SessionForkRequest {
   readonly sessionId: SessionId
+  /** Exact inclusive source event seq; omission selects the latest completed-turn prefix. */
   readonly atSeq?: number
 }
 
@@ -362,6 +383,8 @@ export interface SessionCancelValue {
 export interface SessionOpenWorkspacePathRequest {
   /** File-manager navigation when requested; omission uses the default application. */
   readonly action?: 'reveal'
+  /** Registered application identifier; ignored for reveal. Omission preserves the operating system default. */
+  readonly application?: string
   /** Path after best-effort Session workspace resolution, in Host filesystem syntax. */
   readonly path: string
 }
@@ -388,8 +411,16 @@ export type SessionAddress =
     readonly kind: 'subagent'
     readonly parentSessionId: SessionId
     readonly childSessionId: SessionId
-    readonly mode: 'one-shot' | 'continuable'
+    readonly mode: 'one-shot' | 'continuable' | 'unknown'
   }
+
+/** One non-activating Session projection read. */
+export interface SessionProjectionsRequest {
+  readonly sessionId: SessionId
+}
+
+/** Complete Session projection baseline; null when the Session does not exist. */
+export type SessionProjectionsValue = SessionProjectionBaseline | null
 
 /** One raw Session event in the Remote journal. */
 export interface SessionEventEntry {
@@ -443,12 +474,18 @@ export interface SessionPageRequest {
   readonly throughSeq: number
   readonly beforeSeq?: number
   readonly maxMessages?: number
+  /** Stop at a Turn start after both minima, unless maxMessages or history exhaustion wins. */
+  readonly turnWindow?: {
+    /** Minimum append-origin user/assistant messages; must not exceed maxMessages. */
+    readonly minMessages: number
+    /** Minimum Turn starts crossed, including the partial Turn at beforeSeq. */
+    readonly minTurns: number
+  }
 }
 
 /** One live event request for a durable Session address. */
-export interface SessionFollowRequest {
+export interface SessionFollowRequest extends Pick<SessionPageRequest, 'maxMessages' | 'turnWindow'> {
   readonly address: SessionAddress
-  readonly maxMessages?: number
   /** Include process-local assistant presentation frames for the Web client. */
   readonly assistantStream?: true
 }
@@ -525,20 +562,8 @@ export type SessionFollowFrame =
   | SessionEventEntry
   | { readonly type: 'assistant-stream'; readonly frame: SessionAssistantStreamFrame }
 
-/** Browser-safe background-job row. */
-export interface SessionJob {
-  readonly id: JobId
-  readonly kind: string
-  readonly label: string
-  readonly status: 'running' | 'stopping' | 'completed' | 'killed' | 'failed'
-  readonly detail?: string
-  readonly startedAt: number
-  readonly finishedAt?: number
-}
-
 /** Complete live control baseline emitted once per control stream generation. */
 export interface SessionControlBaseline {
-  readonly jobs: Readonly<Record<SessionId, readonly SessionJob[]>>
   readonly projections: Readonly<Record<SessionId, SessionProjectionBaseline>>
 }
 
@@ -553,15 +578,15 @@ export interface SessionProjectionUpdate {
 /** Host-wide live state stream. Each generation starts with exactly one baseline. */
 export type SessionControlFrame =
   | { readonly type: 'baseline'; readonly value: SessionControlBaseline }
-  | { readonly type: 'jobs'; readonly sessionId: SessionId; readonly jobs: readonly SessionJob[] }
   | ({ readonly type: 'projection' } & SessionProjectionUpdate)
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /**
-     * A Session became visible to Session list consumers.
+     * A Session became visible or its Agent was created or disposed.
+     * Consumers upsert the summary and replace its current running and availability state.
      * @mode emit
-     * @param summary - initial list row for the Session.
+     * @param summary - current list row for the Session.
      */
     'api-session/added'(summary: SessionSummary): void
     /**
@@ -596,3 +621,6 @@ declare module '@deepseek-ai/cordis' {
 
 /** JSON-compatible projection value accepted by list consumers. */
 export type SessionProjectionValue = JsonValue
+
+/** Application metadata returned by the serving desktop for one file. */
+export type SessionWorkspacePathApplication = NativeFileApplication

@@ -6,16 +6,21 @@
  */
 
 import { createSystemMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { ContextSnapshotSection, Message } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, ContextSnapshotSection, Message } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, SessionSeq, SurfaceIntent, SystemMessage, UserMessage } from '@deepseek-ai/dsh-session'
 import { isReplacementSurfaceEvent } from '@deepseek-ai/dsh-session'
 import type { Context } from '@deepseek-ai/cordis'
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'runtime-context': { kind: 'runtime-context' } & ContextFormed
+  }
+}
 
-const SOURCE = '@deepseek-ai/dsh-system-prompt'
+const SOURCE = 'runtime-context'
 const CLEARED = 'Current runtime context: none. Earlier runtime-context snapshots no longer apply.'
 
 function isOwned(message: UserMessage): boolean {
-  return message.source.kind === 'plugin' && message.source.plugin === SOURCE
+  return message.source.kind === SOURCE
 }
 
 function textOf(message: Message): string | undefined {
@@ -36,9 +41,9 @@ export interface SystemPromptDecisionInput {
   /** Whether the prepared route for this attempt reads a later `system` message as the effective prompt. */
   inHistory: boolean
   /**
-   * Whether this step's request starts a new model-message series: a pre-step
-   * listener declared one, the surface was replaced since the last request, or
-   * the assembled tool schemas differ from the logged header.
+   * Whether prompt admission must consolidate: a pre-step listener declared a
+   * new series, the surface changed since the last request, or assembled tools
+   * changed on a route without tool-update support.
    */
   startsSeries: boolean
 }
@@ -84,7 +89,7 @@ export class SystemPromptProjection {
     const nodes = this.systemNodes()
     const head = nodes[0]
     if (head === undefined) {
-      return [{ message: createSystemMessage(rendered, SOURCE), intent: { surfaceOp: 'append' } }]
+      return [{ message: createSystemMessage(rendered), intent: { surfaceOp: 'append' } }]
     }
     const latest = nodes.findLast(node => node.text !== '') ?? head
     if (!input.inHistory || input.startsSeries || rendered.length === 0) {
@@ -94,12 +99,12 @@ export class SystemPromptProjection {
       return updates
     }
     if (latest.text === rendered) return []
-    return [{ message: createSystemMessage(rendered, SOURCE), intent: { surfaceOp: 'append' } }]
+    return [{ message: createSystemMessage(rendered), intent: { surfaceOp: 'append' } }]
   }
 
   private replace(seq: SessionSeq, text: string): SystemPromptCommit {
     return {
-      message: createSystemMessage(text, SOURCE),
+      message: createSystemMessage(text),
       intent: { surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq }, sourceEventSeqs: [seq] },
     }
   }
@@ -152,8 +157,8 @@ export class RuntimeContextProjection {
       content: [{ type: 'text', text: snapshot }],
       // The cleared marker has no contributions left to attribute.
       source: sections.length === 0
-        ? { kind: 'plugin', plugin: SOURCE }
-        : { kind: 'plugin', plugin: SOURCE, form: 'snapshot', sections },
+        ? { kind: SOURCE }
+        : { kind: SOURCE, form: 'snapshot', sections },
     })
   }
 }

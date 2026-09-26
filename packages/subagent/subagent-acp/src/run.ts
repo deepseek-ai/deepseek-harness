@@ -476,7 +476,7 @@ export async function startAcpRun(request: SubagentStartRequest, spec: AcpRunSpe
   request.signal.addEventListener('abort', onAbort, { once: true })
 
   // Read at every return so a partial answer survives a later cancel/error.
-  const collectOutput = (): ContentBlock[] => fold.collect() ?? []
+  const collectOutput = (): readonly ContentBlock[] => fold.collect() ?? []
 
   // Establish the remote session before publishing a handle. Any failure owns
   // the still-private process and therefore reaps it before rejecting.

@@ -36,7 +36,7 @@
       "path": "../session-format-catalog"
     },
     {
-      "path": "../session-format-v2-to-v3"
+      "path": "../session-format-v3-to-v4"
     }
   ]
 }

@@ -1,4 +1,4 @@
-/** Shared props for every ic_ds_* icon component. */
+/** Shared props for every product icon component. */
 export interface IconProps {
   /** Square edge in px; defaults to the glyph's own drawn size. */
   size?: number | undefined

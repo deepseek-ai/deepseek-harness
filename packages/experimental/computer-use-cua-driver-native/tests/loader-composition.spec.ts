@@ -106,15 +106,16 @@ it('loads from cordis.yml and logs the native screenshot before the next model r
   expect(JSON.stringify(model.requests[0])).toContain('Cua Driver native computer-use tools operate the host desktop.')
   const toolEvent = agent.session.snapshotEvents().find(event => event.type === 'tool/result')
   expect(toolEvent?.data.message.source.callId).toBe('native-window')
-  const toolResult = agent.session.deriveMessages().flatMap(message => message.content).find(block => block.type === 'tool-result')
-  const image = toolResult?.type === 'tool-result' ? toolResult.content.find(block => block.type === 'image') : undefined
+  const toolResult = agent.session.deriveMessages().find(message => message.role === 'tool')
+  if (toolResult?.role !== 'tool') throw new Error('Native screenshot result was not admitted')
+  const image = toolResult.content.find(block => block.type === 'image')
   expect(image?.type).toBe('image')
   if (image?.type !== 'image') throw new Error('Native screenshot was not admitted')
   expect(image.attachment).toMatchObject({ mediaType: 'image/png', width: 1, height: 1 })
   const stored = await context.attachments.readImage(image.attachment)
   expect(Buffer.from(stored.data).toString('base64')).toBe(screenshotBase64)
   expect(JSON.stringify(model.requests[1]?.messages)).toContain(JSON.stringify(image.attachment))
-  expect(JSON.stringify(toolResult?.content)).not.toContain(screenshotBase64)
+  expect(JSON.stringify(toolResult.content)).not.toContain(screenshotBase64)
   const direct = await context.tools.execute({
     agent, signal: new AbortController().signal, callId: ToolCallId('programmatic-window'),
     name: 'cua_driver_native__get_window_state', arguments: { pid: 9, window_id: 7 },

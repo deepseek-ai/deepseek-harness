@@ -1,7 +1,7 @@
 # Keyless session-query snapshot patch: replay plus the filesystem spill
 # settings inherited by this scenario. The ACP row re-pins the recorded flash model.
 - id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   disabled: true
 
 - id: agent-default-model
@@ -48,7 +48,7 @@
 - id: spill-policy
   name: '@deepseek-ai/dsh-spill-policy'
   config:
-    maxInlineBytes: 800
+    maxInlineTokens: 200
 
 # Keyless counterpart to session-query.cordis.yml: the nested snapshot overlay
 # supplies replay plus deterministic private spill storage and its byte limit.

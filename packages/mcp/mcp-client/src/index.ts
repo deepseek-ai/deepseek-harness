@@ -46,7 +46,7 @@ const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
 /** Default budget for one connection attempt plus its initial tool sync (ms). */
 const DEFAULT_STARTUP_TIMEOUT_MS = 30_000
 
-/** Default spacing between liveness pings on an established connection. */
+/** Default spacing between health checks on an established connection. */
 const DEFAULT_HEALTH_CHECK_INTERVAL_MS = 30_000
 
 /** Valid `serverName`, kept below the public tool-name budget. */
@@ -98,9 +98,9 @@ export interface StdioConfig {
   /** Budget for one connection attempt plus its initial tool sync, in milliseconds. */
   startupTimeoutMs: number
   /**
-   * Spacing between liveness pings on an established connection, in
-   * milliseconds; the same value bounds each ping's answer. A failed or
-   * timed-out ping closes the generation into the reconnect path — the only
+   * Spacing between health checks (legacy ping or modern discover), in
+   * milliseconds; the same value bounds each check's answer. A failed or
+   * timed-out check closes the generation into the reconnect path — the only
    * way a silently dead Streamable HTTP server (no close signal between
    * requests) is detected.
    */
@@ -132,9 +132,9 @@ export interface StreamableHttpConfig {
   /** Budget for one connection attempt plus its initial tool sync, in milliseconds. */
   startupTimeoutMs: number
   /**
-   * Spacing between liveness pings on an established connection, in
-   * milliseconds; the same value bounds each ping's answer. A failed or
-   * timed-out ping closes the generation into the reconnect path — the only
+   * Spacing between health checks (legacy ping or modern discover), in
+   * milliseconds; the same value bounds each check's answer. A failed or
+   * timed-out check closes the generation into the reconnect path — the only
    * way a silently dead Streamable HTTP server (no close signal between
    * requests) is detected.
    */
@@ -198,7 +198,7 @@ export const Config = z.union([
     maxInstructionBytes: z.number().step(1).min(1).default(DEFAULT_MAX_INSTRUCTION_BYTES),
     reconnect: ReconnectSchema,
   }),
-]) as unknown as z<ConfigInput, Config>
+]) as z<ConfigInput, Config>
 /* jscpd:ignore-end */
 
 // ---- Plugin apply ----

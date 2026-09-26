@@ -11,7 +11,7 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
+import { expandOwningTurnProcess, newEnglishPage, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
 
 import { AUTO_REVIEW_FIXTURE, captureAutoReviewState } from './auto-review-fixture.ts'
 
@@ -52,9 +52,10 @@ describe.skipIf(MODE === 'record')('web e2e: cold Auto-review denial', () => {
     expect(result?.data).not.toHaveProperty('callId')
 
     scaffold = await launchWebScaffold(AUTO_REVIEW_FIXTURE)
-    await seedSession(scaffold, fixture, SEED_ID)
+    await seedSession(scaffold, fixture, SEED_ID, undefined, { createdAt: WEB_FIXTURE_TIME })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    await page.clock.setFixedTime(WEB_FIXTURE_TIME)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })

@@ -1,8 +1,8 @@
 /**
  * Generate `THIRD_PARTY_NOTICES.md` from the workspace manifests: every
  * external dependency named by a workspace `package.json`, the vendored-package
- * manifest in `vendor/README.md`, the Python `pyproject.toml` files, and the
- * pnpm patch list. License and repository metadata come from the installed
+ * manifest in `vendor/README.md`, the Python `pyproject.toml` files, the shared
+ * Python distribution lock, and the pnpm patch list. npm metadata comes from the installed
  * store, so the tree must be installed. `--check` verifies the committed
  * artifact. Tier policy and ownership live in
  * `.agents/notes/implemented/process/2026-07-30-generated-third-party-notices.md`.
@@ -13,6 +13,7 @@ import { dirname, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { parse as parseToml, type TomlTableWithoutBigInt, type TomlValueWithoutBigInt } from 'smol-toml'
 import parseSpdx from 'spdx-expression-parse'
+import primaryRuntimeLock from './primary-runtime/lock.json' with { type: 'json' }
 import { browserBundledExternals } from './browser-bundled-externals.ts'
 
 const root = resolve(import.meta.dirname, '..')
@@ -52,6 +53,15 @@ const FIRST_PARTY = new Set([
 export const CLAUDE_AGENT_SDK_PACKAGE = '@anthropic-ai/claude-agent-sdk'
 const CLAUDE_PLATFORM_PACKAGE_PREFIX = `${CLAUDE_AGENT_SDK_PACKAGE}-`
 const CLAUDE_PLATFORM_DECLARED_LICENSE = 'SEE LICENSE IN LICENSE.md'
+const LIBREOFFICE_KIT_PACKAGE = '@deepseek-ai/libreoffice-kit'
+const LIBREOFFICE_PACKAGES = new Set([
+  LIBREOFFICE_KIT_PACKAGE,
+  '@deepseek-ai/libreoffice-kit-wasm',
+  '@deepseek-ai/libreoffice-kit-darwin-arm64',
+  '@deepseek-ai/libreoffice-kit-darwin-x64',
+  '@deepseek-ai/libreoffice-kit-win32-arm64',
+  '@deepseek-ai/libreoffice-kit-win32-x64',
+])
 
 /**
  * Whether a non-permissive runtime declaration has an identity-scoped owner
@@ -81,14 +91,27 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
 }
 
 /**
- * Python dependencies are few and named directly in `pyproject.toml` files
- * without installed metadata to harvest, so license/repo are recorded here and
- * the generator fails when a manifest names a package this map misses.
+ * Python metadata is recorded from the distributions' license and project
+ * fields; generation does not require installing their wheels. Both Python
+ * manifests and the shared runtime lock reject names absent from this map.
  */
-const PYTHON_METADATA: Record<string, { license: string; repo: string; role: string }> = {
+const PYTHON_METADATA: Record<string, { license: string; repo: string; role?: string }> = {
   pydantic: { license: 'MIT', repo: 'https://github.com/pydantic/pydantic', role: 'runtime dependency of `deepseek-harness-sdk`' },
   hatchling: { license: 'MIT', repo: 'https://github.com/pypa/hatch', role: 'build backend' },
+  'et-xmlfile': { license: 'MIT', repo: 'https://foss.heptapod.net/openpyxl/et_xmlfile' },
+  lxml: { license: 'BSD-3-Clause', repo: 'https://github.com/lxml/lxml' },
+  numpy: { license: 'BSD-3-Clause', repo: 'https://github.com/numpy/numpy' },
+  openpyxl: { license: 'MIT', repo: 'https://foss.heptapod.net/openpyxl/openpyxl' },
+  pandas: { license: 'BSD-3-Clause', repo: 'https://github.com/pandas-dev/pandas' },
+  pillow: { license: 'MIT-CMU', repo: 'https://github.com/python-pillow/Pillow' },
+  'python-dateutil': { license: 'Apache-2.0 OR BSD-3-Clause', repo: 'https://github.com/dateutil/dateutil' },
+  'python-docx': { license: 'MIT', repo: 'https://github.com/python-openxml/python-docx' },
+  'python-pptx': { license: 'MIT', repo: 'https://github.com/scanny/python-pptx' },
   pytest: { license: 'MIT', repo: 'https://github.com/pytest-dev/pytest', role: 'test-only' },
+  six: { license: 'MIT', repo: 'https://github.com/benjaminp/six' },
+  'typing-extensions': { license: 'PSF-2.0', repo: 'https://github.com/python/typing_extensions' },
+  tzdata: { license: 'Apache-2.0', repo: 'https://github.com/python/tzdata' },
+  xlsxwriter: { license: 'BSD-2-Clause', repo: 'https://github.com/jmcnamara/XlsxWriter' },
 }
 
 type PythonMetadata = typeof PYTHON_METADATA
@@ -581,7 +604,7 @@ export function collectPythonDependencies(
   return [...found].sort((a, b) => a.localeCompare(b)).map((name) => {
     const entry = metadata[name]
     if (entry === undefined) throw new Error(`gen-third-party-notices: python dependency ${name} is missing from PYTHON_METADATA.`)
-    return { name, ...entry }
+    return { name, ...entry, role: entry.role ?? 'Python project dependency' }
   })
 }
 
@@ -592,6 +615,33 @@ function collectPython(): { name: string; license: string; repo: string; role: s
   return collectPythonDependencies(manifests.map(path => readFileSync(resolve(root, path), 'utf8')))
 }
 
+/**
+ * Disclose every bundled wheel distribution using its locked version, rejecting duplicate normalized names.
+ * @param packages - Distribution names and exact versions from the shared runtime lock.
+ * @param metadata - License and source metadata for every locked distribution.
+ * @returns Normalized, sorted distribution identities with versions and licenses.
+ */
+export function collectBundledPythonDependencies(
+  packages: Readonly<Record<string, string>>,
+  metadata: PythonMetadata = PYTHON_METADATA,
+): { name: string; version: string; license: string; repo: string }[] {
+  const normalized = new Map<string, string>()
+  for (const [distribution, version] of Object.entries(packages)) {
+    const name = normalizePythonDistributionName(distribution)
+    const previous = normalized.get(name)
+    if (previous !== undefined && previous !== version) {
+      throw new Error(`gen-third-party-notices: bundled Python distribution ${name} has conflicting locked versions.`)
+    }
+    if (previous !== undefined) throw new Error(`gen-third-party-notices: bundled Python distribution ${name} has duplicate normalized names.`)
+    normalized.set(name, version)
+  }
+  return [...normalized].sort(([a], [b]) => a.localeCompare(b)).map(([name, version]) => {
+    const entry = metadata[name]
+    if (entry === undefined) throw new Error(`gen-third-party-notices: bundled Python distribution ${name} is missing from PYTHON_METADATA.`)
+    return { name, version, license: entry.license, repo: entry.repo }
+  })
+}
+
 /** pnpm-patched external packages, from `pnpm-workspace.yaml`. */
 function collectPatched(): { spec: string; patch: string }[] {
   const workspace = yaml.load(readFileSync(resolve(root, 'pnpm-workspace.yaml'), 'utf8')) as { patchedDependencies?: Record<string, string> }
@@ -599,7 +649,7 @@ function collectPatched(): { spec: string; patch: string }[] {
 }
 
 /** SPDX identifiers this project may ship without further review. */
-const PERMISSIVE_LICENSES = new Set(['MIT', 'ISC', 'BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0', '0BSD', 'Unlicense', 'CC0-1.0', 'BlueOak-1.0.0', 'Python-2.0'])
+const PERMISSIVE_LICENSES = new Set(['MIT', 'MIT-CMU', 'ISC', 'BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0', '0BSD', 'Unlicense', 'CC0-1.0', 'BlueOak-1.0.0', 'Python-2.0', 'PSF-2.0'])
 
 /** Evaluate a parsed SPDX expression under the repository's license policy. */
 function isPermissiveSpdx(expression: ReturnType<typeof parseSpdx>): boolean {
@@ -639,7 +689,9 @@ export function isPermissive(license: string): boolean {
  * @throws When a runtime package has no permissive license or exact owner authorization.
  */
 export function assertRuntimeLicenses(dependencies: readonly { name: string; license: string }[]): void {
-  const rejected = dependencies.filter(dep => !isPermissive(dep.license) && !isOwnerAuthorizedRuntime(dep.name))
+  const rejected = dependencies.filter(dep => !isPermissive(dep.license)
+    && !isOwnerAuthorizedRuntime(dep.name)
+    && !(LIBREOFFICE_PACKAGES.has(dep.name) && dep.license === 'MPL-2.0'))
   if (rejected.length > 0) {
     throw new Error(`gen-third-party-notices: runtime ${rejected.map(dep => `${dep.name} (${dep.license})`).join(', ')} is not a permissive license; review the distribution terms and record the decision before regenerating.`)
   }
@@ -698,8 +750,10 @@ export async function render(): Promise<string> {
   const npm = collectNpmDeps(manifests, names, browser)
   const runtimeDeps = npm.filter(dep => dep.runtime)
   const devDeps = npm.filter(dep => !dep.runtime)
+  const kitRuntime = runtimeDeps.some(dep => dep.name === LIBREOFFICE_KIT_PACKAGE)
   const vendored = collectVendored()
   const python = collectPython()
+  const bundledPython = collectBundledPythonDependencies(primaryRuntimeLock.pythonPackages)
   const patched = collectPatched()
   const claudeDistribution = runtimeDeps.some(
     dep => dep.name === CLAUDE_AGENT_SDK_PACKAGE,
@@ -708,6 +762,7 @@ export async function render(): Promise<string> {
     : undefined
   const nonPermissiveDev = devDeps.filter(dep => !isPermissive(dep.license))
   assertRuntimeLicenses(runtimeDeps)
+  assertRuntimeLicenses(bundledPython)
   const patchedLines = patched.map(({ spec, patch }) => `- \`${spec}\` — [\`${patch}\`](${patch})`)
 
   return `<!-- Generated by scripts/gen-third-party-notices.ts — do not edit by hand.
@@ -717,9 +772,9 @@ export async function render(): Promise<string> {
 
 DeepSeek Harness is licensed under [MIT](LICENSE). It depends on the third-party software listed below. Each project remains under its own license; nothing in this file changes those terms.
 
-This file lists **direct** dependencies declared by the workspace and the explicitly disclosed official Claude Code platform payload closure. It is generated from the workspace manifests by \`scripts/gen-third-party-notices.ts\`: a pre-commit hook regenerates it whenever a staged file changes one of its inputs, and \`scripts/gen-third-party-notices.spec.ts\` asserts in the test lane that the committed bytes match. Deleting a manifest runs no hook, so that case is caught by the assertion instead. Run \`pnpm run verify-third-party-notices\` for the standalone check.
+This file lists **direct** dependencies declared by the workspace, the explicitly disclosed official Claude Code platform payload closure, and the Bundled Python distributions. It is generated by \`scripts/gen-third-party-notices.ts\`: a pre-commit hook regenerates it whenever a staged file changes one of its inputs, and \`scripts/gen-third-party-notices.spec.ts\` asserts in the test lane that the committed bytes match. Deleting a manifest runs no hook, so that case is caught by the assertion instead. Run \`pnpm run verify-third-party-notices\` for the standalone check.
 
-The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [\`pnpm-lock.yaml\`](pnpm-lock.yaml) — inspect it with \`pnpm licenses list\`. The Python closure is recorded separately in [\`python/sdk/uv.lock\`](python/sdk/uv.lock).
+The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [\`pnpm-lock.yaml\`](pnpm-lock.yaml) — inspect it with \`pnpm licenses list\`. The Python SDK closure is recorded separately in [\`python/sdk/uv.lock\`](python/sdk/uv.lock).
 
 ## Vendored source (\`vendor/\`)
 
@@ -739,6 +794,13 @@ pnpm applies local patches to the following packages at install time, so shipped
 
 ${patchedLines.join('\n')}
 ${renderClaudeDistribution(claudeDistribution)}
+${kitRuntime ? `
+## LibreOffice conversion kit
+
+${[...LIBREOFFICE_PACKAGES].map(name => `\`${name}\``).join(', ')} declare MPL-2.0, which remains outside the permissive-license allowlist; the notices check accepts only these package identities at those terms. The [distribution decision](.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md) records the source obligations.
+
+The [kit repository](https://github.com/deepseek-harness/libreoffice-kit) supplies the corresponding LibreOffice source pin, modifications, build instructions, Node API, and artifact validation. Its engine packages retain their license and third-party notices; the Node API retains its MPL-2.0 declaration and NOTICE. Recipients must have access to those corresponding sources and notices.
+` : ''}
 
 ## Development-only npm dependencies
 
@@ -754,6 +816,14 @@ Direct dependencies of the \`pyproject.toml\` manifests, plus \`uv\` as the deve
 | --- | --- | --- |
 ${python.map(dep => `| [\`${dep.name}\`](${dep.repo}) | ${dep.license} | ${dep.role} |`).join('\n')}
 | [\`uv\`](https://github.com/astral-sh/uv) | MIT / Apache-2.0 | development workflow tool |
+
+## Bundled Python distributions
+
+The [shared runtime lock](scripts/primary-runtime/lock.json) records each distribution version and the wheel download hashes. The table includes every entry in \`pythonPackages\`, including transitive dependencies. Wheel extraction preserves distribution metadata and the license and notice files supplied by each archive. Project licenses below do not enumerate the separate licenses of native libraries bundled inside wheels.
+
+| Distribution | Locked version | Project license |
+| --- | --- | --- |
+${bundledPython.map(dep => `| [\`${dep.name}\`](${dep.repo}) | ${dep.version} | ${dep.license} |`).join('\n')}
 
 ## First-party native packages
 

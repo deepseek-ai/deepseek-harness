@@ -83,6 +83,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
     },
   } as never)
   ctx.provide('llm', {
+    listModels: async () => [{ id: 'fixture-model', name: 'Model' }],
     listProviders: () => [{ id: 'fixture', name: 'Fixture' }],
     resolveModelInfo: () => Promise.resolve({ provider: 'fixture', id: 'fixture-model', name: 'Fixture' }),
   } as never)

@@ -20,19 +20,19 @@ const OPTIONS = [{ id: 'zh', label: '中文' }, { id: 'en', label: 'English' }]
 
 function emptySessions() {
   const store = createSnapshotStore<SessionListState>(
-    { ids: [], byId: {}, current: undefined, phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined })
+    { ids: [], byId: {}, phase: 'ready', projectionsBySession: {} })
   return bindSnapshotSelector(store)
 }
 function emptyWorkspaces() {
   const store = createSnapshotStore<WorkspaceSnapshot>({
-    items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+    items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
   })
   return bindSnapshotSelector(store)
 }
 
-type AttentionSnapshot = Parameters<Parameters<LanguageRowComponentProps['useSessionPendingInteraction']>[0]>[0]
+type AttentionSnapshot = Parameters<Parameters<LanguageRowComponentProps['useSessionStatus']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
-const useSessionPendingInteraction: LanguageRowComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
+const useSessionStatus: LanguageRowComponentProps['useSessionStatus'] = selector => selector(noAttention)
 
 function mount(active = 'en') {
   // Real store instance — the sanctioned zero-machinery path for tests.
@@ -41,8 +41,8 @@ function mount(active = 'en') {
   const setLocale = vi.fn()
   const props: LanguageRowComponentProps = {
     useSessions: emptySessions(),
-    useSessionPendingInteraction,
-    usePanelInfo, useResource,
+    useSessionStatus,
+    usePanelInfo, useSessionRetainInfo: () => undefined, useResource,
     useWorkspaces: emptyWorkspaces(),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,

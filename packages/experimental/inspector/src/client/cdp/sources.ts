@@ -172,16 +172,16 @@ export class ClientSourceCatalog {
  * @returns A lazy catalog, or `undefined` outside the assembled web application.
  */
 export function discoverInspectorClientSourceCatalog(): ClientSourceCatalog | undefined {
-  const graph = Reflect.get(globalThis, '__DSH_BOOT__') as unknown
+  const graph: unknown = Reflect.get(globalThis, '__DSH_BOOT__')
   if (typeof graph !== 'object' || graph === null) return undefined
-  const entries = Reflect.get(graph, 'entries') as unknown
+  const entries: unknown = Reflect.get(graph, 'entries')
   if (!Array.isArray(entries)) return undefined
   const row = entries.find((value) => {
     if (typeof value !== 'object' || value === null) return false
     return Reflect.get(value, 'id') === PACKAGE_ID
   }) as Record<string, unknown> | undefined
   if (row === undefined || typeof row.url !== 'string' || typeof row.rev !== 'string') return undefined
-  const base = browserLocation()
+  const base = documentBase()
   if (base === undefined) return undefined
   const sourceUrl = new URL(row.url, base)
   const sourceMapUrl = new URL(sourceUrl.href)
@@ -203,10 +203,19 @@ async function fetchText(url: string): Promise<string> {
   return response.text()
 }
 
-function browserLocation(): string | undefined {
-  const location = Reflect.get(globalThis, 'location') as unknown
+/**
+ * Base every app-owned route reference resolves against: the document's
+ * `baseURI`, else the location URL, else undefined outside a browser.
+ */
+function documentBase(): string | undefined {
+  const document: unknown = Reflect.get(globalThis, 'document')
+  if (typeof document === 'object' && document !== null) {
+    const baseURI: unknown = Reflect.get(document, 'baseURI')
+    if (typeof baseURI === 'string' && baseURI !== '') return baseURI
+  }
+  const location: unknown = Reflect.get(globalThis, 'location')
   if (typeof location !== 'object' || location === null) return undefined
-  const href = Reflect.get(location, 'href') as unknown
+  const href: unknown = Reflect.get(location, 'href')
   return typeof href === 'string' ? href : undefined
 }
 
@@ -224,7 +233,7 @@ function renderError(error: unknown): string {
 
 function normalizedUrl(value: string): string {
   try {
-    const url = new URL(value, browserLocation())
+    const url = new URL(value, documentBase())
     url.hash = ''
     return url.href
   } catch {

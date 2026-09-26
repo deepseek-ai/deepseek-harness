@@ -134,10 +134,9 @@ describe('ReadBlock banner', () => {
     expect(view.queryByText(/显示/u)).toBeNull()
   })
 
-  it('draws an empty label and empty language when neither is given', () => {
-    const view = render(<ReadBlock lines={lines(1)} totalLines={1} />)
-    expect(view.container.querySelector('[class^="_label_"]')?.textContent).toBe('')
-    expect(view.container.querySelector('[class^="_lang_"]')?.textContent).toBe('')
+  it('uses the localized code title when no language is given', () => {
+    render(<ReadBlock lines={lines(1)} totalLines={1} />)
+    expect(screen.getByText('代码块')).toBeTruthy()
   })
 })
 

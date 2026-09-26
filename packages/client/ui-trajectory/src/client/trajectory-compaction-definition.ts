@@ -16,12 +16,12 @@ function checkpointId(
   event: Parameters<ConversationNodeDefinition['match']>[0],
 ): string | undefined {
   if (event.type !== 'user/message') return undefined
-  const source = event.data.source as unknown as {
+  const source = event.data.source as {
     readonly kind?: unknown
     readonly plugin?: unknown
     readonly compactionId?: unknown
   }
-  return source.kind === 'plugin' && source.plugin === 'compact'
+  return source.kind === 'compact-checkpoint'
     && typeof source.compactionId === 'string' && source.compactionId !== ''
     ? source.compactionId
     : undefined

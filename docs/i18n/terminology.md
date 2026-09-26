@@ -64,7 +64,7 @@
 | spawn | spawn | | | |
 | steering | steering | steering（中途引导） | | |
 | job id | job id | | 任务 id | 保留英文 |
-| subagent | subagent | | | |
+| subagent | subagent | | | 文档正文保留英文；中文 UI 中译作「子智能体」，不使用「子代理」 |
 | transcript | transcript | transcript（文本记录） | | 指会话渲染给用户或编辑器的完整文本，区别于事件日志 |
 | Typert | Typert | | TypeRT、typeRT、Type RT | DeepSeek Harness 类型图、生成器、loader 与运行时 registry 的产品拼写 |
 | waterfall | waterfall | waterfall（瀑布式事件） | | |
@@ -134,7 +134,7 @@
 | extension point | 扩展点 | | | 注意与 `seam` 区分 |
 | fail-fast | 快速失败 | | | |
 | fenced code block | 围栏代码块 | | | 沿用 MDN 中文翻译 |
-| fingerprint | 指纹 | | | 通用内容指纹；双语配对机制使用 sidecar record 记录两侧 blob hash |
+| fingerprint | 指纹 | | | 通用内容指纹；双语配对机制使用 sidecar record 按分节记录两侧 hash |
 | finish reason | 结束原因 | | | |
 | fold | 折叠区 | | | 配置界面语境：默认收起的字段分区（collapsed →「收起」）|
 | foreground run | 前台运行 | | | |
@@ -150,7 +150,7 @@
 | merge | 合并 | | | |
 | message | 消息 | | | |
 | mod | 模组 | | | |
-| model provider | 模型提供方 | | | |
+| model provider | 模型提供商 | | | 指为模型提供 API 的厂商或网关：模型设置页文案、用户指南 providers 与 `ui-settings-models` README 用「提供商」；llm seam 的开发者文档（可配置提供方目录、dormant 等）沿用「提供方」 |
 | model selection | 模型选择 | | 模型目标 | 面向 Agent 的提供方、模型和可选推理强度选择。 |
 | module | 模块 | | | |
 | non-escalation | 非升权 | | 非升级、不可升级 | 仅用于安全与权限语境，指主体不得获得超出既有授权的权限；普通升级不适用此行 |
@@ -168,7 +168,7 @@
 | plugin | 插件 | | | |
 | postmortem | 事故复盘 | 事故复盘（postmortem） | 事后分析、事故记录 | 事故记录与分析文档；目录或路径中的 `postmortem` 保持代码形式 |
 | prompt | 提示词 | | | |
-| provider | 提供方 | | | |
+| provider | 提供方 | | | 泛指的提供方（搜索、检查、settings 文件、subagent 等）；模型厂商或网关见 model provider 行 |
 | provider-neutral | 提供方无关 | | 提供方中立 | |
 | quality gate | 质量门禁 | | | |
 | quiescence | 完全停稳 | | 静默、静止状态 | 指生命周期工作全部结算后的状态 |

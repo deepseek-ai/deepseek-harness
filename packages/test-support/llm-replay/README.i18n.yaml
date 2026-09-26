@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/test-support/llm-replay/README.md
-README.md: 5877db20babb07523e870d6f3041e1c35f076130
-README.zh.md: dc2c015ff4f1347da41f49608452702c9c90a67a
+/:
+  en: 80e8e69cb5216e23
+  zh: cd84f0762bc67487
+/deepseek-ai-dsh-llm-replay:
+  en: dd20eb4783680487
+  zh: 990036cd77298507
+/deepseek-ai-dsh-llm-replay/summary:
+  en: 9db70d252b8e2902
+  zh: 26c3e40a0fef9b53
+/deepseek-ai-dsh-llm-replay/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-llm-replay/use-this-package:
+  en: e2116be9c7a5c18f
+  zh: dc89da423decf4aa
+/deepseek-ai-dsh-llm-replay/use-this-package/mounting-it:
+  en: 8885809b3bc7da3e
+  zh: cb3f1a3268164d11
+/deepseek-ai-dsh-llm-replay/use-this-package/how-the-fixture-works:
+  en: d7dd048cd69e723d
+  zh: 9f5dfa5186549cd0
+/deepseek-ai-dsh-llm-replay/use-this-package/nested-agents:
+  en: 7745c49d10a63b0e
+  zh: 937b954c664f1973
+/deepseek-ai-dsh-llm-replay/use-this-package/failure-modes-and-overrides:
+  en: 319e95521a4a06fe
+  zh: 884c8299028df8a3
+/deepseek-ai-dsh-llm-replay/use-this-package/what-can-go-wrong:
+  en: 965da31d63ec88fe
+  zh: 8ca1428daae5d583
+/deepseek-ai-dsh-llm-replay/understand-the-implementation:
+  en: 1d2dbd8b50da6f22
+  zh: ab738914c74212ff
+/deepseek-ai-dsh-llm-replay/understand-the-implementation/design:
+  en: dfd1dd70ea389c66
+  zh: 3c0f2e0ee601e3f5
+/deepseek-ai-dsh-llm-replay/understand-the-implementation/source-map:
+  en: cbf5c51583663671
+  zh: 794ec0b8873736cc
+/deepseek-ai-dsh-llm-replay/understand-the-implementation/binding-and-stream-flow:
+  en: 484c98a2679b218f
+  zh: 8d3266a0f3deac87
+/deepseek-ai-dsh-llm-replay/further-exploration:
+  en: 3ae8fe611d1e1335
+  zh: bc4f80df80e879bf
+/deepseek-ai-dsh-llm-replay/model-experience:
+  en: ad4fe7025029da90
+  zh: 1cced10c67323c37
+/deepseek-ai-dsh-llm-replay/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: f57cc48a1b5cbfa9
+/deepseek-ai-dsh-llm-replay/known-limitations-and-deferred-work:
+  en: 003f1d9c1ec49eed
+  zh: 116bcde9030e4cb4
+/deepseek-ai-dsh-llm-replay/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

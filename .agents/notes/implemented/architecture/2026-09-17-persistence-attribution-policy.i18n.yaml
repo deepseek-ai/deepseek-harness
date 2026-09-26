@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-17-persistence-attribution-policy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-17-persistence-attribution-policy.md
+/agent-note-recorded-user-source-attribution-compatibility:
+  en: db7dca9aee8a5f49
+  zh: 1c5aace5cb896738
+/agent-note-recorded-user-source-attribution-compatibility/problem:
+  en: 21904d2f57e4e159
+  zh: 589fe41a93ec9e5d
+/agent-note-recorded-user-source-attribution-compatibility/decision:
+  en: 10bd45b099218280
+  zh: c21ab6c74dd1afbf
+/agent-note-recorded-user-source-attribution-compatibility/alternatives-considered:
+  en: 2e1b3bcd9e00b5be
+  zh: e5a1725390346470
+/agent-note-recorded-user-source-attribution-compatibility/consequences:
+  en: cb2b35edfe2a006f
+  zh: e73c28367e78c44c

@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/host/directory-picker-browse/README.md
-README.md: 9618b6b2f7101aa5dd145fd2c8f7a659a44b0308
-README.zh.md: 20c9267bd47dcf1500985465ea620027d7a47e99
+/:
+  en: bea16365bc3196b2
+  zh: ba6b3c899a0f20b2
+/deepseek-ai-dsh-host-directory-picker-browse:
+  en: 6fbc8d553ca1d797
+  zh: 6503d8fa5542b0f2
+/deepseek-ai-dsh-host-directory-picker-browse/summary:
+  en: 49d1427956180353
+  zh: 15955b505310295a
+/deepseek-ai-dsh-host-directory-picker-browse/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-host-directory-picker-browse/use-this-package:
+  en: 943e692ce514daf6
+  zh: 917f508c4c612eae
+/deepseek-ai-dsh-host-directory-picker-browse/use-this-package/listing-a-directory:
+  en: fc4fc8e16e37df02
+  zh: d609eeb57557e5cb
+/deepseek-ai-dsh-host-directory-picker-browse/use-this-package/creating-a-directory:
+  en: 71acb6e2f9b6176d
+  zh: 64e0bd932507dfe9
+/deepseek-ai-dsh-host-directory-picker-browse/use-this-package/observable-failures:
+  en: 3f136f768deaab29
+  zh: 39eef7ad16271cdb
+/deepseek-ai-dsh-host-directory-picker-browse/use-this-package/configuration:
+  en: a9137892248ac644
+  zh: ad3bee71ab003f94
+/deepseek-ai-dsh-host-directory-picker-browse/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-host-directory-picker-browse/understand-the-implementation/design-concept:
+  en: cec8eab00b0484b9
+  zh: 213a5cf9f61bd0e0
+/deepseek-ai-dsh-host-directory-picker-browse/understand-the-implementation/the-fully-qualified-fence:
+  en: b547791a9cd9d9f0
+  zh: fd62beb4b2cac303
+/deepseek-ai-dsh-host-directory-picker-browse/understand-the-implementation/abort-and-probing:
+  en: adffb1740e726f22
+  zh: edfe4a1f3141a1b5
+/deepseek-ai-dsh-host-directory-picker-browse/understand-the-implementation/source-map:
+  en: 1a8d1b820a0f97e7
+  zh: 377cc9d4832f93df
+/deepseek-ai-dsh-host-directory-picker-browse/further-exploration:
+  en: 25ae7d1a481cacca
+  zh: f49741dd1677000d
+/deepseek-ai-dsh-host-directory-picker-browse/model-experience:
+  en: cdbb9c75fbb91bb5
+  zh: 35047dda1956f0ac
+/deepseek-ai-dsh-host-directory-picker-browse/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-host-directory-picker-browse/known-limitations-and-deferred-work:
+  en: 45c0c8ff249e6119
+  zh: d7e4ff77f5978fba
+/deepseek-ai-dsh-host-directory-picker-browse/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

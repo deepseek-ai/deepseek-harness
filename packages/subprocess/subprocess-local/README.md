@@ -40,9 +40,11 @@ Load the provider in the same composition as its consumers. It has no config fie
 
 Absolute executable paths are verified; bare names resolve against the scrubbed PATH with platform-aware executable extensions (`.COM`/`.EXE`/`.BAT`/`.CMD` on Windows). Relative paths containing separators are rejected — provide an absolute path or a bare PATH name — and relative PATH entries resolve from the host process cwd.
 
+Windows ordinary subprocesses start the private Job runner with `windowsHide` and request hidden initial windows for native targets. Standard streams and Job ownership remain independent of window visibility; commands that explicitly create their own windows are outside this guarantee.
+
 ### Collecting output
 
-Collect mode keeps the last `maxBytes` of a stream in memory — errors and final results cluster at the end — and, when a `spill` cap is configured, appends the complete stream to a private file under a per-process directory in the OS temp dir (a `0700` directory, `0600` random-named files). A stream larger than the spill cap discards its incomplete spill and returns only the marked truncated tail. Reads are offset-based and non-consuming, so background and batch readers coexist before and after exit.
+Collect mode keeps the last `maxBytes` of a stream in memory — errors and final results cluster at the end — and, when a `spill` cap is configured, appends the complete stream to a private file under a per-process directory in the OS temp dir (a `0700` directory, `0600` random-named files). A stream larger than the spill cap discards its incomplete spill and returns only the marked truncated tail. Spilling is best-effort: when the spill file cannot be opened or appended (the per-process directory removed by a temporary-file cleaner, `EACCES`, `EMFILE`, `ENOSPC`), the collector discards the spill, logs one `error` through the plugin logger, and keeps collecting the in-memory tail, so the result is truncated with no spill path. Reads are offset-based and non-consuming, so background and batch readers coexist before and after exit.
 
 The `./output` export shares this collector and retained-spill storage with process adapters. `snapshot()` returns the retained raw bytes and total byte count, allowing remote adapters to preserve offsets without forwarding the complete stream.
 
@@ -107,7 +109,7 @@ A spawn synchronously validates the final argv, cwd, and environment, selects co
 
 ### Safety invariants
 
-Spill files are opened `0600` with `O_EXCL` and random names under a `0700` per-process directory, defeating symlink planting in shared temp dirs; a failed final close withholds the spill path. Fallback process identities carry start times, so cleanup never follows PID reuse. A selected native failure is reported instead of replaying argv through fallback, and a range is removed from the live set only after cleanup completes or the failure remains observable. Host-exit finalization creates no promises or timers, preserves the host exit code and diagnostic, contains each target's failure, and does not claim quiescence.
+Spill files are opened `0600` with `O_EXCL` and random names under a `0700` per-process directory, defeating symlink planting in shared temp dirs; a failed open, append, or final close withholds the spill path and never interrupts collection, because collection runs inside the stream's `'data'` listener where a thrown error would kill the host process. Fallback process identities carry start times, so cleanup never follows PID reuse. A selected native failure is reported instead of replaying argv through fallback, and a range is removed from the live set only after cleanup completes or the failure remains observable. Host-exit finalization creates no promises or timers, preserves the host exit code and diagnostic, contains each target's failure, and does not claim quiescence.
 
 </details>
 
@@ -153,6 +155,7 @@ These limits define when the provider is a poor fit or needs special operational
 - **In-process cleanup requires a JavaScript-observable exit** — direct `process.exit()`, default uncaught exceptions, and default unhandled rejections emit Node's synchronous `exit` event. The default OS disposition for an unhandled `SIGTERM`, `SIGINT`, or `SIGHUP` bypasses that event; an application covers those signals only by installing a handler that performs normal disposal or calls `process.exit()`. `SIGKILL`, fatal OOM, `process.abort()`, native crashes, power loss, and any failure that cannot run JavaScript require an external supervisor, container init, or equivalent OS owner.
 - **The credential scrub is a name heuristic** — `*KEY*`/`*PASSWORD*`/`*SECRET*`/`*TOKEN*` only; differently named secrets (for example `*PASSPHRASE*`) pass through, and a whitelist for over-scrubbed variables is noted future work.
 - **Completed spill files are not deleted** — bounded full-output recovery files accumulate under the OS tmpdir until something external cleans them; the private per-process spill directory is removed at a JavaScript-observable exit only when it holds no completed spill file.
+- **A removed spill directory is not recreated** — the private per-process directory is created once; after an external cleaner removes it, every later spill in that process degrades to the in-memory tail with an `error` log until the host restarts. Recreating a fresh random directory on `ENOENT` is deferred work.
 
 <a id="dev-note"></a>
 ### Dev Note

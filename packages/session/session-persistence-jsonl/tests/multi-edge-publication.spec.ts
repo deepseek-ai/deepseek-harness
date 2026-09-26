@@ -1,7 +1,7 @@
 /** Durable composition of historical chunk collapse and V3 system/reference migration. */
 
 import { Context } from '@deepseek-ai/cordis'
-import { Session, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { createSessionFormatCatalog } from '@deepseek-ai/dsh-session-format'
 import { releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, sessionFormatV0ToV1 } from '@deepseek-ai/dsh-session-format-v0-to-v1'
@@ -150,7 +150,7 @@ function assertRequests(events: readonly SessionEvent[], header: SessionHeader) 
 
 function assertMigrated(result: Awaited<ReturnType<typeof readSession>>) {
   const { events, header, cut, session } = result
-  expect(header).toEqual({ version: 3, id, createdAt: 1, parentSession: 'parent', delegationDepth: 0, isSeeded: true })
+  expect(header).toEqual({ version: SESSION_FORMAT_VERSION, id, createdAt: 1, parentSession: 'parent', delegationDepth: 0, isSeeded: true })
   expect(events.map(event => event.seq)).toEqual(Array.from({ length: 23 }, (_, seq) => seq))
   expect(events.filter(event => event.type.startsWith('assistant/'))).toEqual([{
     type: 'assistant/message', seq: 6, time: 108, surfaceOp: 'append',
@@ -200,7 +200,7 @@ async function publishedRows(path: string, compression: JsonlCompression) {
 }
 
 describe.each([0, 1] as const)('V%s multi-edge durable publication', (version) => {
-  it.each(['none', 'zstd'] as const)('publishes only V3 after chunk collapse, system changes, and reference remapping (%s)', async (compression) => {
+  it.each(['none', 'zstd'] as const)('publishes only the current generation after chunk collapse, system changes, and reference remapping (%s)', async (compression) => {
     const { root, path } = await seed(version, compression)
     const source = await observe(path)
     const ctx = await mount(root, compression)
@@ -215,7 +215,7 @@ describe.each([0, 1] as const)('V%s multi-edge durable publication', (version) =
     expect(written.events).toEqual(prepared.events)
     await ctx.fiber.dispose()
     contexts.splice(contexts.indexOf(ctx), 1)
-    const successor = generationLogPath(root, undefined, id, 3, compression)
+    const successor = generationLogPath(root, undefined, id, SESSION_FORMAT_VERSION, compression)
     expect((await readdir(dirname(path))).filter(name => name !== 'session.lock').sort())
       .toEqual([basename(path), basename(successor)].sort())
     expect(await publishedRows(successor, compression)).toEqual([{ type: 'session', ...prepared.header }, ...prepared.events])
@@ -263,7 +263,7 @@ describe.each([0, 1] as const)('V%s multi-edge durable publication', (version) =
     expect(retried.events).toEqual(expected)
     expect(retried.cut).toBe(prepared.cut)
     assertRequests(retried.events, retried.header)
-    const successor = generationLogPath(root, undefined, id, 3, compression)
+    const successor = generationLogPath(root, undefined, id, SESSION_FORMAT_VERSION, compression)
     expect(await publishedRows(successor, compression)).toEqual([{ type: 'session', ...prepared.header }, ...expected])
     expect((await readdir(dirname(path))).filter(name => name !== 'session.lock').sort())
       .toEqual([basename(path), basename(successor)].sort())

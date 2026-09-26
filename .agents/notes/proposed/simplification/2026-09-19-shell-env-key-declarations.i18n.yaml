@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-19-shell-env-key-declarations.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/simplification/2026-09-19-shell-env-key-declarations.md
+/agent-note-keep-shell-environment-declarations-focused-on-key-ownership:
+  en: 45ac68010d497bfd
+  zh: 388e4f51893c4615
+/agent-note-keep-shell-environment-declarations-focused-on-key-ownership/problem:
+  en: ff308f45fc6f5242
+  zh: 025b58883a3e175b
+/agent-note-keep-shell-environment-declarations-focused-on-key-ownership/proposal:
+  en: ffd78167917dfa4b
+  zh: dbcb1004009ea9f5
+/agent-note-keep-shell-environment-declarations-focused-on-key-ownership/alternatives-considered:
+  en: 476de18c44f2ad86
+  zh: a0a15da6c5e7fbf7
+/agent-note-keep-shell-environment-declarations-focused-on-key-ownership/acceptance-criteria:
+  en: 3196e83f9ae22f45
+  zh: 0766bf5914672572
+/agent-note-keep-shell-environment-declarations-focused-on-key-ownership/risks:
+  en: 55e2677a8d48d759
+  zh: ff97043cc6a6a31b

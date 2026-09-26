@@ -15,18 +15,18 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot } from './support.ts'
+import { newEnglishPage, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/markdown-inline-code-links', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('./expected/markdown-inline-code-links/ui.expected.md', import.meta.url))
 const MODE = webSnapshotMode()
 const SEED_ID = 'markdown-inline-code-links-web-e2e'
 const DONE = 'INLINE_CODE_LINK_DONE'
+const LINK_URL = 'http://127.0.0.1:3199/?demo=1'
 
 /** Build a settled assistant reply with linkable URL code and inert code controls. */
 function markdownFixture(linkUrl: string): string {
   const session = Session.create(SessionId('markdown-inline-code-links-source'))
-  const eventTimeOrigin = new Date().setHours(12, 0, 0, 0)
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'Show the local preview URL.' }],
@@ -78,7 +78,7 @@ function markdownFixture(linkUrl: string): string {
     }),
     ...session.snapshotEvents().map(event => JSON.stringify({
       ...event,
-      time: eventTimeOrigin + event.seq * 1_000,
+      time: WEB_FIXTURE_TIME + event.seq * 1_000,
     })),
     '',
   ].join('\n')
@@ -88,15 +88,20 @@ describe('web e2e: Markdown inline-code links', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
-  let linkUrl: string
   let tripwire: ReturnType<typeof watchConsole>
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({})
-    linkUrl = new URL('/?demo=1', scaffold.baseUrl).toString()
-    await seedSession(scaffold, markdownFixture(linkUrl), SEED_ID)
+    scaffold = await launchWebScaffold({
+      extraOverlayPath: fileURLToPath(new URL('./sidebar-browser.overlay.yml', import.meta.url)),
+    })
+    await seedSession(scaffold, markdownFixture(LINK_URL), SEED_ID, undefined, { createdAt: WEB_FIXTURE_TIME })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    await page.clock.setFixedTime(WEB_FIXTURE_TIME)
+    await page.route('http://127.0.0.1:3199/**', async route => route.fulfill({
+      contentType: 'text/html',
+      body: '<h1>Inline-code preview</h1>',
+    }))
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -119,24 +124,22 @@ describe('web e2e: Markdown inline-code links', () => {
 
     const inlineCodeLink = page.locator('[class*="markdown"] code a')
     await expect.poll(() => inlineCodeLink.count(), { timeout: 10_000 }).toBe(1)
-    expect(await inlineCodeLink.getAttribute('href')).toBe(linkUrl)
+    expect(await inlineCodeLink.getAttribute('href')).toBe(LINK_URL)
     expect(await inlineCodeLink.getAttribute('target')).toBe('_blank')
     expect(await inlineCodeLink.getAttribute('rel')).toBe('noopener noreferrer')
     await inlineCodeLink.focus()
     expect(await inlineCodeLink.evaluate(element => document.activeElement === element)).toBe(true)
 
-    const popupPromise = page.waitForEvent('popup')
     await inlineCodeLink.click()
-    const popup = await popupPromise
-    await popup.waitForURL(linkUrl, { timeout: 15_000 })
-    expect(popup.url()).toBe(linkUrl)
-    await popup.close()
+    const browserAddress = page.locator('[data-rightbar-col]')
+      .getByRole('textbox', { name: 'Enter an HTTP(S) address' })
+    await expect.poll(() => browserAddress.inputValue()).toBe(LINK_URL)
 
-    expect(await page.getByText(`curl ${linkUrl}`, { exact: true }).locator('a').count()).toBe(0)
+    expect(await page.getByText(`curl ${LINK_URL}`, { exact: true }).locator('a').count()).toBe(0)
     expect(await page.getByText('javascript:alert(1)', { exact: true }).locator('a').count()).toBe(0)
     const snapshot = (await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd))
       .split(SEED_ID).join('{{seededId}}')
-      .split(linkUrl).join('{{linkUrl}}')
+      .split(LINK_URL).join('{{linkUrl}}')
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])

@@ -1,25 +1,12 @@
-/* The right Sidebar's 28px round header icon button: a 28px circle around a
-   15px glyph, level with the header's corner controls. */
+/* The shared compact Button owns radius, height, and interaction fills. */
 .moreButton {
-  display: inline-flex;
   flex: none;
-  align-items: center;
-  justify-content: center;
   width: 28px;
-  height: 28px;
-  padding: 6px;
+  padding: 0;
   color: var(--dsw-alias-label-secondary);
-  background: transparent;
-  border: none;
-  border-radius: 28px;
-  cursor: pointer;
 }
 
 .moreButton svg {
   width: 15px;
   height: 15px;
-}
-
-.moreButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
 }

@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { createUserMessage, ToolCallId , createMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
-import { toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+import { CompactionId, compactCheckpointSource, toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
 import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionSeq as SessionSeqType } from '@deepseek-ai/dsh-session'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'test': { kind: 'test' } & ContextFormed
+  }
+}
 
 const SURFACE = { surfaceOp: 'append' as const }
 
@@ -138,7 +145,7 @@ describe('tool-pairing boundaries', () => {
     }, SURFACE)
     midStep.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'background update' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'test' },
     }), SURFACE)
     midStep.append('tool/result', {
       turn: 1, step: 1,
@@ -170,7 +177,7 @@ describe('tool-pairing surface identity', () => {
     const nodes = session.surface.nodes
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'checkpoint' }],
-      source: { kind: 'plugin', plugin: 'compact' },
+      source: compactCheckpointSource(CompactionId('tool-pairing-compaction')),
     }), {
       surfaceOp: { op: 'replace', startSeq: nodes[0]!, endSeq: nodes.at(-1)! },
       sourceEventSeqs: [...nodes],

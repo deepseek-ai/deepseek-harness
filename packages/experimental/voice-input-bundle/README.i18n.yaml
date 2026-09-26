@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/voice-input-bundle/README.md
+/:
+  en: a610a36da32c92ad
+  zh: 19434bfe1701828d
+/deepseek-ai-dsh-experimental-voice-input-bundle:
+  en: 338585d3575a8f90
+  zh: 22a493cbeefec8f0
+/deepseek-ai-dsh-experimental-voice-input-bundle/summary:
+  en: e84cf8d1493e2a08
+  zh: f0549f75a5234388
+/deepseek-ai-dsh-experimental-voice-input-bundle/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 364c80ee00a374ff
+/deepseek-ai-dsh-experimental-voice-input-bundle/use-this-package:
+  en: 9151bf11e64b4f1c
+  zh: 7c9638c16ac6a0db
+/deepseek-ai-dsh-experimental-voice-input-bundle/understand-the-implementation:
+  en: fd8c48acf2a8c0e9
+  zh: 6aabab11912f0e3d
+/deepseek-ai-dsh-experimental-voice-input-bundle/further-exploration:
+  en: 5c64426add9d79d6
+  zh: 4e06aa2ead8d2ccd
+/deepseek-ai-dsh-experimental-voice-input-bundle/model-experience:
+  en: 3c5a85f8b7129ce8
+  zh: d5f491ca88d9a810
+/deepseek-ai-dsh-experimental-voice-input-bundle/model-experience/kv-cache-effect:
+  en: b5ec79db2e1d0dbc
+  zh: e5aff567ae5ee6fc
+/deepseek-ai-dsh-experimental-voice-input-bundle/known-limitations-and-deferred-work:
+  en: 72323eaeec1b0dae
+  zh: becc003f1da53c51
+/deepseek-ai-dsh-experimental-voice-input-bundle/known-limitations-and-deferred-work/dev-note:
+  en: 0225ba087c5266f3
+  zh: 4e706f1b2b984e63

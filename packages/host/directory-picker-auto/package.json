@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-host-directory-picker-auto",
   "description": "Adaptive chooser of the directory-picker seam: resolves the host situation at boot and mounts the native or browse backend for the DeepSeek Harness web GUI host",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -27,26 +27,26 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:^",
-    "@deepseek-ai/dsh-host-directory-picker-browse": "workspace:^",
-    "@deepseek-ai/dsh-host-directory-picker-native": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:*",
+    "@deepseek-ai/dsh-host-directory-picker-browse": "workspace:*",
+    "@deepseek-ai/dsh-host-directory-picker-native": "workspace:*",
+    "@deepseek-ai/dsh-host-webserver": "workspace:*"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/cordis-plugin-include": "workspace:^",
-    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:^",
-    "@deepseek-ai/dsh-host-directory-picker": "workspace:^",
-    "@deepseek-ai/dsh-host-directory-picker-browse": "workspace:^",
-    "@deepseek-ai/dsh-host-directory-picker-native": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cordis-plugin-include": "workspace:~",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:*",
+    "@deepseek-ai/dsh-host-directory-picker": "workspace:*",
+    "@deepseek-ai/dsh-host-directory-picker-browse": "workspace:*",
+    "@deepseek-ai/dsh-host-directory-picker-native": "workspace:*",
+    "@deepseek-ai/dsh-host-webserver": "workspace:*"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-launch-environment": "workspace:^"
+    "@deepseek-ai/dsh-launch-environment": "workspace:*"
   }
 }

@@ -18,10 +18,16 @@
       "path": "../connection/tsconfig.client.json"
     },
     {
-      "path": "../locale"
+      "path": "../locale/tsconfig.client.json"
     },
     {
-      "path": "../ui-conversation"
+      "path": "../resources"
+    },
+    {
+      "path": "../ui-chat/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-conversation/tsconfig.client.json"
     },
     {
       "path": "../ui-input-trigger"
@@ -33,7 +39,13 @@
       "path": "../ui-renderer"
     },
     {
+      "path": "../ui-sidebar-right"
+    },
+    {
       "path": "../ui-session"
+    },
+    {
+      "path": "../ui-workspace"
     },
     {
       "path": "../ui-slots"

@@ -1,6 +1,100 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/core/agent-loop/README.md
-README.md: 7c3073aefb90fa2ec74d521d6c9d97aff5f74ace
-README.zh.md: 44621a0b02eadfc574f6f6b924f64cfeb4141cd3
+/:
+  en: 5d57c28077cb670a
+  zh: 8113ea0248d66a17
+/deepseek-ai-dsh-agent-loop:
+  en: b711ded29c7b9a17
+  zh: cbccba927743f35f
+/deepseek-ai-dsh-agent-loop/summary:
+  en: 9256331cd3baf930
+  zh: 02b4c10cf3286eb3
+/deepseek-ai-dsh-agent-loop/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-agent-loop/use-this-package:
+  en: 35a960c0100a6aa4
+  zh: 438e133fb4c24a9e
+/deepseek-ai-dsh-agent-loop/use-this-package/configure-declarative-agents:
+  en: 96295035babf4f90
+  zh: 8848f9497019ee63
+/deepseek-ai-dsh-agent-loop/use-this-package/create-or-resume-agents-programmatically:
+  en: 82ec792637e8e57f
+  zh: e32f8ec5ee17afcf
+/deepseek-ai-dsh-agent-loop/use-this-package/what-a-step-does:
+  en: 15ce4783b53532a2
+  zh: b04a18337281237a
+/deepseek-ai-dsh-agent-loop/understand-the-implementation:
+  en: ce7e776e9d516bdb
+  zh: 59d2751743db7795
+/deepseek-ai-dsh-agent-loop/understand-the-implementation/design-concept:
+  en: 030202c112f89366
+  zh: 621d53ed755cafa3
+/deepseek-ai-dsh-agent-loop/understand-the-implementation/request-headers-and-adapter-defaults:
+  en: 6fa5c8b2f91552d8
+  zh: 75886c7e922d23df
+/deepseek-ai-dsh-agent-loop/understand-the-implementation/source-map:
+  en: d7f6b2947ec9b2f3
+  zh: 8a3d566fb8cf2938
+/deepseek-ai-dsh-agent-loop/understand-the-implementation/creation-and-teardown:
+  en: 6bc52b8ef503eeda
+  zh: 3290052ebc47baf6
+/deepseek-ai-dsh-agent-loop/understand-the-implementation/persistence-integration:
+  en: da056b9f0dde4ab3
+  zh: ba9ce3b19c17ca22
+/deepseek-ai-dsh-agent-loop/understand-the-implementation/turn-and-step-flow:
+  en: ed5137ef858b3424
+  zh: af2ff3bc15576456
+/deepseek-ai-dsh-agent-loop/understand-the-implementation/failure-and-cancellation:
+  en: 6bd69c9cf8790e14
+  zh: e2812f6bb4c26f10
+/deepseek-ai-dsh-agent-loop/further-exploration:
+  en: 6c73cd2390e24b86
+  zh: ba042ca93cc0f595
+/deepseek-ai-dsh-agent-loop/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-agent-loop/model-experience/complete-conversation-request:
+  en: 5507d83eb979c737
+  zh: 0ffde85d627b3933
+/deepseek-ai-dsh-agent-loop/model-experience/complete-conversation-request/what-the-model-sees:
+  en: cd89b20032608049
+  zh: 1f57d4cecc30313b
+/deepseek-ai-dsh-agent-loop/model-experience/complete-conversation-request/token-effect:
+  en: ad93d8d61968a25d
+  zh: 268ff858b0fa96e8
+/deepseek-ai-dsh-agent-loop/model-experience/complete-conversation-request/kv-cache-effect:
+  en: c002d27c825d04e8
+  zh: b0dbdd95d3b3b6b5
+/deepseek-ai-dsh-agent-loop/model-experience/retained-message-history:
+  en: 50d33d852dec1e28
+  zh: ec15695304f25f38
+/deepseek-ai-dsh-agent-loop/model-experience/retained-message-history/what-the-model-sees:
+  en: 0a36273eff0815fd
+  zh: 1aa1e856d8b1afc9
+/deepseek-ai-dsh-agent-loop/model-experience/retained-message-history/token-effect:
+  en: 91552b9cbef55638
+  zh: 6e835a66d984f62d
+/deepseek-ai-dsh-agent-loop/model-experience/retained-message-history/kv-cache-effect:
+  en: 2b82cd95e6335e91
+  zh: 2275f0c808427bf1
+/deepseek-ai-dsh-agent-loop/model-experience/undispatched-calls-after-cancellation:
+  en: a7afa95628111dd8
+  zh: 1d72925e9915f75f
+/deepseek-ai-dsh-agent-loop/model-experience/undispatched-calls-after-cancellation/what-the-model-sees:
+  en: e3c07034229f15ed
+  zh: b0ee0507606b34ce
+/deepseek-ai-dsh-agent-loop/model-experience/undispatched-calls-after-cancellation/token-effect:
+  en: 7c139b3584615343
+  zh: 02d5d8239b502b06
+/deepseek-ai-dsh-agent-loop/model-experience/undispatched-calls-after-cancellation/kv-cache-effect:
+  en: 1750eea3cc5bf2d8
+  zh: 519d37b0cb4467a7
+/deepseek-ai-dsh-agent-loop/known-limitations-and-deferred-work:
+  en: f658b8bc2935578f
+  zh: 4d503701fa17b982
+/deepseek-ai-dsh-agent-loop/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

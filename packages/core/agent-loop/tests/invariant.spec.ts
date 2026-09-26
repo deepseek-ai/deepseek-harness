@@ -4,6 +4,13 @@ import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import * as AgentLoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
 import { createUserMessage, markAgentLoopRequest, type GenerateOptions  } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'x': { kind: 'x' } & ContextFormed
+  }
+}
 
 async function setup(): Promise<Context> {
   const ctx = new Context()
@@ -45,7 +52,7 @@ describe('request-reconstruction invariant', () => {
   it('includes context appended inside the open step before dispatch', async () => {
     const { ctx, session } = await requestSetup()
     session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: '[step context]' }], source: { kind: 'plugin', plugin: 'x' },
+      content: [{ type: 'text', text: '[step context]' }], source: { kind: 'x' },
     }), { surfaceOp: 'append' })
     const options = loopRequest({
       model: 'm',

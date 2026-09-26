@@ -22,7 +22,7 @@ Host presenter 与 Client keyed renderer 分担展示会形成对同一事件的
 
 ## Decision
 
-下述展示对等要求不包含已独立批准的[嵌套 terminal 卡片修复](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)；其他展示与所有权约束全部保留。
+下述展示对等要求不包含已独立批准的[嵌套 terminal 卡片修复](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)和[紧凑工具详情](2026-09-10-compact-tool-details.zh.md)；其他展示与所有权约束全部保留。
 
 Session Remote journal 只下发原始、已验证、可持久化的 Session event。`session.page` 和 `session.follow` 不解析工具参数，不查询 Tools registry，不恢复 presenter scope，不执行 `presentCall`／`presentResult`，也不构造或克隆任何 tool view。
 
@@ -51,7 +51,7 @@ Host 的 `ToolDefinition.presentCall`、`ToolDefinition.presentResult`、`ToolCa
 | 保留 | Session 日志格式、Remote journal 生命周期与 Conversation identity/topology |
 | 保留 | 现有 keyed slot、Generic fallback、Chat、Details 与 Trajectory 结构 |
 | 禁止 | 新 Client presenter service、平行 registry 或 wire renderer id |
-| 禁止 | 新卡片、视觉改版、交互改版或 PTC dispatch rich-card 增强，[嵌套 terminal 卡片例外](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)除外 |
+| 禁止 | 新卡片、视觉改版、交互改版或 PTC dispatch rich-card 增强，[嵌套 terminal 卡片例外](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)和[紧凑工具详情](2026-09-10-compact-tool-details.zh.md)除外 |
 | 禁止 | 为兼容保留双写、版本协商或旧 `view` 字段 |
 
 ## 术语
@@ -64,7 +64,7 @@ Host 的 `ToolDefinition.presentCall`、`ToolDefinition.presentResult`、`ToolCa
 
 **Client card model**指 `ui-tool/src/client/tool/models/` 下直接供 `TerminalBlock`、`DiffBlock`、`ReadBlock`、`SearchBlock`、`WebBlock` 或 `ToolRow` 使用的纯 props 数据。
 
-**专用卡片**指 terminal、diff、read、search 与 web 的结构化正文；标题、摘要、状态点和普通 IN／OUT 文本仍属于通用工具行。
+**专用卡片**指 terminal、diff、read、search 与 web 的结构化正文；标题、摘要、生命周期样式、业务图形和普通 IN／OUT 文本仍属于通用工具行。
 
 **对等**指同一受支持输入产生由现有组件、组装与浏览器证据固定的用户可见结果和交互，不要求相同的中间 TypeScript 类型或内部函数调用。
 
@@ -301,7 +301,7 @@ Client terminal model 从工具名称、调用参数、结果 content、error �
 | 输入 | 保持的结果 |
 |---|---|
 | 标准 `bash`／`pwsh` 前台 running | terminal prompt、description、cwd、running 状态 |
-| 标准前台 success | terminal output、exit code/signal、成功或失败状态点 |
+| 标准前台 success | terminal output、exit code/signal 与结算状态呈现 |
 | `run_in_background:true` | Generic 行与原始结果 |
 | 工具执行 error | Generic IN／OUT 与错误摘要 |
 | persistent `bash`／`pwsh` running | terminal prompt |

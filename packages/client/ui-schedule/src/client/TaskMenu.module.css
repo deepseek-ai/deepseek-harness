@@ -1,0 +1,189 @@
+/* Rules the task manager's four menus use, copied from the shared
+ * ui-primitives Menu.module.css so this package owns its own card. */
+
+.root {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Compact translucent dropdown card. */
+.list {
+  /* min-widths below are the design's outer card widths — include the pad. */
+  box-sizing: border-box;
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 0;
+  border-radius: 16px;
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
+  /* Elevated surface: the scrollbar thumb takes the l2 elevation tokens. The
+     declaration sits on the card rather than on `.scrollable .viewport`
+     because the elevation is a property of this surface, and the custom
+     properties inherit down to whichever descendant actually scrolls (see
+     ui-theme styles/scrollbar.css for the rebinding contract). */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  min-width: 144px;
+  max-width: 360px;
+}
+
+/* Portal mode: fixed in the viewport, coordinates supplied inline from the
+ * anchor rect (align resolved in JS, the in-place offset rules above don't
+ * apply). Portaled lists must layer above modal overlays (z 1000) — an anchor
+ * inside a dialog still expects its menu on top. */
+.portal {
+  position: fixed;
+  top: auto;
+  left: auto;
+  z-index: 1100;
+}
+
+.alignEnd {
+  left: auto;
+  right: 0;
+}
+
+/* Viewport fit: the card stops 12px short of the viewport's top/bottom edges
+ * (the hook's margin) and taller content scrolls inside .viewport. */
+.scrollable {
+  max-height: calc(100vh - 12px - max(12px, var(--dsh-frame-top-clearance, 12px)));
+}
+
+.viewport {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.scrollable .viewport {
+  overflow-y: auto;
+}
+
+/* Owner controls pinned above the scrolling rows; l2 hairline (l1 is
+ * near-invisible on the menu surface) mirrors the .separator spacing. */
+.header {
+  flex: none;
+  padding: 5px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.itemWrap {
+  position: relative;
+}
+
+/* Menu cell: compact text, icon, and selection spacing. */
+.item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+}
+
+.item:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Arrow navigation moves real focus, so the row the keyboard is on carries the
+   same fill the pointer gets: the fill is the row's focus indication, and the
+   browser's default ring would double it. */
+.item:focus-visible:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: none;
+}
+
+.item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.itemIcon {
+  display: inline-flex;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.itemIcon svg,
+.check {
+  width: 14px;
+  height: 14px;
+}
+
+.itemLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check {
+  flex: none;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Selected cell keeps the plain fill (marker is the trailing check); the
+ * class remains as a hook for owner-side emphasis. */
+.selected {
+  background: transparent;
+}
+
+/* Destructive row: error text/icon, danger hover fill. */
+.danger {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.danger .itemIcon {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+.danger:focus-visible:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  outline: none;
+}
+
+/* Heading row: non-interactive small grey text, padding aligned with items. */
+.label {
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Separator cell (figma 122:9481): py 4 / px 2 around the hairline. l2, not
+ * l1, for the same reason as .header: l1 is near-invisible on this surface. */
+.separator {
+  height: 0.5px;
+  margin: 3px 2px;
+  background: var(--dsw-alias-border-l2);
+}
+
+/* Two data separators in a row draw one line. */
+.separator + .separator {
+  display: none;
+}

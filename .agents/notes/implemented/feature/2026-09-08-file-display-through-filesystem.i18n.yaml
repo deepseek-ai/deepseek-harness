@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-08-file-display-through-filesystem.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-08-file-display-through-filesystem.md
-2026-09-08-file-display-through-filesystem.md: b1f93f8c9fbd245ad69bc732b2a599c6e0abeb0d
-2026-09-08-file-display-through-filesystem.zh.md: faa3fdb757c9a3fc60cae37692a559158e02ceee
+/agent-note-authenticated-file-display-reuses-filesystem-byte-reads:
+  en: 1db6d91b6011384e
+  zh: 68152c2e3fff2931
+/agent-note-authenticated-file-display-reuses-filesystem-byte-reads/problem:
+  en: c8e25473775da151
+  zh: af807ea30d423858
+/agent-note-authenticated-file-display-reuses-filesystem-byte-reads/decision:
+  en: d448ed98f635fd14
+  zh: 81795f947a0c1c99
+/agent-note-authenticated-file-display-reuses-filesystem-byte-reads/alternatives-considered:
+  en: 80e52b422305ca28
+  zh: d0e38b1cd96be951
+/agent-note-authenticated-file-display-reuses-filesystem-byte-reads/consequences:
+  en: 15ec0dd18d621f24
+  zh: e4925a96395edd8c
+/agent-note-authenticated-file-display-reuses-filesystem-byte-reads/testing:
+  en: 9d28b1552a2decde
+  zh: 6ea9f91992bcfa1a

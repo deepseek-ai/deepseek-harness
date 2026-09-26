@@ -1,28 +1,33 @@
-/* Context-occupancy ring beside the send button plus its click-open breakdown
-   panel (menu surface: r12, elevation-prominent). */
+/* Context-occupancy pill below the composer plus its click-open breakdown
+   panel (menu surface: elevation-prominent). */
 
 .root {
-  position: relative;
   display: inline-flex;
+  flex: none;
 }
 
-/* Same 28px circular hit target family as the composer's attach button. */
 .trigger {
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: none;
-  width: 28px;
-  height: 28px;
+  padding: 1px 8px;
   border: none;
-  border-radius: 999px;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-tertiary);
+  font-family: inherit;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-variant-numeric: tabular-nums;
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.trigger:hover {
+.trigger:hover,
+.trigger[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
 }
 
 .track {
@@ -39,16 +44,15 @@
 }
 
 .panel {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  z-index: 100;
+  position: fixed;
+  z-index: 1100;
   box-sizing: border-box;
-  width: 264px;
+  width: min(264px, calc(100vw - 24px));
   padding: 12px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
   font-size: 12px;

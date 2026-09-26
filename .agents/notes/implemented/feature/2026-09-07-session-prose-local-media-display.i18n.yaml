@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-07-session-prose-local-media-display.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-07-session-prose-local-media-display.md
-2026-09-07-session-prose-local-media-display.md: ed740acd0d0d6eaf7f8834dc8d6280a33305aecd
-2026-09-07-session-prose-local-media-display.zh.md: de8a7f99d7aabc4474f525f9f37f50a465a80840
+/agent-note-session-prose-local-media-paths-display-through-a-same-origin-file-route:
+  en: 58736e33d45c5578
+  zh: 224ab6304833ce7f
+/agent-note-session-prose-local-media-paths-display-through-a-same-origin-file-route/problem:
+  en: 934cbf480461e9e6
+  zh: 986d53c72b94cfe4
+/agent-note-session-prose-local-media-paths-display-through-a-same-origin-file-route/decision:
+  en: 37e189446dd25601
+  zh: 0321b091e2250650
+/agent-note-session-prose-local-media-paths-display-through-a-same-origin-file-route/alternatives-considered:
+  en: b184da259c41e4de
+  zh: 5c75e50fa595a30e
+/agent-note-session-prose-local-media-paths-display-through-a-same-origin-file-route/consequences:
+  en: 9929a8ad123b21b0
+  zh: ac5bf7f3a317d180
+/agent-note-session-prose-local-media-paths-display-through-a-same-origin-file-route/testing:
+  en: 3c29c3c506a993b2
+  zh: 2dfac506ae2ff93a

@@ -1,4 +1,4 @@
-import { createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 /**
  * Coordinator semantics against a bare fake backend — the RFC's named unit
  * tier for the seam: adoption (fresh, seeded, re-adoption via the handoff
@@ -135,6 +135,12 @@ describe('SessionTelemetryCoordinator capture', () => {
     ;(message.body as { content: { text: string }[] }).content[0]!.text = 'tampered'
     const logged = session.snapshotEvents()[1] as SessionEvent<'user/message'>
     expect(logged.data.content[0]).toMatchObject({ text: 'hello' })
+    expect(message.sourceEvent?.sessionId).toBe(session.id)
+    expect(message.sourceEvent?.envelope).not.toHaveProperty('data')
+    expect(message.sourceEvent?.envelope).toMatchObject({ seq: logged.seq, time: logged.time, type: logged.type, surfaceOp: 'append' })
+    expect(message.sourceEvent?.envelope).not.toBe(logged)
+    message.sourceEvent!.envelope.time = 0
+    expect(logged.time).not.toBe(0)
   })
 
   it('captures a live request header without replaying previously withheld events', async () => {
@@ -299,8 +305,8 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
       })
       const parent = liveSession(ctx, 'history-parent')
       appendTurn(parent)
-      const child = ctx.sessions.create(SessionId('history-child'), { seed: [...parent.snapshotEvents()] })
-      const boundary = child.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      const child = ctx.sessions.fork(parent, undefined, SessionId('history-child'))
+      const boundary = child.snapshotEvents().at(-1)!
       child.append('turn/start', { turn: 2 })
       expect(backend.records).toEqual([])
       coordinator.captureSession(child, boundary.seq)
@@ -387,6 +393,96 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
 })
 
 describe('SessionTelemetryCoordinator adoption', () => {
+  it.each([
+    { capture: 'live', includeHistory: false },
+    { capture: 'on-demand', includeHistory: false },
+    { capture: 'live', includeHistory: true },
+    { capture: 'on-demand', includeHistory: true },
+  ] as const)('restores a seeded Session with $capture capture and includeHistory=$includeHistory', async (options) => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SessionStore)
+      const parent = liveSession(ctx, 'cold-parent')
+      appendTurn(parent)
+      parent.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      const child = ctx.sessions.fork(parent, undefined, SessionId('cold-child'))
+      child.append('turn/start', { turn: 2 })
+      child.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+      const resumedId = SessionId('restored-child')
+      const resumed = Session.fromRestore(resumedId, child.snapshotEvents(), { ...child.header, id: resumedId },
+        child.inheritedEventCount, 'shared-frozen')
+      const backend = new FakeBackend()
+      let coordinator!: SessionTelemetryCoordinator
+      await ctx.plugin({
+        name: 'seeded-resume-telemetry', inject: ['sessions'],
+        apply: (inner: Context) => { coordinator = new SessionTelemetryCoordinator(inner, backend, options) },
+      })
+      ctx.sessions.enter(resumed)
+      ctx.sessions.announce(resumed)
+      const expected = resumed.snapshotEvents().slice(options.includeHistory ? 0 : resumed.firstLiveSeq)
+      const captured = () => backend.ledger().filter(record => record.attributes['session.id'] === resumedId)
+      expect(captured().map(record => record.attributes['event.seq']))
+        .toEqual(options.capture === 'live' ? expected.map(event => event.seq) : [])
+      coordinator.captureSession(resumed)
+      coordinator.captureSession(resumed)
+      expect(captured().map(record => record.attributes['event.seq'])).toEqual(expected.map(event => event.seq))
+      expect(expected.at(-1)?.type).toBe('session/end-seed')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['live', 'on-demand'] as const)('captures the child-owned fork marker and closers in %s mode', async (capture) => {
+    const { ctx, backend, coordinator, fiber } = await setup(new FakeBackend(), capture)
+    try {
+      const parent = liveSession(ctx, 'fork-parent')
+      appendTurn(parent)
+      parent.append('step/start', { turn: 1, step: 1 })
+      parent.append('assistant/message', {
+        turn: 1, step: 1, stream: [],
+        message: createAssistantMessage({
+          content: [{ type: 'tool-call', id: ToolCallId('fork-call'), name: 'bash', arguments: '{}' }],
+          source: { provider: 'mock', model: 'mock' },
+        }),
+      }, { surfaceOp: 'append' })
+      parent.append('tool/call', {
+        turn: 1, step: 1, callId: ToolCallId('fork-call'), name: 'bash', arguments: '{}',
+      })
+      const child = ctx.sessions.fork(parent, undefined, SessionId('fork-child'))
+      const ownEvents = child.snapshotEvents().slice(child.inheritedEventCount)
+      expect(ownEvents.map(event => event.type)).toEqual([
+        'session/end-seed', 'tool/result', 'step/end', 'turn/end',
+      ])
+      expect(child.firstLiveSeq).toBe(child.inheritedEventCount + ownEvents.length)
+      const captured = () => backend.ledger().filter(record => record.attributes['session.id'] === child.id)
+      expect(captured().map(record => record.attributes['event.seq']))
+        .toEqual(capture === 'live' ? ownEvents.map(event => event.seq) : [])
+
+      coordinator.captureSession(child)
+      coordinator.captureSession(child)
+      expect(captured().map(record => record.attributes['event.seq'])).toEqual(ownEvents.map(event => event.seq))
+      expect(captured().map(record => record.body)).toEqual(ownEvents.map(event => event.data))
+
+      await fiber.dispose()
+      const second = new FakeBackend()
+      let reloaded!: SessionTelemetryCoordinator
+      await ctx.plugin({
+        name: 'fork-telemetry-reloaded',
+        inject: ['sessions'],
+        apply: (inner: Context) => {
+          reloaded = new SessionTelemetryCoordinator(inner, second, { capture })
+        },
+      })
+      reloaded.captureSession(child)
+      expect(second.ledger()).toEqual([])
+      const next = child.append('turn/start', { turn: 2 })
+      reloaded.captureSession(child)
+      expect(second.ledger().map(record => record.attributes['event.seq'])).toEqual([next.seq])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('replays a new fork object from its constructor boundary without its inherited prefix', async () => {
     const backend = new FakeBackend()
     const ctx = new Context()

@@ -28,19 +28,19 @@ const COPY: Record<string, string> = {
 /** Empty global standard-kit hooks (the row reads neither). */
 function emptySessions() {
   const store = createSnapshotStore<SessionListState>(
-    { ids: [], byId: {}, current: undefined, phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined })
+    { ids: [], byId: {}, phase: 'ready', projectionsBySession: {} })
   return bindSnapshotSelector(store)
 }
 function emptyWorkspaces() {
   const store = createSnapshotStore<WorkspaceSnapshot>({
-    items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+    items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
   })
   return bindSnapshotSelector(store)
 }
 
-type AttentionSnapshot = Parameters<Parameters<FontSizeRowComponentProps['useSessionPendingInteraction']>[0]>[0]
+type AttentionSnapshot = Parameters<Parameters<FontSizeRowComponentProps['useSessionStatus']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
-const useSessionPendingInteraction: FontSizeRowComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
+const useSessionStatus: FontSizeRowComponentProps['useSessionStatus'] = selector => selector(noAttention)
 
 function mount(fontSize = 14) {
   // Real store instance — the sanctioned zero-machinery path for tests.
@@ -49,8 +49,8 @@ function mount(fontSize = 14) {
   const setFontSize = vi.fn()
   const props: FontSizeRowComponentProps = {
     useSessions: emptySessions(),
-    useSessionPendingInteraction,
-    usePanelInfo, useResource,
+    useSessionStatus,
+    usePanelInfo, useSessionRetainInfo: () => undefined, useResource,
     useWorkspaces: emptyWorkspaces(),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,

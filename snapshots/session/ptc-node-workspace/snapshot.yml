@@ -10,6 +10,8 @@ replay:
   override: true
 platform: posix
 permission: workspace-write
+environment:
+  ELECTRON_RUN_AS_NODE: '1'
 workspace:
   final: true
   parent: outside-temp

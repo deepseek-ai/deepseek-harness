@@ -1,5 +1,5 @@
 .callRow {
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
 }
 
 .subCalls {

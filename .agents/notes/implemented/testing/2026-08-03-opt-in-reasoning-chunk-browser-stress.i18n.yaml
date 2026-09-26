@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-03-opt-in-reasoning-chunk-browser-stress.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-08-03-opt-in-reasoning-chunk-browser-stress.md
-2026-08-03-opt-in-reasoning-chunk-browser-stress.md: 5b679ce2682743531bd3ff48621cbde462a335aa
-2026-08-03-opt-in-reasoning-chunk-browser-stress.zh.md: 3d730a4505351be968c71092c65a9b9c6b69818c
+/agent-note-frame-coalesced-reasoning-chunk-publication-and-browser-stress-validation:
+  en: c63de146daf09530
+  zh: 5e117bc92e2ac783
+/agent-note-frame-coalesced-reasoning-chunk-publication-and-browser-stress-validation/problem:
+  en: 73673725b44538c9
+  zh: 32027f7a457ee3ae
+/agent-note-frame-coalesced-reasoning-chunk-publication-and-browser-stress-validation/decision:
+  en: 76879cc8efbe7c80
+  zh: 539556341dcb04e5
+/agent-note-frame-coalesced-reasoning-chunk-publication-and-browser-stress-validation/alternatives-considered:
+  en: 8d0a7be0a8660a9c
+  zh: c1e94daae31893c5
+/agent-note-frame-coalesced-reasoning-chunk-publication-and-browser-stress-validation/consequences:
+  en: 7b67ec0da7f08635
+  zh: 2b808c760e8df494

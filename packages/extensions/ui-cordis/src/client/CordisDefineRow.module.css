@@ -1,8 +1,6 @@
 /* Cordis definition card: DisclosureRow chrome (leading/chevron/title come from
    that primitive) plus this card's own trailing run switch and source body.
-   No running sweep: `cordis_define` only registers a definition in host memory,
-   so the call settles in the same turn it starts and the state dot carries the
-   whole signal. */
+   No running sweep: `cordis_define` settles in the same turn it starts. */
 
 .card {
   display: flex;

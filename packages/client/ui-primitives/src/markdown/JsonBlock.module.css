@@ -10,7 +10,7 @@
   border: none;
   background: transparent;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
 }
 
 .toggle:hover {
@@ -24,7 +24,7 @@
   overflow: auto;
   background: var(--dsw-alias-markdown-code-block);
   border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-lg);
   font-family: var(--ds-font-family-code);
   font-size: 11px;
   line-height: 16px;

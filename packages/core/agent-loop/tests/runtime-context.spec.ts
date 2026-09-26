@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import { RuntimeContextProjection } from '../src/runtime-context.ts'
 
-const SOURCE = '@deepseek-ai/dsh-system-prompt'
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'test-compaction': { kind: 'test-compaction' } & ContextFormed
+  }
+}
+
+const SOURCE = 'runtime-context'
 
 function contextMessage(text: string) {
   return createUserMessage({
     content: [{ type: 'text', text }],
-    source: { kind: 'plugin', plugin: SOURCE },
+    source: { kind: SOURCE },
   })
 }
 
@@ -22,7 +29,7 @@ describe('RuntimeContextProjection', () => {
     const shadowed = session.append('user/message', contextMessage('shadowed'), { surfaceOp: 'append' })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'summary' }],
-      source: { kind: 'plugin', plugin: 'test-compaction' },
+      source: { kind: 'test-compaction' },
     }), {
       surfaceOp: { op: 'replace', startSeq: shadowed.seq, endSeq: shadowed.seq },
       sourceEventSeqs: [shadowed.seq],
@@ -32,8 +39,7 @@ describe('RuntimeContextProjection', () => {
     expect(session.surface.nodes).toContain(retained.seq)
     expect(projection.project('retained', [])).toBeUndefined()
     expect(projection.project('next', [{ name: 'sandbox:policy', text: 'policy' }])?.source).toEqual({
-      kind: 'plugin',
-      plugin: SOURCE,
+      kind: SOURCE,
       form: 'snapshot',
       sections: [{ name: 'sandbox:policy', text: 'policy' }],
     })

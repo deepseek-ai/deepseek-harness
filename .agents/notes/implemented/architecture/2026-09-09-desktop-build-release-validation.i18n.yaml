@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-desktop-build-release-validation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-09-desktop-build-release-validation.md
-2026-09-09-desktop-build-release-validation.md: 23aeeaa98d2647f8b9f54e94ea2aedaa82b19e55
-2026-09-09-desktop-build-release-validation.zh.md: 266bca5bbd593907c9a8fadd43050113ede94100
+/agent-note-verify-desktop-release-compatibility-during-packaging:
+  en: 4183cb362d89a8fb
+  zh: ede5e45ba6245b6b
+/agent-note-verify-desktop-release-compatibility-during-packaging/problem:
+  en: ae3f1e31ba929c0e
+  zh: 1a42684e41531547
+/agent-note-verify-desktop-release-compatibility-during-packaging/decision:
+  en: 352372f213c43a76
+  zh: 54dc9826254e56f2
+/agent-note-verify-desktop-release-compatibility-during-packaging/alternatives-considered:
+  en: 515cec0d22c8373c
+  zh: e3a5b3058b6316c2
+/agent-note-verify-desktop-release-compatibility-during-packaging/consequences:
+  en: 5193e3ce82faa984
+  zh: 1bd7a31152e3b71c

@@ -34,7 +34,7 @@ kind: "package-reference"
 ### 最小配置
 
 ```yaml
-- name: '@deepseek-ai/dsh-llm-deepseek'
+- name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   config:
     apiKeyEnv: DEEPSEEK_API_KEY
     retryPolicy:

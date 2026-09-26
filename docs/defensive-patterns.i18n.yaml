@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for defensive-patterns.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/defensive-patterns.md
-defensive-patterns.md: 9db582354628a13abd43c5bd052dbbfd6e52f79f
-defensive-patterns.zh.md: 11b2a34a40957acf6bfc97a36c1e9b9b9633cf9b
+/defensive-patterns:
+  en: 6316b1da0ae4561b
+  zh: f059647429c707d5
+/defensive-patterns/report-orthogonal-outcomes-independently:
+  en: 09cdbaa7cf763dc9
+  zh: 11e5c13d77b2a563
+/defensive-patterns/honor-public-contracts-on-both-sides:
+  en: 157f966db7329171
+  zh: 80da311819125f36
+/defensive-patterns/async-state-is-not-synchronous-state:
+  en: 33085f2b58bab16c
+  zh: be38e69a9c7d3f0e
+/defensive-patterns/dispose-must-reach-quiescence-not-just-request-it:
+  en: 5c906be504b88a65
+  zh: 8f428f59a87bb1a8
+/defensive-patterns/contain-callback-exceptions-in-the-dispatcher:
+  en: ae1788e76190db2c
+  zh: a55ab7473bb0c8dd
+/defensive-patterns/never-hand-untrusted-output-the-ambient-environment-or-predictable-paths:
+  en: 09ad9d6433026468
+  zh: cc0ba1a52859bb08
+/defensive-patterns/unlink-link-shaped-paths:
+  en: 644e6b1a9bd7b7d7
+  zh: 823600c76c81ead1

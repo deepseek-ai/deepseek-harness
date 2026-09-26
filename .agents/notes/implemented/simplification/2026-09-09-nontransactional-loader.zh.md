@@ -18,7 +18,7 @@ Loader 立即更改条目选项。EntryGroup 并发启动同级条目并记录�
 
 Fiber、Entry 和 isolate 保持上游的更新返回行为。App boot 通过现有的 `internal/update` waterfall 观察被丢弃的重启 promise，并在检查 patch 重载前等待 fiber。游离的导入完成观察器处理 fiber 的两种结果；fiber 仍保留失败信息供显式检查。Include 的持久写入在删除子条目前后均排空，防止后续拆卸写入掩盖更早的终止性写入失败。
 
-保留两项 #932 专属 vendor 改动：Include 中等待初始文件创建并强制重新读取，以及 Schemastery 条件导出。恢复 #932 前的防抖写入和读取顺序，会在缺失文件初始化测试中复现 `ENOENT`。保留这两行可以维持已有 `initial` 选项，而无需在应用侧增加文件写入器或另一份 YAML 序列化逻辑。移除 Schemastery exports 后，Web preset 测试在启动时复现 `ERR_REQUIRE_ESM_RACE_CONDITION`：并发 ESM 导入使 Node 回退到 CJS 入口。HMR 注入装饰器、条件 patch 克隆及更新返回值采用 #932 前的行为。显式 `workspace:^` 依赖使 #932 的 workspace 链接开关与专用锁文件检查不再必要。
+保留两项 #932 专属 vendor 改动：Include 中等待初始文件创建并强制重新读取，以及 Schemastery 条件导出。恢复 #932 前的防抖写入和读取顺序，会在缺失文件初始化测试中复现 `ENOENT`。保留这两行可以维持已有 `initial` 选项，而无需在应用侧增加文件写入器或另一份 YAML 序列化逻辑。移除 Schemastery exports 后，Web preset 测试在启动时复现 `ERR_REQUIRE_ESM_RACE_CONDITION`：并发 ESM 导入使 Node 回退到 CJS 入口。HMR 注入装饰器、条件 patch 克隆及更新返回值采用 #932 前的行为。显式 `workspace:` 依赖使 #932 的 workspace 链接开关与专用锁文件检查不再必要。
 
 ## 考虑过的替代方案
 

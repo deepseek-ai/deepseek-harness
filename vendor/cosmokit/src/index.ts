@@ -8,3 +8,5 @@ export * from './misc.ts'
 export * from './string.ts'
 /** Time constants, parsing, and formatting helpers. */
 export * from './time.ts'
+/** Immutable config references shared by schema validators and runtimes. */
+export * from './volatile.ts'

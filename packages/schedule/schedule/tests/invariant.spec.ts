@@ -18,6 +18,7 @@ function create(id: string): ScheduleChange {
     schedule: {
       id: ScheduleId(id),
       kind: 'after',
+      title: 'check logs',
       prompt: 'check logs',
       afterSeconds: 1,
       scheduledAt: '2026-08-05T12:00:01.000Z',
@@ -32,6 +33,7 @@ function createEvery(id: string): ScheduleChange {
     schedule: {
       id: ScheduleId(id),
       kind: 'every',
+      title: 'check metrics',
       prompt: 'check metrics',
       everySeconds: 300,
       scheduledAt: '2026-08-05T12:05:00.000Z',

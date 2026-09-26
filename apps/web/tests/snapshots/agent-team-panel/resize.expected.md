@@ -1,0 +1,15 @@
+- dialog "Agent Team":
+  - heading "Members" [level=3]
+  - button "lead Current chat Inactive" [disabled]
+  - heading "Shared tasks 2" [level=3]
+  - article:
+    - strong: Agent task
+    - text: In progress
+    - paragraph: Created by the Team Lead
+    - text: "task-1Owner: leadWrite scopes: src/web"
+  - article:
+    - strong: Responsive task
+    - text: Pending
+    - paragraph: Check the task description before you start work. Check the task description before you start work. Check the task description before you start work.
+    - button "Show more"
+    - text: "task-2Owner: UnownedReady"

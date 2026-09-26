@@ -161,3 +161,5 @@ This Dev Note is working context for maintainers: open questions and undecided d
 The limitations above name the open directions — resumable attempts, server-side revocation, orphaned-record discovery — each needing its own design and store before landing. The invariant companion is the one load-bearing runtime check: settlement must always find the key released, because a wedged key is indistinguishable from a busy one and only a restart frees it.
 
 </details>
+
+A flow can use session.commit(record) to refuse writes after cancellation. Once commit is admitted, cancel() leaves it running until persistence and flow settlement complete. Flows that write through their own credential adapter remain responsible for their own cancellation ordering.

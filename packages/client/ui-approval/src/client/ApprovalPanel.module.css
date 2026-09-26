@@ -10,7 +10,7 @@
   width: 100%;
   max-width: var(--dsh-chat-content-width);
   border: 1px solid var(--dsw-alias-state-warn-secondary);
-  border-radius: 20px;
+  border-radius: var(--dsw-radius-xl);
   background: var(--dsw-specific-input-major);
   box-shadow: var(--dsw-shadow-lv2);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
@@ -26,14 +26,6 @@
   color: var(--dsw-alias-state-warn-primary);
   font-size: 13px;
   line-height: 18px;
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  corner-shape: round;
-  background: var(--dsw-alias-state-warn-primary);
 }
 
 .body {

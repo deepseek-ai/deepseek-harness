@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { CodeBlock as LocalizedCodeBlock } from '../src/markdown/CodeBlock.tsx'
+import { CODE_HIGHLIGHT_EXTENSIONS, languageForPath } from '../src/code-highlighting.ts'
+import { readLangHintForPath } from '@deepseek-ai/dsh-util-code-language'
 import { highlightToHtml, subscribeGrammarLoaded } from '../src/markdown/highlight.ts'
 import { markdownLabels } from './labels.client.ts'
 
@@ -33,16 +35,21 @@ describe('highlightToHtml', () => {
     expect(highlightToHtml('x', undefined)).toBeUndefined()
   })
 
-  // Every read-tool language hint whose grammar loads lazily (the boot set —
-  // ts/js/shell/sh/json — is covered above). Touching each one drives its own
-  // dynamic import thunk, so the whole LAZY_GRAMMARS table is exercised.
+  // Every language whose grammar loads lazily (the boot set — ts/js/shell/sh/json
+  // — is covered above). Touching each one drives its own dynamic import thunk, so
+  // the whole LAZY_GRAMMARS table is exercised.
   const LAZY_ALIASES = [
     'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'cs', 'kotlin', 'swift', 'php',
     'yaml', 'toml', 'ini', 'md', 'mdx', 'html', 'css', 'scss', 'less', 'sql',
     'xml', 'lua',
+    'fish', 'dotenv', 'log', 'csv', 'diff', 'http', 'rst', 'latex', 'bibtex',
+    'asciidoc', 'bat', 'powershell', 'r', 'julia', 'dart', 'scala', 'clojure',
+    'erlang', 'elixir', 'haskell', 'fsharp', 'vb', 'perl', 'verilog',
+    'system-verilog', 'graphql', 'proto', 'hcl', 'nix', 'vue', 'svelte', 'make',
+    'cmake', 'groovy',
   ]
 
-  it('lazily loads every read-card grammar: plain first, highlighted after load', async () => {
+  it('lazily loads every extension grammar: plain first, highlighted after load', async () => {
     const registered = Promise.withResolvers<undefined>()
     // Registration notifications, not a private polling deadline, establish readiness.
     const stop = subscribeGrammarLoaded(() => {
@@ -55,7 +62,34 @@ describe('highlightToHtml', () => {
     } finally {
       stop()
     }
-  })
+    // 57 dynamic grammars (some with large embedded sub-grammars) exceed the default.
+  }, 120_000)
+
+  it('highlights both ids every suffix reaches through the shipped surfaces', async () => {
+    // LAZY_ALIASES above is a hand-synced list, so it cannot catch an alias whose
+    // target is in neither LANGS nor LAZY_GRAMMARS: ensureGrammar treats that as a
+    // registered boot grammar, supportsHighlighting still reports true, and the
+    // render then throws. Walking the shared table's two ids per suffix covers
+    // every hint the Code preview and the read card can actually produce.
+    const hints = new Set<string>()
+    for (const extension of CODE_HIGHLIGHT_EXTENSIONS) {
+      const path = `file.${extension}`
+      for (const hint of [languageForPath(path), readLangHintForPath(path)]) if (hint !== undefined) hints.add(hint)
+    }
+    expect(hints.size).toBeGreaterThan(50)
+    const allLoaded = (): boolean => [...hints].every(hint => highlightToHtml('x', hint) !== undefined)
+    const registered = Promise.withResolvers<undefined>()
+    const stop = subscribeGrammarLoaded(() => { if (allLoaded()) registered.resolve(undefined) })
+    try {
+      // Touching each hint starts its dynamic import. A hint already loaded by an
+      // earlier test fires no further notification, so only await when needed.
+      for (const hint of hints) highlightToHtml('x', hint)
+      if (!allLoaded()) await registered.promise
+      for (const hint of hints) expect(highlightToHtml('x', hint), hint).toContain('shiki')
+    } finally {
+      stop()
+    }
+  }, 120_000)
 })
 
 describe('CodeBlock', () => {

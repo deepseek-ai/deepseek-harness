@@ -1,15 +1,22 @@
 /** Raw Session journal transport and message-aligned pagination coverage. */
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 import SessionStore from '@deepseek-ai/dsh-session'
 import { LlmAttemptId, ToolCallId, createMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import { SessionHistoryController } from '@deepseek-ai/dsh-api-session-controller/src/history.ts'
 import type { SessionFollowFrame, SessionPage, SessionWireEvent } from '@deepseek-ai/dsh-api-session-controller/types'
 import { createSessionTestRemote, installSessionReadTestServices } from './test-remote.ts'
 
+type CheckpointSource = Extract<MessageSource, { readonly kind: 'compact-checkpoint' }>
+
+/** Build a typed checkpoint source for a journal fixture without owning compaction. */
+function checkpointSource(compactionId: string): CheckpointSource {
+  return { kind: 'compact-checkpoint', compactionId: compactionId as CheckpointSource['compactionId'] }
+}
 /** Append a production-shaped human prompt to the session surface. */
 function appendUserText(session: Session, text: string): SessionEvent {
   return session.append('user/message', createUserMessage({
@@ -18,9 +25,9 @@ function appendUserText(session: Session, text: string): SessionEvent {
 }
 
 /** Append a production-shaped assistant message to the session surface. */
-function appendAssistantText(session: Session, text: string, step: number): SessionEvent {
+function appendAssistantText(session: Session, text: string, step: number, turn = 1): SessionEvent {
   return session.append('assistant/message', {
-    turn: 1,
+    turn,
     step,
     message: createMessage({
       role: 'assistant',
@@ -741,6 +748,74 @@ describe('Session history raw journal', () => {
     ])
   })
 
+  it.each([
+    { name: 'two long Turns', replies: [9, 39, 39], beforeMessage: undefined, firstTurn: 2, steering: false },
+    { name: 'the partial upper Turn and its predecessor', replies: [9, 39, 99], beforeMessage: 20, firstTurn: 2, steering: false },
+    { name: 'an upper window beginning at its user message', replies: [9, 59, 59], beforeMessage: 0, firstTurn: 2, steering: false },
+    { name: 'short Turns until 50 messages', replies: [9, 9, 9, 9, 9, 9], beforeMessage: undefined, firstTurn: 2, steering: false },
+    { name: 'navigation until 200 messages', replies: [9, 49, 49, 49, 49], beforeMessage: undefined, firstTurn: 2, steering: false, minMessages: 200 },
+    { name: 'steering within one Turn', replies: [9, 39, 39], beforeMessage: undefined, firstTurn: 2, steering: true },
+    { name: 'exhausted history below both minima', replies: [9], beforeMessage: undefined, firstTurn: 1, steering: false },
+    { name: 'the 500-message cap inside one Turn', replies: [9, 600], beforeMessage: undefined, firstTurn: undefined, steering: false },
+  ])('paginates $name in one contiguous Turn window', async ({ replies, beforeMessage, firstTurn, steering, minMessages = 50 }) => {
+    const { ctx } = await harness()
+    onTestFinished(() => ctx.fiber.dispose())
+    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
+    const starts: SessionEvent[] = []
+    const messages: SessionEvent[][] = []
+    for (const [index, count] of replies.entries()) {
+      const turn = index + 1
+      starts.push(session.append('turn/start', { turn }))
+      const rows = [appendUserText(session, `prompt ${turn}`)]
+      for (let step = 1; step <= count; step++) {
+        rows.push(appendAssistantText(session, `reply ${turn}/${step}`, step, turn))
+        if (steering && index === replies.length - 1 && step % 3 === 0) {
+          rows.push(appendUserText(session, `steering ${step}`))
+        }
+      }
+      messages.push(rows)
+      session.append('turn/end', { turn, reason: { kind: 'completed' } })
+    }
+    const beforeSeq = beforeMessage === undefined ? session.seq : messages.at(-1)![beforeMessage]!.seq
+    const response = await remote.page({
+      address: { kind: 'session', sessionId: session.id },
+      throughSeq: session.seq - 1,
+      beforeSeq,
+      maxMessages: 500,
+      turnWindow: { minMessages, minTurns: 2 },
+    })
+    if (!response.ok) throw new Error('expected a history page')
+    const page = pageEvents(response.value)
+    const expectedStart = firstTurn === undefined ? messages.at(-1)!.at(-500)!.seq : starts[firstTurn - 1]!.seq
+    expect(page.map(event => event.seq)).toEqual(Array.from({ length: beforeSeq - expectedStart }, (_, index) => expectedStart + index))
+    expect(response.value.hasMore).toBe(expectedStart > 0)
+    if (firstTurn === undefined) {
+      expect(page.filter(event => event.type === 'user/message' || event.type === 'assistant/message')).toHaveLength(500)
+      expect(page.some(event => event.type === 'user/message')).toBe(false)
+    } else {
+      expect(page[0]?.type).toBe('turn/start')
+      expect(page.some(event => event.seq === messages[firstTurn - 1]![0]!.seq)).toBe(true)
+    }
+    if (beforeMessage === undefined) {
+      const abort = new AbortController()
+      const stream = remote.follow({
+        address: { kind: 'session', sessionId: session.id },
+        maxMessages: 500,
+        turnWindow: { minMessages, minTurns: 2 },
+      }, abort.signal)[Symbol.asyncIterator]()
+      try {
+        await expect(stream.next()).resolves.toMatchObject({
+          done: false,
+          value: { type: 'snapshot', records: response.value.records, hasMore: response.value.hasMore },
+        })
+      } finally {
+        abort.abort()
+        await stream.return?.()
+      }
+    }
+  })
+
   it('counts only append-origin messages toward maxMessages and keeps each compaction summary with its replacement', async () => {
     const { ctx } = await harness()
     const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
@@ -768,7 +843,7 @@ describe('Session history raw journal', () => {
     })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: '<context_checkpoint>summary</context_checkpoint>' }],
-      source: { kind: 'plugin', plugin: 'compact' },
+      source: checkpointSource('journal-compaction'),
     }), {
       surfaceOp: { op: 'replace', startSeq: shadowedStart, endSeq: shadowedEnd },
       sourceEventSeqs: [...shadowed, summary.seq],

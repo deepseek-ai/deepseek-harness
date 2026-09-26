@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-tool-jobs` to inspect and control background commands, PTY work, and subagents through `job_output`, `job_list`, and `job_kill`. Reads can wait within a configured timeout, list results identify each job's kind and status, and cancellation settles only after the work stops. When owned work finishes, the agent receives an in-session notice: busy agents receive it in their next step, while idle agents may be woken by a bounded follow-up turn. Configuration controls wait limits, completion delivery, and consecutive wakeups. Stream output is consumed by one reader, and pending notices do not survive owner disposal.
+Use `dsh-tool-jobs` to inspect and control background commands, PTY work, and subagents through `job_output`, `job_list`, and `job_kill`. Reads can wait within a configured timeout, list results identify each job's kind and status, and cancellation settles only after the work stops. When owned work finishes, the agent receives an in-session notice: busy agents receive it in their next step, while idle agents are woken by a follow-up turn. Configuration controls wait limits, completion delivery, and an optional cap on consecutive wakeups. Stream output is consumed by one reader, and pending notices do not survive owner disposal.
 
 ## Table of Contents
 
@@ -25,21 +25,21 @@ Use `dsh-tool-jobs` to inspect and control background commands, PTY work, and su
 <a id="use-this-package"></a>
 ## Use this package
 
-Load this plugin in any composition where the agent should start, observe, and stop background jobs: it registers the three tools, attaches the controller producers need, and delivers completion notices. It requires the `ctx.tools`, `ctx.jobs`, and `ctx.systemPrompt` services from the composed harness.
+Load this plugin in any composition where the agent should start, observe, and stop background jobs: it registers the three tools, attaches the controller producers need, and delivers completion notices. It requires the `ctx.tools`, `ctx.jobs`, and `ctx.systemPrompt` services from the composed harness; completion notices resolve their destination through `ctx.agents`, which every composition with owned jobs already provides.
 
 ### The three tools
 
-- `job_output(job_id, wait?, timeout_ms?)` — Read a job's output. Stream jobs return only the output since the previous read; final-output jobs return their result after settlement. Every response ends with `[status: ...]`. Reads are non-blocking unless `wait: true`, which waits up to the configured cap and leaves a still-running job alive on timeout.
+- `job_output(job_id, wait?, timeout_ms?)` — Read a job's output. Stream jobs return only the output since the previous read; final-output jobs return their result after settlement. Every response ends with `[status: ...]`. Reads are non-blocking unless `wait: true`, which waits up to the configured cap and leaves a still-running job alive on timeout. A read renders stdout first and stderr in one `[stderr]` section, notes output that left memory before the read, and carries a job's result (a subagent's answer) exactly once, on the first read after settlement.
 - `job_list()` — List your background jobs with their ids, kinds, and statuses, one per line: `<id> [<kind>] <status> — <label>`.
 - `job_kill(job_id, reason?)` — Request cancellation of a running job immediately; the job settles as `killed` once its work actually stops. A terminal job returns its current snapshot, and the optional reason is recorded and forwarded to the job.
 
-The three tools return `{ text, job }`, `PublicJobSnapshot[]`, and `{ outcome: 'cancellation-requested' | 'already-finished', job }` respectively. A public snapshot carries id, kind, label, status/detail, and start/finish times and omits ownership and notification bookkeeping. All three render through generic UI cards: `read` for output and list, `execute` for kill.
+The three tools return `{ text, job }`, `PublicJobSnapshot[]`, and `{ outcome: 'cancellation-requested' | 'already-finished', job }` respectively. A public snapshot carries id, kind, label, status with the live progress line or the terminal detail, and start/finish times, and omits ownership and ring offsets. All three render through generic UI cards: `read` for output and list, `execute` for kill.
 
 ### Completion notices
 
-When a job finishes, the owning agent receives `background job <id> (<kind>: <label>) finished [status: ...]. Read its output with job_output.` as an in-session message. A busy agent has the notice injected into its next step — the turn cannot close while the inbox holds it, so several jobs settling together cost one step rather than one turn each. An idle agent is instead woken with a follow-up turn, because an unclaimed notice is a completion the model never learns about. A kill or a terminal read/wait marks the completion reported and suppresses the redundant notice, as does the teardown cancel that drains an owner or the service.
+When a job finishes, the owning agent receives `background job <id> (<kind>: <label>) finished [status: ...]. Read its output with job_output.` as an in-session message. A busy agent has the notice injected into its next step — the turn cannot close while the inbox holds it, so several jobs settling together cost one step rather than one turn each. An idle agent is instead woken with a follow-up turn, because an unclaimed notice is a completion the model never learns about. Completions the model already collected get no notice: the registry reports a settlement that released a live `wait` as `awaited` — whether a `job_output` wait or a shell tool waiting on its own foreground command — and the plugin remembers the kills the model requested through `job_kill`; a settlement caused by owner or service teardown is skipped because nobody is left to read it.
 
-Waking is bounded: each owner may be woken `maxConsecutiveWakes` times before further notices degrade to injection, and claiming any user-authored message restores the budget. The bound exists because the chain is self-exciting — a woken turn may start the background job whose completion wakes it again. `completionDelivery: quiet` keeps even idle owners on the injection lane, which deterministic transcripts need.
+Waking is unbounded by default: an unattended agent that chains background commands and one-shot subagents is woken for every completion. `maxConsecutiveWakes` caps that: each owner may be woken that many times before further notices degrade to injection, and claiming any user-authored message restores the budget. The cap bounds the self-exciting chain — a woken turn may start the background job whose completion wakes it again — but a notice past it waits silently until the next user input, so a session that relies on wakes to finish its work stalls there. `completionDelivery: quiet` keeps even idle owners on the injection lane, which deterministic transcripts need.
 
 ### Minimal configuration
 
@@ -54,7 +54,7 @@ Loading the plugin with no config is the common path; a `waitTimeoutMs` above `m
 | `waitTimeoutMs` | `30,000` | Wait used when `wait: true` omits `timeout_ms` |
 | `maxWaitTimeoutMs` | `600,000` | Cap for model-supplied waits; larger values clamp down to it |
 | `completionDelivery` | `wakeup` | `wakeup` opens a turn on an idle owner; `quiet` leaves the notice pending |
-| `maxConsecutiveWakes` | `3` | Turns one owner may open by wake before notices degrade to injection |
+| `maxConsecutiveWakes` | unset | Turns one owner may open by wake before notices degrade to injection; unset means no cap |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-jobs) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -82,7 +82,8 @@ This section explains the design decisions behind the tools and points at the co
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: tool registrations, completion listener, prompt section, output capping |
+| [`src/index.ts`](src/index.ts) | Plugin entry: tool registrations, the settlement subscription and model-kill set, prompt section, output capping |
+| [`src/render.ts`](src/render.ts) | Model-facing rendering: the public projection, status lines, and the consuming delta (stdout, `[stderr]` section, dropped-output notice) |
 | — | No runtime invariant companion is published; this model-facing adapter has no independent lifecycle stream; execution relations are owned by the capability seam it calls. |
 
 ### Output capping
@@ -91,7 +92,7 @@ This section explains the design decisions behind the tools and points at the co
 
 ### Notice delivery lanes
 
-`onJobDone` skips jobs already reported or unowned. A `wakeup` delivery opens a turn on an idle owner while the budget lasts, tracked per exact `Agent` in a `WeakMap`; claiming a user-authored message (`agent/inbox/claimed`) resets that owner's budget. A busy owner — or any notice past the budget, or `quiet` delivery — is injected into the next-step inbox instead. Teardown settlements arrive already `reported`, so disposal never spends a model request announcing a notice nobody can read.
+The settlement subscription (`{ owners: 'scope' }`) skips settlements the registry reports as `awaited`, jobs the model killed through `job_kill`, unowned jobs, and teardown settlements, then resolves the agent registered for the owner session. A `wakeup` delivery opens a turn on an idle owner; with `maxConsecutiveWakes` set, only while the budget lasts, tracked per exact `Agent` in a `WeakMap`, and claiming a user-authored message (`agent/inbox/claimed`) resets that owner's budget. A busy owner — or any notice past a configured budget, or `quiet` delivery — is injected into the next-step inbox instead. The registry counts only a wait still owed the projection at settlement, so a wait that timed out or was aborted leaves a later settlement to notify as usual; a removal drops the job from the model-kill set, which only ever holds live jobs the model killed.
 
 </details>
 
@@ -153,11 +154,11 @@ Prefix-stable while tool definitions and visibility are unchanged. Registration 
 
 #### What the model sees
 
-Reads return output or `(no new output)` followed by `[status: <status>]` and optional detail. An empty list returns `(no background jobs)`. Kill returns `requested cancellation of job <id>` or the existing terminal status. An unreported owned completion uses the notice above.
+Reads return output or `(no new output)` followed by `[status: <status>]` and optional detail. An empty list returns `(no background jobs)`. Kill returns `requested cancellation of job <id>` or the existing terminal status. An owned completion the model has not already collected uses the notice above.
 
 #### Token effect
 
-Results and notices remain in parent history until compaction. Stream reads do not repeat consumed output; a producer-supplied `outputLimitBytes` bounds each complete read or notice. Under `wakeup`, a notice reaching an idle owner also buys a model request the user did not ask for, capped per owner by `maxConsecutiveWakes`; a notice reaching a busy owner adds a step to the turn it is already paying for.
+Results and notices remain in parent history until compaction. Stream reads do not repeat consumed output; a producer-supplied `outputLimitBytes` bounds each complete read or notice. Under `wakeup`, a notice reaching an idle owner also buys a model request the user did not ask for, capped per owner only when `maxConsecutiveWakes` is set; a notice reaching a busy owner adds a step to the turn it is already paying for.
 
 #### KV Cache effect
 
@@ -171,9 +172,9 @@ Append-only; newly visible content follows the reusable request prefix and does 
 These limits define when the tools are a poor fit. They are current package constraints, not a task backlog.
 
 - **A settlement inside the driver's retirement window still strands its notice** — between the turn loop's last inbox check and the driver committing its idle phase the owner still reads as busy, so the notice is injected and nothing wakes. Steering has the same hole; closing it belongs to `agent-loop`.
-- **A spent wake budget is not restored by time** — only user-authored input refills it, so an unattended agent whose budget ran out collects its remaining notices on the next turn something else opens.
+- **A spent wake budget is not restored by time** — with `maxConsecutiveWakes` set, only user-authored input refills it, so an unattended agent whose budget ran out collects its remaining notices on the next turn something else opens, and nothing in the client shows that a notice is waiting.
 - **A notice pending on an idle owner does not survive that owner's disposal** — the disposal cancel clears the unclaimed inbox, and the log keeps the insert/cancel pair as the record.
-- **Stream reads are single-consumer** — independent observers need another runtime API.
+- **Model reads are single-consumer** — independent observers use the registry's non-consuming `readAt` (the Web client's `job.follow`), not these tools.
 - **Unowned jobs have no session fence** — external callers must supply policy or avoid them.
 
 <a id="dev-note"></a>

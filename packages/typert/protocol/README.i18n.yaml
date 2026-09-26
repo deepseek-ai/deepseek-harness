@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/typert/protocol/README.md
-README.md: 99883e322bf6e528f8fd4effe9c4fc1e418abbdb
-README.zh.md: 429c08587a5297e254ac4c0f3fb9d82fc680a455
+/:
+  en: f05430dc6311d1e1
+  zh: ad9779e051bc21f8
+/deepseek-ai-dsh-typert-protocol:
+  en: c0a0d129924ee1ed
+  zh: b0edfa8b75f8de41
+/deepseek-ai-dsh-typert-protocol/summary:
+  en: 2eaad6529802274f
+  zh: 6a8aa3cbc2ea6aad
+/deepseek-ai-dsh-typert-protocol/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-typert-protocol/use-this-package:
+  en: c479b5b665822198
+  zh: 1ffb789c18043baf
+/deepseek-ai-dsh-typert-protocol/use-this-package/exposing-a-host-method:
+  en: fae902875c18ef33
+  zh: ed4332cabe0e3a45
+/deepseek-ai-dsh-typert-protocol/use-this-package/associating-host-objects-and-contexts-with-wire-identities:
+  en: 3db384ae6f215632
+  zh: 56207184b09d4018
+/deepseek-ai-dsh-typert-protocol/use-this-package/reporting-and-reading-a-remote-failure:
+  en: 4ba5266ddb014029
+  zh: e31ae6438b9b4aa5
+/deepseek-ai-dsh-typert-protocol/use-this-package/receiving-forwarded-host-events-on-the-client:
+  en: 1101bd1d1419618c
+  zh: 6ff036538d237e0a
+/deepseek-ai-dsh-typert-protocol/understand-the-implementation:
+  en: f1a51c9826244574
+  zh: bd3ebd8831c6bf84
+/deepseek-ai-dsh-typert-protocol/understand-the-implementation/design-concept:
+  en: 4f45bb46a1920984
+  zh: 70408d3b59d2735a
+/deepseek-ai-dsh-typert-protocol/understand-the-implementation/remote-markers:
+  en: 93b83a9441a5a3c2
+  zh: c4eb143ddd167a27
+/deepseek-ai-dsh-typert-protocol/understand-the-implementation/protocol-maps-and-descriptors:
+  en: 164b30b3fa543936
+  zh: 0831edd3e04a3d3a
+/deepseek-ai-dsh-typert-protocol/understand-the-implementation/wire-identity-grammar:
+  en: aac79a7b4682371e
+  zh: bc9cc513c1ced3e6
+/deepseek-ai-dsh-typert-protocol/understand-the-implementation/source-map:
+  en: c8834e55e3e3db73
+  zh: d820bc330814b240
+/deepseek-ai-dsh-typert-protocol/further-exploration:
+  en: 84191d1b07fb8bb6
+  zh: 9a5212732ed38ab6
+/deepseek-ai-dsh-typert-protocol/model-experience:
+  en: dc0c83c97e195e97
+  zh: 1f11dd080898d6c0
+/deepseek-ai-dsh-typert-protocol/model-experience/kv-cache-effect:
+  en: b1c49d5e440d9d41
+  zh: 87ead78472415189
+/deepseek-ai-dsh-typert-protocol/known-limitations-and-deferred-work:
+  en: 0be59e6d97923487
+  zh: 70523fb0dc567ed6
+/deepseek-ai-dsh-typert-protocol/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

@@ -82,8 +82,9 @@ describe('desktop backend controller', () => {
 
   it('publishes preparation errors and permits retry', async () => {
     const f = fixture()
-    await expect(f.controller.start(async () => { throw new Error('invalid profile') })).rejects.toThrow('invalid profile')
-    expect(f.controller.state).toEqual({ phase: 'error', message: 'invalid profile' })
+    const invalid = new Error('invalid profile')
+    await expect(f.controller.start(async () => { throw invalid })).rejects.toThrow('invalid profile')
+    expect(f.controller.state).toEqual({ phase: 'error', message: 'invalid profile', failure: invalid })
     expect(f.create).not.toHaveBeenCalled()
     f.ready.resolve()
     await f.controller.start(async () => {})
@@ -97,11 +98,13 @@ describe('desktop backend controller', () => {
     const start = f.controller.start(async () => {})
     const rejected = expect(start).rejects.toThrow('plugin failed')
     await f.started.promise
-    f.ready.reject(new Error('plugin failed'))
+    const pluginFailure = new Error('plugin failed')
+    f.ready.reject(pluginFailure)
     await f.stopping.promise
     f.exited.resolve()
     await rejected
-    expect(f.controller.state).toEqual({ phase: 'error', message: 'plugin failed' })
+    // The original error object travels with the state so a crash report keeps its stack and properties.
+    expect(f.controller.state).toEqual({ phase: 'error', message: 'plugin failed', failure: pluginFailure })
     expect(f.host.stop).toHaveBeenCalledTimes(1)
     await f.controller.close()
   })
@@ -110,8 +113,9 @@ describe('desktop backend controller', () => {
     const f = fixture()
     f.ready.resolve()
     await f.controller.start(async () => {})
-    f.fail(new Error('transport failed'))
-    expect(f.controller.state).toEqual({ phase: 'error', message: 'transport failed' })
+    const transportFailure = new Error('transport failed')
+    f.fail(transportFailure)
+    expect(f.controller.state).toEqual({ phase: 'error', message: 'transport failed', failure: transportFailure })
     expect(f.controller.host).toBeUndefined()
     await f.stopping.promise
     const prepare = vi.fn(async () => {})
@@ -131,11 +135,12 @@ describe('desktop backend controller', () => {
     const rejected = expect(start).rejects.toThrow('immediate failure')
     await f.started.promise
     f.ready.resolve()
-    f.fail(new Error('immediate failure'))
+    const immediate = new Error('immediate failure')
+    f.fail(immediate)
     await f.stopping.promise
     f.exited.resolve()
     await rejected
-    expect(f.states).toEqual([{ phase: 'starting' }, { phase: 'error', message: 'immediate failure' }])
+    expect(f.states).toEqual([{ phase: 'starting' }, { phase: 'error', message: 'immediate failure', failure: immediate }])
     await f.controller.close()
   })
 

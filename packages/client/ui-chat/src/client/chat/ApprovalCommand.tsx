@@ -32,7 +32,7 @@ export function ApprovalCommand({ callId, useChat }: PropsRuntime<'conversation.
   const command = useChat((snapshot) => {
     for (const node of snapshot.nodes.values()) {
       const root = node.kind === 'tool-call' ? (node as ChatNode<'tool-call'>).data.root : undefined
-      if (root !== undefined && root.callId === callId && !('kind' in root)) return commandOf(root)
+      if (root !== undefined && root.callId === callId && !('kind' in root) && root.phase === 'start') return commandOf(root)
     }
     return undefined
   })

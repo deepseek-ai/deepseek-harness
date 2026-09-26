@@ -23,11 +23,12 @@ export type FileUploadReceiptId = Branded<'file-upload-receipt-id'>
 
 /**
  * Fetch-shaped carrier installed by a page that owns its Host transport.
- * @param input - absolute same-origin upload URL.
+ * @param input - document-relative upload route; a carrier that needs an
+ * absolute URL resolves it against its own base.
  * @param init - raw request body, headers, and cancellation signal.
  * @returns the Host response.
  */
-export type FileUploadFetch = (input: URL, init: RequestInit) => Promise<Response>
+export type FileUploadFetch = (input: string | URL, init: RequestInit) => Promise<Response>
 
 /** Pre-Cordis hook supplied by a page whose Host runs in another execution context. */
 export interface ClientFileUploadHooks {

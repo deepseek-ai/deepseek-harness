@@ -1,0 +1,19 @@
+- id: llm-deepseek
+  disabled: true
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: deepseek-official
+            name: DeepSeek
+            models:
+              - id: deepseek-v4-flash
+                systemPromptUpdate: in-history
+                toolUpdate: in-history
+                defaultMaxTokens: 256000
+                reasoningEfforts: [off, low, high, max]
+                defaultReasoningEffort: high
+    - id: dynamic-tool-prompt-updates
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/dynamic-tool-prompt-updates.ts'

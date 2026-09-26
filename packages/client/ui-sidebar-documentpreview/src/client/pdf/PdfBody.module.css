@@ -1,19 +1,27 @@
 .body {
   display: flex;
   flex-direction: column;
+  gap: 12px;
   box-sizing: border-box;
   width: 100%;
-  min-height: 0;
-  overflow-x: hidden;
+  min-height: 100%;
+  min-width: 100%;
+  padding: 12px;
+  overflow: visible;
+  background: var(--dsw-alias-bg-document-preview);
   font-family: var(--dsw-font, sans-serif);
   white-space: normal;
+}
+
+:global([data-document-zoom-mode="fixed"]) .body {
+  width: max-content;
 }
 
 .page {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  overflow-x: hidden;
+  overflow-x: visible;
 }
 
 /* An unrendered page holds its place as a quiet block; the block itself is
@@ -26,14 +34,102 @@
 
 .canvas {
   display: block;
-  width: min(var(--pdf-page-width), 100%);
-  max-width: 100%;
+  width: 100%;
+  max-width: none;
   height: auto;
   margin-inline: auto;
 }
 
-.canvas[hidden] {
+.surface {
+  position: relative;
+  max-width: none;
+  margin-inline: auto;
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+.surface[hidden] {
   display: none;
+}
+
+.text {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+}
+
+/* TextLayerBuilder selection styles follow pdfjs-dist/web/pdf_viewer.css. */
+.text :global(.textLayer) {
+  position: absolute;
+  inset: 0;
+  text-align: initial;
+  overflow: clip;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 0;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.text :global(.textLayer)[data-main-rotation="90"] {
+  transform: rotate(90deg) translateY(-100%);
+}
+
+.text :global(.textLayer)[data-main-rotation="180"] {
+  transform: rotate(180deg) translate(-100%, -100%);
+}
+
+.text :global(.textLayer)[data-main-rotation="270"] {
+  transform: rotate(270deg) translateX(-100%);
+}
+
+.text :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+  user-select: text;
+}
+
+.text :global(.textLayer) > :not(:global(.markedContent)),
+.text :global(.markedContent) span:not(:global(.markedContent)) {
+  z-index: 1;
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.text :global(.markedContent) {
+  display: contents;
+}
+
+.text ::selection {
+  background: var(--dsw-alias-interactive-bg-hover-accent);
+  color: transparent;
+}
+
+.text br::selection {
+  background: transparent;
+}
+
+.text :global(.textLayer) :global(.endOfContent) {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+}
+
+.text :global(.selecting) :global(.endOfContent) {
+  top: 0;
 }
 
 .status {
@@ -46,25 +142,6 @@
   line-height: 1.5;
 }
 
-/* The document-open wait fills the still-empty body and centres, matching the
-   owner's read spinner position. */
-.opening {
-  justify-content: center;
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 100%;
-}
-
-.loadingIcon {
-  display: flex;
-  flex: none;
-  animation: turn 0.8s linear infinite;
-}
-
-@keyframes turn {
-  to { transform: rotate(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .loadingIcon { animation: none; }
+.body .status {
+  color: var(--dsw-alias-label-document-preview);
 }

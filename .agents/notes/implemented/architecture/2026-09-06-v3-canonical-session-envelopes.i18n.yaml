@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-06-v3-canonical-session-envelopes.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-06-v3-canonical-session-envelopes.md
-2026-09-06-v3-canonical-session-envelopes.md: 17ec331cc1ea21f31d0b51eab86d22725b6deef8
-2026-09-06-v3-canonical-session-envelopes.zh.md: a18bb3b4d71c164e3fba7288cc686a1cb7c7b4df
+/agent-note-canonical-v3-session-event-envelopes:
+  en: 17b0c507058d0bba
+  zh: cc281197005d02c8
+/agent-note-canonical-v3-session-event-envelopes/problem:
+  en: 60cc4d9e1122118f
+  zh: c1e8d767dc1999e8
+/agent-note-canonical-v3-session-event-envelopes/decision:
+  en: f75747b415bfd13b
+  zh: 18e5e35853e4b506
+/agent-note-canonical-v3-session-event-envelopes/decision/validation-ownership:
+  en: 6fb18468df0b93e1
+  zh: 8dd4dd58a883884f
+/agent-note-canonical-v3-session-event-envelopes/decision/released-v2-to-v3-conversion:
+  en: 1f76511cc4c2fcfd
+  zh: 77633f9860f14d9d
+/agent-note-canonical-v3-session-event-envelopes/alternatives-considered:
+  en: 08c196bc596a0b2a
+  zh: 55bbbec345e9a078
+/agent-note-canonical-v3-session-event-envelopes/consequences:
+  en: 9e88dd3830fb0522
+  zh: 8be0d8bde8d0d9d2
+/agent-note-canonical-v3-session-event-envelopes/verification:
+  en: 31ec0b1095035042
+  zh: 05d9f08138da1136

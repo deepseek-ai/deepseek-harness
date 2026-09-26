@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-02-projcache-cross-version-read-compat.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-02-projcache-cross-version-read-compat.md
-2026-09-02-projcache-cross-version-read-compat.md: 82f7f26d5cd0484f5adcd51db17748f41a298294
-2026-09-02-projcache-cross-version-read-compat.zh.md: 58705ec8f15fbffff6af31872a69f1f19ef5e3c5
+/agent-note-projection-cache-predecessor-recovery-and-session-format-binding-session-projcache-v3-v6-v7:
+  en: 5744de86025f278d
+  zh: 5ba2198c13ac54f9
+/agent-note-projection-cache-predecessor-recovery-and-session-format-binding-session-projcache-v3-v6-v7/problem:
+  en: f8d44a69c7b5fefe
+  zh: 76a4fb3d87698194
+/agent-note-projection-cache-predecessor-recovery-and-session-format-binding-session-projcache-v3-v6-v7/the-on-disk-generations:
+  en: 221b8afd2599e139
+  zh: ba1de634b87edc71
+/agent-note-projection-cache-predecessor-recovery-and-session-format-binding-session-projcache-v3-v6-v7/decision:
+  en: 264e40c0fb90cdc1
+  zh: 2e986615bbd656cf
+/agent-note-projection-cache-predecessor-recovery-and-session-format-binding-session-projcache-v3-v6-v7/decision/v3-v6-v7-disposition:
+  en: fe188d164c08a7f5
+  zh: 30aa9e9201621f35
+/agent-note-projection-cache-predecessor-recovery-and-session-format-binding-session-projcache-v3-v6-v7/decision/upgrade-matrix:
+  en: 5d515bd3cb34b0ee
+  zh: 0648563a966759c7
+/agent-note-projection-cache-predecessor-recovery-and-session-format-binding-session-projcache-v3-v6-v7/alternatives-considered:
+  en: c53e111219c5da0c
+  zh: 8c69f6fc2e776981
+/agent-note-projection-cache-predecessor-recovery-and-session-format-binding-session-projcache-v3-v6-v7/consequences:
+  en: ac8b2f4a66c926ea
+  zh: 5a415436c2fbc4ec
+/agent-note-projection-cache-predecessor-recovery-and-session-format-binding-session-projcache-v3-v6-v7/testing:
+  en: 495058fe5708949d
+  zh: 67ed95abc946d418

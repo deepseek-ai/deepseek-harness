@@ -12,11 +12,11 @@ Web 的 Appearance、Language 和繁忙态 Enter 偏好原本存在浏览器 `lo
 
 ## 决策
 
-各领域所属的 Host half 注册三份 schema：可选的 `locale.preference`（`zh` 或 `en`，缺失时交由浏览器决定）、`ui-theme.preference`（`light`、`dark` 或 `system`，默认为 `system`），以及 `ui-conversation.busyEnter`（`queue` 或 `steer`，默认为 `queue`）。本地 settings 提供方将显式选择存入 `$DSH_HOME/settings.yaml`，在使用默认 home 时，该路径解析为 `~/.dsh/settings.yaml`。API 代理在 Connection 浏览器认证之后服务每一个已注册的 namespace；字段角色仍会脱敏机密值。
+对应 Host Config schema 声明 volatile 语言、主题和忙碌时 Enter 偏好。ConfigEditor 将显式选择保存到活跃 profile patch。经过认证的 settings API 投影这些 Config 字段，并对 secret 角色字段脱敏。
 
-`dsh-client-ui-settings` 持有一个浏览器全局的 settings describe 镜像，并提供 `ctx.settingsScope.bind(spec)` 作为该镜像上的逐 namespace selector。镜像在开始后台读取之前安装 `settings/document-updated` 和 `connection/reset` 监听器，因此任何 settings 传输都不会阻塞插件激活，失效通知也不会掉入先读取、后订阅的空档。每个绑定的 scope 会发布一个供领域服务订阅的快照 store（状态、分节值、revision、可写性、host／内存模式），自身不再增加协议读取或监听器。默认解码器会对照该 namespace 自身的序列化 wire schema（经同包的 `ctx.settingsSchema` 服务还原）校验每个传入分节，因此各领域无需携带手写的 wire 校验器。领域服务把 scope 当作普通的构造函数协作者接收，立即发布各自的暂定默认值：由浏览器派生的 locale、系统主题和 Queue；随后采纳已获接受的 Host 分节，但不将其写回；不带 scope 构造的服务——独立词典或政策 fixture（测试前置数据）——则仅停留在进程本地。共享读取与失效生命周期由后续的 [settings describe 镜像决策](../../archived/architecture/2026-08-17-settings-describe-mirror.md)规定。
+`dsh-client-ui-settings` 持有一个浏览器全局的 settings describe 镜像，并提供 `ctx.configForms.get(entryId)` 作为该镜像上的逐 namespace selector。镜像在开始后台读取之前安装 `settings/document-updated` 和 `connection/reset` 监听器，因此任何 settings 传输都不会阻塞插件激活，失效通知也不会掉入先读取、后订阅的空档。每个共享条目表单会发布一个供领域服务订阅的快照 store（状态、分节值、revision、可写性、host／内存模式），自身不再增加协议读取或监听器。默认解码器会对照该 namespace 自身的序列化 wire schema（经同包的 `ctx.settingsSchema` 服务还原）校验每个传入分节，因此各领域无需携带手写的 wire 校验器。领域服务把 scope 当作普通的构造函数协作者接收，立即发布各自的暂定默认值：由浏览器派生的 locale、系统主题和 Queue；随后采纳已获接受的 Host 分节，但不将其写回；不带 scope 构造的服务——独立词典或政策 fixture（测试前置数据）——则仅停留在进程本地。共享读取与失效生命周期由后续的 [settings describe 镜像决策](../../archived/architecture/2026-08-17-settings-describe-mirror.md)规定。
 
-用户变更会同步更新实时服务，并经 `scope.set` 将一项 `settings.mutate` 路径操作排入队列。scope 会串行处理手势，以最新已知 namespace revision 作为 `expectedRevision` 发送，记录每次成功写入的 revision，并且只允许最新写入的结算结果重新发布实时状态。最新写入被拒或失败时，scope 会重新加载 Host 状态。插件释放会拒绝新工作、跳过已排队操作、抑制运行中操作发布状态，并等待该操作结算后才让插件达到完全停稳。
+用户修改立即更新实时偏好，并通过共享条目表单排队提交带修订号检查的修改。提供者为每个条目持有一个写入队列；消费者在卸载时释放订阅。提供者销毁时跳过排队工作、禁止迟到发布，并等待正在执行的操作结束。
 
 Client 在非 loopback 页面禁用 Host 持久化，因此这些页面的偏好仍只保留在进程内，尽管 Connection 认证完整 API。动态第三方主题 id 仍是内置 Host schema 之外的进程内扩展；移除其中一个会重置实时注册表，但不会替换上一个持久化的内置偏好。
 
@@ -36,7 +36,7 @@ Client 在非 loopback 页面禁用 Host 持久化，因此这些页面的偏好
 
 ## 后果
 
-Appearance、Language 和繁忙态 Enter 选择会跟随 DSH 用户 home，跨越重新加载、端口与回环 origin。直接编辑 `settings.yaml` 所产生的变更会通过现有失效流收敛，而旧的 `dsh.theme`、`dsh.locale` 和 `dsh.conversation.busyEnter` 条目既不会被读取，也不会被写入。
+外观、语言和忙碌时 Enter 偏好跟随活跃 profile，跨刷新、端口和回环 origin 保持一致。ConfigEditor 和 volatile HMR 应用 profile 更改；表单镜像通过 settings 失效通知跟随已接受值。旧浏览器偏好键保持不使用。
 
 启动时可能会在后台读取结算前短暂显示领域默认值。短暂的读取失败会保留该默认值或上一个正确的进程内值；重连时会重试。写入被拒时，界面可能会在本地值立即变化后明显恢复为持久化偏好。
 

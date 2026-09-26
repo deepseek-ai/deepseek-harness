@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/subagent/README.md
-README.md: 265aec1072dcec736ea9d6a9be3d20f67ac4361e
-README.zh.md: 4cf907d4df6d178aac8e43174e8ded973716b1cf
+/:
+  en: 8f20c437b8a32075
+  zh: 3057529ec3ceadca
+/subagent-subagent-capability-family:
+  en: 08588a11264e9d49
+  zh: d45e5ad1e3f73f6e
+/subagent-subagent-capability-family/summary:
+  en: 4cb71f430f89dd03
+  zh: 9cd59de2a92d0711
+/subagent-subagent-capability-family/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/subagent-subagent-capability-family/packages:
+  en: 353b7465a154d0e9
+  zh: a0a8f3150260100d
+/subagent-subagent-capability-family/related-documentation:
+  en: 2245aba8b9f117fd
+  zh: 4f2e3f6a5dc4f3dd
+/subagent-subagent-capability-family/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

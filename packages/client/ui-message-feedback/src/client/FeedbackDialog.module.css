@@ -3,7 +3,7 @@
 .dialog.dialog {
   gap: 38px;
   width: min(488px, 100%);
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-panel);
 }
 
 .categories {
@@ -17,8 +17,7 @@
   height: 28px;
   padding: 0 12px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 14px;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
@@ -39,7 +38,7 @@
 }
 
 .chip:focus-visible {
-  outline: 2px solid var(--dsw-alias-button-primary-fill);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
@@ -61,7 +60,7 @@
   margin-top: 18px;
   padding: 12px 14px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   font: inherit;
@@ -79,27 +78,15 @@
 .detail:focus {
   outline: none;
   border-color: var(--dsw-alias-border-l3);
-  box-shadow: 0 0 0 1px var(--dsw-alias-border-l3);
+  box-shadow: 0 0 0 1px var(--dsw-alias-state-business-primary);
 }
 
 .submit {
   width: 100%;
   height: 44px;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-lg);
   font-size: 14px;
   font-weight: 500;
-}
-
-/* The design's ringed green check, not the warning tint the Toast icon seat defaults to. */
-.toastIcon {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border: 1.5px solid var(--dsw-alias-state-success-primary);
-  border-radius: 50%;
-  corner-shape: round;
-  color: var(--dsw-alias-state-success-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {

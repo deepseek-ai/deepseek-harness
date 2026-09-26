@@ -14,13 +14,64 @@ import type { SessionSearchResultItem } from '../sessions/manager.ts'
 import type { SessionBinding, SessionListState } from '../sessions/service.ts'
 import type { SessionFace } from './session.ts'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { SessionReferenceSource } from '../index.ts'
 
 export type { AgentContext } from '../scope.ts'
 
+/** Known Session identity or durable direct-parent subagent address; an address owns no lifetime. */
+export type SessionTarget = SessionId | SubagentAddress
+
+/** One independent use of an exact Client generation, without Host Agent ownership. */
+export interface SessionReference extends Disposable {
+  readonly sessionId: SessionId
+  /** Shared binding; access fails after reference release or generation disposal. */
+  readonly binding: SessionBinding
+  /** This reference's cancellable wait for the shared initial `Session.open()` attempt to settle. */
+  readonly ready: Promise<SessionBinding>
+  /** Release once; the final reference starts local scope and history teardown. */
+  release(): void
+}
+
+/** Consumer identity and optional cancellation of one acquisition waiter. */
+export interface SessionRetainOptions {
+  readonly source: SessionReferenceSource
+  readonly signal?: AbortSignal | undefined
+}
+
+/** Local ownership counts, independent of catalog membership and never persisted. */
+export interface SessionRetainInfo {
+  readonly referenceCount: number
+  /** Positive source counts only; a source without references is absent. */
+  readonly retainedBy: Readonly<Partial<Record<SessionReferenceSource, number>>>
+}
+
 /** The sessions-service face injected as `ctx.sessions`. */
 export interface ISessions {
-  /** The useSessions standard feed (list rows + current selection; read face — writes stay inside the domain). */
+  /** Host catalog and local reference-source counts; navigation belongs to view owners. */
   readonly list: ObservableSnapshot<SessionListState>
+  /**
+   * Retain an exact Client generation and start its shared initial history opening.
+   * @param target - known identity or durable direct-parent address.
+   * @param options - required consumer source and optional independent waiter cancellation.
+   * @returns an owned reference immediately; await `reference.ready` when the initial open attempt must settle first.
+   */
+  retain(target: SessionTarget, options: SessionRetainOptions): SessionReference
+  /**
+   * Hold one reference through callback settlement, including synchronous and asynchronous failures.
+   * @param target - Session to acquire.
+   * @param options - source and acquisition cancellation.
+   * @param operation - callback using the reference only until its returned value or Promise settles.
+   * @returns the callback result after release; acquisition and callback failures propagate unchanged.
+   */
+  using<T>(target: SessionTarget, options: SessionRetainOptions, operation: (reference: SessionReference) => T | Promise<T>): Promise<T>
+  /**
+   * Observe local reference counts without retaining, creating a scope, or opening history.
+   * The returned source keeps stable identity across same-id generations and remains allocated
+   * until the Client root is disposed, even after its final subscriber leaves.
+   * @param id - explicit Session identity; Host existence is not implied.
+   * @returns a stable read-only source across same-id generations, with zero counts when none is live.
+   */
+  retainInfo(id: SessionId): ObservableSnapshot<SessionRetainInfo>
   /**
    * The `session.search` result bound the wire schema fixes, exposed to
    * presentation as injected data. Not per-connection state: every transport
@@ -30,7 +81,7 @@ export interface ISessions {
   /**
    * Create or adopt a Session on the Host.
    * @param opts - target workspace, directory, and optional preallocated identity.
-   * @returns the Session identity after its local binding is addressable.
+   * @returns the catalogued identity; retain it before borrowing its binding.
    */
   create(opts?: {
     workspaceId?: WorkspaceId
@@ -38,36 +89,19 @@ export interface ISessions {
     sessionId?: SessionId
   }): Promise<SessionId>
   /**
-   * Select a session as current.
-   * @param id - session id (must exist in the list; unknown ids fail loud).
-   */
-  open(id: SessionId): void
-  /**
-   * Open a healthy catalog child through its exact direct-parent address.
-   * @param address - catalog-derived parent and child ids.
-   */
-  openSubagent(address: SubagentAddress): void
-  /**
    * Resolve an already discovered direct-parent address without opening it.
    * @param id - possible addressed child id.
-   * @returns the retained address, when present.
+   * @returns a retained or loaded-catalog address, without retaining a new selection or scope.
    */
   subagentAddress(id: SessionId): SubagentAddress | undefined
+
   /**
-   * Mark whether a catalog menu is consuming live membership updates.
-   * @param parentSessionId - catalog owner.
-   * @param open - current menu state.
-   */
-  setSubagentCatalogOpen(parentSessionId: SessionId, open: boolean): void
-  /**
-   * Refresh one direct-child catalog.
-   * @param parentSessionId - catalog owner.
+   * Load all Session projections once per connection; retry an unsuccessful initial read.
+   * @param sessionId - Session to inspect without opening its conversation.
    * @returns completion of the current or newly started refresh.
    */
-  refreshSubagents(parentSessionId: SessionId): Promise<void>
+  refreshProjections(sessionId: SessionId): Promise<void>
 
-  /** Clear the current selection into the no-session view state. */
-  clear(): void
   /**
    * Refresh the Host-authoritative Session list.
    * @returns completion of the current or newly started Session-list refresh.
@@ -85,20 +119,21 @@ export interface ISessions {
     signal: AbortSignal,
   ): Promise<RemoteResult<{ items: SessionSearchResultItem[]; hasMore: boolean }>>
   /**
-   * Fork a session from a completed-turn prefix of the source; on resolution
-   * the child is in the list store and `open()` can target it.
-   * @param opts - source session id, the optional event seq anchoring the
-   *   cut (the boundary is the first turn/end at or after it; an in-log
-   *   anchor in an open turn is unavailable rather than clipped backward),
-   *   and whether to increment an inherited durable title before resolving.
+   * Fork a session from an exact inclusive prefix of the source; on
+   * resolution the child is catalogued and can be explicitly retained.
+   * @param opts - source session id, the optional exact inclusive boundary
+   *   seq (a real event seq the caller already knows; a cut inside an open
+   *   turn is balanced Host-side with synthetic closers, and omission selects
+   *   the latest completed-turn prefix), and whether to increment an
+   *   inherited durable title before resolving.
    * @returns the child session id.
    * @throws when the fork fails, or when a requested child-title rename fails after creation.
    */
   fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId>
   /**
-   * Resolve an Agent-scoped context view (use-and-discard).
+   * Borrow an already-retained Agent-scoped Context without extending its lifetime.
    * @param id - session id.
-   * @returns scoped ctx, or undefined for a session neither listed nor already scoped.
+   * @returns the live scoped Context, or undefined without a retained generation.
    */
   scope(id: SessionId): AgentContext | undefined
   /**
@@ -111,13 +146,13 @@ export interface ISessions {
   /**
    * Resolve the session face behind an Agent-scoped context.
    * @param ctx - an Agent-scoped context.
-   * @returns the session face, or undefined when the ctx is untagged or its scope was pruned.
+   * @returns the matching live Session, or undefined for an untagged, foreign, or ended generation.
    */
   sessionOf(ctx: Context): SessionFace | undefined
   /**
-   * Resolve the stable session binding (scope-addressed assembly feed).
+   * Borrow an already-retained Session binding without extending its lifetime.
    * @param id - session id.
-   * @returns binding, or undefined for a session neither listed nor already scoped.
+   * @returns the live binding, or undefined without a retained generation.
    */
   binding(id: SessionId): SessionBinding | undefined
 }

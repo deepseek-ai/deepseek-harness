@@ -1,0 +1,16 @@
+.dialog { user-select: none; box-sizing: border-box; border: 0.5px solid var(--dsw-alias-border-inverted); }
+.content { display: flex; flex-direction: column; width: 100%; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 22px 24px 12px; }
+.title { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--dsw-alias-label-primary); }
+.close { box-sizing: border-box; display: inline-flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 6px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-primary); cursor: pointer; }
+.close:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.actions { box-sizing: border-box; display: flex; justify-content: flex-end; align-items: center; width: 100%; padding: 0 24px; gap: 8px; }
+.primaryButton, .secondaryButton { box-sizing: border-box; min-width: 72px; height: 36px; border-radius: var(--dsw-radius-md); font-size: 14px; line-height: 22px; }
+.primaryButton { padding: 0 16px; font-weight: 500; }
+.secondaryButton { padding: 0 14px; border: 0.5px solid var(--dsw-alias-border-l2); }
+.description { margin: 0; padding: 0 24px; font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); }
+.link { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+.spinner { flex: none; animation: spin 1s linear infinite; }
+.primaryButton:has(.spinner) { opacity: 1; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

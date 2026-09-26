@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-20-focus-ring-brand-primary.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-20-focus-ring-brand-primary.md
+/agent-note-one-keyboard-focus-colour-for-every-control:
+  en: 967e19daff3df9bc
+  zh: 81e1a21d4204eb8a
+/agent-note-one-keyboard-focus-colour-for-every-control/problem:
+  en: 2f3f77b1de539959
+  zh: a4fa146b1d9ddecf
+/agent-note-one-keyboard-focus-colour-for-every-control/decision:
+  en: 613ec184df6bf5d5
+  zh: e4b3f95f4d33a54c
+/agent-note-one-keyboard-focus-colour-for-every-control/alternatives-considered:
+  en: 392968102d520d1d
+  zh: e7b7b68f145cf3d3
+/agent-note-one-keyboard-focus-colour-for-every-control/consequences:
+  en: 25b9933c3d43ad76
+  zh: 75d374ce3b7ec2eb

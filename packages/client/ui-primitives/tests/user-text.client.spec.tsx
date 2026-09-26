@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 /**
- * Inline projection of sent user text: decoration never breaks a single-line
- * message (bubble regression), and wire session forms fold to their label
- * (queue-row readability).
+ * Inline projection of sent user text: decoration adds no block containers,
+ * preserves whitespace, and folds wire session forms to their label.
  */
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/react'
@@ -17,7 +16,7 @@ const project = (
   render(<div data-host>{projectUserText(text, labels, slashNames, slashKind)}</div>).container.querySelector('[data-host]')!
 
 describe('projectUserText', () => {
-  it('keeps a decorated single-line message on one line: every part is inline', () => {
+  it('keeps decorated text inline and preserves whitespace between references', () => {
     const host = project('反反复复 /dsh-acp-test @执行几个命令测试', ['执行几个命令测试'], ['dsh-acp-test'])
     expect(host.querySelectorAll('div').length).toBe(0)
     expect(host.textContent).toBe('反反复复 /dsh-acp-test 执行几个命令测试')

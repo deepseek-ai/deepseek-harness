@@ -8,7 +8,7 @@
   padding: 0 8px;
   box-sizing: border-box;
   border: 1px solid transparent;
-  border-radius: 13px;
+  border-radius: var(--dsw-radius-sm);
   font-family: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -56,7 +56,7 @@
 }
 
 .warning:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-warn-label);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
@@ -73,16 +73,12 @@
   height: 14px;
 }
 
+.icon > svg {
+  color: inherit;
+}
+
 .label {
   text-align: left;
-}
-
-.spinner {
-  animation: spinner-rotate 0.9s linear infinite;
-}
-
-@keyframes spinner-rotate {
-  to { transform: rotate(360deg); }
 }
 
 .dots {
@@ -112,8 +108,7 @@
 @media (prefers-reduced-motion: reduce) {
   .indicator,
   .secondDot,
-  .thirdDot,
-  .spinner {
+  .thirdDot {
     animation: none;
   }
 

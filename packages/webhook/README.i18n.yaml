@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/webhook/README.md
-README.md: fa35bf07d20760dd66b8443af27d79c12c2ba676
-README.zh.md: fa941391b23a2bd68d0e615245290e2b9cc9f19d
+/:
+  en: 4b01653e4ccb53d2
+  zh: 85df5bd61bac9fe6
+/webhook-verified-external-events-to-dsh-sessions:
+  en: 56361bc7c10f73ad
+  zh: 2a40c90775045766
+/webhook-verified-external-events-to-dsh-sessions/summary:
+  en: 297975121095f74a
+  zh: 9530dbf3c90d1ae0
+/webhook-verified-external-events-to-dsh-sessions/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/webhook-verified-external-events-to-dsh-sessions/packages:
+  en: 7bebbc165a382b0d
+  zh: ee601ab6a4c467ee
+/webhook-verified-external-events-to-dsh-sessions/related-documentation:
+  en: 24b7903a3f1f7dce
+  zh: fab213faf1d22760
+/webhook-verified-external-events-to-dsh-sessions/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

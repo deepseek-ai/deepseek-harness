@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-26-ptc-live-parallel-dispatch.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-26-ptc-live-parallel-dispatch.md
-2026-07-26-ptc-live-parallel-dispatch.md: f064314098af9c074f7cd06dc9ceea3df4c91c76
-2026-07-26-ptc-live-parallel-dispatch.zh.md: 70cbebcdc30c5771a2c29f36b588232822e19269
+/agent-note-ptc-mode-live-dispatch-lifecycle-and-native-contract-parallelism:
+  en: f546683c54ae7d6b
+  zh: 1c0760c5f49f0188
+/agent-note-ptc-mode-live-dispatch-lifecycle-and-native-contract-parallelism/problem:
+  en: ce16b44b1db07ec0
+  zh: 30681dab84948cd8
+/agent-note-ptc-mode-live-dispatch-lifecycle-and-native-contract-parallelism/decision:
+  en: 7ac907f773ff9d50
+  zh: 86982428baf83cde
+/agent-note-ptc-mode-live-dispatch-lifecycle-and-native-contract-parallelism/alternatives-considered:
+  en: b015fa95b46e5fd5
+  zh: b4fe283a1ab598c1
+/agent-note-ptc-mode-live-dispatch-lifecycle-and-native-contract-parallelism/consequences:
+  en: d16ba3a88fa7d528
+  zh: 8c374a14a4f34cfe

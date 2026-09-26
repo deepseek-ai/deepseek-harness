@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-primitives",
   "description": "Pure React atoms for the dsh web UI: controls, icons, markdown, and JSON inspectors (zero cordis)",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -23,9 +23,11 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@deepseek-ai/dsh-client-store": "workspace:*",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.0",
-    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-util-code-language": "workspace:*",
     "react": "^18.2.0",
     "clsx": "^2.0.0",
     "diff": "^9.0.0",
@@ -38,6 +40,7 @@
     "micromark-util-symbol": "^2.0.1",
     "micromark-util-types": "^2.0.2",
     "shiki": "^4.3.1",
+    "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@shikijs/langs": "^4.3.1",
     "@types/mdast": "^4.0.4",
     "micromark-factory-space": "^2.0.1",
@@ -46,7 +49,8 @@
     "mdast-util-gfm": "^3.1.0",
     "mdast-util-math": "^3.0.0",
     "micromark-extension-gfm": "^3.0.0",
-    "micromark-util-sanitize-uri": "^2.0.1"
+    "micromark-util-sanitize-uri": "^2.0.1",
+    "simple-icons": "16.31.0"
   },
   "files": [
     "lib/index.js",
@@ -54,6 +58,6 @@
     "lib/types/**/*.d.ts"
   ],
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~"
   }
 }

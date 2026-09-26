@@ -19,6 +19,7 @@
     "src/list.ts",
     "src/media-references.ts",
     "src/model-selection-projection.ts",
+    "src/archived-session-gate.ts",
     "src/skill-catalog.ts"
   ],
   "references": [
@@ -38,7 +39,7 @@
     { "path": "../../llm/llm" },
     { "path": "../../util/deque" },
     { "path": "../../util/native-command" },
-    { "path": "../../preset/agent-presets" },
+    { "path": "../../preset/agent-preset-registry" },
     { "path": "../../session/session-persistence" },
     { "path": "../../session/session-projection" },
     { "path": "../../session/session-projection-cache" },

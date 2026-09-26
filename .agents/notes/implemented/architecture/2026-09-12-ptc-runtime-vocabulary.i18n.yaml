@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-12-ptc-runtime-vocabulary.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-12-ptc-runtime-vocabulary.md
-2026-09-12-ptc-runtime-vocabulary.md: 86d2132b735166fb0ee7c4a4929d5ca64ba0880a
-2026-09-12-ptc-runtime-vocabulary.zh.md: 5951c43b9554a6266d96cc60d99c11e84acc138f
+/agent-note-ptc-runtime-vocabulary:
+  en: 4e585bb88c918c48
+  zh: 1ee36889df928e84
+/agent-note-ptc-runtime-vocabulary/problem:
+  en: 1281bbda56bc41e0
+  zh: 719dc99572bd7921
+/agent-note-ptc-runtime-vocabulary/decision:
+  en: b3ca07cb6a92f358
+  zh: f3b763124b483563
+/agent-note-ptc-runtime-vocabulary/alternatives-considered:
+  en: 38af2c476cc408bc
+  zh: 9f1ebd14829250e3
+/agent-note-ptc-runtime-vocabulary/consequences:
+  en: bb68774fb0a4bcc3
+  zh: b866e8763b3a4f74

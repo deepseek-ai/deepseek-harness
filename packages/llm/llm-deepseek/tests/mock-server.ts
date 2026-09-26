@@ -13,7 +13,7 @@ export interface MockServer {
   requests: unknown[]
   /** Header bags of received requests, in order (parallel to `requests`). */
   headers: IncomingMessage['headers'][]
-  /** Parsed Files API operations, excluded from chat request ordering. */
+  /** Parsed Files API operations, excluded from model request ordering. */
   fileRequests: Array<{ method: string; path: string; filename?: string; bytes?: number }>
   script: Behavior[]
   close(): Promise<void>
@@ -28,18 +28,20 @@ export async function closeMockServers(): Promise<void> {
 
 /** A minimal complete text generation, reused by request-shape assertions. */
 export const textEvents = [
-  '{"choices":[{"delta":{"role":"assistant","content":null,"reasoning_content":""}}]}',
-  '{"choices":[{"delta":{"content":"hello"}}]}',
-  '{"choices":[{"delta":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1}}',
-  '[DONE]',
-]
+  { type: 'message_start', message: { id: 'msg_1', model: 'deepseek-v4-flash', usage: { input_tokens: 3, output_tokens: 0 } } },
+  { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+  { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'hello' } },
+  { type: 'content_block_stop', index: 0 },
+  { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } },
+  { type: 'message_stop' },
+].map(event => JSON.stringify(event))
 
-/** Local chat-completions stand-in: replays scripted behaviors per request. */
+/** Local Messages stand-in: replays scripted behaviors per request. */
 export async function mockServer(script: Behavior[]): Promise<MockServer> {
   const requests: unknown[] = []
   const headers: IncomingMessage['headers'][] = []
   const fileRequests: MockServer['fileRequests'] = []
-  const files = new Map<string, { id: string; object: 'file'; bytes: number; created_at: number; filename: string; purpose: 'user_data'; expires_at: number }>()
+  const files = new Map<string, { id: string; type: 'file'; size_bytes: number; created_at: string; filename: string; mime_type: string }>()
   let nextFile = 1
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
     const chunks: Buffer[] = []
@@ -48,12 +50,12 @@ export async function mockServer(script: Behavior[]): Promise<MockServer> {
       void (async () => {
         const url = new URL(request.url ?? '/', 'http://localhost')
         const body = Buffer.concat(chunks)
-        if (url.pathname === '/files' && request.method === 'POST') {
+        if (url.pathname === '/v1/files' && request.method === 'POST') {
           const headers = new Headers()
           for (const [name, value] of Object.entries(request.headers)) {
             if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value)
           }
-          const form = await new Request('http://localhost/files', {
+          const form = await new Request('http://localhost/v1/files', {
             method: 'POST',
             headers,
             body,
@@ -62,28 +64,25 @@ export async function mockServer(script: Behavior[]): Promise<MockServer> {
           if (!(blob instanceof Blob)) throw new Error('mock upload omitted file')
           const name = 'name' in blob && typeof blob.name === 'string' ? blob.name : 'uploaded_file'
           const id = `file-api-${nextFile}`
-          const createdAt = Math.floor(Date.now() / 1_000)
+          const createdAt = new Date().toISOString()
           nextFile += 1
-          const expiresSeconds = Number(form.get('expires_after[seconds]'))
           const file = {
             id,
-            object: 'file' as const,
-            bytes: blob.size,
+            type: 'file' as const,
+            size_bytes: blob.size,
             created_at: createdAt,
             filename: name,
-            purpose: 'user_data' as const,
-            expires_at: createdAt + expiresSeconds,
+            mime_type: blob.type,
           }
           files.set(id, file)
           fileRequests.push({ method: 'POST', path: url.pathname, filename: name, bytes: blob.size })
           response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(file))
           return
         }
-        if (url.pathname === '/files' && request.method === 'GET') {
+        if (url.pathname === '/v1/files' && request.method === 'GET') {
           fileRequests.push({ method: 'GET', path: `${url.pathname}${url.search}` })
           const data = [...files.values()]
           response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
-            object: 'list',
             data,
             first_id: data[0]?.id,
             last_id: data.at(-1)?.id,
@@ -91,17 +90,17 @@ export async function mockServer(script: Behavior[]): Promise<MockServer> {
           }))
           return
         }
-        if (url.pathname.startsWith('/files/') && request.method === 'DELETE') {
-          const id = decodeURIComponent(url.pathname.slice('/files/'.length))
+        if (url.pathname.startsWith('/v1/files/') && request.method === 'DELETE') {
+          const id = decodeURIComponent(url.pathname.slice('/v1/files/'.length))
           files.delete(id)
           fileRequests.push({ method: 'DELETE', path: url.pathname })
           response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
-            id, object: 'file', deleted: true,
+            id, type: 'file_deleted',
           }))
           return
         }
-        if (url.pathname.startsWith('/files/') && request.method === 'GET') {
-          const id = decodeURIComponent(url.pathname.slice('/files/'.length))
+        if (url.pathname.startsWith('/v1/files/') && request.method === 'GET') {
+          const id = decodeURIComponent(url.pathname.slice('/v1/files/'.length))
           fileRequests.push({ method: 'GET', path: url.pathname })
           const file = files.get(id)
           if (file === undefined) {

@@ -43,10 +43,10 @@
       "path": "../../client/store"
     },
     {
-      "path": "../../client/ui-chat"
+      "path": "../../client/ui-chat/tsconfig.client.json"
     },
     {
-      "path": "../../client/ui-conversation"
+      "path": "../../client/ui-conversation/tsconfig.client.json"
     },
     {
       "path": "../../client/ui-layout"
@@ -61,7 +61,7 @@
       "path": "../../client/ui-session"
     },
     {
-      "path": "../../client/ui-settings"
+      "path": "../../client/ui-settings/tsconfig.client.json"
     },
     {
       "path": "../../subagent/subagent"

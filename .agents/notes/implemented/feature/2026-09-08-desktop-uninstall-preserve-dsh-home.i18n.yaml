@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-08-desktop-uninstall-preserve-dsh-home.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-08-desktop-uninstall-preserve-dsh-home.md
+/agent-note-windows-uninstall-retains-the-harness-home:
+  en: ae26a8eee5e5ef6e
+  zh: 2549190b3d8890e1
+/agent-note-windows-uninstall-retains-the-harness-home/problem:
+  en: 7e0091e3af8b52d8
+  zh: b40193a58711c6a5
+/agent-note-windows-uninstall-retains-the-harness-home/decision:
+  en: fd2608389491a1f8
+  zh: b007e1d35a049292
+/agent-note-windows-uninstall-retains-the-harness-home/alternatives-considered:
+  en: f3a2c8263d598b30
+  zh: 226a3203c940bdd3
+/agent-note-windows-uninstall-retains-the-harness-home/deferred:
+  en: 7d13267e5928961a
+  zh: 79398501c8e099dd
+/agent-note-windows-uninstall-retains-the-harness-home/consequences:
+  en: 9f94a327edbd7685
+  zh: fa53c77c2d9df54d

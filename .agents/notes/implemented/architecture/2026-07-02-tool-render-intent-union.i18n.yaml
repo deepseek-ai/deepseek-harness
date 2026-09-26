@@ -1,6 +1,37 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-02-tool-render-intent-union.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-02-tool-render-intent-union.md
-2026-07-02-tool-render-intent-union.md: 52626d3d9200146df95aee7836d37bbaf7e6a9ec
-2026-07-02-tool-render-intent-union.zh.md: bc91b89c53c3c43b6c483dc0d4876a00f5a936b7
+/agent-note-tagged-render-intent-union-for-tool-call-presentation:
+  en: 599dd6f91059580e
+  zh: b6a46767bb4198e6
+/agent-note-tagged-render-intent-union-for-tool-call-presentation/problem:
+  en: 3a4b92dca651b979
+  zh: 6b10ce7ba3681180
+/agent-note-tagged-render-intent-union-for-tool-call-presentation/decision:
+  en: aff6d789bde63f17
+  zh: 73782526b46a3ee5
+/agent-note-tagged-render-intent-union-for-tool-call-presentation/decision/why-a-tagged-union-beats-the-field-bag:
+  en: ed7b15039050e65e
+  zh: a719562b5fcdbd4e
+/agent-note-tagged-render-intent-union-for-tool-call-presentation/decision/producer-mapping:
+  en: c87f22a29caef002
+  zh: 7bfd28c1df80b8a1
+/agent-note-tagged-render-intent-union-for-tool-call-presentation/decision/terminal-fallback-ownership:
+  en: 0bb2f60726afc4d9
+  zh: 60040141447b4a2e
+/agent-note-tagged-render-intent-union-for-tool-call-presentation/decision/purity-preserved:
+  en: 1ba6a480967c524d
+  zh: 90535e843f346bcf
+/agent-note-tagged-render-intent-union-for-tool-call-presentation/alternatives-considered:
+  en: 2cd4801f3162227b
+  zh: 76afaa23bc2b9eb0
+/agent-note-tagged-render-intent-union-for-tool-call-presentation/consequences:
+  en: 81d8366d826285c2
+  zh: b437b862794c146e
+/agent-note-tagged-render-intent-union-for-tool-call-presentation/non-goals:
+  en: e9d60967a9b3f9bd
+  zh: 6dfa9ac30d847879
+/agent-note-tagged-render-intent-union-for-tool-call-presentation/related:
+  en: fe27f777b3728fa4
+  zh: 4b648dbf731ace00

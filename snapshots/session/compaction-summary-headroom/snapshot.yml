@@ -1,0 +1,11 @@
+version: 1
+scenario: compaction-summary-headroom
+profile: headless
+composition: compaction-summary-headroom
+recording: authored
+header:
+  class: compaction-summary-headroom
+  pin: true
+  systemPromptSource: compaction-recovery
+  toolSchemasSource: compaction-recovery
+  changes: 1

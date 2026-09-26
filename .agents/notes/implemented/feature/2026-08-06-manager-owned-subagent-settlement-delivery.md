@@ -90,7 +90,7 @@ The refusal and interruption wordings are pinned verbatim in unit tests rather t
 
 **Filter the canonical child output.** Removing nontext blocks in `AssistantOutputFold` would discard assistant content needed by SDK and UI consumers. Only the parent notice requires a text projection.
 
-**Relax the Messages serializer.** Accepting or silently discarding invalid user-role blocks would conceal the producer's role conversion error. Notice construction supplies content that every parent provider can represent while protocol validation remains strict.
+**Rely on serializer tolerance for notice construction.** Notice construction supplies text that every parent provider can represent; adapter filtering cannot replace that producer responsibility. The [saved-input compatibility decision](../bug-fix/2026-09-18-messages-input-history-compatibility.md) supersedes the rejection of Messages input filtering for already recorded notices, which a producer fix cannot change.
 
 ## Consequences
 

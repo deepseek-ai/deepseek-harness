@@ -170,44 +170,16 @@ ${body}
 }
 
 /**
- * Lowercased file-extension to syntax-highlighting language hint. Keys are the
- * extension without its dot; a UI treats an absent key as plain text. The map is
- * intentionally small — common source, config, and markup extensions a
- * line-numbered code view benefits from highlighting — not an exhaustive registry.
- */
-const LANG_BY_EXTENSION: Readonly<Record<string, string>> = {
-  ts: 'ts', tsx: 'tsx', mts: 'ts', cts: 'ts',
-  js: 'js', jsx: 'jsx', mjs: 'js', cjs: 'js',
-  json: 'json', jsonc: 'json',
-  py: 'py', rb: 'rb', go: 'go', rs: 'rs', java: 'java',
-  c: 'c', h: 'c', cc: 'cpp', cpp: 'cpp', hpp: 'cpp', cxx: 'cpp',
-  cs: 'cs', kt: 'kotlin', swift: 'swift', php: 'php',
-  sh: 'sh', bash: 'sh', zsh: 'sh',
-  yaml: 'yaml', yml: 'yaml', toml: 'toml', ini: 'ini',
-  md: 'md', markdown: 'md', mdx: 'mdx',
-  html: 'html', htm: 'html', css: 'css', scss: 'scss', less: 'less',
-  sql: 'sql', xml: 'xml', lua: 'lua',
-}
-
-/**
- * Derive a syntax-highlighting language hint from a read path's file extension.
- * Pure and case-insensitive on the extension; a dotfile with no extension
- * (`.gitignore`) and an unknown extension both yield `undefined`.
+ * Derive the persisted `lang` hint from a read path's file extension. The shared
+ * table in `@deepseek-ai/dsh-util-code-language` owns the recognized suffixes and
+ * the path rules (both separators, a leading dot as the extension separator, and
+ * prototype-key safety); `readLangHintForPath` projects the read card's short ids
+ * over it, so a suffix whose value a recorded session already holds keeps it
+ * byte-identical while every other suffix uses its language's short name.
  * @param path - the model-facing path the read reported.
- * @returns the language hint for {@link LANG_BY_EXTENSION}, or `undefined` when the extension maps to none.
+ * @returns the persisted language hint, or `undefined` when the extension maps to none.
  */
-export function langFromPath(path: string): string | undefined {
-  const base = path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
-  const dot = base.lastIndexOf('.')
-  // A leading dot is a dotfile (no extension), not an empty extension.
-  if (dot <= 0) return undefined
-  const ext = base.slice(dot + 1).toLowerCase()
-  // Own-property check only: a filename whose extension is an Object.prototype
-  // key (`foo.constructor`, `foo.__proto__`) must map to no language, not to the
-  // inherited member — otherwise a function would reach `lang` and fail the
-  // tool-output JSON validation.
-  return Object.hasOwn(LANG_BY_EXTENSION, ext) ? LANG_BY_EXTENSION[ext] : undefined
-}
+export { readLangHintForPath as langFromPath } from '@deepseek-ai/dsh-util-code-language'
 
 /**
  * The `read` tool's private `tool/result` `meta` payload: the structured

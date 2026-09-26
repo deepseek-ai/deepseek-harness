@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
+import { expect } from 'vitest'
 
 /** The built page under test; `pnpm run test:web` rebuilds it before running. */
 export const DIST_INDEX = fileURLToPath(new URL('../dist/index.html', import.meta.url))
@@ -37,6 +38,9 @@ export function requireBuilt(name: string): unknown {
  */
 export const ZH_BROWSER_LOCALE = 'zh-CN'
 
+/** Same-day anchor for seeded event times and the Asia/Shanghai browser clock. */
+export const WEB_FIXTURE_TIME = Date.parse('2026-01-15T12:00:00+08:00')
+
 /**
  * Open the standard browser-test page advertising English before client boot.
  * This keeps role locators and goldens deterministic while leaving the Host
@@ -53,32 +57,49 @@ export async function newEnglishPage(browser: Browser, height = 1000): Promise<P
 }
 
 /**
- * Expand every currently eligible Turn-process group so a Tool-focused
+ * Scroll a locator whose rendered element can be replaced during layout.
+ * @param target - locator resolved again when its previous element detached.
+ */
+export async function scrollIntoView(target: Locator): Promise<void> {
+  await expect.poll(() => target.evaluate((element) => {
+    if (!element.isConnected) return false
+    element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })
+    return true
+  }), { timeout: 10_000 }).toBe(true)
+}
+
+/**
+ * Expand every eligible Turn process and secondary group so a Tool-focused
  * scenario can exercise the original row contract beneath product-default
  * compact Chat presentation.
  * @param page - page containing the Chat view.
  */
 export async function expandTurnProcesses(page: Page): Promise<void> {
-  const controls = page.locator('[data-turn-process]')
+  const controls = page.locator('[data-turn-process], [data-process-activity]')
   await controls.first().waitFor({ state: 'visible', timeout: 10_000 })
   const count = await controls.count()
   for (let index = 0; index < count; index++) {
     const control = controls.nth(index)
-    if (await control.getAttribute('aria-expanded') !== 'true') await control.click()
+    if (await control.isVisible() && await control.getAttribute('aria-expanded') === 'false') await control.click()
   }
 }
 
 /**
- * Expand the Turn-process group containing one possibly hidden descendant.
+ * Expand the Turn process and secondary group containing a hidden descendant.
  * @param page - page containing the Chat view.
- * @param target - descendant whose owning Turn process should open.
+ * @param target - descendant whose outer process disclosures should open.
  */
 export async function expandOwningTurnProcess(page: Page, target: Locator): Promise<void> {
+  if (await target.isVisible()) return
   const turn = await target.evaluate(element => element.closest<HTMLElement>('[data-chat-turn]')?.dataset.chatTurn)
-  if (turn === undefined || await target.isVisible()) return
-  const control = page.locator(`[data-turn-process="${turn}"]`)
-  await control.waitFor({ state: 'visible', timeout: 10_000 })
-  if (await control.getAttribute('aria-expanded') !== 'true') await control.click()
+  if (turn !== undefined) {
+    const control = page.locator(`[data-turn-process="${turn}"]`)
+    await control.waitFor({ state: 'visible', timeout: 10_000 })
+    if (await control.getAttribute('aria-expanded') === 'false') await control.click()
+  }
+  const group = target.locator('xpath=ancestor::*[@data-chat-group-key][1]')
+  const header = group.locator('[data-process-activity]').first()
+  if (await header.isVisible() && await header.getAttribute('aria-expanded') === 'false') await header.click()
 }
 
 /** Fail loud on a stale checkout instead of testing yesterday's bundle. */
@@ -145,8 +166,9 @@ export async function connectFreshWorkspace(page: Page, root: string, name = 'wo
  * @param page - the browser page under test.
  * @param root - workspace parent directory.
  * @param name - directory created under `root` and connected.
+ * @param modelAvailable - require an editable composer when the selected model is available.
  */
-export async function connectFreshWorkspaceZh(page: Page, root: string, name = 'workspace'): Promise<void> {
+export async function connectFreshWorkspaceZh(page: Page, root: string, name = 'workspace', modelAvailable = true): Promise<void> {
   mkdirSync(join(root, name), { recursive: true })
   await page.getByRole('textbox', { name: '选择工作区' }).click()
   const dialog = page.getByRole('dialog', { name: '选择工作区目录' })
@@ -156,7 +178,8 @@ export async function connectFreshWorkspaceZh(page: Page, root: string, name = '
   await pathInput.fill(join(root, name))
   await pathInput.press('Enter')
   await dialog.getByRole('button', { name: '打开', exact: true }).click()
-  await page.locator('[data-composer-input][contenteditable="true"][data-placeholder="描述你想要构建的内容, / 调用指令, @ 文件或对话"]')
+  const editable = modelAvailable ? '[contenteditable="true"]' : ''
+  await page.locator(`[data-composer-input]${editable}[data-placeholder="描述你想要构建的内容, / 调用指令, @ 文件或对话"]`)
     .waitFor({ timeout: 15_000 })
 }
 
@@ -205,6 +228,30 @@ export async function saveFailureShot(page: Page, name: string): Promise<void> {
 }
 
 /**
+ * Assert a visible tooltip paints above the element a user would read through
+ * it, at the bubble's center and bottom edge. The bubble ignores pointer events
+ * by design, so the measurement enables them for its own duration; each probe
+ * reports the bubble or the covering element, so a failure names its cover.
+ * @param tooltip - locator for the visible `[role="tooltip"]` bubble.
+ */
+export async function expectTooltipOnTop(tooltip: Locator): Promise<void> {
+  const probes = await tooltip.evaluate((bubble) => {
+    const rect = bubble.getBoundingClientRect()
+    const previous = bubble.style.pointerEvents
+    bubble.style.pointerEvents = 'auto'
+    const probe = (y: number): string => {
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, y)
+      if (hit === null) return 'none'
+      return bubble.contains(hit) ? 'tooltip' : `${hit.tagName}.${hit.classList.value}`.slice(0, 120)
+    }
+    const probes = { center: probe(rect.top + rect.height / 2), bottom: probe(rect.bottom - 1) }
+    bubble.style.pointerEvents = previous
+    return probes
+  })
+  expect(probes).toEqual({ center: 'tooltip', bottom: 'tooltip' })
+}
+
+/**
  * The conversation engine's Context key format, restated here rather than
  * imported: these specs live in the Host compiler aggregate, which must not
  * reach the Client plane. The engine's own copy is
@@ -216,4 +263,18 @@ export async function saveFailureShot(page: Page, name: string): Promise<void> {
  */
 export function conversationContextKey(kind: string, id: string): string {
   return `${kind.length}:${kind}${id}`
+}
+
+/** Open Settings through the Web gear or Desktop account menu.
+ * @param page - browser page with the mounted sidebar.
+ * @param locale - current UI language.
+ */
+export async function openSettings(page: Page, locale: 'en' | 'zh'): Promise<void> {
+  const label = locale === 'zh' ? '设置' : 'Settings'
+  if (await page.evaluate(() => 'dshDesktop' in globalThis)) {
+    await page.getByRole('button', { name: locale === 'zh' ? '账号菜单' : 'Account menu', exact: true }).click()
+    await page.getByRole('menuitem', { name: label, exact: true }).click()
+  } else {
+    await page.getByRole('button', { name: label, exact: true }).click()
+  }
 }

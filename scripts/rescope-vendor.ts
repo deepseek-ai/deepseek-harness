@@ -78,25 +78,26 @@ interface GenericSkip {
 const GENERIC_SKIPS: readonly GenericSkip[] = [
   // `Symbol.for('schemastery')` and the `vendor:` metadata field are upstream identifiers.
   { file: 'vendor/schemastery/src/index.ts', upstream: ['schemastery'] },
+  // Narrows a Standard Schema by the same upstream `vendor:` identifier.
+  { file: 'vendor/loader/src/config/diff.ts', upstream: ['schemastery'] },
+  // Native schema detection and its fixture share the vendored runtime's Symbol.for identifier.
+  { file: 'packages/boot/app-boot/src/config-schema/native.ts', upstream: ['schemastery'] },
+  { file: 'packages/boot/app-boot/tests/config-schema.spec.ts', upstream: ['schemastery'] },
   // Asserts the vendored-manifest table, which gains an upstream-name column.
   { file: 'scripts/gen-third-party-notices.spec.ts', upstream: RENAMES.map(rename => rename.upstream) },
-  // `cordis` is also an agent-preset id — the directory name under
-  // packages/preset/agent-presets/presets/ — so in these files the bare name is
+  // `cordis` is also an agent-preset id, so in these files the bare name is
   // product data, not a package reference. Renaming it changed which preset
   // the creator flow stages and which id the roster reports.
   { file: 'packages/client/ui-agent-preset/src/client/AgentPresetSection.tsx', upstream: ['cordis'] },
-  { file: 'packages/preset/agent-presets/tests/shipped-root.spec.ts', upstream: ['cordis'] },
+  { file: 'packages/client/ui-agent-preset/src/client/PresetGuideDialog.tsx', upstream: ['cordis'] },
   { file: 'packages/client/ui-agent-preset/src/client/index.ts', upstream: ['cordis'] },
   { file: 'packages/client/ui-agent-preset/tests/apply.client.spec.ts', upstream: ['cordis'] },
   { file: 'packages/client/ui-agent-preset/tests/locales.client.spec.ts', upstream: ['cordis'] },
   { file: 'packages/client/ui-agent-preset/tests/section.client.spec.tsx', upstream: ['cordis'] },
   { file: 'apps/cli/tests/web-agent-presets.e2e.ts', upstream: ['cordis'] },
+  { file: 'apps/cli/tests/profiles/web/tests/fixtures/creator-plugin-manager.mjs', upstream: ['cordis'] },
   { file: 'apps/web/tests/agent-preset-authoring.e2e.ts', upstream: ['cordis'] },
-  { file: 'packages/preset/agent-presets/tests/session.spec.ts', upstream: ['cordis'] },
-  // The preset's own composition: its header comment and its system prompt name
-  // the preset a model mounts, so the scoped name would send the model after an
-  // id no roster reports.
-  { file: 'packages/preset/agent-presets/presets/cordis/agent.cordis.yml', upstream: ['cordis'] },
+  { file: 'packages/preset/agent-preset-registry/tests/session.spec.ts', upstream: ['cordis'] },
   // The preset-roster loop names the `cordis` preset id, not a package.
   { file: 'apps/cli/tests/windows-shell.spec.ts', upstream: ['cordis'] },
   // GROUP_ORDER holds `packages/<group>/` directory names, not package names.
@@ -134,6 +135,7 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   { file: 'packages/extensions/ui-cordis/src/client/CordisActionRow.tsx', upstream: ['cordis'] },
   { file: 'packages/extensions/ui-cordis/src/client/CordisDefineRow.tsx', upstream: ['cordis'] },
   { file: 'packages/extensions/ui-cordis/src/client/CordisPanel.tsx', upstream: ['cordis'] },
+  { file: 'packages/extensions/ui-cordis/src/client/CordisPreparingRow.tsx', upstream: ['cordis'] },
   { file: 'packages/extensions/ui-cordis/src/client/CordisRunRow.tsx', upstream: ['cordis'] },
   { file: 'packages/extensions/ui-cordis/src/client/locales.ts', upstream: ['cordis'] },
 ]
@@ -161,8 +163,6 @@ const POSTCONDITIONS: readonly PostCondition[] = [
   // The preset ids in this table are product data, not package names.
   { file: 'packages/client/ui-agent-preset/tests/locales.client.spec.ts', text: '[\'cordis\', \'presetCordisName\'', count: 1 },
   // The preset id the shipped composition documents to its own model.
-  { file: 'packages/preset/agent-presets/presets/cordis/agent.cordis.yml', text: 'The `cordis` agent preset', count: 1 },
-  { file: 'packages/preset/agent-presets/presets/cordis/agent.cordis.yml', text: 'corrupting the `cordis` preset', count: 1 },
 ]
 
 /**
@@ -171,6 +171,13 @@ const POSTCONDITIONS: readonly PostCondition[] = [
  * quote a neighbouring line the generic pass would rewrite.
  */
 const EXACT_EDITS: readonly ExactEdit[] = [
+  {
+    id: 'loader-diff-schemastery-import',
+    file: 'vendor/loader/src/config/diff.ts',
+    find: "import type Schema from 'schemastery'",
+    replace: "import type Schema from '@deepseek-ai/schemastery'",
+    expect: 1,
+  },
   {
     id: 'cordis-walk-merge-head',
     file: 'scripts/cordis-walk.ts',
@@ -223,7 +230,7 @@ const EXACT_EDITS: readonly ExactEdit[] = [
     id: 'vendor-readme-preamble',
     file: 'vendor/README.md',
     find: 'All vendored packages keep their **original npm names** (they are resolved through pnpm workspaces) and are marked `private: true` — they are never published from this repo.',
-    replace: 'All vendored packages use the **`@deepseek-ai` scope** (`cordis` → `@deepseek-ai/cordis`, `@cordisjs/plugin-<x>` → `@deepseek-ai/cordis-plugin-<x>`). The manifest table records upstream versions and source commits; each package manifest carries its Harness release version and publication metadata. Repository-owned runtime dependencies use `workspace:^`, so local builds resolve the pinned workspace packages and publication substitutes release ranges.',
+    replace: 'All vendored packages use the **`@deepseek-ai` scope** (`cordis` → `@deepseek-ai/cordis`, `@cordisjs/plugin-<x>` → `@deepseek-ai/cordis-plugin-<x>`). The manifest table records upstream versions and source commits; each package manifest carries its Harness release version and publication metadata. References to vendored packages use `workspace:~`, so local builds resolve the workspace packages and published ranges permit patch updates within the same minor version.',
     expect: 1,
   },
   {
@@ -238,7 +245,7 @@ const EXACT_EDITS: readonly ExactEdit[] = [
     id: 'root-agents-vendored-name-contract',
     file: 'AGENTS.md',
     find: 'vendored packages keep upstream names and are `private: true`. `cordis` is a peerDependency (+ dev) of every harness package.',
-    replace: 'vendored packages are rescoped ([mapping](docs/rescope.md)) and `private: true`. `@deepseek-ai/cordis` is a peerDependency (+ dev) of every harness package.',
+    replace: 'vendor is [rescoped](docs/rescope.md) and `private: true`. Harness packages declare `@deepseek-ai/cordis` in `peerDependencies`/`devDependencies`.',
     expect: 1,
   },
   {

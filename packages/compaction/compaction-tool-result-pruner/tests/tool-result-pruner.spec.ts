@@ -212,10 +212,7 @@ describe('ToolResultPruner session transaction', () => {
       type: 'tool/result',
       data: {
         message: {
-          content: [{
-            type: 'tool-result',
-            content: [{ type: 'text', text: 'x'.repeat(100) }],
-          }],
+          content: [{ type: 'text', text: 'x'.repeat(100) }],
         },
       },
     })
@@ -227,7 +224,9 @@ describe('ToolResultPruner session transaction', () => {
         isError: true,
         message: {
           source: { kind: 'tool', callId: ToolCallId('one') },
-          content: [{ type: 'tool-result', isError: true }],
+          role: 'tool',
+          toolCallId: ToolCallId('one'),
+          isError: true,
         },
         error: { name: 'ExitError', code: 'EXIT_1' },
         meta: { diff: ['a', 'b'] },

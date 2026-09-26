@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self'">
+    <title></title>
+    <link rel="stylesheet" href="update-dialog.css">
+  </head>
+  <body class="update-dialog">
+    <main id="dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="title" aria-describedby="detail" hidden>
+      <header><h1 id="title"></h1><button id="close" class="close" type="button"><img src="update-close.svg" alt=""></button></header>
+      <p id="detail"></p>
+      <details id="technical-details" hidden>
+        <summary id="technical-details-label"></summary>
+        <pre id="technical-details-content" tabindex="0"></pre>
+      </details>
+      <div id="actions"></div>
+    </main>
+    <script src="update-dialog.js"></script>
+  </body>
+</html>

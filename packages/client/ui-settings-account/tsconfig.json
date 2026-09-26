@@ -1,0 +1,60 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../locale/tsconfig.client.json"
+    },
+    {
+      "path": "../store"
+    },
+    {
+      "path": "../ui-settings/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-primitives"
+    },
+    {
+      "path": "../ui-renderer"
+    },
+    {
+      "path": "../ui-slots"
+    },
+    {
+      "path": "../ui-theme/tsconfig.client.json"
+    },
+    {
+      "path": "../../credentials/deepseek-account"
+    },
+    {
+      "path": "../ui-settings-models"
+    },
+    {
+      "path": "../../host/webserver"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../ui-chat/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-layout"
+    },
+    {
+      "path": "../../settings/settings"
+    }
+  ]
+}

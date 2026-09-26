@@ -6,6 +6,7 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { SessionLogDownloadHeaderAction } from '../src/client/HeaderAction.tsx'
 import { apply, inject } from '../src/client/index.ts'
+import type { SessionLogDownloadHeaderInjected } from '../src/client/HeaderAction.tsx'
 
 const SID = 'session-export-apply' as SessionId
 
@@ -33,6 +34,26 @@ async function bench() {
 }
 
 describe('session-log-download browser plugin', () => {
+  it('follows feedback plugin availability and opens the selected Session form', async () => {
+    const b = await bench()
+    const entry = b.slots.entries('conversation.session.header.utilities')[0]!
+    const injected = (entry.inject as unknown as () => SessionLogDownloadHeaderInjected)()
+    expect(injected.hooks.feedbackAvailable.getSnapshot()).toBe(false)
+    injected.openFeedback(SID)
+
+    const openSession = vi.fn()
+    const feedback = b.ctx.plugin((ctx) => { ctx.provide('feedbackUi', { openSession }) })
+    await feedback.await()
+    await vi.waitFor(() => { expect(injected.hooks.feedbackAvailable.getSnapshot()).toBe(true) })
+    injected.openFeedback(SID)
+    expect(openSession).toHaveBeenCalledWith(SID)
+
+    await feedback.dispose()
+    await vi.waitFor(() => { expect(injected.hooks.feedbackAvailable.getSnapshot()).toBe(false) })
+    expect(b.slots.entries('conversation.session.header.utilities')).toHaveLength(1)
+    await b.fiber.dispose()
+  })
+
   it('provides one controller and removes its Header contribution on disposal', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 500 })))
     const b = await bench()

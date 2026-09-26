@@ -23,7 +23,7 @@
   flex-wrap: wrap;
 }
 
-/* Appearance cube (figma '.Selector Cube' 276x82 r16, pad 20/32, centered
+/* Appearance cube (figma '.Selector Cube' 276x82, pad 20/32, centered
  * icon-over-label column, gap 4); flexed down from the figma width so all
  * three sit on one row in the 800 panel, wrapping when narrower. */
 .themeCube {
@@ -36,7 +36,7 @@
   gap: 4px;
   padding: 20px 32px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 20px;
+  border-radius: var(--dsw-radius-xl);
   background: transparent;
   font: inherit;
   font-size: 14px;

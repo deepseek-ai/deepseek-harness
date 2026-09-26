@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-09-23-section-keyed-translation-pairing-records.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-23-section-keyed-translation-pairing-records.md
+/agent-note-section-keyed-translation-pairing-records:
+  en: fe3ee02933f0e25b
+  zh: 3518b378aebef215
+/agent-note-section-keyed-translation-pairing-records/problem:
+  en: 1662619f5cc6743f
+  zh: e98e9b39e82a2294
+/agent-note-section-keyed-translation-pairing-records/decision:
+  en: 333d08badeeef8a6
+  zh: 2ccb1fe95b3457ff
+/agent-note-section-keyed-translation-pairing-records/alternatives-considered:
+  en: 3e17a6963d74e3de
+  zh: cc086da130648d3c
+/agent-note-section-keyed-translation-pairing-records/consequences:
+  en: 7a1f77c69ef79755
+  zh: 7f12bd25f556ba9c
+/agent-note-section-keyed-translation-pairing-records/measured-effect:
+  en: 97af2f09c25338f1
+  zh: 2ec62a414fa61254
+/agent-note-section-keyed-translation-pairing-records/related:
+  en: 8f208df4c003e06e
+  zh: c1660f5b55dea743

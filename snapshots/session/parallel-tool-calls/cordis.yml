@@ -10,7 +10,7 @@
 - id: spill-policy
   name: '@deepseek-ai/dsh-spill-policy'
   config:
-    maxInlineBytes: !!js process.env.DSH_SNAPSHOT && 800 || 50000
+    maxInlineTokens: !!js process.env.DSH_SNAPSHOT && 200 || 12500
 
 - insert:
     - id: snapshot-spill-locators

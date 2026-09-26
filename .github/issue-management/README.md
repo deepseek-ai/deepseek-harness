@@ -61,7 +61,7 @@ Lifecycle processing is event-driven, not a reconciler. Omitted events do not re
 <a id="module-ownership"></a>
 ## Module ownership
 
-Maintainers reuse the owning module directly; [policy.mjs](policy.mjs) only reads the event file, dispatches commands, and reports command failures. The [module-ownership decision](../../.agents/notes/implemented/process/2026-09-07-issue-policy-module-ownership.md) explains this separation.
+Maintainers reuse the owning module directly; [policy.mjs](policy.mjs) only reads the event file, dispatches commands, and reports command failures.
 
 <details>
 <summary>Implementation owners</summary>

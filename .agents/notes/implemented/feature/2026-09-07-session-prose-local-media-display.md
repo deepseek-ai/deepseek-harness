@@ -14,7 +14,7 @@ Local media paths in Session prose render through a same-origin file route. This
 
 `ui-primitives` owns the `MarkdownPathImages` vocabulary on `MarkdownText`. Like `fileMentions`, it applies only after a message settles so frozen streaming blocks cannot cache a vocabulary handler. The settled pass rewrites image destinations outside the remote-URL allowlist and emits only absolute `http(s)`, `blob`, or `data` results. Without a vocabulary, local destinations retain inert alt text. Failed loads replace the image with authored alt text, or its original destination when alt is empty; a different source can load again.
 
-`ui-chat` supplies a page-stable `localPathMediaUrl` vocabulary through `AssistantMarkdown`. It maps absolute POSIX paths to `/api/file?path=…` on the page's origin. Relative and protocol-relative paths, Windows-style paths, and non-HTTP page transports such as Electron `file://` remain inert.
+`ui-chat` supplies a page-stable `localPathMediaUrl` vocabulary through `AssistantMarkdown`. It maps absolute POSIX paths to `api/file?path=…` resolved against `document.baseURI`, so the request stays under whatever mount the served document came from. Relative and protocol-relative paths, Windows-style paths, and non-HTTP page transports such as Electron `file://` remain inert.
 
 `session-controller` owns the `SessionMediaReferences` contribution beside `SessionFileReferences`. It registers through `connection.fetch`, which applies the same browser authentication and trust checks as `/api` RPC. The fixed same-origin endpoint gives the synchronous renderer a stable URL without an asynchronous capability negotiation.
 

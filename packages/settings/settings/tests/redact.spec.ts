@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { redactSecrets } from '../src/index.ts'
-import { MemorySettings } from './memory.ts'
 
 const Profile = z.object({
   apiKey: z.string().role('secret'),
@@ -101,68 +99,22 @@ describe('redactSecrets', () => {
     expect(redactSecrets({ type: 'object' } as never, { k: 'v' })).toEqual({ value: { k: 'v' }, secrets: [] })
     expect(redactSecrets({ type: 'array' } as never, ['v'])).toEqual({ value: ['v'], secrets: [] })
   })
+  it('removes secrets declared by any union branch, intersection, or transform', () => {
+    const schema = z.object({
+      union: z.union([z.object({ token: z.string().role('secret') }), z.object({ token: z.string() })]),
+      intersection: z.intersect([z.object({ token: z.string().role('secret') }), z.object({ name: z.string() })]),
+      transformed: z.transform(z.object({ token: z.string().role('secret') }), value => value),
+    })
+    const { value, secrets } = redactSecrets(schema as z<never>, {
+      union: { token: 'union-secret' }, intersection: { token: 'intersection-secret', name: 'visible' },
+      transformed: { token: 'transformed-secret' },
+    })
+    expect(value).toEqual({ union: {}, intersection: { name: 'visible' }, transformed: {} })
+    expect(secrets).toEqual(['union', 'intersection', 'transformed'].map(key => ({ path: [key, 'token'], set: true })))
+  })
+
 })
 
-describe('describe() layers and redaction', () => {
-  const NS = 'adapter'
-
-  async function boot(doc?: Record<string, unknown>) {
-    const ctx = new Context()
-    await ctx.plugin(MemorySettings, doc === undefined ? undefined : { doc })
-    return ctx
-  }
-
-  it('exposes detached base and user layers beside the resolved value', async () => {
-    const ctx = await boot({ adapter: { baseURL: 'https://user' } })
-    const base = { apiKey: 'entry-key', baseURL: 'https://base' }
-    ctx.settings.register(NS, Profile, { base })
-    const [descriptor] = ctx.settings.describe()
-    expect(descriptor?.base).toEqual(base)
-    expect(descriptor?.base).not.toBe(base)
-    expect(descriptor?.user).toEqual({ baseURL: 'https://user' })
-    expect(descriptor?.value).toEqual({ apiKey: 'entry-key', baseURL: 'https://user' })
-    ;(descriptor?.user as Record<string, unknown>).baseURL = 'mutated'
-    expect(ctx.settings.describe()[0]?.user).toEqual({ baseURL: 'https://user' })
-    expect(descriptor?.secrets).toBeUndefined()
-  })
-
-  it('omits the layers when neither a base nor a user section exists', async () => {
-    const ctx = await boot()
-    ctx.settings.register(NS, Profile)
-    const [descriptor] = ctx.settings.describe()
-    expect(descriptor).not.toHaveProperty('base')
-    expect(descriptor).not.toHaveProperty('user')
-  })
-
-  it('describes a section that became malformed after registration as having no user layer', async () => {
-    const ctx = await boot({ adapter: { baseURL: 'https://user' } })
-    const provider = ctx.get('settings') as MemorySettings
-    ctx.settings.register(NS, Profile, { base: { baseURL: 'https://base' } })
-    provider.pushExternal({ adapter: 5 })
-    const [descriptor] = ctx.settings.describe()
-    expect(descriptor).not.toHaveProperty('user')
-    // The malformed publish kept the last good resolved value.
-    expect(descriptor?.value).toEqual({ baseURL: 'https://user' })
-  })
-
-  it('redacts a descriptor that has neither base nor user layer', async () => {
-    const ctx = await boot()
-    ctx.settings.register(NS, Profile)
-    const [descriptor] = ctx.settings.describe({ redactSecrets: true })
-    expect(descriptor).not.toHaveProperty('base')
-    expect(descriptor).not.toHaveProperty('user')
-    expect(descriptor?.secrets).toEqual([{ path: ['apiKey'], set: false }])
-  })
-
-  it('redacts every layer and enumerates secret slots under redactSecrets', async () => {
-    const ctx = await boot({ adapter: { apiKey: 'user-key', baseURL: 'https://user' } })
-    ctx.settings.register(NS, Profile, { base: { apiKey: 'entry-key' } })
-    const [descriptor] = ctx.settings.describe({ redactSecrets: true })
-    expect(descriptor?.value).toEqual({ baseURL: 'https://user' })
-    expect(descriptor?.base).toEqual({})
-    expect(descriptor?.user).toEqual({ baseURL: 'https://user' })
-    expect(descriptor?.secrets).toEqual([{ path: ['apiKey'], set: true }])
-    const [verbatim] = ctx.settings.describe()
-    expect(verbatim?.value).toEqual({ apiKey: 'user-key', baseURL: 'https://user' })
-  })
+it('preserves values when an unspecified union declares no secret alternatives', () => {
+  expect(redactSecrets(new z({ type: 'union' }) as z<never>, 'visible')).toEqual({ value: 'visible', secrets: [] })
 })

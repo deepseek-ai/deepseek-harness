@@ -12,19 +12,28 @@
       "path": "../../../vendor/cordis"
     },
     {
+      "path": "../../api/gateway/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
       "path": "../../api/session-controller/tsconfig.client.json"
     },
     {
       "path": "../../host/open-in-app"
     },
     {
-      "path": "../locale"
+      "path": "../locale/tsconfig.client.json"
     },
     {
       "path": "../store"
     },
     {
-      "path": "../ui-conversation"
+      "path": "../ui-conversation/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-layout"
     },
     {
       "path": "../ui-primitives"
@@ -36,7 +45,19 @@
       "path": "../ui-session"
     },
     {
+      "path": "../ui-sidebar-documentpreview/tsconfig.client.json"
+    },
+    {
       "path": "../ui-slots"
+    },
+    {
+      "path": "../ui-deliverables/tsconfig.client.json"
+    },
+    {
+      "path": "../../util/native-command"
+    },
+    {
+      "path": "../shortcuts/tsconfig.client.json"
     }
   ]
 }

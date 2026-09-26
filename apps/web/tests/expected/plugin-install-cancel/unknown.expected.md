@@ -1,0 +1,8 @@
+- dialog "未能获取安装结果":
+  - button "返回编辑": 编辑
+  - button "关闭"
+  - status: 未能获取安装结果
+  - paragraph: 后端当前没有此安装任务。请检查插件列表后再尝试安装。
+  - paragraph: recovered-package
+  - paragraph: 版本 1.0.0
+  - button "查看安装详情"

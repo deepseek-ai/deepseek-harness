@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/jobs/jobs/README.md
-README.md: a96db102354b41ebd196b0718ed0ef0b97f6935b
-README.zh.md: 7198c8e6a82ed0d4f4d9dd9a3a2a501cfdebcbf2
+/:
+  en: 4055a3bc920e4ac2
+  zh: 3bc99f3b5bc2fd71
+/deepseek-ai-dsh-jobs:
+  en: 721d849fde0fbebe
+  zh: 9578ffb37edc5d7b
+/deepseek-ai-dsh-jobs/summary:
+  en: f64d24a22c76423c
+  zh: 5bfd3c04ce108bcb
+/deepseek-ai-dsh-jobs/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-jobs/use-this-package:
+  en: 1246c880d1c61927
+  zh: 157c703fd2da6b9c
+/deepseek-ai-dsh-jobs/use-this-package/what-a-background-job-gives-you:
+  en: 56f117c80db88cb2
+  zh: 4df7046e005f846c
+/deepseek-ai-dsh-jobs/use-this-package/the-ownership-boundary:
+  en: 873494750b38dae5
+  zh: 2e6142ab889f7a8b
+/deepseek-ai-dsh-jobs/use-this-package/starting-background-work-needs-a-controller:
+  en: 68075d00cde8763d
+  zh: 4bc42c01d9e4dc8d
+/deepseek-ai-dsh-jobs/use-this-package/smallest-working-composition:
+  en: cce846c7e3b0c33e
+  zh: 17f353d970b4216d
+/deepseek-ai-dsh-jobs/use-this-package/what-can-go-wrong:
+  en: fcfee3f72ea703ac
+  zh: 80299901bd44783b
+/deepseek-ai-dsh-jobs/understand-the-implementation:
+  en: 7e13d669ecc96d59
+  zh: b5fe7ae65812d926
+/deepseek-ai-dsh-jobs/understand-the-implementation/design-philosophy:
+  en: 2a42e1e06dfc469e
+  zh: 5c2c77eca52846f0
+/deepseek-ai-dsh-jobs/understand-the-implementation/source-map:
+  en: 2416d5be526d4dba
+  zh: 1090a9373258d7bb
+/deepseek-ai-dsh-jobs/understand-the-implementation/service-operations:
+  en: b2e4ef34ccf1e749
+  zh: 128b57b57ed09316
+/deepseek-ai-dsh-jobs/further-exploration:
+  en: 14a42f5debabd3ea
+  zh: 16a60585a7280ccf
+/deepseek-ai-dsh-jobs/model-experience:
+  en: efb58cac0fc08163
+  zh: 838791f77fd79917
+/deepseek-ai-dsh-jobs/model-experience/kv-cache-effect:
+  en: e290ccc9b3c92c08
+  zh: d75d48f485447a74
+/deepseek-ai-dsh-jobs/known-limitations-and-deferred-work:
+  en: bf4e5e0bd25d579e
+  zh: ed995c02012f0c72
+/deepseek-ai-dsh-jobs/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

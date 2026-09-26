@@ -9,7 +9,7 @@ import { startInspectorWorker } from './server.ts'
 if (parentPort === null) throw new Error('experimental inspector: Worker entry loaded on the main thread')
 const controlPort = parentPort
 
-const bootData = workerData as unknown
+const bootData: unknown = workerData
 if (!isPlainObject(bootData)
   || !(bootData.hostSourcePort instanceof MessagePort)) {
   throw new Error('experimental inspector: invalid Worker boot data')

@@ -61,7 +61,7 @@ PR 打开时，工作流按配置时区中的 PR 创建日期，为每个被引�
 <a id="module-ownership"></a>
 ## 模块归属
 
-维护者直接复用所属模块；[policy.mjs](policy.mjs)仅负责读取事件文件、分派命令并报告命令失败。[模块归属决策](../../.agents/notes/implemented/process/2026-09-07-issue-policy-module-ownership.zh.md)解释此职责分离。
+维护者直接复用所属模块；[policy.mjs](policy.mjs)仅负责读取事件文件、分派命令并报告命令失败。
 
 <details>
 <summary>实现职责</summary>

@@ -18,7 +18,7 @@ interface RootManifest {
   readonly scripts?: Record<string, unknown>
 }
 
-interface DemoPolicy {
+interface LauncherPolicy {
   readonly kind: 'dsh-direct' | 'dsh-wrapper'
   readonly wrapper?: string
 }
@@ -32,6 +32,7 @@ const MANIFEST_BIN_ALLOWLIST = new Map<string, ManifestBin>([
 /** Every JavaScript executable in an application or packaging workspace has one explicit role. */
 const EXECUTABLE_SOURCE_ALLOWLIST = new Map<string, string>([
   ['apps/cli/src/bin.ts', 'supported dsh application launcher'],
+  ['apps/desktop/scripts/logged-notarytool.mjs', 'build-only notarization logging wrapper'],
   ['packages/context/time-context/tests/fixtures/driver.ts', 'test-only subprocess driver'],
   ['packages/experimental/webworker-packer/bin.js', 'build-only wrapper'],
   ['packages/experimental/webworker-packer/src/bin.ts', 'build-only implementation'],
@@ -47,10 +48,16 @@ const EXECUTABLE_SOURCE_ALLOWLIST = new Map<string, string>([
   ['python/sdk-runtime/runtime-bootstrap.mjs', 'private packaging-only runtime dispatcher'],
 ])
 
-/** Root demos are application wrappers and therefore must visibly select dsh. */
-const ROOT_DEMO_POLICIES = new Map<string, DemoPolicy>([
+/**
+ * Root scripts that start an application must visibly select dsh: every `demo:*`
+ * script needs a row here, and the Web start and development scripts are pinned
+ * by name.
+ */
+const ROOT_LAUNCHER_POLICIES = new Map<string, LauncherPolicy>([
   ['demo:ptc', { kind: 'dsh-wrapper', wrapper: 'scripts/demo-ptc.mjs' }],
   ['demo:inspector', { kind: 'dsh-direct' }],
+  ['start:web', { kind: 'dsh-direct' }],
+  ['dev:web', { kind: 'dsh-wrapper', wrapper: 'scripts/dev-web.ts' }],
 ])
 
 const SOURCE_PATTERNS = [
@@ -130,22 +137,23 @@ function referencesPackageEntry(source: string): boolean {
   return /packages\/[^/\s'"`]+\/[^/\s'"`]+\/(?:src|lib)\/[^\s'"`]+/.test(source)
 }
 
-function rootDemoViolations(root: string): string[] {
+function rootLauncherViolations(root: string): string[] {
   const manifestPath = resolve(root, 'package.json')
   if (!existsSync(manifestPath)) return []
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as RootManifest
   const failures: string[] = []
   for (const [name, commandValue] of Object.entries(manifest.scripts ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
-    if (!name.startsWith('demo:')) continue
-    const command = typeof commandValue === 'string' ? commandValue : ''
-    const policy = ROOT_DEMO_POLICIES.get(name)
+    const policy = ROOT_LAUNCHER_POLICIES.get(name)
     if (policy === undefined) {
-      failures.push(`package.json scripts.${name}: demo launcher has no explicit dsh or in-process classification`)
+      if (name.startsWith('demo:')) {
+        failures.push(`package.json scripts.${name}: demo launcher has no explicit dsh or in-process classification`)
+      }
       continue
     }
+    const command = typeof commandValue === 'string' ? commandValue : ''
     if (policy.kind === 'dsh-direct') {
-      if (!referencesDshCli(command)) failures.push(`package.json scripts.${name}: application demo must launch apps/cli/src/bin.ts`)
-      if (referencesPackageEntry(command)) failures.push(`package.json scripts.${name}: application demo must not launch a package entry directly`)
+      if (!referencesDshCli(command)) failures.push(`package.json scripts.${name}: application launcher script must launch apps/cli/src/bin.ts`)
+      if (referencesPackageEntry(command)) failures.push(`package.json scripts.${name}: application launcher script must not launch a package entry directly`)
       continue
     }
     const wrapper = policy.wrapper
@@ -155,12 +163,12 @@ function rootDemoViolations(root: string): string[] {
     }
     const wrapperPath = resolve(root, wrapper)
     if (!existsSync(wrapperPath)) {
-      failures.push(`${wrapper}: classified demo wrapper is missing`)
+      failures.push(`${wrapper}: classified launcher wrapper is missing`)
       continue
     }
     const source = readFileSync(wrapperPath, 'utf8')
-    if (!referencesDshCli(source)) failures.push(`${wrapper}: application demo wrapper must launch apps/cli/src/bin.ts`)
-    if (referencesPackageEntry(source)) failures.push(`${wrapper}: application demo wrapper must not launch a package entry directly`)
+    if (!referencesDshCli(source)) failures.push(`${wrapper}: application launcher wrapper must launch apps/cli/src/bin.ts`)
+    if (referencesPackageEntry(source)) failures.push(`${wrapper}: application launcher wrapper must not launch a package entry directly`)
   }
   return failures
 }
@@ -174,7 +182,7 @@ export function applicationEntrypointViolations(root: string): string[] {
   return [
     ...manifestBinViolations(root),
     ...executableSourceViolations(root),
-    ...rootDemoViolations(root),
+    ...rootLauncherViolations(root),
   ]
 }
 

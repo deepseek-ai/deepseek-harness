@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-16-host-schedule-storage.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-16-host-schedule-storage.md
+/agent-note-host-owned-scheduled-messages:
+  en: 11854b220af809ea
+  zh: 0f0575de37107ed8
+/agent-note-host-owned-scheduled-messages/problem:
+  en: 2c774d05ae75784f
+  zh: 619ba7f281b13233
+/agent-note-host-owned-scheduled-messages/decision:
+  en: 4a38d9bd933241b0
+  zh: b246c74f68e92a25
+/agent-note-host-owned-scheduled-messages/alternatives-considered:
+  en: 21d7ec9a9ff3cbf2
+  zh: 93d03b8b3012aa7e
+/agent-note-host-owned-scheduled-messages/consequences:
+  en: a48f13f89a1944b1
+  zh: f8fa677122ce2e12

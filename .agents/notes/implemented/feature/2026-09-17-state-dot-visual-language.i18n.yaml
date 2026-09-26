@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-17-state-dot-visual-language.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-17-state-dot-visual-language.md
+/agent-note-statedot-solid-marks-and-loading-spinner:
+  en: 74ca1dda90213e27
+  zh: 14851ca8d3d4617d
+/agent-note-statedot-solid-marks-and-loading-spinner/problem:
+  en: 4739e4079e950c72
+  zh: 4633fc299da13565
+/agent-note-statedot-solid-marks-and-loading-spinner/decision:
+  en: 98dd1c4ac95913b9
+  zh: c3c53bae1ffc430a
+/agent-note-statedot-solid-marks-and-loading-spinner/alternatives-considered:
+  en: 962827b807ebf026
+  zh: dfe83e98956dd2cd
+/agent-note-statedot-solid-marks-and-loading-spinner/testing:
+  en: 9d5f7bfb69b7bded
+  zh: 281db4c0e7ddd8c2
+/agent-note-statedot-solid-marks-and-loading-spinner/consequences:
+  en: 17a7a8d9c3923666
+  zh: 84d941223b079f2b

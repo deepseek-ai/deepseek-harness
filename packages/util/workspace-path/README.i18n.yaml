@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/workspace-path/README.md
-README.md: ab7787f3649c8f75a0f0e0745bc78ea32edb5925
-README.zh.md: 270c79f7bb57def13a7656e8f76f900c1e094f4f
+/:
+  en: e8d97ffa99a57ab7
+  zh: 2d7247c47412c30a
+/dsh-util-workspace-path:
+  en: 328c592b68c88e44
+  zh: 7a2f03def21b86fe
+/dsh-util-workspace-path/summary:
+  en: ffdecddc9c4957ad
+  zh: 33cf84892aa5e669
+/dsh-util-workspace-path/table-of-contents:
+  en: e8236aa6cbcb7dca
+  zh: 500e57982344c0fa
+/dsh-util-workspace-path/file-addresses:
+  en: fa695bca8bd534e0
+  zh: d8feffb4794adfcd
+/dsh-util-workspace-path/known-limitations-and-deferred-work:
+  en: 1e6d448f4f0030c4
+  zh: c050dd5e470fe47b
+/dsh-util-workspace-path/known-limitations-and-deferred-work/dev-note:
+  en: cfc7173facebc57c
+  zh: 4ea51377d7c9c147

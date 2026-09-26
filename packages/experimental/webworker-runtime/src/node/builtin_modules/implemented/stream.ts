@@ -28,7 +28,7 @@ const {
   Duplex, PassThrough, Readable, Stream: StreamBase, Transform, Writable,
   addAbortSignal, compose, destroy, finished, isDisturbed, isErrored, isReadable, pipeline, promises,
 } = nodeStream
-const streamStatics = StreamBase as unknown as StreamStatics
+const streamStatics = StreamBase as StreamStatics
 const {
   getDefaultHighWaterMark, isDestroyed, isWritable, setDefaultHighWaterMark,
 } = streamStatics

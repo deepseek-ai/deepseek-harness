@@ -97,8 +97,8 @@ const subjectBuilt = [
   'packages/host/webserver/lib/index.js',
   'packages/llm/plugin-package-inventory-deepseek/lib/index.js',
   'native/system/packages/entry/lib/index.js',
-  'packages/preset/agent-presets/lib/typert.host.js',
-  'packages/preset/agent-presets/lib/typert.remote-client.js',
+  'packages/preset/agent-preset-registry/lib/typert.host.js',
+  'packages/preset/agent-preset-registry/lib/typert.remote-client.js',
 ].every(path => existsSync(join(repoRoot, path)))
 
 let memo: ReturnType<typeof packVfsImage> | undefined

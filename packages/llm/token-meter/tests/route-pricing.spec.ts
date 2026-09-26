@@ -2,7 +2,7 @@ import { imageOffloadProjection } from '@deepseek-ai/dsh-compaction-image-offloa
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import {
-  LlmRuntime, LlmAdapter, createMessage, createUserMessage, projectFilesToText,
+  LlmRuntime, LlmAdapter, createMessage, createToolResultMessage, createUserMessage, projectFilesToText, ToolCallId,
 } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmImageRequestPricing, Message, StreamChunk, TokenUsage, UserMessage } from '@deepseek-ai/dsh-llm'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
@@ -274,29 +274,24 @@ describe('request projection pricing', () => {
     }
   })
 
-  it('prices nested tool-result images through the same route pricing', async () => {
+  it('prices tool-result images through the same route pricing', async () => {
     const { meter, session } = await harness(() => fixedPricing)
-    const nested = createUserMessage({
-      content: [{
-        type: 'tool-result',
-        toolCallId: 'call-1' as never,
-        content: [
-          { type: 'text', text: 'screenshot below' },
-          { type: 'image', attachment: imageRef('nested') },
-        ],
-      }],
-      source: { kind: 'user' },
+    const result = createToolResultMessage({
+      callId: ToolCallId('call-1'),
+      content: [
+        { type: 'text', text: 'screenshot below' },
+        { type: 'image', attachment: imageRef('nested') },
+      ],
+      isError: false,
     })
-    session.append('user/message', nested, { surfaceOp: 'append' })
+    session.append('tool/result', { turn: 1, step: 1, message: result }, { surfaceOp: 'append' })
     session.append('request/header', { header: header('vision'), reason: 'initial' })
     const measurement = meter.measure(session)
-    const imageFree = estimateMessage({
-      ...nested,
-      content: [{
-        ...nested.content[0] as Extract<Message['content'][number], { type: 'tool-result' }>,
-        content: [{ type: 'text', text: 'screenshot below' }],
-      }],
-    })
+    const imageFree = estimateMessage(createToolResultMessage({
+      callId: ToolCallId('call-1'),
+      content: [{ type: 'text', text: 'screenshot below' }],
+      isError: false,
+    }))
     expect(measurement.nodes[0]!.tokens)
       .toBe(imageFree + VISUAL_TOKENS + estimateContent([{ type: 'text', text: HANDLE_TEXT }]))
   })

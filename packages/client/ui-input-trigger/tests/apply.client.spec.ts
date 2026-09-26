@@ -28,10 +28,14 @@ async function bench() {
   )
   // Sessions face: mint one real scope for session 'a' and resolve it by id.
   const scope = createScope(ctx, sid('a'))
+  const session = { sessionId: sid('a') }
+  const binding = { sessionId: sid('a'), session, ctx: scope.ctx }
   ctx.provide('sessions', {
     scope: (id: SessionId) => (id === sid('a') ? scope.ctx : undefined),
     scopeOf: (c: Context) => scopeOf(c),
-  })
+    sessionOf: (c: Context) => c === scope.ctx ? session : undefined,
+    binding: (id: SessionId) => id === sid('a') ? binding : undefined,
+  } as never)
   const locale = new LocaleRuntime(ctx)
   // These specs assert the shipped Chinese copy. There is no jsdom `window`
   // in this lane, so browser-language detection never runs and the locale

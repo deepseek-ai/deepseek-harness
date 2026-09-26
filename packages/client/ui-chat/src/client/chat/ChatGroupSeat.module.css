@@ -1,0 +1,128 @@
+.root {
+  min-width: 0;
+}
+
+.title {
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: var(--dsh-content-font-size, 14px);
+  text-align: left;
+  cursor: pointer;
+  transition: color 100ms ease;
+}
+
+.title:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.leading {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.activityIcon,
+.chevron {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 100ms ease;
+}
+
+.activityIcon {
+  opacity: 1;
+}
+
+.chevron {
+  opacity: 0;
+}
+
+.title:is(:hover, :focus-visible) .activityIcon {
+  opacity: 0;
+}
+
+.title:is(:hover, :focus-visible) .chevron {
+  opacity: 1;
+}
+
+.title[aria-expanded="true"] .activityIcon {
+  opacity: 0;
+}
+
+.title[aria-expanded="true"] .chevron {
+  opacity: 1;
+}
+
+.title[aria-expanded="true"] {
+  padding-bottom: 16px;
+}
+
+.body {
+  --dsh-chat-flow-gap: 8px;
+  max-height: min(400px, 50vh);
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fadeTop {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 24px, #000 100%);
+}
+
+.fadeBottom {
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 24px), transparent 100%);
+}
+
+.fadeTop.fadeBottom {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 24px),
+    transparent 100%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title,
+  .activityIcon,
+  .chevron {
+    transition: none;
+  }
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+}
+.content > * { flex-shrink: 0; }
+.content > :not([hidden]):not(:empty) ~ :not([hidden]):not(:empty) {
+  margin-top: var(--dsh-chat-flow-gap, 8px);
+}
+.expandedBody {
+  --dsh-chat-flow-gap: 16px;
+  max-height: none;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}

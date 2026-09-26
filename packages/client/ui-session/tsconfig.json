@@ -12,10 +12,16 @@
       "path": "../../../vendor/cordis"
     },
     {
+      "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
       "path": "../../api/session-controller/tsconfig.client.json"
     },
     {
       "path": "../../core/session"
+    },
+    {
+      "path": "../../util/values"
     },
     {
       "path": "../store"

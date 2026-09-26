@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for development.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write python/development.md
-development.md: 8e7608ada715e5a0acc6eb597ae9d06ebef3ecbf
-development.zh.md: 3f6c1f92632d216e540b0dff5c4b72cdf90ae7d1
+/python-contributor-workflows:
+  en: e14647f4d39e03f6
+  zh: 354bd37e6aea1e86
+/python-contributor-workflows/build-runtime-artifacts:
+  en: 8e99640e4936332d
+  zh: 729d5de1e0ad2869
+/python-contributor-workflows/validate-the-sdk:
+  en: fbdd6bb379edd159
+  zh: f3a803a5d99a7b92
+/python-contributor-workflows/run-against-node-source:
+  en: 4d30c74632781443
+  zh: 13191cb05f99dd31
+/python-contributor-workflows/build-distributions:
+  en: 4aa941562dba5482
+  zh: 50543a92b3d0cf04
+/python-contributor-workflows/validate-a-release-candidate:
+  en: dd3298f2b221451f
+  zh: 8dad5bf59caa2636

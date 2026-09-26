@@ -1,277 +1,307 @@
-/**
- * The change feed's promises: one Host stream per session, delivery by absolute
- * path, and a follower's life bounded by its signal or by
- * the stream's end.
- */
+/** Target-scoped Host streams, canonical-path delivery, and follower disposal. */
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { ChangeFeed } from '../src/client/change-feed.ts'
 import type { WorkspaceFileWatchFrame } from '../src/types.ts'
-import { FakeRemote, peek, settle } from './fake-remote.client.ts'
+import { FakeRemote } from './fake-remote.client.ts'
 
 const S1 = 's1' as SessionId
 const S2 = 's2' as SessionId
+const PATH = '/w/a.txt'
 
 function harness() {
   const remote = new FakeRemote()
+  remote.autoReady = false
   const feed = new ChangeFeed(remote)
+  const followers: Array<{ controller: AbortController; it: AsyncIterator<unknown> }> = []
+  onTestFinished(async () => {
+    for (const follower of followers) follower.controller.abort()
+    await remote.dispose()
+    await Promise.all(followers.map(follower => Promise.resolve(follower.it.return?.())))
+    await feed.settle()
+    expect(remote.opened.every(watch => watch.source.aborted)).toBe(true)
+  })
   const follow = (sessionId: SessionId, path: string, controller = new AbortController()) => {
-    const follower = feed.follow(sessionId, controller.signal)
+    const follower = feed.follow(sessionId, path, controller.signal)
     follower.bind(path)
-    return { it: follower[Symbol.asyncIterator](), controller }
+    const result = { it: follower[Symbol.asyncIterator](), controller, ready: follower.ready }
+    followers.push(result)
+    return result
   }
   return { remote, feed, follow }
 }
 
-describe('ChangeFeed — one Host stream per session', () => {
-  it('starts a later follower from the existing session acknowledgement without opening another stream', async () => {
-    const { remote, feed } = harness()
-    const controller = new AbortController()
-    const first = feed.follow(S1, controller.signal)
-    try {
-      await expect(first.ready).resolves.toBe(true)
-      const second = feed.follow(S1, controller.signal)
-      await expect(second.ready).resolves.toBe(true)
-      expect(remote.calls).toEqual(['changes', 'accept'])
-      expect(remote.opened).toHaveLength(1)
-
-      second.bind('/w/second.txt')
-      const iterator = second[Symbol.asyncIterator]()
-      await remote.opened[0]!.source.deliver({
-        kind: 'change', change: { absolutePath: '/w/second.txt', version: 'v1' },
-      })
-      await expect(iterator.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v1' } })
-      controller.abort()
-      await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined })
-      await feed.settle()
-      expect(remote.disposed).toEqual(['workspace file changes of s1'])
-    } finally {
-      controller.abort()
-      await feed.settle()
-    }
-  })
-
-  it('shares one stream among the followers of a session and opens another per session', async () => {
-    const { remote, follow } = harness()
-    follow(S1, '/w/a.txt')
-    follow(S1, '/w/b.txt')
-    await settle()
-    expect(remote.opened.map(o => o.sessionId)).toEqual([S1])
-    follow(S2, '/w/a.txt')
-    await settle()
-    expect(remote.opened.map(o => o.sessionId)).toEqual([S1, S2])
-  })
-
-  it('disposes the session stream when its last follower leaves and reopens for the next', async () => {
-    const { remote, follow } = harness()
-    const a = follow(S1, '/w/a.txt')
-    const b = follow(S1, '/w/b.txt')
-    await settle()
-    a.controller.abort()
-    await settle()
-    expect(remote.disposed).toEqual([])
-    b.controller.abort()
-    await settle()
-    expect(remote.disposed).toEqual(['workspace file changes of s1'])
-    expect(remote.opened[0]!.source.aborted).toBe(true)
-    follow(S1, '/w/c.txt')
-    await settle()
-    expect(remote.opened).toHaveLength(2)
-  })
-
-  it('opens the next stream of a session only after the previous dispose settled, and settle() waits for it', async () => {
+describe('ChangeFeed — one Host stream per Session and target', () => {
+  it('starts a later follower from the existing target acknowledgement without opening another stream', async () => {
     const { remote, feed, follow } = harness()
-    let release!: () => void
-    remote.disposeGate = new Promise<void>((resolve) => { release = resolve })
-    const a = follow(S1, '/w/a.txt')
-    await settle()
-    a.controller.abort()
-    await settle()
+    const first = follow(S1, PATH)
+    await remote.ready(0)
+    await expect(first.ready).resolves.toBe(true)
+    const second = follow(S1, PATH)
+    await expect(second.ready).resolves.toBe(true)
+    expect(remote.calls).toEqual(['changes', 'accept'])
+    expect(remote.opened).toMatchObject([{ sessionId: S1, path: PATH }])
+
+    await remote.opened[0]!.source.deliver({ kind: 'change', change: { absolutePath: PATH, version: 'v1' } })
+    await expect(second.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v1' } })
+    first.controller.abort()
+    second.controller.abort()
+    await expect(second.it.next()).resolves.toEqual({ done: true, value: undefined })
+    await feed.settle()
     expect(remote.disposed).toEqual(['workspace file changes of s1'])
-    // The next follower registers at once, but its Host stream waits for the close.
-    follow(S1, '/w/b.txt')
-    await settle()
-    expect(remote.opened).toHaveLength(1)
-    let settled = false
-    void feed.settle().then(() => { settled = true })
-    await settle()
-    expect(settled).toBe(false)
-    release()
-    await settle()
+  })
+
+  it('shares a stream only when both Session and target match', async () => {
+    const { remote, follow } = harness()
+    const one = follow(S1, PATH)
+    const twin = follow(S1, PATH)
+    const otherPath = follow(S1, '/w/b.txt')
+    const otherSession = follow(S2, PATH)
+    await Promise.all([remote.ready(0), remote.ready(1), remote.ready(2)])
+    await expect(Promise.all([one.ready, twin.ready, otherPath.ready, otherSession.ready])).resolves.toEqual([true, true, true, true])
+    expect(remote.opened.map(({ sessionId, path }) => ({ sessionId, path }))).toEqual([
+      { sessionId: S1, path: PATH },
+      { sessionId: S1, path: '/w/b.txt' },
+      { sessionId: S2, path: PATH },
+    ])
+  })
+
+  it('disposes a target stream when its last follower leaves and reopens for the next', async () => {
+    const { remote, feed, follow } = harness()
+    const a = follow(S1, PATH)
+    const b = follow(S1, PATH)
+    const { source } = await remote.ready(0)
+    a.controller.abort()
+    await expect(a.it.next()).resolves.toEqual({ done: true, value: undefined })
+    expect(remote.disposed).toEqual([])
+    await source.deliver({ kind: 'change', change: { absolutePath: PATH, version: 'v1' } })
+    await expect(b.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v1' } })
+    b.controller.abort()
+    await feed.settle()
+    expect(remote.disposed).toEqual(['workspace file changes of s1'])
+    expect(source.aborted).toBe(true)
+    const next = follow(S1, PATH)
+    await remote.ready(1)
+    await expect(next.ready).resolves.toBe(true)
     expect(remote.opened).toHaveLength(2)
+  })
+
+  it('waits for the same target to close while another target can open, and settle waits for the close', async () => {
+    const { remote, feed, follow } = harness()
+    const gate = remote.holdDisposal()
+    const a = follow(S1, PATH)
+    await remote.ready(0)
+    a.controller.abort()
+    await remote.waitForDispose(0)
+    const b = follow(S1, PATH)
+    let settled = false
+    const closing = feed.settle().then(() => { settled = true })
+    const independent = follow(S1, '/w/b.txt')
+    const otherWatch = await remote.ready(1)
+    await expect(independent.ready).resolves.toBe(true)
+    expect(otherWatch.path).toBe('/w/b.txt')
+    expect(remote.opened).toHaveLength(2)
+    expect(settled).toBe(false)
+
+    gate.resolve(undefined)
+    await closing
+    await remote.ready(2)
+    await expect(b.ready).resolves.toBe(true)
+    expect(remote.opened.map(watch => watch.path)).toEqual([PATH, '/w/b.txt', PATH])
     expect(settled).toBe(true)
-    // Nothing left closing: settle() resolves at once.
     await feed.settle()
   })
 
-  it('keeps waiting for the newest close when two closes of one session overlap', async () => {
+  it('keeps waiting for the newest close when two closes of one target overlap', async () => {
     const { remote, feed, follow } = harness()
-    let release!: () => void
-    remote.disposeGate = new Promise<void>((resolve) => { release = resolve })
-    const a = follow(S1, '/w/a.txt')
-    await settle()
+    const firstGate = remote.holdDisposal()
+    const a = follow(S1, PATH)
+    await remote.ready(0)
     a.controller.abort()
-    await settle()
-    // The second feed waits for the first close, then its only follower leaves too.
-    const b = follow(S1, '/w/b.txt')
-    await settle()
+    await remote.waitForDispose(0)
+    const b = follow(S1, PATH)
+    const secondGate = remote.holdDisposal()
     b.controller.abort()
-    await settle()
+    await remote.waitForDispose(1)
+    await expect(b.ready).resolves.toBe(false)
     let settled = false
-    void feed.settle().then(() => { settled = true })
-    release()
-    await settle()
-    await settle()
-    expect(settled).toBe(true)
+    const closing = feed.settle().then(() => { settled = true })
+    firstGate.resolve(undefined)
+    await remote.waitForStreamEnd(1)
     expect(remote.disposed).toHaveLength(2)
-    follow(S1, '/w/c.txt')
-    await settle()
+    expect(settled).toBe(false)
+    secondGate.resolve(undefined)
+    await closing
+    expect(settled).toBe(true)
+    const next = follow(S1, PATH)
+    await remote.ready(2)
+    await expect(next.ready).resolves.toBe(true)
     expect(remote.opened).toHaveLength(3)
   })
 
-  it('treats a dispose that rejects as settled, so the next stream still opens', async () => {
+  it('treats a rejected dispose as settled so the same target can reopen', async () => {
     const { remote, feed, follow } = harness()
-    // Rejected only once dispose() has taken the gate, so the rejection always has a handler.
-    let fail!: (error: Error) => void
-    remote.disposeGate = new Promise<void>((_resolve, reject) => { fail = reject })
-    const a = follow(S1, '/w/a.txt')
-    await settle()
+    const gate = remote.holdDisposal()
+    const a = follow(S1, PATH)
+    await remote.ready(0)
     a.controller.abort()
-    await settle()
-    follow(S1, '/w/b.txt')
-    await settle()
-    expect(remote.opened).toHaveLength(1)
-    fail(new Error('carrier gone'))
-    await settle()
-    expect(remote.opened).toHaveLength(2)
+    await remote.waitForDispose(0)
+    const b = follow(S1, PATH)
+    const independent = follow(S1, '/w/b.txt')
+    await remote.ready(1)
+    await expect(independent.ready).resolves.toBe(true)
+    expect(remote.opened.map(watch => watch.path)).toEqual([PATH, '/w/b.txt'])
+    gate.reject(new Error('carrier gone'))
+    remote.disposeGate = undefined
+    await remote.ready(2)
+    await expect(b.ready).resolves.toBe(true)
+    expect(remote.opened).toHaveLength(3)
     await feed.settle()
   })
 })
 
 describe('ChangeFeed — delivery', () => {
-  it('routes a frame to the followers of its path, whichever separator the Host spells', async () => {
+  it('routes only matching canonical paths to shared followers, normalizing Host separators', async () => {
     const { remote, follow } = harness()
-    // A stat and a change frame may spell the same Host path with different separators.
     const mine = follow(S1, 'C:/w/a b.txt')
     const twin = follow(S1, 'C:/w/a b.txt')
     const other = follow(S1, 'C:/w/other.txt')
-    await settle()
-    const source = remote.opened[0]!.source
-    source.push({ kind: 'change', change: { absolutePath: 'C:/w/a b.txt', version: 'v1' } })
-    source.push({ kind: 'change', change: { absolutePath: 'C:\\w\\a b.txt', absent: true } })
+    const { source } = await remote.ready(0)
+    const otherWatch = await remote.ready(1)
+    await source.deliver({ kind: 'change', change: { absolutePath: 'C:/w/a b.txt', version: 'v1' } })
+    await source.deliver({ kind: 'change', change: { absolutePath: 'C:\\w\\a b.txt', absent: true } })
     await expect(mine.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v1' } })
     await expect(mine.it.next()).resolves.toEqual({ done: false, value: { kind: 'absent' } })
     await expect(twin.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v1' } })
-    await expect(peek(other.it)).resolves.toBe('silent')
-    // One follower of a path leaving does not silence the other.
     mine.controller.abort()
-    await settle()
-    source.push({ kind: 'change', change: { absolutePath: 'C:/w/a b.txt', version: 'v2' } })
+    await source.deliver({ kind: 'change', change: { absolutePath: 'C:/w/other.txt', version: 'wrong-target' } })
+    await source.deliver({ kind: 'change', change: { absolutePath: 'C:/w/a b.txt', version: 'v2' } })
     await expect(twin.it.next()).resolves.toEqual({ done: false, value: { kind: 'absent' } })
     await expect(twin.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v2' } })
+    await otherWatch.source.deliver({ kind: 'change', change: { absolutePath: 'C:/w/other.txt', version: 'own-target' } })
+    await expect(other.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'own-target' } })
   })
 
   it('queues frames reported before the consumer starts pulling', async () => {
     const { remote, follow } = harness()
-    const mine = follow(S1, '/w/a.txt')
-    await settle()
-    remote.opened[0]!.source.push({ kind: 'change', change: { absolutePath: '/w/a.txt', version: 'v1' } })
-    await settle()
+    const mine = follow(S1, PATH)
+    const { source } = await remote.ready(0)
+    await source.deliver({ kind: 'change', change: { absolutePath: PATH, version: 'v1' } })
+    await source.deliver({ kind: 'change', change: { absolutePath: PATH, version: 'v2' } })
     await expect(mine.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v1' } })
+    await expect(mine.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v2' } })
   })
 
-  it('keeps sessions apart', async () => {
+  it('keeps Sessions apart even when their target paths match', async () => {
     const { remote, follow } = harness()
-    const one = follow(S1, '/w/a.txt')
-    const two = follow(S2, '/w/a.txt')
-    await settle()
-    remote.opened[1]!.source.push({ kind: 'change', change: { absolutePath: '/w/a.txt', version: 'v2' } })
-    await expect(two.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v2' } })
-    await expect(peek(one.it)).resolves.toBe('silent')
+    const one = follow(S1, PATH)
+    const two = follow(S2, PATH)
+    const firstWatch = await remote.ready(0)
+    const secondWatch = await remote.ready(1)
+    await secondWatch.source.deliver({ kind: 'change', change: { absolutePath: PATH, version: 's2-version' } })
+    await expect(two.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 's2-version' } })
+    await firstWatch.source.deliver({ kind: 'change', change: { absolutePath: PATH, version: 's1-version' } })
+    await expect(one.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 's1-version' } })
+  })
+
+  it('emits refresh on a later ready for every follower of that target only', async () => {
+    const { remote, follow } = harness()
+    const one = follow(S1, PATH)
+    const twin = follow(S1, PATH)
+    const other = follow(S1, '/w/b.txt')
+    const { source } = await remote.ready(0)
+    const otherWatch = await remote.ready(1)
+    await source.deliver({ kind: 'ready' })
+    await expect(one.it.next()).resolves.toEqual({ done: false, value: { kind: 'refresh' } })
+    await expect(twin.it.next()).resolves.toEqual({ done: false, value: { kind: 'refresh' } })
+    await otherWatch.source.deliver({ kind: 'change', change: { absolutePath: '/w/b.txt', version: 'v1' } })
+    await expect(other.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v1' } })
+    expect(remote.calls).toEqual(['changes', 'changes', 'accept', 'accept', 'accept'])
   })
 })
 
 describe('ChangeFeed — a follower ends', () => {
-  it('ends every follower and disposes the session stream for an unknown wire frame kind', async () => {
-    const { remote, feed } = harness()
-    const controller = new AbortController()
-    const first = feed.follow(S1, controller.signal)
-    const second = feed.follow(S1, controller.signal)
-    const firstIterator = first[Symbol.asyncIterator]()
-    const secondIterator = second[Symbol.asyncIterator]()
-    try {
-      await expect(Promise.all([first.ready, second.ready])).resolves.toEqual([true, true])
-      const endings = Promise.all([firstIterator.next(), secondIterator.next()])
-      const source = remote.opened[0]!.source
-      // The Remote double supplies decoded wire data, including an unknown protocol tag.
-      const wireFrame: unknown = JSON.parse('{"kind":"future-frame"}')
-      source.push(wireFrame as WorkspaceFileWatchFrame)
-      await expect(endings).resolves.toEqual([
-        { done: true, value: undefined },
-        { done: true, value: undefined },
-      ])
-      await feed.settle()
-      expect(source.aborted).toBe(true)
-      expect(remote.disposed).toEqual(['workspace file changes of s1'])
-      expect(remote.opened).toHaveLength(1)
-    } finally {
-      controller.abort()
-      await Promise.all([firstIterator.return?.(), secondIterator.return?.()])
-      await feed.settle()
-    }
+  it('ends every shared follower and disposes the target stream for an unknown wire frame kind', async () => {
+    const { remote, feed, follow } = harness()
+    const first = follow(S1, PATH)
+    const second = follow(S1, PATH)
+    const { source } = await remote.ready(0)
+    await expect(Promise.all([first.ready, second.ready])).resolves.toEqual([true, true])
+    const endings = Promise.all([first.it.next(), second.it.next()])
+    // The Remote double supplies decoded wire data, including an unknown protocol tag.
+    const wireFrame: unknown = JSON.parse('{"kind":"future-frame"}')
+    source.push(wireFrame as WorkspaceFileWatchFrame)
+    await expect(endings).resolves.toEqual([
+      { done: true, value: undefined },
+      { done: true, value: undefined },
+    ])
+    await feed.settle()
+    expect(source.aborted).toBe(true)
+    expect(remote.disposed).toEqual(['workspace file changes of s1'])
+    expect(remote.opened).toHaveLength(1)
   })
 
   it('ends on its signal and drops nothing queued before it', async () => {
     const { remote, follow } = harness()
-    const mine = follow(S1, '/w/a.txt')
-    await settle()
-    remote.opened[0]!.source.push({ kind: 'change', change: { absolutePath: '/w/a.txt', version: 'v1' } })
-    await settle()
+    const mine = follow(S1, PATH)
+    const { source } = await remote.ready(0)
+    await source.deliver({ kind: 'change', change: { absolutePath: PATH, version: 'v1' } })
     mine.controller.abort()
     await expect(mine.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v1' } })
     await expect(mine.it.next()).resolves.toEqual({ done: true, value: undefined })
   })
 
-  it('is empty when the signal is already aborted, without opening a stream', async () => {
-    const { remote, feed } = harness()
+  it('is empty when the signal is already aborted without opening a stream', async () => {
+    const { remote, feed, follow } = harness()
     const controller = new AbortController()
     controller.abort()
-    const it = feed.follow(S1, controller.signal)[Symbol.asyncIterator]()
-    await expect(it.next()).resolves.toEqual({ done: true, value: undefined })
-    await settle()
+    const follower = follow(S1, PATH, controller)
+    await expect(follower.ready).resolves.toBe(false)
+    await expect(follower.it.next()).resolves.toEqual({ done: true, value: undefined })
+    await feed.settle()
     expect(remote.opened).toEqual([])
   })
 
   it('unregisters when the consumer breaks out after a notice', async () => {
-    const { remote, follow } = harness()
-    const mine = follow(S1, '/w/a.txt')
-    await settle()
-    remote.opened[0]!.source.push({ kind: 'change', change: { absolutePath: '/w/a.txt', version: 'v1' } })
-    await mine.it.next()
+    const { remote, feed, follow } = harness()
+    const mine = follow(S1, PATH)
+    const { source } = await remote.ready(0)
+    await source.deliver({ kind: 'change', change: { absolutePath: PATH, version: 'v1' } })
+    await expect(mine.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v1' } })
     await mine.it.return?.()
-    await settle()
+    await feed.settle()
     expect(remote.disposed).toEqual(['workspace file changes of s1'])
+    expect(source.aborted).toBe(true)
   })
 
-  it('ends every follower when the Host closes the session stream', async () => {
-    const { remote, follow } = harness()
-    const a = follow(S1, '/w/a.txt')
-    const b = follow(S1, '/w/b.txt')
-    await settle()
-    remote.opened[0]!.source.end()
+  it('ends shared followers when the Host closes their target stream without ending other targets', async () => {
+    const { remote, feed, follow } = harness()
+    const a = follow(S1, PATH)
+    const b = follow(S1, PATH)
+    const other = follow(S1, '/w/b.txt')
+    const { source } = await remote.ready(0)
+    const otherWatch = await remote.ready(1)
+    source.end()
     await expect(a.it.next()).resolves.toEqual({ done: true, value: undefined })
     await expect(b.it.next()).resolves.toEqual({ done: true, value: undefined })
-    // The next follower starts a fresh stream rather than joining the dead one.
-    follow(S1, '/w/c.txt')
-    await settle()
-    expect(remote.opened).toHaveLength(2)
+    await feed.settle()
+    await otherWatch.source.deliver({ kind: 'change', change: { absolutePath: '/w/b.txt', version: 'v1' } })
+    await expect(other.it.next()).resolves.toEqual({ done: false, value: { kind: 'changed', version: 'v1' } })
+    const next = follow(S1, PATH)
+    await remote.ready(2)
+    await expect(next.ready).resolves.toBe(true)
+    expect(remote.opened).toHaveLength(3)
   })
 
-  it('ends every follower when the session stream fails', async () => {
-    const { remote, follow } = harness()
-    const a = follow(S1, '/w/a.txt')
-    await settle()
-    remote.opened[0]!.source.fail(new Error('carrier gone for good'))
+  it('ends every follower when its target stream fails', async () => {
+    const { remote, feed, follow } = harness()
+    const a = follow(S1, PATH)
+    const b = follow(S1, PATH)
+    const { source } = await remote.ready(0)
+    source.fail(new Error('carrier gone for good'))
     await expect(a.it.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(b.it.next()).resolves.toEqual({ done: true, value: undefined })
+    await feed.settle()
+    expect(source.aborted).toBe(true)
   })
 })

@@ -14,9 +14,13 @@ Web 客户端有两条互不相连的反馈路径，且都没有可见结果。`
 
 `ui-message-feedback` 成为 Web 反馈界面。每个 Session 一个 `FeedbackSurface`，拥有消息反馈控制器、负责草稿、提交与 toast 序号的 `FeedbackDialogController`，以及两者之间的路由：消息目标经消息控制器 put 一条带弹窗分类与备注的所选评分，Session 目标经 `ctx.remote.sessionFeedback` 记录。`conversation.input.overlay` 的 `FeedbackDialog` 条目从弹窗 store 渲染 Modal 与 Toast 基元。宿主 `feedback` 命令上的装饰让菜单选中或不带参数的回车为 Session 打开弹窗，而 `/feedback <text>` 仍到达宿主；它使用 `CommandUiSpec` 中的 `action` 种类：裸调用消费触发 token 后运行一个客户端回调，不提交任何内容。后续的[对称消息反馈提交](2026-09-10-symmetric-message-feedback-submission.zh.md)决策拥有评分入口规则：任一未记录的评分都会打开弹窗，再次点击已记录的评分则撤回。备注浮层、`clearNote` 与 `clear` 继续保持移除，因为弹窗是唯一的备注编辑器。
 
+会话标题栏的更多操作菜单也通过 `feedbackUi.openSession` Client 服务打开 Session 弹窗。菜单仍由 `session-log-export` 持有，现有的逐 Session 反馈控制器持有草稿与提交。一个可观察值跟踪可选反馈插件的可用状态，因此卸载反馈插件只移除其菜单行，导出仍然可用。打开或关闭表单不写反馈事件；点击提交才记录一条 Session 反馈。
+
 弹窗是共用的 Modal 卡片，宽度按设计稿；设计稿里「包括当前对话的日志」复选框不做，因为日志随每个反馈事件一起投递，不是可选项。超长描述仍在提交时以 `note-too-large` 失败；弹窗保留草稿并通过警告 toast 展示本地化错误。
 
 ## 考虑过的替代方案
+
+**为标题栏菜单动作声明子 slot。** slot 可以让每个插件持有自己的菜单行，但需要共享菜单项 API，超出 #4445 所需反馈入口的范围。可选的 `feedbackUi` 服务将改动限制在局部，同时让弹窗状态与提交继续由反馈插件持有。
 
 **把分类编进备注文本。** 自由文本里的前缀不解析就无法过滤，还会混进遥测上传的原样备注；载荷里的持久 id 才是消费方能分组的东西。
 

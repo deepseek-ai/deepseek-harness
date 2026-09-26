@@ -1,13 +1,11 @@
 /** Strict per-session header/body content inserted into the resident conversation layout. */
 
 import clsx from 'clsx'
-import { isDarwinDesktop } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   ConversationSessionHeaderSlotProps, ConversationSessionSlotProps,
 } from '../contract/slots.ts'
-import { conversationPhase } from '../contract/snapshot.ts'
 import { resolveActiveView } from '../view-selection.ts'
 import { DefaultConversationViews } from './DefaultConversationViews.tsx'
 import css from './ConversationRoot.module.css'
@@ -55,54 +53,45 @@ function equalBreadcrumbs(left: readonly Breadcrumb[], right: readonly Breadcrum
 /**
  * Renders Session header chrome above the resident conversation scrollport.
  * @param props - Strict Session store, view ledger, navigation, render, and locale shares.
- * @returns the header: title and tabs when visible, and on macOS desktop the
- *   always-mounted leading seat even while blank-session chrome hides.
+ * @returns Session navigation controls, with title and tabs after conversation starts.
  */
 export function ConversationSessionHeader({
-  sessionId, useSession, useSessions, useConversation, useConversationViews, useStore,
+  sessionId, hideChrome, useSessions, useConversationViews, useStore,
   renderSlot, open, selectView, t,
 }: ConversationSessionHeaderProps) {
   const tabs = useConversationViews(value => value)
   const selectedId = useStore(s => s.view)
   const active = resolveActiveView(tabs, selectedId)
   const ancestry = useSessions(s => deriveAncestry(s, sessionId), equalBreadcrumbs)
-  const session = useSession(s => s)
-  const conversation = useConversation(s => s)
-  const hideChrome = session.blank && conversationPhase(session, conversation) === 'blank'
-  // macOS desktop keeps the leading seat mounted through the blank state (the
-  // hidden sidebar's reopen control lives there), so the header may not leave
-  // the layout or the accessibility tree while its chrome hides.
-  const darwinDesktop = isDarwinDesktop()
-
+  const showTabs = !hideChrome && tabs.length > 1
   return (
-    <header
-      className={clsx(css.header, hideChrome && css.headerHidden)}
-      aria-hidden={(hideChrome && !darwinDesktop) || undefined}
-    >
+    <>
       <div className={css.titleRow}>
-        <div className={css.headerLeading} data-conversation-header-leading="">
-          {renderSlot('conversation.session.header.leading', {})}
-        </div>
         {!hideChrome && (
           <>
             <div className={css.titleCluster}>
               <nav className={css.crumbs} aria-label={t('session.hierarchy')}>
                 {ancestry.map((summary, index) => {
                   const last = index === ancestry.length - 1
-                  const title = (
-                    <button
-                      type="button"
-                      className={clsx(
-                        css.crumb,
-                        summary.subagent && css.crumbSubagent,
-                        last && css.crumbCurrent,
-                      )}
-                      disabled={last}
-                      onClick={() => { open(summary.id) }}
-                    >
-                      {summary.displayTitle}
-                    </button>
-                  )
+                  // The current crumb has no navigation, so it is plain text
+                  // rather than a disabled button: on darwin desktop a button
+                  // would subtract itself from the header's drag row (ui-web
+                  // base.css) and leave the title inert for dragging too.
+                  const title = last
+                    ? (
+                      <span className={clsx(css.crumb, summary.subagent && css.crumbSubagent, css.crumbCurrent)}>
+                        {summary.displayTitle}
+                      </span>
+                    )
+                    : (
+                      <button
+                        type="button"
+                        className={clsx(css.crumb, summary.subagent && css.crumbSubagent)}
+                        onClick={() => { open(summary.id) }}
+                      >
+                        {summary.displayTitle}
+                      </button>
+                    )
                   const lineage = last || summary.subagent
                   const lineageOwner = {
                     lineageSessionId: summary.id,
@@ -142,14 +131,16 @@ export function ConversationSessionHeader({
             <div className={css.headerUtilities}>
               {renderSlot('conversation.session.header.utilities', {})}
             </div>
-            <div className={css.headerCorner} data-conversation-header-corner="">
-              {renderSlot('conversation.session.header.corner', {})}
-            </div>
           </>
         )}
+        <div className={css.headerCorner} data-conversation-header-corner="">
+          {renderSlot('conversation.session.header.corner', {})}
+        </div>
       </div>
-      {!hideChrome && tabs.length > 1 && (
-        <div className={css.tabs} role="tablist">
+      {showTabs && (
+        // data-conversation-tabs: marks the tab strip, which the window-chrome
+        // geometry and the browser coverage lane anchor on.
+        <div className={css.tabs} role="tablist" data-conversation-tabs="">
           {tabs.map(viewTab => (
             <button
               key={viewTab.id}
@@ -164,7 +155,7 @@ export function ConversationSessionHeader({
           ))}
         </div>
       )}
-    </header>
+    </>
   )
 }
 

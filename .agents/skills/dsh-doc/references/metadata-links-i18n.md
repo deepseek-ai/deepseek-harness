@@ -70,7 +70,7 @@ Line equality is a structural check, not proof of faithful meaning. Review still
 
 ## Bilingual consistency records
 
-Keep the `*.i18n.yaml` sidecar for every bilingual pair. `verify-translation-pairing` consumes its Git blob hashes for last-confirmed-text recovery, verifies structure and exact line alignment, supports automatic merging, records generated regions, and seals archives. Re-record it with `pnpm run verify-translation-pairing --write <pair>` after either language changes. Do not copy content hashes into README frontmatter: independent edits would change the same header line and turn otherwise mergeable prose into an owner-file conflict.
+Keep the `*.i18n.yaml` sidecar for every bilingual pair. It records a hash pair per heading section, excluding fenced code blocks and generated regions, so edits to different sections merge with Git's default text merge; generated data belongs in generated regions that the generator writes into both pages; `verify-translation-pairing` compares those entries with the current contents and verifies structure. Re-record it with `pnpm run verify-translation-pairing --write <pair>` after either language changes. Do not copy content hashes into README frontmatter: independent edits would change the same header line and turn otherwise mergeable prose into an owner-file conflict.
 
 ## Dev Note
 

@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for invariants.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/invariants.md
-invariants.md: 2d1856dfd049a32076356bf6fa8736d4179881f2
-invariants.zh.md: 15760a9b116d03475970de762657e841e094c72a
+/runtime-invariants:
+  en: b48053808b8bb042
+  zh: 7be7763ded5f3a6e
+/runtime-invariants/selection:
+  en: 2d3bb3a2a0212e2d
+  zh: 8c8f1e1ba5790ba4
+/runtime-invariants/the-installer:
+  en: ba1607612e5ed640
+  zh: 33459bdb7c42443c
+/runtime-invariants/the-service:
+  en: 6368b54b2cbdb36c
+  zh: 4859ac095e536d42
+/runtime-invariants/the-companion-contract:
+  en: 414b986025768325
+  zh: b4071f8b39f8f755

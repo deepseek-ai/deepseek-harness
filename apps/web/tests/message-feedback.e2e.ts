@@ -1,8 +1,6 @@
-// Keyless browser regression for durable per-message feedback. Cold-seeds a
-// settled two-turn transcript (zero model calls), records a Like through the
-// feedback dialog, replaces it through the same dialog with a Dislike, proves
-// the judgment survives a full page reload from the Host's canonical log, then
-// retracts it.
+// Keyless browser regression for durable message and Session feedback. A
+// cold-seeded, settled two-turn transcript avoids model calls while exercising
+// message ratings and the Session Header dialog against the Host's canonical log.
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
@@ -13,7 +11,7 @@ import {
   acknowledgeReloadConnectionLoss, launchWebScaffold,
   seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot } from './support.ts'
+import { newEnglishPage, saveFailureShot, scrollIntoView } from './support.ts'
 
 // Borrowed read-only: this scenario needs any settled assistant message to
 // address, not a new recording (message-actions / sidebar-scrollbar pattern).
@@ -69,7 +67,7 @@ describe('web e2e: durable per-message feedback', () => {
     await page.getByText('DONE', { exact: true }).waitFor({ timeout: 30_000 })
     const like = page.getByRole('button', { name: 'Good response' }).first()
     await like.waitFor({ timeout: 30_000 })
-    await like.scrollIntoViewIfNeeded()
+    await scrollIntoView(like)
     await like.hover()
     await like.click()
     const dialog = page.getByRole('dialog', { name: 'Submit feedback' })
@@ -113,12 +111,12 @@ describe('web e2e: durable per-message feedback', () => {
     // the unrated control is what triggers the authoritative re-read.
     const cold = page.getByRole('button', { name: 'Good response' }).first()
     await cold.waitFor({ timeout: 30_000 })
-    await cold.scrollIntoViewIfNeeded()
+    await scrollIntoView(cold)
     await cold.hover()
 
     const restored = page.getByRole('button', { name: 'Remove rating' }).first()
     await restored.waitFor({ timeout: 30_000 })
-    await restored.scrollIntoViewIfNeeded()
+    await scrollIntoView(restored)
     await restored.hover()
     await expect.poll(() => restored.getAttribute('aria-pressed'), { timeout: 15_000 }).toBe('true')
     // The retract label sits on the Dislike side: the Like stays unpressed.
@@ -145,4 +143,40 @@ describe('web e2e: durable per-message feedback', () => {
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })
+
+  it.skipIf(MODE === 'record')('opens the shared dialog from the header and records Session feedback only on submit', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-header-feedback'))
+    await openSeededSession()
+    await page.getByText('DONE', { exact: true }).waitFor({ timeout: 30_000 })
+    const agent = scaffold.ctx.agents.get(SessionId(SEED_ID))
+    if (agent === undefined) throw new Error('seeded session did not attach an agent')
+    const feedbackEvents = () => agent.session.snapshotEvents().filter(event => event.type.startsWith('feedback/'))
+    const before = feedbackEvents().length
+    const dialog = page.getByRole('dialog', { name: 'Submit feedback' })
+
+    await page.getByRole('button', { name: 'More actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Download session log' }).waitFor()
+    await page.getByRole('menuitem', { name: 'Feedback', exact: true }).click()
+    await dialog.waitFor()
+    expect(await page.getByRole('menu').count()).toBe(0)
+    expect(feedbackEvents()).toHaveLength(before)
+    await dialog.getByRole('textbox', { name: 'Feedback details' }).fill('discarded draft')
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+    expect(feedbackEvents()).toHaveLength(before)
+
+    await page.getByRole('button', { name: 'More actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Feedback', exact: true }).click()
+    await dialog.waitFor()
+    expect(await dialog.getByRole('textbox', { name: 'Feedback details' }).inputValue()).toBe('')
+    await dialog.getByRole('button', { name: 'Product features and interaction', exact: true }).click()
+    await dialog.getByRole('textbox', { name: 'Feedback details' }).fill('Feedback from the Session menu.')
+    await dialog.getByRole('button', { name: 'Submit', exact: true }).click()
+    await expect.poll(() => dialog.count()).toBe(0)
+    await page.getByRole('alert').filter({ hasText: 'Thanks for your feedback' }).waitFor()
+    expect(feedbackEvents().slice(before)).toMatchObject([
+      { type: 'feedback/record', data: { category: 'product-interaction', text: 'Feedback from the Session menu.' } },
+    ])
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  }, 60_000)
 })

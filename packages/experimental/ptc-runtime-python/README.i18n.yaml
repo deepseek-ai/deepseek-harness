@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/ptc-runtime-python/README.md
-README.md: 287617991c5da9c13775e40c325877c231dbc312
-README.zh.md: f0c64a535cbac53241a807cc9901074f9ddd843d
+/:
+  en: 21d67ee6d4caef1e
+  zh: 815c36a37b8a2c3e
+/deepseek-ai-dsh-experimental-ptc-runtime-python:
+  en: 98894607ad9de9bf
+  zh: 068899d3766c2628
+/deepseek-ai-dsh-experimental-ptc-runtime-python/summary:
+  en: a7dc02100b3d90ba
+  zh: 5f80610b0bf84d84
+/deepseek-ai-dsh-experimental-ptc-runtime-python/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-experimental-ptc-runtime-python/use-this-package:
+  en: d8db36ca3f32afeb
+  zh: fec311dea315aac4
+/deepseek-ai-dsh-experimental-ptc-runtime-python/use-this-package/what-you-get:
+  en: ca7b9cc958069c7f
+  zh: 8a4ac72d02ad76eb
+/deepseek-ai-dsh-experimental-ptc-runtime-python/use-this-package/the-wire:
+  en: e690628dc6197c3b
+  zh: 2b9cdad8b41dcde5
+/deepseek-ai-dsh-experimental-ptc-runtime-python/use-this-package/what-can-go-wrong:
+  en: d43927c607a9855f
+  zh: e1dd1643bebfd647
+/deepseek-ai-dsh-experimental-ptc-runtime-python/understand-the-implementation:
+  en: 7824816505e2b844
+  zh: 3603d1c332c2ed5d
+/deepseek-ai-dsh-experimental-ptc-runtime-python/understand-the-implementation/design-concept:
+  en: 9339b0800d70be48
+  zh: 71a9a3d3eea86050
+/deepseek-ai-dsh-experimental-ptc-runtime-python/understand-the-implementation/wire-contract:
+  en: 586d320cd7ef9974
+  zh: ccf4e4f9fb230eb8
+/deepseek-ai-dsh-experimental-ptc-runtime-python/understand-the-implementation/lossless-json-crossing:
+  en: 6252e86fa10e9dd0
+  zh: 9b95b033ea0b5463
+/deepseek-ai-dsh-experimental-ptc-runtime-python/understand-the-implementation/mirror-alignment:
+  en: 167a08a71870f227
+  zh: 43f671b45104849f
+/deepseek-ai-dsh-experimental-ptc-runtime-python/understand-the-implementation/source-map:
+  en: 254759d380b5a58a
+  zh: 471f21e1c06c324d
+/deepseek-ai-dsh-experimental-ptc-runtime-python/further-exploration:
+  en: ab4a08f301de599d
+  zh: e698b35ccf3ce665
+/deepseek-ai-dsh-experimental-ptc-runtime-python/model-experience:
+  en: 42064c81cda8f059
+  zh: fa68d1acac16e263
+/deepseek-ai-dsh-experimental-ptc-runtime-python/model-experience/kv-cache-effect:
+  en: 40294c1c31b74824
+  zh: d805c6bd7270505e
+/deepseek-ai-dsh-experimental-ptc-runtime-python/known-limitations-and-deferred-work:
+  en: 9177182ef230c99e
+  zh: 2a15994203ad325c
+/deepseek-ai-dsh-experimental-ptc-runtime-python/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

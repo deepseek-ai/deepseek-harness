@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-07-ptc-executor-collapse.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-07-ptc-executor-collapse.md
-2026-08-07-ptc-executor-collapse.md: e034d30ff54673ecef98faf5c632b92c2d39aa2f
-2026-08-07-ptc-executor-collapse.zh.md: 03f93a323533b8507043c2fa8653b4c51c5fd56e
+/agent-note-ptc-mode-collapses-the-executor-not-just-the-wire:
+  en: 7958ca7ba1201af2
+  zh: bc7f74c91444eed6
+/agent-note-ptc-mode-collapses-the-executor-not-just-the-wire/problem:
+  en: a6fcd5114ffde259
+  zh: 05940375a30756d0
+/agent-note-ptc-mode-collapses-the-executor-not-just-the-wire/decision:
+  en: 66f55639766a6d02
+  zh: a8819b045463a927
+/agent-note-ptc-mode-collapses-the-executor-not-just-the-wire/alternatives-considered:
+  en: 6119e2aff3b6be5a
+  zh: e01a6c669a9ec6aa
+/agent-note-ptc-mode-collapses-the-executor-not-just-the-wire/alternatives-considered/filter-get-the-registry-view-by-mode:
+  en: 31b6fed689eea5db
+  zh: ace070ad616bca62
+/agent-note-ptc-mode-collapses-the-executor-not-just-the-wire/alternatives-considered/filter-at-the-agent-loop-entry:
+  en: 9dbdb9939baccd49
+  zh: 11437030cd211000
+/agent-note-ptc-mode-collapses-the-executor-not-just-the-wire/alternatives-considered/reject-via-a-shipped-guard:
+  en: 9011947651f58129
+  zh: 1d4a0c622680f13f
+/agent-note-ptc-mode-collapses-the-executor-not-just-the-wire/alternatives-considered/keep-schema-omission-only-status-quo:
+  en: 0d4759646b19917a
+  zh: 1a1bef7617c52f9c
+/agent-note-ptc-mode-collapses-the-executor-not-just-the-wire/consequences:
+  en: 9120e68ba25bd30a
+  zh: 6ec4bea5df8668a1

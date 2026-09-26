@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/host/README.md
-README.md: 0b595eb7e63f33ed8e11ec0f39438f5d79b6ab33
-README.zh.md: 6a7507b7d8d2b2d791952783235a80280c8c0408
+/:
+  en: 1581f6bf83f9f0f4
+  zh: 328e9539b83f5df2
+/host-web-gui-host-half:
+  en: dfb700c867632d7f
+  zh: 8afebea57ae7845a
+/host-web-gui-host-half/summary:
+  en: 2e87442a03e973ee
+  zh: 1cb9d4ff114e101d
+/host-web-gui-host-half/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/host-web-gui-host-half/packages:
+  en: 4c383f11f07cdefe
+  zh: 0de3c2aa07233540
+/host-web-gui-host-half/related-documentation:
+  en: c8a410ebbd2f0a3a
+  zh: bcaeb195ff8d8593
+/host-web-gui-host-half/dev-note:
+  en: 5de1d6304e00c58f
+  zh: 8d8225361cfa29e5

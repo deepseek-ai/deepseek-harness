@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-18-session-history-and-event-transport.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-18-session-history-and-event-transport.md
-2026-08-18-session-history-and-event-transport.md: db5c403562101bca76c0d39a037a199b2ca164f3
-2026-08-18-session-history-and-event-transport.zh.md: 41ff3ea2dd538edb457e0db3108a900bab220e47
+/agent-note-session-history-control-state-and-remote-event-transport:
+  en: 79e15a9da0b4053b
+  zh: fb9719cd520abf7b
+/agent-note-session-history-control-state-and-remote-event-transport/problem:
+  en: b40a730a4cd03535
+  zh: 10d5a61824b53443
+/agent-note-session-history-control-state-and-remote-event-transport/decision:
+  en: bbe86a1833ab5547
+  zh: 987a2ade8b4cb909
+/agent-note-session-history-control-state-and-remote-event-transport/decision/connection-generation-and-physical-connections:
+  en: c4342f89bf96a63b
+  zh: f8749f02bcfccc4e
+/agent-note-session-history-control-state-and-remote-event-transport/decision/general-remote-stream-model:
+  en: fb2c7bcde3b1672a
+  zh: a05bd30be07e5413
+/agent-note-session-history-control-state-and-remote-event-transport/decision/general-remote-stream-model/remotestream:
+  en: d55c2ce88400e448
+  zh: 344d510ab946bb9f
+/agent-note-session-history-control-state-and-remote-event-transport/decision/general-remote-stream-model/remotesnapshotstream:
+  en: f2c1d2b00d9554fd
+  zh: c3e85cf344f7ef24
+/agent-note-session-history-control-state-and-remote-event-transport/decision/general-remote-stream-model/remotejournalstream:
+  en: d5d0d6a57a4fa581
+  zh: 265973b157f957d9
+/agent-note-session-history-control-state-and-remote-event-transport/decision/session-controller:
+  en: e338ac27490a380f
+  zh: 12600011ec742e5b
+/agent-note-session-history-control-state-and-remote-event-transport/decision/session-controller/activation-policy:
+  en: 534dcc62a26d305e
+  zh: 03d64abc0a46bbec
+/agent-note-session-history-control-state-and-remote-event-transport/decision/session-controller/session-journal:
+  en: bb710f8cf35f2028
+  zh: aae2cfb8cd848069
+/agent-note-session-history-control-state-and-remote-event-transport/decision/session-controller/session-live-control:
+  en: a11d627cd68650c3
+  zh: 9aff565b9f712853
+/agent-note-session-history-control-state-and-remote-event-transport/decision/workspace-controller:
+  en: ce0c3fcff169412d
+  zh: 7076182817358dff
+/agent-note-session-history-control-state-and-remote-event-transport/decision/remote-event:
+  en: c76291bf39999882
+  zh: 76f032664fb91ead
+/agent-note-session-history-control-state-and-remote-event-transport/decision/api-proxy-s-remaining-boundary:
+  en: 457408013eb78636
+  zh: 126e9d263225d7c4
+/agent-note-session-history-control-state-and-remote-event-transport/alternatives-considered:
+  en: 22a77c3afd4df0d6
+  zh: 661cf8d02d741f1d
+/agent-note-session-history-control-state-and-remote-event-transport/verification:
+  en: 7328f28ba3e32f4c
+  zh: 2150f20437a473af
+/agent-note-session-history-control-state-and-remote-event-transport/consequences:
+  en: 808ce6d1310876a2
+  zh: d9e8fe2aa5cda617

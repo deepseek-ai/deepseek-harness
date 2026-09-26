@@ -1,10 +1,12 @@
 /** Host Workspace Remote owner: explicit commands and reconnect-safe state. */
 
 import { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { WorkspaceCommands } from './commands.ts'
 import { DirectoryPickerController } from './directory-picker.ts'
-import { WorkspaceFeed } from './feed.ts'
+import { WorkspaceFeed, workspaceView } from './feed.ts'
+import { defaultWorkspaceDirectory, validateDocumentsDirectory } from './default-directory.ts'
 import type {
   WorkspaceArchiveSessionRequest,
   WorkspaceArchiveValue,
@@ -16,13 +18,27 @@ import type {
   WorkspaceInsertBeforeRequest,
   WorkspaceInsertSessionBeforeRequest,
   WorkspaceOrderValue,
+  WorkspacePinSessionRequest,
+  WorkspacePinValue,
   WorkspaceRenameRequest,
   WorkspaceUnarchiveSessionRequest,
+  WorkspaceUnpinSessionRequest,
   WorkspaceValue,
 } from './types.ts'
 
 export type * from './types.ts'
 export { DirectoryPickerController } from './directory-picker.ts'
+
+/** First-use directory policy for the Host account. */
+export interface Config {
+  /** Override the system Documents directory with a fully qualified path. */
+  documentsDirectory?: string
+  /** Maximum duration of the operating system's Documents lookup. */
+  documentsLookupTimeoutMs?: number
+}
+
+/** Directory policy after schema defaults have been applied. */
+type ResolvedConfig = Config & { documentsLookupTimeoutMs: number }
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -35,12 +51,23 @@ declare module '@deepseek-ai/cordis' {
 export class WorkspaceController extends TypertRemoteService {
   static inject = ['typert', 'workspaceRegistry']
 
+  static Config: z<Config, ResolvedConfig> = z.object({
+    documentsDirectory: z.string(),
+    documentsLookupTimeoutMs: z.natural().min(1).default(10_000),
+  })
+
+  private readonly config: ResolvedConfig
   private readonly commands: WorkspaceCommands
   private readonly feed: WorkspaceFeed
 
-  /** @param ctx - Host context containing the Workspace registry. */
-  constructor(ctx: Context) {
+  /**
+   * @param ctx - Host context containing the Workspace registry.
+   * @param config - first-use directory policy.
+   */
+  constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'workspaceController', { namespace: 'workspace' })
+    this.config = WorkspaceController.Config(config)
+    if (this.config.documentsDirectory !== undefined) validateDocumentsDirectory(this.config.documentsDirectory)
     this.commands = new WorkspaceCommands(ctx)
     this.feed = new WorkspaceFeed(ctx)
     // This package is the Loader entry for both Remote owners it hosts: the
@@ -58,6 +85,25 @@ export class WorkspaceController extends TypertRemoteService {
   @Remote('create')
   create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue> {
     return this.commands.create(request)
+  }
+
+  /**
+   * Initialize or reuse the default Workspace during first-use startup. The
+   * directory name is fixed, so the Host never renames or relocates an
+   * existing default; its initial title is that same name, which browser
+   * consumers label in the reader's language.
+   * @param signal - caller lifetime; cancels native directory lookup.
+   * @returns the durable Workspace, or undefined when first-use initialization is ineligible; creates no Session or message.
+   */
+  @Remote('initializeDefault')
+  async initializeDefault(signal: AbortSignal): Promise<WorkspaceValue | undefined> {
+    const workspace = await this.ctx.workspaceRegistry.initializeDefault(async () => {
+      const timeout = AbortSignal.timeout(this.config.documentsLookupTimeoutMs)
+      return await defaultWorkspaceDirectory(
+        this.config.documentsDirectory, AbortSignal.any([signal, timeout]),
+      )
+    })
+    return workspace === undefined ? undefined : { workspace: workspaceView(workspace) }
   }
 
   /**
@@ -118,6 +164,26 @@ export class WorkspaceController extends TypertRemoteService {
   @Remote('unarchiveSession')
   unarchiveSession(request: WorkspaceUnarchiveSessionRequest): Promise<WorkspaceArchiveValue> {
     return this.commands.unarchiveSession(request)
+  }
+
+  /**
+   * Surface one known unarchived Session ahead of unpinned Sessions.
+   * @param request - Session identity to pin.
+   * @returns the complete resulting pin set, most recently pinned first.
+   */
+  @Remote('pinSession')
+  pinSession(request: WorkspacePinSessionRequest): Promise<WorkspacePinValue> {
+    return this.commands.pinSession(request)
+  }
+
+  /**
+   * Remove one Session's pin without changing its saved Session order.
+   * @param request - Session identity to unpin.
+   * @returns the complete resulting pin set, most recently pinned first.
+   */
+  @Remote('unpinSession')
+  unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue> {
+    return this.commands.unpinSession(request)
   }
 
   /**

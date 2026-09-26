@@ -12,12 +12,14 @@ export const DIFF_CONTEXT = 3
 
 /**
  * The `write`/`edit` tools' private `tool/result` `meta` payload: the applied
- * contextual-diff hunks. Attached opaquely (as `unknown`) on the tool result and
+ * contextual-diff hunks, and for `write` whether the call created or updated
+ * the file, which tells an empty hunk list of a create from one of an
+ * unchanged overwrite. Attached opaquely (as `unknown`) on the tool result and
  * persisted with the session log — it must be JSON-serializable (the session
  * validates this at `append`), so `presentResult` reproduces the diff card on
  * replay. The producing tool owns and narrows this opaque shape.
  */
-export type FsDiffMeta = { diffs: FileDiff[] }
+export type FsDiffMeta = { diffs: FileDiff[]; operation?: 'create' | 'update' }
 
 /**
  * Compute one {@link FileDiff} per hunk between `before` and `after`, each carrying the

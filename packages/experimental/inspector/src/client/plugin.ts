@@ -45,7 +45,7 @@ export const inject: string[] = []
 export async function apply(ctx: Context): Promise<void> {
   const injected = globalThis.__DSH_INSPECTOR__
   if (injected === undefined) {
-    throw new Error('experimental inspector: Host bootstrap is missing')
+    throw new Error('experimental inspector: Host bootstrap is missing; reload the page after enabling the Inspector')
   }
   const bootstrap = parseInspectorClientBootstrap(injected)
   await ctx.effect(async () => {

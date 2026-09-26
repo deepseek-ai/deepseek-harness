@@ -1986,7 +1986,7 @@ export class PythonPtcRuntime extends PtcRuntime {
       // that reads fd 3 continuously, so arrival order was never observable,
       // and the bindings themselves still run concurrently. Only the host's peak
       // memory and the flush timing change.
-      const replyQueue: ReplyMessage[] = []
+      const replyQueue: (ReplyMessage | undefined)[] = []
       // Replies queued but not yet written, tracked separately from
       // `replyQueue.length`: the drain loop clears consumed slots to `undefined`
       // but does not shrink the array until it finishes, so `length` counts
@@ -2050,7 +2050,7 @@ export class PythonPtcRuntime extends PtcRuntime {
             // in `replyQueue` for the whole busy period, making host memory grow
             // with cumulative processing rather than the current backlog.
             const payload = replyQueue[head] as ReplyMessage
-            replyQueue[head] = undefined as unknown as ReplyMessage
+            replyQueue[head] = undefined
             head += 1
             pendingReplies -= 1
             // Compact the consumed prefix once it reaches the backlog bound:

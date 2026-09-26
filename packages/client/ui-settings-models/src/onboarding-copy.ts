@@ -1,5 +1,5 @@
 /** Durable settings namespace for product-wide GUI onboarding facts. */
-export const WELCOME_NOTICE_SETTINGS_NAMESPACE = 'ui-onboarding'
+export const WELCOME_NOTICE_SETTINGS_NAMESPACE = 'ui-settings-general'
 
 /** Field storing the last welcome notice version the user acknowledged. */
 export const WELCOME_NOTICE_ACK_FIELD = 'welcomeNoticeVersion'

@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/lsp/lsp-stdio/README.md
-README.md: 5f0f19255ed39432ce0bb1a59f7b9f08c02a4bf8
-README.zh.md: 5380f2cec79a34d8f40de8e195049699857f0d99
+/:
+  en: c9eac4288ae5293a
+  zh: fb718ad3c2da3e49
+/deepseek-ai-dsh-lsp-stdio:
+  en: 79147f5b588a6d6a
+  zh: 12d7ab50d6fe0850
+/deepseek-ai-dsh-lsp-stdio/summary:
+  en: 9bb3631289433c95
+  zh: 4b30c9a4aa5186b8
+/deepseek-ai-dsh-lsp-stdio/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-lsp-stdio/use-this-package:
+  en: c632954ac645e57e
+  zh: 646525beedbdb97c
+/deepseek-ai-dsh-lsp-stdio/use-this-package/minimal-configuration:
+  en: 3cf011ee27d835e8
+  zh: f1a8fbf0f26b8f98
+/deepseek-ai-dsh-lsp-stdio/use-this-package/what-a-query-does:
+  en: 41363baf8fdba020
+  zh: d1a6193b1aa813ba
+/deepseek-ai-dsh-lsp-stdio/use-this-package/observable-success-and-failures:
+  en: 57f3a82c014af107
+  zh: 770fc617c1ab0eab
+/deepseek-ai-dsh-lsp-stdio/use-this-package/security-boundary:
+  en: f1f7fef771bcaa6d
+  zh: f11dcf771a6fecfc
+/deepseek-ai-dsh-lsp-stdio/understand-the-implementation:
+  en: 8a5efa64f5b12f88
+  zh: 451548c05c045c22
+/deepseek-ai-dsh-lsp-stdio/understand-the-implementation/design-philosophy:
+  en: 7e5e63f993a287f2
+  zh: a5a01b22551e5d46
+/deepseek-ai-dsh-lsp-stdio/understand-the-implementation/source-map:
+  en: c1eb566e6aa64d09
+  zh: 6fa10484e329e570
+/deepseek-ai-dsh-lsp-stdio/understand-the-implementation/protocol-behavior:
+  en: 0f9bac88ad9448b8
+  zh: f5d3a2e61a596003
+/deepseek-ai-dsh-lsp-stdio/further-exploration:
+  en: 2b280b85054f6b9f
+  zh: 6e609d42db7da87c
+/deepseek-ai-dsh-lsp-stdio/model-experience:
+  en: b366d0dfbfeb2d91
+  zh: 72a7a8d957b13eb4
+/deepseek-ai-dsh-lsp-stdio/model-experience/kv-cache-effect:
+  en: 64354484a5367fbc
+  zh: aec3e5c7933389b6
+/deepseek-ai-dsh-lsp-stdio/known-limitations-and-deferred-work:
+  en: dc4fc5797b3b2d38
+  zh: f04e4159ce280218
+/deepseek-ai-dsh-lsp-stdio/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for lsp.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/lsp.md
-lsp.md: 5a8adb24c1768ac2a977b99f1ffb732610ccd911
-lsp.zh.md: e041217866b3469f6ad06fac9ad20289a6524eb3
+/lsp-navigation:
+  en: fa02506f51df9966
+  zh: eaa24f7154cccb1a
+/lsp-navigation/operations-and-coordinates:
+  en: 42204b23027154f4
+  zh: 20f3db54da245f99
+/lsp-navigation/request:
+  en: 90429192a7758437
+  zh: 36145358e1918c38
+/lsp-navigation/result:
+  en: d260facb7ad22440
+  zh: f4868aae5be01eb6
+/lsp-navigation/provider-and-service:
+  en: 754b4f1a0c80e332
+  zh: aaacbc912dd6337b

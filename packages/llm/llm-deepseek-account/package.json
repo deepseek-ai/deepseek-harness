@@ -1,0 +1,54 @@
+{
+  "name": "@deepseek-ai/dsh-llm-deepseek-account",
+  "description": "DeepSeek account provider authentication and discovery",
+  "version": "0.1.7-rc.2",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/llm/llm-deepseek-account"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-llm-deepseek": "workspace:*",
+    "@deepseek-ai/dsh-launch-environment": "workspace:*",
+    "@deepseek-ai/dsh-deepseek-account": "workspace:*",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-llm-deepseek": "workspace:*",
+    "@deepseek-ai/dsh-launch-environment": "workspace:*",
+    "@deepseek-ai/dsh-deepseek-account": "workspace:*",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@deepseek-ai/dsh-llm-deepseek-api-key": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-deepseek-account": {
+      "optional": true
+    },
+    "@deepseek-ai/cordis-plugin-loader": {
+      "optional": true
+    }
+  }
+}

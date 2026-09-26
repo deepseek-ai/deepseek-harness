@@ -1,0 +1,12 @@
+# Experimental Schedule switch over the shipped Web composition. `dsh-web-app`
+# inserts the three rows with `disabled: true`; this layer flips them on and
+# appends nothing, so enabling it cannot mount a Host service twice.
+
+- id: time-context
+  disabled: false
+
+- id: schedule
+  disabled: false
+
+- id: ui-schedule
+  disabled: false

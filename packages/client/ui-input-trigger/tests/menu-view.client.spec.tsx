@@ -128,7 +128,7 @@ describe('MenuView', () => {
     }))
     const options = screen.getAllByRole('option')
     expect(options.map(o => o.textContent)).toEqual(['计划plan进入或退出计划模式', 'File'])
-    expect(options[0]?.querySelector('[data-glyph="plan"]')?.getAttribute('width')).toBe('16')
+    expect(options[0]?.querySelector('[data-glyph="plan"]')?.getAttribute('width')).toBe('14')
     // A label that is the name in another letter case renders no alias.
     expect(options[1]?.querySelectorAll('span')).toHaveLength(1)
     expect(screen.getAllByText('添加')).toHaveLength(1)
@@ -241,10 +241,10 @@ describe('MenuView', () => {
     expect(menuShell().style.maxHeight).toBe('400px')
   })
 
-  it('clamps the list height to the space above the composer minus the safe margin', () => {
+  it('clamps the list height to the space above the composer minus the header-clearing margin', () => {
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ bottom: 200 } as DOMRect)
     mount(openState())
-    expect(menuShell().style.maxHeight).toBe('188px')
+    expect(menuShell().style.maxHeight).toBe('116px')
   })
 
   it('re-fits the height when the window resizes', () => {
@@ -254,7 +254,7 @@ describe('MenuView', () => {
     expect(menuShell().style.maxHeight).toBe('400px')
     rect.mockReturnValue({ bottom: 100 } as DOMRect)
     act(() => { window.dispatchEvent(new Event('resize')) })
-    expect(menuShell().style.maxHeight).toBe('88px')
+    expect(menuShell().style.maxHeight).toBe('16px')
   })
 
   it('shows the bottom overflow hint until the list reaches its final row', () => {

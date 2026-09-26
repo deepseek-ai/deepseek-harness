@@ -1,0 +1,250 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {
+      "key": "event:subagent/catalog",
+      "kind": "event",
+      "event": "subagent/catalog",
+      "surface": false,
+      "digest": "3abae7324356f155cb42450c00b806d134ec93bd6439d2063b8d724162d58604",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 15,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              2,
+              7,
+              9,
+              11,
+              12
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "childCreatedAt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "childId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "mode",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 6,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "literal",
+            "value": "continuable"
+          },
+          {
+            "kind": "literal",
+            "value": 0
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "childCreatedAt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "childId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "mode",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 8,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": 1
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "childCreatedAt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "childId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "mode",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 6,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "one-shot"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "childCreatedAt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "childId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "mode",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 8,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "childCreatedAt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "childId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "mode",
+                "type": 13,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 8,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "unknown"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "subagent/catalog"
+          }
+        ]
+      }
+    }
+  ],
+  "types": []
+}

@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-directory-picker-native/README.md
-README.md: 4d35b30e093f06e939d0831a1ea45c050c43bf03
-README.zh.md: 98bdf1b15eea5de9dee2f0a7dab583f0f124b504
+/:
+  en: 6f45a471a5e9305f
+  zh: d771883685e91a45
+/deepseek-ai-dsh-client-ui-directory-picker-native:
+  en: dd00fd3c4c22a356
+  zh: 070b3db2cce5ecc3
+/deepseek-ai-dsh-client-ui-directory-picker-native/summary:
+  en: e039fd6b8a89ef2e
+  zh: dd4b40cfc0bc4fd5
+/deepseek-ai-dsh-client-ui-directory-picker-native/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-directory-picker-native/use-this-package:
+  en: 1e2172c756246031
+  zh: f33dc7b40b14cceb
+/deepseek-ai-dsh-client-ui-directory-picker-native/use-this-package/when-to-choose-it:
+  en: bcba761168d2162c
+  zh: d484e2305e074c0b
+/deepseek-ai-dsh-client-ui-directory-picker-native/understand-the-implementation:
+  en: f7a287740b4b08f9
+  zh: 3347375c4e486b22
+/deepseek-ai-dsh-client-ui-directory-picker-native/further-exploration:
+  en: 437668b193c4d141
+  zh: 55ca260fc45a9f54
+/deepseek-ai-dsh-client-ui-directory-picker-native/model-experience:
+  en: 35d8546cfb4b540b
+  zh: 25e4ce35c66c92e2
+/deepseek-ai-dsh-client-ui-directory-picker-native/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: f57cc48a1b5cbfa9
+/deepseek-ai-dsh-client-ui-directory-picker-native/known-limitations-and-deferred-work:
+  en: d041273e43ca0541
+  zh: 8b7a718ed22e7f18
+/deepseek-ai-dsh-client-ui-directory-picker-native/known-limitations-and-deferred-work/dev-note:
+  en: b2aec04118566ad8
+  zh: 15639689899fc5a1

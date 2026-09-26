@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-format-v0-to-v1",
   "description": "Frozen released-v0 Session codec and identity migration to v1",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -39,14 +39,14 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/dsh-session-format": "workspace:^",
-    "@deepseek-ai/dsh-util-values": "workspace:^"
+    "@deepseek-ai/dsh-session-format": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-session": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-session": "workspace:*"
   }
 }

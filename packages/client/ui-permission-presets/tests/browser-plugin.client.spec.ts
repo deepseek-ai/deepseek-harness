@@ -32,6 +32,7 @@ import { accessEn, accessZh } from '../src/client/locales.ts'
 const sid = (k: string): SessionId => k as SessionId
 
 const CATALOG: PermissionCatalog = {
+  defaultPreset: 'read-only', defaultOptions: [{ value: 'read-only', name: 'read-only' }, { value: 'workspace-write', name: 'workspace-write' }, { value: 'danger-full-access', name: 'danger-full-access' }],
   options: [
     { value: 'read-only', name: 'read-only', description: 'Reads only.' },
     { value: 'workspace-write', name: 'workspace-write' },
@@ -156,7 +157,7 @@ describe('ui-permission browser plugin', () => {
   it('dismisses stale slash choices on a catalog invalidation and removes that subscription on disposal', async () => {
     const b = await bench()
     const initial = b.dismissed.length
-    b.setCatalog({ options: CATALOG.options.filter(option => option.value !== 'auto') })
+    b.setCatalog({ ...CATALOG, options: CATALOG.options.filter(option => option.value !== 'auto') })
     await vi.waitFor(() => { expect(b.dismissed.slice(initial)).toEqual(['permission']) })
     await b.fiber.dispose()
     b.setCatalog(CATALOG)
@@ -232,7 +233,7 @@ describe('ui-permission browser plugin', () => {
       cancelLabel: '取消',
       confirmLabel: '启用完全权限',
     })
-    b.setCatalog({ options: [
+    b.setCatalog({ ...CATALOG, options: [
       { value: 'workspace-write', name: 'Project Files' },
       { value: 'danger-full-access', name: 'Operator Mode' },
       { value: 'custom-mode', name: 'custom-mode' },
@@ -297,7 +298,7 @@ describe('ui-permission browser plugin', () => {
     const shell = b.openShell()
     await vi.waitFor(() => { expect(shell.state.getSnapshot().status).toBe('ready') })
 
-    b.setCatalog({ options: CATALOG.options.filter(option => option.value !== 'auto') })
+    b.setCatalog({ ...CATALOG, options: CATALOG.options.filter(option => option.value !== 'auto') })
     await vi.waitFor(() => { expect(shell.state.getSnapshot().open).toBe(false) })
   })
 

@@ -365,7 +365,7 @@ class ClientRuntimeSession {
     const args = (command.arguments ?? []).map(argument => this.resolveArgument(argument))
     let value: unknown
     try {
-      const fn = globalThis.eval(`(${command.functionDeclaration}\n)`) as unknown
+      const fn: unknown = globalThis.eval(`(${command.functionDeclaration}\n)`)
       if (typeof fn !== 'function') throw new TypeError('functionDeclaration did not evaluate to a function')
       value = Reflect.apply(fn, receiver, args)
       if (command.awaitPromise === true) value = await awaitWithCancellation(value, signal)
@@ -460,9 +460,9 @@ function parseUnserializable(value: string): unknown {
 }
 
 function clientUrl(): { readonly url?: string } {
-  const location = Reflect.get(globalThis, 'location') as unknown
+  const location: unknown = Reflect.get(globalThis, 'location')
   if (typeof location !== 'object' || location === null) return {}
-  const href = Reflect.get(location, 'href') as unknown
+  const href: unknown = Reflect.get(location, 'href')
   return typeof href === 'string' ? { url: href } : {}
 }
 

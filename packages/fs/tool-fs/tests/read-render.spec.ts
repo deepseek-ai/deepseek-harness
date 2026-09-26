@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { languageForPath } from '@deepseek-ai/dsh-util-code-language'
 import { buildWindow, langFromPath, readMetaFromMeta, READ_MAX_BYTES, READ_MAX_LINE_LENGTH } from '../src/read-render.ts'
 import type { ReadWindow } from '../src/read-render.ts'
 
@@ -117,13 +118,72 @@ describe('buildWindow', () => {
   })
 })
 
+/**
+ * The short `lang` values a recorded read persisted, transcribed verbatim.
+ * Changing any value changes replay-visible output for an already-recorded
+ * session, so this table is the test's independent expectation rather than a
+ * second read of the implementation's own data.
+ */
+const PERSISTED_READ_LANG_BY_EXTENSION: Readonly<Record<string, string>> = {
+  ts: 'ts', tsx: 'tsx', mts: 'ts', cts: 'ts',
+  js: 'js', jsx: 'jsx', mjs: 'js', cjs: 'js',
+  json: 'json', jsonc: 'json',
+  py: 'py', rb: 'rb', go: 'go', rs: 'rs', java: 'java',
+  c: 'c', h: 'c', cc: 'cpp', cpp: 'cpp', hpp: 'cpp', cxx: 'cpp',
+  cs: 'cs', kt: 'kotlin', swift: 'swift', php: 'php',
+  sh: 'sh', bash: 'sh', zsh: 'sh',
+  yaml: 'yaml', yml: 'yaml', toml: 'toml', ini: 'ini',
+  md: 'md', markdown: 'md', mdx: 'mdx',
+  html: 'html', htm: 'html', css: 'css', scss: 'scss', less: 'less',
+  sql: 'sql', xml: 'xml', lua: 'lua',
+}
+
 describe('langFromPath', () => {
-  it('maps a known extension to its language hint, case-insensitively', () => {
+  it('keeps every already-persisted suffix byte-identical', () => {
+    expect(Object.keys(PERSISTED_READ_LANG_BY_EXTENSION)).toHaveLength(43)
+    for (const [extension, hint] of Object.entries(PERSISTED_READ_LANG_BY_EXTENSION)) {
+      expect(langFromPath(`file.${extension}`), extension).toBe(hint)
+    }
+  })
+
+  it('gives every other suffix the language short id', () => {
+    // A suffix with no persisted value has none to preserve, so the projection
+    // applies the language's short name instead of the canonical grammar id.
+    expect(langFromPath('build.ps1')).toBe('ps1')
+    expect(langFromPath('table.csv')).toBe('csv')
+    expect(langFromPath('deploy.bat')).toBe('bat')
+    expect(langFromPath('.env')).toBe('env')
+    expect(langFromPath('server.log')).toBe('log')
+    expect(langFromPath('message.proto')).toBe('proto')
+    expect(langFromPath('infra.tf')).toBe('tf')
+    expect(langFromPath('paper.tex')).toBe('tex')
+    expect(langFromPath('model.jl')).toBe('jl')
+    expect(langFromPath('top.v')).toBe('v')
+    expect(langFromPath('build.gradle')).toBe('gradle')
+    // A later suffix of an already-known language follows that language's short name.
+    expect(langFromPath('app.conf')).toBe('ini')
+    expect(langFromPath('task.rake')).toBe('rb')
+    expect(langFromPath('events.jsonl')).toBe('json')
+    expect(langFromPath('page.xhtml')).toBe('html')
+    expect(langFromPath('logo.svg')).toBe('xml')
+    expect(langFromPath('notebook.ipynb')).toBe('json')
+  })
+
+  it('maps a known extension to its persisted short hint, case-insensitively', () => {
     expect(langFromPath('src/a.ts')).toBe('ts')
     expect(langFromPath('src/a.TSX')).toBe('tsx')
     expect(langFromPath('/abs/module.mjs')).toBe('js')
     expect(langFromPath('conf.yml')).toBe('yaml')
     expect(langFromPath('README.md')).toBe('md')
+  })
+
+  it('keeps the canonical ids the Client code surfaces use out of the persisted hint', () => {
+    // The Client reads the shared table directly; only this projection owns the
+    // persisted value, so the two intentionally differ for the suffixes a
+    // recorded session already holds.
+    expect(languageForPath('src/a.ts')).toBe('typescript')
+    expect(languageForPath('README.md')).toBe('markdown')
+    expect(langFromPath('src/a.ts')).not.toBe(languageForPath('src/a.ts'))
   })
 
   it('reads the extension after the last path segment and last dot', () => {

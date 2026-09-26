@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-04-busy-send-button-follows-enter-setting.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-04-busy-send-button-follows-enter-setting.md
-2026-09-04-busy-send-button-follows-enter-setting.md: 2db0848e3ce3b7a1b6b07ff6d6d23c06b23be5ef
-2026-09-04-busy-send-button-follows-enter-setting.zh.md: 7062f60320c4bc56f15f57388e79df9ce0e45c2f
+/agent-note-the-busy-send-button-follows-the-enter-setting:
+  en: d0e9f804958ee8ce
+  zh: e5cd102fbdd12ff1
+/agent-note-the-busy-send-button-follows-the-enter-setting/problem:
+  en: c378dfa9efcc0758
+  zh: 785c3b9ee99c66a4
+/agent-note-the-busy-send-button-follows-the-enter-setting/decision:
+  en: 101e21100f8afd7d
+  zh: 76979af8aee15976
+/agent-note-the-busy-send-button-follows-the-enter-setting/verification:
+  en: eb886930b09445bd
+  zh: 1e671f8f81868490
+/agent-note-the-busy-send-button-follows-the-enter-setting/alternatives-considered:
+  en: d47aa278a2103890
+  zh: 313f75c7fb8ccd5c
+/agent-note-the-busy-send-button-follows-the-enter-setting/consequences:
+  en: a067e427615a682a
+  zh: d72074056e1def4a

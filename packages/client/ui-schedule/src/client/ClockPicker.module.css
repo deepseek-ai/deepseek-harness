@@ -1,0 +1,48 @@
+/* Three scrolling clock columns inside the shared picker card. */
+.clock {
+  flex-direction: row;
+  gap: 2px;
+  padding: 3px;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  width: 52px;
+  max-height: 216px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* One clock value. The right column's rows are 13px copy, so the columns set
+   their own size rather than inheriting the card's. */
+.option {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border-radius: 10px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  cursor: pointer;
+  outline: none;
+}
+
+.option:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+/* The value the row shows, marked the way the card's active chips are. */
+.selected {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-button-ghost-active-fill);
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-button-ghost-active-border);
+}

@@ -471,7 +471,7 @@ describe('approval policy (the approval/policy fold)', () => {
         type: 'text',
         text: 'The approval policy changed from "ask" to "never" (changed by the user).',
       }],
-      source: { kind: 'plugin', plugin: 'user-approval' },
+      source: { kind: 'user-approval' },
     })
   })
 

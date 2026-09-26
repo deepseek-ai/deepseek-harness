@@ -1,0 +1,138 @@
+diff --git a/dist/index.esm.js b/dist/index.esm.js
+index c4486a2b38bec4eff10cdfda4d3748d40bfb71ba..c5a6ee9adf10cdf8ad8dd7fde39d56aa67644c26 100644
+--- a/dist/index.esm.js
++++ b/dist/index.esm.js
+@@ -921,7 +921,7 @@ var InputBox = function InputBox() {
+     return {};
+   }, [context.luckysheetfile, context.currentSheetId, context.luckysheetCellUpdate, firstSelection]);
+   useLayoutEffect(function () {
+-    if (!context.allowEdit) {
++    if (!context.allowEdit && context.forceFormulaRef) {
+       setContext(function (ctx) {
+         var flowdata = getFlowdata(ctx);
+         if (!_.isNil(flowdata) && ctx.forceFormulaRef) {
+@@ -6733,12 +6733,16 @@ var FxEditor = function FxEditor() {
+         if (isInlineStringCell(cell)) {
+           value = getInlineStringNoStyle(r, c, d);
+         } else if (cell.f) {
+-          value = getCellValue(r, c, d, "f");
++          value = context.allowEdit === false ? cell.f : getCellValue(r, c, d, "f");
+         } else {
+           value = valueShowEs(r, c, d);
+         }
+       }
+-      refs.fxInput.current.innerHTML = escapeHTMLTag(escapeScriptTag(value));
++      if (context.allowEdit === false) {
++        refs.fxInput.current.textContent = value;
++      } else {
++        refs.fxInput.current.innerHTML = escapeHTMLTag(escapeScriptTag(value));
++      }
+     } else {
+       refs.fxInput.current.innerHTML = "";
+     }
+@@ -6908,7 +6912,8 @@ var SheetItem = function SheetItem(_ref) {
+         draftCtx.scrollLeft = 0;
+         draftCtx.scrollTop = 0;
+         draftCtx.luckysheet_select_status = false;
+-        draftCtx.luckysheet_select_save = undefined;
++        var currentSheet = draftCtx.luckysheetfile.find(function (s) { return s.id === draftCtx.currentSheetId; });
++        draftCtx.luckysheet_select_save = currentSheet && currentSheet.luckysheet_select_save;
+       }
+       draftCtx.luckysheet_selection_range = [];
+     });
+@@ -7248,8 +7253,14 @@ var SheetTab = function SheetTab() {
+   useEffect(function () {
+     var tabCurrent = tabContainerRef.current;
+     if (!tabCurrent) return;
+-    setIsShowScrollBtn(tabCurrent.scrollWidth - 2 > tabCurrent.clientWidth);
+-  }, [context.luckysheetfile]);
++    var availableWidth = tabCurrent.clientWidth;
++    if (context.allowEdit === false) {
++      // Count navigation space before deciding whether the tabs need it.
++      availableWidth += leftScrollRef.current ? leftScrollRef.current.offsetWidth : 0;
++      availableWidth += rightScrollRef.current ? rightScrollRef.current.offsetWidth : 0;
++    }
++    setIsShowScrollBtn(tabCurrent.scrollWidth - 2 > availableWidth);
++  }, [context.luckysheetfile, context.allowEdit, context.luckysheetTableContentHW[0]]);
+   var onAddSheetClick = useCallback(function () {
+     return setTimeout(function () {
+       setContext(function (draftCtx) {
+@@ -10693,7 +10704,8 @@ var SheetListItem = function SheetListItem(_ref) {
+         draftCtx.scrollLeft = 0;
+         draftCtx.scrollTop = 0;
+         draftCtx.luckysheet_select_status = false;
+-        draftCtx.luckysheet_select_save = undefined;
++        var currentSheet = draftCtx.luckysheetfile.find(function (s) { return s.id === draftCtx.currentSheetId; });
++        draftCtx.luckysheet_select_save = currentSheet && currentSheet.luckysheet_select_save;
+       }
+       draftCtx.luckysheet_selection_range = [];
+     });
+diff --git a/dist/index.js b/dist/index.js
+index e4045518773578e3faaa3a58985a5585f9683088..2b217b8dde18934a020ef8ba1f2dd5c161c68b7f 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -932,7 +932,7 @@ var InputBox = function InputBox() {
+     return {};
+   }, [context.luckysheetfile, context.currentSheetId, context.luckysheetCellUpdate, firstSelection]);
+   React.useLayoutEffect(function () {
+-    if (!context.allowEdit) {
++    if (!context.allowEdit && context.forceFormulaRef) {
+       setContext(function (ctx) {
+         var flowdata = core.getFlowdata(ctx);
+         if (!___default['default'].isNil(flowdata) && ctx.forceFormulaRef) {
+@@ -6744,12 +6744,16 @@ var FxEditor = function FxEditor() {
+         if (core.isInlineStringCell(cell)) {
+           value = core.getInlineStringNoStyle(r, c, d);
+         } else if (cell.f) {
+-          value = core.getCellValue(r, c, d, "f");
++          value = context.allowEdit === false ? cell.f : core.getCellValue(r, c, d, "f");
+         } else {
+           value = core.valueShowEs(r, c, d);
+         }
+       }
+-      refs.fxInput.current.innerHTML = core.escapeHTMLTag(core.escapeScriptTag(value));
++      if (context.allowEdit === false) {
++        refs.fxInput.current.textContent = value;
++      } else {
++        refs.fxInput.current.innerHTML = core.escapeHTMLTag(core.escapeScriptTag(value));
++      }
+     } else {
+       refs.fxInput.current.innerHTML = "";
+     }
+@@ -6919,7 +6923,8 @@ var SheetItem = function SheetItem(_ref) {
+         draftCtx.scrollLeft = 0;
+         draftCtx.scrollTop = 0;
+         draftCtx.luckysheet_select_status = false;
+-        draftCtx.luckysheet_select_save = undefined;
++        var currentSheet = draftCtx.luckysheetfile.find(function (s) { return s.id === draftCtx.currentSheetId; });
++        draftCtx.luckysheet_select_save = currentSheet && currentSheet.luckysheet_select_save;
+       }
+       draftCtx.luckysheet_selection_range = [];
+     });
+@@ -7259,8 +7264,14 @@ var SheetTab = function SheetTab() {
+   React.useEffect(function () {
+     var tabCurrent = tabContainerRef.current;
+     if (!tabCurrent) return;
+-    setIsShowScrollBtn(tabCurrent.scrollWidth - 2 > tabCurrent.clientWidth);
+-  }, [context.luckysheetfile]);
++    var availableWidth = tabCurrent.clientWidth;
++    if (context.allowEdit === false) {
++      // Count navigation space before deciding whether the tabs need it.
++      availableWidth += leftScrollRef.current ? leftScrollRef.current.offsetWidth : 0;
++      availableWidth += rightScrollRef.current ? rightScrollRef.current.offsetWidth : 0;
++    }
++    setIsShowScrollBtn(tabCurrent.scrollWidth - 2 > availableWidth);
++  }, [context.luckysheetfile, context.allowEdit, context.luckysheetTableContentHW[0]]);
+   var onAddSheetClick = React.useCallback(function () {
+     return setTimeout(function () {
+       setContext(function (draftCtx) {
+@@ -10704,7 +10715,8 @@ var SheetListItem = function SheetListItem(_ref) {
+         draftCtx.scrollLeft = 0;
+         draftCtx.scrollTop = 0;
+         draftCtx.luckysheet_select_status = false;
+-        draftCtx.luckysheet_select_save = undefined;
++        var currentSheet = draftCtx.luckysheetfile.find(function (s) { return s.id === draftCtx.currentSheetId; });
++        draftCtx.luckysheet_select_save = currentSheet && currentSheet.luckysheet_select_save;
+       }
+       draftCtx.luckysheet_selection_range = [];
+     });

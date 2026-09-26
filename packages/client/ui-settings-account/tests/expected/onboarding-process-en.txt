@@ -1,0 +1,1 @@
+How much detail would you like to see?This only changes how progress is shown, not what DeepSeek Harness can do.Results onlySee just the results in a clean, simple interfaceKey detailsFocus on results, with only the most important steps and actions shownFull detailsSee the full process for easier debugging and troubleshootingBackSkip

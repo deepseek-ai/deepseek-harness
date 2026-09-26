@@ -78,6 +78,22 @@ The calibrated source budgets are:
 | Client-fold delta scaling | 2.5× | 3.125× |
 | Constrained old space | — | 128 MB |
 
+### Indexed traversal of stored JSON arrays
+
+The JSONL backend freezes decoded event graphs before memoization. Its native decoder and fixed migration catalog produce acyclic JSON graphs whose arrays contain only indexed values. Numeric array traversal preserves freezing of every nested object and array while avoiding string-key enumeration across the compact stream's 125,000 text entries and 124,600 time deltas. Object traversal still preserves own `__proto__` and `constructor` data. No admission, relationship validation, decoding, or freezing moves beyond the measured open endpoint, and a shallow `Object.isFrozen()` result never skips descendant traversal.
+
+On an Apple M4 Pro with Node 24.19.0, an open-only CPU profile attributes about 4.2 ms to complete event freezing. Separate fresh-process V4 runs give these results; the final column restores and rebuilds the exact original traversal as a negative control:
+
+| Reopen measurement | Original traversal | Indexed traversal | Original restored |
+|---|---|---|---|
+| `open` samples (ms) | 22.2, 22.4, 22.8, 22.6, 22.9 | 17.7, 18.4, 17.4, 17.8, 17.6 | 21.7, 22.4, 22.2, 21.7, 21.6 |
+| Median `open` (ms) | 22.6 | 17.7 | 21.7 |
+| Median first history (ms) | 35.0 | 30.6 | 33.6 |
+| Median Agent resume (ms) | 30.5 | 26.8 | 29.8 |
+| Agent retained heap (MB) | 4.5 | 4.5 | 4.5 |
+
+Each run passes all 17 Session cases, including the 128 MB completion checks. The original implementation remains below 63 ms on this local machine; the restored traversal demonstrates the removed cost, while the hosted benchmark remains the required budget verdict. The workload, time limits, memory limits, cold-process setup, and measurement endpoints are unchanged. The JSONL owner tests cover nested opaque JSON, rejected mutation, and immutable event sharing through historical V3 and current reads. These measurements establish a reopen improvement; they do not establish a consistent first-open improvement or hosted-runner timing.
+
 ## Alternatives considered
 
 **Check out the historical commit and compare it on every CI run.** Rejected because a historical checkout requires a separate install, and old and current revisions can assign work to different API phases, adding runtime, dependency, and interface drift. A fixed workload with static budgets calibrated against positive and negative controls is easier to reproduce and review.

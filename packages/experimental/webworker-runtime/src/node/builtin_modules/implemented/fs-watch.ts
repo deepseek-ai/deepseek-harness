@@ -283,12 +283,12 @@ type RefTimer = { ref?: () => unknown; unref?: () => unknown }
 
 /** Browser timers are numeric; Node timers expose optional liveness methods. */
 const timerRef = (timer: ReturnType<typeof setTimeout>): void => {
-  ;(timer as unknown as RefTimer).ref?.()
+  ;(timer as RefTimer).ref?.()
 }
 
 /** Browser timers are numeric; Node timers expose optional liveness methods. */
 const timerUnref = (timer: ReturnType<typeof setTimeout>): void => {
-  ;(timer as unknown as RefTimer).unref?.()
+  ;(timer as RefTimer).unref?.()
 }
 
 const statWatchers = new Map<string, StatWatcher>()

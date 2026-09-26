@@ -1,56 +1,60 @@
-/**
- * The `file` provider's frame stream: how the two address scopes resolve to a
- * Host call and a change-feed key, the opening stat, the write version that
- * carries no content, the disappearance that stats again, failures
- * as frames, and the life bounded by the signal.
- */
+/** File-provider metadata reads, target subscriptions, failures, and cancellation. */
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { RemoteFailure } from '@deepseek-ai/dsh-typert-protocol'
+import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { absoluteFileAddress, sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceFileStat } from '../src/types.ts'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { ChangeFeed } from '../src/client/change-feed.ts'
 import { createFileResourceProvider } from '../src/client/provider.ts'
-import { FakeRemote, settle } from './fake-remote.client.ts'
+import { FakeRemote } from './fake-remote.client.ts'
 
 const S1 = 's1' as SessionId
 const S2 = 's2' as SessionId
-/** The relative path the address carries, and the absolute path the Host's frames spell for it under S1's root. */
 const REL_PATH = 'a b.txt'
 const HOST_PATH = '/w/a b.txt'
 const ADDRESS = sessionFileAddress(S1, REL_PATH)
-/** A file outside every workspace root, addressed absolutely. */
 const ABS_PATH = '/etc/hosts'
 const ABS_ADDRESS = sessionFileAddress(S1, ABS_PATH)
 
 const stat = (version: string, bytes: number): WorkspaceFileStat => ({ absolutePath: HOST_PATH, version, bytes })
 const notFound = (): RemoteFailure => new RemoteError('workspace-file/not-found', 'no such file', { path: REL_PATH })
 
-function opened(address = ADDRESS) {
+function harness() {
   const remote = new FakeRemote()
+  remote.autoReady = false
   const changes = new ChangeFeed(remote)
   const provider = createFileResourceProvider(remote, changes)
-  const controller = new AbortController()
-  const it = provider.open(address, { signal: controller.signal })[Symbol.asyncIterator]()
+  const resources: Array<{ controller: AbortController; it: AsyncIterator<RemoteResult<WorkspaceFileStat>> }> = []
   onTestFinished(async () => {
-    controller.abort()
-    for (const request of remote.stats) {
-      request.resolve({ ok: false, error: new RemoteError('gateway/internal', 'test ended', {}) })
-    }
-    await it.return?.()
+    for (const resource of resources) resource.controller.abort()
+    await remote.dispose()
+    await Promise.all(resources.map(resource => Promise.resolve(resource.it.return?.())))
     await changes.settle()
+    expect(remote.opened.every(watch => watch.source.aborted)).toBe(true)
   })
-  return { remote, provider, changes, controller, it }
+  const open = (address = ADDRESS) => {
+    const controller = new AbortController()
+    const it = provider.open(address, { signal: controller.signal })[Symbol.asyncIterator]()
+    const resource = { controller, it }
+    resources.push(resource)
+    return resource
+  }
+  return { remote, changes, open }
 }
 
-/** Open, answer the opening stat, and hand back the bench once the first frame is out. */
+function opened(address = ADDRESS) {
+  const bench = harness()
+  return { ...bench, ...bench.open(address) }
+}
+
 async function live(version = 'v0', bytes = 3) {
   const bench = opened()
   const first = bench.it.next()
-  await settle()
-  bench.remote.stats[0]!.resolve({ ok: true, value: stat(version, bytes) })
-  await first
+  await bench.remote.ready(0)
+  const request = await bench.remote.waitForStat(0)
+  request.resolve({ ok: true, value: stat(version, bytes) })
+  await expect(first).resolves.toEqual({ done: false, value: { ok: true, value: stat(version, bytes) } })
   return bench
 }
 
@@ -84,130 +88,282 @@ describe('file provider — the address', () => {
     expect(remote.opened).toEqual([])
   })
 
-  it('hands the Host a session address\'s relative path and follows the stat absolute path', async () => {
+  it('watches and stats the relative input path while matching the Host canonical path', async () => {
     const { remote, it } = opened()
     const first = it.next()
-    await settle()
-    expect(remote.stats[0]).toMatchObject({ sessionId: S1, path: REL_PATH })
-    remote.stats[0]!.resolve({ ok: true, value: stat('v0', 3) })
-    await first
-    // The Host's frame names the file absolutely; the follower keyed by the resolved path receives it.
-    remote.opened[0]!.source.push({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
-    await expect(it.next()).resolves.toMatchObject({ value: { ok: true, value: { version: 'v1' } } })
+    const watch = await remote.ready(0)
+    expect(watch).toMatchObject({ sessionId: S1, path: REL_PATH })
+    const initial = await remote.waitForStat(0)
+    expect(initial).toMatchObject({ sessionId: S1, path: REL_PATH })
+    initial.resolve({ ok: true, value: stat('v0', 3) })
+    await expect(first).resolves.toEqual({ done: false, value: { ok: true, value: stat('v0', 3) } })
+    const next = it.next()
+    await watch.source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
+    const update = await remote.waitForStat(1)
+    expect(update).toMatchObject({ sessionId: S1, path: REL_PATH })
+    update.resolve({ ok: true, value: stat('v1', 7) })
+    await expect(next).resolves.toEqual({ done: false, value: { ok: true, value: stat('v1', 7) } })
   })
 
-  it('reads an absolute path through the Session in its address, with the absolute path as both Host path and follow key', async () => {
+  it('watches and stats an absolute path through the Session in its address', async () => {
     const { remote, it } = opened(ABS_ADDRESS)
     const first = it.next()
-    await settle()
-    expect(remote.opened.map(o => o.sessionId)).toEqual([S1])
-    expect(remote.stats[0]).toMatchObject({ sessionId: S1, path: ABS_PATH })
-    remote.stats[0]!.resolve({ ok: true, value: { absolutePath: ABS_PATH, version: 'v0', bytes: 3 } })
+    const watch = await remote.ready(0)
+    expect(watch).toMatchObject({ sessionId: S1, path: ABS_PATH })
+    const initial = await remote.waitForStat(0)
+    expect(initial).toMatchObject({ sessionId: S1, path: ABS_PATH })
+    initial.resolve({ ok: true, value: { absolutePath: ABS_PATH, version: 'v0', bytes: 3 } })
     await expect(first).resolves.toEqual({ done: false, value: { ok: true, value: { absolutePath: ABS_PATH, version: 'v0', bytes: 3 } } })
-    remote.opened[0]!.source.push({ kind: 'change', change: { absolutePath: ABS_PATH, version: 'v1' } })
-    await expect(it.next()).resolves.toMatchObject({ value: { ok: true, value: { version: 'v1' } } })
+    const next = it.next()
+    await watch.source.deliver({ kind: 'change', change: { absolutePath: ABS_PATH, version: 'v1' } })
+    const update = await remote.waitForStat(1)
+    expect(update).toMatchObject({ sessionId: S1, path: ABS_PATH })
+    update.resolve({ ok: true, value: { absolutePath: ABS_PATH, version: 'v1', bytes: 8 } })
+    await expect(next).resolves.toEqual({ done: false, value: { ok: true, value: { absolutePath: ABS_PATH, version: 'v1', bytes: 8 } } })
   })
 
-  it('opens one change stream per session named by the addresses', async () => {
-    const remote = new FakeRemote()
-    const provider = createFileResourceProvider(remote, new ChangeFeed(remote))
-    const signal = new AbortController().signal
-    void provider.open(sessionFileAddress(S1, 'a.txt'), { signal })[Symbol.asyncIterator]().next()
-    void provider.open(sessionFileAddress(S2, 'a.txt'), { signal })[Symbol.asyncIterator]().next()
-    await settle()
-    expect(remote.opened.map(o => o.sessionId)).toEqual([S1, S2])
-    expect(remote.stats.map(pending => pending.sessionId)).toEqual([S1, S2])
+  it('opens separate streams for the same path in different Sessions', async () => {
+    const { remote, open } = harness()
+    const one = open(sessionFileAddress(S1, 'a.txt'))
+    const first = one.it.next()
+    await remote.ready(0)
+    const request = await remote.waitForStat(0)
+    request.resolve({ ok: true, value: { absolutePath: '/one/a.txt', version: 's1-v0' } })
+    await expect(first).resolves.toEqual({ done: false, value: { ok: true, value: { absolutePath: '/one/a.txt', version: 's1-v0' } } })
+
+    const two = open(sessionFileAddress(S2, 'a.txt'))
+    const second = two.it.next()
+    await remote.ready(1)
+    const other = await remote.waitForStat(1)
+    other.resolve({ ok: true, value: { absolutePath: '/two/a.txt', version: 's2-v0' } })
+    await expect(second).resolves.toEqual({ done: false, value: { ok: true, value: { absolutePath: '/two/a.txt', version: 's2-v0' } } })
+    expect(remote.opened.map(watch => [watch.sessionId, watch.path])).toEqual([[S1, 'a.txt'], [S2, 'a.txt']])
+    expect(remote.stats.map(pending => [pending.sessionId, pending.path])).toEqual([[S1, 'a.txt'], [S2, 'a.txt']])
   })
 })
 
 describe('file provider — the opening stat', () => {
-  it('stats the decoded relative path in the session the address names and yields its metadata', async () => {
+  it('stats the decoded relative path after ready and yields its metadata', async () => {
     const { remote, it, controller } = opened()
     const first = it.next()
-    await settle()
+    await remote.ready(0)
+    const request = await remote.waitForStat(0)
     expect(remote.stats).toHaveLength(1)
-    expect(remote.stats[0]).toMatchObject({ sessionId: S1, path: REL_PATH, signal: controller.signal })
-    remote.stats[0]!.resolve({ ok: true, value: stat('v0', 3) })
-    await expect(first).resolves.toEqual({ done: false, value: { ok: true, value: { absolutePath: HOST_PATH, version: 'v0', bytes: 3 } } })
+    expect(remote.calls).toEqual(['changes', 'accept', 'stat'])
+    expect(request).toMatchObject({ sessionId: S1, path: REL_PATH, signal: controller.signal })
+    request.resolve({ ok: true, value: stat('v0', 3) })
+    await expect(first).resolves.toEqual({ done: false, value: { ok: true, value: stat('v0', 3) } })
+  })
+
+  it('does not stat or emit metadata when a ready observer cancels before the provider resumes', async () => {
+    const { remote, changes, it, controller } = opened()
+    const observer = changes.follow(S1, REL_PATH, controller.signal)
+    // Register this readiness reaction before the provider awaits the shared acknowledgement.
+    const cancelled = observer.ready.then((acknowledged) => {
+      if (acknowledged) controller.abort()
+      return acknowledged
+    })
+    const first = it.next()
+    const { source } = await remote.ready(0)
+    await expect(cancelled).resolves.toBe(true)
+    await expect(first).resolves.toEqual({ done: true, value: undefined })
+    await changes.settle()
+    expect(remote.calls).toEqual(['changes', 'accept'])
+    expect(remote.stats).toEqual([])
+    expect(remote.disposed).toEqual(['workspace file changes of s1'])
+    expect(source.aborted).toBe(true)
   })
 
   it('omits bytes when the backend reports none', async () => {
     const { remote, it } = opened()
     const first = it.next()
-    await settle()
-    remote.stats[0]!.resolve({ ok: true, value: { absolutePath: HOST_PATH, version: 'v0' } })
+    await remote.ready(0)
+    const request = await remote.waitForStat(0)
+    request.resolve({ ok: true, value: { absolutePath: HOST_PATH, version: 'v0' } })
     await expect(first).resolves.toStrictEqual({ done: false, value: { ok: true, value: { absolutePath: HOST_PATH, version: 'v0' } } })
   })
 
-  it('yields the Host failure as a frame and keeps following the address', async () => {
+  it('yields an initial Host failure and recovers when the watched target changes', async () => {
     const { remote, it } = opened()
     const first = it.next()
-    await settle()
+    const { source } = await remote.ready(0)
+    const initial = await remote.waitForStat(0)
     const error = notFound()
-    remote.stats[0]!.resolve({ ok: false, error })
+    initial.resolve({ ok: false, error })
     await expect(first).resolves.toEqual({ done: false, value: { ok: false, error } })
-    const source = remote.opened[0]!.source
-    // Still gone: no stat, no frame; the pull stays open for what comes next.
-    source.push({ kind: 'change', change: { absolutePath: HOST_PATH, absent: true } })
     const pending = it.next()
-    await expect(Promise.race([pending, settle().then(() => 'silent' as const)])).resolves.toBe('silent')
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
+    const retry = await remote.waitForStat(1)
+    retry.resolve({ ok: true, value: stat('v1', 5) })
+    await expect(pending).resolves.toEqual({ done: false, value: { ok: true, value: stat('v1', 5) } })
+    expect(remote.stats).toHaveLength(2)
+  })
+
+  it('does not re-stat or emit another absence after an initial failure', async () => {
+    const { remote, it, changes } = opened()
+    const first = it.next()
+    const { source } = await remote.ready(0)
+    const request = await remote.waitForStat(0)
+    const error = notFound()
+    request.resolve({ ok: false, error })
+    await expect(first).resolves.toEqual({ done: false, value: { ok: false, error } })
+    const pending = it.next()
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, absent: true } })
+    source.end()
+    await expect(pending).resolves.toEqual({ done: true, value: undefined })
+    await changes.settle()
     expect(remote.stats).toHaveLength(1)
-    // The agent creates the file: the write stats again and the value goes live.
-    source.push({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
-    await settle()
-    remote.stats[1]!.resolve({ ok: true, value: stat('v1', 5) })
-    await expect(pending).resolves.toEqual({ done: false, value: { ok: true, value: { absolutePath: HOST_PATH, version: 'v1', bytes: 5 } } })
   })
 
   it('ends without a frame when aborted during the stat', async () => {
     const { remote, it, controller } = opened()
     const first = it.next()
-    await settle()
+    await remote.ready(0)
+    const request = await remote.waitForStat(0)
     controller.abort()
-    remote.stats[0]!.resolve({ ok: false, error: new RemoteError('gateway/internal', 'aborted', {}) })
+    request.resolve({ ok: false, error: new RemoteError('gateway/internal', 'aborted', {}) })
     await expect(first).resolves.toEqual({ done: true, value: undefined })
   })
 
-  it('shares one change stream between two files of a session', async () => {
-    const remote = new FakeRemote()
-    const provider = createFileResourceProvider(remote, new ChangeFeed(remote))
-    const signal = new AbortController().signal
-    void provider.open(sessionFileAddress(S1, 'a.txt'), { signal })[Symbol.asyncIterator]().next()
-    void provider.open(sessionFileAddress(S1, 'b.txt'), { signal })[Symbol.asyncIterator]().next()
-    await settle()
-    expect(remote.opened).toHaveLength(1)
+  it('opens separate streams for different files and waits for each target acknowledgement', async () => {
+    const { remote, open } = harness()
+    const a = open(sessionFileAddress(S1, 'a.txt'))
+    const b = open(sessionFileAddress(S1, 'b.txt'))
+    const first = a.it.next()
+    const second = b.it.next()
+    const watch = await remote.ready(0)
+    expect(watch.path).toBe('a.txt')
+    const request = await remote.waitForStat(0)
+    expect(remote.stats).toHaveLength(1)
+    expect(request.path).toBe('a.txt')
+    request.resolve({ ok: true, value: { absolutePath: '/w/a.txt', version: 'a0' } })
+    await expect(first).resolves.toEqual({ done: false, value: { ok: true, value: { absolutePath: '/w/a.txt', version: 'a0' } } })
+    const otherWatch = await remote.ready(1)
+    expect(otherWatch.path).toBe('b.txt')
+    const otherRequest = await remote.waitForStat(1)
+    otherRequest.resolve({ ok: true, value: { absolutePath: '/w/b.txt', version: 'b0' } })
+    await expect(second).resolves.toEqual({ done: false, value: { ok: true, value: { absolutePath: '/w/b.txt', version: 'b0' } } })
+    expect(remote.opened).toHaveLength(2)
     expect(remote.stats).toHaveLength(2)
+  })
+
+  it('shares one target stream across consumers while keeping their stats and cancellation independent', async () => {
+    const { remote, changes, open } = harness()
+    const a = open()
+    const b = open()
+    const first = a.it.next()
+    const second = b.it.next()
+    const { source } = await remote.ready(0)
+    const requests = await Promise.all([remote.waitForStat(0), remote.waitForStat(1)])
+    for (const request of requests) {
+      expect(request).toMatchObject({ sessionId: S1, path: REL_PATH })
+      request.resolve({ ok: true, value: stat('v0', 3) })
+    }
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { done: false, value: { ok: true, value: stat('v0', 3) } },
+      { done: false, value: { ok: true, value: stat('v0', 3) } },
+    ])
+    expect(remote.opened).toHaveLength(1)
+    a.controller.abort()
+    await expect(a.it.next()).resolves.toEqual({ done: true, value: undefined })
+    expect(source.aborted).toBe(false)
+    const next = b.it.next()
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
+    const update = await remote.waitForStat(2)
+    expect(update.signal).toBe(b.controller.signal)
+    update.resolve({ ok: true, value: stat('v1', 9) })
+    await expect(next).resolves.toEqual({ done: false, value: { ok: true, value: stat('v1', 9) } })
+    b.controller.abort()
+    await expect(b.it.next()).resolves.toEqual({ done: true, value: undefined })
+    await changes.settle()
+    expect(remote.disposed).toEqual(['workspace file changes of s1'])
   })
 })
 
 describe('file provider — Host writes', () => {
-  it('reports a write with its version and keeps the byte count', async () => {
-    const { remote, it } = await live()
-    remote.opened[0]!.source.push({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
-    await expect(it.next()).resolves.toEqual({ done: false, value: { ok: true, value: { absolutePath: HOST_PATH, version: 'v1', bytes: 3 } } })
+  it.each([
+    ['changed byte count', stat('v1', 17)],
+    ['a newer version than the notification', stat('v2', 9)],
+    ['an omitted byte count', { absolutePath: HOST_PATH, version: 'v1' }],
+  ])('re-reads complete metadata after a write with %s', async (_, metadata) => {
+    const { remote, it, controller } = await live()
+    const next = it.next()
+    await remote.opened[0]!.source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
+    const request = await remote.waitForStat(1)
+    expect(request).toMatchObject({ sessionId: S1, path: REL_PATH, signal: controller.signal })
+    request.resolve({ ok: true, value: metadata })
+    await expect(next).resolves.toStrictEqual({ done: false, value: { ok: true, value: metadata } })
+    expect(remote.stats).toHaveLength(2)
+  })
+
+  it('ignores a held version and still reads a later different version', async () => {
+    const { remote, it } = await live('v0')
+    const source = remote.opened[0]!.source
+    const pending = it.next()
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v0' } })
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
+    const request = await remote.waitForStat(1)
+    request.resolve({ ok: true, value: stat('v1', 5) })
+    await expect(pending).resolves.toEqual({ done: false, value: { ok: true, value: stat('v1', 5) } })
+    expect(remote.stats).toHaveLength(2)
+  })
+
+  it('does not read or emit metadata for a duplicate version before the stream ends', async () => {
+    const { remote, it, changes } = await live('v0')
+    const source = remote.opened[0]!.source
+    const pending = it.next()
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v0' } })
+    source.end()
+    await expect(pending).resolves.toEqual({ done: true, value: undefined })
+    await changes.settle()
     expect(remote.stats).toHaveLength(1)
   })
 
-  it('ignores a frame carrying the version it already holds', async () => {
-    const { remote, it } = await live('v0')
-    const source = remote.opened[0]!.source
-    source.push({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v0' } })
-    // The pull outlives the silent tick: the frame that finally answers it is v1.
-    const pending = it.next()
-    await expect(Promise.race([pending, settle().then(() => 'silent' as const)])).resolves.toBe('silent')
-    source.push({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
-    await expect(pending).resolves.toMatchObject({ value: { ok: true, value: { version: 'v1' } } })
-  })
-
-  it('does not lose a write reported during the opening stat', async () => {
+  it('does not lose a write delivered while the opening stat is unresolved', async () => {
     const { remote, it } = opened()
     const first = it.next()
-    await settle()
-    remote.opened[0]!.source.push({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
-    await settle()
-    remote.stats[0]!.resolve({ ok: true, value: stat('v0', 3) })
-    await expect(first).resolves.toMatchObject({ value: { ok: true, value: { version: 'v0' } } })
-    await expect(it.next()).resolves.toMatchObject({ value: { ok: true, value: { version: 'v1' } } })
+    const { source } = await remote.ready(0)
+    const initial = await remote.waitForStat(0)
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
+    initial.resolve({ ok: true, value: stat('v0', 3) })
+    await expect(first).resolves.toEqual({ done: false, value: { ok: true, value: stat('v0', 3) } })
+    const next = it.next()
+    const update = await remote.waitForStat(1)
+    update.resolve({ ok: true, value: stat('v1', 11) })
+    await expect(next).resolves.toEqual({ done: false, value: { ok: true, value: stat('v1', 11) } })
+    expect(remote.stats).toHaveLength(2)
+  })
+
+  it('queues a further change while metadata refresh is unresolved', async () => {
+    const { remote, it } = await live()
+    const source = remote.opened[0]!.source
+    const first = it.next()
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
+    const initial = await remote.waitForStat(1)
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v2' } })
+    initial.resolve({ ok: true, value: stat('v1', 5) })
+    await expect(first).resolves.toEqual({ done: false, value: { ok: true, value: stat('v1', 5) } })
+    const next = it.next()
+    const update = await remote.waitForStat(2)
+    update.resolve({ ok: true, value: stat('v2', 12) })
+    await expect(next).resolves.toEqual({ done: false, value: { ok: true, value: stat('v2', 12) } })
+    expect(remote.stats).toHaveLength(3)
+  })
+
+  it('yields a metadata failure and retries even when the next notice repeats the last successful version', async () => {
+    const { remote, it } = await live()
+    const source = remote.opened[0]!.source
+    const next = it.next()
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
+    const update = await remote.waitForStat(1)
+    const error = new RemoteError('gateway/internal', 'metadata unavailable', {})
+    update.resolve({ ok: false, error })
+    await expect(next).resolves.toEqual({ done: false, value: { ok: false, error } })
+    const recovered = it.next()
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v0' } })
+    const retry = await remote.waitForStat(2)
+    retry.resolve({ ok: true, value: stat('v2', 8) })
+    await expect(recovered).resolves.toEqual({ done: false, value: { ok: true, value: stat('v2', 8) } })
   })
 })
 
@@ -224,45 +380,58 @@ describe('file provider — a reported disappearance', () => {
     expect(remote.disposed).toEqual(['workspace file changes of s1'])
   })
 
-  it('stats again and, when the file is still there, yields its fresh metadata', async () => {
+  it('stats again and yields fresh metadata when the file is still there', async () => {
     const { remote, it } = await live('v0', 3)
-    remote.opened[0]!.source.push({ kind: 'change', change: { absolutePath: HOST_PATH, absent: true } })
     const next = it.next()
-    await settle()
+    await remote.opened[0]!.source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, absent: true } })
+    const request = await remote.waitForStat(1)
     expect(remote.stats).toHaveLength(2)
-    remote.stats[1]!.resolve({ ok: true, value: stat('v2', 9) })
-    await expect(next).resolves.toEqual({ done: false, value: { ok: true, value: { absolutePath: HOST_PATH, version: 'v2', bytes: 9 } } })
+    request.resolve({ ok: true, value: stat('v2', 9) })
+    await expect(next).resolves.toEqual({ done: false, value: { ok: true, value: stat('v2', 9) } })
   })
 
-  it('yields the not-found frame and keeps following, so a later write stats again and brings the file back', async () => {
+  it('yields not-found and keeps following so a later write can bring the file back', async () => {
     const { remote, it } = await live('v0', 3)
     const source = remote.opened[0]!.source
-    source.push({ kind: 'change', change: { absolutePath: HOST_PATH, absent: true } })
     const next = it.next()
-    await settle()
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, absent: true } })
+    const request = await remote.waitForStat(1)
     const error = notFound()
-    remote.stats[1]!.resolve({ ok: false, error })
+    request.resolve({ ok: false, error })
     await expect(next).resolves.toEqual({ done: false, value: { ok: false, error } })
-    source.push({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v3' } })
     const back = it.next()
-    await settle()
-    remote.stats[2]!.resolve({ ok: true, value: stat('v3', 8) })
-    await expect(back).resolves.toEqual({ done: false, value: { ok: true, value: { absolutePath: HOST_PATH, version: 'v3', bytes: 8 } } })
+    await source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v3' } })
+    const retry = await remote.waitForStat(2)
+    retry.resolve({ ok: true, value: stat('v3', 8) })
+    await expect(back).resolves.toEqual({ done: false, value: { ok: true, value: stat('v3', 8) } })
   })
 })
 
 describe('file provider — the end', () => {
-  it('ends when its signal aborts and releases the session stream', async () => {
-    const { remote, it, controller } = await live()
+  it('does not start another stat for a change queued before cancellation', async () => {
+    const { remote, it, controller, changes } = await live()
+    await remote.opened[0]!.source.deliver({ kind: 'change', change: { absolutePath: HOST_PATH, version: 'v1' } })
     controller.abort()
-    await expect(it.next()).resolves.toEqual({ done: true, value: undefined })
-    await settle()
+    await changes.settle()
+    const next = it.next()
+    await expect(Promise.race([next, remote.waitForStat(1)])).resolves.toEqual({ done: true, value: undefined })
+    expect(remote.stats).toHaveLength(1)
+  })
+
+  it('ends a pending pull when its signal aborts and releases the target stream', async () => {
+    const { remote, it, controller, changes } = await live()
+    const next = it.next()
+    controller.abort()
+    await expect(next).resolves.toEqual({ done: true, value: undefined })
+    await changes.settle()
     expect(remote.disposed).toEqual(['workspace file changes of s1'])
   })
 
-  it('ends when the Host closes the session stream', async () => {
-    const { remote, it } = await live()
+  it('ends when the Host closes the target stream', async () => {
+    const { remote, it, changes } = await live()
     remote.opened[0]!.source.end()
     await expect(it.next()).resolves.toEqual({ done: true, value: undefined })
+    await changes.settle()
+    expect(remote.disposed).toEqual(['workspace file changes of s1'])
   })
 })

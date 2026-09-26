@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-27-worktree-local-lefthook.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-27-worktree-local-lefthook.md
-2026-07-27-worktree-local-lefthook.md: 42adc1ed1d60d1462a3fb6600b22b7d77b6ae28e
-2026-07-27-worktree-local-lefthook.zh.md: b4b905967861606154a4bf63f4dbb6b4eb469e92
+/agent-note-make-lefthook-installation-worktree-local:
+  en: 2a11ec534041e270
+  zh: 9cbd4adbaecd1b32
+/agent-note-make-lefthook-installation-worktree-local/problem:
+  en: b3ec2245644b46e6
+  zh: 83de1cb620f9ddcf
+/agent-note-make-lefthook-installation-worktree-local/decision:
+  en: b53a2425f88a6031
+  zh: 41f459b00803b3f9
+/agent-note-make-lefthook-installation-worktree-local/alternatives-considered:
+  en: d7100b0d2c95a3f9
+  zh: 070c38c4d0d1331a
+/agent-note-make-lefthook-installation-worktree-local/consequences:
+  en: ea991f7a0d5c0bf2
+  zh: e7f7b3c9215213ba

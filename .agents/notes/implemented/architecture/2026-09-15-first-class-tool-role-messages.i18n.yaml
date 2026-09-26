@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-15-first-class-tool-role-messages.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-15-first-class-tool-role-messages.md
+/agent-note-first-class-tool-role-messages:
+  en: 7241f8eb82eda881
+  zh: fecbc696803c619b
+/agent-note-first-class-tool-role-messages/problem:
+  en: d1bff2dd3b7c5070
+  zh: 866aecc4211992fd
+/agent-note-first-class-tool-role-messages/decision:
+  en: fd6733aee2f00a16
+  zh: 9dd9c2e7525ba9be
+/agent-note-first-class-tool-role-messages/alternatives-considered:
+  en: 5f727366e0885a7a
+  zh: b1ac16578076c286
+/agent-note-first-class-tool-role-messages/consequences:
+  en: 6fb4a2047b748ba7
+  zh: 5382786860f2e624

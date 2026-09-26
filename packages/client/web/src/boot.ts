@@ -13,6 +13,7 @@ import { bootClient } from './boot-client.ts'
 import { BootPage } from './boot-page.ts'
 import { mountClient } from './mount.ts'
 import { getStaticModules } from './seed.ts'
+import { installWindowDragRecall } from './window-drag/recall.ts'
 import './base.css'
 
 /** Module transport hook replaced by jsdom tests. */
@@ -24,6 +25,7 @@ export class AppWebEntry {
   private readonly seams: BootSeams | undefined
   private readonly page: BootPage
   private ctx: Context | undefined
+  private stopDragRecall: (() => void) | undefined
   private modules!: ClientModuleSystem
   private manifest!: BootManifest
 
@@ -87,6 +89,11 @@ export class AppWebEntry {
           if (onFailure === undefined || state !== 'failed') this.page.setState(name, state)
         },
       })
+      // The shell owns the one watcher that keeps Electron's window drag rects in
+      // step with the rows that own them (electron#32341), so no chrome row has to
+      // know that trap. It installs before the first mount, so the surface the
+      // renderer draws is the one the first frame measures.
+      this.stopDragRecall = installWindowDragRecall({ document: this.container.ownerDocument })
       await mountClient(ctx, this.container)
     } catch (reason) {
       console.error(reason)
@@ -97,6 +104,8 @@ export class AppWebEntry {
 
   /** Dispose the client plugin tree and whichever page owns the mount point. */
   async dispose(): Promise<void> {
+    this.stopDragRecall?.()
+    this.stopDragRecall = undefined
     const ctx = this.ctx
     this.ctx = undefined
     if (ctx !== undefined) await ctx.fiber.dispose()

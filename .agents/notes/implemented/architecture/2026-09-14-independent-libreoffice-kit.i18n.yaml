@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-14-independent-libreoffice-kit.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md
+/agent-note-independent-libreoffice-kit-ownership:
+  en: ee1625b5a309d9e6
+  zh: c3e78e1b1aa92fd8
+/agent-note-independent-libreoffice-kit-ownership/problem:
+  en: 2fc4ac7bdd4a3474
+  zh: 21ebdd3ac9264132
+/agent-note-independent-libreoffice-kit-ownership/decision:
+  en: 31200a9be3940dc0
+  zh: 8e22be1d160ec3e4
+/agent-note-independent-libreoffice-kit-ownership/alternatives-considered:
+  en: 55175bb30630bf0c
+  zh: 788853ddd5f7a4e9
+/agent-note-independent-libreoffice-kit-ownership/consequences:
+  en: ace5eeafb4795ab6
+  zh: 136489e75455c8e7

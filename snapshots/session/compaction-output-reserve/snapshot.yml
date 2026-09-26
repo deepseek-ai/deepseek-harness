@@ -1,0 +1,11 @@
+version: 1
+scenario: compaction-output-reserve
+profile: headless
+composition: compaction-output-reserve
+recording: authored
+header:
+  class: compaction-output-reserve
+  pin: true
+  systemPromptSource: compaction-recovery
+  toolSchemasSource: compaction-recovery
+  changes: 1

@@ -8,6 +8,13 @@
 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /** Images deferred from a successful PTC subcall's final result. */
+    'ptc-mode': { kind: 'ptc-mode' }
+  }
+}
+
 import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { PtcBindingFunction, PtcRunResult, PtcRunSandbox, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import { approveEscalation, ESCALATION_TARGETS, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
@@ -101,7 +108,7 @@ const RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION
 const RUN_CODE_CONTROLS = {
   timeoutMs: { type: 'number', description: 'Positive elapsed-time budget in milliseconds, capped by the deployment maximum.' },
   sandbox_permissions: { type: 'string', enum: [...ESCALATION_TARGETS], description: 'Wider sandbox mode for this complete program execution; requires justification and approval.' },
-  justification: { type: 'string', description: 'Reason this complete program needs wider access, shown to the user for approval.' },
+  justification: { type: 'string', description: 'Reason this complete program needs wider access, shown to the user for approval. Use the language of the user’s current request.' },
 } as const
 
 function controlParameters(runtime: PtcRuntime | undefined) {
@@ -632,7 +639,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
               if (!result.isError && result.content.some(block => block.type === 'image')) {
                 exec.deferContext(createUserMessage({
                   content: result.content,
-                  source: { kind: 'plugin', plugin: 'tools-ptc' },
+                  source: { kind: 'ptc-mode' },
                 }))
               }
               for (const context of result.additionalContexts ?? []) {

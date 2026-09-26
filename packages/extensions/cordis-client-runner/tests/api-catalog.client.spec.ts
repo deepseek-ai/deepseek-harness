@@ -16,18 +16,18 @@ describe('Client Cordis inspect catalog', () => {
         'create(input: { path: string }): Promise<WorkspaceView>',
         'rename(workspaceId: WorkspaceId, title: string): Promise<WorkspaceView>',
         'delete(workspaceId: WorkspaceId): Promise<void>',
-        'archiveSession(sessionId: SessionId): Promise<void>',
+        'archiveSession(sessionId: SessionId, options?: { readonly stopActivity?: boolean }): Promise<void>',
         'unarchiveSession(sessionId: SessionId): Promise<void>',
         'insertSessionBefore( workspaceId: WorkspaceId, sessionId: SessionId, beforeSessionId?: SessionId, ): Promise<WorkspaceView>',
       ])
     expect(SERVICE_API.find(service => service.key === 'uiWorkspace')?.methods.map(method => method.signature))
       .toEqual([
-        'openSession(sessionId: SessionId): void',
+        'openSession(target: SessionTarget): void',
         'openWorkspace(workspaceId: WorkspaceId, beforeOpen?: (sessionId: SessionId) => void): Promise<void>',
         'forkSession(sessionId: SessionId): Promise<void>',
         'connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>',
         'startSession(workspaceId?: WorkspaceId): void',
-        'archiveSession(sessionId: SessionId): Promise<void>',
+        'archiveSession(sessionId: SessionId, options?: { readonly stopActivity?: boolean }): Promise<void>',
         'unarchiveSession(sessionId: SessionId): Promise<void>',
         'pickDirectory(): Promise<string | null>',
         'listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing>',

@@ -9,6 +9,13 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'user-approval': { kind: 'user-approval' } & ContextFormed
+  }
+}
+
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
@@ -183,7 +190,7 @@ export class ApprovalService extends Service {
         type: 'text',
         text: `The approval policy changed from "${previous}" to "${policy}" (changed by the user).`,
       }],
-      source: { kind: 'plugin', plugin: 'user-approval' },
+      source: { kind: 'user-approval' },
     }))
   }
 

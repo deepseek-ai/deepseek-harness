@@ -2,6 +2,7 @@
 
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import type { Agent } from '@deepseek-ai/dsh-agent/types'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 
 /** One selectable answer offered to the user. */
 export interface AskUserQuestionOption {
@@ -27,6 +28,8 @@ export type AskUserQuestionIntent = {
    * An `approve` naming no option of its own question is rejected at `ask()`.
    */
   approve: string
+  /** Logged tool invocation whose arguments contain the reviewed plan. */
+  callId?: ToolCallId
 }
 
 /** One question in a user-questions request. */

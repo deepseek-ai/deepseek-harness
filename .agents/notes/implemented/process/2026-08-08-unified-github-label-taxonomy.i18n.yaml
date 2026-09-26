@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-08-unified-github-label-taxonomy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-08-unified-github-label-taxonomy.md
-2026-08-08-unified-github-label-taxonomy.md: 1748f9b77ed2922035c5e75ac4a2eee047f413d3
-2026-08-08-unified-github-label-taxonomy.zh.md: 3b221a5f3db43597656f46dfc505cdfda38c75db
+/agent-note-unified-github-label-taxonomy:
+  en: 59560a685380483f
+  zh: 1bf2324f05c8968a
+/agent-note-unified-github-label-taxonomy/problem:
+  en: 8c0c360d500f22f0
+  zh: 97c815076ee9b53b
+/agent-note-unified-github-label-taxonomy/decision:
+  en: 398fb26c5da12e42
+  zh: 02c16ca5058283bc
+/agent-note-unified-github-label-taxonomy/decision/kinds:
+  en: 04e51bc9313727a0
+  zh: 443388bc0472c368
+/agent-note-unified-github-label-taxonomy/decision/areas:
+  en: b8d485a8222d0938
+  zh: 8fbb27557db98023
+/agent-note-unified-github-label-taxonomy/decision/issues-and-migrations:
+  en: 6d720c37cf806ae6
+  zh: c16c420482d02067
+/agent-note-unified-github-label-taxonomy/alternatives-considered:
+  en: 57740baaeda04f6d
+  zh: 8da0aabac6b06424
+/agent-note-unified-github-label-taxonomy/consequences:
+  en: 41169a21b2ac9801
+  zh: 5506bf106f95163d

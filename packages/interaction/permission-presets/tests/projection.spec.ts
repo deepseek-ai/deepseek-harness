@@ -19,11 +19,15 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import PermissionPresetService from '@deepseek-ai/dsh-permission-presets'
 import { AUTO_PRESET } from '@deepseek-ai/dsh-permission-presets'
-import type { Config } from '@deepseek-ai/dsh-permission-presets'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
+import { omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
 
-async function harness(options: { withPermission?: boolean; config?: Config } = {}): Promise<{ ctx: Context; session: Session }> {
-  const ctx = new Context()
+async function harness(options: {
+  withPermission?: boolean
+  config?: NonNullable<Parameters<typeof PermissionPresetService.Config>[0]>
+  ctx?: Context
+} = {}): Promise<{ ctx: Context; session: Session }> {
+  const ctx = options.ctx ?? new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(CommandRuntime)
@@ -198,3 +202,8 @@ describe('/permission command', () => {
       event.type !== 'command/run' && event.type !== 'command/done')).toEqual(before)
   })
 })
+
+it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage(async (ctx) => {
+  await harness({ ctx, withPermission: false })
+  return ctx.plugin(PermissionPresetService, {})
+}))

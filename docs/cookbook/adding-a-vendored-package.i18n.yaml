@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for adding-a-vendored-package.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cookbook/adding-a-vendored-package.md
-adding-a-vendored-package.md: 0f8b9f38de8f0d2ae19f40b339529afbb40d90ed
-adding-a-vendored-package.zh.md: 2668b874eee845f6a505ae2e7d2ead5e63642ce2
+/cookbook-adding-a-vendored-package:
+  en: f4eda20eb37f2d46
+  zh: ecf2b59d40f63275
+/cookbook-adding-a-vendored-package/1-copy-the-source-in:
+  en: 4cde59b8108d03e2
+  zh: 39b842dcdc678a45
+/cookbook-adding-a-vendored-package/2-register-it-in-the-root-configs:
+  en: 5c29db234af3eb3b
+  zh: 7cea907bf30e2043
+/cookbook-adding-a-vendored-package/3-mind-the-manifest-guard:
+  en: 04f0b9d516b61910
+  zh: 919a32ce8cb5536a
+/cookbook-adding-a-vendored-package/4-verify:
+  en: d73b1b6a5aa6353f
+  zh: 15b3a4241e3b65ff

@@ -1,6 +1,37 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-22-standard-acp-automation-controls.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-22-standard-acp-automation-controls.md
-2026-08-22-standard-acp-automation-controls.md: dd1e39b84f942417640f741f17a211276b67872c
-2026-08-22-standard-acp-automation-controls.zh.md: 2d7160bda164949799652bc2e3e3ab95afdafb0c
+/agent-note-standard-acp-v1-automation-controls:
+  en: e6a4b457afbf12ac
+  zh: b1d83f4892e05f99
+/agent-note-standard-acp-v1-automation-controls/problem:
+  en: ba88135e9528b4c7
+  zh: 8bc1be92b1f5178e
+/agent-note-standard-acp-v1-automation-controls/decision:
+  en: 0a2b2a83aca7d189
+  zh: 8de789db33953283
+/agent-note-standard-acp-v1-automation-controls/per-session-ownership:
+  en: 5b98c5e68eccfe76
+  zh: c22dc47ad8003f22
+/agent-note-standard-acp-v1-automation-controls/persistent-session-controls:
+  en: 122752f1cb116417
+  zh: 96971bcc1fed4a8a
+/agent-note-standard-acp-v1-automation-controls/standard-configuration-options:
+  en: 61cb15891965c67a
+  zh: a0a958094b60951f
+/agent-note-standard-acp-v1-automation-controls/standard-mcp-mapping:
+  en: 57acbe1c89af4c6b
+  zh: 3417e3d4b1874d94
+/agent-note-standard-acp-v1-automation-controls/semantic-update-projection:
+  en: 8e5128cd34629af3
+  zh: 6132e78ddf9b3cf9
+/agent-note-standard-acp-v1-automation-controls/alternatives-considered:
+  en: fc94c87f43787d95
+  zh: 17850ecc35e6ab9d
+/agent-note-standard-acp-v1-automation-controls/verification:
+  en: 08e2b98606d9d362
+  zh: 99d6aef7c89e287f
+/agent-note-standard-acp-v1-automation-controls/consequences:
+  en: 9f839d4720f07d28
+  zh: 5164ae3eb5b52385

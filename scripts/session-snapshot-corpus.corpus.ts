@@ -23,6 +23,7 @@ const repoRoot = resolve(import.meta.dirname, '..')
 const corpusRoot = join(repoRoot, 'snapshots')
 const profiles = ['acp', 'sdk', 'session', 'web'] as const
 const snapshotAdapters = [
+  'apps/web/tests/code-language.snapshot.ts',
   'apps/web/tests/message-feedback-protocol.snapshot.ts',
   'apps/web/tests/minimal-preset.snapshot.ts',
   'apps/web/tests/preset-migration.snapshot.ts',
@@ -191,7 +192,7 @@ it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', 
   }
 })
 
-it('keeps a current-writer majority plus bounded declared historical migration coverage', async () => {
+it('keeps V3 replay input plus bounded declared historical migration coverage', async () => {
   const owners = (await scenarios()).filter(scenario => scenario.manifest.session === undefined)
   const inventory = await Promise.all(owners.map(async scenario => ({
     key: scenario.key,
@@ -201,8 +202,10 @@ it('keeps a current-writer majority plus bounded declared historical migration c
       : { retained: scenario.manifest.sessionFormat }),
   })))
 
-  expect(assertSnapshotCorpusPolicy(inventory)).toMatchObject({
-    retainedRoles: 9,
-    retainedScenarios: 7,
+  const summary = assertSnapshotCorpusPolicy(inventory)
+  expect(summary.baselineRoles).toBeGreaterThan(0)
+  expect(summary).toMatchObject({
+    retainedRoles: 11,
+    retainedScenarios: 8,
   })
 })

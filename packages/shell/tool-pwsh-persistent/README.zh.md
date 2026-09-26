@@ -54,11 +54,11 @@ kind: "package-reference"
 
 ### agent 可以依赖什么
 
-命令共享每个 agent 一个 shell，因此 cwd、`$env:` 变量、函数与后台任务都会跨调用保留。结果排除私有完成标记、shell 提示符与回显的输入行。非零的包装命令追加 `[exit code: N]`——命令运行原生程序时给出确切原生退出码，PowerShell 终止错误则为 `1`。在报告该状态前就退出的 shell 改为追加 `[shell exited: code N]`、`[shell killed by signal: SIG]` 或 `[shell exited]`（Windows 强制终止报告 exit 1 且没有信号），然后重置并告诉 agent 下一次调用从全新状态开始。长输出保留最早的已保留前缀并附裁剪通知；若 terminal 已经丢弃该前缀，结果会明确说明。
+命令共享每个 agent 一个 shell，因此 cwd、`$env:` 变量、函数与后台任务都会跨调用保留。结果排除私有完成标记与回显的输入行。当 shell 再次读取 stdin 却没有打印完成标记时——一次中断、一个被替换的 shell，或提供方能证明其 stdin 等待的交互式前台子进程——调用返回已捕获的部分输出，其结尾可能是后端自己的提示符文本。非零的包装命令追加 `[exit code: N]`——命令运行原生程序时给出确切原生退出码，PowerShell 终止错误则为 `1`。在报告该状态前就退出的 shell 改为追加 `[shell exited: code N]`、`[shell killed by signal: SIG]` 或 `[shell exited]`（Windows 强制终止报告 exit 1 且没有信号），然后重置并告诉 agent 下一次调用从全新状态开始。长输出保留最早的已保留前缀并附裁剪通知；若 terminal 已经丢弃该前缀，结果会明确说明。
 
 ### 可能出什么问题
 
-没有拥有者 agent 会话的调用会以 `pwsh requires an owning agent session` 失败，没有 pwsh 方言 PTY 后端的组合会激活该工具，但首次调用以 `no PTY backend registered for "shell"` 失败。模型重定义 `prompt` 函数会移除就绪标记，shell 随后在静默层级而非标记快路径上结算。命令内的原始 ESC 字符会在执行前被 PSReadLine 消费，不受支持。超时或取消会关闭不确定的 shell、丢弃结果并报告重置。
+没有拥有者 agent 会话的调用会以 `pwsh requires an owning agent session` 失败，没有 pwsh 方言 PTY 后端的组合会激活该工具，但首次调用以 `no PTY backend registered for "shell"` 失败。模型重定义 `prompt` 函数会移除就绪标记，shell 随后在静默层级而非标记快路径上结算。命令内的原始 ESC 字符会在执行前被 PSReadLine 消费，不受支持。超时关闭不确定的 shell，并报告受限的部分输出与重置。取消会重置 shell 并丢弃命令输出。清理完成后，ToolRuntime 发布 `Error: tool call aborted`，错误码为 `ABORTED`；取消原因不作为命令输出渲染。排队期间被取消的调用不发送命令。
 
 -----
 
@@ -73,7 +73,7 @@ kind: "package-reference"
 ### 设计理念
 
 - **`dsh-tool-bash-persistent` 的刻意孪生。** 会话注册表、轮询循环与重置约定按设计镜像持久 bash 工具（[pwsh 持久 PTY Agent Note](../../../.agents/notes/archived/architecture/2026-08-11-pwsh-persistent-pty.md)）。
-- **prompt 函数就绪。** 工具安装自己的 `prompt` 函数，打印 BEL 结尾的 OSC 标记加可打印提示符；OSC 标记携带最后的退出码，可打印提示符让每条命令都能结算，因此模型重定义 `prompt` 会把就绪降级到静默层级。
+- **后端拥有提示符就绪。** shell 的 `prompt` 函数属于后端：它打印 BEL 结尾的 OSC 标记加受控的可打印提示符，该确切提示符文本让每条命令都经由后端快路径结算。工具既不安装也不匹配自己的提示符，因此只有模型重定义 `prompt` 才会把就绪降级到静默层级。
 - **PSReadLine 回显靠锚定剥离。** PowerShell 会把提交的输入渲染回流中；标记锚定提取与包装源码剥离移除回显，而跨终端宽度换行的包装可能在部分输出结果中留下部分回显。
 - **重置，而非修复。** 任何不确定状态——显式 `exit`、超时、发送失败、中止——都会关闭 shell 并让下一次调用从全新状态开始。
 
@@ -81,12 +81,12 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：shell 注册表、prompt 设置、命令包装、scrollback 轮询、提取与渲染 |
+| [`src/index.ts`](src/index.ts) | 插件入口：shell 注册表、命令包装、scrollback 轮询、提取与渲染 |
 | — | 不发布运行时不变式伴生入口；适配器私有的 owner-to-shell 缓存不存在可观察的事件或数据关系。生命周期测试无需仅为不变式增加公共 API 即可验证其清理。 |
 
 ### 命令流程
 
-首条命令通过 `ctx.terminals.spawn` 生成 shell，安装 `prompt` 覆盖，并等待就绪。随后每条命令都包装成一行物理文本——`Write-Output` 起始标记、用反引号转义进双引号字符串的命令体、`Write-Output` 结束标记加退出状态——因此 PSReadLine 对换行包装的回显无法伪造完成。工具以 1,000 行一页轮询 scrollback，直到出现结束标记或完成的提示符，提取区间、剥离回显的包装与提示符，并连同任何状态标记一起渲染。超时会中止截止时间、捕获部分输出并重置 shell。
+首条命令通过 `ctx.terminals.spawn` 生成 shell，其 pwsh 启动流程安装受控的 `prompt` 函数，并只在该 shell 达到就绪后返回。随后每条命令都包装成一行物理文本——`Write-Output` 起始标记、用反引号转义进双引号字符串的命令体、`Write-Output` 结束标记加退出状态——因此 PSReadLine 对换行包装的回显无法伪造完成。工具以 1,000 行一页轮询 scrollback，直到出现结束标记或该 send 以 `stdin_read` 结算，提取区间、剥离回显的包装，并连同任何状态标记一起渲染。超时会中止截止时间、捕获部分输出并重置 shell。
 
 </details>
 
@@ -128,7 +128,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-命令共享每个 agent 一个 shell，因此 cwd、`$env:` 变量、函数与后台任务都会跨调用保留。结果排除私有完成标记、shell 提示词与回显的输入行（PSReadLine 会把提交的输入渲染回流中；标记锚定提取与包装源码剥离会移除它）。非零的包装命令追加 `[exit code: N]`——命令运行原生程序时给出确切原生退出码，PowerShell 终止错误则为 `1`。在报告该状态前就退出的 shell 改为追加 `[shell exited: code N]`、`[shell killed by signal: SIG]`，或后端两者都未提供时的 `[shell exited]`（Windows 强制终止报告 exit 1 且没有信号），然后重置并告诉模型下一次调用从全新状态开始。长输出保留最早的已保留前缀并附裁剪通知；若 terminal 已经丢弃该前缀，结果会明确说明。超时返回有界部分输出、关闭不确定的 shell 并报告重置。
+命令共享每个 agent 一个 shell，因此 cwd、`$env:` 变量、函数与后台任务都会跨调用保留。结果排除私有完成标记与回显的输入行（PSReadLine 会把提交的输入渲染回流中；标记锚定提取与包装源码剥离会移除它）。当 shell 再次读取 stdin 却没有打印完成标记时——一次中断、一个被替换的 shell，或提供方能证明其 stdin 等待的交互式前台子进程——调用返回已捕获的部分输出，其结尾可能是后端自己的提示符文本。非零的包装命令追加 `[exit code: N]`——命令运行原生程序时给出确切原生退出码，PowerShell 终止错误则为 `1`。在报告该状态前就退出的 shell 改为追加 `[shell exited: code N]`、`[shell killed by signal: SIG]`，或后端两者都未提供时的 `[shell exited]`（Windows 强制终止报告 exit 1 且没有信号），然后重置并告诉模型下一次调用从全新状态开始。长输出保留最早的已保留前缀并附裁剪通知；若 terminal 已经丢弃该前缀，结果会明确说明。超时返回有界部分输出、关闭不确定的 shell 并报告重置。
 
 #### Token 影响
 
@@ -149,7 +149,7 @@ kind: "package-reference"
 - **输入回显不可避免**——PowerShell 的 PSReadLine 会把提交的输入渲染回终端流，而且没有 `stty -echo` 等价物。标记锚定提取在完整结果中排除回显；包装源码剥离覆盖回退路径，但跨终端宽度换行的包装可能在部分输出结果中留下部分回显，受 `maxOutputChars` 设界。
 - **模型命令内的原始 ESC 字符不受支持**——PSReadLine 会在执行前消费它们。包装器会转义它需要的控制字节（`[char]27` 构造的 OSC 标记、正文的反引号转义）。
 - **模型重定义 `prompt` 函数会移除就绪标记**——shell 随后在静默层级而非标记快路径上结算。
-- **命令期间没有交互 stdin**——读取输入的前台命令会一直阻塞到命令超时，随后重置 shell。
+- **命令期间没有交互 stdin**——在提供方能证明前台 stdin 等待之处，读取输入的子进程会提前返回部分输出并保留会话，因此该子进程可能吞掉下一次调用的命令，直到那次调用到达 `timeoutMs` 并重置 shell。其他情况下原调用本身会运行到 `timeoutMs`，随后重置 shell。
 - **Windows 上 SIGTSTP/SIGHUP 不可用**（后端拒绝）；SIGINT 以控制台级 Ctrl-C 输入写入投递，在提示词处会取消待处理行而不是向进程发信号。
 - **在 Windows ACL 沙箱的只读模式下，pwsh 以 ConstrainedLanguage 启动**，可能拒绝引导的 `[Console]::` 编码固定与 prompt 标记。命令仍可通过可打印提示词与静默层级结算，但非 ASCII 输出可能跟随宿主代码页。
 - **BEL 结尾的 OSC 标记目前只是就绪信号**——通向模型的 BEL 事件通道仍被推迟，与当前实现保持一致。

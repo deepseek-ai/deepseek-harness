@@ -39,7 +39,7 @@ For a truncated reference, an optional spill backend saves the full captured tex
 
 ### Finding sessions to reference
 
-`listCandidates(agent, query?, limit?)` lists sessions other than the agent's own, filters case-insensitively by id, working directory, or the projected title, and ranks same-directory sessions first. Each candidate carries its latest title as the mention label, falling back to the session id when the title is absent or unreadable, and reports whether its working directory is the requesting agent's so a host can surface a location only when it distinguishes the row. Browser consumers call the same discovery as `ctx.remote.sessionReferenceResolver.candidates`, which attaches each candidate's canonical mention.
+`listCandidates(agent, query?, limit?)` lists sessions other than the agent's own, filters case-insensitively by id, working directory, projected title, or display title, and ranks same-directory sessions first. Each candidate carries its latest title as `label`, falling back to the session id when the title is absent or unreadable. Its display title prefers a subagent's durable creation label over that title. The candidate also reports whether its working directory is the requesting agent's so a host can surface a location only when it distinguishes the row. Browser consumers call the same discovery as `ctx.remote.sessionReferenceResolver.candidates`, which labels the canonical mention with `displayTitle` when present.
 
 ### Configuration
 

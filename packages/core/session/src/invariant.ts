@@ -104,6 +104,10 @@ function validateEvent(
       openStep = event.data.step
       break
     }
+    case 'developer/message': {
+      requireOpenStep(trace, 'developer/message', event.data.turn, event.data.step, fail)
+      break
+    }
     case 'step/end': {
       requireOpenStep(trace, 'step/end', event.data.turn, event.data.step, fail)
       pendingCalls = { kind: 'clear' }
@@ -135,7 +139,7 @@ function validateEvent(
       }
       requireOpenStep(trace, 'tool/result', event.data.turn, event.data.step, fail)
       const callId = event.data.message.source.callId
-      const syntheticNotStarted = event.data.message.content[0].isError === true && event.data.error?.code === TOOL_NOT_STARTED
+      const syntheticNotStarted = event.data.message.isError === true && event.data.error?.code === TOOL_NOT_STARTED
       if (!trace.pendingCalls.has(callId) && !syntheticNotStarted) {
         fail(`tool/result for ${callId} with no prior tool/call in this step`)
       }

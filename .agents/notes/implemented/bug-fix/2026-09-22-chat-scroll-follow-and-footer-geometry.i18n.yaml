@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-22-chat-scroll-follow-and-footer-geometry.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-22-chat-scroll-follow-and-footer-geometry.md
+/agent-note-separate-chat-clipping-and-independent-follow-intent:
+  en: a95aae5eecac228c
+  zh: 01b7df574c3d010f
+/agent-note-separate-chat-clipping-and-independent-follow-intent/problem:
+  en: 8e4310ee05cf535c
+  zh: bd57ba36ebe8c201
+/agent-note-separate-chat-clipping-and-independent-follow-intent/decision:
+  en: afe3cf3bb5a92039
+  zh: bb11f9f4bcd8f329
+/agent-note-separate-chat-clipping-and-independent-follow-intent/alternatives-considered:
+  en: 014e7974ce1cadae
+  zh: 63c1743c598413e4
+/agent-note-separate-chat-clipping-and-independent-follow-intent/verification:
+  en: 235dc4e251fa8124
+  zh: 2c08ab5e14213b54
+/agent-note-separate-chat-clipping-and-independent-follow-intent/consequences:
+  en: aa1367b399806ab7
+  zh: f98a8b416d9a70c8

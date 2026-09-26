@@ -20,7 +20,7 @@ Sidebar 随包交付三个 tab 类型：**引导页**（`ui-sidebar-right`）、
 
 引导页是 pane 承载内容之前显示的东西。它的注册定义是 `{ id: '@deepseek-ai/dsh-client-ui-sidebar-right/guide', kind: 'guide', priority: 'builtin', title }`，没有 `patterns`：引导页不查看任何东西，所以经 `openTab` 按 kind 打开，并记在页地址 `sidebar://guide` 之下——那是注册表自己的记账，调用方从不拼它。tab 标题是 `开始` / `Start`，在 pane 播种时捕获进布局记录，于是之后切换语言只重标类型，不改已开着的 tab。
 
-正文按 `order` 从每个已注册类型的 `guide[]` 投影入口，并通过注册表可观察的 `guide()` 列表更新，因此后注册的类型无需引导页感知即可出现。[引导起始页与统计 pill 的细化](2026-09-10-guide-start-page-and-stat-pill-refinements.zh.md)负责罗盘、可选描述、兜底图标和当前胶囊布局。点选胶囊会调用 `tabActions.openTab(entry.kind, { replaceTab: true })`：被选的类型在引导页自己的 tab 里打开，引导页随之消失。引导页是一扇门，不是留在被打开者旁边的一页。
+正文按 `order` 从每个已注册类型的 `guide[]` 投影入口，并通过注册表可观察的 `guide()` 列表更新，因此后注册的类型无需引导页感知即可出现。[Sidebar README](../../../../packages/client/ui-sidebar-right/README.zh.md#the-guide)说明罗盘、可选描述、兜底图标和当前胶囊布局。点选胶囊会调用 `tabActions.openTab(entry.kind, { replaceTab: true })`：被选的类型在引导页自己的 tab 里打开，引导页随之消失。引导页是一扇门，不是留在被打开者旁边的一页。
 
 体同时也是替换接缝。它渲染 `sidebar.right.tab.guide` 链，并以随包交付的引导页作为链的 fallback，于是注册了自己入口的产品接管整个体，而没有入口、或每个入口都拒绝时，随包交付的引导页照常绘制。因为随包交付的引导页是 fallback 而不是链上的一个入口，所以永远恰有一个体，也不可能被意外投掉。
 
@@ -34,7 +34,7 @@ Sidebar 随包交付三个 tab 类型：**引导页**（`ui-sidebar-right`）、
 
 tab 使用 `dsh-resource://file/session/<sessionId>/<path>`，其中路径可以是相对路径或绝对路径（[Workspace Files](../architecture/2026-09-05-workspace-files-service.zh.md)负责该语法与 `fileAddressFor` / `parseFileAddress` 辅助函数）。`hostFileOf` 只接受这种 Session scope，并从地址取得 Session 与路径；不认领不带 Session 的 `absolute` 地址。被认领的地址若格式错误，则作为程序错误抛出。
 
-元数据与内容来自不同的地方。`useResource<'file'>(tab.contentId)`——[client 资源模型](../architecture/2026-09-05-client-resource-model.zh.md)提供的全局标准 hook——产生 `WorkspaceFileStat`；正文把其观察版本与已加载内容版本比较。Preview face 通过 `remote.workspaceFiles.read` 读取文本，通过 `readAll` 读取完整字节。后续文本页若来自更新版本，则从第一页重新开始；被重载或 tab 销毁淘汰的请求不能再写入。[Document Preview 决议](../architecture/2026-09-08-document-preview-operations.zh.md)负责各渲染器的加载方式。
+元数据与内容来自不同的地方。`useResource<'file'>(tab.contentId)`——[client 资源模型](../architecture/2026-09-05-client-resource-model.zh.md)提供的全局标准 hook——产生 `WorkspaceFileStat`；正文把其观察版本与已加载内容版本比较。Preview face 通过 `remote.workspaceFiles.read` 读取文本，通过带 `{}` 选项的 `readBytes` 读取完整字节。后续文本页若来自更新版本，则从第一页重新开始；被重载或 tab 销毁淘汰的请求不能再写入。[Document Preview 决议](../architecture/2026-09-08-document-preview-operations.zh.md)负责各渲染器的加载方式。
 
 store 是 Slot 标准件：每会话一个独占实例，按 tab id 分桶，持有 `{ version, pages, eof, loading, failure, scrollTop, wrap, revision }`。按 tab 而非按文件分桶是有意的——同一文件的两个 tab 各自滚动。face（`loadPage`、`reloadPages`）是唯一的异步半边：它标记读取进行中，等待 Remote 结果，再经 store 的 action 写入一页或一次失败；若 owner 的 `signal` 已触发则什么也不写。`signal` 同时终结这个桶：face 在 tab 首次读取时挂一个 abort 监听器，由它忘掉桶——不是体，体随 tab 切换反复挂载卸载；从未读过的 tab 没有桶也没有监听器，而 tab 记录可能在其体被另一 tab 挡住而卸载时结束。因此滚动位置、换行与已答过的导航都活得比体久：tab 回来时停在读者离开的地方，而不是重读或再跳一次。刷新页面后什么都不保留。
 
@@ -48,7 +48,7 @@ store 是 Slot 标准件：每会话一个独占实例，按 tab id 分桶，持
 
 ### 文件树
 
-`files` 是页类型，不是查看器：它不认领任何地址。注册定义是 `{ kind: 'files', id: '@deepseek-ai/dsh-client-ui-sidebar-files', priority: 'builtin', title, guide: [{ order: 10, title, description, icon: FolderSheetGlyph }] }`——没有 `patterns`，因为没有谁按地址导航*到*一棵文件树；引导页的入口框打开的是类型本身。`FolderSheetGlyph` 把共享的彩色文件夹页适配到引导页请求的图标尺寸；[引导页细化记录](2026-09-10-guide-start-page-and-stat-pill-refinements.zh.md)负责这项展示选择。`id` 是这个实现在 Tab 系统里的唯一键，同时也是体坑位 `sidebar.right.pane.tab` 的 `key`，于是同一个串既命名类型也命名画它的组件。`register()` 返回 disposer 并经 `ctx.effect` 注册，与所有注册一致。
+`files` 是页类型，不是查看器：它不认领任何地址。注册定义是 `{ kind: 'files', id: '@deepseek-ai/dsh-client-ui-sidebar-files', priority: 'builtin', title, guide: [{ order: 10, title, description, icon: FolderSheetGlyph }] }`——没有 `patterns`，因为没有谁按地址导航*到*一棵文件树；引导页的入口框打开的是类型本身。`FolderSheetGlyph` 把共享的彩色文件夹页适配到引导页请求的图标尺寸；[Sidebar README](../../../../packages/client/ui-sidebar-right/README.zh.md#the-guide)说明这项展示规则。`id` 是这个实现在 Tab 系统里的唯一键，同时也是体坑位 `sidebar.right.pane.tab` 的 `key`，于是同一个串既命名类型也命名画它的组件。`register()` 返回 disposer 并经 `ctx.effect` 注册，与所有注册一致。
 
 根是 Host 在会话列表里上报的会话工作目录（`useSessions().byId[sessionId].cwd`），标签由 `dsh-util-workspace-path` 的 `workspaceTitleOf` 给出——路径最后一个非空段——路径只有分隔符时用根串本身作标签。没有工作目录的会话只显示一行（`noWorkspace`），不发请求。没有根选择器，也不能往上浏览：Host 的 `list` 拒绝会话工作区根之外的路径，所以客户端能列的那一个目录就是它显示的目录。
 

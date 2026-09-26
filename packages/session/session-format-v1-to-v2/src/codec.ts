@@ -144,7 +144,7 @@ function decodeEvent(value: unknown, rowIndex: number): SessionFormatEvent {
   if (record['ignorable'] !== undefined && record['ignorable'] !== true) {
     throw new SessionFormatError(`released v2 row ${rowIndex} ignorable must be true when present`)
   }
-  if (record['sourceEventSeqs'] === undefined) return record as unknown as SessionFormatEvent
+  if (record['sourceEventSeqs'] === undefined) return record as SessionFormatEvent
   const seq = sessionFormatCount(record['seq'], `released v2 row ${rowIndex} seq`)
   return {
     ...record,

@@ -1,0 +1,248 @@
+{
+  "finalResponse": "DYNAMIC_TOOLS_OK",
+  "declarations": [
+    null,
+    {
+      "name": "snapshot_ping",
+      "description": "Return pong once.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "defer_loading": true
+    },
+    null
+  ],
+  "requestToolChanges": [
+    [],
+    [
+      {
+        "type": "tool_addition",
+        "tool": {
+          "type": "tool_reference",
+          "name": "snapshot_ping"
+        }
+      }
+    ],
+    []
+  ],
+  "events": [
+    {
+      "type": "request/header",
+      "seq": 11,
+      "time": 0,
+      "data": {
+        "header": {
+          "config": {
+            "provider": "deepseek-official",
+            "model": "smoke-model",
+            "maxTokens": 256000,
+            "reasoningEffort": "high"
+          },
+          "adapterDefaults": {
+            "reasoningEffort": true,
+            "maxTokens": true
+          },
+          "tools": [
+            "create_goal",
+            "edit",
+            "exit_plan_mode",
+            "get_goal",
+            "glob",
+            "grep",
+            "interrupt_agent",
+            "job_kill",
+            "job_list",
+            "job_output",
+            "list_agents",
+            "load_workspace_dependencies",
+            "read",
+            "read_image",
+            "send_message",
+            "skill",
+            "subagent",
+            "subagent_fork",
+            "todo_write",
+            "update_goal",
+            "web_fetch",
+            "web_search",
+            "workflow",
+            "write"
+          ]
+        },
+        "reason": "initial"
+      }
+    },
+    {
+      "type": "request/context",
+      "seq": 12,
+      "time": 0,
+      "data": {
+        "provider": "deepseek-official",
+        "model": "smoke-model",
+        "contextWindow": 1000000
+      }
+    },
+    {
+      "type": "request/header",
+      "seq": 20,
+      "time": 0,
+      "data": {
+        "header": {
+          "config": {
+            "provider": "deepseek-official",
+            "model": "smoke-model",
+            "maxTokens": 256000,
+            "reasoningEffort": "high"
+          },
+          "adapterDefaults": {
+            "reasoningEffort": true,
+            "maxTokens": true
+          },
+          "tools": [
+            "create_goal",
+            "edit",
+            "exit_plan_mode",
+            "get_goal",
+            "glob",
+            "grep",
+            "interrupt_agent",
+            "job_kill",
+            "job_list",
+            "job_output",
+            "list_agents",
+            "load_workspace_dependencies",
+            "read",
+            "read_image",
+            "send_message",
+            "skill",
+            "snapshot_ping",
+            "subagent",
+            "subagent_fork",
+            "todo_write",
+            "update_goal",
+            "web_fetch",
+            "web_search",
+            "workflow",
+            "write"
+          ]
+        },
+        "reason": "change"
+      }
+    },
+    {
+      "type": "developer/message",
+      "seq": 21,
+      "time": 0,
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "source": {
+            "kind": "tool-registry"
+          },
+          "content": [
+            {
+              "type": "tool-addition",
+              "toolName": "snapshot_ping"
+            }
+          ],
+          "role": "developer",
+          "id": "{{messageId}}"
+        },
+        "headerSeq": 20
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "request/header",
+      "seq": 28,
+      "time": 0,
+      "data": {
+        "header": {
+          "config": {
+            "provider": "deepseek-official",
+            "model": "smoke-model",
+            "maxTokens": 256000,
+            "reasoningEffort": "high"
+          },
+          "adapterDefaults": {
+            "reasoningEffort": true,
+            "maxTokens": true
+          },
+          "tools": [
+            "create_goal",
+            "edit",
+            "exit_plan_mode",
+            "get_goal",
+            "glob",
+            "grep",
+            "interrupt_agent",
+            "job_kill",
+            "job_list",
+            "job_output",
+            "list_agents",
+            "load_workspace_dependencies",
+            "read",
+            "read_image",
+            "send_message",
+            "skill",
+            "subagent",
+            "subagent_fork",
+            "todo_write",
+            "update_goal",
+            "web_fetch",
+            "web_search",
+            "workflow",
+            "write"
+          ]
+        },
+        "reason": "change"
+      }
+    },
+    {
+      "type": "developer/message",
+      "seq": 29,
+      "time": 0,
+      "data": {
+        "turn": 1,
+        "step": 3,
+        "message": {
+          "source": {
+            "kind": "tool-registry"
+          },
+          "content": [
+            {
+              "type": "tool-removal",
+              "toolName": "snapshot_ping"
+            }
+          ],
+          "role": "developer",
+          "id": "{{messageId}}"
+        }
+      },
+      "surfaceOp": "append"
+    }
+  ],
+  "toolCalls": [
+    "read",
+    "snapshot_ping"
+  ],
+  "pingResult": {
+    "role": "tool",
+    "source": {
+      "kind": "tool",
+      "callId": "python-dynamic-ping"
+    },
+    "toolCallId": "python-dynamic-ping",
+    "content": [
+      {
+        "type": "text",
+        "text": "pong"
+      }
+    ],
+    "isError": false,
+    "id": "{{messageId}}"
+  }
+}

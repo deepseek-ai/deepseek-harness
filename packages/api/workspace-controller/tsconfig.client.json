@@ -9,6 +9,7 @@
     "src/client/index.ts",
     "src/client/model.ts",
     "src/client/service.ts",
+    "src/default-workspace.ts",
     "src/types.ts"
   ],
   "references": [

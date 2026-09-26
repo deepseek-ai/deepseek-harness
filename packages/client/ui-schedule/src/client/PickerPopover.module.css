@@ -1,0 +1,20 @@
+/* Shared card of the timing pickers: the Repeat and time-zone dropdown's own
+   translucent surface, portal-positioned from its trigger. */
+.panel {
+  position: fixed;
+  top: auto;
+  left: auto;
+  box-sizing: border-box;
+  z-index: 1100;
+  display: flex;
+  border: 0;
+  border-radius: 16px;
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
+  /* Elevated surface: the scrolling columns take the l2 thumb tokens, as in
+     every other menu card (see ui-theme styles/scrollbar.css). */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}

@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-15-profile-command-shorthand.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-15-profile-command-shorthand.md
-2026-09-15-profile-command-shorthand.md: 15bdf30b98eb814e299e8e2c3af3756b1f59aad1
-2026-09-15-profile-command-shorthand.zh.md: 77ffd2324fc8fe518368fce44f52ad85274eb7b5
+/agent-note-profile-command-shorthand:
+  en: 35f20a1162b8407f
+  zh: 33d263d534df0b1d
+/agent-note-profile-command-shorthand/problem:
+  en: b5c950343e5fbe8c
+  zh: df2a055d2c0b3f53
+/agent-note-profile-command-shorthand/decision:
+  en: cc8d5ebd595fee34
+  zh: 99cb3ade0f17fb7b
+/agent-note-profile-command-shorthand/alternatives-considered:
+  en: 8d10eee94348e187
+  zh: 5930dee3861058e1
+/agent-note-profile-command-shorthand/consequences:
+  en: bbfeb6e59bb8ba55
+  zh: fc33289f717cb805

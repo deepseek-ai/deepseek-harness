@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/atomic-write/README.md
-README.md: 89770a6d318da778e9dcb7a462dc7754244a0e41
-README.zh.md: a64771ae1266f132254c82aaa71f193dbf33cd06
+/:
+  en: 1065a4fcafd0430d
+  zh: 40bc911b6d01288b
+/deepseek-ai-dsh-atomic-write:
+  en: ed491d62812ad8cc
+  zh: 653e184dd035ec71
+/deepseek-ai-dsh-atomic-write/summary:
+  en: 6c4c49bda04ed05f
+  zh: 1080ddd179d0a3d2
+/deepseek-ai-dsh-atomic-write/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-atomic-write/use-this-package:
+  en: 9cc27a0ee5ae0808
+  zh: d0ee06b54452f600
+/deepseek-ai-dsh-atomic-write/use-this-package/writing-a-file-atomically:
+  en: 7b757dc3c3b27335
+  zh: a097d90a2561475d
+/deepseek-ai-dsh-atomic-write/use-this-package/coordinating-writers:
+  en: 77c865c1f78d2a0c
+  zh: 5a91874c352c6f18
+/deepseek-ai-dsh-atomic-write/use-this-package/failures-to-plan-for:
+  en: 59308dc757e25273
+  zh: 01113ed577a413cb
+/deepseek-ai-dsh-atomic-write/understand-the-implementation:
+  en: 93b537308f7c88c7
+  zh: 282e0d2042aeb1be
+/deepseek-ai-dsh-atomic-write/understand-the-implementation/source-map:
+  en: 725509a8b621c668
+  zh: c11e3ffdf73af844
+/deepseek-ai-dsh-atomic-write/understand-the-implementation/write-path:
+  en: 2e6561c9282f0c0d
+  zh: 7f0e76f6dbdea501
+/deepseek-ai-dsh-atomic-write/understand-the-implementation/why-the-swap-stays-safe:
+  en: 784e985c1fb3a25e
+  zh: 4afda1b9bf5f29cc
+/deepseek-ai-dsh-atomic-write/further-exploration:
+  en: 16ece9b754f7fff6
+  zh: 2456fe14cc5a658b
+/deepseek-ai-dsh-atomic-write/model-experience:
+  en: 225fc1d94a284905
+  zh: 7319a43c3b8a884d
+/deepseek-ai-dsh-atomic-write/model-experience/kv-cache-effect:
+  en: 815e93723a98919c
+  zh: 921da870f67e4033
+/deepseek-ai-dsh-atomic-write/known-limitations-and-deferred-work:
+  en: 5d0b395da8833bbb
+  zh: 6191bab46d288be7
+/deepseek-ai-dsh-atomic-write/known-limitations-and-deferred-work/dev-note:
+  en: d3461ceeaf041974
+  zh: f59df2adbf52fed9

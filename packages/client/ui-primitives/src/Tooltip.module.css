@@ -1,4 +1,7 @@
 .bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   position: fixed;
   z-index: 100;
   /* Fixed-position shrink-to-fit measures only the space from `left` to the
@@ -7,7 +10,7 @@
   width: max-content;
   max-width: 50vw;
   padding: 3px 7px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-tooltip-bg);
   color: var(--dsw-static-neutral-bluish-00);
   font-size: 13px;
@@ -19,6 +22,13 @@
   animation: tooltip-in 150ms var(--ds-ease-in-out);
 }
 
+.bubble[data-portal] { z-index: 1100; }
+.label { min-width: 0; }
+
+/* A 16px keycap centered beside a 20px label has 5px of vertical clearance. */
+.bubble[data-has-shortcut] { padding-inline-end: 5px; }
+.bubble[data-has-shortcut]:not(:has(.label)) { padding: 3px; }
+
 .bubble[data-side='right'] {
   transform: translateY(-50%);
 }
@@ -29,6 +39,16 @@
 
 .bubble[data-side='top'] {
   transform: translate(-50%, -100%);
+}
+
+/* End alignment: `left` carries the anchor's right edge, so the bubble sits
+   fully left of it instead of centering. */
+.bubble[data-side='bottom'][data-align='end'] {
+  transform: translateX(-100%);
+}
+
+.bubble[data-side='top'][data-align='end'] {
+  transform: translate(-100%, -100%);
 }
 
 @keyframes tooltip-in {

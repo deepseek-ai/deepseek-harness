@@ -37,12 +37,35 @@ import { SubagentInbox } from './inbox.ts'
 import type { SubagentDelivery } from './inbox.ts'
 import type { ActivationObserver, ActivationTerminal } from './lifecycle.ts'
 
+/** Process-local slots shared through uninterrupted continuable parent links. */
+class ActivationPool {
+  private readonly slots = new Set<symbol>()
+
+  /** Reserve before reconstruction; the returned release also tolerates unpublished rollback. */
+  reserve(capacity: number): () => void {
+    if (this.slots.size >= capacity) {
+      throw new SubagentError(
+        `subagent limit reached (active child limit: ${capacity}); wait for an existing child to finish `
+        + 'or complete this work with the current agents',
+        'ACTIVATION_LIMIT_REACHED',
+      )
+    }
+    const slot = Symbol()
+    this.slots.add(slot)
+    return () => { this.slots.delete(slot) }
+  }
+}
+
 /**
  * One residency epoch for a reconstructed continuable child Agent. It directly
  * owns the published `AgentHandle`; the registry's private activation-owner
  * scope is its structural Cordis owner.
  */
 export interface Activation {
+  /** Shared capacity for this Activation and all its continuable descendants. */
+  readonly pool: ActivationPool
+  /** Return this epoch's slot after its handle has finished disposal. */
+  readonly releaseSlot: () => void
   /** The durable child this Activation is an epoch of. */
   readonly childId: SessionId
   /**
@@ -153,6 +176,8 @@ export class ChildLock {
 export class ContinuableActivationRegistry {
   /** Child session id → its live Activation. Process-local, never durable. */
   private readonly resident = new Map<SessionId, Activation>()
+  /** Root identities retain their pool across child settlement without retaining dead roots. */
+  private readonly rootPools = new WeakMap<Agent, ActivationPool>()
   /** Materializations admitted before drain, tracked through publication or rollback. */
   private readonly materializations = new Set<Materialization>()
   /** Per-child serializer shared by delivery, release, and disposal. */
@@ -180,6 +205,7 @@ export class ContinuableActivationRegistry {
       childId: SessionId,
       parent: Agent,
     ) => ActivationObserver,
+    private readonly maxActiveSubagents: () => number,
   ) {
     // Ordinary Cordis owner effects unwind in reverse registration order, which
     // cannot express the dynamic child graph. Register the private scope's
@@ -457,14 +483,20 @@ export class ContinuableActivationRegistry {
    */
   materialize(inputs: MaterializeInputs): Promise<Activation> {
     this.assertAdmitting(inputs.parent)
-    const settled = Promise.withResolvers<void>()
+    inputs.signal.throwIfAborted()
     const lineage = this.liveLineage(inputs.parent)
+    const pool = this.resident.get(inputs.parent.id)?.pool ?? this.rootPool(inputs.parent)
+    const releaseSlot = pool.reserve(this.maxActiveSubagents())
+    const settled = Promise.withResolvers<void>()
     const materialization: Materialization = {
       lineage,
       settled: settled.promise,
     }
     this.materializations.add(materialization)
-    return this.materializeTracked(inputs, lineage).finally(() => {
+    return this.materializeTracked(inputs, lineage, pool, releaseSlot).catch((error: unknown) => {
+      releaseSlot()
+      throw error
+    }).finally(() => {
       this.materializations.delete(materialization)
       settled.resolve()
     })
@@ -569,10 +601,22 @@ export class ContinuableActivationRegistry {
     return undefined
   }
 
+  /** Resolve a root's pool once; descendants inherit their resident parent's pool directly. */
+  private rootPool(parent: Agent): ActivationPool {
+    let pool = this.rootPools.get(parent)
+    if (pool === undefined) {
+      pool = new ActivationPool()
+      this.rootPools.set(parent, pool)
+    }
+    return pool
+  }
+
   /** Perform one tracked materialization through publication or rollback. */
   private async materializeTracked(
     inputs: MaterializeInputs,
     parentLineage: readonly Agent[],
+    pool: ActivationPool,
+    releaseSlot: () => void,
   ): Promise<Activation> {
     const { childId, provider, parent, create } = inputs
     inputs.signal.throwIfAborted()
@@ -606,6 +650,8 @@ export class ContinuableActivationRegistry {
       })
 
     const activation: Activation = {
+      pool,
+      releaseSlot,
       childId,
       parentSession: parent.id,
       provider,
@@ -643,6 +689,7 @@ export class ContinuableActivationRegistry {
         await activation.handle.dispose()
       } finally {
         this.resident.delete(activation.childId)
+        activation.releaseSlot()
         this.releaseOwnership(activation.childId)
       }
     })
@@ -813,6 +860,7 @@ export class ContinuableActivationRegistry {
       )
     }
     this.resident.delete(childId)
+    activation.releaseSlot()
     this.notifySettlement(activation, activation.observer.terminal(failure))
     this.releaseOwnership(childId)
     activation.observer.settle(failure)

@@ -1,0 +1,15 @@
+{
+  "name": "@local/my-decoration",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./index.js", "./client": "./client.js" },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-conversation"]
+    }
+  }
+}

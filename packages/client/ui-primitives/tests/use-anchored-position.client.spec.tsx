@@ -51,10 +51,10 @@ function stubResizeObserver(): Recorded[] {
  * @param props - whether the panel is open.
  * @returns the anchor and, while open, the panel carrying the position.
  */
-function Host({ open }: { open: boolean }) {
+function Host({ open, align }: { open: boolean; align?: 'start' | 'end' }) {
   const anchorRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
-  const position = useAnchoredPosition({ open, anchorRef, panelRef, gap: 4, margin: 12 })
+  const position = useAnchoredPosition({ open, anchorRef, panelRef, gap: 4, margin: 12, ...align === undefined ? {} : { align } })
   return (
     <>
       <button ref={anchorRef} type="button">anchor</button>
@@ -64,6 +64,25 @@ function Host({ open }: { open: boolean }) {
 }
 
 describe('useAnchoredPosition', () => {
+  it('lines the panel up with the anchor\'s right edge when aligned to the end', () => {
+    // jsdom lays nothing out: the anchor's rect and the panel's width are stated, and the placement read back.
+    const rect = { left: 100, right: 300, top: 10, bottom: 30, width: 200, height: 20, x: 100, y: 10, toJSON: () => ({}) } as DOMRect
+    const anchorRect = vi.spyOn(HTMLButtonElement.prototype, 'getBoundingClientRect').mockReturnValue(rect)
+    const width = vi.spyOn(HTMLDivElement.prototype, 'offsetWidth', 'get').mockReturnValue(120)
+    vi.stubGlobal('innerWidth', 1000)
+    vi.stubGlobal('innerHeight', 800)
+    try {
+      const { getByTestId, rerender } = render(<Host open align="end" />)
+      expect(getByTestId('panel').style.left).toBe('180px')
+      expect(getByTestId('panel').style.top).toBe('34px')
+      rerender(<Host open />)
+      expect(getByTestId('panel').style.left).toBe('100px')
+    } finally {
+      anchorRect.mockRestore()
+      width.mockRestore()
+    }
+  })
+
   it('observes the panel while open and disconnects when it closes', () => {
     const made = stubResizeObserver()
     const ui = render(<Host open />)

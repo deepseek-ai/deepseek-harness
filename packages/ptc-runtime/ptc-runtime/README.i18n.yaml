@@ -1,6 +1,70 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/ptc-runtime/ptc-runtime/README.md
-README.md: 658697a73f126722474c3280e74c1a73ec0c8320
-README.zh.md: 70c2315e9ab7ed8597f031fee95f2ca847a90a77
+/:
+  en: 8904d5f5d5251a83
+  zh: 69b48f289b0416f0
+/deepseek-ai-dsh-ptc-runtime:
+  en: cced8c691b58657a
+  zh: 3da9cdf76a1a07ff
+/deepseek-ai-dsh-ptc-runtime/summary:
+  en: d5a1f0be39931018
+  zh: 3584bd577f654a38
+/deepseek-ai-dsh-ptc-runtime/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-ptc-runtime/use-this-package:
+  en: 7e5ebf7420c13af4
+  zh: 9ad1e056e794ca4a
+/deepseek-ai-dsh-ptc-runtime/use-this-package/run-a-program:
+  en: 6f97019cebc2f417
+  zh: c56f18a690dbe814
+/deepseek-ai-dsh-ptc-runtime/use-this-package/choose-a-backend:
+  en: f2dd49b11ef5e888
+  zh: f2be82b0cae2d8e4
+/deepseek-ai-dsh-ptc-runtime/use-this-package/name-your-bindings-portably:
+  en: 4e46c1672701b8df
+  zh: 0353c5855c9ff6be
+/deepseek-ai-dsh-ptc-runtime/use-this-package/what-can-go-wrong:
+  en: 44f9fdf2c8e2cacc
+  zh: 99dd555a49075f88
+/deepseek-ai-dsh-ptc-runtime/understand-the-implementation:
+  en: 686d570f5e669fa4
+  zh: 2075cf27c30f251a
+/deepseek-ai-dsh-ptc-runtime/understand-the-implementation/design-concept:
+  en: 9f0055e22a1595a5
+  zh: 0aa3ceb9dd145128
+/deepseek-ai-dsh-ptc-runtime/understand-the-implementation/service-api:
+  en: 1d7a792c9a78a517
+  zh: b49bddf18c259edc
+/deepseek-ai-dsh-ptc-runtime/understand-the-implementation/vocabulary:
+  en: 855cb8366e3bd293
+  zh: da6d7a0ce51f97fc
+/deepseek-ai-dsh-ptc-runtime/understand-the-implementation/portable-identifiers:
+  en: 01c82c6e73180979
+  zh: e29b066f9f82c8b4
+/deepseek-ai-dsh-ptc-runtime/understand-the-implementation/source-map:
+  en: 73b7deab23f3b00d
+  zh: 780ddf5ff0dd5f65
+/deepseek-ai-dsh-ptc-runtime/further-exploration:
+  en: a77e68bc4f5e66d9
+  zh: 101a57bcad581668
+/deepseek-ai-dsh-ptc-runtime/model-experience:
+  en: 5506904c50c1ee20
+  zh: f0ffa9f4f08b20cf
+/deepseek-ai-dsh-ptc-runtime/model-experience/kv-cache-effect:
+  en: 40294c1c31b74824
+  zh: 081cebc2e2650f03
+/deepseek-ai-dsh-ptc-runtime/known-limitations-and-deferred-work:
+  en: 7f30f78c5d427667
+  zh: 99d21160016deea2
+/deepseek-ai-dsh-ptc-runtime/known-limitations-and-deferred-work/dev-note:
+  en: d56846da29ad869c
+  zh: 0397151a7e29b8ba
+/deepseek-ai-dsh-ptc-runtime/known-limitations-and-deferred-work/dev-note/future-persistent-kernel-backend:
+  en: cfefaae6ed9705d5
+  zh: 3cca5b1bd92445b0
+/deepseek-ai-dsh-ptc-runtime/known-limitations-and-deferred-work/dev-note/future-container-backend:
+  en: 2b94202842f0556c
+  zh: 5aa0311fa621a018

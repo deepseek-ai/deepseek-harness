@@ -54,6 +54,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
 
+`pnpm run dev:web` builds, serves, and rebuilds client bundles on source edits in one terminal, and `make help` lists the matching Make targets for Web and Desktop; the guide's application commands section owns the full table.
+
 For agents, follow [AGENTS.md](AGENTS.md).
 
 ## Citation

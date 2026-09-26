@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import {
   constants,
   copyFileSync,
+  globSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -13,6 +14,7 @@ import {
 } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
+import * as yaml from 'js-yaml'
 import {
   DESKTOP_HOST_PACKAGE,
   DESKTOP_HOST_RUNTIME_FILES,
@@ -49,13 +51,17 @@ function dependencyNames(manifest: Readonly<Record<string, unknown>>, section: s
 }
 
 /**
- * Select the complete available first-party dependency closures rooted at dsh and its private Host.
+ * Select workspace dependencies rooted at dsh and its private Host; npm resolves external packages.
+ * Reads the repository workspace manifest and package manifests to distinguish required local packages from npm-resolved externals.
  * @param available - Packed packages indexed by package name.
  * @returns Selected packages sorted by name.
  */
 export function selectDesktopPackageClosure(
   available: ReadonlyMap<string, PackedDesktopPackage>,
 ): PackedDesktopPackage[] {
+  const workspace = yaml.load(readFileSync(join(REPOSITORY_ROOT, 'pnpm-workspace.yaml'), 'utf8')) as { packages: string[] }
+  const workspaceNames = new Set(globSync(workspace.packages.map(pattern => `${pattern}/package.json`), { cwd: REPOSITORY_ROOT })
+    .map(path => (JSON.parse(readFileSync(join(REPOSITORY_ROOT, path), 'utf8')) as { name: string }).name))
   const selected = new Map<string, PackedDesktopPackage>()
   const visit = (name: string): void => {
     if (selected.has(name)) return
@@ -65,8 +71,8 @@ export function selectDesktopPackageClosure(
     for (const section of REQUIRED_DEPENDENCY_SECTIONS) {
       for (const dependency of dependencyNames(packed.manifest, section)) {
         if (available.has(dependency)) visit(dependency)
-        else if (dependency.startsWith('@deepseek-ai/')) {
-          throw new Error(`desktop package set: ${name} requires unpacked internal package ${dependency}`)
+        else if (workspaceNames.has(dependency)) {
+          throw new Error(`desktop package set: ${name} requires unpacked package ${dependency}`)
         }
       }
     }

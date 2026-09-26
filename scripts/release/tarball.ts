@@ -7,7 +7,7 @@
  */
 
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { capture } from './process.ts'
 
 /** Name of the file recording the order in which a packed family uploads. */
@@ -27,7 +27,8 @@ export interface PackedIdentity {
  * @returns Every path inside the archive.
  */
 export function tarballFiles(tarball: string): string[] {
-  return capture('tar', ['-tzf', tarball]).split(/\r?\n/u).filter(line => line !== '')
+  // GNU tar reads the colon in a Windows drive path as a remote-host separator, so tar runs beside the tarball.
+  return capture('tar', ['-tzf', basename(tarball)], { cwd: dirname(tarball) }).split(/\r?\n/u).filter(line => line !== '')
 }
 
 /**
@@ -36,7 +37,7 @@ export function tarballFiles(tarball: string): string[] {
  * @returns The name and version the tarball declares.
  */
 export function packedIdentity(tarball: string): PackedIdentity {
-  const manifest: unknown = JSON.parse(capture('tar', ['-xOzf', tarball, 'package/package.json']))
+  const manifest: unknown = JSON.parse(capture('tar', ['-xOzf', basename(tarball), 'package/package.json'], { cwd: dirname(tarball) }))
   if (manifest === null || typeof manifest !== 'object') throw new Error(`${tarball} has no manifest`)
   const { name, version } = manifest as Record<string, unknown>
   if (typeof name !== 'string' || typeof version !== 'string') throw new Error(`${tarball} manifest lacks name/version`)

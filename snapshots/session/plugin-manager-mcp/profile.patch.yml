@@ -1,0 +1,9 @@
+- insert:
+    - id: demo
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: demo
+        transport: streamable-http
+        url: !!js process.env.DSH_MCP_DEMO_URL
+        failOnStartupError: true

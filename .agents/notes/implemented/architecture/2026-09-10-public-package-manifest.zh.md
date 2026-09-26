@@ -14,7 +14,7 @@ Status: implemented
 
 运行时要求位于顶层 `engines`：`dsh`、`node` 和 `npm` 均为可选版本字符串，也允许其他 engine 名称。`dsh.manifestVersion` 标识声明格式 `1`。当前安装器和加载器不强制检查格式与 DSH 兼容性声明。
 
-镜像打包器拥有 `configTrees`，工作区目录生成器拥有 Session 迁移声明，app-boot 拥有生成的模块后备元数据。这些内部工具仍可读取既有磁盘字段，但公共 manifest 类型不暴露这些字段。此范围细化了[共享声明归属决策](2026-09-05-package-manifest-types.zh.md)，后者的包位置与依赖规则仍然有效。
+镜像打包器拥有 `configTrees`，工作区目录生成器拥有 Session 迁移声明。这些内部工具仍可读取既有磁盘字段，但公共 manifest 类型不暴露这些字段。此范围细化了[共享声明归属决策](2026-09-05-package-manifest-types.zh.md)，后者的包位置与依赖规则仍然有效。
 
 各消费方负责 JSON 解析、字段校验、默认值解析和运行时数据适配。接口不会校验已解析的 JSON。只有多个消费方需要相同校验或归一化时，helper 才属于共享包；重复属性访问的 getter 不提供共享策略。
 

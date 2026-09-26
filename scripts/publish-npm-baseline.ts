@@ -768,9 +768,9 @@ interface InspectedTarball {
 }
 
 function inspectTarball(path: string, runner: CommandRunner): InspectedTarball {
-  const manifest = JSON.parse(
+  const manifest: unknown = JSON.parse(
     runner.capture('tar', ['-xOf', path, 'package/package.json'], dirname(path)),
-  ) as unknown
+  )
   if (!isRecord(manifest)) throw new Error(`${path} contains an invalid package.json`)
   return {
     name: expectString(manifest, 'name', path),

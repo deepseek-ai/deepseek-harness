@@ -3,7 +3,8 @@
 // the real provider, while replay keeps the same provider-authored behavior
 // keyless. Assertions read the exact durable header, runtime-context messages,
 // and tool calls, so assistant prose alone cannot satisfy the scenario.
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
@@ -11,6 +12,8 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { canonicalPath } from '@deepseek-ai/dsh-sandbox'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { WebTerminalId } from '@deepseek-ai/dsh-api-terminal-controller/types'
+import type {} from '@deepseek-ai/dsh-api-terminal-controller'
 import {
   assertFinalWorkspaceSnapshot, assertFixtureInventory, fixtureUserPrompts, launchWebScaffold, recordFixture,
   watchConsole, webSnapshotMode, type WebScaffold,
@@ -40,8 +43,7 @@ function systemPrompts(events: readonly SessionEvent[]): string[] {
 function runtimeContexts(events: readonly SessionEvent[]): string[] {
   return events.flatMap((event) => {
     if (event.type !== 'user/message'
-      || event.data.source.kind !== 'plugin'
-      || event.data.source.plugin !== '@deepseek-ai/dsh-system-prompt') return []
+      || event.data.source.kind !== 'runtime-context') return []
     return event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
   })
 }
@@ -65,10 +67,18 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
   let tripwire: ReturnType<typeof watchConsole>
   let disposeApproval: (() => void) | undefined
   let sessionWorkspace: string | undefined
+  let outsideWorkspace: string | undefined
+  let terminalId: WebTerminalId | undefined
   const sessionEvents: SessionEvent[] = []
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold(MODE === 'record' ? {} : { replayFixture: FIXTURE, compareReplaySession: true })
+    scaffold = await launchWebScaffold({
+      ...MODE === 'record' ? {} : { replayFixture: FIXTURE, compareReplaySession: true },
+      ...process.platform === 'win32' ? {} : {
+        extraOverlayPath: fileURLToPath(new URL('./fixtures/sidebar-terminal.patch.yml', import.meta.url)),
+      },
+    })
+    outsideWorkspace = await mkdtemp(join(tmpdir(), 'dsh-user-terminal-'))
     disposeApproval = scaffold.ctx.on('approval/request', () => Promise.resolve('allowed-once'), { prepend: true })
     scaffold.ctx.on('session/event', (session, event: SessionEvent) => {
       sessionWorkspace = session.header.cwd
@@ -83,10 +93,47 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
   }, 120_000)
 
   afterAll(async () => {
-    await browser?.close()
-    disposeApproval?.()
-    await scaffold?.close()
+    try { await browser?.close() } finally {
+      disposeApproval?.()
+      try { await scaffold?.close() } finally {
+        if (outsideWorkspace !== undefined) await rm(outsideWorkspace, { recursive: true, force: true })
+      }
+    }
   })
+
+  async function verifyUserTerminal(preset: string): Promise<void> {
+    // The pinned interactive Bash profile is POSIX-only; Windows still replays every Agent policy assertion.
+    if (process.platform === 'win32') return
+    if (terminalId === undefined) {
+      const expand = page.locator('[data-sidebar-right-expand]')
+      if (await expand.isVisible()) await expand.click()
+      await page.locator('[data-sidebar-right-guide-entry="terminal"]').getByRole('button', { name: /^New terminal/u }).click()
+      await expect.poll(() => page.locator('.xterm-rows:visible').innerText()).toContain('bash-')
+    }
+    const agent = scaffold.ctx.agents.list()[0]
+    if (agent === undefined || sessionWorkspace === undefined || outsideWorkspace === undefined) throw new Error('Terminal test has no Session workspace')
+    const terminals = scaffold.ctx.terminalController.list(agent.id)
+    expect(terminals).toHaveLength(1)
+    terminalId ??= terminals[0]!.id
+    expect(terminals[0]).toMatchObject({ id: terminalId, state: 'running', cwd: sessionWorkspace })
+    const outsideFile = join(outsideWorkspace, 'terminal-access.txt')
+    const quotedOutside = `'${outsideFile.replaceAll("'", "'\\''")}'`
+    const beforeInput = sessionEvents.length
+    await page.locator('.xterm-helper-textarea:visible').click()
+    await page.keyboard.insertText(`printf '%s' '${preset}' > terminal-access.txt; printf '%s' '${preset}' > ${quotedOutside}`)
+    await page.keyboard.press('Enter')
+    await expect.poll(() => readFile(join(sessionWorkspace!, 'terminal-access.txt'), 'utf8')).toBe(preset)
+    await expect.poll(() => readFile(outsideFile, 'utf8')).toBe(preset)
+    expect(sessionEvents).toHaveLength(beforeInput)
+    await page.keyboard.insertText('rm terminal-access.txt')
+    await page.keyboard.press('Enter')
+    await expect.poll(async () => {
+      try { await readFile(join(sessionWorkspace!, 'terminal-access.txt')); return false } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        return true
+      }
+    }).toBe(true)
+  }
 
   it('switches read-only, danger-full-access, and workspace-write through the real GUI command path', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-permission-policy-context'))
@@ -107,11 +154,13 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
       await input.press('Enter')
       sessionId = await settled
       await input.waitFor({ timeout: 10_000 })
+      await verifyUserTerminal(preset)
     }
 
     await writeComposerDraft(page, input, '/permission read-only')
     await input.press('Enter')
     await page.getByRole('button', { name: 'Access mode, current: Read Only' }).waitFor({ timeout: 10_000 })
+    await verifyUserTerminal('read-only')
     const settled = scaffold.whenTurnSettled()
     await writeComposerDraft(page, input, PROMPTS[3])
     await input.press('Enter')

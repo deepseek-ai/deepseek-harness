@@ -32,10 +32,14 @@ export interface ComposerKeymapHandlers {
   dismissPopup(): void
   /** Whether Enter may submit right now (locked/busy states refuse). */
   canSubmit(): boolean
-  /** The Enter gesture after every guard passed; `accelerated` = Ctrl/Cmd held. */
+  /** Plain Enter submits; exactly Ctrl+Enter or Cmd+Enter selects accelerated delivery. */
   submit(accelerated: boolean): void
-  /** Pasted files (image intake). */
-  intakeFiles(files: readonly File[]): void
+  /**
+   * Pasted files with directory metadata supplied by the clipboard entry API.
+   * @param files - browser files in clipboard order.
+   * @param directories - known directory members; absent when no entry identifies a directory.
+   */
+  intakeFiles(files: readonly File[], directories?: ReadonlySet<File>): void
   /** Pasted plain text (sanitized insertion through the shell). */
   pasteText(text: string): void
 }
@@ -100,9 +104,15 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
     editor.registerUpdateListener(syncComposition),
     editor.registerCommand(KEY_ARROW_UP_COMMAND, arrow('up'), COMMAND_PRIORITY_CRITICAL),
     editor.registerCommand(KEY_ARROW_DOWN_COMMAND, arrow('down'), COMMAND_PRIORITY_CRITICAL),
-    // Tab acts only when the trigger menu has a highlighted completion;
-    // otherwise it passes so the browser keeps its native focus traversal.
-    editor.registerCommand(KEY_TAB_COMMAND, arrow('tab'), COMMAND_PRIORITY_CRITICAL),
+    // Tab settles the highlighted completion and passes without one, keeping
+    // native focus traversal; Shift+Tab leaves the menu like Escape whenever it
+    // is open, highlight or not, so the two Tab gestures never disagree about
+    // consuming the draft.
+    editor.registerCommand(
+      KEY_TAB_COMMAND,
+      event => arrow(event.shiftKey ? 'tabBack' : 'tab')(event),
+      COMMAND_PRIORITY_CRITICAL,
+    ),
     editor.registerCommand(KEY_ESCAPE_COMMAND, (event) => {
       // Escape layering: an open overlay closes; claimed without an overlay
       // does NOT release (backspacing the token is the only exit gesture).
@@ -123,8 +133,11 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
       return false
     }, COMMAND_PRIORITY_CRITICAL),
     editor.registerCommand(KEY_ENTER_COMMAND, (event) => {
-      // Shift+Enter is the native line break UNCONDITIONALLY — decided before
-      // the IME guard so a composition-closing Shift+Enter still breaks the line.
+      // Returning true stops Lexical's fallback line break without consuming
+      // the DOM event that application shortcuts need.
+      if (event !== null && (event.altKey || event.getModifierState('AltGraph')
+        || (event.ctrlKey && event.metaKey) || (event.shiftKey && (event.ctrlKey || event.metaKey)))) return true
+      // Plain Shift+Enter keeps its native line break, including during composition.
       if (event?.shiftKey === true) return false
       if (event !== null && isComposingEvent(event, recentlyComposing)) {
         // The IME consumes this Enter (candidate pick); neither submit nor
@@ -148,11 +161,18 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
       // deliver clipboardData on plain events.
       const clipboardData = (event as ClipboardEvent).clipboardData ?? null
       if (clipboardData === null) return false
-      const files = Array.from(clipboardData.items)
-        .filter(item => item.kind === 'file')
-        .map(item => item.getAsFile())
-        .filter((file): file is File => file !== null)
-      if (files.length > 0) handlers.intakeFiles(files)
+      const files: File[] = []
+      const directories = new Set<File>()
+      for (const item of clipboardData.items) {
+        if (item.kind !== 'file') continue
+        const file = item.getAsFile()
+        if (file === null) continue
+        files.push(file)
+        if (typeof item.webkitGetAsEntry === 'function' && item.webkitGetAsEntry()?.isDirectory === true) {
+          directories.add(file)
+        }
+      }
+      if (files.length > 0) handlers.intakeFiles(files, directories.size === 0 ? undefined : directories)
       const text = clipboardData.getData('text/plain')
       if (text === '') {
         if (files.length === 0) return false

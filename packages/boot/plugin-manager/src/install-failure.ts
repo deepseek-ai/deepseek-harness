@@ -25,7 +25,8 @@ const LOG_KINDS: readonly [PluginInstallFailureKind, RegExp][] = [
   ['disk-full', /\bENOSPC\b|no space left on device/i],
   ['permission', /\bEACCES\b|\bEPERM\b|permission denied/i],
   ['integrity', /ERR_PNPM_TARBALL_INTEGRITY|ERR_PNPM_BAD_TARBALL_SIZE|\bEINTEGRITY\b/],
-  ['network', /\bENOTFOUND\b|\bECONNRESET\b|\bETIMEDOUT\b|\bECONNREFUSED\b|\bEAI_AGAIN\b|ERR_PNPM_META_FETCH_FAIL|ERR_PNPM_FETCH_5\d\d|ERR_PNPM_FETCH_TIMEOUT|socket hang up|Could not resolve host|unable to access/],
+  ['unknown', /The requested URL returned error: 40[134]\b/],
+  ['network', /\bENOTFOUND\b|\bECONNRESET\b|\bETIMEDOUT\b|\bECONNREFUSED\b|\bEAI_AGAIN\b|ERR_PNPM_META_FETCH_FAIL|ERR_PNPM_FETCH_5\d\d|ERR_PNPM_FETCH_TIMEOUT|\bFETCH_ERROR\b|socket hang up|Could not resolve host|unable to access/],
 ]
 
 /**

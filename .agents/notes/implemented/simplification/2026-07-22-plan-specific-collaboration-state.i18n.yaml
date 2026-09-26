@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-22-plan-specific-collaboration-state.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-07-22-plan-specific-collaboration-state.md
-2026-07-22-plan-specific-collaboration-state.md: 20648b8d6cee3e3c049aeee3022bd322d657ba1c
-2026-07-22-plan-specific-collaboration-state.zh.md: 2142839d5a834abba7aac042c8b1fee7a56c56b1
+/agent-note-plan-specific-collaboration-state:
+  en: b1e94e354a36ef2b
+  zh: bbc98d4b9a837a5a
+/agent-note-plan-specific-collaboration-state/problem:
+  en: e79a03a0ec1ebc34
+  zh: 94adee6ef4f1bcc2
+/agent-note-plan-specific-collaboration-state/decision:
+  en: 1255fd4c4852ea9c
+  zh: 27e431da895a9a69
+/agent-note-plan-specific-collaboration-state/decision/boundary-and-model-contract:
+  en: f9d67f4f91e14f9d
+  zh: 3284e2432e8a8466
+/agent-note-plan-specific-collaboration-state/decision/reviewed-exit:
+  en: 283fec44700c41e5
+  zh: 99b8634a1dff791c
+/agent-note-plan-specific-collaboration-state/deleted-api:
+  en: 7da48b6397bad4d0
+  zh: cc0af0e26a81c7e0
+/agent-note-plan-specific-collaboration-state/alternatives-considered:
+  en: 4098e049cd6d28d8
+  zh: 4ab332ad6af53ccf
+/agent-note-plan-specific-collaboration-state/verification:
+  en: 41179b6ab02b3f90
+  zh: 47f5a602496281cd
+/agent-note-plan-specific-collaboration-state/consequences:
+  en: a71537da7d3921e2
+  zh: a2ab69676bfe985d

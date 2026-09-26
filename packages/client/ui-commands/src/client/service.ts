@@ -9,6 +9,8 @@
  * `rankByName`). A host/contribution name collision fails loud. Every
  * execute addresses the session's agent by sessionId — sessions are always
  * agent-backed.
+ * Catalog RPCs retain an existing Client Session through completion and
+ * wait for its initial history open to succeed before contacting the Host.
  */
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
@@ -17,8 +19,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { CommandResult } from '@deepseek-ai/dsh-commands/types'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ISessions, SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { WeakMapWithValues } from '@deepseek-ai/dsh-util-values'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 import { rankByName } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
@@ -32,6 +35,13 @@ import { PopupSelectController } from './popup.ts'
 import { builtinRowFace, sectionRows } from './presentation.ts'
 import { claimToken } from './resolution.ts'
 import type { TokenSegment } from './popup.ts'
+
+declare module '@deepseek-ai/dsh-api-session-controller/client' {
+  interface SessionReferenceSourceMap {
+    /** A command-catalog fetch waiting for initial history and its RPC result. */
+    commandCatalog: unknown
+  }
+}
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -59,7 +69,7 @@ function submittedCommandName(line: string): string {
 interface LiveState {
   readonly contributions: Map<string, CommandContribution>
   readonly decorations: Map<string, CommandDecoration>
-  readonly popups: Map<SessionId, PopupSelectController<ClientSessionContext>>
+  readonly popups: WeakMapWithValues<SessionBinding, PopupSelectController<ClientSessionContext>>
 }
 
 /** Command surface: session-keyed directory + '/' source + contribution registry + per-session popups. */
@@ -67,7 +77,11 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
   static inject = ['inputTriggers', 'sessions', 'remote', 'remote.commands']
 
   private readonly directory: CommandDirectory
-  private readonly live: LiveState = { contributions: new Map(), decorations: new Map(), popups: new Map() }
+  private readonly live: LiveState = {
+    contributions: new Map(),
+    decorations: new Map(),
+    popups: new WeakMapWithValues(),
+  }
   /** `command`-namespace translator (composer refusal notices). */
   private readonly t: TranslateNS<'command'>
 
@@ -81,10 +95,20 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     if (locale === undefined) throw new Error('ui-commands: locale service unavailable')
     this.t = locale.bind('command')
     this.directory = new CommandDirectory(async (sessionId) => {
-      if (this.sessions().subagentAddress(sessionId) !== undefined) return []
-      const result = await ctx.remote.commands.list(sessionId)
-      if (!result.ok) throw new Error(`command.list failed: ${result.error.code}: ${result.error.message}`)
-      return result.value
+      const sessions = this.sessions()
+      if (sessions.subagentAddress(sessionId) !== undefined) return []
+      if (sessions.binding(sessionId) === undefined) {
+        throw new Error(`command catalog requires a retained session "${sessionId}"`)
+      }
+      return sessions.using(sessionId, { source: 'commandCatalog' }, async (reference) => {
+        const state = reference.binding.session.getSnapshot()
+        if (state.openState !== 'open') {
+          throw state.openError ?? new Error(`session "${sessionId}" is not open`)
+        }
+        const result = await ctx.remote.commands.list(sessionId)
+        if (!result.ok) throw new Error(`command.list failed: ${result.error.code}: ${result.error.message}`)
+        return result.value
+      })
     })
     const inputTriggers = ctx.get('inputTriggers')
     if (inputTriggers === undefined) throw new Error('ui-commands: slash service unavailable')
@@ -147,8 +171,11 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
    * @param name - command name without the leading slash.
    */
   dismiss(name: string): void {
-    for (const popup of this.live.popups.values()) {
-      if (popup.state.getSnapshot().command === name) popup.dismiss()
+    for (const popup of this.live.popups.values) {
+      // A catalog that went stale underneath the card takes its rows away; the
+      // composer keeps the keyboard the card was holding, like every other
+      // dismissal path.
+      if (popup.state.getSnapshot().command === name) popup.dismiss({ focusComposer: true })
     }
   }
 
@@ -156,48 +183,36 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
    * Resolve the per-session popup controller (lazy; dies with the session
    * scope). The controller's consume callback dispatches the scoped
    * consume-token event back to this session; focusComposer reaches the
-   * composer through the overlay slot currency.
+   * session's composer through the conversation input face.
    * @param actx - session-scope ctx.
    * @returns the resident controller.
+   * @throws when the Context no longer belongs to a retained Session generation.
    */
   popupFor(actx: ClientContext): PopupSelectController<ClientSessionContext> {
     const sessions = this.sessions()
-    const id = sessions.scopeOf(actx)
-    if (id === undefined) throw new Error('command.popupFor requires a session scope')
+    const session = sessions.sessionOf(actx)
+    const binding = session === undefined ? undefined : sessions.binding(session.sessionId)
+    if (binding === undefined || binding.session !== session) {
+      throw new Error('command.popupFor requires a retained Session scope')
+    }
     const { popups } = this.live
-    const existing = popups.get(id)
+    const existing = popups.get(binding)
     if (existing !== undefined) return existing
     const controller = new PopupSelectController<ClientSessionContext>({
-      consume: segment => actx.bail(actx, 'slash/input-consume-token', {
+      consume: segment => binding.ctx.bail(binding.ctx, 'slash/input-consume-token', {
         guard: segment.via === 'menu'
           ? { kind: 'span', span: segment.span }
           : { kind: 'bare-token', token: segment.token },
       }) === true,
-      focusComposer: () => { this.focusHooks.get(id)?.() },
+      // The shell took the keyboard; the composer restores it, caret included.
+      focusComposer: () => { binding.ctx.get('conversation')?.input.for(binding.ctx).focus() },
     })
-    popups.set(id, controller)
-    actx.effect(() => () => {
+    popups.set(binding, controller)
+    binding.ctx.effect(() => () => {
       controller.dispose()
-      popups.delete(id)
-      this.focusHooks.delete(id)
+      popups.delete(binding)
     }, 'command: session popup')
     return controller
-  }
-
-  /** Composer focus hooks by session (the overlay wiring binds the textarea focus here). */
-  private readonly focusHooks = new Map<SessionId, () => void>()
-
-  /**
-   * Bind one session's composer-focus hook (overlay slot wiring; unbind on unmount).
-   * @param id - session id.
-   * @param focus - textarea focus callback.
-   * @returns the unbind disposer.
-   */
-  bindComposerFocus(id: SessionId, focus: () => void): () => void {
-    this.focusHooks.set(id, focus)
-    return () => {
-      if (this.focusHooks.get(id) === focus) this.focusHooks.delete(id)
-    }
   }
 
   /**

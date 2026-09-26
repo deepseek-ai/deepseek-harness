@@ -177,12 +177,12 @@ describe('dsh-tool-todo', () => {
     it('instructs the model to keep at most one active, while true instructs parallel', async () => {
       const single = await setup(false)
       const singleDesc = single.tools.schemas().find(s => s.name === 'todo_write')!.description
-      expect(singleDesc).toContain('Keep AT MOST ONE todo `in_progress`')
-      expect(singleDesc).not.toContain('several at once')
+      expect(singleDesc).toContain('keep exactly one todo `in_progress`')
+      expect(singleDesc).not.toContain('several only')
 
       const parallelDesc = (await setup(true)).tools.schemas().find(s => s.name === 'todo_write')!.description
-      expect(parallelDesc).toContain('several at once when work genuinely runs in parallel')
-      expect(parallelDesc).not.toContain('AT MOST ONE')
+      expect(parallelDesc).toContain('several only when work runs in parallel')
+      expect(parallelDesc).not.toContain('exactly one')
     })
   })
 

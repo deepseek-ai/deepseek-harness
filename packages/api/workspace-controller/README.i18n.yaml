@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/api/workspace-controller/README.md
-README.md: ccf07bfb61ad005d516928ad27145148a62ddf19
-README.zh.md: b96f49e92696cef2475458f4b51c764063aa32f9
+/:
+  en: a080cd1633a6f3a9
+  zh: a54cb4fb9d9f15b2
+/workspace-controller:
+  en: b9d615d0df92cbb7
+  zh: 5ecd432522478c8a
+/workspace-controller/summary:
+  en: b7822e9ab1f26abf
+  zh: b052a3d4a20d26a3
+/workspace-controller/table-of-contents:
+  en: 4e53164159b5ce41
+  zh: 89582dc0294d0776
+/workspace-controller/use-this-package:
+  en: aa0d93826ab685fe
+  zh: 144e48d49020f5a4
+/workspace-controller/use-this-package/first-use-workspace:
+  en: 61032e060e7213f0
+  zh: 437eb982a8738539
+/workspace-controller/model-experience:
+  en: 4f399d6a27daf683
+  zh: 13811489fe636127
+/workspace-controller/model-experience/kv-cache-effect:
+  en: f38466c42287d3db
+  zh: 692eb6e5806fe865
+/workspace-controller/known-limitations-and-deferred-work:
+  en: 43b497c19779532e
+  zh: c6d9d3afff774219
+/workspace-controller/known-limitations-and-deferred-work/dev-note:
+  en: 0f74591fc1097e46
+  zh: f4df9e5617a50a9f

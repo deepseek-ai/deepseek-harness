@@ -25,7 +25,7 @@ renderer 为每一层分配不同视觉职责。运行使用 32 像素 module-pl
 
 导航从两个当前权威派生，不写入持久记录。只有持久成员状态仍为运行中，且当前普通 Session 列表包含同一 id、`origin: 'subagent'`、`parentId` 等于当前父 Session、`running: true` 时，成员行才可交互。带下划线的成员文字是唯一可见提示；键盘聚焦时，名称区显示 2 像素 business-primary 焦点环，固定状态列继续只表达生命周期，而不写动作说明。renderer 只调用注入的普通 `sessions.open(id)` 回调。仅地址化、远程、父级不符或终态成员继续可见，但保持静态。
 
-[七状态 Figma 参考](https://www.figma.com/design/tguwzZRmHCjbq58mfsqT0M?node-id=5-2)固定运行展开／收起、完成历史／展开、失败与取消、恢复后中断以及暗色窄列的信息层级。仓库的 `DisclosureRow`、`StateDot`、图标、语义 token 和 keyed-node 行为仍是实现权威；参考稿不引入运行时字段或状态 owner。
+七状态 Figma 参考固定运行展开／收起、完成历史／展开、失败与取消、恢复后中断以及暗色窄列的信息层级。仓库的 `DisclosureRow`、`StateDot`、图标、语义 token 和 keyed-node 行为仍是实现权威；参考稿不引入运行时字段或状态 owner。
 
 ## 验证
 

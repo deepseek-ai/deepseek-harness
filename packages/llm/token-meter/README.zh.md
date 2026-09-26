@@ -102,6 +102,8 @@ const price = ctx.tokenMeter.estimateMessage(message)
 
 `contextBreakdown` 按 surface 顺序保留纯 JSON 的 `{ seq, heuristicTokens, system }` 条目，并复用测量服务的 plan/commit fold。其状态与 surface 转换成本为 O(当前保留 surface)，不是 O(1)，也不是 O(完整历史日志)；被替换条目和消息正文不保留。状态版本 5 使计入省略元数据的检查点失效。`contextPressure` 仍是标量影子价消费方：没有相邻 claim 的替换贡献零增量。用量 fold 保留一个最后样本槽，因为合法日志不会在更晚步骤报告用量后再次报告更早步骤的用量。
 
+`./estimate` 导出无服务状态的文字与内容估算函数，供工具结果保留复用。图片的实际请求成本由模型适配器的 `imageRequestPricing` 提供。
+
 </details>
 
 -----

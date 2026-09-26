@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/telemetry/README.md
+/:
+  en: 53661eb6551dbf31
+  zh: 8cc1a84f4cb8a69f
+/telemetry-shared-reporting:
+  en: 0c5ec106d3250ce7
+  zh: ab9e19ea56f1f75f
+/telemetry-shared-reporting/summary:
+  en: 9dbe398017c89288
+  zh: 91b8c2de8176de4f
+/telemetry-shared-reporting/table-of-contents:
+  en: 09848f4d056e4fc1
+  zh: 8df6139cff0288f6
+/telemetry-shared-reporting/packages:
+  en: 0bc9ee219231fa9a
+  zh: 873150749266f259
+/telemetry-shared-reporting/related-documentation:
+  en: f550e93c6228156b
+  zh: 7414955502825abd
+/telemetry-shared-reporting/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

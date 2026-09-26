@@ -30,6 +30,7 @@ afterEach(() => {
 })
 
 it('loads a combo map through the tunnel and embeds it in the blob script', async () => {
+  document.head.innerHTML = '<base href="/static/preview/">'
   const { worker, sent, deliver } = stubWorker()
   const tunnel = new WorkerTunnel(worker)
   const blobs: Blob[] = []
@@ -52,10 +53,11 @@ it('loads a combo map through the tunnel and embeds it in the blob script', asyn
     }
   })
 
-  const scriptUrl = '/plugins/??a/client.js,b/client.js&rev=abc'
-  const mapUrl = '/plugins/??a/client.js.map,b/client.js.map&rev=abc'
+  // The worker's Host starts at '/', independently of the preview document directory.
+  const scriptUrl = 'plugins/??a/client.js,b/client.js&rev=abc'
+  const mapUrl = '??a/client.js.map,b/client.js.map&rev=abc'
   const loading = tunnel.loadBundle(scriptUrl)
-  expect(sent[0]?.url).toBe(`http://localhost:3000${scriptUrl}`)
+  expect(sent[0]?.url).toBe(`http://localhost:3000/${scriptUrl}`)
   deliver({
     t: 'res',
     id: 1,
@@ -64,7 +66,7 @@ it('loads a combo map through the tunnel and embeds it in the blob script', asyn
     body: new TextEncoder().encode(`factory();\n//# sourceMappingURL=${mapUrl}\n`).buffer,
   })
   await vi.waitFor(() => { expect(sent).toHaveLength(2) })
-  expect(sent[1]?.url).toBe(`http://localhost:3000${mapUrl}`)
+  expect(sent[1]?.url).toBe(`http://localhost:3000/plugins/${mapUrl}`)
   const map = '{"version":3,"sections":[]}'
   deliver({
     t: 'res',

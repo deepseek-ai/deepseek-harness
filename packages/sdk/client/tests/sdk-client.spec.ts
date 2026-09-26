@@ -647,6 +647,9 @@ describe('HarnessClient', () => {
     const inject = (method: string, params: Record<string, unknown>): void => {
       (client as unknown as { dispatchNotification(n: HarnessNotification): void }).dispatchNotification({ method, params })
     }
+    const unknownChild = { type: 'subagent/catalog', seq: 0, time: 1,
+      data: { version: 1, childId: 'unreadable-child', childCreatedAt: 1, mode: 'unknown' } }
+    inject('session.event', { sessionId: 'root', event: unknownChild })
     inject('subagent.started', { parentSessionId: 'root', childSessionId: 'child' })
     inject('subagent.started', { parentSessionId: 'child', childSessionId: 'grandchild' })
     inject('session.event', { sessionId: 'grandchild', event: { type: 'noop' } })
@@ -658,6 +661,7 @@ describe('HarnessClient', () => {
     inject('subagent.started', { parentSessionId: '', childSessionId: 'x' })
     inject('subagent.finished', { childSessionId: 'root' })
 
+    expect(await tree.next()).toEqual({ method: 'session.event', params: { sessionId: 'root', event: unknownChild } })
     expect((await tree.next()).method).toBe('subagent.started')
     expect((await tree.next()).method).toBe('subagent.started')
     expect((await tree.next()).params.sessionId).toBe('grandchild')

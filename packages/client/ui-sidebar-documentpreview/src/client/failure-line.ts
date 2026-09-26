@@ -33,3 +33,25 @@ export function failureLine(t: TranslateNS<'sidebarDocumentPreview'>, failure: R
     default: return t('error.unavailable', { message: failure.message })
   }
 }
+
+/** The action an empty preview offers beside its failure line. */
+export type EmptyFailureRecourse = 'open' | 'retry' | 'none'
+
+/**
+ * Choose the empty state's action for one settled read failure.
+ * @param failure - the settled Remote failure.
+ * @returns `open` for a readable file this preview cannot render, `none` for a
+ * path with nothing to show or open, `retry` for the rest: carrier and
+ * unclassified failures a second read may resolve.
+ */
+export function emptyFailureRecourse(failure: RemoteFailure): EmptyFailureRecourse {
+  switch (failure.code) {
+    case 'workspace-file/not-text':
+    case 'workspace-file/too-large':
+      return 'open'
+    case 'workspace-file/not-found':
+    case 'workspace-file/not-regular-file':
+      return 'none'
+    default: return 'retry'
+  }
+}

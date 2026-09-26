@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
-import { TurnTimePanel, TurnUsagePanel } from '../src/client/chat/TurnUsagePanel.tsx'
+import { TurnUsagePanel } from '../src/client/chat/TurnUsagePanel.tsx'
 import type { TurnTokenUsage } from '../src/client/contract/chat-nodes.ts'
 import { en } from '../src/client/locale.ts'
 
@@ -94,40 +94,5 @@ describe('TurnUsagePanel', () => {
     expect(view.queryByRole('dialog')).toBeTruthy()
     fireEvent.pointerDown(document.body)
     expect(view.queryByRole('dialog')).toBeNull()
-  })
-})
-
-describe('TurnTimePanel', () => {
-  it('shows a clock-and-duration pill and opens the time dialog on click', () => {
-    const view = render(
-      <TurnTimePanel runMs={19_000} tokensPerSecond={20} ttftMs={1_200} t={t} />,
-    )
-    const trigger = view.getByRole('button')
-    expect(trigger.textContent).toBe('Ran for 19s')
-    expect(trigger.querySelector('svg')).not.toBeNull()
-    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog')
-    expect(view.queryByRole('dialog')).toBeNull()
-
-    fireEvent.click(trigger)
-    expect(trigger.getAttribute('aria-expanded')).toBe('true')
-    const dialog = view.getByRole('dialog')
-    expect(dialog.getAttribute('aria-label')).toBe('Turn time and speed')
-    expect(dialog.parentElement).toBe(document.body)
-    const details = dialog.querySelector('[data-turn-time-details]') as HTMLElement
-    expect(details.textContent).toContain('Total run time19s')
-    expect(details.textContent).toContain('Tokens per second (TPS)20 tok/s')
-    expect(details.textContent).toContain('Time to first token (TTFT)1.2s')
-
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(view.queryByRole('dialog')).toBeNull()
-  })
-
-  it('omits unrecorded speed and TTFT rows', () => {
-    const view = render(<TurnTimePanel runMs={3_000} t={t} />)
-    fireEvent.click(view.getByRole('button'))
-    const dialog = view.getByRole('dialog')
-    expect(dialog.textContent).toContain('Total run time3s')
-    expect(dialog.textContent).not.toContain('Tokens per second')
-    expect(dialog.textContent).not.toContain('Time to first token')
   })
 })

@@ -38,7 +38,7 @@ Client Session and Workspace objects belong to `api/session-controller/client` a
 
 The React adapters for Session and Workspace belong to `client/ui-session` and `client/ui-workspace`. The Store engine belongs to `client/store`; the Slot registry, scope materialization, and observable-to-hook binding belong to `client/ui-renderer`.
 
-The system has no aggregate `client/runtime` package and no replacement central facade. [Session history and event transport](2026-08-18-session-history-and-event-transport.md) defines Session history, Remote streams, pagination cursors, and reconnect continuity; this note starts from the Client objects and sources published by Controllers.
+The system has no aggregate `client/runtime` package and no replacement central facade. [Session history and event transport](2026-08-18-session-history-and-event-transport.md) defines history continuity. [Client Session references](2026-09-15-client-session-references.md) owns reference acquisition, exact-generation lifetimes, main-area ownership, and unified UI status; this note owns the layering and source-registration rules.
 
 ## Layering principles
 
@@ -55,9 +55,10 @@ Each standard hook belongs to the `ui-*` package closest to its data semantics.
 | Hook | Owner | Source |
 | --- | --- | --- |
 | `useSessions` | `client/ui-session` | Session Controller global list |
-| `useSession` | `client/ui-session` | Current Session snapshot |
-| `useProjection` | `client/ui-session` | Current Session keyed projection |
-| `useSessionPendingInteraction` | `client/ui-session` | Aggregated pending domains |
+| `useSession` | `client/ui-session` | Bound Session snapshot |
+| `useProjection` | `client/ui-session` | Bound Session keyed projection |
+| `useSessionStatus` | `client/ui-session` | Running, effective pending request, and unread completion |
+| `useSessionRetainInfo` | `client/ui-session` | Read-only Controller reference-source counts |
 | `useWorkspaces` | `client/ui-workspace` | Workspace Controller list |
 | `useConversation` | `client/ui-conversation` | Conversation binding snapshot |
 | `useChat` | `client/ui-chat` | `chat` target source |
@@ -77,10 +78,10 @@ Adding a target does not add a branch to the renderer or Session Controller. The
 
 | Package | Owns | Explicitly does not own |
 | --- | --- | --- |
-| `api/session-controller/client` | Session objects, list, selection, commands, projections, queue, event windows, and Agent Contexts | Conversation targets, React, Slots, Workspace |
+| `api/session-controller/client` | Session objects, catalog, references, source counts, commands, projections, event windows, and Agent Contexts | Navigation, completion reminders, Conversation targets, React, Slots, Workspace |
 | `api/workspace-controller/client` | Workspace objects, ordering, archive state, commands, and snapshots | React, Session navigation policy, directory UI |
-| `client/ui-session` | Session scope, standard sources, `SessionProvider`, and pending-interaction aggregation | Session transport, Conversation assembly, Approval/Question results |
-| `client/ui-workspace` | Workspace hook, browser UI, and cross-Controller navigation policy | Workspace transport, copies of Session data |
+| `client/ui-session` | Explicit Session scope, standard sources, `SessionProvider`, and unified UI status | Session transport, reference ownership, Conversation assembly, Approval/Question results |
+| `client/ui-workspace` | Workspace hook, browser UI, main-area reference, and cross-Controller navigation policy | Workspace transport, copies of Session data |
 | `client/ui-conversation` | Conversation core, registries, bindings, shell, input, composer, queue, and View navigation | Session transport, Chat/Trajectory snapshots |
 | `client/ui-chat` | Chat target, Node definitions, renderers, selection, details, and locale | Session lifecycle, generic View navigation, Trajectory, historical-image cache |
 | `client/ui-trajectory` | Trajectory target, event-record projection, and inspection view | Session snapshots, Chat snapshots |
@@ -117,9 +118,9 @@ Session data reaches the UI through this path:
        useChat            useTrajectory
 ```
 
-Workspace data enters the Workspace Controller from `ctx.remote.workspace`, then `ui-workspace` exposes it as `useWorkspaces`. For cross-domain navigation, `ui-workspace` temporarily reads the Session Controller and issues a selection or command.
+Workspace data enters the Workspace Controller from `ctx.remote.workspace`, then `ui-workspace` exposes it as `useWorkspaces`. `ui-workspace` reads explicit targets for cross-domain navigation and owns the main-area reference without making it a default business Context.
 
-Approval and Question arrive from the Host waterfall through `ctx.remote.$on` at their respective UI owners. Each owner publishes a Pending object; `ui-session.pendingInteractions` then supplies that same object to Session navigation state and Conversation composer selection.
+Approval and Question arrive from the Host waterfall through `ctx.remote.$on` at their respective UI owners. Each owner publishes a Pending object; `ui-session.sessionStatus` supplies the same effective object to Workspace indicators and Conversation composer selection.
 
 ## Session Controller Client
 
@@ -142,7 +143,7 @@ Whether a field derives from an event, control frame, or local command does not 
 
 The Session Controller exposes three distinct read faces:
 
-1. The global Session list and current-selection source, used by navigation and `useSessions`.
+1. The Session catalog and local ownership sources, used by `useSessions` and read-only reference metadata consumers.
 2. A logical binding for each Session containing `sessionId`, a `SessionSnapshot` source, commands, and projection sources.
 3. A Conversation-facing `SessionEventSource` used only by the Conversation assembly core.
 
@@ -160,9 +161,9 @@ Initial open, reconnect, gap repair, and updates whose continuity cannot be prov
 
 ### Session binding lifecycle
 
-Each Session binding owns a Cordis Context and Fiber. The Session Controller creates and releases the binding.
+Each live Session generation owns a Cordis Context and Fiber. The Controller creates its binding on acquisition and retires it on final reference release or root disposal.
 
-Objects that depend on a Session register cleanup through `binding.ctx.effect()`. Releasing a binding cleans up Conversation bindings, UI materializations, and scoped Slot stores without a dedicated `onBindingRelease` or `onRelease` callback protocol.
+Objects that depend on a Session register cleanup through `binding.ctx.effect()`. Generation retirement cleans up Conversation bindings, UI materializations, and scoped Slot stores without a dedicated `onBindingRelease` or `onRelease` callback protocol.
 
 This cleanup does not require the Session Controller to know the roster of upper-layer consumers.
 
@@ -172,12 +173,12 @@ This cleanup does not require the Session Controller to know the roster of upper
 
 `client/ui-session` is the sole Session adapter between the Session Controller and the React/Slot system. It provides `ctx.uiSession` and:
 
-- observes the Session list, current selection, and per-Session bindings;
+- observes the Session catalog, local reference metadata, and explicitly supplied bindings;
 - installs the session and session-maybe scope adapters;
 - supplies `SessionProvider` rendering semantics;
 - supplies built-in Session snapshot, projection, and sessionId sources;
 - accepts Session-scoped source contributions from other domain packages;
-- aggregates pending interactions registered by business packages.
+- aggregates domain-owned pending interactions with running and completion-reminder facts in `sessionStatus`.
 
 It does not own Session transport, event folding, Conversation targets, or concrete business results.
 
@@ -193,12 +194,12 @@ The runtime rejects undeclared, missing, or duplicate standard props. `ui-sessio
 
 session and session-maybe use the same adapter with different binding semantics:
 
-- a strict session scope refuses to render without a current binding;
+- a strict session scope refuses to render without an explicitly supplied binding;
 - session-maybe uses a stable absent binding to preserve hook call order;
-- changing the current Session rebuilds the strict Session subtree under the `sessionId` key;
-- root and session-maybe entries may remain mounted across Session changes.
+- changing the exact Context generation remounts a bound subtree, including same-id replacement;
+- an unbound session-maybe entry adopts its first binding without remounting; root entries have no Session binding.
 
-Each real materialized binding retains the Controller binding's Context. `ui-session` removes the cache entry and withdraws the current binding through `binding.ctx.effect()`.
+Each UI materialization borrows the Controller binding's Context. `ui-session` removes that generation's cache entry and publishes absence through `binding.ctx.effect()`; it does not retain the Session.
 
 Changing the contribution roster rematerializes existing bindings and publishes a new source set. Source identity remains stable within one binding lifetime, as required by `useSyncExternalStore` caching.
 
@@ -206,9 +207,9 @@ Changing the contribution roster rematerializes existing bindings and publishes 
 
 `SessionProvider` is a standard seat derived by `PropsRenderSlots` from a session-scoped child declaration, not a React Context imported directly by business components.
 
-It accepts ordinary `ReactNode` children rather than a `(sessionId) => ReactNode` render function; callers wrap `renderSlot('details', {})` directly.
+It accepts ordinary `ReactNode` children and a required `session={reference | undefined}`. The Provider borrows the caller-owned reference without acquiring or releasing it; callers wrap `renderSlot('details', {})` directly.
 
-Session identity comes from the scope binding and standard `sessionId` prop. The Provider handles only the absent branch and subtree isolation by Session identity; components do not obtain Session data through a Provider callback.
+Session identity reaches components through the explicit scope binding and standard `sessionId` prop. An absent Provider stays unbound, and neither nested Providers nor root entries fall back to a main-area Session.
 
 ### Pending interactions
 
@@ -220,7 +221,7 @@ Concurrent objects with the same key are rejected; replacement requests use a ne
 
 `ui-session` selects each Session's effective object using domain precedence. Higher precedence wins; at equal precedence, the later valid object in traversal order wins.
 
-The aggregate is published as `pendingInteractions: ObservableSnapshot<ReadonlyMap<SessionId, SessionPendingInteraction>>`; `useSessionPendingInteraction` is its React read face.
+The pending aggregate is private to `ui-session`; its effective request appears unchanged as `sessionStatus.getSnapshot().get(id)?.pendingInteraction`. `useSessionStatus` is the public UI read face.
 
 Session navigation state and composer takeover read the same effective object. They do not maintain separate status maps or takeover rosters.
 
@@ -242,7 +243,7 @@ These combined facts do not enter `WorkspaceSnapshot`:
 
 `client/ui-workspace` registers the Workspace list source as the root standard source `workspaces`, from which the renderer provides `useWorkspaces`.
 
-Initial selection, blank-Session reuse, new-session navigation, concurrent-create coalescing, and navigation after archival are UI navigation policy. That policy may read both `ctx.workspaces` and `ctx.sessions` at decision time, but it issues only Controller commands and selection actions and does not publish a combined snapshot.
+Initial restoration, blank-Session reuse, new-session navigation, concurrent-create coalescing, and navigation after archival are UI policy. `ui-workspace` may read both Controllers, but it keeps the main target and reference in its own navigation owner instead of writing UI selection into a Controller snapshot.
 
 Directory pickers, directory browsing, and `openPath` are separate directory capabilities and do not enter the Workspace Controller.
 
@@ -286,7 +287,7 @@ The shell phase is a pure composition of Session lifecycle and Conversation targ
 
 ### Input and composer
 
-The composer chain belongs to `ui-conversation`; a concrete takeover belongs to its business package. `ConversationRoot` reads the current Session's effective object through `useSessionPendingInteraction` and supplies it to chain selectors as `ComposerChainProps.pendingInteraction`.
+The composer chain belongs to `ui-conversation`; a concrete takeover belongs to its business package. `ConversationRoot` reads its bound Session's effective request through `useSessionStatus` and supplies it to chain selectors as `ComposerChainProps.pendingInteraction`.
 
 A selector is a pure function of owner currency. Its non-null result reaches the selected component as `matched`. A stable composer entry and the default composer remain mounted together, while the chain selects one effective presentation.
 
@@ -334,7 +335,7 @@ The Gateway requires only that Remote Event arguments and results are valid JSON
 
 ### One pending projection
 
-The Sidebar and composer consume the same `pendingInteractions` snapshot. Navigation displays approval, plan-review, or question state from the effective object's `kind`; each composer entry selects its own panel by object identity.
+The Sidebar and composer consume the same effective `sessionStatus` pending request. Navigation displays approval, plan-review, or question state from its `kind`; each composer entry selects its own panel by object identity.
 
 The same request identity drives both UI surfaces. A request that replaces another request of the same type uses a new key, so selectors and subscribers observe the identity change.
 
@@ -366,7 +367,7 @@ Stores hold viewing and interaction state such as drafts, View selection, Chat s
 
 When one plugin provides both a source and a Slot entry, it registers the source first and the entry second. Reverse Cordis disposal then removes the entry before the source, so a mounted entry never briefly loses a required hook.
 
-Releasing a Session binding cleans up UI materialization and scoped Stores through `binding.ctx.effect()`. Releasing a plugin fiber cleans up sources, listeners, and Slot entries through registration disposers.
+Final Session-reference release cleans up UI materialization and scoped Stores through `binding.ctx.effect()`. Releasing a plugin fiber cleans up sources, listeners, and Slot entries through registration disposers.
 
 Every disposer is idempotent and depends on no implicit callback outside the Cordis lifecycle.
 
@@ -386,7 +387,7 @@ UI components do not receive `ctx`. Cross-package collaboration uses Cordis serv
 
 Before adding state, choose its sole owner from its consumption semantics: Host communication, commands, and entity lifecycle belong to an API Controller; data assembled from Session events but independent of a target belongs to the Conversation core; projections serving only one View belong to that target package; drafts, selections, and panel state belong to the UI package that owns the interaction.
 
-The same fact must not be retained simultaneously in a Controller snapshot, Conversation snapshot, and Store. A cross-domain decision reads multiple sources and immediately issues a command; it does not create a joined snapshot or cache another domain's object.
+The same fact must not be retained simultaneously in a Controller snapshot, Conversation snapshot, and Store. Cross-domain navigation reads sources at decision time. A UI-owned status source may compose independent running, pending-request, and completion-reminder facts, but must preserve domain ownership and object identity rather than duplicate those domains' state.
 
 These are signs of incorrect ownership: a Controller imports React; the renderer branches on business types; a component traverses Session events; a Store holds Session or Workspace entities; changing one target requires changing the Session Controller.
 
@@ -421,7 +422,7 @@ A target must not use another target's snapshot as its data source. Optional col
 5. When it can handle the request, create the Pending object, publish it through the publication function, await its result, and remove it in `finally`.
 6. Test concurrent keys, precedence, user cancellation, transport abort, plugin disposal, and delegation without a Session.
 
-A request does not register Slots, declare child Slots, mutate the Session snapshot, or create a separate state index. Sidebar and composer both read one effective object from `useSessionPendingInteraction`.
+A request does not register Slots, declare child Slots, mutate the Session snapshot, or create a separate state index. Sidebar and composer read the same effective object from `useSessionStatus`.
 
 ### Review checks
 

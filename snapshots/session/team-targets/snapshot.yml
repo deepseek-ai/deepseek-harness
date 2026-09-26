@@ -1,0 +1,8 @@
+version: 1
+scenario: team-targets
+profile: headless
+composition: team-targets
+recording: authored
+header:
+  class: team-targets
+  pin: true

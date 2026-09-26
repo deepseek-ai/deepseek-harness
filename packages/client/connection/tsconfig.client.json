@@ -36,6 +36,9 @@
       "path": "../../llm/llm"
     },
     {
+      "path": "../../typert/protocol"
+    },
+    {
       "path": "../../util/brand"
     }
   ]

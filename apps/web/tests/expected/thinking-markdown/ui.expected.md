@@ -1,0 +1,220 @@
+- button "Think" [expanded]
+- heading "Compact reasoning with a deliberately long summary with a deliberately long summary with a deliberately long summary with a deliberately long summary with a deliberately long summary with a deliberately long summary with a deliberately long summary with a deliberately long summary" [level=2]
+- paragraph:
+  - text: A paragraph with
+  - strong: strong text
+  - text: ","
+  - emphasis: emphasis
+  - text: ","
+  - link "reference":
+    - /url: https://example.com/
+  - text: ", and"
+  - code: inline_code
+  - text: .
+- heading "Level 1" [level=1]
+- heading "Level 2" [level=2]
+- heading "Level 3" [level=3]
+- heading "Level 4" [level=4]
+- heading "Level 5" [level=5]
+- heading "Level 6" [level=6]
+- list:
+  - listitem: Unordered item
+  - listitem: Second item
+  - listitem:
+    - text: "Inline list formula:"
+    - math: x j
+    - text: .
+  - listitem:
+    - text: "Long list atom:"
+    - math: a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a ⏟ l o n g
+    - text: .
+- list:
+  - listitem: Ordered item
+  - listitem: Another item
+- list:
+  - listitem:
+    - paragraph: Loose first paragraph.
+    - paragraph: Loose middle paragraph.
+    - paragraph: Loose last paragraph.
+- blockquote:
+  - paragraph: Quoted reasoning.
+- separator
+- table:
+  - rowgroup:
+    - row "First Second Third Fourth Fifth Sixth":
+      - columnheader "First"
+      - columnheader "Second"
+      - columnheader "Third"
+      - columnheader "Fourth"
+      - columnheader "Fifth"
+      - columnheader "Sixth"
+  - rowgroup:
+    - row "long_table_cell_0_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx long_table_cell_1_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx long_table_cell_2_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx long_table_cell_3_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx long_table_cell_4_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx long_table_cell_5_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx":
+      - cell "long_table_cell_0_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      - cell "long_table_cell_1_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      - cell "long_table_cell_2_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      - cell "long_table_cell_3_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      - cell "long_table_cell_4_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      - cell "long_table_cell_5_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    - row "Row 1 column 1 Row 1 column 2 Row 1 column 3 Row 1 column 4 Row 1 column 5 Row 1 column 6":
+      - cell "Row 1 column 1"
+      - cell "Row 1 column 2"
+      - cell "Row 1 column 3"
+      - cell "Row 1 column 4"
+      - cell "Row 1 column 5"
+      - cell "Row 1 column 6"
+    - row "Row 2 column 1 Row 2 column 2 Row 2 column 3 Row 2 column 4 Row 2 column 5 Row 2 column 6":
+      - cell "Row 2 column 1"
+      - cell "Row 2 column 2"
+      - cell "Row 2 column 3"
+      - cell "Row 2 column 4"
+      - cell "Row 2 column 5"
+      - cell "Row 2 column 6"
+    - row "Row 3 column 1 Row 3 column 2 Row 3 column 3 Row 3 column 4 Row 3 column 5 Row 3 column 6":
+      - cell "Row 3 column 1"
+      - cell "Row 3 column 2"
+      - cell "Row 3 column 3"
+      - cell "Row 3 column 4"
+      - cell "Row 3 column 5"
+      - cell "Row 3 column 6"
+    - row "Row 4 column 1 Row 4 column 2 Row 4 column 3 Row 4 column 4 Row 4 column 5 Row 4 column 6":
+      - cell "Row 4 column 1"
+      - cell "Row 4 column 2"
+      - cell "Row 4 column 3"
+      - cell "Row 4 column 4"
+      - cell "Row 4 column 5"
+      - cell "Row 4 column 6"
+    - row "Row 5 column 1 Row 5 column 2 Row 5 column 3 Row 5 column 4 Row 5 column 5 Row 5 column 6":
+      - cell "Row 5 column 1"
+      - cell "Row 5 column 2"
+      - cell "Row 5 column 3"
+      - cell "Row 5 column 4"
+      - cell "Row 5 column 5"
+      - cell "Row 5 column 6"
+    - row "Row 6 column 1 Row 6 column 2 Row 6 column 3 Row 6 column 4 Row 6 column 5 Row 6 column 6":
+      - cell "Row 6 column 1"
+      - cell "Row 6 column 2"
+      - cell "Row 6 column 3"
+      - cell "Row 6 column 4"
+      - cell "Row 6 column 5"
+      - cell "Row 6 column 6"
+    - row "Row 7 column 1 Row 7 column 2 Row 7 column 3 Row 7 column 4 Row 7 column 5 Row 7 column 6":
+      - cell "Row 7 column 1"
+      - cell "Row 7 column 2"
+      - cell "Row 7 column 3"
+      - cell "Row 7 column 4"
+      - cell "Row 7 column 5"
+      - cell "Row 7 column 6"
+    - row "Row 8 column 1 Row 8 column 2 Row 8 column 3 Row 8 column 4 Row 8 column 5 Row 8 column 6":
+      - cell "Row 8 column 1"
+      - cell "Row 8 column 2"
+      - cell "Row 8 column 3"
+      - cell "Row 8 column 4"
+      - cell "Row 8 column 5"
+      - cell "Row 8 column 6"
+    - row "Row 9 column 1 Row 9 column 2 Row 9 column 3 Row 9 column 4 Row 9 column 5 Row 9 column 6":
+      - cell "Row 9 column 1"
+      - cell "Row 9 column 2"
+      - cell "Row 9 column 3"
+      - cell "Row 9 column 4"
+      - cell "Row 9 column 5"
+      - cell "Row 9 column 6"
+    - row "Row 10 column 1 Row 10 column 2 Row 10 column 3 Row 10 column 4 Row 10 column 5 Row 10 column 6":
+      - cell "Row 10 column 1"
+      - cell "Row 10 column 2"
+      - cell "Row 10 column 3"
+      - cell "Row 10 column 4"
+      - cell "Row 10 column 5"
+      - cell "Row 10 column 6"
+    - row "Row 11 column 1 Row 11 column 2 Row 11 column 3 Row 11 column 4 Row 11 column 5 Row 11 column 6":
+      - cell "Row 11 column 1"
+      - cell "Row 11 column 2"
+      - cell "Row 11 column 3"
+      - cell "Row 11 column 4"
+      - cell "Row 11 column 5"
+      - cell "Row 11 column 6"
+    - row "Row 12 column 1 Row 12 column 2 Row 12 column 3 Row 12 column 4 Row 12 column 5 Row 12 column 6":
+      - cell "Row 12 column 1"
+      - cell "Row 12 column 2"
+      - cell "Row 12 column 3"
+      - cell "Row 12 column 4"
+      - cell "Row 12 column 5"
+      - cell "Row 12 column 6"
+    - row "Row 13 column 1 Row 13 column 2 Row 13 column 3 Row 13 column 4 Row 13 column 5 Row 13 column 6":
+      - cell "Row 13 column 1"
+      - cell "Row 13 column 2"
+      - cell "Row 13 column 3"
+      - cell "Row 13 column 4"
+      - cell "Row 13 column 5"
+      - cell "Row 13 column 6"
+    - row "Row 14 column 1 Row 14 column 2 Row 14 column 3 Row 14 column 4 Row 14 column 5 Row 14 column 6":
+      - cell "Row 14 column 1"
+      - cell "Row 14 column 2"
+      - cell "Row 14 column 3"
+      - cell "Row 14 column 4"
+      - cell "Row 14 column 5"
+      - cell "Row 14 column 6"
+    - row "Row 15 column 1 Row 15 column 2 Row 15 column 3 Row 15 column 4 Row 15 column 5 Row 15 column 6":
+      - cell "Row 15 column 1"
+      - cell "Row 15 column 2"
+      - cell "Row 15 column 3"
+      - cell "Row 15 column 4"
+      - cell "Row 15 column 5"
+      - cell "Row 15 column 6"
+    - row "Row 16 column 1 Row 16 column 2 Row 16 column 3 Row 16 column 4 Row 16 column 5 Row 16 column 6":
+      - cell "Row 16 column 1"
+      - cell "Row 16 column 2"
+      - cell "Row 16 column 3"
+      - cell "Row 16 column 4"
+      - cell "Row 16 column 5"
+      - cell "Row 16 column 6"
+    - row "Row 17 column 1 Row 17 column 2 Row 17 column 3 Row 17 column 4 Row 17 column 5 Row 17 column 6":
+      - cell "Row 17 column 1"
+      - cell "Row 17 column 2"
+      - cell "Row 17 column 3"
+      - cell "Row 17 column 4"
+      - cell "Row 17 column 5"
+      - cell "Row 17 column 6"
+    - row "Row 18 column 1 Row 18 column 2 Row 18 column 3 Row 18 column 4 Row 18 column 5 Row 18 column 6":
+      - cell "Row 18 column 1"
+      - cell "Row 18 column 2"
+      - cell "Row 18 column 3"
+      - cell "Row 18 column 4"
+      - cell "Row 18 column 5"
+      - cell "Row 18 column 6"
+    - row "Row 19 column 1 Row 19 column 2 Row 19 column 3 Row 19 column 4 Row 19 column 5 Row 19 column 6":
+      - cell "Row 19 column 1"
+      - cell "Row 19 column 2"
+      - cell "Row 19 column 3"
+      - cell "Row 19 column 4"
+      - cell "Row 19 column 5"
+      - cell "Row 19 column 6"
+    - row "Row 20 column 1 Row 20 column 2 Row 20 column 3 Row 20 column 4 Row 20 column 5 Row 20 column 6":
+      - cell "Row 20 column 1"
+      - cell "Row 20 column 2"
+      - cell "Row 20 column 3"
+      - cell "Row 20 column 4"
+      - cell "Row 20 column 5"
+      - cell "Row 20 column 6"
+- paragraph:
+  - text: "Short subscript:"
+  - math: x j
+  - text: .
+- paragraph:
+  - text: "Short scripts:"
+  - math: x i 2
+  - text: .
+- paragraph:
+  - text: "Long atom:"
+  - math: a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a ⏟ l o n g
+  - text: .
+- paragraph:
+  - text: "Inline math:"
+  - math: a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + z
+  - text: .
+- math: a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + a + 1 1 + 1 x
+- text: typescript
+- button "Wrap lines" [pressed]
+- button "Copy"
+- code: const value = "reasoning code"
+- paragraph: {{longToken}}

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -19,7 +20,7 @@ import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import {
   chatSnapshot as emptyChatSnapshot, conversationSnapshot, makeTranslate, sessionSnapshot,
-  stubSettingsScope, workspaceSnapshot,
+  stubConfigForm, TestSessions, workspaceSnapshot,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import {
   WorkflowRunPanel, type WorkflowRunInjected, type WorkflowRunPanelProps,
@@ -295,18 +296,17 @@ const listState = (overrides: Partial<SessionListState> = {}): SessionListState 
   ids: [PARENT_ID, CHILD_ID],
   byId: {
     [PARENT_ID]: {
-      id: PARENT_ID, displayTitle: 'parent', running: true, blank: false, updatedAt: 0,
+      id: PARENT_ID, displayTitle: 'parent', running: true, retainedBy: {}, blank: false, updatedAt: 0,
     },
     [CHILD_ID]: {
       id: CHILD_ID, displayTitle: 'child', parentId: PARENT_ID, origin: 'subagent',
-      running: true, blank: false, updatedAt: 0,
+      running: true, retainedBy: {}, blank: false, updatedAt: 0,
     },
   },
-  current: PARENT_ID,
   phase: 'ready',
-  subagentsByParent: {},
-  jobsBySession: {},
-  currentAddress: undefined,
+  projectionsBySession: { [PARENT_ID]: { state: 'ready', error: null, values: { subagentCatalog: [
+    { createdAt: 1, id: CHILD_ID, mode: 'one-shot' },
+  ] } } },
   ...overrides,
 })
 
@@ -316,7 +316,8 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     sessionId: PARENT_ID,
     useSessions: selector => selector(sessions),
     usePanelInfo, useResource,
-    useSessionPendingInteraction: selector => selector(panelAttention),
+    useSessionStatus: selector => selector(panelAttention),
+    useSessionRetainInfo: () => undefined,
     useSession: selector => selector(panelSession),
     useProjection: () => undefined,
     useConversation: selector => selector(panelConversation),
@@ -324,6 +325,8 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     useTrajectory: selector => selector(panelTrajectory),
     useInput: () => { throw new Error('unused') },
     inputActions: {
+      captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
+      insertText: () => false,
       setDraft: () => {},
       addAttachments: () => false,
       removeAttachment: () => {},
@@ -332,6 +335,7 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     },
     useWorkspaces: selector => selector(panelWorkspace),
     useTurnData: () => undefined,
+    useDisclosure: () => { throw new Error('unused') },
     openSkill: vi.fn(),
     openFile: () => {},
     inspectCall: () => {},
@@ -664,6 +668,10 @@ describe('WorkflowRunPanel', () => {
   it('defers normal completion collapse until focused member content loses focus', () => {
     const sessions = listState({
       ids: [PARENT_ID, CHILD_ID, SECOND_ID],
+      projectionsBySession: { [PARENT_ID]: { state: 'ready', error: null, values: { subagentCatalog: [
+        { createdAt: 1, id: CHILD_ID, mode: 'one-shot' },
+        { createdAt: 1, id: SECOND_ID, mode: 'one-shot' },
+      ] } } },
       byId: {
         ...listState().byId,
         [SECOND_ID]: {
@@ -825,40 +833,55 @@ describe('WorkflowRunPanel', () => {
     expect(screen.getByRole('button', { name: /未分阶段/ }).getAttribute('aria-expanded')).toBe('true')
   })
 
-  it('opens only a running ordinary-list subagent proven to have this parent', () => {
+  it('opens a running member confirmed by the direct parent catalog', () => {
     const data: WorkflowRunChatData = {
       name: 'audit', status: 'running', phases: [phase()],
     }
     const openSession = vi.fn()
-    render(<WorkflowRunPanel {...panelProps(data, listState(), openSession)} />)
+    const sessions = listState()
+    render(<WorkflowRunPanel {...panelProps(data, sessions, openSession)} />)
     fireEvent.click(screen.getByRole('button', { name: '打开 worker' }))
-    expect(openSession).toHaveBeenCalledWith('child-1')
+    expect(openSession).toHaveBeenCalledWith({
+      parentSessionId: PARENT_ID,
+      childSessionId: CHILD_ID,
+      mode: 'one-shot',
+    })
   })
 
-  it('promotes a running member when its ordinary Session row arrives', () => {
+  it('uses observed running state for a catalog-only member', () => {
+    const data: WorkflowRunChatData = { name: 'audit', status: 'running', phases: [phase()] }
+    const sessions = listState({
+      ids: [PARENT_ID],
+      byId: { ...listState().byId, [CHILD_ID]: { ...listState().byId[CHILD_ID]!, running: false } },
+    })
+    const openSession = vi.fn()
+    let statuses = new Map([[CHILD_ID, { running: true, pendingInteraction: undefined, completionUnread: false }]])
+    const props: WorkflowRunPanelProps = { ...panelProps(data, sessions, openSession),
+      useSessionStatus: select => select(statuses),
+    }
+    const view = render(<WorkflowRunPanel {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: '打开 worker' }))
+    expect(openSession).toHaveBeenCalledWith({ parentSessionId: PARENT_ID, childSessionId: CHILD_ID, mode: 'one-shot' })
+    statuses = new Map([[CHILD_ID, { running: false, pendingInteraction: undefined, completionUnread: false }]])
+    view.rerender(<WorkflowRunPanel {...props} />)
+    expect(screen.queryByRole('button', { name: '打开 worker' })).toBeNull()
+  })
+
+  it('promotes a running member when its parent catalog arrives', () => {
     const data: WorkflowRunChatData = {
       name: 'audit', status: 'running', phases: [phase()],
     }
-    const view = render(<WorkflowRunPanel {...panelProps(data, listState({ ids: [PARENT_ID] }))} />)
+    const view = render(<WorkflowRunPanel {...panelProps(data, listState({ projectionsBySession: {} }))} />)
     expect(screen.queryByRole('button', { name: '打开 worker' })).toBeNull()
     view.rerender(<WorkflowRunPanel {...panelProps(data, listState())} />)
     expect(screen.getByRole('button', { name: '打开 worker' })).toBeTruthy()
   })
 
   it.each([
-    ['not in ordinary list', listState({ ids: [PARENT_ID] }), 'running'],
-    ['remote row', listState({ byId: {
-      ...listState().byId,
-      [CHILD_ID]: { ...listState().byId[CHILD_ID]!, origin: undefined },
-    } }), 'running'],
-    ['wrong parent', listState({ byId: {
-      ...listState().byId,
-      [CHILD_ID]: { ...listState().byId[CHILD_ID]!, parentId: 'other' as SessionId },
-    } }), 'running'],
-    ['list terminal', listState({ byId: {
-      ...listState().byId,
-      [CHILD_ID]: { ...listState().byId[CHILD_ID]!, running: false },
-    } }), 'running'],
+    ['catalog absent', listState({ projectionsBySession: {} }), 'running'],
+    ['catalog empty', listState({ projectionsBySession: { [PARENT_ID]: { state: 'ready', error: null, values: { subagentCatalog: [] } } } }), 'running'],
+    ['wrong parent', listState({ projectionsBySession: { ['other' as SessionId]: { state: 'ready', error: null, values: { subagentCatalog: [{ createdAt: 1, id: CHILD_ID, mode: 'one-shot' }] } } } }), 'running'],
+    ['child inactive', listState({ byId: { ...listState().byId, [CHILD_ID]: { ...listState().byId[CHILD_ID]!, running: false } } }), 'running'],
     ['member terminal', listState(), 'completed'],
   ] as const)('does not navigate when %s', (_name, sessions, memberStatus) => {
     const data: WorkflowRunChatData = {
@@ -875,20 +898,17 @@ describe('WorkflowRunPanel', () => {
   })
 })
 
-class TestSessions extends Service {
-  readonly opened: SessionId[] = []
-  constructor(ctx: Context) { super(ctx, 'sessions') }
-  open(id: SessionId): void { this.opened.push(id) }
-}
-
 describe('plugin lifecycle', () => {
   it('registers and removes the Definition and keyed renderer with its fiber', async () => {
     const ctx = new Context()
     await ctx.plugin(SlotRegistry).await()
     ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
     ctx.provide('remote', { $on: () => () => {} } as never)
-    ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
-    await ctx.plugin(TestSessions).await()
+    ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
+    const sessions = new TestSessions(async (action) => { await action() }, ctx)
+    ctx.provide('sessions', sessions)
+    const openSession = vi.fn(async () => {})
+    ctx.provide('uiWorkspace', { openSession } as never)
     const conversationEvents = new UiConversation(ctx, ctx.sessions).events
     ctx.slots.register({
       name: 'root',
@@ -902,7 +922,7 @@ describe('plugin lifecycle', () => {
     const entry = ctx.slots.entries('conversation.chat.node')[0]!
     const face = entry.inject?.() as unknown as WorkflowRunInjected
     face.openSession(CHILD_ID)
-    expect((ctx.sessions as unknown as TestSessions).opened).toEqual([CHILD_ID])
+    expect(openSession).toHaveBeenCalledExactlyOnceWith(CHILD_ID)
     await fiber.dispose()
     expect(conversationEvents.entries()).toEqual([])
     expect(ctx.slots.entries('conversation.chat.node')).toEqual([])

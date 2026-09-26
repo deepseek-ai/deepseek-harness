@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-22-archive-admission-reads-stored-tasks.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-22-archive-admission-reads-stored-tasks.md
+/agent-note-archive-admission-reads-the-stored-tasks:
+  en: 8be4b1d210d5d8bf
+  zh: e9124b48467818b3
+/agent-note-archive-admission-reads-the-stored-tasks/problem:
+  en: 093de39b40f7cc97
+  zh: 50c712bde174bc96
+/agent-note-archive-admission-reads-the-stored-tasks/decision:
+  en: afbf818442c0794a
+  zh: 4749e63d9757bbbb
+/agent-note-archive-admission-reads-the-stored-tasks/alternatives-considered:
+  en: 099360f2c97a50ea
+  zh: eac4746c4602f152
+/agent-note-archive-admission-reads-the-stored-tasks/consequences:
+  en: cb2883b34c2c73fa
+  zh: 9bb1489c9711cf99

@@ -155,9 +155,9 @@ describe('web e2e: Goal keeps one assistant action row per completed turn', () =
     expect(sessionEvents.flatMap(event =>
       event.type === 'request/header' ? [event.data.reason] : [])).toEqual(['initial', 'series'])
     await expect.poll(() => page.locator('[data-turn-process]').count(), { timeout: 15_000 }).toBe(2)
-    expect(await page.getByRole('button', { name: 'System prompt' }).count()).toBe(2)
+    expect(await page.getByRole('button', { name: 'System prompt' }).count()).toBe(0)
     expect(await page.locator(
-      '[data-chat-flow-kind="system-prompt"][hidden="until-found"]',
+      '[data-chat-flow-kind="system-prompt"]',
     ).count()).toBe(0)
     const branchButtons = page.getByRole('button', { name: 'Branch into a new conversation' })
     await expect.poll(() => branchButtons.count(), { timeout: 15_000 }).toBe(2)

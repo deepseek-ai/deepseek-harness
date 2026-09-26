@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for adding-a-session-format-version.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cookbook/adding-a-session-format-version.md
-adding-a-session-format-version.md: 6ebc6bd2062acd88dab953bc227bc1046b13f083
-adding-a-session-format-version.zh.md: c66a045303f96c2ef237cf3b1c1dc598e9c8f5f6
+/cookbook-adding-a-session-log-format-version:
+  en: 71132d61e41cb40b
+  zh: 0b56ed8893bf8d0a
+/cookbook-adding-a-session-log-format-version/summary:
+  en: 76b76c19e0889ab3
+  zh: 1ddc1afa5c2333f0
+/cookbook-adding-a-session-log-format-version/table-of-contents:
+  en: 6977fff29f49e4a4
+  zh: 7ffb6f5490831dce
+/cookbook-adding-a-session-log-format-version/1-choose-the-version-and-release-base:
+  en: 3205409b918b891d
+  zh: 98f17c19045954d5
+/cookbook-adding-a-session-log-format-version/2-add-an-identity-edge:
+  en: 77c9c26d94fb33ca
+  zh: 313c54c45cfc7dbc
+/cookbook-adding-a-session-log-format-version/3-implement-per-artifact-stages-and-validation:
+  en: 2bea8b93ac9b359a
+  zh: 2c24e71680f66ef7
+/cookbook-adding-a-session-log-format-version/4-update-current-version-consumers:
+  en: a285126945d02c12
+  zh: e039c77cf7866ad2
+/cookbook-adding-a-session-log-format-version/5-create-snapshot-successors:
+  en: 7f865673d550a949
+  zh: 8bde6a9ef29f382a
+/cookbook-adding-a-session-log-format-version/6-validate-the-integrated-result:
+  en: fb1c6d23599659c5
+  zh: b51e4ee8c0d1daeb
+/cookbook-adding-a-session-log-format-version/6-validate-the-integrated-result/developer-v4-corpus-trial:
+  en: f22ab2d7b089a6d2
+  zh: 0a47f543899f0161
+/cookbook-adding-a-session-log-format-version/6-validate-the-integrated-result/final-v3-event-vocabulary-before-v4-publication:
+  en: a6ed1788dc64efbe
+  zh: 9ca3382f92df986b
+/cookbook-adding-a-session-log-format-version/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

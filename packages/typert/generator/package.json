@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-typert-generator",
   "description": "TypeScript project analyzer and model-driven Typert artifact generator",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -36,12 +36,12 @@
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-tool-cordis": "workspace:^",
-    "@deepseek-ai/dsh-typert-registry": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-tool-cordis": "workspace:*",
+    "@deepseek-ai/dsh-typert-registry": "workspace:*",
+    "@deepseek-ai/cordis": "workspace:~",
     "zod": "^4.4.3"
   }
 }

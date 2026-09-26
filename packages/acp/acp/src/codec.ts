@@ -27,7 +27,8 @@ export function turnEndToStopReason(reason: TurnEndReason): StopReason {
     case 'blocked':
     case 'error':
       return 'end_turn'
-    /* v8 ignore next 2 -- TurnEndReason is closed and every member is handled above */
+    /* v8 ignore next 2 -- TurnEndReason is merge-extensible; every live-turn member is
+     * handled above, and seed-only variants (`forked`) never end an ACP prompt turn. */
     default:
       return 'end_turn'
   }

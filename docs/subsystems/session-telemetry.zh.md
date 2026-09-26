@@ -2,7 +2,7 @@
 
 [English](session-telemetry.md) | 中文
 
-对外的会话上报拆分为一项[能力 seam](../capability-seams.zh.md)：Service Definition 与捕获协调器（[dsh-session-telemetry](../../packages/session/session-telemetry)，`ctx.sessionTelemetry`）拥有完整的权威事件捕获、`session-telemetry/record` 脱敏 waterfall（瀑布式事件）、handoff 游标与最小后端约定；部署方加载的 Service Provider（[dsh-session-telemetry-otel](../../packages/session/session-telemetry-otel)）则是原样配置的 OpenTelemetry JS SDK 日志流水线。它是一项可选能力，不属于 agent loop（智能体循环）主干，这里也没有任何内容会进入模型请求。边界公理（harness 的职责止于 `emit()`；批处理、重试、排队与丢失策略都属于上报 SDK）连同被否决的替代方案，均已在[复活 Agent Note](../../.agents/notes/implemented/feature/2026-07-23-session-telemetry-otel-revival.zh.md)中定案；捕获与游标约定见 [Service Definition README](../../packages/session/session-telemetry/README.zh.md)。
+[捕获服务](../../packages/session/session-telemetry/README.zh.md) 负责规范事件捕获、脱敏和交接游标。[反馈后端](../../packages/session/session-telemetry-otel/README.zh.md) 授权 Session 前缀，并负责独立队列、逐请求调度及 4,000,000 字节上限。上报数据不会进入模型请求。
 
 源码：[`packages/session/session-telemetry/src/index.ts`](../../packages/session/session-telemetry/src/index.ts)
 
@@ -12,7 +12,7 @@
 /**
  * Severity of a telemetry record, pre-mapped at capture so a receiver can
  * alert with zero configuration: `error` for events whose own outcome flag
- * says so (the tool-result block's `isError`, `turn/end` error reasons) and for
+ * says so (the tool message's `isError`, `turn/end` error reasons) and for
  * `agent-error` operational records. Captured events otherwise default to
  * `info`; `warn` remains available to `session-telemetry/record` policies and
  * backends.
@@ -29,6 +29,8 @@ type SessionTelemetrySeverity = 'info' | 'warn' | 'error'
  * identity so they can never be mistaken for ledger rows.
  */
 interface SessionTelemetryRecord {
+  /** Canonical envelope without data; body carries the separately redacted payload. Absent for operational records. */
+  sourceEvent?: { sessionId: SessionId; envelope: Omit<SessionEvent, 'data'> }
   /** Ledger (session-log mirror) or ops (operational signal) channel; backends keep the two under separate instrumentation scopes. */
   channel: 'ledger' | 'ops'
   /** Unix epoch milliseconds — the source event's append time for ledger records, the emission time for ops records. */
@@ -55,7 +57,7 @@ interface SessionTelemetryRecord {
 }
 ```
 
-每条权威[会话事件](session.zh.md)都会完整透传为一条有序 ledger 记录，包括每个携带完整紧凑 stream 的 `assistant/message` 或 `assistant/attempt`，以及该 seam 从未听说过、由插件合并进来的类型。进程本地 `agent/assistant-stream` frame 不进入该持久 feed。新 Session 对象从其生命周期边界开始，除非后端选择 `includeHistory`；重新收养同一对象时会从 handoff 游标之后继续。投递是尽力而为的：游标标记的是「已交接」而非「已送达」，记录可能丢失（崩溃、重载窗口）也可能重复（新对象回放、SDK 重试），因此接收端对 ledger 记录基于 `(session.id, session.format_version, event.seq)` 去重；ops 记录刻意省略这类标识——它们是用于告警的信号，而非用于累加的条目，重复被容忍而非被去重。
+每条权威[会话事件](session.zh.md)都会完整透传为一条有序 ledger 记录，包括每个携带完整紧凑 stream 的 `assistant/message` 或 `assistant/attempt`，以及该 seam 从未听说过、由插件合并进来的类型。进程本地 `agent/assistant-stream` frame 不进入该持久 feed。新 fork 从子会话自有后缀开始，包括继承标记和 fork 结束事件；恢复的 Session 从已存储前缀之后开始，包括恢复的 fork。后端可以选择 `includeHistory` 来包含完整前缀；重新收养同一对象时会从 handoff 游标之后继续。投递是尽力而为的：游标标记的是「已交接」而非「已送达」，记录可能丢失（崩溃、重载窗口）也可能重复（新对象回放、SDK 重试），因此接收端对 ledger 记录基于 `(session.id, session.format_version, event.seq)` 去重；ops 记录刻意省略这类标识——它们是用于告警的信号，而非用于累加的条目，重复被容忍而非被去重。
 
 ## 共享披露
 
@@ -80,7 +82,7 @@ type SessionTelemetryCapture = 'live' | 'on-demand'
 interface SessionTelemetryCaptureOptions {
   /** Follow live events, or wait for explicit capture; defaults to live. */
   capture?: SessionTelemetryCapture
-  /** Include stored history before this lifecycle; defaults to false. */
+  /** Include inherited fork history and stored history from earlier lifecycles; defaults to false. */
   includeHistory?: boolean
 }
 ```

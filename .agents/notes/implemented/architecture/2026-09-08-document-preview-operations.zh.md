@@ -16,15 +16,19 @@ Document Preview 将资源观察与内容读取分开。[资源模型](2026-09-0
 
 可读取的文件使用 `dsh-resource://file/session/<sessionId>/<path>`。路径可以相对工作区，也可以是绝对路径；编码后的绝对路径保留前导斜杠。`fileAddressFor` 始终生成这种 Session 地址。提供方与 Preview RPC 只从该地址取 Session，不取当前选择、首个持有者或 tab 所属 Session。不带 Session 的 `absolute` URI 无法读取；提供方报告 `workspace-file/unknown-workspace`。Session 授权是文件协议规则，不是额外的 Resource 身份。
 
-[Document Preview](../../../../packages/client/ui-sidebar-documentpreview/README.zh.md) 负责格式选择和加载策略。元数据通过 `ctx.documentPreviews` 注册；组件单独注册到 keyed `sidebar.right.tab.document` Slot。扩展注册优先于内置注册，其次比较后缀长度和注册顺序。工具栏仅在候选不少于两个时列出匹配候选，按 tab 记住手动选择；纯文本是兜底，但注册声明为二进制的后缀和 owner 的 unviewable 清单所列后缀除外（[侧边栏预览打磨](../feature/2026-09-11-sidebar-document-preview-polish.zh.md)）。子组件收到累积文本或完整原生字节、原始资源地址，以及标准 `useResource` 和 `useTabInfo` 钩子。Preview 经普通注入调用既有 `read`、`readAll` 与 `readRelated`，在自己的 `rpc.ts` 解码字节。刷新仍按 tab 独立进行，不引入资源 reload、共享 `changed` 确认、额外资源包装层或内容 Session。
+[Document Preview](../../../../packages/client/ui-sidebar-documentpreview/README.zh.md) 负责格式选择和加载策略。元数据通过 `ctx.documentPreviews` 注册；组件单独注册到 keyed `sidebar.right.tab.document` Slot。扩展注册优先于内置注册，其次比较后缀长度和注册顺序。工具栏列出受支持的候选，按 tab 记住手动选择。未知扩展名及文本兼容的渲染器仍可使用纯文本。文本兼容性由注册的二进制后缀决定，与加载方式无关；HTML 和 SVG 不属于二进制后缀，保留源码查看。只有一个候选时不显示查看器控件。注册声明为二进制的后缀不提供纯文本；已知二进制后缀没有注册渲染器时不发起读取，并显示不支持预览的空态（[侧边栏预览打磨](../feature/2026-09-11-sidebar-document-preview-polish.zh.md)）。子组件收到累积文本或完整原生字节、原始资源地址，以及标准 `useResource` 和 `useTabInfo` 钩子。Preview 通过 `ctx.remote.workspaceFiles.read` 读取文本，通过 `ctx.remote.workspaceFiles.readBytes` 读取原生字节，关联资源使用 `baseFile`。刷新仍按 tab 独立进行，不引入资源 reload、共享 `changed` 确认、额外资源包装层或内容 Session。
 
-Markdown 和代码通过累积的分页文本复用增量渲染原语。HTML、PDF 和图片读取完整 `Uint8Array<ArrayBuffer>` 数据；Host 传输保持 base64。发布后的缓冲区只读借用，绝不持久化进布局或 Session JSON。PDF.js 在自有 Worker 中运行，字体和解码数据以相同版本随包发布，转移输入前先复制，以保留 Preview 的缓冲区。HTML 在 Blob iframe 中运行，设置 `sandbox="allow-scripts"`，不授予同源、弹窗、表单、下载或顶层导航权限。浏览器保持正常的外部网络规则。有上限的静态本地 JS/CSS 读取由父页面负责；不透明源 iframe 创建自己的资源 Blob，因为它不能加载父源创建的 Blob。PNG、JPEG、GIF、WebP、BMP、ICO 和 SVG 使用图片专用 Blob URL，在 `<img>` 静态图片上下文中渲染。比面板宽的图片按纵横比缩小到面板宽度；较小的图片保留固有 CSS 像素尺寸并由 auto margin 居中，较高的图片扩展共享滚动区的纵向范围（[侧边栏预览打磨](../feature/2026-09-11-sidebar-document-preview-polish.zh.md)）。渲染器不提供缩放或拖拽平移。SVG 标记绝不进入应用 DOM 或 iframe，因此脚本保持不可执行，也无法访问父页面。替换 HTML 或图片时会撤销其根 Blob URL。
+Markdown 和代码通过累积的分页文本复用增量渲染原语。HTML、PDF 和图片读取完整 `Uint8Array<ArrayBuffer>` 数据；Host 传输使用[工作区文件二进制传输](2026-09-17-workspace-file-binary-transfer.zh.md)。发布后的缓冲区只读借用，绝不持久化进布局或 Session JSON。PDF.js 在自有 Worker 中运行，字体和解码数据以相同版本随包发布，转移输入前先复制，以保留 Preview 的缓冲区。开启[开发者工具](../feature/2026-09-17-developer-tools-settings.zh.md)时，HTML 在 Blob iframe 中运行，设置 `sandbox="allow-scripts"`，不授予同源、弹窗、表单、下载或顶层导航权限。浏览器保持正常的外部网络规则。有上限的静态本地 JS/CSS 读取由父页面负责；不透明源 iframe 创建自己的资源 Blob，因为它不能加载父源创建的 Blob。PNG、JPEG、GIF、WebP、BMP、ICO 和 SVG 使用图片专用 Blob URL，在 `<img>` 静态图片上下文中渲染。比面板宽的图片按纵横比缩小到面板宽度；较小的图片保留固有 CSS 像素尺寸并由 auto margin 居中，较高的图片扩展共享滚动区的纵向范围（[侧边栏预览打磨](../feature/2026-09-11-sidebar-document-preview-polish.zh.md)）。渲染器不提供缩放或拖拽平移。SVG 标记绝不进入应用 DOM 或 iframe，因此脚本保持不可执行，也无法访问父页面。替换 HTML 或图片时会撤销其根 Blob URL。
+
+PDF.js 官方 TextLayerBuilder 在适配宽度的 canvas 上负责选择边界和复制规范化，共享页面清理，并使用由组件拥有的 resize observer。响应式尺寸适配使用独立的 CSS `scale` 属性，与 PDF.js 的页面旋转和平移变换组合。其内容结束标记和堆叠规则限制空白区域中的选择；换行高亮被抑制。逐页取消使用 builder 的清理操作，而不 abort 第一页的信号，因为官方选择监听器跨页面共享。
 
 ## 考虑过的替代方案
 
+**通过预览元数据中的回调加载转换内容。** 这种回调会让共享文件 store 同时持有源文件字节和格式专属的转换结果。由渲染器自行加载可将转换缓存、错误和字体元数据留在 Office，同时保留共享文件身份和工具栏控件。定义声明 `loading: 'renderer'`；正文接收与格式无关的加载 revision，并将读取与 store 更新交给其私有注入 face。face 向共享 owner 报告已展示的源版本或加载失败。重新加载或替换实现会增加 revision，过期报告会被忽略，正文在替换或卸载时取消待处理工作。Office 在 tab 生命周期内保留已完成的内容，并组合自己的 PDF 子 slot。
+
 **把方法挂到 Iterator 或其值上。** 这会混淆观察与命令，并在数据帧中重复能力身份。帧携带数据和失败；显式 Preview RPC 回调负责读取。
 
-**核心公开投影工厂，或在 `open` 内做同样的组装。** 分开的流值、operations 组合与公开接口增加了组装步骤，没有另一个当前消费方需要它。Preview 的共享 RPC 适配已让渲染器无需解码 Session 和 base64。Resource 不提供与提供方无关的命令接口，也不提供绑定于打开实例的命令生命周期；增加任一种都需要文件预览之外的消费方证据。
+**核心公开投影工厂，或在 `open` 内做同样的组装。** 分开的流值、operations 组合与公开接口增加了组装步骤，没有另一个当前消费方需要它。Preview 的共享 RPC 适配已让渲染器无需处理 Session 寻址和字节传输。Resource 不提供与提供方无关的命令接口，也不提供绑定于打开实例的命令生命周期；增加任一种都需要文件预览之外的消费方证据。
 
 **把 UI Session 作为额外 Resource 身份，或由首个持有者、当前选择决定授权。** 保留的 tab 可以属于不同于当前选择的 Session，UI 所在位置也不能标识地址指向的文件。将所需 Session 编入文件地址，既保留 Host 授权，也让同地址的所有读者共享观察。
 

@@ -195,16 +195,19 @@ describe('TabDomain — a tab\'s own actions', () => {
     expect(navigator.closeIn).toHaveBeenCalledWith(SESSION, tabId)
   })
 
-  it('passes revealIfOpened through, so a tab may open a second copy beside itself', () => {
+  it('passes placement options through, so a tab may prefer a new pane and open a second copy', () => {
     const { domain, navigator, controller, current } = harness()
     const tabId = controller.openContent({ kind: 'text', contentId: 'dsh-resource://file/session/s-one/a.txt', title: 'a' })
     domain.sync(SESSION, current())
     const { tabActions } = domain.occurrence(SESSION, recordOf(current(), tabId))
-    tabActions.openResource('dsh-resource://file/session/s-one/a.txt', { revealIfOpened: false })
+    tabActions.openResource('dsh-resource://file/session/s-one/a.txt', {
+      preferNewPane: true,
+      revealIfOpened: false,
+    })
     expect(navigator.openResourceIn).toHaveBeenLastCalledWith(
       SESSION,
       'dsh-resource://file/session/s-one/a.txt',
-      { paneId: current().rootId, revealIfOpened: false },
+      { paneId: current().rootId, preferNewPane: true, revealIfOpened: false },
     )
   })
 })

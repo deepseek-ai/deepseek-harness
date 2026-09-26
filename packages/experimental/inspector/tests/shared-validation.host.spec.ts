@@ -27,7 +27,7 @@ describe('Inspector JSON values', () => {
     cyclic.self = cyclic
     const arrayWithField = [1]
     Reflect.set(arrayWithField, 'extra', true)
-    const inheritedArray = Object.setPrototypeOf([1], null) as unknown
+    const inheritedArray: unknown = Object.setPrototypeOf([1], null)
     const symbolObject = { [Symbol('field')]: true }
     const hidden = {}
     Object.defineProperty(hidden, 'value', { value: 1, enumerable: false })

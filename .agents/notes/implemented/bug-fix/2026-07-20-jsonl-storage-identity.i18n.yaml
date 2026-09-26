@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-20-jsonl-storage-identity.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-07-20-jsonl-storage-identity.md
-2026-07-20-jsonl-storage-identity.md: 5224ebf6bebc42b4b72e14243c1af6c02f366372
-2026-07-20-jsonl-storage-identity.zh.md: 05b7150edb99cdf336b9df90bc8e3cc1df9848a3
+/agent-note-bind-jsonl-session-identity-before-mutation:
+  en: 1d52db2391f1433e
+  zh: 3bcb9dca6b77bfdd
+/agent-note-bind-jsonl-session-identity-before-mutation/problem:
+  en: 960d783083269ddd
+  zh: ef52b53d99b520d1
+/agent-note-bind-jsonl-session-identity-before-mutation/decision:
+  en: 3fc8ab92d1f0f98b
+  zh: 855b863c7d90cdd9
+/agent-note-bind-jsonl-session-identity-before-mutation/alternatives-considered:
+  en: 5269f154c37cb8de
+  zh: 983f18775457361a
+/agent-note-bind-jsonl-session-identity-before-mutation/consequences:
+  en: 2c88ff974542760f
+  zh: 489996a16ba6907b

@@ -15,13 +15,20 @@ const COUNT_SUFFIX = EXACT_OMISSION.slice(COUNT_OFFSET + 1)
  * Format the notice appended to a retained preview, preserving its persisted spelling.
  * @param omitted - bytes omitted by the retention policy.
  * @param ref - saved text locator and retrieval guidance.
+ * @param images - number of whole images omitted alongside text.
  * @returns the complete notice without a leading preview separator.
  */
-export function formatSpillNotice(omitted: Omitted, ref: Pick<SpillRef, 'locator' | 'retrievalHint'>): string {
-  return `${OPEN}${describeOmitted(omitted, 'bytes')}${LOCATION}${ref.locator}${GUIDANCE_SEPARATOR}${ref.retrievalHint}${CLOSE}`
+export function formatSpillNotice(omitted: Omitted, ref: Pick<SpillRef, 'locator' | 'retrievalHint'>, images = 0): string {
+  const imageNotice = images > 0 ? ` Omitted ${images} images.` : ''
+  return `${OPEN}${describeOmitted(omitted, 'bytes')}${imageNotice}${LOCATION}${ref.locator}${GUIDANCE_SEPARATOR}${ref.retrievalHint}${CLOSE}`
 }
 
 function isOmission(text: string): boolean {
+  const imageNotice = / Omitted ([1-9][0-9]*) images\.$/.exec(text)
+  if (imageNotice !== null) {
+    if (!Number.isSafeInteger(Number(imageNotice[1]))) return false
+    text = text.slice(0, imageNotice.index)
+  }
   if (text === describeOmitted({ kind: 'none' }, 'bytes')
     || text === describeOmitted({ kind: 'unknown' }, 'bytes')) return true
   const count = Number(text.slice(COUNT_OFFSET, text.length - COUNT_SUFFIX.length))

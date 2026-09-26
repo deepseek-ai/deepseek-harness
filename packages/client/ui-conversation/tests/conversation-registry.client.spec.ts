@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createAssistantMessage, LlmAttemptId } from '@deepseek-ai/dsh-llm'
@@ -70,22 +70,25 @@ function fakeSessions(ctx: Context): { sessions: ISessions; binding: SessionBind
   const list = createSnapshotStore<SessionListState>({
     ids: [],
     byId: {},
-    current: undefined,
     phase: 'ready',
-    subagentsByParent: {},
-    jobsBySession: {},
-    currentAddress: undefined,
+    projectionsBySession: {},
   })
-  const sessions = {
+  const reference = {
+    sessionId: SESSION_ID,
+    binding,
+    ready: Promise.resolve(binding),
+    release: () => {},
+    [Symbol.dispose]() {},
+  }
+  const sessions: ISessions = {
     list,
     searchResultLimit: 50,
     create: () => Promise.reject(new Error('unused fake Sessions operation')),
-    open: () => {},
-    openSubagent: () => {},
+    retain: () => reference,
+    using: async (_target, _options, operation) => await operation(reference),
+    retainInfo: () => createSnapshotStore({ referenceCount: 1, retainedBy: {} }),
     subagentAddress: () => undefined,
-    setSubagentCatalogOpen: () => {},
-    refreshSubagents: () => Promise.reject(new Error('unused fake Sessions operation')),
-    clear: () => {},
+    refreshProjections: () => Promise.reject(new Error('unused fake Sessions operation')),
     refresh: () => Promise.reject(new Error('unused fake Sessions operation')),
     search: () => Promise.reject(new Error('unused fake Sessions operation')),
     fork: () => Promise.reject(new Error('unused fake Sessions operation')),
@@ -93,7 +96,7 @@ function fakeSessions(ctx: Context): { sessions: ISessions; binding: SessionBind
     scopeOf: candidate => candidate === binding.ctx ? SESSION_ID : undefined,
     sessionOf: candidate => candidate === binding.ctx ? binding.session : undefined,
     binding: id => id === SESSION_ID ? binding : undefined,
-  } satisfies ISessions
+  }
   return { sessions, binding }
 }
 
@@ -127,6 +130,7 @@ async function bootRegistries(): Promise<{
   views: ConversationViewRegistry
 }> {
   const ctx = new Context()
+  onTestFinished(async () => { await ctx.fiber.dispose() })
   const { sessions, binding } = fakeSessions(ctx)
   const uiConversation = new UiConversation(ctx, sessions)
   return {
@@ -139,6 +143,75 @@ async function bootRegistries(): Promise<{
 }
 
 describe('Conversation registries', () => {
+  it('publishes open turns without an active view and detaches when the Session scope ends', async () => {
+    const { uiConversation, binding } = await bootRegistries()
+    const conversation = uiConversation.binding(binding)
+    const source = binding.eventSource as MutableSessionEventSource
+    const openTurn = conversation.openTurn
+    const published: (number | undefined)[] = []
+    const listener = vi.fn(() => { published.push(openTurn.getSnapshot()) })
+    const unsubscribe = openTurn.subscribe(listener)
+    expect(openTurn.getSnapshot()).toBeUndefined()
+    expect(conversation.snapshot.getSnapshot().activeTargets.size).toBe(0)
+    source.append({ type: 'event', event: {
+      type: 'turn/start', seq: SessionSeq(1), time: 1, data: { turn: 1 },
+    } })
+    expect(openTurn.getSnapshot()).toBe(1)
+    source.append({ type: 'event', event: {
+      type: 'step/start', seq: SessionSeq(2), time: 2, data: { turn: 1, step: 1 },
+    } })
+    expect(listener).toHaveBeenCalledOnce()
+    source.append({ type: 'event', event: {
+      type: 'turn/end', seq: SessionSeq(3), time: 3, data: { turn: 1, reason: { kind: 'completed' } },
+    } })
+    expect(openTurn.getSnapshot()).toBeUndefined()
+    source.append({ type: 'event', event: {
+      type: 'turn/start', seq: SessionSeq(4), time: 4, data: { turn: 2 },
+    } })
+    expect(openTurn.getSnapshot()).toBe(2)
+    expect(published).toEqual([1, undefined, 2])
+    expect(uiConversation.binding(binding).openTurn).toBe(openTurn)
+    expect(conversation.snapshot.getSnapshot().activeTargets.size).toBe(0)
+    unsubscribe()
+    listener.mockClear()
+    source.append({ type: 'event', event: {
+      type: 'turn/end', seq: SessionSeq(5), time: 5, data: { turn: 2, reason: { kind: 'completed' } },
+    } })
+    expect(openTurn.getSnapshot()).toBeUndefined()
+    expect(listener).not.toHaveBeenCalled()
+    const unsubscribeAgain = openTurn.subscribe(listener)
+    await binding.ctx.fiber.dispose()
+    listener.mockClear()
+    source.append({ type: 'event', event: {
+      type: 'turn/start', seq: SessionSeq(6), time: 6, data: { turn: 3 },
+    } })
+    expect(listener).not.toHaveBeenCalled()
+    expect(openTurn.getSnapshot()).toBeUndefined()
+    unsubscribeAgain()
+  })
+
+  it('requires a loaded turn start and follows prepended history and replacement windows', async () => {
+    const { uiConversation, binding } = await bootRegistries()
+    const source = binding.eventSource as MutableSessionEventSource
+    source.replace([{ type: 'event', event: {
+      type: 'step/start', seq: SessionSeq(2), time: 2, data: { turn: 7, step: 1 },
+    } }], true)
+    const openTurn = uiConversation.binding(binding).openTurn
+    expect(openTurn.getSnapshot()).toBeUndefined()
+    source.prepend([{ type: 'event', event: {
+      type: 'turn/start', seq: SessionSeq(1), time: 1, data: { turn: 7 },
+    } }], false)
+    expect(openTurn.getSnapshot()).toBe(7)
+    source.replace([{ type: 'event', event: {
+      type: 'turn/end', seq: SessionSeq(3), time: 3, data: { turn: 7, reason: { kind: 'completed' } },
+    } }], true)
+    expect(openTurn.getSnapshot()).toBeUndefined()
+    source.replace([{ type: 'event', event: {
+      type: 'turn/start', seq: SessionSeq(4), time: 4, data: { turn: 8 },
+    } }], false)
+    expect(openTurn.getSnapshot()).toBe(8)
+  })
+
   it('publishes frame-paced updates after three animation frames and lets immediate updates preempt them', async () => {
     let nextFrame = 0
     const frames = new Map<number, FrameRequestCallback>()

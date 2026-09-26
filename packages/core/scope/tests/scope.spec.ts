@@ -207,7 +207,7 @@ describe('scope parent chain', () => {
     agentScope.ctx.on('probe/event' as never, ((): void => { seen.push('agent') }) as never)
     otherScope.ctx.on('probe/event' as never, ((): void => { seen.push('other') }) as never)
 
-    const emit = ctx as unknown as { emit: (carrier: object, type: string) => void }
+    const emit = ctx as { emit: (carrier: object, type: string) => void }
     // Dispatch at the AGENT key: its own tag and its ancestor's admit; a
     // sibling root does not.
     emit.emit(scopeTarget({}, agent), 'probe/event')

@@ -53,11 +53,11 @@ kind: "package-reference"
 
 ### 切换预设
 
-切换到 Auto 时，服务先同步执行其准入检查；每次预设切换随后只改变实际值不同的旋钮，再次选择当前已生效的预设不会产生任何变化。当前值解析顺序为：仍匹配的最近一次记录选择，其次是配置表中的第一个匹配项，否则为 `custom`。用户通过 `/permission` 命令切换：不带参数调用时报告当前预设与所有可用条目，带预设参数时切换过去。
+切换到 Auto 时，服务先同步执行其准入检查；每次预设切换随后只改变实际值不同的旋钮，再次选择当前已生效的预设不会产生任何变化。当前值解析顺序为：仍匹配的最近一次记录选择（已记录的 Auto 选择在 `never` 审批策略下也匹配），其次是配置表中的第一个匹配项，否则为 `custom`。用户通过 `/permission` 命令切换：不带参数调用时报告当前预设与所有可用条目，带预设参数时切换过去。
 
 ### 用户看到什么
 
-客户端从进程级目录渲染可选条目：先按表顺序列出配置预设，再在 Auto integration 存活时列出 Auto。客户端把这份快照与 Session 当前值合并；不匹配的 `custom` 值可以标记当前控件，但绝不会成为可选目录行。Auto 的身份与 Full access 旋钮组合固定在本服务内部。shipped 客户端的 locale 字典拥有 Auto 的 label 与 description，而配置预设保留 Host 提供的展示信息。调用方不能通过通用 contribution API 发布其他预设；他们可以从 `custom` 切换出去，但不能通过此服务选中或持久化一个具名 custom 预设。
+客户端从进程级目录渲染可选条目：先按表顺序列出配置预设，再在 Auto integration 存活时列出 Auto。客户端把这份快照与 Session 当前值合并；不匹配的 `custom` 值可以标记当前控件，但绝不会成为可选目录行。Auto 的身份与旋钮组合（Full access 沙箱加 `ask` 审批策略）固定在本服务内部；已记录的 Auto 选择也匹配委派子会话固定的 `never` 策略。shipped 客户端的 locale 字典拥有 Auto 的 label 与 description，而配置预设保留 Host 提供的展示信息。调用方不能通过通用 contribution API 发布其他预设；他们可以从 `custom` 切换出去，但不能通过此服务选中或持久化一个具名 custom 预设。
 
 ### 会话默认值
 
@@ -83,11 +83,11 @@ kind: "package-reference"
 
 ### 写入路径
 
-`set()` 解析预设，并在适用时同步执行 Auto 准入检查。切换仅在有效预设变化时追加 `permission/preset`，再通过各自的权威 setter——`dsh-sandbox-policy` 的 `setSandboxMode` 与 `dsh-user-approval` 的 `setApprovalPolicy`——写入每个变化的旋钮。因此，两个预设共享同一组取值时，选择事件仍会保留用户意图：Auto 与 Full access 之间切换时，沙箱与审批值已经相同，只记录新的身份。净变化为零的选择不追加任何内容。
+`set()` 解析预设，并在适用时同步执行 Auto 准入检查。切换仅在有效预设变化时追加 `permission/preset`，再通过各自的权威 setter——`dsh-sandbox-policy` 的 `setSandboxMode` 与 `dsh-user-approval` 的 `setApprovalPolicy`——写入每个变化的旋钮。因此，两个预设共享同一组取值时，选择事件仍会保留用户意图。Auto 与 Full access 之间切换时，记录新的身份与变化的审批策略。净变化为零的选择不追加任何内容。
 
 ### 读取侧与 `custom`
 
-`current(session)` 读取必需的 `permissions` 投影；该单元在组合默认值（`ctx.shell.sandboxMode` 与审批配置）之上折叠三个全量值旋钮事件。host 状态还会保留 `session/end-seed` 是否已经出现，使会话固定无需重扫日志即可区分显式为空的恢复 seed 与真正的新会话。仍匹配的最近选择在共享捆绑时胜出；否则配置表中的第一个匹配项胜出；否则返回推导出的 `CUSTOM_PRESET`。投影 key 缺失时会显式失败。
+`current(session)` 读取必需的 `permissions` 投影；该单元在组合默认值（`ctx.shell.sandboxMode` 与审批配置）之上折叠三个全量值旋钮事件。host 状态还会保留 `session/end-seed` 是否已经出现，使会话固定无需重扫日志即可区分显式为空的恢复 seed 与真正的新会话。仍匹配的最近选择在共享捆绑时胜出，已记录的 Auto 选择在 `never` 审批策略下也匹配；否则配置表中的第一个匹配项胜出；否则返回推导出的 `CUSTOM_PRESET`。投影 key 缺失时会显式失败。
 
 `optionOf(name)` 返回配置条目、存活的 Auto 条目或仅供显示的 `custom` 条目。只有名称不匹配这三者时才抛错；已撤回的 Auto 条目不可用。
 
@@ -135,7 +135,7 @@ kind: "package-reference"
 - **`custom` 只能推导得出**：调用方可以从不匹配的旋钮组合切换出去，但无法通过此服务选中或持久化一个名为 custom 的预设。
 - **配置预设表在插件生命周期内固定**：只有固定的 Auto contribution 可以在不重新加载本服务的情况下改变实时进程目录。
 - **Auto 不能成为默认值**：它只在 integration effect 存活期间存在，并且有意不进入 `permission` 设置 schema。
-- **已存储的默认值必须保留在 preset 表中**：移除被引用的 preset 会导致权限设置注册失败，直到更新或重置 `settings.yaml` 中的 `permission` 分节。
+- **配置的默认值必须指向已配置预设**——移除被引用预设时，必须在同一次 Config 编辑中修改 `defaultPreset`。
 
 <a id="dev-note"></a>
 ### 开发备注

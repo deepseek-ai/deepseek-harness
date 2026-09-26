@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Computer Use (Cua Driver)",
+    "description": "Let the model operate the desktop with the bundled Cua Driver runtime; needs desktop permissions for the app that launches dsh."
+  }
+}

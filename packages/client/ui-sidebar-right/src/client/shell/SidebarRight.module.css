@@ -9,7 +9,7 @@
  * One content tree uses the frame's width normally and fills the viewport in
  * fullscreen. The frame retains a shown wide panel's track in both modes.
  *
- * Hidden, the panel is translated off the frame's right edge rather than
+ * Hidden, docked Grid items translate off the frame's right edge rather than
  * unmounted, so showing and hiding are one slide in both presentations. The
  * transform rides the same variables as the frame's track transition (ui-theme
  * base.css); while squeezing, the panel's left edge and the conversation's right
@@ -17,76 +17,94 @@
  * is out of reach once off-edge, and flips back before the slide starts.
  *
  * The normal panel is below frame overlays (20); fullscreen (40) covers the
- * frame and remains below independently floating panels (60).
+ * frame and remains below independently floating panels (60). The common
+ * content root owns no stacking context or transform.
  */
+.session {
+  display: contents;
+}
+
+.session[hidden] {
+  display: none;
+}
+
 .panel {
+  --dsh-dockkit-dock-layer: 10;
+  --dsh-dockkit-float-layer: 60;
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
-  z-index: 10;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  /* The same ground as the conversation: this is a column of the page, not a
-     raised surface. The edge is the weight of the kit's split dividers inside
-     (ui-dockkit `.divider`), so the panel's outline and its inner rules match. */
-  background: var(--dsw-alias-bg-base);
-  border-left: 0.5px solid var(--dsw-alias-border-l4);
-  transform: translateX(100%);
+  pointer-events: none;
+}
+
+/* Only docked Grid items slide. Their common ancestor remains untransformed,
+   unclipped and without a stacking context, so fixed floating children escape. */
+.panel :global([data-dockkit-host='dock']),
+.panel :global([data-dockkit-empty]),
+.panel :global([data-dockkit-divider]) {
+  transform: translateX(var(--dsh-sidebar-width));
   visibility: hidden;
   transition:
     transform var(--ds-transition-duration-slow) var(--ds-ease-in-out),
     visibility 0s linear var(--ds-transition-duration-slow);
 }
 
-.panel[data-sidebar-right-open] {
+.panel[data-sidebar-right-open] :global([data-dockkit-host='dock']),
+.panel[data-sidebar-right-open] :global([data-dockkit-empty]),
+.panel[data-sidebar-right-open] :global([data-dockkit-divider]) {
   transform: none;
   visibility: visible;
   transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
 .panel[data-sidebar-right-panel='fullscreen'] {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  border: none;
-  /* Electron drag regions are window geometry, not stacking: the conversation
-     title row's and the sidebar top strip's drag bands underneath keep taking
-     the pointer through this overlay, making the first strip's tabs unclickable.
-     The panel appears after both in DOM order, so this subtracts its whole box;
-     the strip rule below restores dragging on the strip's blank run. */
-  -webkit-app-region: no-drag;
+  --dsh-dockkit-dock-layer: 40;
+}
+
+/* No whole-box subtraction here: Electron drag regions are window geometry,
+   not stacking, so a strip row inside this fullscreen content that marks itself
+   `data-window-drag` (ui-dockkit) still owns the drag over its own box, and
+   ui-web base.css subtracts interactive elements and portalled overlays. A
+   panel-wide no-drag would trade that drag affordance away. */
+
+/* Windows keeps caption controls above fullscreen file and terminal panels. */
+:global([data-windows-titlebar]) .panel[data-sidebar-right-panel='fullscreen'] {
+  max-width: calc(100vw - var(--dsh-windows-sidebar-width));
+}
+
+:global([data-windows-titlebar]) .panel[data-sidebar-right-panel='fullscreen'] :global([data-dockkit-column='0'][data-dockkit-pane]) {
+  border-radius: var(--dsh-windows-content-radius) 0 0 0;
+  corner-shape: round;
 }
 
 /* macOS fullscreen: the panel reaches the window's top-left corner, where the
    hiddenInset traffic lights (x 16..~68) float over the first pane's tab
    strip. Widen that strip's start inset (dockkit publishes the variable);
-   panes below or right of a divider sit clear of the lights, and every
-   non-first split cell resets the inherited value for its whole subtree. */
-:global([data-platform='darwin']) .panel[data-sidebar-right-panel='fullscreen'] .panelBody {
+   the second Grid column sits clear of the lights and uses the ordinary inset. */
+:global([data-platform='darwin']) .panel[data-sidebar-right-panel='fullscreen'] :global([data-dockkit-host='dock'][data-dockkit-column='0']) {
   /* Lights end near x 68; 88 leaves the same 20px of air the conversation
      header's leading controls keep after them (ui-sidebar HeaderLeadingControls). */
   --dsh-dockkit-strip-inline-start: 88px;
 }
 
-:global([data-platform='darwin']) .panel[data-sidebar-right-panel='fullscreen'] .panelBody :global([data-dockkit-cell]):not(:first-child) {
+:global([data-platform='darwin']) .panel[data-sidebar-right-panel='fullscreen'] :global([data-dockkit-host='dock'][data-dockkit-column='1']) {
   --dsh-dockkit-strip-inline-start: 10px;
 }
 
-/* Fullscreen keeps a window drag affordance on the tab strips' blank runs;
-   tabs and strip controls opt back out. */
-:global([data-platform='darwin']) .panel[data-sidebar-right-panel='fullscreen'] :global([data-dockkit-strip]) {
-  -webkit-app-region: drag;
-}
-
-:global([data-platform='darwin']) .panel[data-sidebar-right-panel='fullscreen'] :global([data-dockkit-strip]) > * {
-  -webkit-app-region: no-drag;
+/* Window fullscreen hides the traffic lights (html[data-fullscreen], desktop
+   preload); the first pane's strip keeps only the ordinary inset. */
+:global([data-platform='darwin'][data-fullscreen]) .panel[data-sidebar-right-panel='fullscreen'] :global([data-dockkit-host='dock'][data-dockkit-column='0']) {
+  --dsh-dockkit-strip-inline-start: 10px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .panel,
-  .panel[data-sidebar-right-open] {
+  .panel :global([data-dockkit-host='dock']),
+  .panel :global([data-dockkit-empty]),
+  .panel :global([data-dockkit-divider]) {
     transition: none;
   }
 }
@@ -105,7 +123,7 @@
   line-height: 1;
   background: transparent;
   border: none;
-  border-radius: 28px;
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
 }
 
@@ -136,16 +154,16 @@
   font-size: var(--dsh-content-font-size-secondary, 13px);
 }
 
-/*
- * Host for the portalled floating panels. Panels leave the column so they can
- * cross it and the conversation, which puts them beside the app root rather than
- * inside it — and a sibling of the root does not inherit its stacking, so the
- * level is stated here. The value sits above the frame's own overlay layer;
- * there is no z-index token layer to draw from yet.
- */
-.floatHost {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  pointer-events: none;
+/* Keep the title's icon and text in dockkit's flex row while retaining occurrence markers. */
+.tabTitle {
+  display: contents;
+}
+
+.tabBody {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }

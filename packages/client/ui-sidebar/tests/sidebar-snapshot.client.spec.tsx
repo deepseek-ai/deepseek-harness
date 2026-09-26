@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 /**
  * Local DOM snapshots of the sidebar shell through the real assembly path:
  * SlotTestRuntime mounts the package apply on its own fiber, the auto frame
@@ -39,6 +40,7 @@ afterEach(() => {
  */
 async function bench(options: { locale?: 'en' } = {}) {
   const runtime = await SlotTestRuntime.create()
+  runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
   runtime.ctx.provide('layout', { toggleSidebar: vi.fn() })
   runtime.ctx.provide('uiWorkspace', { startSession: vi.fn() } as never)
   const locale = new LocaleRuntime(runtime.ctx)
@@ -95,5 +97,20 @@ describe('sidebar shell snapshots', () => {
     expect(slot.view.getAllByRole('button', { name: 'New session' })).toHaveLength(2)
     expect(slot.view.queryByRole('button', { name: '新建会话' })).toBeNull()
     await runtime.dispose()
+  })
+
+  it('renders Windows caption controls in expanded and collapsed states', async () => {
+    document.documentElement.setAttribute('data-windows-titlebar', '')
+    const { runtime } = await bench({ locale: 'en' })
+    try {
+      const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300 })
+      expect(slot.container).toMatchSnapshot('windows expanded')
+      slot.update({ collapsed: true, width: 0 })
+      expect(slot.view.getAllByRole('button', { name: 'New session' })).toHaveLength(1)
+      expect(slot.container).toMatchSnapshot('windows collapsed')
+    } finally {
+      await runtime.dispose()
+      document.documentElement.removeAttribute('data-windows-titlebar')
+    }
   })
 })

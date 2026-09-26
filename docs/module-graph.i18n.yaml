@@ -1,6 +1,10 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for module-graph.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/module-graph.md
-module-graph.md: 5d04f8a3f00430d9a88a7f6a8dee51ee57bc418a
-module-graph.zh.md: 57c3118688da8eef01c3296cdc9b5137cd6c6400
+/:
+  en: 6b06a1af5ffbdefb
+  zh: 3718d990c23682de
+/shared-instance-dependency-graph:
+  en: 01a7953b2e010af0
+  zh: cc94c6ec51e5c1e0

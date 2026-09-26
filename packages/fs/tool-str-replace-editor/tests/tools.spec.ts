@@ -68,10 +68,10 @@ function call(ctx: Context, owner: Agent | undefined, args: unknown) {
 
 async function setup(
   config: ToolStrReplaceEditor.Config = {},
-  options: { fsPolicy?: boolean; sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access' } = {},
+  options: { fsPolicy?: boolean; sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access'; root?: string } = {},
 ) {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-tool-str-replace-editor-'))
-  roots.push(root)
+  const root = options.root ?? await mkdtemp(join(tmpdir(), 'dsh-tool-str-replace-editor-'))
+  if (options.root === undefined) roots.push(root)
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(SystemPrompt)
@@ -345,6 +345,23 @@ describe('tool-str-replace-editor', () => {
       path: join(clipped.root, 'large.txt'),
     })))
       .toContain('<response clipped>')
+  })
+
+  it('clips a view at a code-unit boundary without splitting a surrogate pair', async () => {
+    const wide = await setup({ maxOutputChars: 10_000 })
+    const file = join(wide.root, 'emoji.txt')
+    await writeFile(file, `${'😀'.repeat(4)}tail`)
+    const untruncated = text(await call(wide.ctx, wide.owner, { command: 'view', path: file }))
+    // The cap lands on the high surrogate of the first emoji.
+    const splitAt = untruncated.indexOf('😀') + 1
+
+    // Share the renderer's root so the clipped context reads the file inside its
+    // own working directory.
+    const clipped = await setup({ maxOutputChars: splitAt }, { root: wide.root })
+    const rendered = text(await call(clipped.ctx, clipped.owner, { command: 'view', path: file }))
+
+    expect(rendered.startsWith(`${untruncated.slice(0, splitAt - 1)}<response clipped>`)).toBe(true)
+    expect(rendered).not.toContain('\uD83D')
   })
 
   it('matches canonical empty-line, range, and end-insert behavior', async () => {

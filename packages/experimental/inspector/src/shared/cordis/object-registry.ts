@@ -168,7 +168,7 @@ export function identifyRealmObject(value: unknown): InspectorObjectReference | 
 
 function registries(): Map<InspectorObjectRegistryId, RealmObjectRegistry> {
   const key = Symbol.for(REGISTRIES_SYMBOL)
-  const existing = Reflect.get(globalThis, key) as unknown
+  const existing: unknown = Reflect.get(globalThis, key)
   if (existing instanceof Map) return existing as Map<InspectorObjectRegistryId, RealmObjectRegistry>
   const value = new Map<InspectorObjectRegistryId, RealmObjectRegistry>()
   Reflect.set(globalThis, key, value)

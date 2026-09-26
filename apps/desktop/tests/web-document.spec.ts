@@ -43,7 +43,7 @@ it('forwards upload bytes and cancellation with Host credentials while keeping t
     method: 'POST', body: 'upload bytes', headers: { origin: 'dsh-app://app', cookie: 'untrusted' },
   })
   const response = await forwardWebRequest(request, 'http://127.0.0.1:1234/?token=secret', 'session=owned')
-  const [target, init] = fetch.mock.calls[0] as unknown as [URL, RequestInit]
+  const [target, init] = fetch.mock.calls[0] as [URL, RequestInit]
   expect(target.href).toBe('http://127.0.0.1:1234/api/upload?name=file')
   expect(new Headers(init.headers).get('cookie')).toBe('session=owned')
   expect(new Headers(init.headers).get('origin')).toBeNull()
@@ -52,6 +52,31 @@ it('forwards upload bytes and cancellation with Host credentials while keeping t
   expect(response.headers.get('set-cookie')).toBeNull()
   expect(response.headers.get('content-encoding')).toBeNull()
   expect(await response.text()).toBe('stream')
+})
+
+it('drops connection-level headers the Host wrote for its own transport', async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response('body', { headers: {
+    'transfer-encoding': 'chunked', connection: 'keep-alive', 'keep-alive': 'timeout=5', trailer: 'x', te: 'trailers',
+    'content-type': 'text/plain', 'cache-control': 'no-cache', etag: '"1"',
+  } }))
+  vi.stubGlobal('fetch', fetch)
+  const response = await forwardWebRequest(new Request('dsh-app://app/api/read'), 'http://127.0.0.1:1234/', 'session=owned')
+  for (const name of ['transfer-encoding', 'connection', 'keep-alive', 'trailer', 'te']) expect(response.headers.get(name)).toBeNull()
+  expect(response.headers.get('content-type')).toBe('text/plain')
+  expect(response.headers.get('cache-control')).toBe('no-cache')
+  expect(response.headers.get('etag')).toBe('"1"')
+})
+
+it('replaces the immutable cache header of plugin bundles with no-store and leaves other routes alone', async () => {
+  const immutable = 'public, max-age=31536000, immutable'
+  const fetch = vi.fn().mockImplementation(async () => new Response('js', { headers: { 'cache-control': immutable } }))
+  vi.stubGlobal('fetch', fetch)
+  const bundle = await forwardWebRequest(new Request('dsh-app://app/plugins/??a/client.js&rev=1'), 'http://127.0.0.1:1234/', 'c')
+  expect(bundle.headers.get('cache-control')).toBe('no-store')
+  const chunk = await forwardWebRequest(new Request('dsh-app://app/plugins/a/client.x.js?rev=1'), 'http://127.0.0.1:1234/', 'c')
+  expect(chunk.headers.get('cache-control')).toBe('no-store')
+  const asset = await forwardWebRequest(new Request('dsh-app://app/api/plugins/list'), 'http://127.0.0.1:1234/', 'c')
+  expect(asset.headers.get('cache-control')).toBe(immutable)
 })
 
 it('refuses another page origin without forwarding its request', async () => {

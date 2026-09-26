@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-06-timeout-deadline-library.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-06-timeout-deadline-library.md
-2026-07-06-timeout-deadline-library.md: 6f726938731f18386105ff1180c79fef981c95bf
-2026-07-06-timeout-deadline-library.zh.md: 48bd7b4b91efd0045c03e3e1e1e9e37656b4dcf6
+/agent-note-a-shared-timeout-deadline-primitive-with-hard-kill-left-to-each-capability:
+  en: 4a9921fef5e65cc8
+  zh: 672cd27d68310cb1
+/agent-note-a-shared-timeout-deadline-primitive-with-hard-kill-left-to-each-capability/problem:
+  en: 110ff68b35bd43cb
+  zh: f1cea15fb29a9ae9
+/agent-note-a-shared-timeout-deadline-primitive-with-hard-kill-left-to-each-capability/decision:
+  en: 18645d82d9e40107
+  zh: 73e510f1ed1106e6
+/agent-note-a-shared-timeout-deadline-primitive-with-hard-kill-left-to-each-capability/decision/the-library-api:
+  en: c62681afef60a0db
+  zh: 69827b4b3165b3da
+/agent-note-a-shared-timeout-deadline-primitive-with-hard-kill-left-to-each-capability/decision/the-division-of-labor:
+  en: 263c8e17bbc87ba0
+  zh: d75a74f47713e79f
+/agent-note-a-shared-timeout-deadline-primitive-with-hard-kill-left-to-each-capability/decision/how-each-capability-consumes-it:
+  en: 333eab4967d753ec
+  zh: dd7537bb82cc717f
+/agent-note-a-shared-timeout-deadline-primitive-with-hard-kill-left-to-each-capability/consequences:
+  en: 832f4dbd93a47f94
+  zh: 65ada43f9f23a39b
+/agent-note-a-shared-timeout-deadline-primitive-with-hard-kill-left-to-each-capability/alternatives-considered:
+  en: 7b3445622becbd36
+  zh: bb358acf2ff28e26

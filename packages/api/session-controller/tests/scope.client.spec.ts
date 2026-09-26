@@ -39,6 +39,23 @@ function bench() {
 }
 
 describe('createScope', () => {
+  it('routes same-id generations independently while keeping untagged listeners shared', async () => {
+    const root = new Context()
+    const previous = createScope(root, sid('same'))
+    const replacement = createScope(root, sid('same'))
+    const seen: string[] = []
+    previous.ctx.on('test/scope-probe', () => { seen.push('old'); return undefined })
+    replacement.ctx.on('test/scope-probe', () => { seen.push('new'); return undefined })
+    root.on('test/scope-probe', () => { seen.push('root'); return undefined })
+    replacement.ctx.emit(replacement.ctx, 'test/scope-probe', { from: 'new' })
+    expect(seen).toEqual(['new', 'root'])
+    await previous.fiber.dispose()
+    seen.length = 0
+    replacement.ctx.emit(replacement.ctx, 'test/scope-probe', { from: 'new' })
+    expect(seen).toEqual(['new', 'root'])
+    await root.fiber.dispose()
+  })
+
   it('tags the ctx (scopeOf) and leaves the root untagged', () => {
     const { root, a } = bench()
     expect(scopeOf(a.ctx)).toBe(sid('a'))

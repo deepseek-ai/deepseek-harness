@@ -923,7 +923,7 @@ function parseFrontmatter(raw: string): { data: Record<string, unknown>; body: s
   const closing = findClosingFrontmatter(raw, start)
   if (closing === undefined) return undefined
   const yaml = raw.slice(start, closing.start)
-  const parsed = parseYaml(yaml) as unknown
+  const parsed: unknown = parseYaml(yaml)
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined
   return { data: parsed as Record<string, unknown>, body: raw.slice(closing.bodyStart) }
 }

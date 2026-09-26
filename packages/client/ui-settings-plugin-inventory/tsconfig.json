@@ -9,22 +9,25 @@
   ],
   "references": [
     {
+      "path": "../../util/package-manifest"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
       "path": "../../api/remotes/tsconfig.client.json"
     },
     {
-      "path": "../locale"
+      "path": "../locale/tsconfig.client.json"
     },
     {
-      "path": "../ui-settings"
+      "path": "../ui-settings/tsconfig.client.json"
     },
     {
       "path": "../ui-agent-preset"
     },
     {
-      "path": "../../preset/agent-presets"
+      "path": "../../preset/agent-preset-registry"
     },
     {
       "path": "../ui-primitives"

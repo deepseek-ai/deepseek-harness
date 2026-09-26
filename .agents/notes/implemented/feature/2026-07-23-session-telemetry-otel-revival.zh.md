@@ -16,6 +16,8 @@ Status: implemented
 - **`session-telemetry/record` waterfall（瀑布式事件）** —— 相对分支版本的增量，也是该 seam 的脱敏扩展点。每条记录抵达任何后端前必经此处；seam 自身不带任何规则——最内层 `next()` 原样透传，部署方以监听器挂载自己的规则（通过变换 `next()` 的返回值堆叠），抛异常的规则将该记录 fail-closed 扣下。脱敏只作用于导出副本；canonical log 永不改写。
 - **`@deepseek-ai/dsh-session-telemetry-otel`** —— 参考后端：OTel JS SDK 日志流水线（`LoggerProvider` → `BatchLogRecordProcessor` → OTLP/HTTP exporter），经 `exporter`/`processor` passthrough 原样配置。`DISABLED` 是插件默认值，且不构造任何传输。`FEEDBACK_ONLY` 要求 `exporter.url`；[显式反馈策略](../architecture/2026-09-05-nonofficial-feedback-otel.zh.md)要求每次有界捕获都由新提交触发，适用于所有提供方。[无缓冲反馈回放](../../archived/simplification/2026-08-06-buffer-free-feedback-telemetry.md)避免在内存中创建会话前缀的第二份副本。
 
+[Session 日志请求上限](../architecture/2026-09-25-session-log-otel-byte-limits.zh.md) 在 OTel Session 发送器中替代下述仅由 SDK 分批的规则；采集、脱敏和交接的理由仍然适用。
+
 边界公理保持不变：harness 的职责止于 `emit()`。批处理、重试、排队与丢失策略属于 reporting SDK，并经 passthrough 配置。投递是尽力而为：崩溃可能丢失已排队记录。后端重试或丢失同一 live 对象的模块作用域游标可能重复生命周期本地 row，因此接收端基于 `(session.id, session.format_version, event.seq)` 去重。
 
 ## 考虑过的替代方案

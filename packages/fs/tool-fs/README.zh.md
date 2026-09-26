@@ -67,7 +67,7 @@ kind: "package-reference"
 
 `read` 与 `read_image` 的路径授权完全由 `ctx.fs` 负责；媒体类型声明和文件签名只决定 `read_image` 是否接受该后端返回的字节。
 
-挂载策略插件后，`write` 与 `edit` 从 `fs/*` 意图槽位取得防护，因此未读目标或陈旧观察会以 `FS_NOT_OBSERVED` 或 `FS_STALE_VERSION` 及恢复指令失败。使用施加沙箱限制的后端（`fs-sandbox`）时，`write`/`edit` 还会公开 `sandbox_permissions` 与 `justification`；被拒绝的变更返回 `[sandbox: file access denied under <mode> mode]` 标记与同轮次升级提示，获批的重试可以在该次调用中加盖严格更宽的模式。
+挂载策略插件后，`write` 与 `edit` 从 `fs/*` 意图槽位取得防护，因此未读目标或陈旧观察会以 `FS_NOT_OBSERVED` 或 `FS_STALE_VERSION` 及恢复指令失败。使用施加沙箱限制的后端（`fs-sandbox`）时，`write`/`edit` 还会公开 `sandbox_permissions` 与 `justification`；被拒绝的变更返回 `[sandbox: file access denied under <mode> mode]` 标记与同轮次升级提示，获批的重试可以在该次调用中加盖严格更宽的模式。理由字段提示模型使用用户当前提问的语言。
 
 ### 失败与恢复
 
@@ -138,19 +138,19 @@ kind: "package-reference"
 ##### Read 指导
 
 ```markdown
-Use the read tool — not shell commands like cat — to inspect text files. Results include line numbers. Use offset and limit to continue reading large files.
+Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.
 ```
 
 ##### Write 指导
 
 ```markdown
-Use the write tool to create files or completely replace file contents. Existing files are overwritten, so read an existing file first (the default fs-observation-policy requires it) and prefer edit for targeted changes.
+Read an existing file before overwriting it with write (the default fs-observation-policy requires it) and prefer edit for targeted changes.
 ```
 
 ##### Edit 指导
 
 ```markdown
-Use the edit tool for targeted changes to existing UTF-8 text files. It replaces literal old_string with new_string; by default old_string must appear exactly once. If old_string appears multiple times, provide a more specific old_string or set replace_all to true. Read the file first (the default fs-observation-policy requires it), unless you just created or edited it in this session.
+Read a file before editing it (the default fs-observation-policy requires it), unless you just created or edited it in this session.
 ```
 
 #### Token 影响

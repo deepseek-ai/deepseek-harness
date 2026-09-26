@@ -1,4 +1,5 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
@@ -10,6 +11,12 @@ import SessionTitleService, {
   normalizeSessionTitle,
   truncateTitleUtf8,
 } from '@deepseek-ai/dsh-session-title'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'seed': { kind: 'seed' } & ContextFormed
+  }
+}
 
 const CONFIG = {
   fallbackMaxWords: 5,
@@ -113,7 +120,7 @@ describe('SessionTitleService', () => {
     })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'plugin text' }],
-      source: { kind: 'plugin', plugin: 'seed' },
+      source: { kind: 'seed' },
     }), { surfaceOp: 'append' })
     session.append('user/message', createUserMessage({
       content: [{ type: 'reasoning', text: 'not visible text' }],

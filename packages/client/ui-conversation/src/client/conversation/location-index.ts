@@ -183,6 +183,7 @@ export class ConversationLocationIndex {
   private readonly turnDataStores = new Map<number, MutableLocationDataStore>()
   private readonly stepDataStores = new Map<string, MutableLocationDataStore>()
   private readonly dirtyDataStores = new Set<MutableLocationDataStore>()
+  private readonly changedTurns = new Set<number>()
   private currentTurn: number | undefined
   private currentStep: number | undefined
 
@@ -192,6 +193,16 @@ export class ConversationLocationIndex {
    */
   snapshot(): ConversationTimelineSnapshot {
     return this.timeline
+  }
+
+  /**
+   * Drain the Turn changes accumulated for one assembly flush.
+   * @returns Turn identities changed since the preceding drain.
+   */
+  takeChangedTurns(): readonly number[] {
+    const turns = [...this.changedTurns]
+    this.changedTurns.clear()
+    return turns
   }
 
   /**
@@ -386,6 +397,9 @@ export class ConversationLocationIndex {
         }
       }
     }
+    for (const turn of new Set([...previousTurns.keys(), ...nextTurns.keys()])) {
+      if (previousTurns.get(turn) !== nextTurns.get(turn)) this.changedTurns.add(turn)
+    }
     this.timeline = sameMap && turnOrder === this.timeline.turnOrder
       ? this.timeline
       : { turnOrder, turns: nextTurns }
@@ -480,6 +494,7 @@ export class ConversationLocationIndex {
       ? [...this.timeline.turnOrder, turnNumber]
       : this.timeline.turnOrder
     this.timeline = { turnOrder, turns }
+    if (turn !== previousTurn) this.changedTurns.add(turnNumber)
 
     const changed = new Set<number>()
     for (const seq of this.seqsByTurn.get(turnNumber) ?? []) {
@@ -572,19 +587,22 @@ export class ConversationLocationIndex {
   }
 
   private mutableTurnData(turn: number): MutableLocationDataStore {
-    const current = this.turnDataStores.get(turn) ?? this.createDataStore()
+    const current = this.turnDataStores.get(turn) ?? this.createDataStore(turn)
     this.turnDataStores.set(turn, current)
     return current
   }
 
   private mutableStepData(key: string): MutableLocationDataStore {
-    const current = this.stepDataStores.get(key) ?? this.createDataStore()
+    const current = this.stepDataStores.get(key) ?? this.createDataStore(Number(key.slice(0, key.indexOf(':'))))
     this.stepDataStores.set(key, current)
     return current
   }
 
-  private createDataStore(): MutableLocationDataStore {
-    return new MutableLocationDataStore(store => this.dirtyDataStores.add(store))
+  private createDataStore(turn: number): MutableLocationDataStore {
+    return new MutableLocationDataStore((store) => {
+      this.dirtyDataStores.add(store)
+      this.changedTurns.add(turn)
+    })
   }
 
   private storeFor(data: ConversationLocationData): MutableLocationDataStore {

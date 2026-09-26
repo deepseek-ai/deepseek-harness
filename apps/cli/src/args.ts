@@ -40,6 +40,15 @@ interface DumpConfigInvocation {
   patches: string[]
 }
 
+/** Print declared plugin schemas without mounting the profile. */
+interface DumpConfigSchemaInvocation {
+  mode: 'dump-config-schema'
+  profile: string
+  /** Shipped template used once to initialize a missing profile. */
+  fromDefaultProfile?: string | undefined
+  patches: string[]
+}
+
 /** Manage a profile's plugins: forward `args` to pnpm inside the profile directory. */
 interface PluginInvocation {
   mode: 'plugin'
@@ -49,13 +58,14 @@ interface PluginInvocation {
 }
 
 /** The resolved `dsh` invocation. Help, version, and errors exit inside {@link parseDshArgs}. */
-export type DshInvocation = ProfileInvocation | DumpConfigInvocation | PluginInvocation
+export type DshInvocation = ProfileInvocation | DumpConfigInvocation | DumpConfigSchemaInvocation | PluginInvocation
 
 /** Launcher flags for profile boot and configuration dumps. */
 interface BootOptions {
   patch?: string[]
   dumpConfig?: boolean
   dumpDefaultConfig?: boolean
+  dumpConfigSchema?: boolean
   fromDefaultProfile?: string
 }
 
@@ -102,17 +112,21 @@ function resolveBoot(program: Command, profile: string, options: BootOptions, ar
   const patches = options.patch ?? []
   if (patches.includes('')) program.error('error: --patch needs a path')
   if (options.fromDefaultProfile === '') program.error('error: --from-default-profile needs a name')
-  if (options.dumpConfig !== true && options.dumpDefaultConfig !== true) {
+  const dumps = [options.dumpConfig, options.dumpDefaultConfig, options.dumpConfigSchema].filter(Boolean)
+  if (dumps.length === 0) {
     return { mode: 'profile', profile, fromDefaultProfile: options.fromDefaultProfile, patches, args }
   }
-  if (options.dumpConfig === true && options.dumpDefaultConfig === true) {
-    program.error('error: --dump-config and --dump-default-config are mutually exclusive')
+  if (dumps.length > 1) {
+    program.error('error: --dump-config, --dump-default-config, and --dump-config-schema are mutually exclusive')
   }
   // The dump is boot-free: it never runs app command-line providers, so it
   // cannot show what those flags would decide, and printing a tree that differs
   // from the same invocation's boot would mislead.
   if (args.length > 0) {
     program.error(`error: config dumps take no app arguments, got ${args.map(argument => JSON.stringify(argument)).join(' ')}`)
+  }
+  if (options.dumpConfigSchema === true) {
+    return { mode: 'dump-config-schema', profile, fromDefaultProfile: options.fromDefaultProfile, patches }
   }
   const defaultOnly = options.dumpDefaultConfig === true
   if (defaultOnly && patches.length > 0) {
@@ -154,6 +168,7 @@ export function parseDshArgs(argv: readonly string[], version: string): DshInvoc
     .option('--from-default-profile <name>', 'initialize a new custom profile from a shipped profile template')
     .option('--patch <path>', 'extra patch-list overlay applied after the profile layer (repeatable)', collect)
     .option('--dump-config', 'print the composed profile tree and exit')
+    .option('--dump-config-schema', 'print JSON Schema for profile entries and patches without mounting')
     .option('--dump-default-config', 'print the profile tree without its user layer or --patch overlays and exit')
     .action((args: string[], options: BootOptions & { profile?: string }) => {
       // With the app owning -h, the launcher's own help is what a bare

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用 `ctx.shell` 运行输出有界的前台 shell 命令，或异步准备后台进程后取得句柄。配置文件可选择本地或沙箱化的 Bash 或 PowerShell 执行方式，而无需更改调用方。执行前解析每个请求，以显式确定工作目录、超时和输出上限。命令完成、非零退出、超时和调用方中止都会作为结果返回；只有基础设施故障才会 reject，而模型可见的渲染与沙箱指引由 `bash` 和 `pwsh` 工具负责。
+使用 `ctx.shell` 运行输出有界的 shell 命令，或让命令作为后台工作继续运行。同一个执行句柄支持前台结果与后台读取。配置文件可以选择本地或沙箱化的 Bash 或 PowerShell 执行方式，而无需更改调用方。执行前解析请求，以显式确定工作目录、超时与输出上限。命令退出、超时和调用方中止都会作为结果返回；只有基础设施故障才会 reject，模型可见的渲染与沙箱指引由 `bash` 和 `pwsh` 工具负责。
 
 ## 目录
 
@@ -25,24 +25,31 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当 agent（智能体）或进程内插件需要运行 shell 命令并读取输出，或启动后台进程并轮询它时，使用 `ctx.shell`。它是每个 shell 执行器与面向模型的 `bash`/`pwsh` 工具共同依赖的约定，因此基于它编写的代码可以运行在任意执行器实现之上。
+当 agent（智能体）或进程内插件需要运行 shell 命令并读取输出、保持进程运行并轮询它，或让前台命令有办法活过自己的 deadline 时，使用 `ctx.shell`。执行方法只有一个——`execute(spec)` 在准备完成后返回句柄——「前台」是调用方等待什么的属性，而不是 spawn 的属性。它是每个 shell 执行器与面向模型的 `bash`/`pwsh` 工具共同依赖的约定，因此基于它编写的代码可以运行在任意执行器实现之上。
 
 ### 前台命令
 
-用已解析的 spec 调用 `run` 即可在前台执行命令。promise 在命令结束时 resolve：非零退出、执行器超时终止或调用方中止终止都是结果，绝不是 rejection。`run` 只在基础设施失败时 reject，例如工作目录不可用或缺少 shell。结果携带退出码或信号、是超时还是中止截断了运行，以及收集到的 stdout/stderr；流超出预算时还附带 spill 文件路径。
+等待句柄的 `result()` 投影即可在前台执行命令。promise 在命令结束时 resolve：非零退出、执行器超时终止或调用方中止终止都是结果，绝不是 rejection。`result()` 只在基础设施失败时 reject，例如工作目录不可用或缺少 shell。结果携带退出码或信号、是超时还是中止截断了运行（首因归类），以及收集到的 stdout/stderr；流超出预算时还附带 spill 文件路径。
 
 ```text
-const result = await ctx.shell.run(ctx.shell.resolve({ command: 'ls -la' }))
+const execution = await ctx.shell.execute(ctx.shell.resolve({ command: 'ls -la' }))
+const result = await execution.result()
 console.log(result.exitCode, result.stdout.text)
 ```
 
 ### 后台进程
 
-用已解析的 spec 等待 `start` 即可启动后台进程；它在准备完成后发布句柄，不应用后台执行超时。取消或准备失败会在发布前拒绝调用。用 `readOutput()` 增量读取输出——连续读取绝不会重复交付，有损读取会指向完整流的 spill 文件。用 `kill()` 终止由提供方管理的进程范围（直接命令结束后返回 `false`），并等待 `done` 完成直接命令结算。job id、所有权、轮询与通知属于通用 `ctx.jobs` 运行时，工具层会把句柄注册进去。
+以 `onExpiry: 'none'` 解析请求并保留句柄：不布置任何 deadline，进程一直跑到被 kill 或自行结束。用 `readOutput()` 增量读取输出——连续读取绝不会重复交付，有损读取会指向完整流的 spill 文件。用 `kill()` 终止由提供方管理的进程范围（直接命令结束后返回 `false`），并等待 `done` 完成直接命令结算。job id、所有权、轮询与通知属于通用 `ctx.jobs` 运行时，工具层会把句柄注册进去。`ShellProcess.observed` 在同一份捕获流上暴露非消费的偏移读取器——供独立于消费游标的观察者使用，例如任务注册表的拉取源——包括被拒绝的 spawn 留在 stderr 上的 `spawn failed: …` 提示。
+
+### deadline 与有界等待
+
+deadline 包含异步准备耗时。进程启动前到期会返回已结算的句柄，其结果为 `timedOut: true`，输出为空。取消或准备失败会在发布句柄前拒绝 `execute`；迟到的准备结果不会启动进程。
+
+seam 只有两种到期策略，没有任何移交协议。`'kill'` 在 deadline 停下命令并把结果归类为 `timedOut`；`'none'` 不设 deadline，只有调用方的信号和 `kill()` 能停下命令。只想等一段时间的调用方以 `'none'` 运行命令并自己限定等待时长：调用方停止等待后句柄依然有效，那一刻没有任何东西易手。`bash`/`pwsh` 工具正是这样做的——组合中有 job registry 时，每条命令一启动就登记到 `ctx.jobs` 并等待该 job，所以超时后仍在运行的前台命令只是继续作为它本来就是的那个 job 运行。
 
 ### 请求与已解析 spec
 
-每次执行都从带可选字段的 `ShellExecRequest` 开始；执行器的 `resolve()` 在任何东西运行之前，把它变成默认值与上限都已显式填好的 `ShellExecSpec`。这一请求/spec 拆分正是仓库在包边界显式解析的模板：调用方绝不依赖 `run` 或 `start` 内部隐藏的默认值。`resolve()` 从执行器配置填充工作目录与超时、对每次调用的覆盖值设上限，并按原样携带可选输入——`stdin`、普通 `env` 与受信任的 `DSH_*` 快照。
+每次执行都从带可选字段的 `ShellExecRequest` 开始；执行器的 `resolve()` 在任何东西运行之前，把它变成默认值与上限都已显式填好的 `ShellExecSpec`。这一请求/spec 拆分正是仓库在包边界显式解析的模板：调用方绝不依赖 `execute` 内部隐藏的默认值。`resolve()` 从执行器配置与请求填充工作目录、超时与到期策略（默认 `'kill'`）、对每次调用的覆盖值设上限，并按原样携带可选输入——`stdin`、普通 `env` 与受信任的 `DSH_*` 快照。
 
 ### 选择并组合一个执行器
 
@@ -73,15 +80,15 @@ seam 本身不是执行器：每个组合只挂载一个提供方，工具即可
 
 本包是标准能力 seam 中的一个角色：命名执行器约定的 Service Definition，Service Provider 与 Consumer 各自拆分，使每个角色都能独立演进（见[能力 seam 笔记](../../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.zh.md)）。两项决策锚定了该约定：
 
-- **边界处的显式解析。** `resolve(request)` 是应用默认值与上限的唯一位置；`run` 与 `start` 只接受已解析的 spec，绝不再次默认化，因此实现内部不会藏有隐藏的兜底值。
-- **无任务语义的后台句柄。** `start` 返回不带 id 或所有者的 `ShellProcess`；job 身份、所有权与生命周期属于通用 `ctx.jobs` 运行时，使执行器与会话保持独立。
+- **边界处的显式解析。** `resolve(request)` 是应用默认值与上限的唯一位置；`execute` 只接受已解析的 spec，绝不再次默认化，因此实现内部不会藏有隐藏的兜底值。
+- **一次执行，多个投影。** `execute` 在准备完成后返回句柄；前台结果与后台游标读取都是同一个已 spawn 进程上的投影，前台/后台是调用方的选择，绝不是第二条 spawn 路径。句柄不带 id 或所有者；job 身份、所有权与生命周期属于通用 `ctx.jobs` 运行时，使执行器与会话保持独立。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：抽象 `ShellExecutor` 服务与共享设置命名空间 |
-| [`src/types.ts`](src/types.ts) | 请求/spec 词汇、`ShellRunResult`、`ShellProcess` 与沙箱事实 |
+| [`src/types.ts`](src/types.ts) | 请求/spec 词汇、`ShellExecution`、`ShellRunResult` 与沙箱事实 |
 | [`src/render.ts`](src/render.ts) | `parseExitStatus`：shell 工具共享的退出状态标记约定 |
 | — | 不发布运行时不变式伴生入口；该无状态 Service Definition 负责请求／结果类型，执行器与策略负责观察。 |
 
@@ -91,7 +98,7 @@ seam 本身不是执行器：每个组合只挂载一个提供方，工具即可
 
 ### 后台生命周期与归属
 
-后台进程属于 subprocess 服务而非执行器：它能在仅重载执行器后存活，并在组合拆解时被终止并 join。实现必须遵守 seam 的语义——`run` 只在基础设施失败时 reject；`start` 在准备完成后返回且不设后台执行超时，已发布句柄的 `done` 绝不 reject（subprocess provider rejection 以 `killed` 结算，并把不声明阶段的错误写入 stderr）；`readOutput` 是消费式的，有损读取会报告 spill 文件。
+已 spawn 的进程属于 subprocess 服务而非执行器：它能在仅重载执行器后存活，并在组合拆解时被终止并 join。实现必须遵守 seam 的语义——`result()` 只在基础设施失败时 reject；句柄在准备完成后发布且其 `done` 绝不 reject（无论同步还是异步的 provider rejection 都把句柄结算为 `killed`、把不声明阶段的提示写入 stderr，同时 `result()` 以同一失败 reject；活句柄在本次执行自己的 `kill()` 或 abort 之后才到来的 rejection 则结算为其终态）；`readOutput` 是消费式的，有损读取会报告 spill 文件。
 
 </details>
 

@@ -215,7 +215,7 @@ export function spawn(
   if (typeof program !== 'string' || program === '') {
     // Node refuses a non-string command with this error rather than starting
     // anything; a caller whose own lookup produced nothing reads why.
-    const invalid = new TypeError(`The "file" argument must be a non-empty string. Received ${program as unknown as string}`) as NodeJS.ErrnoException
+    const invalid = new TypeError(`The "file" argument must be a non-empty string. Received ${program as string}`) as NodeJS.ErrnoException
     invalid.code = 'ERR_INVALID_ARG_TYPE'
     throw invalid
   }

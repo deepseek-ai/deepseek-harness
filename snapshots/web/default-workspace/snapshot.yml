@@ -1,0 +1,11 @@
+version: 1
+scenario: default-workspace
+profile: web
+composition: web-default
+recording: authored
+workspace:
+  final: true
+header:
+  class: web-default
+session:
+  source: ../fresh-round-trip/session.v4.jsonl

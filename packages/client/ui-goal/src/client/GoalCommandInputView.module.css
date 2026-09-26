@@ -20,7 +20,7 @@
   max-width: 100%;
   padding: 10px 16px;
   overflow-wrap: anywhere;
-  border-radius: 22px;
+  border-radius: var(--dsw-radius-xl);
   background: var(--dsw-specific-bubble);
   color: var(--dsw-alias-label-primary);
   /* The command echo is a user message: it inherits the body face like the

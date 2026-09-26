@@ -3,8 +3,7 @@
   display: inline-flex;
 }
 
-/* Dropdown card (figma MenuDropdown 122:9481 / 419:16920): menu surface,
- * r12, elevation-prominent (hairline stroke in shadow), 4px inset padding. */
+/* Compact translucent dropdown card shared by feature menus. */
 .list,
 .submenu {
   /* min-widths below are the design's outer card widths — include the pad. */
@@ -14,8 +13,6 @@
   flex-direction: column;
   gap: 0;
   border: 0;
-  border-radius: 20px;
-  background: var(--dsw-specific-menu);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
   /* Elevated surface: the scrollbar thumb takes the l2 elevation tokens. The
@@ -27,13 +24,13 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
-/* Primary card is 218 wide in the design across both hosts. */
+/* Primary cards grow with their content between compact and readable bounds. */
 .list {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
   z-index: 100;
-  min-width: 218px;
+  min-width: 144px;
   max-width: 360px;
 }
 
@@ -60,12 +57,13 @@
 }
 
 /* Viewport fit: the card stops 12px short of the viewport's top/bottom edges
- * (24 = 2 × the portal MARGIN in Menu.tsx) and taller content scrolls inside
+ * (the portal MARGIN in Menu.tsx; the top side widens to the frame's published
+ * top clearance, the macOS window strip) and taller content scrolls inside
  * .viewport, so a pinned .footer stays visible. Menus with submenu rows skip
  * this class — the overflow clip would crop the side card, so they rely on
  * staying short. */
 .scrollable {
-  max-height: calc(100vh - 24px);
+  max-height: calc(100vh - 12px - max(12px, var(--dsh-frame-top-clearance, 12px)));
 }
 
 .viewport {
@@ -84,8 +82,8 @@
   flex: none;
   display: flex;
   flex-direction: column;
-  margin-top: 4px;
-  padding-top: 4px;
+  margin-top: 3px;
+  padding-top: 3px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
@@ -93,21 +91,20 @@
   position: relative;
 }
 
-/* Menu cell (figma .Menu_cell): min-h 40, r10, pad 10/8, 14/22 primary,
- * gap 8 between leading icon / label / trailing check. */
+/* Menu cell: compact text, icon, and selection spacing. */
 .item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
+  min-height: 34px;
+  padding: 6px 8px;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   cursor: pointer;
-  font-size: 14px;
-  line-height: 22px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--dsw-alias-label-primary);
   text-align: left;
 }
@@ -116,34 +113,41 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* Arrow navigation moves real focus, so the row the keyboard is on carries the
+   same fill the pointer gets: the fill is the row's focus indication, and the
+   browser's default ring would double it. */
+.item:focus-visible:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: none;
+}
+
 .denseList .item {
-  min-height: 34px;
-  padding-block: 5px;
+  min-height: 30px;
+  padding-block: 4px;
 }
 
 .denseList .label {
-  padding-block: 4px;
+  padding-block: 3px;
 }
 
 .list.compactList,
 .submenu.compactList {
-  min-width: 164px;
-  padding: 2px;
-  border-radius: 7px;
+  min-width: 156px;
+  padding: 4px;
 }
 
 .compactList .item {
-  min-height: 26px;
-  gap: 6px;
-  padding: 3px 7px;
-  border-radius: 5px;
-  font-size: 12px;
-  line-height: 18px;
+  min-height: 24px;
+  gap: 5px;
+  padding: 2px 6px;
+  border-radius: var(--dsw-radius-sm);
+  font-size: 11px;
+  line-height: 17px;
 }
 
 .compactList .itemIcon {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
 .compactList .separator {
@@ -151,9 +155,9 @@
 }
 
 .compactList .label {
-  padding: 4px 7px;
-  font-size: 11px;
-  line-height: 16px;
+  padding: 3px 6px;
+  font-size: 10px;
+  line-height: 15px;
 }
 
 .item:disabled {
@@ -164,11 +168,23 @@
 .itemIcon {
   display: inline-flex;
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   align-items: center;
   justify-content: center;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-menu-icon);
+}
+
+.itemIcon svg,
+.check {
+  width: 14px;
+  height: 14px;
+}
+
+.compactList .itemIcon svg,
+.compactList .check {
+  width: 12px;
+  height: 12px;
 }
 
 .itemLabel {
@@ -177,6 +193,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.shortcut {
+  flex: none;
+  margin-inline-start: auto;
+}
+
+.shortcut .shortcutKeys {
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .check {
@@ -208,27 +235,37 @@
   background: var(--dsw-alias-interactive-bg-hover-danger);
 }
 
+.danger:focus-visible:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  outline: none;
+}
+
 /* Heading row: non-interactive small grey text, padding aligned with items. */
 .label {
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 16px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 15px;
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* Separator cell (figma 122:9481): py 4 / px 2 around the hairline. */
+/* Separator cell (figma 122:9481): py 4 / px 2 around the hairline. l2, not
+ * l1, for the same reason as .footer: l1 is near-invisible on this surface. */
 .separator {
   height: 0.5px;
-  margin: 4px 2px;
-  background: var(--dsw-alias-border-l1);
+  margin: 3px 2px;
+  background: var(--dsw-alias-border-l2);
 }
 
-/* Nested card to the right of the parent row (figma 419:16920).
- * Bottom-aligned with the parent menu card (grows upward): itemWrap sits in
- * .list's 4px pad, so bottom: -4px matches the list's outer bottom edge.
- * Horizontal: list pad (4px) + 6px card gap = 10px past itemWrap — plain
- * `100% + 6px` collapses to ~2px between outer card edges.
- * ::before bridges the full gap so the pointer can cross without mouseLeave. */
+/* A data separator directly followed by a row that starts a group draws one
+ * line, not two; a group start on the list's first row draws none. */
+.separator + .separator,
+.separator + .itemWrap > .separator:first-child,
+.itemWrap:first-child > .separator:first-child {
+  display: none;
+}
+
+/* The submenu aligns with the parent's bottom edge. Its hit bridge covers
+ * the menu inset and the 6px gap so pointer movement keeps it open. */
 .submenu {
   position: absolute;
   top: auto;

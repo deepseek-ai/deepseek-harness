@@ -1,6 +1,142 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/fs/tool-fs/README.md
-README.md: 9d338a6227b7f02ef43fcbe97900b166cb722817
-README.zh.md: 0c34f840ad449847a649df8abdadec01f772f37b
+/:
+  en: 52b93805befe8077
+  zh: 9786e662303f0e2f
+/deepseek-ai-dsh-tool-fs:
+  en: fc8f28deebe5fa6b
+  zh: 738c6ad45034da88
+/deepseek-ai-dsh-tool-fs/summary:
+  en: c8f608c85c8d6626
+  zh: 4133a867517baca5
+/deepseek-ai-dsh-tool-fs/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tool-fs/use-this-package:
+  en: 8fd62afcdabe55d4
+  zh: 9bdcae272575be8c
+/deepseek-ai-dsh-tool-fs/use-this-package/minimal-composition:
+  en: eb21d89a3ecbd2d4
+  zh: f05ccbb1e7515f32
+/deepseek-ai-dsh-tool-fs/use-this-package/the-tools:
+  en: e70e0164411016b5
+  zh: 3fa6caa8f3d70552
+/deepseek-ai-dsh-tool-fs/use-this-package/configuration:
+  en: 7eb705e3b132fcba
+  zh: 883207b13d381f9e
+/deepseek-ai-dsh-tool-fs/use-this-package/policy-and-sandbox-behavior:
+  en: 53d4ac2db089ef39
+  zh: 214ea051ed56f500
+/deepseek-ai-dsh-tool-fs/use-this-package/failures-and-recovery:
+  en: 962b09e21305a04b
+  zh: 382d2b8cce217569
+/deepseek-ai-dsh-tool-fs/understand-the-implementation:
+  en: e30f7038c28e93f8
+  zh: a3868dbd90367b13
+/deepseek-ai-dsh-tool-fs/understand-the-implementation/design-concept:
+  en: 454b5291db9ba847
+  zh: 9fe7081dfb416c93
+/deepseek-ai-dsh-tool-fs/understand-the-implementation/source-map:
+  en: e8220ed04480aadc
+  zh: 1cc5f9a505953102
+/deepseek-ai-dsh-tool-fs/understand-the-implementation/per-tool-flow:
+  en: d741e01be9fddb76
+  zh: 7aa1d7ca719a4aac
+/deepseek-ai-dsh-tool-fs/understand-the-implementation/observation-and-concurrency:
+  en: 665d437dc35bf05f
+  zh: 8004334d6a3246b4
+/deepseek-ai-dsh-tool-fs/further-exploration:
+  en: 485bc55482f576bc
+  zh: fc5fa55b41098bd0
+/deepseek-ai-dsh-tool-fs/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-fs/model-experience/system-prompt:
+  en: cf78b9dd5596495f
+  zh: bd44560f8c2435e8
+/deepseek-ai-dsh-tool-fs/model-experience/system-prompt/what-the-model-sees:
+  en: b09ee4be5e522c29
+  zh: ffd30b57d7fc96e8
+/deepseek-ai-dsh-tool-fs/model-experience/system-prompt/what-the-model-sees/read-guidance:
+  en: f8961df3f3a6a671
+  zh: 85c7bd418b40b089
+/deepseek-ai-dsh-tool-fs/model-experience/system-prompt/what-the-model-sees/write-guidance:
+  en: 7e34af48c583f210
+  zh: e39ad6823689c665
+/deepseek-ai-dsh-tool-fs/model-experience/system-prompt/what-the-model-sees/edit-guidance:
+  en: 28f07502a411303b
+  zh: 437897dc99fc4360
+/deepseek-ai-dsh-tool-fs/model-experience/system-prompt/token-effect:
+  en: 7a44cabe439a879a
+  zh: 1adf9bf3de7658b6
+/deepseek-ai-dsh-tool-fs/model-experience/system-prompt/kv-cache-effect:
+  en: 4f1b5639f91405a8
+  zh: f90ffe077a2e52a3
+/deepseek-ai-dsh-tool-fs/model-experience/tool-schemas:
+  en: 3039bc5e7a796b21
+  zh: 6b7a9eaf69c9ea53
+/deepseek-ai-dsh-tool-fs/model-experience/tool-schemas/what-the-model-sees:
+  en: 6f2a072c474e39e7
+  zh: dbee4c2b206bf68f
+/deepseek-ai-dsh-tool-fs/model-experience/tool-schemas/token-effect:
+  en: 68517f7d65ef7e9d
+  zh: 544a4b81e8ea16c0
+/deepseek-ai-dsh-tool-fs/model-experience/tool-schemas/kv-cache-effect:
+  en: 1e6d3da20012762d
+  zh: 482f8bc569b8b490
+/deepseek-ai-dsh-tool-fs/model-experience/read-result:
+  en: ebd38733c0490428
+  zh: b45101c325efe784
+/deepseek-ai-dsh-tool-fs/model-experience/read-result/what-the-model-sees:
+  en: 06e250bd8788248a
+  zh: e00d36b48068909a
+/deepseek-ai-dsh-tool-fs/model-experience/read-result/token-effect:
+  en: 4269b4368622ec2f
+  zh: f4df80c1fb6972f1
+/deepseek-ai-dsh-tool-fs/model-experience/read-result/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: 3d6bc05b9eadfbc2
+/deepseek-ai-dsh-tool-fs/model-experience/image-read-result:
+  en: 9dac44e6d0b9d8de
+  zh: 7bc4dc1c5df39eaf
+/deepseek-ai-dsh-tool-fs/model-experience/image-read-result/what-the-model-sees:
+  en: 9252b6d73776c5ff
+  zh: d6e433450989399e
+/deepseek-ai-dsh-tool-fs/model-experience/image-read-result/token-effect:
+  en: 68bd5255f1c9ca48
+  zh: 0474213531c1aae3
+/deepseek-ai-dsh-tool-fs/model-experience/image-read-result/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: 48e202e396bc5fcc
+/deepseek-ai-dsh-tool-fs/model-experience/write-and-edit-results:
+  en: 1b3b6cfa3605d0b4
+  zh: 78e37c2aa4f76d54
+/deepseek-ai-dsh-tool-fs/model-experience/write-and-edit-results/what-the-model-sees:
+  en: bb2a92e0e43e3273
+  zh: a744395576b48a93
+/deepseek-ai-dsh-tool-fs/model-experience/write-and-edit-results/token-effect:
+  en: fb4d0b17a99f49cf
+  zh: 17460a2a5d72f6cc
+/deepseek-ai-dsh-tool-fs/model-experience/write-and-edit-results/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: 3d6bc05b9eadfbc2
+/deepseek-ai-dsh-tool-fs/model-experience/tool-errors:
+  en: 2d4f2c8605eccab3
+  zh: 67f1f0218f73c6bf
+/deepseek-ai-dsh-tool-fs/model-experience/tool-errors/what-the-model-sees:
+  en: 4e8fac7bac8ced61
+  zh: 7ba921dbcddc9f97
+/deepseek-ai-dsh-tool-fs/model-experience/tool-errors/token-effect:
+  en: 681cadd5be7b8ac1
+  zh: 65e483f62fb819d9
+/deepseek-ai-dsh-tool-fs/model-experience/tool-errors/kv-cache-effect:
+  en: f5d5f97a153f7c70
+  zh: 3d6bc05b9eadfbc2
+/deepseek-ai-dsh-tool-fs/known-limitations-and-deferred-work:
+  en: ce7a91d41d2f7597
+  zh: d4a3c905e124fd7f
+/deepseek-ai-dsh-tool-fs/known-limitations-and-deferred-work/dev-note:
+  en: 0c4d0c465413d319
+  zh: a20efeb10121b927

@@ -14,9 +14,11 @@ import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 import { SessionFormatEventCollector, type SessionFormatArtifactDecoder, type SessionFormatCodec } from '@deepseek-ai/dsh-session-format'
 import { releasedV0SessionFormatCodec, releasedV1SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v0-to-v1'
 import { releasedV2SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v1-to-v2'
+import { releasedV3SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v2-to-v3'
 
 const historicalCodecs: readonly SessionFormatCodec[] = [
   releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, releasedV2SessionFormatCodec,
+  releasedV3SessionFormatCodec,
 ]
 
 /** Physical persistence artifacts validated by the WebWorker runtime fixture spec. */
@@ -69,7 +71,7 @@ function renderFixture(headerLine: string, events: readonly SessionEvent[]): str
   return [
     headerLine,
     ...events.map((event) => {
-      const record = { ...event } as unknown as Record<string, unknown>
+      const record: Record<string, unknown> = { ...event }
       delete record.seq
       delete record.time
       return JSON.stringify(record)
@@ -89,7 +91,7 @@ function projectedRowCardinality(record: Readonly<Record<string, unknown>>): num
 function parseFixtureObjectLine(line: string, lineNumber: number): Record<string, unknown> {
   let value: unknown
   try {
-    value = JSON.parse(line) as unknown
+    value = JSON.parse(line)
   } catch (error) {
     throw new Error(`session snapshot line ${lineNumber} contains invalid JSON`, { cause: error })
   }
@@ -222,7 +224,7 @@ export function canonicalSessionFixture(content: string, label = '<session-fixtu
 
   let headerValue: unknown
   try {
-    headerValue = JSON.parse(headerLine) as unknown
+    headerValue = JSON.parse(headerLine)
   } catch {
     return undefined
   }
