@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Scheduling and time context",
-    "description": "Enable durable reminders, the Automation tasks page, and per-step clock context."
+    "title": "Automation tasks",
+    "description": "Run tasks in your sessions at a set time or on a repeating schedule."
   }
 }

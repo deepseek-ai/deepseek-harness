@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 Cordis 组合中挂载插件并提供应用标识；需要时可覆盖接收地址。内置 profile 不挂载本插件。启动器环境须将 `DSH_APP_VERSION` 设为运行中应用的发布版本；缺少版本时 schema 会拒绝配置。
+在 Cordis 组合中挂载插件并提供应用标识；需要时可覆盖接收地址。桌面组合在开启[产品埋点](../../client/product-analytics/README.zh.md)时挂载本插件；普通 Web 不挂载。下方独立示例读取 `DSH_APP_VERSION`；桌面端由原生启动器提供 `DSH_CLIENT_VERSION`。两者均须为运行中的发布版本；缺少版本时 schema 会拒绝配置。
 
 ```yaml
 - name: '@deepseek-ai/dsh-otel'

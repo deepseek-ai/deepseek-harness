@@ -16,9 +16,9 @@ import {
   Button, IconCheckCircleFillRegular, IconChevronDownOutlineRegular, IconChevronLeftOutlineMedium,
   IconChevronRightOutlineRegular, IconCloseOutlineMedium,
   IconPlusOutlineRegular, IconRefreshOutlineRegular, IconTrashOutlineRegular,
-  IconWarningOutlineRegular, Input, Modal,
+  IconWarningOutlineRegular, Input, Modal, pointerModality,
   PluginArtworkDefault, PluginArtworkLoop, PluginArtworkSearch, PluginArtworkSubagent, PluginArtworkTerminal,
-  StateDot, Switch, Tag, TerminalBlock, Toast, useAnchoredPosition, useDismissOnOutsidePointer,
+  StateDot, Switch, Tag, TerminalBlock, Toast, Tooltip, useAnchoredPosition, useDismissOnOutsidePointer,
   type IconProps, type StateDotState, type TerminalBlockLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
@@ -320,6 +320,39 @@ function CardHead({ title, t, onOpen, icon, tags, description, end }: {
       </div>
       {end === undefined ? null : <div className={css.cardEnd}>{end}</div>}
     </div>
+  )
+}
+
+/** First-read placeholders share the Official group's card and text-line layout. */
+function ListSkeleton({ label }: { readonly label: string }): ReactNode {
+  return (
+    <section className={css.group} role="status" aria-label={label} data-plugin-loading>
+      <div className={css.groupHead} aria-hidden="true">
+        <span className={`${css.groupTitle} ${css.skeletonText} ${css.skeletonHeading}`}>
+          <span className={`${css.skeletonFill} ${css.skeletonBar}`} />
+        </span>
+      </div>
+      <ul className={css.cards} aria-hidden="true">
+        {[0, 1, 2, 3].map(index => (
+          <li key={index} className={css.card}>
+            <div className={css.cardHead}>
+              <span className={`${css.cardIcon} ${css.skeletonFill} ${css.skeletonIcon}`} />
+              <div className={css.cardMain}>
+                <div className={css.titleRow}>
+                  <span className={`${css.cardTitle} ${css.skeletonText} ${css.skeletonTitle}`}>
+                    <span className={`${css.skeletonFill} ${css.skeletonBar}`} />
+                  </span>
+                </div>
+                <span className={`${css.cardDesc} ${css.skeletonText} ${css.skeletonDescription}`}>
+                  <span className={`${css.skeletonFill} ${css.skeletonBar}`} />
+                </span>
+              </div>
+              <div className={`${css.cardEnd} ${css.skeletonActions}`} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -681,10 +714,10 @@ function registryList(registries: readonly Registry[], t: Translate, resolved: s
   return registries.map(registry => registryText(registry, t, resolved).name).join(t('registryListSeparator'))
 }
 
-/** An option's label: the registry's name with the host it names, unless the host is the name. */
-function registryOption(registry: Registry, t: Translate, resolved: string | null): string {
+/** An option's name with its host in tertiary text, unless the host is the name. */
+function registryOption(registry: Registry, t: Translate, resolved: string | null): ReactNode {
   const { name, host } = registryText(registry, t, resolved)
-  return name === host ? name : t('registryWithHost', { name, host })
+  return name === host ? name : <>{name}{' '}<span className={css.registryHint}>{host}</span></>
 }
 
 /**
@@ -726,6 +759,19 @@ function SubjectCard({ subject, t }: { readonly subject: InstallSubject; readonl
   )
 }
 
+/** Track one install field's composition, including Safari's 10ms post-composition Enter window. */
+function useInstallComposition(active: boolean) {
+  const composition = useRef({ active: false, until: 0 })
+  useEffect(() => { composition.current = { active: false, until: 0 } }, [active])
+  return {
+    onCompositionStart: () => { composition.current.active = true },
+    onCompositionEnd: () => { composition.current = { active: false, until: Date.now() + 10 } },
+    onBlur: () => { composition.current = { active: false, until: 0 } },
+    isComposing: (event: KeyboardEvent) => event.isComposing || Reflect.get(event, 'keyCode') === 229
+      || composition.current.active || Date.now() < composition.current.until,
+  }
+}
+
 /**
  * The install dialog: the spec and its check, then the installing, installed,
  * and failed screens over the same subject card. A failed run that left
@@ -757,15 +803,23 @@ function InstallDialog({
   const registryId = useId()
   const registryErrorId = useId()
   const [guideOpen, setGuideOpen] = useState(false)
+  const [customRegistryDraft, setCustomRegistryDraft] = useState('')
   const { phase } = install
   // The registry options float over the dialog from their toggle, so unfolding them never adds to its height;
   // the store folds them when a run starts, so they show at the spec only.
   const registryToggleRef = useRef<HTMLButtonElement | null>(null)
   const registryPanelRef = useRef<HTMLFieldSetElement | null>(null)
+  const registryCustomRef = useRef<HTMLInputElement | null>(null)
   const registryShown = install.registryOpen && phase === 'idle'
+  const specComposition = useInstallComposition(install.open && phase === 'idle')
+  const registryComposition = useInstallComposition(install.open && registryShown)
   const registryPosition = useAnchoredPosition({
     open: registryShown, anchorRef: registryToggleRef, panelRef: registryPanelRef, align: 'end', gap: 6, margin: 12,
   })
+  const registryReady = registryShown && registryPosition !== null
+  useEffect(() => {
+    if (registryReady && install.registryError) registryCustomRef.current?.focus()
+  }, [registryReady, install.registryError])
   // The hook only ever asks to close.
   useDismissOnOutsidePointer(registryToggleRef, registryShown, onToggleRegistry, registryPanelRef)
   useEffect(() => {
@@ -849,7 +903,13 @@ function InstallDialog({
               aria-invalid={install.inputError !== null}
               aria-describedby={install.inputError === null ? undefined : errorId}
               onChange={(event) => { onEditSpec(event.currentTarget.value) }}
-              onKeyDown={(event) => { if (event.key === 'Enter' && !empty && !checking) onRun() }}
+              onCompositionStart={specComposition.onCompositionStart}
+              onCompositionEnd={specComposition.onCompositionEnd}
+              onBlur={specComposition.onBlur}
+              onKeyDown={(event) => {
+                if (specComposition.isComposing(event.nativeEvent)) return
+                if (event.key === 'Enter' && !empty && !checking) onRun()
+              }}
             />
           </div>
           {inputSentence === null
@@ -925,37 +985,70 @@ function InstallDialog({
                 style={registryPosition ?? { visibility: 'hidden', left: 0, top: 0 }}
                 data-install-registry
                 aria-label={t('registryLegend')}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.nativeEvent.isComposing) return
+                  event.preventDefault()
+                  event.stopPropagation()
+                  const radio = event.currentTarget.querySelector<HTMLInputElement>('input[type="radio"]:checked')
+                  const field = registryCustomRef.current
+                  if (event.shiftKey && event.target === field) radio?.focus()
+                  else if (!event.shiftKey && event.target !== field) field?.focus()
+                  else {
+                    onToggleRegistry()
+                    registryToggleRef.current?.focus()
+                  }
+                }}
               >
                 {offeredRegistries(install.registries).map((registry) => {
                   const checked = choice.kind === 'offered' && choice.registry === registry
                   return (
                     <label key={registry ?? ''} className={css.registryOption} data-checked={checked}>
-                      <input type="radio" name={registryId} checked={checked} onChange={() => { onChooseRegistry({ kind: 'offered', registry }) }} />
-                      <span className={css.registryTitle}><span>{registryOption(registry, t, resolved)}</span></span>
+                      <input type="radio" name={registryId} checked={checked} onChange={() => {
+                        if (choice.kind === 'custom') setCustomRegistryDraft(choice.url)
+                        onChooseRegistry({ kind: 'offered', registry })
+                      }} />
+                      <span className={css.registryTitle}>{registryOption(registry, t, resolved)}</span>
                     </label>
                   )
                 })}
-                <div className={css.registryOption} data-checked={choice.kind === 'custom'}>
+                <div className={css.registryOption} data-checked={choice.kind === 'custom'}
+                  onClick={(event) => {
+                    // Keep label activation from moving focus back to the radio.
+                    if (!(event.target instanceof HTMLInputElement)) event.preventDefault()
+                    registryCustomRef.current?.focus()
+                  }}>
                   <label className={css.registryCustomPick}>
                     <input
                       type="radio"
                       name={registryId}
                       checked={choice.kind === 'custom'}
-                      onChange={() => { onChooseRegistry({ kind: 'custom', url: '' }) }}
+                      onChange={() => {
+                        onChooseRegistry({ kind: 'custom', url: customRegistryDraft })
+                        registryCustomRef.current?.focus()
+                      }}
                     />
                     <span className={css.registryTitle}><span>{t('registryCustom')}</span></span>
                   </label>
                   <input
+                    ref={registryCustomRef}
                     type="text"
                     className={css.registryCustomField}
                     aria-label={t('registryCustom')}
                     placeholder={t('registryCustomPlaceholder')}
-                    value={choice.kind === 'custom' ? choice.url : ''}
-                    disabled={choice.kind !== 'custom'}
+                    value={choice.kind === 'custom' ? choice.url : customRegistryDraft}
                     aria-invalid={install.registryError}
                     aria-describedby={install.registryError ? registryErrorId : undefined}
+                    onFocus={() => {
+                      if (pointerModality() && choice.kind !== 'custom') onChooseRegistry({ kind: 'custom', url: customRegistryDraft })
+                    }}
                     onChange={(event) => { onChooseRegistry({ kind: 'custom', url: event.currentTarget.value }) }}
-                    onKeyDown={(event) => { if (event.key === 'Enter' && !empty) onRun() }}
+                    onCompositionStart={registryComposition.onCompositionStart}
+                    onCompositionEnd={registryComposition.onCompositionEnd}
+                    onBlur={registryComposition.onBlur}
+                    onKeyDown={(event) => {
+                      if (registryComposition.isComposing(event.nativeEvent)) return
+                      if (event.key === 'Enter' && !empty) onRun()
+                    }}
                   />
                   {install.registryError
                     ? <p id={registryErrorId} className={css.inputError} role="alert">{t('registryCustomInvalid')}</p>
@@ -1168,7 +1261,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     const timer = setTimeout(clearHighlight, HIGHLIGHT_MS)
     return () => { clearTimeout(timer) }
   }, [highlight, clearHighlight])
-  const noticeLine = state.notice === null ? null : noticeText(state.notice, t)
+  const noticeLine = state.notice === null || state.notice.kind === 'refresh-failed' ? null : noticeText(state.notice, t)
 
   // The page manages what the person installed, what the installation ships for them to switch on, and a
   // selected name the Host cannot read; the installation's other bundles are inspected in the Settings
@@ -1178,6 +1271,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const mine = listed.filter(pkg => pkg.installed || !pkg.optional)
   const official = listed.filter(pkg => pkg.optional && !pkg.installed)
   const loaded = state.status === 'ready' || state.status === 'error'
+  const refreshing = state.refreshStatus === 'refreshing'
   const openPkg = view.kind === 'package' || view.kind === 'row' ? listed.find(pkg => pkg.name === view.name) : undefined
   const openItem = view.kind === 'item' ? ledger.items.find(item => item.id === view.id) : undefined
   const openRow = view.kind === 'row' && openPkg !== undefined ? openPkg.rows.find(row => row.rowId === view.rowId) : undefined
@@ -1224,7 +1318,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     )
 
   return (
-    <section className={css.page} data-plugin-panel aria-busy={state.status === 'loading'}>
+    <section className={css.page} data-plugin-panel aria-busy={state.status === 'loading' || refreshing}>
       {showsCards
         ? (
           <header className={css.pageHead} data-window-drag>
@@ -1233,9 +1327,13 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
               <p className={css.pageIntro}>{t('intro')}</p>
             </div>
             <div className={css.toolbar}>
-              <button type="button" className={css.iconButton} aria-label={t('refresh')} title={t('refresh')} disabled={!loaded} onClick={props.refresh}>
-                <span className={css.iconWrap} aria-hidden="true"><IconRefreshOutlineRegular /></span>
-              </button>
+              <Tooltip label={t('refresh')} delayMs={500} focusDelayMs={500} side="bottom" portal disabled={!loaded || refreshing}>
+                <button type="button" className={css.iconButton} aria-label={t('refresh')} aria-busy={refreshing} disabled={!loaded || refreshing} onClick={props.refresh}>
+                  <span className={css.iconWrap} aria-hidden="true">
+                    {refreshing ? <StateDot state="ongoing" size={18} /> : <IconRefreshOutlineRegular />}
+                  </span>
+                </button>
+              </Tooltip>
               <Button variant="primary" size="sm" className={css.addButton} icon={<IconPlusOutlineRegular size={13} />} disabled={!loaded} onClick={props.openInstall}>
                 {t(state.install.requestId === undefined ? 'addPlugin' : 'installViewTask')}
               </Button>
@@ -1243,11 +1341,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           </header>
         )
         : null}
-      {showsCards && state.status === 'loading' ? (
-        <p className={`${css.status} ${css.statusWithDot}`} role="status">
-          <StateDot state="ongoing" />{t('loading')}
-        </p>
-      ) : null}
+      {showsCards && state.status === 'loading' ? <ListSkeleton label={t('loading')} /> : null}
       {showsCards && state.status === 'unavailable' ? (
         <p className={`${css.status} ${css.statusWithDot}`} role="status">
           <StateDot state="idle" />{t('unavailable')}
@@ -1264,11 +1358,11 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
             onDone={props.dismissNotice}
           />
         )}
-      {!showsCards && state.status === 'error'
+      {!showsCards && state.status === 'error' && !refreshing
         ? (
           <div className={css.failure}>
             <p className={css.statusWithDot} role="alert">
-              <StateDot state="error" />{t('error')}
+              <StateDot state="error" />{t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')}
             </p>
             <Button variant="outline" size="sm" onClick={props.refresh}>{t('retry')}</Button>
           </div>
@@ -1317,11 +1411,11 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
               {renderGroup('bundles', t('bundlesTitle'), mine.map(packageCard))}
               {/* A failed package read trails the groups it left incomplete: right under Official on a
                   first-load failure, and after the kept cards when a refresh fails over stale data. */}
-              {state.status === 'error'
+              {state.status === 'error' && !refreshing
                 ? (
                   <div className={css.failure}>
                     <p className={css.statusWithDot} role="alert">
-                      <StateDot state="error" />{t('error')}
+                      <StateDot state="error" />{t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')}
                     </p>
                     <Button variant="outline" size="sm" onClick={props.refresh}>{t('retry')}</Button>
                   </div>

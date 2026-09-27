@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-27-observation-waits-on-observed-state.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-27-observation-waits-on-observed-state.md
+/agent-note-windows-lane-observations-wait-on-the-state-they-read:
+  en: 8949f81c9d585fc0
+  zh: 34e1bdbca1cf2126
+/agent-note-windows-lane-observations-wait-on-the-state-they-read/problem:
+  en: 270b015afc8de8ac
+  zh: 65aeb1e270d19a27
+/agent-note-windows-lane-observations-wait-on-the-state-they-read/decision:
+  en: 479cb25421102304
+  zh: 9e23396728001e2c
+/agent-note-windows-lane-observations-wait-on-the-state-they-read/alternatives-considered:
+  en: 00e59c561085e081
+  zh: 4f6ac4dfc3259f58
+/agent-note-windows-lane-observations-wait-on-the-state-they-read/consequences:
+  en: 13db32f9da19d87b
+  zh: 48081fc7035dea45
+/agent-note-windows-lane-observations-wait-on-the-state-they-read/deferred:
+  en: 68baa2f8c114d646
+  zh: 5ca029c62a288b14

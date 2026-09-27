@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Task scheduling",
+    "description": "Stores automation tasks, runs each in its original session when it is due, and gives the agent tools to manage them."
+  }
+}

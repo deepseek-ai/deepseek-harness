@@ -4,12 +4,60 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium } from 'playwright'
+import { chromium, type Locator, type Page } from 'playwright'
 import { expect, it } from 'vitest'
 import { launchWebScaffold, captureStableAria, compareOrRefreshGolden, webSnapshotMode, watchConsole, type WebScaffold } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE } from './support.ts'
 
-it('cancels installation through the UI, restores files, and offers the spec again', async () => {
+async function invalidInputStyles(page: Page, input: Locator) {
+  const styles = []
+  try {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme })
+      await expect.poll(() => page.locator('body').getAttribute('data-ds-dark-theme')).toBe(colorScheme === 'dark' ? '' : null)
+      await input.focus()
+      await expect.poll(() => input.evaluate(element => document.activeElement === element)).toBe(true)
+      expect(await input.getAttribute('aria-invalid')).toBe('true')
+      const { focused, focusRingColor, errorBorderColor } = await input.evaluate((element) => {
+        const style = getComputedStyle(element)
+        const probe = document.createElement('span')
+        probe.style.display = 'none'
+        probe.style.color = style.getPropertyValue('--dsw-focus-ring-color').trim() || style.getPropertyValue('--dsw-alias-state-business-primary')
+        element.after(probe)
+        try {
+          const focusRingColor = getComputedStyle(probe).color
+          probe.style.color = style.getPropertyValue('--dsw-alias-state-error-primary')
+          return {
+            focused: { outline: style.outlineStyle, boxShadow: style.boxShadow, borderColor: style.borderColor },
+            focusRingColor,
+            errorBorderColor: getComputedStyle(probe).color,
+          }
+        } finally {
+          probe.remove()
+        }
+      })
+      expect(focused.outline).toBe('none')
+      expect(focused.boxShadow).toContain('inset')
+      expect(focused.boxShadow).toContain('0px 0px 0px 0.5px')
+      expect(focused.boxShadow).toContain(focusRingColor)
+      expect(focused.borderColor).toBe(errorBorderColor)
+      expect(focusRingColor).not.toBe(errorBorderColor)
+      await input.evaluate((element) => { (element as HTMLInputElement).blur() })
+      await expect.poll(() => input.evaluate(element => document.activeElement === element)).toBe(false)
+      const blurred = await input.evaluate((element) => {
+        const style = getComputedStyle(element)
+        return { outline: style.outlineStyle, boxShadow: style.boxShadow, borderColor: style.borderColor }
+      })
+      expect(blurred).toEqual({ outline: 'none', boxShadow: 'none', borderColor: focused.borderColor })
+      styles.push({ colorScheme, focused, blurred })
+    }
+    return styles
+  } finally {
+    await page.emulateMedia({ colorScheme: null })
+  }
+}
+
+it('cancels installation, retries and highlights the enabled plugin at 40% alpha, and recovers unknown results', async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'dsh-install-cancel-'))
   const overlay = join(scratch, 'cordis.patch.yml')
   await writeFile(overlay, `- id: plugin-manager\n  config: ${JSON.stringify({ pnpmCommand: process.execPath })}\n`)
@@ -39,6 +87,7 @@ it('cancels installation through the UI, restores files, and offers the spec aga
       `)
       const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: ZH_BROWSER_LOCALE })
       const tripwire = watchConsole(page)
+      await page.clock.install()
       await page.goto(scaffold.authenticatedUrl)
       await page.waitForSelector('[class*="frame"]')
       if (await page.getByRole('dialog', { name: '设置' }).count() > 0) await page.keyboard.press('Escape')
@@ -48,6 +97,29 @@ it('cancels installation through the UI, restores files, and offers the spec aga
       // The dialog is named after its current screen, so it is found by role alone.
       const dialog = page.getByRole('dialog')
       await dialog.getByRole('textbox').fill('slow-package')
+      await dialog.getByRole('button', { name: /^安装源/ }).click()
+      const registryMenu = page.locator('[data-install-registry]')
+      const customAddress = registryMenu.getByRole('textbox', { name: '自定义地址', exact: true })
+      await customAddress.fill('invalid-registry')
+      await page.keyboard.press('Escape')
+      await registryMenu.waitFor({ state: 'hidden' })
+      await dialog.getByRole('button', { name: '安装', exact: true }).click()
+      await customAddress.waitFor({ state: 'visible' })
+      await expect.poll(() => customAddress.evaluate(element => document.activeElement === element)).toBe(true)
+      expect(await customAddress.getAttribute('aria-invalid')).toBe('true')
+      const registryStyles = await invalidInputStyles(page, customAddress)
+      const invalidRegistryAria = await captureStableAria(page, '[data-install-registry] > [data-checked="true"]', scaffold.workspaceCwd)
+      await registryMenu.getByRole('radio').first().check()
+      await page.keyboard.press('Escape')
+      await registryMenu.waitFor({ state: 'hidden' })
+      const packageName = dialog.getByRole('textbox', { name: '包名或地址', exact: true })
+      await packageName.fill('./relative')
+      await packageName.press('Enter')
+      await expect.poll(() => packageName.getAttribute('aria-invalid')).toBe('true')
+      const packageStyles = await invalidInputStyles(page, packageName)
+      await compareOrRefreshGolden(fileURLToPath(new URL('./expected/plugin-install-cancel/invalid-registry.expected.md', import.meta.url)),
+        `${invalidRegistryAria}\n\n${JSON.stringify({ registry: registryStyles, packageName: packageStyles }, null, 2)}`, webSnapshotMode())
+      await packageName.fill('slow-package')
       // Hold request delivery and the real Host's cancellation reply independently.
       // Cancellation reaches the Host before the install it names.
       const cancellationArrived = Promise.withResolvers<undefined>()
@@ -135,7 +207,46 @@ it('cancels installation through the UI, restores files, and offers the spec aga
       await dialog.getByRole('button', { name: '查看安装详情', exact: true }).click()
       await dialog.getByText('Retry completed', { exact: true }).waitFor()
       expect(JSON.parse(await readFile(manifestPath, 'utf8'))).toMatchObject({ dependencies: { 'slow-package': '1.0.0' } })
-      await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+      // Freeze the real highlight's expiry timer and CSS first frame independently.
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000))
+      const pausedHighlight = await page.addStyleTag({ content: '[data-plugin-highlight] { animation-play-state: paused !important; }' })
+      try {
+        await dialog.getByRole('button', { name: '立即启用', exact: true }).click()
+        await dialog.waitFor({ state: 'hidden' })
+        const card = panel.locator('[data-plugin-package="slow-package"][data-plugin-highlight]')
+        await card.waitFor({ state: 'visible' })
+        expect(await panel.locator('[data-plugin-highlight]').count()).toBe(1)
+        expect(await card.getAttribute('data-plugin-status')).toBe('running')
+        const styles = []
+        for (const colorScheme of ['light', 'dark'] as const) {
+          await page.emulateMedia({ colorScheme })
+          await expect.poll(() => page.locator('body').getAttribute('data-ds-dark-theme')).toBe(colorScheme === 'dark' ? '' : null)
+          for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+            await page.emulateMedia({ reducedMotion })
+            const style = await card.evaluate((element) => {
+              const computed = getComputedStyle(element)
+              return { boxShadow: computed.boxShadow, animationName: computed.animationName, animationDuration: computed.animationDuration }
+            })
+            expect(style.boxShadow).toMatch(/(?:\/|,)\s*0\.4\)/)
+            expect(style.boxShadow).toContain('0px 0px 0px 2px')
+            if (reducedMotion === 'reduce') {
+              expect(style.animationName).toBe('none')
+            } else {
+              expect(style.animationName).toContain('dsh-plugin-highlight')
+              expect(style.animationDuration).toBe('2.4s')
+            }
+            styles.push({ colorScheme, reducedMotion, boxShadow: style.boxShadow, animated: style.animationName !== 'none' })
+          }
+        }
+        await compareOrRefreshGolden(fileURLToPath(new URL('./expected/plugin-install-cancel/highlight.expected.md', import.meta.url)),
+          `${await captureStableAria(page, '[data-plugin-package="slow-package"]', scaffold.workspaceCwd)}\n\n${JSON.stringify(styles, null, 2)}`, webSnapshotMode())
+        await page.clock.runFor(2400)
+        await card.waitFor({ state: 'detached' })
+      } finally {
+        await pausedHighlight.evaluate((element) => { element.parentNode?.removeChild(element) })
+        await page.emulateMedia({ colorScheme: null, reducedMotion: null })
+        await page.clock.resume()
+      }
       await panel.getByRole('button', { name: '添加插件', exact: true }).click()
       await dialog.getByRole('textbox').fill('recovered-package')
       await page.route('**/api/pluginManager/installBundle', async (route) => {

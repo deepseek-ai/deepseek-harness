@@ -271,8 +271,13 @@ it('re-reads profile and balance but no bonus for the onboarding recharge return
   vi.stubGlobal('dshPlatform', { open: vi.fn(), setBounds: vi.fn(), close: vi.fn() })
   await c.reload(SELF)
   const actions = operations(c)
+  const track = vi.fn()
+  c.ctx.provide('productAnalytics', { track } as never)
+  expect(actions).not.toHaveProperty('track')
   const onboarding = injectedOf(c.ctx.slots.entries('shell.overlay')
     .find(entry => entry.options.id === 'desktop-onboarding')!) as DesktopOnboardingInjected
+  onboarding.track?.('onboarding_page_view', { page_name: 'onboarding_recharge' })
+  expect(track).toHaveBeenCalledWith('onboarding_page_view', { page_name: 'onboarding_recharge' })
   const host = injectedOf(platformHostEntry(c)!) as AccountPlatformHostInjected
   c.mock.remote.account.getProfile.mockResolvedValue(ok(profile))
   c.mock.remote.account.getBalance.mockResolvedValue(ok(null))

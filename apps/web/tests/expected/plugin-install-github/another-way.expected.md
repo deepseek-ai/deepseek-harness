@@ -2,14 +2,14 @@
   - heading "添加插件" [level=2]
   - button "关闭"
   - textbox "插件包名":
-    - /placeholder: 例如 @deepseek-ai/dsh-subagent-codex
+    - /placeholder: 例如 dsh-plugin-whale-pet
   - button "收起引导" [expanded]
   - button "安装源 中国大陆镜像源"
   - list:
     - listitem:
       - text: 包名 插件包名即 npm 包名（如 dsh-xxx 或 @作者/插件名），社区插件的 README 安装命令中 dsh plugin add 或 pnpm add 之后的部分。 示例：
-      - code: "@deepseek-ai/dsh-subagent-codex"
-      - button "填入示例 @deepseek-ai/dsh-subagent-codex": 填入示例
+      - code: dsh-plugin-whale-pet
+      - button "填入示例 dsh-plugin-whale-pet": 填入示例
     - listitem:
       - text: GitHub 仓库地址 插件在 GitHub 上的开源仓库地址，也支持其他 Git 仓库。 示例：
       - code: https://github.com/author/dsh-plugin

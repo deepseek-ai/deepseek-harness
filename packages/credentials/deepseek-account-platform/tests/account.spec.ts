@@ -1657,3 +1657,20 @@ it('clears a completed login from snapshots while credential deletion is still s
     deletion.mockRestore()
   }
 })
+
+
+it('reads credential-free device identity without minting a device', async () => {
+  const f = await fixture()
+  expect(await f.account.getDeviceIdentity()).toEqual({ osVersion: expect.any(String) as string })
+  const key = credentialKey('deepseek-account-platform', 'device')
+  expect(await f.ctx.credentials.readRecord(key)).toBeUndefined()
+  await f.ctx.credentials.modifyRecord(key, async () => ({ kind: 'grant', payload: { id: 'invalid' } }))
+  expect(await f.account.getDeviceIdentity()).not.toHaveProperty('deviceId')
+  await f.ctx.credentials.modifyRecord(key, async () => ({ kind: 'api-key', key: 'private' }))
+  expect(await f.account.getDeviceIdentity()).not.toHaveProperty('deviceId')
+  const deviceId = '01990000-0000-4000-8000-000000000001'
+  await f.ctx.credentials.modifyRecord(key, async () => ({ kind: 'grant', payload: { id: deviceId } }))
+  await storeAccount(f)
+  await f.account.getProfile(clientMetadata())
+  expect(await f.account.getDeviceIdentity()).toEqual({ deviceId, userId: 'test-user', osVersion: expect.any(String) as string })
+})

@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   lstatSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -158,9 +159,15 @@ function gitDirectory(fixture: Fixture, root: string): string {
   return git(fixture, root, ['rev-parse', '--absolute-git-dir'])
 }
 
+// The installer resolves the common directory against Git's own top-level path, and the host
+// spells that path differently from the fixture directory this file created: Git canonicalizes
+// Windows 8.3 short names and the macOS `/var` symlink, while `mkdtempSync` returns the temp
+// directory's own spelling. Canonicalizing the fixture-side directory collapses both spellings
+// onto the one directory the installer touches, so an injected failure on this path reaches the
+// installer's own lock instead of a differently spelled name for it.
 function commonDirectory(fixture: Fixture): string {
   const output = git(fixture, fixture.main, ['rev-parse', '--git-common-dir'])
-  return isAbsolute(output) ? output : resolve(fixture.main, output)
+  return realpathSync.native(isAbsolute(output) ? output : resolve(fixture.main, output))
 }
 
 function hooksPath(fixture: Fixture, root: string): string {
@@ -321,14 +328,11 @@ describe('worktree-local Lefthook installer', { timeout: 90_000 }, () => {
     expect(existsSync(join(hooksPath(fixture, fixture.main), '.fake-lefthook-running'))).toBe(false)
   })
 
-  it.each([
-    { operation: 'openSync', code: 'EPERM', expires: false },
-    { operation: 'readFileSync', code: 'EPERM', expires: false },
-    { operation: 'lstatSync', code: 'EPERM', expires: false },
-    { operation: 'openSync', code: 'EPERM', expires: true },
-    { operation: 'openSync', code: 'EACCES', expires: false },
-  ])('handles $operation $code with expired deadline=$expires', async ({ operation, code, expires }) => {
-    const fixture = createFixture()
+  /** Inject one lock-access failure and assert the installer's documented outcome. */
+  async function expectInjectedLockAccessFailure(
+    fixture: Fixture,
+    { operation, code, expires }: { operation: string; code: string; expires: boolean },
+  ): Promise<void> {
     const lockPath = installLockPath(fixture)
     const probe = join(fixture.container, 'lock-access-probe')
     const preload = join(fixture.container, 'lock-access.cjs')
@@ -359,6 +363,7 @@ syncBuiltinESMExports()
 
     const result = await runInstaller(fixture, fixture.main, {}, ['--require', preload])
 
+    expect(existsSync(probe), `lock injection missing: exit ${result.status}\n${result.stderr}`).toBe(true)
     expect(readFileSync(probe, 'utf8')).toBe('injected')
     const recovers = process.platform === 'win32' && code === 'EPERM' && !expires
     expect(result.status, result.stderr).toBe(recovers ? 0 : 1)
@@ -369,6 +374,28 @@ syncBuiltinESMExports()
       expect(result.stderr).toContain('injected lock access failure')
       expect(existsSync(hooksPath(fixture, fixture.main))).toBe(false)
     }
+  }
+
+  it.each([
+    { operation: 'openSync', code: 'EPERM', expires: false },
+    { operation: 'readFileSync', code: 'EPERM', expires: false },
+    { operation: 'lstatSync', code: 'EPERM', expires: false },
+    { operation: 'openSync', code: 'EPERM', expires: true },
+    { operation: 'openSync', code: 'EACCES', expires: false },
+  ])('handles $operation $code with expired deadline=$expires', async ({ operation, code, expires }) => {
+    await expectInjectedLockAccessFailure(createFixture(), { operation, code, expires })
+  })
+
+  // The alias forces the installer's resolved common directory to differ from the path this spec
+  // composes on every host — a junction on Windows, a directory symlink elsewhere — instead of
+  // depending on a runner whose temp directory happens to carry a short name.
+  it('handles an injected lock failure through an aliased worktree root', async () => {
+    const fixture = createFixture()
+    const alias = join(fixture.container, 'main-alias')
+    symlinkSync(fixture.main, alias, process.platform === 'win32' ? 'junction' : 'dir')
+    fixture.main = alias
+
+    await expectInjectedLockAccessFailure(fixture, { operation: 'openSync', code: 'EPERM', expires: false })
   })
 
   it('waits for a concurrent installer to finish publishing its lock record', async () => {

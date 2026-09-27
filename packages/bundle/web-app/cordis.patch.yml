@@ -42,6 +42,24 @@
 # `dsh.client` rows are the browser roster the modules node half scans into
 # window.__DSH_BOOT__; the modules row is simultaneously a host row.
 - insert:
+    - id: desktop-product-telemetry
+      name: '@deepseek-ai/dsh-host-product-telemetry-otel'
+      disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"
+      config:
+        timeoutMillis: 1000
+        exportTimeoutMillis: 1500
+        shutdownTimeoutMillis: 2000
+        serviceName: deepseek-harness-desktop
+        serviceVersion: !!js process.env.DSH_CLIENT_VERSION
+        endpoint: !!js process.env.DSH_PRODUCT_ANALYTICS_OTLP_URL
+
+    - id: product-analytics
+      name: '@deepseek-ai/dsh-client-product-analytics'
+      disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"
+      config:
+        enabled: true
+        appVersion: !!js process.env.DSH_CLIENT_VERSION
+
     # Host-owned opt-in sampled when a new Web session receives its preset
     # delegation tools. The Plugins page edits this settings namespace.
     - id: subagent-model-selection-settings
@@ -112,19 +130,6 @@
       name: '@deepseek-ai/dsh-api-terminal-controller'
     - id: workspace-files
       name: '@deepseek-ai/dsh-api-workspace-files'
-
-    # Durable Host-wide reminders. The Schedule service owns the task store and
-    # delivers each due occurrence as a follow-up in its original Session;
-    # `time-context` supplies the current time, browser zone, and elapsed time
-    # the model needs to resolve an unqualified date or time. The browser half
-    # is the `ui-schedule` row below.
-    - id: time-context
-      name: '@deepseek-ai/dsh-time-context'
-      disabled: true
-
-    - id: schedule
-      name: '@deepseek-ai/dsh-schedule'
-      disabled: true
 
     # Configuration-surface reads and writes over Typert Remote. Each method
     # reports an actionable error when its settings-domain provider is absent.
@@ -364,12 +369,6 @@
     # record panels over the session job-output service.
     - id: ui-jobs
       name: '@deepseek-ai/dsh-client-ui-jobs'
-
-    # Task management and Session reminder catalog over the Host Schedule
-    # service mounted above.
-    - id: ui-schedule
-      name: '@deepseek-ai/dsh-client-ui-schedule'
-      disabled: true
 
     # Goal surface: GoalBar in the input dock over the goal session projection.
     - id: ui-goal

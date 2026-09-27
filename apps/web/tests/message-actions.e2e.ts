@@ -14,7 +14,7 @@ import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, parseSeedFixture, renderSeedFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { openSettings, newEnglishPage, saveFailureShot } from './support.ts'
+import { openSettings, newEnglishPage, pinBrowserClock, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/message-actions', import.meta.url))
 // Borrowed read-only: this scenario needs any settled user+assistant pair, not
@@ -189,6 +189,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
+  let unpinBrowserClock: (() => void) | undefined
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({})
@@ -201,15 +202,21 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     expect(parseSeedFixture(raw).events.flatMap(event => event.type === 'request/header'
       ? [event.data.reason]
       : []), 'adapted seed must carry an unchanged resume header').toEqual(['initial', 'resume'])
-    await seedSession(scaffold, raw, SEED_ID)
+    // The fixture carries no times of its own, so the seed anchors them at
+    // `Date.now() - 60_000` unless the scenario names the shared fixture day.
+    // 90 s keeps the earliest rows in the `1min` bucket and the later ones,
+    // carried by their stream spans, inside `now` — what the fork golden records.
+    await seedSession(scaffold, raw, SEED_ID, undefined, { createdAt: WEB_FIXTURE_TIME - 90_000 })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    unpinBrowserClock = await pinBrowserClock(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
   }, 120_000)
 
   afterAll(async () => {
+    unpinBrowserClock?.()
     await browser?.close()
     await scaffold?.close()
   })

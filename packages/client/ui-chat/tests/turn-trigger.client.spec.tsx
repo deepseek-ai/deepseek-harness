@@ -2,11 +2,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { IconClockOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNode } from '../src/client/contract/chat-nodes.ts'
 import { TurnTriggerNodeView } from '../src/client/chat/TurnTriggerNodeView.tsx'
 import { turnTriggerDetails } from '../src/client/chat/turn-trigger.ts'
 import { contextForm, contextProducer } from '../src/client/conversation-nodes/event-projection.ts'
-import { en } from '../src/client/locale.ts'
+import { en, zh } from '../src/client/locale.ts'
 
 afterEach(cleanup)
 
@@ -24,7 +25,7 @@ function trigger(source: unknown): ChatNode<'turn-trigger'> {
 
 describe('Turn trigger notices', () => {
   it.each([
-    [{ kind: 'schedule' }, 'schedule', 'Scheduled task'],
+    [{ kind: 'schedule' }, 'schedule', 'Automation task'],
     [{ kind: 'tool-jobs' }, 'job', 'Background task updated'],
     [{ kind: 'cordis-host-runner' }, 'plugin', 'Plugin status updated'],
     [{ kind: 'goal' }, 'goal', 'Continuing goal'],
@@ -43,6 +44,19 @@ describe('Turn trigger notices', () => {
     expect(view.getByRole('button').textContent).toContain(title)
     expect(view.getByRole('button').querySelector('svg')).not.toBeNull()
     expect(view.container.querySelector('time')?.dateTime).toBe('2023-11-14T22:13:20.000Z')
+  })
+
+  it.each([
+    { locale: en, title: 'Automation task' },
+    { locale: zh, title: '自动化任务' },
+  ])('uses the automation task label $title and shared clock', ({ locale, title }) => {
+    const node = trigger({ kind: 'schedule' })
+    const view = render(<TurnTriggerNodeView node={node} t={makeTranslate(locale)} />)
+    expect(view.getByRole('button').textContent).toContain(title)
+    const reference = render(<IconClockOutlineRegular size={14} />)
+    expect(view.getByRole('button').querySelector('svg')?.outerHTML)
+      .toBe(reference.container.querySelector('svg')?.outerHTML)
+    expect(node.data.source).toEqual({ kind: 'schedule' })
   })
 
   it('opens the recorded notice body and closes it independently of the Turn', () => {

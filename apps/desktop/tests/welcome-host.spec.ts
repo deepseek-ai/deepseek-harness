@@ -20,6 +20,8 @@ function transport(preference?: string) {
     if (method === 'account/getState') value = { links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null }
     else if (method === 'settings/describe') value = { namespaces }
     else if (method === 'llm/listConfigurableProviders') value = [{ settingsNs: 'llm-pi-ai', settingsPath: ['profiles', 'example'] }]
+    else if (method === 'productAnalytics/enabled') value = true
+    else if (method === 'productAnalytics/report') value = undefined
     else if (method === 'credentials/set') keys.set(payload.args.ref, payload.args.value)
     else value = Object.fromEntries(payload.args.refs.map(ref => [ref, { configured: keys.has(ref), writable: true }]))
     return Response.json({ type: 'server-response', rpcId, result: { ok: true, value } })
@@ -34,6 +36,7 @@ describe('desktop welcome Web operations', () => {
     const host = transport()
     const backend = await connectDesktopWelcome(url, host.send)
     expect(host.send).toHaveBeenCalledExactlyOnceWith(url, { credentials: 'include' })
+    expect(await backend.analyticsEnabled()).toBe(true)
     expect(await backend.save('sk-example')).toEqual({ ok: true })
     expect(host.keys.get('CUSTOM_DEEPSEEK_KEY')).toBe('sk-example')
     expect(await backend.read()).toEqual({ loggedIn: false, hasApiKey: true, writable: true, localePreference: null })
@@ -88,6 +91,19 @@ describe('desktop welcome Web operations', () => {
     expect(await backend.save('sk-example')).toEqual({ ok: false })
     host.send.mockResolvedValueOnce(Response.json({ type: 'server-response', rpcId: 'other', result: { ok: true } }))
     await expect(backend.read()).rejects.toThrow('Web RPC failed')
+  })
+
+
+  it('submits native analytics through authenticated RPC with a bounded request', async () => {
+    const host = transport()
+    const backend = await connectDesktopWelcome(url, host.send)
+    const event = { eventName: 'desktop_app_launch' as const, timestamp: 100, attributes: {} }
+    await backend.report(event)
+    const [input, init] = host.send.mock.calls.at(-1)!
+    expect(input).toBe('http://127.0.0.1:19387/api/productAnalytics/report')
+    expect(init?.credentials).toBe('include')
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
+    expect(JSON.parse(init!.body as string)).toMatchObject({ payload: { args: { event } } })
   })
 
   it('refuses an unauthenticated Web launch', async () => {

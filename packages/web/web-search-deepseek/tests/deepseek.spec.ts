@@ -4,8 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
+import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
+import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import WebRuntime, { WebError } from '@deepseek-ai/dsh-web'
 import {
   DeepSeekSearchProvider,
@@ -166,6 +170,10 @@ describe('DeepSeekSearchProvider availability', () => {
     expect(searchProvider(options).available()).toBe(true)
   })
 
+  it('is available with only an account token resolver', () => {
+    expect(searchProvider({ ...options, apiKey: '', resolveAccountToken: async () => 'account-token' }).available()).toBe(true)
+  })
+
   it('is misconfigured when the base URL is unparseable', () => {
     expect(searchProvider({ ...options, baseURL: 'not a url' }).available()).toBe(false)
   })
@@ -213,6 +221,132 @@ describe('DeepSeekSearchProvider request mapping', () => {
     await searchProvider(options).search({ query: 'q' }, controller.signal)
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(init.signal).toBe(controller.signal)
+  })
+})
+
+describe('DeepSeekSearchProvider account authentication', () => {
+  /** Stub fetch and read back the endpoint and headers of its first call. */
+  function captureFetch() {
+    // The provider always passes the endpoint as a string.
+    const fetchMock = vi.fn(async (_input: string, _init?: RequestInit) => jsonResponse(searchResponse()))
+    vi.stubGlobal('fetch', fetchMock)
+    return {
+      fetchMock,
+      first: () => {
+        const [url, init] = fetchMock.mock.calls[0] ?? []
+        return { url: url ?? '', headers: (init?.headers ?? {}) as Record<string, string> }
+      },
+    }
+  }
+
+  it('sends only the account token for the dispatched endpoint, ahead of a configured key', async () => {
+    const { first } = captureFetch()
+    const resolveAccountToken = vi.fn(async (_endpoint: string) => 'account-token')
+    const resolveApiKey = vi.fn(async () => 'resolved-key')
+    await searchProvider({ ...options, resolveAccountToken, resolveApiKey }).search({ query: 'q' })
+    const { url, headers } = first()
+    expect(resolveAccountToken).toHaveBeenCalledWith(url)
+    expect(resolveApiKey).not.toHaveBeenCalled()
+    expect(headers['x-dsh-auth-token']).toBe('account-token')
+    expect(headers).not.toHaveProperty('x-api-key')
+    expect(headers).not.toHaveProperty('authorization')
+  })
+
+  it.each([undefined, ''])('falls back to the API key when the account resolves %j', async (token) => {
+    const { first } = captureFetch()
+    await searchProvider({ ...options, resolveAccountToken: async () => token }).search({ query: 'q' })
+    const { headers } = first()
+    expect(headers['x-api-key']).toBe('ds-key')
+    expect(headers).not.toHaveProperty('x-dsh-auth-token')
+  })
+
+  it('maps an account resolver rejection to WEB_PROVIDER_ERROR without dispatching', async () => {
+    const { fetchMock } = captureFetch()
+    await expect(searchProvider({
+      ...options,
+      resolveAccountToken: () => Promise.reject(new Error('account storage failed')),
+    }).search({ query: 'q' }))
+      .rejects.toThrow(expect.objectContaining({
+        code: 'WEB_PROVIDER_ERROR',
+        message: 'DeepSeek search credential resolution failed: Error: account storage failed',
+      }))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('replaces endpoint guidance with sign-in guidance when DeepSeek rejects the account token', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: { message: 'invalid token' } }, { status: 401 })))
+    const error = await rejectedWebError(searchProvider({
+      ...options,
+      resolveAccountToken: async () => 'account-token',
+    }).search({ query: 'q' }))
+    expect(error).toMatchObject({
+      code: 'WEB_PROVIDER_ERROR',
+      message: 'DeepSeek API error (HTTP 401): invalid token\n\n'
+        + 'DeepSeek rejected the account sign-in used for this web search. '
+        + 'Guide the user to sign in to DeepSeek again; the search endpoint does not need changing.',
+    })
+  })
+
+  it('keeps endpoint guidance for other account-authenticated HTTP failures', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({}, { status: 503 })))
+    const error = await rejectedWebError(searchProvider({
+      ...options,
+      resolveAccountToken: async () => 'account-token',
+    }).search({ query: 'q' }))
+    expect(error.message).toContain('Search endpoint configuration is separate from chat.')
+  })
+
+  it('maps a synchronous resolver throw to WEB_PROVIDER_ERROR', async () => {
+    const { fetchMock } = captureFetch()
+    await expect(searchProvider({
+      ...options,
+      resolveAccountToken: () => { throw new Error('account service threw') },
+    }).search({ query: 'q' }))
+      .rejects.toThrow(expect.objectContaining({
+        code: 'WEB_PROVIDER_ERROR',
+        message: 'DeepSeek search credential resolution failed: Error: account service threw',
+      }))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('starts neither resolver for a pre-aborted call', async () => {
+    const resolveAccountToken = vi.fn(async () => 'account-token')
+    const resolveApiKey = vi.fn(async () => 'resolved-key')
+    const controller = new AbortController()
+    controller.abort(new Error('caller stopped'))
+    await expect(searchProvider({ ...options, apiKey: '', resolveAccountToken, resolveApiKey })
+      .search({ query: 'q' }, controller.signal))
+      .rejects.toThrow(expect.objectContaining({ code: 'WEB_ABORTED' }))
+    expect(resolveAccountToken).not.toHaveBeenCalled()
+    expect(resolveApiKey).not.toHaveBeenCalled()
+  })
+
+  it('does not start API-key resolution after cancellation during account resolution', async () => {
+    const controller = new AbortController()
+    const resolveApiKey = vi.fn(() => Promise.reject(new Error('must not run')))
+    await expect(searchProvider({
+      ...options,
+      apiKey: '',
+      resolveAccountToken: async () => {
+        controller.abort(new Error('caller stopped'))
+        return undefined
+      },
+      resolveApiKey,
+    }).search({ query: 'q' }, controller.signal))
+      .rejects.toThrow(expect.objectContaining({ code: 'WEB_ABORTED' }))
+    expect(resolveApiKey).not.toHaveBeenCalled()
+  })
+
+  it('aborts while the account resolver remains pending', async () => {
+    const { fetchMock } = captureFetch()
+    const controller = new AbortController()
+    const search = searchProvider({
+      ...options,
+      resolveAccountToken: () => new Promise<string>(() => {}),
+    }).search({ query: 'q' }, controller.signal)
+    controller.abort(new Error('deadline'))
+    await expect(search).rejects.toThrow(expect.objectContaining({ code: 'WEB_ABORTED' }))
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 
@@ -552,5 +686,54 @@ describe('web-search-deepseek plugin registration', () => {
     } finally {
       if (prev !== undefined) process.env.DEEPSEEK_API_KEY = prev
     }
+  })
+})
+
+describe('web-search-deepseek account route selection', () => {
+  /**
+   * Mount the provider with a signed-in account and run one search inside an
+   * initiator whose latest request context names `provider`.
+   * @param provider - route recorded by the initiating Session's request context; undefined runs the
+   *   search without an initiator while a Session on the account route exists.
+   * @returns the headers the search sent and the URLs the account was asked about.
+   */
+  async function searchAs(provider: string | undefined): Promise<{ headers: Record<string, string>; asked: string[] }> {
+    const fetchMock = vi.fn(async (_input: string, _init?: RequestInit) => jsonResponse(searchResponse()))
+    vi.stubGlobal('fetch', fetchMock)
+    const asked: string[] = []
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
+      ctx.provide('deepseekAccount', {
+        resolveToken: async (url: string) => { asked.push(url); return 'account-token' },
+      } as DeepSeekAccount)
+      await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key' })
+      const session = ctx.sessions.create(SessionId(`web-search-account-${provider ?? 'none'}`))
+      session.append('turn/start', { turn: 1 })
+      session.append('request/context', { provider: provider ?? 'deepseek-account', model: 'deepseek-v4-flash' })
+      const agent = { session } as Agent
+      const search = () => ctx.web.search({ query: 'q' })
+      await (provider === undefined ? search() : ctx.agents.withInitiator(agent, search))
+      const [, init] = fetchMock.mock.calls[0] ?? []
+      return { headers: (init?.headers ?? {}) as Record<string, string>, asked }
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  }
+
+  it('authenticates with the account token when the initiating Session uses the account route', async () => {
+    const { headers, asked } = await searchAs('deepseek-account')
+    expect(asked).toEqual(['https://api.deepseek.com/anthropic/v1/messages'])
+    expect(headers['x-dsh-auth-token']).toBe('account-token')
+    expect(headers).not.toHaveProperty('x-api-key')
+  })
+
+  it.each(['deepseek-official', undefined])('keeps API-key authentication for route %j', async (provider) => {
+    const { headers, asked } = await searchAs(provider)
+    expect(asked).toEqual([])
+    expect(headers['x-api-key']).toBe('ds-key')
+    expect(headers).not.toHaveProperty('x-dsh-auth-token')
   })
 })

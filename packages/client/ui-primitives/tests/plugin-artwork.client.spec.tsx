@@ -36,6 +36,20 @@ describe('plugin artwork', () => {
     expect(container.querySelector('foreignObject div')).not.toBeNull()
   })
 
+  it('pairs the search green with the loop upper-right blue-violet in its ring and handle', () => {
+    const { container } = render(<PluginArtworkSearch />)
+    const ring = container.querySelector<HTMLElement>('foreignObject div')
+    expect(ring?.style.background).toBe('conic-gradient(from 90deg, rgb(65, 225, 172) 0deg, rgb(101, 142, 255) 62.0619deg, rgb(65, 225, 172) 360deg)')
+    expect(container.querySelector('path[stroke]')?.getAttribute('stroke')).toBe('#658EFF')
+  })
+
+  it('uses light blue for both terminal strokes', () => {
+    const { container } = render(<PluginArtworkTerminal />)
+    const strokes = [...container.querySelectorAll('path')].map(path => path.getAttribute('stroke'))
+    expect(strokes).toEqual(['#679EFE', '#679EFE'])
+    expect(container.querySelector('linearGradient')).toBeNull()
+  })
+
   it.each(Object.entries(artworks))('%s renders at 36 by default and repeats without document-global ids', (_name, Artwork) => {
     const { container } = render(
       <>
@@ -46,8 +60,8 @@ describe('plugin artwork', () => {
     for (const svg of container.querySelectorAll('svg')) expect(svg.getAttribute('width')).toBe('36')
     const ids = [...container.querySelectorAll('[id]')].map(node => node.id)
     expect(new Set(ids).size).toBe(ids.length)
-    for (const reference of container.querySelectorAll('[fill^="url("], [clip-path^="url("]')) {
-      const target = (reference.getAttribute('fill') ?? reference.getAttribute('clip-path') ?? '').slice('url(#'.length, -1)
+    for (const reference of container.querySelectorAll('[fill^="url("], [stroke^="url("], [clip-path^="url("]')) {
+      const target = (reference.getAttribute('fill') ?? reference.getAttribute('stroke') ?? reference.getAttribute('clip-path') ?? '').slice('url(#'.length, -1)
       expect(ids).toContain(target)
     }
   })

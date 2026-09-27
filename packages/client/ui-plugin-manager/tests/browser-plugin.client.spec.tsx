@@ -12,6 +12,7 @@ import { TestRemote, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-t
 import * as settings from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject, NS, PANEL_ID } from '../src/client/index.ts'
 import { PluginManagerPage } from '../src/client/PluginManagerPage.tsx'
+import { PluginRefreshToast, type PluginRefreshToastFace } from '../src/client/PluginRefreshToast.tsx'
 import { PluginsPanelIcon } from '../src/client/PluginsPanelIcon.tsx'
 import type { PluginManagerFace } from '../src/client/manager-store.ts'
 
@@ -54,6 +55,7 @@ function declare(slots: SlotRegistry): () => void {
     name: 'root',
     children: {
       'main': { kind: 'keyed', scope: 'root' },
+      'shell.overlay': { kind: 'list', scope: 'root' },
       'sidebar.panellist': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
@@ -78,6 +80,41 @@ describe('ui-plugin-manager browser plugin', () => {
     removeRoot()
     b.selectPanel(null)
     expect(navigation.getSnapshot()).toEqual({ view: { kind: 'package', name: 'dsh-navigation-test' } })
+  })
+
+  it('shares refresh failures with the overlay after navigation and releases both registrations across reloads', async () => {
+    const b = await bench()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    expect(b.slots.entries('shell.overlay')).toHaveLength(0)
+    const removeRoot = declare(b.slots)
+    const mainInjected: object = b.slots.entries('main')[0]!.inject!()
+    const face = mainInjected as PluginManagerFace
+    const overlayInjected: object = b.slots.entries('shell.overlay')[0]!.inject!()
+    const overlay = overlayInjected as PluginRefreshToastFace
+    expect(overlay.hooks.pluginManager).toBe(face.hooks.pluginManager)
+    face.ensure()
+    await vi.waitFor(() => { expect(face.hooks.pluginManager.getSnapshot().status).toBe('ready') })
+    b.selectPanel(PANEL_ID)
+    b.list.mockRejectedValueOnce(new Error('offline'))
+    face.refresh()
+    b.selectPanel(null)
+    await vi.waitFor(() => { expect(overlay.hooks.pluginManager.getSnapshot().notice?.kind).toBe('refresh-failed') })
+    overlay.dismissNotice()
+    expect(face.hooks.pluginManager.getSnapshot().notice).toBeNull()
+    removeRoot()
+    expect(b.slots.entries('shell.overlay')).toHaveLength(0)
+    expect(b.slots.entries('main')).toHaveLength(0)
+    declare(b.slots)
+    const remountedInjected: object = b.slots.entries('shell.overlay')[0]!.inject!()
+    expect((remountedInjected as PluginRefreshToastFace).hooks.pluginManager).toBe(face.hooks.pluginManager)
+    await fiber.dispose()
+    expect(b.slots.entries('shell.overlay')).toHaveLength(0)
+    expect(b.slots.entries('main')).toHaveLength(0)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const reloadedInjected: object = b.slots.entries('shell.overlay')[0]!.inject!()
+    expect((reloadedInjected as PluginRefreshToastFace).hooks.pluginManager).not.toBe(face.hooks.pluginManager)
+    expect((reloadedInjected as PluginRefreshToastFace).hooks.pluginManager.getSnapshot().notice).toBeNull()
   })
 
   it('declares only the services the page and its Remote methods use', () => {
@@ -116,7 +153,18 @@ describe('ui-plugin-manager browser plugin', () => {
     for (const name of ['plugins.detail.actions', 'plugins.detail.badge', 'plugins.detail.section'] as const) {
       expect(b.slots.spec(name)).toMatchObject({ kind: 'list', scope: 'root' })
     }
-    const face = (entry.inject as unknown as () => PluginManagerFace)()
+    const injected: object = entry.inject!()
+    const face = injected as PluginManagerFace
+    const overlay = b.slots.entries('shell.overlay')[0]!
+    expect(overlay.component).toBe(PluginRefreshToast)
+    expect(overlay.options).toMatchObject({ id: 'plugin-manager.refresh-toast' })
+    expect(overlay.locale).toBe(NS)
+    const overlayInjected: object = overlay.inject!()
+    const overlayFace = overlayInjected as PluginRefreshToastFace
+    expect(overlayFace.hooks.pluginManager).toBe(face.hooks.pluginManager)
+    expect(overlayFace.dismissNotice).toBe(face.dismissNotice)
+    expect(Object.keys(overlayFace).sort()).toEqual(['dismissNotice', 'hooks'])
+    expect(Object.keys(overlayFace.hooks)).toEqual(['pluginManager'])
     const text = { en: 'Local tools', zh: '本地工具' }
     expect(face.resolveText(text)).toBe('本地工具')
     b.locale.setLocale('en')
@@ -146,6 +194,7 @@ describe('ui-plugin-manager browser plugin', () => {
     await fiber.dispose()
     expect(b.ctx.get('pluginNavigation')).toBeUndefined()
     expect(b.slots.entries('main')).toHaveLength(0)
+    expect(b.slots.entries('shell.overlay')).toHaveLength(0)
     expect(b.slots.entries('sidebar.panellist')).toHaveLength(0)
     b.remote.emit('plugin-manager/changed', [{ reason: 'install' }])
     await Promise.resolve()

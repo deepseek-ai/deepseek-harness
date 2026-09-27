@@ -1,0 +1,78 @@
+[
+  {
+    "session_id": "{{parent}}",
+    "final_response": "",
+    "finish_reason": "error",
+    "eventTypes": [
+      "agent/inbox/spliced",
+      "turn/start",
+      "agent/inbox/spliced",
+      "step/start",
+      "system/message",
+      "user/message",
+      "user/message",
+      "request/header",
+      "request/context",
+      "session/title",
+      "assistant/message",
+      "tool/call",
+      "todo/write",
+      "tool/result",
+      "tool/call",
+      "tool/result",
+      "tool/result",
+      "step/end",
+      "turn/end"
+    ],
+    "notificationMethods": [
+      "session.event",
+      "session.status",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.status"
+    ]
+  },
+  {
+    "session_id": "{{parent}}",
+    "final_response": "SCHEDULER_RECOVERY_OK",
+    "finish_reason": "completed",
+    "eventTypes": [
+      "agent/inbox/spliced",
+      "turn/start",
+      "agent/inbox/spliced",
+      "step/start",
+      "user/message",
+      "assistant/message",
+      "step/end",
+      "turn/end"
+    ],
+    "notificationMethods": [
+      "session.event",
+      "session.status",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.event",
+      "session.status"
+    ]
+  }
+]

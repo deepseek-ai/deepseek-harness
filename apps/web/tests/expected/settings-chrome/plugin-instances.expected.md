@@ -1,23 +1,20 @@
 - list:
   - listitem:
-    - button "tool-subagent-control, tool-subagent-control, 已启用":
+    - button "tool-subagent-control, 已启用":
       - strong: tool-subagent-control
-      - text: 已启用 Globally named send_message, interrupt_agent, and list_agents tools over ctx.subagents continuations
-      - code: tool-subagent-control
+      - text: Globally named send_message, interrupt_agent, and list_agents tools over ctx.subagents continuations
   - listitem:
     - button "tool-subagent-control/list-agents, tool-subagent-list-agents, 已启用":
       - strong: tool-subagent-control/list-agents
-      - text: 已启用
       - code: tool-subagent-list-agents
   - listitem:
-    - button "tool-subagent, tool-subagent, 已启用":
+    - button "tool-subagent, 已启用":
       - strong: tool-subagent
-      - text: 已启用 Model-facing subagent delegation tool over the ctx.subagents seam
-      - code: tool-subagent
+      - text: Model-facing subagent delegation tool over the ctx.subagents seam
   - listitem:
     - button "tool-subagent, tool-subagent-fork, 已启用":
       - strong: tool-subagent
-      - text: 已启用 Model-facing subagent delegation tool over the ctx.subagents seam
+      - text: Model-facing subagent delegation tool over the ctx.subagents seam
       - code: tool-subagent-fork
   - listitem:
     - button "tool-subagent, tool-subagent-codex, 已停用":

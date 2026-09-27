@@ -96,7 +96,8 @@
     "@lexical/history": "^0.49.0",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-settings": "workspace:*",
-    "@deepseek-ai/dsh-client-shortcuts": "workspace:*"
+    "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
+    "@deepseek-ai/dsh-client-product-analytics": "workspace:*"
   },
   "files": [
     "lib/index.js",

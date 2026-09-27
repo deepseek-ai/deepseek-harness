@@ -485,7 +485,7 @@ describe('ui-workspace apply', () => {
     b.retain.mockClear()
     fork.forkSession('session' as never)
     await forkSession.mock.results[0]!.value
-    expect(b.fork).toHaveBeenCalledWith({ sessionId: 'session', increaseTitle: true })
+    expect(b.fork).toHaveBeenCalledWith({ sessionId: 'session', increaseTitle: true, onCreated: expect.any(Function) as (childId: SessionId) => void })
     expect(b.retain).not.toHaveBeenCalled()
 
     // The rename row raises the request the dialog entry reads; settling clears it.

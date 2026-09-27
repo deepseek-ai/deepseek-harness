@@ -40,7 +40,9 @@ type TooltipLabel = string | (() => string)
  * bubble would overlap); default 'center'. Ignored for side 'right'.
  * @param props.portal - render the bubble under document.body, so an ancestor's clipping or its
  * stacking context (which confines the bubble's z-index to that context) cannot hide it.
- * @param props.delayMs - hover delay in milliseconds; keyboard focus remains immediate.
+ * @param props.delayMs - hover delay in milliseconds (default 0).
+ * @param props.focusDelayMs - keyboard focus delay in milliseconds (default 0); blur, click,
+ * mouse leave, disabling, and unmount cancel a pending show.
  * @param props.gap - anchor-to-bubble distance in pixels for 'bottom'/'top' bubbles (default 8);
  * ignored for side 'right'.
  * @param props.disabled - suppress the bubble while true; the anchor renders identically so
@@ -53,7 +55,7 @@ type TooltipLabel = string | (() => string)
  * anchor dismisses the bubble until the next trigger, and focus arriving after a pointer
  * interaction (a closing menu refocusing its trigger) never raises it.
  */
-export function Tooltip({ label, shortcutKeys, side = 'right', align = 'center', delayMs = 0, gap = 8, disabled = false, portal = false, maxWidth, children }: { label: TooltipLabel; shortcutKeys?: readonly string[] | undefined; side?: TooltipSide; align?: 'center' | 'end'; delayMs?: number; gap?: number; disabled?: boolean; portal?: boolean; maxWidth?: number; children: ReactElement<AnchorProps> }) {
+export function Tooltip({ label, shortcutKeys, side = 'right', align = 'center', delayMs = 0, focusDelayMs = 0, gap = 8, disabled = false, portal = false, maxWidth, children }: { label: TooltipLabel; shortcutKeys?: readonly string[] | undefined; side?: TooltipSide; align?: 'center' | 'end'; delayMs?: number; focusDelayMs?: number; gap?: number; disabled?: boolean; portal?: boolean; maxWidth?: number; children: ReactElement<AnchorProps> }) {
   const anchor = useRef<HTMLElement | null>(null)
   // React 18 keeps the element's ref outside props; forward it so wrapping an
   // anchor in Tooltip never silently severs the owner's ref.
@@ -157,16 +159,16 @@ export function Tooltip({ label, shortcutKeys, side = 'right', align = 'center',
     })
     announce(true)
   }
-  const showAfterHoverDelay = () => {
+  const showAfterDelay = (delay: number) => {
     cancelShow()
-    if (delayMs <= 0) {
+    if (delay <= 0) {
       show()
       return
     }
     showTimer.current = setTimeout(() => {
       showTimer.current = null
       show()
-    }, delayMs)
+    }, delay)
   }
   const withdraw = () => {
     setPos(null)
@@ -198,13 +200,18 @@ export function Tooltip({ label, shortcutKeys, side = 'right', align = 'center',
     <TooltipSuppression.Provider value={setSuppressed}>
       {cloneElement(children, {
         ref: mergedRef,
-        onMouseEnter: (e) => { children.props.onMouseEnter?.(e); triggers.current.hover = true; showAfterHoverDelay() },
+        onMouseEnter: (e) => { children.props.onMouseEnter?.(e); triggers.current.hover = true; showAfterDelay(delayMs) },
         onMouseLeave: (e) => { children.props.onMouseLeave?.(e); triggers.current.hover = false; cancelShow(); withdraw() },
         // Activating the anchor dismisses the bubble: the action often changes
         // what the anchor now does (pin → unpin), and the click leaves the
         // anchor focused, which would otherwise pin the relabelled bubble up.
         onClick: (e) => { children.props.onClick?.(e); triggers.current.focus = false; cancelShow(); withdraw() },
-        onFocus: (e) => { children.props.onFocus?.(e); if (pointerModality()) return; triggers.current.focus = true; cancelShow(); show() },
+        onFocus: (e) => {
+          children.props.onFocus?.(e)
+          if (pointerModality()) return
+          triggers.current.focus = true
+          showAfterDelay(focusDelayMs)
+        },
         onBlur: (e) => { children.props.onBlur?.(e); triggers.current.focus = false; hide() },
       })}
       {portal ? (content !== false && createPortal(content, document.body)) : content}

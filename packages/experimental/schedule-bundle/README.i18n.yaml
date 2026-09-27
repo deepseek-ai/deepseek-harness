@@ -3,26 +3,26 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/schedule-bundle/README.md
 /:
-  en: 7504834d27adc717
-  zh: 464587026083c661
+  en: 06ac0f83120e2636
+  zh: 24407e82f408f03c
 /deepseek-ai-dsh-experimental-schedule-bundle:
   en: d7b8b6126df4e3c4
   zh: 546d528efd4edbde
 /deepseek-ai-dsh-experimental-schedule-bundle/summary:
-  en: 832752e963df6177
-  zh: 30d1d292230a17c1
+  en: cd6bb19197192724
+  zh: 983a579ee54aa098
 /deepseek-ai-dsh-experimental-schedule-bundle/table-of-contents:
   en: d152484eb41ac6b4
   zh: 364c80ee00a374ff
 /deepseek-ai-dsh-experimental-schedule-bundle/use-this-package:
-  en: d84cae0d3f3869c6
-  zh: c19c74c0671f3127
+  en: 632033572617d7bc
+  zh: b2a050e68cf3f3e1
 /deepseek-ai-dsh-experimental-schedule-bundle/understand-the-implementation:
-  en: b17882af7c7eaf2c
-  zh: bfc71d0152557af5
+  en: fce278be320c1ade
+  zh: 8f81ac0154ea01a1
 /deepseek-ai-dsh-experimental-schedule-bundle/further-exploration:
-  en: 99a29dddf9805540
-  zh: 13a6df3ee31abfc1
+  en: c66c056c527188f1
+  zh: 2781b2ff3420c319
 /deepseek-ai-dsh-experimental-schedule-bundle/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -39,8 +39,8 @@
   en: 0b01d8c40b422f5b
   zh: 57fede4db59a62b8
 /deepseek-ai-dsh-experimental-schedule-bundle/known-limitations-and-deferred-work:
-  en: a4a2674fb3c5a101
-  zh: cb4c54ba37730708
+  en: 6c0599acfe520c6a
+  zh: 69063300060b5785
 /deepseek-ai-dsh-experimental-schedule-bundle/known-limitations-and-deferred-work/dev-note:
   en: 0225ba087c5266f3
   zh: 4e706f1b2b984e63

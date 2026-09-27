@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ConfigPageForm } from '../src/client/slot-contract.ts'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { PluginEntryId, PluginInstallRequestId } from '@deepseek-ai/dsh-api-remotes/client'
@@ -11,6 +11,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { StrictMode, type ReactNode } from 'react'
 import { createNavigationStore } from '../src/client/navigation-store.ts'
 import { PluginManagerPage } from '../src/client/PluginManagerPage.tsx'
+import { PluginRefreshToast } from '../src/client/PluginRefreshToast.tsx'
 import type { PluginManagerPageProps } from '../src/client/index.ts'
 import type { ConfigLedger } from '../src/client/config-ledger.ts'
 import { rowKey, type InstallState, type PackageRow, type PackageView, type PluginManagerState } from '../src/client/manager-store.ts'
@@ -54,9 +55,9 @@ const OFFICIAL = 'https://registry.npmjs.org/'
 const REGISTRIES = { registry: null, fallbackRegistries: [MIRROR], resolved: OFFICIAL }
 
 /** pnpm's own registry as the options label it: by npm's own name once read, the neutral default name until then. */
-const OFFICIAL_OPTION = en.registryWithHost.replace('{name}', en.registryOfficial).replace('{host}', 'registry.npmjs.org')
-const UNREAD_OPTION = en.registryWithHost.replace('{name}', en.registryDefault).replace('{host}', 'registry.npmjs.org')
-const MIRROR_OPTION = en.registryWithHost.replace('{name}', en.registryNpmmirror).replace('{host}', 'registry.npmmirror.com')
+const OFFICIAL_OPTION = `${en.registryOfficial} registry.npmjs.org`
+const UNREAD_OPTION = `${en.registryDefault} registry.npmjs.org`
+const MIRROR_OPTION = `${en.registryNpmmirror} registry.npmmirror.com`
 
 const IDLE_INSTALL: InstallState = {
   open: false, spec: '', registries: null, registry: { kind: 'offered', registry: null }, registryOpen: false, registryError: false, attempts: null,
@@ -66,6 +67,7 @@ const IDLE_INSTALL: InstallState = {
 
 const READY: PluginManagerState = {
   status: 'ready',
+  refreshStatus: 'idle',
   packages: [],
   busy: [],
   notice: null,
@@ -163,9 +165,18 @@ function renderTab(
       return body(owner.view, owner, 'form' in owner ? owner.form as ConfigPageForm | undefined : undefined)
     },
   }
-  const { rerender, unmount } = render(<PluginManagerPage {...props} />)
+  let showPage = true
+  let currentT = t
+  const contents = () => (
+    <>
+      {showPage ? <PluginManagerPage {...props} t={currentT} /> : null}
+      <PluginRefreshToast usePluginManager={props.usePluginManager} dismissNotice={actions.dismissNotice} t={currentT} />
+    </>
+  )
+  const { rerender, unmount } = render(contents())
   return {
     navigation,
+    hidePage: () => { showPage = false; rerender(contents()) },
     props,
     unmount,
     store,
@@ -173,7 +184,8 @@ function renderTab(
     set: (next: Partial<PluginManagerState>) => { act(() => { store.set({ ...store.getSnapshot(), ...next }) }) },
     setLanguage: (dict: typeof en) => {
       locale.setLocale(dict === zh ? 'zh' : 'en')
-      rerender(<PluginManagerPage {...props} t={translate(dict)} />)
+      currentT = translate(dict)
+      rerender(contents())
     },
   }
 }
@@ -203,9 +215,14 @@ describe('PluginManagerPage', () => {
   it('asks the store once mounted and renders the loading, unavailable, error, and empty states', () => {
     const { actions, set } = renderTab({ status: 'loading' })
     expect(actions.ensure).toHaveBeenCalledTimes(1)
-    expect(screen.getByText(en.loading).querySelector('[data-state="ongoing"]')).not.toBeNull()
+    const loading = screen.getByRole('status', { name: en.loading })
+    expect(loading.querySelectorAll('li')).toHaveLength(4)
+    expect(loading.querySelector('ul')?.getAttribute('aria-hidden')).toBe('true')
+    expect(loading.querySelector('button, input, [data-state="ongoing"]')).toBeNull()
+    expect(document.querySelector('[data-plugin-panel]')?.getAttribute('aria-busy')).toBe('true')
     expect(screen.getByRole('button', { name: en.addPlugin })).toHaveProperty('disabled', true)
     set({ status: 'unavailable' })
+    expect(screen.queryByRole('status', { name: en.loading })).toBeNull()
     expect(screen.getByRole('status').querySelector('[data-state="idle"]')).not.toBeNull()
     set({ status: 'error' })
     expect(screen.getByRole('alert').querySelector('[data-state="error"]')).not.toBeNull()
@@ -217,6 +234,134 @@ describe('PluginManagerPage', () => {
     expect(screen.getByText(en.empty)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: en.addPlugin }))
     expect(actions.openInstall).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows skeletons only while loading and keeps ready cards during refresh and switching', () => {
+    const { actions, set } = renderTab({ status: 'idle' })
+    expect(screen.queryByRole('status', { name: en.loading })).toBeNull()
+    set({ status: 'loading' })
+    expect(screen.getByRole('status', { name: en.loading })).toBeTruthy()
+    set({ status: 'ready', packages: [pkg()] })
+    expect(screen.queryByRole('status', { name: en.loading })).toBeNull()
+    expect(document.querySelector('[data-plugin-panel]')?.getAttribute('aria-busy')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: en.refresh }))
+    expect(actions.refresh).toHaveBeenCalledTimes(1)
+    set({ busy: ['dsh-better-sidebar'] })
+    expect(screen.queryByRole('status', { name: en.loading })).toBeNull()
+    expect(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'dsh-better-sidebar') })).toHaveProperty('disabled', true)
+  })
+
+  it('shows refresh progress on the disabled button while preserving cards, then restores it without a toast', () => {
+    const { actions, set } = renderTab({ packages: [pkg()] })
+    const refresh = screen.getByRole('button', { name: en.refresh })
+    const detailName = en.openDetail.replace('{name}', 'dsh-better-sidebar')
+    const card = screen.getByRole('button', { name: detailName })
+    expect(refresh).toHaveProperty('disabled', false)
+    expect(refresh.getAttribute('title')).toBeNull()
+    fireEvent.click(refresh)
+    expect(actions.refresh).toHaveBeenCalledOnce()
+    set({ refreshStatus: 'refreshing' })
+    expect(refresh).toHaveProperty('disabled', true)
+    expect(refresh.getAttribute('aria-busy')).toBe('true')
+    expect(refresh.querySelector('[data-state="ongoing"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: detailName })).toBe(card)
+    expect(screen.queryByRole('status', { name: en.loading })).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+    fireEvent.click(refresh)
+    expect(actions.refresh).toHaveBeenCalledOnce()
+    set({ refreshStatus: 'idle' })
+    expect(refresh).toHaveProperty('disabled', false)
+    expect(refresh.getAttribute('aria-busy')).toBe('false')
+    expect(refresh.querySelector('[data-state="ongoing"]')).toBeNull()
+    expect(screen.getByRole('button', { name: detailName })).toBe(card)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(actions.dismissNotice).not.toHaveBeenCalled()
+  })
+
+  it.each(['list', 'detail'] as const)('keeps cached %s content with one localized refresh toast and no inline retry', (view) => {
+    const { set, setLanguage } = renderTab({ packages: [pkg()] })
+    if (view === 'detail') fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
+    const content = document.querySelector(view === 'detail' ? '[data-plugin-detail]' : '[data-plugin-package]')
+    for (const dict of [en, zh]) {
+      setLanguage(dict)
+      set({ status: 'ready', refreshStatus: 'idle', notice: { kind: 'refresh-failed', seq: 1 } })
+      expect(screen.getAllByRole('alert')).toHaveLength(1)
+      const toast = screen.getByRole('alert')
+      expect(toast.textContent).toBe(dict.refreshError)
+      expect(toast.parentElement).toBe(document.body)
+      expect(document.querySelector('[data-plugin-panel]')?.contains(toast)).toBe(false)
+      expect(screen.queryByRole('button', { name: dict.retry })).toBeNull()
+      expect(content?.isConnected).toBe(true)
+      set({ refreshStatus: 'refreshing', notice: null })
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(content?.isConnected).toBe(true)
+      set({ refreshStatus: 'idle' })
+      expect(screen.queryByRole('alert')).toBeNull()
+    }
+  })
+
+  it.each(['list', 'configuration detail'] as const)('keeps an uncached refresh failure inline in %s and hides it during retry', (view) => {
+    const { actions, set, setLanguage } = renderTab(
+      { status: 'error', refreshStatus: 'failed' },
+      { items: [{ id: 'bash', label: 'Shell' }] },
+    )
+    if (view === 'configuration detail') fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'Shell') }))
+    for (const dict of [en, zh]) {
+      setLanguage(dict)
+      set({ status: 'error', refreshStatus: 'failed' })
+      const alert = screen.getByRole('alert')
+      expect(alert.textContent).toBe(dict.refreshError)
+      expect(document.querySelector('[data-plugin-panel]')?.contains(alert)).toBe(true)
+      fireEvent.click(screen.getByRole('button', { name: dict.retry }))
+      set({ refreshStatus: 'refreshing' })
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.queryByRole('button', { name: dict.retry })).toBeNull()
+    }
+    expect(actions.refresh).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['before', 'after'] as const)('keeps the refresh toast when navigation leaves %s the failure arrives', (navigation) => {
+    vi.useFakeTimers()
+    try {
+      const { actions, set, hidePage } = renderTab({ packages: [pkg()] })
+      set({ refreshStatus: 'refreshing' })
+      if (navigation === 'before') hidePage()
+      set({ refreshStatus: 'idle', notice: { kind: 'refresh-failed', seq: 1 } })
+      const toast = screen.getByRole('alert')
+      expect(toast.textContent).toBe(en.refreshError)
+      if (navigation === 'after') hidePage()
+      expect(document.querySelector('[data-plugin-panel]')).toBeNull()
+      expect(screen.getByRole('alert')).toBe(toast)
+      expect(toast.style.getPropertyValue('--dsh-toast-hold')).toBe('3000ms')
+      act(() => { vi.advanceTimersByTime(3_999) })
+      expect(actions.dismissNotice).not.toHaveBeenCalled()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(actions.dismissNotice).toHaveBeenCalledOnce()
+      set({ notice: null })
+      expect(screen.queryByRole('alert')).toBeNull()
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives a repeated refresh failure its own toast lifetime without extending it for locale changes', () => {
+    vi.useFakeTimers()
+    try {
+      const { actions, set, setLanguage } = renderTab({ notice: { kind: 'refresh-failed', seq: 1 } })
+      act(() => { vi.advanceTimersByTime(2_000) })
+      set({ notice: { kind: 'refresh-failed', seq: 2 } })
+      act(() => { vi.advanceTimersByTime(2_000) })
+      expect(actions.dismissNotice).not.toHaveBeenCalled()
+      setLanguage(zh)
+      expect(screen.getByRole('alert').textContent).toBe(zh.refreshError)
+      act(() => { vi.advanceTimersByTime(2_000) })
+      expect(actions.dismissNotice).toHaveBeenCalledOnce()
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+    }
   })
 
   it('keeps the read failure and its retry visible while a detail page is open', () => {
@@ -735,6 +880,19 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-plugin-name]')?.textContent).toBe(name)
   })
 
+  it.each([
+    { locale: en, placeholder: 'for example dsh-plugin-whale-pet' },
+    { locale: zh, placeholder: '例如 dsh-plugin-whale-pet' },
+  ])('uses the package example in $placeholder and the install guide', ({ locale, placeholder }) => {
+    const { actions, setLanguage } = renderTab({ install: { ...IDLE_INSTALL, open: true } })
+    setLanguage(locale)
+    expect(screen.getByPlaceholderText(placeholder)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: locale.installGuideToggle }))
+    expect(screen.getByText('dsh-plugin-whale-pet')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: locale.installGuideFillAria.replace('{example}', 'dsh-plugin-whale-pet') }))
+    expect(actions.editInstallSpec).toHaveBeenCalledExactlyOnceWith('dsh-plugin-whale-pet')
+  })
+
   it('opens a guide under the field and drops an example into it', () => {
     const { actions } = renderTab({ install: { ...IDLE_INSTALL, open: true } })
     expect(screen.queryByText(en.installGuideIdHint)).toBeNull()
@@ -855,6 +1013,100 @@ describe('PluginManagerPage', () => {
     // A row without a fiber, on a bundle that is on, reads idle.
     set({ packages: [pkg({ rows: [row({ phase: null })] })] })
     expect(within(detail).getByText(en.rowStateIdle)).toBeTruthy()
+  })
+
+  describe.each(['package', 'custom registry'] as const)('%s input IME confirmation', (input) => {
+    beforeEach(() => { vi.useFakeTimers() })
+    afterEach(() => { cleanup(); vi.useRealTimers() })
+    const inputName = input === 'package' ? en.installSpecLabel : en.registryCustom
+    const open: InstallState = {
+      ...IDLE_INSTALL, open: true, spec: 'dsh-new', registryOpen: true,
+      registry: { kind: 'custom', url: 'https://npm.corp.example/' },
+    }
+    const enter = (field: HTMLElement) => {
+      // oxlint-disable-next-line typescript/no-deprecated -- Exercise native Enter's legacy keyCode in the IME regression.
+      const event = new KeyboardEvent('keydown', { key: 'Enter', isComposing: false, keyCode: 13, bubbles: true, cancelable: true })
+      fireEvent(field, event)
+      expect(event.defaultPrevented).toBe(false)
+    }
+
+    it('guards active composition and the first 10ms after compositionend without native flags', () => {
+      const { actions } = renderTab({ install: open })
+      const field = screen.getByRole('textbox', { name: inputName })
+      fireEvent.compositionStart(field)
+      enter(field)
+      expect(actions.runInstall).not.toHaveBeenCalled()
+      fireEvent.compositionEnd(field)
+      enter(field)
+      act(() => { vi.advanceTimersByTime(9) })
+      enter(field)
+      expect(actions.runInstall).not.toHaveBeenCalled()
+      act(() => { vi.advanceTimersByTime(1) })
+      enter(field)
+      expect(actions.runInstall).toHaveBeenCalledOnce()
+    })
+
+    it('keeps composition state independent from the other input', () => {
+      const { actions } = renderTab({ install: open })
+      const field = screen.getByRole('textbox', { name: inputName })
+      const other = screen.getByRole('textbox', { name: input === 'package' ? en.registryCustom : en.installSpecLabel })
+      fireEvent.compositionStart(field)
+      enter(other)
+      expect(actions.runInstall).toHaveBeenCalledOnce()
+      enter(field)
+      expect(actions.runInstall).toHaveBeenCalledOnce()
+    })
+
+    it.each(['active', 'ended'] as const)('clears %s composition on blur and dialog reopen', (phase) => {
+      const { actions, set } = renderTab({ install: open })
+      const field = screen.getByRole('textbox', { name: inputName })
+      fireEvent.compositionStart(field)
+      if (phase === 'ended') fireEvent.compositionEnd(field)
+      fireEvent.blur(field)
+      enter(field)
+      expect(actions.runInstall).toHaveBeenCalledOnce()
+      fireEvent.compositionStart(field)
+      if (phase === 'ended') fireEvent.compositionEnd(field)
+      set({ install: { ...open, open: false } })
+      set({ install: open })
+      enter(screen.getByRole('textbox', { name: inputName }))
+      expect(actions.runInstall).toHaveBeenCalledTimes(2)
+    })
+
+    if (input === 'custom registry') {
+      it('clears composition when the registry menu closes and reopens', () => {
+        const { actions, set } = renderTab({ install: open })
+        fireEvent.compositionStart(screen.getByRole('textbox', { name: inputName }))
+        set({ install: { ...open, registryOpen: false } })
+        set({ install: open })
+        enter(screen.getByRole('textbox', { name: inputName }))
+        expect(actions.runInstall).toHaveBeenCalledOnce()
+      })
+    }
+
+    it.each([
+      { signal: 'isComposing', isComposing: true, keyCode: 13 },
+      { signal: 'legacy keyCode 229', isComposing: false, keyCode: 229 },
+    ])('leaves $signal Enter to the IME and installs on the next ordinary Enter', ({ isComposing, keyCode }) => {
+      const { actions } = renderTab({
+        install: {
+          ...IDLE_INSTALL, open: true, spec: 'dsh-new', registryOpen: input === 'custom registry',
+          registry: { kind: 'custom', url: 'https://npm.corp.example/' },
+        },
+      })
+      const field = screen.getByRole('textbox', { name: input === 'package' ? en.installSpecLabel : en.registryCustom })
+      fireEvent.compositionStart(field)
+      if (!isComposing) fireEvent.compositionEnd(field)
+      // oxlint-disable-next-line typescript/no-deprecated -- Exercise the legacy IME signal when isComposing is false.
+      const confirm = new KeyboardEvent('keydown', { key: 'Enter', isComposing, keyCode, bubbles: true, cancelable: true })
+      fireEvent(field, confirm)
+      expect(actions.runInstall).not.toHaveBeenCalled()
+      expect(confirm.defaultPrevented).toBe(false)
+      if (isComposing) fireEvent.compositionEnd(field)
+      act(() => { vi.advanceTimersByTime(10) })
+      fireEvent.keyDown(field, { key: 'Enter', isComposing: false, keyCode: 13 })
+      expect(actions.runInstall).toHaveBeenCalledOnce()
+    })
   })
 
   it('takes a spec, checks it, and words what the check refused', () => {
@@ -1195,6 +1447,86 @@ describe('PluginManagerPage', () => {
       expect(screen.queryByRole('dialog', { name: en.installGithubFailedTitle })).toBeNull()
       expect(screen.getByRole('button', { name: en.installRetry })).toBeTruthy()
     }
+  })
+
+  it('selects the custom registry from its whole area and focuses the address without clearing it', () => {
+    const open = { ...IDLE_INSTALL, open: true, registryOpen: true, registries: REGISTRIES }
+    const { actions, set } = renderTab({ install: open })
+    const field = screen.getByRole('textbox', { name: en.registryCustom })
+    const label = screen.getByRole('radio', { name: en.registryCustom }).parentElement!
+    const area = label.parentElement!
+    expect(field).toHaveProperty('disabled', false)
+    for (const target of [area, label, screen.getByText(en.registryCustomHint)]) {
+      field.blur()
+      set({ install: open })
+      actions.chooseRegistry.mockClear()
+      fireEvent.pointerDown(target)
+      fireEvent.click(target)
+      expect(actions.chooseRegistry).toHaveBeenCalledExactlyOnceWith({ kind: 'custom', url: '' })
+      expect(document.activeElement).toBe(field)
+    }
+    set({ install: { ...open, registry: { kind: 'custom', url: 'https://npm.corp/' } } })
+    field.blur()
+    actions.chooseRegistry.mockClear()
+    field.focus()
+    fireEvent.click(field)
+    fireEvent.click(area)
+    expect(document.activeElement).toBe(field)
+    expect(field).toHaveProperty('value', 'https://npm.corp/')
+    expect(actions.chooseRegistry).not.toHaveBeenCalled()
+    field.blur()
+    fireEvent.click(screen.getByRole('radio', { name: OFFICIAL_OPTION }))
+    set({ install: open })
+    expect(field).toHaveProperty('value', 'https://npm.corp/')
+    fireEvent.click(screen.getByRole('radio', { name: MIRROR_OPTION }))
+    set({ install: { ...open, registry: { kind: 'offered', registry: MIRROR } } })
+    fireEvent.click(area)
+    expect(actions.chooseRegistry).toHaveBeenLastCalledWith({ kind: 'custom', url: 'https://npm.corp/' })
+    expect(document.activeElement).toBe(field)
+  })
+
+  it('keeps the selected registry on keyboard focus and selects custom through its radio', () => {
+    const open = { ...IDLE_INSTALL, open: true, registryOpen: true, registries: REGISTRIES }
+    const { actions } = renderTab({ install: open })
+    const field = screen.getByRole('textbox', { name: en.registryCustom })
+    const official = screen.getByRole('radio', { name: OFFICIAL_OPTION })
+    official.focus()
+    fireEvent.keyDown(official, { key: 'Tab' })
+    expect(document.activeElement).toBe(field)
+    expect(official).toHaveProperty('checked', true)
+    expect(actions.chooseRegistry).not.toHaveBeenCalled()
+    fireEvent.keyDown(field, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(official)
+    fireEvent.keyDown(official, { key: 'Tab', shiftKey: true })
+    const toggle = screen.getByRole('button', { name: `${en.registryToggle} ${en.registryOfficial}` })
+    expect(document.activeElement).toBe(toggle)
+    expect(actions.toggleRegistryOptions).toHaveBeenCalledOnce()
+    actions.toggleRegistryOptions.mockClear()
+    field.focus()
+    fireEvent.keyDown(field, { key: 'Tab' })
+    expect(document.activeElement).toBe(toggle)
+    expect(actions.toggleRegistryOptions).toHaveBeenCalledOnce()
+    const custom = screen.getByRole('radio', { name: en.registryCustom })
+    custom.focus()
+    fireEvent.keyDown(custom, { key: ' ' })
+    fireEvent.click(custom)
+    expect(actions.chooseRegistry).toHaveBeenCalledExactlyOnceWith({ kind: 'custom', url: '' })
+    expect(document.activeElement).toBe(field)
+  })
+
+  it('focuses an invalid custom address when submission opens its registry menu', () => {
+    const open = { ...IDLE_INSTALL, open: true, spec: 'dsh-new', registry: { kind: 'custom' as const, url: 'invalid' } }
+    const { actions, set } = renderTab({ install: open })
+    fireEvent.click(screen.getByRole('button', { name: en.installRun }))
+    expect(actions.runInstall).toHaveBeenCalledOnce()
+    set({ install: { ...open, registryOpen: true, registryError: true } })
+    const field = screen.getByRole('textbox', { name: en.registryCustom })
+    expect(document.activeElement).toBe(field)
+    expect(field.getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByRole('alert').textContent).toBe(en.registryCustomInvalid)
+    fireEvent.keyDown(field, { key: 'Escape' })
+    expect(actions.toggleRegistryOptions).toHaveBeenCalledOnce()
+    expect(actions.closeInstall).not.toHaveBeenCalled()
   })
 
   it('offers the registries under the spec, folded by default, and picks or types one', () => {

@@ -1,4 +1,6 @@
+/* The tab's own width, not the window's, decides the card columns below. */
 .section {
+  container: plugin-inventory / inline-size;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -7,7 +9,6 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.catalogHeading h3,
 .status,
 .failure p {
   margin: 0;
@@ -85,37 +86,21 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)) 18%, transparent);
 }
 
-.catalogHeading {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  padding: 0 2px;
-}
-
-.catalogHeading h3 {
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 600;
-}
-
-.catalogHeading span {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
 .cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
   gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* Cards stretch to their grid row's height. The button fills a stretched card:
+   the title row and description stay at the top, in line with the other card's,
+   and the spare height sits above the entry id chip or at the bottom. */
 .card {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   overflow: hidden;
   border: 0.5px solid var(--dsw-alias-settings-card-stroke);
@@ -127,11 +112,22 @@
   border-color: var(--dsw-alias-border-l3);
 }
 
+/* The other card in an expanded card's row keeps its own height instead of
+   stretching alongside the details. The selectors assume the two columns
+   `.cards` declares, where each row starts at an odd position, and must change
+   with that count; in one column the matched card sits alone in its row. */
+.card:nth-child(odd)[data-open='true'] + .card,
+.card:nth-child(odd):has(+ .card[data-open='true']) {
+  align-self: start;
+}
+
 .cardContent {
   box-sizing: border-box;
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   align-items: stretch;
+  gap: 2px;
   width: 100%;
   min-height: 52px;
   border: 0;
@@ -173,11 +169,35 @@
   min-width: 0;
   font-size: 14px;
   line-height: 20px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
-/* The Loader entry id keeps one size in the card subtitle and the row it expands into;
-   the collapsed subtitle stays on the quieter label tier, while the expanded row carries
+/* Two lines at most while collapsed; the expanded card shows the full text. */
+.cardDescription {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  text-wrap: pretty;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.card[data-open='true'] .cardDescription {
+  display: block;
+}
+
+/* The entry id is metadata, not prose: a code chip in the card's bottom-left
+   corner whose left edge lines up with the title. */
+.cardMeta {
+  display: flex;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+/* The Loader entry id keeps one size in the card chip and the row it expands into;
+   the collapsed chip stays on the quieter label tier, while the expanded row carries
    the card's primary value. */
 .cardIdentity,
 .entryValue {
@@ -188,15 +208,19 @@
 
 .cardIdentity {
   display: block;
-  width: 100%;
-  color: var(--dsw-alias-label-tertiary);
+  box-sizing: border-box;
+  max-width: 100%;
+  border-radius: var(--dsw-radius-xs);
+  padding: 1px 6px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
 }
 
 .cardTrailing {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -213,11 +237,13 @@
   gap: 10px;
 }
 
+/* Every group header takes the preset switcher's 36px height, so each subtitle
+   sits the same distance below its title. */
 .groupTitleRow {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
+  min-height: 36px;
 }
 
 .group + .group {
@@ -266,12 +292,19 @@
 .groupSub {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  row-gap: 4px;
   margin: -6px 0 0 20px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 18px;
   font-variant-numeric: tabular-nums;
+}
+
+/* A middle dot with equal space on both sides separates the subtitle's parts. */
+.groupSub > * + *::before {
+  content: '·';
+  padding: 0 6px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .failedCount {
@@ -330,7 +363,7 @@
   padding: 8px 10px;
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
   color: var(--dsw-alias-state-error-primary);
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 18px;
   overflow-wrap: anywhere;
   white-space: pre-line;
@@ -343,7 +376,7 @@
   gap: 4px 8px;
   margin: 0;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 18px;
 }
 
@@ -353,10 +386,34 @@
   background: transparent;
   color: var(--dsw-alias-state-business-primary);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   cursor: pointer;
 }
 
+/* Loading placeholder in the cards grid, sized like a card with one description
+   line; its bars pulse through the shared skeleton token as the input-trigger
+   menu's pending rows do. */
+.skeletonCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke);
+  border-radius: var(--dsw-radius-xl);
+  padding: 15px 14px;
+  background: var(--dsw-alias-settings-card-fill);
+}
+
+.skeletonBar {
+  width: 40%;
+  height: 14px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+.skeletonBar + .skeletonBar {
+  width: 80%;
+  height: 12px;
+}
 
 .enabledIn {
   display: flex;
@@ -430,9 +487,19 @@
   .chevron {
     transition: transform 140ms var(--ds-ease-in-out);
   }
+
+  .skeletonBar {
+    animation: plugin-inventory-skeleton 2s cubic-bezier(0.36, 0, 0.64, 1) infinite;
+  }
 }
 
-@media (max-width: 680px) {
+@keyframes plugin-inventory-skeleton {
+  0% { opacity: 1; }
+  40% { opacity: 0.6; }
+  80%, 100% { opacity: 1; }
+}
+
+@container plugin-inventory (max-width: 520px) {
   .cards {
     grid-template-columns: minmax(0, 1fr);
   }

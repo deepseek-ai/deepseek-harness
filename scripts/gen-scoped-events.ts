@@ -9,8 +9,8 @@
  * `Events` parameter tuple. Zero matches require `@dshScopeScan unsupported`;
  * multiple matches are ambiguous and always fail loud.
  *
- *   `tsx scripts/gen-scoped-events.ts`          -> write the generated source
- *   `tsx scripts/gen-scoped-events.ts --check`  -> exit 1 when it is stale
+ *   `pnpm run gen-scoped-events`     -> write the generated source
+ *   `pnpm run verify-scoped-events`  -> exit 1 when it is stale
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'

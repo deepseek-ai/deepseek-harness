@@ -178,3 +178,16 @@ it('keeps an outstanding start open until the request settles', async () => {
   await act(async () => { pending.resolve(undefined); await pending.promise })
   expect(screen.getByRole('button', { name: en.signIn }).hasAttribute('disabled')).toBe(false)
 })
+
+// Workspace login remains outside native welcome analytics even if a caller forwards a sender.
+it('does not report workspace login views or login choices', async () => {
+  const track = vi.fn()
+  const props = { ...dialogProps(null), track }
+  const view = render(<SignInDialog {...props} />)
+  view.rerender(<SignInDialog {...props} colorScheme="light" />)
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: en.signIn })) })
+  expect(props.start).toHaveBeenCalledOnce()
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: en.addApiKey })) })
+  expect(props.useApiKey).toHaveBeenCalledOnce()
+  expect(track).not.toHaveBeenCalled()
+})

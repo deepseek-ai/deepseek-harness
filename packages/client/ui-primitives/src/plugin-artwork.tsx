@@ -70,13 +70,13 @@ export const PluginArtworkSearch = ({ size = 36, className }: IconProps) => {
   const uid = useArtworkId()
   return (
     <svg width={size} height={size} className={className} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M26.5362 26.9865L22.3813 22.8317" stroke="#2F2295" strokeWidth="3" />
+      <path d="M26.5362 26.9865L22.3813 22.8317" stroke="#658EFF" strokeWidth="3" />
       <g clipPath={`url(#${uid}ring)`}>
         <g transform="matrix(0.0119394 -0.00173904 0.00173904 0.0119394 15.7661 16.2159)">
           <foreignObject x="-958.94" y="-958.94" width="1917.88" height="1917.88">
             <div
               style={{
-                background: 'conic-gradient(from 90deg, rgb(65, 225, 172) 0deg, rgb(85, 71, 210) 62.0619deg, rgb(65, 225, 172) 360deg)',
+                background: 'conic-gradient(from 90deg, rgb(65, 225, 172) 0deg, rgb(101, 142, 255) 62.0619deg, rgb(65, 225, 172) 360deg)',
                 height: '100%',
                 width: '100%',
               }}
