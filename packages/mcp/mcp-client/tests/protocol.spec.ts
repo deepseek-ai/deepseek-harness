@@ -12,15 +12,15 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import { startConnection, resolveReconnectPolicy } from '../src/connection.ts'
 import { McpStatusCell } from '../src/status.ts'
-import type { Config } from '../src/index.ts'
+import { Config } from '../src/index.ts'
 
 const { mockTransport } = vi.hoisted(() => ({ mockTransport: vi.fn<() => Transport>() }))
 vi.mock('../src/transport.ts', () => ({ createTransport: mockTransport }))
 
-const config: Config = {
+const config = Config({
   transport: 'stdio', serverName: 'fixture', command: 'fixture', args: [], env: {}, cwd: '',
   toolCallTimeoutMs: 60_000, startupTimeoutMs: 30_000, healthCheckIntervalMs: 30_000, failOnStartupError: true,
-}
+})
 
 async function connect(server: McpServer, options?: { resources: true }): Promise<Context> {
   const ctx = new Context()

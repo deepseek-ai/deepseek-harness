@@ -1,5 +1,7 @@
 /** Shared settlement deadline for the startup and probe budgets. */
 
+import { McpLocalError } from './diagnostic.ts'
+
 /**
  * Settle with `promise`, or reject with `timeoutMessage` once `remainingMs`
  * elapses first. The timer never holds the process open, and a non-Error
@@ -12,7 +14,7 @@
 export function withDeadline<T>(promise: Promise<T>, remainingMs: number, timeoutMessage: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error(timeoutMessage))
+      reject(new McpLocalError(timeoutMessage))
     }, Math.max(1, remainingMs))
     timer.unref()
     promise.then(

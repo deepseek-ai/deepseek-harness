@@ -1,4 +1,5 @@
 /** Real profile persistence, inherited servers, and live Loader reconciliation. */
+import type { Transport } from '@modelcontextprotocol/client'
 import { readFile, writeFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -8,30 +9,41 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { managerProfile } from './profile-fixture.ts'
 
-const { MockClient } = vi.hoisted(() => {
+const { MockClient, MockTransport } = vi.hoisted(() => {
+  class MockTransport {
+    onclose?: () => void
+    start = async () => {}
+    send = async () => {}
+    close = async () => { this.onclose?.() }
+  }
   class MockClient {
-    transport: object | undefined = {}
+    transport: Transport | undefined
     onclose: (() => void) | undefined
-    connect = vi.fn(async () => {})
+    connect = vi.fn(async (transport: Transport) => {
+      this.transport = transport
+      const onclose = transport.onclose
+      transport.onclose = () => { onclose?.(); this.onclose?.() }
+      await transport.start()
+    })
     getProtocolEra = () => 'legacy' as const
     ping = async () => {}
-    close = vi.fn(async function (this: { onclose?: () => void }) { this.onclose?.() })
+    close = vi.fn(async () => { await this.transport?.close() })
     listTools = vi.fn(async () => ({ tools: [{ name: 'remote', inputSchema: { type: 'object' } }], nextCursor: undefined }))
     getServerCapabilities = () => ({ tools: {} })
     getInstructions(): string | undefined { return undefined }
     listResources = async () => ({ resources: [] })
     getServerVersion = (): { name: string; version: string } => ({ name: 'fixture', version: '1.0.0' })
   }
-  return { MockClient }
+  return { MockClient, MockTransport }
 })
 
 vi.mock('@modelcontextprotocol/client', async importOriginal => ({
   ...await importOriginal<typeof import('@modelcontextprotocol/client')>(),
   Client: MockClient,
-  StreamableHTTPClientTransport: vi.fn(function () { return { close: () => Promise.resolve() } }),
+  StreamableHTTPClientTransport: vi.fn(function () { return new MockTransport() }),
 }))
 vi.mock('@modelcontextprotocol/client/stdio', () => ({
-  StdioClientTransport: vi.fn(function () { return { close: () => Promise.resolve() } }),
+  StdioClientTransport: vi.fn(function () { return new MockTransport() }),
 }))
 
 async function registry(): Promise<Context> {
@@ -63,8 +75,8 @@ describe('mcp-manager real composition', () => {
     await vi.waitFor(() => { expect(ctx.tools.get('mcp__added__remote')).toBeDefined() }, { timeout: 5_000 })
     expect(entry.fiber).toBe(fiber)
     expect(manager.list().map(view => view.name).sort()).toEqual(['added', 'base'])
-    expect(manager.list().find(view => view.name === 'added')).toMatchObject({ deletable: true })
-    expect(manager.list().find(view => view.name === 'base')).toMatchObject({ deletable: false })
+    expect(manager.list().find(view => view.name === 'added')).toMatchObject({ configured: true })
+    expect(manager.list().find(view => view.name === 'base')).toMatchObject({ configured: true })
 
     const revision = ctx.settings.describe().find(row => row.ns === id)!.revision
     await ctx.settings.update(id, { servers: { base: { enabled: false } } }, revision)
@@ -74,7 +86,7 @@ describe('mcp-manager real composition', () => {
     const restored = await registry()
     await start(restored)
     await vi.waitFor(() => { expect(restored.tools.get('mcp__added__remote')).toBeDefined() })
-    expect(restored.mcpServers.list().find(view => view.name === 'base')).toMatchObject({ enabled: false, deletable: false })
+    expect(restored.mcpServers.list().find(view => view.name === 'base')).toMatchObject({ configured: true, status: { state: 'disabled' } })
     await restored.settings.mutate(id, [{ op: 'unset', path: ['servers', 'base'] }])
     await vi.waitFor(() => { expect(restored.tools.get('mcp__base__remote')).toBeDefined() })
     await restored.settings.mutate(id, [{ op: 'unset', path: ['servers', 'added'] }])

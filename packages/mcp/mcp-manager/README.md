@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-mcp-manager` manages a live fleet of MCP servers: declare `config.servers` on its profile entry (or edit it through Settings), and the manager mounts one `dsh-mcp-client` instance per enabled entry, adding, rebuilding, disabling, and removing instances as the document changes without a restart. `ctx.mcpServers` aggregates every server's connection status, `restart` recovers a server whose reconnect budget ran out, and `probe` tests a configuration without touching the live instances. `${env:NAME}` and `${credential:REF}` templates keep secrets out of the document, and a rotated credential rebuilds only the servers referencing it.
+`dsh-mcp-manager` manages a live fleet of MCP servers: declare `config.servers` on its profile entry (or edit it through Settings), and the manager mounts one `dsh-mcp-client` instance per enabled entry, adding, rebuilding, disabling, and removing instances as the document changes without a restart. `ctx.mcpServers` aggregates every server's connection status, `restart` recovers a server whose reconnect budget ran out, and `probe` tests a configuration without touching the live instances. `${env:NAME}` and `${credential:REF}` templates keep secrets out of the document; mcp-client handles credential rotation inside each instance.
 
 ## Table of Contents
 
@@ -69,7 +69,8 @@ A profile’s `cordis.patch.yml` replaces the entry’s complete `servers` map. 
 | `command` / `args` / `env` / `cwd` | — | stdio: executable, arguments, extra child env, working directory |
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
 | `enabled` | `true` | Durable intent: `false` unmounts the instance and keeps the entry |
-| `toolCallTimeoutMs` / `startupTimeoutMs` / `healthCheckIntervalMs` / `reconnect` | mcp-client defaults | Per-server overrides passed through to the instance |
+| `startupTimeoutMs` | `30,000` | Budget for template resolution, negotiation, connection, and initial tool discovery |
+| `toolCallTimeoutMs` / `closeTimeoutMs` / `healthCheckIntervalMs` / `healthCheckTimeoutMs` / `reconnect` | mcp-client defaults | Per-server overrides; health checks are off by default |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-manager) is the exhaustive source for every accepted field.
 
@@ -77,11 +78,13 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 Settings writes persist through ConfigEditor with revision checks; Loader updates the volatile configuration without remounting the manager. Every committed configuration change reconciles the fleet: a new enabled entry mounts, a removed entry unmounts, `enabled: false` unmounts while keeping the entry listed, and any other field change rebuilds that one instance while unchanged siblings keep running. Through Settings, inherited servers can be overridden or disabled; deleting an inherited server restores its base configuration. Only servers added by the user layer are removable. A broken entry — a missing `command`, a cross-transport field, a malformed template — is refused at the write, so the document never stores a server the manager cannot act on.
 
-`env` values, `headers` values, `command`, `args`, `cwd`, and `url` accept `${env:NAME}` and `${credential:REF}` templates, resolved when the instance mounts, so the profile patch need not carry a secret; stored values — template strings included — stay readable to management surfaces, so a value that must stay hidden belongs in a template, not in the document. A missing referent fails that one server with a message naming the fix. Storing or rotating a referenced credential rebuilds the servers that use it — including one whose earlier mount failed because the credential did not exist yet.
+`env` values, `headers` values, `command`, `args`, `cwd`, and `url` accept `${env:NAME}` and `${credential:REF}` templates. The manager passes raw strings to mcp-client with template expansion enabled; configuration remains readable to management surfaces, so keep secret values in the referenced sources. Missing values put that instance in `waiting-credentials`; referenced credential updates retry resolution or replace its connection when the resolved values change. Environment values use the Host's launch snapshot. See [runtime templates and credentials](../mcp-client/README.md#runtime-templates-and-credentials) for provider requirements, HTTP request checks, and replacement ordering.
 
 ### Observing and recovering
 
-`ctx.mcpServers.list()` answers a management surface with one row per configured server: transport, durable intent, deletability, and the live status (`connecting`, `connected` with its tool count, `reconnecting` with the attempt budget, `failed` with the reason and last error, or `disabled`). Every transition also emits the `mcp-manager/status` event. Reconnection itself stays inside mcp-client (backoff from 500 ms to 30 s, ten attempts per outage); `restart(name)` is the manual recovery beyond it — a fresh instance with a fresh budget, which is the only way back from a `failed` terminal state short of a config change. `probe(name)` connects, lists tools, and disconnects without registering anything — the "test this server" affordance, and it works on a disabled entry.
+`ctx.mcpServers.list()` returns each server's `name`, `configured` flag, and live `status`. Configuration fields remain available through Settings. The list includes removed entries whose cleanup is still pending or failed, with `configured: false`; a cleanup failure retains the row until the Host restarts. Cleanup status retains the first diagnostic and reports `closeConfirmed: false` if any instance or probe could not confirm closure. Published status changes emit `mcp-manager/status` while the manager is live, including cleanup failures after configuration removal.
+
+Reconnection stays inside mcp-client. `restart(name)` replaces an instance and resets its reconnect budget, including after that budget runs out. Unconfirmed transport closure or a local cleanup error blocks replacement and further probes for that server; restart the Host to recover. `probe(name, options)` resolves templates, connects, reads server identity and tool names, and closes without registering tools or reserving a namespace. Disabled entries can be probed. The probe has its own deadline and cancellation signal, and reports connection/listing success separately from closure and cleanup results.
 
 -----
 
@@ -95,8 +98,8 @@ This section explains the design decisions and points at the code; the observabl
 
 ### Design philosophy
 
-- **Configuration is the only truth.** The manager never stores server state of its own: the current volatile Config value (schema defaults → inherited profile configuration → user patch) is read fresh for every decision, so external file edits and management-surface writes take the same path.
-- **One serialized operation tail.** Reconciles, restarts, and credential rebuilds queue on one chain, so two lifecycle operations can never interleave one instance's unmount/mount, and disposal drains the tail before unwinding.
+- **Configuration owns the server set.** The current volatile Config value (schema defaults → inherited profile configuration → user patch) determines configured entries; runtime records retain instance ownership, active probes, and cleanup failures. External file edits and management-surface writes take the same path.
+- **One serialized operation tail.** Reconciles and restarts queue on one chain, so two lifecycle operations cannot interleave one instance's unmount/mount. Probes run independently; configuration changes and disposal cancel them before waiting for the operation tail and owned cleanup.
 - **Whole-entry identity.** Any field change except `enabled` rebuilds the instance — instance config is captured at mcp-client load, so an in-place update cannot exist. `enabled` alone toggles mounting.
 - **A flat entry schema, validated cross-field.** Write-time validation enforces the per-transport rules a union would have expressed and rejects them at the write, naming the offending field where a union's shape error would not.
 - **Connection handling stays in mcp-client.** Children are ordinary plugin instances mounted under the manager's fiber: `serverName` reservations collide correctly with statically composed instances, teardown unwinds tools, and the manager reads each instance's status through `connectionStatusOf` rather than duplicating supervision.
@@ -106,13 +109,12 @@ This section explains the design decisions and points at the code; the observabl
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | The service: schema, validation, reconcile, restart, probe, status registry |
-| [`src/templates.ts`](src/templates.ts) | `${env:…}` / `${credential:…}` syntax checks, resolution, and the static ref scan |
 | [`src/types.ts`](src/types.ts) | The status union, list view, and the `mcp-manager/status` event declaration |
 | [`src/invariant.ts`](src/invariant.ts) | Invariant companion: status emissions name a server the live manager lists |
 
 ### Lifecycle notes
 
-The first reconcile waits for the manager's own fiber to activate, because the service is visible to dependents only from that point and the status event asserts a reachable manager. A mount re-checks its entry against the current configuration after template resolution, so an entry deleted mid-resolution leaves nothing behind. Status publications are absorbed when equal, dropped for names the configuration no longer carries, and stopped entirely at disposal — late connection callbacks from an instance being torn down cannot emit for a manager that is gone.
+The first reconcile waits for the manager's own fiber to activate, because the service is visible to dependents only from that point and the status event asserts a reachable manager. Child startup does not hold the configuration queue open. A changed or removed entry stops forwarding child status and cancels its probes before queued cleanup; replacement waits for both probes and the child to finish cleanup. Equal status publications are absorbed. Cleanup failures remain observable after configuration removal; disposal stops all further events.
 
 </details>
 
@@ -150,7 +152,7 @@ These limits describe what you cannot do with this manager today. They are curre
 - **Global plane only** — instances mounted by agent presets or static `cordis.yml` rows are neither listed nor governed; a static instance shows up only as a `serverName` collision when a managed entry tries to reuse its name.
 - **A rebuild has a tool gap** — a changed entry is disposed and remounted, so its tools disappear from the model's set until the new instance finishes its initial sync; there is no keep-serving-until-replacement handover.
 - **Templates know two schemes** — `${env:NAME}` and `${credential:REF}` only; no default-value syntax and no other sources.
-- **Probe output is capped** — a probe follows at most 16 listing pages and returns at most 512 tool names, reporting truncation beyond that.
+- **Probe output is capped** — a probe defaults to 16 listing pages and 512 tool names, reporting truncation beyond those limits; callers can set `maxPages` and `maxToolNames`.
 
 <a id="dev-note"></a>
 ### Dev Note

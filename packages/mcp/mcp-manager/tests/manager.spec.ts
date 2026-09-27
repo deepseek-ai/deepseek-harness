@@ -6,7 +6,8 @@
  * Isolated file so vi.mock of the MCP SDK doesn't pollute other test suites.
  */
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { Context, type Fiber } from '@deepseek-ai/cordis'
+import { Context, FiberState, type Fiber } from '@deepseek-ai/cordis'
+import type { FetchLike, Transport } from '@modelcontextprotocol/client'
 import type Settings from '@deepseek-ai/dsh-settings'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -16,7 +17,7 @@ import type {
   CredentialRef, ResolvedCredential,
 } from '@deepseek-ai/dsh-credentials'
 
-const { mockConnect, mockClose, mockListTools, MockClient, instances, transportConfigs } = vi.hoisted(() => {
+const { mockConnect, mockClose, mockListTools, MockClient, MockTransport, instances, transportConfigs } = vi.hoisted(() => {
   const mockConnect = vi.fn<() => Promise<void>>()
   const mockClose = vi.fn<() => Promise<void>>()
   const mockListTools = vi.fn<(_params?: Record<string, unknown>) => Promise<unknown>>()
@@ -26,10 +27,22 @@ const { mockConnect, mockClose, mockListTools, MockClient, instances, transportC
     if (request.method === 'tools/list') return await mockListTools(request.params)
     throw new Error(`unexpected MCP request: ${request.method}`)
   })
+  class MockTransport {
+    onclose?: () => void
+    start = async () => {}
+    send = async () => {}
+    close = async () => { this.onclose?.() }
+  }
   class MockClient {
-    transport: object | undefined = {}
+    transport: Transport | undefined
     onclose: (() => void) | undefined
-    connect = mockConnect
+    async connect(transport: Transport): Promise<void> {
+      this.transport = transport
+      const onclose = transport.onclose
+      transport.onclose = () => { onclose?.(); this.onclose?.() }
+      await transport.start()
+      await mockConnect.call(this)
+    }
     ping = (): Promise<void> => Promise.resolve()
     getProtocolEra = () => 'legacy' as const
     close = mockClose
@@ -44,14 +57,14 @@ const { mockConnect, mockClose, mockListTools, MockClient, instances, transportC
   }
   const instances: MockClient[] = []
   const transportConfigs: Array<Record<string, unknown>> = []
-  return { mockConnect, mockClose, mockListTools, MockClient, instances, transportConfigs }
+  return { mockConnect, mockClose, mockListTools, MockClient, MockTransport, instances, transportConfigs }
 })
 
 vi.mock('@modelcontextprotocol/client/stdio', () => ({
   // Constructible mock: `new` on an arrow-implemented vi.fn throws.
   StdioClientTransport: vi.fn(function (config: Record<string, unknown>) {
     transportConfigs.push(config)
-    return { close: () => Promise.resolve() }
+    return new MockTransport()
   }),
 }))
 vi.mock('@modelcontextprotocol/client', async importOriginal => ({
@@ -59,11 +72,11 @@ vi.mock('@modelcontextprotocol/client', async importOriginal => ({
   Client: MockClient,
   StreamableHTTPClientTransport: vi.fn(function (url: URL, options: Record<string, unknown>) {
     transportConfigs.push({ url: url.href, ...options })
-    return {}
+    return new MockTransport()
   }),
 }))
 
-import { apply as applyMcpClient } from '@deepseek-ai/dsh-mcp-client'
+import { apply as applyMcpClient, Config as ClientConfig, connectionStatusOf } from '@deepseek-ai/dsh-mcp-client'
 import McpServerManager from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 import type { Config, McpManagedServerStatus } from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 import { managerProfile } from './profile-fixture.ts'
@@ -175,9 +188,8 @@ describe('mcp-manager', () => {
     instances.length = 0
     transportConfigs.length = 0
     mockConnect.mockResolvedValue(undefined)
-    mockClose.mockImplementation(function (this: { onclose?: () => void }) {
-      this.onclose?.()
-      return Promise.resolve()
+    mockClose.mockImplementation(async function (this: InstanceType<typeof MockClient>) {
+      await this.transport?.close()
     })
     mockListTools.mockResolvedValue(listing('remote'))
   })
@@ -205,20 +217,18 @@ describe('mcp-manager', () => {
     expect(ctx.tools.get('mcp__base__remote')).toBeDefined()
     expect(manager.list()).toEqual([{
       name: 'base',
-      transport: 'stdio',
-      enabled: true,
-      deletable: false,
+      configured: true,
       status: { state: 'connected', toolCount: 1, connectedAt: anyNumber },
     }])
   })
 
-  it('mounts servers from the settings user layer and reports them deletable', async () => {
+  it('mounts servers from the settings user layer and reports them configured', async () => {
     const { ctx, manager } = await mountWorld({
       settingsDoc: { mcp: { servers: { added: stdioEntry() } } },
     })
     await waitForState(manager, 'added', 'connected')
     expect(ctx.tools.get('mcp__added__remote')).toBeDefined()
-    expect(manager.list()[0]).toMatchObject({ name: 'added', deletable: true })
+    expect(manager.list()[0]).toMatchObject({ name: 'added', configured: true })
   })
 
   it('rebuilds an instance when its entry changes and leaves an unchanged sibling alone', async () => {
@@ -250,7 +260,7 @@ describe('mcp-manager', () => {
     await settings!.update('mcp', { servers: { toggled: { enabled: false } } })
     await waitForState(manager, 'toggled', 'disabled')
     expect(ctx.tools.get('mcp__toggled__remote')).toBeUndefined()
-    expect(manager.list()[0]).toMatchObject({ name: 'toggled', enabled: false, status: { state: 'disabled' } })
+    expect(manager.list()[0]).toMatchObject({ name: 'toggled', configured: true, status: { state: 'disabled' } })
 
     await settings!.update('mcp', { servers: { toggled: { enabled: true } } })
     await waitForState(manager, 'toggled', 'connected')
@@ -297,17 +307,16 @@ describe('mcp-manager', () => {
     expect(transportConfigs.at(-1)!['env']).toMatchObject({ PASSTHROUGH: 'literal', SECRET: 'resolved-secret' })
 
     await settings!.update('mcp', { servers: { templated: { env: { SECRET: '${env:MCP_MANAGER_SPEC_ABSENT}' } } } })
-    await waitForState(manager, 'templated', 'failed')
+    await waitForState(manager, 'templated', 'waiting-credentials')
     const view = manager.list()[0]!
     expect(view.status).toMatchObject({
-      state: 'failed',
-      reason: 'resolve',
+      state: 'waiting-credentials',
       lastError: containing('MCP_MANAGER_SPEC_ABSENT'),
     })
   })
 
-  it('resolves credential templates and rebuilds the instance when the credential rotates', async () => {
-    const { manager, credentials } = await mountWorld({
+  it('resolves credentials without expanding Fiber config and replaces the connection on rotation', async () => {
+    const { ctx, manager, credentials } = await mountWorld({
       withCredentials: true,
       settingsDoc: {
         mcp: {
@@ -323,6 +332,8 @@ describe('mcp-manager', () => {
       expect(transportConfigs.at(-1)).toMatchObject({ requestInit: { headers: { Authorization: 'Bearer first-token' } } })
     })
     await waitForState(manager, 'remote', 'connected')
+    const fiber = [...ctx.registry.get(applyMcpClient)!.fibers][0]!
+    expect(fiber.config).toMatchObject({ headers: { Authorization: 'Bearer ${credential:MCP_SPEC_TOKEN}' } })
     const clientsBefore = instances.length
 
     await credentials!.set(credentialRef('MCP_SPEC_TOKEN'), 'second-token')
@@ -330,12 +341,173 @@ describe('mcp-manager', () => {
       expect(transportConfigs.at(-1)).toMatchObject({ requestInit: { headers: { Authorization: 'Bearer second-token' } } })
     })
     expect(instances.length).toBe(clientsBefore + 1)
+    expect([...ctx.registry.get(applyMcpClient)!.fibers][0]).toBe(fiber)
     // An unrelated credential rotation rebuilds nothing, and the disabled
     // sibling referencing the same credential never mounted.
     await credentials!.set(credentialRef('MCP_SPEC_UNRELATED'), 'noise')
     await manager.restart('remote')
     expect(instances.length).toBe(clientsBefore + 2)
     expect(manager.list().find(view => view.name === 'dormant')!.status).toEqual({ state: 'disabled' })
+  })
+
+  it('preserves an exhausted retry budget for same-value credential notifications', async () => {
+    vi.useFakeTimers()
+    try {
+      const { ctx, manager, credentials } = await mountWorld({
+        withSettings: false, withCredentials: true,
+        managerConfig: { servers: { remote: {
+          transport: 'streamable-http', url: 'http://localhost:1',
+          headers: { Authorization: '${credential:MCP_SPEC_RETRY}' },
+          reconnect: { initialDelayMs: 1_000, maxDelayMs: 1_000, maxAttempts: 1 },
+        } } },
+      })
+      await vi.waitFor(() => { expect(manager.list()[0]?.status.state).toBe('waiting-credentials') })
+      mockConnect.mockRejectedValue(new Error('unavailable'))
+      await credentials!.set(credentialRef('MCP_SPEC_RETRY'), 'first-token')
+      await vi.runAllTimersAsync()
+      expect(manager.list()[0]?.status).toMatchObject({ state: 'failed', reason: 'gave-up' })
+      const attempts = mockConnect.mock.calls.length
+      await credentials!.set(credentialRef('MCP_SPEC_RETRY'), 'first-token')
+      await vi.runAllTimersAsync()
+      expect(mockConnect).toHaveBeenCalledTimes(attempts)
+      expect(manager.list()[0]?.status).toMatchObject({ state: 'failed', reason: 'gave-up' })
+      mockConnect.mockResolvedValue(undefined)
+      await credentials!.set(credentialRef('MCP_SPEC_RETRY'), 'second-token')
+      await vi.runAllTimersAsync()
+      expect(mockConnect).toHaveBeenCalledTimes(attempts + 1)
+      expect(manager.list()[0]?.status.state).toBe('connected')
+      await ctx.fiber.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('refreshes credentials for each HTTP request without sending rotated values on the old session', async () => {
+    const { manager, credentials } = await mountWorld({
+      withCredentials: true,
+      settingsDoc: { mcp: { servers: { remote: {
+        transport: 'streamable-http', url: 'http://localhost:1',
+        headers: { Authorization: 'Bearer ${credential:MCP_SPEC_HTTP}' },
+      } } } },
+    })
+    await waitForState(manager, 'remote', 'waiting-credentials')
+    await credentials!.set(credentialRef('MCP_SPEC_HTTP'), 'first-token')
+    await waitForState(manager, 'remote', 'connected')
+    const network = vi.fn(async () => new Response('{}'))
+    vi.stubGlobal('fetch', network)
+    onTestFinished(() => { vi.unstubAllGlobals() })
+    const resolve = vi.spyOn(credentials!, 'resolve')
+    const first = transportConfigs.at(-1)!
+    const fetch = first.fetch as FetchLike
+    await fetch('http://localhost:1', first.requestInit as RequestInit)
+    await fetch('http://localhost:1', first.requestInit as RequestInit)
+    expect(resolve).toHaveBeenCalledTimes(2)
+    expect(network).toHaveBeenCalledTimes(2)
+
+    credentials!.values.set('MCP_SPEC_HTTP', 'second-token')
+    await expect(fetch('http://localhost:1', first.requestInit as RequestInit)).rejects.toThrow('credential binding changed')
+    expect(network).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => {
+      expect(transportConfigs.at(-1)).toMatchObject({ requestInit: { headers: { Authorization: 'Bearer second-token' } } })
+    })
+    await waitForState(manager, 'remote', 'connected')
+    const second = transportConfigs.at(-1)!
+    await (second.fetch as FetchLike)('http://localhost:1', second.requestInit as RequestInit)
+    expect(network).toHaveBeenCalledTimes(3)
+    expect(network).toHaveBeenLastCalledWith('http://localhost:1', expect.objectContaining({ headers: { Authorization: 'Bearer second-token' } }))
+  })
+
+  it('removes tools while an active credential is missing and recovers when it is stored again', async () => {
+    const { ctx, manager, credentials } = await mountWorld({
+      withCredentials: true,
+      settingsDoc: { mcp: { servers: { srv: stdioEntry({ env: { TOKEN: '${credential:MCP_SPEC_UNSET}' } }) } } },
+    })
+    await waitForState(manager, 'srv', 'waiting-credentials')
+    await credentials!.set(credentialRef('MCP_SPEC_UNSET'), 'first')
+    await waitForState(manager, 'srv', 'connected')
+    await credentials!.unset(credentialRef('MCP_SPEC_UNSET'))
+    await waitForState(manager, 'srv', 'waiting-credentials')
+    expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined()
+    expect(mockConnect).toHaveBeenCalledTimes(1)
+    await credentials!.set(credentialRef('MCP_SPEC_UNSET'), 'restored')
+    await waitForState(manager, 'srv', 'connected')
+    expect(transportConfigs.at(-1)?.env).toMatchObject({ TOKEN: 'restored' })
+    expect(ctx.tools.get('mcp__srv__remote')).toBeDefined()
+  })
+
+  it('rechecks a queued credential update after provider failure without logging its secret', async () => {
+    const { ctx, manager, credentials } = await mountWorld({
+      withCredentials: true,
+      settingsDoc: { mcp: { servers: { srv: stdioEntry({ env: { TOKEN: '${credential:MCP_SPEC_RECHECK}' } }) } } },
+    })
+    await waitForState(manager, 'srv', 'waiting-credentials')
+    await credentials!.set(credentialRef('MCP_SPEC_RECHECK'), 'first')
+    await waitForState(manager, 'srv', 'connected')
+    const errors: string[] = []
+    ctx.logger.error = ((message: unknown) => { errors.push(String(message)) }) as typeof ctx.logger.error
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    const resolve = vi.spyOn(credentials!, 'resolve').mockImplementationOnce(async () => {
+      entered.resolve()
+      await gate.promise
+      throw new Error('provider response included secret-value')
+    })
+    try {
+      await credentials!.set(credentialRef('MCP_SPEC_RECHECK'), 'second')
+      await entered.promise
+      await credentials!.set(credentialRef('MCP_SPEC_RECHECK'), 'latest')
+      gate.resolve()
+      await vi.waitFor(() => { expect(transportConfigs.at(-1)?.env).toMatchObject({ TOKEN: 'latest' }) })
+      await waitForState(manager, 'srv', 'connected')
+      expect(resolve.mock.calls.length).toBeGreaterThanOrEqual(3)
+      expect(errors.some(line => line.includes('credential refresh failed'))).toBe(true)
+      expect(errors.join('\n')).not.toContain('secret-value')
+      expect(mockConnect).toHaveBeenCalledTimes(2)
+    } finally {
+      gate.resolve()
+      resolve.mockRestore()
+    }
+  })
+
+  it('reports cleanup timeout when disposal overtakes credential resolution and contains its late rejection', async () => {
+    vi.useFakeTimers()
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    let disposing: Promise<void> | undefined
+    try {
+      const { ctx, manager, credentials, managerFiber } = await mountWorld({
+        withSettings: false, withCredentials: true,
+        managerConfig: { servers: { srv: stdioEntry({ env: { TOKEN: '${credential:MCP_SPEC_DISPOSE}' }, closeTimeoutMs: 50 }) } },
+      })
+      await waitForState(manager, 'srv', 'waiting-credentials')
+      await credentials!.set(credentialRef('MCP_SPEC_DISPOSE'), 'first')
+      await waitForState(manager, 'srv', 'connected')
+      const fiber = [...ctx.registry.get(applyMcpClient)!.fibers][0]!
+      const errors: string[] = []
+      ctx.logger.error = ((message: unknown) => { errors.push(String(message)) }) as typeof ctx.logger.error
+      vi.spyOn(credentials!, 'resolve').mockImplementationOnce(async () => {
+        entered.resolve()
+        await gate.promise
+        throw new Error('late provider secret-value')
+      })
+      await credentials!.set(credentialRef('MCP_SPEC_DISPOSE'), 'second')
+      await entered.promise
+      disposing = managerFiber.dispose()
+      await vi.advanceTimersByTimeAsync(51)
+      await disposing
+      expect(connectionStatusOf(fiber)!.closure()).toMatchObject({ closeConfirmed: true, cleanupError: containing('MCP cleanup did not settle') })
+      expect(manager.list()[0]!.status).toMatchObject({ state: 'failed', reason: 'cleanup' })
+      gate.resolve()
+      await vi.runAllTimersAsync()
+      expect(errors.some(line => line.includes('credential refresh failed'))).toBe(false)
+      expect(errors.join('\n')).not.toContain('secret-value')
+      expect(mockConnect).toHaveBeenCalledTimes(1)
+      await ctx.fiber.dispose()
+    } finally {
+      gate.resolve()
+      await disposing
+      vi.useRealTimers()
+    }
   })
 
   it('fails a credential template without the credential seam, naming the alternative', async () => {
@@ -350,14 +522,14 @@ describe('mcp-manager', () => {
     })
     await waitForState(manager, 'remote', 'failed')
     expect(manager.list()[0]!.status).toMatchObject({
-      reason: 'resolve',
-      lastError: containing('credential seam'),
+      reason: 'load',
+      lastError: containing('credentials provider'),
     })
   })
 
   it('reports a load failure when the serverName collides with a static instance', async () => {
     const { ctx, manager, settings } = await mountWorld()
-    await applyMcpClient(ctx, {
+    await applyMcpClient(ctx, ClientConfig({
       transport: 'stdio',
       serverName: 'dup',
       command: 'echo',
@@ -368,7 +540,7 @@ describe('mcp-manager', () => {
       startupTimeoutMs: 30_000,
       healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
-    })
+    }))
     await settings!.update('mcp', { servers: { dup: stdioEntry() } })
     await waitForState(manager, 'dup', 'failed')
     expect(manager.list()[0]!.status).toMatchObject({
@@ -393,6 +565,373 @@ describe('mcp-manager', () => {
     await manager.restart('off')
     expect(manager.list().find(view => view.name === 'off')!.status).toEqual({ state: 'disabled' })
     await expect(manager.probe('ghost')).rejects.toThrow(/unknown server "ghost"/)
+  })
+
+  it('cancels a probe when its configuration is deleted and retains failed cleanup', async () => {
+    const { manager, settings, events } = await mountWorld({
+      settingsDoc: { mcp: { servers: { probed: stdioEntry({ enabled: false }) } } },
+    })
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const connect: PromiseWithResolvers<void> = Promise.withResolvers()
+    mockConnect.mockImplementation(() => { entered.resolve(); return connect.promise })
+    mockClose.mockImplementation(async function (this: InstanceType<typeof MockClient>) {
+      connect.reject(new Error('closed by removal'))
+      await this.transport?.close()
+      throw new Error('cleanup failed')
+    })
+    const probing = manager.probe('probed')
+    await entered.promise
+    await settings!.replace('mcp', {})
+    expect(await probing).toMatchObject({ ok: false, closeConfirmed: true, cleanupError: expect.any(String) as string })
+    await vi.waitFor(() => {
+      expect(manager.list()).toMatchObject([{ name: 'probed', configured: false, status: { state: 'failed', reason: 'cleanup' } }])
+    })
+    expect(events.at(-1)).toMatchObject({ name: 'probed', status: { state: 'failed', reason: 'cleanup' } })
+    await settings!.update('mcp', { servers: { probed: stdioEntry() } })
+    await expect(manager.restart('probed')).rejects.toThrow('cleanup')
+    expect(mockConnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels a caller-owned probe without closing the managed connection', async () => {
+    const { ctx, manager } = await mountWorld({
+      settingsDoc: { mcp: { servers: { srv: stdioEntry() } } },
+    })
+    await waitForState(manager, 'srv', 'connected')
+    const live = instances[0]!
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const listed: PromiseWithResolvers<ReturnType<typeof listing>> = Promise.withResolvers()
+    mockListTools.mockImplementationOnce(() => { entered.resolve(); return listed.promise })
+    const controller = new AbortController()
+    const probing = manager.probe('srv', { signal: controller.signal })
+    try {
+      await entered.promise
+      controller.abort()
+      listed.resolve(listing('probe-only'))
+      expect(await probing).toMatchObject({ ok: false, stage: 'list', message: 'probe aborted', closeConfirmed: true })
+      expect(manager.list()[0]!.status.state).toBe('connected')
+      expect(ctx.tools.get('mcp__srv__remote')).toBeDefined()
+      expect(mockClose.mock.contexts).not.toContain(live)
+    } finally {
+      listed.resolve(listing())
+      await probing
+    }
+  })
+
+  it('preserves probe cleanup failures against later connection status changes', async () => {
+    const { ctx, manager } = await mountWorld({
+      settingsDoc: { mcp: { servers: { srv: stdioEntry({ reconnect: { enabled: false } }) } } },
+    })
+    await waitForState(manager, 'srv', 'connected')
+    const live = instances[0]!
+    const fiber = [...ctx.registry.get(applyMcpClient)!.fibers][0]!
+    mockClose.mockImplementationOnce(async function (this: InstanceType<typeof MockClient>) {
+      await this.transport?.close()
+      throw new Error('probe cleanup failure')
+    })
+    expect(await manager.probe('srv')).toMatchObject({ ok: true, closeConfirmed: true, cleanupError: expect.any(String) as string })
+    await expect(manager.probe('srv')).rejects.toThrow('cleanup')
+    await live.transport!.close()
+    await vi.waitFor(() => { expect(connectionStatusOf(fiber)!.current()).toMatchObject({ state: 'failed', reason: 'reconnect-disabled' }) })
+    expect(manager.list()[0]!.status).toMatchObject({ state: 'failed', reason: 'cleanup' })
+    await expect(manager.restart('srv')).rejects.toThrow('cleanup')
+  })
+
+  it.each([false, true])('retains unconfirmed closure across concurrent probes when the first confirms %s', async (firstConfirmed) => {
+    const { manager, managerFiber } = await mountWorld({
+      settingsDoc: { mcp: { servers: { off: stdioEntry({ enabled: false, closeTimeoutMs: 50 }) } } },
+    })
+    await waitForState(manager, 'off', 'disabled')
+    const firstClosing: PromiseWithResolvers<void> = Promise.withResolvers()
+    const finishFirst: PromiseWithResolvers<void> = Promise.withResolvers()
+    const secondListing: PromiseWithResolvers<void> = Promise.withResolvers()
+    const listed = Promise.withResolvers<ReturnType<typeof listing>>()
+    const secondClosing: PromiseWithResolvers<void> = Promise.withResolvers()
+    mockListTools.mockResolvedValueOnce(listing('remote')).mockImplementationOnce(() => {
+      secondListing.resolve()
+      return listed.promise
+    })
+    mockClose.mockImplementationOnce(async function (this: InstanceType<typeof MockClient>) {
+      firstClosing.resolve()
+      await finishFirst.promise
+      if (!firstConfirmed) return
+      await this.transport?.close()
+      throw new Error('first cleanup failure')
+    }).mockImplementationOnce(async function (this: InstanceType<typeof MockClient>) {
+      secondClosing.resolve()
+      if (firstConfirmed) return
+      await this.transport?.close()
+      throw new Error('second cleanup failure')
+    })
+    vi.useFakeTimers()
+    const first = manager.probe('off')
+    let second: ReturnType<McpServerManager['probe']> | undefined
+    try {
+      await firstClosing.promise
+      second = manager.probe('off')
+      await secondListing.promise
+      finishFirst.resolve()
+      await vi.advanceTimersByTimeAsync(50)
+      const firstResult = await first
+      expect(firstResult).toMatchObject({ ok: true, closeConfirmed: firstConfirmed })
+      listed.resolve(listing('remote'))
+      await secondClosing.promise
+      await vi.advanceTimersByTimeAsync(50)
+      expect(await second).toMatchObject({ ok: true, closeConfirmed: !firstConfirmed })
+      expect(manager.list()[0]!.status).toEqual({ state: 'failed', reason: 'cleanup',
+        result: { closeConfirmed: false, cleanupError: firstResult.cleanupError } })
+      await expect(manager.restart('off')).rejects.toThrow('cleanup')
+    } finally {
+      finishFirst.resolve()
+      listed.resolve(listing())
+      for (const instance of instances) await instance.transport?.close()
+      await Promise.allSettled([first, second])
+      await managerFiber.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it('retains an unconfirmed managed connection after a probe cleanup error and configuration removal', async () => {
+    const { manager, settings, managerFiber } = await mountWorld({
+      settingsDoc: { mcp: { servers: { srv: stdioEntry({ closeTimeoutMs: 50 }) } } },
+    })
+    await waitForState(manager, 'srv', 'connected')
+    const live = instances[0]!
+    mockClose.mockImplementationOnce(async function (this: InstanceType<typeof MockClient>) {
+      await this.transport?.close()
+      throw new Error('probe cleanup failure')
+    })
+    const probe = await manager.probe('srv')
+    expect(probe).toMatchObject({ ok: true, closeConfirmed: true, cleanupError: expect.any(String) as string })
+    const closing: PromiseWithResolvers<void> = Promise.withResolvers()
+    mockClose.mockImplementationOnce(() => { closing.resolve(); return Promise.resolve() })
+    vi.useFakeTimers()
+    try {
+      await settings!.replace('mcp', {})
+      await closing.promise
+      await vi.advanceTimersByTimeAsync(50)
+      await vi.waitFor(() => {
+        expect(manager.list()).toEqual([{ name: 'srv', configured: false, status: {
+          state: 'failed', reason: 'cleanup', result: { closeConfirmed: false, cleanupError: probe.cleanupError },
+        } }])
+      })
+    } finally {
+      await live.transport?.close()
+      await managerFiber.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it('combines probe cleanup errors with a later live connection closure failure', async () => {
+    vi.useFakeTimers()
+    try {
+      const { manager, managerFiber } = await mountWorld({
+        withSettings: false,
+        managerConfig: { servers: { srv: stdioEntry({ closeTimeoutMs: 50, healthCheckIntervalMs: 1_000 }) } },
+      })
+      await waitForState(manager, 'srv', 'connected')
+      const live = instances[0]!
+      try {
+        mockClose.mockImplementationOnce(async function (this: InstanceType<typeof MockClient>) {
+          await this.transport?.close()
+          throw new Error('probe cleanup failure')
+        })
+        const probe = await manager.probe('srv')
+        expect(probe.closeConfirmed).toBe(true)
+        vi.spyOn(live, 'ping').mockRejectedValueOnce(new Error('health check failed'))
+        mockClose.mockResolvedValueOnce(undefined)
+        await vi.advanceTimersByTimeAsync(1_050)
+        expect(manager.list()[0]!.status).toEqual({ state: 'failed', reason: 'cleanup',
+          result: { closeConfirmed: false, cleanupError: probe.cleanupError } })
+      } finally {
+        await live.transport?.close()
+        await managerFiber.dispose()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores a status callback already captured when manager disposal detaches it', async () => {
+    const { ctx, manager, settings, managerFiber, events } = await mountWorld()
+    let disposing: Promise<void> | undefined
+    ctx.on('internal/status', (fiber) => {
+      if (fiber.runtime?.callback !== applyMcpClient || fiber.state !== FiberState.ACTIVE) return
+      connectionStatusOf(fiber)!.onChange(() => { disposing = managerFiber.dispose() })
+    }, { global: true })
+    await settings!.update('mcp', { servers: { srv: stdioEntry() } })
+    await waitForState(manager, 'srv', 'connected')
+    const before = manager.list()
+    const published = events.length
+    await instances[0]!.transport!.close()
+    await vi.waitFor(() => { expect(disposing).toBeDefined() })
+    await disposing
+    expect(manager.list()).toEqual(before)
+    expect(events).toHaveLength(published)
+  })
+
+  it('blocks replacements after a connection attempt reports incomplete cleanup', async () => {
+    mockConnect.mockRejectedValueOnce(new Error('connection refused'))
+    mockClose.mockImplementationOnce(async function (this: InstanceType<typeof MockClient>) {
+      await this.transport?.close()
+      throw new Error('startup cleanup failure')
+    })
+    const { manager, credentials } = await mountWorld({
+      withCredentials: true,
+      settingsDoc: { mcp: { servers: { srv: stdioEntry({ env: { TOKEN: '${credential:MCP_SPEC_CLEANUP}' } }) } } },
+    })
+    await waitForState(manager, 'srv', 'waiting-credentials')
+    await credentials!.set(credentialRef('MCP_SPEC_CLEANUP'), 'first')
+    await waitForState(manager, 'srv', 'failed')
+    expect(manager.list()[0]!.status).toMatchObject({ state: 'failed', reason: 'unclosed-generation' })
+    const resolve = vi.spyOn(credentials!, 'resolve')
+    await credentials!.set(credentialRef('MCP_SPEC_CLEANUP'), 'second')
+    expect(resolve).not.toHaveBeenCalled()
+    await expect(manager.probe('srv')).rejects.toThrow('cleanup')
+    await expect(manager.restart('srv')).rejects.toThrow('cleanup')
+    expect(mockConnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a child startup rejection after manager disposal has retired it', async () => {
+    const { ctx, manager, settings, managerFiber, events } = await mountWorld()
+    const failed: PromiseWithResolvers<void> = Promise.withResolvers()
+    let disposing: Promise<void> | undefined
+    ctx.on('internal/status', (fiber) => {
+      if (fiber.runtime?.callback !== applyMcpClient || fiber.state !== FiberState.FAILED) return
+      disposing = managerFiber.dispose()
+      failed.resolve()
+    }, { global: true })
+    await settings!.update('mcp', { servers: { missing: stdioEntry({ env: { TOKEN: '${credential:MCP_SPEC_ABSENT_PROVIDER}' } }) } })
+    await failed.promise
+    await disposing
+    expect(events.some(event => event.status.state === 'failed')).toBe(false)
+    await expect(manager.restart('missing')).rejects.toThrow('disposed')
+  })
+
+  it('drops queued startup-failure handling when configuration removal retires the child', async () => {
+    const { ctx, manager, settings, events } = await mountWorld({
+      settingsDoc: { mcp: { servers: { live: stdioEntry() } } },
+    })
+    await waitForState(manager, 'live', 'connected')
+    const closing: PromiseWithResolvers<void> = Promise.withResolvers()
+    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    let restarting: Promise<void> | undefined
+    mockClose.mockImplementationOnce(async function (this: InstanceType<typeof MockClient>) {
+      closing.resolve()
+      await gate.promise
+      await this.transport?.close()
+    })
+    ctx.on('internal/status', (fiber) => {
+      if (fiber.runtime?.callback !== applyMcpClient || fiber.state !== FiberState.FAILED) return
+      restarting = manager.restart('live')
+    }, { global: true })
+    try {
+      await settings!.update('mcp', { servers: { missing: stdioEntry({ env: { TOKEN: '${credential:MCP_SPEC_ABSENT_PROVIDER}' } }) } })
+      await closing.promise
+      await settings!.replace('mcp', { servers: { live: stdioEntry() } })
+      gate.resolve()
+      await restarting
+      await vi.waitFor(() => { expect(manager.list().map(server => server.name)).toEqual(['live']) })
+      expect(events.some(event => event.name === 'missing' && event.status.state === 'failed')).toBe(false)
+    } finally {
+      gate.resolve()
+      await restarting
+    }
+  })
+
+  it('cancels an active probe before manager disposal waits for it', async () => {
+    const { manager, managerFiber } = await mountWorld({
+      settingsDoc: { mcp: { servers: { off: stdioEntry({ enabled: false }) } } },
+    })
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    mockConnect.mockImplementationOnce(() => { entered.resolve(); return gate.promise })
+    mockClose.mockImplementationOnce(async function (this: InstanceType<typeof MockClient>) {
+      gate.reject(new Error('probe closed'))
+      await this.transport?.close()
+    })
+    const probing = manager.probe('off')
+    try {
+      await entered.promise
+      await managerFiber.dispose()
+      expect(await probing).toMatchObject({ ok: false, message: 'probe aborted', closeConfirmed: true })
+      await expect(manager.probe('off')).rejects.toThrow('disposed')
+    } finally {
+      gate.resolve()
+      await probing
+    }
+  })
+
+  it.each(['removed configuration', 'failed probe cleanup'] as const)('settles failed startup alongside %s during credential resolution', async (action) => {
+    const { ctx, manager, settings, credentials, events } = await mountWorld({ withCredentials: true })
+    await applyMcpClient(ctx, ClientConfig({ transport: 'stdio', serverName: 'dup', command: 'static' }))
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    const resolution = gate.promise.then(() => ({ value: 'token', source: 'memory' }))
+    vi.spyOn(credentials!, 'resolve').mockImplementationOnce(() => {
+      entered.resolve()
+      return resolution
+    })
+    let probing: ReturnType<McpServerManager['probe']> | undefined
+    const detach = ctx.on('mcp-manager/status', (name, status) => {
+      if (name === 'dup' && status.state === 'connecting') probing = manager.probe(name)
+    })
+    vi.useFakeTimers()
+    try {
+      await settings!.update('mcp', { servers: { dup: stdioEntry({ env: { TOKEN: '${credential:MCP_SPEC_COLLISION}' }, closeTimeoutMs: 50 }) } })
+      await entered.promise
+      if (action === 'removed configuration') {
+        await settings!.replace('mcp', {})
+        gate.resolve()
+        expect(await probing).toMatchObject({ ok: false, closeConfirmed: true })
+        await vi.waitFor(() => { expect(manager.list()).toEqual([]) })
+        expect(events.some(event => event.name === 'dup' && event.status.state === 'failed')).toBe(false)
+      } else {
+        await vi.advanceTimersByTimeAsync(51)
+        expect(await probing).toMatchObject({ ok: false, closeConfirmed: true, cleanupError: containing('MCP cleanup did not settle') })
+        await waitForState(manager, 'dup', 'failed')
+        expect(manager.list()[0]!.status).toMatchObject({ state: 'failed', reason: 'cleanup' })
+      }
+      expect(ctx.tools.get('mcp__dup__remote')).toBeDefined()
+    } finally {
+      detach()
+      gate.resolve()
+      await resolution
+      await probing
+      await ctx.fiber.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['newer configuration', 'disposal'] as const)('does not mount a stale configuration after %s overtakes cleanup', async (action) => {
+    const { manager, settings, managerFiber } = await mountWorld({
+      settingsDoc: { mcp: { servers: { srv: stdioEntry() } } },
+    })
+    await waitForState(manager, 'srv', 'connected')
+    const closing: PromiseWithResolvers<void> = Promise.withResolvers()
+    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    mockClose.mockImplementationOnce(async function (this: InstanceType<typeof MockClient>) {
+      closing.resolve()
+      await gate.promise
+      await this.transport?.close()
+    })
+    try {
+      await settings!.update('mcp', { servers: { srv: { command: 'stale' } } })
+      await closing.promise
+      await expect(manager.probe('srv')).rejects.toThrow('changing')
+      if (action === 'newer configuration') {
+        await settings!.update('mcp', { servers: { srv: { command: 'latest', closeTimeoutMs: 900, healthCheckTimeoutMs: 2_000 } } })
+        gate.resolve()
+        await vi.waitFor(() => { expect(transportConfigs.map(config => config.command)).toEqual(['echo', 'latest']) })
+        await waitForState(manager, 'srv', 'connected')
+      } else {
+        const disposing = managerFiber.dispose()
+        gate.resolve()
+        await disposing
+        expect(transportConfigs.map(config => config.command)).toEqual(['echo'])
+      }
+    } finally {
+      gate.resolve()
+    }
   })
 
   it('contains a throwing status listener so the lifecycle operation completes', async () => {
@@ -441,8 +980,7 @@ describe('mcp-manager', () => {
     await settings!.replace('mcp', {})
     gate.resolve()
     await vi.waitFor(() => { expect(manager.list()).toEqual([]) })
-    // Nothing mounted for the removed entry: no instance, no tools.
-    expect(instances.length).toBe(0)
+    expect(mockConnect).not.toHaveBeenCalled()
     expect(ctx.tools.get('mcp__fleeting__remote')).toBeUndefined()
   })
 
@@ -471,10 +1009,8 @@ describe('mcp-manager', () => {
     })
     await vi.waitFor(() => { expect(instances.length).toBe(1) })
     await settings!.replace('mcp', {})
-    await vi.waitFor(() => { expect(manager.list()).toEqual([]) })
     gate.resolve()
-    // The activation continuation finds its record gone and publishes nothing.
-    await new Promise(resolve => setTimeout(resolve, 20))
+    await vi.waitFor(() => { expect(manager.list()).toEqual([]) })
     expect(ctx.tools.get('mcp__starting__remote')).toBeUndefined()
     expect(events.filter(event => event.name === 'starting' && event.status.state === 'connected')).toEqual([])
   })
@@ -489,15 +1025,15 @@ describe('mcp-manager', () => {
     })
     // Let the boot mount settle as a resolve failure before the credential
     // exists, so the healing rebuild below is the only mount in flight.
-    await waitForState(manager, 'vanishing', 'failed')
+    await waitForState(manager, 'vanishing', 'waiting-credentials')
     await credentials!.set(credentialRef('MCP_SPEC_VANISH'), 'value')
     await waitForState(manager, 'vanishing', 'connected')
     const clientsBefore = instances.length
 
     // Rotation queues a rebuild whose unmount blocks on the slow close…
-    mockClose.mockImplementation(function (this: { onclose?: () => void }) {
-      this.onclose?.()
-      return closeGate.promise
+    mockClose.mockImplementation(async function (this: InstanceType<typeof MockClient>) {
+      await this.transport?.close()
+      await closeGate.promise
     })
     await credentials!.set(credentialRef('MCP_SPEC_VANISH'), 'rotated')
     // …and the entry is deleted while that unmount is still in flight.
@@ -521,12 +1057,15 @@ describe('mcp-manager', () => {
     await waitForState(manager, 'gated', 'connected')
     const failures = events.filter(event => event.status.state === 'failed').length
 
-    // Hold the tail open inside a restart's template resolution…
     const gate: PromiseWithResolvers<void> = Promise.withResolvers()
-    credentials!.values.delete('MCP_SPEC_GATE')
-    credentials!.resolveGate = gate.promise
+    const closing: PromiseWithResolvers<void> = Promise.withResolvers()
+    mockClose.mockImplementationOnce(async function (this: InstanceType<typeof MockClient>) {
+      closing.resolve()
+      await gate.promise
+      await this.transport?.close()
+    })
     const restarting = manager.restart('gated')
-    // …queue a settings reconcile behind it, then dispose the manager.
+    await closing.promise
     await settings!.update('mcp', { servers: { gated: { toolCallTimeoutMs: 5_000 } } })
     const disposing = managerFiber.dispose()
     gate.resolve()

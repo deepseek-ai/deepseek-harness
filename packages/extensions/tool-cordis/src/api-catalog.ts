@@ -1488,26 +1488,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'mcpServers',
     summary: 'The manager service.',
-    description: 'The manager service. Reconciliation, `restart`, and rotation-driven rebuilds are serialized on one operation tail, so two lifecycle operations can never interleave one instance\'s unmount/mount.',
+    description: 'The manager service. Configuration reconciliation and `restart` serialize instance replacement. Probes run independently and are cancelled before replacement or disposal waits for their cleanup.',
     methods: [
       {
         signature: 'list(): McpManagedServerView[]',
-        description: 'Every configured server with its durable intent, deletability, and current runtime status. Read-only: listing never mounts, connects, or probes anything.',
+        description: 'Read configured servers and retained runtime records without mounting or probing.',
         parameters: [],
-        returns: 'one view per configured entry, in document order.',
+        returns: 'configured entries in document order, followed by retained records for removed entries.',
       },
       {
         signature: 'async restart(name: string): Promise<void>',
-        description: 'Rebuild one server from its current configuration: dispose the live instance (if any) and mount a fresh one. This is the manual recovery for every terminal `failed` state — a fresh instance starts a fresh reconnect budget — and the plain reconnect affordance while connected.',
+        description: 'Rebuild one server from its current configuration: dispose the live instance (if any) and mount a fresh one with a fresh reconnect budget. Incomplete cleanup blocks replacement until the Host restarts.',
         parameters: [{ name: 'name', description: 'the configured entry key.' }],
-        throws: ['when no entry of that name is configured.'],
+        throws: ['when the manager is disposed, no entry is configured, or cleanup is incomplete.'],
       },
       {
         signature: 'async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult>',
-        description: 'Probe one configured server without touching its live instance: resolve the entry\'s templates, connect, list tools, close. A disabled entry can be probed — that is how a management surface tests it before enabling.',
-        parameters: [{ name: 'name', description: 'the configured entry key.' }, { name: 'options', description: 'probe budget and abort signal.' }],
-        returns: 'the stage-classified probe outcome.',
-        throws: ['when no entry of that name is configured or its templates do not resolve.'],
+        description: 'Probe one configured server without touching its live instance: resolve the entry\'s templates, connect, list tools, close. A disabled entry can be probed — that is how a management surface tests it before enabling. Configuration changes and manager disposal cancel the probe.',
+        parameters: [{ name: 'name', description: 'the configured entry key.' }, { name: 'options', description: 'probe budget, listing caps, and abort signal.' }],
+        returns: 'the stage-classified probe outcome and independent cleanup result.',
+        throws: ['when the manager is disposed, the entry is absent or changing, cleanup is incomplete, options are invalid, or a required credentials provider is missing.'],
       },
     ],
   },
@@ -4107,7 +4107,7 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'emit',
     signature: '\'mcp-manager/status\'(name: string, status: McpManagedServerStatus): void',
     summary: 'One managed server\'s status transitioned.',
-    description: 'One managed server\'s status transitioned. Emitted for every published change while the entry exists — connection-state transitions mirrored from the instance, `disabled` when the entry is configured off, and the manager-side `failed` reasons. Not emitted for an entry removed from configuration; observers learn removals from plugin configuration.',
+    description: 'One managed server\'s status transitioned. Emitted for every published change while the manager is live and either the entry is configured or a runtime record remains. Removed entries may emit cleanup failures; observers learn configuration removals from plugin configuration.',
     parameters: [{ name: 'name', description: 'the `servers` entry key.' }, { name: 'status', description: 'the status now current for that server.' }],
   },
   {
@@ -5675,16 +5675,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ManualCompactAgentContext extends CompactionAgentContext {\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n}',
   },
   {
+    name: 'McpCloseResult',
+    declaration: 'export interface McpCloseResult {\n    closeConfirmed: boolean;\n    cleanupError?: string;\n}',
+  },
+  {
     name: 'McpConnectionStatus',
-    declaration: 'export type McpConnectionStatus = {\n    state: \'connecting\';\n    attempt: number;\n} | {\n    state: \'connected\';\n    toolCount: number;\n    connectedAt: number;\n} | {\n    state: \'reconnecting\';\n    attempt: number;\n    maxAttempts: number;\n    nextRetryAtMs: number;\n    lastError: string;\n} | {\n    state: \'failed\';\n    reason: \'gave-up\' | \'reconnect-disabled\' | \'unclosed-generation\';\n    lastError?: string;\n};',
+    declaration: 'export type McpConnectionStatus = {\n    state: \'closed\';\n    result: McpCloseResult;\n} | {\n    state: \'waiting-credentials\';\n    lastError: string;\n} | {\n    state: \'connecting\';\n    attempt: number;\n} | {\n    state: \'connected\';\n    toolCount: number;\n    connectedAt: number;\n} | {\n    state: \'reconnecting\';\n    attempt: number;\n    maxAttempts: number;\n    nextRetryAtMs: number;\n    lastError: string;\n} | {\n    state: \'failed\';\n    reason: \'gave-up\' | \'reconnect-disabled\' | \'unclosed-generation\';\n    lastError?: string;\n};',
   },
   {
     name: 'McpManagedServerStatus',
-    declaration: 'export type McpManagedServerStatus = McpConnectionStatus | {\n    state: \'disabled\';\n} | {\n    state: \'failed\';\n    reason: \'resolve\' | \'load\';\n    lastError: string;\n};',
+    declaration: 'export type McpManagedServerStatus = McpConnectionStatus | {\n    state: \'disabled\';\n} | {\n    state: \'failed\';\n    reason: \'load\';\n    lastError: string;\n} | {\n    state: \'failed\';\n    reason: \'cleanup\';\n    result: McpCloseResult;\n};',
   },
   {
     name: 'McpManagedServerView',
-    declaration: 'export interface McpManagedServerView {\n    name: string;\n    transport: \'stdio\' | \'streamable-http\';\n    enabled: boolean;\n    deletable: boolean;\n    status: McpManagedServerStatus;\n}',
+    declaration: 'export interface McpManagedServerView {\n    name: string;\n    configured: boolean;\n    status: McpManagedServerStatus;\n}',
   },
   {
     name: 'McpProbeFailure',
@@ -5692,11 +5696,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'McpProbeOptions',
-    declaration: 'export interface McpProbeOptions {\n    timeoutMs?: number;\n    signal?: AbortSignal;\n}',
+    declaration: 'export interface McpProbeOptions {\n    timeoutMs?: number;\n    maxPages?: number;\n    maxToolNames?: number;\n    signal?: AbortSignal;\n}',
   },
   {
     name: 'McpProbeResult',
-    declaration: 'export type McpProbeResult = McpProbeSuccess | McpProbeFailure;',
+    declaration: 'export type McpProbeResult = (McpProbeSuccess | McpProbeFailure) & McpCloseResult;',
   },
   {
     name: 'McpProbeStage',

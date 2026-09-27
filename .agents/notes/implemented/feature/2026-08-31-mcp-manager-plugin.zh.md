@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`packages/mcp/mcp-manager` 是一个服务插件（`ctx.mcpServers`），拥有 volatile `servers` 配置并对一支普通 `dsh-mcp-client` 子实例编队做对账；`packages/mcp/mcp-client` 补上了管理器需要的三个原语——状态面、探测与启动预算——其重连语义不变。
+`packages/mcp/mcp-manager` 是一个服务插件（`ctx.mcpServers`），拥有 volatile `servers` 配置并对一支普通 `dsh-mcp-client` 子实例编队做对账；`packages/mcp/mcp-client` 拥有连接监督、状态、探测与逐次启动预算。
 
 **配置由 volatile Config 提供，CRUD 不需要新 API。** Settings 按管理器条目的 Loader id 展示其 Config；ConfigEditor 拥有 profile 持久化、继承和 revision 检查。Settings 编辑保留继承的服务器，重置继承条目会恢复其基层值。直接编写 profile patch 会替换完整 `servers` 映射。Loader 先提交引用，再通知管理器现有的协调队列。
 
@@ -18,13 +18,13 @@ Status: implemented
 
 **子实例是插件实例，不是库调用。** 每个启用条目经 `ctx.plugin()` 在管理器 fiber 下挂载 `dsh-mcp-client`。这复用了经过测试的激活/销毁语义，让 `serverName` 预留与静态组合实例正确冲突（以带可操作消息的 `failed`/`load` 状态浮出），并让管理器销毁经普通 fiber 收卷解除每个实例及其工具。
 
-**整条目即身份；`enabled` 是唯一例外。** 任何字段变化都重建实例（实例配置在插件加载时捕获，原地更新不存在）；`enabled` 只切换挂载与否。所有生命周期操作——对账、`restart`、凭据重建——串行在一条操作尾巴上，挂载在异步模板解析后把条目与当前配置复核一致，解析中途被删除的条目不会留下孤儿实例。
+**整条目决定实例；`enabled` 控制挂载。** 条目变化会重建子实例，停用或删除条目会销毁子实例。对账与 `restart` 在同一操作队列中串行执行。探测独立运行，配置变更先取消受影响的探测，再由队列中的清理操作等待它们结束。管理器保留清理失败记录，并在 Host 重启前拒绝替换，防止服务器生命周期重叠。
 
-**状态是按作用域的句柄，不是广播。** mcp-client 的监督器发布一个状态单元（带载荷的 `connecting`/`connected`/`reconnecting`/`failed`），随 `serverName` 预留一起注册，经 `connectionStatusOf(ctx, name)` 读取——与预留同样按作用域取键，Agent 作用域实例绝不泄漏进全局面，归属也无需在载荷里塞身份令牌。管理器把单元聚合为 `list()` 加 `mcp-manager/status` 事件（吸收相等状态、丢弃配置已不含的名字、销毁后静默）；其不变量伴生断言每次发出都点名活管理器所列出的服务器。首次对账等待管理器自身 fiber 激活，因为严格服务读取只对激活的 fiber 作答。
+**状态属于子 Fiber。** 监督器发布经 `connectionStatusOf(fiber)` 读取的状态单元。同一 Fiber 重载时保留该单元，最终销毁时移除观察者，但单元仍可读取。Fiber 身份直接区分不同注册作用域中的实例，无需在状态载荷中加入身份令牌。管理器聚合为 `list()` 和 `mcp-manager/status` 事件，吸收相等状态并在销毁后停止发出事件。配置已删除但清理未完成的条目仍以 `configured: false` 列出；不变量伴生检查每次事件都指向活管理器列出的服务器。首次对账等待管理器自身 Fiber 激活，因为严格服务读取要求 Fiber 已激活。
 
-**模板让密钥不进文档，而文档保持可读。** 存储的 env 与 header 值不做 wire 脱敏：编辑器回显文档里存的原文，必须隐藏的值应写成模板。 `${env:NAME}` 与 `${credential:REF}` 在挂载时解析；引用缺失让那一台服务器失败并在消息里给出修复方式。凭据轮换通过静态扫描原始配置（而非追踪已挂实例的引用）来定位受影响服务器，因此那台因凭据缺失而挂载失败的服务器会在凭据存入时被治愈。
+**模板让密钥不进入配置。** 存储的 env 和 header 值仍可读，必须隐藏的值应使用模板。管理器把原始模板传入子 Fiber。mcp-client 显式启用模板展开后，从启动快照解析 `${env:NAME}`，从当前 provider 解析 `${credential:REF}`。缺失值使非严格客户端等待凭据，相关凭据通知可恢复连接。值变化时，连接只有在清理成功后才会替换；同值通知保留当前连接和重试预算。HTTP 请求重新检查凭据绑定，并拒绝在旧会话中发送变化后的值。
 
-**mcp-client 增补。** `startupTimeoutMs`（默认 30 秒）为每次连接尝试加初次工具同步设界，关闭了继承 SDK 超时的缺口；`probeServer()` 连接、读服务器身份、列工具（16 页 / 512 名，超出报告截断）后关闭，不预留名字也不触碰 `ctx.tools`——对已存条目与未保存草稿一体适用的「测试该服务器」。
+**mcp-client 预算与探测。** 独立客户端的 `startupTimeoutMs` 可省略，管理器明确提供 30 秒默认值。健康检查默认关闭，其超时与检查间隔独立。`probeServer(ctx, config, options)` 连接、读取服务器身份、列出工具名并关闭，不预留名称，也不注册工具。探测有独立于运行期启动的预算和可配置的列表上限。探测成功与传输关闭分别报告，因此发现成功不会掩盖清理未完成。
 
 OAuth 刻意不在本次范围内：凭据记录与 authorization seam 加 MCP SDK 的 `OAuthClientProvider` 是预期归宿，`needs-auth` 状态位为那次变更保留。
 
@@ -34,7 +34,7 @@ OAuth 刻意不在本次范围内：凭据记录与 authorization seam 加 MCP S
 
 **把 `startConnection()` 当库调用而不挂子插件。** 否决：这会让生命周期与静态组合实例分叉，丢掉预留冲突检查，还要重造插件已在测试下证明的激活/销毁静默。
 
-**让 mcp-client 以 Cordis 事件广播逐实例状态。** 否决：preset 作用域实例会以相同名字发事件，迫使载荷携带身份令牌；按作用域的句柄以预留自身的生命周期给出精确归属。管理器的单一聚合事件是唯一广播面。
+**让 mcp-client 以 Cordis 事件广播逐实例状态。** 否决：preset 作用域实例可以重名，迫使事件载荷携带身份令牌。Fiber 所有的句柄直接识别实例，管理器提供唯一的聚合事件。
 
 **让管理界面轮询状态。** 否决：Remote 面已转发宿主事件；发货了轮询的同类产品（Reasonix）或缺状态事件的（OpenCode v1）都把它当作待修缺陷。
 
@@ -42,11 +42,11 @@ OAuth 刻意不在本次范围内：凭据记录与 authorization seam 加 MCP S
 
 ## 测试
 
-mcp-client 单元（`tests/status.spec.ts`、`tests/probe.spec.ts`，SDK mock）：全部状态迁移含预算耗尽、关闭重连、启动预算两个阶段、连接期即关闭的无错误中断、观察者遏制、销毁移除句柄，以及探测的阶段分类、上限、预算与关闭遏制。管理器单元（`tests/manager.spec.ts`，真实 Cordis + profile 支持的 Settings 和内存 credential provider）：无 settings 时的基层回退、设置驱动的增/重建/停用/删除、restart 语义、模板解析与失败、凭据轮换重建（含治愈挂载失败的用例）、以 `failed`/`load` 浮出的 serverName 冲突、解析中途删除的中止、陈旧激活回调、销毁先解除工具再拒绝操作、排队对账输给销毁时被遏制并记录。不变量 spec 证明发出契约可以失败。真实组合（`tests/composition.spec.ts`）：Loader 启动的 profile 配置——继承服务器挂载，外部 profile patch 热加第二台服务器，Settings 编辑在重启后恢复，无效写入保持 patch 不变。E2E（`mcp-client.e2e.ts`，无密钥）：对真实 stdio fixture 服务器与死命令探测。覆盖率在两个包上保持逐文件 100% 门禁。
+mcp-client 单测覆盖状态迁移、独立的启动/探测/健康检查预算、模板绑定、同一 Fiber 重载、销毁后可读状态、观察者异常遏制、取消，以及独立的关闭和清理结果。管理器测试使用真实 Cordis、profile 支持的 Settings 和内存 credential provider，覆盖配置变化、凭据轮换、探测取消、清理失败保留，以及待完成工作期间的删除或销毁。不变量 spec 检查状态归属。真实组合测试验证继承服务器、profile patch、持久化设置编辑和写入期校验。无密钥 e2e 验证真实 stdio 和 HTTP 服务器，包括探测与崩溃恢复。两个包均满足逐文件 100% 覆盖率门禁。
 
 ## 后果
 
-- 八项管理界面操作分解为：增/改/删/启/停 = 设置写入（无新 API）；状态 = `list()` 加一条转发事件；测试 = `probe`；恢复 = mcp-client 重连加 `restart` 作为 `failed` 终态的手动出口。后续的 Remote 控制器与 Web 分区恰好消费这一表面。
-- 被重建服务器的工具会消失到新实例完成首次同步为止；滚动换代（先起新代再销毁旧代）是已知的开放方向。
+- 管理操作通过 Settings 增/改/删/启/停，通过 `list()` 和一条事件获取状态，通过 `probe` 测试。重连和 `restart` 恢复连接失败；清理未完成时需要重启 Host。
+- 被重建服务器的工具在替换连接完成首次同步前不可用。替换会等待传输确认关闭且本地清理成功。
 - 管理器只治理全局面；preset 作用域与静态实例不在其列表内。
 - `startupTimeoutMs` 只为启动尝试设界，通知驱动的重同步请求仍走 SDK 请求默认值——已记录为 mcp-client 的限制。

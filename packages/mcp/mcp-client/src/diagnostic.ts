@@ -1,11 +1,38 @@
 /**
- * One-line diagnostic for a connection-layer failure, keeping the cause chain
- * that `String(error)` drops. Node's fetch wraps the actionable failure —
- * `connect ECONNREFUSED 127.0.0.1:8932`, a TLS code, a DNS code — inside
- * `error.cause`, so the outer `TypeError: fetch failed` alone diagnoses
- * nothing. The raw identifiers are kept verbatim: they are what a person
- * pastes into a search or hands to a model.
+ * Connection diagnostics retain cause chains for literal configuration.
+ * Template-expanded configuration exposes only local reasons and known error
+ * codes because upstream messages can contain resolved credentials.
  */
+
+import { SdkErrorCode } from '@modelcontextprotocol/client'
+
+/** Local failure whose message contains no expanded configuration or upstream text. */
+export class McpLocalError extends Error {}
+
+const SAFE_ERROR_CODES = new Set<string>([
+  ...Object.values(SdkErrorCode),
+  'ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT',
+  'ENOENT', 'EACCES', 'EPERM', 'EPIPE', 'ERR_INVALID_URL',
+  'CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_SOCKET',
+])
+
+/**
+ * Describe a failure without copying expanded configuration from upstream errors.
+ * @param error - caught failure, including nested transport causes.
+ * @returns a local reason, known error code, or a generic failure message.
+ */
+export function describeTemplateError(error: unknown): string {
+  const seen = new Set<Error>()
+  while (error instanceof Error && !seen.has(error)) {
+    if (error instanceof McpLocalError) return error.message
+    seen.add(error)
+    const code = 'code' in error ? error.code : undefined
+    if (typeof code === 'string' && SAFE_ERROR_CODES.has(code)) return code
+    error = error.cause
+  }
+  return 'operation failed (upstream details omitted to protect credentials)'
+}
 
 /** One readable segment of the chain; generic `Error` names are noise and dropped. */
 function segmentOf(value: unknown): string {

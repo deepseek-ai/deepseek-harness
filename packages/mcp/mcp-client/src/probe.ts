@@ -10,19 +10,23 @@
  */
 
 import { Client } from '@modelcontextprotocol/client'
-import { describeError } from './diagnostic.ts'
-import { withDeadline } from './deadline.ts'
-import { createTransport } from './transport.ts'
+import type { Context } from '@deepseek-ai/cordis'
+import type { McpCloseResult } from './status.ts'
+import { McpTemplateBinding } from './credentials.ts'
+import { McpGeneration } from './generation.ts'
 import type { Config } from './index.ts'
 
 /** Options for one {@link probeServer} call. */
 export interface McpProbeOptions {
   /** Budget for the whole probe (connect + listing) in milliseconds; default 10000. */
   timeoutMs?: number
+  /** Maximum listing pages before returning a truncated result; default 16. */
+  maxPages?: number
+  /** Maximum raw tool names retained in the result; default 512. */
+  maxToolNames?: number
   /**
-   * Abort the in-flight probe; settles as a failure at the current stage. A
-   * hung connect is broken by closing the client, and listing requests carry
-   * the signal directly.
+   * Abort the in-flight probe; settles as a failure at the current stage after
+   * bounded generation cleanup.
    */
   signal?: AbortSignal
 }
@@ -30,16 +34,16 @@ export interface McpProbeOptions {
 /** Probe phase a failure is attributed to. */
 export type McpProbeStage = 'connect' | 'list'
 
-/** Successful probe: the server answered `initialize` and `tools/list`. */
+/** Successful probe: negotiation and any advertised tool listing completed. */
 export interface McpProbeSuccess {
   ok: true
   /** Server-reported identity from `initialize`, when the SDK captured one. */
   serverInfo?: { name: string; version: string }
-  /** Advertised raw tool names, capped at {@link PROBE_MAX_TOOL_NAMES}. */
+  /** Advertised raw tool names, capped at the resolved `maxToolNames`. */
   toolNames: string[]
   /** Whether the advertised list was longer than the returned `toolNames`. */
   truncated: boolean
-  /** Wall-clock duration of the probe in milliseconds. */
+  /** Wall-clock duration of negotiation and listing, excluding cleanup, in milliseconds. */
   durationMs: number
 }
 
@@ -54,7 +58,7 @@ export interface McpProbeFailure {
 }
 
 /** Outcome of one {@link probeServer} call. */
-export type McpProbeResult = McpProbeSuccess | McpProbeFailure
+export type McpProbeResult = (McpProbeSuccess | McpProbeFailure) & McpCloseResult
 
 /** Default whole-probe budget (ms): interactive surfaces need a bounded answer. */
 const DEFAULT_PROBE_TIMEOUT_MS = 10_000
@@ -65,85 +69,66 @@ const PROBE_MAX_PAGES = 16
 /** Tool-name cap on the returned list. */
 const PROBE_MAX_TOOL_NAMES = 512
 
-/** Reject when the shared probe budget elapses before `promise` settles. */
-function withProbeDeadline<T>(promise: Promise<T>, remainingMs: number): Promise<T> {
-  return withDeadline(promise, remainingMs, `probe timed out after its ${String(remainingMs)}ms remaining budget`)
+function resolveProbeOptions(options: McpProbeOptions) {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS
+  const maxPages = options.maxPages ?? PROBE_MAX_PAGES
+  const maxToolNames = options.maxToolNames ?? PROBE_MAX_TOOL_NAMES
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new TypeError('probeServer: timeoutMs must be a positive finite number')
+  if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw new TypeError('probeServer: maxPages must be a positive safe integer')
+  if (!Number.isSafeInteger(maxToolNames) || maxToolNames < 1) throw new TypeError('probeServer: maxToolNames must be a positive safe integer')
+  return { timeoutMs, maxPages, maxToolNames, signal: options.signal }
 }
 
 /**
- * Probe one MCP server configuration without registering anything.
- * @param config - resolved transport configuration (the `serverName` is not reserved).
- * @param options - probe budget and abort signal.
- * @returns the stage-classified probe outcome; expected failures resolve rather than reject.
+ * Probe a server without registering tools or reserving its namespace.
+ * @param ctx - context providing template sources when expansion is enabled.
+ * @param config - transport configuration; its startup budget does not bound the probe.
+ * @param options - whole-probe budget, listing caps, and cancellation signal.
+ * @returns the connect/list outcome and independent cleanup result after bounded closure.
+ * @throws for invalid options, malformed templates, or a missing required credentials provider.
  */
-export async function probeServer(config: Config, options: McpProbeOptions = {}): Promise<McpProbeResult> {
-  const timeoutMs = options.timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    throw new TypeError('probeServer: timeoutMs must be a positive finite number')
-  }
+export async function probeServer(ctx: Context, config: Config, options: McpProbeOptions = {}): Promise<McpProbeResult> {
+  const spec = resolveProbeOptions(options)
   const startedAt = Date.now()
-  const remaining = (): number => timeoutMs - (Date.now() - startedAt)
-  let stage: McpProbeStage = 'connect'
-  const signal = options.signal
-  // A helper, not a direct property read: flow narrowing would otherwise pin
-  // `aborted` to its pre-connect value across the awaits below.
-  const aborted = (): boolean => signal?.aborted === true
-  if (aborted()) {
-    return { ok: false, stage, message: 'probe aborted', durationMs: 0 }
-  }
-  // Negotiates exactly as the supervised connection does, so a probe verdict
-  // predicts what mounting the entry would do.
+  const remaining = (): number => spec.timeoutMs - (Date.now() - startedAt)
+  const binding = new McpTemplateBinding(ctx, config)
   const client = new Client({ name: 'dsh-mcp-probe', version: '0.0.1' }, { capabilities: {}, versionNegotiation: { mode: 'auto' } })
-  // Closing the client is the abort lever the SDK gives a hung connect; the
-  // listing stage additionally carries the signal on each request.
-  const onAbort = (): void => {
-    void client.close().catch(() => undefined)
-  }
-  signal?.addEventListener('abort', onAbort, { once: true })
+  const generation = new McpGeneration(client, config.closeTimeoutMs, error => binding.diagnostic(error, 'cleanup'))
+  const abort = (): void => { void generation.close() }
+  spec.signal?.addEventListener('abort', abort, { once: true })
+  if (spec.signal?.aborted) abort()
+  let stage: McpProbeStage = 'connect'
+  let result: McpProbeSuccess | McpProbeFailure
   try {
-    await withProbeDeadline(client.connect(createTransport(config)), remaining())
+    const resolved = await generation.run(signal => binding.resolve(signal), remaining())
+    await generation.connect(resolved, remaining(), config.expandTemplates && config.transport === 'streamable-http'
+      ? (url, init) => generation.run(signal => binding.fetch(resolved, url, init, signal))
+      : undefined)
     const identity = client.getServerVersion()
     const serverInfo = identity === undefined ? undefined : { name: identity.name, version: identity.version }
     stage = 'list'
     const toolNames: string[] = []
     let truncated = false
     let cursor: string | undefined
-    for (let page = 0; page < PROBE_MAX_PAGES; page += 1) {
-      const result = await withProbeDeadline(
-        client.request(
-          { method: 'tools/list', ...cursor === undefined ? {} : { params: { cursor } } },
-          options.signal === undefined ? {} : { signal: options.signal },
-        ),
-        remaining(),
-      )
-      for (const tool of result.tools) {
-        if (toolNames.length >= PROBE_MAX_TOOL_NAMES) {
-          truncated = true
-          break
+    if (client.getServerCapabilities()?.tools !== undefined) {
+      for (let page = 0; page < spec.maxPages; page++) {
+        const response = await generation.run(signal => client.request(
+          { method: 'tools/list', ...cursor === undefined ? {} : { params: { cursor } } }, { signal },
+        ), remaining())
+        for (const tool of response.tools) {
+          if (toolNames.length >= spec.maxToolNames) { truncated = true; break }
+          toolNames.push(tool.name)
         }
-        toolNames.push(tool.name)
+        cursor = response.nextCursor
+        if (cursor === undefined || truncated) break
+        if (page === spec.maxPages - 1) truncated = true
       }
-      cursor = result.nextCursor
-      if (cursor === undefined || truncated) break
-      if (page === PROBE_MAX_PAGES - 1) truncated = true
     }
-    return {
-      ok: true,
-      ...serverInfo === undefined ? {} : { serverInfo },
-      toolNames,
-      truncated,
-      durationMs: Date.now() - startedAt,
-    }
+    result = { ok: true, ...serverInfo === undefined ? {} : { serverInfo }, toolNames, truncated, durationMs: Date.now() - startedAt }
   } catch (error) {
-    const message = aborted() ? 'probe aborted' : describeError(error)
-    return { ok: false, stage, message, durationMs: Date.now() - startedAt }
+    result = { ok: false, stage, message: spec.signal?.aborted ? 'probe aborted' : binding.diagnostic(error, stage), durationMs: Date.now() - startedAt }
   } finally {
-    signal?.removeEventListener('abort', onAbort)
-    try {
-      await client.close()
-    } catch {
-      // Transport already gone: a probe that failed to connect (or whose server
-      // vanished mid-listing) has nothing left to close.
-    }
+    spec.signal?.removeEventListener('abort', abort)
   }
+  return { ...result, ...await generation.close() }
 }

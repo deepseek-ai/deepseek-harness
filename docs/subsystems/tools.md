@@ -505,24 +505,21 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.mcpServers` — `McpServerManager`
 
-The manager service. Reconciliation, `restart`, and rotation-driven rebuilds are serialized on one operation tail, so two lifecycle operations can never interleave one instance's unmount/mount.
+The manager service. Configuration reconciliation and `restart` serialize instance replacement. Probes run independently and are cancelled before replacement or disposal waits for their cleanup.
 
 ```ts cordis-catalog
 /**
- * Every configured server with its durable intent, deletability, and
- * current runtime status. Read-only: listing never mounts, connects, or
- * probes anything.
- * @returns one view per configured entry, in document order.
+ * Read configured servers and retained runtime records without mounting or probing.
+ * @returns configured entries in document order, followed by retained records for removed entries.
  */
 list(): McpManagedServerView[]
 
 /**
  * Rebuild one server from its current configuration: dispose the live
- * instance (if any) and mount a fresh one. This is the manual recovery for
- * every terminal `failed` state — a fresh instance starts a fresh reconnect
- * budget — and the plain reconnect affordance while connected.
+ * instance (if any) and mount a fresh one with a fresh reconnect budget.
+ * Incomplete cleanup blocks replacement until the Host restarts.
  * @param name - the configured entry key.
- * @throws when no entry of that name is configured.
+ * @throws when the manager is disposed, no entry is configured, or cleanup is incomplete.
  */
 async restart(name: string): Promise<void>
 
@@ -530,10 +527,12 @@ async restart(name: string): Promise<void>
  * Probe one configured server without touching its live instance: resolve
  * the entry's templates, connect, list tools, close. A disabled entry can be
  * probed — that is how a management surface tests it before enabling.
+ * Configuration changes and manager disposal cancel the probe.
  * @param name - the configured entry key.
- * @param options - probe budget and abort signal.
- * @returns the stage-classified probe outcome.
- * @throws when no entry of that name is configured or its templates do not resolve.
+ * @param options - probe budget, listing caps, and abort signal.
+ * @returns the stage-classified probe outcome and independent cleanup result.
+ * @throws when the manager is disposed, the entry is absent or changing, cleanup is
+ * incomplete, options are invalid, or a required credentials provider is missing.
  */
 async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult>
 ```
@@ -646,15 +645,14 @@ Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index
 
 #### `mcp-manager/status` — emit
 
-One managed server's status transitioned. Emitted for every published change while the entry exists — connection-state transitions mirrored from the instance, `disabled` when the entry is configured off, and the manager-side `failed` reasons. Not emitted for an entry removed from configuration; observers learn removals from plugin configuration.
+One managed server's status transitioned. Emitted for every published change while the manager is live and either the entry is configured or a runtime record remains. Removed entries may emit cleanup failures; observers learn configuration removals from plugin configuration.
 
 ```ts cordis-catalog
 /**
  * One managed server's status transitioned. Emitted for every published
- * change while the entry exists — connection-state transitions mirrored
- * from the instance, `disabled` when the entry is configured off, and the
- * manager-side `failed` reasons. Not emitted for an entry removed from
- * configuration; observers learn removals from plugin configuration.
+ * change while the manager is live and either the entry is configured or
+ * a runtime record remains. Removed entries may emit cleanup failures;
+ * observers learn configuration removals from plugin configuration.
  * @param name - the `servers` entry key.
  * @param status - the status now current for that server.
  * @mode emit

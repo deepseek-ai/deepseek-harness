@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-mcp-manager` 管理一组实时 MCP 服务器：在其 profile 条目的 `config.servers` 中声明服务器（或通过 Settings 编辑），管理器为每个启用的条目挂载一个 `dsh-mcp-client` 实例，并随文档变化增加、重建、停用与移除实例，无需重启。`ctx.mcpServers` 汇总每台服务器的连接状态，`restart` 恢复重连预算耗尽的服务器，`probe` 在不触碰活动实例的情况下测试一份配置。`${env:NAME}` 与 `${credential:REF}` 模板让密钥不进入文档，轮换的凭据只重建引用它的服务器。
+`dsh-mcp-manager` 管理一组实时 MCP 服务器：在其 profile 条目的 `config.servers` 中声明服务器（或通过 Settings 编辑），管理器为每个启用的条目挂载一个 `dsh-mcp-client` 实例，并随文档变化增加、重建、停用与移除实例，无需重启。`ctx.mcpServers` 汇总每台服务器的连接状态，`restart` 恢复重连预算耗尽的服务器，`probe` 在不触碰活动实例的情况下测试一份配置。`${env:NAME}` 与 `${credential:REF}` 模板让密钥不进入文档；mcp-client 在各实例内部处理凭据轮换。
 
 ## 目录
 
@@ -69,7 +69,8 @@ profile 的 `cordis.patch.yml` 会替换条目的完整 `servers` 映射。需�
 | `command` / `args` / `env` / `cwd` | — | stdio：可执行文件、参数、附加子进程环境、工作目录 |
 | `url` / `headers` | — | streamable-http：端点 URL 与附加请求头 |
 | `enabled` | `true` | 持久意图：`false` 卸载实例但保留条目 |
-| `toolCallTimeoutMs` / `startupTimeoutMs` / `healthCheckIntervalMs` / `reconnect` | mcp-client 默认值 | 逐服务器覆盖，原样传给实例 |
+| `startupTimeoutMs` | `30,000` | 模板解析、协商、连接与初次工具发现的预算 |
+| `toolCallTimeoutMs` / `closeTimeoutMs` / `healthCheckIntervalMs` / `healthCheckTimeoutMs` / `reconnect` | mcp-client 默认值 | 逐服务器覆盖；健康检查默认关闭 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-mcp-manager)是每个可接受字段的详尽出处。
 
@@ -77,11 +78,13 @@ profile 的 `cordis.patch.yml` 会替换条目的完整 `servers` 映射。需�
 
 Settings 写入经 ConfigEditor 持久化并检查 revision；Loader 更新 volatile 配置，无需重新挂载管理器。每次提交的配置变更都会对账编队：新的启用条目挂载，被移除的条目卸载，`enabled: false` 卸载实例但保留条目在列表中，其余任何字段变化只重建那一个实例、未变的同级继续运行。通过 Settings 可以覆盖或停用继承的服务器；删除继承的服务器会恢复其基层配置。只有用户层新增的服务器才可移除。坏条目——缺 `command`、带跨传输字段、模板写错——在写入处被拒绝，因此文档绝不会存下管理器无法执行的服务器。
 
-`env` 值、`headers` 值、`command`、`args`、`cwd` 与 `url` 接受 `${env:NAME}` 与 `${credential:REF}` 模板，在实例挂载时解析，profile patch 因此无需保存密钥；存储值——包括模板串——对管理表面保持可读，必须隐藏的值应写成模板而不是存进文档。引用缺失会让那一台服务器失败，并给出指明修复方式的消息。存入或轮换被引用的凭据会重建使用它的服务器——包括那台因凭据当时还不存在而挂载失败的。
+`env` 值、`headers` 值、`command`、`args`、`cwd` 与 `url` 接受 `${env:NAME}` 和 `${credential:REF}` 模板。管理器将原始字符串传给 mcp-client 并启用模板展开；配置对管理界面保持可读，因此密钥值应保存在被引用的来源中。缺失值使实例进入 `waiting-credentials`；被引用凭据更新时重试解析，解析值变化时替换连接。环境变量使用宿主启动快照。提供方要求、HTTP 请求检查与替换顺序见[运行时模板与凭据](../mcp-client/README.zh.md#runtime-templates-and-credentials)。
 
 ### 观察与恢复
 
-`ctx.mcpServers.list()` 给管理界面每台已配置服务器一行：传输、持久意图、可删性与实时状态（`connecting`、带工具数的 `connected`、带尝试预算的 `reconnecting`、带原因与最近错误的 `failed`，或 `disabled`）。每次状态迁移同时发出 `mcp-manager/status` 事件。重连本身留在 mcp-client 内（500 毫秒到 30 秒退避、每次断线十次尝试）；`restart(name)` 是其外的手动恢复——全新实例带全新预算，也是不改配置时走出 `failed` 终态的唯一途径。`probe(name)` 连接、列工具、断开而不注册任何东西——即「测试该服务器」，对已停用条目同样可用。
+`ctx.mcpServers.list()` 返回各服务器的 `name`、`configured` 标记与实时 `status`。配置字段仍通过 Settings 读取。已从配置移除、但仍在清理或清理失败的条目继续列出，`configured: false`；清理失败时该行保留到宿主重启。清理状态保留首个诊断；任一实例或探测未确认关闭时，`closeConfirmed` 保持 `false`。管理器存活期间，已发布状态的变化会发出 `mcp-manager/status`，包括配置移除后的清理失败。
+
+重连留在 mcp-client 内。`restart(name)` 替换实例并重置重连预算，预算耗尽后同样适用。传输关闭未确认或本地清理出错时，会阻止该服务器的替换与后续探测；需要重启宿主恢复。`probe(name, options)` 解析模板、连接、读取服务器身份与工具名，再关闭，不注册工具或预留 namespace。已停用条目也可探测。探测有独立的截止时间与取消信号，并分别报告连接/列表查询成功与关闭、清理结果。
 
 -----
 
@@ -95,8 +98,8 @@ Settings 写入经 ConfigEditor 持久化并检查 revision；Loader 更新 vola
 
 ### 设计理念
 
-- **配置是唯一事实。** 管理器不自存服务器状态：每个决策都新读当前 volatile Config 值（schema 默认值 → 继承的 profile 配置 → 用户 patch），因此外部文件编辑与管理界面写入走同一条路。
-- **单条串行操作尾巴。** 对账、restart 与凭据重建排在一条链上，两个生命周期操作永远无法交错同一实例的卸载/挂载，销毁时先排干尾巴再收卷。
+- **配置决定服务器集合。** 当前 volatile Config 值（schema 默认值 → 继承的 profile 配置 → 用户 patch）决定已配置条目；运行时记录保留实例归属、活动探测与清理失败。外部文件编辑与管理界面写入走同一条路。
+- **单条串行操作队列。** 对账与 restart 排在一条链上，两个生命周期操作不能交错同一实例的卸载/挂载。探测独立运行；配置变化与销毁会先取消探测，再等待操作队列与所属资源的清理。
 - **整条目即身份。** 除 `enabled` 外任何字段变化都会重建实例——实例配置在 mcp-client 加载时被捕获，原地更新不存在。`enabled` 只切换是否挂载。
 - **扁平条目 schema，跨字段校验。** 写入期校验在写入处强制执行 union 本可表达的逐传输规则，拒绝时点名出错字段——union 的形状错误做不到这一点。
 - **连接处理留在 mcp-client。** 子实例是挂在管理器 fiber 下的普通插件实例：`serverName` 预留与静态组合实例正确互斥，收卷即注销工具，管理器经 `connectionStatusOf` 读取各实例状态而不重复监督。
@@ -106,13 +109,12 @@ Settings 写入经 ConfigEditor 持久化并检查 revision；Loader 更新 vola
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 服务本体：schema、校验、对账、restart、probe、状态注册表 |
-| [`src/templates.ts`](src/templates.ts) | `${env:…}` / `${credential:…}` 语法检查、解析与静态引用扫描 |
 | [`src/types.ts`](src/types.ts) | 状态联合、列表视图与 `mcp-manager/status` 事件声明 |
 | [`src/invariant.ts`](src/invariant.ts) | 不变量伴生：状态事件必须点名活管理器所列出的服务器 |
 
 ### 生命周期要点
 
-首次对账等待管理器自身 fiber 激活，因为服务从那一刻起才对依赖方可见，而状态事件断言管理器可达。挂载在模板解析后会把条目与当前配置复核一致，解析中途被删除的条目不会留下任何东西。状态发布对相等值吸收、对配置已不含的名字丢弃、销毁后彻底停止——被拆除实例的迟到连接回调不可能替一个已消失的管理器发事件。
+首次对账等待管理器自身 fiber 激活，因为服务从那一刻起才对依赖方可见，而状态事件断言管理器可达。子实例启动不占住配置队列。条目变化或移除时，在排队清理前停止转发子实例状态并取消其探测；替换等待探测与子实例都完成清理。相等的状态不重复发布。配置移除后仍可观察清理失败；销毁停止所有后续事件。
 
 </details>
 
@@ -150,7 +152,7 @@ Settings 写入经 ConfigEditor 持久化并检查 revision；Loader 更新 vola
 - **只治理全局面**——agent preset 或静态 `cordis.yml` 行挂载的实例既不被列出也不受治理；静态实例只在受管条目试图复用其名字时以 `serverName` 冲突现身。
 - **重建存在工具空窗**——变更的条目先销毁再重挂，其工具会从模型工具集消失直到新实例完成初次同步；没有旧代继续服务到换代完成的交接。
 - **模板只认两种来源**——仅 `${env:NAME}` 与 `${credential:REF}`；没有默认值语法，也没有其他来源。
-- **探测输出有上限**——一次探测最多跟进 16 页列表、最多返回 512 个工具名，超出即报告截断。
+- **探测输出有上限**——探测默认最多跟进 16 页列表、返回 512 个工具名，超出即报告截断；调用方可设置 `maxPages` 与 `maxToolNames`。
 
 <a id="dev-note"></a>
 ### 开发备注

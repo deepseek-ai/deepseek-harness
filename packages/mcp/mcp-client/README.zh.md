@@ -59,8 +59,11 @@ kind: "package-reference"
 | `command` / `args` / `env` / `cwd` | — | stdio：可执行文件、参数、合并到清洗过的环境之上的额外环境变量、工作目录 |
 | `url` / `headers` | — | streamable-http：端点 URL 与额外请求标头 |
 | `toolCallTimeoutMs` | `60,000` | 每次 `tools/call` 或资源请求的超时 |
-| `startupTimeoutMs` | `30,000` | 单次连接尝试的预算——协商与连接加初次工具同步 |
-| `healthCheckIntervalMs` | `30,000` | 已建立连接上两次健康检查的间隔：旧协议用 `ping`，现代协议用 `discover`（同时是每次检查的应答预算） |
+| `startupTimeoutMs` | 未设置 | 模板解析、协商、连接及初次工具同步的可选预算 |
+| `closeTimeoutMs` | `5,000` | 传输关闭与待处理本地工作完全结算的预算 |
+| `healthCheckIntervalMs` | `0` | 旧版 `ping` 或现代 `discover` 健康检查的间隔；`0` 禁用检查 |
+| `healthCheckTimeoutMs` | `10,000` | 每次已启用健康检查的应答预算 |
+| `expandTemplates` | `false` | 在运行时解析传输字符串中的 `${env:NAME}` 与 `${credential:REF}` |
 | `maxInstructionBytes` | `32,768` | 包括服务器归属信息在内的服务器指令 UTF-8 字节上限；超出时连接失败 |
 | `failOnStartupError` | `false` | 初始连接或工具同步失败时拒绝插件激活 |
 | `reconnect.enabled` | `true` | 连接丢失后自动重新连接 |
@@ -90,9 +93,16 @@ kind: "package-reference"
 
 ### 启动、工具更新与重连
 
-服务器的工具会在 harness 开始首个轮次之前出现。每次连接尝试——首次连接与每次重连——都受 `startupTimeoutMs`（默认 30 秒）约束，覆盖连接加初次工具发现，因此无响应的服务器无法拖住启动。已建立的连接每 `healthCheckIntervalMs`（默认 30 秒）执行一次健康检查：stdio 服务器死亡会自行关闭传输，而 Streamable HTTP 在两次请求之间没有连接，失败或超时的检查 正是把悄然死亡的服务器送入重连路径的信号。服务器更改工具列表时，模型的工具集会自动更新；更新失败时，上一组工具继续可用。
+服务器的工具会在 harness 开始首个轮次之前出现。设置 `startupTimeoutMs` 可约束每次连接尝试，包括模板解析与初次工具发现；省略时不添加覆盖整次尝试的截止时间。健康检查默认关闭。设置 `healthCheckIntervalMs` 可启用旧版 `ping` 或现代 `discover` 检查；`healthCheckTimeoutMs` 独立约束每次应答。检查失败或超时会进入重连路径，包括没有传输关闭信号、已悄然停止响应的 Streamable HTTP 服务器。工具列表通知会刷新已注册工具；发现失败保留上一组工具，注册冲突则关闭连接并按重连策略处理。
 
 服务器连接断开时——例如本地服务器进程崩溃——插件会以从 500 ms 起逐次翻倍、上限 30 s 的延迟自动重连，并刷新工具集；重连进度在日志中可见。中断期间最后已知的工具仍会列出，但对它们的调用会失败，直到服务器恢复。连续失败十次后，该服务器的工具会被移除，重连停止，直到你重载配置或重启 harness；服务器持续连接一段时间后，该计数会重置。设置 `reconnect.enabled: false` 可禁用自动重连——此时工具在断开后仍会列出，但调用失败，直到你重载。编辑配置项会在原地重载服务器连接，未变的名称保持不变。
+
+<a id="runtime-templates-and-credentials"></a>
+### 运行时模板与凭据
+
+启用 `expandTemplates: true` 后，`command`、`args`、`env` 值、`cwd`、`url` 与 `headers` 值接受 `${env:NAME}` 和 `${credential:REF}`。环境变量来自宿主启动快照；凭据值来自当前凭据提供方。原始插件配置保留模板字符串。使用凭据引用时，加载阶段必须存在凭据提供方。缺失值会进入 `waiting-credentials`，不消耗重连次数，严格启动拒绝激活的情况除外；被引用凭据更新时会重试解析。更改启动环境变量需要重启宿主。
+
+凭据通知只有在解析值变化时才重建连接；值相同的通知保留连接及其重连预算。替代连接启动前，旧连接必须关闭并完成本地清理。Streamable HTTP 在每次请求前重新解析模板，拒绝在旧会话中发送已变更的凭据。清理未完成会阻止替换，直到宿主重启。
 
 -----
 
@@ -118,10 +128,13 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`serverName` 预留、激活等待 |
 | [`src/connection.ts`](src/connection.ts) | 连接监督器：客户端世代、重连策略、尝试预算、dispose（资源释放） |
+| [`src/generation.ts`](src/generation.ts) | 传输归属、取消、待处理工作与关闭确认 |
+| [`src/credentials.ts`](src/credentials.ts) | 运行时模板绑定与 HTTP 请求前的凭据检查 |
+| [`src/templates.ts`](src/templates.ts) | 模板语法、来源解析与凭据引用发现 |
 | [`src/server-context.ts`](src/server-context.ts) | 资源提供方注册与字面服务器指令 |
 | [`src/tools.ts`](src/tools.ts) | 工具桥接：发现、命名、注册交换、执行、图片投影 |
 | [`src/transport.ts`](src/transport.ts) | 传输工厂：带清洗环境的 stdio spawn、Streamable HTTP |
-| [`src/status.ts`](src/status.ts) | 状态面：每实例状态单元与按作用域的查询 |
+| [`src/status.ts`](src/status.ts) | 以 Fiber 为键的状态单元，保留最终清理结果 |
 | [`src/probe.ts`](src/probe.ts) | 一次性探测：连接、取身份、列工具、关闭——不注册任何东西 |
 | [`src/deadline.ts`](src/deadline.ts) | 启动与探测预算共用的结算截止器 |
 | — | 不发布运行时不变式伴生入口；MCP 世代会通过工具注册表发挥作用，但桥接在异步重新同步后不提供独立的服务器工具映射快照。 |
@@ -132,9 +145,11 @@ kind: "package-reference"
 
 `apply` 解析重连策略、在当前注册作用域内预留 `serverName`、启动监督器，并等待初始连接加发现完成。独立 agent（智能体）作用域可以复用相同 namespace，因为其工具与传输彼此隔离；同一作用域内重复会在加载时失败。监督器把所有同步——初始、通知与重连——串行到同一条队列，因此两次同步绝不会交错执行各自的先 dispose 后注册交换。dispose 会取消待执行的重连、关闭协商中的传输或已绑定的客户端、等待进行中的尝试与排队同步完全停稳，然后注销当前世代。
 
-组合实例的管理器（如 `dsh-mcp-manager`）通过 `connectionStatusOf(ctx, serverName)` 观察单个实例：这是对监督器状态单元（`connecting`、`connected`、`reconnecting`、`failed`）的读取加订阅句柄，随 `serverName` 预留一起注册与释放。`probeServer(config)` 回答配置界面的「测试该服务器」，既不预留名字也不触碰 `ctx.tools`。
+组合实例的管理器（如 `dsh-mcp-manager`）通过 `connectionStatusOf(fiber)` 观察单个实例。同一 Fiber 重载后句柄保持不变，dispose 后仍保留最终连接与清理结果；最终 dispose 会移除观察者。状态观察者可以在重载时销毁 Fiber；清理仍覆盖该轮连接尝试。`probeServer(ctx, config, options)` 测试服务器，不预留名称或注册工具。其 `timeoutMs` 共同约束模板解析、连接与列表查询，独立于运行时的 `startupTimeoutMs`；清理使用 `closeTimeoutMs`，并单独报告 `closeConfirmed`。传输关闭已确认时仍可能存在 `cleanupError`；关闭未确认或清理失败都会阻止替换。
 
-SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器将每次重新同步排队并重新发布已连接的工具数；获取失败时保留之前的注册代，注册冲突则回滚本次尝试。每次故障共享一个尝试预算：连续失败达到 `maxAttempts` 后注销工具并停止重连；连接持续超过 `maxDelayMs` 则重置预算。
+SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器将每次重新同步排队并重新发布已连接的工具数；获取失败时保留之前的注册代，注册冲突则回滚本次尝试并关闭连接，再按重连策略处理。每次故障共享一个尝试预算：连续失败达到 `maxAttempts` 后注销工具并停止重连；连接持续超过 `maxDelayMs` 则重置预算。
+
+启用 `expandTemplates` 时，失败诊断保留操作名称、已知传输或 SDK 错误码，以及本地产生的失败原因。上游消息与原因链可能包含展开后的凭据，因此不输出原文。未启用模板展开的配置保留完整错误诊断。
 
 ### 工具执行内部细节
 
@@ -214,8 +229,8 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 这些限制说明你无法用本插件做什么、以及何时需要运维注意。它们是当前包约束，不是与其他 MCP 客户端的对比，也不是任务积压。
 
 - **资源按需读取**——随附 profile 提供[共享资源服务](../mcp-resources/README.zh.md)；资源订阅与 MCP 提示词模板不受支持。
-- **只有启动尝试受预算约束**——`startupTimeoutMs` 覆盖每次连接尝试（协商、连接与初次工具同步）；通知驱动的重同步发出的 `tools/list` 请求仍使用 MCP SDK 的 60 秒请求默认值及其页数上限。插件卸载先关闭传输以中断待处理的启动请求，再等待清理。
-- **重连处理协商失败、传输关闭与健康检查失败**——初始探测失败、stdio 子进程崩溃或不再应答健康检查 的 Streamable HTTP 服务器都会使用配置的重连预算。HTTP 建立连接后，请求失败使用 SDK 传输的恢复机制，而非重新创建连接。
+- **整次启动尝试的预算需主动配置**——设置 `startupTimeoutMs` 后，它覆盖模板解析、协商、连接与初次工具同步。通知驱动的重同步发出的 `tools/list` 请求使用 MCP SDK 的 60 秒请求默认值及其页数上限。插件卸载先关闭传输以中断待处理的启动请求，再等待清理。
+- **重连处理协商失败、传输关闭与健康检查失败**——初始探测失败、stdio 子进程崩溃或不再应答已启用健康检查的 Streamable HTTP 服务器都会使用配置的重连预算。普通 HTTP 请求失败使用 SDK 传输的恢复机制；凭据变化则替换连接。
 - **图片是唯一的持久丰富结果桥接**——PNG、JPEG、WebP 与 GIF 在确切能力得到证明后进入 Native 上下文。音频与嵌入资源载荷仍只存在于执行局部并带明确诊断，资源链接只以文本保留名称与 URI。
 - **无效的协议结果或输出 schema 由 SDK 拒绝**——桥接器不接受旧式 `toolResult` 替代结果，也不绕过已声明的 schema 校验。
 - **要求基于任务的 MCP 工具在调用时被拒绝**——要求使用基于任务的执行（task-based execution）扩展的工具会抛出异常而非被桥接；该扩展未实现。
@@ -229,8 +244,7 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 本开发备注是维护者的工作上下文：开放设计问题与尚未决定的探索方向。它明确不具权威性——已交付行为、限制与既定理由以上文、包代码与所链接的 Agent Note 为准。
 
 - 公开名称算法是由测试固定的 v1 约定；发布后更改会破坏会话历史与权限规则。
-- 由 DSH 拥有的通知驱动重同步预算是开放的探索方向；`startupTimeoutMs` 约束启动尝试，SDK 的 60 秒默认值约束重同步请求。
-- Streamable HTTP 的重连归属仍未决定：按请求重试是 SDK 行为，supervisor 也可以拥有 HTTP 世代。
+- 由 DSH 拥有的通知驱动重同步预算是开放的探索方向；配置后的 `startupTimeoutMs` 约束启动尝试，SDK 的 60 秒默认值约束重同步请求。
 - MCP 提示词模板需要独立的用户选择和模板调用机制。
 - 固定的 MCP SDK 仍在演化；上游破坏性变更需要更新桥接。
 

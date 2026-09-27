@@ -23,14 +23,24 @@ import type { ToolDefinition, ToolExecution, ToolExecutionResult } from '@deepse
 import { assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonSchemaNode } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { McpLocalError } from './diagnostic.ts'
 
 /** Resolved options relevant to tool bridging. */
 export interface ToolBridgeOptions {
-  /** Whether a registry conflict is contained or rejects this synchronization. */
-  registrationFailure: 'contain' | 'throw'
   serverName: string
   toolCallTimeoutMs: number
+  /** Generation cancellation combined with each tool execution's signal. */
+  signal: AbortSignal
+  /**
+   * Format tool-call failures before they reach callers.
+   * @param error - caught transport or protocol failure.
+   * @returns the error safe to expose for this instance's configuration.
+   */
+  error?: (error: unknown) => Error
 }
+
+/** Registration failed after the prior generation was removed and partial registrations were rolled back. */
+export class McpToolRegistrationError extends McpLocalError {}
 
 /** State for one sync generation: the current set of disposers keyed by public name. */
 export type ToolDisposers = Map<string, () => void>
@@ -98,13 +108,12 @@ export function publicToolName(serverName: string, rawName: string): string {
  * 2. Swap: dispose the previous generation, register the new one. A registry
  *    conflict here can only mean a foreign registration squats on this
  *    server's `mcp__<serverName>__` namespace — the partial generation is
- *    rolled back (zero tools from this server) and logged. Initial strict
- *    synchronization may propagate the conflict so its parent transaction
- *    rejects; ordinary clients and later re-syncs return an empty map.
+ *    rolled back (zero tools from this server), logged, and rejected so the
+ *    supervisor closes the failed connection generation.
  *
  * @param client - Connected MCP Client instance used to list and call tools.
  * @param ctx - Cordis context providing the `tools` service for registration.
- * @param opts - Bridge options: server namespace and per-call timeout.
+ * @param opts - server namespace, call timeout, generation signal, and optional error formatter.
  * @param previous - Disposer map from the prior sync generation; disposed
  *   during the swap phase (only after the fetch phase succeeded).
  * @param eligible - Judged again at the commit point, after the listing
@@ -125,7 +134,7 @@ export async function syncTools(
   const definitions = new Map<string, ToolDefinition>()
   const response = client.getServerCapabilities()?.tools === undefined
     ? { tools: [] }
-    : await client.listTools(undefined, { cacheMode: 'refresh' })
+    : await client.listTools(undefined, { cacheMode: 'refresh', signal: opts.signal })
   for (const tool of response.tools) {
     const publicName = publicToolName(opts.serverName, tool.name)
     if (definitions.has(publicName)) {
@@ -140,10 +149,17 @@ export async function syncTools(
       inputSchema: tool.inputSchema,
       outputSchema: tool.outputSchema,
       taskRequired: tool.execution?.taskSupport === 'required',
-      call: (args, execution) => client.callTool(
-        { name: tool.name, arguments: args },
-        { signal: execution.signal, timeout: opts.toolCallTimeoutMs, toolDefinition: tool },
-      ),
+      call: async (args, execution) => {
+        try {
+          return await client.callTool(
+            { name: tool.name, arguments: args },
+            { signal: AbortSignal.any([execution.signal, opts.signal]),
+              timeout: opts.toolCallTimeoutMs, toolDefinition: tool },
+          )
+        } catch (error) {
+          throw opts.error?.(error) ?? error
+        }
+      },
     }))
   }
 
@@ -162,9 +178,9 @@ export async function syncTools(
     // registration occupies this server's namespace. Roll back so the model
     // sees either the full generation or none of it — never a partial set.
     for (const dispose of disposers.values()) dispose()
-    ctx.logger.error(`mcp-client(${opts.serverName}): tool registration failed, no tools registered: ${String(error)}`)
-    if (opts.registrationFailure === 'throw') throw error
-    return new Map()
+    const failure = opts.error?.(error) ?? error
+    ctx.logger.error(`mcp-client(${opts.serverName}): tool registration failed, no tools registered: ${String(failure)}`)
+    throw new McpToolRegistrationError('MCP tool registration failed', { cause: failure })
   }
   return disposers
 }

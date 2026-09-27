@@ -1,14 +1,16 @@
 /**
- * `${env:NAME}` / `${credential:REF}` templates in managed-server strings.
- * Validation runs synchronously at the settings write so a malformed token is
- * refused where it is typed; resolution runs at instance mount so the
- * configuration document never carries a secret value and a rotated
- * credential reaches the next mounted instance.
+ * `${env:NAME}` / `${credential:REF}` syntax and substitution for MCP transport
+ * strings. Managers validate syntax at configuration writes; the client
+ * resolves values at runtime without changing the stored configuration.
  *
  * @module
  */
 
-/** One well-formed template token. */
+import { McpLocalError } from './diagnostic.ts'
+
+/** A named template source has no configured value. */
+export class MissingTemplateValue extends McpLocalError {}
+
 const TOKEN = /\$\{(env|credential):([A-Za-z_][A-Za-z0-9_]*)\}/g
 
 /** Any `${…}` occurrence, well-formed or not, for fail-loud validation. */
@@ -28,12 +30,6 @@ export interface TemplateSources {
    * @returns the secret value, or `undefined` while unconfigured.
    */
   credential(ref: string): Promise<string | undefined>
-}
-
-/** A resolved string plus the credential references its templates named. */
-export interface ResolvedTemplateString {
-  value: string
-  credentialRefs: string[]
 }
 
 /**
@@ -78,15 +74,14 @@ export function assertTemplateSyntax(value: string, where: string): void {
  * @param value - the configured string.
  * @param where - configuration path used in thrown messages.
  * @param sources - environment and credential lookups.
- * @returns the substituted string and the credential references it used.
+ * @returns the substituted string.
  * @throws when a named environment variable is unset or a named credential is unconfigured.
  */
 export async function resolveTemplateString(
   value: string,
   where: string,
   sources: TemplateSources,
-): Promise<ResolvedTemplateString> {
-  const credentialRefs: string[] = []
+): Promise<string> {
   let out = ''
   let cursor = 0
   TOKEN.lastIndex = 0
@@ -98,19 +93,18 @@ export async function resolveTemplateString(
     if (scheme === 'env') {
       const resolved = sources.env(name)
       if (resolved === undefined) {
-        throw new Error(`${where}: environment variable "${name}" is not set — export it or remove the \${env:${name}} template`)
+        throw new MissingTemplateValue(`${where}: environment variable "${name}" is not set — export it or remove the \${env:${name}} template`)
       }
       out += resolved
     } else {
       const resolved = await sources.credential(name)
       if (resolved === undefined) {
-        throw new Error(`${where}: credential "${name}" is not configured — store it through the credential seam or remove the \${credential:${name}} template`)
+        throw new MissingTemplateValue(`${where}: credential "${name}" is not configured — store it through the credential seam or remove the \${credential:${name}} template`)
       }
-      credentialRefs.push(name)
       out += resolved
     }
     cursor = token.index + matched.length
   }
   out += value.slice(cursor)
-  return { value: out, credentialRefs }
+  return out
 }

@@ -1,19 +1,25 @@
+import type { Fiber } from '@deepseek-ai/cordis'
+
 /**
- * Connection-status surface for one mcp-client instance: a typed status cell
- * the supervisor writes and a per-registration-scope lookup that managers
- * (such as `dsh-mcp-manager`) read without owning the plugin instance.
- *
- * Lookup is keyed by the same registration-scope owner as the `serverName`
- * reservation, so a caller sharing the instance's scope resolves exactly its
- * own instances and an Agent-scoped instance never leaks into the global
- * plane. Cells register and release inside the reservation effect; after
- * plugin disposal the lookup returns `undefined`.
+ * Connection status and cleanup results keyed by the owning Cordis Fiber.
+ * The cell survives reloads of that Fiber and remains readable after final
+ * disposal, which detaches existing observers.
  *
  * @module
  */
 
-/** Runtime status of one supervised MCP server connection. */
+/** Transport closure and local cleanup are reported independently. */
+export interface McpCloseResult {
+  /** Transport closure is confirmed, or no transport was created; unfinished negotiation remains unconfirmed. */
+  closeConfirmed: boolean
+  /** Cleanup failed or exceeded its budget, including after confirmed transport closure. */
+  cleanupError?: string
+}
+
+/** Runtime state of one MCP instance and its current connection generation. */
 export type McpConnectionStatus =
+  | { state: 'closed'; result: McpCloseResult }
+  | { state: 'waiting-credentials'; lastError: string }
   | {
     /** A connection attempt is in flight. */
     state: 'connecting'
@@ -42,11 +48,11 @@ export type McpConnectionStatus =
   }
   | {
     /**
-     * Terminal until disposal: the supervisor stopped on its own. `gave-up`
+     * The supervisor stopped automatic attempts. `gave-up`
      * exhausted the per-outage attempt budget and unregistered the tools;
      * `reconnect-disabled` lost (or never made) the connection with reconnect
-     * off; `unclosed-generation` stopped because a failed generation did not
-     * close and reconnecting could overlap server processes.
+     * off; `unclosed-generation` blocks replacement because transport closure
+     * or local cleanup is incomplete.
      */
     state: 'failed'
     /** Which supervisor stop produced this terminal state. */
@@ -63,6 +69,11 @@ export interface McpConnectionStatusHandle {
    */
   current(): McpConnectionStatus
   /**
+   * The latest generation's cleanup result, independent of connection status.
+   * @returns unconfirmed while a generation is open, or its recorded cleanup result.
+   */
+  closure(): McpCloseResult
+  /**
    * Observe status transitions. Callbacks run synchronously in publish order;
    * a throwing callback is contained and logged without affecting the
    * supervisor or other callbacks.
@@ -72,9 +83,24 @@ export interface McpConnectionStatusHandle {
   onChange(callback: (status: McpConnectionStatus) => void | Promise<void>): () => void
 }
 
-/** Writable status cell owned by one plugin instance's supervisor. */
+/** Writable status cell retained across supervisors on the same Fiber. */
 export class McpStatusCell implements McpConnectionStatusHandle {
   private value: McpConnectionStatus = { state: 'connecting', attempt: 0 }
+  private closeResult: McpCloseResult = { closeConfirmed: true }
+
+  closure(): McpCloseResult { return this.closeResult }
+
+  /** Mark the next generation's closure as unconfirmed. */
+  opened(): void { this.closeResult = { closeConfirmed: false } }
+
+  /**
+   * Record cleanup without publishing a connection-status transition.
+   * @param result - independently observed transport and local cleanup outcome.
+   */
+  recordClosure(result: McpCloseResult): void { this.closeResult = result }
+
+  /** Remove existing observers without discarding the readable status or cleanup result. */
+  detach(): void { this.listeners.clear() }
   // Stored with an unknown return: dispatch inspects the returned value for
   // a promise to contain, which a void-typed call expression cannot express.
   private readonly listeners = new Set<(status: McpConnectionStatus) => unknown>()
@@ -82,7 +108,13 @@ export class McpStatusCell implements McpConnectionStatusHandle {
   /**
    * @param warn - contained-listener diagnostic sink (the owning plugin's logger).
    */
-  constructor(private readonly warn: (message: string, error: unknown) => void) {}
+  constructor(private warn: (message: string, error: unknown) => void) {}
+
+  /**
+   * Associate observer diagnostics with the Fiber's current supervisor.
+   * @param warn - contained-listener diagnostic sink.
+   */
+  setWarningSink(warn: (message: string, error: unknown) => void): void { this.warn = warn }
 
   /**
    * The current status.
@@ -126,33 +158,28 @@ export class McpStatusCell implements McpConnectionStatusHandle {
   }
 }
 
-/** Live status cells per registration-scope owner, keyed by `serverName`. */
-const cellsByOwner = new WeakMap<object, Map<string, McpStatusCell>>()
+const cellsByFiber = new WeakMap<Fiber, McpStatusCell>()
 
 /**
- * File one instance's status cell under its registration-scope owner.
- * @param owner - the scope owner also holding the `serverName` reservation.
- * @param serverName - the instance's namespace, unique within `owner` by reservation.
- * @param cell - the supervisor-owned cell to expose.
- * @returns the disposer removing the cell from the lookup.
+ * Create or reuse a Fiber's status cell without discarding prior cleanup results.
+ * @param fiber - the actual plugin Fiber owning the supervisor.
+ * @param warn - diagnostic sink for observer failures.
+ * @returns the stable writable cell for this Fiber.
  */
-export function registerStatusCell(owner: object, serverName: string, cell: McpStatusCell): () => void {
-  let cells = cellsByOwner.get(owner)
-  if (cells === undefined) {
-    cells = new Map()
-    cellsByOwner.set(owner, cells)
-  }
-  cells.set(serverName, cell)
-  return () => void cellsByOwner.get(owner)?.delete(serverName)
+export function registerStatusCell(fiber: Fiber, warn: (message: string, error: unknown) => void): McpStatusCell {
+  let cell = cellsByFiber.get(fiber)
+  if (cell === undefined) {
+    cell = new McpStatusCell(warn)
+    cellsByFiber.set(fiber, cell)
+  } else cell.setWarningSink(warn)
+  return cell
 }
 
 /**
- * The status handle of the live mcp-client instance named `serverName` inside
- * one registration scope, or `undefined` while no such instance is live.
- * @param owner - the registration-scope owner (`scopeOf(ctx) ?? ctx.root` of the reading context).
- * @param serverName - the instance's configured namespace.
- * @returns the read-and-observe handle, or `undefined` when the name has no live instance.
+ * Look up status through an actual Fiber or the handle returned by `ctx.plugin()`.
+ * @param fiber - plugin Fiber or its thenable handle.
+ * @returns the retained cell, or `undefined` before the MCP instance registers one.
  */
-export function connectionStatusIn(owner: object, serverName: string): McpConnectionStatusHandle | undefined {
-  return cellsByOwner.get(owner)?.get(serverName)
+export function connectionStatusIn(fiber: Fiber): McpConnectionStatusHandle | undefined {
+  return cellsByFiber.get(fiber.ctx.fiber)
 }
