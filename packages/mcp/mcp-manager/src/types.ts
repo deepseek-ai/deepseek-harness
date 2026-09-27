@@ -37,10 +37,12 @@ declare module '@deepseek-ai/cordis' {
      * change while the manager is live and either the entry is configured or
      * a runtime record remains. Removed entries may emit cleanup failures;
      * observers learn configuration removals from plugin configuration.
+     * Lifecycle operations do not wait for listeners. Synchronous throws and
+     * returned promise rejections are logged without skipping other listeners.
      * @param name - the `servers` entry key.
      * @param status - the status now current for that server.
-     * @mode emit
+     * @mode parallel
      */
-    'mcp-manager/status'(name: string, status: McpManagedServerStatus): void
+    'mcp-manager/status'(name: string, status: McpManagedServerStatus): void | Promise<void>
   }
 }

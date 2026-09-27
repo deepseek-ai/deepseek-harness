@@ -4135,10 +4135,10 @@ export const EVENT_API: readonly EventApiEntry[] = [
   },
   {
     name: 'mcp-manager/status',
-    mode: 'emit',
-    signature: '\'mcp-manager/status\'(name: string, status: McpManagedServerStatus): void',
+    mode: 'parallel',
+    signature: '\'mcp-manager/status\'(name: string, status: McpManagedServerStatus): void | Promise<void>',
     summary: 'One managed server\'s status transitioned.',
-    description: 'One managed server\'s status transitioned. Emitted for every published change while the manager is live and either the entry is configured or a runtime record remains. Removed entries may emit cleanup failures; observers learn configuration removals from plugin configuration.',
+    description: 'One managed server\'s status transitioned. Emitted for every published change while the manager is live and either the entry is configured or a runtime record remains. Removed entries may emit cleanup failures; observers learn configuration removals from plugin configuration. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.',
     parameters: [{ name: 'name', description: 'the `servers` entry key.' }, { name: 'status', description: 'the status now current for that server.' }],
   },
   {

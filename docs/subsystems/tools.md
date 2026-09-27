@@ -641,11 +641,11 @@ Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index
 
 ### `mcp-manager/*` events
 
-<a id="mcp-managerstatus--emit"></a>
+<a id="mcp-managerstatus--parallel"></a>
 
-#### `mcp-manager/status` — emit
+#### `mcp-manager/status` — parallel
 
-One managed server's status transitioned. Emitted for every published change while the manager is live and either the entry is configured or a runtime record remains. Removed entries may emit cleanup failures; observers learn configuration removals from plugin configuration.
+One managed server's status transitioned. Emitted for every published change while the manager is live and either the entry is configured or a runtime record remains. Removed entries may emit cleanup failures; observers learn configuration removals from plugin configuration. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.
 
 ```ts cordis-catalog
 /**
@@ -653,11 +653,13 @@ One managed server's status transitioned. Emitted for every published change whi
  * change while the manager is live and either the entry is configured or
  * a runtime record remains. Removed entries may emit cleanup failures;
  * observers learn configuration removals from plugin configuration.
+ * Lifecycle operations do not wait for listeners. Synchronous throws and
+ * returned promise rejections are logged without skipping other listeners.
  * @param name - the `servers` entry key.
  * @param status - the status now current for that server.
- * @mode emit
+ * @mode parallel
  */
-'mcp-manager/status'(name: string, status: McpManagedServerStatus): void
+'mcp-manager/status'(name: string, status: McpManagedServerStatus): void | Promise<void>
 ```
 
 Source: [`packages/mcp/mcp-manager/src/types.ts`](../../packages/mcp/mcp-manager/src/types.ts)

@@ -934,19 +934,28 @@ describe('mcp-manager', () => {
     }
   })
 
-  it('contains a throwing status listener so the lifecycle operation completes', async () => {
+  it.each(['throws', 'rejects'] as const)('notifies later status listeners and completes the lifecycle when a listener %s', async (failureMode) => {
     const { ctx, manager, settings } = await mountWorld({
       settingsDoc: { mcp: { servers: { srv: stdioEntry() } } },
     })
     await waitForState(manager, 'srv', 'connected')
-    const errors: string[] = []
-    ctx.logger.error = ((message: unknown) => { errors.push(String(message)) }) as typeof ctx.logger.error
+    const failure = new Error('listener bomb')
+    const logError = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    onTestFinished(() => { logError.mockRestore() })
     ctx.on('mcp-manager/status', () => {
-      throw new Error('listener bomb')
+      if (failureMode === 'throws') throw failure
+      return Promise.reject(failure)
     })
+    const laterEvents: Array<{ name: string; status: McpManagedServerStatus }> = []
+    ctx.on('mcp-manager/status', (name, status) => { laterEvents.push({ name, status }) })
     await settings!.update('mcp', { servers: { srv: { enabled: false } } })
     await waitForState(manager, 'srv', 'disabled')
-    expect(errors.some(line => line.includes('mcp-manager/status listener failed'))).toBe(true)
+    expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined()
+    expect(laterEvents).toContainEqual({ name: 'srv', status: { state: 'disabled' } })
+    await vi.waitFor(() => {
+      expect(logError).toHaveBeenCalledWith('mcp-manager: a mcp-manager/status listener failed for "srv"')
+      expect(logError).toHaveBeenCalledWith(expect.objectContaining({ errors: [failure] }))
+    })
   })
 
   it('unwinds every instance and its tools when the manager is disposed, then refuses operations', async () => {
