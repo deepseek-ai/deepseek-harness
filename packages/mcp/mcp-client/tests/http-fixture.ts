@@ -13,8 +13,8 @@ export interface HttpMcpFixture {
   close: () => Promise<void>
 }
 
-/** Start a local stateless MCP endpoint exposing one `ping` tool. */
-export async function startHttpMcpFixture(): Promise<HttpMcpFixture> {
+/** Start a local stateless MCP endpoint exposing one `ping` tool, optionally echoing the request credential in a transport error. */
+export async function startHttpMcpFixture(options: { rejectToolCalls?: boolean } = {}): Promise<HttpMcpFixture> {
   const calls: string[] = []
   const authorization: Array<string | undefined> = []
   const handler = createMcpHandler(() => {
@@ -28,7 +28,18 @@ export async function startHttpMcpFixture(): Promise<HttpMcpFixture> {
     })
     return mcp
   })
-  const handle = toNodeHandler(handler)
+  const handle = toNodeHandler({
+    async fetch(request, context) {
+      if (options.rejectToolCalls && request.method === 'POST') {
+        const body: unknown = await request.clone().json()
+        if (body !== null && typeof body === 'object' && 'method' in body && body.method === 'tools/call') {
+          calls.push('ping')
+          return new Response(`MCP fixture rejected ${request.headers.get('authorization')}`, { status: 500 })
+        }
+      }
+      return handler.fetch(request, context)
+    },
+  })
   const handleRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     authorization.push(request.headers.authorization)
     // The adapter excludes explicit undefined on Node's optional HTTP fields.
