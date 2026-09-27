@@ -59,6 +59,7 @@ export type {
 export { projectUserText, type UserTextReferences } from './user-text.tsx'
 export { Tooltip } from './Tooltip.tsx'
 export type { TooltipSide } from './Tooltip.tsx'
+export { pointerModality } from './input-modality.ts'
 export { Toast } from './Toast.tsx'
 export { fileSizeText } from './file-size.ts'
 export { writeClipboard } from './clipboard.ts'

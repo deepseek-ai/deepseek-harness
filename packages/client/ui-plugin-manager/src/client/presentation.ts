@@ -143,6 +143,7 @@ export function noticeText(notice: ManagerNotice, t: Translate): string {
     case 'restart': return t('restartNotice')
     case 'overridden': return t('overriddenNotice', { name: notice.packageName })
     case 'cancelled': return t('installCancelled')
+    case 'refresh-failed': return t('refreshError')
     case 'install': return t(({
       done: 'installBackgroundDone', failed: 'installBackgroundFailed',
       unconfirmed: 'installBackgroundUnconfirmed', applying: 'installBackgroundApplying', unknown: 'installBackgroundUnknown',

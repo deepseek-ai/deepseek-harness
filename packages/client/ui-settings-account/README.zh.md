@@ -7,6 +7,8 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
+桌面端产品事件使用可选的[产品埋点服务](../product-analytics/README.zh.md)，不包含普通 Web 交互。工作区内的登录弹窗不发送认证事件；认证埋点由原生欢迎页负责。
+
 账号凭据被服务端判定失效后，清空显示的账号详情，并弹出一次本地化的重新登录提示 toast；账号快照重放不会重复提示。
 
 ## 概述

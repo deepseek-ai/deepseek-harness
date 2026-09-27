@@ -1,0 +1,109 @@
+[
+  {
+    "model": "smoke-model",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Run three todo updates; the scheduler will reject the second call."
+          },
+          {
+            "type": "text",
+            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically \u2014 do not request sandbox escalation (do not set `sandbox_permissions`)."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "smoke-model",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Run three todo updates; the scheduler will reject the second call."
+          },
+          {
+            "type": "text",
+            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically \u2014 do not request sandbox escalation (do not set `sandbox_permissions`)."
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "scheduler-complete",
+            "name": "todo_write",
+            "input": {
+              "todos": []
+            }
+          },
+          {
+            "type": "tool_use",
+            "id": "scheduler-fail",
+            "name": "todo_write",
+            "input": {
+              "todos": []
+            }
+          },
+          {
+            "type": "tool_use",
+            "id": "scheduler-unstarted",
+            "name": "todo_write",
+            "input": {
+              "todos": []
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "scheduler-complete",
+            "content": [
+              {
+                "type": "text",
+                "text": "Updated todo list: 0 pending, 0 in progress, 0 completed."
+              }
+            ],
+            "is_error": false
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "scheduler-fail",
+            "content": [
+              {
+                "type": "text",
+                "text": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly."
+              }
+            ],
+            "is_error": true
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "scheduler-unstarted",
+            "content": [
+              {
+                "type": "text",
+                "text": "The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed."
+              }
+            ],
+            "is_error": true
+          },
+          {
+            "type": "text",
+            "text": "Continue after the scheduler failure without repeating any tools."
+          }
+        ]
+      }
+    ]
+  }
+]

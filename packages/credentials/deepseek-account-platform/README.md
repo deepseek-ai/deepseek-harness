@@ -19,6 +19,8 @@ Profile and balance HTTP 401 responses or top-level response code `40003` (inval
 
 Sign in through the system browser and keep the account credential in the existing local credential store. Local cancellation prevents late callbacks and exchange responses from signing the user in.
 
+Device identity reads validate the existing login device record and expose only its ID, the current account ID, and the shared login OS version string.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)

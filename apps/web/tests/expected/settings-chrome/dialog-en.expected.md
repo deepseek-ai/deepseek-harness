@@ -19,7 +19,7 @@
   - button "Increase font size"
   - button "Decrease font size"
   - text: px Work details Choose how much detail to show for tool calls
-  - button "Standard"
+  - button "Detailed"
   - text: Performance & usage Choose how much performance and usage information to show
   - button "Detailed"
   - text: Coding Tools Shows trajectory, code diffs, and Agent preset switching in new chats

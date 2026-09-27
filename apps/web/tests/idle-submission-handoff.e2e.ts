@@ -145,7 +145,7 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
       if (order === 'transcript-first') {
         await expect.poll(() => gate.turnStartDelivery()).toBeDefined()
         gate.releaseThrough(gate.turnStartDelivery()!)
-        await page.locator('[data-turn-process]').last().filter({ hasText: 'Deep diving' }).waitFor()
+        await page.locator('[data-chat-flow-kind="turn-process"]').last().waitFor({ state: 'attached' })
         await expect.poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
         trace.push({ phase: 'turn-start', ...await placement(page) })
         await expect.poll(() => gate.admissionDelivery()).toBeDefined()
@@ -167,7 +167,7 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
       if (order === 'inbox-first') {
         await expect.poll(() => gate.turnStartDelivery()).toBeDefined()
         gate.releaseThrough(gate.turnStartDelivery()!)
-        await page.locator('[data-turn-process]').last().filter({ hasText: 'Deep diving' }).waitFor()
+        await page.locator('[data-chat-flow-kind="turn-process"]').last().waitFor({ state: 'attached' })
         await expect.poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
         trace.push({ phase: 'turn-start', ...await placement(page) })
       }

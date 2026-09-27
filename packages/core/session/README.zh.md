@@ -100,12 +100,16 @@ session.deriveMessages()         // the derived model history
 | [`src/surface.ts`](src/surface.ts) | 有序 surface 投影、替换校验、`deriveEventMessage` |
 | [`src/request-header.ts`](src/request-header.ts) | `request/header` 折叠与重建 |
 | [`dsh-util-values`](../../util/values/README.zh.md) | 共享无损 JSON 校验与分离式快照 |
-| [`src/repair.ts`](src/repair.ts) | 崩溃遗留日志的冷修复 |
+| [`src/repair.ts`](src/repair.ts) | 失败步骤、中断日志与 fork 种子共享的工具结果恢复 |
 | [`src/invariant.ts`](src/invariant.ts) | 不变式配套：序号、轮次／步骤闭合、工具调用／结果配对 |
 
 ### 追加校验
 
 每次追加都会使用共享的迭代式 `snapshotJsonValue()` 流程，对每个嵌套值只读取、校验并复制一次，因此有状态的 getter 无法给校验提供一个值、给存储提供另一个值。非无损 JSON 载荷（BigInt、循环、稀疏数组、`-0`、特殊原型）会在追加位置被拒绝，先于任何后端刷新。追加路径会构造每个 `SessionSeq`；surface 事件还会校验标记形态、被引用的源事件序号，以及替换的完整遮蔽节点覆盖。
+
+### 共享恢复逻辑
+
+`ToolCallRecovery` 从已提交事件中跟踪尚无结果的请求，不保留事件历史。AgentLoop 观察实时步骤；崩溃恢复与 fork 种子构造通过 `openTurnClosers` 回放各自的前缀。实时失败与崩溃恢复默认使用中断结果文案；fork 构造传入 fork 原因，以选择其专用的重试指引。调用方在关闭步骤之前追加恢复结果（[决策](../../../.agents/notes/implemented/bug-fix/2026-09-19-failed-step-tool-results.zh.md)）。
 
 ### 派生历史
 
@@ -149,17 +153,15 @@ session.deriveMessages()         // the derived model history
 
 追加的 surface 条目会保留可复用前缀。即使底层事件日志保持仅追加，`replace` 操作也会从首条被遮蔽消息起使缓存复用失效。
 
-### 崩溃修复结果
+### 工具结果恢复与 fork 结果
 
 #### 模型看到什么
 
-如果恢复发现 assistant 工具请求没有持久 `tool/call`，其合成 `TOOL_NOT_STARTED` 结果内容为 `The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.`。如果持久 `tool/call` 没有结果，其 `TOOL_OUTCOME_UNKNOWN` 结果内容为 `The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.`。
-
-Fork 生成的结果只描述继承记录：父会话可能已经在所选事件之后启动或完成调用。`TOOL_NOT_STARTED` 表示前缀中没有启动记录；`TOOL_OUTCOME_UNKNOWN` 表示有启动记录但没有结果。两者都要求模型仅对只读或幂等操作直接重试；有副作用的操作需要先验证外部状态或询问用户。参见 [fork 决策](../../../.agents/notes/implemented/feature/2026-08-18-arbitrary-seq-session-fork.zh.md)。
+如果恢复发现 assistant 工具请求没有持久 `tool/call`，其合成 `TOOL_NOT_STARTED` 结果内容为 `The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.`。如果持久 `tool/call` 没有结果，其 `TOOL_OUTCOME_UNKNOWN` 结果内容为 `The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.`。 Fork 生成的结果只描述继承记录：父会话可能已经在所选事件之后启动或完成调用。`TOOL_NOT_STARTED` 表示前缀中没有启动记录；`TOOL_OUTCOME_UNKNOWN` 表示有启动记录但没有结果。两者都要求模型仅对只读或幂等操作直接重试；有副作用的操作需要先验证外部状态或询问用户。参见 [fork 决策](../../../.agents/notes/implemented/feature/2026-08-18-arbitrary-seq-session-fork.zh.md)。
 
 #### Token 影响
 
-未受损会话的 token 增量为零。恢复时，每个修复后的调用都会添加保留的、针对具体风险的错误文本。
+未受损会话的 token 增量为零。每个修复后的调用都会向后续请求添加保留的、针对具体风险的错误文本。
 
 #### KV Cache 影响
 

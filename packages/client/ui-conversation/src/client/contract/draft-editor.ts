@@ -40,7 +40,7 @@ export interface ComposerKeyboard {
   /** The shell-owned Lexical editor the composer binds its contenteditable to. */
   readonly editor: LexicalEditor
   /** Submit with an explicit delivery mode resolved by the submission policy (Enter gestures and the primary Send button). */
-  submit(mode: InputSubmitMode): void
+  submit(mode: InputSubmitMode, source?: 'click' | 'enter'): void
   /**
    * Steer every still-pending queued message into the running turn (the
    * empty-draft accelerated-Enter gesture; the queue dock's per-row steer

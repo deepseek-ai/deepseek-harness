@@ -315,6 +315,34 @@ def test_snapshot_value_scrubs_system_nodes_without_erasing_header_fields() -> N
     assert normalize(empty, []) == empty
 
 
+def test_snapshot_value_preserves_deterministic_tool_repair_ids() -> None:
+    normalize = SMOKE["normalize_snapshot_value"]
+    repair = {
+        "type": "tool/result", "seq": 19, "time": 123,
+        "data": {"message": {
+            "id": "interrupted-tool-result-scheduler-unstarted-19",
+            "role": "tool", "source": {"kind": "tool", "callId": "scheduler-unstarted"},
+            "toolCallId": "scheduler-unstarted", "isError": True,
+            "content": [{"type": "text", "text": "The tool did not start."}],
+        }},
+    }
+    normalized = normalize(repair, [])
+    assert normalized["data"]["message"]["id"] == repair["data"]["message"]["id"]
+    assert normalized["seq"] == 19
+    assert normalized["time"] == 0
+    ordinary = {
+        "id": "521f38bb-fb22-45cb-af5f-a9cc370a1814", "role": "tool",
+        "toolCallId": "scheduler-complete",
+        "source": {"kind": "tool", "callId": "scheduler-complete"}, "content": [],
+    }
+    assert normalize(ordinary, [])["id"] == "{{messageId}}"
+    wrong_call = {**repair["data"]["message"], "toolCallId": "other"}
+    assert normalize(wrong_call, [])["id"] == "{{messageId}}"
+    historical = {**repair["data"]["message"], "role": "user"}
+    historical.pop("toolCallId")
+    assert normalize(historical, [])["id"] == repair["data"]["message"]["id"]
+
+
 def test_snapshot_value_normalizes_embedded_assistant_stream_timing() -> None:
     normalize = SMOKE["normalize_snapshot_value"]
     event = {

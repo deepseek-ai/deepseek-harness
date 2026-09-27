@@ -1,11 +1,14 @@
 /** Operations available to the isolated native welcome renderer. */
 
 import type { AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
+import type { ProductEventMap } from '@deepseek-ai/dsh-client-product-analytics/types'
 import type { DesktopLocale } from './locale.ts'
 
 /** Private native welcome channels, installed only while its window exists. */
 export const WELCOME_IPC = {
   saveApiKey: 'dsh-welcome:save-api-key',
+  analytics: 'dsh-welcome:analytics',
+  analyticsEnabled: 'dsh-welcome:analytics-enabled',
   skip: 'dsh-welcome:skip',
   start: 'dsh-welcome:start',
   cancel: 'dsh-welcome:cancel',
@@ -20,8 +23,14 @@ export type WelcomeSaveResult = { readonly ok: true } | { readonly ok: false }
 /** One-time notification retained by the main process until Welcome receives it. */
 export type WelcomeNotice = 'session-expired'
 
+type WelcomeEventName = 'auth_page_view' | 'auth_page_click' | 'api_key_save_click'
+
 /** Host-owned operations used by the welcome window. */
 export interface WelcomeOperations {
+  /** @param eventName - allowed welcome event. @param attributes - approved fields without credentials. */
+  analytics?<K extends WelcomeEventName>(eventName: K, attributes: ProductEventMap[K]): Promise<void>
+  /** @returns the Host's current effective collection policy. */
+  analyticsEnabled(): Promise<boolean>
   /** @returns the pending notification, clearing it before another renderer can receive it. */
   takeNotice(): Promise<WelcomeNotice | undefined>
   /** @returns account state after starting a login attempt. */

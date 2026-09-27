@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-time-context` gives the model a clock: on eligible steps it appends a durable, source-attributed reading with the current time, the browser zone attached to the open request, and the elapsed time since the preceding model-visible message. It helps the model interpret otherwise-unqualified dates and times in the user's browser zone, and tells it to ask when current-turn browser zones are mixed or missing. The shipped Web composition carries its row disabled; the optional `@deepseek-ai/dsh-experimental-schedule-bundle` mounts it with Schedule from the Plugins page. Readings default to a 10-minute minimum interval; `refreshIntervalMs: 0` injects at every eligible step.
+`dsh-time-context` gives the model a clock: on eligible steps it appends a durable, source-attributed reading with the current time, the browser zone attached to the open request, and the elapsed time since the preceding model-visible message. It helps the model interpret otherwise-unqualified dates and times in the user's browser zone, and tells it to ask when current-turn browser zones are mixed or missing. The shipped Web composition carries no row for it; the optional `@deepseek-ai/dsh-experimental-schedule-bundle` inserts and mounts it with Schedule from the Plugins page. Readings default to a 10-minute minimum interval; `refreshIntervalMs: 0` injects at every eligible step.
 
 ## Table of Contents
 

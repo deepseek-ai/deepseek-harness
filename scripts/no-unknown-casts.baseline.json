@@ -619,9 +619,6 @@
   "packages/client/ui-plan/tests/plan-resource.client.spec.ts": {
     "fa53d5cd55d87b522c83a98968e3a2bf933b1cc1b84d2f009e79d6c702099786": 1
   },
-  "packages/client/ui-plugin-manager/tests/browser-plugin.client.spec.tsx": {
-    "04984a2ce1486250236e638e0197da0a1a840855ed3975c59130a85358c7e5fe": 1
-  },
   "packages/client/ui-primitives/tests/highlight-viewport.client.spec.tsx": {
     "6061de0a1e01547eb1abf9d4e1b5fa79fda112fa35dda980775491123413dcce": 1
   },

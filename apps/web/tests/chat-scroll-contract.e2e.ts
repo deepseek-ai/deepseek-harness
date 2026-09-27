@@ -23,7 +23,7 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
+import { expandOwningTurnProcess, newEnglishPage, openSettings, saveFailureShot } from './support.ts'
 
 const MODE = webSnapshotMode()
 const HISTORY_SESSION_ID = 'chat-scroll-history-e2e'
@@ -677,7 +677,7 @@ describe('web e2e: long Chat scroll contract', () => {
     })
   }, 180_000)
 
-  it.skipIf(MODE === 'record')('follows a growing process group independently of the outer transcript', async () => {
+  it.skipIf(MODE === 'record')('follows a growing Standard-mode process group independently of the outer transcript', async () => {
     const parts = [
       'GROUP_SCROLL_START\n\n',
       ...Array.from({ length: 4 }, (_, batch) => Array.from({ length: 20 }, (_, row) =>
@@ -701,6 +701,14 @@ describe('web e2e: long Chat scroll contract', () => {
     }, async (world) => {
       await world.page.emulateMedia({ reducedMotion: 'no-preference' })
       await openSeed(world.page, HISTORY_FIXTURE, HISTORY_FIXTURE.markers.assistant(HISTORY_FIXTURE.turns))
+      await openSettings(world.page, 'en')
+      await world.page.getByRole('dialog', { name: 'Settings', exact: true })
+        .getByText('Work details', { exact: true }).locator('../..')
+        .getByRole('button', { name: 'Detailed', exact: true }).click()
+      await world.page.getByRole('menuitem', { name: 'Standard', exact: true }).click()
+      await expect.poll(() => world.scaffold.ctx.settings.describe().find(row => row.ns === 'ui-chat')?.value)
+        .toMatchObject({ transcriptView: 'standard' })
+      await world.page.keyboard.press('Escape')
       const gates = parts.slice(1).map(() => Promise.withResolvers<undefined>())
       const dispose = world.scaffold.ctx.on('llm/stream', async function* (_options, next) {
         let index = -1

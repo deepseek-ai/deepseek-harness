@@ -45,6 +45,7 @@ export class DesktopUpdateCoordinator {
    * @param updater - Process-owned Electron updater, replaceable at the network/platform test boundary.
    * @param enabled - Whether this process has a packaged update source.
    * @param currentVersion - Actual installed application version.
+   * @param downloadResult - Once per completed download attempt, including platform preparation failures.
    */
   constructor(
     private readonly publish: (state: DesktopUpdateState) => DesktopUpdateState,
@@ -52,6 +53,7 @@ export class DesktopUpdateCoordinator {
     private readonly updater: AppUpdater = autoUpdater,
     private readonly enabled: () => boolean = () => app.isPackaged && existsSync(join(process.resourcesPath, 'app-update.yml')),
     private readonly currentVersion: () => string = () => app.getVersion(),
+    private readonly downloadResult?: (success: boolean, reason?: string) => void,
   ) {
     if (updater === autoUpdater) {
       // electron-updater omits this internal transport property from its public declarations.
@@ -108,9 +110,11 @@ export class DesktopUpdateCoordinator {
       try {
         await this.updater.downloadUpdate()
         if (!this.downloaded) throw new Error('desktop update: platform preparation did not report readiness')
+        this.downloadResult?.(true)
         return this.setState({ phase: 'ready', version })
       } catch (error) {
         this.downloaded = false
+        this.downloadResult?.(false, error instanceof DesktopUpdatePreparationError ? error.kind : 'download_failed')
         return this.setState(this.failure(error, 'download'))
       }
     }).finally(() => { this.downloadOperation = undefined })

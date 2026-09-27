@@ -194,7 +194,6 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 
 <a id="known-limitations-and-deferred-work"></a>
 
-
 这些限制说明此启动库在何时不合适，或何时需要特别注意。它们是当前包约束，不是任务积压。
 
 - **运行时解析依赖 Node 内部机制**——受支持的 Node 版本需要 native builtin access addon 和可执行兼容验证。只有构建后的 Harness 自有 Worker 接收 runtime resolution bootstrap；第三方 Worker 与自定义 `vm` linker 保持原生解析。

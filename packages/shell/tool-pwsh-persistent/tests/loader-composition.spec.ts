@@ -198,8 +198,11 @@ describe.skipIf(!hasPwsh)('persistent pwsh through a real cordis.yml Loader comp
     expect(text(await execute('after-exit', 'Write-Output "$PWD"'))).toBe(root)
 
     // Six commands settle on the controlled prompt; no send may fall back to the
-    // silence tier, which is the 3.5 s-per-call degradation this suite pins.
-    expect(settleReasons.filter(reason => reason === 'stdin_read').length).toBeGreaterThanOrEqual(6)
+    // silence tier, which is the 3.5 s-per-call degradation this suite pins. The
+    // counts alone do not say which tier settled which send, so every reason the
+    // run recorded rides in the failure message (2026-09-25 self-hosted Windows
+    // lane reported one to two stdin_read settlements across three runs).
+    expect(settleReasons.filter(reason => reason === 'stdin_read').length, JSON.stringify(settleReasons)).toBeGreaterThanOrEqual(6)
     expect(settleReasons).not.toContain('inferred_idle')
   }, 120_000)
 })

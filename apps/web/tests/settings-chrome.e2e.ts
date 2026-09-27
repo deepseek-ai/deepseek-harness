@@ -71,6 +71,10 @@ describe('web e2e: settings modal and General preferences', () => {
     await dialog.getByRole('button', { name: '工作区内修改' }).waitFor({ timeout: 10_000 })
     await expect.poll(() => dialog.getByText('语言', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     await expect.poll(() => dialog.getByText('外观', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
+    await dialog.getByText('工作步骤展示', { exact: true }).locator('../..')
+      .getByRole('button', { name: '详细', exact: true }).waitFor({ timeout: 10_000 })
+    expect(await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'))
+      .not.toContain('transcriptView:')
     const openDocument = dialog.getByRole('button', { name: '打开配置文件' })
     await openDocument.waitFor({ timeout: 10_000 })
     let openRequests = 0
@@ -111,16 +115,17 @@ describe('web e2e: settings modal and General preferences', () => {
     // rewrite this surface's golden.
     await dialog.getByRole('button', { name: '内置插件', exact: true }).click()
     await dialog.getByRole('heading', { name: '内置插件', exact: true }).waitFor({ timeout: 10_000 })
-    // Both groups start collapsed; the preset group's header still carries its display-only switcher.
+    // The preset group starts open under its display-only switcher; the global group starts folded.
     const presetSwitcher = dialog.getByRole('button', { name: '选择要查看的 Agent 预设' })
     await presetSwitcher.waitFor({ timeout: 10_000 })
     // The shipped default's zh display name comes from the zh dictionaries.
     expect(await presetSwitcher.textContent()).toBe('标准模式（默认）')
     const presetToggle = dialog.getByRole('button', { name: '会话插件', exact: true })
-    expect(await presetToggle.getAttribute('aria-expanded')).toBe('false')
-    expect(await dialog.locator('[data-plugin-scope="preset"] [data-plugin-entry]').count()).toBe(0)
-    await presetToggle.click()
-    await dialog.getByRole('button', { name: /^全局/ }).click()
+    expect(await presetToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(await dialog.locator('[data-plugin-scope="preset"] [data-plugin-entry]').count()).toBeGreaterThan(0)
+    const globalToggle = dialog.getByRole('button', { name: /^全局/ })
+    expect(await globalToggle.getAttribute('aria-expanded')).toBe('false')
+    await globalToggle.click()
     const pluginRow = dialog.locator(PLUGIN_ROW_SELECTOR)
     await pluginRow.waitFor({ timeout: 10_000 })
     const expectedPluginCount = [...scaffold.ctx.loader.entries()]
@@ -132,11 +137,12 @@ describe('web e2e: settings modal and General preferences', () => {
     // presets took over included, preset compositions excluded.
     expect(await dialog.locator('[data-plugin-scope="global"] [data-plugin-entry]').count())
       .toBe(expectedPluginCount)
-    // The enablement tag is the row's collapsed status: an active fiber draws no
-    // dot, so no global row names the active phase. Guard the assertion against
-    // matching nothing because no row is enabled.
-    expect(await dialog.locator('[data-plugin-scope="global"] [data-plugin-entry] button[aria-label$="已启用"]').count())
-      .toBeGreaterThan(0)
+    // A plainly enabled row states its status only in its accessible name: it
+    // carries no tag, and an active fiber draws no dot, so no global row shows
+    // either. Guard the assertions against matching nothing because no row is enabled.
+    const enabledRows = dialog.locator('[data-plugin-scope="global"] [data-plugin-entry] button[aria-label$="已启用"]')
+    expect(await enabledRows.count()).toBeGreaterThan(0)
+    expect(await enabledRows.getByText('已启用', { exact: true }).count()).toBe(0)
     expect(await dialog.locator('[data-plugin-scope="global"] [role="img"][aria-label="运行中"]').count()).toBe(0)
     expect(await dialog.locator('[data-plugin-count]').getAttribute('data-plugin-count'))
       .toBe(String(expectedPluginCount))
@@ -159,10 +165,17 @@ describe('web e2e: settings modal and General preferences', () => {
     ] as const
     for (const [entryId, status] of instanceRows) {
       const row = dialog.locator(`[data-plugin-scope="preset"] [data-plugin-entry="${entryId}"]`)
-      const trigger = row.getByRole('button', { name: `tool-subagent, ${entryId}, ${status}`, exact: true })
+      // An id that repeats the title adds nothing, so its card shows no chip and its name omits it.
+      const repeatsTitle = entryId === 'tool-subagent'
+      const name = repeatsTitle ? `tool-subagent, ${status}` : `tool-subagent, ${entryId}, ${status}`
+      const trigger = row.getByRole('button', { name, exact: true })
       await trigger.waitFor({ timeout: 10_000 })
       expect(await trigger.getAttribute('aria-expanded')).toBe('false')
       const identity = row.locator('code')
+      if (repeatsTitle) {
+        expect(await identity.count()).toBe(0)
+        continue
+      }
       expect(await identity.textContent()).toBe(entryId)
       expect(await identity.getAttribute('title')).toBe(entryId)
     }
@@ -560,7 +573,7 @@ describe('web e2e: settings modal and General preferences', () => {
   }, 90_000)
 
   it.each([
-    ['compact', '简洁'], ['detailed', '详细'], ['verbose', '完全展开'],
+    ['compact', '简洁'], ['standard', '标准'], ['verbose', '完全展开'],
   ] as const)('persists the %s work-details mode across reload', async (mode, label) => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-transcript-view'))
     await openSettings(page, 'zh')
@@ -568,7 +581,7 @@ describe('web e2e: settings modal and General preferences', () => {
     await dialog.waitFor({ timeout: 10_000 })
     await dialog.getByText('工作步骤展示', { exact: true }).waitFor({ timeout: 10_000 })
     const details = dialog.getByText('工作步骤展示', { exact: true }).locator('../..')
-    await details.getByRole('button', { name: '标准', exact: true }).click()
+    await details.getByRole('button', { name: '详细', exact: true }).click()
     await page.getByRole('menuitem', { name: label, exact: true }).click()
     await details.getByRole('button', { name: label, exact: true }).waitFor({ timeout: 10_000 })
     await expect.poll(async () => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'), { timeout: 5_000 })
@@ -585,10 +598,10 @@ describe('web e2e: settings modal and General preferences', () => {
     await restoredDetails.getByRole('button', { name: label, exact: true }).waitFor({ timeout: 10_000 })
 
     await restoredDetails.getByRole('button', { name: label, exact: true }).click()
-    await page.getByRole('menuitem', { name: '标准', exact: true }).click()
-    await restoredDetails.getByRole('button', { name: '标准', exact: true }).waitFor({ timeout: 10_000 })
+    await page.getByRole('menuitem', { name: '详细', exact: true }).click()
+    await restoredDetails.getByRole('button', { name: '详细', exact: true }).waitFor({ timeout: 10_000 })
     await expect.poll(async () => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'), { timeout: 5_000 })
-      .toContain('transcriptView: standard')
+      .toContain('transcriptView: detailed')
     await page.keyboard.press('Escape')
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
@@ -798,7 +811,8 @@ describe('web e2e: settings modal and General preferences', () => {
     await withoutBrowser.goto(fresh.authenticatedUrl, { waitUntil: 'load' })
     await openSettings(withoutBrowser, 'en')
     const dialog = withoutBrowser.getByRole('dialog', { name: 'Settings' })
-    await dialog.getByRole('button', { name: 'Detailed', exact: true }).waitFor()
+    await dialog.getByText('Work details', { exact: true }).locator('../..')
+      .getByRole('button', { name: 'Detailed', exact: true }).waitFor()
     expect(await dialog.getByText('Open chat links in', { exact: true }).count()).toBe(0)
     const snapshot = await captureStableAria(withoutBrowser, '[role="dialog"]', fresh.workspaceCwd, versionCapture)
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'dialog-no-browser.expected.md'), snapshot, MODE)

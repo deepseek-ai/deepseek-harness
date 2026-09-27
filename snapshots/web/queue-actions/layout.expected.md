@@ -11,9 +11,9 @@
 - button "Continuing goal {{clock}}":
   - text: Continuing goal
   - time: {{clock}}
-- status: Deep diving...
-- button "Deep diving for {{duration}}" [disabled] [expanded]
 - paragraph: partial
+- status: Deep diving...
+- text: Deep diving for {{duration}}...
 - region "To-dos":
   - button "To-dos 1 completed · 1 in progress"
 - text: Ongoing Goal Keep the composer context panels aligned

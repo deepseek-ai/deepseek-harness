@@ -1,0 +1,7 @@
+version: 1
+scenario: tool-scheduler-recovery
+profile: sdk
+composition: sdk-default
+recording: authored
+header:
+  class: sdk-default

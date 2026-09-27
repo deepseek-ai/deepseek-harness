@@ -33,6 +33,7 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
     })
     await page.exposeFunction('nativeLocaleChanged', (locale: string) => { reported.push(locale) })
     await page.addInitScript(() => {
+      Object.defineProperty(globalThis, 'dshDesktop', { value: { protocolVersion: 1 } })
       const bridge = globalThis as typeof globalThis & {
         nativeLocaleRead(): Promise<unknown>
         nativeLocaleChanged(locale: string): Promise<void>

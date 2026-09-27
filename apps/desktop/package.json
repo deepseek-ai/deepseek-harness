@@ -75,6 +75,7 @@
     "vite": "^6.0.0",
     "@deepseek-ai/dsh-client-ui-theme": "workspace:*",
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
-    "@deepseek-ai/dsh-atomic-write": "workspace:*"
+    "@deepseek-ai/dsh-atomic-write": "workspace:*",
+    "@deepseek-ai/dsh-client-product-analytics": "workspace:*"
   }
 }

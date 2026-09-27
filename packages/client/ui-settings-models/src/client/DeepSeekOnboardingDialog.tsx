@@ -5,7 +5,7 @@
  * official DeepSeek route. The step reuses that page's credential editor in
  * the onboarding plugin's shared modal, so the key is entered once.
  */
-
+import type { TrackProductEvent } from '@deepseek-ai/dsh-client-product-analytics/client'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -22,6 +22,8 @@ import styles from './DeepSeekOnboardingDialog.module.css'
 
 /** Registration-side dependencies of {@link DeepSeekOnboardingDialog}. */
 export interface DeepSeekOnboardingInjected {
+  /** Desktop-only event collection. */
+  track?: TrackProductEvent
   /** Whether first-run setup should show automatically. Explicit requests remain available. */
   automatic: boolean
   hooks: {
@@ -120,6 +122,7 @@ export function DeepSeekOnboardingDialog(props: DeepSeekOnboardingDialogProps): 
           readOnly={false}
           hideTitle
           credentialOnly
+          onSubmitCredential={() => { props.track?.('api_key_save_click', {}) }}
           credentialRequired
           autoFocusCredential
           cancelLabelKey="onboardingLater"

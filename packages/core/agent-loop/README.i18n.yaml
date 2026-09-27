@@ -48,8 +48,8 @@
   en: ed5137ef858b3424
   zh: af2ff3bc15576456
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/failure-and-cancellation:
-  en: 6bd69c9cf8790e14
-  zh: e2812f6bb4c26f10
+  en: 548b6ee23c3a1e5d
+  zh: e89428f427b4462e
 /deepseek-ai-dsh-agent-loop/further-exploration:
   en: 6c73cd2390e24b86
   zh: ba042ca93cc0f595
@@ -92,9 +92,21 @@
 /deepseek-ai-dsh-agent-loop/model-experience/undispatched-calls-after-cancellation/kv-cache-effect:
   en: 1750eea3cc5bf2d8
   zh: 519d37b0cb4467a7
+/deepseek-ai-dsh-agent-loop/model-experience/unanswered-calls-after-step-failure:
+  en: 0f150799ee294e40
+  zh: 4c283b07367dfa4a
+/deepseek-ai-dsh-agent-loop/model-experience/unanswered-calls-after-step-failure/what-the-model-sees:
+  en: a62feae35f09ff13
+  zh: d20a0172d86f6515
+/deepseek-ai-dsh-agent-loop/model-experience/unanswered-calls-after-step-failure/token-effect:
+  en: cefdf878a21a681a
+  zh: 96d8271b257478d6
+/deepseek-ai-dsh-agent-loop/model-experience/unanswered-calls-after-step-failure/kv-cache-effect:
+  en: 83531f2a13cc1f0e
+  zh: 81a780d637dd8c5d
 /deepseek-ai-dsh-agent-loop/known-limitations-and-deferred-work:
-  en: f658b8bc2935578f
-  zh: 4d503701fa17b982
+  en: 7f93fa258b0e39ba
+  zh: 819075791542b01c
 /deepseek-ai-dsh-agent-loop/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

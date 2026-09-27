@@ -462,9 +462,12 @@ describe.skipIf(MODE === 'record')('web e2e: conversational reminders', () => {
     await row.waitFor({ timeout: 15_000 })
     expect(await row.getAttribute('data-chat-flow-kind')).toBe('assistant-step')
     expect(await row.textContent()).toContain(AFTER_REPLY)
+    const triggerTitle = '[data-turn-trigger] > button > span:nth-child(2)'
+    await page.locator(triggerTitle).waitFor()
+    expect(await page.locator(triggerTitle).textContent()).toBe('Automation task')
     await compareOrRefreshGolden(
       AFTER_EXPECTED,
-      await captureStableAria(page, selector, scaffold.workspaceCwd),
+      `${await captureStableAria(page, triggerTitle, scaffold.workspaceCwd)}\n\n${await captureStableAria(page, selector, scaffold.workspaceCwd)}`,
       MODE,
     )
     await expectNoReminderEntry(page)
@@ -839,19 +842,20 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
 
   it('reads stored tasks without a live Session and deletes them through the catalog', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-schedule-catalog'))
-    const shipped = composeEntries([
+    const layers = [
       loadOverlayPatches('Schedule catalog shipped roster', BASE_PATCH),
       ...WEB_PATCHES.map(file => loadOverlayPatches('Schedule catalog shipped roster', file)),
-    ])
-    expect(shipped.find(entry => entry.id === 'ui-schedule')).toMatchObject({
-      name: '@deepseek-ai/dsh-client-ui-schedule',
-    })
-    expect(shipped.find(entry => entry.id === 'ui-schedule')?.disabled).toBe(true)
+    ]
+    const shipped = composeEntries(layers)
+    const withBundle = composeEntries([...layers, loadOverlayPatches('Schedule catalog bundle', SCHEDULE_BUNDLE)])
     for (const row of [
       { id: 'time-context', name: '@deepseek-ai/dsh-time-context' },
       { id: 'schedule', name: '@deepseek-ai/dsh-schedule' },
+      { id: 'ui-schedule', name: '@deepseek-ai/dsh-client-ui-schedule' },
     ]) {
-      expect(shipped.filter(entry => entry.id === row.id && entry.name === row.name)).toHaveLength(1)
+      // The shipped Web composition carries none of the rows; the bundle inserts each once, switched on.
+      expect(shipped.some(entry => entry.id === row.id)).toBe(false)
+      expect(withBundle.filter(entry => entry.id === row.id && entry.name === row.name && entry.disabled !== true)).toHaveLength(1)
     }
 
     await page.getByRole('button', { name: 'Automation tasks', exact: true }).click()

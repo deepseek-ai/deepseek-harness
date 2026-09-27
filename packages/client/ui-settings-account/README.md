@@ -7,6 +7,8 @@ kind: "package-reference"
 
 English | [中文](README.zh.md)
 
+Desktop product events use the optional [product analytics service](../product-analytics/README.md); ordinary Web interactions are excluded. Workspace login dialogs emit no authentication events; native welcome owns authentication analytics.
+
 Server-expired account credentials clear the displayed account details and emit a localized sign-in reminder toast once; account snapshot replay does not repeat it.
 
 ## Summary

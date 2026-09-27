@@ -198,6 +198,7 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
+    { "path": "./packages/client/product-analytics/tsconfig.host.json" },
     { "path": "./packages/telemetry/otel" },
     { "path": "./packages/experimental/speech-to-text" },
     { "path": "./packages/experimental/speech-to-text-sensevoice" },

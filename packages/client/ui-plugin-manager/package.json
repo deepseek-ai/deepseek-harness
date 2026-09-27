@@ -72,7 +72,8 @@
     "react-dom": "^18.2.0",
     "@deepseek-ai/dsh-util-crypto": "workspace:*",
     "@deepseek-ai/dsh-client-ui-settings": "workspace:*",
-    "@deepseek-ai/dsh-plugin-manager": "workspace:*"
+    "@deepseek-ai/dsh-plugin-manager": "workspace:*",
+    "@deepseek-ai/dsh-client-product-analytics": "workspace:*"
   },
   "files": [
     "lib/index.js",

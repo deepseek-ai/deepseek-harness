@@ -109,6 +109,11 @@ export abstract class DeepSeekAccount extends Service {
    * @returns a Host-only snapshot, or null while signed out or when the credential changed during the read.
    */
   abstract getPlatformSession(): Promise<PlatformSession | null>
+  /**
+   * Read existing login identity without creating a device or returning credentials.
+   * @returns optional device/account identifiers and the provider's OS version string.
+   */
+  abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; osVersion: string }>
 }
 export default DeepSeekAccount
 

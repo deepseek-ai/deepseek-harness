@@ -6,6 +6,8 @@ kind: "package-reference"
 
 English | [中文](README.zh.md)
 
+Desktop analytics follows the [product collection policy](../../client/product-analytics/README.md), including its launch-time switch. Web usage is excluded.
+
 ## Summary
 
 `@deepseek-ai/dsh-api-session-controller` owns the Host `ctx.sessionController` service and the generated Client `session`, `skills`, and `fileReferences` Remote namespaces. It serves Session lifecycle and history, the Host-generation model catalog, human background-job kill, workspace-path opening, user-invocable skill discovery, and Agent-scoped file references. Use it through API Gateway when a Client needs operations addressed by a Session.

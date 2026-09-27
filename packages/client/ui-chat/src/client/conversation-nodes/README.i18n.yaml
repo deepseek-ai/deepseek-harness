@@ -24,14 +24,17 @@
   en: 91b35cbebe8c2a1d
   zh: a4fee6d7102bc874
 /chat-conversation-node-rules/whole-turn-folding:
-  en: 8db4991626210708
-  zh: e18c8aa3cb434980
+  en: 69989cc6a42c137a
+  zh: ceca703426315b88
 /chat-conversation-node-rules/display-modes:
-  en: 42342a06ef189075
-  zh: 1a554b50125fcdda
+  en: ada5a60d2c46f6a8
+  zh: f3eaeb5cb4d9b3de
+/chat-conversation-node-rules/display-modes/defaults-and-saving-preferences:
+  en: a47e16132ba3c736
+  zh: fbed2b6f43a93287
 /chat-conversation-node-rules/display-modes/group-title-rules:
-  en: a6d29a5ea3fd2362
-  zh: dbd07bf82cdd61b1
+  en: 49fc1aa60cbd239e
+  zh: 44b0f9a96ec5b112
 /chat-conversation-node-rules/process-grouping:
   en: 276a97b95610f5e8
   zh: 7627b2afb0a7c0f4

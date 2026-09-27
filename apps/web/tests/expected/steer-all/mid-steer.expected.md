@@ -8,13 +8,13 @@
     - tab "Trajectory"
 - text: Use the ask_user_question tool to ask me exactly one question with id "checkpoint", question "Ready to continue?", header "Checkpoint", and options labeled "Yes" and "No". After I answer, reply with one short sentence acknowledging my answer and stop. {{clock}}
 - button "Copy"
-- status: Deep diving...
-- button "Deep diving for {{duration}}" [disabled] [expanded]
-- button "Analyzing the request · The user wants me to ask them a checkpoint question first, then continue with whatever they interject. Let me do exactly that."
+- button "Think The user wants me to ask them a checkpoint question first, then continue with whatever they interject. Let me do exactly that."
 - text: "Interjection: include the word BANANA in your final reply."
 - button "Copy"
 - text: "Interjection: include the word ORANGE in your final reply."
 - button "Copy"
+- status: Deep diving...
+- text: Deep diving for {{duration}}...
 - textbox "Message or run a task, / commands, @ files or sessions"
 - button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write

@@ -3,17 +3,17 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-24-schedule-opt-in-optional-bundle.md
 /agent-note-schedule-as-an-opt-in-optional-bundle:
-  en: d234bf064c5990f1
-  zh: c54b941429b4658c
+  en: 8c2381fd778a9888
+  zh: 8877255cb980eea1
 /agent-note-schedule-as-an-opt-in-optional-bundle/problem:
-  en: 2409ea3a006ea5d9
-  zh: dbcda58a4c6b5b9f
+  en: bb23c2f7f93a462b
+  zh: 9fb600fc8e203323
 /agent-note-schedule-as-an-opt-in-optional-bundle/decision:
-  en: 5aa944749a231645
-  zh: c14651be6367ee13
+  en: 483d1dd51b9cc073
+  zh: b069e2e2385c8132
 /agent-note-schedule-as-an-opt-in-optional-bundle/alternatives-considered:
-  en: 1782c8ecdbe6bf87
-  zh: dd6997d067257562
+  en: 8e5f4d8fa8c2e78d
+  zh: 3353c7042c6a1d6b
 /agent-note-schedule-as-an-opt-in-optional-bundle/consequences:
-  en: 8ea1d9aaf25f1702
-  zh: 32e721347ea55475
+  en: 36cd0eb71abeedbe
+  zh: 7c134095cc19fcfd

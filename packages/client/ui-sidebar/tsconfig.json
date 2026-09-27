@@ -40,6 +40,9 @@
     },
     {
       "path": "../shortcuts/tsconfig.client.json"
+    },
+    {
+      "path": "../product-analytics/tsconfig.client.json"
     }
   ]
 }

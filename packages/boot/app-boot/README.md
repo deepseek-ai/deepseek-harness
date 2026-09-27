@@ -194,7 +194,6 @@ Boot itself changes no request prefix. `addHarnessSourceSection` places its sour
 
 <a id="known-limitations-and-deferred-work"></a>
 
-
 These limits describe when this boot library is a poor fit or needs special care. They are current package constraints, not a task backlog.
 
 - **Runtime resolution depends on Node internals** — supported Node versions require the native builtin-access addon and executable compatibility coverage. Only built Harness-owned Workers receive the runtime resolution bootstrap; third-party Workers and custom `vm` linkers keep native resolution.

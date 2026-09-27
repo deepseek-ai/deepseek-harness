@@ -2,7 +2,7 @@
   - heading "添加插件" [level=2]
   - button "关闭"
   - textbox "插件包名":
-    - /placeholder: 例如 @deepseek-ai/dsh-subagent-codex
+    - /placeholder: 例如 dsh-plugin-whale-pet
   - button "插件安装引导和示例"
   - button "安装源 中国大陆镜像源"
   - button "安装" [disabled]

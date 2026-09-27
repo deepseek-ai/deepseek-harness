@@ -28,7 +28,11 @@ it.each([false, true])('settles startup after parent IPC disconnect (boot failur
   }
   writeFileSync(join(root, 'package.json'), '{"type":"module"}')
   writeFileSync(join(modules, 'dsh-app-boot', 'package.json'), '{"type":"module","exports":"./index.js"}')
-  writeFileSync(join(modules, 'dsh-app-boot', 'index.js'), 'export const loadProfileDirectory = () => ({ skippedBundles: [] }); export const reportSkippedBundles = () => {}; export const loadLayeredEnv = () => ({})')
+  writeFileSync(join(modules, 'dsh-app-boot', 'index.js'), `
+    export const loadProfileDirectory = () => ({ skippedBundles: [] });
+    export const reportSkippedBundles = () => {};
+    export const loadLayeredEnv = () => ({});
+  `)
   writeFileSync(join(modules, 'dsh', 'package.json'), '{"type":"module","exports":{"./profile-boot":"./profile-boot.js"}}')
   writeFileSync(join(modules, 'dsh', 'profile-boot.js'), `
     import { writeFileSync } from 'node:fs';

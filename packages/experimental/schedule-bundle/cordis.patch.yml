@@ -1,12 +1,16 @@
-# Experimental Schedule switch over the shipped Web composition. `dsh-web-app`
-# inserts the three rows with `disabled: true`; this layer flips them on and
-# appends nothing, so enabling it cannot mount a Host service twice.
+# Experimental Schedule over the shipped Web composition, which carries none of
+# these rows. The Schedule service owns the task store and delivers each due
+# occurrence as a follow-up in its original Session; `time-context` supplies the
+# current time, browser zone, and elapsed time the model needs to resolve an
+# unqualified date or time; `ui-schedule` is the task page and the Session
+# reminder catalog over that service.
 
-- id: time-context
-  disabled: false
+- insert:
+    - id: time-context
+      name: '@deepseek-ai/dsh-time-context'
 
-- id: schedule
-  disabled: false
+    - id: schedule
+      name: '@deepseek-ai/dsh-schedule'
 
-- id: ui-schedule
-  disabled: false
+    - id: ui-schedule
+      name: '@deepseek-ai/dsh-client-ui-schedule'

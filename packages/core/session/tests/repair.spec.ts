@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ToolCallId , createMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
-import { interruptedTurnClosers as repairInterruptedTurn, SessionSeq, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN } from '../src/index.ts'
+import { interruptedTurnClosers as repairInterruptedTurn, SessionSeq, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN, ToolCallRecovery } from '../src/index.ts'
 import { openTurnClosers as closeOpenTurn, type OpenTurnCloseCause } from '../src/repair.ts'
 import type { SessionEvent as LogicalSessionEvent, SurfaceEvent } from '../src/index.ts'
 
@@ -33,6 +33,70 @@ function openTurnClosers(events: readonly SessionEvent[], cause: OpenTurnCloseCa
 
 const userTurnStart = (turn: number, seq: number): SessionEvent =>
   ({ type: 'turn/start', seq, time: seq, data: { turn } })
+
+function liveToolRequests(): LogicalSessionEvent<'assistant/message'> {
+  return {
+    type: 'assistant/message', seq: SessionSeq(21), time: 110, surfaceOp: 'append',
+    data: {
+      turn: 3, step: 2, stream: [],
+      message: createMessage({
+        role: 'assistant', source: { kind: 'model', provider: 'mock', model: 'mock' },
+        content: [
+          { type: 'tool-call', id: ToolCallId('started'), name: 'bash', arguments: '{}' },
+          { type: 'tool-call', id: ToolCallId('pending'), name: 'bash', arguments: '{}' },
+        ],
+      }),
+    },
+  }
+}
+
+describe('ToolCallRecovery', () => {
+  it('observes a live step without earlier history and retains repairs until their commits arrive', () => {
+    const recovery = new ToolCallRecovery()
+    expect(recovery.results()).toEqual([])
+    recovery.observe({ type: 'step/start', seq: SessionSeq(20), time: 100, data: { turn: 3, step: 2 } })
+    recovery.observe(liveToolRequests())
+    recovery.observe({
+      type: 'tool/call', seq: SessionSeq(22), time: 120,
+      data: { turn: 3, step: 2, callId: ToolCallId('started'), name: 'bash', arguments: '{}' },
+    })
+
+    const results = recovery.results()
+    expect(results.map(event => ({
+      seq: event.seq, time: event.time, turn: event.data.turn, step: event.data.step,
+      callId: event.data.message.toolCallId, code: event.data.error?.code, sourceEventSeqs: event.sourceEventSeqs,
+    }))).toEqual([
+      { seq: 23, time: 120, turn: 3, step: 2, callId: 'started', code: TOOL_OUTCOME_UNKNOWN, sourceEventSeqs: [22] },
+      { seq: 24, time: 120, turn: 3, step: 2, callId: 'pending', code: TOOL_NOT_STARTED, sourceEventSeqs: undefined },
+    ])
+    expect(recovery.results()).toEqual(results)
+    for (const [index, event] of results.entries()) {
+      recovery.observe(event)
+      expect(recovery.results()).toEqual(results.slice(index + 1))
+    }
+  })
+
+  it.each([
+    { kind: 'replacement', turn: 3, step: 2 },
+    { kind: 'other turn', turn: 2, step: 2 },
+    { kind: 'other step', turn: 3, step: 1 },
+  ])('does not acknowledge a pending call with $kind result reusing its id', ({ kind, turn, step }) => {
+    const recovery = new ToolCallRecovery()
+    recovery.observe(liveToolRequests())
+    recovery.observe({
+      type: 'tool/result', seq: SessionSeq(22), time: 120,
+      surfaceOp: kind === 'replacement' ? { op: 'replace', startSeq: SessionSeq(10), endSeq: SessionSeq(10) } : 'append',
+      ...kind === 'replacement' ? { sourceEventSeqs: [SessionSeq(10)] } : {},
+      data: {
+        turn, step,
+        message: createToolResultMessage({ callId: ToolCallId('started'), content: [{ type: 'text', text: 'old result' }], isError: false }),
+      },
+    })
+
+    expect(recovery.results().map(event => event.data.message.toolCallId)).toEqual([ToolCallId('started'), ToolCallId('pending')])
+  })
+
+})
 
 const causes: OpenTurnCloseCause[] = [{ kind: 'interrupted' }, { kind: 'forked' }]
 
@@ -72,7 +136,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
     const events: SessionEvent[] = [
       userTurnStart(2, 0),
       { type: 'step/start', seq: 1, time: 1, data: { turn: 2, step: 1 } },
-      { type: 'assistant/message', seq: 2, time: 2, data: {
+      { type: 'assistant/message', seq: 2, time: 2, surfaceOp: 'append', data: {
         turn: 2, step: 1,
         message: createMessage({
           role: 'assistant',
@@ -115,7 +179,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
     const events: SessionEvent[] = [
       userTurnStart(2, 0),
       { type: 'step/start', seq: 1, time: 1, data: { turn: 2, step: 1 } },
-      { type: 'assistant/message', seq: 2, time: 2, data: {
+      { type: 'assistant/message', seq: 2, time: 2, surfaceOp: 'append', data: {
         turn: 2, step: 1,
         message: createMessage({
           role: 'assistant',
@@ -128,7 +192,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
           },
         }),
       } },
-      { type: 'tool/result', seq: 3, time: 3, data: {
+      { type: 'tool/result', seq: 3, time: 3, surfaceOp: 'append', data: {
         turn: 2, step: 1,
         message: createToolResultMessage({
           callId: ToolCallId('call-1'),
@@ -146,7 +210,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
     const events: SessionEvent[] = [
       userTurnStart(2, 0),
       { type: 'step/start', seq: 1, time: 1, data: { turn: 2, step: 1 } },
-      { type: 'assistant/message', seq: 2, time: 2, data: {
+      { type: 'assistant/message', seq: 2, time: 2, surfaceOp: 'append', data: {
         turn: 2, step: 1,
         message: createMessage({
           role: 'assistant',
@@ -174,7 +238,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
     const events: SessionEvent[] = [
       userTurnStart(1, 0),
       { type: 'step/start', seq: 1, time: 1, data: { turn: 1, step: 1 } },
-      { type: 'assistant/message', seq: 2, time: 2, data: {
+      { type: 'assistant/message', seq: 2, time: 2, surfaceOp: 'append', data: {
         turn: 1, step: 1,
         message: createMessage({
           role: 'assistant',
@@ -187,7 +251,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
           },
         }),
       } },
-      { type: 'tool/result', seq: 3, time: 3, data: {
+      { type: 'tool/result', seq: 3, time: 3, surfaceOp: 'append', data: {
         turn: 1, step: 1,
         message: createToolResultMessage({
           callId: ToolCallId('old-call'),
@@ -199,7 +263,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
       { type: 'turn/end', seq: 5, time: 5, data: { turn: 1, reason: { kind: 'completed' } } },
       userTurnStart(2, 6),
       { type: 'step/start', seq: 7, time: 7, data: { turn: 2, step: 1 } },
-      { type: 'assistant/message', seq: 8, time: 8, data: {
+      { type: 'assistant/message', seq: 8, time: 8, surfaceOp: 'append', data: {
         turn: 2, step: 1,
         message: createMessage({
           role: 'assistant',
@@ -223,7 +287,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
     const events: SessionEvent[] = [
       userTurnStart(1, 0),
       { type: 'step/start', seq: 1, time: 1, data: { turn: 1, step: 1 } },
-      { type: 'assistant/message', seq: 2, time: 2, data: {
+      { type: 'assistant/message', seq: 2, time: 2, surfaceOp: 'append', data: {
         turn: 1, step: 1,
         message: createMessage({
           role: 'assistant',
@@ -238,7 +302,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
         }),
       } },
       // call-a got answered before the cut; call-b did not.
-      { type: 'tool/result', seq: 3, time: 3, data: {
+      { type: 'tool/result', seq: 3, time: 3, surfaceOp: 'append', data: {
         turn: 1, step: 1,
         message: createToolResultMessage({
           callId: ToolCallId('call-a'),
@@ -257,7 +321,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
     const events: SessionEvent[] = [
       userTurnStart(1, 0),
       { type: 'step/start', seq: 1, time: 1, data: { turn: 1, step: 1 } },
-      { type: 'assistant/message', seq: 2, time: 2, data: {
+      { type: 'assistant/message', seq: 2, time: 2, surfaceOp: 'append', data: {
         turn: 1, step: 1,
         message: createMessage({
           role: 'assistant',

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Time awareness",
+    "description": "Tells the model the current time, the browser's time zone, and the time since the previous message at each step."
+  }
+}

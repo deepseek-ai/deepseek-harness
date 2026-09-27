@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/product-analytics/README.md
+/:
+  en: 385fffb5f6f81222
+  zh: ea1d23fccd3b2b84
+/deepseek-ai-dsh-client-product-analytics:
+  en: bfcd910889485da9
+  zh: 74e27b92b9fafc33
+/deepseek-ai-dsh-client-product-analytics/summary:
+  en: 4b48b9e5de3a0e97
+  zh: cc06154eef4c4f6a
+/deepseek-ai-dsh-client-product-analytics/table-of-contents:
+  en: 2fee9973f19f9401
+  zh: 8ab4b55413cb8408
+/deepseek-ai-dsh-client-product-analytics/use-this-package:
+  en: 6bd7bf60e279ba1c
+  zh: afd55f06585c6462
+/deepseek-ai-dsh-client-product-analytics/understand-the-implementation:
+  en: 416b7e925f0852c9
+  zh: c0b83bacf18e91b1
+/deepseek-ai-dsh-client-product-analytics/model-experience:
+  en: 291751b16b8a37e7
+  zh: 3b38008f4364ec41
+/deepseek-ai-dsh-client-product-analytics/model-experience/kv-cache-effect:
+  en: 1f5125831808e7a9
+  zh: 97566fdde332df39
+/deepseek-ai-dsh-client-product-analytics/known-limitations-and-deferred-work:
+  en: a33ad31745fd5240
+  zh: 8b579cfc4c9b8155
+/deepseek-ai-dsh-client-product-analytics/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

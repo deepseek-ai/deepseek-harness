@@ -406,6 +406,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Flows are registered by the plugin that knows how to obtain one credential and keyed by the record they write; the seam owns the conversation and the one-attempt-per-key lifecycle, never the protocol.',
   },
   {
+    key: 'productAnalytics',
+    pkg: 'client-product-analytics',
+    title: 'Desktop interaction collection',
+    mode: 'service',
+    note: 'Accepts selected Desktop events, enriches available login identity, and observes live compaction under the live Host collection policy.',
+  },
+  {
     key: 'otel',
     pkg: 'otel',
     title: 'Shared OTel reporting channels',

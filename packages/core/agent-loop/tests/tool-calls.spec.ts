@@ -3,10 +3,10 @@
  * ACP expected outputs own transcript-facing coverage.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, ToolCallId, StreamChunk  } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionEvent, SessionId, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -631,6 +631,180 @@ describe('tool-call scheduler: abort handling', () => {
 })
 
 describe('tool-call scheduler: failure quiescence', () => {
+  it.each(['execution-mode', 'prepare', 'finalize'] as const)('pairs outstanding requests after %s fails and preserves committed results', async (phase) => {
+    const adapter = new MockAdapter([
+      multiCall([
+        { id: 'c1', name: 'p', args: { id: '1' } },
+        { id: 'c2', name: 'p', args: { id: '2' } },
+        { id: 'c3', name: 'p', args: { id: '3' } },
+      ]),
+      textResponse('continued'),
+    ])
+    const ctx = await harness(adapter)
+    onTestFinished(() => ctx.fiber.dispose())
+    const executed: string[] = []
+    ctx.tools.register(defineContentToolFixture({
+      name: 'p', description: 'exclusive', parameters: { id: { type: 'string', required: true } },
+      async execute(args) {
+        executed.push(args.id)
+        return [{ type: 'text', text: `done-${args.id}` }]
+      },
+    }))
+    const scheduler = ctx.tools[TOOL_RUNTIME_SCHEDULER]
+    const executionMode = ctx.tools.executionMode.bind(ctx.tools)
+    const prepare = scheduler.prepare.bind(scheduler)
+    const finalize = scheduler.finalize.bind(scheduler)
+    const failure = new Error(`${phase} failed`)
+    if (phase === 'execution-mode') {
+      ctx.tools.executionMode = (exec) => {
+        if (exec.callId === ToolCallId('c2')) throw failure
+        return executionMode(exec)
+      }
+    } else if (phase === 'prepare') {
+      scheduler.prepare = (exec) => {
+        if (exec.callId === ToolCallId('c2')) throw failure
+        return prepare(exec)
+      }
+    } else {
+      scheduler.finalize = (exec, result) => {
+        if (exec.callId === ToolCallId('c2')) throw failure
+        return finalize(exec, result)
+      }
+    }
+    const agent = await ctx.agentLoop.create(SessionId(`failure-${phase}`), { provider: 'mock', model: 'mock' })
+    const listenerCount = () => ctx.events.dispatch('emit', ['session/event', agent.session, events(agent).at(-1)]).length
+    const idleListenerCount = listenerCount()
+    const failedTurn = waitForIdle(ctx, agent)
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await failedTurn
+
+    const failedEvents = events(agent)
+    const calls = failedEvents.filter(event => event.type === 'tool/call')
+    const results = failedEvents.filter(event => event.type === 'tool/result')
+    expect(executed).toEqual(phase === 'finalize' ? ['1', '2'] : ['1'])
+    expect(results.map(event => [event.data.message.toolCallId, event.data.error?.code])).toEqual([
+      [ToolCallId('c1'), undefined],
+      [ToolCallId('c2'), phase === 'execution-mode' ? TOOL_NOT_STARTED : TOOL_OUTCOME_UNKNOWN],
+      [ToolCallId('c3'), TOOL_NOT_STARTED],
+    ])
+    expect(results[0]?.data.message).toMatchObject({
+      role: 'tool', toolCallId: ToolCallId('c1'), isError: false, content: [{ type: 'text', text: 'done-1' }],
+    })
+    expect(results.slice(1).map(event => event.data.message.isError)).toEqual([true, true])
+    expect(results.map(event => event.sourceEventSeqs)).toEqual([
+      [calls[0]?.seq],
+      phase === 'execution-mode' ? undefined : [calls[1]?.seq],
+      undefined,
+    ])
+    expect(failedEvents.slice(-3).map(event => event.type)).toEqual(['tool/result', 'step/end', 'turn/end'])
+    expect(failedEvents.at(-1)).toMatchObject({
+      data: { reason: { kind: 'error', error: { message: failure.message, code: 'UNKNOWN' } } },
+    })
+    expect(listenerCount()).toBe(idleListenerCount)
+
+    ctx.tools.executionMode = executionMode
+    scheduler.prepare = prepare
+    scheduler.finalize = finalize
+    const nextTurn = waitForIdle(ctx, agent)
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } }))
+    await nextTurn
+
+    expect(adapter.requests[1]?.messages.flatMap((message): string[] => {
+      if (message.role === 'tool') return [`result:${message.toolCallId}`]
+      return message.content.flatMap((block): string[] => {
+        if (block.type === 'tool-call') return [`call:${block.id}`]
+        if (message.role === 'user' && block.type === 'text') return [`user:${block.text}`]
+        return []
+      })
+    })).toEqual(['user:go', 'call:c1', 'call:c2', 'call:c3', 'result:c1', 'result:c2', 'result:c3', 'user:continue'])
+    expect(events(agent).filter(event => event.type === 'tool/result')).toHaveLength(3)
+    expect(events(agent).findLast(event => event.type === 'turn/end')?.data.reason.kind).toBe('completed')
+    expect(listenerCount()).toBe(idleListenerCount)
+  })
+
+  it('preserves the scheduler error when recording recovery results also fails', async () => {
+    const adapter = new MockAdapter([multiCall([{ id: 'c1', name: 'p', args: {} }])])
+    const ctx = await harness(adapter)
+    onTestFinished(() => ctx.fiber.dispose())
+    const failure = new Error('prepare failed')
+    const recoveryFailure = new Error('recovery result rejected')
+    ctx.tools[TOOL_RUNTIME_SCHEDULER].prepare = () => { throw failure }
+    ctx.on('internal/dispatch', (_mode, name, args) => {
+      if (name === 'session/event' && (args[1] as SessionEvent).type === 'tool/result') throw recoveryFailure
+    })
+    const errors: unknown[] = []
+    ctx.on('agent/error', ({ error }) => { errors.push(error) })
+    const agent = await ctx.agentLoop.create(SessionId('recovery-result-failure'), { provider: 'mock', model: 'mock' })
+    const done = waitForIdle(ctx, agent)
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await done
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toBeInstanceOf(AggregateError)
+    expect(errors[0]).toMatchObject({ cause: failure, errors: [failure, recoveryFailure] })
+    expect(events(agent).filter(event => event.type === 'tool/result')).toEqual([])
+    expect(events(agent).at(-1)).toMatchObject({ data: { reason: { kind: 'error', error: { code: 'UNKNOWN' } } } })
+  })
+
+  it('isolates pending requests from child agents and other sessions in the same scope', async () => {
+    const adapter = new MockAdapter([
+      multiCall([{ id: 'shared', name: 'p', args: {} }, { id: 'pending', name: 'p', args: {} }]),
+      multiCall([{ id: 'shared', name: 'p', args: {} }]),
+      textResponse('second agent done'),
+    ])
+    const ctx = await harness(adapter)
+    const enteredDispatch = Promise.withResolvers<undefined>()
+    const releaseDispatch = Promise.withResolvers<undefined>()
+    onTestFinished(async () => {
+      releaseDispatch.resolve(undefined)
+      await ctx.fiber.dispose()
+    })
+    ctx.tools.register(defineContentToolFixture({
+      name: 'p', description: 'probe', parameters: {},
+      async execute() { return [{ type: 'text', text: 'completed' }] },
+    }))
+    const scheduler = ctx.tools[TOOL_RUNTIME_SCHEDULER]
+    const dispatch = scheduler.dispatch.bind(scheduler)
+    scheduler.dispatch = async (exec) => {
+      if (exec.agent?.id === SessionId('first-agent')) {
+        enteredDispatch.resolve(undefined)
+        await releaseDispatch.promise
+        throw new Error('first agent dispatch failed')
+      }
+      return dispatch(exec)
+    }
+    const first = await ctx.agentLoop.create(SessionId('first-agent'), { provider: 'mock', model: 'mock' })
+    const { agent: second } = await first.ctx.agents.create({
+      sessionId: SessionId('second-agent'),
+      agentOptions: { provider: 'mock', model: 'mock' },
+      parentAgent: first,
+    })
+    const firstDone = waitForIdle(ctx, first)
+    first.followup(createUserMessage({ content: [{ type: 'text', text: 'first' }], source: { kind: 'user' } }))
+    await enteredDispatch.promise
+    const secondDone = waitForIdle(ctx, second)
+    second.followup(createUserMessage({ content: [{ type: 'text', text: 'second' }], source: { kind: 'user' } }))
+    await secondDone
+    const side = first.ctx.sessions.create(SessionId('same-scope-session'))
+    side.append('turn/start', { turn: 1 })
+    side.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'side session' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
+    side.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    releaseDispatch.resolve(undefined)
+    await firstDone
+
+    const firstResults = events(first).filter(event => event.type === 'tool/result')
+    expect(firstResults.map(event => [
+      event.data.message.toolCallId, event.data.error?.code,
+    ])).toEqual([[ToolCallId('shared'), TOOL_OUTCOME_UNKNOWN], [ToolCallId('pending'), TOOL_NOT_STARTED]])
+    expect(firstResults.map(event => event.sourceEventSeqs)).toEqual([
+      [events(first).find(event => event.type === 'tool/call')?.seq], undefined,
+    ])
+    const secondResults = events(second).filter(event => event.type === 'tool/result')
+    expect(secondResults).toHaveLength(1)
+    expect(secondResults[0]?.data.message).toMatchObject({ role: 'tool', toolCallId: ToolCallId('shared'), isError: false, content: [{ type: 'text', text: 'completed' }] })
+    expect(events(second).findLast(event => event.type === 'turn/end')?.data.reason.kind).toBe('completed')
+  })
+
   it('stops new dispatches and drains started bodies before surfacing the first failure', async () => {
     const adapter = new MockAdapter([
       multiCall([
@@ -660,6 +834,12 @@ describe('tool-call scheduler: failure quiescence', () => {
     const schedulerError = new Error('scheduler exploded')
     const drainedError = new Error('sibling failed while draining')
     let rejectFirst: ((error: Error) => void) | undefined
+    onTestFinished(async () => {
+      prepareGate.resolve(undefined)
+      rejectFirst?.(schedulerError)
+      for (const id of gated.pending()) gated.release(id)
+      await ctx.fiber.dispose()
+    })
     scheduler.dispatch = exec => exec.callId === ToolCallId('c1')
       ? new Promise((_resolve, reject) => { rejectFirst = reject })
       : dispatch(exec).then(() => { throw drainedError })
@@ -677,13 +857,22 @@ describe('tool-call scheduler: failure quiescence', () => {
     const startedBeforeDrain = [...gated.started]
     const idleBeforeDrain = idle
     const turnEndBeforeDrain = events(agent).find(event => event.type === 'turn/end')
+    const resultsBeforeDrain = events(agent).filter(event => event.type === 'tool/result')
     for (const id of gated.pending()) gated.release(id)
     await idlePromise
 
     expect(startedBeforeDrain).toEqual(['2'])
     expect(idleBeforeDrain).toBe(false)
     expect(turnEndBeforeDrain).toBeUndefined()
+    expect(resultsBeforeDrain).toEqual([])
     expect(gated.pending()).toEqual([])
+    expect(events(agent).filter(event => event.type === 'tool/result').map(event => [
+      event.data.message.toolCallId, event.data.error?.code,
+    ])).toEqual([
+      [ToolCallId('c1'), TOOL_OUTCOME_UNKNOWN],
+      [ToolCallId('c2'), TOOL_OUTCOME_UNKNOWN],
+      [ToolCallId('c3'), TOOL_OUTCOME_UNKNOWN],
+    ])
     expect(events(agent).findLast(event => event.type === 'turn/end')).toMatchObject({
       data: { reason: { kind: 'error', error: { message: schedulerError.message, code: 'UNKNOWN' } } },
     })

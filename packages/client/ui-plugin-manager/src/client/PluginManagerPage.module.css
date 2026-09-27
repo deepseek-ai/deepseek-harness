@@ -146,7 +146,7 @@
 @keyframes dsh-plugin-highlight {
   0%,
   55% {
-    box-shadow: 0 0 0 2px var(--dsw-alias-state-business-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, transparent);
   }
 
   100% {
@@ -157,7 +157,7 @@
 @media (prefers-reduced-motion: reduce) {
   .card[data-plugin-highlight] {
     animation: none;
-    box-shadow: 0 0 0 2px var(--dsw-alias-state-business-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, transparent);
   }
 }
 
@@ -271,7 +271,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: inherit;
+  border-radius: var(--dsw-radius-xl);
 }
 
 .cardOpen:focus-visible {
@@ -291,6 +291,46 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
   overflow: hidden;
+}
+
+/* Match Session search's pulse without coupling the two feature packages. */
+.skeletonFill {
+  background: var(--dsw-alias-bg-skeleton);
+  animation: dsh-plugin-skeleton 2s cubic-bezier(0.36, 0, 0.64, 1) infinite;
+}
+
+/* Keep each real text line's height; center the shorter painted bar within it. */
+.skeletonText {
+  display: flex;
+  align-items: center;
+  height: 1lh;
+}
+
+.skeletonBar {
+  width: 100%;
+  height: 12px;
+  border-radius: var(--dsw-radius-xs);
+}
+
+.skeletonHeading { width: 48px; }
+.skeletonTitle { width: min(144px, 60%); }
+.skeletonDescription { width: min(280px, 85%); }
+.skeletonIcon { border-color: transparent; }
+
+/* Keep text-column metrics while leaving the action area blank. */
+.skeletonActions {
+  width: 36px;
+  height: 20px;
+}
+
+@keyframes dsh-plugin-skeleton {
+  0% { opacity: 1; }
+  40% { opacity: 0.6; }
+  80%, 100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonFill { animation: none; }
 }
 
 .cardEnd {
@@ -462,13 +502,21 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.installField input[type='text']:focus {
+.installField input[type='text']:focus,
+.registryCustomField:focus {
   border-color: var(--dsw-alias-state-business-primary);
   box-shadow: inset 0 0 0 0.5px var(--dsw-alias-state-business-primary);
 }
 
-.installField input[aria-invalid='true'] {
+.installField input[type='text'][aria-invalid='true'],
+.registryCustomField[aria-invalid='true'] {
   border-color: var(--dsw-alias-state-error-primary);
+  box-shadow: none;
+}
+
+.installField input[type='text'][aria-invalid='true']:focus,
+.registryCustomField[aria-invalid='true']:focus {
+  box-shadow: inset 0 0 0 0.5px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
 }
 
 /* The guide under the field: opened by a text button, it says what an ID is and shows the three forms with examples. */
@@ -610,10 +658,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 26px;
+  height: 28px;
   padding: 0 8px 0 10px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: var(--dsw-radius-sm);
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-layer-2);
   font: inherit;
   font-size: 12.5px;
@@ -655,12 +703,12 @@
   box-sizing: border-box;
   width: min(440px, calc(100vw - 24px));
   margin: 0;
-  padding: 8px 10px 12px;
+  padding: 8px;
   border: 0;
-  border-radius: var(--dsw-radius-lg);
+  /* An opaque layer keeps the registry form controls readable over the dialog. */
   background: var(--dsw-alias-bg-layer-2);
-  /* The neutral stroke is the elevation's hairline, not a border beside it. */
-  --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-lg);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
   min-width: 0;
 }
@@ -670,14 +718,13 @@
   flex-direction: column;
   gap: 4px;
   padding: 8px 10px;
-  border: 0.5px solid transparent;
-  border-radius: var(--dsw-radius-lg);
+  border: 0;
+  border-radius: var(--dsw-radius-md);
   cursor: pointer;
 }
 
-.registryOption[data-checked='true'] {
-  border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 40%, transparent);
-  background: var(--dsw-alias-bg-layer-2);
+.registryOption:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* An offered registry is one row: the radio beside its title and the line under it. */
@@ -720,6 +767,7 @@ label.registryOption {
 }
 
 .registryCustomField {
+  outline: none;
   height: 32px;
   margin-left: 26px;
   padding: 0 10px;
@@ -729,10 +777,6 @@ label.registryOption {
   font: inherit;
   font-size: 13px;
   color: var(--dsw-alias-label-primary);
-}
-
-.registryCustomField[aria-invalid='true'] {
-  border-color: var(--dsw-alias-state-error-primary);
 }
 
 /* The typed address's field, refusal, and line sit under its title, past the radio and its gap. */

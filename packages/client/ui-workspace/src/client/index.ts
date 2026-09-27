@@ -15,6 +15,7 @@
  * its relative time and its trailing status line. Export discipline:
  * packages/client/AGENTS.md.
  */
+import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -208,7 +209,9 @@ export function apply(ctx: Context): void {
   })
   const forkInjected = (): ForkSessionInjected => ({
     forkSession: (sessionId) => {
-      uiWorkspace.forkSession(sessionId).catch(() => {
+      uiWorkspace.forkSession(sessionId, (childId) => {
+        ctx.get('productAnalytics')?.track('branch_session_click', { session_id: childId, parent_session_id: sessionId, click_position: 'sidebar' })
+      }).catch(() => {
         // Fork or child-title failure leaves the list as it was.
       })
     },

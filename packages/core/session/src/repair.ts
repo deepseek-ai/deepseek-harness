@@ -1,10 +1,7 @@
 /**
- * Synthetic closer events that balance a session log whose tail turn is open.
- * Two producers share the mechanism: crash recovery closes an interrupted
- * persisted log on reload, and fork-seed construction closes a prefix cut
- * inside the source's open turn. Both preserve every fully written event and
- * close the unfinished step and turn. Calls in already closed steps remain
- * unchanged, including any missing results.
+ * Pending tool-result recovery shared by failed live steps, interrupted logs,
+ * and fork seeds. Tail repair preserves closed steps and supplies only missing
+ * tool results and lifecycle boundaries, with cause-specific retry guidance.
  * @module @deepseek-ai/dsh-session/repair
  */
 
@@ -45,64 +42,34 @@ const CLOSER_TEXT = {
 
 /**
  * Return deterministic synthetic events that close an open tail turn. Unmatched
- * calls in its open step receive error results, followed by `step/end` and a
- * `turn/end` carrying the cause's reason. Calls in closed steps remain unchanged.
- * Sequences continue the log and timestamps reuse the last real event. A balanced or empty log returns no
- * events.
+ * calls receive error results first, followed by an open `step/end` and a
+ * cause-specific `turn/end`; sequences continue the log and timestamps reuse the
+ * last real event. A balanced or empty log returns no events.
  *
- * Package-internal: each cause has exactly one owner, so external callers go
- * through {@link interruptedTurnClosers} (persistence crash recovery) or
- * `buildForkSeed` in `./fork.ts` (fork seeds) instead of selecting a cause.
- *
- * @param events - the log to scan: a valid committed prefix, possibly ending
- *   inside an open turn (a crash tail or a mid-turn fork cut).
- * @param cause - why the turn is being closed; selects the `turn/end` reason
- *   and the model-visible wording of synthetic error tool results.
+ * @param events - the loaded durable log to scan (a valid committed prefix, possibly with a crash tail).
+ * @param cause - the owning close operation: selects result wording and the turn-ending reason.
  * @returns the synthetic closer events to append after `events`, in order; empty when the log is already balanced.
  */
 export function openTurnClosers(events: readonly SessionEvent[], cause: OpenTurnCloseCause): SessionEvent[] {
   let openTurn: number | null = null
   let openStep: number | null = null
-  // Reset at each turn boundary so earlier calls cannot leak into tail repair.
-  // Assistant blocks register calls; later `tool/call` events add their seqs to `sourceEventSeqs`.
-  const pendingCalls = new Map<ToolCallId, { step: number; callSeq?: SessionSeqType }>()
+  const recovery = new ToolCallRecovery(cause)
   for (const event of events) {
+    recovery.observe(event)
     switch (event.type) {
       case 'turn/start':
         openTurn = event.data.turn
         openStep = null
-        pendingCalls.clear()
         break
       case 'turn/end':
         openTurn = null
         openStep = null
-        pendingCalls.clear()
         break
       case 'step/start':
         openStep = event.data.step
         break
       case 'step/end':
-        pendingCalls.clear()
         openStep = null
-        break
-      case 'assistant/message':
-        // The assistant message carries the tool-call blocks; each is pending
-        // until a tool/result event with the same callId is logged.
-        for (const block of event.data.message.content) {
-          if (block.type === 'tool-call') pendingCalls.set(block.id, { step: event.data.step })
-        }
-        break
-      case 'tool/call':
-        // Cite the `tool/call` seq from the synthetic result.
-        {
-          const entry = pendingCalls.get(event.data.callId)
-          if (entry) {
-            entry.callSeq = event.seq
-          }
-        }
-        break
-      case 'tool/result':
-        pendingCalls.delete(event.data.message.source.callId)
         break
       // Other event types do not move the turn/step boundary cursor.
       default:
@@ -118,44 +85,11 @@ export function openTurnClosers(events: readonly SessionEvent[], cause: OpenTurn
   // The last real event supplies the seq base and the timestamp for the
   // synthetic closers (reusing the last timestamp keeps them deterministic and
   // never invents a "future" time).
-  let seq = last.seq + 1
+  const closers: SessionEvent[] = recovery.results()
+  let seq = last.seq + closers.length + 1
   const time = last.time
-  const closers: SessionEvent[] = []
 
-  // Close calls before their step; Map insertion order preserves transcript order.
-  const text = CLOSER_TEXT[cause.kind]
-  for (const [callId, { step, callSeq }] of pendingCalls) {
-    const started = callSeq !== undefined
-    const message: ToolResultMessage = deepFreeze({
-      id: brandString<MessageId>(`${cause.kind}-tool-result-${callId}-${seq}`),
-      role: 'tool',
-      toolCallId: callId,
-      isError: true,
-      source: { kind: 'tool', callId },
-      content: [{
-        type: 'text',
-        text: started ? text.started : text.notStarted,
-      }],
-    })
-    closers.push({
-      type: 'tool/result',
-      seq: SessionSeq(seq++),
-      time,
-      data: {
-        turn: openTurn,
-        step,
-        message,
-        error: started
-          ? { name: 'ToolOutcomeUnknownError', code: TOOL_OUTCOME_UNKNOWN }
-          : { name: 'ToolNotStartedError', code: TOOL_NOT_STARTED },
-      },
-      surfaceOp: 'append',
-      ...started ? { sourceEventSeqs: [callSeq] } : {},
-    })
-  }
-
-  // Close an open step next — a turn/end while a step is open is an invariant
-  // violation, so the step's boundary must be synthesized before the turn's.
+  // Close an open step before its turn.
   if (openStep !== null) {
     closers.push({ type: 'step/end', seq: SessionSeq(seq++), time, data: { turn: openTurn, step: openStep } })
   }
@@ -164,10 +98,110 @@ export function openTurnClosers(events: readonly SessionEvent[], cause: OpenTurn
 }
 
 /**
+ * Track unanswered assistant tool requests from one Session's committed events.
+ * Observe from the start of the owned step or replay prefix, and recover before
+ * its step closes. This state retains pending identities, not event history.
+ */
+export class ToolCallRecovery {
+  private readonly pendingCalls = new Map<ToolCallId, { turn: number; step: number; callSeq?: SessionSeqType }>()
+  private last: Pick<SessionEvent, 'seq' | 'time'> | undefined
+
+  /** @param cause - defaults to interrupted live/crash recovery; fork-seed construction supplies its own cause. */
+  constructor(private readonly cause: OpenTurnCloseCause = { kind: 'interrupted' }) {}
+
+  /**
+   * Consume the next committed event; closed steps and turn boundaries discard pending requests.
+   * @param event - the next event from the same Session, in sequence order.
+   */
+  observe(event: SessionEvent): void {
+    this.last = { seq: event.seq, time: event.time }
+    switch (event.type) {
+      case 'turn/start':
+      case 'turn/end':
+      case 'step/end':
+        this.pendingCalls.clear()
+        break
+      case 'assistant/message':
+        for (const block of event.data.message.content) {
+          if (block.type === 'tool-call') {
+            this.pendingCalls.set(block.id, { turn: event.data.turn, step: event.data.step })
+          }
+        }
+        break
+      case 'tool/call': {
+        const entry = this.pendingCalls.get(event.data.callId)
+        if (entry) entry.callSeq = event.seq
+        break
+      }
+      case 'tool/result': {
+        const callId = event.data.message.source.callId
+        const entry = this.pendingCalls.get(callId)
+        if (event.surfaceOp === 'append' && entry !== undefined
+          && entry.turn === event.data.turn && entry.step === event.data.step) {
+          this.pendingCalls.delete(callId)
+        }
+        break
+      }
+      // SessionEvent is merge-extensible; unrelated events retain pending requests.
+      default:
+        break
+    }
+  }
+
+  /**
+   * Build conservative error results in assistant order without changing tracked state.
+   * Sequences follow the latest observed event and timestamps reuse its time.
+   * Callers commit the results and observe those commits before recovering again.
+   * @returns pending tool-result events, empty when no request remains unanswered.
+   */
+  results(): SessionEvent<'tool/result'>[] {
+    if (this.last === undefined) return []
+    let seq = this.last.seq + 1
+    const time = this.last.time
+    const results: SessionEvent<'tool/result'>[] = []
+
+    const text = CLOSER_TEXT[this.cause.kind]
+    // Close calls before their step: providers reject dangling assistant calls,
+    // and Map insertion order preserves their transcript order.
+    for (const [callId, { turn, step, callSeq }] of this.pendingCalls) {
+      const started = callSeq !== undefined
+      const message: ToolResultMessage = deepFreeze({
+        id: brandString<MessageId>(`${this.cause.kind}-tool-result-${callId}-${seq}`),
+        role: 'tool',
+        toolCallId: callId,
+        isError: true,
+        source: { kind: 'tool', callId },
+        content: [{
+          type: 'text',
+          text: started ? text.started : text.notStarted,
+        }],
+      })
+      results.push({
+        type: 'tool/result',
+        seq: SessionSeq(seq++),
+        time,
+        data: {
+          turn,
+          step,
+          message,
+          error: started
+            ? { name: 'ToolOutcomeUnknownError', code: TOOL_OUTCOME_UNKNOWN }
+            : { name: 'ToolNotStartedError', code: TOOL_NOT_STARTED },
+        },
+        surfaceOp: 'append',
+        ...started ? { sourceEventSeqs: [callSeq] } : {},
+      })
+    }
+
+    return results
+  }
+}
+
+/**
  * Crash-recovery entry point: synthetic closers that balance a persisted log
  * whose tail turn was interrupted. Used by crash-recovery callers; fork
  * seeds receive their `forked`-cause closers through `buildForkSeed` in
- * `./fork.ts`, and cause selection stays internal to those two owners.
+ * `./fork.ts`.
  *
  * @param events - the persisted log to scan, possibly ending inside an open turn.
  * @returns the synthetic `interrupted` closer events to append after `events`; empty when the log is already balanced.

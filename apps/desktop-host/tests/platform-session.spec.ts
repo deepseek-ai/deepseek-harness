@@ -9,6 +9,7 @@ const state: AccountView = {
 }
 
 class Account extends DeepSeekAccount {
+  getDeviceIdentity = async () => ({ osVersion: 'test-os' })
   fail = false
   ended = Promise.withResolvers<undefined>()
   reading = Promise.withResolvers<undefined>()

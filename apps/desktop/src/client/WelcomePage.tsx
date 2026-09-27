@@ -19,6 +19,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   const [expiryNotice, setExpiryNotice] = useState(false)
   const [page, setPage] = useState<Page>('entry')
   const pageRef = useRef<Page>('entry')
+  const visiblePage = useRef<Page>('entry')
   const [attempt, setAttempt] = useState<AccountView['attempt']>(null)
   const attemptRef = useRef<AccountView['attempt']>(null)
   const [starting, setStarting] = useState(false)
@@ -69,12 +70,14 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   }, [api, m.welcomeTitle])
 
   useEffect(() => {
+    if (page === 'entry' && visiblePage.current !== 'entry') void api.analytics?.('auth_page_view', {})
+    visiblePage.current = page
     if (page === 'key') input.current?.focus()
     else if (page === 'entry' && focusEntry.current) {
       focusEntry.current = false
       keyButton.current?.focus()
     }
-  }, [page])
+  }, [page, api])
 
   useEffect(() => {
     if (copyState !== 'copied' && copyState !== 'failed') return
@@ -85,6 +88,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   async function saveKey(event: FormEvent) {
     event.preventDefault()
     if (busyRef.current) return
+    void api.analytics?.('api_key_save_click', {})
     const value = draft.trim()
     if (!/^[\x21-\x7e]+$/.test(value) || /^[A-Z][A-Z0-9_]*=[^=]/.test(value)
       || ((value.startsWith('"') || value.startsWith("'") || value.charCodeAt(0) === 96) && value.at(-1) === value[0])) {
@@ -198,15 +202,15 @@ export function Welcome({ api }: { api: WelcomeApi }) {
         <button id="auth-loading" className="primary" type="button" hidden={failed} disabled aria-label={m.welcomeAuthExchanging}>
           <StateDot state="ongoing" size={16} className="welcome-loading" />
         </button>
-        <button id="auth-retry" className="primary" type="button" hidden={!failed} onClick={() => { void start() }}>{m.welcomeAuthRetry}</button>
-        <button id="auth-api-key" className="secondary" type="button" hidden={!failed} onClick={() => { navigate('key') }}>{m.welcomeApiKey}</button>
+        <button id="auth-retry" className="primary" type="button" hidden={!failed} onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'sign_in' }); void start() }}>{m.welcomeAuthRetry}</button>
+        <button id="auth-api-key" className="secondary" type="button" hidden={!failed} onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'api-key' }); navigate('key') }}>{m.welcomeApiKey}</button>
         <button id="auth-cancel" className="secondary" type="button" hidden={failed}
           disabled={cancelling || phase === 'committing' || phase === 'succeeded' || (phase === 'initializing' && !attempt?.id)}
           onClick={() => { void cancel() }}>{m.welcomeAuthCancel}</button>
       </div>
       <div id="entry-actions" className="actions" hidden={page !== 'entry'}>
-        <button id="sign-in" className="primary" type="button" onClick={() => { void start() }}>{m.welcomeSignIn}</button>
-        <button ref={keyButton} id="api-key" className="secondary" type="button" onClick={() => { navigate('key') }}>{m.welcomeApiKey}</button>
+        <button id="sign-in" className="primary" type="button" onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'sign_in' }); void start() }}>{m.welcomeSignIn}</button>
+        <button ref={keyButton} id="api-key" className="secondary" type="button" onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'api-key' }); navigate('key') }}>{m.welcomeApiKey}</button>
       </div>
       <div id="key-actions" className="actions" hidden={page !== 'key'}>
         <button id="save-key" className="primary" type="submit" form="key-form" disabled={busy || draft.trim() === ''}>{m.welcomeKeySave}</button>

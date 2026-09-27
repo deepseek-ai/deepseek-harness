@@ -1,0 +1,3 @@
+- insert:
+    - id: scheduler-failure-fixture
+      name: './scheduler-failure.mjs'

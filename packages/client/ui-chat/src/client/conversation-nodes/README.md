@@ -78,7 +78,7 @@ The Turn control follows all its opening inputs, including human steering and no
 | Non-human message in an idle `next-step` claim | Turn-trigger notice only in Step 1, with a loaded Turn start, a claim after that start, no `next-turn` claim in this Turn, and no human in the same `next-step` batch. |
 | Other non-human input | Ordinary Context, retained in the Node Store but omitted from Chat. Unclaimed, canceled, or requeued messages do not establish a waking claim. |
 
-Trigger titles and icons use the recorded `source.kind`: `schedule`, `tool-jobs`, and `cordis-host-runner` identify scheduled work, background work, and plugin updates. Goal, agent, team, subagent, and webhook sources have their own titles; a webhook with `provider: github` uses the GitHub title. Unknown sources use the generic execution-request title. Expanding the notice shows its recorded body; it does not imply successful execution.
+Trigger titles and icons use the recorded `source.kind`: `schedule`, `tool-jobs`, and `cordis-host-runner` identify scheduled work, background work, and plugin updates. Schedule notices are labeled Automation task and use the same plain clock icon as the Automation tasks entry. Goal, agent, team, subagent, and webhook sources have their own titles; a webhook with `provider: github` uses the GitHub title. Unknown sources use the generic execution-request title. Expanding the notice shows its recorded body; it does not imply successful execution.
 
 | Turn condition | Current behavior |
 |---|---|
@@ -99,7 +99,7 @@ Clicking Load older anchors the first visible content item below that button in 
 
 Paging adds older content above the retained anchor without jumping to the new top. A capped group absorbs the displacement within its scroll range; the outer transcript absorbs the remainder, including when the group first reaches its cap. If the available scroll range is insufficient, compensation stops at the actual limit without adding bottom space. Later content growth keeps the same anchor until a reading gesture or explicit navigation releases it. Typing or clicking within the composer and non-scrolling transcript keys retain the anchor. If the reader scrolls while a page is loading, scrolling takes priority and its settled reading position becomes the new paging anchor.
 
-A running clock updates in whole seconds, starts at one second, and uses hours from 60 minutes. Completion fixes the duration; cancellation and failure replace it with their status. Lifecycle changes have a polite announcement; clock ticks do not. This control is Chat's only Turn-level running indicator.
+While the Session runs, Chat appends a Session-level indicator at the bottom of the current transcript, after pending submission or steering rows: a whale tail beside shimmering elapsed time. Before the current Turn start time arrives, the indicator shows status text without a duration. The clock updates in whole seconds, starts at one second, and uses hours from 60 minutes. When the Session stops running, the indicator disappears; the closed Turn process control shows the fixed duration, cancellation, or failure status. Lifecycle changes have a polite announcement; clock ticks do not. The whale is hidden from assistive technology and remains static under reduced motion.
 
 Automatic collapse keeps the process open if hiding it would hide keyboard focus. Manual closing focuses the process control before hiding its members. Closing a whole Turn resets its groups and inner reasoning/tool disclosures; it does not reset unrelated renderer state. Browser find can reveal searchable hidden content.
 
@@ -108,7 +108,7 @@ Automatic collapse keeps the process open if hiding it would hide keyboard focus
 <a id="display-modes"></a>
 ## Display modes
 
-Settings → General → Work details offers `compact`, `standard` (default), `detailed`, and `verbose`; its description is “Choose how much detail to show for tool calls”. A saved `normal` reads as `standard`, and a saved `expanded` reads as `detailed`, without automatic write-back. Existing `detailed` remains `detailed`. Missing or invalid values, including the period before Host settings arrive, use `standard`; invalid values in other settings still fail validation.
+Settings → General → Work details offers four modes for choosing how much tool-call detail to show: Compact `compact`, Standard `standard`, Detailed `detailed`, and Verbose `verbose`.
 
 | Behavior | Compact | Standard | Detailed | Verbose |
 |---|---|---|---|---|
@@ -118,9 +118,19 @@ Settings → General → Work details offers `compact`, `standard` (default), `d
 | Individual reasoning and tool bodies | Manual expansion | Manual expansion | Manual expansion | Manual expansion |
 | Eligible completed Turn | Initially collapsed | Initially collapsed | Initially collapsed | Always open; duration/status header cannot collapse it |
 
-A closed group's header names the first three categories from its ranked summary, without displaying counts. A group without categories uses the thinking label. A running header names its live tool category, otherwise thinking; Standard appends live detail. Live titles remain visible for at least 150ms, retaining only the newest pending title.
+### Defaults and saving preferences
+
+Work details uses the Host setting `ui-chat.transcriptView`. The client reads it according to these rules:
+
+- Saved values for the four modes are used directly, regardless of changes to defaults.
+- Legacy `normal` and `expanded` values display as `detailed`, without automatically rewriting the saved values on disk.
+- When the setting is missing, `null`, or invalid, Desktop uses `standard` and non-Desktop Web uses `detailed`. Each client also uses its default before Host settings arrive; invalid values in other settings still fail validation.
+
+Reading a default does not automatically save configuration. When the user changes modes, the selected value is saved through Host settings; memory mode does not write to disk. Desktop onboarding writes preferences according to its rules when completed or skipped.
 
 ### Group-title rules
+
+A closed group's header names the first three categories from its ranked summary, without displaying counts. A group without categories uses the thinking label. A running header names its live tool category, otherwise thinking; Standard appends live detail. Live titles remain visible for at least 150ms, retaining only the newest pending title.
 
 All three stages share the tool-name classification below. A preparing Tool node uses its category's preparation label: read files for `read`, read images for `read_image`, write files for `write`, edit files for `edit` and `apply_patch`, and update the plan for `todo_write` and goal tools. Only the generic “Preparing tool calls” category appends the wire tool name in Standard mode; other categories omit it. It contributes one call without parsing arguments and renders one non-expandable row. A named live delta can create this node; historical calls start directly from tool/call without replaying preparation.
 

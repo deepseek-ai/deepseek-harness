@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-26-web-conversation-clock-fixture-day.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-26-web-conversation-clock-fixture-day.md
+/agent-note-web-conversation-clocks-on-the-fixture-day:
+  en: 13b5d9d0bb3626af
+  zh: 0bd01e1848284a35
+/agent-note-web-conversation-clocks-on-the-fixture-day/problem:
+  en: 6f334488a6d3a28d
+  zh: b33aed9b10d0cd84
+/agent-note-web-conversation-clocks-on-the-fixture-day/decision:
+  en: ba875c82795d58e1
+  zh: 13a7df6f8c4e0aa6
+/agent-note-web-conversation-clocks-on-the-fixture-day/alternatives-considered:
+  en: 9c0a2afb1473c1d1
+  zh: 36c9e72a70072f5e
+/agent-note-web-conversation-clocks-on-the-fixture-day/verification:
+  en: 5031ca866fed24dd
+  zh: c11f71af70c1f5ec
+/agent-note-web-conversation-clocks-on-the-fixture-day/consequences:
+  en: c5cdbbd3b2889df7
+  zh: 8458ef92443cf1a6

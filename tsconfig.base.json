@@ -28,6 +28,9 @@
     // not declaration path aliases, keep each package/vendor source compiled
     // under its own tsconfig boundary.
     "paths": {
+      "@deepseek-ai/dsh-client-product-analytics": ["./packages/client/product-analytics/src/index.ts"],
+      "@deepseek-ai/dsh-client-product-analytics/types": ["./packages/client/product-analytics/src/events.ts"],
+      "@deepseek-ai/dsh-client-product-analytics/client": ["./packages/client/product-analytics/src/client/index.ts"],
       "@deepseek-ai/dsh-otel": ["./packages/telemetry/otel/src"],
       "@deepseek-ai/dsh-client-ui-settings-account": ["./packages/client/ui-settings-account/src/index.ts"],
       "@deepseek-ai/dsh-client-ui-settings-account/client": ["./packages/client/ui-settings-account/src/client/index.ts"],

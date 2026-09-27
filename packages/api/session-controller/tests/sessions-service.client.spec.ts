@@ -983,8 +983,10 @@ describe('fork', () => {
     b.mock.remote.session.fork.mockResolvedValue(ok({ sessionId: sid('child') }))
     b.mock.remote.session.rename.mockResolvedValue(err(new RemoteError('session/title-invalid', 'rejected', { sessionId: sid('child') })))
 
-    await expect(b.svc.fork({ sessionId: sid('source'), increaseTitle: true }))
+    const onCreated = vi.fn()
+    await expect(b.svc.fork({ sessionId: sid('source'), increaseTitle: true, onCreated }))
       .rejects.toThrow('fork child rename failed: session/title-invalid: rejected')
+    expect(onCreated).toHaveBeenCalledExactlyOnceWith('child')
     expect(b.svc.list.getSnapshot().byId[sid('child')]).toBeDefined()
     expect(b.svc.binding(sid('child'))).toBeUndefined()
     expect(b.svc.retainInfo(sid('child')).getSnapshot().referenceCount).toBe(0)

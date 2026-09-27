@@ -29,7 +29,7 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, pinBrowserClock, saveFailureShot, WEB_FIXTURE_TIME, writeComposerDraft } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/reference-composer', import.meta.url))
 const MENU_EXPECTED = join(SNAPSHOT_DIR, 'menu.expected.md')
@@ -142,14 +142,16 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
+  let unpinBrowserClock: (() => void) | undefined
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({})
-    const targetCreatedAt = Date.now() - 60_000
+    const targetCreatedAt = WEB_FIXTURE_TIME - 60_000
     await seedSession(scaffold, sourceSessionFixture(), SOURCE_SESSION_ID, undefined, { createdAt: targetCreatedAt - 1 })
     await seedSession(scaffold, targetSessionFixture(), TARGET_SESSION_ID, undefined, { createdAt: targetCreatedAt })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    unpinBrowserClock = await pinBrowserClock(page)
     tripwire = watchConsole(page)
     // Fixture files land before the workspace connects so the Host's file
     // index never races their creation (the connect helper mkdirs the same
@@ -169,6 +171,7 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
   }, 120_000)
 
   afterAll(async () => {
+    unpinBrowserClock?.()
     await browser?.close()
     await scaffold?.close()
   })

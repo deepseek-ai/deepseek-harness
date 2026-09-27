@@ -28,6 +28,9 @@
     },
     {
       "path": "../../packages/util/atomic-write"
+    },
+    {
+      "path": "../../packages/client/product-analytics/tsconfig.host.json"
     }
   ],
   "exclude": [

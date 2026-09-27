@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-experimental-schedule-bundle",
-  "description": "Optional bundle that switches the shipped Schedule, time-context, and reminder-catalog rows on",
+  "description": "Optional bundle that adds Schedule, its task page, and time context to the Web composition",
   "version": "0.1.7-rc.2",
   "icon": "./icon.svg",
   "publishConfig": {
@@ -32,6 +32,11 @@
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh-client-ui-schedule": "workspace:*",
+    "@deepseek-ai/dsh-schedule": "workspace:*",
+    "@deepseek-ai/dsh-time-context": "workspace:*"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"
   },

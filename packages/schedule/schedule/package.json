@@ -28,6 +28,7 @@
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
     "./typert": {
       "types": "./lib/typert.host.d.ts",
       "default": "./lib/typert.host.js"
@@ -38,6 +39,7 @@
     }
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/invariant.js",
     "lib/types/**/*.js",

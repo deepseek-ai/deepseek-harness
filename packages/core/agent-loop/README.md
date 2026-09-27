@@ -126,6 +126,8 @@ Prompt admission uses the actual `prepareCall()` result, not the preceding `requ
 
 Final adapter selection, dispatch, and iteration failures arrive as terminal finishes and enter `agent/request-error`; a handling listener returns `{ kind: 'retry' }` without calling `next()`, while an unhandled failure is terminal. Middleware, result-processing, tool, and other extension failures remain thrown and close the turn directly — plugin failure ends the turn, not the loop. Undispatched model tool calls after cancellation receive synthetic `tool/call` plus `ABORTED_BEFORE_DISPATCH` result pairs. The [explicit-cancellation decision](../../../.agents/notes/implemented/architecture/2026-07-16-explicit-turn-cancellation.md) owns the signal lifecycle.
 
+Before closing a failed step, the driver records an error result for each unanswered assistant tool call. A recorded `tool/call` without a committed result receives `TOOL_OUTCOME_UNKNOWN`; a request without a call record receives `TOOL_NOT_STARTED`. Committed results remain intact, started dispatches settle before recovery, and the turn retains the original failure. These results let later requests use paired tool history without automatically retrying uncertain operations ([decision](../../../.agents/notes/implemented/bug-fix/2026-09-19-failed-step-tool-results.md)).
+
 </details>
 
 -----
@@ -189,6 +191,20 @@ One fixed error result per skipped call remains in history until compaction shad
 
 Append-only; each synthetic result follows the reusable request prefix and does not invalidate existing KV Cache entries.
 
+### Unanswered calls after step failure
+
+#### What the model sees
+
+Each unanswered tool call receives an error result in later history. For a recorded call, the result states `Its outcome is unknown.` and permits retries only for read-only or idempotent operations; possible side effects require checking external state or asking the user first. A call without a start record states `The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.`
+
+#### Token effect
+
+One recovery result per unanswered call remains in history until compaction shadows it.
+
+#### KV Cache effect
+
+Recovery results append after the existing history and preserve its reusable prefix.
+
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -197,6 +213,7 @@ Append-only; each synthetic result follows the reusable request prefix and does 
 These limits define when the loop needs special care. They are current package constraints, not a task backlog.
 
 - **Classification is unary** — calls whose safety depends on comparing siblings or resources must remain exclusive ([rationale](../../../.agents/notes/implemented/feature/2026-07-10-parallel-tool-call-execution.md)).
+- **Previously closed inconsistent history** — failed-step recovery does not rewrite unanswered calls in already-closed historical turns.
 - **Config labels are fresh by default** — omitting `sessionId` creates a fresh `${id}-session-<uuid>` on every startup; exact resume-or-create behavior requires an explicit stable `sessionId`, while `resumeSessionId` requires existing persisted history.
 - **Config agents have no per-agent persona field or setup hook** — they use the deployment persona; scoped persona and tool composition are available only through the programmatic `ctx.agents.create()` / `resume()` factory options.
 - **No built-in turn budget** — tool calls or steering continue the current turn; a policy that bounds runaway turns must cancel from an existing lifecycle extension point such as `agent/turn-stopping`.
