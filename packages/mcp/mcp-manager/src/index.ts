@@ -461,16 +461,10 @@ export default class McpServerManager extends Service {
     const previous = this.statuses.get(name)
     if (previous !== undefined && deepEqualJson(previous, status)) return
     this.statuses.set(name, status)
-    // A consumer's throwing listener must not break the lifecycle operation
-    // publishing the status (docs/defensive-patterns.md: contain callback
-    // exceptions). Invariant companions report through their own reporter,
-    // not by throwing here, so containment costs them nothing.
-    try {
-      this.ctx.emit('mcp-manager/status', name, status)
-    } catch (error) {
+    void this.ctx.parallel('mcp-manager/status', name, status).catch((error: unknown) => {
       this.ctx.logger.error(`mcp-manager: a mcp-manager/status listener failed for "${name}"`)
       this.ctx.logger.error(error)
-    }
+    })
   }
 
   /** Template lookups: the process environment and the optional credential seam. */

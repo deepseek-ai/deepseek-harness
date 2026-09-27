@@ -81,7 +81,7 @@ Settings 写入经 ConfigEditor 持久化并检查 revision；Loader 更新 vola
 
 ### 观察与恢复
 
-`ctx.mcpServers.list()` 给管理界面每台已配置服务器一行：传输、持久意图、可删性与实时状态（`connecting`、带工具数的 `connected`、带尝试预算的 `reconnecting`、带原因与最近错误的 `failed`，或 `disabled`）。每次状态迁移同时发出 `mcp-manager/status` 事件。重连本身留在 mcp-client 内（500 毫秒到 30 秒退避、每次断线十次尝试）；`restart(name)` 是其外的手动恢复——全新实例带全新预算，也是不改配置时走出 `failed` 终态的唯一途径。`probe(name)` 连接、列工具、断开而不注册任何东西——即「测试该服务器」，对已停用条目同样可用。
+`ctx.mcpServers.list()` 给管理界面每台已配置服务器一行：传输、持久意图、可删性与实时状态（`connecting`、带工具数的 `connected`、带尝试预算的 `reconnecting`、带原因与最近错误的 `failed`，或 `disabled`）。每次状态迁移同时发出 `mcp-manager/status` 事件。生命周期操作不等待监听器完成；监听器同步抛错或返回的 Promise 拒绝都会被记录，其他监听器仍会收到通知。重连本身留在 mcp-client 内（500 毫秒到 30 秒退避、每次断线十次尝试）；`restart(name)` 是其外的手动恢复——全新实例带全新预算，也是不改配置时走出 `failed` 终态的唯一途径。`probe(name)` 连接、列工具、断开而不注册任何东西——即「测试该服务器」，对已停用条目同样可用。
 
 -----
 
