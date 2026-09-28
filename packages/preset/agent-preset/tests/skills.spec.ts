@@ -3,13 +3,15 @@
  * files exist, templates parse, and no skill bans reading DSH sources.
  */
 import { execFileSync } from 'node:child_process'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, statSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { Context } from '@deepseek-ai/cordis'
 import { fileURLToPath } from 'node:url'
 import * as yaml from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { codePointLength } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
-import { renderSkillContent } from '@deepseek-ai/dsh-skill'
+import SkillRegistry, { renderSkillContent } from '@deepseek-ai/dsh-skill'
+import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import { describe, expect, it } from 'vitest'
 
 const skills = fileURLToPath(new URL('../skills/', import.meta.url))
@@ -35,6 +37,37 @@ function markdownFiles(dir: string): string[] {
 }
 
 describe('the shipped creator skills', () => {
+  const repositorySkills = fileURLToPath(new URL('../../../../.agents/skills/', import.meta.url))
+  const alias = join(repositorySkills, 'agent-experience/SKILL.md')
+  const canonical = join(skills, 'agent-experience/SKILL.md')
+
+  it('keeps agent-experience in the package with a repository alias, not a second copy', () => {
+    expect(names).toContain('agent-experience')
+    expect(lstatSync(canonical).isFile()).toBe(true)
+    const linked = lstatSync(alias).isSymbolicLink()
+    // Git can materialize link targets as plain files on Windows with core.symlinks=false.
+    if (!linked) expect(process.platform).toBe('win32')
+    const target = linked ? readlinkSync(alias) : readFileSync(alias, 'utf8').trim()
+    expect(resolve(dirname(alias), target)).toBe(canonical)
+  })
+
+  it.for(['package', 'repository'] as const)('loads agent-experience from the %s skill root', async (source, test) => {
+    if (source === 'repository' && process.platform === 'win32' && !lstatSync(alias).isSymbolicLink()) {
+      test.skip(true, 'Repository discovery requires a checkout with symbolic links enabled.')
+    }
+    const ctx = new Context()
+    test.onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SkillRegistry)
+    await ctx.plugin(SkillFileSystem, {
+      includeDefaultRoots: false, watch: false,
+      customSkillDirs: [source === 'package' ? skills : repositorySkills],
+    })
+    expect((await ctx.skills.list()).map(skill => skill.name)).toContain('agent-experience')
+    const loaded = await ctx.skills.get('agent-experience')
+    expect(loaded?.path).toBe(realpathSync(canonical))
+    expect(loaded?.content).toBe(body('agent-experience').trim())
+  })
+
   it('render below the pruner threshold and name only files that exist', () => {
     for (const name of names) {
       const rendered = renderSkillContent({

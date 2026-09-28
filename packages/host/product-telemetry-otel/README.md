@@ -48,11 +48,11 @@ Mount the plugin in a Cordis composition with the application identity; override
 | `scheduledDelayMillis` | `30000` | Partial-batch export interval |
 | `timeoutMillis` | `15000` | Exporter HTTP and retry deadline |
 | `exportTimeoutMillis` | `20000` | Processor batch export deadline |
-| `shutdownTimeoutMillis` | `21000` | Outer wait for shutdown; expiry reports possible loss |
+| `shutdownTimeoutMillis` | `21000` | Drain deadline; expiry cancels pending exports and reports possible loss |
 
 The default endpoint routes explicitly submitted events to the production product collector. Test and custom deployments must override it. Only `x-channel` and SDK protocol headers reach the collector; ambient OTel headers and client certificates are not inherited.
 
-The 30-second interval batches product events; the exporter has a 15-second retry window inside the processor’s 20-second batch deadline. The outer 21-second wait bounds plugin disposal, including SDK `forceFlush()` work that the processor deadline does not cover. An unreachable collector can delay disposal for the full 21 seconds. A full 2,048-record queue requires four 512-record batches and may not drain before that deadline. Interactive compositions needing a shorter exit should override these budgets; neither configuration guarantees delivery.
+The 30-second interval batches product events; the exporter has a 15-second retry window inside the processor’s 20-second batch deadline. The 21-second drain deadline covers SDK `forceFlush()` work that the processor deadline does not cover. Expiry cancels active HTTP requests and retry waits, then awaits transport cleanup before disposal completes. An unreachable collector can delay disposal for the full 21 seconds. A full 2,048-record queue requires four 512-record batches and may not drain before that deadline. Interactive compositions needing a shorter exit should override these budgets; neither configuration guarantees delivery.
 
 Consumers inject `productTelemetry` and call `emit()` with explicitly selected analytics fields. Event names and field semantics belong to their product and analytics owners. The plugin reads no Session, account, credential, or device identifier. Callers must exclude prompts, responses, file contents, credentials, and other unapproved values.
 
@@ -66,7 +66,7 @@ The collector expects a string body and attributes containing strings, numbers, 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The adapter injects `otel` and creates an independent ordinary-event channel through `ctx.otel.createEventReporter()`. The [shared OTel plugin](../../telemetry/otel/README.md) owns SDK transport and batching; this adapter owns analytics configuration and its bounded shutdown wait. No global OTel provider is installed.
+The adapter injects `otel` and creates an independent ordinary-event channel through `ctx.otel.createEventReporter()`. The [shared OTel plugin](../../telemetry/otel/README.md) owns transport and SDK batching; this adapter owns analytics configuration and its shutdown cancellation deadline. No global OTel provider is installed.
 
 [`src/index.ts`](src/index.ts) owns configuration and submission. No runtime invariant companion is published: delivery has no independent local acknowledgement to compare with the SDK's queue.
 

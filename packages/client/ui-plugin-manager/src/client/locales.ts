@@ -1,10 +1,17 @@
 /** Plugin management interface copy. */
 
+/** Git template shared by the displayed example and replacement reminder. */
+export const INSTALL_GIT_EXAMPLE = 'https://github.com/author/dsh-plugin'
+/** Local-path template shared by the displayed example and replacement reminder. */
+export const INSTALL_PATH_EXAMPLE = '/Users/name/my-plugin'
+
 /** Simplified Chinese dictionary and key source of truth. */
 export const zh = {
   panel: '插件',
   title: '插件',
-  intro: '添加和管理插件',
+  intro: '安装、启用和配置插件',
+  infoLabel: '插件说明',
+  infoDescription: '在这里配置官方插件，安装和管理其他插件。内置插件列表及运行状态可在「设置 → 内置插件」中查看',
   loading: '正在读取插件…',
   error: '可能由于网络问题，无法读取全部插件',
   unavailable: '本部署没有可管理的 profile，无法安装或启停插件。',
@@ -56,12 +63,14 @@ export const zh = {
   installGuideIdExample: 'dsh-plugin-whale-pet',
   installGuideIdHint: '插件包名即 npm 包名（如 dsh-xxx 或 @作者/插件名），社区插件的 README 安装命令中 dsh plugin add 或 pnpm add 之后的部分。',
   installGuideGitTitle: 'GitHub 仓库地址',
-  installGuideGitExample: 'https://github.com/author/dsh-plugin',
+  installGuideGitExample: INSTALL_GIT_EXAMPLE,
   installGuideGitHint: '插件在 GitHub 上的开源仓库地址，也支持其他 Git 仓库。',
   installGuidePathTitle: '本地插件目录',
-  installGuidePathExample: '/Users/name/my-plugin',
+  installGuidePathExample: INSTALL_PATH_EXAMPLE,
   installGuidePathHint: '本机上插件目录的绝对路径，适用于自行开发或已下载的插件。',
   installGuideExampleLabel: '示例：',
+  installGitTemplateHint: '请替换为实际的 Git 仓库地址',
+  installPathTemplateHint: '请替换为本机插件目录的实际路径',
   installGuideFill: '填入示例',
   installGuideFillAria: '填入示例 {example}',
   installGuideSafety: '请确认插件来源可信。插件在本机以你的权限运行，来源不明的插件可能损坏 DeepSeek Harness，或读取和泄露你的数据。',
@@ -197,7 +206,9 @@ export type PluginManagerLocaleKey = keyof typeof zh
 export const en = {
   panel: 'Plugins',
   title: 'Plugins',
-  intro: 'Add and manage plugins',
+  intro: 'Install, enable, and configure plugins',
+  infoLabel: 'About plugins',
+  infoDescription: 'Configure official plugins and install or manage other plugins here. View the built-in plugin list and runtime status in Settings → Built-in plugins.',
   loading: 'Reading plugins…',
   error: 'Could not read all plugins, possibly due to a network problem',
   unavailable: 'This deployment runs without a manageable profile, so plugins cannot be installed or switched here.',
@@ -249,12 +260,14 @@ export const en = {
   installGuideIdExample: 'dsh-plugin-whale-pet',
   installGuideIdHint: 'The plugin package name is the npm package name (like dsh-xxx or @author/plugin): the part after dsh plugin add or pnpm add in a community plugin\'s README install command.',
   installGuideGitTitle: 'GitHub repository address',
-  installGuideGitExample: 'https://github.com/author/dsh-plugin',
+  installGuideGitExample: INSTALL_GIT_EXAMPLE,
   installGuideGitHint: 'The address of the plugin\'s open-source repository on GitHub; other Git hosts work too.',
   installGuidePathTitle: 'Local plugin directory',
-  installGuidePathExample: '/Users/name/my-plugin',
+  installGuidePathExample: INSTALL_PATH_EXAMPLE,
   installGuidePathHint: 'The absolute path of a plugin directory on this machine, developed here or downloaded.',
   installGuideExampleLabel: 'Example: ',
+  installGitTemplateHint: 'Replace this with the actual Git repository address.',
+  installPathTemplateHint: 'Replace this with the actual path to your local plugin directory.',
   installGuideFill: 'Use example',
   installGuideFillAria: 'Use the example {example}',
   installGuideSafety: 'Install only plugins you trust: they run with your permissions and can damage DeepSeek Harness or leak your data.',

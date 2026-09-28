@@ -29,14 +29,14 @@ it.skipIf(process.platform !== 'win32')('queries and invokes a registered Window
     const opened = await readFile(marker, 'utf8').catch(() => '(no handoff marker)')
     console.error('Windows association fixture:', phase, 'active native commands:', active.size, opened)
   })
-  const run: NativeCommandRunner = (command, args, operationSignal) => {
-    const pending = runNativeCommand(command, args, operationSignal)
+  const run: NativeCommandRunner = (command, args, operationSignal, window) => {
+    const pending = runNativeCommand(command, args, operationSignal, window)
     active.add(pending)
     void pending.then(() => active.delete(pending), () => active.delete(pending))
     return pending
   }
   const runScript = async (source: string): Promise<void> => {
-    await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(source, 'utf16le').toString('base64')], signal)
+    await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(source, 'utf16le').toString('base64')], signal, 'hidden')
   }
   onTestFinished(async () => {
     lifetime.abort()
@@ -47,7 +47,7 @@ $root = [Microsoft.Win32.Registry]::CurrentUser
 $root.DeleteSubKeyTree('Software\\Classes\\${extension}', $false)
 $root.DeleteSubKeyTree('Software\\Classes\\${progId}', $false)
 $root.DeleteSubKeyTree('Software\\Classes\\Applications\\${appName}', $false)
-`, 'utf16le').toString('base64')], new AbortController().signal)
+`, 'utf16le').toString('base64')], new AbortController().signal, 'hidden')
     } finally { await rm(root, { recursive: true, force: true }) }
   })
   await writeFile(path, 'test')
@@ -65,7 +65,7 @@ public static class Handler {
 '@
 `)
   phase = 'verify fixture executable'
-  await run(executable, [path], signal)
+  await run(executable, [path], signal, 'hidden')
   expect((await readFile(marker, 'utf8')).split(/\r?\n/)[0]).toBe(path)
   await rm(marker)
   phase = 'register association'

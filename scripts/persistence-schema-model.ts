@@ -4,6 +4,7 @@
  */
 
 import { createHash } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 
 /** Recorded reader promise for explicitly attributed source additions. */
 export interface SourceCompatibility {
@@ -69,6 +70,53 @@ export interface PersistenceSchemaInventory {
   readonly formatVersion: 1 | 2
   readonly roots: readonly PersistenceRoot[]
   readonly types: readonly PersistenceType[]
+}
+
+/** Type metadata with an explicit graph when roots cannot reconstruct it exactly. */
+export interface PersistenceTypeIndex extends Omit<PersistenceType, 'schema'> {
+  readonly schema?: CanonicalSchema
+}
+
+/** Compact inventory representation; formatVersion still pins normalization. */
+export interface PersistenceSchemaSnapshot {
+  readonly formatVersion: PersistenceSchemaInventory['formatVersion']
+  readonly roots: readonly PersistenceRoot[]
+  readonly types: readonly PersistenceTypeIndex[]
+}
+
+/**
+ * Index every normalized type reachable from the supplied graphs.
+ * @param schemas - complete canonical root graphs.
+ * @returns canonical subgraphs keyed by their structural digest.
+ */
+export function reachableSchemaTypes(schemas: readonly CanonicalSchema[]): Map<string, CanonicalSchema> {
+  const types = new Map<string, CanonicalSchema>()
+  for (const schema of schemas) {
+    for (const [index] of schema.nodes.entries()) {
+      const type = canonicalizeSchema(schema.nodes, index)
+      types.set(schemaDigest(type), type)
+    }
+  }
+  return types
+}
+
+/**
+ * Omit type graphs exactly reconstructable from roots, retaining all other graphs.
+ * @param inventory - expanded inventory, including types erased from roots by normalization.
+ * @returns a lossless snapshot preserving root graphs, type order, and declaration metadata.
+ */
+export function persistenceSchemaSnapshot(inventory: PersistenceSchemaInventory): PersistenceSchemaSnapshot {
+  const reachable = reachableSchemaTypes(inventory.roots.map(root => root.schema))
+  return {
+    formatVersion: inventory.formatVersion,
+    roots: inventory.roots,
+    types: inventory.types.map(({ digest, schema, names, sources }) => ({
+      digest,
+      ...(isDeepStrictEqual(schema, reachable.get(digest)) ? {} : { schema }),
+      names,
+      sources,
+    })),
+  }
 }
 
 /**

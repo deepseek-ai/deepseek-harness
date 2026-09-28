@@ -1,15 +1,18 @@
-/** Feishu questionnaire context follows the Platform Web ticket fields. */
+/** Feishu questionnaire context: Harness build, locale, screen and reported environment. */
+import type { AccountUserId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { ContactConfig } from '../contact-config.ts'
 
 /**
  * Build an external questionnaire URL without authentication credentials.
  * @param config - questionnaire destination and supported source option.
- * @param context - currently available build and browser environment.
+ * @param context - account, build and environment facts sampled by the caller.
  * @returns questionnaire URL with hidden, optionally prefilled context fields.
  */
 export function contactUrl(config: ContactConfig, context: {
+  uid: AccountUserId | null | undefined
   version: string | undefined
   locale: string
+  deviceInfo: string
   width: number
   height: number
   pixelRatio: number
@@ -19,8 +22,8 @@ export function contactUrl(config: ContactConfig, context: {
   const width = Math.round(context.width * ratio)
   const height = Math.round(context.height * ratio)
   const fields = {
-    source: config.contactSource, app_version: context.version,
-    os_version: undefined, device_brand: undefined, device_model: undefined,
+    uid: context.uid, source: config.contactSource, harness_version: context.version,
+    os_version: undefined, device_brand: undefined, device_info: context.deviceInfo,
     app_locale: context.locale, screen_resolution: width > 0 && height > 0 ? `${width}x${height}` : undefined,
   }
   for (const [name, value] of Object.entries(fields)) {
@@ -28,7 +31,10 @@ export function contactUrl(config: ContactConfig, context: {
     url.searchParams.delete(`prefill_${name}`)
     if (value) url.searchParams.set(`prefill_${name}`, value)
   }
-  url.searchParams.delete('prefill_uid')
-  url.searchParams.delete('hide_uid')
+  // Exclude unsupported questionnaire fields from configured URLs.
+  url.searchParams.delete('prefill_app_version')
+  url.searchParams.delete('hide_app_version')
+  url.searchParams.delete('prefill_device_model')
+  url.searchParams.delete('hide_device_model')
   return url.href
 }

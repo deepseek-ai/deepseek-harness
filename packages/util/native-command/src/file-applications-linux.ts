@@ -37,10 +37,10 @@ async function desktopFile(root: string, id: string, directory = root): Promise<
 export async function linuxFileApplications(
   path: string, signal: AbortSignal, run: NativeCommandRunner, env: NodeJS.ProcessEnv,
 ): Promise<readonly NativeFileApplication[]> {
-  const info = await run('gio', ['info', '-a', 'standard::content-type', path], signal)
+  const info = await run('gio', ['info', '-a', 'standard::content-type', path], signal, 'hidden')
   const mime = /standard::content-type:\s*(\S+)/.exec(info.stdout)?.[1]
   if (mime === undefined) throw new Error('GIO did not identify the file content type')
-  const result = await run('env', ['LC_ALL=C', 'gio', 'mime', mime], signal)
+  const result = await run('env', ['LC_ALL=C', 'gio', 'mime', mime], signal, 'hidden')
   const preferred = /^Default application.*:\s*(.+\.desktop)\s*$/m.exec(result.stdout)?.[1]
   const ids = [...new Set([...(preferred === undefined ? [] : [preferred]), ...result.stdout.split(/\r?\n/)
     .filter(line => /^\s+.*\.desktop\s*$/.test(line)).map(line => line.trim())])]

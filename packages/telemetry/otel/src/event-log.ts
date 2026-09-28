@@ -1,11 +1,13 @@
-/** Ordinary event batching over an explicit SDK HTTP transport. */
+/** Ordinary event SDK batching over a cancellable HTTP transport. */
 import type { Attributes } from '@opentelemetry/api'
+import { addAbortListener } from 'node:events'
 import { SeverityNumber, type Logger } from '@opentelemetry/api-logs'
 import { ExportResultCode } from '@opentelemetry/core'
 import { resourceFromAttributes } from '@opentelemetry/resources'
-import { BatchLogRecordProcessor, LoggerProvider, type BatchLogRecordProcessorOptions } from '@opentelemetry/sdk-logs'
+import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs'
+import type { BatchLogRecordProcessorOptions, LogRecordExporter } from '@opentelemetry/sdk-logs'
 import type { SessionLogOptions } from './session-log.ts'
-import { createLogExporter } from './transport.ts'
+import { createEventLogExporter } from './event-transport.ts'
 
 /** Scalar values accepted by the collector's Arrow attributes map. */
 export type OTelEventScalar = string | number | boolean
@@ -35,12 +37,15 @@ export interface EventLogOptions {
 
 /** One caller-owned ordinary-event queue, independent of every Session-log queue. */
 export class EventLogReporter {
+  private readonly exporter: LogRecordExporter
   private readonly provider: LoggerProvider
   private readonly logger: Logger
+  private readonly cancellation = new AbortController()
 
   /** @param options - explicit transport, resource, scope, queue, and diagnostic settings. */
   constructor(options: EventLogOptions) {
-    const exporter = createLogExporter(options.exporter)
+    const exporter = createEventLogExporter(options.exporter, this.cancellation.signal)
+    this.exporter = exporter
     this.provider = new LoggerProvider({
       resource: resourceFromAttributes(options.resourceAttributes),
       processors: [new BatchLogRecordProcessor({
@@ -70,8 +75,19 @@ export class EventLogReporter {
   }
 
   /**
-   * Drain the queue and release its SDK transport.
-   * @returns completion of SDK shutdown; callers own their outer deadline.
+   * Drain the queue and release its transport, cancelling remaining exports when the caller aborts.
+   * @param signal - optional shutdown deadline; abort discards pending exports and cancels retry waits.
+   * @returns completion of SDK shutdown and transport cleanup.
    */
-  shutdown(): Promise<void> { return this.provider.shutdown() }
+  async shutdown(signal?: AbortSignal): Promise<void> {
+    const abort = (): void => { this.cancellation.abort(signal?.reason) }
+    const listener = signal === undefined ? undefined : addAbortListener(signal, abort)
+    if (signal?.aborted) abort()
+    try { await this.provider.shutdown() }
+    finally {
+      // SDK batch shutdown can reject before it releases the exporter.
+      try { await this.exporter.shutdown() }
+      finally { listener?.[Symbol.dispose]() }
+    }
+  }
 }

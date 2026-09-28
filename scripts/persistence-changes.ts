@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { basename, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { JSON_SCHEMA, load } from 'js-yaml'
-import { canonicalizeSchema, schemaDigest } from './persistence-schema-model.ts'
+import { canonicalizeSchema, reachableSchemaTypes, schemaDigest } from './persistence-schema-model.ts'
 import { matchingSourceCompatibility, sourceKindGroups, validSourceCompatibility } from './persistence-source-policy.ts'
 import type { CanonicalSchema, PersistenceRoot, PersistenceSchemaInventory, SchemaNode, SchemaTupleElement } from './persistence-schema-model.ts'
 import { extractPersistenceSchema } from './persistence-schema.ts'
@@ -265,7 +265,7 @@ function parseSchema(value: unknown, label: string, formatVersion: 1 | 2): Canon
   return schema
 }
 
-/** Parse a persisted schema inventory, rejecting malformed graphs and digest drift.
+/** Parse full or compact inventories, restoring type graphs and rejecting invalid digests.
  * @param value - JSON read from the current inventory or an enforced acknowledgement snapshot.
  * @returns the validated inventory.
  */
@@ -284,8 +284,10 @@ export function parseHistoricalPersistenceSnapshot(value: unknown): PersistenceS
 function parseSnapshot(value: unknown, historical: boolean): PersistenceSchemaInventory {
   const input = record(value, 'schema inventory')
   keys(input, ['formatVersion', 'roots', 'types'], 'schema inventory')
-  if (input.formatVersion !== 1 && input.formatVersion !== 2) throw new Error('unsupported persistence schema normalization version')
+  const formatVersion = input.formatVersion
+  if (formatVersion !== 1 && formatVersion !== 2) throw new Error('unsupported persistence schema normalization version')
   const names = new Set<string>()
+  const schemas: CanonicalSchema[] = []
   for (const rawRoot of array(input.roots, 'schema roots')) {
     const root = record(rawRoot, 'schema root')
     keys(root, ['key', 'kind', 'digest', 'schema'], 'schema root', ['event', 'surface'])
@@ -298,24 +300,37 @@ function parseSnapshot(value: unknown, historical: boolean): PersistenceSchemaIn
     } else if ((root.kind !== 'header' || !['SessionHeader', 'JsonlHeaderLine'].includes(key))
       && (root.kind !== 'envelope' || key !== 'SessionEventEnvelope')) throw new Error(`invalid schema root ${key}`)
     if (root.kind !== 'event' && (root.event !== undefined || root.surface !== undefined)) throw new Error(`${key}: non-event metadata`)
-    const schema = parseSchema(root.schema, key, input.formatVersion)
+    const schema = parseSchema(root.schema, key, formatVersion)
     if (root.kind === 'event') validateEventMetadata(schema, String(root.event), root.surface === true, historical)
     if (digest(root.digest, `${key} digest`) !== schemaDigest(schema)) throw new Error(`${key}: schema digest mismatch`)
+    schemas.push(schema)
   }
-  for (const rawType of array(input.types, 'schema types')) {
+  let reachable: Map<string, CanonicalSchema> | undefined
+  const types = array(input.types, 'schema types').map((rawType) => {
     const type = record(rawType, 'schema type')
-    keys(type, ['digest', 'schema', 'names', 'sources'], 'schema type')
-    const schema = parseSchema(type.schema, 'shared schema', input.formatVersion)
-    if (digest(type.digest, 'shared digest') !== schemaDigest(schema)) throw new Error('shared schema digest mismatch')
-    for (const name of array(type.names, 'type names')) textValue(name, 'type name')
-    for (const source of array(type.sources, 'type sources')) {
+    keys(type, ['digest', 'names', 'sources'], 'schema type', ['schema'])
+    const typeDigest = digest(type.digest, 'shared digest')
+    let schema: CanonicalSchema
+    if ('schema' in type) {
+      schema = parseSchema(type.schema, 'shared schema', formatVersion)
+      if (typeDigest !== schemaDigest(schema)) throw new Error('shared schema digest mismatch')
+    } else {
+      reachable ??= reachableSchemaTypes(schemas)
+      const found = reachable.get(typeDigest)
+      if (found === undefined) throw new Error(`shared schema digest ${typeDigest} is not reachable from roots`)
+      schema = found
+    }
+    const typeNames = array(type.names, 'type names').map(name => textValue(name, 'type name'))
+    const sources = array(type.sources, 'type sources').map((source) => {
       const location = textValue(source, 'type source')
       if (historical && /:\d+(?::\d+)?$|#L\d+(?:-L\d+)?$/u.test(location)) {
         throw new Error('historical schema sources must omit line numbers')
       }
-    }
-  }
-  return input as unknown as PersistenceSchemaInventory
+      return location
+    })
+    return { digest: typeDigest, schema, names: typeNames, sources }
+  })
+  return { ...input as unknown as PersistenceSchemaInventory, types }
 }
 
 function validateEventMetadata(schema: CanonicalSchema, event: string, surface: boolean, historical: boolean): void {

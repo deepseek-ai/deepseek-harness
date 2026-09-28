@@ -39,7 +39,7 @@
     "@deepseek-ai/dsh-session-format-v3-to-v4": "workspace:*",
     "@deepseek-ai/node-addon-system": "workspace:~",
     "@deepseek-ai/schemastery": "workspace:~",
-    "koffi": "^3.1.0"
+    "koffi": "3.1.1"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-session": "workspace:*",

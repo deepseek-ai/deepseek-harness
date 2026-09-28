@@ -19,7 +19,7 @@ import { renderPersistencePair, type PersistenceArtifact } from './persistence-a
 
 export { annotateSurface, collectEventEnvelopeTypes, collectLogEvents, collectSurfaceEventTypes } from './persistence-catalog-source.ts'
 export type { AnnotatedLogEventEntry, EventEnvelopeTypeEntry, LogEventEntry } from './persistence-catalog-source.ts'
-import type { PersistenceSchemaInventory } from './persistence-schema-model.ts'
+import { persistenceSchemaSnapshot, type PersistenceSchemaInventory } from './persistence-schema-model.ts'
 import { renderPersistenceSchemaDefinitions, renderPersistenceSchemaIndex } from './render-persistence-schema.ts'
 
 const root = resolve(import.meta.dirname, '..')
@@ -178,7 +178,7 @@ export function persistenceCatalogArtifacts(scanRoot: string, schema: Persistenc
   return [
     ...renderPersistencePair(scanRoot, OUT, render(events, envelope, schema), render(events, envelope, schema, 'zh')),
     { path: OUT_RUNTIME_TYPES, content: renderKnownEventTypes(events) },
-    { path: OUT_SCHEMA, content: `${JSON.stringify(schema, null, 2)}\n` },
+    { path: OUT_SCHEMA, content: `${JSON.stringify(persistenceSchemaSnapshot(schema), null, 2)}\n` },
   ]
 }
 

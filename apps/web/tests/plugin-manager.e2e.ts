@@ -123,9 +123,10 @@ describe('web e2e: plugin manager', () => {
         expect(await skeleton.getAttribute('role')).toBe('status')
         expect(await skeleton.getAttribute('aria-label')).toBe('正在读取插件…')
         expect(await panel.getAttribute('aria-busy')).toBe('true')
-        const actions = panel.locator(':scope > header button')
+        const actions = panel.locator(':scope > header > div:last-child button')
         expect(await actions.count()).toBe(2)
         for (const action of await actions.all()) expect(await action.isDisabled()).toBe(true)
+        expect(await panel.getByRole('button', { name: '插件说明' }).isEnabled()).toBe(true)
         const loadingAria = await captureStableAria(probe, '[data-plugin-panel]', scaffold.workspaceCwd)
         if (aria === '') aria = loadingAria
         else expect(loadingAria).toBe(aria)
@@ -371,6 +372,40 @@ describe('web e2e: plugin manager', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-list'))
     const panel = await openPluginsPanel()
 
+    const info = panel.getByRole('button', { name: '插件说明' })
+    const infoBounds = await info.boundingBox()
+    const iconBounds = await info.locator('svg').boundingBox()
+    const subtitleBounds = await panel.getByText('安装、启用和配置插件', { exact: true }).boundingBox()
+    if (infoBounds === null || iconBounds === null || subtitleBounds === null) {
+      throw new Error('Plugin information button, icon, and subtitle must be visible')
+    }
+    expect(infoBounds.width).toBe(20)
+    expect(infoBounds.height).toBe(20)
+    expect(iconBounds.width).toBe(11)
+    expect(iconBounds.height).toBe(11)
+    expect(infoBounds.x - subtitleBounds.x - subtitleBounds.width).toBeCloseTo(4)
+    expect(iconBounds.y + iconBounds.height / 2).toBeCloseTo(subtitleBounds.y + subtitleBounds.height / 2)
+    await info.hover()
+    const hoverHelp = page.getByRole('tooltip')
+    await hoverHelp.waitFor()
+    expect(await hoverHelp.textContent()).toBe('在这里配置官方插件，安装和管理其他插件。内置插件列表及运行状态可在「设置 → 内置插件」中查看')
+    await panel.getByRole('heading', { name: '插件', exact: true }).hover()
+    await hoverHelp.waitFor({ state: 'hidden' })
+    await info.focus()
+    await page.keyboard.press('Enter')
+    const help = page.getByRole('tooltip')
+    await help.waitFor()
+    expect(await help.textContent()).toContain('设置 → 内置插件')
+    await page.keyboard.press('Escape')
+    expect(await help.count()).toBe(0)
+    expect(await info.evaluate(element => element === document.activeElement)).toBe(true)
+    await info.click()
+    await panel.getByRole('heading', { name: '插件', exact: true }).hover()
+    await help.hover()
+    expect(await help.isVisible()).toBe(true)
+    await panel.getByRole('heading', { name: '插件', exact: true }).click()
+    expect(await help.count()).toBe(0)
+
     await panel.getByRole('button', { name: '查看 @fixture/bundle', exact: true }).waitFor({ timeout: 20_000 })
     const toggle = panel.getByRole('switch', { name: '启用 @fixture/bundle' })
     expect(await toggle.getAttribute('aria-checked')).toBe('false')
@@ -416,6 +451,45 @@ describe('web e2e: plugin manager', () => {
     await compareOrRefreshGolden(MANAGER_EXPECTED, snapshot, MODE)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
+
+  it('keeps off-state switch thumbs light in both themes', async () => {
+    // The off-state thumb must stay light so an operable toggle cannot read as
+    // disabled, whose only other difference is reduced opacity.
+    for (const [theme, label] of [['light', '浅色'], ['dark', '深色']] as const) {
+      await openSettings(page, 'zh')
+      const settings = page.getByRole('dialog', { name: '设置', exact: true })
+      await settings.getByRole('button', { name: '通用设置', exact: true }).click()
+      await settings.getByRole('button', { name: label, exact: true }).click()
+      await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme'))).toBe(theme === 'dark')
+      const panel = await openPluginsPanel()
+      const toggle = panel.getByRole('switch', { name: '启用 @fixture/bundle', exact: true })
+      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+      const appearance = await toggle.evaluate((element) => {
+        const thumb = element.firstElementChild
+        if (thumb === null) throw new Error('Switch thumb is missing')
+        const bounds = element.getBoundingClientRect()
+        return {
+          width: bounds.width,
+          height: bounds.height,
+          thumb: getComputedStyle(thumb).backgroundColor,
+          opacity: getComputedStyle(element).opacity,
+        }
+      })
+      expect(appearance).toEqual({
+        width: 36,
+        height: 20,
+        thumb: theme === 'dark' ? 'rgb(173, 178, 184)' : 'rgb(255, 255, 255)',
+        opacity: '1',
+      })
+    }
+    // Leave the shared page in the default theme for the tests after this one.
+    await openSettings(page, 'zh')
+    const settings = page.getByRole('dialog', { name: '设置', exact: true })
+    await settings.getByRole('button', { name: '通用设置', exact: true }).click()
+    await settings.getByRole('button', { name: '浅色', exact: true }).click()
+    await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme'))).toBe(false)
+    await closeSettings()
+  })
 
   it('decodes manifest icons for disabled bundles and independent plugin rows', async () => {
     const panel = await openPluginsPanel()
@@ -760,6 +834,20 @@ describe('web e2e: plugin manager', () => {
     const field = dialog.getByRole('textbox', { name: '包名或地址' })
     const install = dialog.getByRole('button', { name: '安装', exact: true })
     expect(await install.isDisabled()).toBe(true)
+    expect(await dialog.getByRole('note').textContent()).toContain('请确认插件来源可信')
+    await dialog.getByRole('button', { name: '插件安装引导和示例' }).click()
+    for (const [example, hint] of [
+      ['https://github.com/author/dsh-plugin', '请替换为实际的 Git 仓库地址'],
+      ['/Users/name/my-plugin', '请替换为本机插件目录的实际路径'],
+    ]) {
+      await dialog.getByRole('button', { name: `填入示例 ${example}` }).click()
+      expect(await field.inputValue()).toBe(example)
+      expect(await dialog.getByRole('status').textContent()).toBe(hint)
+    }
+    await field.fill('/actual/plugin-directory')
+    expect(await dialog.getByRole('status').count()).toBe(0)
+    await dialog.getByRole('button', { name: '收起引导' }).click()
+    expect(await dialog.getByRole('note').textContent()).toContain('请确认插件来源可信')
     // A name the list already shows is refused without asking the Host.
     await field.fill('@fixture/bundle')
     await install.click()

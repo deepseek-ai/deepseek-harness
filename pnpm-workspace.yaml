@@ -40,6 +40,9 @@ allowBuilds:
   protobufjs: false
   node-addon-require-builtin: false
   # JSONL durability calls MoveFileExW with write-through publication on Windows.
+  # Consumers pin 3.1.1: Koffi 3.3.2's source build fails under GCC 13 when
+  # optional prebuilts are omitted. Upgrade all consumers together after the
+  # replacement passes that build and the release packed-install check.
   koffi: true
   # The Python runtime deploy includes the reviewed workspace postinstall that
   # restores the executable bit on node-pty's macOS spawn helper.

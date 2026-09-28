@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-native-command` 无需 shell 即可运行 Host 可执行文件，并通过桌面打开 Host 文件系统路径。命令运行器捕获 utf8 输出、传播取消，并隐藏 Windows 瞬时控制台。路径打开器支持默认应用与文本编辑器意图、浏览器可渲染文档、WSL 转换与桌面可用性检查。它是库而非插件：没有 `ctx`、无状态、不发事件。
+`dsh-native-command` 无需 shell 即可运行 Host 可执行文件，并通过桌面打开 Host 文件系统路径。命令运行器捕获 utf8 输出、传播取消，并要求显式指定 Windows 启动时的窗口可见性。路径打开器支持默认应用与文本编辑器意图、浏览器可渲染文档、WSL 转换与桌面可用性检查。它是库而非插件：没有 `ctx`、无状态、不发事件。
 
 ## 目录
 
@@ -34,10 +34,10 @@ import { runNativeCommand } from '@deepseek-ai/dsh-native-command'
 
 declare const script: string
 declare const signal: AbortSignal
-const { stdout, stderr } = await runNativeCommand('osascript', ['-e', script], signal)
+const { stdout, stderr } = await runNativeCommand('osascript', ['-e', script], signal, 'hidden')
 ```
 
-退出码为 0 时，调用解析为捕获到的 stdout 与 stderr。任何失败都会以错误拒绝，错误附带退出 `code` 与两路已捕获输出，因此调用方无需重跑命令即可区分工具缺失（`ENOENT`）、取消（`ABORT_ERR`）与真实的命令失败。
+退出码为 0 时，调用解析为捕获到的 stdout 与 stderr。任何失败都会以错误拒绝，错误附带退出 `code` 与两路已捕获输出，因此调用方无需重跑命令即可区分工具缺失（`ENOENT`）、取消（`ABORT_ERR`）与真实的命令失败。必填的第四个参数 `window: 'hidden' | 'visible'` 控制 Windows 启动时的窗口可见性，在其他平台不生效。后台命令传入 `'hidden'`，GUI 启动程序传入 `'visible'`。路径打开器为 Explorer 选择 `'visible'`，包括 WSL 转交和文件选中操作，因为隐藏 Explorer 也会隐藏它的文件夹窗口。
 
 ### 注入命令边界
 
@@ -72,7 +72,7 @@ const { stdout, stderr } = await runNativeCommand('osascript', ['-e', script], s
 
 ### execFile 给了运行器什么
 
-`execFile` 以 argv 数组直接 spawn 可执行文件——没有 shell 字符串，参数不经 shell 解释。`signal` 选项在调用方中止触发时终止子进程；`windowsHide` 在 Windows 上抑制瞬时控制台窗口。遇到非零退出或 spawn 错误时，回调把 `code`、`stdout`、`stderr` 挂到被拒绝的错误上，并保留原始错误作为 `cause`。
+`execFile` 以 argv 数组直接 spawn 可执行文件——没有 shell 字符串，参数不经 shell 解释。`signal` 选项在调用方中止触发时终止子进程；`window` 由运行器映射为 Node 的 `windowsHide` 选项。遇到非零退出或 spawn 错误时，回调把 `code`、`stdout`、`stderr` 挂到被拒绝的错误上，并保留原始错误作为 `cause`。
 
 </details>
 

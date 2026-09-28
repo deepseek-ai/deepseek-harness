@@ -49,9 +49,9 @@ function browserEnvironment() {
 }
 
 describe.skipIf(!existsSync(preload('preload-app')))('built sandboxed Desktop preloads', () => {
-  it.each(['preload-app', 'preload-welcome'])('%s loads without filesystem module access', (name) => {
+  it.each(['preload-app', 'preload-welcome'])('%s loads without filesystem module access', async (name) => {
     const exposed = new Map<string, Record<string, unknown>>()
-    const invoke = vi.fn(() => Promise.resolve({ languages: ['en-US'], preference: 'zh' }))
+    const invoke = vi.fn<(...args: unknown[]) => Promise<unknown>>(() => Promise.resolve({ languages: ['en-US'], preference: 'zh' }))
     const send = vi.fn()
     const browser = browserEnvironment()
     const electron = {
@@ -64,11 +64,15 @@ describe.skipIf(!existsSync(preload('preload-app')))('built sandboxed Desktop pr
         if (id !== 'electron') throw new Error(`sandbox cannot load ${id}`)
         return electron
       },
-      process: { argv: ['electron', '--dsh-welcome-locale=en'] },
+      process: { argv: ['electron', '--dsh-welcome-locale=en'], isMainFrame: true },
       location: new URL('dsh-app://app/'),
       exports: {},
     })
     if (name === 'preload-app') {
+      const product = exposed.get('dshDesktop') as { deviceInfo(): Promise<string> }
+      invoke.mockResolvedValueOnce('platform=darwin; memory_gib=32.0')
+      await expect(product.deviceInfo()).resolves.toBe('platform=darwin; memory_gib=32.0')
+      expect(invoke).toHaveBeenCalledWith('dsh-desktop:device-info')
       browser.loadTheme('dark')
       expect(send).toHaveBeenCalledWith('dsh-desktop:native-theme-set', 'dark')
       browser.changeTheme('light')

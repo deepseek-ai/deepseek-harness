@@ -37,6 +37,15 @@ export interface Config {
    * regain the foreground before `inferred_idle` settles; at least one `pollIntervalMs`.
    */
   handoffGraceMs?: number
+  /**
+   * Extra wait beyond `idleSilenceMs` and `handoffGraceMs`, once a prompt marker was seen but
+   * its printable tail has not arrived, before `inferred_idle` settles. The marker is written
+   * by the shell's own prompt function and the tail by the same render, so a missing tail is a
+   * delivery delay on a contended host rather than an absent prompt. Zero keeps the bound at
+   * `idleSilenceMs + handoffGraceMs`; any other value covers at least one `pollIntervalMs`, so a
+   * nonzero tolerance always contains a readiness poll.
+   */
+  promptTailGraceMs?: number
   /** Absolute bound for one send and the complete pwsh startup sequence. */
   timeoutMs?: number
   /** Grace before teardown escalates to `SIGKILL`. */
@@ -95,12 +104,15 @@ export const Config: z<Config> = z.object({
   exactProbeAfterMs: z.number().default(150),
   idleSilenceMs: z.number().default(3_000),
   handoffGraceMs: z.number().default(500),
+  promptTailGraceMs: z.number().default(0),
   timeoutMs: z.number().default(30_000),
   disposeGraceMs: z.number().default(3_000),
 })
 
 /**
- * Assert every effective numeric config field is a positive safe integer and bounds compose.
+ * Assert every effective numeric config field is a positive safe integer — except
+ * `promptTailGraceMs`, whose zero is the documented "no extension" value — and that bounds
+ * compose.
  * @param config - Schemastery-resolved plugin configuration.
  * @returns Narrows the input to the fully resolved configuration.
  */
@@ -109,14 +121,22 @@ export function validateConfig(config: Config): asserts config is ResolvedConfig
   if (resolved.backendType.length === 0) throw new Error('terminal-bash: backendType must be non-empty')
   if (resolved.shellPath.length === 0) throw new Error('terminal-bash: shellPath must be non-empty')
   for (const [name, value] of Object.entries(resolved)) {
+    if (name === 'promptTailGraceMs') continue
     if (typeof value === 'number' && (!Number.isSafeInteger(value) || value <= 0)) {
       throw new Error(`terminal-bash: ${name} must be a positive safe integer`)
     }
+  }
+  if (typeof resolved.promptTailGraceMs === 'number'
+    && (!Number.isSafeInteger(resolved.promptTailGraceMs) || resolved.promptTailGraceMs < 0)) {
+    throw new Error('terminal-bash: promptTailGraceMs must be a non-negative safe integer')
   }
   if (resolved.maxReadBytes > resolved.scrollbackMaxBytes) {
     throw new Error('terminal-bash: maxReadBytes must not exceed scrollbackMaxBytes')
   }
   if (resolved.handoffGraceMs < resolved.pollIntervalMs) {
     throw new Error('terminal-bash: handoffGraceMs must be at least pollIntervalMs so one readiness poll runs inside the grace window')
+  }
+  if (resolved.promptTailGraceMs !== 0 && resolved.promptTailGraceMs < resolved.pollIntervalMs) {
+    throw new Error('terminal-bash: promptTailGraceMs must be zero or at least pollIntervalMs so a nonzero tolerance contains one readiness poll')
   }
 }

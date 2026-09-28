@@ -11,7 +11,7 @@ import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterEach, describe, expect, it, onTestFailed, vi } from 'vitest'
 import type { ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
@@ -37,6 +37,22 @@ const MODE = webSnapshotMode()
 // the scenario would pass against either implementation.
 const NARRATION = 'Reading the workspace now.'
 const PROMPT = `Begin your reply with the plain sentence "${NARRATION}" as text, and in that same message call the bash tool with the command "echo alpha". After the tool result, reply with the single word DONE and stop.`
+
+/**
+ * Focus the Copy IconAction and wait for the tooltip the running golden records.
+ *
+ * `Tooltip` ignores focus while the last input came from a pointer, and any
+ * keydown clears that flag, so a focus that follows this scenario's own clicks
+ * raises no bubble. Clear the flag with a key that moves nothing, then focus
+ * and wait for the bubble rather than assuming its commit landed.
+ * @param page - page containing the Copy button.
+ * @param button - the Copy button to focus.
+ */
+async function expectFocusTooltip(page: Page, button: Locator): Promise<void> {
+  await page.keyboard.press('Shift')
+  await button.focus()
+  await page.getByRole('tooltip', { name: 'Copy', exact: true }).waitFor({ timeout: 10_000 })
+}
 
 describe('web e2e: assistant IconActions wait for the turn to end', () => {
   let scaffold: WebScaffold | undefined
@@ -157,7 +173,7 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     const copyButtons = page.getByRole('button', { name: 'Copy' })
     await expect.poll(() => copyButtons.count(), { timeout: 10_000 }).toBe(1)
     expect(await page.getByRole('button', { name: 'Branch into a new conversation' }).count()).toBe(0)
-    await copyButtons.first().focus()
+    await expectFocusTooltip(page, copyButtons.first())
     const running = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)
     await compareOrRefreshGolden(RUNNING_EXPECTED, running, MODE)
 
@@ -170,6 +186,8 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     await page.locator('[data-turn-process]').waitFor({ timeout: 10_000 })
     await expect.poll(() => copyButtons.count(), { timeout: 10_000 }).toBe(2)
     await expect.poll(() => page.locator('[data-streaming="true"]').count(), { timeout: 10_000 }).toBe(0)
+    // The settled golden records no bubble: this focus follows the Stop click,
+    // which leaves the pointer owning the last input.
     await copyButtons.last().focus()
     const settledAria = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)
     await compareOrRefreshGolden(SETTLED_EXPECTED, settledAria, MODE)

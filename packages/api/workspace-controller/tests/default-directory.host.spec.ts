@@ -11,7 +11,7 @@ describe('system Documents directory', () => {
     const run = vi.fn<NativeCommandRunner>(async () => ({ stdout, stderr: '' }))
     const signal = new AbortController().signal
     await expect(defaultWorkspaceDirectory(undefined, signal, { platform, run })).resolves.toBe(path)
-    expect(run).toHaveBeenCalledWith(command, expect.any(Array), signal)
+    expect(run).toHaveBeenCalledWith(command, expect.any(Array), signal, 'hidden')
   })
 
   it('uses the configured directory without a system lookup', async () => {

@@ -1,7 +1,8 @@
-# Sandbox CI: the keyless real-kernel confinement proofs. This master-only
-# reference stays outside the pull-request verdict; rationale lives in
+# Sandbox CI: the keyless real-kernel confinement proofs, plus the darwin
+# unit-parity job (unit-darwin) that needs the matrix's macOS image. This
+# master-only reference stays outside the pull-request verdict; rationale lives in
 # .agents/notes/implemented/process/2026-07-21-serial-cross-platform-ci-reference.md.
-# A separate workflow from ci.yml because the axis is different — these jobs
+# A separate workflow from ci.yml because the axis is different — the e2e jobs
 # fan out over OS×runner (kernel capabilities), not node versions. The Landlock
 # launcher is built from native/system on each Landlock leg and installed
 # from the same tarballs the main-repository release workflow publishes.
@@ -96,14 +97,6 @@ jobs:
           pnpm --dir native/system run build:ts
           pnpm --dir native/system run build:native
 
-      # The unit suite runs on ubuntu in `checks`; this is the one darwin leg
-      # in the workflow, so run it here too — the platform-dependent unit
-      # expectations (Seatbelt path canonicalization: /tmp IS /private/tmp)
-      # take their darwin branch only on this runner.
-      - name: Unit tests (darwin parity)
-        if: matrix.runner == 'seatbelt'
-        run: pnpm run test
-
       - name: Sandbox e2e (real kernel confinement, world-verified)
         # NO_COLOR: vitest force-enables ANSI color under GITHUB_ACTIONS even
         # without a TTY, which would thread escape codes through the summary
@@ -139,3 +132,30 @@ jobs:
           echo "$out"
           [ "$status" -eq 0 ]
           echo "$out" | grep -qE 'Test Files[[:space:]]+1 passed \(1\)'
+
+  # The unit suite runs on ubuntu in ci.yml's Linux jobs; macos-latest is this
+  # workflow's only darwin runner, so the platform-dependent unit expectations
+  # (Seatbelt path canonicalization: /tmp IS /private/tmp — sandbox semantics,
+  # hence this workflow rather than ci-master.yml) take their darwin branch only
+  # here. A job of its own so the seatbelt e2e leg keeps the matrix budget. The
+  # budget below is a completion ceiling, not a latency target: the full suite
+  # takes 16 minutes on a fast macos-latest runner and was under half done at
+  # 20 on the slowest observed.
+  unit-darwin:
+    name: unit tests (darwin parity, macos-latest)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit tests (darwin parity)
+        run: pnpm run test

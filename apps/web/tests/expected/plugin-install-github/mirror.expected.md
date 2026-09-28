@@ -5,4 +5,5 @@
     - /placeholder: 例如 dsh-plugin-whale-pet
   - button "插件安装引导和示例"
   - button "安装源 中国大陆镜像源"
+  - note: 请确认插件来源可信。插件在本机以你的权限运行，来源不明的插件可能损坏 DeepSeek Harness，或读取和泄露你的数据。
   - button "安装" [disabled]

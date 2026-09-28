@@ -23,6 +23,7 @@
 }
 
 .bubble[data-portal] { z-index: 1100; }
+.bubble[data-pinned] { pointer-events: auto; }
 .label { min-width: 0; }
 
 /* A 16px keycap centered beside a 20px label has 5px of vertical clearance. */
