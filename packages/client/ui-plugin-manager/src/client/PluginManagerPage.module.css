@@ -47,10 +47,21 @@
 }
 
 .pageIntro {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin: 4px 0 0;
   font-size: 13px;
   line-height: 20px;
   color: var(--dsw-alias-label-secondary);
+}
+
+.infoButton {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--dsw-alias-label-caption);
 }
 
 .toolbar {
@@ -80,16 +91,6 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.banner {
-  margin: 0;
-  padding: 8px 12px;
-  border-radius: var(--dsw-radius-md);
-  font-size: 12px;
-  line-height: 18px;
-  background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary)) 12%, transparent);
-  color: var(--dsw-alias-label-primary);
 }
 
 .group {
@@ -474,6 +475,21 @@
   min-width: 0;
 }
 
+.installFooter {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.templateHint {
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
 /* Where pnpm installs: the profile directory the first run names. */
 .installLocation {
   margin: 0;
@@ -561,26 +577,27 @@
   margin: 0;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
 }
 
-/* The security warning that closes the guide: plugins run with the person's own permissions. */
-.guideSafety {
+/* Trust guidance stays beside the install action, including while examples are collapsed. */
+.installSafety {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   margin: 0;
   padding: 10px 12px;
   border-radius: var(--dsw-radius-md);
-  background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary)) 12%, transparent);
+  background: var(--dsw-alias-state-warn-tertiary);
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary));
+  color: var(--dsw-alias-label-secondary);
 }
 
-.guideSafety > svg {
+.installSafety > svg {
   flex: none;
   margin-top: 2px;
+  color: var(--dsw-alias-state-warn-primary);
 }
 
 .guideList {
@@ -597,6 +614,10 @@
   align-items: flex-start;
   gap: 10px;
   padding: 8px 0;
+}
+
+.guideItem > button {
+  align-self: center;
 }
 
 .guideIndex {
@@ -637,7 +658,7 @@
 }
 
 .guideExample code {
-  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--ds-font-family-code);
 }
 
 .guideExampleLabel {
@@ -1016,7 +1037,7 @@ label.registryOption {
 }
 
 .resultWarn {
-  background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary)) 12%, transparent);
+  background: var(--dsw-alias-state-warn-tertiary);
 }
 
 /* The approval a blocked run asks for: the packages whose install scripts pnpm did not run, and the one action. */
@@ -1025,9 +1046,9 @@ label.registryOption {
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary)) 40%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);
   border-radius: var(--dsw-radius-lg);
-  background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary)) 8%, transparent);
+  background: var(--dsw-alias-state-warn-tertiary);
 }
 
 .approvalTitle {
@@ -1048,8 +1069,8 @@ label.registryOption {
   margin: 0;
   font-size: 12.5px;
   line-height: 18px;
-  font-weight: 600;
-  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-business-primary));
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
 }
 
 .approvalList {
@@ -1066,7 +1087,7 @@ label.registryOption {
   padding: 2px 8px;
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-3);
-  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--ds-font-family-code);
   font-size: 12px;
   color: var(--dsw-alias-label-primary);
 }

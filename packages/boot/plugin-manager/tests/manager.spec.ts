@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execa } from 'execa'
 import type { Context } from '@deepseek-ai/cordis'
-import { expect, it, onTestFinished, vi } from 'vitest'
+import { afterAll, beforeAll, expect, it, onTestFinished, vi } from 'vitest'
 import {
   boot, composeEntries, initProfile, loadProfileDirectory, readProfilePatches, readProfileManifest,
   reconcileProfilePatches, OPTIONAL_BUNDLES, PluginPackages, readPluginMeta, getDshRuntimeVersion,
@@ -23,6 +23,12 @@ import { Group } from '@deepseek-ai/cordis-plugin-loader'
 import * as operations from '../src/operations.ts'
 import * as githubConnection from '../src/github-connection.ts'
 import { parse, parseDocument } from 'yaml'
+import { isolateGitCommandLineConfig } from './git-environment.ts'
+
+// These cases install through real Git and pnpm, so the host's command-line configuration group must not reach their children.
+let restoreGitCommandLineConfig: () => void
+beforeAll(() => { restoreGitCommandLineConfig = isolateGitCommandLineConfig() })
+afterAll(() => { restoreGitCommandLineConfig() })
 
 async function fixture(reload: 'live' | 'startup' = 'live', overlay = false, prepare?: (ctx: Context) => void, config: Config = {}, packageManager?: ProfileContext['packageManager'], prepareFiles?: (dir: string) => void) {
   const temporaryHome = mkdtempSync(join(tmpdir(), 'plugin-manager-'))

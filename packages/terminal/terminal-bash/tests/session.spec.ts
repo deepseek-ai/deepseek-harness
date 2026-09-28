@@ -141,7 +141,7 @@ function config(overrides: Partial<ResolvedConfig> = {}): ResolvedConfig {
   return {
     backendType: 'shell', shellDialect: 'bash', shellPath: '/bin/bash', shellArgs: [], rows: 24, cols: 80,
     scrollbackLines: 10, scrollbackMaxBytes: 128, maxReadBytes: 64,
-    pollIntervalMs: 10, exactProbeAfterMs: 20, idleSilenceMs: 50, handoffGraceMs: 10, timeoutMs: 100,
+    pollIntervalMs: 10, exactProbeAfterMs: 20, idleSilenceMs: 50, handoffGraceMs: 10, promptTailGraceMs: 0, timeoutMs: 100,
     disposeGraceMs: 20,
     ...overrides,
   }
@@ -529,6 +529,101 @@ describe('LocalPtySession readiness and output', () => {
     await vi.advanceTimersByTimeAsync(10)
     expect((await operation.done).waitReason).toBe('stdin_read')
   })
+
+  it('keeps waiting for a seen prompt marker with a delayed tail up to promptTailGraceMs', async () => {
+    vi.useFakeTimers()
+    const terminal = new FakeTerminal()
+    const inspector = new FakeInspector()
+    const session = makeSession(terminal, inspector, config({ idleSilenceMs: 50, handoffGraceMs: 10, promptTailGraceMs: 200 }))
+    try {
+      await initialize(session, terminal)
+
+      const operation = session.startSend({ text: 'slow-render', submit: true })
+      await Promise.resolve()
+      await Promise.resolve()
+      let settled: string | undefined
+      void operation.done.then((result) => { settled = result.waitReason })
+
+      // The marker arrives; its printable tail is delayed by the host. The plain bound
+      // (`idleSilenceMs + handoffGraceMs`) passes without settling the silence tier.
+      terminal.emitData('\x1b]133;D;0\x07')
+      await vi.advanceTimersByTimeAsync(70)
+      expect(settled).toBeUndefined()
+
+      // The tail lands inside the tolerance and the exact prompt path settles the send.
+      terminal.emitData('dsh> ')
+      await vi.advanceTimersByTimeAsync(20)
+      expect((await operation.done).waitReason).toBe('stdin_read')
+    } finally {
+      await session.close('prompt tail grace cleanup')
+    }
+  }, 5_000)
+
+  it('charges the silence tier at the plain bound when promptTailGraceMs is zero', async () => {
+    vi.useFakeTimers()
+    const terminal = new FakeTerminal()
+    const inspector = new FakeInspector()
+    const session = makeSession(terminal, inspector, config({ idleSilenceMs: 50, handoffGraceMs: 10, promptTailGraceMs: 0 }))
+    try {
+      await initialize(session, terminal)
+
+      const operation = session.startSend({ text: 'slow-render', submit: true })
+      await Promise.resolve()
+      await Promise.resolve()
+      terminal.emitData('\x1b]133;D;0\x07')
+      await vi.advanceTimersByTimeAsync(70)
+      expect((await operation.done).waitReason).toBe('inferred_idle')
+    } finally {
+      await session.close('prompt tail grace cleanup')
+    }
+  }, 5_000)
+
+  it('settles inferred_idle at the extended bound when the prompt tail never arrives', async () => {
+    vi.useFakeTimers()
+    const terminal = new FakeTerminal()
+    const session = new LocalPtySession(terminal, config({
+      idleSilenceMs: 50, handoffGraceMs: 10, promptTailGraceMs: 200, timeoutMs: 1_000,
+    }))
+    try {
+      await initialize(session, terminal)
+      const operation = session.startSend({ text: 'silent-render', submit: true })
+      await Promise.resolve()
+      await Promise.resolve()
+      let settled: string | undefined
+      void operation.done.then((result) => { settled = result.waitReason })
+
+      terminal.emitData('\x1b]133;D;0\x07')
+      await vi.advanceTimersByTimeAsync(70)
+      expect(settled).toBeUndefined()
+      await vi.advanceTimersByTimeAsync(200)
+      expect((await operation.done).waitReason).toBe('inferred_idle')
+    } finally {
+      await session.close('prompt tail expiry cleanup')
+    }
+  }, 5_000)
+
+  it('keeps the plain silence bound once later output invalidated the prompt tail', async () => {
+    vi.useFakeTimers()
+    const terminal = new FakeTerminal()
+    const session = new LocalPtySession(terminal, config({
+      idleSilenceMs: 50, handoffGraceMs: 10, promptTailGraceMs: 200, timeoutMs: 1_000,
+    }))
+    try {
+      await initialize(session, terminal)
+      const operation = session.startSend({ text: 'noisy-command', submit: true })
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // The prompt arrives and is immediately followed by command output, so the tail is no
+      // longer completable and the tolerance has nothing left to wait for.
+      terminal.emitData('\x1b]133;D;0\x07dsh> ')
+      terminal.emitData('partial output')
+      await vi.advanceTimersByTimeAsync(70)
+      expect((await operation.done).waitReason).toBe('inferred_idle')
+    } finally {
+      await session.close('prompt tail invalidation cleanup')
+    }
+  }, 5_000)
 
   it('captures prompt MOTD, writes submit explicitly, and settles exact stdin waits', async () => {
     vi.useFakeTimers()

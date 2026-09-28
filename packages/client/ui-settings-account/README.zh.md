@@ -40,11 +40,11 @@ Desktop 的用量、充值与引导充值操作在 48px 返回栏下方打开同
 
 Chat 通过 `shell.overlay` 中的宿主把已绑定 Session 的实时欠费交给全局 `shell.quota-notice` 链，提示的生命周期因此长于上报它的 Chat 面板。账号条目认领 `ACCOUNT_QUOTA`：已存储账号凭证且存在共享宿主条目时，Modal 提供取消和去充值。只要通过该共享请求通道请求的页面正在显示，原生视图就会盖住本页，因此该条目既不绘制 Modal 也不绘制 Toast。在 Account 设置页已打开页面的情况下新到达的欠费不会被保持：它仍受最新提示替换规则约束，返回后若该提示仍是最新一条就显示 Modal。该 Modal 报告的是原始请求的失败，而不是账号当前余额：返回时的重读是一次独立读取，返回本身既不证明支付成功，也不会自动撤下该提示。提示自身的去充值属于被保持的情形：它调用 `keepOpen()` 并通过共享请求通道申请 `top-up` 页面，使该提示与其页面在后续欠费期间保持挂载。存在共享宿主条目时，该条目会等待首个账号快照，而不是渲染一个可能被自身计时器丢弃的 Toast；快照报告未存储凭证，或账号流失败且无快照时，才由该条目自行渲染同一段中立警告 Toast，缺少该宿主条目时则立即渲染该 Toast，而不依赖 Chat 宿主回退。该条目持有保持与页面请求，并在自身卸载时释放二者，因此后续欠费会重新发布而不重放已丢弃的提示；关闭与退出登录也会清除保持和页面请求。关闭、取消、退出登录或离开该提示自己的内嵌页面都会撤下提示，且不会重试请求。
 
-账号菜单的“意见反馈”入口在系统浏览器中打开飞书问卷。链接通过 prefill_* 参数填写已有的构建版本、界面语言和屏幕物理分辨率，并为所有上下文字段设置 hide_*=1；不传账号 UID、token 或联系方式。可在 ui-settings-account 插件配置 contactFormUrl，切换到另一个 HTTPS 问卷。问卷支持 Harness 来源选项前，contactSource 默认为空；OS 和设备字段沿用 Web 实现，保持未填写。
+账号菜单的“意见反馈”入口在系统浏览器中打开飞书问卷。每次点击都按当时的上下文取值：profile ready 且带 id 时的账号 UID、以 harness_version 表示的构建版本、界面语言、屏幕物理分辨率，以及 device_info。所有上下文字段同时设置 hide_*=1，配置的表单 URL 中这些字段的 stale prefill 参数先被清除，uid、device_info 与 harness_version 的隐藏参数不依赖配置 URL 的取值。不传 token 或脱敏联系方式；未登录、profile 仍在加载或读取失败时都不填写 prefill_uid。Desktop 桥接没有 deviceInfo 读取器时，打开的表单以 navigator.userAgent 作为 device_info。Desktop 端暴露可选的 dshDesktop.deviceInfo 读取器，其字段格式由 [Desktop README](../../../apps/desktop/README.zh.md) 负责；该读取器的结果取代 user-agent，读取失败时仍打开表单、仅 device_info 留空，而 device_info 描述的是上报的环境而非硬件型号。可在 ui-settings-account 插件配置 contactFormUrl，切换到另一个 HTTPS 问卷；问卷支持 Harness 来源选项前，contactSource 默认为空。
 
 账号资料与余额卡片共用[设置卡片材质与圆角](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)。用量与充值链接与标准 Button 尺寸一致；授权操作使用公共 Button。
 
-侧边栏账号菜单使用公共 Menu 的表面和背景模糊。已登录菜单沿用公共菜单项排版；未登录菜单使用自己的较宽菜单项，并将“意见反馈”入口的文案改为“联系我们”。设置菜单项显示外壳传入的有效组合键。关闭设置后，焦点回到侧栏账号入口。
+侧边栏账号菜单使用公共 Menu 的表面和背景模糊。已登录菜单沿用公共菜单项排版；未登录菜单使用自己的较宽菜单项。两种菜单的问卷入口均为“意见反馈”。设置菜单项显示外壳传入的有效组合键。关闭设置后，焦点回到侧栏账号入口。
 
 账号卡片的“更多账号信息”链接不带下划线，通过系统浏览器打开 Host 提供的 Platform 用量 URL 的根路径，遵循 `platformOrigin` 配置。
 

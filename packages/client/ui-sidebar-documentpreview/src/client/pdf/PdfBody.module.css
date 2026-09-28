@@ -111,7 +111,7 @@
 }
 
 .text ::selection {
-  background: var(--dsw-alias-interactive-bg-hover-accent);
+  background: var(--dsw-alias-bg-document-selection);
   color: transparent;
 }
 

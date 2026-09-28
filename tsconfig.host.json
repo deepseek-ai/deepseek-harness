@@ -92,6 +92,7 @@
     "apps/web/tests/session-unarchive.e2e.ts",
     "apps/web/tests/session-archive-active.e2e.ts",
     "apps/web/tests/replay-round-trip.e2e.ts",
+    "apps/web/tests/session-replay-reload.e2e.ts",
     "apps/web/tests/hmr-live.e2e.ts",
     "apps/web/tests/preview-boot.e2e.ts",
     "apps/web/tests/seeded-history.e2e.ts",

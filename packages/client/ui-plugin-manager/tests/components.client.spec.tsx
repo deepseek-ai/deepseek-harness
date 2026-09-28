@@ -893,6 +893,23 @@ describe('PluginManagerPage', () => {
     expect(actions.editInstallSpec).toHaveBeenCalledExactlyOnceWith('dsh-plugin-whale-pet')
   })
 
+  it.each([
+    { example: en.installGuideGitExample, key: 'installGitTemplateHint' as const },
+    { example: en.installGuidePathExample, key: 'installPathTemplateHint' as const },
+  ])('asks for a real value when the field holds $example, including after a language change', ({ example, key }) => {
+    const install = { ...IDLE_INSTALL, open: true, spec: example }
+    const { set, setLanguage } = renderTab({ install })
+    const hint = screen.getByRole('status')
+    expect(hint.textContent).toBe(en[key])
+    expect(screen.getByRole('textbox', { name: en.installSpecLabel }).getAttribute('aria-describedby')).toBe(hint.id)
+    setLanguage(zh)
+    expect(screen.getByRole('status').textContent).toBe(zh[key])
+    expect(screen.getByRole('note').textContent).toBe(zh.installGuideSafety)
+    set({ install: { ...install, spec: '@actual/plugin' } })
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.getByRole('textbox', { name: zh.installSpecLabel }).getAttribute('aria-describedby')).toBeNull()
+  })
+
   it('opens a guide under the field and drops an example into it', () => {
     const { actions } = renderTab({ install: { ...IDLE_INSTALL, open: true } })
     expect(screen.queryByText(en.installGuideIdHint)).toBeNull()

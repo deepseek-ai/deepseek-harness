@@ -8,14 +8,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as subprocess from 'execa'
-import { expect, it, onTestFinished, vi } from 'vitest'
+import { afterAll, beforeAll, expect, it, onTestFinished, vi } from 'vitest'
 import { checkGithubConnection } from '../src/github-connection.ts'
 import { parseInstallSpec } from '../src/install-spec.ts'
+import { isolateGitCommandLineConfig } from './git-environment.ts'
 
 vi.mock('execa', async (original) => {
   const module = await original<typeof import('execa')>()
   return { ...module, execa: vi.fn(module.execa) }
 })
+
+// These cases spawn real Git, so the host's command-line configuration group must not reach its children.
+let restoreGitCommandLineConfig: () => void
+beforeAll(() => { restoreGitCommandLineConfig = isolateGitCommandLineConfig() })
+afterAll(() => { restoreGitCommandLineConfig() })
 
 async function fixture() {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-github-check-'))

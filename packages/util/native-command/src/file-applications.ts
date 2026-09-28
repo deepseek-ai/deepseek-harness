@@ -71,7 +71,7 @@ async function queryFileApplications(
   const run = internals.run ?? runNativeCommand
   if (target.platform === 'linux') return linuxFileApplications(path, signal, run, internals.env ?? process.env)
   if (target.platform === 'darwin') {
-    const { stdout } = await run('osascript', ['-l', 'JavaScript', '-e', MAC_APPLICATIONS, target.path, display ? 'icons' : 'handlers'], signal)
+    const { stdout } = await run('osascript', ['-l', 'JavaScript', '-e', MAC_APPLICATIONS, target.path, display ? 'icons' : 'handlers'], signal, 'hidden')
     const applications = parseMacApplications(JSON.parse(stdout))
     return display ? dedupeMacApplications(applications) : applications
   }
@@ -179,8 +179,8 @@ export async function openNativeFileApplication(
   }
   const apps = await queryFileApplications(path, signal, internals, false)
   if (!apps.some(app => app.id === application)) throw new Error('Application is not registered for this file')
-  if (target.platform === 'linux') await run('gio', ['launch', application, path], signal)
-  else await run('open', ['-a', application, path], signal)
+  if (target.platform === 'linux') await run('gio', ['launch', application, path], signal, 'hidden')
+  else await run('open', ['-a', application, path], signal, 'hidden')
 }
 
 /** Resolve the desktop that owns the file, including Windows applications reached from WSL. */
@@ -190,7 +190,7 @@ async function desktopTarget(
   signal.throwIfAborted()
   const platform = internals.platform ?? process.platform
   if (platform === 'linux' && nativeFileManager(internals) === 'explorer') {
-    const translated = await (internals.run ?? runNativeCommand)('wslpath', ['-w', path], signal)
+    const translated = await (internals.run ?? runNativeCommand)('wslpath', ['-w', path], signal, 'hidden')
     signal.throwIfAborted()
     const windowsPath = translated.stdout.replace(/[\r\n]+$/, '')
     if (windowsPath === '') throw new Error('wslpath returned no Windows path')

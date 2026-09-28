@@ -215,8 +215,16 @@ it('cancels installation, retries and highlights the enabled plugin at 40% alpha
         await dialog.waitFor({ state: 'hidden' })
         const card = panel.locator('[data-plugin-package="slow-package"][data-plugin-highlight]')
         await card.waitFor({ state: 'visible' })
+        // `enableInstalled` marks the card and starts the directory reload the
+        // Host answers, so the highlight is observable before the reload
+        // commits the enabled bundle into the list. Measured 61 ms between the
+        // two locally; this poll waits for that commit, which the single read
+        // it replaces sampled inside.
+        await expect.poll(
+          () => card.getAttribute('data-plugin-status'),
+          { timeout: 10_000 },
+        ).toBe('running')
         expect(await panel.locator('[data-plugin-highlight]').count()).toBe(1)
-        expect(await card.getAttribute('data-plugin-status')).toBe('running')
         const styles = []
         for (const colorScheme of ['light', 'dark'] as const) {
           await page.emulateMedia({ colorScheme })

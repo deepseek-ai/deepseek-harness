@@ -34,7 +34,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-host-directory-picker": "workspace:*",
     "@deepseek-ai/dsh-native-command": "workspace:*",
-    "koffi": "^3.1.0"
+    "koffi": "3.1.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

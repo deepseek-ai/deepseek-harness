@@ -59,7 +59,7 @@ async function measure(capacityBytes: number, mode: string): Promise<TerminalIoR
     rows: 40, cols: 160, scrollbackLines: 10_000, scrollbackMaxBytes: capacityBytes,
     maxReadBytes: Math.min(256 * 1024, capacityBytes),
     pollIntervalMs: 1, exactProbeAfterMs: 150, idleSilenceMs: 1,
-    handoffGraceMs: 1, timeoutMs: 120_000, disposeGraceMs: 1,
+    handoffGraceMs: 1, promptTailGraceMs: 0, timeoutMs: 120_000, disposeGraceMs: 1,
   })
   try {
     if (prefillBytes > 0) {

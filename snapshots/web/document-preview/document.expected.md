@@ -60,6 +60,8 @@
 
 - Table selection: forward and backward drags exclude later sections
 - Line-break highlight: transparent
+- Text selection: translucent blue in light and dark themes; canvas text remains visible
+- Mouse release preserves the selected text
 
 ## Image zoom
 

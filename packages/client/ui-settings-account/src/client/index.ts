@@ -161,12 +161,34 @@ export function apply(ctx: Context): void {
     ...nativePlatform === undefined ? {} : { openPlatformPage: platformPageOpener(refreshAccount) },
     refreshAccount,
     contactUs() {
-      const url = contactUrl(config, {
+      // Sample the account, build and environment before awaiting native information, so
+      // a profile the read outlasts cannot replace the UID this click reported.
+      const profile = snapshot.details?.profile
+      const context = {
+        uid: profile?.status === 'ready' ? profile.value.id : null,
         version: process.env.DSH_CLIENT_VERSION,
         locale: ctx.locale.getSnapshot().active === 'zh' ? 'zh-CN' : 'en',
         width: window.screen.width, height: window.screen.height, pixelRatio: window.devicePixelRatio,
-      })
-      window.open(url, '_blank', 'noopener,noreferrer')
+      }
+      const openForm = (deviceInfo: string): void => {
+        window.open(contactUrl(config, { ...context, deviceInfo }), '_blank', 'noopener,noreferrer')
+      }
+      const readDeviceInfo = (globalThis as typeof globalThis & {
+        dshDesktop?: { deviceInfo?: () => Promise<string> }
+      }).dshDesktop?.deviceInfo
+      if (readDeviceInfo === undefined) {
+        // A Desktop bridge without the optional reader reports the renderer user agent.
+        openForm(navigator.userAgent)
+        return
+      }
+      void (async () => {
+        let deviceInfo = ''
+        try { deviceInfo = await readDeviceInfo() }
+        catch (_error) {
+          // Native information is optional; the questionnaire opens without it.
+        }
+        openForm(deviceInfo)
+      })()
     },
     showLogin(visible) { publish({ ...snapshot, loginVisible: visible }) },
     setOnboarding(active) { publish({ ...snapshot, onboarding: active }) },

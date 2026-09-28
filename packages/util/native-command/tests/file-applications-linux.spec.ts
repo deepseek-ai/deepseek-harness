@@ -31,7 +31,7 @@ it('deduplicates GIO handlers, resolves nested ids, localizes names, and reuses 
     { id: join(root, 'applications', 'nested', 'other.desktop'), name: 'Other', default: false, icon: null },
   ])
   await openNativeFileApplication('/file.mp3', apps[0]!.id, signal, facts)
-  expect(run).toHaveBeenLastCalledWith('gio', ['launch', apps[0]!.id, '/file.mp3'], signal)
+  expect(run).toHaveBeenLastCalledWith('gio', ['launch', apps[0]!.id, '/file.mp3'], signal, 'hidden')
   await expect(openNativeFileApplication('/file.mp3', '/unregistered.desktop', signal, facts)).rejects.toThrow('not registered')
 })
 

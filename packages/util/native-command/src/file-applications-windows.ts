@@ -268,7 +268,7 @@ ${application === null ? 'ConvertTo-Json -InputObject @([DshFileAssociations]::L
     await writeFile(scriptPath, `\uFEFF${script}`, 'utf8')
     const result = await run('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-STA', '-ExecutionPolicy', 'Bypass', '-File', scriptPath,
-    ], signal)
+    ], signal, 'hidden')
     return result.stdout
   } finally {
     await rm(directory, { recursive: true, force: true })

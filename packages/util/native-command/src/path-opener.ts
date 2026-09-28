@@ -58,7 +58,7 @@ async function openInBrowser(
     let bundle: string | undefined
     try {
       const { stdout } = await run(
-        'defaults', ['read', 'com.apple.LaunchServices/com.apple.launchservices.secure'], signal)
+        'defaults', ['read', 'com.apple.LaunchServices/com.apple.launchservices.secure'], signal, 'hidden')
       bundle = macBundleForHttps(stdout)
     } catch {
       // No LaunchServices record (a fresh account never changed a default):
@@ -66,7 +66,7 @@ async function openInBrowser(
       return false
     }
     if (bundle === undefined) return false
-    await run('open', ['-b', bundle, path], signal)
+    await run('open', ['-b', bundle, path], signal, 'hidden')
     return true
   }
   if (platform === 'linux') {
@@ -74,7 +74,7 @@ async function openInBrowser(
     // xdg-settings needs a launcher this package has no business shipping.
     const browser = env.BROWSER
     if (browser === undefined || browser === '') return false
-    await run(browser, [path], signal)
+    await run(browser, [path], signal, 'hidden')
     return true
   }
   // Windows names no browser without reading the UserChoice registry, and its
@@ -135,7 +135,8 @@ function explorerTarget(windowsPath: string): string {
  */
 async function runExplorer(args: readonly string[], signal: AbortSignal, run: PathOpenerRunner): Promise<void> {
   try {
-    await run('explorer.exe', args, signal)
+    // SW_HIDE also hides Explorer's folder window, not just console windows.
+    await run('explorer.exe', args, signal, 'visible')
   } catch (error: unknown) {
     signal.throwIfAborted()
     // Explorer can exit 1 after delegating to the existing desktop process.
@@ -156,7 +157,7 @@ async function openWindowsPath(path: string, signal: AbortSignal, run: PathOpene
 
 /** Translate a WSL path before handing it to the Windows desktop. */
 async function openWslPath(path: string, signal: AbortSignal, run: PathOpenerRunner): Promise<void> {
-  const translated = await run('wslpath', ['-w', path], signal)
+  const translated = await run('wslpath', ['-w', path], signal, 'hidden')
   signal.throwIfAborted()
   const windowsPath = translated.stdout.replace(/[\r\n]+$/, '')
   if (windowsPath === '') throw new Error('wslpath returned no Windows path')
@@ -179,7 +180,7 @@ async function openNativePathWithIntent(
     && await openInBrowser(path, signal, platform, run, env)) return
 
   if (platform === 'darwin') {
-    await run('open', intent === 'text-editor' ? ['-t', path] : [path], signal)
+    await run('open', intent === 'text-editor' ? ['-t', path] : [path], signal, 'hidden')
     return
   }
 
@@ -193,7 +194,7 @@ async function openNativePathWithIntent(
       await openWslPath(path, signal, run)
       return
     }
-    await run('xdg-open', [path], signal)
+    await run('xdg-open', [path], signal, 'hidden')
     return
   }
 
@@ -292,13 +293,13 @@ export async function revealNativePath(
   const run = internals.run ?? runNativeCommand
   const manager = nativeFileManager({ ...internals, platform })
   if (manager === 'finder') {
-    await run('open', ['-R', path], signal)
+    await run('open', ['-R', path], signal, 'hidden')
     return
   }
   if (manager === 'explorer') {
     let windowsPath = path
     if (platform === 'linux') {
-      const translated = await run('wslpath', ['-w', path], signal)
+      const translated = await run('wslpath', ['-w', path], signal, 'hidden')
       signal.throwIfAborted()
       windowsPath = translated.stdout.replace(/[\r\n]+$/, '')
       if (windowsPath === '') throw new Error('wslpath returned no Windows path')
@@ -307,7 +308,7 @@ export async function revealNativePath(
     return
   }
   if (manager === 'directory') {
-    await run('xdg-open', [dirname(path)], signal)
+    await run('xdg-open', [dirname(path)], signal, 'hidden')
     return
   }
   throw new Error(`native file manager is unsupported on ${platform}`)

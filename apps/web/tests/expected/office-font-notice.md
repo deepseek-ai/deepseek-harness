@@ -1,6 +1,7 @@
 # Office font warning
 
 - Document preparation: centered 28px spinner with visible rendering status in both themes
+- Text selection: translucent blue with transparent overlay text in both themes; Chinese text copies unchanged
 - Document backdrop: cool light grey in light mode; matte black in dark mode
 - Word and PowerPoint paper layout: 12px page gaps and outer backdrop insets
 - Warning precedes reload in the same toolbar: true

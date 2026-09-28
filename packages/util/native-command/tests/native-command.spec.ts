@@ -8,7 +8,7 @@ describe('runNativeCommand', () => {
     const result = await runNativeCommand(
       node,
       ['-e', 'process.stdout.write("out✓"); process.stderr.write("err")'],
-      new AbortController().signal,
+      new AbortController().signal, 'hidden',
     )
     expect(result).toEqual({ stdout: 'out✓', stderr: 'err' })
   })
@@ -17,7 +17,7 @@ describe('runNativeCommand', () => {
     const failure = await runNativeCommand(
       node,
       ['-e', 'process.stdout.write("partial"); process.stderr.write("boom"); process.exit(3)'],
-      new AbortController().signal,
+      new AbortController().signal, 'hidden',
     ).then(() => { throw new Error('unexpected resolve') }, (error: unknown) => error)
     expect(failure).toMatchObject({ code: 3, stdout: 'partial', stderr: 'boom' })
     expect((failure as Error).cause).toBeInstanceOf(Error)
@@ -27,14 +27,14 @@ describe('runNativeCommand', () => {
     const failure = await runNativeCommand(
       'dsh-definitely-missing-command',
       [],
-      new AbortController().signal,
+      new AbortController().signal, 'hidden',
     ).then(() => { throw new Error('unexpected resolve') }, (error: unknown) => error)
     expect(failure).toMatchObject({ code: 'ENOENT' })
   })
 
   it('terminates the child when the signal aborts', async () => {
     const abort = new AbortController()
-    const pending = runNativeCommand(node, ['-e', 'setTimeout(() => {}, 60_000)'], abort.signal)
+    const pending = runNativeCommand(node, ['-e', 'setTimeout(() => {}, 60_000)'], abort.signal, 'hidden')
     abort.abort()
     const failure = await pending.then(() => { throw new Error('unexpected resolve') }, (error: unknown) => error)
     expect(failure).toBeInstanceOf(Error)

@@ -10,8 +10,19 @@ import type { LogRecordExporter } from '@opentelemetry/sdk-logs'
  * @returns the exporter owned by one independent log pipeline.
  */
 export function createLogExporter(options: OTLPExporterNodeConfigBase & { url: string }): LogRecordExporter {
+  return new OTLPExporterBase(createOtlpHttpExportDelegate(logTransportOptions(options), JsonLogsSerializer))
+}
+
+/**
+ * Resolve collector-local headers and agents with shared SDK timeout and compression defaults.
+ * @param options - explicit endpoint and SDK HTTP settings.
+ * @returns resolved transport settings without ambient credentials.
+ */
+export function logTransportOptions(
+  options: OTLPExporterNodeConfigBase & { url: string },
+): Parameters<typeof createOtlpHttpExportDelegate>[0] {
   const shared = mergeOtlpSharedConfigurationWithDefaults(options, getSharedConfigurationFromEnvironment('LOGS'), getSharedConfigurationDefaults())
-  const transport = {
+  return {
     ...shared,
     url: options.url,
     headers: async () => ({
@@ -23,5 +34,4 @@ export function createLogExporter(options: OTLPExporterNodeConfigBase & { url: s
       : httpAgentFactoryFromOptions({ keepAlive: options.keepAlive ?? true, ...options.httpAgentOptions }),
     ...(options.userAgent === undefined ? {} : { userAgent: options.userAgent }),
   }
-  return new OTLPExporterBase(createOtlpHttpExportDelegate(transport, JsonLogsSerializer))
 }

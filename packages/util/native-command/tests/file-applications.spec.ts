@@ -12,7 +12,7 @@ describe('native file associations', () => {
     const run = vi.fn(async () => ({ stdout: JSON.stringify([application]), stderr: '' }))
     const path = '/tmp/中文 $(touch nope).mp3'
     await expect(nativeFileApplications(path, signal, { platform: 'darwin', run })).resolves.toEqual([application])
-    expect(run).toHaveBeenCalledWith('osascript', ['-l', 'JavaScript', '-e', expect.any(String), path, 'icons'], signal)
+    expect(run).toHaveBeenCalledWith('osascript', ['-l', 'JavaScript', '-e', expect.any(String), path, 'icons'], signal, 'hidden')
   })
 
   it.each(['{}', '[null]', '[{"id":1}]', '[{"id":"/a.app","default":false,"icon":null,"bundle":"b"}]', '[{"id":"/a.app","name":"A","default":false,"icon":null,"bundle":5}]', JSON.stringify([{ ...application, icon: 'javascript:alert(1)' }])])('rejects malformed native output %s', async (stdout) => {
@@ -79,8 +79,8 @@ describe('native file associations', () => {
   it('launches only a currently registered application with argv', async () => {
     const run = vi.fn(async () => ({ stdout: JSON.stringify([application]), stderr: '' }))
     await openNativeFileApplication('/file.mp3', application.id, signal, { platform: 'darwin', run })
-    expect(run).toHaveBeenNthCalledWith(1, 'osascript', ['-l', 'JavaScript', '-e', expect.any(String), '/file.mp3', 'handlers'], signal)
-    expect(run).toHaveBeenLastCalledWith('open', ['-a', application.id, '/file.mp3'], signal)
+    expect(run).toHaveBeenNthCalledWith(1, 'osascript', ['-l', 'JavaScript', '-e', expect.any(String), '/file.mp3', 'handlers'], signal, 'hidden')
+    expect(run).toHaveBeenLastCalledWith('open', ['-a', application.id, '/file.mp3'], signal, 'hidden')
     run.mockClear()
     await expect(openNativeFileApplication('/file.mp3', '/arbitrary.app', signal, { platform: 'darwin', run })).rejects.toThrow('not registered')
     expect(run).toHaveBeenCalledOnce()
@@ -95,7 +95,7 @@ describe('native file associations', () => {
     const shown = await nativeFileApplications('/file.mp3', signal, { platform: 'darwin', run })
     expect(shown.map(app => app.id)).toEqual([application.id])
     await openNativeFileApplication('/file.mp3', '/updates/Music.app', signal, { platform: 'darwin', run })
-    expect(run).toHaveBeenLastCalledWith('open', ['-a', '/updates/Music.app', '/file.mp3'], signal)
+    expect(run).toHaveBeenLastCalledWith('open', ['-a', '/updates/Music.app', '/file.mp3'], signal, 'hidden')
   })
 
   it('does not query after cancellation or on unsupported platforms', async () => {
@@ -114,7 +114,7 @@ it('uses the production command adapter and current platform when no override is
   onTestFinished(() => { run.mockRestore() })
   expect(await nativeFileApplications('/file.mp3', signal)).toEqual(process.platform === 'linux' ? [] : [application])
   await openNativeFileApplication('/file.mp3', application.id, signal, { platform: 'darwin' })
-  expect(run).toHaveBeenLastCalledWith('open', ['-a', application.id, '/file.mp3'], signal)
+  expect(run).toHaveBeenLastCalledWith('open', ['-a', application.id, '/file.mp3'], signal, 'hidden')
 })
 
 
@@ -167,7 +167,7 @@ it('uses the Windows desktop for WSL paths and rejects an empty translation', as
   const facts = { platform: 'linux' as const, osRelease: 'microsoft', env: {}, run }
   expect(await nativeFileApplications('/mnt/c/音频.mp3', signal, facts)).toEqual([application])
   await openNativeFileApplication('/mnt/c/音频.mp3', application.id, signal, facts)
-  expect(run).toHaveBeenCalledWith('wslpath', ['-w', '/mnt/c/音频.mp3'], signal)
+  expect(run).toHaveBeenCalledWith('wslpath', ['-w', '/mnt/c/音频.mp3'], signal, 'hidden')
   const empty = async () => ({ stdout: '', stderr: '' })
   await expect(nativeFileApplications('/a', signal, { ...facts, run: empty })).rejects.toThrow('no Windows path')
 })

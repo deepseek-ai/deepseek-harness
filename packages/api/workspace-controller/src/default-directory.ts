@@ -50,7 +50,7 @@ export async function defaultWorkspaceDirectory(
       case 'darwin':
         ({ stdout } = await run('osascript', [
           '-e', 'POSIX path of (path to documents folder from user domain without folder creation)',
-        ], signal))
+        ], signal, 'hidden'))
         break
       case 'win32':
         ({ stdout } = await run('powershell.exe', [
@@ -58,10 +58,10 @@ export async function defaultWorkspaceDirectory(
           '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); '
           + '[Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments, '
           + '[Environment+SpecialFolderOption]::DoNotVerify)',
-        ], signal))
+        ], signal, 'hidden'))
         break
       case 'linux':
-        ({ stdout } = await run('xdg-user-dir', ['DOCUMENTS'], signal))
+        ({ stdout } = await run('xdg-user-dir', ['DOCUMENTS'], signal, 'hidden'))
         break
       default:
         throw new Error(`system Documents directory is unavailable on ${platform}`)

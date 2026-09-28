@@ -168,7 +168,7 @@ export async function output(
   command: string, args: readonly string[], timeoutMs: number, internals: ResolvedInternals,
 ): Promise<string | null> {
   try {
-    const { stdout } = await internals.run(command, args, AbortSignal.timeout(timeoutMs))
+    const { stdout } = await internals.run(command, args, AbortSignal.timeout(timeoutMs), 'hidden')
     return stdout
   } catch {
     // Swallows spawn, non-zero-exit, and timeout-abort failures alike: a

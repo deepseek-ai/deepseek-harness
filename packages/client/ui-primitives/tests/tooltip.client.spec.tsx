@@ -434,6 +434,103 @@ describe('Tooltip', () => {
     }
   })
 
+  it('pins an informational tooltip on click and preserves the anchor description', () => {
+    const clicked = vi.fn()
+    render(<>
+      <p id="existing-description">Existing description</p>
+      <Tooltip label="Plugin information" openOnClick portal>
+        <button aria-describedby="existing-description" onClick={clicked}>anchor</button>
+      </Tooltip>
+    </>)
+    const anchor = screen.getByText('anchor')
+    fireEvent.pointerDown(anchor)
+    fireEvent.focus(anchor)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.click(anchor)
+    expect(clicked).toHaveBeenCalledOnce()
+    const bubble = screen.getByRole('tooltip')
+    expect(bubble.textContent).toBe('Plugin information')
+    expect(anchor.getAttribute('aria-describedby')).toBe(`existing-description ${bubble.id}`)
+    fireEvent.mouseLeave(anchor)
+    fireEvent.blur(anchor)
+    expect(screen.getByRole('tooltip')).toBe(bubble)
+    fireEvent.pointerDown(bubble)
+    expect(screen.getByRole('tooltip')).toBe(bubble)
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    expect(anchor.getAttribute('aria-describedby')).toBe('existing-description')
+    fireEvent.click(anchor)
+    expect(screen.getByRole('tooltip')).toBeTruthy()
+    fireEvent.click(anchor)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
+  it('shows informational tooltips on hover and focus, and consumes Escape only while open', () => {
+    const onKeyDown = vi.fn()
+    render(<div onKeyDown={onKeyDown}>
+      <Tooltip label="Plugin information" openOnClick><button>anchor</button></Tooltip>
+    </div>)
+    const anchor = screen.getByText('anchor')
+    fireEvent.mouseEnter(anchor)
+    expect(screen.getByRole('tooltip').textContent).toBe('Plugin information')
+    fireEvent.mouseLeave(anchor)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.keyDown(anchor, { key: 'Tab' })
+    fireEvent.focus(anchor)
+    expect(screen.getByRole('tooltip')).toBeTruthy()
+    fireEvent.keyDown(anchor, { key: 'a' })
+    expect(screen.getByRole('tooltip')).toBeTruthy()
+    onKeyDown.mockClear()
+    expect(fireEvent.keyDown(anchor, { key: 'Escape' })).toBe(false)
+    expect(onKeyDown).not.toHaveBeenCalled()
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.keyDown(anchor, { key: 'Escape' })
+    expect(onKeyDown).toHaveBeenCalledOnce()
+    fireEvent.click(anchor)
+    expect(fireEvent.keyDown(anchor, { key: 'Tab' })).toBe(true)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
+  it('cancels a delayed hover when clicking to pin the information', () => {
+    vi.useFakeTimers()
+    try {
+      render(<Tooltip label="Plugin information" openOnClick delayMs={300}><button>anchor</button></Tooltip>)
+      const anchor = screen.getByText('anchor')
+      fireEvent.mouseEnter(anchor)
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      fireEvent.click(anchor)
+      expect(screen.getByRole('tooltip')).toBeTruthy()
+      fireEvent.mouseLeave(anchor)
+      expect(screen.getByRole('tooltip')).toBeTruthy()
+      fireEvent.keyDown(anchor, { key: 'Escape' })
+      act(() => { vi.advanceTimersByTime(300) })
+      expect(screen.queryByRole('tooltip')).toBeNull()
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops a click pin when disabled or when click opening is removed', () => {
+    const view = render(<Tooltip label="Plugin information" openOnClick><button>anchor</button></Tooltip>)
+    const anchor = screen.getByText('anchor')
+    fireEvent.click(anchor)
+    view.rerender(<Tooltip label="Plugin information" openOnClick disabled><button>anchor</button></Tooltip>)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.click(anchor)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    view.rerender(<Tooltip label="Plugin information" openOnClick><button>anchor</button></Tooltip>)
+    fireEvent.click(anchor)
+    expect(screen.getByRole('tooltip')).toBeTruthy()
+    view.rerender(<Tooltip label="Plugin information"><button>anchor</button></Tooltip>)
+    fireEvent.mouseLeave(anchor)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    view.rerender(<Tooltip label="Plugin information" openOnClick><button>anchor</button></Tooltip>)
+    fireEvent.click(anchor)
+    view.unmount()
+    expect(fireEvent.keyDown(document.body, { key: 'Escape' })).toBe(true)
+  })
+
   it('a click on the anchor dismisses the bubble even while the anchor stays focused', () => {
     render(
       <Tooltip label="Pin session">

@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-27-plugin-manager-git-child-environment.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-27-plugin-manager-git-child-environment.md
+/agent-note-plugin-manager-git-children-isolate-the-host-s-command-line-configuration:
+  en: ebb8f6a97dcc126a
+  zh: 4f7fbb487136f218
+/agent-note-plugin-manager-git-children-isolate-the-host-s-command-line-configuration/problem:
+  en: 67f7316995be5f48
+  zh: fbb8dda3946ff1f3
+/agent-note-plugin-manager-git-children-isolate-the-host-s-command-line-configuration/decision:
+  en: 7723360996b8b09e
+  zh: 78d8dfa61b1711ec
+/agent-note-plugin-manager-git-children-isolate-the-host-s-command-line-configuration/alternatives-considered:
+  en: 3f4e5b0bc9a8a961
+  zh: 5f39ffd20e076914
+/agent-note-plugin-manager-git-children-isolate-the-host-s-command-line-configuration/verification:
+  en: 7c8b5b8f4002c71a
+  zh: 59493bd968ba34bf
+/agent-note-plugin-manager-git-children-isolate-the-host-s-command-line-configuration/consequences:
+  en: b81437323c8ae6e2
+  zh: 79f8d0926218ae2e

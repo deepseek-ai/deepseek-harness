@@ -36,7 +36,7 @@ export interface Config {
   timeoutMillis: number
   /** Processor deadline for one batch export. */
   exportTimeoutMillis: number
-  /** Outer shutdown wait; pending exports may be lost after this deadline. */
+  /** Drain deadline; expiry cancels pending exports before disposal completes. */
   shutdownTimeoutMillis: number
 }
 
@@ -97,15 +97,13 @@ export default class ProductTelemetry extends Service {
     })
     this.reporter = reporter
     ctx.effect(() => async () => {
-      let timer!: ReturnType<typeof setTimeout>
-      const deadline = new Promise<void>((resolve) => {
-        timer = setTimeout(() => {
-          ctx.logger.warn('Product telemetry shutdown deadline exceeded; pending events may be lost')
-          resolve()
-        }, config.shutdownTimeoutMillis)
-      })
+      const cancellation = new AbortController()
+      const timer = setTimeout(() => {
+        ctx.logger.warn('Product telemetry shutdown deadline exceeded; pending events may be lost')
+        cancellation.abort(new Error('Product telemetry shutdown deadline exceeded'))
+      }, config.shutdownTimeoutMillis)
       try {
-        await Promise.race([reporter.shutdown(), deadline])
+        await reporter.shutdown(cancellation.signal)
       } finally {
         clearTimeout(timer)
       }

@@ -41,6 +41,8 @@ pnpm --silent run persistence-review --before .artifacts/base.schema.json --afte
 
 Record the commits supplying those files with the report. Add `--json` for structured output. This read-only comparison groups shared changes with their affected roots and uses actual literal `kind`/`form` values instead of union positions. Ambiguous alternatives remain separate additions and removals. Its compatibility section copies every root's authoritative classifier result; the structural explanation does not replace acknowledgement checks. Current catalog labels and declaration names are descriptive metadata; structural anchors and fingerprints identify types.
 
+The current machine inventory stores complete graphs in `roots`. A `types` entry contains `digest`, `names`, and `sources`, plus an explicit `schema` when roots cannot reconstruct that graph exactly. Readers resolve omitted graphs from root subgraphs by digest and validate explicit graphs directly, preserving every type and its metadata. Historical full entries remain readable. `formatVersion` identifies normalization rules; storage compaction does not change root fingerprints or require an acknowledgement.
+
 <a id="acknowledge"></a>
 ## 1. Record the change
 
