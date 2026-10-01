@@ -13,33 +13,25 @@ export interface HttpMcpFixture {
   close: () => Promise<void>
 }
 
-/** Start a local stateless MCP endpoint exposing one `ping` tool, optionally echoing the request credential in a transport error. */
+/** Start a local stateless MCP endpoint exposing one `ping` tool, optionally echoing the request credential in an MCP tool error. */
 export async function startHttpMcpFixture(options: { rejectToolCalls?: boolean } = {}): Promise<HttpMcpFixture> {
   const calls: string[] = []
   const authorization: Array<string | undefined> = []
-  const handler = createMcpHandler(() => {
+  const handler = createMcpHandler(({ requestInfo }) => {
     const mcp = new McpServer(
       { name: 'http-fixture', version: '1.0.0' },
       { capabilities: { tools: {} } },
     )
     mcp.registerTool('ping', { description: 'Replies pong.', inputSchema: z.object({}) }, async (): Promise<CallToolResult> => {
       calls.push('ping')
+      if (options.rejectToolCalls) {
+        return { isError: true, content: [{ type: 'text', text: `MCP fixture rejected ${requestInfo?.headers.get('authorization')}` }] }
+      }
       return { content: [{ type: 'text', text: 'pong' }] }
     })
     return mcp
   })
-  const handle = toNodeHandler({
-    async fetch(request, context) {
-      if (options.rejectToolCalls && request.method === 'POST') {
-        const body: unknown = await request.clone().json()
-        if (body !== null && typeof body === 'object' && 'method' in body && body.method === 'tools/call') {
-          calls.push('ping')
-          return new Response(`MCP fixture rejected ${request.headers.get('authorization')}`, { status: 500 })
-        }
-      }
-      return handler.fetch(request, context)
-    },
-  })
+  const handle = toNodeHandler(handler)
   const handleRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     authorization.push(request.headers.authorization)
     // The adapter excludes explicit undefined on Node's optional HTTP fields.

@@ -360,6 +360,24 @@ describe('reconnect supervisor', () => {
     }
   })
 
+  it.each([true, false])('formats MCP tool errors for expandTemplates=%s', async (expandTemplates) => {
+    const config = { ...stdioConfig({ enabled: false }), expandTemplates }
+    const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'test'), new McpStatusCell(() => {}))
+    try {
+      await handle.ready
+      const message = 'upstream rejected Bearer test-secret'
+      mockCallTool.mockResolvedValue({ isError: true, content: [{ type: 'text', text: message }] })
+      const result = await ctx.tools.execute({ name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal })
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('expected MCP failure')
+      expect(result.error.message).toBe(expandTemplates
+        ? 'mcp-client(srv): tools: operation failed (upstream details omitted to protect credentials)'
+        : message)
+    } finally {
+      await handle.dispose()
+    }
+  })
+
   it('publishes no tools when disposal follows connection completion before discovery', async () => {
     const connected: PromiseWithResolvers<void> = Promise.withResolvers()
     const continueStartup: PromiseWithResolvers<void> = Promise.withResolvers()

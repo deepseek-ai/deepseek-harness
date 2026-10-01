@@ -132,7 +132,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   const diagnostic = (error: unknown, operation: string): string => binding.diagnostic(error, operation)
   const lifetime = new AbortController()
   const readiness = Promise.withResolvers<ConnectionOutcome>()
-  type Generation = { wire: McpGeneration; bound?: Config; connectedAt?: number }
+  type Generation = { wire: McpGeneration; connectedAt?: number }
   let current: Generation | undefined
   let bindingValue: { config?: Config } | undefined
   let disposed = false
@@ -330,9 +330,8 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       const startedAt = Date.now()
       const remaining = (): number | undefined => config.startupTimeoutMs === undefined ? undefined
         : config.startupTimeoutMs - (Date.now() - startedAt)
-      record.bound = await record.wire.run(signal => binding.resolve(signal), remaining())
-      bindingValue = { config: record.bound }
-      const resolved = record.bound
+      const resolved = await record.wire.run(signal => binding.resolve(signal), remaining())
+      bindingValue = { config: resolved }
       await record.wire.connect(resolved, remaining(), config.expandTemplates && config.transport === 'streamable-http'
         ? (url, init) => record.wire.run(signal => binding.fetch(resolved, url, init, signal, requestCredentialRefresh))
         : undefined)

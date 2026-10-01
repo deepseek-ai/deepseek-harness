@@ -33,7 +33,7 @@ export interface ToolBridgeOptions {
   signal: AbortSignal
   /**
    * Format tool-call failures before they reach callers.
-   * @param error - caught transport or protocol failure.
+   * @param error - transport, protocol, or MCP tool-result failure.
    * @returns the error safe to expose for this instance's configuration.
    */
   error?: (error: unknown) => Error
@@ -151,11 +151,13 @@ export async function syncTools(
       taskRequired: tool.execution?.taskSupport === 'required',
       call: async (args, execution) => {
         try {
-          return await client.callTool(
+          const result = await client.callTool(
             { name: tool.name, arguments: args },
             { signal: AbortSignal.any([execution.signal, opts.signal]),
               timeout: opts.toolCallTimeoutMs, toolDefinition: tool },
           )
+          if (result.isError === true && opts.error !== undefined) throw new Error(extractText(result.content as JsonValue[], tool.name))
+          return result
         } catch (error) {
           throw opts.error?.(error) ?? error
         }

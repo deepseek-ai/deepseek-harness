@@ -304,7 +304,7 @@ export default class McpServerManager extends Service {
     if (entry === undefined) throw new Error(`mcp-manager: unknown server "${name}"`)
     let record = this.instances.get(name)
     if (record === undefined) {
-      record = { entrySnapshot: structuredClone(entry), probes: new Map() }
+      record = { entrySnapshot: entry, probes: new Map() }
       this.instances.set(name, record)
     }
     if (record.retired || !deepEqualJson(entry, record.entrySnapshot)) throw new Error(`mcp-manager: configuration for "${name}" is changing`)
@@ -394,7 +394,7 @@ export default class McpServerManager extends Service {
 
   private mount(name: string, entry: VolatileSnapshot<McpManagedServerEntry>, existing?: ManagedRecord): void {
     if (this.stopped || !deepEqualJson(this.config.servers.get()[name], entry)) return
-    const record: ManagedRecord = existing ?? { entrySnapshot: structuredClone(entry), probes: new Map() }
+    const record: ManagedRecord = existing ?? { entrySnapshot: entry, probes: new Map() }
     this.instances.set(name, record)
     this.setStatus(name, { state: 'connecting', attempt: 0 })
     const handle = record.handle = this.ownerContext.plugin(McpClient, this.toClientConfig(name, entry))

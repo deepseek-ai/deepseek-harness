@@ -104,6 +104,8 @@ With `expandTemplates: true`, `command`, `args`, `env` values, `cwd`, `url`, and
 
 Credential notifications rebuild the connection only when the resolved values change; same-value notifications preserve the connection and its reconnect budget. The old connection must close and finish local cleanup before a replacement starts. Streamable HTTP re-resolves templates before every request and refuses to send changed credentials on the old session. Incomplete cleanup blocks replacement until the Host restarts.
 
+With template expansion enabled, failure diagnostics omit upstream messages, including MCP `isError` tool-result content, because they can contain credentials. Successful tool results retain their content.
+
 -----
 
 <a id="understand-the-implementation"></a>

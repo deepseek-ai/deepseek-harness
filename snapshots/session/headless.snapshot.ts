@@ -659,7 +659,7 @@ function verifyMcpTemplateError(log: string, secret: string): void {
   expect(results).toHaveLength(1)
   expect(results[0]).toMatchObject({ isError: true })
   const diagnostic = results[0]!.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-  expect(diagnostic).toBe('Error: mcp-client(protected): tools: CLIENT_HTTP_NOT_IMPLEMENTED')
+  expect(diagnostic).toBe('Error: mcp-client(protected): tools: operation failed (upstream details omitted to protect credentials)')
   expect(log).not.toContain(secret)
   const resultIndex = events.findIndex(event => event.type === 'tool/result')
   const nextRequest = events.findIndex((event, index) => index > resultIndex && event.type === 'assistant/message')
