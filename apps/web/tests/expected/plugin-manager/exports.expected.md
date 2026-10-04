@@ -23,3 +23,9 @@
     - code: fixture-review
     - code: "@fixture/bundle/review"
     - text: 已关闭
+- heading "来源信息" [level=4]
+- term: 代码来源
+- definition:
+  - code: file:{{fixtures}}/fixture-bundle
+- term: 当前版本
+- definition: 0.0.1

@@ -36,7 +36,7 @@ One package provides the whole plan-mode feature; the subsystem reference owns t
 Start with the subsystem reference for the shared vocabulary, then read the design note for the decisions.
 
 - [Plan mode subsystem reference](../../docs/subsystems/plan.md) — how plan mode works, its configuration, and the exit tool's behavior.
-- [Plan-specific collaboration state](../../.agents/notes/implemented/simplification/2026-07-22-plan-specific-collaboration-state.md) — the design decision behind plan mode.
+- [Plan-specific collaboration state](plan-mode/README.md) — the design decision behind plan mode.
 
 <a id="dev-note"></a>
 ## Dev Note

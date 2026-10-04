@@ -4,6 +4,7 @@ import type {
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-tools/types'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { trajectoryNode } from './trajectory-definition-common.ts'
 
 /* jscpd:ignore-start -- Target-owned Definitions intentionally keep their event
@@ -39,6 +40,7 @@ function rootCall(match: ConversationMatch): StartedToolCall {
     callId: String(match.event.data.callId),
     name: match.event.data.name,
     argsRaw: match.event.data.arguments,
+    args: PartialArguments.fromText(match.event.data.arguments),
     turn: match.event.data.turn,
     step: match.event.data.step,
     time: match.event.time,
@@ -57,6 +59,8 @@ function rootResult(
     seq: match.event.seq,
     time: match.event.time,
     callId: String(message.source.callId),
+    name: previous?.name ?? '',
+    args: previous?.args ?? PartialArguments.EMPTY,
     call: previous === undefined ? null : { name: previous.name, argsRaw: previous.argsRaw },
     callTime: previous?.time ?? null,
     content: message.content,
@@ -84,6 +88,7 @@ function childCall(match: ConversationMatch, data: DispatchData): StartedToolCal
     parentCallId: data.parentCallId,
     name: data.name,
     argsRaw: JSON.stringify(data.arguments),
+    args: PartialArguments.fromObject(data.arguments),
     turn: locationTurn(match),
     step: locationStep(match),
     time: match.event.time,
@@ -102,6 +107,8 @@ function childResult(
     time: match.event.time,
     callId: data.subCallId,
     parentCallId: data.parentCallId,
+    name: data.name,
+    args: previous?.args ?? PartialArguments.fromObject(data.arguments),
     call: { name: data.name, argsRaw: JSON.stringify(data.arguments) },
     callTime: previous === undefined || 'kind' in previous ? null : previous.time,
     content: data.content ?? [],
@@ -193,6 +200,8 @@ function projectCall(
     time: interruptedAt.time,
     callId: block.callId,
     ...block.parentCallId === undefined ? {} : { parentCallId: block.parentCallId },
+    name: block.name,
+    args: block.args,
     call: { name: block.name, argsRaw: block.argsRaw },
     callTime: block.time,
     content: [],

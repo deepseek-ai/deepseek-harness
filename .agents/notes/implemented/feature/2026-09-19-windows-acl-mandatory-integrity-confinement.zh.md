@@ -53,4 +53,4 @@ Status: implemented
 ## 相关
 
 - [Windows sandbox 档：原始 ACL 受限令牌](2026-08-08-windows-acl-restricted-token-sandbox.zh.md)——本次改动所扩展的档（保持 active；本笔记只取代其删除路径边界）。
-- [沙箱决策](2026-07-06-sandbox.zh.md)——平台链与 `partial` 强制执行词汇。
+- [沙箱参考](../../../../packages/sandbox/sandbox-local/README.zh.md)——平台链与 `partial` 强制执行词汇。

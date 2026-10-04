@@ -67,9 +67,10 @@
   justify-content: center;
 }
 
+/* The full-viewport overlay blocks background clicks above the painted mask too. */
 .mask {
   position: absolute;
-  inset: 0;
+  inset: var(--dsh-frame-chrome-top, 0px) 0 0;
   background: var(--dsw-alias-bg-mask-1);
   backdrop-filter: var(--dsw-mask-blur);
 }
@@ -79,15 +80,14 @@
    every section, taken from the viewport rather than the content, because a
    content-sized panel would resize under the pointer on every nav click.
    The viewport height leaves 24px of air above and below, widened to the
-   frame's published top clearance (the macOS window strip, where clicks drag
-   the window) on both sides, so the panel sits centered and clear of the
-   strip. */
+   frame's published overlay inset on both sides, so the panel sits centered
+   and clear of the strip. */
 .panel {
   position: relative;
   z-index: 1;
   display: flex;
   width: 800px;
-  height: min(800px, calc(100vh - 2 * max(24px, var(--dsh-frame-top-clearance, 24px))));
+  height: min(800px, calc(100vh - 2 * max(24px, var(--dsh-frame-overlay-top, 24px))));
   max-width: calc(100vw - 48px);
   border-radius: var(--dsw-radius-panel);
   overflow: hidden;

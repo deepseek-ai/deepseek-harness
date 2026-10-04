@@ -2,8 +2,8 @@
  * What `ctx.sidebarRight` promises other plugins.
  *
  * The service is root-scoped and the surface is per session, so every command
- * depends on a binding the mounted seat publishes; the interesting cases are all
- * about that seam. Opening is asserted against a real store instance, because
+ * acts on the Session the plugin names as on screen, through the store the
+ * runtime minted for it; the interesting cases are all about that seam. Opening is asserted against a real store instance, because
  * "already open" and "in that tab's place" mean whatever the planner means by
  * them and nothing else, and against the Tab domain, because an open is not
  * complete until the tab knows how it was navigated to.
@@ -31,7 +31,7 @@ const SESSION = 's-test' as SessionId
 /** Key-echoing translate: this file asserts behaviour, not copy. */
 const t = ((key: string) => key) as Parameters<typeof guideDefinition>[0]
 
-/** A controller over a real registry and a real store, bound as a mounted seat would be. */
+/** A controller over a real registry and a real store, adopted as the runtime mints it. */
 function harness() {
   const ctx = new Context()
   const tabs = new SidebarRightTabRegistry(ctx)
@@ -47,25 +47,26 @@ function harness() {
     title: address => address.slice(address.lastIndexOf('/') + 1),
   })
   const pin = vi.fn<(address: string, signal: AbortSignal) => void>()
-  const { controller, adopt } = createSidebarRightController(tabs, pin)
+  const { controller, adopt, show, measure } = createSidebarRightController(tabs, pin, {
+    autoFullscreen: () => false,
+    openWithFocus: (_sessionId, open) => { open() },
+    closeWithFocus: (_sessionId, _paneId, close) => { close() },
+  })
   const instance = createSidebarRightStore(() => ({ kind: 'guide', title: 'seed' })).create()
+  // The runtime mints the Session's store before any seat renders, and the plugin adopts it.
+  const unadopt = adopt(SESSION, instance)
   const layout = (): LayoutState => {
     const surface = instance.getSnapshot().bySession[SESSION]
     if (surface === undefined) throw new Error('expected a surface')
     return surface.layout
   }
-  /** Republish the way the seat does after each commit, and sync the domain the way it does too. */
   /** The room rule's verdict the seat would report; a spec flips it to model a narrow pane. */
   const room = { allowed: true }
+  /** Put the Session on screen the way the plugin does from the selection, with the room rule its seat reports. */
   const publish = (): (() => void) => {
-    const surface = instance.getSnapshot().bySession[SESSION]
-    if (surface !== undefined) controller.tabDomain.sync(SESSION, surface.layout)
-    return controller.bind({
-      sessionId: SESSION, actions: instance.actions, surfaces: instance.getSnapshot().bySession,
-      closeWithFocus: (_paneId, close) => { close() },
-      openWithFocus: (open) => { open() },
-      canSplitPane: () => room.allowed,
-    })
+    show(SESSION)
+    measure(SESSION, () => room.allowed)
+    return () => { show(undefined) }
   }
   const titles = (): string[] => {
     const surface = instance.getSnapshot().bySession[SESSION]
@@ -79,7 +80,7 @@ function harness() {
   const entries = (): number => instance.getSnapshot().bySession[SESSION]?.history.entries.length ?? 0
   // A surface starts empty; expanding seeds the default guide ('seed').
   const expand = (): void => { instance.actions.setExpanded(SESSION, true) }
-  return { controller, adopt, tabs, instance, pin, publish, titles, tabOf, layout, entries, room, expand }
+  return { controller, adopt, unadopt, show, measure, tabs, instance, pin, publish, titles, tabOf, layout, entries, room, expand }
 }
 
 describe('SidebarRightController — opening', () => {
@@ -102,7 +103,7 @@ describe('SidebarRightController — opening', () => {
     } finally { release() }
   })
 
-  it('refuses every write while no seat is mounted', () => {
+  it('refuses every write while no Session is on screen', () => {
     const { controller } = harness()
     expect(() => { controller.openResource('dsh-resource://file/session/s-test/a.txt') }).toThrow('no session surface is mounted')
     expect(() => { controller.openTab('guide') }).toThrow('no session surface is mounted')
@@ -114,21 +115,19 @@ describe('SidebarRightController — opening', () => {
     expect(() => { controller.dock('pane1' as PaneId) }).toThrow('no session surface is mounted')
   })
 
-  it('publishes the mounted session only on real transitions of the seat binding', () => {
+  it('publishes the on-screen Session only when it changes', () => {
     const h = harness()
     const seen: (string | undefined)[] = []
     const unsubscribe = h.controller.mounted.subscribe(() => { seen.push(h.controller.mounted.getSnapshot()) })
     try {
       expect(h.controller.mounted.getSnapshot()).toBeUndefined()
-      const first = h.publish()
+      h.show(SESSION)
       expect(h.controller.mounted.getSnapshot()).toBe(SESSION)
-      // The seat republishes on every store commit; the same session is silent.
-      const second = h.publish()
+      // Naming the same Session again, and the Session's own store commits, are silent.
+      h.show(SESSION)
+      h.expand()
       expect(seen).toEqual([SESSION])
-      // A stale release — the first seat's, after a newer one took over — changes nothing.
-      first()
-      expect(h.controller.mounted.getSnapshot()).toBe(SESSION)
-      second()
+      h.show(undefined)
       expect(h.controller.mounted.getSnapshot()).toBeUndefined()
       expect(seen).toEqual([SESSION, undefined])
     } finally { unsubscribe() }
@@ -519,25 +518,14 @@ describe('SidebarRightController — a tab\'s own actions', () => {
   const B_TXT = 'dsh-resource://file/session/s-test/b.txt'
 
   it('opens into an adopted store before that store has created its session surface', () => {
-    const { controller, adopt, instance, titles } = harness()
-    const releaseOwn = adopt(SESSION, instance)
-    const other = createSidebarRightStore(() => ({ kind: 'guide', title: 'seed' })).create(OTHER)
-    const releaseBinding = controller.bind({
-      sessionId: OTHER,
-      actions: other.actions,
-      surfaces: other.getSnapshot().bySession,
-      closeWithFocus: (_paneId, close) => { close() },
-      openWithFocus: (open) => { open() }, canSplitPane: () => true,
-    })
+    const { controller, show, titles } = harness()
+    show(OTHER)
     controller.openResourceIn(SESSION, A_TXT)
     expect(titles()).toContain('a.txt')
-    releaseBinding()
-    releaseOwn()
   })
 
-  it('land in the session the tab is in through its own adopted store, after another session\'s seat took over', () => {
-    const { controller, adopt, instance, publish, layout, expand } = harness()
-    const releaseOwn = adopt(SESSION, instance)
+  it('land in the session the tab is in through its own adopted store, after another session came on screen', () => {
+    const { controller, adopt, show, publish, layout, expand } = harness()
     expand()
     publish()
     controller.openResource(A_TXT)
@@ -546,7 +534,7 @@ describe('SidebarRightController — a tab\'s own actions', () => {
     if (own === undefined || guide === undefined) throw new Error('expected the opened tab and the seeded guide')
     const fromOwn = controller.tabDomain.occurrence(SESSION, own).tabActions
     const guideOccurrence = controller.tabDomain.occurrence(SESSION, guide)
-    // The user switches sessions: the other seat binds with the other session's
+    // The user switches sessions: the other Session comes on screen with its
     // own instance, whose store knows nothing of this session.
     const other = createSidebarRightStore(() => ({ kind: 'guide', title: 'seed' })).create(OTHER)
     const releaseOther = adopt(OTHER, other)
@@ -554,12 +542,7 @@ describe('SidebarRightController — a tab\'s own actions', () => {
     other.actions.setExpanded(OTHER, true)
     const otherSurface = other.getSnapshot().bySession[OTHER]
     if (otherSurface === undefined) throw new Error('expected the other surface')
-    controller.bind({
-      sessionId: OTHER, actions: other.actions, surfaces: other.getSnapshot().bySession,
-      closeWithFocus: (_paneId, close) => { close() },
-      openWithFocus: (open) => { open() },
-      canSplitPane: () => true,
-    })
+    show(OTHER)
     fromOwn.openResource(B_TXT)
     fromOwn.openTab('guide', { revealIfOpened: false })
     expect(Object.values(layout().tabs).map(tab => tab.title)).toContain('b.txt')
@@ -574,17 +557,17 @@ describe('SidebarRightController — a tab\'s own actions', () => {
     expect(other.getSnapshot().bySession[OTHER]).toBe(otherSurface)
     expect(controller.active()?.kind).toBe('guide')
     releaseOther()
-    releaseOwn()
   })
 
   it('do nothing for a session whose store is not adopted, and again once its adoption is released', () => {
-    const { controller, adopt, instance, publish, layout, titles } = harness()
+    const { controller, adopt, unadopt, instance, publish, layout, titles } = harness()
     publish()
     controller.openResource(A_TXT)
-    publish()
     const own = Object.values(layout().tabs).find(tab => tab.title === 'a.txt')
     if (own === undefined) throw new Error('expected the opened tab')
     const { tabActions } = controller.tabDomain.occurrence(SESSION, own)
+    // The runtime disposed the Session's store generation.
+    unadopt()
     const before = instance.getSnapshot().bySession
     tabActions.openResource(B_TXT)
     tabActions.openTab('guide')
@@ -661,17 +644,16 @@ describe('SidebarRightController — the readable slice', () => {
   })
 })
 
-describe('SidebarRightController — binding lifetime', () => {
-  it('acts on the newest binding when a seat republishes', () => {
+describe('SidebarRightController — the on-screen Session', () => {
+  it('acts on the on-screen Session through its adopted store', () => {
     const { controller, publish, layout } = harness()
     publish()
     controller.toggleExpanded()
-    publish()
     expect(controller.isExpanded()).toBe(true)
     expect(layout().expanded).toBe(true)
   })
 
-  it('goes back to refusing writes once the seat releases', () => {
+  it('goes back to refusing writes once no Session is on screen', () => {
     const { controller, publish } = harness()
     const release = publish()
     release()
@@ -679,12 +661,20 @@ describe('SidebarRightController — binding lifetime', () => {
     expect(controller.isExpanded()).toBe(false)
   })
 
-  it('a stale release does not clear a newer binding', () => {
-    const { controller, publish } = harness()
-    const stale = publish()
-    publish()
-    stale()
-    expect(() => { controller.toggleExpanded() }).not.toThrow()
+  it('refuses writes for an on-screen Session whose store the runtime has not minted', () => {
+    const { controller, show } = harness()
+    show('s-unminted' as SessionId)
+    expect(() => { controller.openResource('dsh-resource://file/session/s-test/a.txt') }).toThrow('no session surface is mounted')
+    expect(controller.active()).toBeUndefined()
+  })
+
+  it('treats panes its seat has not measured as having room', () => {
+    const { controller, show, instance, layout, expand } = harness()
+    instance.actions.open(SESSION)
+    expand()
+    show(SESSION)
+    expect(controller.split()).toBeDefined()
+    expect(dockPaneIds(layout())).toHaveLength(2)
   })
 })
 

@@ -120,8 +120,6 @@ Linux 桌面文件字段和图标使用共享的 [native-command](../../util/nat
 <details>
 <summary>维护者工作语境——点击展开</summary>
 
-转正期的各项决定——host/`ui-` 分包、为什么用裸 webServer 路由而非 Typert Remote、目录为什么保持编译期固定、resolver 重设计（已验证启动器、单趟解析、点击不再重新检测）、三期限配置、以及各平台图标策略与被拒的替代方案——记录在[转正 Agent Note](../../../.agents/notes/implemented/feature/2026-08-25-promote-open-anywhere-plugin.zh.md)。
+转正期的各项决定——host/`ui-` 分包、为什么用裸 webServer 路由而非 Typert Remote、目录为什么保持编译期固定、resolver 重设计（已验证启动器、单趟解析、点击不再重新检测）、三期限配置、以及各平台图标策略与被拒的替代方案——记录在[历史转正 Agent Note](../../../.agents/notes/archived/feature/2026-08-25-promote-open-anywhere-plugin.md)。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。本包经三条无状态路由提供一趟主机解析的结果；路由注册已由各自的 HMR（热模块替换）安全测试证明可处置，不存在可能分叉的独立观测。

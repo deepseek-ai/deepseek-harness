@@ -100,7 +100,6 @@ The decision history lives in the [unified service decision](../../../.agents/no
 | [`src/documents.ts`](src/documents.ts) | Surface-aware semantic document projection |
 | [`src/tracing.ts`](src/tracing.ts) | One-shot session-lineage and event-relationship tracing |
 | [`src/sources.ts`](src/sources.ts) | Immutable-header compatibility check |
-| — | No runtime invariant companion is published; query results are immutable per-call projections whose lineage and event relations are validated while they are built; the service retains no observable result state. |
 
 ### Corpus resolution
 

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-frontend",
   "description": "Web application entry: vite build over the @deepseek-ai/dsh-client-web shell library; dist/ served by apps/cli's dsh web",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -33,6 +33,7 @@
     "@deepseek-ai/cordis-plugin-group": "workspace:~",
     "@deepseek-ai/dsh-client-modules": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
+    "@deepseek-ai/dsh-llm-mock-server": "workspace:*",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
     "@deepseek-ai/dsh-client-ui-deliverables": "workspace:*",
     "@deepseek-ai/dsh-client-ui-dockkit": "workspace:*",
@@ -45,6 +46,7 @@
     "@deepseek-ai/dsh-experimental-webworker-packer": "workspace:*",
     "@deepseek-ai/dsh-experimental-webworker-runtime": "workspace:*",
     "@deepseek-ai/dsh-remote-mock": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*",
     "@types/node": "^22.0.0",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.0",

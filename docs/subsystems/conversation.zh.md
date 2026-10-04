@@ -69,7 +69,7 @@ Group 存储在安装前校验完整提交结果：根 Group 引用与记录一�
 
 系统支持增量事件。如果生产方能以较低成本发出 whole-value checkpoint，应优先采用，因为 start 位于已加载窗口之外时它仍可直接使用。每条 delta 都必须携带稳定 id，并且按照日志 `seq` 升序回放时能够确定性地产生 State；它不能依赖只存在于实时内存中的状态。如果当前历史窗口只有 update，Assembler 会保留一个 pending Context，并在更早分页补齐 start 前不构造 State。如果产品必须在 start 尚未加载时渲染，terminal 或 checkpoint 事件就必须携带足够的完整 fallback 状态，让 Definition 能直接构造结果；不要通过扫描无关事件恢复它。
 
-实时 Assistant delta 作为 Client-only `assistant/live-chunk` event 到达。重连 baseline 会把活跃的进程内紧凑 stream 展开为相同的瞬态 event，持久 `assistant/message` 与 `assistant/attempt` event 则嵌入完整紧凑 stream 供历史回放。瞬态 event 可以初始化 Context。具名工具 delta 和后续 tool/call 可以按同一个 callId 匹配为 start；只有最早的 Match 调用 start()，后续 Match 调用 update()。历史分页不把已结束消息展开为实时 delta。消费 Assistant 输出的 Definition 在同一组 `match()` 与 `update()` 方法里处理 live chunk 与持久 settlement，其他 Definition 直接返回 `null`，无需展开 stream。
+实时 Assistant delta 作为 Client-only `assistant/live-chunk` event 到达。重连 baseline 会把活跃的进程内紧凑 stream 展开为相同的瞬态 event，持久 `assistant/message` 与 `assistant/attempt` event 则嵌入完整紧凑 stream 供历史回放。瞬态 event 可以初始化 Context。每条工具 delta 和后续 `tool/call` 都可以按同一个 callId 匹配为 start，即使名称尚未到达；只有最早的 Match 调用 `start()`，后续 Match 调用 `update()`。准备态 Tool 节点只有在名称可用后才显示。历史分页不把已结束消息展开为实时 delta。消费 Assistant 输出的 Definition 通过同一组匹配和更新接口处理 live chunk 与持久 settlement，其他 Definition 直接返回 `null`，无需展开 stream。
 
 ## Definition 与类型化 Chat payload
 
@@ -244,6 +244,8 @@ export function apply(ctx: ClientContext): void {
 ```
 
 `match(event)` 是身份提取器，不是 fold：它只能收到当前 `SessionEventLike`，并返回 Definition 内部 id 与生命周期角色。命中后，Assembler 通过 `(kind, id)` 定位 Context；当前最早的 start 初始化 State，不论它是持久事件还是瞬态事件。后续所有 Match，包括其他 start，都调用 `update`。移除瞬态 Match 后，从剩余事件重新选择 start 并重算 State；没有剩余 start 时 State 为 undefined。两个函数都必须返回引擎随后采用的 State；推荐返回新的 immutable value，但函数原地修改后返回同一对象时，采用语义也相同。
+
+`ConversationNodeDefinitionInput` 接受上述函数，或事件类型到匹配函数的只读表。函数形式的注册接收所有事件；表形式只接收列出的类型。Registry 在注册关系变化时复制表条目并预计算有序候选 Set，不在逐事件分发时构造候选集合。替换表时先注销，再重新注册。两种形式解析后的 `ConversationNodeDefinition` 都保留可调用的 `match(event)`。
 
 `buildLocationData(context, scope)` 可以把 Definition 拥有的数据发布到引擎拥有的 Turn 或 Step 上。通过 declaration merging 为每个 key 指定精确 value 类型。同一 Location 内的另一个 Node 可以使用受限 slot hook（例如 `useTurnData(key)`）读取该值，无须取得 Session，也无须扫描 `snapshot.chat.nodes`。
 

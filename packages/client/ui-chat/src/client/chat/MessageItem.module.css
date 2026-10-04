@@ -48,9 +48,8 @@
   padding: 2px 0;
 }
 
-/* Compaction marker: one dim 24px row with a context icon at rest and a
-   hover/focus disclosure for the summary body. Dimmed title (not
-   label-primary) — the row is a boundary notice, not conversation content. */
+/* Compaction marker: one 24px row with a context icon at rest and a
+   hover/focus disclosure for the summary body. */
 .compactionRow {
   /* The toggle's line, and the band a pinned toggle occupies. The button's
      height and the offset that holds a summary's code banner below that band
@@ -69,7 +68,8 @@
   border: none;
   border-radius: var(--dsw-radius-sm);
   background: none;
-  color: inherit;
+  color: var(--dsw-alias-label-tertiary);
+  transition: color 100ms ease;
   font: inherit;
   text-align: left;
 }
@@ -113,6 +113,10 @@
   cursor: pointer;
 }
 
+.compactionButton:hover {
+  color: var(--dsw-alias-label-secondary);
+}
+
 .compactionButton:not(:disabled):hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
@@ -124,7 +128,7 @@
   width: calc(16px + var(--dsh-content-font-delta, 0px));
   height: calc(16px + var(--dsh-content-font-delta, 0px));
   margin-right: 6px;
-  color: var(--dsw-alias-label-secondary);
+  color: inherit;
 }
 
 /* Same glyph-scaling rule as DisclosureRow's leading: the CSS edge overrides
@@ -160,7 +164,7 @@
   flex: none;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-primary-dimmed);
+  color: inherit;
 }
 
 .compactionSep {
@@ -176,7 +180,7 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
+  color: inherit;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   text-overflow: ellipsis;
@@ -201,6 +205,7 @@
   display: inline-flex;
   align-items: center;
   width: fit-content;
+  max-width: 100%;
   padding: 2px 0;
   gap: 7px;
   border-radius: var(--dsw-radius-sm);
@@ -215,12 +220,13 @@
 }
 
 .retrySummary::after {
+  flex: none;
   width: 6px;
   height: 6px;
+  margin-right: 2px;
   border-right: 1.5px solid currentcolor;
   border-bottom: 1.5px solid currentcolor;
   content: '';
-  opacity: 0.8;
   transform: rotate(-45deg);
   transition: transform 120ms ease;
 }
@@ -229,30 +235,20 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .compactionButton {
+    transition: none;
+  }
+}
+
 .retrySummary:focus-visible {
   outline: 1.5px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
 .retryText {
-  color: inherit;
-}
-
-.retryRow[data-active] .retryText {
-  background:
-    linear-gradient(
-      90deg,
-      var(--dsw-alias-label-tertiary) 0%,
-      var(--dsw-alias-label-tertiary) 40%,
-      var(--dsw-alias-label-secondary) 50%,
-      var(--dsw-alias-label-tertiary) 60%,
-      var(--dsw-alias-label-tertiary) 100%
-    );
-  background-position: 100% 50%;
-  background-size: 200% 100%;
-  background-clip: text;
-  color: transparent;
-  animation: retry-shimmer 1.6s ease-in-out infinite;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .retryRow[open] .retrySummary::after {
@@ -311,24 +307,6 @@
   margin-right: 6px;
   color: var(--dsw-alias-state-warn-primary);
   font-weight: 600;
-}
-
-@keyframes retry-shimmer {
-  from {
-    background-position: 100% 50%;
-  }
-
-  to {
-    background-position: 0 50%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .retryRow[data-active] .retryText {
-    background: none;
-    color: inherit;
-    animation: none;
-  }
 }
 
 .attachmentRow {

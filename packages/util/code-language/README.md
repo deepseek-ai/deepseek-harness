@@ -46,5 +46,3 @@ The set is curated for common source, config, script, data, and markup extension
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. This utility owns no mutable runtime relationship.

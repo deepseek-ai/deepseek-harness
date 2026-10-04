@@ -11,7 +11,6 @@ import type { RemoteErrorCode } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import {
   AGENT_PRESET_SETTINGS_NS, AgentPresetSettingsController,
   writeDefaultPreset,
@@ -206,12 +205,10 @@ describe('the new-session chip controller', () => {
       failSelect?: string
       failList?: string
       failListCode?: RemoteErrorCode
-      developerTools?: ObservableSnapshot<boolean>
       list?: () => Promise<ReturnType<typeof remoteRoster>>
     } = {},
   ): AgentPresetSeatController {
     const partial = {
-      configForms: { developerTools: { enabled: options.developerTools ?? createSnapshotStore(true) } },
       remote: {
         agentPresets: {
           list: options.list ?? (() => {
@@ -435,7 +432,9 @@ describe('the new-session chip controller', () => {
 
     // Showing `minimal` after a refusal would claim a composition the session
     // never got.
-    expect(controller.store.getSnapshot()).toMatchObject({ current: 'standard', error: 'already started' })
+    expect(controller.store.getSnapshot()).toMatchObject({
+      current: 'standard', error: { preset: { id: 'minimal' }, reason: 'already started' },
+    })
   })
 
   it('ignores a pick while a switch is in flight', async () => {
@@ -466,51 +465,22 @@ describe('the new-session chip controller', () => {
     expect(controller.store.getSnapshot().current).toBe('minimal')
   })
 
-  it('clears an unconsumed stage when Developer tools are off', async () => {
+  it('keeps the introduction cue after applying a staged pick', async () => {
     const writes: Recorded[] = []
-    const developerTools = createSnapshotStore(false)
-    const controller = chip(ROSTER, {
-      id: 's1' as SessionId,
-      blank: false,
-      projectionValues: { agentPreset: 'standard' },
-    }, { writes, developerTools })
-    controller.stage('minimal', true)
-
-    await controller.load()
-    await controller.apply()
-
-    expect(writes).toEqual([])
-    expect(controller.store.getSnapshot()).toMatchObject({
-      current: 'standard',
-      introduce: false,
-    })
-  })
-
-  it('drops a stage made while Developer tools were on once they turn off', async () => {
-    const writes: Recorded[] = []
-    const developerTools = createSnapshotStore(true)
     const session = {
       id: 's1' as SessionId,
       blank: true,
       projectionValues: { agentPreset: 'standard' },
     }
-    const controller = chip(ROSTER, session, { writes, developerTools })
+    const controller = chip(ROSTER, session, { writes })
     await controller.load()
-    // The blank session keeps the composition its own screen already names.
     controller.stage('minimal', true)
-    developerTools.set(false)
-
     await controller.apply()
-
-    expect(writes).toEqual([])
-    expect(controller.store.getSnapshot()).toMatchObject({
-      current: 'standard',
-      introduce: false,
-    })
+    expect(writes).toEqual([{ ns: 'select', ops: 'minimal' }])
+    expect(controller.store.getSnapshot()).toMatchObject({ current: 'minimal', introduce: true })
   })
 
-  it('leaves the introduction cue to the chip while Developer tools stay on', async () => {
-    const developerTools = createSnapshotStore(true)
+  it('keeps the introduction cue until acknowledged when the Session already runs the staged preset', async () => {
     const session = {
       id: 's1' as SessionId,
       blank: true,
@@ -518,7 +488,7 @@ describe('the new-session chip controller', () => {
       // no-op that leaves the cue for the chip to play.
       projectionValues: { agentPreset: 'minimal' },
     }
-    const controller = chip(ROSTER, session, { developerTools })
+    const controller = chip(ROSTER, session)
     await controller.load()
     controller.stage('minimal', true)
 

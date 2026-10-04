@@ -27,9 +27,15 @@ Choose Agent presets and the new-task default in Web, read what each mode does a
 
 Settings shows the built-in and custom card groups with default highlighting and card-body selection; a group without presets is omitted, except the custom group, which keeps its Creator entry on screen. Every card offers “View configuration”, which opens the preset's declared plugin list as read-only YAML in the Loader's own dialect (`!!js` conditions included); a failed preset stays readable because its diagnostic points into that YAML. Escape closes only the viewer and returns focus to its card; leaving Settings clears the viewer, and a late read does not reopen it. The page edits nothing: the Creator entry starts a Creator-mode task that authors or overrides a preset as a bundle, offered while the `cordis` preset is on the roster and a conversation flow exists.
 
-Coding Tools in General Settings decide whether a mode can be chosen at all: with them off the new-session picker disappears and the cards refuse selection, while the saved default keeps composing new tasks. Choosing a healthy default also synchronizes the blank session on the current new-task surface. Creator starts a new task using the `cordis` preset.
+With Coding Tools off in General Settings, the new-session picker and Settings roster offer Standard, Creator, and custom presets; turning them on also offers PTC and Minimal. Default selection and the Creator entry remain available in both states. Choosing a healthy default also synchronizes the blank session on the current new-task surface. Creator starts a new task using the `cordis` preset.
+
+Turning Coding Tools off clears all unapplied choices through the existing Developer tools subscription. Once the off value is accepted, a host-backed connection resets a saved built-in PTC or Minimal default to Standard. Saved Standard, Creator, and custom defaults (including named PTC or Minimal overrides) stay unchanged. The user can select an available preset again after turning Coding Tools off. Existing sessions, including blank sessions reused by New Session, keep their selected mode; its label remains visible even when that mode is absent from the menu. Turning Coding Tools back on does not restore the old default or cleared choice. A remote connection using in-memory settings does not rewrite the Host's default. If Standard is missing or broken, the default remains unchanged and an error is shown.
 
 Known shipped presets offer mode details and usage examples in a read-only dialog. Its tabs preserve each page's scroll position; closing returns focus to the opening action. Help does not change the new-task default. The default badge replaces the card's group badge, and the preset id appears beside the title. Guide copy and examples belong to this package.
+
+**Let the agent create a plugin** in the Plugins page's **Add plugin** arrow menu enters the same Creator flow as Settings. It submits no message and preserves unsent drafts. While the roster loads or Creator is unavailable, the menu item is disabled with an explanation. Both entries show a Toast with the reason if the Host refuses the preset switch.
+
+Entering Creator selects `cordis` for the receiving blank Session without changing the new-task default or Coding Tools setting. If no workspace or blank Session is bound yet, the choice waits for that binding. After the choice is applied, the Creator Session keeps its preset; a later newly created Session uses the configured default, such as Standard.
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
@@ -38,6 +44,8 @@ Known shipped presets offer mode details and usage examples in a read-only dialo
 <summary>Implementation internals — click to expand</summary>
 
 `agentPresets/list` supplies the roster and marks the current default, and `agentPresets/read` one declaration's YAML for the viewer; default changes write the `agent-preset-registry` settings namespace. The picker, blank-session synchronization and read-only session label use recorded preset identities. Connection resets and settings updates refresh the roster.
+
+`CreatePluginMenuItem` contributes to `plugins.add.actions` using the shared roster store. Its selection calls the owner's `onDismiss()` before the same `startCreatorDraft` callback exposed to Settings as `creatorDraft`. That callback stages `cordis` through `AgentPresetSeatController` and opens the task through `uiWorkspace.startSession`; it can reuse a blank Session and applies the staged choice when a Session binding becomes available. The choice is consumed once applied. Both Coding Tools states use the same picker and selection store, and `AgentPresetSeat` renders refusals through the shared `Toast` component.
 
 </details>
 
@@ -72,5 +80,3 @@ Selection changes affect only later tasks; existing plugins and prompts remain u
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published; the Host registry owns state, and component tests cover client presentation and selection.

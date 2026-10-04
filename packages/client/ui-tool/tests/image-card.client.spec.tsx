@@ -24,6 +24,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { MessageImageLoader } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ToolImagesOwnerProps, ToolTreeProps } from '../src/client/contract/slots.ts'
 import { imageCardModel } from '../src/client/tool/models/image-card-model.ts'
 import { ReadImageRow, readImageToolview } from '../src/client/tool/toolviews/read-image-row.tsx'
@@ -38,8 +40,8 @@ const ARGS = '{"file_path":"shots/card.png"}'
 const ENVELOPE = '<path>shots/card.png</path>\n<type>image</type>\n<content>\nimage/png image, 1496x260 px, 24588 bytes\n</content>'
 
 /** The durable reference read_image persists through presentationMeta. */
-const sampleImage = {
-  attachmentId: 'sha256:fe6d588c8d5a8e93c743d80524b9376634ca1cc262db9e1d21c9e4c18fc856cc',
+const sampleImage: ImageAttachmentRef = {
+  attachmentId: AttachmentId('sha256:fe6d588c8d5a8e93c743d80524b9376634ca1cc262db9e1d21c9e4c18fc856cc'),
   mediaType: 'image/png',
   bytes: 24_588,
   width: 1496,
@@ -56,27 +58,34 @@ const withImage = (attachment: unknown) => [
   { type: 'image', attachment },
 ]
 
-const running = (over?: Partial<StartedToolCall>): StartedToolCall => ({
-  phase: 'start' as const, callId: 'c1', name: 'read_image', argsRaw: ARGS,
-  turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
-})
+const running = (over?: Partial<StartedToolCall>): StartedToolCall => {
+  const argsRaw = over?.argsRaw ?? ARGS
+  return {
+    phase: 'start' as const, args: PartialArguments.fromText(argsRaw), callId: 'c1', name: 'read_image', argsRaw,
+    turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
+  }
+}
 
 /**
  * A settled read_image node carrying the REAL content shape: [text envelope, image
  * block]. A text-only fixture would hide that the row must not flatten the image
  * block into JSON under the picture.
  */
-const settled = (over?: Partial<ToolResultNode>): ToolResultNode => ({
-  kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
-  call: { name: 'read_image', argsRaw: ARGS },
-  callTime: 1_000,
-  content: [
-    { type: 'text', text: ENVELOPE },
-    { type: 'image', attachment: sampleImage },
-  ],
-  isError: false,
-  meta: imageMeta(), subCalls: [], ...over,
-} as unknown as ToolResultNode)
+const settled = (over?: Partial<ToolResultNode>): ToolResultNode => {
+  const call = over?.call === undefined ? { name: 'read_image', argsRaw: ARGS } : over.call
+  return {
+    kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
+    name: call?.name ?? '', args: call === null ? PartialArguments.EMPTY : PartialArguments.fromText(call.argsRaw),
+    call,
+    callTime: 1_000,
+    content: [
+      { type: 'text', text: ENVELOPE },
+      { type: 'image', attachment: sampleImage },
+    ],
+    isError: false,
+    meta: imageMeta(), subCalls: [], ...over,
+  }
+}
 
 /**
  * A renderSlot stub standing in for the attachment presentation plugin's

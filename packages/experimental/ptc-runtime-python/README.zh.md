@@ -77,7 +77,6 @@ kind: "package-reference"
 | [`py/protocol.py`](py/protocol.py) | Python 侧：`PROTOCOL_FD`、`TypedDict` 帧镜像、`log_truncation_marker` |
 | [`tests/runtime.spec.ts`](tests/runtime.spec.ts) | 真实子进程套件：预算、隔离、敌意帧、名称重绑 |
 | [`tests/protocol-mirror.e2e.ts`](tests/protocol-mirror.e2e.ts) | 对照真实 `python3` 的跨语言镜像测试 |
-| — | 不发布运行时不变式配套项：帧顺序、预算计量与拆卸发生在 CPython 子进程或 fd 3 上，因此本包没有可供 Cordis listener 比较的同进程事件序列或独立维护的可变关系；协议镜像与真实子进程测试覆盖这些进程边界行为。 |
 
 </details>
 

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-remotes",
   "description": "Remote BFF assembly for application-selected Host capabilities",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -51,7 +51,6 @@
   ],
   "dependencies": {
     "@deepseek-ai/dsh-deque": "workspace:*",
-    "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "peerDependencies": {

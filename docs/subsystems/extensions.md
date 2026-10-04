@@ -46,7 +46,8 @@ list(): CordisInspectProviderView[]
  * @param input - optional lossless JSON input.
  * @param agent - requesting Agent and scope.
  * @param signal - tool-call cancellation.
- * @returns provider JSON data.
+ * @returns provider JSON data; Client queries fail fast when Gateway has no live Client
+ * and retain only the first observed failure diagnostic for timeout reporting.
  */
 async query( platform: CordisInspectPlatform, providerId: string, methodName: string, input: JsonValue | undefined, agent: Agent, signal: AbortSignal, ): Promise<JsonValue>
 
@@ -55,7 +56,7 @@ async query( platform: CordisInspectPlatform, providerId: string, methodName: st
  * @param agent - Agent whose Session owns the query.
  * @param requestId - Pending Client query identity.
  * @param resolution - Client provider result or failure.
- * @returns whether this response settled the still-pending query.
+ * @returns acknowledgement with accepted true only for a success that settles the query; only the first failure diagnostic is retained.
  */
 resolveClientQuery( agent: Agent, requestId: CordisInspectRequestId, resolution: CordisInspectQueryResolution, ): CordisInspectResolveAck
 ```
@@ -168,11 +169,12 @@ async stop(agent: Agent, pluginId: CordisDynamicPluginId): Promise<DynamicCordis
 @Remote('syncInspectManifest') syncInspectManifest(providers: readonly CordisInspectProviderManifest[]): null
 
 /**
- * Claim one pending Client inspect query with its live result.
+ * Submit a Client inspect result or failure for a pending query.
  * @param agent - Session that owns the query.
  * @param requestId - exact pending query identity.
  * @param resolution - provider result or structured refusal.
- * @returns whether this answer won the query.
+ * @returns acknowledgement with accepted true only for a valid success that settles the query;
+ * pending-query failures return { accepted: false } and retain only the first diagnostic.
  */
 @Remote('resolveInspectQuery') resolveInspectQuery( agent: Agent, requestId: CordisInspectRequestId, resolution: CordisInspectQueryResolution, ): CordisInspectResolveAck
 

@@ -120,5 +120,3 @@ loopback 始终被绕过——`localhost`、整个 `127.0.0.0/8` 段、`::1`、`
 userland undici 能触及 Node 内置的 `fetch`，依赖的是两者都会写入 legacy 的 `Symbol.for('undici.globalDispatcher.1')` 槽位。那是跨版本的隐式耦合，不是约定——参见 [corepack#834](https://github.com/nodejs/corepack/issues/834) 中它失效的实例。`tests/install.spec.ts` 断言真实请求会抵达一个 loopback 代理，因此破坏该耦合的版本升级会在那里失败，而不是流到线上。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。本包唯一的可变状态——生效中的策略——由单元测试对照它所安装的 dispatcher 断言：测试会对该注册执行 dispose（资源释放）并观察一个真实的 loopback 代理。

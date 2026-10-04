@@ -40,4 +40,4 @@ Manager 测试覆盖无轮次刷新、运行转空闲、对象替换、迟到受
 
 ## 相关决策
 
-[作用域与供给决策](../architecture/2026-07-25-web-client-session-scope-and-provide-channel.zh.md) 拥有 Session 作用域、创建/复用及可见 blank 行。[Session/Conversation 归属决策](../architecture/2026-08-20-client-session-conversation-ownership.zh.md) 拥有传输、装配及快照内容。
+[作用域与供给参考](../architecture/2026-09-15-client-session-references.zh.md) 拥有 Session 作用域、创建/复用及可见 blank 行。[Session/Conversation 归属决策](../architecture/2026-08-20-client-session-conversation-ownership.zh.md) 拥有传输、装配及快照内容。

@@ -102,11 +102,6 @@ The domain layer is a single implementation, not an abstracted seam: consumers d
 | [`src/domain.ts`](src/domain.ts) | Open-domain runtime: write chain, table and global handles, close |
 | [`src/events.ts`](src/events.ts) | The `domain/changed` event vocabulary |
 | [`src/error.ts`](src/error.ts) | `DomainError` codes |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: every `domain/changed` agrees with in-memory state |
-
-### Invariant
-
-The `storage-domain-invariant` companion registers the owned relationship: every `domain/changed` event must agree with the emitting domain's authoritative in-memory state at emission — a divergence means a write path skipped the chain or emitted a stale value.
 
 </details>
 

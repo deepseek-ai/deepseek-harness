@@ -30,7 +30,7 @@ Fork 与 Dependabot 拉取请求永远不会获得仓库密钥。它们的原生
 
 ### 必需目标
 
-拉取请求的 `python-runtime` job 针对 Linux x64 与 Windows x64 调用可复用构建器；master 推送根据[仅 master 平台策略](../process/2026-09-06-master-only-platform-ci.zh.md)选择 Linux arm64 与两种 macOS 架构。其聚合结果仍是 `all checks passed` 的依赖项，因此任一原生载体失败、取消或缺失都会阻止必需判定通过。[sdk-runtime README](../../../../python/sdk-runtime/README.zh.md) 负责 Windows 目标及其 PowerShell 专属极简快照。
+拉取请求的 `python-runtime` job 针对 Linux x64 与 Windows x64 调用可复用构建器；master 推送根据[仅 master 平台策略](../../../../.github/workflows/ci-master.yml)选择 Linux arm64 与两种 macOS 架构。其聚合结果仍是 `all checks passed` 的依赖项，因此任一原生载体失败、取消或缺失都会阻止必需判定通过。[sdk-runtime README](../../../../python/sdk-runtime/README.zh.md) 负责 Windows 目标及其 PowerShell 专属极简快照。
 
 ## Existing decisions and supersession
 

@@ -35,7 +35,7 @@ kind: "package-bundle"
 <details>
 <summary>维护者信息 — 点击展开</summary>
 
-静态 `cordis.patch.yml` 添加四个语音条目，选择 `sensevoice-local` 作为默认识别器，并通过 `dshHomePath` 提供 Provider 缓存目录。可选 Bundle 安装使插件管理器能够发现此包，但不会在默认配置中选择它。浏览器贡献拥有其生成 Remote 的挂载；稳定 API Remotes 不导入实验性代码。此纯配置包没有独立可变的运行时状态，因此不发布不变量伴随模块。
+静态 `cordis.patch.yml` 添加四个语音条目，选择 `sensevoice-local` 作为默认识别器，并通过 `dshHomePath` 提供 Provider 缓存目录。可选 Bundle 安装使插件管理器能够发现此包，但不会在默认配置中选择它。浏览器贡献拥有其生成 Remote 的挂载；稳定 API Remotes 不导入实验性代码。
 
 </details>
 

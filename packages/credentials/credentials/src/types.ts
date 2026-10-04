@@ -80,10 +80,7 @@ declare module '@deepseek-ai/cordis' {
      * `unset`, or an external edit observed in storage. Ambient
      * process-environment changes are not observable and never emit. Listener
      * failures are contained and logged — a sync throw and an async rejection
-     * alike — without changing the committed operation's outcome, except
-     * `INVARIANT`-coded failures, which rethrow after every listener ran;
-     * that rethrow reaches the emitter only from synchronous listeners, so
-     * invariant checks on this event must not be async functions.
+     * alike — without changing the committed operation's outcome.
      * @param ref - the reference whose stored value changed.
      * @mode emit
      */

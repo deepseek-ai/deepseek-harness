@@ -12,7 +12,7 @@ Status: implemented
 
 当 Session 的审批策略为 `ask` 时，reviewer 拒绝返回 tools 流水线既有的 `ask` 决定。`ToolRuntime` 通过审批服务发送该请求，理由为 `Auto review denied tool "<name>"`；reviewer 给出理由时再追加 `: <reviewer reason>`。`allowed-once` 执行调用；`rejected`、`cancelled` 与 `unavailable` 通过审批服务的普通消息拒绝调用，body 不执行。只有后续 `tools/pre-execute` listener 放行调用后，listener 才请求审批，因此下游拒绝或取消优先且不弹出审批。
 
-选择 Auto 会写入 `danger-full-access` 与 `ask` 审批策略。已记录的 Auto 选择也匹配 `never` 策略。[进程内委派 child 固定 `never`](2026-08-10-subagent-approval-pinned-never.zh.md)，因此 child 的 Auto 保留最终的 `AutoReviewDeniedError` 拒绝及其理由；按先前 `never` 组合记录的 Session 仍解析为 Auto，而不是 Full access。再次选择 Auto 会写入 `ask`。
+选择 Auto 会写入 `danger-full-access` 与 `ask` 审批策略。已记录的 Auto 选择也匹配 `never` 策略。[进程内委派 child 固定 `never`](../../../../packages/subagent/subagent/README.zh.md)，因此 child 的 Auto 保留最终的 `AutoReviewDeniedError` 拒绝及其理由；按先前 `never` 组合记录的 Session 仍解析为 Auto，而不是 Full access。再次选择 Auto 会写入 `ask`。
 
 Reviewer 失败以 `Auto review of tool "<name>" failed; its body was not executed: <error>` 拒绝调用，不带结构化错误信息。Provider 失败消息包含 finish 类型、失败代码与 provider 消息，因此模型与通用工具卡片显示实际原因。
 

@@ -86,7 +86,14 @@ export function useFloatGestures(state: LayoutState, intents: DockIntents) {
     // The press stops here: the panel's own press-to-focus would record a focus
     // entry before the drag's, and the release below decides which one it is.
     event.stopPropagation()
-    const start: FloatDrag = { mode, originX: event.clientX, originY: event.clientY, rect: floatRect(getPane(state, paneId)) }
+    const root = document.documentElement
+    const windows = root.hasAttribute('data-windows-titlebar')
+    // Desktop publishes the caption height in pixels on the root's inline style.
+    const caption = windows && !root.hasAttribute('data-fullscreen')
+      ? Number.parseFloat(root.style.getPropertyValue('--dsh-windows-titlebar-height')) : 0
+    const saved = floatRect(getPane(state, paneId))
+    const rect = { ...saved, y: Math.max(saved.y, windows ? caption + 20 : 0) }
+    const start: FloatDrag = { mode, originX: event.clientX, originY: event.clientY, rect }
     begin(event.currentTarget, event.pointerId, {
       move: (moved) => { setPreview({ paneId, rect: draggedRect(start, moved.clientX, moved.clientY) }) },
       up: (released) => {
@@ -164,7 +171,7 @@ export function FloatLayer({ state, intents, labels, renderTab, renderTabTitle, 
             data-dockkit-float-active={state.activePaneId === paneId || undefined}
             style={{
               left: live.x,
-              top: live.y,
+              top: `max(var(--dsh-dockkit-float-top, 0px), ${live.y}px)`,
               width: live.width,
               height: live.height,
               zIndex: lifted === undefined ? depth + 1 : state.floats.length + 1,

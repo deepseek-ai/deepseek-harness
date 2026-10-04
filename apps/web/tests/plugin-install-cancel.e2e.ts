@@ -4,7 +4,7 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium, type Locator, type Page } from 'playwright'
+import { chromium, type Locator, type Page, type Route } from 'playwright'
 import { expect, it } from 'vitest'
 import { launchWebScaffold, captureStableAria, compareOrRefreshGolden, webSnapshotMode, watchConsole, type WebScaffold } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE } from './support.ts'
@@ -87,6 +87,24 @@ it('cancels installation, retries and highlights the enabled plugin at 40% alpha
       `)
       const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: ZH_BROWSER_LOCALE })
       const tripwire = watchConsole(page)
+      // Hold request delivery and the real Host's cancellation reply independently.
+      // Cancellation reaches the Host before the install it names.
+      const cancellationArrived = Promise.withResolvers<undefined>()
+      let installBundleRoute = async (route: Route): Promise<void> => {
+        await delivery.promise
+        await route.continue()
+      }
+      let cancelInstallRoute = async (route: Route): Promise<void> => {
+        const response = await route.fetch()
+        cancellationArrived.resolve(undefined)
+        await cancellationReply.promise
+        await route.fulfill({ response })
+      }
+      // Host invalidations keep reading the directory between install phases.
+      // Interception stays enabled from before navigation until page closure,
+      // so phase changes cannot strand those requests.
+      await page.route('**/api/pluginManager/installBundle', route => installBundleRoute(route))
+      await page.route('**/api/pluginManager/cancelInstall', route => cancelInstallRoute(route))
       await page.clock.install()
       await page.goto(scaffold.authenticatedUrl)
       await page.waitForSelector('[class*="frame"]')
@@ -120,19 +138,6 @@ it('cancels installation, retries and highlights the enabled plugin at 40% alpha
       await compareOrRefreshGolden(fileURLToPath(new URL('./expected/plugin-install-cancel/invalid-registry.expected.md', import.meta.url)),
         `${invalidRegistryAria}\n\n${JSON.stringify({ registry: registryStyles, packageName: packageStyles }, null, 2)}`, webSnapshotMode())
       await packageName.fill('slow-package')
-      // Hold request delivery and the real Host's cancellation reply independently.
-      // Cancellation reaches the Host before the install it names.
-      const cancellationArrived = Promise.withResolvers<undefined>()
-      await page.route('**/api/pluginManager/installBundle', async (route) => {
-        await delivery.promise
-        await route.continue()
-      })
-      await page.route('**/api/pluginManager/cancelInstall', async (route) => {
-        const response = await route.fetch()
-        cancellationArrived.resolve(undefined)
-        await cancellationReply.promise
-        await route.fulfill({ response })
-      })
       await dialog.getByRole('button', { name: '安装', exact: true }).click()
       await dialog.getByText('正在准备安装…', { exact: true }).waitFor()
       await compareOrRefreshGolden(fileURLToPath(new URL('./expected/plugin-install-cancel/preparing.expected.md', import.meta.url)),
@@ -156,10 +161,10 @@ it('cancels installation, retries and highlights the enabled plugin at 40% alpha
       await page.getByText('已取消安装，插件未启用，下载的文件可能保留', { exact: true }).waitFor()
       expect(await readFile(manifestPath, 'utf8')).toBe(manifest)
       expect(await readFile(lockPath, 'utf8')).toBe('original lockfile\n')
-      await page.unrouteAll({ behavior: 'wait' })
+      cancelInstallRoute = route => route.continue()
       // Drop the browser's response while the real Host still owns the child process.
       const activeReplySettled = Promise.withResolvers<undefined>()
-      await page.route('**/api/pluginManager/installBundle', async (route) => {
+      installBundleRoute = async (route) => {
         const response = route.fetch().then(() => undefined, (error: unknown) => error)
         try {
           await loseActiveReply.promise
@@ -168,7 +173,7 @@ it('cancels installation, retries and highlights the enabled plugin at 40% alpha
         } finally {
           activeReplySettled.resolve(undefined)
         }
-      })
+      }
       await panel.getByRole('button', { name: '添加插件', exact: true }).click()
       await dialog.getByRole('textbox').fill('slow-package')
       await dialog.getByRole('button', { name: '安装', exact: true }).click()
@@ -186,7 +191,7 @@ it('cancels installation, retries and highlights the enabled plugin at 40% alpha
       expect(await readFile(lockPath, 'utf8')).toBe('original lockfile\n')
       expect(await dialog.getByRole('textbox').inputValue()).toBe('slow-package')
       await activeReplySettled.promise
-      await page.unrouteAll({ behavior: 'wait' })
+      installBundleRoute = route => route.continue()
       const snapshot = (await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd))
         .split(process.execPath).join('{{node}}')
         .split(scaffold.harnessHome).join('{{harnessHome}}')
@@ -257,10 +262,10 @@ it('cancels installation, retries and highlights the enabled plugin at 40% alpha
       }
       await panel.getByRole('button', { name: '添加插件', exact: true }).click()
       await dialog.getByRole('textbox').fill('recovered-package')
-      await page.route('**/api/pluginManager/installBundle', async (route) => {
+      installBundleRoute = async (route) => {
         await route.fetch()
         await route.abort('failed')
-      })
+      }
       await dialog.getByRole('button', { name: '安装', exact: true }).click()
       await dialog.getByText('未能获取安装结果', { exact: true }).waitFor()
       await compareOrRefreshGolden(fileURLToPath(new URL('./expected/plugin-install-cancel/unknown.expected.md', import.meta.url)),

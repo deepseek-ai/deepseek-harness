@@ -454,6 +454,23 @@ describe('TypertGatewayService', () => {
     expect(service.lastSignal).toBe(abort.signal)
   })
 
+  it('skips declared Services without an active provider during SRC resolution', async () => {
+    const { ctx } = await setup()
+    const unbound = ctx.plugin(class UnboundService extends Service {
+      constructor(ctx: Context) { super(ctx, 'unboundFixture') }
+    })
+    await unbound
+    await unbound.dispose()
+    registerAgentLookup(ctx, { id: 'agent-1' })
+
+    await expect(ctx.extend({ fixtureScope: 'unbound' }).typertGateway.invoke({
+      namespace: 'goals',
+      method: 'create',
+      args: { agentId: 'agent-1', request: { title: 'ship' } },
+      signal: new AbortController().signal,
+    })).resolves.toEqual({ agentId: 'agent-1', title: 'ship', scope: 'unbound' })
+  })
+
   it('does not downgrade an observed SRC lookup after its provider unloads', async () => {
     const { ctx, service } = await setup()
     const dispose = registerAgentLookup(ctx, { id: 'agent-1' })

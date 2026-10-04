@@ -1,11 +1,11 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
-  FileTypeIcon, fileSizeText, IconEditOutlineRegular, IconQueueOutlineRegular, IconSendOutlineRegular,
+  FileTypeIcon, fileSizeText, IconEditOutlineRegular, InlineEditor, IconQueueOutlineRegular, IconSendOutlineRegular,
   IconTrashOutlineRegular, projectUserText, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
@@ -96,53 +96,6 @@ function QueueThumb({ attachment, loadImage, label }: {
   return url === null
     ? <span className={css.thumb} aria-hidden />
     : <img className={css.thumb} src={url} alt={label} />
-}
-
-/**
- * Inline editor for one queued row. A textarea rather than an input: HTML
- * strips newlines from single-line input values, so editing a multi-line
- * queued message through one rewrites it as a single line. It grows with its
- * content up to the CSS cap, then scrolls. Enter saves, Shift+Enter breaks the
- * line, Escape cancels.
- */
-function QueueEditor({ text, label, onChange, onSave, onCancel }: {
-  text: string
-  label: string
-  onChange: (text: string) => void
-  onSave: () => void
-  onCancel: () => void
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null)
-
-  useLayoutEffect(() => {
-    const node = ref.current
-    /* v8 ignore next -- the ref is attached before layout effects run. */
-    if (node === null) return
-    node.style.height = 'auto'
-    // scrollHeight excludes the border that the border-box height includes.
-    node.style.height = `${node.scrollHeight + node.offsetHeight - node.clientHeight}px`
-  }, [text])
-
-  return (
-    <textarea
-      ref={ref}
-      autoFocus
-      rows={1}
-      className={css.editor}
-      aria-label={label}
-      value={text}
-      onChange={(event) => { onChange(event.currentTarget.value) }}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          onCancel()
-          return
-        }
-        if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
-        event.preventDefault()
-        onSave()
-      }}
-    />
-  )
 }
 
 /** Full props of a dock entry: InputZone owner share + session standard kit + global seat + the locale seat. */
@@ -248,8 +201,8 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                 {rowCount === 1 && <span className={css.lead} aria-hidden><IconQueueOutlineRegular /></span>}
                 {editing?.id === row.id
                   ? (
-                    <QueueEditor
-                      text={editing.text}
+                    <InlineEditor
+                      value={editing.text}
                       label={t('queue.edit')}
                       onChange={(text) => { setEditing({ id: row.id, text }) }}
                       onSave={() => { void saveEdit() }}

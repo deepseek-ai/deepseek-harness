@@ -1,9 +1,9 @@
 # AGENTS.md — Experimental packages
 
-These rules supplement the [package rules](../AGENTS.md). The [experimental publication decision](../../.agents/notes/implemented/process/2026-09-12-experimental-publication-denylist.md) owns the publication policy; the [Agent Teams package decision](../../.agents/notes/implemented/architecture/2026-08-18-experimental-agent-teams-packages.md) owns dependency isolation and promotion rationale.
+These rules supplement the [package rules](../AGENTS.md). The [experimental publication reference](README.md) owns the publication policy; the rules below define dependency isolation and promotion.
 
 - A package belongs here only when its complete public contract is experimental or internal-only. An experimental option inside a release package stays with its owning product role.
 - Every package here uses the `@deepseek-ai/dsh-experimental-*` npm prefix and joins the dsh release family by default: omit `private` and set `publishConfig.access: public`. Only directories in `PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES` in [the publication policy](../../scripts/experimental-package-policy.ts) stay private: set `private: true` and omit `publishConfig`.
 - Release packages and apps outside this group must not name experimental packages in `dependencies`, `optionalDependencies`, or `peerDependencies`. [Default-product isolation](../../.agents/notes/implemented/process/2026-09-12-default-product-experimental-isolation.md) also checks transitive installations, runtime imports, and shipped compositions in CI. Experimental packages may depend on release packages and each other. Tests may use experimental packages through `devDependencies`; examples may load them explicitly.
-- Experimental status does not relax engineering, security, documentation, lifecycle, testing, invariant, or snapshot requirements.
+- Experimental status does not relax engineering, security, documentation, lifecycle, testing, or snapshot requirements.
 - Publishing an experimental package does not promote it or add a stability promise. Promotion moves a package to its product-role group and removes `experimental-` from its npm name; update every import and configuration row atomically, then review its public contract, limitations, test evidence, release payload, runtime dependents, and named stable owner.

@@ -101,7 +101,7 @@ The backend owns its complete storage runtime (`src/storage.ts`): `JsonlSessionH
 
 ### Physical encoding
 
-The default artifact is a standard concatenation of independent [Zstandard frames](../../../.agents/notes/implemented/architecture/2026-07-19-zstandard-jsonl-session-logs.md): one checksummed frame containing only the header line, then one checksummed frame per durable append batch, using Node's built-in Zstandard API at its default compression level (no level knob). The current format writes one event per row; `sourceEventSeqs` uses a lossless storage representation in which consecutive runs of at least three sequence numbers become `[start, end]` pairs, any other list stays verbatim, and reading expands the exact in-memory array. Historical migration reuses one Zstandard decoder, passes parsed rows through stateful format stages, and streams current records through one compression context in about 1 MiB main-thread slices while retaining only final current events, bounded decoder state, and the required sequence-remap table. Listing reads and validates only the header frame. `compression: 'none'` keeps the same storage-form logical lines without frame compression. A root belongs to one encoding: startup discovery and targeted lookup reject generations with the other suffix; format migration preserves the configured encoding, while compression conversion, mixed-root fallback, and dual write remain unsupported. Frozen v0 and v1 codecs retain their packed-row decoders solely for historical generations.
+The default artifact is a standard concatenation of independent Zstandard frames: one checksummed frame containing only the header line, then one checksummed frame per durable append batch, using Node's built-in Zstandard API at its default compression level (no level knob). The current format writes one event per row; `sourceEventSeqs` uses a lossless storage representation in which consecutive runs of at least three sequence numbers become `[start, end]` pairs, any other list stays verbatim, and reading expands the exact in-memory array. Historical migration reuses one Zstandard decoder, passes parsed rows through stateful format stages, and streams current records through one compression context in about 1 MiB main-thread slices while retaining only final current events, bounded decoder state, and the required sequence-remap table. Listing reads and validates only the header frame. `compression: 'none'` keeps the same storage-form logical lines without frame compression. A root belongs to one encoding: startup discovery and targeted lookup reject generations with the other suffix; format migration preserves the configured encoding, while compression conversion, mixed-root fallback, and dual write remain unsupported. Frozen v0 and v1 codecs retain their packed-row decoders solely for historical generations.
 
 ### Source map
 
@@ -114,7 +114,6 @@ The default artifact is a standard concatenation of independent [Zstandard frame
 | [`src/migration-verifier.ts`](src/migration-verifier.ts) | Worker lifecycle for staged and competing-generation verification |
 | [`src/zstd.ts`](src/zstd.ts) | Zstandard frame compression, decoding, and frame scanning |
 | [`src/win32.ts`](src/win32.ts) | Windows write-through publish and directory creation |
-| — | No runtime invariant companion is published; persistence correctness requires backend round-trip and crash-tail tests; this package exposes no continuously observable in-process relation. |
 
 </details>
 
@@ -127,8 +126,6 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Session persistence subsystem](../../../docs/subsystems/persistence.md) — backend-neutral service semantics and provider relationships.
 - [Session persistence seam](../session-persistence/README.md) — the service contract this backend implements.
-- [Project-session directory decision](../../../.agents/notes/implemented/architecture/2026-07-24-project-session-directories.md) — the layout tradeoff behind project and session directories.
-- [Zstandard JSONL session logs](../../../.agents/notes/implemented/architecture/2026-07-19-zstandard-jsonl-session-logs.md) — the checksummed-frame encoding rationale.
 - [Released Session format migrations](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md) — immutable generations, adjacent migration edges, and publication rules.
 
 -----

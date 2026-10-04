@@ -1,0 +1,67 @@
+{
+  "dialogs": [
+    {
+      "type": "info",
+      "title": "管理 dsh 命令",
+      "message": "将 Desktop 命令添加到终端。",
+      "detail": "Desktop 命令：/usr/local/bin/dsh",
+      "buttons": [
+        "安装",
+        "取消"
+      ],
+      "defaultId": 0,
+      "cancelId": 1
+    },
+    {
+      "type": "info",
+      "title": "管理 dsh 命令",
+      "message": "Desktop 命令已安装。",
+      "detail": "Desktop 命令：/usr/local/bin/dsh\n\n当前 dsh 命令：/usr/local/bin/dsh",
+      "buttons": [
+        "关闭",
+        "修复",
+        "移除"
+      ],
+      "defaultId": 0,
+      "cancelId": 0
+    },
+    {
+      "type": "info",
+      "title": "管理 dsh 命令",
+      "message": "Desktop 命令需要修复。",
+      "detail": "Desktop 命令：/usr/local/bin/dsh",
+      "buttons": [
+        "关闭",
+        "修复",
+        "移除"
+      ],
+      "defaultId": 0,
+      "cancelId": 0
+    },
+    {
+      "type": "warning",
+      "title": "管理 dsh 命令",
+      "message": "Desktop 命令已安装。",
+      "detail": "Desktop 命令：/usr/local/bin/dsh\n\n当前 dsh 命令：/opt/homebrew/bin/dsh\n\n另一个 dsh 的优先级更高。请移除或调整该安装的顺序，以默认使用 Desktop 命令；也可以通过完整路径运行 Desktop 命令。",
+      "buttons": [
+        "关闭",
+        "修复",
+        "移除"
+      ],
+      "defaultId": 0,
+      "cancelId": 0
+    },
+    {
+      "type": "info",
+      "title": "管理 dsh 命令",
+      "message": "将 Desktop 命令添加到终端。",
+      "detail": "Desktop 命令：/usr/local/bin/dsh\n\n无法确认 shell 中的命令。别名或另一个 dsh 安装可能具有更高优先级。",
+      "buttons": [
+        "安装",
+        "取消"
+      ],
+      "defaultId": 0,
+      "cancelId": 1
+    }
+  ]
+}

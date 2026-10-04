@@ -36,7 +36,7 @@ PTC Node 约束需要独立于任意程序 stdin/stdout/stderr 的双向控制�
 
 依赖仓库 E2B 包的自定义组合失去该后端。外部采用情况未知。移除集成也会移除其真实远程组合证据；保留的本地与延迟提供方测试保护各自约定，并不验证尚未实现的替代方案。
 
-[原生约束](../architecture/2026-08-28-subprocess-native-containment.zh.md)、[出站代理](../architecture/2026-08-27-outbound-proxy-policy.zh.md)和[工作区文件服务](../architecture/2026-09-05-workspace-files-service.zh.md)决策保持有效。它们的 E2B 实现与验证清单被撤下，进程所有权、路由和文件访问要求保持完整。可移植性决策仅有 E2B 实现部分被取代。
+[原生约束](../../../../packages/subprocess/subprocess-local/README.zh.md)、[出站代理](../architecture/2026-08-27-outbound-proxy-policy.zh.md)和[工作区文件服务](../architecture/2026-09-05-workspace-files-service.zh.md)决策保持有效。它们的 E2B 实现与验证清单被撤下，进程所有权、路由和文件访问要求保持完整。可移植性决策仅有 E2B 实现部分被取代。
 
 ## 重新引入条件
 

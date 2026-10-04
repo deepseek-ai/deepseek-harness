@@ -53,7 +53,8 @@ import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
 import TerminalSessionService from '@deepseek-ai/dsh-terminal'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
 import * as ToolGoal from '@deepseek-ai/dsh-tool-goal'
-import * as ToolSchedule from '@deepseek-ai/dsh-schedule'
+import * as ToolSchedule from '@deepseek-ai/dsh-tool-schedule'
+import type ScheduleService from '@deepseek-ai/dsh-schedule'
 import Lsp from '@deepseek-ai/dsh-lsp'
 import * as ToolLsp from '@deepseek-ai/dsh-tool-lsp'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
@@ -132,26 +133,6 @@ function registerCatalogSubagentProvider(ctx: Context, name: string): void {
 
 /** Minted child-scope keys for packages whose tools are never global. */
 const catalogChildScopes = new WeakMap<Context, Agent>()
-
-/**
- * Install one scope-local tool package into an agent-like child scope for
- * schema harvest, without starting a model, Agent loop, or persistence backend.
- * @param ctx - catalog context owning the scope.
- * @param mountScoped - package installer for the scoped context.
- * @param key - agent-like scope key exposed to the package's scope selector.
- * @param inject - services the package installer must await before mounting.
- */
-async function mountCatalogChildScope(
-  ctx: Context,
-  mountScoped: (childCtx: Context) => void,
-  key: Agent = { id: SessionId('tool-catalog-child') } as Agent,
-  inject: string[] = ['tools', 'systemPrompt', 'subagents'],
-): Promise<void> {
-  await ctx.plugin(Object.assign((inner: Context) => {
-    mountScoped(createScope(inner, key).ctx)
-  }, { inject }))
-  catalogChildScopes.set(ctx, key)
-}
 
 /**
  * Tool package plus its hand-maintained boot recipe. The caller mounts the
@@ -248,13 +229,13 @@ const TOOL_PACKAGES: ToolPackage[] = [
     dir: 'tool-ask-user',
     source: 'packages/interaction/tool-ask-user/src/index.ts',
     requires: ['ctx.tools', 'ctx.userQuestions'],
-    writes: ['tool/call', 'tool/result after a UI/provider answers the question'],
+    writes: ['tool/call', 'tool/result after an answer or timeout', 'late user/message'],
     async mount(ctx) {
       await ctx.plugin(UserQuestionService)
       await ctx.plugin(ToolAskUser)
     },
     note:
-      'ask_user_question pauses the tool call until the active UI provider returns a human answer.',
+      'ask_user_question keeps the original blocking behavior by default; set `mode: timed` to opt into a foreground timeout and pending result while the question remains answerable. In timed mode, `timeout: -1` keeps that call blocking indefinitely.',
   },
   {
     pkg: '@deepseek-ai/dsh-tools',
@@ -447,22 +428,20 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'create, edit, pause, and resume require direct-human root authority; complete and blocked also accept the exact current goal round. The default blocked lower bound is three admitted rounds.',
   },
   {
-    pkg: '@deepseek-ai/dsh-schedule',
-    dir: 'schedule',
-    source: 'packages/schedule/schedule/src/tools.ts',
-    requires: ['ctx.tools', 'ctx.schedule', 'a live root Agent'],
+    pkg: '@deepseek-ai/dsh-tool-schedule',
+    dir: 'tool-schedule',
+    source: 'packages/schedule/tool-schedule/src/index.ts',
+    requires: ['ctx.tools', 'ctx.schedule'],
     writes: ['tool/call', 'Schedule storage domain create, update, or delete', 'tool/result'],
     async mount(ctx) {
-      await ctx.plugin(SessionStore)
-      const session = ctx.sessions.create(SessionId('tool-catalog-schedule'))
-      const agent = { id: session.id, session } as Agent
-      await mountCatalogChildScope(ctx, (childCtx) => {
-        ToolSchedule.registerScheduleTools(ctx, childCtx, agent)
-      }, agent, ['tools', 'systemPrompt'])
+      // Schema harvest never executes a tool, so the Host service is a
+      // declaration-only stub.
+      ctx.provide('schedule', {} as ScheduleService)
+      await ctx.plugin(ToolSchedule)
     },
-    scope: ctx => catalogChildScopes.get(ctx) as Agent,
     note:
-      'Registered in live root Agent scopes while the Schedule service is loaded. '
+      'A preset or Agent scope mounts this package; the preset decides which agents receive the four '
+      + 'management tools. Each call acts on the calling Agent\'s Session. '
       + 'Accepts after_seconds, explicit absolute at, bounded fixed-rate every_seconds, daily and weekly '
       + 'local times in an explicit IANA zone, and cron as a five-field expression. '
       + 'Management uses the Host storage domain; due messages resume the original Session.',

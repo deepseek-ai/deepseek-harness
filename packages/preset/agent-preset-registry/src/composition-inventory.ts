@@ -1,5 +1,5 @@
 /** Plugin inventory from declared configuration or an activated revision. */
-import type { FiberState } from '@deepseek-ai/cordis'
+import { FiberState } from '@deepseek-ai/cordis'
 import { isJsExpr, type EntryTree } from '@deepseek-ai/cordis-plugin-loader'
 import { entryListProblem } from './definition.ts'
 
@@ -46,6 +46,42 @@ export interface AgentPresetComposition {
   readonly broken?: string
   /** Composition rows in composition order; empty when the preset is broken. */
   readonly rows: readonly AgentPresetCompositionRow[]
+}
+
+/** Active module references and isolation diagnostics for one retained preset revision. */
+export interface AgentPresetInspection {
+  /** Preset identity; different retained revisions can share it. */
+  readonly id: string
+  /** Active modules, with the bases needed to resolve their package identities. */
+  readonly modules: readonly {
+    /** Configured module specifier. */
+    readonly moduleName: string
+    /** Declaring configuration's URL, when available. */
+    readonly baseUrl?: string
+    /** Whether bare specifiers use the application's module base. */
+    readonly useHostBase: boolean
+  }[]
+  /** Services this revision published outside its isolated realm. */
+  readonly leakedServices: readonly string[]
+}
+
+/** Read active module references without exposing Loader entries.
+ * @param tree - the retained revision's tree.
+ * @returns detached module references in Loader order.
+ */
+export function activeCompositionModules(tree: EntryTree): AgentPresetInspection['modules'] {
+  const modules: Array<AgentPresetInspection['modules'][number]> = []
+  for (const entry of tree.entries()) {
+    if (entry.options.group || entry.disabled || entry.fiber?.state !== FiberState.ACTIVE) continue
+    const ownerTree = entry.parent.tree
+    const baseUrl = ownerTree.ctx.baseUrl
+    modules.push({
+      moduleName: entry.options.name,
+      ...baseUrl === undefined ? {} : { baseUrl },
+      useHostBase: ownerTree === tree,
+    })
+  }
+  return modules
 }
 
 /**

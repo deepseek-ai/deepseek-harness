@@ -8,7 +8,7 @@ English | [中文](2026-08-26-ban-ambiguous-origin-label.zh.md)
 
 The case-insensitive ten-letter ASCII token formed by `prove` followed by `nance` had accumulated unrelated meanings across the repository. It named source-event references, provider and model metadata, context producers, installed artifact identity, configuration origins, browser-recording evidence, and release attestations. A reader could not determine the recorded fact from the label alone.
 
-The existing [concrete prose decision](2026-08-09-concrete-prose-names-actors-and-recorded-facts.md) required sentence-level classification and normally preserved identifiers. That policy improved individual sentences but allowed the same ambiguous label to remain in APIs, durable compatibility fixtures, filenames, generated catalogs, and new prose.
+The existing [concrete prose reference](../../../skills/dsh-prose-standard/SKILL.md) required sentence-level classification and normally preserved identifiers. That policy improved individual sentences but allowed the same ambiguous label to remain in APIs, durable compatibility fixtures, filenames, generated catalogs, and new prose.
 
 ## Decision
 

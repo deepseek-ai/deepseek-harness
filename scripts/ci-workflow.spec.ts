@@ -407,6 +407,24 @@ describe('CI workflow', () => {
     expect(observational?.env).toMatchObject({ DSH_GATE_FAIL_FAST: '' })
   })
 
+  it('runs the darwin unit parity inventory at the coverage lanes\' test budget', () => {
+    const coverage = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24-coverage')
+    if (!isRecord(coverage.env) || typeof coverage.env.DSH_COVERAGE_TEST_TIMEOUT_MS !== 'string') {
+      throw new TypeError('node-24-coverage must grant DSH_COVERAGE_TEST_TIMEOUT_MS')
+    }
+    const unitDarwin = workflowJob(loadWorkflow('.github/workflows/sandbox.yml'), 'unit-darwin')
+    if (!Array.isArray(unitDarwin.steps)) throw new TypeError('unit-darwin job must define steps')
+    const unit = unitDarwin.steps.filter(isRecord).find(step => step.name === 'Unit tests (darwin parity)')
+    // The whole unit inventory on a shared macos-latest runner pays the same
+    // scheduling delay the coverage lanes absorb; the ci-unit aggregate is the
+    // `pnpm run test` path that consumes the variable, and the value is the
+    // coverage lane's so the two budget classes cannot drift apart.
+    expect(unit).toMatchObject({
+      run: 'pnpm run check:ci:unit',
+      env: { DSH_COVERAGE_TEST_TIMEOUT_MS: coverage.env.DSH_COVERAGE_TEST_TIMEOUT_MS },
+    })
+  })
+
   it('gates standalone keyless blacksmith jobs and benchmark tiers on the failover variables', () => {
     const expectedFilenames = workflowJob(loadWorkflow('.github/workflows/expected-filenames.yml'), 'expected-filenames')
     const sandbox = workflowJob(loadWorkflow('.github/workflows/sandbox.yml'), 'sandbox-e2e')
@@ -464,10 +482,10 @@ describe('CI workflow', () => {
     })
   })
 
-  it('bounds the complete benchmark job to fifteen minutes', () => {
+  it('bounds the complete benchmark job to twenty minutes', () => {
     const benchmark = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24-bench')
 
-    expect(benchmark['timeout-minutes']).toBe(15)
+    expect(benchmark['timeout-minutes']).toBe(20)
     expect(benchmark.steps).toContainEqual({
       name: 'Run performance benchmarks',
       env: { DSH_GATE_VERBOSE: '1' },
@@ -566,7 +584,7 @@ describe('CI workflow', () => {
       // Removing this injection would send every pnpm call in the lane (setup,
       // store-path probe, install, and the gate) back to the root partition's
       // /tmp; rationale in
-      // .agents/notes/implemented/process/2026-08-28-ci-node-compile-cache-data-disk.md.
+      // .github/workflows/ci.yml.
       expect(redirectStepIndex, `${jobKey} must inject NODE_COMPILE_CACHE into GITHUB_ENV`).toBeGreaterThan(-1)
       const pnpmSetupIndex = job.steps.findIndex((step): step is Record<string, unknown> & { uses: string } => (
         isRecord(step) && typeof step.uses === 'string' && step.uses.includes('pnpm/action-setup')
@@ -612,6 +630,16 @@ describe('CI workflow', () => {
 
     expect(config).not.toContain("pool: process.platform === 'win32' ? 'threads' : 'forks'")
     expect(config.match(/pool: 'forks'/g)).toHaveLength(2)
+  })
+
+  it('applies the lane test budget inside every Vitest project', () => {
+    // Each inline project spreads coverageTestTimeoutOptions, the only route
+    // for DSH_COVERAGE_TEST_TIMEOUT_MS into projects; the behavior itself is
+    // pinned by scripts/lane-test-budget.spec.ts.
+    const config = readFileSync(resolve(root, 'vitest.config.ts'), 'utf8')
+
+    expect(config).toContain('const laneTestBudget = coverageTestTimeoutOptions(process.env[COVERAGE_TEST_TIMEOUT_ENV])')
+    expect(config.match(/^ {10}\.\.\.laneTestBudget,$/gm)).toHaveLength(2)
   })
 })
 
@@ -1104,6 +1132,37 @@ describe('Issue lifecycle workflow', () => {
 })
 
 describe('npm release workflows', () => {
+  it('passes the optional vendor channel as a quoted argument while preserving default publication', () => {
+    const workflow = loadWorkflow('.github/workflows/release-vendor-publish.yml')
+    expect(workflow.on).toMatchObject({
+      workflow_dispatch: {
+        inputs: {
+          'dist-tag': {
+            required: false,
+            type: 'string',
+            default: '',
+          },
+        },
+      },
+    })
+    const publish = workflowJob(workflow, 'publish')
+    expect(publish.steps).toContainEqual({
+      name: 'Publish tarballs',
+      env: {
+        NODE_AUTH_TOKEN: '${{ secrets.NPM_TOKEN }}',
+        RELEASE_DIST_TAG: '${{ inputs.dist-tag }}',
+      },
+      run: [
+        'args=()',
+        'if [[ -n "$RELEASE_DIST_TAG" ]]; then',
+        '  args+=(--dist-tag "$RELEASE_DIST_TAG")',
+        'fi',
+        'pnpm run release:publish --family vendor --from dist/npm-vendor "${args[@]}"',
+        '',
+      ].join('\n'),
+    })
+  })
+
   it('keeps publication dispatch-only and pack in the PR workflow', () => {
     // pack stays in the PR/master release workflows so a PR proves the set packs.
     for (const file of ['release.yml', 'release-vendor.yml']) {

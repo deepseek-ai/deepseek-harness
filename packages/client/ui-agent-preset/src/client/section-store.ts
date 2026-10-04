@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { AgentPresetRow } from '@deepseek-ai/dsh-agent-preset-registry/types'
-import { writeDefaultPreset } from './settings-store.ts'
+import { AGENT_PRESET_SETTINGS_NS, requiresCodingTools, writeDefaultPreset } from './settings-store.ts'
 
 /** The read-only composition viewer over one preset. */
 export interface PresetView {
@@ -31,6 +31,7 @@ export class AgentPresetSectionController {
   /** Observable roster, selection and viewer state. */
   readonly store: SnapshotStore<AgentPresetSectionState> = createSnapshotStore(INITIAL)
   private loading: Promise<void> | undefined
+  private pendingSave: Promise<void> | undefined
   private viewRequest = 0
   constructor(private readonly ctx: Context) {}
 
@@ -76,8 +77,31 @@ export class AgentPresetSectionController {
   async makeDefault(id: string, sync?: (id: string) => Promise<string | undefined>): Promise<void> {
     await this.save(() => writeDefaultPreset(this.ctx, id), sync)
   }
+
+  /** Replace a hidden built-in default after accepted Coding Tools changes.
+   * @param shouldReset Rechecked after waiting; false when tools are enabled or this owner is disposed.
+   * @returns Once the conditional save settles; errors remain visible in the section.
+   */
+  async reconcileCodingTools(shouldReset: () => boolean): Promise<void> {
+    while (this.pendingSave !== undefined) await this.pendingSave
+    if (!shouldReset()) return
+    const settings = this.ctx.configForms.get(AGENT_PRESET_SETTINGS_NS).getSnapshot()
+    if (settings.mode !== 'host' || settings.status !== 'ready' || !settings.writable || settings.revision === undefined) return
+    await this.load()
+    if (!shouldReset() || this.store.getSnapshot().status !== 'ready') return
+    const rows = this.store.getSnapshot().rows
+    if (!requiresCodingTools(rows.find(row => row.isDefault))) return
+    if (!rows.some(row => row.id === 'standard' && row.broken === undefined)) {
+      this.set({ error: this.ctx.locale.bind('settings.agentPreset')('standardUnavailable') })
+      return
+    }
+    await this.save(() => writeDefaultPreset(this.ctx, 'standard', settings.revision))
+  }
+
   private async save(write: () => Promise<string | undefined>, sync?: (id: string) => Promise<string | undefined>): Promise<void> {
     if (this.store.getSnapshot().saving) return
+    const completion = Promise.withResolvers<void>()
+    this.pendingSave = completion.promise
     this.set({ saving: true, error: null })
     try {
       const error = await write()
@@ -89,6 +113,10 @@ export class AgentPresetSectionController {
         if (error !== undefined) throw new Error(error)
       }
     } catch (error) { this.set({ error: message(error) }) }
-    finally { this.set({ saving: false }) }
+    finally {
+      this.pendingSave = undefined
+      this.set({ saving: false })
+      completion.resolve()
+    }
   }
 }

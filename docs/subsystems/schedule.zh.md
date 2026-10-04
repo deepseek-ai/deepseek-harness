@@ -116,7 +116,7 @@ interface LocalAtInput {
 type AtInput = string | LocalAtInput
 ```
 
-随发行版交付的 Web 组合不含 `time-context` 行；在插件管理页启用可选实验性 bundle `@deepseek-ai/dsh-experimental-schedule-bundle` 会插入并挂载 time-context，它为每条提示词采样浏览器的 IANA 时区。当 open turn 只有一个无歧义的浏览器时区时，Time-context 会告诉模型按该请求本地时区解释未明确限定时区的自然语言日期和时间；浏览器时区记录混合或缺失时，则告诉模型询问用户。该指引不是持久 Session 默认值：模型仍必须在字符串形式中传入偏移量，或在本地形式中传入 `time_zone`；Schedule 绝不会读取浏览器、Session、进程或模型上下文。
+随发行版交付的 Web 组合挂载 `schedule` 服务与 `ui-schedule` 任务页面。时钟读数与四个提醒工具归 preset 所有：`standard`、`cordis` 与 `ptc` 一同声明 `time-context` 与 `@deepseek-ai/dsh-tool-schedule`，`minimal` 两者都不声明。这三个 preset 中的 `tool-subagent` 与 `tool-subagent-fork` 两行都 deny 这四个工具，且每个工具都以 `subagent_session` 拒绝被委派的调用方，因此被委派的子 agent 既看不到这些工具，其调用也不会被接受。当 open turn 只有一个无歧义的浏览器时区时，Time-context 会告诉模型按该请求本地时区解释未明确限定时区的自然语言日期和时间；浏览器时区记录混合或缺失时，则告诉模型询问用户。该指引不是持久 Session 默认值：模型仍必须在字符串形式中传入偏移量，或在本地形式中传入 `time_zone`；Schedule 绝不会读取浏览器、Session、进程或模型上下文。
 
 Schedule 会拒绝无效偏移量与时区、不带偏移量的字符串、非未来目标，以及落在夏令时缺口内的本地时间。遇到夏令时重叠时，会选择第一次出现的较早时点。创建成功后只存储规范化后的 UTC `scheduledAt`，因此回放绝不依赖环境时区状态。
 
@@ -172,7 +172,7 @@ cron 解码保留已提交时点及已存储的时区拼写，并拒绝非规范
 
 ## 历史 Session 变更
 
-版本 1 的 `schedule/change` 事件仍可作为历史 Session 数据解码。其 create、fold 和 invariant 类型使用 `LegacyScheduleRecord`，仅接受 After、At 和 Every；Daily、Weekly 与 Cron 仅属于当前宿主的 `ScheduleRecord`。宿主记录解码器独立于冻结的历史解码器。在 title 出现之前写入的 create 记录不含 `title`，因此历史解码器接受该缺失成员，而宿主解码器仍要求它。历史事件不会填充 storage domain 或触发投递。这些事件中的已有提醒需要显式通过 `schedule_create` 重新创建；不会隐式迁移 Session 或转换旧 `at` 记录。
+版本 1 的 `schedule/change` 事件仍可作为历史 Session 数据解码。其 create 和 fold 类型使用 `LegacyScheduleRecord`，仅接受 After、At 和 Every；Daily、Weekly 与 Cron 仅属于当前宿主的 `ScheduleRecord`。宿主记录解码器独立于冻结的历史解码器。在 title 出现之前写入的 create 记录不含 `title`，因此历史解码器接受该缺失成员，而宿主解码器仍要求它。历史事件不会填充 storage domain 或触发投递。这些事件中的已有提醒需要显式通过 `schedule_create` 重新创建；不会隐式迁移 Session 或转换旧 `at` 记录。
 
 ```ts type-equiv
 /**
@@ -262,7 +262,7 @@ type ScheduleView = ScheduleRecord & {
 }
 ```
 
-[工具目录](../tool-catalog.zh.md#deepseek-aidsh-schedule) 负责 `schedule_create`、`schedule_list`、`schedule_delete` 和 `schedule_update` 的 schema。创建、删除和更新在 storage domain 写入确认后返回成功。宿主级队列将这些变更与到期投递串行化；删除任务不会移除已入队消息。模型工具操作当前 Session，共享宿主的 create、list、update 和 delete 方法接受显式 Session 绑定。创建必须提供 `title`，其去除首尾空白后必须非空且不超过 120 个字符；缺失、空白或过长的标题以 `invalid_prompt` 拒绝，且创建过程绝不从指令派生标题。create 和 list 视图在指令之外同时携带已存储的 `title`，且 `title` 缺失或非法的已存储记录在解码时被拒绝。
+[工具目录](../tool-catalog.zh.md#deepseek-aidsh-tool-schedule) 负责 `schedule_create`、`schedule_list`、`schedule_delete` 和 `schedule_update` 的 schema，这四个工具由 [`@deepseek-ai/dsh-tool-schedule`](../../packages/schedule/tool-schedule/README.zh.md) 在挂载它的每个 preset 中贡献；宿主服务拥有存储与投递。创建、删除和更新在 storage domain 写入确认后返回成功。宿主级队列将这些变更与到期投递串行化；删除任务不会移除已入队消息。模型工具操作当前 Session，共享宿主的 create、list、update 和 delete 方法接受显式 Session 绑定。`create` 与 `update` 在其委派深度大于零时以 `subagent_session` 拒绝被委派子 agent 拥有的 Session，且投递无法到达这样的 Session。四个模型工具在工具层拒绝被委派的调用方，而 `list`、`catalog`、`history` 与 `delete` 仍服务该 Session。创建必须提供 `title`，其去除首尾空白后必须非空且不超过 120 个字符；缺失、空白或过长的标题以 `invalid_prompt` 拒绝，且创建过程绝不从指令派生标题。create 和 list 视图在指令之外同时携带已存储的 `title`，且 `title` 缺失或非法的已存储记录在解码时被拒绝。
 
 ```ts type-equiv
 /** Reminder creation selector, shared by the model consumer and Host service. */
@@ -339,7 +339,7 @@ type ScheduleCatalogEntry = ScheduleRecord & {
 
 Remote 方法 `schedule.list({ sessionId })`、模型 `schedule_list` 和 Session 页头目录仅返回活动任务。模型视图派生的时间 `state` 与存储的生命周期 `status` 仍是不同概念。删除通过 `schedule.delete({ sessionId, id })` 使用条目的原始绑定；绑定不匹配时返回未找到。模型工具传入当前 Agent 的 Session，全局用户界面则传入所选任务的绑定。仅校验绑定并不构成调用者鉴权。无 payload 的 `schedule/changed` 事件通知客户端刷新列表；重新连接后，客户端再次获取当前状态。
 
-随发行版交付的 Web 组合不含 `ui-schedule` 行；在插件管理页启用可选实验性 bundle `@deepseek-ai/dsh-experimental-schedule-bundle` 会插入它并与宿主能力一起挂载。[客户端包](../../packages/client/ui-schedule/README.zh.md) 负责目录、空状态与删除控件。页面单独筛选全部、活动和未运行任务，保留未运行任务详情及详情页签条内的原 Session 入口，并要求显式确认删除。“规则”和“发送记录”将任务设置与按需分页加载的已保存回执分开。回执与未运行状态均不确认模型执行。
+随发行版交付的 Web 组合把 `ui-schedule` 与宿主能力一起挂载。[客户端包](../../packages/client/ui-schedule/README.zh.md) 负责目录、空状态与删除控件。页面单独筛选全部、活动和未运行任务，保留未运行任务详情及详情页签条内的原 Session 入口，并要求显式确认删除。“规则”和“任务运行记录”页签将任务设置与按需分页加载的已保存回执分开。回执与未运行状态均不确认模型执行。
 
 ## 修改时间
 
@@ -459,6 +459,8 @@ Shared management service; reads, deletion, and timing edits never activate a Se
  *
  * The request must supply a title; a missing, blank-after-trim, or over-long
  * title rejects with `invalid_prompt` instead of deriving one from the prompt.
+ * A Session a delegated child owns rejects with `subagent_session`, because delivery
+ * can never reach it: the child is one whose delegation depth is above zero.
  * The record is built from the clock reading taken before the request joins the
  * serialized queue, so a create that waits behind a longer operation keeps its
  * request-time anchor and may already be due when the queue reaches it.
@@ -497,7 +499,9 @@ async create(sessionId: SessionId, request: ScheduleCreateRequest, signal?: Abor
  * Delete one task belonging to the selected Session, leaving queued messages intact.
  *
  * The row is removed: the task no longer schedules, leaves `list` and `catalog`, and its
- * saved delivery records go with it.
+ * saved delivery records go with it. A task bound to a Session a delegated child owns
+ * stays deletable even though creation and timing edits refuse that binding, so a task
+ * stored before that rule existed remains removable.
  * @param request - Session and exact task identity.
  * @param signal - Optional cancellation checked before persistence begins, including after FIFO waits.
  * @returns Whether that Session owned a deleted task. Cancellation does not roll back an in-flight write.
@@ -509,10 +513,13 @@ async create(sessionId: SessionId, request: ScheduleCreateRequest, signal?: Abor
  * binding without activating the Session or changing saved deliveries.
  *
  * Each supplied field replaces its stored value; an omitted field keeps it. A name or
- * instruction change alone does not reset the committed target.
+ * instruction change alone does not reset the committed target. A Session a delegated
+ * child owns returns the non-mutating `subagent_session` result, so an edit cannot
+ * re-arm a task bound to a Session delivery can never reach, and the Web editor can
+ * explain the refusal through the ordinary result it already renders.
  * @param request - Task binding, complete observed record, and any combination of timing, name, and instruction.
  * @param signal - Cancellation checked after domain readiness and FIFO waits, before persistence begins.
- * @returns The committed record, unchanged record for a no-op, or a non-mutating input/lookup/conflict result.
+ * @returns The committed record, unchanged record for a no-op, or a non-mutating input/lookup/conflict/refusal result.
  * Storage and lifecycle failures reject; cancellation after a write starts does not roll it back.
  */
 @Remote('update') async update(request: ScheduleUpdateRequest, signal?: AbortSignal): Promise<ScheduleUpdateResult>

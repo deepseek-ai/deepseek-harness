@@ -103,7 +103,6 @@ schema 校验会在执行前拒绝缺失或非数组的 `queries` 字段、非�
 | [`src/index.ts`](src/index.ts) | 插件入口：配置 schema、启用状态、超时预算、工具注册 |
 | [`src/search.ts`](src/search.ts) | `web_search` 工具：参数校验、查询扇出、合并、格式化、呈现元数据 |
 | [`src/fetch.ts`](src/fetch.ts) | `web_fetch` 工具：HTML→markdown 转换、输出上限、格式化、呈现元数据 |
-| — | 不发布运行时不变量配套入口；这个面向模型的适配器没有独立的生命周期事件流；执行关系由它调用的能力 seam 负责。 |
 
 ### 搜索流程
 

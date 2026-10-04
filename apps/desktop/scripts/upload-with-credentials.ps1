@@ -14,6 +14,8 @@ Deployment that owns the credential pair; never inferred from the filename.
 Completed Desktop target to upload when Upload is explicitly selected.
 .PARAMETER Bucket
 COS bucket for an explicit upload. Not needed for the local credential check.
+.PARAMETER Latest
+Publish only the installer at its fixed download URL. Requires Upload.
 .PARAMETER Upload
 Authorize the existing target upload entry. Omit to check credentials locally.
 #>
@@ -32,7 +34,9 @@ param(
     [ValidatePattern('^[a-z0-9-]+$')]
     [string]$Bucket,
     [Parameter(ParameterSetName = 'Publish', Mandatory = $true)]
-    [switch]$Upload
+    [switch]$Upload,
+    [Parameter(ParameterSetName = 'Publish')]
+    [switch]$Latest
 )
 
 $ErrorActionPreference = 'Stop'
@@ -87,6 +91,7 @@ try {
     if ($Upload) {
         $startInfo.EnvironmentVariables["${prefix}_BUCKET"] = $Bucket
         $startInfo.Arguments = "--import tsx/esm apps/desktop/scripts/upload-target.ts $Target --credential-launcher --environment $Environment --bucket $Bucket"
+        if ($Latest) { $startInfo.Arguments += " --latest" }
         Write-Output "desktop credentials: uploading $Target to $Environment; release validation runs before network writes."
     } else {
         $probe = "const id=process.env.${prefix}_SECRET_ID;const key=process.env.${prefix}_SECRET_KEY;process.exit(id?.trim()&&key?.trim()?0:1)"

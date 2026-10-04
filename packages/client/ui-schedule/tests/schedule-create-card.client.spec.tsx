@@ -7,6 +7,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { ScheduleCatalogEntry, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { ScheduleCreateCard, type ScheduleCreateCardProps } from '../src/client/ScheduleCreateCard.tsx'
 import { narrowScheduleRecord, scheduleCreateCardModel } from '../src/client/schedule-create-card.ts'
 import { zoneLabel } from '../src/client/schedule-format.ts'
@@ -40,6 +41,7 @@ afterEach(cleanup)
 function running(args: unknown = ARGS): ToolBlock {
   return {
     phase: 'start',
+    args: PartialArguments.fromText(typeof args === 'string' ? args : JSON.stringify(args)),
     callId: CALL, name: TOOL, argsRaw: typeof args === 'string' ? args : JSON.stringify(args),
     turn: 1, step: 1, time: 0, subCalls: [],
   }
@@ -53,12 +55,12 @@ function settled(value: unknown, options: {
   isError?: boolean
   call?: boolean
 } = {}): ToolBlock {
+  const argsRaw = typeof options.args === 'string' ? options.args : JSON.stringify(options.args ?? ARGS)
   return {
     kind: 'tool-result', seq: 1, time: 1, callId: CALL,
-    call: options.call === false ? null : {
-      name: TOOL,
-      argsRaw: typeof options.args === 'string' ? options.args : JSON.stringify(options.args ?? ARGS),
-    },
+    name: options.call === false ? '' : TOOL,
+    args: options.call === false ? PartialArguments.EMPTY : PartialArguments.fromText(argsRaw),
+    call: options.call === false ? null : { name: TOOL, argsRaw },
     callTime: 0,
     content: options.content ?? [{ type: 'text', text: options.text ?? JSON.stringify(value) }],
     isError: options.isError ?? false,
@@ -139,7 +141,7 @@ describe('scheduleCreateCardModel', () => {
 
   it('names a still-preparing call by the tool until its arguments arrive', () => {
     expect(scheduleCreateCardModel({
-      phase: 'preparing', callId: CALL, name: TOOL, turn: 1, step: 1, time: 0, subCalls: [],
+      phase: 'preparing', args: PartialArguments.EMPTY, callId: CALL, name: TOOL, turn: 1, step: 1, time: 0, subCalls: [],
     }, TOOL)).toEqual({ task: undefined, title: TOOL, output: null })
   })
 

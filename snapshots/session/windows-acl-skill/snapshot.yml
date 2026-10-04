@@ -1,0 +1,9 @@
+version: 1
+scenario: windows-acl-skill
+profile: headless
+composition: default
+recording: authored
+header:
+  class: skill
+workspace:
+  setup: windows-acl-skill

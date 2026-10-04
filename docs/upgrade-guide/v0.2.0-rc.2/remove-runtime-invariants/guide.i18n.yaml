@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.0-rc.2/remove-runtime-invariants/guide.md
+/:
+  en: 3cb412fe69354a6b
+  zh: fbd2dd7abcd08ed7
+/runtime-invariant-plugins-are-removed:
+  en: 573fd5239a856cab
+  zh: edb2683d049a81b7
+/runtime-invariant-plugins-are-removed/change:
+  en: 58c246cfc02ab19d
+  zh: 4826b8cbb34e1363
+/runtime-invariant-plugins-are-removed/migration:
+  en: b42a35a30b792f84
+  zh: 0ddbccc4b93410a3

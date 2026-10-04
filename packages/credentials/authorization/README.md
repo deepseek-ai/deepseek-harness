@@ -99,7 +99,6 @@ This section explains the design decisions behind the seam and points at the cod
 |---|---|
 | [`src/index.ts`](src/index.ts) | Service Definition: flow registry, one-attempt-per-key lifecycle, interaction routing, commit confirmation |
 | [`src/types.ts`](src/types.ts) | Wire-safe vocabulary: methods, notices, prompts, outcomes, entries |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: `authorization/settled` always names a released key |
 
 ### Lifecycle
 
@@ -158,7 +157,7 @@ These limits define when this package is a poor fit or needs special care. They 
 
 This Dev Note is working context for maintainers: open questions and undecided directions. It is explicitly non-authoritative — shipped behavior, limits, and accepted rationale live in the sections above, the package code, and the linked Agent Note.
 
-The limitations above name the open directions — resumable attempts, server-side revocation, orphaned-record discovery — each needing its own design and store before landing. The invariant companion is the one load-bearing runtime check: settlement must always find the key released, because a wedged key is indistinguishable from a busy one and only a restart frees it.
+The limitations above name the open directions — resumable attempts, server-side revocation, orphaned-record discovery — each needing its own design and store before landing.
 
 </details>
 

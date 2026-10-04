@@ -73,7 +73,7 @@ This section explains the design decisions behind the tool and points at the cod
 ### Design philosophy
 
 - **A deliberate twin of `dsh-tool-bash-persistent`.** The session registry, polling loop, and reset contract mirror the persistent bash tool by design ([pwsh persistent PTY Agent Note](../../../.agents/notes/archived/architecture/2026-08-11-pwsh-persistent-pty.md)).
-- **Backend-owned prompt readiness.** The shell's `prompt` function belongs to the backend: it prints a BEL-terminated OSC marker plus the controlled printable prompt, and that exact prompt text settles every command through the backend's fast path. The tool neither installs nor matches a prompt of its own, so only a model redefinition of `prompt` degrades readiness to the silence tier.
+- **Backend-owned prompt readiness.** The shell's `prompt` function belongs to the backend: it prints a BEL-terminated OSC marker plus the controlled printable prompt. The backend accepts recognized prompt text through its fast path and otherwise uses its own readiness checks or silence tier. The tool neither installs nor matches a prompt of its own.
 - **PSReadLine echo stripped by anchoring.** PowerShell renders submitted input back into the stream; the marker-anchored extraction and a wrapper-source strip remove the echo, and a wrapper that wraps across the terminal width may leave a partial echo in partial-output results.
 - **Reset, never repair.** Any uncertain state — an explicit `exit`, a timeout, a send failure, an abort — closes the shell and starts the next call fresh.
 
@@ -82,11 +82,10 @@ This section explains the design decisions behind the tool and points at the cod
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: shell registry, command wrapping, scrollback polling, extraction and rendering |
-| — | No runtime invariant companion is published; the adapter's private owner-to-shell cache has no observable event or data relation. Lifecycle tests prove its cleanup without adding a public API solely for an invariant. |
 
 ### Command flow
 
-A first command spawns the shell through `ctx.terminals.spawn`, whose pwsh startup installs the controlled `prompt` function and returns only once the shell reached readiness. Each command is wrapped into one physical line — `Write-Output` of the start marker, the body escaped with backtick escapes into a double-quoted string, and `Write-Output` of the end marker plus the exit status — so PSReadLine's echo of a wrapped line cannot fabricate completion. The tool polls the scrollback in 1,000-line pages until the end marker appears or the send settles as `stdin_read`, extracts the span, strips the echoed wrapper, and renders it with any status marker. A timeout aborts the deadline, captures the partial output, and resets the shell.
+A first command spawns the shell through `ctx.terminals.spawn`, whose pwsh startup installs the controlled `prompt` function and returns only once the shell reached readiness. Each command is wrapped into one physical line — `Write-Output` of the start marker, the body escaped with backtick escapes into a double-quoted string, and `Write-Output` of the end marker plus the exit status — so PSReadLine's echo of a wrapped line cannot fabricate completion. The parser accepts ASCII-space padding after the status digits but still requires LF or CRLF. Spaces in command output remain unchanged. The tool polls the scrollback in 1,000-line pages until a complete end-marker status line is available or the send settles as `stdin_read`, extracts the span, strips the echoed wrapper, and renders it with any status marker. A timeout aborts the deadline, captures the partial output, and resets the shell.
 
 </details>
 

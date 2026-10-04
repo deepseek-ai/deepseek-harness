@@ -33,6 +33,7 @@ import { TunnelServer, type TunnelPort } from './transport/tunnel.ts'
 import { inflateImage, inflateImageStream } from './storage/image-gzip.ts'
 import { loadVfsImage, loadVfsOverlay, MemoryVfs } from './storage/memory.ts'
 import { setActiveVfs } from './storage/active.ts'
+import { setTextViewer } from './shell/process/xdg-open.ts'
 import {
   DEFAULT_ROOT, IMAGE_CONFIG_PATH, IMAGE_EMPTY_DIRECTORIES, IMAGE_HOME_DIRECTORY, IMAGE_MANIFEST_PATH,
   LOWERING_VERSION,
@@ -176,6 +177,7 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
     ...options.privilegedMethods === undefined ? {} : { privilegedMethods: options.privilegedMethods },
     ...options.unaryApiLane === undefined ? {} : { unaryApiLane: options.unaryApiLane },
   })
+  setTextViewer((path, text) => { tunnel.viewText(path, text) })
 
   let vfs: MemoryVfs | undefined
   let modules: WorkerModuleLoader | undefined
@@ -228,8 +230,14 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
         ): Promise<HostContext>
       }
       const cmdline = require('@deepseek-ai/dsh-cmdline') as {
-        provideCmdline(ctx: unknown, host: { args: readonly string[]; exit: (code: number) => void }): void
+        provideCmdline(ctx: unknown, host: {
+          args: readonly string[]
+          exit: (code: number) => void
+          ready: { onReady(listener: () => void): () => void }
+        }): void
       }
+      // Resolved once the tunnel serves; a failed start never resolves it.
+      const started = Promise.withResolvers<void>()
 
       const { patches, profile } = bootPatches(loader, mounted, configPath, root)
       const profileConfig = join(profile.dir, 'cordis.yml')
@@ -242,6 +250,13 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
         cmdline.provideCmdline(hostCtx, {
           args: [...(options.cmdlineArgs ?? ['--host', '127.0.0.1', '--port', String(port), '--no-open'])],
           exit: (code: number) => { console.warn(`webworker host: tree requested exit(${String(code)})`) },
+          ready: {
+            onReady: (listener) => {
+              let pending = true
+              void started.promise.then(() => { if (pending) listener() })
+              return () => { pending = false }
+            },
+          },
         })
       })
       context = ctx
@@ -264,6 +279,7 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
           typertGateway.wireStream.open(endpoint, payload, uplink, undefined, signal),
         streamFailure: typertGateway.wireStream.failure,
       })
+      started.resolve()
     } catch (reason) {
       tunnel.fail(reason)
       throw reason
@@ -395,11 +411,6 @@ function bootPatches(
       : {}) as Record<string, unknown>
 
   const patches: Array<ProfileContext['overlays'][number]> = []
-  // The image has no package manager or Node module-reload cache. ConfigEditor
-  // reconciles writes directly; Loader commits accepted live values.
-  for (const id of ['hmr', 'plugin-manager']) {
-    if (find(rows, id) !== undefined) patches.push({ id, disabled: true })
-  }
   // The worker carries no compression codec, and the VFS is in-memory anyway:
   // the JSONL backend's plaintext path is the composition's one legal encoding.
   const jsonl = find(rows, 'session-persistence-jsonl')

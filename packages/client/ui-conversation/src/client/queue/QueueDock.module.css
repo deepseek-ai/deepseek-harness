@@ -194,8 +194,7 @@
   object-fit: cover;
 }
 
-.preview,
-.editor {
+.preview {
   flex: 1 1 auto;
   min-width: 0;
   font: var(--dsw-font-xs-13);
@@ -208,25 +207,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   word-break: break-word;
-}
-
-.editor {
-  box-sizing: border-box;
-  min-height: 28px;
-  /* Six 20px text lines plus padding and border, then the editor scrolls. */
-  max-height: 127px;
-  padding: 3px 8px;
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: var(--dsw-radius-sm);
-  outline: none;
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-primary);
-  overflow-y: auto;
-  resize: none;
-}
-
-.editor:focus {
-  border-color: var(--dsw-alias-state-business-primary);
 }
 
 .actions {

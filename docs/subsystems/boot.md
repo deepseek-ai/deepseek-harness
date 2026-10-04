@@ -10,13 +10,13 @@ The [boot package group](../../packages/boot/README.md) owns launcher-provided p
 
 `PluginInfo` carries module identity, effective enablement, fiber phase and optional display `meta`, plus a unique `patchId` or a `readOnlyReason`.
 
-`BundleInfo` carries the package name, optional installed version, selected enablement, removal availability and optional resolution error. Its optional `meta` and each `BundleRowInfo.meta` contain display text or a metadata diagnostic; Clients select a language at render time.
+`BundleInfo` carries the package name, optional installed version, selected enablement, removal availability, optional resolution error, and, for a bundle the profile's own dependency supplies and the installation does not, `source`: that dependency as a spec `pnpm add` accepts. Its optional `meta` and each `BundleRowInfo.meta` contain display text or a metadata diagnostic; Clients select a language at render time.
 
 `InstallBundleOptions.enabled` defaults to true. False installs without selecting the bundle layer. `approvedBuilds` grants persistent script permission to the supplied pending package names before installation. `registry` names the registry asked first; absent, the configured one.
 
 `PluginRegistries` carries the configured first registry, `null` for the one pnpm's own configuration names, the fallbacks asked after it, and `resolved`, the URL pnpm's own configuration names or `null` while unread. `InspectOptions.registry` names the registry a lookup asks first.
 
-`ChangeResult.changed` reports a disk edit independently of `application`: `applied`, `restart-required`, `overridden` or `failed`. Optional `error` carries a localizable code and external diagnostic. `packageResult` records the pnpm exit code, bounded output, truncation flag and complete diagnostic log path, plus `timedOut` when the manager terminated a run that stopped printing. A terminated run is classified `timeout` whatever exit status the signal left behind, so installation and removal report failure instead of success and no further registry is asked. `pendingBuilds` lists undecided packages across the profile; `approvedBuilds` records the names granted permission by this operation; `registries` lists the registries an installation asked, in order; `failedAt` says whether the last failed run could not reach the registry it asked or the host a git or tarball spec is fetched from.
+`ChangeResult.changed` reports a disk edit independently of `application`: `applied`, `restart-required`, `overridden` or `failed`. Optional `error` carries a localizable code and external diagnostic. `packageResult` records the pnpm exit code, bounded output, truncation flag and complete diagnostic log path, plus `timedOut` when the manager terminated a run that stopped printing. A terminated run is classified `timeout` whatever exit status the signal left behind, so installation and removal report failure instead of success and no further registry is asked. `pendingBuilds` lists undecided packages across the profile; `approvedBuilds` records the names granted permission by this operation; `registries` lists the registries an installation asked, in order; `bundle` and `version` name the package a finished installation added and its manifest version; `failedAt` says whether the last failed run could not reach the registry it asked or the host a git or tarball spec is fetched from.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -111,8 +111,8 @@ Manage profile files and apply their declared reload lifecycle.
 
 /** Read the profile's installed bundles, the bundles this dsh installation supplies, and the selected names that are not bundles.
  * A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.
- * @returns Package versions, manifest descriptions, rows, optional display metadata, activation selections,
- * whether the installation offers the bundle, and removal availability.
+ * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
+ * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
  */
 @Remote listBundles(): Promise<BundleInfo[]>
 
@@ -170,8 +170,9 @@ Manage profile files and apply their declared reload lifecycle.
  */
 @Remote async cancelInstall(requestId: PluginInstallRequestId): Promise<PluginInstallCancellation>
 
-/** Unload and remove a profile-owned bundle dependency through dsh plugin's pnpm path.
- * @param name Installed dependency name.
+/** Unload and remove a profile-owned bundle dependency through dsh plugin's pnpm path; a selected name no
+ * dependency holds is only deselected.
+ * @param name Installed dependency or selected bundle name.
  * @returns Removal diagnostics and the remaining profile state.
  */
 @Remote removeBundle(name: string): Promise<ChangeResult>

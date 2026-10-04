@@ -1,5 +1,11 @@
 [
   {
+    "label": "检查更新…"
+  },
+  {
+    "label": "管理 dsh 命令…"
+  },
+  {
     "role": "hide",
     "label": "隐藏 DeepSeek Harness"
   },

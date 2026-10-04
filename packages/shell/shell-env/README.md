@@ -87,7 +87,6 @@ This section explains the design decisions behind the registry and points at the
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry, `ShellEnvRegistry` service, and the built-in facts |
-| — | No runtime invariant companion is published; the environment registry validates ownership and collected values at each registration/collection; it publishes no independent snapshot that a companion could cross-check. |
 
 ### Collection
 

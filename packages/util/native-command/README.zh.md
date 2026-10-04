@@ -68,7 +68,6 @@ const { stdout, stderr } = await runNativeCommand('osascript', ['-e', script], s
 | [`src/index.ts`](src/index.ts) | 命令运行器与路径打开器的公共导出 |
 | [`src/runner.ts`](src/runner.ts) | 无 shell 的 `execFile` 适配器 |
 | [`src/path-opener.ts`](src/path-opener.ts) | 桌面探测、打开意图、浏览器偏好与 WSL 转换 |
-| — | 不发布运行时不变式伴生入口；每次运行都是一次无状态的子进程往返，不拥有事件流或可变运行时数据；相关行为由单元测试保障。 |
 
 ### execFile 给了运行器什么
 

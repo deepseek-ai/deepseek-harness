@@ -14,7 +14,7 @@ The method is nevertheless discoverable through the [Cordis inspection provider]
 
 Represent a contributor's declaration as an explicit readonly collection of keys. Remove description objects, `BashEnvVariable`, `BashEnvVariableInfo`, `list()`, description-only validation, and the exhaustive-catalog TODO. Update the Web contributor, README pair, and generated service/type declarations together.
 
-Keep `register`, `collect`, reserved keys, ownership conflicts, undeclared-output refusal, deterministic environment output, and effect disposal. The [PowerShell parity decision](../../implemented/feature/2026-08-02-pwsh-tool-bash-parity.md) continues to own the shared registry and both shell consumers. The proposal removes one public method, two metadata types, and their validation/enumeration tests; roughly 32 identified source lines disappear before the small key-membership adaptation.
+Keep `register`, `collect`, reserved keys, ownership conflicts, undeclared-output refusal, deterministic environment output, and effect disposal. The [PowerShell parity reference](../../../../packages/shell/shell-env/README.md) continues to own the shared registry and both shell consumers. The proposal removes one public method, two metadata types, and their validation/enumeration tests; roughly 32 identified source lines disappear before the small key-membership adaptation.
 
 ## Alternatives considered
 

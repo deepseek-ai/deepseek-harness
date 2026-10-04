@@ -739,6 +739,14 @@
   height: 40%;
 }
 
+:global(html[data-windows-titlebar]) .float {
+  --dsh-dockkit-float-top: calc(var(--dsh-windows-titlebar-height) + 20px);
+}
+
+:global(html[data-windows-titlebar][data-fullscreen]) .float {
+  --dsh-dockkit-float-top: 20px;
+}
+
 .float {
   position: fixed;
   display: flex;

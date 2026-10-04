@@ -90,7 +90,6 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配标识�
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：抽象 `PtcRuntime` 服务与可移植标识符排除集 |
 | [`src/types.ts`](src/types.ts) | 词汇：`PtcRunRequest`、`PtcRunSpec`、绑定、结果、失败与沙箱事实 |
-| — | 不发布运行时不变式伴生入口；本包不公开任何独立的事件序列或可变数据关系，相关约束仅由其所属 seam 的约定实施。 |
 
 </details>
 

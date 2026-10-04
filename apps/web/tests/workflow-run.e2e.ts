@@ -134,7 +134,7 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
       const disclosures = element.querySelectorAll('[data-disclosure-row]')
       const runHeader = disclosures[0]
       const phaseHeader = disclosures[1]
-      const phaseTitle = phaseHeader?.children.item(1) as HTMLElement | null
+      const phaseTitle = phaseHeader?.querySelector('[class*="phaseTitle"]') as HTMLElement | null
       const phaseStatus = element.querySelector('[data-phase-status-text]')
       const originalPhaseTitle = phaseTitle?.textContent ?? ''
       if (phaseTitle !== null) phaseTitle.textContent = 'A phase name long enough to require ellipsis in the narrow layout'

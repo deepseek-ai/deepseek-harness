@@ -302,6 +302,15 @@ export class TunnelServer {
     for (const frame of this.queue.splice(0)) this.refuse(frame, message)
   }
 
+  /**
+   * Ask the page to show one text file in its read-only viewer.
+   * @param path - Absolute VFS path the viewer names.
+   * @param text - File contents.
+   */
+  viewText(path: string, text: string): void {
+    this.send({ t: 'view-text', path, text })
+  }
+
   private send(frame: TunnelOutboundFrame, transfer?: Transferable[]): void {
     this.port.postMessage(frame, transfer)
   }

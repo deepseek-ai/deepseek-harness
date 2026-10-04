@@ -42,7 +42,7 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-注册和监听随插件生命周期释放。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由。无需 invariant companion：目录直接由配置派生，不维护独立副本。
+注册和监听随插件生命周期释放。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由。
 
 <a id="further-exploration"></a>
 ## 进一步探索

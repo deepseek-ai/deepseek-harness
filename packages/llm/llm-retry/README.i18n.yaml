@@ -36,8 +36,8 @@
   en: fc4f15a14435698c
   zh: 3c6d83f5ba04ec0e
 /deepseek-ai-dsh-llm-retry/understand-the-implementation/source-map:
-  en: f34b551859b68c88
-  zh: 813ffa32497b1d9a
+  en: 9b79cdd6597930e0
+  zh: 0838f3efbc1e83ac
 /deepseek-ai-dsh-llm-retry/understand-the-implementation/recovery-flow:
   en: 85bace285b029101
   zh: 6e0237450ca6ccc0
@@ -66,5 +66,5 @@
   en: bef1baa545592b9c
   zh: 61984a1e10de8294
 /deepseek-ai-dsh-llm-retry/known-limitations-and-deferred-work/dev-note:
-  en: ff38027230617ebb
-  zh: 4a7913e851407b0c
+  en: add61ee91e4ae8e4
+  zh: 3877c147b541b2c9

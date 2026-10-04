@@ -409,6 +409,7 @@ export class RuntimeDomainSession {
       if (this.enabled) {
         void runtimeBackend(event.session).enable().then(
           () => {
+            if (this.closed || !this.enabled || !this.realms.all().includes(event.session)) return
             this.attachConsole(event.session)
             this.announce(event.session)
           },

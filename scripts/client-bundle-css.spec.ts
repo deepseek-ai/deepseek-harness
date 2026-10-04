@@ -17,7 +17,7 @@ interface CssPlugin {
 function cssPlugin(name: 'dsh-css-modules-inline' | 'dsh-css-global-inline' | 'dsh-css-text-inline'): CssPlugin {
   const configs = clientBundle(
     '@deepseek-ai/dsh-client-test',
-    ['lib/types/index.js', 'lib/types/invariant.js'],
+    ['lib/types/index.js'],
   )({ env: { DSH_BUILD_FACE: 'client' } })
   const client = configs.find(config => config.platform === 'browser')
   if (client === undefined) throw new Error('client config missing')

@@ -2,36 +2,33 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-06-11-dev-invariants-over-deep-readonly.md
-/agent-note-source-owned-session-immutability-and-dev-mode-invariants:
-  en: 052aa271e87074c0
-  zh: 3ccffc50fc1a28d4
-/agent-note-source-owned-session-immutability-and-dev-mode-invariants/problem:
-  en: 6ea85a4531d5e59f
-  zh: b4b568eb347f016a
-/agent-note-source-owned-session-immutability-and-dev-mode-invariants/decision:
-  en: 6e701ec64c3bbfae
-  zh: b8ed0f1cb7a0477a
-/agent-note-source-owned-session-immutability-and-dev-mode-invariants/decision/session-owns-immutable-history:
-  en: ff47e58c377a8dc0
-  zh: 5edbe4f3642a3fe6
-/agent-note-source-owned-session-immutability-and-dev-mode-invariants/decision/derived-requests-remain-detached:
+/agent-note-source-owned-session-immutability:
+  en: cf33ffdd07df7257
+  zh: 3d6895c9c80b0b1f
+/agent-note-source-owned-session-immutability/problem:
+  en: e5d87f6c5aef2dad
+  zh: 9f7f1459d99c523c
+/agent-note-source-owned-session-immutability/decision:
+  en: 821a886d365a2271
+  zh: 4ba5d74a7772150d
+/agent-note-source-owned-session-immutability/decision/session-owns-immutable-history:
+  en: 76fc0d8548d192c1
+  zh: 34c610fff5beb455
+/agent-note-source-owned-session-immutability/decision/derived-requests-remain-detached:
   en: 975df574ee6e6df8
   zh: 96d765058482835a
-/agent-note-source-owned-session-immutability-and-dev-mode-invariants/decision/package-owned-invariant-companions-check-relationships:
-  en: a88e3a896eedca91
-  zh: 03e96c7870cba932
-/agent-note-source-owned-session-immutability-and-dev-mode-invariants/alternatives-considered:
+/agent-note-source-owned-session-immutability/alternatives-considered:
   en: 6119e2aff3b6be5a
   zh: 76136ef5249c23eb
-/agent-note-source-owned-session-immutability-and-dev-mode-invariants/alternatives-considered/pervasive-deep-readonly-types:
+/agent-note-source-owned-session-immutability/alternatives-considered/pervasive-deep-readonly-types:
   en: ec54af2931616616
   zh: 5fd9bc469a6fd3a5
-/agent-note-source-owned-session-immutability-and-dev-mode-invariants/alternatives-considered/development-only-freezing:
-  en: 85591197bb62eabf
-  zh: ba69b9ccf596a6d7
-/agent-note-source-owned-session-immutability-and-dev-mode-invariants/alternatives-considered/clone-only-when-deriving-messages:
+/agent-note-source-owned-session-immutability/alternatives-considered/development-only-freezing:
+  en: 1857fb245ec3f086
+  zh: 6d3324c872627bf6
+/agent-note-source-owned-session-immutability/alternatives-considered/clone-only-when-deriving-messages:
   en: a9848dec50664b92
   zh: 7c558550b054627b
-/agent-note-source-owned-session-immutability-and-dev-mode-invariants/consequences:
-  en: bcccf7d464a070db
-  zh: eccd442a21e2c99e
+/agent-note-source-owned-session-immutability/consequences:
+  en: d26609b76b9eea01
+  zh: cf046d5c7173b738

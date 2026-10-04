@@ -31,6 +31,8 @@ Mount `dsh-tools` wherever agents call tools: it provides `ctx.tools`, the regis
 
 `defineTool` builds a typed tool definition: a model-facing name, description, and parameter schema, a canonical output declaration, and an `execute` body that returns only the declared JSON value. Model arguments are validated before execution; invalid input becomes a normal error result.
 
+Canonical values belong to execution; the Session records rendered content and optional presentation metadata instead. Replacing or redacting that content does not remove the canonical value available to a programmatic caller; a policy that must deny that access must block execution or replace the value.
+
 ```ts
 import { readFile } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
@@ -116,7 +118,6 @@ The registry holds typed `ToolDefinition`s in scoped layers and projects them on
 | [`src/ptc.ts`](src/ptc.ts) | PTC mode: SDK generation, `run_code` dispatch bridge, settlement |
 | [`src/ts-types.ts`](src/ts-types.ts) | TypeScript SDK type rendering |
 | [`src/py-types.ts`](src/py-types.ts) | Python SDK type rendering |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion |
 
 ### Execution and cancellation
 
@@ -124,7 +125,7 @@ Each typed invocation materializes and freezes parsed arguments, assigns an opaq
 
 ### PTC mode
 
-Under `ptc` or `both`, the registry exposes the reserved `run_code` transport plus a deterministic SDK generated in the loaded runtime's language. Each SDK binding captures a frozen ToolSchema and passes it through the scheduler to its execution context. Before policy, a started call records only pairing ids, name, and normalized arguments; its settle event preserves the rendered result and optional structured error. Description and parameters remain transient and never enter Session events or SDK output. Calls are scheduled through a per-run pool that reuses the native concurrency contract. Under `ptc` alone, a model-direct call naming any other visible tool resolves to `UNKNOWN_TOOL` before policy — the announced surface and the callable surface stay the same. Intermediate binding values are execution-local; only the outer `run_code` result has a hard size cap. The [executor-collapse note](../../../.agents/notes/implemented/bug-fix/2026-08-07-ptc-executor-collapse.md) owns the collapse contract.
+Under `ptc` or `both`, the registry exposes the reserved `run_code` transport plus a deterministic SDK generated in the loaded runtime's language. Each SDK binding captures a frozen ToolSchema and passes it through the scheduler to its execution context. Before policy, a started call records only pairing ids, name, and normalized arguments; its settle event preserves the rendered result and optional structured error. Description and parameters remain transient and never enter Session events or SDK output. Calls are scheduled through a per-run pool that reuses the native concurrency contract. Under `ptc` alone, a model-direct call naming any other visible tool resolves to `UNKNOWN_TOOL` before policy — the announced surface and the callable surface stay the same. Intermediate binding values are execution-local; only the outer `run_code` result has a hard size cap.
 
 New sub-calls use `<parent>:ptc:<n>` ids. Consumers treat these ids as opaque and correlate events by exact equality; restored historical ids retain their original bytes. The [PTC mode decision](../../../.agents/notes/implemented/feature/2026-06-15-ptc.md) owns durable naming and restoration rules.
 
@@ -176,16 +177,16 @@ Prefix-stable while visible definitions and their order are unchanged. Registrat
 
 #### What the model sees
 
-PTC mode exposes the generated [`run_code` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tools), the SDK instructions below, and the generated exact SDK block for the loaded runtime's language. The TypeScript instructions identify generated declarations as program-only bindings. When the current `bash` parameter schema accepts the example arguments, they also show a complete `run_code` call around `tools.bash(...)`. The `tools:sdk` section uses first-party order 5000 and disables prompt-variable interpolation, preserving literal `{{…}}` text in tool descriptions and schemas for both runtime languages. `both` exposes normal schemas and this PTC mode API; under `ptc` the prompt also carries the `tools:ptc-only` rule earlier in the first-party order, so the model reads which tools it may call before it reads what each one is for.
+PTC mode exposes the generated [`run_code` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tools), the SDK instructions below, and the generated exact SDK block for the loaded runtime's language. Both runtime languages list `description` before `code` and request that generation order in the shared parameter description; this is guidance, not an enforced JSON member order. The TypeScript instructions identify generated declarations as program-only bindings. When the current `bash` parameter schema accepts the example arguments, they also show a complete `run_code` call around `tools.bash(...)`. The `tools:sdk` section uses first-party order 5000 and disables prompt-variable interpolation, preserving literal `{{…}}` text in tool descriptions and schemas for both runtime languages. `both` exposes normal schemas and this PTC mode API; under `ptc` the prompt also carries the `tools:ptc-only` rule earlier in the first-party order, so the model reads which tools it may call before it reads what each one is for.
 
 ##### TypeScript PTC mode SDK instructions with bash
 
 ```markdown
 ## Writing code for run_code
 
-`run_code` takes two required arguments: `code` — the body of an async TypeScript function (erasable syntax only — no `enum` or namespaces; type annotations are advisory, the code runs type-stripped) — and `description`, a short summary of what the program does. The declarations below are SDK bindings for this program. A declaration does not make its name a directly callable tool; only names supplied as separate tool schemas may be called directly. When no separate `bash` schema is supplied, invoke a declared `bash` binding inside `run_code`:
+`run_code` takes two required arguments: `description`, a short summary of what the program does, and `code` — the body of an async TypeScript function (erasable syntax only — no `enum` or namespaces; type annotations are advisory, the code runs type-stripped). The declarations below are SDK bindings for this program. A declaration does not make its name a directly callable tool; only names supplied as separate tool schemas may be called directly. When no separate `bash` schema is supplied, invoke a declared `bash` binding inside `run_code`:
 
-`run_code({ code: "return await tools.bash({ command: 'pwd', description: 'Show current directory' })", description: "Show current directory" })`
+`run_code({ description: "Show current directory", code: "return await tools.bash({ description: 'Show current directory', command: 'pwd' })" })`
 
 Inside the program:
 

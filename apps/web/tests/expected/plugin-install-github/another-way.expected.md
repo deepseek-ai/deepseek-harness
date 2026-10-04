@@ -7,16 +7,8 @@
   - button "安装源 中国大陆镜像源"
   - list:
     - listitem:
-      - text: 包名 插件包名即 npm 包名（如 dsh-xxx 或 @作者/插件名），社区插件的 README 安装命令中 dsh plugin add 或 pnpm add 之后的部分。 示例：
+      - text: 填入插件 npm 包名 插件包名即 npm 包名（如 dsh-xxx 或 @作者/插件名），社区插件的 README 安装命令中 dsh plugin add 或 pnpm add 之后的部分。 示例：
       - code: dsh-plugin-whale-pet
       - button "填入示例 dsh-plugin-whale-pet": 填入示例
-    - listitem:
-      - text: GitHub 仓库地址 插件在 GitHub 上的开源仓库地址，也支持其他 Git 仓库。 示例：
-      - code: https://github.com/author/dsh-plugin
-      - button "填入示例 https://github.com/author/dsh-plugin": 填入示例
-    - listitem:
-      - text: 本地插件目录 本机上插件目录的绝对路径，适用于自行开发或已下载的插件。 示例：
-      - code: /Users/name/my-plugin
-      - button "填入示例 /Users/name/my-plugin": 填入示例
-  - note: 请确认插件来源可信。插件在本机以你的权限运行，来源不明的插件可能损坏 DeepSeek Harness，或读取和泄露你的数据。
+  - note: 请确认插件来源可信。插件在本机以你的权限运行，来源不明的插件可能损坏 DeepSeek Harness，或读取和泄露你的数据。 插件安装后，暂不支持自动更新。若需升级，请先卸载再安装新版，后续版本会持续改善升级体验。
   - button "安装" [disabled]

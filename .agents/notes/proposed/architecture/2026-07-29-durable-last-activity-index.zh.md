@@ -8,7 +8,7 @@ Status: proposed
 
 一个冷会话（已持久化、未附加）对「用户上次是什么时候在这里发出 prompt」没有权威的已存储答案。`dsh-host-apiproxy` 从可选 projection cache 的 `lastPromptAt` 提供 `updatedAt`，缺失时回退到 `createdAt`，Web 客户端按该值为 Session 树排序。cache 采用 fail-soft 并异步写入 checkpoint，因此缺失或延迟的记录会让最近收到 prompt 的 Session 排得过旧。
 
-网关以前会在可用时采用 JSONL 产物的 mtime。mtime 回答的是另一件事：这份产物上次是什么时候被写入。每一次持久写入都会刷新它，包括对撕裂尾部的截断修复、平衡中断轮次的合成 closer，以及拾起时追加的 [`session/end-seed` 边界](../../implemented/architecture/2026-07-30-session-end-seed-log-boundary.zh.md)。这套近似会让 Session 仅仅因为被打开就提升排序。[有界冷空白验证](../../archived/bug-fix/2026-08-13-bounded-cold-blank-verification.md)移除了 mtime 排序，并把 cache 保守的「过旧」错误方向作为现阶段取舍。
+网关以前会在可用时采用 JSONL 产物的 mtime。mtime 回答的是另一件事：这份产物上次是什么时候被写入。每一次持久写入都会刷新它，包括对撕裂尾部的截断修复、平衡中断轮次的合成 closer，以及拾起时追加的 [`session/end-seed` 边界](../../../../packages/core/session/src/types.ts)。这套近似会让 Session 仅仅因为被打开就提升排序。[有界冷空白验证](../../archived/bug-fix/2026-08-13-bounded-cold-blank-verification.md)移除了 mtime 排序，并把 cache 保守的「过旧」错误方向作为现阶段取舍。
 
 已附加摘要可以折叠实时事件日志并选择最新的真人 `user/message`，但冷路径有意不读取任何日志：冷摘要只来自 projection cache，因此冷最近时间的新旧只取决于 cache。
 
@@ -34,7 +34,7 @@ Status: proposed
 
 **保留 mtime，但把边界的写入排除在它之外。** 否决的理由是做不到，而不是不合意：mtime 属于文件系统，不属于后端。除了在每次边界写入之后把时间戳复原，没有别的办法能保住它，而那样做会与任何并发读取方产生竞态，也会对这份产物撒谎。
 
-**仅在确实发生了修复时才写入边界。** 这能降低出现频率，而[边界 Agent Note](../../implemented/architecture/2026-07-30-session-end-seed-log-boundary.zh.md)已经否决过它：谓词对有序重启同样必须成立。用一条正确性不变式去换时间戳的准确度，方向是错的。
+**仅在确实发生了修复时才写入边界。** 这能降低出现频率，而[边界 reference](../../../../packages/core/session/src/types.ts)已经否决过它：谓词对有序重启同样必须成立。用一条正确性不变式去换时间戳的准确度，方向是错的。
 
 **从投影缓存派生活动时间。** 这是当前的过渡实现。`session-projection-cache` 会折叠水位线之后的尾部，无需改变持久格式，但它是可选且 fail-soft 的。缺失或 checkpoint 延迟会让排序取决于 cache 是否存在以及是否新鲜，因此无法提供本文所提议的权威值。
 
@@ -59,6 +59,6 @@ Status: proposed
 ## 相关
 
 - [有界冷空白验证](../../archived/bug-fix/2026-08-13-bounded-cold-blank-verification.md)——移除 mtime 排序，并定义了本提案将使之精确的、仅依赖 cache 的过渡冷摘要。
-- [种子结束日志边界](../../implemented/architecture/2026-07-30-session-end-seed-log-boundary.zh.md)——让 mtime 不适用的非 prompt 写入之一。
-- [会话持久化](../../implemented/architecture/2026-06-14-session-persistence.zh.md)——仅追加与绝不重写这两条不变式，正是它们排除了可变的 JSONL header 字段。
+- [种子结束日志边界](../../../../packages/core/session/src/types.ts)——让 mtime 不适用的非 prompt 写入之一。
+- [会话持久化](../../../../packages/session/session-persistence/README.zh.md)——仅追加与绝不重写这两条不变式，正是它们排除了可变的 JSONL header 字段。
 - [基于句柄的会话持久化](../../implemented/architecture/2026-08-27-handle-based-session-persistence.zh.md)——一个已存储字段将挂入的那条写句柄追加路径。

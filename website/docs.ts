@@ -139,6 +139,14 @@ const homeAndGuide = pairedPages([
     order: 3,
   },
   {
+    source: 'docs/user/guide/public-deployments.md',
+    route: 'guide/public-deployments.md',
+    label: { root: '公开部署', en: 'Public deployments' },
+    sidebar: { root: 'zh-guide', en: 'en-guide' },
+    section: { root: '入门', en: 'Guide' },
+    order: 4,
+  },
+  {
     source: 'docs/user/guide/python-sdk.md',
     route: 'guide/python-sdk.md',
     label: { root: 'Python', en: 'Python' },
@@ -300,7 +308,6 @@ const subsystemGroups = [
   ['内核与作用域', 'Core and scopes', [
     ['core.md', '核心', 'Core'],
     ['scope.md', '作用域', 'Scopes'],
-    ['invariants.md', '运行时不变式', 'Runtime invariants'],
   ]],
   ['会话与持久化', 'Sessions and persistence', [
     ['session.md', '会话', 'Sessions'],

@@ -72,7 +72,6 @@ kind: "package-library"
 | [`src/transport.ts`](src/transport.ts) | `JsonRpcLineTransport`：行分帧、请求/响应/通知分发、错误映射、挂起请求记账 |
 | [`src/types.ts`](src/types.ts) | 具名请求/结果与通知载荷类型，按方法索引 |
 | [`src/index.ts`](src/index.ts) | 消费方接口：传输与具名协议类型 |
-| — | 不发布运行时不变式伴生入口；这是一个由传输类和类型声明组成的纯协议库，自身没有事件流或可变数据关系；两个协议端各自负责其协议行为。 |
 
 ### 帧分发
 

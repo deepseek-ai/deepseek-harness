@@ -2,9 +2,7 @@
 import { resolve } from 'node:path'
 import {
   COVERAGE_PARTITIONS_ENV,
-  COVERAGE_TEST_TIMEOUT_ENV,
   CoveragePartitionCoordinator,
-  coverageTestTimeoutArgs,
   forwardedCoverageArgs,
   parseCoveragePartitionCount,
 } from './coverage-partitions.ts'
@@ -22,9 +20,6 @@ const coordinator = new CoveragePartitionCoordinator({
   root: resolve(import.meta.dirname, '..'),
   partitions,
   pnpmEntrypoint,
-  vitestArgs: [
-    ...coverageTestTimeoutArgs(process.env[COVERAGE_TEST_TIMEOUT_ENV]),
-    ...forwardedCoverageArgs(process.argv.slice(2)),
-  ],
+  vitestArgs: forwardedCoverageArgs(process.argv.slice(2)),
 })
 process.exitCode = await coordinator.run()

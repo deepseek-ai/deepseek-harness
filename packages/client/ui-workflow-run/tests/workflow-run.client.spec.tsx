@@ -328,6 +328,7 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
       captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
       insertText: () => false,
       setDraft: () => {},
+      persistDraft: () => {},
       addAttachments: () => false,
       removeAttachment: () => {},
       pruneAttachments: () => {},

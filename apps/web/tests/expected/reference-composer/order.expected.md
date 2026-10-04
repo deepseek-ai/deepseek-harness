@@ -7,8 +7,8 @@
     - tab "Trajectory"
 - text: Research notes what changed? Referenced session · Research notes {{clock}}
 - button "Copy"
-- status: Worked
-- button "Took {{duration}}" [disabled]
+- status: Completed
+- button "Completed in {{duration}}" [disabled]
 - textbox "Message or run a task, / commands, @ files or sessions"
 - button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write

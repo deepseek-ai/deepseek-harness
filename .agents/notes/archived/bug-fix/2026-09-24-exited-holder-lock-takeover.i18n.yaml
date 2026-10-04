@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-09-24-exited-holder-lock-takeover.md
+2026-09-24-exited-holder-lock-takeover.md: 61712db971e238de9d820cdac5b5ce3c4ca0827e
+2026-09-24-exited-holder-lock-takeover.zh.md: 651dc2df66b0d200631f613966de1a464be422b2

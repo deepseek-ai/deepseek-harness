@@ -1,15 +1,17 @@
 /** Serialized module and profile-configuration reloads. */
+import assert from 'node:assert/strict'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { watchConfig as watchExactConfig } from './watch-config.ts'
-import { Context, Inject, Service, type Plugin } from '@deepseek-ai/cordis'
-import { ModuleLoader, type ModuleJob, type ResolveResult } from '@deepseek-ai/cordis-plugin-loader'
+import { Context, Inject, Service, type Fiber, type Plugin } from '@deepseek-ai/cordis'
+import type { ModuleLoader, ModuleJob, ResolveResult } from '@deepseek-ai/cordis-plugin-loader'
 import type { Include } from '@deepseek-ai/cordis-plugin-include'
 import { FSWatcher, watch, type ChokidarOptions } from 'chokidar'
-import { basename, dirname, join, relative, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { readFileSync, realpathSync } from 'node:fs'
 import { readProfileManifest, readProfilePatches, reconcileProfilePatches, PROFILE_PATCH_FILENAME } from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-cmdline'
 import { handleError } from './error.ts'
+import { PackageManifests } from './package-manifest.ts'
 import type {} from '@deepseek-ai/cordis-plugin-timer'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
@@ -79,7 +81,127 @@ async function loadDependencies(job: ModuleJob, ignored = new Set<string>()) {
 /** Module location and runtime retained during a replacement. */
 export interface Reload {
   filename: string
+  /** Original namespaces and URLs of all entry modules participating in this runtime replacement. */
+  modules: ReloadModules
   runtime?: Plugin.Runtime | undefined
+}
+
+/** Entry names with distinct namespaces; iteration falls back to undefined only for names without a loaded namespace. */
+class EntryNamespaces {
+  private readonly names = new Map<string, Set<unknown>>()
+
+  constructor(private internal: ModuleLoader, private moduleUrls: ReadonlyMap<unknown, string>) {}
+
+  static getModuleUrls(internal: ModuleLoader): Map<unknown, string> {
+    const moduleUrls = new Map<unknown, string>()
+    for (const url of internal.loadCache.keys()) {
+      const job = internal.loadCache.get(url)
+      if (!job?.module) continue
+      try {
+        moduleUrls.set(job.module.getNamespace(), url)
+      } catch (_error) {
+        // Node also caches unfinished jobs whose namespace is not available yet.
+      }
+    }
+    return moduleUrls
+  }
+
+  add(name: string, moduleNamespace: unknown): this {
+    const namespaces = this.names.get(name) ?? new Set<unknown>()
+    namespaces.add(moduleNamespace)
+    this.names.set(name, namespaces)
+    return this
+  }
+
+  *[Symbol.iterator](): Generator<[name: string, moduleNamespace: unknown]> {
+    for (const [name, namespaces] of this.names) {
+      for (const moduleNamespace of namespaces) {
+        if (moduleNamespace === undefined && namespaces.size > 1) continue
+        yield [name, moduleNamespace]
+      }
+    }
+  }
+
+  async resolve(name: string, baseUrl: string, moduleNamespace: unknown): Promise<Pick<ResolveResult, 'url'>> {
+    if (moduleNamespace === undefined || name.startsWith('cordis:')) {
+      switch (this.internal.version) {
+        case 'v1': return await this.internal.resolve(name, baseUrl, {})
+        case 'v2': return this.internal.resolveSync(baseUrl, { specifier: name, attributes: {} })
+      }
+    }
+    const url = this.moduleUrls.get(moduleNamespace)
+    if (url === undefined) throw new Error(`HMR cannot locate the loaded module for ${name} from ${baseUrl}`)
+    return { url }
+  }
+}
+
+type ReloadFiber = {
+  fiber: Fiber
+  entry: Fiber['entry']
+  config: unknown
+  moduleNamespace: unknown
+}
+
+type ReloadModule = { filename: string; moduleNamespace: unknown; plugin: Plugin }
+
+/** Entry modules belonging to one runtime, keyed by their original namespaces across replacement. */
+class ReloadModules {
+  private readonly modules = new Map<unknown, ReloadModule>()
+
+  static include(reloads: ReadonlyMap<Plugin, Reload>, plugin: Plugin, job: ModuleJob, runtime: Plugin.Runtime | undefined): boolean {
+    let info = reloads.get(plugin)
+    if (info === undefined && runtime) info = [...reloads.values()].find(info => info.runtime === runtime)
+    if (info === undefined) return false
+    info.modules.add(job, plugin)
+    return true
+  }
+
+  add(job: ModuleJob, plugin: Plugin): this {
+    assert(job.module, `HMR pending module is missing: ${job.url}`)
+    const moduleNamespace: unknown = job.module.getNamespace()
+    this.modules.set(moduleNamespace, { filename: job.url, moduleNamespace, plugin })
+    return this
+  }
+
+  async importRemaining(loader: Context['loader'], getOuterStack: () => string[], primary: ReloadModule): Promise<ReloadModules> {
+    const replacements = new ReloadModules()
+    for (const [originalNamespace, { filename }] of this.modules) {
+      if (filename === primary.filename) {
+        replacements.modules.set(originalNamespace, primary)
+        continue
+      }
+      const moduleNamespace: unknown = await loader.import(filename, getOuterStack)
+      const plugin = loader.unwrapExports(moduleNamespace) as Plugin
+      replacements.modules.set(originalNamespace, { filename, moduleNamespace, plugin })
+    }
+    return replacements
+  }
+
+  *getActiveImplementations(ctx: Context, plugin: Plugin, fibers: readonly ReloadFiber[]): Generator<[ReloadFiber, Plugin]> {
+    const callbacks = new Set([...this.modules.values()].map(value => ctx.registry.resolve(value.plugin)))
+    const implementations = fibers.map((previousFiber) => {
+      if (previousFiber.entry === undefined) return [previousFiber, plugin] as const
+      const replacement = this.modules.get(previousFiber.moduleNamespace)
+      const implementation = replacement ? replacement.plugin : ctx.loader.unwrapExports(previousFiber.moduleNamespace) as Plugin
+      callbacks.add(ctx.registry.resolve(implementation))
+      return [previousFiber, implementation] as const
+    })
+    for (const [previousFiber, implementation] of implementations) {
+      if (previousFiber.fiber.parent.fiber.uid === null) continue
+      if (previousFiber.entry === undefined && callbacks.size > 1) {
+        throw new Error('HMR replacement is ambiguous for a plugin instance without a Loader entry')
+      }
+      yield [previousFiber, implementation]
+    }
+  }
+
+  updateEntries(loader: Context['loader']): void {
+    for (const [originalNamespace, { moduleNamespace }] of this.modules) {
+      for (const entry of loader.entries()) {
+        if (entry.moduleNamespace === originalNamespace) entry.moduleNamespace = moduleNamespace
+      }
+    }
+  }
 }
 
 /** Hot reload service with Cordis-compatible module configuration and events. */
@@ -131,6 +253,7 @@ class Hmr extends Service {
   private applicationReady: Promise<boolean> = Promise.resolve(true)
   private closing = false
   private readonly configPaths = new Set<string>()
+  private readonly manifests = new PackageManifests()
 
   /** Serialize a caller-owned mutation with all automatic reload paths.
    * @param operation Work that must not overlap module or configuration replacement.
@@ -185,22 +308,13 @@ class Hmr extends Service {
     this.baseDir = fileURLToPath(new URL(config.base || '.', ctx.baseUrl))
   }
 
-  /**
-   * Resolve a module specifier to a URL, compatible with Node 22-24.
-   */
-  private async _resolve(specifier: string, parentURL: string, attrs: ImportAttributes): Promise<ResolveResult> {
-    switch (this.internal.version) {
-      case 'v1': return await this.internal.resolve(specifier, parentURL, attrs)
-      case 'v2': return this.internal.resolveSync(parentURL, { specifier, attributes: attrs })
-    }
-  }
-
   async* [Service.init](): AsyncGenerator<() => Promise<void>, void, unknown> {
     yield async () => {
       this.closing = true
       await this.watcher?.close()
       // A configuration reload may remove its own HMR entry.
       if (!this.executing.getStore()) await this.operations
+      this.manifests.dispose()
     }
 
     const profile = this.ownerContext.get('profileContext')
@@ -276,15 +390,20 @@ class Hmr extends Service {
           const filename = canonicalPath(resolve(watchBaseDir, path))
           const configuredFilename = resolve(this.baseDir, path)
           if (this.configPaths.has(filename) || this.configPaths.has(configuredFilename)) continue
+          const isManifest = basename(filename) === 'package.json' && !filename.includes(`${sep}node_modules${sep}`)
+          if (isManifest) {
+            this.manifests.invalidate(filename)
+          }
           const url = pathToFileURL(filename).href
           if (this.externals.has(url)) {
             fullReload = true
             continue
           }
-          if (this.internal.loadCache.has(url)) {
+          if (this.internal.loadCache.has(url) || this.internal.loadCache.has(url, 'json')) {
             this.stashed.add(url)
             continue
           }
+          if (isManifest) continue
           const include = [...loader.entries()].map(entry => entry.subtree as Include | undefined)
             .find(tree => tree?.filename === filename || tree?.filename === configuredFilename)
           if (include !== undefined) includes.add(include)
@@ -408,23 +527,24 @@ class Hmr extends Service {
 
     const pending = new Map<ModuleJob, Plugin>()
     const reloads = new Map<Plugin, Reload>()
+    const moduleUrls = EntryNamespaces.getModuleUrls(this.internal)
 
     // Build a map of plugin names per config tree URL.
     // Plugin entry files are treated as atomic reload units.
-    const nameMap = new Map<string, Set<string>>()
+    const nameMap = new Map<string, EntryNamespaces>()
     for (const entry of this.ctx.loader.entries()) {
       const baseUrl = entry.parent.tree.ctx.baseUrl
       if (baseUrl === undefined) throw new Error('HMR entry tree has no base URL')
-      const names = nameMap.get(baseUrl) ?? new Set<string>()
-      names.add(entry.options.name)
+      const names = nameMap.get(baseUrl) ?? new EntryNamespaces(this.internal, moduleUrls)
+      names.add(entry.options.name, entry.moduleNamespace)
       nameMap.set(baseUrl, names)
     }
 
-    // Resolve each plugin name to its file URL and check if it needs reload
+    // Find each plugin's loaded URL and check if it needs reload.
     for (const [baseUrl, names] of nameMap) {
-      for (const name of names) {
+      for (const [name, moduleNamespace] of names) {
         try {
-          const { url } = await this._resolve(name, baseUrl, {})
+          const { url } = await names.resolve(name, baseUrl, moduleNamespace)
           if (this.declined.has(url)) continue
           const job = this.internal.loadCache.get(url)
           const plugin = this.ctx.loader.unwrapExports(job?.module?.getNamespace()) as Plugin | undefined
@@ -443,13 +563,25 @@ class Hmr extends Service {
       const dependencies = [...await loadDependencies(job, this.declined)]
       this.declined.add(job.url)
 
+      if (dependencies.length === 0) {
+        pending.delete(job)
+        continue
+      }
       if (!dependencies.some(dep => this.accepted.has(dep))) continue
       dependencies.forEach(dep => this.accepted.add(dep))
 
+      const runtime = this.ctx.registry.get(plugin)
+      if (ReloadModules.include(reloads, plugin, job, runtime)) continue
       reloads.set(plugin, {
         filename: job.url,
-        runtime: this.ctx.registry.get(plugin),
+        runtime,
+        modules: new ReloadModules().add(job, plugin),
       })
+    }
+
+    // Re-export roots of a replaced runtime must not retain bindings to its old modules.
+    for (const [job, plugin] of pending) {
+      if (ReloadModules.include(reloads, plugin, job, this.ctx.registry.get(plugin))) this.accepted.add(job.url)
     }
 
     /**
@@ -502,14 +634,23 @@ class Hmr extends Service {
       fibers: [...info.runtime?.fibers ?? []].map((fiber) => {
         const entry = fiber.entry?.fiber?.uid === fiber.uid ? fiber.entry : undefined
         const config: unknown = entry === undefined ? fiber._config : entry.options.config
-        return { fiber, entry, config }
+        return { fiber, entry, config, moduleNamespace: entry?.moduleNamespace }
       }),
     }))
-    const attempts: Array<(typeof generations)[number] & { replacement: Plugin }> = []
+    type ReloadAttempt = (typeof generations)[number] & {
+      replacement: Plugin
+      replacements: ReloadModules
+      activated: Fiber[]
+    }
+    const attempts: ReloadAttempt[] = []
     try {
       for (const generation of generations) {
-        const replacement = this.ctx.loader.unwrapExports(await this.ctx.loader.import(generation.filename, this.getOuterStack)) as Plugin
-        attempts.push({ ...generation, replacement })
+        const moduleNamespace: unknown = await this.ctx.loader.import(generation.filename, this.getOuterStack)
+        const replacement = this.ctx.loader.unwrapExports(moduleNamespace) as Plugin
+        const replacements = await generation.modules.importRemaining(this.ctx.loader, this.getOuterStack, {
+          filename: generation.filename, moduleNamespace, plugin: replacement,
+        })
+        attempts.push({ ...generation, replacement, replacements, activated: [] })
       }
     } catch (e) {
       handleError(this.ctx, e)
@@ -517,11 +658,14 @@ class Hmr extends Service {
       throw e
     }
 
-    const reload = async (plugin: Plugin, fibers: (typeof generations)[number]['fibers']) => {
-      const activated = []
-      for (const previousFiber of fibers) {
-        if (previousFiber.fiber.parent.fiber.uid === null) continue
-        const fiber = previousFiber.fiber.parent.registry.plugin(plugin, previousFiber.config, this.getOuterStack).ctx.fiber
+    const reload = async (
+      plugin: Plugin,
+      fibers: (typeof generations)[number]['fibers'],
+      replacements = new ReloadModules(),
+      activated: Fiber[] = [],
+    ) => {
+      for (const [previousFiber, implementation] of replacements.getActiveImplementations(this.ctx, plugin, fibers)) {
+        const fiber = previousFiber.fiber.parent.registry.plugin(implementation, previousFiber.config, this.getOuterStack).ctx.fiber
         if (previousFiber.entry !== undefined) {
           fiber.entry = previousFiber.entry
           previousFiber.entry.fiber = fiber
@@ -533,7 +677,7 @@ class Hmr extends Service {
 
     const removed = new Set<Plugin>()
     try {
-      for (const { previous: plugin, replacement, filename, runtime, fibers } of attempts) {
+      for (const { previous: plugin, replacement, filename, runtime, fibers, replacements, activated } of attempts) {
         if (!runtime) continue
         const path = relative(this.baseDir, fileURLToPath(filename))
 
@@ -547,7 +691,7 @@ class Hmr extends Service {
         }
 
         try {
-          await reload(replacement, fibers)
+          await reload(replacement, fibers, replacements, activated)
           this.ctx.logger.info('reload plugin at %C', path)
         } catch (err) {
           this.ctx.logger.warn('failed to reload plugin at %C', path)
@@ -558,14 +702,17 @@ class Hmr extends Service {
     } catch (error) {
       // Restore caches and re-register old plugins after a replacement failure.
       rollback()
-      for (const { previous: plugin, replacement, fibers } of attempts) {
+      for (const { previous: plugin, fibers, activated } of attempts) {
         if (!removed.has(plugin)) continue
         try {
-          const replacementRuntime = this.ctx.registry.get(replacement)
-          const replacementFibers = [...replacementRuntime?.fibers ?? []]
-          this.ctx.registry.delete(replacement)
-          // Failed startup errors remain on fibers after their teardown finishes.
-          await Promise.allSettled(replacementFibers.map(fiber => fiber.await()))
+          for (const { runtime } of activated) {
+            if (runtime && this.ctx.registry.get(runtime.callback) === runtime) {
+              const replacementFibers = [...runtime.fibers]
+              this.ctx.registry.delete(runtime.callback)
+              // Failed startup errors remain on fibers after their teardown finishes.
+              await Promise.allSettled(replacementFibers.map(fiber => fiber.await()))
+            }
+          }
           await reload(plugin, fibers)
         } catch (err) {
           this.ctx.logger.warn(err)
@@ -575,6 +722,9 @@ class Hmr extends Service {
     }
 
     await this.ctx.loader.await()
+    for (const { replacements } of attempts) {
+      replacements.updateEntries(this.ctx.loader)
+    }
     this.ctx.emit('hmr/reload', reloads)
     this.stashed = new Set()
   }

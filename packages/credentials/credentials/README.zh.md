@@ -114,7 +114,7 @@ apiKeyEnv: DEEPSEEK_API_KEY
 - **消费方按操作解析。** 解析是一次按调用读取，无跨操作缓存；这次读取正是热更新机制。
 - **空的存储值等于不存在。** `resolve` 跳过它，`describe` 报告未配置——空白永远不会伪装成已配置的机密。
 - **记录是持久化的，存在即事实。** 记录按 `<scope>/<id>` 存储并跨重启保留；空值规则不适用，因此一条既无 key 也无环境值的 `api-key` 记录是有意陈述，而不是空白。
-- **监听器失败受到隔离。** `notifyUpdated` 扇出 `credentials/reference-updated`，保证每个监听器都会运行；同步抛出与异步拒绝都会被记录，不改变已提交操作的结果，`INVARIANT` 编码的失败除外——它们在所有监听器运行完毕后重新抛出。
+- **监听器失败受到隔离。** `notifyUpdated` 扇出 `credentials/reference-updated`，保证每个监听器都会运行；同步抛出与异步拒绝都会被记录，不改变已提交操作的结果。
 
 ### credentials/reference-updated 事件
 
@@ -132,7 +132,6 @@ apiKeyEnv: DEEPSEEK_API_KEY
 |---|---|
 | [`src/index.ts`](src/index.ts) | Service Definition：`credentialRef`/`credentialKey` 品牌、`ResolvedCredential`/`CredentialRecordInfo`、覆盖两个键空间的抽象提供方、带失败隔离的扇出 |
 | [`src/types.ts`](src/types.ts) | 客户端安全类型面：`CredentialRef` 与 `CredentialKey` 品牌、存储记录联合类型、`CredentialInfo` 引用视图、`credentials/reference-updated` 与 `credentials/record-updated` 事件声明 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件：`credentials/reference-updated` 只在凭据服务存活时触发 |
 
 ### 客户端安全类型
 
@@ -140,7 +139,7 @@ apiKeyEnv: DEEPSEEK_API_KEY
 
 ### 生命周期
 
-服务是提供方注册的 Cordis `Service`：释放挂载 fiber 会移除 `ctx.credentials`。不变式伴生插件检查 `credentials/reference-updated` 绝不在服务未存活时触发——释放后仍有发射意味着提供方把工作泄漏到了 teardown 完全停稳之后。
+服务是提供方注册的 Cordis `Service`：释放挂载 fiber 会移除 `ctx.credentials`。
 
 </details>
 

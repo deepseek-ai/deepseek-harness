@@ -87,6 +87,7 @@ function harness(cwd: string | null, refreshShortcut?: ReturnType<FilesBodyProps
         actions: tabActions, refreshShortcut,
       },
     }),
+    renderSlot: () => null,
     sessionId: SESSION,
     useSessions: <S,>(sel: (s: SessionListState) => S) => sel(sessions),
     useStore: hookOf(instance),

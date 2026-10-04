@@ -57,7 +57,11 @@ function injectedOf(entry: { inject?: (() => object) | undefined }): object {
   const injected: object = entry.inject!()
   return injected
 }
-beforeEach(() => { vi.stubEnv('DSH_CLIENT_VERSION', '0.0.0-test') })
+beforeEach(() => {
+  vi.stubEnv('DSH_CLIENT_VERSION', '0.0.0-test')
+  vi.stubGlobal('screen', { width: 1512, height: 982 })
+  vi.stubGlobal('devicePixelRatio', 2)
+})
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks() })
 
 it('keeps account UI and account RPC inactive in a plain browser, including after reload', async ({ start, mock }) => {
@@ -126,7 +130,6 @@ it('shares account actions across seats, publishes dialog ownership, and opens c
   const entry = c.ctx.slots.entries('settings.section').find(entry => entry.options.id === 'account')!
   expect(entry.inject!()).toBe(actions)
   expect(resolveSlotLabel(entry.options.label)).toBe('Account')
-  vi.spyOn(c.ctx.locale, 'getSnapshot').mockReturnValue({ ...c.ctx.locale.getSnapshot(), active: 'zh' })
   actions.contactUs()
   const support = new URL(String(open.mock.calls.at(-1)![0]))
   expect(support.searchParams.get('prefill_uid')).toBe('account-user')
@@ -134,10 +137,13 @@ it('shares account actions across seats, publishes dialog ownership, and opens c
   expect(support.searchParams.get('hide_harness_version')).toBe('1')
   expect(support.searchParams.get('prefill_harness_version')).toBe('0.0.0-test')
   expect(support.searchParams.get('hide_device_info')).toBe('1')
-  expect(support.searchParams.get('prefill_device_info')).toBe(navigator.userAgent)
+  expect(support.searchParams.get('prefill_device_info')).toBe(`${navigator.userAgent}; screen_resolution=3024x1964`)
   expect(support.searchParams.has('prefill_device_model')).toBe(false)
   expect(support.searchParams.has('hide_device_model')).toBe(false)
-  expect(support.searchParams.get('prefill_app_locale')).toBe('zh-CN')
+  for (const field of ['os_version', 'device_brand', 'app_locale', 'screen_resolution']) {
+    expect(support.searchParams.has(`prefill_${field}`)).toBe(false)
+    expect(support.searchParams.has(`hide_${field}`)).toBe(false)
+  }
   expect(support.searchParams.has('prefill_app_version')).toBe(false)
   c.mock.streams.push('account/watch', view)
   await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().view).toEqual(view) })
@@ -159,17 +165,19 @@ it('prefills the native device description from the Desktop bridge on every clic
   await vi.waitFor(() => { expect(open).toHaveBeenCalledOnce() })
   const first = new URL(String(open.mock.calls.at(-1)![0]))
   expect(first.searchParams.get('prefill_device_info'))
-    .toBe('platform=darwin; os=15.0; app_arch=arm64; cpu=Apple M3; memory_gib=16.0')
+    .toBe('platform=darwin; os=15.0; app_arch=arm64; cpu=Apple M3; memory_gib=16.0; screen_resolution=3024x1964')
   expect(first.searchParams.get('hide_device_info')).toBe('1')
   deviceInfo.mockResolvedValue('platform=win32; os=10.0; app_arch=x64; memory_gib=32.0')
+  vi.stubGlobal('screen', { width: 1920, height: 1080 })
+  vi.stubGlobal('devicePixelRatio', 1)
   actions.contactUs()
   await vi.waitFor(() => { expect(open).toHaveBeenCalledTimes(2) })
   expect(new URL(String(open.mock.calls.at(-1)![0])).searchParams.get('prefill_device_info'))
-    .toBe('platform=win32; os=10.0; app_arch=x64; memory_gib=32.0')
+    .toBe('platform=win32; os=10.0; app_arch=x64; memory_gib=32.0; screen_resolution=1920x1080')
   expect(deviceInfo).toHaveBeenCalledTimes(2)
 }, 60_000)
 
-it('opens the questionnaire with an empty device field when the native read fails', async ({ start }) => {
+it('opens the questionnaire with screen resolution when the native read fails', async ({ start }) => {
   const open = vi.spyOn(window, 'open').mockReturnValue(null)
   const deviceInfo = vi.fn(async (): Promise<string> => { throw new Error('platform ipc unavailable') })
   vi.stubGlobal('dshDesktop', { deviceInfo })
@@ -177,9 +185,9 @@ it('opens the questionnaire with an empty device field when the native read fail
   operations(c).contactUs()
   await vi.waitFor(() => { expect(open).toHaveBeenCalledOnce() })
   const url = new URL(String(open.mock.calls.at(-1)![0]))
-  expect(url.searchParams.has('prefill_device_info')).toBe(false)
+  expect(url.searchParams.get('prefill_device_info')).toBe('screen_resolution=3024x1964')
   expect(url.searchParams.get('hide_device_info')).toBe('1')
-  expect(url.searchParams.get('prefill_app_locale')).toBe('en')
+  expect(url.searchParams.has('prefill_app_locale')).toBe(false)
   expect(deviceInfo).toHaveBeenCalledOnce()
 }, 60_000)
 

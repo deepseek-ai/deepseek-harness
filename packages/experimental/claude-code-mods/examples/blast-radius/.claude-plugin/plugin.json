@@ -1,0 +1,6 @@
+{
+  "name": "blast-radius",
+  "version": "0.1.0",
+  "description": "See what a risky command would change before it runs.",
+  "author": { "name": "You" }
+}

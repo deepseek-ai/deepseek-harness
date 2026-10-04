@@ -68,7 +68,6 @@ The snapshot is built on one separation: the launcher owns which files exist, an
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `createLaunchEnvironmentSnapshot`, `launchEnvironmentOf`, and the `ctx.launchEnvironment` slot |
-| — | No runtime invariant companion is published; the snapshot is frozen before any fiber starts and this package owns no event stream or mutable runtime data; its lookup and rejection rules are enforced by unit tests. |
 
 ### How the snapshot stays frozen
 

@@ -15,7 +15,39 @@ const CORDIS_PACKAGE = '@deepseek-ai/cordis'
 const NESTED_DSH_ALIAS = 'dsh-previous'
 const NESTED_DSH_PATH = `node_modules/${NESTED_DSH_ALIAS}`
 const DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const
-const TIMEOUT_MS = 300_000
+
+/**
+ * Resolution work accepted from the dual-release graph, in
+ * `dshPackagesPerVersion * checkedDshEdges` units.
+ *
+ * npm's hoisted placement re-checks every internal edge against the incoming
+ * edges of its peer target (`canPlacePeers` calls `checkCanPlaceNoCurrent`,
+ * which walks `depValid` over that target's edges), so resolution time grows
+ * with this product and not with the package count alone. Measured on an idle
+ * M-series host: 277 package(s) x 2524 internal edge(s) = 699,148 unit(s) cost
+ * 180.7 s of npm time out of 185.1 s end to end. The budget adds 25% headroom
+ * for ordinary product growth, so a graph that grows here fails with its own
+ * measured counts instead of failing on whichever runner happens to be slow.
+ * Raising it requires re-measuring the resolution and recording the new counts.
+ */
+export const MAX_RESOLUTION_WORK_UNITS = 875_000
+
+/**
+ * Measured npm seconds per resolution work unit on the reference host: 180.66 s
+ * for the 699,148 units of the graph the budget was derived from.
+ */
+const SECONDS_PER_WORK_UNIT = 2.6e-4
+
+/**
+ * Wall-clock guard for the npm child process. This is a hang guard, not the
+ * gate's growth criterion: {@link MAX_RESOLUTION_WORK_UNITS} decides whether the
+ * graph is too large to verify, and a runner up to four times slower than the
+ * measured host cannot decide this gate's outcome. Derived from the budget so a
+ * raised budget cannot silently shrink the guard's headroom.
+ */
+const NPM_HANG_GUARD_MS = Math.round(
+  4 * MAX_RESOLUTION_WORK_UNITS * SECONDS_PER_WORK_UNIT * 1000,
+)
 
 /** Synthetic incompatible versions used to expose cross-release placement errors. */
 export const SYNTHETIC_DSH_VERSIONS = ['0.1.0', '0.2.0'] as const
@@ -186,6 +218,27 @@ export function assertDualDshInstallLayout(packageLock: NpmPackageLock): DshInst
   return { dshPackagesPerVersion: rootNames.size, checkedDshEdges }
 }
 
+/**
+ * Reject a verified dual-release graph that exceeds the resolution work budget.
+ * @param summary - Counts returned by {@link assertDualDshInstallLayout}.
+ * @returns The verified resolution work units.
+ */
+export function assertResolutionWorkBudget(summary: DshInstallLayoutSummary): number {
+  const units = summary.dshPackagesPerVersion * summary.checkedDshEdges
+  if (units > MAX_RESOLUTION_WORK_UNITS) {
+    throw new Error(
+      'dual-release graph exceeds the resolution work budget: '
+      + `${String(summary.dshPackagesPerVersion)} package(s) per release x `
+      + `${String(summary.checkedDshEdges)} internal edge(s) = ${String(units)} unit(s), `
+      + `budget ${String(MAX_RESOLUTION_WORK_UNITS)} unit(s)\n`
+      + '  npm re-checks every internal edge against the incoming edges of its peer target, so the resolution\n'
+      + '  cost grows with this product. Measure the new cost and raise MAX_RESOLUTION_WORK_UNITS in\n'
+      + '  scripts/verify-npm-install-layout.ts.',
+    )
+  }
+  return units
+}
+
 function workspaceVersion(root: string): string {
   const manifest = JSON.parse(readFileSync(resolve(root, 'apps/cli/package.json'), 'utf8')) as { version?: unknown }
   if (typeof manifest.version !== 'string') throw new Error('apps/cli/package.json has no string version')
@@ -199,12 +252,14 @@ async function main(): Promise<void> {
   const result = await resolveNpmPackageLock(index, {
     [DSH_PACKAGE]: rootVersion,
     [NESTED_DSH_ALIAS]: `npm:${DSH_PACKAGE}@${nestedVersion}`,
-  }, TIMEOUT_MS)
+  }, NPM_HANG_GUARD_MS, 'npm resolution hang guard')
   if (result.archiveRequests !== 0) throw new Error(`npm requested ${String(result.archiveRequests)} package archive(s)`)
   const summary = assertDualDshInstallLayout(result.packageLock)
+  const units = assertResolutionWorkBudget(summary)
   console.log(
     `verify-npm-install-layout: ${String(summary.dshPackagesPerVersion)} DSH package(s) per release and `
     + `${String(summary.checkedDshEdges)} internal edge(s) verified in ${(result.durationMs / 1000).toFixed(2)} s; `
+    + `${String(units)} of ${String(MAX_RESOLUTION_WORK_UNITS)} budgeted resolution work unit(s); `
     + `both releases share one Cordis installation; ${String(result.unknownPackages.length)} unavailable optional `
     + 'package name(s) ignored by npm.',
   )

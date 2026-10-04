@@ -29,6 +29,7 @@ const UI_EXPECTED = join(SNAPSHOT_DIR, 'ui.expected.md')
 const SENDING_EXPECTED = join(SNAPSHOT_DIR, 'sending.expected.md')
 const WRITER_HELD_EXPECTED = join(SNAPSHOT_DIR, 'writer-held.expected.md')
 const FAILED_EXPECTED = join(SNAPSHOT_DIR, 'failed.expected.md')
+const GOAL_STOP_EXPECTED = join(SNAPSHOT_DIR, 'goal-stop.expected.md')
 const MODE = webSnapshotMode()
 
 const ACTIVE_PROMPT = 'Reply with a one-sentence description of event sourcing, then stop.'
@@ -421,6 +422,73 @@ describe('web e2e: queue row actions', () => {
     expect(tripwire.warnings).toEqual([])
   }, 120_000)
 
+  it.skipIf(MODE === 'record')('runs a prompt sent after Stop when a Goal round was queued behind stopped work', async () => {
+    overrideDir = await mkdtemp(join(tmpdir(), 'dsh-web-goal-stop-'))
+    const roundReady = join(overrideDir, '.round-ready')
+    const humanReady = join(overrideDir, '.human-ready')
+    const overridePath = join(overrideDir, 'replay.override.json')
+    const recorded = deriveReplayScript(parseSessionLog(await readFile(FIXTURE, 'utf8')))
+    await writeFile(overridePath, JSON.stringify([
+      { kind: 'hang', readyFile: roundReady },
+      { kind: 'hang', readyFile: humanReady },
+      recorded[0]!,
+    ] satisfies ReplayEntry[]))
+
+    const sessionEvents: SessionEvent[] = []
+    scaffold = await launchWebScaffold({ replayFixture: FIXTURE, replayOverride: overridePath, compareReplaySession: false })
+    scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { sessionEvents.push(event) })
+    browser = await chromium.launch()
+    page = await newEnglishPage(browser)
+    const tripwire = watchConsole(page)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await connectFreshWorkspace(page, scaffold.workspaceCwd)
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-goal-stop'))
+
+    const input = page.locator('[data-composer-input]').first()
+    const editable = page.locator('[data-composer-input][contenteditable="true"]').first()
+    const stop = page.getByRole('button', { name: 'Stop generating', exact: true })
+    await editable.waitFor({ timeout: 10_000 })
+    await input.fill('/goal Keep working after Stop')
+    await input.press('Enter')
+    await expect.poll(() => existsSync(roundReady), { timeout: 15_000 }).toBe(true)
+
+    // Human work queued behind the running round survives the first Stop.
+    await editable.waitFor({ timeout: 10_000 })
+    await input.fill(REMOVE)
+    await input.press('Enter')
+    await page.getByRole('button', { name: 'Remove queued message', disabled: false }).waitFor({ timeout: 10_000 })
+    await stop.click()
+    await page.getByRole('button', { name: 'Resume goal' }).waitFor({ timeout: 10_000 })
+
+    // Resuming queues the next round behind that human prompt, which runs first.
+    await page.getByRole('button', { name: 'Resume goal' }).click()
+    await expect.poll(() => existsSync(humanReady), { timeout: 15_000 }).toBe(true)
+    await expect.poll(() => page.locator('[data-queue-dock] li', { hasText: '<goal_round>' }).count(), { timeout: 10_000 })
+      .toBe(1)
+    await stop.click()
+    await expect.poll(() => stop.count(), { timeout: 10_000 }).toBe(0)
+    await expect.poll(() => page.locator('[data-queue-dock]').count(), { timeout: 10_000 }).toBe(0)
+
+    const settled = scaffold.whenTurnSettled()
+    await editable.waitFor({ timeout: 10_000 })
+    await input.fill(WAKE)
+    await input.press('Enter')
+    await settled
+    await expect.poll(() => turnEndReasons(sessionEvents), { timeout: 15_000 })
+      .toEqual(['aborted', 'aborted', 'completed'])
+    expect(sessionEvents.flatMap(event => event.type === 'user/message' && event.data.source.kind === 'user'
+      ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
+      : [])).toEqual([REMOVE, WAKE])
+    expect(sessionEvents.some(event => event.type === 'agent/inbox/spliced' && event.data.target === 'next-turn'
+      && event.data.outcome === 'canceled')).toBe(true)
+    await expect.poll(() => stop.count(), { timeout: 10_000 }).toBe(0)
+    const snapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(GOAL_STOP_EXPECTED, snapshot, MODE)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  }, 120_000)
+
   it.skipIf(MODE === 'record')('keeps its snapshot inventory closed', async () => {
     await assertFixtureInventory(
       SNAPSHOT_DIR,
@@ -428,6 +496,7 @@ describe('web e2e: queue row actions', () => {
         'collapsed.expected.md', 'editing.expected.md', 'layout.expected.md',
         'preserved.expected.md', 'preserved-expanded.expected.md', 'ui.expected.md',
         'sending.expected.md', 'failed.expected.md', 'writer-held.expected.md',
+        'goal-stop.expected.md',
       ],
     )
   })

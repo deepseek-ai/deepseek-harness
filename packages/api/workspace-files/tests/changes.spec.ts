@@ -1,8 +1,9 @@
 /** Target-scoped Host changes, fresh filesystem metadata, and watcher ownership. */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFailed, vi } from 'vitest'
 import type { Mock, MockInstance } from 'vitest'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { performance } from 'node:perf_hooks'
 import type { Context } from '@deepseek-ai/cordis'
 import type { FileSystem, FsObservation, FsTarget } from '@deepseek-ai/dsh-fs'
 import { FsVersion } from '@deepseek-ai/dsh-fs'
@@ -422,23 +423,39 @@ describe('workspaceFiles.changes — backends and access', () => {
   })
 
   it('observes creation of a missing outside file through the real local watcher', async () => {
+    const started = performance.now()
+    // Keep earlier awaits visible if teardown advances a timed-out test.
+    const phases: Array<{ phase: string; elapsedMs: number }> = []
+    const mark = (phase: string): void => {
+      phases.push({ phase, elapsedMs: Math.round(performance.now() - started) })
+    }
+    onTestFailed(() => { console.error(`workspace missing-file watcher phases: ${JSON.stringify(phases)}`) })
+
     watch.mockRestore()
     const path = join(harness.outside, 'created.txt')
     const staging = join(harness.outside, 'staged.txt')
     // Publish complete bytes so an early watcher stat cannot observe a partial write.
+    mark('staging')
     await writeFile(staging, 'new file contents')
     const service = harness.endpoint()
     const stream = open(service, path)
+    mark('waiting-ready')
     await ready(stream)
     const pending = stream.next()
+    mark('renaming')
     await rename(staging, path)
+    mark('reading-stat')
     const current = await service.stat(harness.scope, path, stream.controller.signal)
+    mark('waiting-change')
     await expect(pending).resolves.toEqual({
       done: false,
       value: { kind: 'change', change: { absolutePath: current.absolutePath, version: current.version } },
     })
+    mark('closing')
     await stream.close()
+    mark('checking-end')
     await expect(stream.next()).resolves.toEqual({ done: true, value: undefined })
+    mark('complete')
   })
 
   it.each(['create', 'modify', 'remove'] as const)(

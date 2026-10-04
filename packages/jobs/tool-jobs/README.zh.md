@@ -84,7 +84,6 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：工具注册、结算订阅与模型杀停集合、提示词区段、输出上限 |
 | [`src/render.ts`](src/render.ts) | 面向模型的渲染：公共投影、状态行与消耗式增量（stdout、`[stderr]` 段、丢失输出提示） |
-| — | 不发布运行时不变式伴生入口；执行关系归能力 seam 所有。 |
 
 ### 输出上限
 

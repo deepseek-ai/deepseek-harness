@@ -6,7 +6,7 @@ English | [中文](2026-07-06-approval-seam.zh.md)
 
 ## Problem
 
-Two callers need one closed decision — "may this specific action proceed?": `tools/pre-execute`'s `ask` decision (including the Claude-Code hook bridge's `permissionDecision: ask`) and the [sandbox Agent Note](2026-07-06-sandbox.md)'s post-denial one-shot escalation retry. A shared seam keeps them from inventing separate outcome vocabularies, channel routing, cancellation, and audit trails, while guaranteeing that a deployment with no answerer can never grant an unanswerable request. The answerer may be an interactive host or an automated controller.
+Two callers need one closed decision — "may this specific action proceed?": `tools/pre-execute`'s `ask` decision (including the Claude-Code hook bridge's `permissionDecision: ask`) and the [sandbox reference](../../../../packages/shell/tool-bash/README.md)'s post-denial one-shot escalation retry. A shared seam keeps them from inventing separate outcome vocabularies, channel routing, cancellation, and audit trails, while guaranteeing that a deployment with no answerer can never grant an unanswerable request. The answerer may be an interactive host or an automated controller.
 
 The routing problem is ownership: a permission request must reach the channel that owns the asking agent, fail closed for agents nobody owns, and stay out of deployments that compose no answerer.
 
@@ -63,7 +63,7 @@ Answerers are `approval/request` waterfall listeners. Zero listeners fall throug
 
 #### The per-session policy tier
 
-The seam also owns the session-scoped `'ask' | 'never'` policy described by [the sandbox Agent Note](2026-07-06-sandbox.md). Effective policy is folded from logged switches over the deployment default. `'never'` resolves to `rejected` inside `request()` before any answerer can run; `'ask'` dispatches and otherwise falls through to `unavailable`. Both current values join the atomic runtime-context snapshot before each model request, so a policy switch needs no separate narration; every approval request still records the audit pair.
+The seam also owns the session-scoped `'ask' | 'never'` policy described by [the approval reference](../../../../packages/interaction/user-approval/README.md). Effective policy is folded from logged switches over the deployment default. `'never'` resolves to `rejected` inside `request()` before any answerer can run; `'ask'` dispatches and otherwise falls through to `unavailable`. Both current values join the atomic runtime-context snapshot before each model request, so a policy switch needs no separate narration; every approval request still records the audit pair.
 
 #### The ACP answerer
 
@@ -87,7 +87,7 @@ Snapshots record allowed and rejected sandbox escalation through `session/reques
 
 ## Deferred
 
-- **`allow_always` grant storage** — honoring a persistent grant means designing storage, scope identity (call? path? prefix? session? time window?), and revocation; until designed, only the one-shot options are advertised ([the sandbox Agent Note](2026-07-06-sandbox.md) § Escalation records the open scope question).
+- **`allow_always` grant storage** — honoring a persistent grant means designing storage, scope identity (call? path? prefix? session? time window?), and revocation; until designed, only the one-shot options are advertised.
 - **A recorded hook-driven `ask` through a composed answerer** — the permission wire is recorded through the sandbox example's escalation branches. The hook matrix's `hook-cc-pretool-ask` pins the no-ApprovalService fallback denial, while the hook-producer-plus-answerer composition remains on the unit tier.
 - **Routing a child agent's approvals to the parent session** — `subagent-acp`'s child auto-answers its own permission requests; delegating them to the parent controller is its own design.
 
@@ -123,7 +123,7 @@ Costs and accepted limits:
 - **Who decides whether a call asks in the first place?** Policy producers: a hook returning `permissionDecision: ask`, any `tools/pre-execute` listener, or the sandbox escalation gate. The seam and the bridge only route and answer; neither injects its own judgment about what deserves a prompt.
 - **What happens when the user dismisses the prompt, or the turn aborts mid-ask?** Dismissal maps to `cancelled` with its own deny text. An already-aborted signal settles `cancelled` without dispatching; an abort during the ask discards the late answer. When both audit appends commit, either path records one pair, never two.
 - **What if the client answers with an option the harness never offered?** Any selection other than the offered `allow_once` maps to `rejected` — an unknown optionId from a non-conforming client can never grant.
-- **How do subagents' approvals route?** They do not: delegation pins every in-process child to `'never'` ([approvals-pinned decision](2026-08-10-subagent-approval-pinned-never.md)), so each child ask resolves `rejected` before any answerer and the child is told up front through its runtime context. `subagent-acp`'s child-side auto-answer is separate; routing a child's asks to the parent controller is deferred (§ Deferred).
+- **How do subagents' approvals route?** They do not: delegation pins every in-process child to `'never'` ([approvals-pinned reference](../../../../packages/subagent/subagent/README.md)), so each child ask resolves `rejected` before any answerer and the child is told up front through its runtime context. `subagent-acp`'s child-side auto-answer is separate; routing a child's asks to the parent controller is deferred (§ Deferred).
 - **What does `policy: 'never'` actually change at runtime?** The service resolves every ask for that session to `rejected` before dispatching any answerer (in-service, so no registration order can bypass it); the next atomic runtime-context snapshot states the policy; each successful auto-rejection records the audit pair.
 - **What happens across a hot reload, or when an answerer unloads mid-session?** Answerers dispose with their owning fiber, so the next ask degrades to `unavailable` instead of hanging on a dead channel; remounting re-registers the answerer with no catch-up state.
 - **Where does a client get approval context?** The request carries the exact `callId` and the asker's human-readable `reason`; channel adapters may correlate richer tool-call state without duplicating arguments in the approval seam.
@@ -134,6 +134,6 @@ In-repo precedents this design copies or contrasts with:
 
 - The `fs/write-intent` gate (`packages/fs/fs/`) — the documented single-occupancy decision-slot waterfall semantics (first answer wins, delegate via `next()`) the answerer contract reuses.
 - `hook/invoked`/`hook/result` — the log-only audit-pair precedent `approval/asked`/`approval/decided` follows; [the hook-bridges Agent Note](../../archived/feature/2026-06-30-hook-bridges.md) ships `permissionDecision: ask`, the first producer.
-- [The interception extension-points Agent Note](2026-06-30-interception-extension-points.md) — the `tools/pre-execute` `allow`/`deny`/`ask` vocabulary whose `ask` this seam services.
+- [The interception extension-points reference](../../../../docs/tool-execution-pipeline.md) — the `tools/pre-execute` `allow`/`deny`/`ask` vocabulary whose `ask` this seam services.
 - [The automation-only ACP Agent Note](../simplification/2026-07-23-acp-automation-only-protocol.md) — the exact-agent ownership check against the session map that the answerer routes through; [the multi-session Agent Note](../../archived/feature/2026-06-14-acp-multi-session.md) — the per-session permission-ownership blocker this implements.
 - The opportunistic `ctx.get()` consumption pattern (`tool-bash`'s owner-token lookup, the loop's persistence probe) — how `dsh-tools` consumes the seam without gating its fiber on it.

@@ -130,7 +130,7 @@ kind: "package-reference"
 当包级约定不够用时阅读以下页面。它们从共享 seam 逐步进入后端、面向模型的工具与设计决策。
 
 - [Subagent 子系统](../../../docs/subsystems/subagent.zh.md)——服务约定、提供方约定与终态结果语义。
-- [Subagent 能力 seam](../../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.zh.md)——委派能力家族的设计记录。
+- [历史Subagent 能力 seam](../../../.agents/notes/archived/feature/2026-06-21-subagent-capability-seam.md)——委派能力家族的设计记录。
 - [可继续的 subagent](../../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.zh.md)——接受后续轮次的持久子级。
 - [进程内 spawn 后端](../subagent-spawn-in-process/README.zh.md)——最容易组合的提供方。
 - [Auto review](../../experimental/auto-review/README.zh.md)——只有进程内 DSH 子级继承的当前会话授权模式。

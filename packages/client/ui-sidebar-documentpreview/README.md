@@ -65,6 +65,8 @@ Shared copy comes from `sidebarDocumentPreview`; each builtin renderer owns its 
 
 Initial reads and renderer preparation, including Office conversion, share a centered 28px ongoing `StateDot` with the visible localized status “Rendering document...”. The status exposes the same accessible name and respects reduced-motion preferences. Additional text pages keep a compact inline spinner while loaded content stays visible. The PDF body loads its package-local `client.pdf.js` chunk only when a PDF preview mounts; PDF.js, its Worker source, and embedded support data stay out of the startup `client.js`. PDF and converted Word/PowerPoint pages form a vertical sequence with 12px page gaps and a 12px outer inset showing the theme-specific document background; fit width reserves this inset, and pages render lazily near the viewport; an unrendered page holds its place as a quiet 3:4 placeholder block. PDF.js’s official TextLayerBuilder manages selection boundaries and normalized copying over an aligned text layer. Selections use translucent blue in both themes while the canvas retains the document text; blank line breaks remain unhighlighted; alignment accounts for PDF page units, page rotation, and viewport resizing, and page disposal cancels both layers. Image-only PDFs contain no selectable text. Code previews show a tertiary-colored language label and a copy icon with a tooltip; wrapping remains in the document toolbar. They show source line numbers by default without including them in copied text; plain text uses the same font size and line height as code. Code sits on the pane's own background rather than the chat card's fill; its banner is adjacent to a full-height inner scrollport, so both scrollbars begin below the copy control.
 
+A leading YAML frontmatter block, opened by `---` on the first line and closed by `---` or `...`, renders above the Markdown body as a key/value list. String values show their resolved text, including folded and multiline strings; other scalars, lists, mappings, and aliases keep their authored YAML. Invalid YAML and non-mapping documents show the block verbatim, and a block without content shows nothing. An unterminated block remains Markdown. The YAML parser loads in the package-local `client.frontmatter-fields.js` chunk only when a document has frontmatter; the verbatim block stands in while it loads or if it fails to load. The source file is unchanged.
+
 <a id="excel-preview"></a>
 ## Excel preview
 
@@ -153,5 +155,3 @@ No direct effect; what the user reads here never enters a model request.
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. Renderer metadata, document loading, and view state belong to the local registry and declared Slot stores, with no independent runtime source to compare against; registration disposal and tab lifetimes are covered by behavior tests.

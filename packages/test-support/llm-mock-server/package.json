@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-llm-mock-server",
   "description": "Scriptable Messages HTTP/SSE fault server for LLM recovery tests",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

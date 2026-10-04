@@ -6,7 +6,7 @@ English | [中文](2026-09-10-image-offload-events.zh.md)
 
 ## Problem
 
-A request can exceed an image-capable route's byte or image-count budget. Recomputing the omitted prefix for each request lets a route switch, inline fallback, or compaction restore previously omitted images. The model-visible image set then depends on unlogged request preparation. The [unified image pipeline](../feature/2026-08-20-unified-image-request-pipeline.md) owns attachment normalization and request versions; durable omission needs its own recorded decision.
+A request can exceed an image-capable route's byte or image-count budget. Recomputing the omitted prefix for each request lets a route switch, inline fallback, or compaction restore previously omitted images. The model-visible image set then depends on unlogged request preparation. The [unified image pipeline](../../../../packages/attachment/attachment-local/README.md) owns attachment normalization and request versions; durable omission needs its own recorded decision.
 
 ## Decision
 

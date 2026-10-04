@@ -167,7 +167,6 @@ export function apply(ctx: Context): void {
       const context = {
         uid: profile?.status === 'ready' ? profile.value.id : null,
         version: process.env.DSH_CLIENT_VERSION,
-        locale: ctx.locale.getSnapshot().active === 'zh' ? 'zh-CN' : 'en',
         width: window.screen.width, height: window.screen.height, pixelRatio: window.devicePixelRatio,
       }
       const openForm = (deviceInfo: string): void => {

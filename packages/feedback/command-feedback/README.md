@@ -92,7 +92,6 @@ The producer trims the text, records blank text as absent, and writes one event 
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `recordFeedback` producer, the `sessionFeedback` Remote service, `/feedback` command registration |
 | [`src/types.ts`](src/types.ts) | `feedback/record` event declaration, the category taxonomy, and the Remote request and result types |
-| — | No runtime invariant companion is published; each `feedback/record` is an independent append-only fact with no cross-event or mutable-data relationship. |
 
 </details>
 

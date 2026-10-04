@@ -17,7 +17,7 @@
 | `dsh web` | 启动 Web profile。 |
 | `dsh plugin --profile <name> <pnpm args>` | 通过在 profile 目录中转发给 pnpm 来管理该 profile 的插件。 |
 
-运行命令时所在的目录将作为默认 workspace 根目录。`web`、`headless`、`sdk`、`sdk-minimal` 和 `acp` profile 在首次使用时会从随附模板自动初始化。使用 `--from-default-profile` 可以基于这些模板之一，在尚未使用的非内置名称处创建其他 profile；通过 `dsh plugin` 则可以初始化一个以 base 为基础的 profile。`desktop` 名称保留给 Electron 持有的 profile，因此 CLI（命令行界面）会拒绝针对它的启动、配置 dump 和插件管理请求。
+运行命令时所在的目录将作为默认 workspace 根目录。`web`、`headless`、`sdk`、`sdk-minimal` 和 `acp` profile 在首次使用时会从随附模板自动初始化。使用 `--from-default-profile` 可以基于这些模板之一，在尚未使用的非内置名称处创建其他 profile；通过 `dsh plugin` 则可以初始化一个以 base 为基础的 profile。`desktop` 名称保留给 Electron 持有的 profile，因此 CLI（命令行界面）会拒绝针对它的启动和配置 dump 请求。npm CLI 也会拒绝其插件管理请求；[Desktop 内置命令](../desktop/README.zh.md#bundled-command-runtime)可以使用该安装的运行时管理已初始化的 Desktop profile。
 
 ## 应用参数
 
@@ -58,5 +58,7 @@ profile 目录包含一个 `package.json`，其中记录树外插件依赖，以
 生产运行需要已构建的包与前端产物。请在仓库根目录单独运行 `pnpm run build`，然后使用 `pnpm dsh <args...>` 运行 TypeScript 入口并转发所有参数；模块解析约定以[源码执行参考](reference/README.zh.md#source-execution)为准。
 
 `@deepseek-ai/dsh/profile-boot` 导出向 Desktop Host 提供共享 profile 生命周期。已解析的应用 profile 为运行时包解析指定自己的安装锚点，同时沿用 Harness home patch、代理环境、遥测开关、patch 热重载和有界关闭。
+
+打包安装通过同一个 `runCli()` 入口传入包管理器可执行文件。Desktop 载体还会启用其已初始化 profile 的插件操作；npm 启动不传入这些选项。安装包提供的包管理环境仅用于插件包操作；调用目录、普通 profile 选择与 agent shell 的 PATH 保留 CLI 语义。
 
 [Web 失败矩阵](tests/profiles/web/tests/web-failure-matrix.expected.e2e.ts)在 `test:expected` 中通过构建后的 CLI 验证启动失败与启用 `awaitWriteFinish` 的原生配置 HMR。它不调用模型 API，而是检查经过认证的 HTTP 响应、诊断、恢复、进程退出与 dispose；[启动验收测试](tests/profiles/web/tests/web-best-effort-startup.expected.e2e.ts)还覆盖随附 Web 的必需依赖与端口冲突。

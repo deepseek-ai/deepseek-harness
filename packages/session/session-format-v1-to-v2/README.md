@@ -27,7 +27,7 @@ English | [中文](README.zh.md)
 
 ### When to use it
 
-Persistence obtains this edge through `dsh-session-format-catalog`; feature compositions do not mount it. Import it directly only when assembling or testing the static released-format catalog or inspecting the exact v1-to-v2 transformation. No runtime invariant companion is published because the package has no independently observable runtime registrations whose state can diverge; decoder and transformer state belongs to one restore.
+Persistence obtains this edge through `dsh-session-format-catalog`; feature compositions do not mount it. Import it directly only when assembling or testing the static released-format catalog or inspecting the exact v1-to-v2 transformation.
 
 ### Entry point
 

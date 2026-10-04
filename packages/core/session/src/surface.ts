@@ -127,14 +127,8 @@ export function deriveEventMessage(
   // history; turn/step boundaries, failed attempts, and errors are trace/replay
   // data.
   switch (event.type) {
-    // Ordinary prompts and injected context project in user role: the event's
-    // model-facing content stays verbatim. Do NOT re-add per-type framing
-    // (e.g. `<context>`) here: framing is caller-owned — a producer bakes it
-    // into `content`, as agent-instructions does with `<system-reminder>` — or,
-    // if reintroduced, must be driven by the event `meta` map and a dedicated
-    // renderer, keeping this projection a verbatim pass-through. See the
-    // deferred design note in
-    // ../../../../.agents/notes/implemented/simplification/2026-07-20-unwrap-injected-content-envelopes.md
+    // Ordinary prompts and injected context retain producer-owned framing.
+    // See Derived history in packages/core/session/README.md.
     case 'user/message': {
       return event.data
     }

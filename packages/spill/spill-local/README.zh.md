@@ -85,7 +85,6 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config`、`LocalSpillStore` 服务、清理生命周期、定位信息与取回提示的组装 |
 | [`src/cleanup.ts`](src/cleanup.ts) | 一次性按年龄扫描、文件系统身份检查、符号链接和所有权保护 |
 | [`src/store.ts`](src/store.ts) | 与 Cordis 无关的存储机制：私有根目录、会话目录、安全名称编码、排他写入 |
-| — | 不发布运行时不变式伴生入口；除由所属 seam 强制执行的约定外，本包不暴露独立事件序列或可变数据关系。 |
 
 ### 文件命名与写入
 

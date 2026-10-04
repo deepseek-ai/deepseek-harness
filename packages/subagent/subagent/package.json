@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-subagent",
   "description": "Abstract subagent seam (ctx.subagents): named-provider registry for delegating to child agents",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -22,10 +22,6 @@
       "types": "./lib/types/internal.d.ts",
       "default": "./lib/types/internal.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./client": {
       "types": "./lib/types/client.d.ts",
       "default": "./lib/types/client.js"
@@ -43,7 +39,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "lib/typert.host.js",
@@ -64,7 +59,6 @@
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-preset-registry": "workspace:*",
     "@deepseek-ai/dsh-attachment": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-jobs": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
@@ -122,20 +116,15 @@
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-preset-registry": "workspace:*",
     "@deepseek-ai/dsh-attachment": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-jobs": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
-    "@deepseek-ai/dsh-schedule": "workspace:*",
     "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-persistence": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-session-query": "workspace:*",
-    "@deepseek-ai/dsh-storage": "workspace:*",
-    "@deepseek-ai/dsh-storage-domain": "workspace:*",
-    "@deepseek-ai/dsh-storage-json": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",

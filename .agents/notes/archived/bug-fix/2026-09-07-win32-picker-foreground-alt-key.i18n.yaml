@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-09-07-win32-picker-foreground-alt-key.md
+2026-09-07-win32-picker-foreground-alt-key.md: 52c2dacc1ec95f78100734ac155ae8afa369c996
+2026-09-07-win32-picker-foreground-alt-key.zh.md: ba407c41126c21f5e84e89f3488cddc1218300c4

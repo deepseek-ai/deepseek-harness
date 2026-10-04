@@ -48,7 +48,7 @@ kind: "package-reference"
 | `write` | `file_path`、`content` | 创建或完整替换文件；有策略插件时，覆盖要求先在未变版本上执行 `read`，创建不需要 |
 | `edit` | `file_path`、`old_string`、`new_string`、`replace_all?` | 字面量替换，除非 `replace_all` 为 true 否则要求唯一匹配；有策略插件时，要求先执行 `read` 且文件未变 |
 
-字段名使用 snake_case，与 Claude Code 和现有 harness 工具 schema 一致。成功返回紧凑信封——读取窗口、图像引用或 `Created file`/`Updated file` 确认——`write`/`edit` 还会派生可回放的 diff 卡片元数据供 UI 展示。
+字段名使用 snake_case，与 Claude Code 和现有 harness 工具 schema 一致。`write` 和 `edit` 的路径描述要求模型先输出 `file_path`，再输出内容或替换字符串；这用于引导流式展示，不强制 JSON 成员顺序。成功返回紧凑信封——读取窗口、图像引用或 `Created file`/`Updated file` 确认——`write`/`edit` 还会派生可回放的 diff 卡片元数据供 UI 展示。
 
 ### 配置
 
@@ -255,5 +255,3 @@ Read a file before editing it (the default fs-observation-policy requires it), u
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。这个模型侧 adapter 没有独立 lifecycle stream；执行关系由它调用的 capability seam 负责。

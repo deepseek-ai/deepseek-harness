@@ -42,7 +42,7 @@ Caller-driven injection and current-step context deliberately use different timi
 
 Cross-session references use that domain composition: TUI prepares the snapshot, returns it from the idle direct message's pre-step beside that message, or injects it before waking steering during a running turn. The target log contains two simple messages, so later source mutation cannot change replay and transcript consumers do not need a prompt envelope. This supersedes the attachment mechanism in the [cross-session reference decision](../../archived/feature/2026-07-21-cross-session-references.md) while retaining its snapshot and trust-boundary rules.
 
-This decision preserves the caller-owned framing decision from [unwrapped injected content](../simplification/2026-07-20-unwrap-injected-content-envelopes.md) and the one-item turn rule from [one send, one turn](../simplification/2026-07-17-one-send-one-turn.md). The later [standalone log-only event decision](../simplification/2026-07-28-remove-synthetic-log-only-turns.md) applies the same execution-only meaning to plugin-owned records.
+This decision preserves the caller-owned framing decision from [unwrapped injected content](../../../../packages/core/session/README.md) and the one-item turn rule from [one send, one turn](../simplification/2026-07-17-one-send-one-turn.md). The later [standalone log-only event decision](../simplification/2026-07-28-remove-synthetic-log-only-turns.md) applies the same execution-only meaning to plugin-owned records.
 
 ## Alternatives considered
 
@@ -64,7 +64,7 @@ This decision preserves the caller-owned framing decision from [unwrapped inject
 - Idle `inject()` immediately appends one durable inbox insertion but no model-visible `user/message`; a later waking delivery may start pre-step processing.
 - Active-turn injection is claimed at the nearest later pre-step boundary, after complete tool-result batches and before the request that consumes it.
 - Rejected or failed pre-step drops its claimed batch; input inserted after the claim remains pending.
-- Unit, persistence/resume, invariant, and TUI coverage pin event order, claim ownership, and durable replay.
+- Unit, persistence/resume, and TUI coverage pin event order, claim ownership, and durable replay.
 
 ## Consequences
 

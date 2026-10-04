@@ -27,6 +27,9 @@
       "path": "../../core/agent"
     },
     {
+      "path": "../../api/gateway/tsconfig.host.json"
+    },
+    {
       "path": "../../core/scope"
     },
     {

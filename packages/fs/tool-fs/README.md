@@ -48,7 +48,7 @@ The policy plugin is optional: without it the tools run against the bare provide
 | `write` | `file_path`, `content` | Creates or fully replaces a file; with the policy plugin, overwriting requires a prior `read` at the unchanged version, creating does not |
 | `edit` | `file_path`, `old_string`, `new_string`, `replace_all?` | Literal replacement requiring a unique match unless `replace_all` is true; with the policy plugin, requires a prior `read` and an unchanged file |
 
-Field names are snake_case to match Claude Code and existing harness tool schemas. Successes return compact envelopes — a read window, an image reference, or a `Created file`/`Updated file` confirmation — and `write`/`edit` derive replayable diff-card metadata for UI presentation.
+Field names are snake_case to match Claude Code and existing harness tool schemas. The `write` and `edit` path descriptions ask the model to emit `file_path` before the content or replacement strings; this guides streaming presentation but does not enforce JSON member order. Successes return compact envelopes — a read window, an image reference, or a `Created file`/`Updated file` confirmation — and `write`/`edit` derive replayable diff-card metadata for UI presentation.
 
 ### Configuration
 
@@ -255,5 +255,3 @@ These limits define when the tool suite is a poor fit or needs special operation
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. This model-facing adapter has no independent lifecycle stream; execution relations are owned by the capability seam it calls.

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GoalActivation, GoalSnapshot } from '@deepseek-ai/dsh-goal/client'
 import {
   IconCheckOutlineRegular, IconCloseOutlineRegular, IconEditOutlineRegular, IconGoalOutlineRegular,
-  IconPauseOutlineRegular, IconPlayOutlineRegular, IconTrashOutlineRegular, Tooltip,
+  IconPauseOutlineRegular, IconPlayOutlineRegular, IconTrashOutlineRegular, InlineEditor, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { GoalActionResult, GoalBarActions, GoalBarInjected } from './slots.ts'
@@ -88,18 +88,13 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
   if (editing) {
     return (
       <div className={css.dock} data-goal-bar>
-        <div className={css.bar}>
-          <input
-            className={css.objectiveInput}
-            type="text"
-            aria-label={t('objective.aria')}
+        <div className={`${css.bar} ${css.editBar}`}>
+          <InlineEditor
             value={draft}
-            onChange={(e) => { setDraft(e.target.value) }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleEdit()
-              if (e.key === 'Escape') setEditing(false)
-            }}
-            autoFocus
+            label={t('objective.aria')}
+            onChange={setDraft}
+            onSave={() => { void handleEdit() }}
+            onCancel={() => { setEditing(false) }}
           />
           {actionError !== null && <span className={css.error} role="alert">{actionError}</span>}
           <div className={css.actions}>

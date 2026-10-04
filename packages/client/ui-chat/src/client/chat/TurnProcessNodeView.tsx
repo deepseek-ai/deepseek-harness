@@ -6,7 +6,7 @@ import { formatRunDuration } from './message-chrome.ts'
 import a11yCss from './accessibility.module.css'
 import css from './TurnProcessNodeView.module.css'
 
-/** Turn-level process disclosure controller. */
+/** Settled Turn duration and process disclosure above its content. */
 export const TurnProcessNodeView = memo(function TurnProcessNodeView({
   node, turnProcess, t,
 }: ChatNodeViewProps<'turn-process'>) {
@@ -20,13 +20,13 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
   const reason = turn.end?.data.reason.kind
   const elapsedMs = turn.start === undefined || turn.end === undefined ? undefined
     : Math.max(1000, turn.end.time - turn.start.time)
-  const duration = elapsedMs === undefined ? undefined
+  const duration = elapsedMs === undefined || reason === 'aborted' || reason === 'error' ? undefined
     : formatRunDuration(elapsedMs, t)
   // Other end reasons retain elapsed time; only cancellation and failure replace it.
   const label = reason === 'aborted' ? t('message.stopped')
     : reason === 'error' ? t('message.turnProcess.failed')
       : duration === undefined ? t('message.turnProcess.worked')
-        : t('message.turnProcess.took', { duration })
+        : t('message.turnProcess.took')
   const announcement = reason === 'aborted' ? t('message.stopped')
     : reason === 'error' ? t('message.turnProcess.failed')
       : t('message.turnProcess.worked')
@@ -48,7 +48,12 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
           turnProcess.setOpen(!open)
         }}
       >
-        <span className={css.label}>{label}</span>
+        <span className={css.label}>
+          {label}
+          {duration?.map((part, index) => (
+            <span key={index} className={part.numeric ? css.durationNumber : undefined}>{part.text}</span>
+          ))}
+        </span>
         {canCollapse && <IconChevronDownOutlineRegular className={css.chevron} />}
       </button>
     </>

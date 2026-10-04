@@ -42,9 +42,9 @@ export const GenericCommandCard = memo(function GenericCommandCard({ node, t, ru
   const toggle = useCallback(() => { setExpanded(value => !value) }, [])
   const collapsedContent = useMemo(() => (
     <>
-      <span className={css.separator} aria-hidden />
+      <span className={css.separator} data-shimmer-decoration aria-hidden />
       <span className={css.summary} data-error={state === 'error' || undefined}>
-        <TextShimmer active={running}>{summary}</TextShimmer>
+        <TextShimmer>{summary}</TextShimmer>
       </span>
     </>
   ), [running, state, summary])
@@ -56,10 +56,8 @@ export const GenericCommandCard = memo(function GenericCommandCard({ node, t, ru
       {state === 'running' && <span className={a11yCss.visuallyHidden}>{t('row.running')}</span>}
       {state === 'error' && <span className={a11yCss.visuallyHidden}>{t('row.failed')}</span>}
       <DisclosureRow
-        rowClassName={css.row}
         leadingClassName={css.leading}
         titleClassName={css.title}
-        chevronClassName={css.chevron}
         icon={COMMAND_ICON}
         title={title}
         running={running}

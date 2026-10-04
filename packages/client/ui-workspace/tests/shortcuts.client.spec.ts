@@ -7,7 +7,8 @@ import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState, SessionSummary, SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import { SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ShortcutCommand, ShortcutGesture } from '@deepseek-ai/dsh-client-shortcuts/client'
+import type { ShortcutCommand, ShortcutGesture, ShortcutPlatform } from '@deepseek-ai/dsh-client-shortcuts/client'
+import type { PanelInfo, MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { ShortcutRegistry } from '../../shortcuts/src/client/registry.ts'
 import { createWorkspaceShortcutControls, installWorkspaceShortcuts } from '../src/client/shortcuts.ts'
 import { en, zh } from '../src/client/locales.ts'
@@ -22,10 +23,10 @@ const row = (id: string, main = false): SessionSummary => ({
   id: sid(id), title: id, displayTitle: id, cwd: `/workspace/${id}`, blank: false,
   running: false, updatedAt: 0, retainedBy: main ? { mainView: 1 } : {},
 })
-async function bench(runtime: 'web' | 'desktop' = 'desktop') {
+async function bench(runtime: 'web' | 'desktop' = 'desktop', platform: ShortcutPlatform = 'macos') {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
-  const registry = new ShortcutRegistry(runtime, 'macos')
+  const registry = new ShortcutRegistry(runtime, platform)
   const commands = new Map<string, ShortcutCommand>()
   ctx.provide('shortcuts', { register: (command: ShortcutCommand) => {
     commands.set(command.id, command)
@@ -41,6 +42,8 @@ async function bench(runtime: 'web' | 'desktop' = 'desktop') {
     sessionId: sid(id), session: { ...history, loadOlder },
   }]))
   ctx.provide('sessions', { list, binding: (id: SessionId) => bindings.get(id) })
+  const panelInfo = createSnapshotStore<PanelInfo>({ activePanelId: null })
+  ctx.provide('layout', { panelInfo })
   const directory = createSnapshotStore(true)
   ctx.provide('slots', { entries: () => directory.getSnapshot() ? [{}] : [], subscribe: (_name: string, listener: () => void) => directory.subscribe(listener) })
   const locale = new LocaleRuntime(ctx)
@@ -58,7 +61,7 @@ async function bench(runtime: 'web' | 'desktop' = 'desktop') {
   const select = (id: string) => { list.set({ ...list.getSnapshot(), byId: {
     [sid('a')]: row('a', id === 'a'), [sid('b')]: row('b', id === 'b'),
   } }) }
-  return { ctx, fiber, registry, commands, navigation, controls, list, directory, select, history, loadOlder }
+  return { ctx, fiber, registry, commands, navigation, controls, list, directory, select, history, loadOlder, panelInfo }
 }
 
 afterEach(() => { vi.restoreAllMocks() })
@@ -82,10 +85,44 @@ describe('workspace shortcut ownership', () => {
     expect(b.registry.catalog.getSnapshot().every(row => row.keys.length > 0)).toBe(true)
     const web = await bench('web')
     expect(web.registry.catalog.getSnapshot().map(row => row.aria)).toEqual([
-      'Alt+Meta+N', 'Alt+Meta+K', 'Alt+Meta+O', 'Shift+Meta+R', 'Shift+Meta+F', 'Alt+Meta+A',
+      'Alt+Meta+N', 'Alt+Meta+K', 'Alt+Meta+O', 'Alt+Meta+G', 'Shift+Meta+F', 'Alt+Meta+A',
     ])
     await b.fiber.dispose()
     expect(b.registry.catalog.getSnapshot()).toEqual([])
+  })
+
+  it.each([
+    { runtime: 'web', platform: 'macos' }, { runtime: 'web', platform: 'windows' },
+    { runtime: 'desktop', platform: 'macos' }, { runtime: 'desktop', platform: 'windows' },
+  ] as const)('uses the shared three-key rename binding on $runtime/$platform', async ({ runtime, platform }) => {
+    const b = await bench(runtime, platform)
+    const primary = { meta: platform === 'macos', control: platform === 'windows' }
+    const consume = vi.fn()
+    for (const shift of [false, true]) {
+      expect(b.registry.dispatch(key('KeyR', { ...primary, shift }), context, consume)).toEqual({ status: 'pass' })
+    }
+    expect(consume).not.toHaveBeenCalled()
+    expect(b.controls.state.getSnapshot().renameTarget).toBeNull()
+    expect(b.registry.dispatch(key('KeyG', { ...primary, alt: true }), context, consume).status).toBe('handled')
+    expect(b.controls.state.getSnapshot().renameTarget?.sessionId).toBe('a')
+  })
+
+  it.each(['web', 'desktop'] as const)('renames only a nonblank main Conversation without an obscuring modal on %s', async (runtime) => {
+    const b = await bench(runtime)
+    const gesture = key('KeyG', { alt: true })
+    const invoke = (modal: string | null = null) => b.registry.dispatch(gesture, { ...context, modal }, vi.fn())
+    b.list.set({ ...b.list.getSnapshot(), byId: { [sid('a')]: { ...row('a', true), blank: true } } })
+    expect(invoke().status).toBe('blocked')
+    expect(b.controls.state.getSnapshot().renameTarget).toBeNull()
+    b.select('a')
+    b.panelInfo.set({ activePanelId: 'plugins' as MainPanelId })
+    expect(invoke().status).toBe('blocked')
+    expect(b.controls.state.getSnapshot().renameTarget).toBeNull()
+    b.panelInfo.set({ activePanelId: null })
+    expect(invoke('settings').status).toBe('blocked')
+    expect(b.controls.state.getSnapshot().renameTarget).toBeNull()
+    expect(invoke().status).toBe('handled')
+    expect(b.controls.state.getSnapshot().renameTarget?.sessionId).toBe('a')
   })
 
   it('uses the owner for new/search/add from terminals and modals while preserving repeat and directory occupancy', async () => {

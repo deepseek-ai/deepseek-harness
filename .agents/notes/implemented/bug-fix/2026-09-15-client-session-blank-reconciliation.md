@@ -40,4 +40,4 @@ Manager tests cover refresh without a turn, running-to-idle updates, object repl
 
 ## Related decisions
 
-The [scope and provisioning decision](../architecture/2026-07-25-web-client-session-scope-and-provide-channel.md) owns Session scope, creation/reuse, and the visible blank row. The [Session/Conversation ownership decision](../architecture/2026-08-20-client-session-conversation-ownership.md) owns transport, assembly, and snapshot contents.
+The [scope and provisioning reference](../architecture/2026-09-15-client-session-references.md) owns Session scope, creation/reuse, and the visible blank row. The [Session/Conversation ownership decision](../architecture/2026-08-20-client-session-conversation-ownership.md) owns transport, assembly, and snapshot contents.

@@ -17,12 +17,13 @@ export function markDocumentPlatform(): void {
 }
 
 /**
- * Mirrors the window's macOS fullscreen state onto `<html data-fullscreen>` so
- * CSS drops the traffic-light clearance while the lights are hidden. The main
+ * Mirrors the window's macOS and Windows fullscreen state onto `<html data-fullscreen>` so
+ * CSS drops the clearance for hidden native window controls. The main
  * process sends the state on every transition and after each load.
  */
 export function syncWindowFullscreen(): void {
-  if (process.platform !== 'darwin') return
+  // The main process sends this IPC only on macOS and Windows; other platforms need no listener.
+  if (process.platform !== 'darwin' && process.platform !== 'win32') return
   ipcRenderer.on(DESKTOP_IPC.windowFullscreen, (_event, fullscreen: boolean) => {
     const root = document.documentElement as HTMLElement | null
     if (root === null) return

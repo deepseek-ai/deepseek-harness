@@ -115,7 +115,8 @@ describe('web e2e: experimental Auto and Full access confirmation', () => {
     expect(slashPickerBox).not.toBeNull()
     expect(composerBox).not.toBeNull()
     expect(slashPickerBox!.width).toBeGreaterThanOrEqual(220)
-    expect(composerBox!.width - slashPickerBox!.width).toBeGreaterThan(1)
+    expect(slashPickerBox!.width).toBeCloseTo(composerBox!.width)
+    expect(slashPickerBox!.x).toBeCloseTo(composerBox!.x)
     expect(Math.abs(composerBox!.y - slashPickerBox!.y - slashPickerBox!.height - 4)).toBeLessThan(1)
 
     await slashPicker.getByRole('option', { name: 'Auto review EXP' }).click()

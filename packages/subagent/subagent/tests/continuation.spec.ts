@@ -10,16 +10,11 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import ScheduleService from '@deepseek-ai/dsh-schedule'
-import Storage from '@deepseek-ai/dsh-storage'
-import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
-import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import type { ContentBlock, GenerateOptions, MessageId, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { ToolCallId, createUserMessage, LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import { MockAdapter, maxTokensResponse, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import SubagentRuntime, {
   SubagentError,
@@ -27,7 +22,6 @@ import SubagentRuntime, {
 } from '../src/index.ts'
 import type { SubagentRunEndInfo, SubagentRunInfo } from '../src/index.ts'
 import type { SubagentPromptRequestId } from '../src/control-types.ts'
-import * as SubagentInvariant from '../src/invariant.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
 import {
@@ -79,29 +73,10 @@ afterEach(async () => {
   if (errors.length > 1) throw new AggregateError(errors, 'temp-root cleanup failed')
 })
 
-/** Mount the real Schedule service for root-only tool-registration assertions. */
-async function mountScheduleForOwnership(ctx: Context): Promise<void> {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-subagent-schedule-'))
-  const fibers: Array<{ dispose(): Promise<void> }> = []
-  cleanups.unshift(async () => {
-    for (const fiber of fibers.toReversed()) await fiber.dispose()
-    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
-  })
-  fibers.push(await ctx.plugin(Storage))
-  fibers.push(await ctx.plugin(StorageJson, { root }))
-  fibers.push(await ctx.plugin(StorageDomain, { backend: 'json' }))
-  // This ownership test creates no reminders and invokes no Remote methods.
-  // Unexpected delivery must fail instead of activating an unrelated Session.
-  ctx.provide('sessionController', {
-    resolveAgent: async () => { throw new Error('ownership test must not dispatch reminders') },
-  } as never)
-  fibers.push(await ctx.plugin(ScheduleService))
-}
-
 /** Boot the full continuable stack: loop, persistence, providers, and subagents. */
 async function setupWith(
   adapter: LlmAdapter,
-  options: { persistence?: boolean; schedule?: boolean; sessionQuery?: boolean; maxActiveSubagents?: number } = {},
+  options: { persistence?: boolean; sessionQuery?: boolean; maxActiveSubagents?: number } = {},
 ) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
@@ -118,7 +93,6 @@ async function setupWith(
     })
   }
   await ctx.plugin(AgentLoop, { agents: [] })
-  if (options.schedule) await mountScheduleForOwnership(ctx)
   if (options.sessionQuery !== false) await ctx.plugin(TestSessionQuery)
   subagentConfigs.set(ctx, await liveConfig(ctx, SubagentRuntime,
     options.maxActiveSubagents === undefined ? {} : { maxActiveSubagents: options.maxActiveSubagents }))
@@ -1109,8 +1083,6 @@ describe('direct-child Queue residency routing', () => {
 
   it('cold-resumes after the initial provider unregisters', async () => {
     const { ctx, parent } = await setup([textResponse('first'), textResponse('after resume')])
-    await ctx.plugin(InvariantRegistry)
-    await ctx.plugin(SubagentInvariant)
     const disposeProvider = ctx.subagents.registerProvider({
       name: 'retired',
       capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
@@ -1358,7 +1330,7 @@ describe('continuable child ownership', () => {
       { chunks: textResponse('child done') },
       { chunks: textResponse('grandchild'), gate: releaseGrandchild.promise },
     ])
-    const { ctx, parent } = await setupWith(adapter, { schedule: true })
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startContinuable(startSpec(parent))
     const child = await vi.waitFor(() => {
       const found = ctx.agents.get(started.childId)
@@ -1367,8 +1339,6 @@ describe('continuable child ownership', () => {
     })
     expect(ctx.agents.roots()).toEqual([parent])
     expect(ctx.agents.isOwnedBy(child.id, parent)).toBe(true)
-    expect(ctx.tools.get('schedule_create', parent)).toBeDefined()
-    expect(ctx.tools.get('schedule_create', child)).toBeUndefined()
     const grandchild = await ctx.subagents.startContinuable(startSpec(child))
 
     await vi.waitFor(() => {

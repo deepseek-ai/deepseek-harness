@@ -140,6 +140,12 @@ export interface TypertGateway {
   readonly wireStream: TypertGatewayWireStream
 
   /**
+   * Check for an active Client event stream.
+   * @returns whether a stream is open and has not been cancelled.
+   */
+  hasLiveClient(): boolean
+
+  /**
    * Register the application-selected forwarded-event source.
    * @param source - stream factory installed by the Remote assembly.
    * @param host - stable Host facts included in each Client generation's opening frame.

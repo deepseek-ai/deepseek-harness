@@ -17,6 +17,7 @@ import {
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
 import { BashRow } from '../src/client/tool/toolviews/bash-sample.tsx'
 import { en, zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 
 type BashRowProps = Parameters<typeof BashRow>[0]
 
@@ -45,18 +46,25 @@ const shellArgs = (over: Record<string, unknown> = {}): string => JSON.stringify
   command: 'ls -la', description: 'List files', ...over,
 })
 
-const running = (over?: Partial<StartedToolCall>): StartedToolCall => ({
-  phase: 'start' as const, callId: 'c1', name: 'bash', argsRaw: ARGS,
-  turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
-})
+const running = (over?: Partial<StartedToolCall>): StartedToolCall => {
+  const argsRaw = over?.argsRaw ?? ARGS
+  return {
+    phase: 'start' as const, args: PartialArguments.fromText(argsRaw), callId: 'c1', name: 'bash', argsRaw,
+    turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
+  }
+}
 
-const settled = (over?: Partial<ToolResultNode>): ToolResultNode => ({
-  kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
-  call: { name: 'bash', argsRaw: ARGS },
-  callTime: 1_000,
-  content: [{ type: 'text', text: 'a.ts  b.ts\nc.ts  d.ts\n' }], isError: false,
-  subCalls: [], ...over,
-})
+const settled = (over?: Partial<ToolResultNode>): ToolResultNode => {
+  const call = over?.call === undefined ? { name: 'bash', argsRaw: ARGS } : over.call
+  return {
+    kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
+    name: call?.name ?? '', args: call === null ? PartialArguments.EMPTY : PartialArguments.fromText(call.argsRaw),
+    call,
+    callTime: 1_000,
+    content: [{ type: 'text', text: 'a.ts  b.ts\nc.ts  d.ts\n' }], isError: false,
+    subCalls: [], ...over,
+  }
+}
 
 describe('terminalCardModel', () => {
   it('derives a running standard-shell card from raw arguments', () => {
@@ -255,13 +263,17 @@ describe('terminalCardModel', () => {
     ['timeout value', { timeoutMs: 0 }],
     ['workdir type', { workdir: 7 }],
     ['background type', { run_in_background: 'yes' }],
-    ['permission type', { sandbox_permissions: 7, justification: 'Need access' }],
-    ['permission value', { sandbox_permissions: 'read-only', justification: 'Need access' }],
-    ['missing justification', { sandbox_permissions: 'workspace-write' }],
-    ['orphan justification', { justification: 'Need access' }],
-    ['blank justification', { sandbox_permissions: 'workspace-write', justification: ' ' }],
   ])('keeps malformed standard-shell optional fields generic: %s', (_label, fields) => {
     expect(terminalCardModel(running({ argsRaw: shellArgs(fields) }))).toBeNull()
+  })
+
+  // Escalation validity depends on the Session's sandbox mode, which only the
+  // Host knows; a rejected call settles as an error result instead.
+  it.each([
+    ['permission equal to the current mode with blank justification', { sandbox_permissions: 'danger-full-access', justification: '' }],
+    ['blank justification alone', { justification: '' }],
+  ])('keeps the terminal card for escalation fields the Host accepts: %s', (_label, fields) => {
+    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs(fields) } }))).not.toBeNull()
   })
 
   it('accepts valid optional and unknown standard-shell fields on the open parameter root', () => {
@@ -428,6 +440,14 @@ describe('BashRow terminal card', () => {
     fireEvent.click(view.container.querySelector('[data-expandable]')!)
     expect(view.queryByText(/a\.ts/)).toBeNull()
     expect(view.getByText('List files')).toBeTruthy()
+  })
+
+  it('expands a completed command that carries Host-accepted blank escalation fields', () => {
+    const view = render(<BashRow {...rowProps(settled({
+      call: { name: 'bash', argsRaw: shellArgs({ sandbox_permissions: 'danger-full-access', justification: '' }) },
+    }))} />)
+    fireEvent.click(view.getByRole('button'))
+    expect(view.getByText('a.ts  b.ts', RAW)).toBeTruthy()
   })
 
   // The row's running state and the card's run-state dot describe the same

@@ -513,8 +513,10 @@ it.skipIf(process.platform === 'win32')('runs a real interactive shell with comp
 
 it('discovers installed shells once per path, preserves default arguments, and refuses unlisted paths', async () => {
   const h = fixture({ shellCandidates: ['bash', 'zsh', 'missing'] })
+  const missing = Object.assign(new Error('absent'), { name: 'SubprocessExecutableNotFoundError' })
+  expect(missing).not.toBeInstanceOf(SubprocessExecutableNotFoundError)
   h.subprocess.resolveExecutable.mockImplementation(async (path) => {
-    if (path === 'missing') throw new SubprocessExecutableNotFoundError('absent')
+    if (path === 'missing') throw missing
     return path.startsWith('/') ? path : `/bin/${path}`
   })
   const shells = await h.controller.shells(h.agent, signal())
@@ -544,6 +546,16 @@ it('propagates optional-shell discovery transport errors and cancellation', asyn
 it('deduplicates Windows executable paths regardless of letter case', async () => {
   const h = fixture({ shell: { path: 'C:\\Windows\\cmd.exe', name: 'Command Prompt', args: [] }, shellCandidates: ['c:\\windows\\cmd.exe'] })
   expect(await h.controller.shells(h.agent, signal())).toEqual([{ path: 'C:\\Windows\\cmd.exe', name: 'Command Prompt', args: [] }])
+})
+
+it('lists each executable name once when PATH reaches the default shell through another directory', async () => {
+  const h = fixture({ shell: undefined, shellCandidates: ['zsh', 'bash'] })
+  // Merged /usr: the login shell is /bin/bash, while PATH lists /usr/bin before the /bin link.
+  h.subprocess.resolveExecutable.mockImplementation(async path => path.startsWith('/') ? path : `/usr/bin/${path}`)
+  expect(await h.controller.shells(h.agent, signal())).toEqual([
+    { path: '/bin/bash', name: 'bash', args: ['-i'] },
+    { path: '/usr/bin/zsh', name: 'zsh', args: ['-i'] },
+  ])
 })
 
 it('retains a known terminal without Agent resolution and fences stream admission after explicit close', async () => {

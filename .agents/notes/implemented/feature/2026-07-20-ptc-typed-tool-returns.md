@@ -10,13 +10,13 @@ PTC mode originally projected each nested tool result back from `ContentBlock[]`
 
 The runtime also treated binding values and the final program value as presentation data. Separate log and completion caps could replace an oversized or non-cloneable completion with inspected text even though intermediate values do not enter model context. That made programmatic composition lossy and confused the memory boundary with the prompt boundary.
 
-The [canonical tool-output contract](../architecture/2026-07-20-canonical-tool-output-contract.md) establishes one validated execution-time value and a separate Native renderer. PTC mode should consume that value directly, preserve it across the worker boundary, and bound only the final output the program deliberately returns to the model.
+The [canonical tool-output contract](../../../../packages/core/tools/README.md) establishes one validated execution-time value and a separate Native renderer. PTC mode should consume that value directly, preserve it across the worker boundary, and bound only the final output the program deliberately returns to the model.
 
 ## Decision
 
 PTC mode is a typed projection of the visible tool registry. Each successful binding resolves to the final canonical `JsonValue` after post-execute policy, while a failed binding rejects with a real `ToolCallError`. Intermediate values remain inside the run and cross the worker boundary whole. The outer `run_code` logs, completion value, or failure diagnostic enter the configurable output ledger and model-facing spill pipeline; a successfully settled sub-call whose final Native content contains an image additionally defers that complete ordered content through the parent result as logged, source-attributed context.
 
-This note owns the return and failure contract layered on the original [PTC mode foundation](2026-06-15-ptc.md). The unified schema vocabulary is owned by the [JSON-value schema DSL note](../architecture/2026-07-20-unified-json-value-schema-dsl.md), and Native rendering and policy projection remain owned by the canonical-output note.
+This note owns the return and failure contract layered on the original [PTC mode foundation](2026-06-15-ptc.md). The unified schema vocabulary is owned by the [JSON-value schema DSL reference](../../../../packages/core/tools/README.md), and Native rendering and policy projection remain owned by the canonical-output note.
 
 ### Generated SDK
 
@@ -67,7 +67,7 @@ Compute time, wall time, worker heap, cancellation, and fresh-worker isolation r
 
 ### Typed handles and lifetime
 
-Background producers return a typed canonical handle such as `{ kind: 'background', jobId }` while retaining their established Native sentence. A pre-aborted background call remains a failure because successful output promises an id and no task was created. After `ctx.jobs.start()` publishes the id, task-owned cancellation governs the work: settlement or later cancellation of the enclosing `run_code` call does not kill it. A later program can pass the returned id to `job_output`, and `job_kill`, owner disposal, or service teardown owns cancellation. Foreground execution remains coupled to the call signal. The task lifetime contract is owned by the [background job runtime note](../architecture/2026-06-20-generic-long-running-tool-runtime.md).
+Background producers return a typed canonical handle such as `{ kind: 'background', jobId }` while retaining their established Native sentence. A pre-aborted background call remains a failure because successful output promises an id and no task was created. After `ctx.jobs.start()` publishes the id, task-owned cancellation governs the work: settlement or later cancellation of the enclosing `run_code` call does not kill it. A later program can pass the returned id to `job_output`, and `job_kill`, owner disposal, or service teardown owns cancellation. Foreground execution remains coupled to the call signal. The task lifetime contract is owned by the [background job runtime reference](../../../../packages/jobs/jobs/README.md).
 
 Temporary Cordis Plugins follow the same rule: `cordis_mount` returns `{ id, pluginName, state, provides, waitingFor }`, so a program can read `mounted.id`, inspect active or pending state, and pass that id to `cordis_unmount` without parsing the stable Native sentence.
 
@@ -75,7 +75,7 @@ Temporary Cordis Plugins follow the same rule: `cordis_mount` returns `{ id, plu
 
 Nested dispatch logs the sub-call's full rendered `content`/`isError` on `tool/ptc-dispatch` but does not persist canonical values. `tool/result` continues to persist only rendered content, error, and optional metadata. A successful final content sequence containing an image is also wrapped in a source-attributed user message and deferred through the outer result; the normal session event makes that model-visible input reconstructable. The [PTC mode note](2026-06-15-ptc.md) owns durable event names and historical identity preservation; replay cannot recreate intermediate canonical program values.
 
-The opaque `exec.parent` token marks nested calls. Presentation metadata and generic or tool-owned spill projections skip those calls; their canonical values never enter context. The Client can derive [nested terminal cards](../bug-fix/2026-09-05-nested-terminal-cards.md) from raw dispatch events without metadata. The outer `run_code` call produces the model-facing result and may spill its final post-policy presentation; `run_code` intentionally declares neither a result presenter nor presentation metadata, so UI adapters complete the card through their generic raw-content fallback using durable `tool/result.content`.
+The opaque `exec.parent` token marks nested calls. Presentation metadata and generic or tool-owned spill projections skip those calls; their canonical values never enter context. The Client can derive [nested terminal cards](../../../../packages/client/ui-tool/README.md) from raw dispatch events without metadata. The outer `run_code` call produces the model-facing result and may spill its final post-policy presentation; `run_code` intentionally declares neither a result presenter nor presentation metadata, so UI adapters complete the card through their generic raw-content fallback using durable `tool/result.content`.
 
 ## Testing
 

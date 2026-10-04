@@ -1,0 +1,16 @@
+[
+  {
+    "message": "The Desktop command is installed.",
+    "buttons": [
+      "Close",
+      "Repair",
+      "Remove"
+    ]
+  },
+  {
+    "message": "The Desktop command is installed.",
+    "buttons": [
+      "Close"
+    ]
+  }
+]

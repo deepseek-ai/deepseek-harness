@@ -6,10 +6,6 @@ import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
-import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
-import * as AgentInvariant from '@deepseek-ai/dsh-agent/invariant'
-import * as AgentLoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
 import SubagentRuntime, { type SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, maxTokensResponse, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -19,17 +15,9 @@ import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]
 
-async function mountInvariants(ctx: Context): Promise<void> {
-  await ctx.plugin(InvariantRegistry)
-  await ctx.plugin(SessionInvariant)
-  await ctx.plugin(AgentInvariant)
-  await ctx.plugin(AgentLoopInvariant)
-}
-
 /**
  * Drives the REAL spawn backend end-to-end: a real agent loop + a scripted mock
- * MODEL (the only mocked boundary) + the real SubagentRuntime + the real
- * invariant service plus package companions (so a malformed child session log would fail the test).
+ * MODEL (the only mocked boundary) + the real SubagentRuntime.
  * The parent is a real config agent; the spawn provider creates a real child
  * agent on the same context and we assert its output.
  */
@@ -37,7 +25,6 @@ async function setup(script: Script) {
   const ctx = new Context()
   const adapter = new MockAdapter(script)
   await mountAgentLoopTestDependencies(ctx)
-  await mountInvariants(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(spawn, { providerName: 'spawn' })
@@ -334,7 +321,6 @@ describe('dsh-subagent-spawn-in-process', () => {
     const ctx = new Context()
     const adapter = new MockAdapter(['hang'])
     await mountAgentLoopTestDependencies(ctx)
-    await mountInvariants(ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(SubagentRuntime)
     const fiber = await ctx.plugin(spawn, { providerName: 'spawn' })

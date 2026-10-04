@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-launch-environment",
   "description": "Immutable DeepSeek Harness launch environment that records which layer supplied each value",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

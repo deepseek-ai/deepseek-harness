@@ -30,7 +30,7 @@ Status: rejected — 下列每一项替换在证据上都未达到净简化门�
 
 **数据与校验：**
 
-- **以 Ajv 承担 tools 的 JSON Schema 校验器**：[schema DSL 决策](../../implemented/architecture/2026-07-20-unified-json-value-schema-dsl.zh.md)已明确否决接纳更大的 schema 语言；这个校验器还会做 Ajv 不做的、针对 realm 内建原型的检查。
+- **以 Ajv 承担 tools 的 JSON Schema 校验器**：[schema DSL 参考](../../../../packages/core/tools/README.zh.md)已明确否决接纳更大的 schema 语言；这个校验器还会做 Ajv 不做的、针对 realm 内建原型的检查。
 - **以 `structuredClone` 替换会话的 `snapshotJsonValue`/`isJsonValue`**：它是校验器加分离器，以「每个 getter 只读一次」和跨 realm 内建对象检查强制执行无损 JSON 边界；`structuredClone` 接受 Map/Date/-0，什么都不强制。有意保持零依赖、针对被模型篡改的 realm 做过加固的 `ptc-runtime-worker` 镜像实现同理。
 - **以 `fast-deep-equal` 替换会话接口面的 `isDeepEqualJson`**、**以 `safe-stable-stringify` 承担 repeat-tool-reminder 的规范化**：两项替换在机械层面都可行，但每一项都是拿约 17–20 行带注释、有测试的代码，去换一个核心包的第一个外部运行时依赖——在这个体量上是净亏损。
 - **以 zod/valibot 承担持久事件的严格解码器**（goal fold、tool-ralph、session）：它们是位于持久化边界、键集精确匹配、失败即明确报错、带事件专属报错信息的解码器；在仓库标准 schemastery 之外再放一个 schema 库是政策变更，不是删除。
@@ -39,8 +39,8 @@ Status: rejected — 下列每一项替换在证据上都未达到净简化门�
 
 **文件系统、子进程与终端：**
 
-- **以 `write-file-atomic` 承担 fs-local/storage-json 的原子写**：这些包缺少私有 0700 暂存目录、Win32 DACL 复制/`ReplaceFileW`、AbortSignal 支持和父目录 fsync——每一项都正是手写实现的意义所在。koffi Win32 绑定本身由 [Windows 持久发布决策](../../implemented/architecture/2026-07-05-windows-jsonl-durable-publish.zh.md)提供依据。
-- **以 `fzstd`/原生 zstd 包承担 JSONL 帧扫描**：`node:zlib` 内置的 zstd 已经负责压缩（[zstd 决策](../../implemented/architecture/2026-07-19-zstandard-jsonl-session-logs.zh.md)，其中明确否决了外部原生依赖）；剩下的 `scanZstdFrames` 为撕裂尾部修复*不做解压*地定位 RFC 8878 帧边界，没有任何包公开这项能力。
+- **以 `write-file-atomic` 承担 fs-local/storage-json 的原子写**：这些包缺少私有 0700 暂存目录、Win32 DACL 复制/`ReplaceFileW`、AbortSignal 支持和父目录 fsync——每一项都正是手写实现的意义所在。koffi Win32 绑定本身由 [Windows 持久发布参考](../../../../packages/session/session-persistence-jsonl/src/win32.ts)提供依据。
+- **以 `fzstd`/原生 zstd 包承担 JSONL 帧扫描**：`node:zlib` 内置的 zstd 已经负责压缩（[zstd 参考](../../../../packages/session/session-persistence-jsonl/README.zh.md)，其中明确否决了外部原生依赖）；剩下的 `scanZstdFrames` 为撕裂尾部修复*不做解压*地定位 RFC 8878 帧边界，没有任何包公开这项能力。
 - **以 `picomatch`/`tinyglobby`/`ignore` 承担 fs 搜索**：根本不存在 glob 引擎——依照 [bash 承载的发现工具决策](../../archived/feature/2026-07-09-bash-backed-grep-glob-discovery.md)，两个发现类工具都通过 shell 调用 ripgrep。
 - **以 `istextorbinary`/`chardet` 承担文本检测**：手写实现是约 15 行的 NUL 采样加 fatal 模式的 `TextDecoder`；启发式包体量更大，还会改变模型能读到哪些文件（模型可见的 `FS_NOT_TEXT` 漂移）。
 - **以 `shell-quote` 承担 POSIX 单引号包裹**：两个各 1 行、测试详尽的引号辅助函数，对上一个处于维护模式、有 CVE 历史、转义输出还不一样的包——安全边界不是省一行代码的地方。
@@ -62,7 +62,7 @@ Status: rejected — 下列每一项替换在证据上都未达到净简化门�
 
 **仓库工具链：**
 
-- **以 `wireit` 替换 `run-gates.ts`**：它能表达 `needs:` 图，但 allowFailure 观测支路和按模式设置的并发上限没有等价物，对一个正确性门禁运行器来说缓存必须防御性禁用，而且每一处 CI 工作流调用都要重构。[并行门禁决策](../../implemented/process/2026-07-06-parallel-pre-push-gates.zh.md)把自研调度器认作代价；保留是站得住的。
+- **以 `wireit` 替换 `run-gates.ts`**：它能表达 `needs:` 图，但 allowFailure 观测支路和按模式设置的并发上限没有等价物，对一个正确性门禁运行器来说缓存必须防御性禁用，而且每一处 CI 工作流调用都要重构。[并行门禁说明](../../../../scripts/run-gates.ts)把自研调度器认作代价；保留是站得住的。
 - **以 `@arethetypeswrong/cli` 替换 `verify-node-next-types`**：attw 按包运行（100+ 次调用对一次快速的全工作区编译），而且不检查仓库特有的显式 `.ts` 说明符不变式，因此扫描的那一半无论如何都得保留。记录为已考虑；保留脚本。
 - **以 `syncpack`/`manypkg` 替换 `check-workspace-constraints.ts`**：它们只覆盖约 20 行的版本范围对齐；承重的 200+ 行（计算生成的 `files` 列表、cordis peer=dev 配对、层级形状）是仓库政策，没有通用引擎能表达。
 - **以 `remark-validate-links` 替换 `verify-md-links.ts`**：该门禁搭载仓库共享的 mdast 工具链；采用 remark-cli 等于为删掉一个小文件而增加第二套 markdown 技术栈。

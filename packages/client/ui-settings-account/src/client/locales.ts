@@ -23,6 +23,7 @@ export const en = {
   initializing: 'Starting sign in…', waiting: 'Continue in your browser',
   completing: 'Completing sign in…', expired: 'Sign in expired. Try again.',
   failed: 'Could not complete the operation. Try again.',
+  noResponse: 'Something went wrong. Please check your network connection and try again.',
   settingsSignedOutTitle: 'You are not signed in to DeepSeek Harness',
   settingsSignedOutDescription: 'Sign in to DeepSeek Harness to get your dedicated API Key',
   signInDescription: 'Use your DeepSeek account to get started.',
@@ -33,7 +34,6 @@ export const en = {
   quotaDescription: 'DeepSeek Harness cannot start a new task with this account when no balance is available. Would you like to top up? You can also top up later in Settings → Account.',
   quotaTopUp: 'Top up',
   bonusNoticeTitle: 'Bonus credited',
-  bonusEmpty: 'No bonus available',
 } as const
 /** Account locale keys. */
 export type AccountKey = keyof typeof en
@@ -59,6 +59,7 @@ export const zh: Record<AccountKey, string> = {
   initializing: '正在发起登录…', waiting: '请在浏览器中继续',
   completing: '正在完成登录…', expired: '登录已过期，请重试。',
   failed: '操作未完成，请重试。',
+  noResponse: '操作未完成，可能是网络异常，请检查你的网络状况后重试',
   settingsSignedOutTitle: '当前未登录 DeepSeek Harness 账号',
   settingsSignedOutDescription: '登录 DeepSeek Harness 账号获取专属 API Key',
   signInDescription: '登录 DeepSeek 账号以开始使用',
@@ -69,5 +70,4 @@ export const zh: Record<AccountKey, string> = {
   quotaDescription: '没有可用额度时，DeepSeek Harness 无法开始新的任务，是否前往充值？或者可以稍后前往 设置 → 账号与余额 进行充值。',
   quotaTopUp: '去充值',
   bonusNoticeTitle: '赠金已到账',
-  bonusEmpty: '暂无可用赠金',
 }

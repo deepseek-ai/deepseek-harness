@@ -8,7 +8,7 @@ English | [中文](2026-07-29-durable-last-activity-index.zh.md)
 
 A cold (persisted, unattached) session has no authoritative stored answer to "when did the user last prompt here". `dsh-host-apiproxy` serves `updatedAt` from the optional projection cache's `lastPromptAt`, falling back to `createdAt`, and the Web client sorts its Session tree by that value. The cache is fail-soft and checkpointed asynchronously, so a missing or delayed row makes a recently prompted Session sort too old.
 
-The gateway previously used JSONL artifact mtime when available. mtime answers a different question: when the artifact was last written. Every durable write refreshes it, including a truncate-repair of a torn tail, synthetic closers that balance an interrupted turn, and the [`session/end-seed` boundary](../../implemented/architecture/2026-07-30-session-end-seed-log-boundary.md) appended during pickup. That approximation promoted a Session merely because it was opened. The [bounded cold blank verification](../../archived/bug-fix/2026-08-13-bounded-cold-blank-verification.md) removed mtime ordering and accepted the cache's conservative "too old" failure direction as an interim tradeoff.
+The gateway previously used JSONL artifact mtime when available. mtime answers a different question: when the artifact was last written. Every durable write refreshes it, including a truncate-repair of a torn tail, synthetic closers that balance an interrupted turn, and the [`session/end-seed` boundary](../../../../packages/core/session/src/types.ts) appended during pickup. That approximation promoted a Session merely because it was opened. The [bounded cold blank verification](../../archived/bug-fix/2026-08-13-bounded-cold-blank-verification.md) removed mtime ordering and accepted the cache's conservative "too old" failure direction as an interim tradeoff.
 
 An attached summary can fold the live event log and select the latest human-authored `user/message`, but the cold path deliberately reads no logs: cold summaries come from the projection cache alone, so cold recency is only as fresh as the cache.
 
@@ -34,7 +34,7 @@ Three questions must be answered before implementation, and none of them is sett
 
 **Keep mtime and exclude boundary writes from it.** Rejected as impossible rather than undesirable: mtime is the filesystem's, not the backend's. Nothing short of restoring the timestamp after every boundary write would preserve it, and that races any concurrent reader and lies about the artifact.
 
-**Write the boundary only when repair occurred.** Would reduce the frequency, and the [boundary note](../../implemented/architecture/2026-07-30-session-end-seed-log-boundary.md) already rejected it: the predicate must hold for an orderly restart too. Trading a correctness invariant for timestamp accuracy is the wrong direction.
+**Write the boundary only when repair occurred.** Would reduce the frequency, and the [boundary reference](../../../../packages/core/session/src/types.ts) already rejected it: the predicate must hold for an orderly restart too. Trading a correctness invariant for timestamp accuracy is the wrong direction.
 
 **Derive activity from a projection cache.** This is the current interim implementation. `session-projection-cache` folds tails past a watermark without changing the persistence format, but it is optional and fail-soft. Its absence or checkpoint delay makes ordering depend on cache availability and freshness, so it cannot provide the authoritative value proposed here.
 
@@ -59,6 +59,6 @@ Three questions must be answered before implementation, and none of them is sett
 ## Related
 
 - [Bounded cold blank verification](../../archived/bug-fix/2026-08-13-bounded-cold-blank-verification.md) — removes mtime ordering and defines the interim cache-only cold summary this proposal would make exact.
-- [The end-seed log boundary](../../implemented/architecture/2026-07-30-session-end-seed-log-boundary.md) — one of the non-prompt writes that made mtime unsuitable.
-- [Session persistence](../../implemented/architecture/2026-06-14-session-persistence.md) — the append-only and never-rewrite invariants that rule out a mutable JSONL header field.
+- [The end-seed log boundary](../../../../packages/core/session/src/types.ts) — one of the non-prompt writes that made mtime unsuitable.
+- [Session persistence](../../../../packages/session/session-persistence/README.md) — the append-only and never-rewrite invariants that rule out a mutable JSONL header field.
 - [Handle-based session persistence](../../implemented/architecture/2026-08-27-handle-based-session-persistence.md) — the write-handle append path a stored field would hook into.

@@ -27,7 +27,7 @@ kind: "package-reference"
 
 与 `ui-conversation` 和 Host 侧的 [workspace-changes](../../deliverables/workspace-changes/README.zh.md) 插件一起挂载本插件；已完成轮次随即以改动文件卡片收尾，位于收尾消息正文与其动作页脚之间。没有可提供的摘要时——本轮没有改动任何文件、该插件被组合出去，或该轮之后 Host 重启过——卡片不出现，只保留交付卡片与正文链接；工作区不在 git 仓库内时摘要只列文件工具的编辑。
 
-改动文件与交付文件的入口卡片、内部文件图标底框和悬停预览浮层遵循 [R16 预览卡片规则](../../../docs/ui-radius.zh.md#radius-scale)，hover 保持相同轮廓。
+改动文件与交付文件的入口卡片和悬停预览浮层遵循 [R16 预览卡片规则](../../../docs/ui-radius.zh.md#radius-scale)；内部文件图标底框采用该规则的 R10 特例。各自的 hover 保持相同轮廓。
 
 <a id="explicit-deliveries"></a>
 ### 显式交付
@@ -79,8 +79,8 @@ Node 半部注册[模型体验](#model-experience)所述的静态 `ui:deliverabl
 
 - [workspace-changes](../../deliverables/workspace-changes/README.zh.md)——记录并提供卡片所渲染摘要的 Host 插件。
 - [ui-chat](../ui-chat/README.zh.md)——声明 `conversation.chat.turnTail` 洞并渲染收尾正文。
-- [本轮改动文件卡片](../../../.agents/notes/implemented/feature/2026-09-11-turn-changed-files-card.zh.md)——用 git 记录的摘要取代修改调用行背后的决策。
-- [工作区文件链接](../../../.agents/notes/implemented/feature/2026-07-31-web-workspace-file-links.zh.md)——早先产出文件行背后的决策；其 Host 打开路径已被[右侧 Sidebar](../../../.agents/notes/implemented/feature/2026-09-04-right-sidebar-docking-infrastructure.zh.md)取代。
+- [历史本轮改动文件卡片](../../../.agents/notes/archived/feature/2026-09-11-turn-changed-files-card.md)——用 git 记录的摘要取代修改调用行背后的决策。
+- [历史工作区文件链接](../../../.agents/notes/archived/feature/2026-07-31-web-workspace-file-links.md)——早先产出文件行背后的决策；其 Host 打开路径已被[右侧 Sidebar](../../../.agents/notes/implemented/feature/2026-09-04-right-sidebar-docking-infrastructure.zh.md)取代。
 - [行内文件提及](../../../.agents/notes/archived/feature/2026-08-07-web-inline-file-mentions.md)——收尾正文可点击提及背后的决策。
 - [客户端包映射](../README.zh.md)——相邻的浏览器 UI 包。
 
@@ -128,5 +128,3 @@ Node 半部注册[模型体验](#model-experience)所述的静态 `ui:deliverabl
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。提示词、slot、dictionary、文件操作路由与可选 service 注册归 effect 所有；Session 日志拥有声明，文件系统拥有文件内容。

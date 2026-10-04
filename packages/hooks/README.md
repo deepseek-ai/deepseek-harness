@@ -33,7 +33,7 @@ The hooks group lets agent runs reuse shell hooks written for Claude Code or Cod
 <a id="related-documentation"></a>
 ## Related documentation
 
-- [Interception extension-points Agent Note](../../.agents/notes/implemented/feature/2026-06-30-interception-extension-points.md) — the typed-Decision surface the bridges program against.
+- [Interception extension-points reference](../../docs/tool-execution-pipeline.md) — the typed-Decision surface the bridges program against.
 - [Hook bridges Agent Note](../../.agents/notes/archived/feature/2026-06-30-hook-bridges.md) — the bridge design and its decision mapping.
 - [Hook protocol library Agent Note](../../.agents/notes/archived/feature/2026-06-30-hook-protocol-lib.md) — what the shared library owns and why.
 

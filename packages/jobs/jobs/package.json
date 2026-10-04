@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-jobs",
   "description": "Background job registry (ctx.jobs) for the DeepSeek Harness — shared ids, owner isolation, polling, cancellation, and completion listeners for long-running tool work",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -18,10 +18,6 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./brand": {
       "types": "./lib/types/brand.d.ts",
       "default": "./lib/types/brand.js"
@@ -35,7 +31,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
@@ -43,7 +38,6 @@
   "peerDependencies": {
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-brand": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-workspace": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
@@ -56,7 +50,6 @@
   "devDependencies": {
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-brand": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-workspace": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"

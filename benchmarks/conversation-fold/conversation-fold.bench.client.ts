@@ -1,4 +1,4 @@
-/** Required performance budget for the compiled cold Client conversation fold. */
+/** Required performance budgets for compiled Client history folding and tool preparation. */
 
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -10,7 +10,7 @@ import {
   ciTimeBudget,
   PERFORMANCE_BUDGET_HEADROOM,
 } from '../support/calibration.ts'
-import type { ConversationFoldWorkerReport } from './conversation-fold.worker.client.ts'
+import type { ConversationFoldWorkerReport, PreparingToolWorkerReport } from './conversation-fold.worker.client.ts'
 
 /** Replies in the folded window; each carries one reasoning block and one text block. */
 const TURNS = 200
@@ -39,6 +39,12 @@ const LARGE_FOLD_BUDGET_MS = ciTimeBudget(EXPECTED_LARGE_FOLD_MS)
 const EXPECTED_DELTA_SCALING = 2.5
 const MAX_DELTA_SCALING = EXPECTED_DELTA_SCALING * PERFORMANCE_BUDGET_HEADROOM
 
+const PREPARING_SAMPLES = 3
+const PREPARING_CASES = [
+  { tool: 'write', characters: 512 * 1024, expectedMs: 300, expectedMb: 30 },
+  { tool: 'bash', characters: 128 * 1024, expectedMs: 150, expectedMb: 8 },
+] as const
+
 const WORKER = join(
   import.meta.dirname,
   '..',
@@ -47,9 +53,9 @@ const WORKER = join(
   'conversation-fold.worker.js',
 )
 
-function requireReport(
-  run: BuiltBenchmarkWorkerRun<ConversationFoldWorkerReport>,
-): ConversationFoldWorkerReport {
+function requireReport<Report>(
+  run: BuiltBenchmarkWorkerRun<Report>,
+): Report {
   if (run.report !== undefined) return run.report
   const stderrLines = run.stderr.trim().split('\n')
   throw new Error(
@@ -74,5 +80,35 @@ describe('cold Chat fold of a large v2 history window', () => {
     expect(report.chatNodes).toBeGreaterThan(0)
     expect(report.largeFoldMs).toBeLessThanOrEqual(LARGE_FOLD_BUDGET_MS)
     expect(report.scaling).toBeLessThanOrEqual(MAX_DELTA_SCALING)
+  })
+})
+
+describe('preparing tool arguments', () => {
+  it.each(PREPARING_CASES)('publishes streamed $tool arguments within bounded CPU and heap costs', async (workload) => {
+    const samples: PreparingToolWorkerReport[] = []
+    for (let index = 0; index < PREPARING_SAMPLES; index++) {
+      const run = await runBuiltBenchmarkWorker<PreparingToolWorkerReport>({
+        worker: WORKER, args: ['preparing', workload.tool, String(workload.characters)],
+        exposeGc: true, timeoutMs: WORKER_TIMEOUT_MS,
+      })
+      expect(run.timedOut, run.stderr).toBe(false)
+      expect(run.signal, run.stderr).toBeNull()
+      expect(run.exitCode, run.stderr).toBe(0)
+      const report = requireReport(run)
+      expect(report.characters).toBe(workload.characters)
+      if (workload.tool === 'write') {
+        expect(report.progressKb).toBe(workload.characters / 1024)
+        expect(report.filePath).toBe('preview.md')
+      }
+      expect(report.detail).toBe(workload.tool === 'write' ? 'preview.md' : `${'abcdefghijklmno '.repeat(10).slice(0, 159)}…`)
+      samples.push(report)
+    }
+    const medianMs = samples.map(sample => sample.elapsedMs).toSorted((a, b) => a - b)[1]!
+    const retainedMb = samples.map(sample => sample.retainedMb).toSorted((a, b) => a - b)[1]!
+    const budgetMs = ciTimeBudget(workload.expectedMs)
+    const budgetMb = workload.expectedMb * PERFORMANCE_BUDGET_HEADROOM
+    console.log(JSON.stringify({ benchmark: `conversation-fold/preparing-${workload.tool}`, samples, medianMs, retainedMb, budgetMs, budgetMb }))
+    expect(medianMs).toBeLessThanOrEqual(budgetMs)
+    expect(retainedMb).toBeLessThanOrEqual(budgetMb)
   })
 })

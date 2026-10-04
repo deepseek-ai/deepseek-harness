@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-office-to-pdf",
   "description": "Shared Office-to-PDF conversion with bounded queues and caching",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -55,7 +55,7 @@
     "@deepseek-ai/dsh-session": "workspace:*"
   },
   "dependencies": {
-    "@deepseek-ai/libreoffice-kit": "^0.1.1",
+    "@deepseek-ai/libreoffice-kit": "^0.1.5",
     "@deepseek-ai/schemastery": "workspace:~",
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",

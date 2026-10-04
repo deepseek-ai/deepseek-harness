@@ -96,7 +96,6 @@ The provider is built on two commitments:
 | [`src/index.ts`](src/index.ts) | Config schema and per-search option capture |
 | [`src/provider.ts`](src/provider.ts) | The `DeepSeekSearchProvider`: Messages request dispatch, block parsing, citation joining, credential resolution |
 | [`src/types.ts`](src/types.ts) | Anthropic wire types for the search response |
-| — | No runtime invariant companion is published; the package emits a pre-dispatch log event but owns no later authoritative dispatch event to relate it to. Exact envelope equality is pinned at the provider boundary instead. |
 
 ### Request flow
 

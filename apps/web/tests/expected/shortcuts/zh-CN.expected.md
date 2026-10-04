@@ -23,7 +23,7 @@
         - text: 添加工作区 ⌥ ⌘ O
       - listitem:
         - button "修改重命名会话快捷键"
-        - text: 重命名会话 ⇧ ⌘ R
+        - text: 重命名会话 ⌥ ⌘ G
       - listitem:
         - button "修改分叉会话快捷键"
         - text: 分叉会话 ⇧ ⌘ F
@@ -32,7 +32,7 @@
         - text: 归档会话 ⌥ ⌘ A
       - listitem:
         - button "修改打开设置快捷键"
-        - text: 打开设置 ⌘ ,
+        - text: 打开设置 ⌥ ⌘ ,
       - listitem:
         - button "修改展开／收起右侧栏快捷键"
         - text: 展开／收起右侧栏 ⇧ ⌘ B

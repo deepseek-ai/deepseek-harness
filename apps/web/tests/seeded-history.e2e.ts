@@ -372,7 +372,6 @@ describe('web e2e: seeded history renders through cold resume', () => {
     const processBottom = await process.evaluate(element => element.getBoundingClientRect().bottom)
     const answerTop = await page.getByText('DONE', { exact: true }).evaluate(element =>
       element.getBoundingClientRect().top)
-    // Collapsed control row keeps its own 8px margin plus the 8px flow gap.
     expect(answerTop).toBe(processBottom + 16)
     expect(await page.getByText('Context compacted', { exact: true }).count()).toBe(0)
     // Tool cards render from logged tool/call + tool/result alone (views are

@@ -6,7 +6,7 @@ English | [中文](2026-09-08-desktop-bundled-runtime-and-external-plugins.zh.md
 
 Plugin management and native recovery follow the [shared Web wrapper decision](2026-09-10-desktop-web-wrapper.md).
 
-The [Electron runtime decision](2026-09-11-desktop-electron-node-runtime.md) supersedes the separate upstream Node executable; other decisions in this note remain applicable.
+Desktop uses Electron as its Node runtime under the [current runtime reference](../../../../apps/desktop/README.md); other decisions in this note remain applicable.
 
 ## Problem
 
@@ -44,11 +44,11 @@ The shared [plugin manager](../../../../packages/boot/plugin-manager/README.md) 
 
 The shared Web plugin manager owns package mutations and activation; Electron retains profile preparation and native recovery. The [Web wrapper decision](2026-09-10-desktop-web-wrapper.md) owns these responsibilities.
 
-The [immediate-window decision](2026-09-09-desktop-immediate-window-and-direct-start.md) owns direct Host startup. The native recovery dialog can disable third-party bundles and back up the profile patch when the Web application cannot start. Installed plugin files remain available for repair.
+The [immediate-window reference](../../../../apps/desktop/README.md) owns direct Host startup. The native recovery dialog can disable third-party bundles and back up the profile patch when the Web application cannot start. Installed plugin files remain available for repair.
 
 ## Alternatives considered
 
-Full runtime verification belongs to packaging. Startup reads the resource descriptor and checks shared package records and required Host entries. The [release-validation decision](2026-09-09-desktop-build-release-validation.md) assigns release and target compatibility checks to packaging. Startup neither enumerates nor hashes installed runtime files. Reading every file before backend loading adds I/O proportional to distribution size; unusable modules instead fail when loaded. Build-time verification rejects changed, missing, extra, or linked files against the recorded inventory.
+Full runtime verification belongs to packaging. Startup reads the resource descriptor and checks shared package records and required Host entries. The [release-validation reference](../../../../apps/desktop/README.md) assigns release and target compatibility checks to packaging. Startup neither enumerates nor hashes installed runtime files. Reading every file before backend loading adds I/O proportional to distribution size; unusable modules instead fail when loaded. Build-time verification rejects changed, missing, extra, or linked files against the recorded inventory.
 
 - **Install the bundled offline seed at startup.** This preserves an ordinary pnpm installation procedure but repeats core extraction and installation on every affected machine. Materialized resources remove that work at the cost of more application files and release-builder responsibility.
 - **Force host dependency versions into plugins.** This unnecessarily couples ordinary plugin dependencies to the host. The runtime resolution supplies missing packages while pnpm-owned entries retain independent versions.

@@ -45,5 +45,3 @@ None; Session selectors and Slot scopes do not assemble model requests.
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The adapter materialization path enforces Session binding consistency.

@@ -68,7 +68,6 @@ The tool registry cannot move into a preset: its consumers are all host-plane �
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `mode` config, `apply` wiring `ctx.tools.presentAs` for the mounting scope |
-| — | No runtime invariant companion is published; this package makes exactly one scoped call into `ctx.tools` and owns no event or snapshot of its own; the relation it establishes — which presentation one agent's assembly uses — is the tool registry's to hold, and `dsh-tools` observes it there. |
 
 ### Behavior notes
 
@@ -86,7 +85,7 @@ The package-level contract is enough for most consumers; read these when you nee
 - [tools package](../tools/README.md) — the tool presentation modes and `presentAs` API.
 - [agent-presets package](../../preset/agent-preset-registry/README.md) — how presets compose agents and their standing mounts.
 - [Node ptc-runtime package](../../ptc-runtime/ptc-runtime-node/README.md) — the TypeScript runtime a PTC mode needs.
-- [PTC mode executor-collapse note](../../../.agents/notes/implemented/bug-fix/2026-08-07-ptc-executor-collapse.md) — why the announced and callable surfaces stay the same.
+- [historical PTC mode executor-collapse note](../../../.agents/notes/archived/bug-fix/2026-08-07-ptc-executor-collapse.md) — why the announced and callable surfaces stay the same.
 - [Core group map](../README.md) — how the core packages compose.
 
 -----

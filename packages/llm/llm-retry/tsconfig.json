@@ -30,9 +30,6 @@
       "path": "../../core/agent"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../../util/timeout"
     }
   ]

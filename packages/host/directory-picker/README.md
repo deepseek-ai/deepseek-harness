@@ -109,5 +109,3 @@ These limits define when the seam contract leaves a decision to a future consume
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. This stateless Service Definition owns the capability vocabulary, while backends and the Remote controller own observations.

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/process/2026-09-09-cancel-superseded-ci.md
+2026-09-09-cancel-superseded-ci.md: cb6c906d7507c2c2345faa72072a293a3a663968
+2026-09-09-cancel-superseded-ci.zh.md: e3a6b50e70cb721d84418ff097040ea2bdea3fcd

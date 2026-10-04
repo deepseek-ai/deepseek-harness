@@ -45,7 +45,7 @@ kind: "package-group"
 
 - [HTTP 服务器子系统](../../docs/subsystems/web-server.zh.md)——webserver 的路由、匹配顺序与配置。
 - [工作区子系统](../../docs/subsystems/workspace.zh.md)——目录选择器所喂给的工作区记录。
-- [Web 配置树启动与传输分层](../../.agents/notes/implemented/architecture/2026-07-24-web-config-tree-boot-and-transport-layering.zh.md)——Web 传输各层的所有权。
+- [Web 配置树启动与传输分层](../boot/app-boot/README.zh.md)——Web 传输各层的所有权。
 - [产品埋点](../../docs/subsystems/product-telemetry.zh.md)——显式提交分析事件。
 
 <a id="dev-note"></a>

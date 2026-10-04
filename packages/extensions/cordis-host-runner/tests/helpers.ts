@@ -48,7 +48,7 @@ interface Harness {
 
 /**
  * Build a real tree with the runner mounted and a recording gateway provided.
- * @param config - runner config overrides (the vm bound).
+ * @param config - runner configuration overrides.
  * @returns the context, the runner service, and the gateway recorder.
  */
 export async function setup(config?: Config): Promise<Harness> {

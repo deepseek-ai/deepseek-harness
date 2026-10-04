@@ -14,7 +14,7 @@ Status: implemented
 
 顶层 `snapshots/` 树和 `*.snapshot.ts` 后缀只用于拥有或显式引用录制会话 JSONL 的场景。每个进程级场景都通过 `dsh` 启动一个随附 profile；小型适配器控制 headless、SDK、ACP 或 Web 行为，但不成为另一个应用入口。声明式 `snapshot.yml` 只保存已完成会话无法表达的 profile、patch、生命周期控制、平台、header pin 和 workspace 事实。
 
-本决策取代[一次录制／确定性回放决策](2026-06-19-acp-snapshot-tests.zh.md)中 ACP 专属的放置位置与控制器所有权；后者继续负责会话日志回放、例外 override、规范化和 ACP transcript 比较。
+本决策取代[一次录制／确定性回放说明](../../../../packages/test-support/session-snapshot/README.zh.md)中 ACP 专属的放置位置与控制器所有权；后者继续负责会话日志回放、例外 override、规范化和 ACP transcript 比较。
 
 录制会话仍是主要输入，并在当前代际场景中同时作为预期输出。来自用户的消息驱动所选公开接口，录制的 assistant chunk 驱动确定性模型回放，规范化后的持久化结果必须等于 fixture。父会话和子会话共享同一类型化脱敏映射。提交的 fixture 使用保留关系的身份 token，并将请求 system prompt 和工具 schema 替换为 token；每个不同 header 类仍保留一个显式 sidecar 所有者。
 

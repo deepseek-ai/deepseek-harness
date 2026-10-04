@@ -66,7 +66,6 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - **只编辑命名空间的三个字段**——提供方的模型、API 版本和 token 预算保持组合值不变；本页只编辑密钥、接口地址和搜索次数。
-- **运行时不变量：**不发布伴生。本页没有自己拥有的关系：它显示的内容派生自设置镜像与凭据域，它写入的内容由 Host 校验。
 
 <a id="dev-note"></a>
 ### 开发备注

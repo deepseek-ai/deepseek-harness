@@ -2,7 +2,9 @@
 - text: 安装、启用和配置插件
 - button "插件说明"
 - button "刷新"
-- button "添加插件"
+- group "添加插件":
+  - button "添加插件"
+  - button "选择添加插件方式"
 - heading "官方" [level=3]
 - text: "8"
 - list:
@@ -15,9 +17,9 @@
     - text: 实验性 提供自动审查权限模式，由模型在每次工具调用前判断是否授权。
     - switch "启用 自动授权审查"
   - listitem:
-    - button "查看 自动化任务": 自动化任务
-    - text: 实验性 按设定的时间或周期，在会话中自动执行任务。
-    - switch "启用 自动化任务"
+    - button "查看 开发者工具": 开发者工具
+    - text: 实验性 查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端
+    - switch "启用 开发者工具"
   - listitem:
     - button "查看 语音输入": 语音输入
     - text: 实验性 在本机使用 SenseVoice 转写录音，首次使用需安装依赖。

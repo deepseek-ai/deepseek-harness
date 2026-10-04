@@ -1,0 +1,3 @@
+{
+  "modules": ["./token-weather.mjs"]
+}

@@ -40,7 +40,7 @@ kind: "package-reference"
 
 [编辑器](src/index.ts) 在派生候选配置前应用外部更改，与其他 profile 操作共同锁定 profile manifest，并原子替换配置覆盖项。它保留替换值以外的 YAML 注释和 `!!js` 表达式。应用失败时恢复之前的文档并重新加载之前的 patch。
 
-此包不发布 invariant companion：编辑器不维护独立配置投影。Loader 和持久化的 profile patch 拥有配置状态。
+读取配置时，没有 profile config 覆盖项的条目共用一次组合结果。有覆盖项的条目分别组合，仅移除自身的覆盖项；profile 插入的条目和其他条目的覆盖项仍然生效。返回的配置为独立副本，组合结果不跨读取缓存。
 
 </details>
 

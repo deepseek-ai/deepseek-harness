@@ -50,7 +50,7 @@ export function SessionScheduleMark({
       // own click target; the row keeps every other cell as its activation area.
       onClick={(event) => { event.stopPropagation() }}
     >
-      <IconClockOutlineRegular size={12} />
+      <IconClockOutlineRegular size={14} />
       {/* The glyph is aria-hidden, so the count reaches assistive technology
           only through this label, as the row's status dots do. */}
       <span className={css.visuallyHidden}>{t('mark.aria', { count: facts.records.length })}</span>

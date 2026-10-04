@@ -8,6 +8,7 @@ import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AgentPresetSectionState } from './section-store.ts'
 import { isBuiltInPreset, presetDisplayText } from './locales.ts'
+import { requiresCodingTools } from './settings-store.ts'
 import { PresetGuideDialog, presetGuide, trapPresetReaderTab, type PresetGuidePage } from './PresetGuideDialog.tsx'
 import css from './AgentPresetSection.module.css'
 
@@ -15,7 +16,7 @@ import css from './AgentPresetSection.module.css'
 export interface AgentPresetSectionInjected {
   hooks: {
     agentPresetSection: SnapshotStore<AgentPresetSectionState>
-    /** Shared Developer tools preference; off hides every selection action. */
+    /** Shared Coding Tools preference; off hides the built-in PTC and Minimal cards. */
     developerTools: ObservableSnapshot<boolean>
   }
   /** Stage the `cordis` preset and start a Creator-mode task; absent without a conversation flow. */
@@ -90,8 +91,7 @@ export function AgentPresetSection({
       <button
         type="button"
         className={css.creatorButton}
-        disabled={!developerTools || state.saving}
-        title={developerTools ? undefined : t('enableDevToolsToCreate')}
+        disabled={state.saving}
         onClick={() => { creator(); closeSettings() }}
       >
         <IconPlusOutlineRegular size={14} />
@@ -103,7 +103,8 @@ export function AgentPresetSection({
     <p className={css.intro}>{t('sectionIntro')}</p>
     {state.error === null ? null : <p className={css.error} role="alert">{state.error}</p>}
     {([true, false] as const).map((builtIn) => {
-      const rows = state.rows.filter(row => isBuiltInPreset(row) === builtIn)
+      const rows = state.rows.filter(row => isBuiltInPreset(row) === builtIn
+        && (developerTools || !requiresCodingTools(row)))
       const entry = builtIn ? null : creatorButton
       if (rows.length === 0 && entry === null) return null
       return <section key={String(builtIn)} className={css.group}>
@@ -113,15 +114,13 @@ export function AgentPresetSection({
             const display = presetDisplayText(row, t)
             const help = presetGuide(row.id, builtIn ? 'system' : 'user')
             const selectionAction = row.broken !== undefined ? t('brokenBadge')
-              : row.isDefault ? t('inUse')
-                : t(developerTools ? 'setDefault' : 'enableDevToolsToSetDefault')
+              : t(row.isDefault ? 'inUse' : 'setDefault')
             return <li key={row.id} data-agent-preset-id={row.id} className={[
               css.card, row.broken === undefined ? undefined : css.cardBroken,
               row.isDefault ? css.cardActive : undefined,
-              !developerTools && row.broken === undefined && !row.isDefault ? css.cardSelectionDisabled : undefined,
             ].filter(Boolean).join(' ')}>
               <button type="button" className={css.cardMain} aria-pressed={row.isDefault}
-                disabled={row.isDefault || (row.broken === undefined && (!developerTools || state.saving))}
+                disabled={row.isDefault || (row.broken === undefined && state.saving)}
                 aria-disabled={row.broken !== undefined} aria-label={`${selectionAction}: ${display.name}`} title={selectionAction}
                 onClick={() => { if (row.broken === undefined) void makeDefault(row.id) }}>
                 <span className={css.cardHead}>

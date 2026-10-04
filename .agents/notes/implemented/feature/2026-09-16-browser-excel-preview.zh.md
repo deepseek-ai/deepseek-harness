@@ -36,7 +36,7 @@ core 补丁还在 `allowEdit === false` 时跳过冻结分隔线的绘制，保�
 
 **替换 ExcelJS 或要求用户重写文件。** 更换解析器会使现有字体、边框、合并及冻结窗格的保留面临风险。重写源文件则把查看器缺陷交给用户处理。临时预览副本同时保留现有适配器和用户文件。
 
-**保留 PDF 作为 Excel 兜底，或在导入时计算所有公式。** PDF 无法保留表格交互与公式查看，而重新计算可能改变已保存结果。[Office 引擎决策](../architecture/2026-09-11-node-office-kit.zh.md)仍适用于 Word/PowerPoint 预览与独立转换使用方；转换能力仍支持表格。
+**保留 PDF 作为 Excel 兜底，或在导入时计算所有公式。** PDF 无法保留表格交互与公式查看，而重新计算可能改变已保存结果。[Office 引擎参考](../../../../packages/document/office-to-pdf/README.zh.md)仍适用于 Word/PowerPoint 预览与独立转换使用方；转换能力仍支持表格。
 
 ## 影响
 

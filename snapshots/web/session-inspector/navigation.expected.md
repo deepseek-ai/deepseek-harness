@@ -1,0 +1,5 @@
+- selected: tool/call
+- unavailable: tool-call
+- highlighted: assistant-step/reasoning
+- visible: true
+- bounds match highlighted node: true

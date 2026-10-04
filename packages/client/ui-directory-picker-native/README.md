@@ -55,7 +55,7 @@ Read these pages when the picking surface is not enough. They move from the brow
 - [dsh-host-directory-picker-native](../../host/directory-picker-native/README.md) — the OS chooser backend this surface drives.
 - [ui-workspace](../ui-workspace/README.md) — declares the directory-flow slots and owns the picking conversation.
 - [ui-directory-picker-browse](../ui-directory-picker-browse/README.md) — the in-app browsing alternative for remote and in-process deployments.
-- [Web client architecture](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.md) — how browser plugin rows load and register slots.
+- [Web client architecture](../../../docs/subsystems/web-client.md) — how browser plugin rows load and register slots.
 
 -----
 
@@ -88,5 +88,3 @@ These limits define when the native chooser fits. They are current package const
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The plugin registers a renderless flow occupant into two workspace holes as one transactional effect, whose disposal the HMR-safety spec proves, and it retains no state between picks.

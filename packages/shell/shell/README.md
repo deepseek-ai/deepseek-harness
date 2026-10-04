@@ -90,7 +90,6 @@ The package is one role of a standard capability seam: the Service Definition th
 | [`src/index.ts`](src/index.ts) | Plugin entry: abstract `ShellExecutor` service and the shared settings namespace |
 | [`src/types.ts`](src/types.ts) | Request/spec vocabulary, `ShellExecution`, `ShellRunResult`, and sandbox facts |
 | [`src/render.ts`](src/render.ts) | `parseExitStatus`: the exit-status marker contract the shell tools share |
-| — | No runtime invariant companion is published; this stateless Service Definition owns request/result types, while executors and policy own observations. |
 
 ### Settings namespace
 

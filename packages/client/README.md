@@ -77,6 +77,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-settings-models/`](ui-settings-models/README.md) | Provides model-provider configuration and DeepSeek onboarding | — |
 | [`ui-settings-shell/`](ui-settings-shell/README.md) | Provides the shell settings page on the Plugins page | — |
 | [`ui-settings-agent-loop/`](ui-settings-agent-loop/README.md) | Provides the agent-loop settings page on the Plugins page | — |
+| [`ui-settings-session-log/`](ui-settings-session-log/README.md) | Controls API Session-log upload in General settings | — |
 | [`ui-settings-subagent/`](ui-settings-subagent/README.md) | Provides the Subagent settings page on the Plugins page | — |
 | [`ui-settings-web-search/`](ui-settings-web-search/README.md) | Provides the web-search settings page on the Plugins page | — |
 | [`ui-plugin-manager/`](ui-plugin-manager/README.md) | Contributes the sidebar Plugins panel: install, enable, disable, retry, and compose installed packages | — |
@@ -96,7 +97,7 @@ Start with the subsystem reference and the two notes that own the cross-package 
 
 - [Client modules subsystem](../../docs/subsystems/client-modules.md) — the web plugin table: `dsh.client` declarations, the boot graph wire, and the bundle route.
 - [Slot system standard](../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.md) — the definitive slot model: registration, props shares, and stores.
-- [Web client architecture note](../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.md) — the loading chain, object layer, and client services.
+- [Web client architecture reference](../../docs/subsystems/web-client.md) — the loading chain, object layer, and client services.
 - [Host group map](../host/README.md) — the host half that serves this browser half.
 
 <a id="dev-note"></a>

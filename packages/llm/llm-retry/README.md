@@ -76,7 +76,6 @@ The executor is built on one rule: **durable before wait, open-step boundaries.*
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | The function plugin: waterfall listener, policy lookup, backoff, durable event appends |
-| [`src/history.ts`](src/history.ts) | Durable retry-history lookup from the session log |
 | [`src/types.ts`](src/types.ts) | Browser-safe `llm/retry` and `llm/retry-started` event payload types |
 | [`src/brand.ts`](src/brand.ts) | The `RetryId` brand shared by the event payloads |
 
@@ -144,6 +143,5 @@ These limits define where the executor stops and future work begins. They are cu
 This Dev Note is non-authoritative working context: notes for maintainers and open questions. Shipped behavior and accepted rationale live in the sections above, the package code, and the linked Agent Notes.
 
 - Retry numbers continue only across events with the same provider and complete policy key, so a route replacement with different limits, code membership, or backoff starts its own history; the key includes every behavior-affecting field and sorts normal-mode codes because eligibility uses set membership.
-- The separately published `./invariant` companion validates each scheduled retry against the session log — naming the current open turn and latest closed step, matching the failed request's durable provider, and requiring each `llm/retry-started` event to name one prior scheduled attempt with the same retry id, turn, step, and retry number.
 
 </details>

@@ -105,7 +105,6 @@ kind: "package-reference"
 | [`src/types.ts`](src/types.ts) | 线路类型与 `RemoteErrorDetailsMap` 错误码，以 `./types` 发布给 Client 包 |
 | [`src/client/index.ts`](src/client/index.ts)、[`provider.ts`](src/client/provider.ts)、[`change-feed.ts`](src/client/change-feed.ts) | 浏览器插件、文件元数据与按目标建立的变更流 |
 | [`src/client/types.ts`](src/client/types.ts)、[`remote.ts`](src/client/remote.ts) | 资源值、参数、Client 错误码与生成的 Remote 类型 |
-| — | 不发布运行时 invariant 伴生件；每个 Host 答案都在调用时由 `ctx.fs` 与沙箱策略推导。 |
 
 Typert 生成 `./typert` 与 `./remote` 暴露的 Host 与 Client Remote 产物。
 

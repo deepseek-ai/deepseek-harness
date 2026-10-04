@@ -38,7 +38,6 @@ The test-support group gives repository tests deterministic, keyless ways to exe
 ## Related documentation
 
 - [Testing policy](../../docs/testing.md) — the keyless snapshot tier these harnesses serve and when it is required.
-- [Runtime invariants subsystem](../../docs/subsystems/invariants.md) — registration and execution of package-owned runtime checks.
 - [Package groups](../README.md) — how support groups relate to the product groups.
 
 -----

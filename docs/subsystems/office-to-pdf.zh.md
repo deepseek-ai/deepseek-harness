@@ -37,7 +37,7 @@
 
 ## 引擎选择和限制
 
-外部 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-harness/libreoffice-kit) Node API 选择其预编译引擎。kit 独立维护版本和发布流程，具体归属由[发布归属决策](../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义。应用构建时安装已发布的 npm 包。应用打包要求目标已声明的原生引擎；kit 未为该目标声明原生引擎时使用 Node WASM。[平台引擎决策](../../.agents/notes/implemented/architecture/2026-09-15-platform-office-engines.zh.md)定义安装和打包规则。元数据无效、必需资源缺失和转换错误都会拒绝请求，不切换引擎。转换在 Host 使用磁盘输入输出路径，不使用浏览器转换引擎或字体 RPC。
+外部 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) Node API 选择其预编译引擎。kit 独立维护版本和发布流程，具体归属由[发布归属决策](../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义。应用构建时安装已发布的 npm 包。应用打包要求目标已声明的原生引擎；kit 未为该目标声明原生引擎时使用 Node WASM。[平台引擎参考](../../packages/document/office-to-pdf/README.zh.md)定义安装和打包规则。元数据无效、必需资源缺失和转换错误都会拒绝请求，不切换引擎。转换在 Host 使用磁盘输入输出路径，不使用浏览器转换引擎或字体 RPC。
 
 [Host 提供方配置](../../packages/document/office-to-pdf/README.zh.md#use-this-package)负责并发、期限、输入输出上限、归档上限、图像分辨率和字体访问。原生/WASM 实现和资产分发属于 kit 工作区。系统 LibreOffice 探测、运行时引擎下载、持久 PDF 缓存和面向模型的渲染不属于此提供方。
 

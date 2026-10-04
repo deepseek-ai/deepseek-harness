@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-util-values` 为运行时包提供统一的无损 JSON 值、不可变对象图、JSON 结构相等和封闭联合类型穷尽失败实现。调用方可以校验不受信任的值、创建分离的 JSON 快照、冻结待发布值、比较 JSON 兼容数据，或终止不可达分支，而无需导入某个能力包。这些 helper 不持有共享注册表、constructor identity 或可变模块状态。
+调用方可以校验无损 JSON、读取流式参数、创建分离的 JSON 快照、冻结待发布值、比较 JSON 兼容数据，或终止不可达分支，而无需导入某个能力包。每次流式调用使用独立的 `PartialArguments` 读器；`PartialArguments.EMPTY` 是不含字段的共用封存视图。
 
 ## 目录
 
@@ -37,6 +37,12 @@ if (!isJsonValue(input)) throw new TypeError('expected lossless JSON')
 const snapshot = snapshotJsonValue(input) as JsonValue
 ```
 
+### 读取流式参数
+
+`PartialArguments` 懒读取 JSON 对象的顶层字段。`append()` 分别保留分片，不扫描也不拼接。读器为新的键值范围建立索引，跳过未请求的内容；仅在请求时解码或计数字符串，仅在请求时解析已完整的非字符串值。`complete()` 表示结束分隔符已到达，不代表内容已校验；`invalid` 报告索引或内容读取已经发现的错误。它不能替代工具入参校验。
+
+`refresh()` 在发布点报告已观察答案的变化；期间的读取不会确认待发布的变化。它先读取内容再比较完成状态，避免解码错误吞掉完成状态更新。字符串读器提供解码文本、有界前缀和精确 UTF-16 长度，并可为变化判定指定步长和偏移量。`settle(finalText)` 直接将分片与完整文本比较：输入相同时封存原视图并保留缓存，分片缺失或冲突时创建新的封存视图。`fromText()` 和 `fromObject()` 也创建拒绝追加的封存视图。`isSealed` 读取这一追加限制，不扫描或观察内容；`closed()` 还包含外层对象闭合或索引失败的情况。返回值区别见[读器定义](src/partial-json.ts)。
+
 ### 发布、比较或保留键控值
 
 `deepFreeze(value)` 原地冻结对象图并返回同一个值。它遍历可枚举字符串键的子项，并刻意让活跃 `AbortSignal` 对象保持可变。`deepEqualJson(a, b)` 按结构比较 JSON 兼容数组与记录；调用方必须先校验恶意或不受约束的值，再进行比较。
@@ -62,7 +68,7 @@ JSON 校验器使用显式工作栈，并只跟踪当前祖先链，因此深层
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | JSON 值类型、校验与快照遍历、结构相等、深度冻结、弱键/强值关联和穷尽联合类型失败 |
-| — | 不发布运行时不变量伴生入口；这些值操作没有共享运行时状态，其代数行为由单元测试覆盖。 |
+| [`src/partial-json.ts`](src/partial-json.ts) | 懒扫描顶层参数，并检测已读取答案的变化 |
 
 </details>
 

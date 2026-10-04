@@ -9,20 +9,20 @@
   en: 5207d17725c07a27
   zh: 258884c4300ac63a
 /development-guide/setup-tutorial/prerequisites:
-  en: 6078798f0fda1347
-  zh: ea73704c4ec4f2a9
+  en: a8543c278338a02d
+  zh: b5790c5fea7c0bc6
 /development-guide/setup-tutorial/windows-and-wsl-2:
   en: e86be579be6f1813
   zh: 14f6a220337d0861
 /development-guide/setup-tutorial/first-time-setup:
-  en: f82b635837db9627
-  zh: ca23888533b0ffc1
+  en: bb2bab0ef17bfc32
+  zh: 8b7cf7e9e703e6af
 /development-guide/contributor-reference:
   en: 3221d1076554001f
   zh: 29f166be6a5c04d9
 /development-guide/contributor-reference/typescript-project-layout:
-  en: de9ab4baab0c5c91
-  zh: cde7e8ab4f698fcb
+  en: 42c03e89df4379e3
+  zh: 9df43176aa64d047
 /development-guide/contributor-reference/environment-variables:
   en: dba2c72ee6ffa930
   zh: b65c27fbb9129ec8
@@ -30,8 +30,8 @@
   en: dc98eda4f4021feb
   zh: b08766708803cf10
 /development-guide/contributor-reference/ci-gates:
-  en: 731fcaffe9210a72
-  zh: d682e221a71b0ef6
+  en: 8fa1aca14c548969
+  zh: a2bd1199fa7f7a8b
 /development-guide/contributor-reference/daily-commands:
   en: 08aa6ec1cdabfeb7
   zh: dcce5ae9d3c829d0

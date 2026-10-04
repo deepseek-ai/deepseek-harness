@@ -33,6 +33,7 @@
       - option "groq"
       - option "huggingface"
       - option "kimi-coding"
+      - option "meta"
       - option "minimax"
       - option "minimax-cn" [selected]
       - option "mistral"
@@ -47,6 +48,7 @@
       - option "qwen-token-plan"
       - option "qwen-token-plan-cn"
       - option "qwen-token-plan-individual"
+      - option "radius"
       - option "together"
       - option "vercel-ai-gateway"
       - option "xai"

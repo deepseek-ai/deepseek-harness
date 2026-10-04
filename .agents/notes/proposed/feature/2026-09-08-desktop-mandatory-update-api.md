@@ -14,7 +14,7 @@ Use a guest-accessible policy endpoint. This document owns its Desktop request a
 
 ### Endpoint and access
 
-The [client decision](../../implemented/feature/2026-09-11-desktop-mandatory-update-client.md) owns the implemented polling and blocking UI. This API proposal remains active for backend deployment and live integration; local fixtures do not certify the service.
+The [client reference](../../../../apps/desktop/README.md) owns the implemented polling and blocking UI. This API proposal remains active for backend deployment and live integration; local fixtures do not certify the service.
 
 ```http
 GET /api/v0/check_client_update

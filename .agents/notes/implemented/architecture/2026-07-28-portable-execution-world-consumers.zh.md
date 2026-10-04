@@ -20,7 +20,7 @@ Status: implemented
 
 文件系统接口负责其他能力需要的路径事实，同时不公开其不透明目标身份：规范化进程路径、规范化 `file:` URI 和包含关系。现有完整文本与流式文本操作仍归文件系统负责；协议消费方在消费流时执行各自的保留上限。
 
-进程管理接口负责可执行文件查找与进程原语：以原始或收集模式 spawn 普通进程，以及 `spawnTerminal()`。普通句柄把 target identity 保持为私有事实：`.done` 报告 direct target，`terminate()` 与 `waitForExit()` 则控制并观察同一个由提供方管理的范围。[原生 containment 决策](2026-08-28-subprocess-native-containment.zh.md)负责本地 Linux scope、Windows Job 及其已声明的 fallback。终端操作是一项深层原语，其句柄负责文本 I/O、前台进程组、信号发送，以及一项须等待的 TERM→KILL 操作；该操作会结算所有在途句柄调用，并使提供方拥有的范围中每个成员完全停稳；观察型 fallback 只能把该范围限制为它仍可观察到的 identity。其信号只取消分配；句柄一经发布，便负责自身生命周期。提示符检测、空闲推断、scrollback、沙箱策略和所有者生命周期仍由 PTY 消费方负责。
+进程管理接口负责可执行文件查找与进程原语：以原始或收集模式 spawn 普通进程，以及 `spawnTerminal()`。普通句柄把 target identity 保持为私有事实：`.done` 报告 direct target，`terminate()` 与 `waitForExit()` 则控制并观察同一个由提供方管理的范围。[原生 containment 参考](../../../../packages/subprocess/subprocess-local/README.zh.md)负责本地 Linux scope、Windows Job 及其已声明的 fallback。终端操作是一项深层原语，其句柄负责文本 I/O、前台进程组、信号发送，以及一项须等待的 TERM→KILL 操作；该操作会结算所有在途句柄调用，并使提供方拥有的范围中每个成员完全停稳；观察型 fallback 只能把该范围限制为它仍可观察到的 identity。其信号只取消分配；句柄一经发布，便负责自身生命周期。提示符检测、空闲推断、scrollback、沙箱策略和所有者生命周期仍由 PTY 消费方负责。
 
 通用消费方使用该执行世界：
 

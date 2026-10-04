@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { act, cleanup, fireEvent, isInaccessible, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, isInaccessible, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { bindSnapshotSelector, makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
@@ -213,7 +213,7 @@ function emptyNewTaskButton(dictionary: typeof en | typeof zh = en): HTMLElement
 function detailViewLabels(dictionary: typeof en | typeof zh) {
   return dictionary === en
     ? {
-      tablist: 'Task detail views', rules: 'Rules', records: 'Delivery records',
+      tablist: 'Task detail views', rules: 'Rules', records: 'Records',
       empty: 'No delivery record available',
     }
     : {
@@ -2933,6 +2933,24 @@ describe('Task detail rule header and run-time card', () => {
     expect(screen.getByRole('alert').textContent).toBe(en['rule.error.conflict'])
   })
 
+  it('explains a subagent-owned Session through the ordinary update result', async () => {
+    const h = mount({ records: [cron] })
+    fireEvent.click(screen.getByRole('button', { name: cron.prompt }))
+    h.updateTiming.mockResolvedValue({
+      ok: true,
+      value: { code: 'subagent_session', message: 'This Session belongs to subagent routing.' },
+    })
+    chooseCronShape(en['rule.cronLabel'])
+    fireEvent.change(screen.getByLabelText<HTMLInputElement>(en['rule.cronLabel']), {
+      target: { value: '*/15 * * * *' },
+    })
+    clickSave()
+    await act(async () => { await h.updateTiming.mock.results[0]!.value })
+    // The refusal arrives as an ordinary non-mutating result, so the editor
+    // names the reason instead of falling back to `rule.error.unknown`.
+    expect(screen.getByRole('alert').textContent).toBe(en['timing.subagentSession'])
+  })
+
   it.each([en, zh])('renders a catalog cron rule with its shape rows, preview, zone, and next run', (dictionary) => {
     mount({ records: [cron] }, dictionary)
     fireEvent.click(screen.getByRole('button', { name: cron.prompt }))
@@ -3398,6 +3416,108 @@ describe('Task detail rule header and run-time card', () => {
     fireEvent.click(within(detail).getByRole('tab', { name: detailViewLabels(en).rules }))
     expect(detailContext(detail)).not.toBeNull()
     expect(within(detail).getByRole('button', { name: en['detail.openSession'] })).toBeDefined()
+  })
+
+  it('shrinks the linked Session entry to an icon with a tooltip while the strip cannot fit it', () => {
+    class FakeResizeObserver implements ResizeObserver {
+      static readonly made: FakeResizeObserver[] = []
+      readonly observe = vi.fn<(target: Element) => void>()
+      readonly unobserve = vi.fn()
+      readonly disconnect = vi.fn()
+      constructor(private readonly callback: ResizeObserverCallback) {
+        FakeResizeObserver.made.push(this)
+      }
+
+      fire(): void {
+        this.callback([], this)
+      }
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+    const stripObserver = (): FakeResizeObserver => FakeResizeObserver.made
+      .findLast(observer => observer.observe.mock.calls.some(([target]) => target.getAttribute('role') === 'tablist'))!
+    // The tab list needs 120px; the expanded entry takes 120px and the icon 28px,
+    // and the tabs get the rest of the strip.
+    let strip = 220
+    const compact = (): boolean => document.querySelector(`.${css.detailContext} .${css.detailIconButton}`) !== null
+    const entryWidth = (): number => (compact() ? 28 : 120)
+    // The tab list itself grows into the strip, so only its tabs report the 120px.
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(() => strip - entryWidth())
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.classList.contains(css.detailContext!)) return new DOMRect(0, 0, entryWidth(), 28)
+      if (this.getAttribute('role') === 'tab') return new DOMRect(this.getAttribute('data-detail-tab') === 'rule' ? 0 : 80, 0, 40, 30)
+      return new DOMRect(0, 0, 0, 0)
+    })
+    try {
+      let state: WorkspaceSnapshot = workspaces
+      const h = mount({ records: [at] }, en, { useWorkspaces: select => select(state) })
+      fireEvent.click(screen.getByRole('button', { name: 'Review release' }))
+      const detail = screen.getByRole('complementary', { name: en['detail.label'] })
+      const link = (): HTMLElement => within(detailContext(detail)!).getByRole('button', { name: en['detail.openSession'] })
+      const tooltip = (): string | null | undefined => document.querySelector('[role="tooltip"]')?.textContent
+      expect(compact()).toBe(true)
+      // Each tab is observed too, so a tab label that widens re-measures the strip.
+      for (const tab of within(detail).getAllByRole('tab')) expect(stripObserver().observe).toHaveBeenCalledWith(tab)
+      expect(link().className).toBe(within(detail).getByRole('button', { name: en['detail.more'] }).className)
+      expect(within(link()).queryByText(en['detail.session'])).toBeNull()
+      expect(within(link()).getByText(at.sessionId)).toBeDefined()
+      fireEvent.mouseEnter(detailContext(detail)!)
+      expect(tooltip()).toBe(en['detail.session'])
+      fireEvent.mouseLeave(detailContext(detail)!)
+      fireEvent.click(link())
+      expect(h.props.onOpenSession).toHaveBeenCalledExactlyOnceWith(at.sessionId)
+
+      // A disabled compact entry still names itself on hover through its wrapper.
+      state = { ...workspaces, archivedSessionIds: [at.sessionId] }
+      h.update({})
+      expect(link().hasAttribute('disabled')).toBe(true)
+      fireEvent.mouseEnter(detailContext(detail)!)
+      expect(tooltip()).toBe(en['detail.session'])
+      fireEvent.mouseLeave(detailContext(detail)!)
+      state = workspaces
+      h.update({})
+      const focused = link()
+      focused.focus()
+
+      // The expanded entry needs 120px beside the tabs' 120px, plus 1px to expand again.
+      strip = 240
+      act(() => { stripObserver().fire() })
+      expect(compact()).toBe(true)
+      strip = 241
+      act(() => { stripObserver().fire() })
+      expect(compact()).toBe(false)
+      // The same button changes layout, so keyboard focus survives the switch.
+      expect(link()).toBe(focused)
+      expect(document.activeElement).toBe(focused)
+      fireEvent.mouseEnter(detailContext(detail)!)
+      expect(tooltip()).toBeUndefined()
+      fireEvent.mouseLeave(detailContext(detail)!)
+      strip = 240
+      act(() => { stripObserver().fire() })
+      expect(compact()).toBe(false)
+      expect(within(link()).getByText(en['detail.session'])).toBeDefined()
+
+      // A label changed while compact is measured expanded before shrinking again.
+      strip = 200
+      act(() => { stripObserver().fire() })
+      expect(compact()).toBe(true)
+      h.view.rerender(<TaskManagerPage {...h.props} t={makeTranslate(zh)} />)
+      expect(compact()).toBe(true)
+      expect(within(detail).getByRole('button', { name: zh['detail.openSession'] })).toBeDefined()
+
+      const observer = stripObserver()
+      fireEvent.click(within(detail).getByRole('tab', { name: detailViewLabels(zh).records }))
+      expect(detailContext(detail)).toBeNull()
+      expect(observer.disconnect).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('scrolls the detail tabs without a visible scrollbar', () => {
+    const sheet = readFileSync(resolve(import.meta.dirname, '../src/client/TaskManagerPage.module.css'), 'utf8')
+    expect(sheet).toMatch(/\.detailTabs \{[^}]*overflow-x: auto;[^}]*scrollbar-width: none;/)
+    expect(sheet).toMatch(/\.detailTabs::-webkit-scrollbar \{\s*display: none;/)
   })
 })
 
@@ -3985,8 +4105,10 @@ describe('Task manager deletion', () => {
     h.list.mockResolvedValueOnce({ ok: true, value: [] })
     fireEvent.click(screen.getByRole('button', { name: en['list.retry'] }))
     await screen.findByText(en['list.empty'])
-    // The successful read reports the row gone, so the detail closes.
-    expect(screen.queryByRole('complementary')).toBeNull()
+    // The successful read reports the row gone, so the detail closes. The panel
+    // leaves on the effect that observes the removed row, one commit after the
+    // empty list replaces it, so the assertion waits for that commit.
+    await waitFor(() => { expect(screen.queryByRole('complementary')).toBeNull() })
   })
 
   it('keeps the detail on its rule when the confirmed deletion reaches no authoritative removal', () => {

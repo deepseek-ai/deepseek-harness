@@ -93,5 +93,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变量：** 不发布 companion；本插件仅提交由注册表管理的定义，没有可独立偏离的运行时状态。

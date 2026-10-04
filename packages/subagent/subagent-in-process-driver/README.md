@@ -73,7 +73,6 @@ The required request signal covers both startup and the live run. Before publica
 |---|---|
 | [`src/index.ts`](src/index.ts) | Run driver: creation, one-turn drive, result reading, disposal |
 | [`src/structured.ts`](src/structured.ts) | Structured-output runtime: capture tool, prompt section, guard, commit |
-| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 </details>
 
@@ -87,7 +86,7 @@ Read these pages when the package-level contract is not enough; they move from t
 - [Subagent subsystem](../../../docs/subsystems/subagent.md) — start requests, results, provider contract, and in-process depth and seed.
 - [dsh-subagent-spawn-in-process](../subagent-spawn-in-process/README.md) — the fresh-child backend built on this driver.
 - [dsh-subagent-fork-in-process](../subagent-fork-in-process/README.md) — the seeded-child backend built on this driver.
-- [Delegation-policy decision](../../../.agents/notes/implemented/feature/2026-07-25-subagent-policy-inheritance.md) — how parent sandbox and approval policy reach the child.
+- [Delegation-policy reference](../subagent/README.md) — how parent sandbox and approval policy reach the child.
 
 -----
 

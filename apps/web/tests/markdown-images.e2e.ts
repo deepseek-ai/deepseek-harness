@@ -80,7 +80,7 @@ async function stopServer(server: Server): Promise<void> {
   })
 }
 
-/** Build one closed, invariant-checked session fixture with remote and local image Markdown. */
+/** Build one closed session fixture with remote and local image Markdown. */
 function markdownImageFixture(remoteUrl: string, outsidePath: string): string {
   const session = Session.create(SessionId('markdown-image-source'))
   const eventTimeOrigin = new Date().setHours(12, 0, 0, 0)

@@ -6,9 +6,9 @@ Status: implemented
 
 ## Problem
 
-[Claude Code 与 Codex 产品提供方](2026-08-04-claude-code-and-codex-subagent-backends.zh.md)都在没有人工界面的情况下运行。因此，原生权限提示、用户对话或 MCP elicitation 不能等待人员响应，但依赖任一产品环境中的默认值仍可能选择交互模式。部署也需要选择更宽松的原生模式，同时不能让父模型或单次工具调用提升自身权限。
+[Claude Code 与 Codex 产品提供方](../../../../packages/subagent/subagent-codex/README.zh.md)都在没有人工界面的情况下运行。因此，原生权限提示、用户对话或 MCP elicitation 不能等待人员响应，但依赖任一产品环境中的默认值仍可能选择交互模式。部署也需要选择更宽松的原生模式，同时不能让父模型或单次工具调用提升自身权限。
 
-失败的产品运行此前只能把终止原因送入 [subagent seam](2026-06-21-subagent-capability-seam.zh.md)。日志可以保留产品错误，但前台父 agent 与[一次性后台 Job](../../archived/feature/2026-08-12-product-subagent-one-shot-background-tasks.md)无法区分权限拒绝和其他失败。若复用 assistant 输出承载该事实，则会把基础设施说明错误归因给子模型。
+失败的产品运行此前只能把终止原因送入 [subagent seam](../../../../packages/subagent/subagent/README.zh.md)。日志可以保留产品错误，但前台父 agent 与[一次性后台 Job](../../archived/feature/2026-08-12-product-subagent-one-shot-background-tasks.md)无法区分权限拒绝和其他失败。若复用 assistant 输出承载该事实，则会把基础设施说明错误归因给子模型。
 
 ## Decision
 

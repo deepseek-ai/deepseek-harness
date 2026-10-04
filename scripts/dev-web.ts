@@ -173,7 +173,7 @@ export function discoverLibraryDirs(root = repoRoot): string[] {
  * @param root - repository or fixture root passed to tsdown.
  * @param pluginDirs - workspace-relative package directories to watch.
  * @param pollInterval - optional source-watcher polling interval in milliseconds.
- * @returns live bundles after every watcher has completed its initial build.
+ * @returns live bundles after every watcher has completed its initial build and package-owned post-build hooks.
  */
 export async function watchClientPlugins(
   root: string,
@@ -187,17 +187,17 @@ export async function watchClientPlugins(
   const bundles = await build({
     cwd: root,
     workspace: [...pluginDirs],
+    configLoader: 'native',
     watch: true,
-    hooks: {
-      'build:done': ({ options }) => {
-        if (initialized.has(options)) return
-        initialized.add(options)
-        readiness.initializedBuilds += 1
-        if (
-          readiness.expectedBuilds !== undefined
-          && readiness.initializedBuilds >= readiness.expectedBuilds
-        ) resolveInitialBuilds?.()
-      },
+    // Workspace hooks override inline hooks; onSuccess runs after each package's build:done work.
+    onSuccess: (options) => {
+      if (initialized.has(options)) return
+      initialized.add(options)
+      readiness.initializedBuilds += 1
+      if (
+        readiness.expectedBuilds !== undefined
+        && readiness.initializedBuilds >= readiness.expectedBuilds
+      ) resolveInitialBuilds?.()
     },
     ...pollInterval !== undefined
       ? { inputOptions: { watch: { watcher: { usePolling: true, pollInterval } } } }

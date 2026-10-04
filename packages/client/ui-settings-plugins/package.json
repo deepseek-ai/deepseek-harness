@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-settings-plugins",
   "description": "Built-in plugins settings section for the dsh web client: the Settings navigation entry and the tab chrome feature-owned tabs register into",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

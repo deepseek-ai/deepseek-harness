@@ -42,7 +42,7 @@ Start with the subsystem references for the shared vocabularies, then the neighb
 - [Commands subsystem](../../docs/subsystems/commands.md) — command registry semantics and the `ctx.commands` Cordis surface.
 - [Approval subsystem](../../docs/subsystems/approval.md) — request/outcome vocabulary, the answerer waterfall, and per-session policy.
 - [Permission presets subsystem](../../docs/subsystems/permission-presets.md) — the preset table and the knob write-through.
-- [User interaction subsystem](../../docs/subsystems/user-questions.md) — question vocabulary, answerer waterfall, and presentation intent.
+- [User interaction subsystem](../../docs/subsystems/user-questions.md) — question vocabulary, answerer waterfall, and pending-question lifecycle.
 - [ACP group](../acp/README.md) — the automation-only transport that answers approval requests for its own agents.
 
 <a id="dev-note"></a>

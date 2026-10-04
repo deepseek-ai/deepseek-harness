@@ -63,7 +63,6 @@ The provider registers three bundled candidates and reads their descriptions fro
 |---|---|
 | [`src/index.ts`](src/index.ts) | Provider registration and configured resource paths. |
 | [`assets/`](assets/) | Three workflows and the read-only OOXML checker. |
-| — | No runtime invariant companion is published: the provider owns immutable candidates, and the skill registry owns registration lifecycle and precedence. |
 
 </details>
 

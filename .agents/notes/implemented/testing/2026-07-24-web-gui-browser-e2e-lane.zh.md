@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-Web GUI 以一条真实组装链交付——chromium 页面 → client 插件 bundle → HTTP 单次 RPC + 两条 SSE（Server-Sent Events）流 → `toFetchHandler`/apiproxy → host 端的 agent loop（智能体循环）、工具与 JSONL 持久化——却没有任何测试无密钥且确定性地检验这条链。[GUI 测试体系](../process/2026-07-20-gui-testing-system.zh.md)覆盖第 1 层（Node 中的协议同构）、第 2 层（对象层状态机）与第 3 层冒烟测试，但原有无密钥冒烟驱动的是独立 Client fixture——没有 host、没有 wire、没有 agent loop——而全链路冒烟需要 `DEEPSEEK_API_KEY` 和真实模型，因此不确定、在无密钥 CI 中自行跳过。[docs/testing.md](../../../../docs/testing.zh.md) 的快照哲学——带密钥录制一次、永久无密钥回放、格式变动时刷新——已覆盖 ACP（Agent Client Protocol）、headless `stream-json` 与 TUI 三个 transcript（文本记录）表面；web 表面是唯一没有这层保障的组装形态。而缺口恰恰是两起已实证 GUI P0 藏身之处：独立 fixture 短路掉的 wire 承载链。
+Web GUI 以一条真实组装链交付——chromium 页面 → client 插件 bundle → HTTP 单次 RPC + 两条 SSE（Server-Sent Events）流 → `toFetchHandler`/apiproxy → host 端的 agent loop（智能体循环）、工具与 JSONL 持久化——却没有任何测试无密钥且确定性地检验这条链。[GUI 测试体系](../../../../docs/testing.zh.md)覆盖第 1 层（Node 中的协议同构）、第 2 层（对象层状态机）与第 3 层冒烟测试，但原有无密钥冒烟驱动的是独立 Client fixture——没有 host、没有 wire、没有 agent loop——而全链路冒烟需要 `DEEPSEEK_API_KEY` 和真实模型，因此不确定、在无密钥 CI 中自行跳过。[docs/testing.md](../../../../docs/testing.zh.md) 的快照哲学——带密钥录制一次、永久无密钥回放、格式变动时刷新——已覆盖 ACP（Agent Client Protocol）、headless `stream-json` 与 TUI 三个 transcript（文本记录）表面；web 表面是唯一没有这层保障的组装形态。而缺口恰恰是两起已实证 GUI P0 藏身之处：独立 fixture 短路掉的 wire 承载链。
 
 ## 决策
 
@@ -50,7 +50,7 @@ Web GUI 以一条真实组装链交付——chromium 页面 → client 插件 bu
 
 ### CI 立场
 
-根据[浏览器快照 CI 决策](2026-07-30-web-browser-snapshot-ci-gate.zh.md)，该车道是 Linux 拉取请求必需的只比较门禁。`node 24 / snapshots and artifacts` 消费方任务在[消费方独立构建](../../archived/process/2026-07-30-independent-ci-consumer-build.md)中负责唯一一次 Linux 构建，安装锁文件选定的 Chromium 和 WebKit，恢复以操作系统和锁文件为键的缓存，并用 `DSH_SNAPSHOT=replay` 运行该车道。这是有意的平面切分：host 与 spec 使用 [tsx 源码启动约定](../architecture/2026-07-29-dsh-source-launch-tsx-esm.zh.md)，浏览器则消费 `apps/web/dist` 和包的 `lib/client.js` 产物，因此门禁依赖 `built-package-invariants` 提供这些客户端产物。自托管的默认分支 Linux 串行热备运行同一门禁；不存在托管 Linux 串行生产者生成供 PR 消费的浏览器缓存，持久化自托管池则不需要托管侧缓存。CI 从不录制或刷新预期输出。场景仍面向 POSIX，并继续置于 Windows 和 macOS 矩阵之外。
+根据[浏览器快照 CI 说明](../../../../docs/testing.zh.md)，该车道是 Linux 拉取请求必需的只比较门禁。`node 24 / snapshots and artifacts` 消费方任务在[消费方独立构建](../../archived/process/2026-07-30-independent-ci-consumer-build.md)中负责唯一一次 Linux 构建，安装锁文件选定的 Chromium 和 WebKit，恢复以操作系统和锁文件为键的缓存，并用 `DSH_SNAPSHOT=replay` 运行该车道。这是有意的平面切分：host 与 spec 使用 [tsx 源码启动约定](../architecture/2026-07-29-dsh-source-launch-tsx-esm.zh.md)，浏览器则消费 `apps/web/dist` 和包的 `lib/client.js` 产物，因此门禁依赖 `build` 提供这些客户端产物。自托管的默认分支 Linux 串行热备运行同一门禁；不存在托管 Linux 串行生产者生成供 PR 消费的浏览器缓存，持久化自托管池则不需要托管侧缓存。CI 从不录制或刷新预期输出。场景仍面向 POSIX，并继续置于 Windows 和 macOS 矩阵之外。
 
 高基数性能诊断使用单独按需启用的 `apps/web/tests/**/*.perf.ts` 清单，并且只由 `vitest.web.perf.config.ts` 选中。`complex-history.perf.ts` 的隔离用例复用真实 scaffold：工作区用例播种 1,000 个紧凑会话以及一份包含 500 次工具调用的 500 轮次历史，在 Chat 中穷尽并重新挂载该历史，并报告 Chromium 主线程、DOM、监听器、堆内存、分页、搜索和 Trajectory 测量结果。两个续聊用例播种同一份长历史，但比较默认的 24 轮次 Chat 窗口与展开全部 500 轮次的状态，然后各自通过真实输入框、agent loop、SSE wire、工具和持久化继续进行 8 个相同轮次；其中两轮执行真实 `bash` 调用并断言其持久化结果，最后一轮则填入一条包含 8,232 个字符的混合语言提示词，并回放 120 个带节奏的文本增量。一个单独的 soak 用例从空白会话开始，通过真实输入框连续驱动 100 轮，每第 10 轮执行一次 `bash` 调用并产生结果，每 10 轮强制执行一次 GC，并报告每 10 轮的延迟窗口及保留的浏览器状态。随后它通过受信任的浏览器点击提交第 101 个纯文本轮次，并使用浏览器时钟分别测量发送到 transcript DOM 和发送到绘制后的延迟，排除输入框的草稿镜像，并与完整轮次完成时间分开。逐轮诊断涵盖输入框填入、点击到用户消息回显、点击到首个分片、完成、浏览器变更、持久化分片和工具事件；合成回放模型拥有足够的上下文容量，可使 fixture 基数保持稳定，而不会因压缩（compaction）消耗脚本化调用。结构性断言钉住预期的负载、流和工具形状，但时间仍不设阈值，因为机器速度不属于正确性约定。必需的 `vitest.web.config.ts` 清单仍仅限 `*.e2e.ts` 和 `*.snapshot.ts`，因此 `test:web:built` 及其 CI 门禁都不会收集性能用例。
 

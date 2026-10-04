@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-workspace-changes",
   "description": "Per-turn workspace file changes recorded from git working-tree snapshots and whole-file captures, with per-file comparisons, for the DeepSeek Harness",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

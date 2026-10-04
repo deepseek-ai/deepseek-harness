@@ -174,6 +174,7 @@ describe('timingError', () => {
     ['schedule_conflict', 'timing.conflict'],
     ['schedule_ended', 'timing.inactive'],
     ['schedule_not_found', 'timing.notFound'],
+    ['subagent_session', 'timing.subagentSession'],
     ['invalid_time_zone', 'timing.invalidZone'],
     ['not_future', 'timing.notFuture'],
     ['frequency_too_high', 'timing.invalidInterval'],

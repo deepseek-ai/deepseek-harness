@@ -7,7 +7,7 @@ description: Record browser or Web UI interaction demos as optimized GIFs using 
 
 Produce a short, truthful UI demonstration as a local GIF, and — only when the task includes attaching it to a pull request — publish it through the attach workflow at the end of this skill. The available browser-control workflow remains preferred. Use [Playwright Videos](https://playwright.dev/docs/videos) when that workflow supports continuous capture at higher frame rates; use the bundled encoder for trimming, playback speed, final hold, dimensions, and size.
 
-The [evidence-chain decision](../../notes/implemented/process/2026-08-08-browser-gif-evidence-chain.md) owns why one storyboard comes from one isolated run and why publication revalidates both the artifact and the demonstrated pull-request head.
+The [archived evidence-chain decision](../../notes/archived/process/2026-08-08-browser-gif-evidence-chain.md) records why one storyboard comes from one isolated run and why publication revalidates both the artifact and the demonstrated pull-request head.
 
 ## Every GUI pull request includes a GIF
 

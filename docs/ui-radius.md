@@ -40,7 +40,7 @@ Prefer an existing shared size variant when a proposed control falls between the
 
 Concrete defaults: `Button` uses H28/R8 for `sm` and H36/R12 for `md`, including outline variants. Standard H32 inputs and H36 selectors use R12. The Workspace files and New terminal guide entries both use R20, including title-only and described variants. Reserve R28 for their enclosing panel or dialog, not those entries.
 
-Code blocks, diffs, and file previews share R16: changed-file entry cards, delivered-file cards, generic file attachment cards, hover preview panels, and the file-icon tiles inside entry cards. Their hover fills keep the same contour.
+Code blocks, diffs, and file previews share R16: changed-file entry cards, delivered-file cards, generic file attachment cards, and hover preview panels. The 40px file-icon tiles inside changed-file and delivery cards use R10 on all four corners as a component-specific exception. Their hover fills keep the same contour.
 
 <a id="shapes"></a>
 ## Reuse tokens and preserve deliberate shapes

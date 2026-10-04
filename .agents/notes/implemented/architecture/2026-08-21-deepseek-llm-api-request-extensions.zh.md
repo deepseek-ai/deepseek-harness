@@ -50,7 +50,7 @@ Status: implemented
 
 ## 验证
 
-注册表测试固定重复所有权、effect 作用域 dispose（资源释放）、分离字段值、并发且可取消的准备、保留接收者的接受操作、单次接受结算与失败聚合。会话测试固定默认开启与显式关闭策略、首次完整／后续后缀交付、与基础正文消息无关的直接完整事件信封、增量水位 fold、持久化重启恢复、fork 身份围栏、乱序接受与 invariant 延迟加载。插件包清单测试固定默认开启与显式关闭策略、宿主与 standing preset 发现、冲突的 Loader 解析基址、manifest 解析、生命周期过滤及确切名称／版本排序。直接适配器 mock 测试证明 HTTP 前准备失败、取消、非 2xx 不接受、2xx 在后续流失败前接受，以及字段冲突。无密钥回放会固定 2xx 后扩展接受，TypeScript JSON-RPC 与 Python 打包运行时快照则通过两套 SDK 投影接受事件。真实 Loader 组合会固定默认包元数据、默认会话上传与显式关闭上传，一个真实 API 请求会挂载两个随附扩展并证明官方端点接受它们；pi-ai 测试保持其协议请求不变。
+注册表测试固定重复所有权、effect 作用域 dispose（资源释放）、分离字段值、并发且可取消的准备、保留接收者的接受操作、单次接受结算与失败聚合。会话测试固定默认开启与显式关闭策略、首次完整／后续后缀交付、与基础正文消息无关的直接完整事件信封、增量水位 fold、持久化重启恢复、fork 身份围栏与乱序接受。插件包清单测试固定默认开启与显式关闭策略、宿主与 standing preset 发现、冲突的 Loader 解析基址、manifest 解析、生命周期过滤及确切名称／版本排序。直接适配器 mock 测试证明 HTTP 前准备失败、取消、非 2xx 不接受、2xx 在后续流失败前接受，以及字段冲突。无密钥回放会固定 2xx 后扩展接受，TypeScript JSON-RPC 与 Python 打包运行时快照则通过两套 SDK 投影接受事件。真实 Loader 组合会固定默认包元数据、默认会话上传与显式关闭上传，一个真实 API 请求会挂载两个随附扩展并证明官方端点接受它们；pi-ai 测试保持其协议请求不变。
 
 ## 考虑过的替代方案
 
@@ -89,4 +89,4 @@ DeepSeek 官方请求会把存活包版本发送到解析后的 `baseURL`，包�
 
 `delivery-accepted` 事件会成为权威日志的一部分，并在后续请求中自行交付。崩溃恢复可能重复后缀，但不会根据 assistant 输出推断接受，也不会创建第二份本地游标存储。缺少存活会话的直接调用会省略会话字段；宿主包清单仍然可用。
 
-[DeepSeek 请求身份决策](../feature/2026-08-11-deepseek-request-user-id-header.zh.md)继续拥有 user／session header，且这些 header 仍位于正文之外。[会话遥测决策](../feature/2026-07-23-session-telemetry-otel-revival.zh.md)在另一项变更删除该 seam 与后端之前仍保持当前有效；本请求路径不改变 OTel 捕获或共享模式。
+[DeepSeek 参考](../../../../packages/llm/llm-deepseek/README.zh.md)定义正文之外的 user／session header。[会话遥测参考](../../../../packages/session/session-telemetry/README.zh.md)负责捕获与脱敏；本请求路径不改变 OTel 捕获或共享模式。

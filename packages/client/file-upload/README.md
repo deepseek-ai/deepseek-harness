@@ -44,11 +44,11 @@ The package has no Cordis configuration fields. A `Blob` uses XMLHttpRequest ins
 
 The Client plugin provides `ctx.fileUpload`. Its `upload()` method receives the owning Session identity, assembles the raw route request, and invokes the generated Remote for exact bytes. The provider reads the optional pre-Cordis `__DSH_FILE_UPLOAD__` hook once. Without a hook, each Blob or stream request owns a short-lived Worker and releases it after completion, failure, or cancellation. With the hook, the service sends the body through the page-owned Fetch carrier; the Web Worker runtime transfers stream bodies through its request frame and exposes them to the Host HTTP bridge as backpressured chunks.
 
-The Host plugin provides `ctx.fileUploads`. It owns the authenticated streaming route, encoded Remote fallback, command receipt resolver, and staged-receipt lifecycle; encoded admission, attachment-error recognition, and byte storage stay behind `ctx.attachments`. Receipt tables use the receiving Agent's Session object as their key. The Session Controller registers the resolver that can resume a cold ordinary Agent and consumes receipts during prompt admission. Prompt delivery holds each receipt binding in a disposable transaction: disposal restores the previous binding until successful delivery commits it, and queue or history observation then retires the committed receipt.
+The Host plugin provides `ctx.fileUploads`. It owns the authenticated streaming route, encoded Remote fallback, command receipt resolver, and staged-receipt lifecycle; encoded admission, attachment-error recognition, and byte storage stay behind `ctx.attachments`. Host callers supply an Agent with its runtime-owned context; receipt tables use that Agent's exact Session object as their key. The Session Controller registers the resolver that can resume a cold ordinary Agent and consumes receipts during prompt admission. Prompt delivery holds each receipt binding in a disposable transaction: disposal restores the previous binding until successful delivery commits it, and queue or history observation then retires the committed receipt.
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Host streaming route, attachment-service admission, and Agent-scoped receipt lifecycle |
+| [`src/index.ts`](src/index.ts) | Host streaming route, attachment-service admission, and Session-owned receipt lifecycle |
 | [`src/types.ts`](src/types.ts) | encoded request, receipt, and durable result types |
 | [`src/client/contract.ts`](src/client/contract.ts) | Client upload, progress, and page-hook types |
 | [`src/client/runtime.ts`](src/client/runtime.ts) | Dedicated Worker and page-owned carrier implementations |
@@ -56,7 +56,7 @@ The Host plugin provides `ctx.fileUploads`. It owns the authenticated streaming 
 
 </details>
 
-**Runtime invariant:** No companion is published. Each upload receipt belongs to one exact Session, and each request uses one selected carrier. Unsupported stream carriers fail before the body is sent.
+Each upload receipt belongs to one exact Session, and each request uses one selected carrier. Unsupported stream carriers fail before the body is sent.
 
 -----
 

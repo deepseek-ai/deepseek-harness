@@ -1,0 +1,21 @@
+# Source overlay: the Claude Code mods bridge, its band above the prompt, and
+# the three example mods from Anthropic's "Getting started with Claude Code
+# mods" post. The relative entries are anchored to this file and run through
+# the CLI's tsx loader without a profile install, as the inspector's source
+# overlay does. Mods load in list order and the band above the prompt is one
+# instance consulted in that order, so the guards that yield when idle come
+# before Token Weather, which draws whenever it has a reading.
+#
+#   pnpm dsh web --patch ./packages/experimental/claude-code-mods/cordis.source.patch.yml
+#   pnpm dsh --profile headless --patch ./packages/experimental/claude-code-mods/cordis.source.patch.yml "task"
+- insert:
+    - id: claude-code-mods
+      name: './src/index.ts'
+    - id: claude-code-mod-blast-radius
+      name: './examples/blast-radius/index.ts'
+    - id: claude-code-mod-replay-theater
+      name: './examples/replay-theater/index.ts'
+    - id: claude-code-mod-token-weather
+      name: './examples/token-weather/index.ts'
+    - id: client-ui-claude-code-mods
+      name: '../client-ui-claude-code-mods/src/index.ts'

@@ -16,7 +16,7 @@ Status: implemented
 
 一次成功的 `send()` 创建一个独立的 FIFO 队列项。该队列项如果运行，就是所在轮次中唯一的普通消息。队列项可能在启动前被丢弃，因此精确保证是最多一个轮次，而不是必定一个轮次；两次 send 绝不会被悄悄合并。
 
-消息插入之前，`send()` 会检查 agent 状态，并接受已有标识且经过深度冻结的值。持久化 splice 与 `agent/inbox/inserted { message }` 会保留其 `MessageId`；在驱动器领取或丢弃该消息之前，可以通过 `Inbox.replace()` 与 `Inbox.remove()` 寻址。当前生命周期由[已领取 pre-step inbox 决策](../architecture/2026-07-31-claimed-pre-step-inbox-lifecycle.zh.md)规定。
+消息插入之前，`send()` 会检查 agent 状态，并接受已有标识且经过深度冻结的值。持久化 splice 与 `agent/inbox/inserted { message }` 会保留其 `MessageId`；在驱动器领取或丢弃该消息之前，可以通过 `Inbox.replace()` 与 `Inbox.remove()` 寻址。当前生命周期由[已领取 pre-step inbox 参考](../../../../packages/core/agent-loop/README.zh.md)规定。
 
 如果消息 A、B 都进入处理，B 的轮次只能在 A 记录 `turn/end` 且 A 的持久性检查点处理结束后开始。因此，B 的请求能看到 A 在同一会话日志中留下的已关闭结果。检查点错误会照常报告，但处理结束只表示解除这道顺序屏障，不表示失败的写入已经持久化。面向整个 agent 的 `cancel()`、dispose（资源释放）或 `turn/start` 之前的失败也可能丢弃尚未启动的队列项，而不打开一个空轮次。
 

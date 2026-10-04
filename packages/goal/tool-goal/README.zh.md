@@ -80,7 +80,6 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：工具注册、配置、系统提示词章节、结果渲染 |
 | [`src/authority.ts`](src/authority.ts) | 执行时权限检查与 Goal Round 接受 |
 | [`src/wrapup.ts`](src/wrapup.ts) | 终局自主更新的结束消息指令 |
-| — | 不发布运行时不变式伴生入口；此面向模型的适配器不拥有独立状态或事件协议；已接受的变更由 goal 领域检查，权限行为则由本包测试验证。 |
 
 ### 工具输出
 

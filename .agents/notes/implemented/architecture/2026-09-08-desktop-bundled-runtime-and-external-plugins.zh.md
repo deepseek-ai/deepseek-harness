@@ -6,7 +6,7 @@ Status: implemented
 
 插件管理和原生恢复遵循[共享 Web 薄壳决策](2026-09-10-desktop-web-wrapper.zh.md)。
 
-[Electron 运行时决策](2026-09-11-desktop-electron-node-runtime.zh.md)替代独立上游 Node 可执行文件的选择；本文其他决策仍然适用。
+Desktop 按[当前运行时参考](../../../../apps/desktop/README.zh.md)使用 Electron 作为 Node 运行时；本文其他决策仍然适用。
 
 ## 问题
 
@@ -44,11 +44,11 @@ profile manifest 分别记录 pnpm 安装的依赖及已启用 bundle 列表。�
 
 共享 Web 插件管理器负责包变更和激活；Electron 保留 profile 准备和原生恢复。[Web 薄壳决策](2026-09-10-desktop-web-wrapper.zh.md)负责这些职责。
 
-[立即显示窗口决策](2026-09-09-desktop-immediate-window-and-direct-start.zh.md)负责直接启动 Host。Web 应用无法启动时，原生恢复对话框可禁用第三方 bundle 并备份 profile patch。已安装插件文件保留以供修复。
+[立即显示窗口参考](../../../../apps/desktop/README.zh.md)负责直接启动 Host。Web 应用无法启动时，原生恢复对话框可禁用第三方 bundle 并备份 profile patch。已安装插件文件保留以供修复。
 
 ## 考虑过的替代方案
 
-完整运行时验证属于打包流程。启动读取资源描述文件，并检查共享包记录及必要的 Host 入口。[发布验证决策](2026-09-09-desktop-build-release-validation.zh.md)将发布与目标兼容性检查交给打包流程。启动既不枚举已安装运行时文件，也不计算其哈希。后端加载前读取每个文件会增加与分发体积成正比的 I/O；不可用模块改由加载时失败暴露。构建时验证按记录清单拒绝内容变化、缺失、多余或链接文件。
+完整运行时验证属于打包流程。启动读取资源描述文件，并检查共享包记录及必要的 Host 入口。[发布验证参考](../../../../apps/desktop/README.zh.md)将发布与目标兼容性检查交给打包流程。启动既不枚举已安装运行时文件，也不计算其哈希。后端加载前读取每个文件会增加与分发体积成正比的 I/O；不可用模块改由加载时失败暴露。构建时验证按记录清单拒绝内容变化、缺失、多余或链接文件。
 
 - **启动时安装内置离线 seed。** 这保留普通 pnpm 安装流程，但会在每台受影响机器上重复核心解压与安装。物化资源消除了这部分工作，代价是更多应用文件和发布构建器责任。
 - **强制插件使用 Host 依赖版本。** 这会让普通插件依赖不必要地耦合于 Host。runtime resolution 提供缺失的包，pnpm 拥有的条目保留独立版本。

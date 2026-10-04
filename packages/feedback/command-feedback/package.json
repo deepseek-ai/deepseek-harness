@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-command-feedback",
   "description": "Log-only session feedback: the record event, the sessionFeedback Host Remote, and the human-facing slash command",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

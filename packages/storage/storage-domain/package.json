@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-storage-domain",
   "description": "Domain data form (ctx.storage.domain): schema-validated, event-emitting KV domains over storage backends for the DeepSeek Harness",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -18,21 +18,15 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-storage": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
   },
@@ -41,7 +35,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-storage": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
   }

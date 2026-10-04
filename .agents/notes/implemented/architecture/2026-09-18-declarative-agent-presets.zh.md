@@ -16,7 +16,7 @@ Preset 目录重复承担 Cordis 配置的所有权。独立的发现、元数�
 
 Web 编辑器与 `agent_preset` 工具只接受子插件 YAML。保存写入当前 profile 的用户补丁，保留显示元数据和无关配置。版本检查和 profile 锁防止覆盖并发保存；验证拒绝会使编辑失效的更高优先级覆盖。持久化与激活结果分别报告。配置在 Host 中执行，因此工具写入需要批准或完全访问权限。
 
-会话数据继续记录 preset 标识。重启时根据当前配置解析该标识，定义缺失则拒绝恢复。旧的可执行代际仅保留在进程内，不会序列化。保存的用户默认值与空白会话选择保持不变：未指定 preset 的新会话解析 `selectedDefault`，客户端的开发者工具偏好只决定是否展示这项选择。
+会话数据继续记录 preset 标识。重启时根据当前配置解析该标识，定义缺失则拒绝恢复。旧的可执行代际仅保留在进程内，不会序列化。未显式指定 preset 的新会话解析 `selectedDefault`；客户端选项过滤和默认值修正遵循[预设 UI 策略](../../../../packages/client/ui-agent-preset/README.zh.md)。
 
 ## Alternatives considered
 

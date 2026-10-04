@@ -39,8 +39,8 @@ kind: "package-group"
 先从子系统参考文档了解共享词汇，再看隔离决策及其跨家族扩展。
 
 - [进程沙箱子系统](../../docs/subsystems/sandbox.zh.md)——模式、逐调用策略、包装 argv 方言与故障关闭错误。
-- [子进程沙箱决策](../../.agents/notes/implemented/feature/2026-07-06-sandbox.zh.md)——能力边界、升权编排与延期阶段。
-- [跨家族文件沙箱决策](../../.agents/notes/implemented/feature/2026-07-14-cross-family-fs-sandbox.zh.md)——统一的共享策略归属与沙箱化文件系统提供方。
+- [历史子进程沙箱决策](../../.agents/notes/archived/feature/2026-07-06-sandbox.md)——能力边界、升权编排与延期阶段。
+- [跨家族文件沙箱参考](../fs/fs-sandbox/README.zh.md)——统一的共享策略归属与沙箱化文件系统提供方。
 - [Windows ACL 受限令牌沙箱决策](../../.agents/notes/implemented/feature/2026-08-08-windows-acl-restricted-token-sandbox.zh.md)——为何选择原始 ACL 受限令牌而非 mxc 与 AppContainer。
 
 <a id="dev-note"></a>

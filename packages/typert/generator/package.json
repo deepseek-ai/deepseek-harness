@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-typert-generator",
   "description": "TypeScript project analyzer and model-driven Typert artifact generator",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

@@ -28,7 +28,7 @@ Web 使用 iframe 载体；Desktop 使用[保持页面实例的 webview 载体](
 
 occurrence 取消会释放控制器。只有 Sidebar 的权威 `openTabs` 清单已不再包含该 Tab 时，才删除保存的检查点。清单先发布布局中的 Tab 移除，再由 `TabDomain` abort 对应 occurrence；插件卸载也会 abort occurrence，但仍保留已保存的 Tab 成员信息。因此清理不会把插件卸载当成删除恢复数据的请求。
 
-Browser 状态只属于呈现层，不进入 Session log、模型请求、resource model 或 DockKit layout operation。现有的[右侧 Sidebar 基础设施](2026-09-04-right-sidebar-docking-infrastructure.zh.md)、[tab 类型契约](../architecture/2026-09-05-sidebar-tab-types-and-navigation.zh.md)、[resource model](../architecture/2026-09-05-client-resource-model.zh.md)和[文档预览操作](../architecture/2026-09-08-document-preview-operations.zh.md)继续负责各自现有职责。
+Browser 状态只属于呈现层，不进入 Session log、模型请求、resource model 或 DockKit layout operation。现有的[右侧 Sidebar 基础设施](2026-09-04-right-sidebar-docking-infrastructure.zh.md)、[tab 类型契约](../../../../packages/client/ui-sidebar-right/README.zh.md)、[resource model](../architecture/2026-09-05-client-resource-model.zh.md)和[文档预览操作](../architecture/2026-09-08-document-preview-operations.zh.md)继续负责各自现有职责。
 
 ## Web 导航状态
 

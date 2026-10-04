@@ -107,9 +107,9 @@ interface McpResourceProvider {
 
 - [MCP 包组](../../packages/mcp/README.zh.md) — 包入口。
 - [MCP 资源](../../packages/mcp/mcp-resources/README.zh.md) — 共享工具与资源提供方语义。
-- [资源可见性决策](../../.agents/notes/implemented/feature/2026-09-13-mcp-resources-in-profiles.zh.md) — profile 统一挂载及由已配置服务器决定的可见性。
+- [资源可见性参考](../../packages/mcp/mcp-resources/README.zh.md) — profile 统一挂载及由已配置服务器决定的可见性。
 - [第三方记忆服务器](../user/guide/mcp-memory.zh.md) — 产品配置指南。
-- [协议协商决策](../../.agents/notes/implemented/feature/2026-09-12-mcp-sdk-protocol-negotiation.zh.md) — SDK 职责与兼容性决策。
+- [协议协商参考](../../packages/mcp/mcp-client/README.zh.md) — SDK 职责与兼容性决策。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

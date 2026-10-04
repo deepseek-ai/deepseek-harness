@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-07-29-terminal-llm-stream-failures.zh.md)
 
-This note supersedes only the thrown-error identity and call-local sidecar mechanism in [bounded LLM request recovery](2026-06-21-bounded-llm-request-recovery.md) and [after-call context-overflow recovery](2026-07-10-after-call-compaction-pressure-and-overflow-recovery.md). Those notes continue to own structured failure facts, retry policy, durable attempts, and compaction recovery.
+This note supersedes the thrown-error identity and call-local sidecar mechanism in [bounded LLM request recovery](2026-06-21-bounded-llm-request-recovery.md), which retains structured failure facts, retry policy, and durable attempts. The [compaction reference](../../../../packages/compaction/compaction-basic/README.md) defines current overflow recovery.
 
 ## Problem
 
@@ -16,7 +16,7 @@ Retry policy had the same indirect ownership. It was discovered through the stre
 
 `LlmRuntime` is the normalization boundary for one adapter attempt. It catches only final-adapter selection, synchronous dispatch, iterator construction, and `next()` failures, converts the thrown value to immutable `LlmFailure`, and emits one terminal `finish`. Caller cancellation or an `ABORTED` failure selects the aborted reason; every other adapter failure selects error. An adapter may also emit either terminal reason directly.
 
-The adapter-owned catch ends before each yielded chunk. Errors from `llm/stream` middleware, nested calls, adapter cleanup, chunk consumers, logging, signal checks, and assembly remain thrown as defects or lifecycle failures; they never enter model-request recovery. A transport failure after partial deltas may leave blocks open, so the stream invariant permits open blocks only for terminal error or aborted finishes. No assistant message or tool call is assembled from that incomplete output.
+The adapter-owned catch ends before each yielded chunk. Errors from `llm/stream` middleware, nested calls, adapter cleanup, chunk consumers, logging, signal checks, and assembly remain thrown as defects or lifecycle failures; they never enter model-request recovery. A transport failure after partial deltas may leave blocks open before a terminal error or aborted finish. No assistant message or tool call is assembled from that incomplete output.
 
 `PreparedLlmCall` exposes the immutable retry policy captured with its config and registration. One-shot reuse and config mismatch remain synchronous `INVALID_PREPARED_CALL` misuse errors. A route served entirely by `llm/stream` middleware has no prepared registration and therefore no serving policy.
 

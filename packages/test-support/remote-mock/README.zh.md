@@ -112,7 +112,6 @@ await mock.streams.drained('session/follow')
 | [`src/remote-proxy.ts`](src/remote-proxy.ts) | 命名空间／方法查找与生成映射的 mock 类型 |
 | [`src/streams.ts`](src/streams.ts) | `frames` / `openStream` 脚本、`streamHandle` / `streamMethod` 假实现标注，以及 `MockStream`（句柄 + `AsyncIterable`） |
 | [`src/log.ts`](src/log.ts) | 带共享 `seq` 计数器的日志 |
-| — | 不发布运行时不变量伴生件；本测试支持库不拥有任何生产事件流或可变进程状态，其行为由本包测试覆盖。 |
 
 </details>
 

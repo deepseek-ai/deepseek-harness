@@ -16,6 +16,7 @@ export const DESKTOP_HOST_PACKAGE = '@deepseek-ai/dsh-desktop-host'
 /** Package-relative Desktop Host files required before a profile can boot. */
 export const DESKTOP_HOST_RUNTIME_FILES = [
   'lib/index.js',
+  'lib/cli.js',
 ] as const
 
 /** One immutable npm tarball in the Desktop core package set. */

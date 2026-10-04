@@ -19,6 +19,21 @@ export interface ReferenceInsert {
   readonly clipboardText: string
 }
 
+/** Persisted reference data without the current editor's occurrence identity. */
+export type DraftReference = Omit<Occurrence, 'occurrenceId'>
+
+/**
+ * Editor-independent content. Reference spans are ordered, non-overlapping UTF-16
+ * ranges whose text equals clipboardText; runtime node identities are excluded.
+ */
+export interface DraftSnapshot {
+  readonly text: string
+  readonly references: readonly DraftReference[]
+}
+
+/** Plain initial text or an existing document with explicit reference identities. */
+export type DraftInput = string | DraftSnapshot
+
 /** Keyboard keys intercepted by an open trigger menu. */
 export type ArbitrateKey = 'up' | 'down' | 'enter' | 'escape' | 'tab' | 'tabBack'
 

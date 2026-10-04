@@ -16,7 +16,7 @@ Electron 在每个应用进程中提供一次原生致命错误对话框。明�
 
 Web 文档保留在原位。宿主回调负责启动失败展示，共享启动页保留加载动画；普通浏览器启动仍显示自身的失败报告。只有主应用框架可以上报 Web 启动失败。后端状态保留在主进程中，原生恢复直接负责禁用全部第三方 bundle。Desktop 不提供 profile 重置或应急恢复文档。后端致命故障必须通过原生恢复操作处理，不在当前进程中重试。
 
-本决策取代[立即显示窗口决策](2026-09-09-desktop-immediate-window-and-direct-start.zh.md)中的恢复页面和重置行为；其立即显示与直接启动 Host 的理由仍有效。[Web 薄壳决策](2026-09-10-desktop-web-wrapper.zh.md)负责共享插件管理和原生 profile 准备。
+[Desktop 参考](../../../../apps/desktop/README.zh.md)定义立即显示窗口与直接启动 Host；本决策负责原生致命故障恢复。[Web 薄壳决策](2026-09-10-desktop-web-wrapper.zh.md)负责共享插件管理和原生 profile 准备。
 
 ## Alternatives considered
 

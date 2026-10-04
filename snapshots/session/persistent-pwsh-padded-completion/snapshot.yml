@@ -1,0 +1,10 @@
+version: 1
+scenario: persistent-pwsh-padded-completion
+profile: headless
+composition: persistent-pwsh-padded-completion
+recording: authored
+header:
+  class: persistent-pwsh-padded-completion
+  pin: true
+  systemPromptSource: persistent-pwsh-tool-turn
+  toolSchemasSource: persistent-pwsh-tool-turn

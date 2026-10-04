@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-09-23-desktop-close-to-background-and-quit-confirmation.md) | 中文
 
-窗口时序和关闭归属仍遵循[在 Host 启动前显示窗口](2026-09-09-desktop-immediate-window-and-direct-start.zh.md)；任务判定复用[更新重启检查](2026-08-25-electron-desktop-packaging-and-updates.zh.md)。本记录部分取代[标准 macOS 窗口菜单](../bug-fix/2026-09-16-desktop-window-menus.zh.md)决策：⌘W 不再通过 Electron 的 role 销毁窗口，Dock 激活在没有可见窗口时重新打开隐藏窗口，而不再只在没有任何窗口时才创建。该记录中的菜单声明仍然有效。
+窗口时序和关闭归属仍遵循[在 Host 启动前显示窗口](../../../../apps/desktop/README.zh.md)；任务判定复用[更新重启检查](2026-08-25-electron-desktop-packaging-and-updates.zh.md)。⌘W 不通过 Electron 的 role 销毁窗口，Dock 激活在没有可见窗口时重新打开隐藏窗口，而不再只在没有任何窗口时才创建。[Desktop 参考](../../../../apps/desktop/README.zh.md)中的原生菜单声明仍然有效。
 
 ## 问题
 

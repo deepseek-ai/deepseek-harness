@@ -84,7 +84,6 @@ This section explains how the command parses input and renders output; the obser
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: command grammar, status rendering, attachment submission |
-| — | No runtime invariant companion is published; this command adapter owns no event stream or state projection; accepted mutations are checked by the goal domain and command dispatch behavior is covered by package tests. |
 
 </details>
 
@@ -97,7 +96,7 @@ The command is a thin adapter over the goal domain; read these pages for the sta
 
 - [Goal service](../goal/README.md) — the state and lifecycle the command mutates.
 - [Commands service](../../interaction/commands/README.md) — the command registry contract and dispatch.
-- [Harness-level goal-execution Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.md) — the UX and composition decisions.
+- [historical Harness-level goal-execution Agent Note](../../../.agents/notes/archived/feature/2026-07-16-harness-level-loop.md) — the UX and composition decisions.
 
 -----
 

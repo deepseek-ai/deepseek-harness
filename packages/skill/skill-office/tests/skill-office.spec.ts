@@ -160,7 +160,7 @@ it('executes capabilities using only paths returned by the loaded skill from a s
     expect(result.timedOut, result.stderr).toBe(false)
     expect(result.signal, result.stderr).toBeUndefined()
     expect(result.exitCode, result.stderr).toBe(0)
-    expect(JSON.parse(result.stdout)).toMatchObject({ runtime: { version: '0.1.1', cliPath: libreofficeKit.cli } })
+    expect(JSON.parse(result.stdout)).toMatchObject({ runtime: { version: '0.1.5', cliPath: libreofficeKit.cli } })
   } finally {
     await ctx.fiber.dispose()
     await rm(root, { recursive: true, force: true })

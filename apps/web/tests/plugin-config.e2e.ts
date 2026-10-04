@@ -317,7 +317,9 @@ describe('web e2e: plugin configuration pages', () => {
     expect(await bundlePage.getByRole('button', { name: '夹具操作' }).count()).toBe(1)
     expect(await bundlePage.locator('[data-live-badge="bundle"]').textContent()).toBe('夹具标签')
     expect(await bundlePage.getByRole('region', { name: '夹具区块' }).getByText('来自夹具的区块内容').count()).toBe(1)
-    const bundleSnapshot = await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd)
+    const bundleSnapshot = await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
+      replacements: [[FIXTURE_PLUGINS, '{{fixtures}}']],
+    })
     await compareOrRefreshGolden(BUNDLE_EXPECTED, bundleSnapshot, MODE)
     await configure.click()
 

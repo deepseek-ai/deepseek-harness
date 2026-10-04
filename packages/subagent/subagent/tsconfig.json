@@ -69,9 +69,6 @@
       "path": "../../util/time"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../../interaction/permission-presets"
     },
     {

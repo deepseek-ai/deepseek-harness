@@ -54,6 +54,7 @@
     { "path": "./apps/desktop/tsconfig.client.json" },
     { "path": "./packages/util/atomic-write" },
     { "path": "./packages/experimental/client-ui-voice-input" },
+    { "path": "./packages/experimental/client-ui-claude-code-mods" },
 
     { "path": "./packages/client/ui-sidebar-terminal" },
     { "path": "./packages/api/terminal-controller/tsconfig.client.json" },
@@ -74,6 +75,7 @@
     { "path": "./packages/client/ui-primitives" },
     { "path": "./packages/client/modules" },
     { "path": "./packages/experimental/inspector/tsconfig.client.json" },
+    { "path": "./packages/experimental/session-inspector" },
     { "path": "./packages/client/hmr" },
     { "path": "./packages/client/connection/tsconfig.client.json" },
     { "path": "./packages/client/file-upload/tsconfig.client.json" },
@@ -122,6 +124,7 @@
     { "path": "./packages/client/ui-settings-plugins" },
     { "path": "./packages/client/ui-settings-shell" },
     { "path": "./packages/client/ui-settings-agent-loop" },
+    { "path": "./packages/client/ui-settings-session-log" },
     { "path": "./packages/client/ui-settings-subagent" },
     { "path": "./packages/client/ui-settings-web-search" },
     { "path": "./packages/client/ui-user-questions" },

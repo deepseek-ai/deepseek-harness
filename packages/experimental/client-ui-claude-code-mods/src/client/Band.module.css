@@ -1,0 +1,106 @@
+.band {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1, transparent);
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+}
+
+.box {
+  display: flex;
+  min-width: 0;
+}
+
+.box[data-direction='row'] {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.box[data-direction='column'] {
+  flex-direction: column;
+}
+
+.box[data-border] {
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+}
+
+.text {
+  display: inline;
+}
+
+.text[data-bold] {
+  font-weight: 600;
+}
+
+.text[data-dim] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.text[data-italic] {
+  font-style: italic;
+}
+
+.text[data-underline] {
+  text-decoration: underline;
+}
+
+/* Claude Code's terminal palette, on this theme's tokens. */
+[data-color='yellow'] { color: var(--dsw-alias-state-warn-primary); }
+[data-color='red'] { color: var(--dsw-alias-state-error-primary); }
+[data-color='green'] { color: var(--dsw-alias-state-success-primary); }
+[data-color='cyan'],
+[data-color='blue'] { color: var(--dsw-alias-button-info-fill); }
+[data-color='magenta'] { color: var(--dsw-alias-state-business-primary); }
+[data-color='gray'] { color: var(--dsw-alias-label-tertiary); }
+[data-color='white'],
+[data-color='black'] { color: var(--dsw-alias-label-primary); }
+
+.box[data-border][data-color='yellow'] { border-color: var(--dsw-alias-state-warn-primary); }
+.box[data-border][data-color='red'] { border-color: var(--dsw-alias-state-error-primary); }
+.box[data-border][data-color='green'] { border-color: var(--dsw-alias-state-success-primary); }
+.box[data-border][data-color='cyan'],
+.box[data-border][data-color='blue'] { border-color: var(--dsw-alias-button-info-fill); }
+.box[data-border][data-color='magenta'] { border-color: var(--dsw-alias-state-business-primary); }
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 2px;
+  padding: 1px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.button:hover,
+.button:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.hotkey {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.notice {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 11px;
+}

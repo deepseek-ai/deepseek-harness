@@ -36,7 +36,7 @@ kind: "package-group"
 先从子系统参考了解共享词汇，再阅读设计说明了解决策。
 
 - [计划模式子系统参考](../../docs/subsystems/plan.zh.md)——计划模式如何工作、其配置与退出工具的行为。
-- [plan 专用协作状态](../../.agents/notes/implemented/simplification/2026-07-22-plan-specific-collaboration-state.zh.md)——计划模式背后的设计决策。
+- [plan 专用协作状态](plan-mode/README.zh.md)——计划模式背后的设计决策。
 
 <a id="dev-note"></a>
 ## 开发备注

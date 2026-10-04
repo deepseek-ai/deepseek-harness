@@ -13,7 +13,7 @@ import CommandRuntime from '@deepseek-ai/dsh-commands'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import FileUploads from '@deepseek-ai/dsh-client-file-upload'
 import type { FileUploadReceiptId } from '@deepseek-ai/dsh-client-file-upload/types'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ApiSessionAgentController } from '../src/agent.ts'
 import { SessionCommandController } from '../src/commands.ts'
 import type { SessionRequestId } from '../src/types.ts'
@@ -33,6 +33,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   uploadRoute: (request: Request) => Promise<Response>
 }> {
   const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(CommandRuntime)
@@ -266,7 +267,7 @@ describe('Session file uploads', () => {
     })).rejects.toMatchObject({ code: 'session/not-found' })
   })
 
-  it('rejects subagent uploads and access outside the receiving Agent scope', async () => {
+  it('rejects subagent uploads before storing bytes', async () => {
     const child = await uploadHarness('subagent')
     await expect(child.uploads.upload(
       child.agent,
@@ -277,16 +278,24 @@ describe('Session file uploads', () => {
       details: { reason: 'SUBAGENT_FILE_UNSUPPORTED' },
     })
     expect(child.saveFile).not.toHaveBeenCalled()
+  })
 
-    const ordinary = await uploadHarness()
-    const receipt = await ordinary.uploads.upload(
-      ordinary.agent,
-      { data: 'AAAA' },
-      new AbortController().signal,
-    )
-    const foreignScope = { ...ordinary.agent, ctx: ordinary.ctx } as Agent
-    expect(() => ordinary.uploads.resolve(foreignScope, receipt.receiptId))
-      .toThrow('operation requires the Agent\'s own scope')
+  it('isolates receipts by Session object even when Session ids match', async () => {
+    const owner = await uploadHarness()
+    const other = await uploadHarness()
+    expect(other.agent.session.id).toBe(owner.agent.session.id)
+    expect(other.agent.session).not.toBe(owner.agent.session)
+    const receipt = await owner.uploads.upload(owner.agent, { data: 'AAAA' }, new AbortController().signal)
+    const binding = owner.uploads.bindPrompt(owner.agent, [receipt.receiptId], 'owner-prompt')
+    binding.commit()
+
+    expect(owner.uploads.resolve(other.agent, receipt.receiptId)).toBeUndefined()
+    expect(() => owner.uploads.bindPrompt(other.agent, [receipt.receiptId], 'other-prompt'))
+      .toThrow(expect.objectContaining({ code: 'session/attachment-invalid', details: { reason: 'FILE_NOT_STAGED' } }))
+    owner.uploads.retirePrompt(other.agent, 'owner-prompt')
+    expect(owner.uploads.resolve(owner.agent, receipt.receiptId)).toEqual(receipt.file)
+    owner.uploads.retirePrompt(owner.agent, 'owner-prompt')
+    expect(owner.uploads.resolve(owner.agent, receipt.receiptId)).toBeUndefined()
   })
 
   it('retires accepted receipts after their rpcId becomes observable', async () => {

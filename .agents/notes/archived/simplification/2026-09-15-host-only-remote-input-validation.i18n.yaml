@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/simplification/2026-09-15-host-only-remote-input-validation.md
+2026-09-15-host-only-remote-input-validation.md: 327f7ef025c7a5fac0447f07282fab6c5a2f62ca
+2026-09-15-host-only-remote-input-validation.zh.md: 9e8a1d67c77b3221b5d364c6e850887325164769

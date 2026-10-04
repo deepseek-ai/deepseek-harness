@@ -72,7 +72,7 @@ function nodeSource(node: ChatConversationViewNode): unknown {
 }
 
 function toolCallName(call: ToolCallBlock): string | null {
-  return 'name' in call ? call.name : call.call?.name ?? null
+  return 'kind' in call ? call.call?.name ?? null : call.name
 }
 
 class FixtureSource<Value> {

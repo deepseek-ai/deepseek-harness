@@ -1,4 +1,4 @@
-/** Host file-upload service: streamed intake and Agent-scoped staged receipts. */
+/** Host file-upload service: streamed intake and Session-owned staged receipts. */
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
@@ -6,7 +6,6 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type { CommandFileReceiptResolver } from '@deepseek-ai/dsh-commands'
-import { scopeOf } from '@deepseek-ai/dsh-scope'
 import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { handleFileUploadHttp } from './http-route.ts'
@@ -53,7 +52,7 @@ class PromptFileBindingGuard implements PromptFileBinding {
   }
 }
 
-/** Host service owning upload storage and Agent-scoped staged receipts. */
+/** Host service owning upload storage and receipts keyed by each receiving Agent's exact Session. */
 export class FileUploads extends TypertRemoteService {
   static inject = ['agents', 'attachments', 'commands', 'connection']
 
@@ -131,13 +130,12 @@ export class FileUploads extends TypertRemoteService {
   }
 
   /**
-   * Resolve one staged receipt inside its receiving Agent scope.
+   * Resolve one staged receipt for the receiving Agent's exact Session.
    * @param agent - receiving Agent.
    * @param receiptId - opaque receipt minted for one completed upload.
    * @returns durable file reference, or `undefined` for an unknown or foreign receipt.
    */
   resolve(agent: Agent, receiptId: FileUploadReceiptId): FileAttachmentRef | undefined {
-    this.assertAgentScope(agent)
     return this.stagedFiles.get(agent.session)?.get(receiptId)?.file
   }
 
@@ -154,7 +152,6 @@ export class FileUploads extends TypertRemoteService {
     receiptIds: readonly FileUploadReceiptId[],
     requestId: string,
   ): PromptFileBinding {
-    this.assertAgentScope(agent)
     const staged = this.stagedFiles.get(agent.session)
     const bound = receiptIds.map((receiptId) => {
       const upload = staged?.get(receiptId)
@@ -176,7 +173,6 @@ export class FileUploads extends TypertRemoteService {
    * @param requestId - prompt identity carried by the queue occurrence.
    */
   retirePrompt(agent: Agent, requestId: string): void {
-    this.assertAgentScope(agent)
     this.retire(agent.session, requestId)
   }
 
@@ -223,12 +219,7 @@ export class FileUploads extends TypertRemoteService {
     return resolver(sessionId)
   }
 
-  private assertAgentScope(agent: Agent): void {
-    if (scopeOf(agent.ctx) !== agent) throw new Error('file-upload: operation requires the Agent\'s own scope')
-  }
-
   private assertOrdinaryAgent(agent: Agent): void {
-    this.assertAgentScope(agent)
     if (agent.session.header.origin === 'subagent') {
       throw new RemoteError(
         'subagent/attachment-invalid' as never,

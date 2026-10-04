@@ -110,7 +110,6 @@ Settings 写入经 ConfigEditor 持久化并检查 revision；Loader 更新 vola
 |---|---|
 | [`src/index.ts`](src/index.ts) | 服务本体：schema、校验、对账、restart、probe、状态注册表 |
 | [`src/types.ts`](src/types.ts) | 状态联合、列表视图与 `mcp-manager/status` 事件声明 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变量伴生：状态事件必须点名活管理器所列出的服务器 |
 
 ### 生命周期要点
 

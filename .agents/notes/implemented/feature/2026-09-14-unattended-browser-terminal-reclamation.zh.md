@@ -33,7 +33,7 @@ Host [终端控制器](../../../../packages/api/terminal-controller/README.zh.md
 
 清理等待 provider 范围完全停稳和最终屏幕输出排空。失败时保留所有权、拒绝新持有关系，并安排一次重试，不重新给予空闲宽限期。分配失败后的清理采用相同重试策略。owner 卸载会停止计时器和流，在清理与观察都结束后才报告失败，包括清理早于观察结束而拒绝的情况。Agent 终端工具、模型输入和 Session 事件均不改变。
 
-Codex 线程卸载、OpenCode Location scope 和 [VS Code PTY 宽限期](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/ptyService.ts) 的调研支持了独立引用和延迟清理的设计。两小时是 DSH 的产品策略，不是行业默认值。[浏览器终端决策](2026-09-09-web-sidebar-terminal.zh.md) 与[布局／provider 恢复决策](../architecture/2026-09-14-sidebar-layout-provider-recovery.zh.md) 继续有效，因为其资源所有权和持久化职责划分仍然适用。
+Codex 线程卸载、OpenCode Location scope 和 [VS Code PTY 宽限期](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/ptyService.ts) 的调研支持了独立引用和延迟清理的设计。两小时是 DSH 的产品策略，不是行业默认值。[浏览器终端决策](2026-09-09-web-sidebar-terminal.zh.md) 与[布局／provider 恢复参考](../../../../packages/client/ui-sidebar-right/README.zh.md) 定义此处沿用的资源所有权和持久化职责划分。
 
 ## 考虑过的替代方案
 

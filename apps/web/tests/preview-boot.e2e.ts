@@ -437,10 +437,12 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
     const sessions = page.getByRole('tree', { name: 'Sessions' })
     const showcase = sessions.getByRole('treeitem').filter({ hasText: SHOWCASE_TITLE })
     await expect.poll(() => showcase.count(), { timeout: 15_000 }).toBe(1)
-    expect(await showcase.locator('[data-session-schedule-mark]').count()).toBe(0)
+    // The packed deployment ships the Schedule rows, and the preview storage
+    // seeds the showcase Session with active tasks.
+    expect(await showcase.locator('[data-session-schedule-mark]').count()).toBe(1)
     await showcase.click()
     await page.getByText(SHOWCASE_TAIL, { exact: true }).waitFor({ timeout: 30_000 })
-    expect(await page.locator('[data-schedule-reminder-entry]').count()).toBe(0)
+    expect(await page.locator('[data-schedule-reminder-entry]').count()).toBe(1)
 
     expect(await page.getByText(SHOWCASE_OLDEST, { exact: true }).count()).toBe(0)
     // Complete Turns can fold while earlier history is still unloaded.

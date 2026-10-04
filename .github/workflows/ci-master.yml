@@ -144,8 +144,8 @@ jobs:
           fetch-depth: 0
 
       # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
-      # the root partition's /tmp before the first pnpm call in this lane —
-      # see .agents/notes/implemented/process/2026-08-28-ci-node-compile-cache-data-disk.md.
+      # the root partition's /tmp before the first pnpm call in this lane.
+      # see .github/workflows/ci.yml.
       - name: Redirect Node compile cache to runner temp
         run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
 

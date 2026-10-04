@@ -155,6 +155,32 @@ describe('web e2e: Goal keeps one assistant action row per completed turn', () =
     expect(sessionEvents.flatMap(event =>
       event.type === 'request/header' ? [event.data.reason] : [])).toEqual(['initial', 'series'])
     await expect.poll(() => page.locator('[data-turn-process]').count(), { timeout: 15_000 }).toBe(2)
+    const trigger = page.locator('[data-turn-trigger]').first()
+    const process = page.locator('[data-turn-process]').first()
+    const originalFontSize = await page.evaluate(() => document.body.style.getPropertyValue('--dsh-content-font-size'))
+    await process.click()
+    try {
+      for (const fontSize of [10, 14, 22]) {
+        await scaffold!.ctx.settings.update('ui-theme', { fontSize })
+        await expect.poll(() => page.evaluate(() => document.body.style.getPropertyValue('--dsh-content-font-size')))
+          .toBe(`${String(fontSize)}px`)
+        const group = page.locator('[data-process-activity]:visible').first()
+        const groupFontSize = await group.evaluate(element => getComputedStyle(element).fontSize)
+        expect(groupFontSize).toBe(`${String(fontSize)}px`)
+        expect(await process.evaluate(element => getComputedStyle(element).fontSize)).toBe(groupFontSize)
+        expect(await trigger.getByText('Continuing goal', { exact: true })
+          .evaluate(element => getComputedStyle(element).fontSize)).toBe(groupFontSize)
+        expect(await process.evaluate(element => element.getBoundingClientRect().top))
+          .toBe(await trigger.evaluate(element => element.getBoundingClientRect().bottom) + 16)
+        expect(await group.evaluate(element => element.getBoundingClientRect().top))
+          .toBe(await process.evaluate(element => element.getBoundingClientRect().bottom) + 16)
+      }
+    } finally {
+      await scaffold!.ctx.settings.update('ui-theme', { fontSize: Number.parseFloat(originalFontSize) })
+      await expect.poll(() => page.evaluate(() => document.body.style.getPropertyValue('--dsh-content-font-size')))
+        .toBe(originalFontSize)
+      await process.click()
+    }
     expect(await page.getByRole('button', { name: 'System prompt' }).count()).toBe(0)
     expect(await page.locator(
       '[data-chat-flow-kind="system-prompt"]',

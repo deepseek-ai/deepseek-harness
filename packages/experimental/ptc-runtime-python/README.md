@@ -77,7 +77,6 @@ Completion values and binding arguments cross as exact JSON: values serialize wi
 | [`py/protocol.py`](py/protocol.py) | Python side: `PROTOCOL_FD`, `TypedDict` frame mirrors, `log_truncation_marker` |
 | [`tests/runtime.spec.ts`](tests/runtime.spec.ts) | Real-subprocess suite: budgets, containment, hostile frames, name rebinding |
 | [`tests/protocol-mirror.e2e.ts`](tests/protocol-mirror.e2e.ts) | Cross-language mirror test against a real `python3` |
-| — | No runtime invariant companion is published: frame ordering, budget accounting, and teardown live in the CPython child or on fd 3, so this package exposes no same-process event sequence or independently maintained mutable relation for a Cordis listener to compare; the protocol mirror and real-subprocess tests cover those process-boundary behaviors. |
 
 </details>
 

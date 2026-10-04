@@ -344,6 +344,22 @@ async function callUntilText(
 }
 
 describe('registration', () => {
+  it.each([
+    ['foreground-only', setup],
+    ['job-backed', setupWithJobs],
+  ] as const)('requests description before command in the %s schema', async (_mode, setupContext) => {
+    const { ctx } = await setupContext()
+    try {
+      const schema = ctx.tools.schemas().find(tool => tool.name === 'pwsh')!
+      expect(Object.keys(schema.parameters.properties as Record<string, unknown>).slice(0, 2))
+        .toEqual(['description', 'command'])
+      expect(schema.parameters).toHaveProperty('required', ['description', 'command'])
+      expect(schema.description).toContain('Provide `description` before `command` in the arguments.')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('registers the pwsh tool with its prompt section and schema', async () => {
     const { ctx } = await setupWithJobs()
     const schema = ctx.tools.schemas().find(s => s.name === 'pwsh')
@@ -356,7 +372,7 @@ describe('registration', () => {
       workdir: { type: 'string' },
       run_in_background: { type: 'boolean' },
     })
-    expect(schema?.parameters.required).toEqual(['command', 'description'])
+    expect(schema?.parameters.required).toEqual(['description', 'command'])
     const prompt = renderPrompt(await ctx.systemPrompt.assemble())
     expect(prompt).toContain('Non-zero exits are reported as `[exit code: N]` markers')
     expect(prompt).toContain('without a signal marker')
@@ -366,7 +382,7 @@ describe('registration', () => {
     const { ctx } = await setup()
     const schema = ctx.tools.schemas().find(s => s.name === 'pwsh')!
     expect(Object.keys(schema.parameters.properties as Record<string, unknown>))
-      .toEqual(['command', 'description', 'timeoutMs', 'workdir'])
+      .toEqual(['description', 'command', 'timeoutMs', 'workdir'])
     expect(JSON.stringify(schema.parameters)).not.toContain('job_output')
   })
 
@@ -864,7 +880,7 @@ describe('background execution through the job runtime', () => {
     const { ctx } = await setup({ enableRunInBackground: false })
     const schema = ctx.tools.schemas().find(s => s.name === 'pwsh')!
     expect(Object.keys(schema.parameters.properties as Record<string, unknown>))
-      .toEqual(['command', 'description', 'timeoutMs', 'workdir'])
+      .toEqual(['description', 'command', 'timeoutMs', 'workdir'])
     expect(schema.description).not.toContain('run_in_background')
 
     // Schema omission is advertising; execution must also enforce the opt-out.

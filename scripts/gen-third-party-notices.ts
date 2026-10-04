@@ -15,6 +15,7 @@ import { parse as parseToml, type TomlTableWithoutBigInt, type TomlValueWithoutB
 import parseSpdx from 'spdx-expression-parse'
 import primaryRuntimeLock from './primary-runtime/lock.json' with { type: 'json' }
 import { browserBundledExternals } from './browser-bundled-externals.ts'
+import { DEVTOOLS_NPM_VERSION, DEVTOOLS_SOURCE_REVISION } from '../packages/experimental/inspector/scripts/devtools/source.ts'
 
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'THIRD_PARTY_NOTICES.md'
@@ -743,6 +744,8 @@ ${rows.join('\n')}
  */
 export async function render(): Promise<string> {
   const browser = await browserBundledExternals(root)
+  // The Inspector's Host build hook compiles this standalone frontend outside the Client bundle graph.
+  browser.add('chrome-devtools-frontend')
   // The linked-manifest cache is keyed by name only, so it must not outlive
   // the manifests map it was resolved from; render() owns that single load.
   workspaceLinkedManifestCache.clear()
@@ -793,13 +796,18 @@ ${renderNpmTable(runtimeDeps)}
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:
 
 ${patchedLines.join('\n')}
+
+## Chrome DevTools frontend
+
+The optional experimental Inspector distributes a locally compiled copy of [chrome-devtools-frontend ${DEVTOOLS_NPM_VERSION}](https://www.npmjs.com/package/chrome-devtools-frontend/v/${DEVTOOLS_NPM_VERSION}), from upstream revision [${DEVTOOLS_SOURCE_REVISION}](https://chromium.googlesource.com/devtools/devtools-frontend/+/${DEVTOOLS_SOURCE_REVISION}). The build includes the Chromium [BSD-3-Clause license](packages/experimental/inspector/assets/devtools/LICENSE) and the third-party license and notice files supplied by the npm source. The Chromium root license does not replace those dependencies' licenses.
+
 ${renderClaudeDistribution(claudeDistribution)}
 ${kitRuntime ? `
 ## LibreOffice conversion kit
 
 ${[...LIBREOFFICE_PACKAGES].map(name => `\`${name}\``).join(', ')} declare MPL-2.0, which remains outside the permissive-license allowlist; the notices check accepts only these package identities at those terms. The [distribution decision](.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md) records the source obligations.
 
-The [kit repository](https://github.com/deepseek-harness/libreoffice-kit) supplies the corresponding LibreOffice source pin, modifications, build instructions, Node API, and artifact validation. Its engine packages retain their license and third-party notices; the Node API retains its MPL-2.0 declaration and NOTICE. Recipients must have access to those corresponding sources and notices.
+The [kit repository](https://github.com/deepseek-ai/dsh-libreoffice-kit) supplies the corresponding LibreOffice source pin, modifications, build instructions, Node API, and artifact validation. Its engine packages retain their license and third-party notices; the Node API retains its MPL-2.0 declaration and NOTICE. Recipients must have access to those corresponding sources and notices.
 ` : ''}
 
 ## Development-only npm dependencies

@@ -6,7 +6,7 @@ English | [中文](2026-06-13-twin-llm-adapters.zh.md)
 
 ## Problem
 
-`dsh-llm` owns a provider-neutral streaming vocabulary — the `StreamChunk` protocol (`block-start`, `text-delta`, `reasoning-delta`, `tool-call-delta`, `block-end`, `usage`, `finish`) and the content-block types ([the content-block vocabulary](2026-06-11-content-block-vocabulary.md)). A vocabulary defined against a single adapter risks baking that adapter's quirks into the "neutral" contract: anything the one implementation happens to do becomes the de-facto spec, and the abstraction is unverified until a second provider arrives — by which point the leak is expensive to fix.
+`dsh-llm` owns a provider-neutral streaming vocabulary — the `StreamChunk` protocol (`block-start`, `text-delta`, `reasoning-delta`, `tool-call-delta`, `block-end`, `usage`, `finish`) and the content-block types ([the content-block vocabulary](../../../../packages/llm/llm/README.md)). A vocabulary defined against a single adapter risks baking that adapter's quirks into the "neutral" contract: anything the one implementation happens to do becomes the de-facto spec, and the abstraction is unverified until a second provider arrives — by which point the leak is expensive to fix.
 
 ## Decision
 

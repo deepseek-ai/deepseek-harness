@@ -87,5 +87,3 @@ The package contributes no stable request prefix, so it does not invalidate mode
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. Operations own only call-local native handles.

@@ -36,6 +36,8 @@ describe('THIRD_PARTY_NOTICES.md', () => {
     expect(generated).toContain(`| [\`numpy\`](https://github.com/numpy/numpy) | ${primaryRuntimeLock.pythonPackages.numpy} | BSD-3-Clause |`)
     expect(generated).toContain('## LibreOffice conversion kit')
     expect(generated).toContain('Recipients must have access to those corresponding sources and notices.')
+    expect(generated.split('## Development-only npm dependencies')[0]).toContain('| [`chrome-devtools-frontend`]')
+    expect(generated).toContain('third-party license and notice files supplied by the npm source')
     expect(readFileSync(resolve(root, 'THIRD_PARTY_NOTICES.md'), 'utf8'), 'stale notices — run `pnpm run gen-third-party-notices`').toBe(generated)
   })
 })

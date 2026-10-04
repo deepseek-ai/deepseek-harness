@@ -75,7 +75,6 @@ index 启动输入分两层。`collectIndexInjections()` 收集一张全新的�
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `WebServer` 服务：路由表、回退席位、index 渲染、匹配、生命周期 |
-| — | 不发布运行时不变式伴生入口；路由注册与释放通过同一服务修改同一张路由表，register/dispose 探针只会重复执行实现。真实路由与 HMR 测试负责验证该行为。 |
 | [`src/injections.ts`](src/injections.ts) | 结构化 `IndexInjection` 行与 `renderIndexInjections` 行渲染 |
 
 </details>
@@ -89,7 +88,7 @@ index 启动输入分两层。`collectIndexInjections()` 收集一张全新的�
 
 - [HTTP 服务器子系统](../../../docs/subsystems/web-server.zh.md)——路由、匹配顺序与服务器接受的配置。
 - [SPA dist 服务器](../frontend-static/README.zh.md)——回退席位的随附持有者。
-- [Web 配置树启动与传输分层](../../../.agents/notes/implemented/architecture/2026-07-24-web-config-tree-boot-and-transport-layering.zh.md)——功能插件为何拥有每条路由。
+- [Web 配置树启动与传输分层](../../boot/app-boot/README.zh.md)——功能插件为何拥有每条路由。
 - [生成配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-host-webserver)——每个受支持配置字段及其源声明。
 
 -----

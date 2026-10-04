@@ -380,6 +380,6 @@ Session 与 Workspace 的 Host API、stream adapter 和 Client 数据模型各�
 
 Remote waterfall 保留多 Client 首个 claim、全体 `next` 后继续 Host chain、断线重放 pending 和端到端取消；代价是当前协议只支持一级 Agent scope 与无损 JSON 请求／结果。
 
-本决定扩展[Remote 事件投递](2026-08-10-remote-event-delivery.zh.md)的 allowlist 与单一 Cordis 签名设计：普通通知继续使用 `emit`，Agent-scoped async waterfall 使用同一 `ctx.remote.$on` 面和显式 `waterfall` mode；不建立第二套 invocation map。
+本决定扩展[Remote 事件投递](../../../../packages/api/remotes/README.zh.md)的 allowlist 与单一 Cordis 签名设计：普通通知继续使用 `emit`，Agent-scoped async waterfall 使用同一 `ctx.remote.$on` 面和显式 `waterfall` mode；不建立第二套 invocation map。
 
-本决定接管[简单一元 API Proxy 迁移](../../archived/architecture/2026-08-10-unary-apiproxy-remote-migration.md)中保留的 Session、Workspace 与 Host event carrier，并保留[后台任务展示](../feature/2026-08-08-web-background-job-display.zh.md)所要求的完整 jobs snapshot、进程内生命周期和“观察不恢复 Agent”语义。
+本决定接管[简单一元 API Proxy 迁移](../../archived/architecture/2026-08-10-unary-apiproxy-remote-migration.md)中保留的 Session、Workspace 与 Host event carrier，并保留[后台任务展示](../../../../packages/api/session-controller/README.zh.md)所要求的完整 jobs snapshot、进程内生命周期和“观察不恢复 Agent”语义。

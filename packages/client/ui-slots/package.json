@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-slots",
   "description": "Slot registry pure core: typed ordinary Slots and reusable Component Factories, derived props, Store seats, and renderer installation",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

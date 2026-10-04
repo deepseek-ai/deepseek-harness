@@ -3,19 +3,22 @@
  *
  * The surface is per session and its state lives in that session's store
  * instance, which the slot runtime mints per session and a root service cannot
- * reach on its own. Two paths lead in. The mounted seat publishes its binding —
- * session id, bound actions, its surface — for exactly as long as it is mounted,
- * and every command on the public face goes through that binding; a command
- * arriving with no seat mounted has no session to act on and fails loudly rather
- * than writing into a surface nobody is drawing. `mounted` publishes that
- * binding's session as an observable, so a consumer that wants to open content
- * as soon as a seat is on screen subscribes to it instead of assuming one is
- * bound when its own effect runs. And the plugin adopts each
- * session's store instance as the runtime mints it, so the controller reaches
- * any session's store by id and syncs the Tab domain from that store's commits.
+ * reach on its own. The plugin adopts each session's store instance as the
+ * runtime mints it, so the controller reaches any session's store by id and
+ * syncs the Tab domain from that store's commits, on screen or not.
+ *
+ * The plugin also names the Session on screen — the selected Session while the
+ * Conversation fills the main column — from the selection and the main panel,
+ * before React renders either change, and publishes it as `mounted`. Every
+ * command on the public face acts on that Session through its adopted store; a
+ * command with no Session on screen, or with one whose store the runtime has not
+ * minted, has nothing to act on and fails loudly rather than writing into a
+ * surface nobody is drawing. The seats never publish which Session they draw:
+ * they report only what they render with, the room their docking kit measured
+ * and the automatic fullscreen rule of their frame width.
  *
  * A tab's own actions (`tabActions`) aim at the session the tab is in, not at
- * the mounted one: they run through that session's adopted store, so a callback
+ * the on-screen one: they run through that session's adopted store, so a callback
  * fired after the user switched sessions still lands where its tab is, and they
  * do nothing for a session whose store was never minted.
  *
@@ -27,14 +30,14 @@
  * hand the store one settled intent and record the navigation in the Tab
  * domain. Placement is the caller's option, never a type's property.
  *
- * The registration adopts Session stores and injects the mounted seat binding;
- * callers use the service's navigation methods.
+ * The registration adopts Session stores, names the on-screen Session, and
+ * forwards the seats' reports; callers use the service's navigation methods.
  */
 import { sidebarTargetFromElement, type SidebarRightTarget } from './focus.ts'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { FloatRect, PaneId, TabId, TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit'
-import { activeDockPaneId, canSplit, findContentTab, dockPaneIds, findTabPane, getPane } from '@deepseek-ai/dsh-client-ui-dockkit'
+import { activeDockPaneId, canSplit, findContentTab, findPaneContentTab, dockPaneIds, findTabPane, getPane } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SidebarRightNavigationParams, SidebarRightResourceParams, SidebarRightTabParamsFor } from './contract/params.ts'
@@ -61,24 +64,49 @@ interface Adoption {
   readonly unsubscribe: () => void
 }
 
+/** The room rule's verdict for a docked pane, as a seat's docking kit last measured it: whether two working halves would fit. */
+type RoomRule = (paneId: PaneId) => boolean
+
+/** Plugin-owned Session state the controller reads; the plugin writes it through the factory's callbacks. */
+interface SidebarRightSessions {
+  /** Each Session's latest adopted store. */
+  readonly adopted: ReadonlyMap<SessionId, Adoption>
+  /** Each Session's room rule as its seat last reported it; a Session without one has room in every pane. */
+  readonly rooms: ReadonlyMap<SessionId, RoomRule>
+  /** The Session the plugin names as on screen. */
+  readonly onScreen: ObservableSnapshot<SessionId | undefined>
+  /** Open tab metadata across saved and adopted Sessions. */
+  readonly openTabs: SidebarTabInventory['source']
+}
+
 /**
- * Create the public controller and the plugin-private store adoption callback.
+ * Create the public controller and the plugin-private Session callbacks.
  * Adoption reconciles restored records before any seat renders, then follows commits.
  * @param tabs - registered tab types.
  * @param pin - resource retention for an occurrence's lifetime.
- * @returns the controller and plugin-owned adoption and scope-removal callbacks.
+ * @param host - the viewport rule and focus continuity the commands use.
+ * @returns the controller; store adoption and scope removal; naming the on-screen Session; and recording a seat's room rule.
  */
-export function createSidebarRightController(tabs: SidebarRightTabRegistry, pin: PinResource): {
+export function createSidebarRightController(tabs: SidebarRightTabRegistry, pin: PinResource, host: SidebarRightHost): {
   controller: SidebarRightController
   adopt: (sessionId: SessionId, store: SidebarRightSurfaceStore) => () => void
   forget: (sessionId: SessionId) => void
+  show: (sessionId: SessionId | undefined) => void
+  measure: (sessionId: SessionId, canSplitPane: RoomRule) => void
 } {
   const adopted = new Map<SessionId, Adoption>()
+  const rooms = new Map<SessionId, RoomRule>()
+  const onScreen = createSnapshotStore<SessionId | undefined>(undefined)
   const inventory = new SidebarTabInventory()
-  const controller = new SidebarRightController(tabs, pin, adopted, inventory.source)
+  const controller = new SidebarRightController(tabs, pin, host, { adopted, rooms, onScreen, openTabs: inventory.source })
   return {
     controller,
-    forget: (sessionId) => { inventory.remove(sessionId) },
+    forget: (sessionId) => {
+      inventory.remove(sessionId)
+      rooms.delete(sessionId)
+    },
+    show: (sessionId) => { if (onScreen.getSnapshot() !== sessionId) onScreen.set(sessionId) },
+    measure: (sessionId, canSplitPane) => { rooms.set(sessionId, canSplitPane) },
     adopt(sessionId, store) {
       adopted.get(sessionId)?.unsubscribe()
       const sync = (): void => {
@@ -97,29 +125,26 @@ export function createSidebarRightController(tabs: SidebarRightTabRegistry, pin:
   }
 }
 
-/** Everything a command needs, as the mounted seat sees it. */
-export interface SidebarRightBinding {
-  /** The session the mounted seat is drawing. */
-  readonly sessionId: SessionId
-  /** The seat's store's bound actions; every action names the session it acts on. */
-  readonly actions: SurfaceActions
+/** What the controller needs from the page around it: the viewport rule and focus continuity. */
+export interface SidebarRightHost {
   /**
-   * The seat's store surfaces as last committed, keyed by session id; the
-   * mounted session's is `surfaces[sessionId]`, absent before the seat's first
-   * open. The runtime mints one store per session, so this holds that session.
+   * Whether the viewport is narrow enough that an expanded panel is presented fullscreen.
+   * @returns the rule's verdict for the frame width the seats last rendered at.
    */
-  readonly surfaces: Readonly<Record<string, SurfaceState>>
+  readonly autoFullscreen: () => boolean
   /**
-   * The room rule's verdict for a docked pane, as the kit last measured it:
-   * whether two working halves would fit. Unmeasured panes fit.
+   * Commit a page operation and focus the pane it selects.
+   * @param sessionId - the Session whose page is opening.
+   * @param open - the synchronous operation; returns the selected pane, or `undefined` when unchanged.
    */
-  readonly canSplitPane: (paneId: PaneId) => boolean
-  /** Commit a keyboard/menu close and retain focus on a surviving visible pane. */
-  readonly closeWithFocus: (paneId: PaneId, close: () => void) => void
-  /** Commit a page operation and focus the pane it selects. */
-  readonly openWithFocus: (open: () => PaneId | undefined) => void
-  /** Narrow viewports present an expanded panel fullscreen. */
-  readonly autoFullscreen?: boolean
+  readonly openWithFocus: (sessionId: SessionId, open: () => PaneId | undefined) => void
+  /**
+   * Commit a keyboard/menu close and retain focus on a surviving visible pane.
+   * @param sessionId - the Session whose page is closing.
+   * @param paneId - the pane whose page is closing.
+   * @param close - the synchronous cleanup and removal.
+   */
+  readonly closeWithFocus: (sessionId: SessionId, paneId: PaneId, close: () => void) => void
 }
 
 /** Where an open lands; every field is optional and the defaults are the common case. */
@@ -160,12 +185,13 @@ export type SidebarRightCloseHandler = (sessionId: SessionId, tab: TabRecord) =>
 /** The outward right-Sidebar face (`ctx.sidebarRight`). */
 export interface ISidebarRight {
   /**
-   * The session whose seat is mounted, or `undefined` while no seat is on
-   * screen (a global panel is active, or no session is selected). Moves when a
-   * seat binds or releases, so a component that opens content from its own
-   * mount effect reads it through a bound hook and acts once it is defined:
-   * the frame mounts the Conversation column ahead of the seat, and the seat
-   * publishes its binding from a passive effect of the same commit.
+   * The Session on screen, or `undefined` while none is (a global panel fills
+   * the main column, or no Session is selected). It changes before React
+   * renders the selection or panel change that causes it, so every component
+   * rendered in that commit reads the arriving Session, and the commands act on
+   * it from that commit's effects: its seat mints its store in the same render.
+   * Moves only when the on-screen Session changes; the Session's own store
+   * commits are silent.
    */
   readonly mounted: ObservableSnapshot<SessionId | undefined>
   /**
@@ -189,13 +215,13 @@ export interface ISidebarRight {
    */
   openTab<K extends string>(kind: K, options?: SidebarRightOpenTabOptions<K>): void
   /**
-   * Close one tab of the mounted session; the sole docked guide remains open.
+   * Close one tab of the on-screen Session; the sole docked guide remains open.
    * @param tabId - the tab to close.
    */
   close(tabId: TabId): void
   /**
    * The active tab of the active pane.
-   * @returns the record, or `undefined` when no seat is mounted.
+   * @returns the record, or `undefined` with no Session on screen.
    */
   active(): TabRecord | undefined
   /**
@@ -236,10 +262,10 @@ export interface ISidebarRight {
 export class SidebarRightController implements ISidebarRight {
   /** Open tab metadata across saved and adopted Sessions, independent of visible seats. */
   readonly openTabs: SidebarTabInventory['source']
-  private readonly mountedSession = createSnapshotStore<SessionId | undefined>(undefined)
-  /** The mounted seat's session; see {@link ISidebarRight.mounted}. */
-  readonly mounted: ObservableSnapshot<SessionId | undefined> = this.mountedSession
-  private binding: SidebarRightBinding | undefined
+  /** The on-screen Session; see {@link ISidebarRight.mounted}. */
+  readonly mounted: ObservableSnapshot<SessionId | undefined>
+  private readonly adopted: ReadonlyMap<SessionId, Adoption>
+  private readonly rooms: ReadonlyMap<SessionId, RoomRule>
   private readonly closeHandlers = new Map<string, SidebarRightCloseHandler>()
 
   /**
@@ -263,16 +289,19 @@ export class SidebarRightController implements ISidebarRight {
   /**
    * @param tabs - the tab-type registry consulted to claim an address.
    * @param pin - `ctx.resources.pin`, which the Tab domain holds addresses with.
-   * @param adopted - plugin-owned session stores used by occurrence actions.
-   * @param openTabs - plugin-owned metadata source across saved and adopted layouts.
+   * @param host - the viewport rule and focus continuity the commands use.
+   * @param sessions - plugin-owned adopted stores, room rules, on-screen Session, and open tab metadata.
    */
   constructor(
     private readonly tabs: SidebarRightTabRegistry,
     pin: PinResource,
-    private readonly adopted = new Map<SessionId, Adoption>(),
-    openTabs: SidebarTabInventory['source'] = new SidebarTabInventory().source,
+    private readonly host: SidebarRightHost,
+    sessions: SidebarRightSessions,
   ) {
-    this.openTabs = openTabs
+    this.adopted = sessions.adopted
+    this.rooms = sessions.rooms
+    this.mounted = sessions.onScreen
+    this.openTabs = sessions.openTabs
     this.tabDomain = new TabDomain(this, pin)
   }
 
@@ -283,31 +312,6 @@ export class SidebarRightController implements ISidebarRight {
    */
   tabsIn(sessionId: SessionId): readonly TabRecord[] {
     return Object.values(this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]?.layout.tabs ?? {})
-  }
-
-  /**
-   * Adopt the mounted seat's binding, replacing any previous one.
-   *
-   * Called from the seat while it is mounted, and released when it leaves.
-   * @param binding - the mounted seat's session, actions, and the store's surfaces.
-   * @returns a release callback that clears exactly this binding.
-   */
-  bind(binding: SidebarRightBinding): () => void {
-    this.binding = binding
-    this.publishMounted()
-    return () => {
-      // A newer seat may already have taken over; only the binding that is
-      // still ours may be cleared.
-      if (this.binding !== binding) return
-      this.binding = undefined
-      this.publishMounted()
-    }
-  }
-
-  /** Publish the mounted session only when it changes; a republished binding for the same session is silent. */
-  private publishMounted(): void {
-    const next = this.binding?.sessionId
-    if (this.mountedSession.getSnapshot() !== next) this.mountedSession.set(next)
   }
 
   /**
@@ -413,7 +417,6 @@ export class SidebarRightController implements ISidebarRight {
     params: SidebarRightNavigationParams,
   ): void {
     const surface = this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]
-      ?? (this.binding?.sessionId === sessionId ? this.binding.surfaces[sessionId] : undefined)
     const targetPane = surface === undefined ? undefined : placement.paneId ?? activeDockPaneId(surface.layout)
     const target = targetPane === undefined ? undefined : surface?.layout.nodes[targetPane]
     const preferNewPane = placement.preferNewPane === true
@@ -424,8 +427,8 @@ export class SidebarRightController implements ISidebarRight {
       && target.tabs.length > 0
       && canSplit(surface.layout)
       && dockPaneIds(surface.layout).length < 2
-      && this.binding?.sessionId === sessionId
-      && this.binding.canSplitPane(target.id)
+      && this.mounted.getSnapshot() === sessionId
+      && this.canSplitPane(sessionId, target.id)
     const commit = (): void => { actions.openContent(sessionId, {
       kind: claim.kind,
       contentId: claim.contentId,
@@ -437,25 +440,26 @@ export class SidebarRightController implements ISidebarRight {
     }, (tabId) => { this.tabDomain.navigate(sessionId, tabId, { address, params }) }) }
     const layout = surface?.layout
     const replaced = placement.replaceTab === undefined ? undefined : layout?.tabs[placement.replaceTab]
-    const revealed = layout === undefined || placement.revealIfOpened === false
-      ? undefined : findContentTab(layout, claim.contentId, claim.kind)
+    const replacementPane = replaced === undefined || layout === undefined ? undefined : findTabPane(layout, replaced.id)
+    const revealed = layout === undefined ? undefined
+      : claim.contentId === pageAddress(claim.kind)
+        ? findPaneContentTab(layout, replacementPane?.host === 'dock' ? replacementPane.id : placement.paneId ?? activeDockPaneId(layout), claim.contentId, claim.kind)
+        : placement.revealIfOpened === false ? undefined : findContentTab(layout, claim.contentId, claim.kind)
     if (replaced === undefined || replaced.id === revealed) { commit(); return }
     this.removeAfterCleanup(sessionId, replaced, commit)
   }
 
   /**
-   * Close one tab of the mounted session; the sole docked guide remains open.
+   * Close one tab of the on-screen Session; the sole docked guide remains open.
    * @param tabId - the tab to close.
    */
   close(tabId: TabId): void {
-    const { sessionId, actions } = this.require()
-    if (this.adopted.has(sessionId)) { this.closeIn(sessionId, tabId); return }
-    actions.closeTab(sessionId, tabId)
+    this.closeIn(this.require().sessionId, tabId)
   }
 
   /**
    * The active tab of the active pane.
-   * @returns the record, or `undefined` with no mounted surface.
+   * @returns the record, or `undefined` without an on-screen surface.
    */
   active(): TabRecord | undefined {
     const layout = this.mountedSurface()?.layout
@@ -466,7 +470,7 @@ export class SidebarRightController implements ISidebarRight {
 
   /**
    * Whether the column is currently showing its panel.
-   * @returns `true` while expanded; `false` while collapsed or with no mounted surface.
+   * @returns `true` while expanded; `false` while collapsed or without an on-screen surface.
    */
   isExpanded(): boolean {
     return this.mountedSurface()?.layout.expanded ?? false
@@ -474,8 +478,8 @@ export class SidebarRightController implements ISidebarRight {
 
   /** Collapse the column, or expand it and focus its active dock pane after rendering. */
   toggleExpanded(): void {
-    const { sessionId, actions, openWithFocus } = this.require()
-    openWithFocus(() => {
+    const { sessionId, actions } = this.require()
+    this.host.openWithFocus(sessionId, () => {
       actions.toggleExpanded(sessionId)
       const layout = this.mountedSurface()?.layout
       return layout?.expanded ? activeDockPaneId(layout) : undefined
@@ -498,28 +502,27 @@ export class SidebarRightController implements ISidebarRight {
    * @returns current focused page identity, or undefined outside a visible sidebar page.
    */
   focusedTarget(element: Element | null = document.activeElement): SidebarRightTarget | undefined {
-    const binding = this.binding
-    const surface = this.mountedSurface()
-    return binding === undefined || surface === undefined ? undefined
-      : sidebarTargetFromElement(element, binding.sessionId, surface.layout,
-        tabId => this.tabDomain.occurrence(binding.sessionId, { id: tabId }))
+    const screen = this.screen()
+    return screen === undefined ? undefined
+      : sidebarTargetFromElement(element, screen.sessionId, screen.surface.layout,
+        tabId => this.tabDomain.occurrence(screen.sessionId, { id: tabId }))
   }
 
   /**
-   * Choose a focused sidebar pane, or the mounted Session's active dock pane for an outside open.
+   * Choose a focused sidebar pane, or the on-screen Session's active dock pane for an outside open.
    * @param element - live command input target; stale sidebar markup never falls back to another pane.
-   * @returns captured target, or undefined without a mounted Session.
+   * @returns captured target, or undefined without an on-screen surface.
    */
   commandTarget(element: Element | null = document.activeElement): SidebarRightTarget | undefined {
     const focused = this.focusedTarget(element)
     if (focused !== undefined || element?.closest('[data-sidebar-right-session]')) return focused
-    const binding = this.binding
-    const layout = this.mountedSurface()?.layout
-    if (binding === undefined || layout === undefined) return undefined
+    const screen = this.screen()
+    if (screen === undefined) return undefined
+    const { sessionId, surface: { layout } } = screen
     const pane = getPane(layout, activeDockPaneId(layout))
     const tabId = pane.activeTabId
-    const held = tabId === undefined ? undefined : this.tabDomain.occurrence(binding.sessionId, { id: tabId })
-    return { sessionId: binding.sessionId, paneId: pane.id, host: pane.host, tabId,
+    const held = tabId === undefined ? undefined : this.tabDomain.occurrence(sessionId, { id: tabId })
+    return { sessionId, paneId: pane.id, host: pane.host, tabId,
       occurrence: held, navigationRevision: held?.navigation.getSnapshot().revision }
   }
 
@@ -530,10 +533,11 @@ export class SidebarRightController implements ISidebarRight {
    */
   openTabFromTarget(kind: string, target: SidebarRightTarget): void {
     if (!this.isTargetCurrent(target)) return
-    this.require().openWithFocus(() => {
+    const { sessionId, actions } = this.require()
+    this.host.openWithFocus(sessionId, () => {
       const tab = target.tabId === undefined ? undefined : this.mountedSurface()?.layout.tabs[target.tabId]
       if (target.host === 'float' && tab?.kind === kind && this.tabs.get(kind)?.multiple !== true) {
-        this.require().actions.setExpanded(target.sessionId, true)
+        actions.setExpanded(sessionId, true)
         this.focus(tab.id)
       } else {
         this.openTab(kind, {
@@ -565,10 +569,10 @@ export class SidebarRightController implements ISidebarRight {
     const surface = this.mountedSurface()
     if (surface === undefined || target.tabId === undefined) return 'unavailable'
     const tabId = target.tabId
-    const binding = this.require()
-    binding.closeWithFocus(target.paneId, () => {
+    const { sessionId, actions } = this.require()
+    this.host.closeWithFocus(sessionId, target.paneId, () => {
       if (canCloseTab(surface, tabId)) this.close(tabId)
-      else binding.actions.setExpanded(target.sessionId, false)
+      else actions.setExpanded(sessionId, false)
     })
     return 'closed'
   }
@@ -576,10 +580,10 @@ export class SidebarRightController implements ISidebarRight {
   /**
    * Check a captured target before acting, including reopened records and intervening navigation.
    * @param target - identity captured while resolving the input.
-   * @returns whether the mounted Session, pane, tab lifetime and navigation still match.
+   * @returns whether the on-screen Session, pane, tab lifetime and navigation still match.
    */
   isTargetCurrent(target: SidebarRightTarget): boolean {
-    if (this.binding?.sessionId !== target.sessionId) return false
+    if (this.mounted.getSnapshot() !== target.sessionId) return false
     const layout = this.mountedSurface()?.layout
     const pane = layout?.nodes[target.paneId]
     if (pane?.kind !== 'pane' || pane.host !== target.host) return false
@@ -603,7 +607,7 @@ export class SidebarRightController implements ISidebarRight {
     if (!layout.expanded) return 'collapsed'
     if (getPane(layout, target.paneId).tabs.length === 0) return 'empty'
     if (!canSplit(layout) || dockPaneIds(layout).length >= 2) return 'budget'
-    if (!this.require().canSplitPane(target.paneId)) return 'width'
+    if (!this.canSplitPane(target.sessionId, target.paneId)) return 'width'
     return undefined
   }
 
@@ -613,9 +617,10 @@ export class SidebarRightController implements ISidebarRight {
    */
   toggleFullscreen(target: SidebarRightTarget): void {
     if (!this.isTargetCurrent(target) || target.host === 'float' || !this.isExpanded()) return
-    const { sessionId, actions, autoFullscreen } = this.require()
-    const fullscreen = autoFullscreen === true || this.mountedSurface()?.layout.mode === 'fullscreen'
-    if (fullscreen && autoFullscreen === true) actions.setExpanded(sessionId, false)
+    const { sessionId, actions } = this.require()
+    const autoFullscreen = this.host.autoFullscreen()
+    const fullscreen = autoFullscreen || this.mountedSurface()?.layout.mode === 'fullscreen'
+    if (fullscreen && autoFullscreen) actions.setExpanded(sessionId, false)
     actions.setMode(sessionId, fullscreen ? 'push' : 'fullscreen')
   }
 
@@ -625,15 +630,15 @@ export class SidebarRightController implements ISidebarRight {
    * @returns the new pane's id, or `undefined` when nothing was split.
    */
   split(paneId?: PaneId): PaneId | undefined {
-    const { sessionId, actions, canSplitPane } = this.require()
+    const { sessionId, actions } = this.require()
     const layout = this.mountedSurface()?.layout
     if (layout === undefined) return undefined
     const target = paneId ?? activeDockPaneId(layout)
     const node = layout.nodes[target]
     if (node === undefined || node.kind !== 'pane' || node.host !== 'dock') return undefined
-    if (!canSplit(layout) || dockPaneIds(layout).length >= 2 || !canSplitPane(target)) return undefined
+    if (!canSplit(layout) || dockPaneIds(layout).length >= 2 || !this.canSplitPane(sessionId, target)) return undefined
     let created: PaneId | undefined
-    this.require().openWithFocus(() => {
+    this.host.openWithFocus(sessionId, () => {
       actions.splitPane(sessionId, target, (id) => { created = id })
       return created
     })
@@ -665,7 +670,7 @@ export class SidebarRightController implements ISidebarRight {
   }
 
   /**
-   * Step the mounted session's surface back one intent.
+   * Step the on-screen Session's surface back one intent.
    *
    * @internal Not part of the product: the sequence is an architectural fact
    * with no user-facing control yet. Kept reachable for tests.
@@ -676,7 +681,7 @@ export class SidebarRightController implements ISidebarRight {
   }
 
   /**
-   * Step the mounted session's surface forward one intent.
+   * Step the on-screen Session's surface forward one intent.
    *
    * @internal See `_undo`.
    */
@@ -685,11 +690,25 @@ export class SidebarRightController implements ISidebarRight {
     actions.redo(sessionId)
   }
 
-  /** The mounted session's surface; `undefined` without a seat or before its first open. */
+  /**
+   * The on-screen Session and its committed surface; `undefined` with no Session
+   * on screen, before the runtime mints its store, or before its first open.
+   */
+  private screen(): { readonly sessionId: SessionId; readonly surface: SurfaceState } | undefined {
+    const sessionId = this.mounted.getSnapshot()
+    if (sessionId === undefined) return undefined
+    const surface = this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]
+    return surface === undefined ? undefined : { sessionId, surface }
+  }
+
+  /** The on-screen Session's surface; see {@link SidebarRightController.screen}. */
   private mountedSurface(): SurfaceState | undefined {
-    const { binding } = this
-    return binding === undefined ? undefined
-      : this.adopted.get(binding.sessionId)?.store.getSnapshot().bySession[binding.sessionId] ?? binding.surfaces[binding.sessionId]
+    return this.screen()?.surface
+  }
+
+  /** Whether a Session's docked pane has room for two working halves, as its seat last measured; unmeasured panes do. */
+  private canSplitPane(sessionId: SessionId, paneId: PaneId): boolean {
+    return this.rooms.get(sessionId)?.(paneId) ?? true
   }
 
   /**
@@ -701,13 +720,15 @@ export class SidebarRightController implements ISidebarRight {
     return this.adopted.get(sessionId)?.store.actions
   }
 
-  private require(): SidebarRightBinding {
+  private require(): { readonly sessionId: SessionId; readonly actions: SurfaceActions } {
     // Reads answer for the no-session case (there is nothing expanded), but a
     // write has no session to write to. Callers are UI gestures and tool
     // results, both of which belong to a session that is on screen.
-    if (this.binding === undefined) {
+    const sessionId = this.mounted.getSnapshot()
+    const actions = sessionId === undefined ? undefined : this.actionsFor(sessionId)
+    if (sessionId === undefined || actions === undefined) {
       throw new Error('sidebarRight: no session surface is mounted')
     }
-    return this.binding
+    return { sessionId, actions }
   }
 }

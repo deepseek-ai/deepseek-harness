@@ -98,7 +98,6 @@ The browser-safe `./notice` entry owns `formatSpillNotice(omitted, ref, images)`
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` validation, the two waterfall listeners, the shared replacement helper |
 | [`src/notice.ts`](src/notice.ts) | Browser-safe notice formatting and recognition, published as `./notice` |
 | [`src/retention.ts`](src/retention.ts) | Pure ordered text/image head-tail retention |
-| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Failure modes
 

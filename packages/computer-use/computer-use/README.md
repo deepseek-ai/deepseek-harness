@@ -45,8 +45,6 @@ Providers stop admitting tool calls, close their resources, and await owned work
 
 One private name owns the slot. Cordis effects remove contributions when their plugin unloads; a repeated disposer cannot remove a later registration. The [source](src/index.ts) contains no driver object, operation interface, or provider selector.
 
-No runtime invariant companion is published: the registry has one authoritative field and exposes no independently maintained observation that can diverge. Duplicate rejection and plugin disposal are covered by the owning tests.
-
 </details>
 
 -----

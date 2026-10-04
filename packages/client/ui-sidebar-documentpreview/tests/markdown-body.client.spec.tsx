@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Markdown preview uses one accumulated document across page arrivals and EOF. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { MarkdownBody, type MarkdownBodyProps } from '../src/client/markdown/MarkdownBody.tsx'
 import { en, zh } from '../src/client/markdown/locales.ts'
@@ -127,6 +127,60 @@ describe('MarkdownBody', () => {
     view.rerender(<MarkdownBody {...props(value, t)} />)
     expect(view.getByRole('button', { name: '复制' })).toBeDefined()
     expect(view.getByRole('heading', { name: '脚注' })).toBeDefined()
+  })
+
+  it('renders leading YAML frontmatter as fields instead of a heading', async () => {
+    const text = [
+      '---', 'name: pdf', 'description: >-', '  Extract text', '  from PDF files.',
+      'metadata:', '  tags: [docs, pdf]', 'anchor: &list [a]', 'copy: *list', 'license:', 'version: 1.0', 'beta: true', '1: one', '? orphan',
+      '---', '', '# Body',
+    ].join('\n')
+    const view = render(<MarkdownBody {...props(content([text], true))} />)
+    const fields = await vi.waitUntil(() => view.container.querySelector('[data-document-frontmatter] dl'))
+    expect([...fields.querySelectorAll('dt')].map(node => node.textContent))
+      .toEqual(['name', 'description', 'metadata', 'anchor', 'copy', 'license', 'version', 'beta', '1', 'orphan'])
+    expect([...fields.querySelectorAll('dd')].map(node => node.textContent)).toEqual([
+      'pdf', 'Extract text from PDF files.', 'tags: [docs, pdf]', '[a]', '*list', '', '1.0', 'true', 'one', '',
+    ])
+    expect(view.getAllByRole('heading').map(node => node.textContent)).toEqual(['Body'])
+  })
+
+  it.each([
+    ['invalid YAML', 'name: [unclosed'],
+    ['a scalar document', '~'],
+    ['a sequence document', '- first\n- second'],
+  ])('shows the verbatim frontmatter source for %s', async (_, source) => {
+    const view = render(<MarkdownBody {...props(content([`---\r\n${source}\r\n...\r\nBody.`], true))} />)
+    await act(async () => { await import('../src/client/markdown/frontmatter-fields.tsx') })
+    const block = view.container.querySelector('[data-document-frontmatter]')
+    expect(block?.querySelector('dl')).toBeNull()
+    expect(block?.querySelector('pre')?.textContent).toBe(source)
+    expect(view.getByText('Body.')).toBeDefined()
+  })
+
+  it('collapses frontmatter without content and keeps an unterminated opening rule as Markdown', async () => {
+    const view = render(<MarkdownBody {...props(content(['---\nname: pdf\n---\nBody.'], true))} />)
+    const block = await vi.waitUntil(() => view.container.querySelector('[data-document-frontmatter]:has(dl)'))
+    view.rerender(<MarkdownBody {...props(content(['---\n# comment\n---\nBody.'], true))} />)
+    expect(view.container.querySelector('[data-document-frontmatter]')).toBe(block)
+    expect(block.childElementCount).toBe(0)
+    view.rerender(<MarkdownBody {...props(content(['---\n---\n# Next\n\n---\nTail'], true))} />)
+    expect(view.container.querySelector('[data-document-frontmatter]')?.childElementCount).toBe(0)
+    expect(view.getByRole('heading', { name: 'Next' })).toBeDefined()
+    expect(view.getByText('Tail')).toBeDefined()
+    view.rerender(<MarkdownBody {...props(content(['---\nname: pdf'], false))} />)
+    expect(view.container.querySelector('[data-document-frontmatter]')).toBeNull()
+    expect(view.container.querySelector('hr')).not.toBeNull()
+  })
+
+  it.each([
+    ['a leading blank line', '\n---\nname: pdf\n---\nBody.'],
+    ['leading text', 'Intro.\n\n---\nname: pdf\n---\nBody.'],
+    ['an indented opening rule', ' ---\nname: pdf\n---\nBody.'],
+  ])('treats a delimiter pair after %s as Markdown', (_, text) => {
+    const view = render(<MarkdownBody {...props(content([text], true))} />)
+    expect(view.container.querySelector('[data-document-frontmatter]')).toBeNull()
+    expect(view.getByText('Body.')).toBeDefined()
   })
 
   it('renders empty text and leaves non-text deliveries to their selected implementation', () => {

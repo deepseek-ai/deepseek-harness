@@ -61,7 +61,7 @@ Two limits are recorded in the package READMEs rather than fixed. An attempt is 
 
 ## Testing
 
-The seam's suite pins the lifecycle it owns: single-flight refusal and release, withdrawal before the flow starts and during it, a flow that ignores its signal, the commit confirmation, and the settlement event including the `failed` case a caller sees as a thrown error. The invariant companion pins that a settled key is a free key, because a wedged one is otherwise invisible.
+The seam's suite pins the lifecycle it owns: single-flight refusal and release, withdrawal before the flow starts and during it, a flow that ignores its signal, the commit confirmation, and the settlement event including the `failed` case a caller sees as a thrown error.
 
 `llm-pi-ai` covers the three translations against a real `$DSH_HOME` document — an api-key credential field by field, an OAuth credential verbatim including its refresh half, a foreign plugin's record skipped by scope, and the write refusal without a credentials service — plus every `AuthEvent` and `AuthPrompt` member restated, with `Models.login()` mocked at the collection boundary since a real one opens a browser. Two real-composition tests boot the plugin with and without the authorization seam.
 

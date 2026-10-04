@@ -1,11 +1,11 @@
 - text: "Use the read tool twice in one assistant message: read a.txt and b.txt. Then reply with the single word DONE and stop. {{clock}}"
 - button "Copy"
-- status: Worked
-- button "Took {{duration}}"
+- status: Completed
+- button "Completed in {{duration}}"
 - text: FORK_BRANCH_USER Summarize what this branch knows about the reads. {{clock}}
 - button "Copy"
-- status: Worked
-- button "Took {{duration}}"
+- status: Completed
+- button "Completed in {{duration}}"
 - paragraph: FORK_BRANCH_FIRST this branch has no read results, so I would check what the parent completed before retrying. FORK_BRANCH_DONE.
 - button "Copy"
 - button "Good response"

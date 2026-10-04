@@ -33,9 +33,6 @@
       "path": "../user-approval"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../../session/session-projection"
     },
     {

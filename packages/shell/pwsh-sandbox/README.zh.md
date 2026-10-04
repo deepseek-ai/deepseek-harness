@@ -83,7 +83,6 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SandboxPwshExecutor`、按进程保留事实、执行准备 |
 | [`src/helpers.ts`](src/helpers.ts) | 拒绝、runner 失败与 runner spawn 失败分类 |
-| — | 不发布运行时不变式伴生入口；除所属 seam 所执行的约定外，本包不暴露独立事件序列或可变数据关系；分类可在结果中观察。 |
 | `tests/` | 跨 ACL 与平台 runner 演练的行为 |
 
 ### 主要流程

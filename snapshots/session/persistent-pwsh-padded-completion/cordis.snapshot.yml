@@ -1,0 +1,92 @@
+# Keyless replay for padded persistent PowerShell completion frames.
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
+  disabled: true
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: deepseek-official
+            name: DeepSeek
+            models:
+              - id: deepseek-v4-pro
+
+- insert:
+    - id: terminal
+      name: '@deepseek-ai/dsh-terminal'
+
+- id: sandbox-policy
+  name: '@deepseek-ai/dsh-sandbox-policy'
+  config:
+    mode: danger-full-access
+    workspaceRoot: !!js process.cwd()
+
+- id: subprocess
+  name: '@deepseek-ai/dsh-subprocess-local'
+
+- insert:
+    - id: padded-pwsh-backend
+      name: './pwsh-snapshot-backend.mjs'
+
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: deepseek-official
+    model: deepseek-v4-pro
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  disabled: true
+
+- id: system-prompt
+  name: '@deepseek-ai/dsh-system-prompt'
+  config:
+    personaPrefix: You are a concise snapshot agent working in {{cwd}}.
+
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+  disabled: true
+
+- id: goal
+  name: '@deepseek-ai/dsh-goal'
+  disabled: true
+
+- id: goal-round-driver
+  name: '@deepseek-ai/dsh-goal-round-driver'
+  disabled: true
+
+- id: command-goal
+  name: '@deepseek-ai/dsh-command-goal'
+  disabled: true
+
+- id: tool-goal
+  name: '@deepseek-ai/dsh-tool-goal'
+  disabled: true
+
+- id: skill
+  name: '@deepseek-ai/dsh-skill'
+  disabled: true
+
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  disabled: true
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+  disabled: true
+
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: true
+
+- insert:
+    - id: tool-pwsh-persistent
+      name: '@deepseek-ai/dsh-tool-pwsh-persistent'

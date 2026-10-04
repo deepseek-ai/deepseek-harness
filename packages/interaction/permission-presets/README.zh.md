@@ -79,7 +79,6 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | `PermissionPresetService`：配置表、固定 Auto 注册、写入路径、设置命名空间、会话固定、子功能 |
 | [`src/types.ts`](src/types.ts) | 进程级目录、目录变化事件与 `permissions` 当前选择类型 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件：校验配置预设名称；Auto 恢复在发布前另行检查 |
 
 ### 写入路径
 
@@ -109,7 +108,7 @@ kind: "package-reference"
 当包级约定不够用时阅读以下页面。它们从预设词汇逐步进入执行旋钮与设计依据。
 
 - [权限预设子系统参考](../../../docs/subsystems/permission-presets.zh.md)——预设表、进程级目录、当前选择与 `ctx.permissionPresets` Cordis API。
-- [沙箱切换设计 Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-sandbox.zh.md)——沙箱模式与审批策略如何组合与切换。
+- [历史沙箱切换设计 Agent Note](../../../.agents/notes/archived/feature/2026-07-06-sandbox.md)——沙箱模式与审批策略如何组合与切换。
 - [审批子系统参考](../../../docs/subsystems/approval.zh.md)——此服务捆绑的审批策略旋钮。
 - [交互组映射](../README.zh.md)——相邻的命令、审批与问答包。
 

@@ -12,17 +12,17 @@
   en: a15c7c13f167e5ac
   zh: 63bcc2ef60c2f344
 /agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/decision/one-tool-owns-three-stages:
-  en: ea65da88c3df35bb
-  zh: a71afb4683a75290
+  en: c4bac1088a4fd3bc
+  zh: 549348deae5485c1
 /agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/decision/start-marks-an-initialization-candidate:
-  en: 696a180246e23391
-  zh: aeb2b1fdcfdf9631
+  en: 7771032e6ad227e7
+  zh: 313d32ab5312d965
 /agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/decision/converge-on-final-state-without-replaying-preparation:
   en: 603cbcf3379ad4f7
   zh: e34d87ea348c756b
 /agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/decision/shared-rows-reuse-their-existing-presentation:
-  en: 24536588cd0c979b
-  zh: 992d4c4657d6d034
+  en: a5741c967212250b
+  zh: de6288916a054c6e
 /agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/decision/relationship-to-existing-records:
   en: bd4984f66c507785
   zh: 4d2372fdbc4c3cec
@@ -30,5 +30,5 @@
   en: 505095bec889700e
   zh: b77c492de3e8641a
 /agent-note-tool-calls-own-preparation-dispatch-and-results-by-callid/consequences:
-  en: 3cf36b54240013da
-  zh: 67e663b431bc67d2
+  en: dd0e4561c50b1188
+  zh: 0ec83177ef570a78

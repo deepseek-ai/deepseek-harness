@@ -43,6 +43,15 @@ function call(seq: number, callId = first, name = 'write', argumentsRaw = args):
     data: { turn: 1, step: 1, callId, name, arguments: argumentsRaw } })
 }
 
+function blockEnd(seq: number, argumentsRaw: string): SessionEventLikeEntry {
+  return { type: 'transient', event: {
+    type: 'assistant/live-chunk', seq, time: seq,
+    data: { turn: 1, step: 1, attemptId, chunk: {
+      type: 'block-end', index: 0, block: { type: 'tool-call', id: first, name: 'write', arguments: argumentsRaw },
+    } },
+  } }
+}
+
 function result(seq: number, callId = first): SessionLiveEventEntry {
   return entry({ type: 'tool/result', seq: SessionSeq(seq), time: seq, surfaceOp: 'append', data: {
     turn: 1, step: 1, message: createToolResultMessage({ callId, content: [{ type: 'text', text: 'Written' }], isError: false }),
@@ -67,9 +76,14 @@ function settlement(ids = [first, second], name = 'write', argumentsRaw = args, 
   } }
 }
 
-function harness(entries: readonly SessionEventLikeEntry[] = opening, hasMore = false, tool = toolDefinition) {
+function harness(
+  entries: readonly SessionEventLikeEntry[] = opening,
+  hasMore = false,
+  tool = toolDefinition,
+  assistant = assistantDefinition,
+) {
   const assembler = new ConversationNodeAssembler(
-    { entries: () => [assistantDefinition, tool], fallbackEntry: () => undefined },
+    { entries: () => [assistant, tool], fallbackEntry: () => undefined },
     { entries: () => [chatViewDefinition] },
     { entries: () => [processGroupDefinition], forTarget: target => target === 'chat' ? processGroupDefinition : undefined },
   )
@@ -87,6 +101,102 @@ function harness(entries: readonly SessionEventLikeEntry[] = opening, hasMore = 
 }
 
 describe('Tool preparation and durable replay', () => {
+  it('keeps Assistant state unchanged for parameter-only deltas while the Tool reader advances', () => {
+    const update = vi.fn<typeof assistantDefinition.update>((...values) => assistantDefinition.update(...values))
+    const h = harness(opening, false, toolDefinition, { ...assistantDefinition, update })
+    h.assembler.append(delta(2.1, first, '{"file_path":"hello.txt","content":"he'))
+    const before: unknown = update.mock.results.at(-1)!.value
+    const view = h.tools()[0]!.data.root.args
+    expect(view.text('content')).toBe('he')
+    h.assembler.append(delta(2.2, first, 'llo"}', null))
+    expect(update.mock.results.at(-1)!.value).toBe(before)
+    expect(view.text('content')).toBe('hello')
+    expect(before).toMatchObject({ blocks: [{ kind: 'tool-call', name: 'write', argsRaw: '' }], firstTokenTime: 2.1 })
+    h.assembler.append(blockEnd(2.3, args))
+    expect(update.mock.results.at(-1)!.value).toMatchObject({ blocks: [{ argsRaw: args }], firstTokenTime: 2.1 })
+  })
+
+  it('accepts a complete tool block before tool/call when no deltas were observed', () => {
+    const h = harness()
+    h.assembler.append(blockEnd(2.1, args))
+    expect(() => h.assembler.append(call(6))).not.toThrow()
+    expect(h.phases()).toEqual([[first, 'start']])
+    expect(h.tools()[0]!.data.root.args.text('content')).toBe('hello')
+  })
+
+  it('retains the argument reader across matching block-end, call, and result', () => {
+    const h = harness()
+    h.assembler.append(delta(2.1, first, '{"file_path":"hello.txt","content":"he'))
+    const before = h.tools()[0]!
+    const view = before.data.root.args
+    expect(view.text('content')).toBe('he')
+    expect(view.complete('content')).toBe(false)
+    h.assembler.append(delta(2.2, first, 'llo"}', null))
+    h.assembler.append(blockEnd(2.3, args))
+    const ended = h.tools()[0]!
+    expect(ended).not.toBe(before)
+    expect(ended.data.root.args).toBe(view)
+    expect(view.text('content')).toBe('hello')
+    expect(view.complete('content')).toBe(true)
+    h.assembler.append(call(6))
+    expect(h.tools()[0]!.data.root.args).toBe(view)
+    h.assembler.append(result(7))
+    expect(h.tools()[0]!.data.root.args).toBe(view)
+  })
+
+  it.each([null, 'write'])('ignores late tool deltas after block-end (name=%s)', (name) => {
+    const h = harness()
+    h.assembler.append(delta(2.1, first, args))
+    const view = h.tools()[0]!.data.root.args
+    h.assembler.append(blockEnd(2.2, args))
+    const ended = h.tools()[0]!
+    expect(() => h.assembler.append(delta(2.3, first, ' ignored', name))).not.toThrow()
+    expect(h.tools()[0]).toBe(ended)
+    expect(view.text('content')).toBe('hello')
+    h.assembler.append(call(6))
+    expect(h.phases()).toEqual([[first, 'start']])
+    expect(h.tools()[0]!.data.root.args).toBe(view)
+    h.assembler.append(result(7))
+    expect(h.phases()).toEqual([[first, 'result']])
+    expect(h.tools()[0]!.data.root.args).toBe(view)
+  })
+
+  it('accepts deltas after a closing brace until block-end without checking closed()', () => {
+    const h = harness()
+    h.assembler.append(delta(2.1, first, args))
+    const view = h.tools()[0]!.data.root.args
+    expect(view.closed()).toBe(true)
+    const closed = vi.spyOn(view, 'closed')
+    try {
+      h.assembler.append(delta(2.2, first, ' ', null))
+      expect(closed).not.toHaveBeenCalled()
+    } finally {
+      closed.mockRestore()
+    }
+    h.assembler.append(blockEnd(2.3, args + ' '))
+    expect(h.tools()[0]!.data.root.args).toBe(view)
+  })
+
+  it.each([
+    '{"file_path":"other.txt","content":"hello"}',
+    '{"file_path":"hello.txt","content":"he',
+    args + args,
+  ])('uses authoritative block-end text after conflicting deltas: %s', (streamed) => {
+    const h = harness()
+    h.assembler.append(delta(2.1, first, streamed))
+    const before = h.tools()[0]!.data.root.args
+    before.text('file_path')
+    h.assembler.append(blockEnd(2.2, args))
+    const ended = h.tools()[0]!.data.root.args
+    expect(ended).not.toBe(before)
+    expect(ended.text('file_path')).toBe('hello.txt')
+    expect(ended.text('content')).toBe('hello')
+    const dispatched = '{"file_path":"final.txt","content":"done"}'
+    h.assembler.append(call(6, first, 'write', dispatched))
+    expect(h.tools()[0]!.data.root.args.text('file_path')).toBe('final.txt')
+    expect(h.tools()[0]!.data.root).toMatchObject({ argsRaw: dispatched })
+  })
+
   it('batches repeated named deltas and retains the unchanged Tool node', () => {
     const start = vi.fn<typeof toolDefinition.start>((...args) => toolDefinition.start(...args))
     const h = harness(opening, false, { ...toolDefinition, start })
@@ -102,6 +212,37 @@ describe('Tool preparation and durable replay', () => {
     expect(h.tools()[0]).not.toBe(original)
     expect(h.assembler.append(result(7))).toBe('immediate')
     expect(h.phases()).toEqual([[first, 'result']])
+  })
+
+  it('publishes a reread argument change and retains the new node through unchanged details', () => {
+    const h = harness()
+    h.assembler.append(delta(2.1, first, '{"command":"a', 'bash'))
+    const original = h.tools()[0]!
+    const groups = h.assembler.grouped('chat')!
+    const group = groups.entries.find(entry => entry.kind === 'group')!
+    if (group.kind !== 'group') throw new Error('expected a process group')
+    const source = groups.groupSource(group.key)
+    const before = source.getSnapshot()
+    expect(before?.data.summary.runningDetail).toBe('a')
+    const argumentsView = original.data.root.args
+    expect(argumentsView.textPrefix('command', 512)).toBe('a')
+
+    h.assembler.append(delta(2.2, first, 'b', null))
+    expect(argumentsView.textPrefix('command', 512)).toBe('ab')
+    expect(source.getSnapshot()).toBe(before)
+    const updated = h.tools()[0]!
+    expect(updated).not.toBe(original)
+    expect(updated.data.root).not.toBe(original.data.root)
+    expect(updated.data.root.args).toBe(argumentsView)
+    expect(updated.key).toBe(original.key)
+    const after = source.getSnapshot()
+    expect(after?.data.summary.runningDetail).toBe('ab')
+
+    for (const [index, fragment] of ['', '","unread":"x', 'y"}'].entries()) {
+      h.assembler.append(delta(2.3 + index / 1000, first, fragment, null))
+      expect(h.tools()[0]).toBe(updated)
+      expect(source.getSnapshot()).toBe(after)
+    }
   })
 
   it('creates two independent live preparations and updates each call under the same key', () => {

@@ -1,13 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentPresetSectionController } from '../src/client/section-store.ts'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { AgentPresetRow } from '@deepseek-ai/dsh-agent-preset-registry/types'
+import { en } from '../src/client/locales.ts'
 
 function fixture() {
+  const form = createSnapshotStore<ConfigFormSnapshot<{ selectedDefault: string }>>({
+    status: 'ready', mode: 'host', writable: true, revision: 7, value: { selectedDefault: 'minimal' }, base: {}, user: {},
+  })
   const remote = { agentPresets: {
-    list: vi.fn(async () => ({ ok: true as const, value: { presets: [{ id: 'standard', isDefault: true }] } })),
+    list: vi.fn(async (): Promise<{ ok: true; value: { presets: AgentPresetRow[] } }> => ({
+      ok: true, value: { presets: [{ id: 'standard', isDefault: true }] },
+    })),
     read: vi.fn(async (id: string) => ({ ok: true as const, value: { agentPreset: id, name: 'Standard', content: '- name: fs\n' } })),
-  }, settings: { update: vi.fn(async () => ({ ok: true as const, value: {} })) } }
-  const controller = new AgentPresetSectionController({ remote } as never)
-  return { remote, controller, state: () => controller.store.getSnapshot() }
+  }, settings: {
+    update: vi.fn(async (_ns: string, _patch: { selectedDefault: string }, _revision?: number) => ({ ok: true as const, value: {} })),
+  } }
+  const controller = new AgentPresetSectionController({ remote, configForms: { get: () => form },
+    locale: { bind: () => (key: keyof typeof en) => en[key] },
+  } as never)
+  return { remote, controller, form, state: () => controller.store.getSnapshot() }
 }
 
 describe('the preset roster', () => {
@@ -97,5 +110,100 @@ describe('the preset roster', () => {
 
     expect(remote.settings.update).toHaveBeenCalledOnce()
     expect(sync).not.toHaveBeenCalled()
+  })
+})
+
+describe('Coding Tools default reconciliation', () => {
+  function setup(defaultId = 'minimal', name?: string) {
+    const f = fixture()
+    let rows: AgentPresetRow[] = [
+      { id: 'standard', isDefault: defaultId === 'standard' },
+      ...(defaultId === 'standard' ? [] : [{ id: defaultId, isDefault: true, ...(name === undefined ? {} : { name }) }]),
+    ]
+    f.remote.agentPresets.list.mockImplementation(async () => ({ ok: true, value: { presets: rows } }))
+    f.remote.settings.update.mockImplementation(async (_ns, patch) => {
+      rows = rows.map(row => ({ ...row, isDefault: row.id === patch.selectedDefault }))
+      return { ok: true, value: {} }
+    })
+    return { ...f, rows: () => rows, setRows: (next: AgentPresetRow[]) => { rows = next } }
+  }
+
+  it.each(['ptc', 'minimal'])('saves Standard instead of built-in %s with the accepted revision', async (id) => {
+    const f = setup(id)
+    await f.controller.reconcileCodingTools(() => true)
+    expect(f.remote.settings.update).toHaveBeenCalledExactlyOnceWith('agent-preset-registry', { selectedDefault: 'standard' }, 7)
+    expect(f.state().rows.find(row => row.isDefault)?.id).toBe('standard')
+    expect(f.state().error).toBeNull()
+    await f.controller.reconcileCodingTools(() => true)
+    expect(f.remote.settings.update).toHaveBeenCalledOnce()
+  })
+
+  it.each([['standard', undefined], ['cordis', undefined], ['custom', 'Custom'], ['ptc', 'My PTC'], ['minimal', 'My Minimal']] as const)(
+    'preserves the allowed default %s (%s)', async (id, name) => {
+      const f = setup(id, name)
+      await f.controller.reconcileCodingTools(() => true)
+      expect(f.remote.settings.update).not.toHaveBeenCalled()
+      expect(f.rows().find(row => row.isDefault)?.id).toBe(id)
+    },
+  )
+
+  it.each([
+    { status: 'loading' as const }, { status: 'unavailable' as const },
+    { mode: 'memory' as const }, { writable: false }, { revision: undefined },
+  ])('does not write without a writable accepted Host form: %j', async (patch) => {
+    const f = setup()
+    f.form.set({ ...f.form.getSnapshot(), ...patch })
+    await f.controller.reconcileCodingTools(() => true)
+    expect(f.remote.settings.update).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('waits for a pending default write and checks the latest toggle (re-enabled: %s)', async (reEnabled) => {
+    const f = setup('standard')
+    f.setRows([{ id: 'standard', isDefault: true }, { id: 'minimal', isDefault: false }])
+    const reply = Promise.withResolvers<undefined>()
+    f.remote.settings.update.mockImplementationOnce(async () => {
+      await reply.promise
+      f.setRows([{ id: 'standard', isDefault: false }, { id: 'minimal', isDefault: true }])
+      return { ok: true, value: {} }
+    })
+    const pending = f.controller.makeDefault('minimal')
+    let off = true
+    const reconcile = f.controller.reconcileCodingTools(() => off)
+    expect(f.remote.settings.update).toHaveBeenCalledOnce()
+    if (reEnabled) off = false
+    reply.resolve(undefined)
+    await Promise.all([pending, reconcile])
+    expect(f.remote.settings.update).toHaveBeenCalledTimes(reEnabled ? 1 : 2)
+    expect(f.state().rows.find(row => row.isDefault)?.id).toBe(reEnabled ? 'minimal' : 'standard')
+  })
+
+  it('rechecks the toggle after a roster read', async () => {
+    const f = setup()
+    const roster = Promise.withResolvers<{ ok: true; value: { presets: AgentPresetRow[] } }>()
+    f.remote.agentPresets.list.mockImplementationOnce(() => roster.promise)
+    let off = true
+    const pending = f.controller.reconcileCodingTools(() => off)
+    off = false
+    roster.resolve({ ok: true, value: { presets: f.rows() } })
+    await pending
+    expect(f.remote.settings.update).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('reports unavailable Standard without a default write (broken: %s)', async (broken) => {
+    const f = setup()
+    f.setRows([{ id: 'minimal', isDefault: true }, ...(broken ? [{ id: 'standard', isDefault: false, broken: 'Missing plugin' }] : [])])
+    await f.controller.reconcileCodingTools(() => true)
+    expect(f.remote.settings.update).not.toHaveBeenCalled()
+    expect(f.state().error).toBe(en.standardUnavailable)
+    expect(f.state().rows.find(row => row.isDefault)?.id).toBe('minimal')
+  })
+
+  it('reports one refused reset without hiding the actual default or retrying itself', async () => {
+    const f = setup()
+    f.remote.settings.update.mockResolvedValueOnce({ ok: false, error: { message: 'Revision changed' } } as never)
+    await f.controller.reconcileCodingTools(() => true)
+    expect(f.remote.settings.update).toHaveBeenCalledOnce()
+    expect(f.state()).toMatchObject({ saving: false, error: 'Revision changed' })
+    expect(f.state().rows.find(row => row.isDefault)?.id).toBe('minimal')
   })
 })

@@ -95,14 +95,9 @@ A completed final `turn/end` exits 0; any other outcome — aborted, error, or n
 | [`src/startup.ts`](src/startup.ts) | The `headless-startup` provider: task positional, `--session-id`, `--json`, and `--help` |
 | [`src/json-stream.ts`](src/json-stream.ts) | The `--json` projection: event vocabulary, commit-point emission, string bounding |
 | [`cordis.patch.yml`](cordis.patch.yml) | The one-shot patch over `dsh-base` |
-| — | No runtime invariant companion is published; the runner's observable contract (provider reasoning on stderr, final text on stdout, exit code by turn-end reason) is process-level and owned by the launcher e2e; it registers nothing and holds no mutable relation to audit inside the tree. |
 | [`tests/headless.spec.ts`](tests/headless.spec.ts) | Run flow, aggregation, flush, session adoption, and exit mapping |
 | [`tests/json-stream.spec.ts`](tests/json-stream.spec.ts) | Projection ordering, commit-point emission, bounding, and disposal |
 | [`tests/startup.spec.ts`](tests/startup.spec.ts) | Command-line parsing over a real Loader tree |
-
-### Invariant ownership
-
-No invariant companion is published because the runner's observable contract (final text on stdout, exit code by turn-end reason) is process-level and owned by the launcher e2e; the plugin registers nothing and holds no mutable relation to audit inside the tree.
 
 </details>
 

@@ -13,6 +13,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { CHAT_READ_MAX_LINES, readCallLine, readCardModel } from '../src/client/tool/models/read-card-model.ts'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
 import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { ReadRow, readToolview } from '../src/client/tool/toolviews/read-row.tsx'
 
 afterEach(cleanup)
@@ -54,18 +55,25 @@ const readMeta = (over?: Partial<ReadMetaFixture>): ReadMetaFixture => ({
 
 const readContent = (body = 'export const a = 1'): string => `<path>src/a.ts</path>\n<type>file</type>\n<content>\n${body}\n</content>`
 
-const running = (over?: Partial<StartedToolCall>): StartedToolCall => ({
-  phase: 'start' as const, callId: 'c1', name: 'read', argsRaw: ARGS,
-  turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
-})
+const running = (over?: Partial<StartedToolCall>): StartedToolCall => {
+  const argsRaw = over?.argsRaw ?? ARGS
+  return {
+    phase: 'start' as const, args: PartialArguments.fromText(argsRaw), callId: 'c1', name: 'read', argsRaw,
+    turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
+  }
+}
 
-const settled = (over?: Partial<ToolResultNode>): ToolResultNode => ({
-  kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
-  call: { name: 'read', argsRaw: ARGS },
-  callTime: 1_000,
-  content: [{ type: 'text', text: readContent() }], isError: false,
-  meta: readMeta(), subCalls: [], ...over,
-})
+const settled = (over?: Partial<ToolResultNode>): ToolResultNode => {
+  const call = over?.call === undefined ? { name: 'read', argsRaw: ARGS } : over.call
+  return {
+    kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
+    name: call?.name ?? '', args: call === null ? PartialArguments.EMPTY : PartialArguments.fromText(call.argsRaw),
+    call,
+    callTime: 1_000,
+    content: [{ type: 'text', text: readContent() }], isError: false,
+    meta: readMeta(), subCalls: [], ...over,
+  }
+}
 
 describe('readCardModel', () => {
   it('derives the card from settled read metadata and its raw envelope', () => {

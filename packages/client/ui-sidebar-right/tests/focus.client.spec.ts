@@ -26,17 +26,22 @@ function harness() {
   const ctx = new Context()
   const tabs = new SidebarRightTabRegistry(ctx)
   for (const kind of ['guide', 'files', 'terminal']) tabs.register({ id: kind, kind, title: () => kind, multiple: kind === 'terminal' })
-  const { controller, adopt } = createSidebarRightController(tabs, vi.fn())
+  const room = { allowed: true, autoFullscreen: false }
+  const { controller, adopt, show: showSession, measure } = createSidebarRightController(tabs, vi.fn(), {
+    autoFullscreen: () => room.autoFullscreen,
+    openWithFocus: (_sessionId, open) => { open() },
+    closeWithFocus: (_sessionId, _paneId, close) => { close() },
+  })
   const store = createSidebarRightStore(() => ({ kind: 'guide', title: 'guide' })).create()
   releases.push(adopt(SESSION, store), () => { controller.tabDomain.dispose() })
   store.actions.setExpanded(SESSION, true)
-  const room = { allowed: true, autoFullscreen: false }
-  const bind = (sessionId = SESSION) => controller.bind({ sessionId, actions: store.actions,
-    surfaces: store.getSnapshot().bySession,
-    closeWithFocus: (_paneId, close) => { close() },
-    openWithFocus: (open) => { open() },
-    canSplitPane: () => room.allowed, autoFullscreen: room.autoFullscreen })
-  releases.push(bind())
+  /** Put a Session on screen the way the plugin does, with the room rule its seat reports. */
+  const show = (sessionId = SESSION) => {
+    showSession(sessionId)
+    measure(sessionId, () => room.allowed)
+    return () => { if (controller.mounted.getSnapshot() === sessionId) showSession(undefined) }
+  }
+  releases.push(show())
   const layout = () => store.getSnapshot().bySession[SESSION]!.layout
   const owner = document.createElement('section')
   owner.dataset.sidebarRightSession = SESSION
@@ -57,7 +62,7 @@ function harness() {
     parent.append(element)
     return element
   }
-  return { controller, store, layout, paneElement, tabElement, room, bind }
+  return { controller, store, layout, paneElement, tabElement, room, show }
 }
 
 describe('sidebar focus targets', () => {
@@ -121,10 +126,10 @@ describe('sidebar focus targets', () => {
     expect(h.controller.focusedTarget(chip)).toBeUndefined()
     expect(h.controller.commandTarget(chip)).toBeUndefined()
     h.store.actions.setExpanded(SESSION, true)
-    releases.push(h.bind('another-session' as SessionId))
+    releases.push(h.show('another-session' as SessionId))
     expect(h.controller.isTargetCurrent(target)).toBe(false)
     expect(h.controller.focusedTarget(chip)).toBeUndefined()
-    releases.push(h.bind())
+    releases.push(h.show())
     h.controller.float(files)
     expect(h.controller.isTargetCurrent(target)).toBe(false)
     h.controller.dock(findTabPane(h.layout(), files).id)
@@ -190,7 +195,7 @@ describe('sidebar focus targets', () => {
     h.controller.toggleFullscreen(floated)
     expect(h.layout().mode).toBe('push')
     h.room.autoFullscreen = true
-    releases.push(h.bind())
+    releases.push(h.show())
     h.controller.toggleFullscreen(h.controller.commandTarget(null)!)
     expect(h.layout().expanded).toBe(false)
   })
@@ -233,7 +238,7 @@ describe('sidebar focus targets', () => {
     expect(findTabPane(h.layout(), floatingFile).id).toBe(floating.paneId)
     expect(h.layout().expanded).toBe(true)
     expect(h.controller.splitBlock(floating)).toBe('float')
-    releases.push(h.bind('missing-session' as SessionId))
+    releases.push(h.show('missing-session' as SessionId))
     expect(h.controller.commandTarget(null)).toBeUndefined()
     expect(h.controller.splitBlock(floating)).toBe('stale')
   })
@@ -462,7 +467,7 @@ describe('sidebar keyboard commands', () => {
     const pendingSplit = split.resolve(context)
     const pendingFullscreen = fullscreen.resolve(context)
     const pendingToggle = toggle.resolve(context)
-    releases.push(h.bind('missing-session' as SessionId))
+    releases.push(h.show('missing-session' as SessionId))
     for (const pending of [pendingSplit, pendingFullscreen, pendingToggle]) {
       expect(pending.status).toBe('handled')
       if (pending.status === 'handled') pending.run()
@@ -470,7 +475,7 @@ describe('sidebar keyboard commands', () => {
     expect(h.layout().mode).toBe('push')
     expect(h.layout().expanded).toBe(true)
     expect(toggle.resolve(context).status).toBe('blocked')
-    releases.push(h.bind())
+    releases.push(h.show())
     const splitNow = split.resolve(context)
     if (splitNow.status === 'handled') splitNow.run()
     expect(h.controller.splitBlock(h.controller.commandTarget(null)!)).toBe('budget')

@@ -12,11 +12,11 @@ Web 客户端需要从一个未必在 Host 机器上的浏览器查看会话工�
 
 ## Decision
 
-`packages/api/workspace-files`（`@deepseek-ai/dsh-api-workspace-files`）同时拥有 Host 服务 `ctx.workspaceFiles`、`workspaceFiles` Remote 命名空间，以及将 `stat` 与 `changes` 转成[资源模型](2026-09-05-client-resource-model.zh.md)实时元数据的 Client `file` 提供者；包组织方式由[双面包组织](2026-09-07-workspace-files-dual-face-package.zh.md)规定。文件方法从工作区根解析相对路径，但继承 Session 文件系统后端的读取权限；`list` 与 `changes` 仍限于工作区。[工作区文件读取权限](2026-09-09-workspace-file-read-authority.zh.md)拥有这一分层及其安全后果。结果以文件在文件系统执行环境中的绝对路径命名文件，内容则受页、字节窗口或整文件上限约束。字节窗口依托 `dsh-fs` 新增的 seam `FileSystem.readByteRange`，由每个提供者实现。Session Controller 不再携带任何工作区文件代码。
+`packages/api/workspace-files`（`@deepseek-ai/dsh-api-workspace-files`）同时拥有 Host 服务 `ctx.workspaceFiles`、`workspaceFiles` Remote 命名空间，以及将 `stat` 与 `changes` 转成[资源模型](2026-09-05-client-resource-model.zh.md)实时元数据的 Client `file` 提供者；包组织方式由[双面包组织](../../../../packages/api/workspace-files/README.zh.md)规定。文件方法从工作区根解析相对路径，但继承 Session 文件系统后端的读取权限；`list` 与 `changes` 仍限于工作区。[工作区文件读取权限](2026-09-09-workspace-file-read-authority.zh.md)拥有这一分层及其安全后果。结果以文件在文件系统执行环境中的绝对路径命名文件，内容则受页、字节窗口或整文件上限约束。字节窗口依托 `dsh-fs` 新增的 seam `FileSystem.readByteRange`，由每个提供者实现。Session Controller 不再携带任何工作区文件代码。
 
 ### 包拓扑
 
-[双面包组织](2026-09-07-workspace-files-dual-face-package.zh.md)取代本记录中把 Host 与 Client 分成两个包的组织选择；这里的文件服务、分页和变更流约定保持不变。[工作区文件读取权限](2026-09-09-workspace-file-read-authority.zh.md)取代文件方法原有的工作区包含选择。Host 与 Client 分别编译在两个叶配置中，共享线路类型，Client 不导入 Host 运行时入口。
+[双面包组织](../../../../packages/api/workspace-files/README.zh.md)取代本记录中把 Host 与 Client 分成两个包的组织选择；这里的文件服务、分页和变更流约定保持不变。[工作区文件读取权限](2026-09-09-workspace-file-read-authority.zh.md)取代文件方法原有的工作区包含选择。Host 与 Client 分别编译在两个叶配置中，共享线路类型，Client 不导入 Host 运行时入口。
 
 | 面 | 包 | 文件 | 依赖 |
 |---|---|---|---|
@@ -41,7 +41,7 @@ Web 客户端需要从一个未必在 Host 机器上的浏览器查看会话工�
 - **`read`** 返回一个行窗口 `WorkspaceFileText = WorkspaceFileStat & { offset, text, lines, eof }`；`lines` 计页内行数，使只含一个空行的页（`text: ''`、`lines: 1`）与越过文件末尾的页（`lines: 0`）可区分。`range.offset` 是 1 起算的首行，缺省 1；`range.limit` 是最多行数，缺省 `maxLines` 且不得超过。行以 `\n` 结束，末尾的 `\n` 终止最后一行而不是开启一空行；`text` 以 `\n` 连接本页各行且不带终止符；页含最后一行时 `eof` 为 true，越过末尾的 offset 返回 `eof` 为 true 的空页。切页器沿 `streamText` 前进，数过窗口前的行而不保留，把每个窗内片段先按 `maxBytes` 核准再缓冲，并在越过窗口的第一个字符处返回，因此任意大小的文件只花一页内存。页上的 `version` 与 `bytes` 来自流之前的那次 stat。
 - **`readBytes`** 返回原生字节、文件元数据、偏移量和 EOF。必填选项对象未传 `range` 时，在 `maxFileBytes` 上限内完整读取；传入时，在 `maxBytes` 上限内读取有界窗口。`range: {}` 使用零偏移和配置的窗口上限；窗口可读取超过完整文件上限的文件。[二进制传输决议](2026-09-17-workspace-file-binary-transfer.zh.md)负责 Remote 响应编码。
 - **`baseFile`** 独立于 `range` 选择目标解析方式：目标 `path` 必须为相对路径，从基准文件所在目录解析。Host 对两个文件执行普通文件检查，并保留后端读取权限。[Document Preview](2026-09-08-document-preview-operations.zh.md)负责内容加载与地址语义。
-- **`list`** 返回 `WorkspaceDirectoryListing { path, entries, truncated }`：被列目录相对根的工作区路径（根为空串）、其直接子项按后端的稳定名序以 `{ name, type, size? }` 给出，以及 `maxEntries` 是否截断了列表。`type` 为 `file`、`directory` 或 `other`；符号链接子项报告其指向目标的类型，悬空者为 `other`。列表报告为目录的子项经其解析目标打开，Windows 目录联接亦然，此时列表以该目标命名；[目录链接列举](../bug-fix/2026-09-18-windows-directory-junction-listing.zh.md)拥有该规则。dotfile 照常列出，不做任何过滤。
+- **`list`** 返回 `WorkspaceDirectoryListing { path, entries, truncated }`：被列目录相对根的工作区路径（根为空串）、其直接子项按后端的稳定名序以 `{ name, type, size? }` 给出，以及 `maxEntries` 是否截断了列表。`type` 为 `file`、`directory` 或 `other`；符号链接子项报告其指向目标的类型，悬空者为 `other`。列表报告为目录的子项经其解析目标打开，Windows 目录联接亦然，此时列表以该目标命名；[目录链接列举](../../../../packages/api/workspace-files/README.zh.md)拥有该规则。dotfile 照常列出，不做任何过滤。
 - **`changes`** 产出 `WorkspaceFileWatchFrame`：在观察队列注册且工作区根解析完成后先发 `{ kind: 'ready' }`，随后为 `{ kind: 'change', change }`。载荷 `WorkspaceFileChange` 对存在的文件为 `{ absolutePath, version }`，对消失的文件为 `{ absolutePath, absent: true }`。来源是工作区根内的 `fs/observed`，不监视操作系统。首次拉取后的观察都会排队，包括根解析期间的观察；取消或插件释放会结束该代流。
 
 ### 线路上的路径
@@ -107,13 +107,13 @@ Client 导出向 `ctx.resources` 注册一个 `ResourceProvider<'file'>`，存�
 
 ### 相关记录
 
-[资源模型](2026-09-05-client-resource-model.zh.md)拥有 `ctx.resources`、`useResource`、`dsh-resource://<type>/…` 地址语法以及"每个地址一份资源"的推理；[文本预览与文件树](../feature/2026-09-05-sidebar-text-preview-and-file-tree.zh.md)是 `read`、`list` 与 `file` 提供者随包交付的消费方；[右侧 Sidebar 停靠基础设施](../feature/2026-09-04-right-sidebar-docking-infrastructure.zh.md)是它们打开进去的界面；[工作区文件链接](../feature/2026-07-31-web-workspace-file-links.zh.md)是经 HTTP 供文件被否决之处。任何在这套体系上扩展的人都经 `remote.workspaceFiles` 触达同样的五个方法、经 `useResource<'file'>` 触达同样的 `file` 资源；线路类型以 `@deepseek-ai/dsh-api-workspace-files/types` 发布。[工作区文件读取权限](2026-09-09-workspace-file-read-authority.zh.md)负责 Host 读取权限与 HTML 安全取舍；[Document Preview](2026-09-08-document-preview-operations.zh.md)负责内容加载和逐 tab 新鲜度。
+[资源模型](2026-09-05-client-resource-model.zh.md)拥有 `ctx.resources`、`useResource`、`dsh-resource://<type>/…` 地址语法以及"每个地址一份资源"的推理；[文本预览与文件树](../../../../packages/client/ui-sidebar-documentpreview/README.zh.md)是 `read`、`list` 与 `file` 提供者随包交付的消费方；[右侧 Sidebar 停靠基础设施](../feature/2026-09-04-right-sidebar-docking-infrastructure.zh.md)是它们打开进去的界面；[历史工作区文件链接](../../archived/feature/2026-07-31-web-workspace-file-links.md)是经 HTTP 供文件被否决之处。任何在这套体系上扩展的人都经 `remote.workspaceFiles` 触达同样的五个方法、经 `useResource<'file'>` 触达同样的 `file` 资源；线路类型以 `@deepseek-ai/dsh-api-workspace-files/types` 发布。[工作区文件读取权限](2026-09-09-workspace-file-read-authority.zh.md)负责 Host 读取权限与 HTML 安全取舍；[Document Preview](2026-09-08-document-preview-operations.zh.md)负责内容加载和逐 tab 新鲜度。
 
 ## Alternatives considered
 
 **把工作区文件端点留在 Session Controller 上。** 最初形态：总字节上限之下的一个 `read`，作为 Session Controller 的子插件注册，因为线路入口本来就在那里。被否，因为 Workspace File 服务是自己的能力——读取和 stat 文件，并列举和观察工作区——这些查询应归于一处，而 Session Controller 关心的是会话生命周期。搬出也让服务长到五个方法而不给 Controller 的文件添第二重目的。
 
-**带有反向 UI 依赖的双面包。** 拆包选择源于 `api/remotes` 引用 Client 叶子后形成的两条工程引用环：资源模型为了结果类型引用 Remote 装配，文件提供者为了 Sidebar 参数表引用右栏 UI。TypeScript 以 `TS6202` 拒绝这些环。[双面包组织](2026-09-07-workspace-files-dual-face-package.zh.md)取代拆包选择：结果类型直接取自协议包，Sidebar 参数注册移至文本预览；保留两个根聚合中的显式编译入口。
+**带有反向 UI 依赖的双面包。** 拆包选择源于 `api/remotes` 引用 Client 叶子后形成的两条工程引用环：资源模型为了结果类型引用 Remote 装配，文件提供者为了 Sidebar 参数表引用右栏 UI。TypeScript 以 `TS6202` 拒绝这些环。[双面包组织](../../../../packages/api/workspace-files/README.zh.md)取代拆包选择：结果类型直接取自协议包，Sidebar 参数注册移至文本预览；保留两个根聚合中的显式编译入口。
 
 **提供可导航的工作区文档。** 因源隔离问题不采用；[二进制传输](2026-09-17-workspace-file-binary-transfer.zh.md)返回 multipart 数据，HTML 仍隔离在 Blob iframe 中。
 

@@ -18,7 +18,7 @@ Web 用户需要在 Session 旁使用交互式 shell 检查工作区和运行命
 
 关闭和替换会同步移除标签页，并在后台清理进程。Client 先以终端独立的 localStorage key 保存未完成的关闭请求；成功后删除，启动时重试剩余请求。清理失败没有通知或手动重试操作。保存布局之外的 Host 终端不会自动重新打开，也没有 UI 恢复入口。独立 key 避免其他窗口覆盖无关的清理请求。折叠、切换标签页或 Session、浮动、全屏和浏览器断线均保留进程。组件清理和 `TabDomain.signal` 只停止浏览器工作，因为插件重新加载也会结束这些生命周期。进程清理失败时保留所有权，包括分配完成但 create 尚未发布时的失败。Session owner 和 Host 插件卸载也会清理终端。 明确的 Session 不存在响应会清除已保存的关闭请求，因为进程清理由 Session 负责；传输失败仍可重试。Client 插件卸载等待所有断开的流结束，避免替换插件继承未完成的 Client 清理。
 
-[侧栏布局持久化与 provider 恢复](../architecture/2026-09-14-sidebar-layout-provider-recovery.zh.md)负责浏览器刷新：先恢复布局和标签身份，再由 terminal provider 重连视图。列表仍直接使用 Session ID，因为历史记录可以比 Agent 和终端 owner 存活更久；离线 Session 没有需要恢复的保留终端。只有新视图可以分配进程，恢复目标消失时显示错误。进程状态、标题和屏幕内容仍以 Host 为准。
+[侧栏布局持久化与 provider 恢复](../../../../packages/client/ui-sidebar-right/README.zh.md)负责浏览器刷新：先恢复布局和标签身份，再由 terminal provider 重连视图。列表仍直接使用 Session ID，因为历史记录可以比 Agent 和终端 owner 存活更久；离线 Session 没有需要恢复的保留终端。只有新视图可以分配进程，恢复目标消失时显示错误。进程状态、标题和屏幕内容仍以 Host 为准。
 
 调用者在创建之前保留终端 ID。相同 Session 和未关闭 ID 的重复 create 不再分配进程。创建结果不确定时，关闭仍使用该 ID，即使没有收到创建响应。Host 在等待分配完成前记录已关闭 ID，防止迟到的 create 复活已关闭终端。每次连接先接收一致、有界的 xterm 序列化屏幕，后续有序输出使用 Gateway 已有的复用 Remote stream。输出和屏幕快照共享操作队列。订阅者正常关闭时保留末尾输出，缓存超限时明确失败。浏览器在完成渲染后确认帧，避免 React 批处理丢失增量。
 
@@ -30,7 +30,7 @@ Web 用户需要在 Session 旁使用交互式 shell 检查工作区和运行命
 
 **进程清理完成前保留标签页。** 缓慢或失败的终止会拖延用户关闭操作。保存清理意图后，可以立即移除标签页，同时保留错误反馈与重试。
 
-**持久化作为权威的活跃进程注册表。** 浏览器进程状态可能独立于 Host 状态失效。[布局持久化决策](../architecture/2026-09-14-sidebar-layout-provider-recovery.zh.md)取代了不保存标签关联的限定，同时保留 Host 对进程存活状态的决定权。
+**持久化作为权威的活跃进程注册表。** 浏览器进程状态可能独立于 Host 状态失效。[布局持久化参考](../../../../packages/client/ui-sidebar-right/README.zh.md)取代了不保存标签关联的限定，同时保留 Host 对进程存活状态的决定权。
 
 **共用 Agent 终端注册表。** 受控提示符和语义化 send/wait 会改变人工 shell 配置并混淆进程所有权。用户终端只共享 subprocess 能力。
 

@@ -38,11 +38,12 @@ export interface DesktopUploadArtifact {
   readonly contents?: string
 }
 
-/** A fully validated upload operation with channel metadata ordered last. */
+/** A validated installer or update upload, with any channel metadata ordered last. */
 export interface DesktopUploadPlan {
   readonly environment: 'test' | 'production'
   readonly target: DesktopPackageTargetName
   readonly version: string
+  /** Update feed directory URL, or the single installer URL for a fixed download. */
   readonly publicUrl: string
   readonly bucket: string
   readonly secretIdEnvName: string
@@ -56,6 +57,8 @@ export interface DesktopUploadPlan {
 
 /** Filesystem and environment inputs used to validate one upload. */
 export interface DesktopUploadPlanOptions {
+  /** Publish only the installer at its fixed download URL, replacing the previous object. */
+  readonly latest?: boolean
   readonly environment?: NodeJS.ProcessEnv
   readonly repositoryRoot?: string
   readonly appRoot?: string
@@ -171,7 +174,7 @@ function uploadArtifact(
  * Validate the completed package record, dsh version, update metadata, hashes, and target files.
  * @param targetName - Fixed platform and architecture selected by the upload command.
  * @param options - Optional filesystem roots and environment for tests or release automation.
- * @returns An upload plan whose mutable channel metadata is the final entry.
+ * @returns A fixed installer upload or an update plan with channel metadata ordered last.
  */
 export async function createDesktopUploadPlan(
   targetName: DesktopPackageTargetName,
@@ -237,23 +240,26 @@ export async function createDesktopUploadPlan(
   const updaterPath = await verifyChecksummedArtifact(artifactsRoot, updaterInfo)
   const artifacts: DesktopUploadArtifact[] = []
   const binaryPrefix = update.binaryKeyPrefix
+  let installerArtifact: DesktopUploadArtifact
 
   if (target.platform === 'darwin') {
     const dmgPath = await requireArtifact(artifactsRoot, `${base}.dmg`)
     const blockmapPath = await requireArtifact(artifactsRoot, `${base}.zip.blockmap`)
+    installerArtifact = uploadArtifact(dmgPath, binaryPrefix, 'application/x-apple-diskimage')
     artifacts.push(
-      uploadArtifact(dmgPath, binaryPrefix, 'application/x-apple-diskimage'),
+      installerArtifact,
       uploadArtifact(updaterPath, binaryPrefix, 'application/zip'),
       uploadArtifact(blockmapPath, binaryPrefix, 'application/octet-stream'),
     )
   }
   else {
     const blockmapPath = await requireArtifact(artifactsRoot, `${base}.exe.blockmap`)
-    artifacts.push(uploadArtifact(
+    installerArtifact = uploadArtifact(
       updaterPath,
       binaryPrefix,
       'application/vnd.microsoft.portable-executable',
-    ))
+    )
+    artifacts.push(installerArtifact)
     artifacts.push(uploadArtifact(blockmapPath, binaryPrefix, 'application/octet-stream'))
   }
 
@@ -272,15 +278,17 @@ export async function createDesktopUploadPlan(
     const stableFilename = metadataFilename.replace('nightly', 'latest')
     artifacts.push({ ...channelArtifact, filename: stableFilename, key: `${update.keyPrefix}/${stableFilename}` })
   }
+  const latestFilename = `dsh-latest-${target.platform === 'darwin' ? 'macos' : 'windows'}-${target.arch}.${target.platform === 'darwin' ? 'dmg' : 'exe'}`
+  const latestKey = `desktop/${latestFilename}`
   return {
     environment: update.environment,
     target: targetName,
     version: buildVersion,
-    publicUrl: update.publicUrl,
+    publicUrl: options.latest ? `${update.origin}/${latestKey}` : update.publicUrl,
     bucket: update.bucket,
     secretIdEnvName: update.secretIdEnvName,
     secretKeyEnvName: update.secretKeyEnvName,
-    artifacts,
+    artifacts: options.latest ? [{ ...installerArtifact, filename: latestFilename, key: latestKey }] : artifacts,
     ...typeof buildRecord.commit === 'string' ? { commit: buildRecord.commit } : {},
     ...typeof buildRecord.dirty === 'boolean' ? { dirty: buildRecord.dirty } : {},
   }

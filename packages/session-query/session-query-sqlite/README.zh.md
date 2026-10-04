@@ -98,7 +98,6 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 服务：配置、openAt 生命周期、串行化对账、查询执行、游标 |
 | [`src/query.ts`](src/query.ts) | 请求规范化、参数化谓词、摘录、谓词与绑定预算 |
 | [`src/schema.ts`](src/schema.ts) | 数据库 schema、application id 归属、原地重置、仅所有者文件创建 |
-| — | 不发布运行时不变式伴生入口；系统会在每次串行化查询边界校验对账、游标世代与派生索引归属。 |
 
 ### 索引生命周期
 

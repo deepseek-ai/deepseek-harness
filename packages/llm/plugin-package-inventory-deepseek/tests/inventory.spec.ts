@@ -192,6 +192,8 @@ describe('DeepSeek plugin package inventory', () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
     await ctx.plugin(PluginInventory)
+    ctx.loader.builtins.noop = () => {}
+    await ctx.loader.create({ name: 'cordis:noop' })
     const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })
     expect(prepared.fields.dsh_plugin_packages).toEqual({ version: 1, packages: [] })
   })
@@ -219,18 +221,35 @@ describe('DeepSeek plugin package inventory', () => {
     ])
   })
 
-  it('resolves a declared preset plugin from its owning composition', async () => {
+  it('resolves preset plugins from the host and nested composition bases', async () => {
     const { ctx, root } = await harness()
     await packagePlugin(root, 'node_modules/preset-only', { name: 'preset-only', version: '4.0.0' })
-    await ctx.agentPresets.register({ id: 'fixture', plugins: [{ id: 'preset-only', name: 'preset-only/plugin.mjs' }] })
+    const nestedRoot = join(root, 'nested-preset')
+    await packagePlugin(nestedRoot, 'node_modules/preset-only', { name: 'preset-only', version: '5.0.0' })
+    const composition = join(nestedRoot, 'cordis.yml')
+    await writeFile(composition, '- id: nested\n  name: preset-only/plugin.mjs\n')
+    await ctx.agentPresets.register({ id: 'fixture', plugins: [
+      { id: 'preset-only', name: 'preset-only/plugin.mjs' },
+      { id: 'nested', name: 'cordis:include', config: { path: pathToFileURL(composition).href } },
+    ] })
     const agentScope = createScope(ctx, {})
     await ctx.agentPresets.mount(agentScope.ctx)
     const id = SessionId('preset-agent')
     const agent = { id, ctx: agentScope.ctx, session: { id } } as unknown as Agent
     await ctx.agents.register(agent)
+    const modules = ctx.agentPresets.inspectCompositions(agentScope.ctx)
+      .flatMap(row => row.modules).filter(row => row.moduleName === 'preset-only/plugin.mjs')
+    expect(modules.map(row => row.useHostBase)).toEqual([true, false])
+    expect(modules.map(row => new URL('probe.mjs', row.baseUrl).href)).toEqual([
+      new URL('probe.mjs', ctx.baseUrl).href,
+      new URL('probe.mjs', pathToFileURL(composition)).href,
+    ])
 
     const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL, sessionId: id })
-    expect(prepared.fields.dsh_plugin_packages?.packages).toEqual([{ name: 'preset-only', version: '4.0.0' }])
+    expect(prepared.fields.dsh_plugin_packages?.packages).toEqual([
+      { name: 'preset-only', version: '4.0.0' },
+      { name: 'preset-only', version: '5.0.0' },
+    ])
   })
 
   it('withdraws the inventory field when the contributing plugin reloads', async () => {

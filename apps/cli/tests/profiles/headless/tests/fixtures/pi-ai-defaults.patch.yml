@@ -16,7 +16,7 @@
         baseURL: !!js process.env.DSH_SNAPSHOT_BASE_URL
         reasoning: low
         modelOverrides:
-          deepseek-v4-flash:
+          deepseek-flash:
             maxTokens: 1024
         streamIdleTimeoutMs: 1000
 
@@ -25,7 +25,7 @@
     agents:
       - id: main
         provider: deepseek
-        model: deepseek-v4-flash
+        model: deepseek-flash
         cwd: !!js process.cwd()
 
 - id: agent-instructions

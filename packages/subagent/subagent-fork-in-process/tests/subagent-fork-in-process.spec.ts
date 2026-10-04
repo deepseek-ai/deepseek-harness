@@ -6,10 +6,6 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
-import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
-import * as AgentInvariant from '@deepseek-ai/dsh-agent/invariant'
-import * as AgentLoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
 import SubagentRuntime, { type SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -18,13 +14,6 @@ import * as fork from '../src/index.ts'
 import { STRUCTURED_OUTPUT_TOOL } from '@deepseek-ai/dsh-subagent-in-process-driver'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]
-
-async function mountInvariants(ctx: Context): Promise<void> {
-  await ctx.plugin(InvariantRegistry)
-  await ctx.plugin(SessionInvariant)
-  await ctx.plugin(AgentInvariant)
-  await ctx.plugin(AgentLoopInvariant)
-}
 
 function start(ctx: Context, provider: string, request: Omit<SubagentStartRequest, 'signal'> & { signal?: AbortSignal }) {
   return ctx.subagents.start(provider, { signal: request.signal ?? new AbortController().signal, ...request })
@@ -35,15 +24,11 @@ function start(ctx: Context, provider: string, request: Omit<SubagentStartReques
 const emptyStop: StreamChunk[] = [{ type: 'finish', reason: { kind: 'stop' } }]
 
 /**
- * Drives the REAL fork backend with a real loop + scripted mock MODEL + the
- * real invariant service and package companions. The session contribution replays a seeded child log on
- * `session/created`, so a malformed (unbalanced) fork seed makes these tests
- * THROW — that is the regression guard for the completed-turn-prefix boundary.
+ * Drives the REAL fork backend with a real loop + scripted mock MODEL.
  */
 async function setup(script: Script) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await mountInvariants(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(fork, { providerName: 'fork' })
@@ -134,10 +119,10 @@ describe('dsh-subagent-fork-in-process', () => {
     await run.dispose()
   })
 
-  it('produces an invariant-CLEAN seed: forking mid-turn excludes the open turn', async () => {
+  it('produces a balanced seed: forking mid-turn excludes the open turn', async () => {
     // Drive the parent so it has one completed turn, then start a SECOND turn that is still
     // open (a hanging model call), and fork while it's in flight. The seed must stop after the
-    // balanced first turn; including the open turn would fail invariant replay during start.
+    // balanced first turn.
     const { ctx, parent } = await setup([textResponse('done'), 'hang', textResponse('child')])
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'q1' }], source: { kind: 'user' } }))
     await parent.whenIdle()

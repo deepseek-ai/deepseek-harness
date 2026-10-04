@@ -40,7 +40,7 @@ describe('useAnchoredMaxHeight', () => {
     document.documentElement.style.setProperty('--dsh-frame-top-clearance', '48px')
     stubBottom(300)
     const { getByTestId } = render(<Probe cap={400} />)
-    expect(getByTestId('probe').dataset.maxHeight).toBe('252')
+    expect(getByTestId('probe').dataset.maxHeight).toBe('232')
   })
 
   it('keeps a caller-raised margin over a published smaller clearance', () => {

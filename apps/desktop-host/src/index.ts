@@ -27,7 +27,7 @@ async function main(): Promise<void> {
     profile: 'desktop',
     resolvedProfile: { profile, installAnchor },
     patchFiles: [],
-    args: ['--no-open', '--port', '19387'],
+    args: ['--no-open', '--port', '0'],
     ...(process.argv[5] === undefined ? {} : {
       packageManager: {
         command: process.execPath,

@@ -72,5 +72,3 @@ profile 在第一方指导之前提供 `You are a coding agent powered by the {{
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。该 bundle 只增加进程传输与启动 latch；帧纯度、help 排除和关闭行为由源码及构建产物的 stdio 测试负责。

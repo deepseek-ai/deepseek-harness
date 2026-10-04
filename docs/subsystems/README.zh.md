@@ -14,7 +14,7 @@
 | [typert.md](typert.zh.md) | 远程调用描述符、lookup/Context 声明、Typert 注册表，以及 Host Gateway/Client API 边界 |
 | [goal.md](goal.zh.md) | 持久 goal 标识、生命周期快照、激活、变更记录与 Round 归属 |
 | [schedule.md](schedule.zh.md) | Host 拥有的提醒记录、持久转换、活动和已结束视图与普通对话交付 |
-| [todo.md](todo.zh.md) | todo 包的整列表条目类型、持久事件所有权、投影和未结束轮次不变式 |
+| [todo.md](todo.zh.md) | todo 包的整列表条目类型、持久事件所有权和投影 |
 | [deliverables.md](deliverables.zh.md) | 一轮交给用户的东西：`present` 声明的 `PresentedFile` 交付，以及由 git 快照得出、由 Host 提供的 `WorkspaceChangesSummary` 改动摘要 |
 | [commands.md](commands.zh.md) | 人类命令注册表服务：定义、适配器发现、直接调用、结果与解析视图 |
 | [session.md](session.zh.md) | 完整的 `SessionEventMap` 变体目录、`TurnEndReason`、`deriveMessages()`、执行封闭与独立事件 |
@@ -48,13 +48,13 @@
 | [subagent.md](subagent.zh.md) | subagent seam：命名提供方注册表、`SubagentStartRequest`/`Result`/`Run`、启动时与运行时能力拆分 |
 | [voice-input.md](voice-input.zh.md) | 实验性具名语音识别、临时音频和受版本保护的草稿插入 |
 | [agent-team.md](agent-team.zh.md) | Agent Teams：隐式 Lead 身份、具名 continuable teammate、持久 peer mailbox 与共享任务 DAG |
+| [claude-code-mods.md](claude-code-mods.zh.md) | 经实验性桥接运行的 Claude Code 模组：与 Claude Code 不同的每个事件、`$` 成员、链规则、绘制特性与示例模组 |
 | [web.md](web.zh.md) | Web 访问 seam：`WebSearchRequest`/`Result`、`WebFetchRequest`/`Result`、`WebFetchBody`、提供方可用性、`WebError` |
 | [spill.md](spill.zh.md) | spill 存储 seam：`SaveTextSpill`、`SpillOwner`/`SpillSource`、`SpillRef`、品牌类型 `SpillLocator` |
 | [workflow.md](workflow.zh.md) | 工作流 seam：`WorkflowStartRequest`、`WorkflowMeta`、`WorkflowRun`/`Result`、`workflow/*` 事件载荷、`WorkflowError` 致命性 |
 | [jobs.md](jobs.zh.md) | 后台任务运行时：品牌化 `JobId`、producer 约定、消费方视图和 `ctx.jobs` 服务行为 |
 | [permission-presets.md](permission-presets.zh.md) | 权限预设层：`PresetSpec`/`PresetOption`、派生的 `custom` 状态、仅记日志的 `permission/preset` 事件 |
 | [plan.md](plan.zh.md) | 计划模式：仅记日志的 `plan/mode` 状态、待定选择的冲刷、`PlanModeConfig`、`exit_plan_mode` 审阅流程 |
-| [invariants.md](invariants.zh.md) | 运行时不变式注册表：选择配置 `Config`、`InvariantInstaller`/`InvariantFailure`、空配套插件约定 |
 | [web-server.md](web-server.zh.md) | HTTP 载体：`WebRouteKind`/`WebRoute`、匹配顺序、可认领的回退席位、index 渲染挂接点 |
 | [webhook.md](webhook.zh.md) | 通过身份验证的提供方交付、任意程序化规则，以及发起 Workspace 会话创建后不等待结果 |
 | [storage.md](storage.zh.md) | 存储子系统：后端约定（`StorageBackend`）、`StorageForms`、`DomainSpec`/`Domain`、`domain/changed` |

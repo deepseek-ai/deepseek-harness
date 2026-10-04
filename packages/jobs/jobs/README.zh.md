@@ -81,7 +81,6 @@ kind: "package-reference"
 | [`src/view.ts`](src/view.ts) | 客户端安全叶子：`JobView`、`JobChunk`、`JobStatus` 与可合并扩展的 `JobKindMap` |
 | [`src/brand.ts`](src/brand.ts) | `JobId` 带类型标记的标识符，无需 agent 依赖即可导入 |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | Workspace 注册表归档准入中的 `job` 族，由接缝构造函数为每个实现安装 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件：校验每个 job 的事件协议（先 registered、恰一次结算、最后 removed）以及每个通告的投影与注册表自身读取的一致性 |
 
 ### 服务操作
 
@@ -102,7 +101,7 @@ kind: "package-reference"
 - [jobs 组映射](../README.zh.md)——同级组页面及其包表格。
 - [进程本地注册表](../jobs-local/README.zh.md)——在本进程中运行任务的随附实现。
 - [模型侧任务控制](../tool-jobs/README.zh.md)——`job_output`、`job_list` 与 `job_kill` 工具及完成通知。
-- [通用长时间运行工具运行时 Agent Note](../../../.agents/notes/implemented/architecture/2026-06-20-generic-long-running-tool-runtime.zh.md)——后台任务运行时背后的设计。
+- [Jobs 生命周期与输出归属](../../../.agents/notes/implemented/architecture/2026-09-03-jobs-seam-consolidation.zh.md)——一套生命周期、输出环与观测流。
 - [任务注册表 seam Agent Note](../../../.agents/notes/archived/architecture/2026-07-26-job-registry-seam.md)——按所有者隔离的注册表约定及其理由。
 - [jobs seam 收敛 Agent Note](../../../.agents/notes/implemented/architecture/2026-09-03-jobs-seam-consolidation.zh.md)——一个输出环、一个投影、一条事件流。
 

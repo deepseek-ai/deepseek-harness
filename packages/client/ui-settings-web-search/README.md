@@ -66,7 +66,6 @@ None; this package neither assembles nor sends a provider request.
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Three fields of the namespace** — the provider's model, API version, and token budget stay at their composed values; the page edits the key, the endpoint, and the search budget only.
-- **Runtime invariant:** No companion is published. The page holds no owned relationship of its own: what it shows derives from the settings mirror and the credentials domain, and what it writes the Host validates.
 
 <a id="dev-note"></a>
 ### Dev Note

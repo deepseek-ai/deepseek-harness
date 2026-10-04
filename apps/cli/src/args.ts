@@ -140,9 +140,10 @@ function resolveBoot(program: Command, profile: string, options: BootOptions, ar
  * error.
  * @param argv - arguments after the Node binary and script.
  * @param version - version string printed by `--version`.
+ * @param manageDesktopProfile - permit Desktop's installed carrier to manage its reserved profile's plugins.
  * @returns the resolved invocation.
  */
-export function parseDshArgs(argv: readonly string[], version: string): DshInvocation {
+export function parseDshArgs(argv: readonly string[], version: string, manageDesktopProfile = false): DshInvocation {
   const first = argv[0]
   let resolved: DshInvocation | undefined
   // Annotated, not inferred: the actions below call back into `program`, and an
@@ -191,9 +192,9 @@ export function parseDshArgs(argv: readonly string[], version: string): DshInvoc
       .argument('[args...]', 'pnpm arguments, forwarded verbatim (add <pkg>, remove <pkg>, why <pkg>, ...)')
       .action((args: string[], options: { profile: string }) => {
         if (options.profile === '') program.error('error: --profile needs a name')
-        rejectElectronProfile(plugin, options.profile)
+        if (!manageDesktopProfile) rejectElectronProfile(plugin, options.profile)
         if (args.length === 0) program.error('error: plugin needs pnpm arguments to forward (e.g. add <package>)')
-        resolved = { mode: 'plugin', profile: options.profile, args }
+        resolved = { mode: 'plugin', profile: options.profile.toLowerCase() === 'desktop' ? 'desktop' : options.profile, args }
       })
   }
 

@@ -4,6 +4,7 @@ import type { InspectorClientBootstrap } from '../../shared/bridge/messages/cont
 import type {
   ClientRuntimeRequestId,
   ClientRuntimeSessionId,
+  InspectorSourceId,
   InspectorSourceGeneration,
 } from '../../shared/bridge/ids.ts'
 import { isJsonValue, jsonByteLength } from '../../shared/json.ts'
@@ -37,6 +38,7 @@ export class ClientInspectorSource extends InspectorSourceConnection {
   private generation: InspectorSourceGeneration | undefined
   private accepted = false
   private closed = false
+  private suspended = false
   private readonly runtime: ClientRuntimeExecutor
   private readonly runtimeRequests = new Map<ClientRuntimeRequestId, {
     readonly controller: AbortController
@@ -45,6 +47,20 @@ export class ClientInspectorSource extends InspectorSourceConnection {
   private readonly console: ClientConsoleObserver
   protected readonly queries: ClientBridgeRpc
   private readonly lifecycle: ClientBridgeLifecycle
+
+  /** Claimed page identity, unchanged across transport reconnects. */
+  get sourceId(): InspectorSourceId { return this.realmSource.sourceId }
+
+  private readonly onPageHide = (): void => {
+    this.suspended = true
+    this.lifecycle.cancelReconnect()
+    this.disconnect('Client page hidden')
+  }
+  private readonly onPageShow = (): void => {
+    if (!this.suspended || this.closed) return
+    this.suspended = false
+    this.connect()
+  }
 
   constructor(
     private readonly bootstrap: InspectorClientBootstrap,
@@ -94,22 +110,45 @@ export class ClientInspectorSource extends InspectorSourceConnection {
       maxFrameBytes: bootstrap.maxFrameBytes,
     })
     this.connect()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pagehide', this.onPageHide)
+      window.addEventListener('pageshow', this.onPageShow)
+    }
   }
 
   /** Permanently stop reconnecting and close the active source generation. */
   close(): void {
     if (this.closed) return
     this.closed = true
-    this.console.close()
-    this.cancelRuntimeRequests()
-    this.runtime.reset()
-    this.queries.close('Inspector Client source closed')
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', this.onPageHide)
+      window.removeEventListener('pageshow', this.onPageShow)
+    }
     this.lifecycle.close()
-    this.publisher.close()
+    try {
+      this.disconnect('Client source closed')
+    } finally {
+      this.console.close()
+      this.queries.close('Inspector Client source closed')
+      this.publisher.close()
+      this.realmSource.close()
+    }
+  }
+
+  private disconnect(reason: string): void {
     const socket = this.socket
     const generation = this.generation
+    const accepted = this.accepted
+    this.socket = undefined
+    this.generation = undefined
+    this.accepted = false
+    this.console.reset()
+    this.cancelRuntimeRequests()
+    this.runtime.reset()
+    this.queries.disconnect(reason)
+    if (socket !== undefined) this.publisher.disconnect(socket)
     try {
-      if (socket?.readyState === WebSocket.OPEN && generation !== undefined) {
+      if (socket?.readyState === WebSocket.OPEN && generation !== undefined && accepted) {
         const frame: SourceCloseFrame = {
           v: INSPECTOR_PROTOCOL_VERSION,
           t: 'source/close',
@@ -117,18 +156,14 @@ export class ClientInspectorSource extends InspectorSourceConnection {
           generation,
         }
         socket.send(JSON.stringify(frame))
-        socket.close(1000, 'Client source closed')
-      } else {
-        socket?.close()
       }
     } finally {
-      this.socket = undefined
-      this.realmSource.close()
+      socket?.close(1000, reason)
     }
   }
 
   private connect(): void {
-    if (this.closed) return
+    if (this.closed || this.suspended) return
     this.console.reset()
     this.cancelRuntimeRequests()
     this.runtime.reset()

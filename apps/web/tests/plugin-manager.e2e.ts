@@ -10,7 +10,7 @@ import { chromium } from 'playwright'
 import { FiberState } from '@deepseek-ai/cordis'
 import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { join } from 'node:path'
 import {
   SCAFFOLD_DEFAULTS_BUNDLE, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
@@ -124,14 +124,14 @@ describe('web e2e: plugin manager', () => {
         expect(await skeleton.getAttribute('aria-label')).toBe('正在读取插件…')
         expect(await panel.getAttribute('aria-busy')).toBe('true')
         const actions = panel.locator(':scope > header > div:last-child button')
-        expect(await actions.count()).toBe(2)
+        expect(await actions.count()).toBe(3)
         for (const action of await actions.all()) expect(await action.isDisabled()).toBe(true)
         expect(await panel.getByRole('button', { name: '插件说明' }).isEnabled()).toBe(true)
         const loadingAria = await captureStableAria(probe, '[data-plugin-panel]', scaffold.workspaceCwd)
         if (aria === '') aria = loadingAria
         else expect(loadingAria).toBe(aria)
 
-        const measure = (group: Locator) => group.evaluate((element) => {
+        const measure = (group: Locator, rowSelector = ':scope > ul > li') => group.evaluate((element, selector) => {
           const rect = (node: Element | null | undefined) => {
             if (node === null || node === undefined) throw new Error('Missing plugin layout element')
             const { x, y, width, height } = node.getBoundingClientRect()
@@ -140,7 +140,7 @@ describe('web e2e: plugin manager', () => {
           return {
             pageHeader: rect(element.closest('[data-plugin-panel]')?.querySelector(':scope > header')),
             groupHeader: rect(element.firstElementChild),
-            rows: Array.from(element.querySelectorAll(':scope > ul > li')).slice(0, 4).map((row) => {
+            rows: Array.from(element.querySelectorAll(selector)).slice(0, 4).map((row) => {
               const head = row.firstElementChild
               const main = head?.children[1]
               return {
@@ -150,7 +150,7 @@ describe('web e2e: plugin manager', () => {
               }
             }),
           }
-        })
+        }, rowSelector)
         const loading = await measure(skeleton)
         const blankActions = await skeleton.locator(':scope > ul > li > div > div:last-child').evaluateAll(nodes => nodes.map(node => ({
           children: node.childElementCount,
@@ -184,8 +184,11 @@ describe('web e2e: plugin manager', () => {
         for (const action of await actions.all()) expect(await action.isDisabled()).toBe(false)
         const official = panel.locator('[data-plugin-group="official"]')
         await official.locator('[data-plugin-package]').first().waitFor()
-        const loaded = await measure(official)
-        expect(loaded.rows).toHaveLength(4)
+        // The Official group lists the shipped bundles and then the
+        // configuration-only items; an item card carries no action cell, so the
+        // placeholder rows model the bundle cards alone.
+        const loaded = await measure(official, ':scope > ul > li[data-plugin-package]')
+        expect(loaded.rows).toHaveLength(OPTIONAL_BUNDLES.length)
         const compare = (name: string, a: typeof loading.pageHeader, b: typeof loaded.pageHeader, axes: readonly (keyof typeof a)[] = ['x', 'y', 'width', 'height']) => {
           for (const axis of axes) {
             expect(Math.abs(a[axis] - b[axis]), `${width}px ${name}.${axis}: loading=${a[axis]}, loaded=${b[axis]}`).toBeLessThanOrEqual(0.1)
@@ -194,12 +197,13 @@ describe('web e2e: plugin manager', () => {
         compare('pageHeader', loading.pageHeader, loaded.pageHeader)
         compare('groupHeader', loading.groupHeader, loaded.groupHeader)
         for (const [index, row] of loading.rows.entries()) {
-          const real = loaded.rows[index]!
+          const real = loaded.rows[index]
+          if (real === undefined) break
           for (const part of ['row', 'head', 'icon', 'main', 'titleRow', 'actions'] as const) compare(`row ${index + 1} ${part}`, row[part], real[part])
           // Painted text bars are deliberately shorter than real copy; their line origins and heights align.
           for (const part of ['title', 'description'] as const) compare(`row ${index + 1} ${part}`, row[part], real[part], ['x', 'y', 'height'])
         }
-        facts.push(`${width}px: 4 rows; page/group headers, rows, icons, text lines and blank action spaces align within 0.1px`)
+        facts.push(`${width}px: ${loaded.rows.length} rows; page/group headers, rows, icons, text lines and blank action spaces align within 0.1px`)
         expect(consoleWatch.pageErrors).toEqual([])
       } finally {
         release.resolve(undefined)
@@ -354,7 +358,7 @@ describe('web e2e: plugin manager', () => {
     expect(await toggle.isDisabled()).toBe(false)
     await panel.getByText(/cannot resolve profile bundle/).waitFor({ timeout: 10_000 })
     expect((await scaffold.ctx.pluginManager.listBundles()).find(row => row.name === '@fixture/missing-bundle'))
-      .toMatchObject({ enabled: true, error: { code: 'operation-error' }, rows: [] })
+      .toMatchObject({ enabled: true, installed: false, removable: true, error: { code: 'operation-error' }, rows: [] })
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'missing-bundle.expected.md'),
       await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
         replacements: [[scaffold.harnessHome, '{{home}}']],
@@ -439,6 +443,9 @@ describe('web e2e: plugin manager', () => {
       .toBe(OPTIONAL_BUNDLES.filter(name => name.startsWith('@deepseek-ai/dsh-experimental-')).length)
     expect(await panel.locator('[data-plugin-package="@deepseek-ai/dsh-experimental-inspector"]').count()).toBe(0)
     expect(await panel.getByRole('switch', { name: '启用 语音输入', exact: true }).getAttribute('aria-checked')).toBe('false')
+    expect(await panel.getByRole('switch', { name: '启用 开发者工具', exact: true }).getAttribute('aria-checked')).toBe('false')
+    expect(await panel.getByText('查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端', { exact: true }).count()).toBe(1)
+    expect(await panel.getByText(/Cordis|Chrome DevTools/).count()).toBe(0)
     // A bundle that is off still shows the rows its patch declares, without switches.
     await panel.getByRole('button', { name: '查看 @fixture/bundle' }).click()
     await panel.locator('[data-plugin-row]', { hasText: 'fixture-row' }).waitFor({ timeout: 10_000 })
@@ -491,9 +498,11 @@ describe('web e2e: plugin manager', () => {
     await closeSettings()
   })
 
-  it('decodes manifest icons for disabled bundles and independent plugin rows', async () => {
+  it('prefers manifest icons for packages and reads exported icons for subpath plugins', async () => {
     const panel = await openPluginsPanel()
+    onTestFinished(closeSettings)
     const fixtureIcon = `data:image/svg+xml;base64,${(await readFile(join(FIXTURE_PLUGINS, 'fixture-bundle/icon.svg'))).toString('base64')}`
+    const fallbackIcon = `data:image/svg+xml;base64,${(await readFile(join(FIXTURE_PLUGINS, 'fixture-bundle/fallback-icon.svg'))).toString('base64')}`
     const teamIcon = `data:image/svg+xml;base64,${(await readFile(fileURLToPath(new URL('../../../packages/experimental/agent-team-profile/icon.svg', import.meta.url)))).toString('base64')}`
     const images: string[] = []
     const checkImage = async (selector: string, source: string, label: string) => {
@@ -529,13 +538,17 @@ describe('web e2e: plugin manager', () => {
     await panel.getByRole('button', { name: '返回插件列表' }).click()
     await panel.getByRole('button', { name: '查看 @fixture/bundle', exact: true }).click()
     await checkImage('[data-plugin-detail]', fixtureIcon, 'Third-party bundle detail')
-    await checkImage('[data-plugin-row="fixture-search"]', fixtureIcon, 'Independent search row')
+    await checkImage('[data-plugin-row="fixture-search"]', fallbackIcon, 'Independent search row')
+    expect(await panel.locator('[data-plugin-row="fixture-review"] img').count()).toBe(0)
+    expect(await panel.locator('[data-plugin-row="fixture-review"] svg').count()).toBeGreaterThan(0)
+    images.push('Independent review row: generic artwork')
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'icons.expected.md'), images.join('\n'), MODE)
     await panel.getByRole('button', { name: '返回插件列表' }).click()
     expect(tripwire.pageErrors).toEqual([])
   })
 
   it('localizes independent exports and falls back per field without activating the plugins', async () => {
+    onTestFinished(closeSettings)
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-exports'))
     const panel = await openPluginsPanel()
     await panel.getByRole('button', { name: '查看 @fixture/bundle' }).click()
@@ -547,24 +560,28 @@ describe('web e2e: plugin manager', () => {
     expect(await review.getByText('审查工作区中的改动。', { exact: true }).count()).toBe(1)
     await panel.getByText('Registry description for the fixture bundle.', { exact: true }).first().waitFor()
     expect([...scaffold.ctx.loader.entries()].some(entry => entry.options.name.startsWith('@fixture/bundle'))).toBe(false)
-    await compareOrRefreshGolden(EXPORTS_EXPECTED, await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd), MODE)
+    await compareOrRefreshGolden(EXPORTS_EXPECTED, await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
+      replacements: [[FIXTURE_PLUGINS, '{{fixtures}}']],
+    }), MODE)
     try {
       await setLanguage('en')
       await search.getByText('File Search', { exact: true }).waitFor()
       expect(await review.getByText('@fixture/bundle/review', { exact: true }).count()).toBeGreaterThan(0)
-      expect(await search.getByText('Search package introduction.', { exact: true }).count()).toBe(1)
+      expect(await search.getByText('Search package introduction.', { exact: true }).count()).toBe(0)
       expect(await review.getByText('审查工作区中的改动。', { exact: true }).count()).toBe(0)
-      await compareOrRefreshGolden(EXPORTS_EN_EXPECTED, await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd), MODE)
+      await compareOrRefreshGolden(EXPORTS_EN_EXPECTED, await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
+        replacements: [[FIXTURE_PLUGINS, '{{fixtures}}']],
+      }), MODE)
       expect(await panel.locator('[data-plugin-name]').textContent()).toBe('@fixture/bundle')
     } finally {
       await setLanguage('zh')
-      await closeSettings()
     }
     await panel.getByRole('button', { name: '返回插件列表' }).click()
     expect(tripwire.pageErrors).toEqual([])
   })
 
   it('updates built-in names and descriptions when the UI language changes', async () => {
+    onTestFinished(closeSettings)
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-locale'))
     const panel = await openPluginsPanel()
     await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
@@ -584,15 +601,14 @@ describe('web e2e: plugin manager', () => {
       await panel.getByRole('button', { name: 'Back to plugins' }).click()
       await panel.getByRole('button', { name: 'View Agent Teams', exact: true }).waitFor()
       expect(await panel.getByRole('switch', { name: 'Enable Agent Teams', exact: true }).count()).toBe(1)
-      await panel.getByRole('button', { name: 'View Automation tasks', exact: true }).waitFor()
-      expect(await panel.getByText('Run tasks in your sessions at a set time or on a repeating schedule.', { exact: true }).count()).toBe(1)
+      // Schedule ships in the delivered composition, so no bundle card carries it in either language.
+      expect(await panel.getByRole('button', { name: 'View Automation tasks', exact: true }).count()).toBe(0)
       // The official configuration pages follow the language too, from their own dictionary.
       for (const title of ['Shell', 'Agent loop', 'Subagent', 'Web search']) {
         await panel.getByRole('button', { name: `View ${title}`, exact: true }).waitFor()
       }
     } finally {
       await setLanguage('zh')
-      await closeSettings()
     }
     await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).waitFor()
     expect(tripwire.pageErrors).toEqual([])
@@ -659,34 +675,18 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('lists the Automation tasks rows and mounts them with the bundle switch', async () => {
+  it('mounts the delivered Automation tasks rows without a bundle switch', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-schedule'))
     const panel = await openPluginsPanel()
     const scheduleRows = () => [...scaffold.ctx.loader.entries()]
-      .filter(entry => ['time-context', 'schedule', 'ui-schedule'].includes(entry.options.id))
-    const running = () => scheduleRows().filter(entry => entry.fiber?.state === FiberState.ACTIVE).length
-    expect(running()).toBe(0)
-    await panel.getByRole('button', { name: '查看 自动化任务', exact: true }).click()
-    const rows = panel.locator('[data-plugin-rows]')
-    for (const title of ['时间感知', '任务调度', '任务界面']) {
-      await rows.locator('[data-plugin-row]', { hasText: title }).waitFor()
-    }
-    // A bundle that is off offers no row switches.
-    expect(await rows.getByRole('switch').count()).toBe(0)
-    const toggle = panel.getByRole('switch', { name: '启用 自动化任务', exact: true })
-    await toggle.click()
-    try {
-      await expect.poll(running, { timeout: 20_000 }).toBe(3)
-      await expect.poll(() => rows.locator('[data-plugin-row]', { hasText: '运行中' }).count(), { timeout: 20_000 }).toBe(3)
-      for (const title of ['时间感知', '任务调度', '任务界面']) {
-        await rows.getByRole('switch', { name: `启用组件 ${title}`, exact: true }).waitFor()
-      }
-      await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '自动化任务', exact: true }).waitFor()
-    } finally {
-      if (await toggle.getAttribute('aria-checked') === 'true') await toggle.click()
-      await expect.poll(running, { timeout: 20_000 }).toBe(0)
-      await panel.getByRole('button', { name: '返回插件列表' }).click()
-    }
+      .filter(entry => ['schedule', 'ui-schedule'].includes(entry.options.id))
+    // The delivered Web composition ships both rows enabled, so no bundle card
+    // offers a switch for them.
+    expect(scheduleRows()).toHaveLength(2)
+    expect(scheduleRows().every(entry => entry.fiber?.state === FiberState.ACTIVE)).toBe(true)
+    expect(await panel.getByRole('button', { name: '查看 自动化任务', exact: true }).count()).toBe(0)
+    expect(await panel.getByRole('switch', { name: '启用 自动化任务', exact: true }).count()).toBe(0)
+    await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '自动化任务', exact: true }).waitFor()
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
@@ -832,16 +832,31 @@ describe('web e2e: plugin manager', () => {
     const dialog = page.getByRole('dialog', { name: '添加插件' })
     await dialog.waitFor({ timeout: 10_000 })
     const field = dialog.getByRole('textbox', { name: '包名或地址' })
+    expect(await page.getByRole('menu').count()).toBe(0)
+    await expect.poll(() => field.evaluate(element => document.activeElement === element)).toBe(true)
+    await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    await panel.getByRole('button', { name: '选择添加插件方式', exact: true }).click()
+    const menu = page.getByRole('menu')
+    await menu.getByRole('menuitem', { name: /^安装第三方插件/ }).click()
+    await menu.waitFor({ state: 'hidden' })
+    await dialog.waitFor({ state: 'visible' })
+    await expect.poll(() => field.evaluate(element => document.activeElement === element)).toBe(true)
     const install = dialog.getByRole('button', { name: '安装', exact: true })
     expect(await install.isDisabled()).toBe(true)
     expect(await dialog.getByRole('note').textContent()).toContain('请确认插件来源可信')
+    expect(await dialog.getByRole('note').textContent()).toContain('暂不支持自动更新')
     await dialog.getByRole('button', { name: '插件安装引导和示例' }).click()
+    // The guide carries the package-name example only; the former template strings keep their replacement reminder.
+    await expect.poll(() => dialog.getByRole('listitem').count()).toBe(1)
+    await dialog.getByRole('button', { name: '填入示例 dsh-plugin-whale-pet' }).click()
+    expect(await field.inputValue()).toBe('dsh-plugin-whale-pet')
+    expect(await dialog.getByRole('status').count()).toBe(0)
     for (const [example, hint] of [
       ['https://github.com/author/dsh-plugin', '请替换为实际的 Git 仓库地址'],
       ['/Users/name/my-plugin', '请替换为本机插件目录的实际路径'],
-    ]) {
-      await dialog.getByRole('button', { name: `填入示例 ${example}` }).click()
-      expect(await field.inputValue()).toBe(example)
+    ] as const) {
+      await field.fill(example)
       expect(await dialog.getByRole('status').textContent()).toBe(hint)
     }
     await field.fill('/actual/plugin-directory')
@@ -852,7 +867,7 @@ describe('web e2e: plugin manager', () => {
     await field.fill('@fixture/bundle')
     await install.click()
     await dialog.getByRole('alert').waitFor({ timeout: 5_000 })
-    expect(await dialog.getByRole('alert').textContent()).toBe('该插件已安装')
+    expect(await dialog.getByRole('alert').textContent()).toBe('该插件已安装。如需升级，请卸载后重新安装')
     // A path the Host cannot read as a package is refused with its reason, and the spec stays editable.
     await field.fill(join(scaffold.harnessHome, 'no-such-plugin'))
     await install.click()

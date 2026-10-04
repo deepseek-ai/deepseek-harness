@@ -77,6 +77,7 @@
     "src/shared/cordis/projector.ts",
     "src/shared/cordis/reader.ts",
     "src/shared/cordis/snapshot.ts",
+    "src/shared/dispose.ts",
     "src/shared/identity.ts",
     "src/shared/index.ts",
     "src/shared/json.ts",
@@ -84,6 +85,7 @@
     "src/shared/network/observation.ts",
     "src/shared/service.ts",
     "src/shared/validation.ts",
+    "src/shared/web.ts",
     "src/worker/bridge/endpoint.ts",
     "src/worker/bridge/hub.ts",
     "src/worker/bridge/runtime-rpc.ts",
@@ -134,6 +136,10 @@
     "src/worker/server.ts"
   ],
   "references": [
+    { "path": "../../client/connection/tsconfig.host.json" },
+    {
+      "path": "../../boot/cmdline"
+    },
     {
       "path": "../../util/brand"
     },

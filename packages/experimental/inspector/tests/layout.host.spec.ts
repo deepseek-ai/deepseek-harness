@@ -10,8 +10,11 @@ const packageRoot = fileURLToPath(new URL('../', import.meta.url))
 const testsRoot = fileURLToPath(new URL('./', import.meta.url))
 
 describe('Inspector execution layout', () => {
-  it('keeps Client and Host implementation paths mirrored', async () => {
-    expect(await sourceFiles('client')).toEqual(await sourceFiles('host'))
+  it('keeps Client and Host adapters mirrored apart from Client dictionaries and bottom controls', async () => {
+    const clientOnly = ['bridge/locales.ts', 'bottom/locales.ts', 'bottom/keyboard.ts']
+    const client = await sourceFiles('client')
+    expect(clientOnly.every(file => client.includes(file))).toBe(true)
+    expect(client.filter(file => !clientOnly.includes(file))).toEqual(await sourceFiles('host'))
   })
 
   it('keeps Worker Client and Host backend paths mirrored', async () => {

@@ -2,7 +2,7 @@
 
 Status: implemented
 
-CPython PTC 运行时位于 `packages/experimental/ptc-runtime-python`，以 `@deepseek-ai/dsh-experimental-ptc-runtime-python` 名称发布；[发布决策](../process/2026-09-12-publish-all-experimental-packages.zh.md)保留其实验性状态。
+CPython PTC 运行时位于 `packages/experimental/ptc-runtime-python`，以 `@deepseek-ai/dsh-experimental-ptc-runtime-python` 名称发布；[发布策略](../../../../packages/experimental/README.zh.md)保留其实验性状态。
 
 [English](2026-07-31-ptc-runtime-python-fd3-protocol.md) | 中文
 
@@ -22,7 +22,7 @@ CPython PTC 运行时位于 `packages/experimental/ptc-runtime-python`，以 `@d
 
 `py/protocol.py` 用 `TypedDict` 镜像消息形状，并重新声明两侧都会 EXECUTE 的两个面——`PROTOCOL_FD = 3` 与 `log_truncation_marker`——文本逐字节一致。
 
-该包随协议一起交付 runtime，同时保持独立可构建。`check-workspace-constraints` 会无条件读取每个 `packages/<group>/<pkg>/package.json`，coverage 与 invariant-topology 检查则会在包目录存在时立即覆盖该包。
+该包随协议一起交付 runtime，同时保持独立可构建。`check-workspace-constraints` 会无条件读取每个 `packages/<group>/<pkg>/package.json`，coverage 检查则会在包目录存在时立即覆盖该包。
 
 ## Wire contract
 
@@ -36,7 +36,7 @@ CPython PTC 运行时位于 `packages/experimental/ptc-runtime-python`，以 `@d
 
 **要求未来的 Python JSON codec（`_encode_json_plain` / `_decode_json_plain`）放进 `py/protocol.py`，以便与 `protocol.ts` 跨侧对称。**拒绝。仓库的 “prefer symmetry for parallel values” 规则指向真正平行的值；这两者不是。`protocol.ts` 中的 host 侧 codec 校验敌意输入且自包含。Child 侧 codec 会产出受信任输出，应与 bootstrap 拥有的发出逻辑和成本核算放在一起；只把入口强塞进 `protocol.py` 会让 vocabulary 镜像耦合 runtime 内部实现，或制造 import 环。`protocol.py` 保持纯 wire-vocabulary 镜像；codec（`_encode_json_plain`／`_decode_json_plain`）与它所服务的 runtime 一起位于 `bootstrap.py`。
 
-**在 runtime 交付前把协议文件放在不可构建的包外。**拒绝：workspace-constraint、coverage 与 invariant-topology 检查要求 `packages/<group>/<pkg>` 下的每个目录都是可构建包，而协议本身拥有独立测试与公开 wire vocabulary。
+**在 runtime 交付前把协议文件放在不可构建的包外。**拒绝：workspace-constraint 与 coverage 检查要求 `packages/<group>/<pkg>` 下的每个目录都是可构建包，而协议本身拥有独立测试与公开 wire vocabulary。
 
 ## Consequences
 

@@ -452,6 +452,31 @@ describe('mode-aware wire contribution', () => {
     expect(assembly.tools.map(tool => tool.name)).toContain('echo')
   })
 
+  it.each(['typescript', 'python'])('requests description before code for a %s runtime', async (language) => {
+    const { ctx, systemPrompt } = await setup({ mode: 'ptc', runtime: { language } })
+    try {
+      const parameters = ctx.tools.get(RUN_CODE_NAME)!.parameters
+      expect(Object.keys(parameters.properties as Record<string, unknown>).slice(0, 2))
+        .toEqual(['description', 'code'])
+      expect(parameters).toHaveProperty('required', ['description', 'code'])
+      expect(parameters).toHaveProperty('properties.description.description',
+        expect.stringContaining('Provide `description` before `code` in the arguments.'))
+      const assembly = await systemPrompt.assemble()
+      expect(assembly.tools.find(tool => tool.name === RUN_CODE_NAME)?.parameters).toEqual(parameters)
+      expect(assembly.tools.find(tool => tool.name === RUN_CODE_NAME)?.description)
+        .toContain('arguments: `description`, a short summary of what the program does, and `code`')
+
+      // defineTool validates its captured static schema, independently of the runtime parameters getter.
+      const rejected = await ctx.tools.execute({
+        signal: testToolSignal, callId: ToolCallId('argument-order'), name: RUN_CODE_NAME, arguments: {},
+      })
+      expect(rejected).toHaveProperty('error.message',
+        'invalid arguments: missing required property "description"; missing required property "code"')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('emits a TypeScript-flavored run_code schema under a typescript runtime', async () => {
     const { ctx, systemPrompt } = await setup({ mode: 'ptc', runtime: { language: 'typescript' } })
     registerEcho(ctx)

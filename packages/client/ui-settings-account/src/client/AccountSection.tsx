@@ -93,6 +93,7 @@ export function AccountSection({ t, useAccount, useTheme, start, cancel, openPla
   const wallets = details?.balance?.status === 'ready' ? details.balance.value : undefined
   const bonusWallets = details?.balance?.status === 'ready'
     ? details.balance.bonusWallets.filter(wallet => new Big(wallet.balance).gt(0)) : []
+  const showBonusRow = details?.balance?.status !== 'ready' || bonusWallets.length > 0
   const attempt = state?.attempt
   const active = attempt !== null && attempt !== undefined
     && ['initializing', 'waiting-browser', 'exchanging', 'committing'].includes(attempt.phase)
@@ -183,7 +184,7 @@ export function AccountSection({ t, useAccount, useTheme, start, cancel, openPla
               ? <span className={css.unavailable}>{t(!signedIn ? 'balanceSignedOut' : 'loading')}</span>
               : platformLink(t('balanceUnavailable'), css.unavailableLink)}
         </div>
-        {signedIn && <>
+        {signedIn && showBonusRow && <>
           <div className={css.divider} />
           <div className={css.row}>
             <span>{t('bonusBalance')}</span>
@@ -194,9 +195,7 @@ export function AccountSection({ t, useAccount, useTheme, start, cancel, openPla
                 </span>)}</span>
                 : details?.balance === undefined
                   ? <span className={css.unavailable}>{t('loading')}</span>
-                  : details.balance.status === 'failed'
-                    ? platformLink(t('balanceUnavailable'), css.unavailableLink)
-                    : <span className={css.unavailable}>{t('bonusEmpty')}</span>}
+                  : platformLink(t('balanceUnavailable'), css.unavailableLink)}
             </span>
           </div>
         </>}

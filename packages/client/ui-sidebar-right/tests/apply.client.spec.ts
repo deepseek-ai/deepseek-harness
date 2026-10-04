@@ -5,7 +5,7 @@
  * means what those faces do; the slot, locale, frame, and resource faces are
  * recorders, because what matters here is what was handed to them — two seats
  * over one store, the guide's body under its own id, the frame reports, the
- * service binding — and that every registration is gone after dispose, which
+ * on-screen Session — and that every registration is gone after dispose, which
  * is what makes a reload safe. The seats' components have their own specs.
  */
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -63,7 +63,11 @@ async function boot(shortcuts: Partial<Shortcuts> = {}) {
       return () => { dictionaries.delete(ns) }
     }),
   }
-  const layout = { openRightbar: vi.fn(), closeRightbar: vi.fn() }
+  const layout = {
+    openRightbar: vi.fn(), closeRightbar: vi.fn(),
+    panelInfo: createSnapshotStore<{ activePanelId: string | null }>({ activePanelId: null }),
+  }
+  const current = createSnapshotStore<{ key: SessionId | undefined }>({ key: undefined })
   const resources = { pin: vi.fn<(address: string, signal: AbortSignal) => void>() }
   ctx.provide('slots', slots as never)
   ctx.provide('locale', locale as never)
@@ -71,8 +75,8 @@ async function boot(shortcuts: Partial<Shortcuts> = {}) {
     catalog: { getSnapshot: () => SHORTCUT_CATALOG, subscribe: () => () => {} }, ...shortcuts } as never)
   ctx.provide('layout', layout as never)
   ctx.provide('resources', resources as never)
-  ctx.provide('sessions', { retain: vi.fn() } as never)
-  ctx.provide('uiSession', { adapter: { current: createSnapshotStore({ key: undefined }) } } as never)
+  ctx.provide('sessions', { retain: vi.fn(() => ({ ready: Promise.resolve(), release: vi.fn() })) } as never)
+  ctx.provide('uiSession', { adapter: { current } } as never)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
   const seat = (name: string): Recorded => {
@@ -84,7 +88,7 @@ async function boot(shortcuts: Partial<Shortcuts> = {}) {
     if (entry.inject === undefined) throw new Error(`expected ${entry.name} to inject`)
     return entry.inject(SESSION)
   }
-  return { ctx, registered, dictionaries, layout, resources, fiber, seat, injectedOf }
+  return { ctx, registered, dictionaries, layout, current, resources, fiber, seat, injectedOf }
 }
 
 describe('ui-sidebar-right apply', () => {
@@ -143,8 +147,21 @@ describe('ui-sidebar-right apply', () => {
     expect(seat('conversation.session.header.corner').store).toBe(seat('rightbar.session').store)
   })
 
-  it('hands the panel seat the frame report, the service binding, the opens, the observable registry, and the Tab domain', async () => {
-    const { ctx, layout, resources, seat, injectedOf } = await boot()
+  it('names the selected Session as on screen while the Conversation fills the main column', async () => {
+    const { ctx, layout, current } = await boot()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    current.set({ key: SESSION })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    layout.panelInfo.set({ activePanelId: 'plugins' })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    layout.panelInfo.set({ activePanelId: null })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    current.set({ key: undefined })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+  })
+
+  it('hands the panel seat the frame report, the room rule, the opens, the observable registry, and the Tab domain', async () => {
+    const { ctx, layout, current, resources, seat, injectedOf } = await boot()
     const injected = injectedOf(seat('rightbar.session')) as SidebarRightInjected
     // The frame learns the composition of expanded and presentation, nothing else.
     injected.syncPresentation({ shown: true, track: true, fullscreen: false })
@@ -162,31 +179,42 @@ describe('ui-sidebar-right apply', () => {
     ctx.sidebarRightTabs.register({ id: 'spec/text', kind: 'text', patterns: ['dsh-resource://file/**'], title: () => 'text' })
     expect(seen).toHaveBeenCalledOnce()
     unsubscribe()
-    // The binding makes the service act on this seat's session; the seat's
-    // store instance is minted here from the handle the registration declared.
+    // The runtime mints each Session's store from the handle the registration
+    // declared; selecting the Session puts it on screen, and the service acts on
+    // its adopted store.
     const handle = seat('rightbar.session').store as ReturnType<typeof createSidebarRightStore>
-    const instance = handle.create()
-    instance.clearPersisted()
-    vi.stubGlobal('document', { activeElement: null })
+    handle.create().clearPersisted()
+    const instance = handle.create(SESSION)
+    vi.stubGlobal('document', { activeElement: null, querySelectorAll: () => [] })
     onTestFinished(() => { vi.unstubAllGlobals() })
     injected.toggleFullscreen()
     expect(injectedOf(seat('conversation.session.header.corner'))).toHaveProperty('hooks.shortcuts')
-    const release = injected.bindService({
-      sessionId: SESSION, actions: instance.actions, surfaces: {},
-      closeWithFocus: (_paneId, close) => { close() },
-      openWithFocus: (open) => { open() },
-      canSplitPane: () => true,
-    })
+    current.set({ key: SESSION })
     injected.openTab('guide', { revealIfOpened: false })
     const surface = instance.getSnapshot().bySession[SESSION]
     expect(surface?.layout.expanded).toBe(true)
     expect(Object.values(surface?.layout.tabs ?? {}).map(tab => tab.kind)).toEqual(['guide'])
     // Holding a record pins its address through the resource model.
     if (surface === undefined) throw new Error('expected a surface')
-    ctx.sidebarRight.tabDomain.sync(SESSION, surface.layout)
     expect(resources.pin).toHaveBeenCalledWith('sidebar://guide', expect.any(AbortSignal))
+    // The seat reports the room rule its kit measured; a narrow pane is not split.
+    const panes = () => Object.values(instance.getSnapshot().bySession[SESSION]?.layout.nodes ?? {}).filter(node => node.kind === 'pane')
+    injected.measureRoom(() => false)
     injected.splitPane(surface.layout.activePaneId)
-    release()
+    expect(panes()).toHaveLength(1)
+    injected.measureRoom(() => true)
+    injected.splitPane(surface.layout.activePaneId)
+    expect(panes()).toHaveLength(2)
+    // The fullscreen command follows the automatic fullscreen rule the seats report.
+    const layoutOf = () => instance.getSnapshot().bySession[SESSION]?.layout
+    injected.toggleFullscreen()
+    expect(layoutOf()?.mode).toBe('fullscreen')
+    injected.reportAutoFullscreen(true)
+    injected.toggleFullscreen()
+    expect(layoutOf()?.expanded).toBe(false)
+    expect(layoutOf()?.mode).toBe('push')
+    // A global panel takes the Conversation's place: no Session is on screen.
+    layout.panelInfo.set({ activePanelId: 'plugins' })
     expect(() => { ctx.sidebarRight.toggleExpanded() }).toThrow('no session surface is mounted')
   })
 
@@ -274,17 +302,12 @@ describe('ui-sidebar-right apply', () => {
   })
 
   it('takes every registration and both faces back when disposed, aborting the open records, so a reload registers again', async () => {
-    const { ctx, registered, dictionaries, fiber, seat, injectedOf } = await boot()
+    const { ctx, registered, dictionaries, current, fiber, seat, injectedOf } = await boot()
     const injected = injectedOf(seat('rightbar.session')) as SidebarRightInjected
     const handle = seat('rightbar.session').store as ReturnType<typeof createSidebarRightStore>
     // Minted under the session key, so the instance is adopted and the teardown releases it.
     const instance = handle.create(SESSION)
-    injected.bindService({
-      sessionId: SESSION, actions: instance.actions, surfaces: {},
-      closeWithFocus: (_paneId, close) => { close() },
-      openWithFocus: (open) => { open() },
-      canSplitPane: () => true,
-    })
+    current.set({ key: SESSION })
     injected.openTab('guide')
     const surface = instance.getSnapshot().bySession[SESSION]
     const guide = Object.values(surface?.layout.tabs ?? {})[0]

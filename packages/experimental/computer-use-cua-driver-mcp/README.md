@@ -64,8 +64,6 @@ The model sees tools under the fixed `mcp__cua-driver-mcp__` namespace. Tool nam
 
 [`src/index.ts`](src/index.ts) groups the computer-use reservation and owned MCP child into one ordered effect. Child teardown finishes before the reservation disposer runs, including during failed activation. The MCP client owns credential scrubbing, subprocess termination, tool synchronization, cancellation, and durable image projection.
 
-No runtime invariant companion is published: the provider exposes no independent driver state to compare with its registration, and the child owns its connection and tool generations.
-
 ### Verify an installed driver
 
 From the repository root, opt into the live compatibility test with the absolute path of a Cua Driver executable. It discovers tools, calls `check_permissions` with `prompt: false`, and verifies teardown. On macOS, `--direct` runs the runtime in the MCP process using the launching host's permissions; omit `DSH_COMPUTER_USE_MCP_ARGS` to use the default `["mcp"]` arguments.

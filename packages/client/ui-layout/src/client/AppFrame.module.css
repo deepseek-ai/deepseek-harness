@@ -1,7 +1,7 @@
 .frame {
   position: relative; /* anchors the drag handles, which straddle column borders */
   display: grid;
-  grid-template-rows: 100%;
+  grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
   overflow: hidden;
   background: var(--dsw-alias-bg-base);
@@ -27,7 +27,6 @@
   --dsh-windows-content-radius: 16px;
   box-sizing: border-box;
   padding-top: var(--dsh-windows-titlebar-height);
-  grid-template-rows: minmax(0, 1fr);
   background: var(--dsw-specific-sidebar-fill);
 }
 
@@ -48,10 +47,6 @@
 
 :global([data-windows-titlebar]) .sidebarCol {
   border-right: none;
-}
-
-:global([data-windows-titlebar]) .handle {
-  top: var(--dsh-windows-titlebar-height);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -87,11 +82,29 @@
    toggle, shell.leading controls), the same in both sidebar states. Entry
    pages in the main panel (plugin manager, settings-like pages — not the
    conversation, which owns its header) pad their top by it so their leading
-   content clears the strip, and overlay primitives keep it as their top
-   viewport margin. Declared on the root element rather than the frame so
+   content clears the strip, and overlay primitives add their own safe inset.
+   Declared on the root element rather than the frame so
    overlays portalled to document.body inherit it too. */
 :global(html[data-platform='darwin']) {
   --dsh-frame-top-clearance: 48px;
+}
+
+/* In-frame Windows content already clears the caption through .frame padding. */
+:global(html[data-windows-titlebar]) {
+  --dsh-frame-top-clearance: var(--dsh-windows-titlebar-height);
+  --dsh-frame-chrome-top: var(--dsh-windows-titlebar-height);
+}
+
+/* Portalled overlays share a viewport inset without adding space to entry pages. */
+:global(html[data-platform='darwin']),
+:global(html[data-windows-titlebar]) {
+  --dsh-frame-overlay-top: calc(var(--dsh-frame-top-clearance) + 20px);
+}
+
+:global(html[data-platform='darwin'][data-fullscreen]),
+:global(html[data-windows-titlebar][data-fullscreen]) {
+  --dsh-frame-overlay-top: 20px;
+  --dsh-frame-chrome-top: 0px;
 }
 
 :global([data-platform='darwin']) .sidebarCol {
@@ -209,6 +222,7 @@
    over the centre. */
 .handle {
   position: absolute;
+  grid-area: 1 / 1 / 2 / -1;
   top: 0;
   bottom: 0;
   width: 8px;
@@ -254,6 +268,14 @@
   position: relative;
   min-width: 0;
   overflow: visible;
+}
+
+.bottomRow {
+  grid-column: 1 / -1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--dsw-alias-bg-base);
 }
 
 .overlayLayer {

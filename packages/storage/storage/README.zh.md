@@ -86,7 +86,6 @@ kind: "package-reference"
 | [`src/registry.ts`](src/registry.ts) | `BackendRegistry`：名称 → 后端表、注册资源释放函数 |
 | [`src/backend.ts`](src/backend.ts) | 后端约定：分面、单元、`UNIT_NAME_RE` |
 | [`src/error.ts`](src/error.ts) | 枢纽与每个后端共享的 `StorageError` 代码 |
-| — | 不发布运行时不变式伴生入口；枢纽是纯注册表（名称 → 后端、形式 → 设施），其一致性完全由调用点强制保障（重复项或缺失项会同步明确报错）；它既没有事件流，也没有可变介质可供交叉检查。 |
 | [`tests/contract.ts`](tests/contract.ts) | 针对每个后端运行的共享一致性套件 |
 
 </details>

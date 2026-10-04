@@ -28,7 +28,7 @@ Initiator scope does not own detached work: registry drain tracks only the Promi
 
 A host-aware transport may derive a deployment-owned header such as `X-Harness-Session-Id` from `ctx.agents.requireInitiator().session.id`; the header is absent from model-visible schema and arguments. No production MCP or Web transport adopts such a header in this decision. A test-double transport proves the trusted boundary without assigning host routing policy to an existing provider-neutral seam.
 
-This decision extends the [Agent registration-scope contract](2026-07-08-agent-scope-contexts.md) and its [runtime design](2026-07-12-agent-scope-runtime-design.md); it does not change their static `agent.ctx` meaning. The [explicit runtime-identity decision](2026-08-31-explicit-agent-runtime-identity.md) keeps initiator scope limited to private asynchronous chains while lifecycle, ownership, event, and wire interfaces carry their subjects directly.
+This decision extends the [Agent registration-scope contract](../../../../packages/core/scope/README.md) and its [runtime design](../../../../packages/core/agent-loop/README.md); it does not change their static `agent.ctx` meaning. The [explicit runtime-identity decision](2026-08-31-explicit-agent-runtime-identity.md) keeps initiator scope limited to private asynchronous chains while lifecycle, ownership, event, and wire interfaces carry their subjects directly.
 
 ## Verification
 

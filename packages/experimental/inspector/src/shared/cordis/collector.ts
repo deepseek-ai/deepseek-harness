@@ -35,7 +35,7 @@ interface MutableFiberNode extends Omit<CordisFiberTreeNode, 'children'> {
 
 type MutableTreeNode = MutableContextNode | MutableFiberNode
 
-/** Realm-local collector with a current live-object table. */
+/** Realm-local collector retaining Contexts without Cordis service-call shadow wrappers. */
 export class CordisTreeCollector {
   /** Live-object table replaced atomically with each emitted snapshot. */
   readonly objects = new RealmObjectRegistry()
@@ -66,7 +66,7 @@ export class CordisTreeCollector {
         children: [],
       }
       for (const child of info.children) {
-        if (child.fiber !== undefined && child.fiber.ctx === child.value) {
+        if (child.fiber !== undefined && unwrapContext(child.fiber.ctx) === child.value) {
           const projected = fiberNode(child.fiber, child)
           if (projected !== undefined) node.children.push(projected)
         } else {

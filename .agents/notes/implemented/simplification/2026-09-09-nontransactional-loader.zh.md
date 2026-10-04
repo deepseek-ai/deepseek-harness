@@ -32,4 +32,4 @@ Fiber、Entry 和 isolate 保持上游的更新返回行为。App boot 通过现
 
 插件激活失败可能保留新选项和失败的 fiber。要求插件处于激活状态的调用者必须在结算后检查；仅等待 `Loader.create()` 不能证明激活。自动插件回滚需要后续独立决策，并证明其恢复收益值得额外的生命周期实现。
 
-[实时 patch 测试](../testing/2026-09-09-user-patch-hmr-test-delivery.zh.md) 保留受控事件投递和原生监视覆盖，同时断言不回滚时的失败报告。[终端释放策略](../bug-fix/2026-07-31-fail-loud-releases-the-terminal.zh.md) 仍适用于致命错误和部分启动拆卸。Web preset 组合与真实 CLI webhook 创建的模型 Session 提供手动挂载插件之外的应用级验证。
+[实时 patch 测试](../../../../packages/boot/app-boot/tests/user-patches.spec.ts) 保留受控事件投递和原生监视覆盖，同时断言不回滚时的失败报告。[终端释放策略](../../../../packages/boot/app-boot/README.zh.md) 仍适用于致命错误和部分启动拆卸。Web preset 组合与真实 CLI webhook 创建的模型 Session 提供手动挂载插件之外的应用级验证。

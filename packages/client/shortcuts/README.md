@@ -79,7 +79,7 @@ None; this package neither assembles nor sends a provider request.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Feature owners declare the Windows and macOS Web defaults explicitly: Mod+Slash, Mod+Comma, Mod+Backslash, and Control+Backquote stay two-key combinations; other defaults without Alt use Mod+Alt, and defaults with Alt use Mod+Shift except fullscreen uses Mod+Alt+Enter. macOS Web leaves Refresh current page unbound by default to preserve browser-specific Command+Option+R actions; its button and explicit user bindings remain available. Mod is Command on macOS and Control on Windows. Windows and macOS accept any three or four distinct modifiers in Web and Desktop. Web also accepts the listed combinations and Mod+Shift combinations; browser or system delivery requires platform testing. Linux Web accepts Mod+Slash, Mod+Shift+Comma, and Mod+Shift+Period. Operating-system shortcuts that do not reach the window cannot be intercepted. A chord does not delay or consume its first key while waiting for the second; a native action or focus change can therefore prevent completion. Command registration or disposal invalidates open edit drafts even when saved preferences are unchanged. Desktop rereads its file on every catalog update; there is no file watcher.
+- Feature owners declare the Windows and macOS Web defaults explicitly: Mod+Slash, Mod+Backslash, and Control+Backquote stay two-key combinations; other defaults without Alt use Mod+Alt, and defaults with Alt use Mod+Shift except fullscreen uses Mod+Alt+Enter and session rename uses Mod+Alt+G. Web Settings uses Mod+Alt+Comma, leaving Mod+Comma to the browser. macOS Web leaves Refresh current page unbound by default to preserve browser-specific Command+Option+R actions; its button and explicit user bindings remain available. Mod is Command on macOS and Control on Windows. Windows and macOS accept any three or four distinct modifiers in Web and Desktop. Web also accepts the listed combinations and Mod+Shift combinations; browser or system delivery requires platform testing. Linux Web accepts Mod+Slash, Mod+Shift+Comma, and Mod+Shift+Period. Operating-system shortcuts that do not reach the window cannot be intercepted. A chord does not delay or consume its first key while waiting for the second; a native action or focus change can therefore prevent completion. Command registration or disposal invalidates open edit drafts even when saved preferences are unchanged. Desktop rereads its file on every catalog update; there is no file watcher.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -90,5 +90,3 @@ None; this package neither assembles nor sends a provider request.
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The catalog and binding index are derived together from the private registry; there is no independently maintained runtime relationship to inspect.

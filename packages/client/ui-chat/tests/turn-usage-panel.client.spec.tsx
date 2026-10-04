@@ -95,4 +95,13 @@ describe('TurnUsagePanel', () => {
     fireEvent.pointerDown(document.body)
     expect(view.queryByRole('dialog')).toBeNull()
   })
+
+  it('closes on an outside click without pointerdown, as keyboard activation elsewhere fires', () => {
+    const view = render(<TurnUsagePanel usage={{ uncachedInputTokens: 1, outputTokens: 1, totalTokens: 2 }} t={t} />)
+    fireEvent.click(view.getByRole('button'))
+    fireEvent.click(view.getByRole('dialog'))
+    expect(view.queryByRole('dialog')).toBeTruthy()
+    fireEvent.click(document.body)
+    expect(view.queryByRole('dialog')).toBeNull()
+  })
 })

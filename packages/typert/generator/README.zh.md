@@ -47,6 +47,8 @@ files:
 
 静态消费方直接针对工作区的 `tsconfig.host.json` 与 `tsconfig.client.json` 聚合配置调用 `WorkspaceAnalyzer`，选择 face 与包子集，并在不生成或加载运行时产物的前提下读取生成的 `FaceModel` 与类型图。`analyzeInBatches()` 通过有界的编译器程序处理大批量包选择，模型形态保持一致；`discoverPackages()` 无需构建类型检查程序即可找出参与贡献的包。
 
+JSON、YAML、SVG、PNG、JPEG 和 WebP 资源导出不提供 TypeScript 声明，因此不进入 API 模型。JavaScript 或 TypeScript 导出源文件缺失时仍报错。
+
 ### 在 tsdown 构建中运行生成
 
 包的 `./tsdown` 子路径为根 tsdown 配置提供 `typertPlugin()`：它在打包前转换 TypeScript 依赖中的标准装饰器，并在包输出根目录生成模型驱动的 face 产物。`package` 模式只生成当前打包的包；`workspace` 模式对每个显式贡献方各生成一次。
@@ -141,5 +143,3 @@ Host 与 Client 是两个独立的 TypeScript 程序。直接项目引用确定�
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。源码项目分析器与构建时 emitter 均不在任何 Cordis 运行时中运行；模型快照、可执行产物与消费方包的类型检查会强制执行其输出约定。

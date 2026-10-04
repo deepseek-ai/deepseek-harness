@@ -9,11 +9,11 @@ kind: "package-reference"
 
 ## 概述
 
-用户交互 Service Definition。它定义 `ctx.userQuestions`，供面向模型的工具或权限插件在需要暂停工作并询问人类决定时使用。当消费方必须暂停操作并等待用户回答时，请使用它。
+当工具或权限流程需要用户提供结构化答案时，使用 `ctx.userQuestions`。`ask()` 会等待回答；`askTimed()` 可以放行 agent 继续独立工作，而问题仍留在会话中供用户回答。
 
 ## 目录
 
-- [服务：`UserQuestionService`（ctx 键：`userQuestions`）](#service-userquestionservice-ctx-key-userquestions)
+- [提出问题](#service-userquestionservice-ctx-key-userquestions)
 - [职责](#role)
 - [模型体验](#model-experience)
 - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
@@ -22,32 +22,22 @@ kind: "package-reference"
 -----
 
 <a id="service-userquestionservice-ctx-key-userquestions"></a>
-## 服务：`UserQuestionService`（ctx 键：`userQuestions`）
+## 提出问题
 
-### 公开 API
-
-- `ctx.userQuestions.ask(request): Promise<AskUserQuestionAnswer>` 派发回答者 waterfall，并等待首个被接受的回答。
-
-### 关键类型
-
-- `AskUserQuestionRequest`：`{ questions: [{ id, question, detail?, header?, options?, multiSelect?, intent? }], agent?, signal? }`；`detail` 提供辅助文本，提供方会将其随问题一起渲染，而不会将其变成选项标签。如提供 `agent`，它必须与注册表中的存活运行时根 agent（智能体）是同一对象。
-- `AskUserQuestionOption`：`{ label, description? }`。
-- `AskUserQuestionIntent`：`{ kind: 'plan-review', approve }`；即下文的带标签呈现意图。
-- `AskUserQuestionAnswer`：`{ answers: [{ id, selected, custom? }] }`。
-- `UserQuestionError`：`HarnessError` 的子类，包含 `EMPTY_QUESTIONS`、`BAD_INTENT`、`NO_PROVIDER`、`ASK_ABORTED`、`CALLER_NOT_LIVE` 和 `DELEGATED_CALLER` 等代码。
+当工作无法在没有答案的情况下继续时调用 `ask()`。当 agent 可以在一段前台等待后继续独立工作时调用 `askTimed()`。回答 UI 通过 `attachWait` 接手等待，取得 Host 计算的剩余时长，并用本地时钟倒计时。没有接手方时，包括最后一个 Client 断开之后，服务在原 deadline 放行模型。`userQuestions` projection 从工具调用、其结果和最终回复派生持久问题；Client 接手状态不落盘。
 
 对于单选题，`custom` 会覆盖选中的选项，且 `selected` 为空。对于多选题，`custom` 可以补充 `selected` 中的标签。UI 可以把跳过的条目保留为 `{ id, selected: [] }`，既维持现有回答形态，也保留该批次中的其他回答。
 
-请求包含 agent 时，`ask()` 会通过当前 `AgentRegistry` 验证该 agent 与注册表中的存活实例是同一对象，并且只允许运行时根调用。持久谱系不构成权限依据：带有历史委托深度的会话恢复为新的运行时根后可以提问；归属于另一个 agent 的存活子级即使持久化记录的委托深度为零也会被拒绝。Web 回答者只接收带 Agent scope 的请求；不含 agent 的程序化请求仍会交给本地未限定 scope 的 waterfall listener，若无人接受则以 `NO_PROVIDER` 失败。
+问题可以携带呈现意图 `intent`，声明它就是某种已知决策，识别该标记的 UI 可以按该决策呈现；目前唯一的标记是 `plan-review`，其 `detail` 是待审阅的计划，`approve` 指明表示同意的选项。意图只改变呈现：遵循它的 UI 回答的选项标签与通用 UI 相同，不认识该标记的 UI 则渲染通用选项列表。`ask()` 会以 `BAD_INTENT` 拒绝两种类型无法表达的断言：`approve` 未命名该问题自己的任何选项，以及没有 `detail` 的问题声明了意图。`dsh-plan-mode` 在 `exit_plan_mode` 的审阅问题上设置它。
 
-### 呈现意图
+请求包含 agent 时，`ask()` 会通过当前 `AgentRegistry` 验证该 agent 与注册表中的存活实例是同一对象，并且只允许运行时根调用。存活子级不能发起人机交互。不含 agent 的程序化请求仍会交给本地未限定 scope 的 waterfall listener，若无人接受则以 `NO_PROVIDER` 失败。
 
-`intent` 声明某个问题本身就是一种已知决策，因此认识该标签的 UI 可以照此呈现——`plan-review` 表示 `detail` 是一份待审阅的计划，`dsh-plan-mode` 会在 `exit_plan_mode` 的问题上设置它。意图只改变呈现：遵循它的 UI 回答的仍是通用 UI 会发送的那些选项标签，不认识该标签的 UI 渲染通用选项列表，因此调用方两种情况下读到的回答字段相同。`approve` 指名表示批准的标签，而不依赖选项顺序。有两项断言无法通过类型表达，`ask()` 会以 `BAD_INTENT` 拒绝它们：`approve` 未命中该问题自身的任一选项，以及意图落在没有 `detail` 的问题上——而 `detail` 正是它自称在审阅的东西。
+工具调用开放期间，唯一的回答路径就是这条请求；重新连接的浏览器会再次收到它，仍可完成。调用返回 pending 之后，或拥有它的进程结束之后，问题进入 `continued`：`answer` Remote 方法把回复作为 `user-question-reply` 消息 steer 给 agent。没有任何 Remote 方法会放弃问题——Client 收起面板时不发送任何内容，因此该调用在收到回答前一直可回答。回答已关闭的会话时先恢复其根 agent。两条路径都不会为已结束的工具调用伪造结果。
 
 <a id="role"></a>
 ## 职责
 
-这是 Service Definition 包。`@deepseek-ai/dsh-tool-ask-user` 等 Consumer 依赖此服务；Web Client 通过 Remote Events 贡献带 Agent scope 的回答者。循环保持不变：工具调用等待 waterfall 结果，该结果随后恢复正常的 agent loop（智能体循环）。
+`UserQuestionService` 拥有每个 `TimedQuestionWait`、可取消的 Client 接手记录和无人接手计时器。有人接手时，倒计时与聚焦／编辑决策归 Client 所有。无人接手时超时只中止前台请求的 signal 并返回 pending，不中止 Turn。`userQuestions` projection 从现有 Session 事件记录开放、已继续和已结算的计时调用：原生调用按记录的工具 schema 识别，PTC 子调用在结果为 pending 时进入投影。`answer` RPC 验证每个问题恰有一条回答，且每个已继续的调用只接收一条排队中的回复；第二条回复以 `REPLY_QUEUED` 失败。回复被丢弃后，问题仍可回答。迟到批次保留在投影中，因为原工具结果包含的是超时而不是该回答。
 
 <a id="model-experience"></a>
 ## 模型体验
@@ -64,6 +54,7 @@ kind: "package-reference"
 
 - **带 Agent scope 的 Web 回答**：Remote Events 仅在请求带有存活 Agent scope 时路由随产品交付的 Web 回答者；agentless 调用方需要本地未限定 scope 的 waterfall listener。
 - **词汇仅包含问题表单形态**：可供选择的选项加可选的自定义文本；更丰富的交互形态（文件选择器、diff 预览确认）尚无 seam 词汇。
+- **草稿文本不属于 Host 问题持久化状态**：问题通过 projection 跨客户端重启保留；未完成的输入仍只保存在一个浏览器配置中。
 
 
 <a id="dev-note"></a>
@@ -74,8 +65,6 @@ kind: "package-reference"
 
 无。
 
-计划审批中可选的 `callId` 标识已记录的工具调用，供文档导航使用，不改变回答及其校验。
-
 </details>
 
-**运行时不变式：** 不发布伴生入口。answerer waterfall 按请求解析并把结果直接返回调用方；该 seam 不发布独立的请求／回答审计流。
+**运行时不变式：** `userQuestions` projection 由已记录的工具调用、PTC 子调用和准入的用户消息推导，不存储单独的问题状态。已继续的问题可以创建新的用户轮次，但不能恢复已结束的工具调用。

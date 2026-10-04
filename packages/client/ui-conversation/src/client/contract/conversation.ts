@@ -192,6 +192,13 @@ export type ConversationPublication = 'none' | 'animation-frame' | 'immediate'
 /** Engine-owned Location data publication phase. */
 export type ConversationLocationDataScope = 'step' | 'turn'
 
+/**
+ * Extract a stable business identity using only the current event.
+ * @param event - durable or transient Client event.
+ * @returns identity and lifecycle role, or null when unrelated.
+ */
+export type ConversationMatchHandler = (event: SessionEventLike) => ConversationMatchResult | null
+
 /** One independently registered business Event-to-Node state machine. */
 export interface ConversationNodeDefinition<State = unknown> {
   readonly kind: string
@@ -254,6 +261,12 @@ export interface ConversationNodeDefinition<State = unknown> {
    */
   buildViewNode?(context: ConversationNodeContext<State>): ConversationViewNode | null
 }
+
+/** Registration accepts a function or an immutable table of own event-type handlers. */
+export type ConversationNodeDefinitionInput<State = unknown> =
+  Omit<ConversationNodeDefinition<State>, 'match'> & {
+    readonly match: ConversationMatchHandler | Readonly<Record<string, ConversationMatchHandler>>
+  }
 
 /** Reference-stable Turn/Step facts published beside view Nodes. */
 export interface ConversationTimelineSnapshot {

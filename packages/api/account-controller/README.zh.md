@@ -31,7 +31,7 @@ account 命名空间提供 getState、getProfile / getBalance、getUnnotifiedBon
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-控制器向账号服务转发操作，不维护独立的账号状态，因此不发布 invariant。
+控制器向账号服务转发操作，不维护独立的账号状态。
 
 <a id="further-exploration"></a>
 ## 深入探索

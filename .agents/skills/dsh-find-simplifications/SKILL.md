@@ -30,7 +30,7 @@ Use these questions to guide discovery. Read the relevant section of [historical
 
 Start with `rg`, then read the matches. Search exact symbols, property reads and writes, discriminants, event and wire strings, config keys, package names, and both `.method(` and `method(` forms. Tests and declarations can show a contract without proving a shipped producer or consumer.
 
-Include `packages/*/*/src`, `apps/`, `python/`, runtime scripts, shipped profiles and overlays, package manifests and exports, loader resolution, generated runtime assets, and installed-package consumers. Classify examples and fixtures by their actual entry point rather than directory name. Follow generated catalogs to their consumers: a catalog used by model-written plugin mounts is a dynamic product API, while a documentation-only listing is not a fixed caller. Public third-party extension paths can be intentional despite zero repository call sites.
+Include `packages/*/*/src`, `apps/`, `python/`, runtime scripts, shipped profiles and overlays, package manifests and exports, loader resolution, generated runtime assets, and installed-package consumers. Classify examples and fixtures by their actual entry point rather than directory name. Follow generated catalogs to their consumers: a catalog used by model-written plugin mounts is a dynamic product API, while a documentation-only listing is not a fixed caller. Public third-party extension paths can be intentional despite zero repository call sites. A static unused-code checker must cover manifest-driven loading, generated outputs, and compiler faces without maintaining a parallel per-workspace exception inventory.
 
 For each candidate, record the current owner, effective producer/consumer path, what disappears, what remains, and the strongest reason to retain it. Distinguish:
 
@@ -45,8 +45,6 @@ Reject a candidate when it breaks a retained obligation, merely relocates the sa
 For copies, freezes, validators, and callback captures, name the value's origin, next owner, and trust boundary. Typed same-process calls ordinarily borrow readonly values; parsers, config loaders, queues, model/tool JSON, durable files, workers, processes, and wire decoders own or validate their inputs. Hostile-getter or callback-replacement tests do not establish a requirement by themselves. A frozen root does not prove its descendants immutable, and equal ids do not prove object identity.
 
 For asynchronous machinery, map each promise, flag, cancellation path, disposer, and reservation to its owner and transition. Collapse mechanisms only when they express the same fact. Preserve synchronous publication and rollback, callback containment, first-terminal-outcome arbitration, worker/process ownership, and dispose-to-quiescence where required. Durable start/end markers can record real facts even when transcript renderers ignore them; dropping interrupted work is a capability loss, not redundant-log cleanup.
-
-An invariant companion is justified by comparing independently produced observations that can diverge. Checks of service presence, plugin metadata, fixed examples, or the same mutation's return value do not qualify. Removing a companion includes its export, build entry, invariant-only compiler references, dependencies, and tests; record the package-specific omission reason in both READMEs. Keep checks comparing independent event producers, durable history, or mutable data.
 
 ## Replace infrastructure only for a net reduction
 

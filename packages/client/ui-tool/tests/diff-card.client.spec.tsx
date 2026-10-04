@@ -14,6 +14,7 @@ import { CHAT_DIFF_MAX_LINES, diffCardModel } from '../src/client/tool/models/di
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
 import { FileMutationRow, fileMutationToolview } from '../src/client/tool/toolviews/file-mutation-row.tsx'
 import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 
 afterEach(cleanup)
 
@@ -27,18 +28,25 @@ const ARGS = '{"file_path":"notes/demo.txt","old_string":"hello","new_string":"h
 
 const DIFFS = [{ path: 'notes/demo.txt', oldText: 'hello', newText: 'hello fixture' }]
 
-const running = (over?: Partial<StartedToolCall>): StartedToolCall => ({
-  phase: 'start' as const, callId: 'c1', name: 'edit', argsRaw: ARGS,
-  turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
-})
+const running = (over?: Partial<StartedToolCall>): StartedToolCall => {
+  const argsRaw = over?.argsRaw ?? ARGS
+  return {
+    phase: 'start' as const, args: PartialArguments.fromText(argsRaw), callId: 'c1', name: 'edit', argsRaw,
+    turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
+  }
+}
 
-const settled = (over?: Partial<ToolResultNode>): ToolResultNode => ({
-  kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
-  call: { name: 'edit', argsRaw: ARGS },
-  callTime: 1_000,
-  content: [{ type: 'text', text: 'The file notes/demo.txt has been updated successfully.' }], isError: false,
-  meta: { diffs: DIFFS }, subCalls: [], ...over,
-})
+const settled = (over?: Partial<ToolResultNode>): ToolResultNode => {
+  const call = over?.call === undefined ? { name: 'edit', argsRaw: ARGS } : over.call
+  return {
+    kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
+    name: call?.name ?? '', args: call === null ? PartialArguments.EMPTY : PartialArguments.fromText(call.argsRaw),
+    call,
+    callTime: 1_000,
+    content: [{ type: 'text', text: 'The file notes/demo.txt has been updated successfully.' }], isError: false,
+    meta: { diffs: DIFFS }, subCalls: [], ...over,
+  }
+}
 
 describe('diffCardModel', () => {
   it('derives a running card from raw edit arguments', () => {
@@ -148,12 +156,11 @@ describe('diffCardModel', () => {
     })
   })
 
-  it('validates mutation escalation fields but accepts unrelated open-root fields', () => {
+  it('leaves escalation fields to the Host and accepts unrelated open-root fields', () => {
     const args = (fields: Record<string, unknown>) => JSON.stringify({
       file_path: 'notes/demo.txt', old_string: 'hello', new_string: 'hello fixture', ...fields,
     })
-    expect(diffCardModel(running({ argsRaw: args({ sandbox_permissions: 7, justification: 'Need access' }) }))).toBeNull()
-    expect(diffCardModel(running({ argsRaw: args({ sandbox_permissions: 'workspace-write' }) }))).toBeNull()
+    expect(diffCardModel(running({ argsRaw: args({ sandbox_permissions: 'workspace-write', justification: '' }) }))).not.toBeNull()
     expect(diffCardModel(running({ argsRaw: args({ extension: { version: 1 } }) }))).not.toBeNull()
   })
 })
@@ -207,7 +214,6 @@ describe('FileMutationRow diff card', () => {
   })
 
   const rowProps = (block: StartedToolCall | ToolResultNode, toolName = 'edit'): FileMutationRowProps => ({
-    useToolCallArgumentsPartial: () => { throw new Error('dispatched calls must not subscribe to preparing arguments') },
     useDisclosure, callId: 'c1', toolName, ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), cwd: '/w/app',
     sessionId: SID, useSessions: bindSnapshotSelector(list()),
     t,
@@ -246,9 +252,10 @@ describe('FileMutationRow diff card', () => {
       meta: { diffs: [] },
     }), 'write')} />)
     // The collapsed row already carries the card's +/- totals beside the path.
-    expect(view.getByText('+1 -0')).toBeTruthy()
+    expect(view.container.querySelector('[data-disclosure-row]')?.textContent).toContain('+1 -0')
     toggleRow(view)
-    expect(view.getAllByText('+1 -0')).toHaveLength(1)
+    expect(view.getAllByText('+1')).toHaveLength(1)
+    expect(view.getAllByText('-0')).toHaveLength(1)
     expect(view.getByText('hello fixture')).toBeTruthy()
   })
 

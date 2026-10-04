@@ -50,7 +50,7 @@ With an exact live agent idle, an active armed goal, and remaining capacity, the
 
 ### When continuation stops
 
-A round starts only at whole-agent idle, and completion, pause, and blocking suppress continuation; a host-initiated pause also aborts the turn already running, while a model-initiated pause inside its own turn finishes normally. An edit only invalidates an in-flight round through the revision fence, and the driver continues the new revision. The driver also stops on its own when a turn ends on max tokens, a durability write fails, the agent is cancelled, the plugin unloads, or the round cap is exhausted — at the cap it records a blocker with the stable code `round-limit`. Cancellation never auto-restarts a round: a goal whose round was under way or already queued is paused at the next idle point, and a cancellation unrelated to a goal attempt only disarms continuation.
+A round starts only at whole-agent idle, and completion, pause, and blocking suppress continuation; a host-initiated pause also aborts the turn already running, while a model-initiated pause inside its own turn finishes normally. An edit only invalidates an in-flight round through the revision fence, and the driver continues the new revision. The driver also stops on its own when a turn ends on max tokens, a durability write fails, the agent is cancelled, the plugin unloads, or the round cap is exhausted — at the cap it records a blocker with the stable code `round-limit`. Cancellation never auto-restarts a round: a goal whose round was under way is paused at the next idle point, and a cancellation unrelated to a goal attempt only disarms continuation. A round prompt still queued when the agent reaches idle is removed from the inbox, so later human input does not wait behind it; when the cancelled turn belonged to other work, continuation is disarmed rather than paused.
 
 ### After resume, fork, or unload
 
@@ -79,11 +79,10 @@ This section explains how the driver schedules rounds without races; the observa
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: driver state machine, race fences, teardown |
 | [`src/prompt.ts`](src/prompt.ts) | The retained `<goal_round>` continuation prompt |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: goal-round messages must match the package-owned prompt |
 
 ### The round prompt
 
-The retained prompt is one text block: the JSON-quoted objective and `round/maxGoalRounds` on the first lines, then the working instructions. The invariant companion reconstructs the goal from the durable prefix and rejects any goal-sourced message whose content does not match the prompt exactly.
+The retained prompt is one text block: the JSON-quoted objective and `round/maxGoalRounds` on the first lines, then the working instructions.
 
 </details>
 

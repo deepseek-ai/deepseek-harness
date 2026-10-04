@@ -419,11 +419,13 @@ describe('Conversation registries', () => {
 
     expect(events.entries()).toHaveLength(1)
     expect(events.fallbackEntry()).toBeDefined()
+    expect(events.forEvent('turn/start').size).toBe(1)
     expect(views.entries()).toHaveLength(1)
 
     await feature.dispose()
     expect(events.entries()).toEqual([])
     expect(events.fallbackEntry()).toBeUndefined()
+    expect(events.forEvent('turn/start').size).toBe(0)
     expect(views.entries()).toEqual([])
   })
 

@@ -15,27 +15,27 @@
   en: 23386452a66b2fbd
   zh: 4a8d91b2f313fead
 /deepseek-ai-dsh-schedule/use-this-package:
-  en: 318cad8a73818a95
-  zh: 267b9c86cb9f06d1
+  en: 88aba0cd93ff0903
+  zh: a8e4c257c319de53
 /deepseek-ai-dsh-schedule/understand-the-implementation:
-  en: 676b7c508f37a1b7
-  zh: c5e8520b3350f0b0
+  en: 3d11c664125e32d8
+  zh: 01a007a5ffb2ab63
 /deepseek-ai-dsh-schedule/further-exploration:
   en: d4404aa2dd7b3a94
   zh: 2dcd3d98cf281c32
 /deepseek-ai-dsh-schedule/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-schedule/model-experience/tool-schemas-on-root-agents:
-  en: c4c31a3f6826626d
-  zh: 5aa01bfa311b2f4c
-/deepseek-ai-dsh-schedule/model-experience/tool-schemas-on-root-agents/what-the-model-sees:
-  en: fe159715b83e3058
-  zh: e86fa4871283720f
-/deepseek-ai-dsh-schedule/model-experience/tool-schemas-on-root-agents/token-effect:
+/deepseek-ai-dsh-schedule/model-experience/tool-schemas-in-mounted-presets:
+  en: 097a655a88e2a9f2
+  zh: 6612c58808186b1e
+/deepseek-ai-dsh-schedule/model-experience/tool-schemas-in-mounted-presets/what-the-model-sees:
+  en: bcc153e35a059ba8
+  zh: 2c2ec93cd0dfa6c0
+/deepseek-ai-dsh-schedule/model-experience/tool-schemas-in-mounted-presets/token-effect:
   en: ae0eb4d2609d4329
   zh: 4fe0a26e37c272dc
-/deepseek-ai-dsh-schedule/model-experience/tool-schemas-on-root-agents/kv-cache-effect:
+/deepseek-ai-dsh-schedule/model-experience/tool-schemas-in-mounted-presets/kv-cache-effect:
   en: 7bf33bbe17e1da03
   zh: 2af9a2f842b4f430
 /deepseek-ai-dsh-schedule/model-experience/tool-results-after-management-calls:
@@ -54,8 +54,8 @@
   en: 39a747e5d135e241
   zh: ad505b3d5bc27acf
 /deepseek-ai-dsh-schedule/model-experience/due-reminders-in-the-original-session/what-the-model-sees:
-  en: 7b05d635d4cc9714
-  zh: d1c908f51115e4f5
+  en: cdb4f0d0fe43bfe8
+  zh: 156c9db0652684ca
 /deepseek-ai-dsh-schedule/model-experience/due-reminders-in-the-original-session/what-the-model-sees/one-shot-framing:
   en: d8635e0075bacc3f
   zh: 685e16d812319f85
@@ -69,8 +69,8 @@
   en: 1006325fa610366d
   zh: 476215d8a3c70fe4
 /deepseek-ai-dsh-schedule/known-limitations-and-deferred-work:
-  en: fd511d607cbc7b8d
-  zh: f45a14991cfa47e6
+  en: 4f01a96b25d462b7
+  zh: 22085f47cb287892
 /deepseek-ai-dsh-schedule/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 8ec3e73528ddb1a6

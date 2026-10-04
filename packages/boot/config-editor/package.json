@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-config-editor",
   "description": "Persist plugin configuration through profile patches and Loader reconciliation",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

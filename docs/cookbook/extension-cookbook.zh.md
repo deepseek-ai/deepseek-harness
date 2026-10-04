@@ -101,7 +101,7 @@ export function apply(ctx: Context) {
 
 ## 功能→机制映射
 
-每个产品功能都映射到一个文档化扩展点上的监听器——微内核声明由此可验证（[微内核 Agent Note](../../.agents/notes/implemented/architecture/2026-06-11-microkernel-event-taxonomy.zh.md)）。没有任何一行修改循环本身。
+每个产品功能都映射到一个文档化扩展点上的监听器——微内核声明由此可验证（[微内核 reference](../architecture.zh.md)）。没有任何一行修改循环本身。
 
 `system-prompt/assemble` 是一个专家协作式的整体装配变换：其返回的装配结果具有权威性，因此监听器作者有责任保留活跃的 PTC mode 和结构化输出协议的贡献。对于需要在展示、查找和执行之间保持对齐的工具过滤，优先使用 `ctx.tools.restrict()`。
 
@@ -112,7 +112,7 @@ export function apply(ctx: Context) {
 | `/loop` | 在 `turn/end` 会话事件上 `followup()` 下一次迭代；或强制继续 |
 | 动态工作流 | `ctx.workflowEngine` + PTC 工作流引擎 + `workflow` 工具；结构化的进程内子任务通过作用域化的提示词/工具注册、单调工具守卫、最终 `tools/result` 提交（包括外层 `run_code`）和结构化输出执行的单调 `concludeTurn()` 标记来强制输出 |
 | 排队消息 + steering | 核心 `Agent.followup()` / `Agent.steer()` |
-| 上下文压缩（context compaction）（自动 + 手动） | `ctx.compaction` seam + `dsh-compaction-basic`；自动压力检查运行在串行 `agent/pre-step`，标准的溢出恢复机制运行在 `agent/request-error`，手动调用方使用同一个压缩服务（[压缩 Agent Note](../../.agents/notes/implemented/feature/2026-06-18-compaction-capability-seam.zh.md)） |
+| 上下文压缩（context compaction）（自动 + 手动） | `ctx.compaction` seam + `dsh-compaction-basic`；自动压力检查运行在串行 `agent/pre-step`，标准的溢出恢复机制运行在 `agent/request-error`，手动调用方使用同一个压缩服务（[压缩 参考](../../packages/compaction/compaction/README.zh.md)） |
 | 系统提示词可配置性 | `ctx.systemPrompt.section()`，支持排序与作用域局部覆盖 |
 | AGENTS.md（根目录） | 一个读取该文件的 section 提供方 |
 | AGENTS.md（子目录，按需触发）+ 文件变更通知 | 从 watcher / 工具结果监听器调用 `agent.inject()` |
@@ -128,7 +128,7 @@ export function apply(ctx: Context) {
 | MCP | 每个服务器一个插件：发现工具 → `ctx.tools.register()` |
 | skill（技能） | section + 工具注册；调用时通过 `inject()` 注入 skill 内容 |
 | 记忆 | section 提供方 + 工具 |
-| 定时任务（cron） | 插件注册面向模型的调度工具；定时器触发 → 空闲时 `followup(…, {source: {kind: 'plugin', plugin: 'schedule'}})`／忙碌时 `inject()` 通知 |
+| 定时任务（cron） | 插件注册面向模型的调度工具；定时器到期后通过 `followup(…, {source: {kind: 'schedule'}})` 投递 |
 | UI（GUI；CLI（命令行界面）输出 JSONL） | 监听 `agent/assistant-stream` 的实时 chunk，并监听 `session/event` 的持久 settlement、边界与工具活动；输入 → `followup()` |
 | Web Client Chat 业务节点 | 注册 `ConversationNodeDefinition` 与 `conversation.chat.node` keyed renderer |
 | 遥测 / 可回放 trace | `session/event` → JSONL；回放 = `sessions.create(id, { seed })` |

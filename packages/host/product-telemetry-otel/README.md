@@ -68,7 +68,7 @@ The collector expects a string body and attributes containing strings, numbers, 
 
 The adapter injects `otel` and creates an independent ordinary-event channel through `ctx.otel.createEventReporter()`. The [shared OTel plugin](../../telemetry/otel/README.md) owns transport and SDK batching; this adapter owns analytics configuration and its shutdown cancellation deadline. No global OTel provider is installed.
 
-[`src/index.ts`](src/index.ts) owns configuration and submission. No runtime invariant companion is published: delivery has no independent local acknowledgement to compare with the SDK's queue.
+[`src/index.ts`](src/index.ts) owns configuration and submission.
 
 </details>
 

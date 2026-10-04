@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-plugin-manager",
   "description": "Current-profile plugin and bundle management shared by dsh CLI, Web and agent tools",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -86,6 +86,7 @@
     }
   },
   "devDependencies": {
+    "chokidar": "^4.0.3",
     "@deepseek-ai/dsh-package-manifest": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",

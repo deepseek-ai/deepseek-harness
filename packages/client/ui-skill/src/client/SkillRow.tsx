@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
-  IconChevronDownOutlineRegular, IconInspectOutlineRegular, IconSkillOutlineRegular,
+  IconChevronDownOutlineRegular, IconInspectOutlineRegular, IconSkillOutlineRegular, TextShimmer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { StartedToolCallViewProps, ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -104,7 +104,7 @@ export function SkillRow(props: SkillRowProps) {
     <div className={css.row}>
       <span className={css.leading}><IconSkillOutlineRegular size={14} /></span>
       <span className={css.visuallyHidden}>{props.t('row.preparing')}</span>
-      <span className={css.title}>{props.t('row.title')}</span>
+      <TextShimmer active className={css.title}>{props.t('row.title')}</TextShimmer>
     </div>
   </div>
   return <StartedSkillRow {...props} />
@@ -116,6 +116,7 @@ function StartedSkillRow({ block, inspect, t }: Exclude<SkillRowProps, { phase: 
   const expandable = model.output !== null
   const open = expanded && expandable
   const status = stateStatus(model.state, t)
+  const running = model.state === 'running'
   const summary = model.state === 'stopped' ? t('row.stopped') : model.errorSummary ?? model.name
   const toggleExpand = (): void => {
     setExpanded(value => !value)
@@ -142,14 +143,16 @@ function StartedSkillRow({ block, inspect, t }: Exclude<SkillRowProps, { phase: 
       >
         <span className={css.leading}>{leading}</span>
         {status !== null ? <span className={css.visuallyHidden}>{status}</span> : null}
-        <span className={css.title}>{t('row.title')}</span>
-        <span className={css.separator} aria-hidden />
-        <span className={`${css.summary}${
-          model.state === 'error' ? ` ${css.errorSummary}`
-            : model.state === 'stopped' ? ` ${css.stoppedSummary}` : ''
-        }`}>
-          {summary}
-        </span>
+        <TextShimmer active={running}>
+          <span className={css.title}><TextShimmer>{t('row.title')}</TextShimmer></span>
+          <span className={css.separator} data-shimmer-decoration aria-hidden />
+          <span className={`${css.summary}${
+            model.state === 'error' ? ` ${css.errorSummary}`
+              : model.state === 'stopped' ? ` ${css.stoppedSummary}` : ''
+          }`}>
+            <TextShimmer>{summary}</TextShimmer>
+          </span>
+        </TextShimmer>
       </div>
       {open ? (
         <div className={css.bodyWrap}>

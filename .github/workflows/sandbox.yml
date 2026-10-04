@@ -157,5 +157,12 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
+      # The same key and value the coverage and serial lanes grant: on the
+      # shared 3-vCPU runner, cases that inherit Vitest's 5000 ms default timed
+      # out in spawn.spec.ts and changes.spec.ts (run 36370945526) while
+      # passing in under a second on a quiet host. The ci-unit aggregate is
+      # `pnpm run test` through the path that consumes the variable.
       - name: Unit tests (darwin parity)
-        run: pnpm run test
+        env:
+          DSH_COVERAGE_TEST_TIMEOUT_MS: '90000'
+        run: pnpm run check:ci:unit

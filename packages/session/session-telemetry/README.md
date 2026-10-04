@@ -65,7 +65,7 @@ This section explains the capture design; the observable behavior is fully cover
 
 ### Design concept
 
-The capture package owns complete event capture, redaction, and handoff cursors. Redaction rules must preserve `sourceEvent` for OTel upload; returning a fresh record without it withholds the event with a diagnostic. Its cloned envelope excludes `data`, which is carried only in `body`. The OTel backend owns byte/count scheduling and uses SDK transport/retries. The [revival Agent Note](../../../.agents/notes/implemented/feature/2026-07-23-session-telemetry-otel-revival.md) owns capture and redaction rationale.
+The capture package owns complete event capture, redaction, and handoff cursors. Redaction rules must preserve `sourceEvent` for OTel upload; returning a fresh record without it withholds the event with a diagnostic. Its cloned envelope excludes `data`, which is carried only in `body`. The OTel backend owns byte/count scheduling and uses SDK transport/retries. The [historical revival Agent Note](../../../.agents/notes/archived/feature/2026-07-23-session-telemetry-otel-revival.md) records capture and redaction rationale.
 
 ### Source map
 
@@ -93,7 +93,7 @@ Read these pages when the seam contract is not enough. They move from the shippe
 
 - [OpenTelemetry telemetry backend](../session-telemetry-otel/README.md) — the shipped backend deployments load, with mode and exporter configuration.
 - [Session telemetry subsystem](../../../docs/subsystems/session-telemetry.md) — the capability split and type declarations.
-- [Session telemetry revival decision](../../../.agents/notes/implemented/feature/2026-07-23-session-telemetry-otel-revival.md) — rationale, trade-offs, and rejected alternatives.
+- [historical Session telemetry revival decision](../../../.agents/notes/archived/feature/2026-07-23-session-telemetry-otel-revival.md) — rationale, trade-offs, and rejected alternatives.
 - [Session package map](../README.md) — adjacent persistence, projection, title, and telemetry packages.
 
 -----
@@ -127,5 +127,3 @@ These limits define the delivery and data-protection guarantees a deployment get
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The package's whole output is the backend handoff — a synchronous `emit()` call outside every authoritative event stream — and its capture side never appends session events, so no event/data relation exists for an independent companion to observe.

@@ -18,7 +18,7 @@ function viewNode(kind: string, seq: number, data: Record<string, unknown>): Cha
     location: { kind: 'session' },
     visibility: 'visible',
     data: { kind, seq, time: seq, ...data },
-  } as unknown as ChatConversationViewNode
+  }
 }
 const user = (seq: number, text: string) =>
   viewNode('user', seq, { content: [{ type: 'text', text }], source: { kind: 'user' } })

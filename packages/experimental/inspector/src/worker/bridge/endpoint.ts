@@ -6,6 +6,8 @@ import type { Duplex } from 'node:stream'
 import { WebSocketServer, type RawData, type WebSocket } from 'ws'
 import type { InspectorWorkerConfig } from '../../shared/bridge/messages/control.ts'
 import type { WorkerToSourceFrame } from '../../shared/bridge/messages/observation.ts'
+import type { InspectorSourceId } from '../../shared/bridge/ids.ts'
+import { readInspectorClientSelection } from '../../shared/web.ts'
 import { CdpSession } from '../cdp/session.ts'
 import type { CdpTransport } from '../cdp/protocol.ts'
 import type { NetworkDomain } from '../cdp/domains/network/session.ts'
@@ -114,18 +116,26 @@ export class InspectorEndpoint {
   }
 
   private handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer): void {
-    let pathname: string
+    let url: URL
     try {
-      pathname = new URL(request.url ?? '/', 'http://inspector.invalid').pathname
+      url = new URL(request.url ?? '/', 'http://inspector.invalid')
     } catch {
       socket.destroy()
       return
     }
-    if (pathname === `/devtools/page/${this.config.targetId}`) {
-      this.cdpServer.handleUpgrade(request, socket, head, (ws) => { this.acceptCdp(ws) })
+    if (url.pathname === `/devtools/page/${this.config.targetId}`) {
+      let clientSourceId: InspectorSourceId | undefined
+      try {
+        clientSourceId = readInspectorClientSelection(url)
+      } catch (error) {
+        void error // Invalid selectors must not open an unfiltered connection.
+        socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
+        return
+      }
+      this.cdpServer.handleUpgrade(request, socket, head, (ws) => { this.acceptCdp(ws, clientSourceId) })
       return
     }
-    if (pathname === '/ingest') {
+    if (url.pathname === '/ingest') {
       if (!this.authorizedClient(request)) {
         socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
         return
@@ -136,21 +146,23 @@ export class InspectorEndpoint {
     socket.destroy()
   }
 
-  private acceptCdp(socket: WebSocket): void {
+  private acceptCdp(socket: WebSocket, clientSourceId: InspectorSourceId | undefined): void {
     const transport: CdpTransport = {
       send: (payload) => {
         if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(payload))
       },
       close: () => { socket.close(1008, 'invalid CDP request') },
     }
+    const target = { targetId: this.config.targetId, title: 'DeepSeek Harness Host' }
     const session = new CdpSession(
       transport,
-      { targetId: this.config.targetId, title: 'DeepSeek Harness Host' },
+      target,
       this.sources,
       this.network,
       this.realms,
       this.cordisDom,
       this.cordisTrees,
+      clientSourceId,
     )
     this.cdpSessions.set(socket, session)
     socket.on('message', (data) => {

@@ -14,7 +14,7 @@ Status: proposed
 
 将贡献方声明表示为显式只读键集合。删除描述对象、`BashEnvVariable`、`BashEnvVariableInfo`、`list()`、仅针对描述的校验，以及完整目录 TODO。同时更新 Web 贡献方、README 配对与生成的服务/类型声明。
 
-保留 `register`、`collect`、保留键、所有权冲突、拒绝未声明输出、确定性的环境输出和 effect 释放。[PowerShell 对齐决策](../../implemented/feature/2026-08-02-pwsh-tool-bash-parity.zh.md) 继续拥有共享注册表及两个 shell 消费方。提案删除一个公共方法、两个元数据类型及其校验/枚举测试；在少量键成员判定适配前，已定位可删除约 32 行源码。
+保留 `register`、`collect`、保留键、所有权冲突、拒绝未声明输出、确定性的环境输出和 effect 释放。[PowerShell 对齐参考](../../../../packages/shell/shell-env/README.zh.md) 继续拥有共享注册表及两个 shell 消费方。提案删除一个公共方法、两个元数据类型及其校验/枚举测试；在少量键成员判定适配前，已定位可删除约 32 行源码。
 
 ## 考虑过的替代方案
 

@@ -75,7 +75,6 @@ The service owns everything except terminal mechanics: session identity, publica
 |---|---|
 | [`src/index.ts`](src/index.ts) | `TerminalSessionService`: backend registry, spawn/send/read/signal/kill/list, owner cleanups, disposal |
 | [`src/types.ts`](src/types.ts) | Shared contracts: backend interface, session types, wait reasons, signal set, error codes |
-| — | No runtime invariant companion is published; backend and owner-scoped session registries are private mutable state, and the service exposes neither an independent lifecycle stream nor an unscoped snapshot. |
 
 ### Data model and lifecycle
 

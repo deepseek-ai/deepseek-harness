@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-win32-process",
   "description": "Shared low-level Win32 process, stdio, and Job Object primitives",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

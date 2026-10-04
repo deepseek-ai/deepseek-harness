@@ -108,7 +108,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || process.platform === 'win32')(`agent 
       expect(existsSync(decoyMarker), 'the agent must not invoke system Office when the bundled CLI is supplied').toBe(false)
       expect(commandText, 'the skill supplies an entry; searching for other Office binaries is unnecessary').not.toMatch(/(?:which|whereis|command -v|find).{0,100}(?:libreoffice|soffice)/iu)
       const capabilities = JSON.parse(await readFile(join(root, 'capabilities.json'), 'utf8')) as { runtime: { version: string; cliPath: string } }
-      expect(capabilities.runtime.version).toBe('0.1.1')
+      expect(capabilities.runtime.version).toBe('0.1.5')
       expect(capabilities.runtime.cliPath).toMatch(/lib[/\\]cli\.js$/u)
       const pdf = await readFile(join(root, 'result.pdf'))
       expect(pdf.subarray(0, 5).toString()).toBe('%PDF-')

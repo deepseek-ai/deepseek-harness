@@ -76,7 +76,6 @@ One difference from spawn, expressed as data: the backend computes the balanced 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Provider registration: prefix computation, `Config` schema, capability declaration |
-| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Run flow
 
@@ -144,7 +143,7 @@ These limits define when the backend is the wrong choice; they are current packa
 
 - **The seed is a one-time snapshot** — the child sees the parent's completed turns as of the fork and nothing the parent logs afterwards; there is no live context sharing.
 - **Fork lifecycle policy differs by composition** — the base bundle and ACP/headless examples use one-shot fork, while the CLI presets use continuable fork. Both keep the inherited prefix eligible for reuse because parent and child messaging definitions match byte for byte; explicit persona, tool filtering, generated-SDK, or route changes can still break equality. Rationale: the [cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md).
-- **Shipped fork tools do not expose child LLM route selection** — they inherit the parent's provider and model so the copied history remains eligible for KV Cache reuse. Route selection stays disabled until a change can preserve reuse or expose a bounded recomputation cost; the [model-selected route Agent Note](../../../.agents/notes/implemented/feature/2026-08-18-model-selected-subagent-routes.md) owns that restriction.
+- **Shipped fork tools do not expose child LLM route selection** — they inherit the parent's provider and model so the copied history remains eligible for KV Cache reuse. Route selection stays disabled until a change can preserve reuse or expose a bounded recomputation cost.
 
 <a id="dev-note"></a>
 ### Dev Note

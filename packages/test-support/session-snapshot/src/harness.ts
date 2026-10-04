@@ -11,7 +11,7 @@
  * shutdown flush. The pure normalizers in ./normalize.ts turn the captured
  * stdout frames and the session-log events into stable, snapshot-able text.
  *
- * See .agents/notes/implemented/testing/2026-06-19-acp-snapshot-tests.md.
+ * See packages/test-support/session-snapshot/README.md.
  *
  * @module @deepseek-ai/dsh-session-snapshot/harness
  */
@@ -587,12 +587,16 @@ async function waitForPersistedTurnEnd(
   sessionId: string,
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
 ): Promise<void> {
-  await vi.waitFor(async () => {
-    const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
-    if (log === undefined || !latestTurnIsClosed(log.content)) {
-      throw new Error(`snapshot-harness: session "${sessionId}" did not persist turn/end within ${timeoutMs}ms`)
-    }
-  }, { interval: WAIT_POLL_INTERVAL_MS, timeout: timeoutMs })
+  const message = `snapshot-harness: session "${sessionId}" did not persist turn/end within ${timeoutMs}ms`
+  try {
+    await vi.waitFor(async () => {
+      const log = (await harvestSessionLogs(root)).find(candidate => candidate.id === sessionId)
+      if (log === undefined || !latestTurnIsClosed(log.content)) throw new Error(message)
+    }, { interval: WAIT_POLL_INTERVAL_MS, timeout: timeoutMs })
+  } catch (cause) {
+    // The deadline can precede the first harvest, before the callback names the missing turn.
+    throw new Error(message, { cause })
+  }
 }
 
 /**

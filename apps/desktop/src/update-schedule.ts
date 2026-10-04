@@ -1,5 +1,6 @@
 /** Ordinary feed polling; policy queries and user-authorized transfers keep their own lifetimes. */
 
+import { resolveDurationMs } from './duration-env.ts'
 import type { DesktopUpdateCoordinator } from './update-coordinator.ts'
 import type { DesktopUpdateState } from './ipc.ts'
 
@@ -16,15 +17,8 @@ export interface DesktopUpdateScheduleConfig {
  * @returns Validated durations and fractional jitter.
  */
 export function resolveDesktopUpdateScheduleConfig(env: NodeJS.ProcessEnv): DesktopUpdateScheduleConfig {
-  function duration(name: string, fallback: number): number {
-    const value = Number(env[name] ?? fallback)
-    if (!Number.isSafeInteger(value) || value < 1_000 || value > 2_147_483_647) {
-      throw new Error(`${name} must be an integer from 1000 through 2147483647`)
-    }
-    return value
-  }
-  const intervalMs = duration('DSH_DESKTOP_UPDATE_CHECK_INTERVAL_MS', 600_000)
-  const maxBackoffMs = duration('DSH_DESKTOP_UPDATE_CHECK_MAX_BACKOFF_MS', Math.max(intervalMs, 3_600_000))
+  const intervalMs = resolveDurationMs(env, 'DSH_DESKTOP_UPDATE_CHECK_INTERVAL_MS', 600_000)
+  const maxBackoffMs = resolveDurationMs(env, 'DSH_DESKTOP_UPDATE_CHECK_MAX_BACKOFF_MS', Math.max(intervalMs, 3_600_000))
   const jitter = Number(env.DSH_DESKTOP_UPDATE_CHECK_JITTER ?? 0.2)
   if (!Number.isFinite(jitter) || jitter < 0 || jitter > 1 || maxBackoffMs < intervalMs) {
     throw new Error('desktop update: check jitter must be in [0, 1] and max backoff must cover the check interval')

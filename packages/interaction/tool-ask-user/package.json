@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-ask-user",
   "description": "Model-facing ask_user_question tool over the ctx.userQuestions seam",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -39,5 +39,8 @@
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-user-questions": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:~"
   }
 }

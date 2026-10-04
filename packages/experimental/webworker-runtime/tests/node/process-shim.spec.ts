@@ -29,6 +29,8 @@ describe('process shim', () => {
   it('exposes an executable identity without enabling Node programs', () => {
     const shim = installProcessGlobal({ cwd: '/dsh', env: {} })
     expect(shim.execPath).toBe('/dsh/bin/node')
+    // No entry script: consumers that read argv[1] as the main module find none.
+    expect(shim.argv).toEqual([shim.execPath])
     expect(spawnSync(shim.execPath, ['--eval', 'throw new Error("must not execute")']).error?.code).toBe('ENOENT')
   })
 

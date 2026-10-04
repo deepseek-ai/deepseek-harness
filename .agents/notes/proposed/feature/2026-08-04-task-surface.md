@@ -83,7 +83,7 @@ Limits are schema-backed configuration on the Task Surface service. The initial 
 
 The tool definition omits `isConcurrencySafe`. Under the existing tool-registry contract, omission classifies every call as an exclusive ordering barrier; no new `ToolDefinition` field is introduced. The tool is composed only in Web profiles that mount both the Host service and Web renderer. Version 1 supports `native` and `both` tool modes; a `ptc`-only profile does not advertise it because PTC mode dispatch is nested and cannot carry its presentation metadata to the outer result.
 
-The browser-safe domain package imports the type-only `Branded` primitive from `@deepseek-ai/dsh-brand` and owns all three Task Surface IDs. The canonical value is execution-local under the [canonical tool output contract](../../implemented/architecture/2026-07-20-canonical-tool-output-contract.md). Replay therefore uses `output.presentationMeta(args, value)` to persist this tagged payload with `tool/result.meta`:
+The browser-safe domain package imports the type-only `Branded` primitive from `@deepseek-ai/dsh-brand` and owns all three Task Surface IDs. The canonical value is execution-local under the [canonical tool output contract](../../../../packages/core/tools/README.md). Replay therefore uses `output.presentationMeta(args, value)` to persist this tagged payload with `tool/result.meta`:
 
 ```ts
 import type { Branded } from '@deepseek-ai/dsh-brand'

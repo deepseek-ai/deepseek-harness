@@ -44,6 +44,8 @@ export const MODULE_PROXIES: Record<string, string> = {
   // Sync-stack AsyncLocalStorage semantics.
   'node:async_hooks': './node/builtin_modules/implemented/async_hooks.ts',
   // Real implementations over browser primitives.
+  'node:assert/strict': './node/builtin_modules/implemented/assert/strict.ts',
+  'assert/strict': './node/builtin_modules/implemented/assert/strict.ts',
   'node:util': './node/builtin_modules/implemented/util.ts',
   'node:util/types': './node/builtin_modules/implemented/util/types.ts',
   'node:events': './node/builtin_modules/implemented/events.ts',

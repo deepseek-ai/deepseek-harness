@@ -30,7 +30,7 @@ Client Session objects, Agent-scoped Client Contexts, references, consumer-sourc
 
 The [Client layering design](../../implemented/architecture/2026-08-20-client-session-conversation-ownership.md) defines one-way data, adapter, renderer, and presentation dependencies. Reference-source bookkeeping does not give the Controller a dependency on UI packages.
 
-This decision partially supersedes the list-selected scope lifecycle in the [Web Client Session scope and provide-channel decision](2026-07-25-web-client-session-scope-and-provide-channel.md); that note retains the blank-Session and adoption rationale under explicit Provider ownership.
+The [blank Session decision](2026-09-17-process-local-blank-sessions.md) owns creation and reuse; this decision owns explicit Provider references and adoption.
 
 ### Addresses, bindings, and references
 
@@ -156,7 +156,7 @@ The main view privately persists its target identity and subagent address under 
 | Chat/Trajectory restoration | Restore the view for the explicitly selected main target; independently bound views keep their own state |
 | Cordis inventory panel | One list without current/other grouping; no public runner getter for main-area selection |
 
-Source metadata does not change when DOM focus moves or when a global panel hides a retained view. The [global main-panel design](../../implemented/architecture/2026-09-08-global-main-panels.md) owns panel selection and layout; Session reference ownership does not replace it.
+Source metadata does not change when DOM focus moves or when a global panel hides a retained view. The [global main-panel design](../../../../packages/client/ui-layout/README.md) owns panel selection and layout; Session reference ownership does not replace it.
 
 Conversation retains its `hero`, `settling`, and `active` composition and existing history-loading and `openError` handling. Acquisition adds no outer loading/error phase presentation, extra composer-hiding condition, Retry button, or replacement Sidebar recovery panel. Existing error handlers continue to handle their errors; call sites without error presentation gain none. Promise rejection and correct reference release do not imply an additional UI handler.
 

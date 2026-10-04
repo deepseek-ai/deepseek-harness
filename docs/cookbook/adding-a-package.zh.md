@@ -24,7 +24,7 @@ packages/<group>/<pkg>/
 
 当已有分组与包的角色匹配时，选择该分组（`core`、`llm`、`shell`、`compaction`、`subagent`、`todo`、`session`、`client`/`host`、`util` 或 `test-support`）。允许新建分组，但分组只是纯容器：没有 `package.json`，没有源文件，包仍然恰好位于其下一层。
 
-package.json 不变式（由 `pnpm run constraints` / `scripts/check-workspace-constraints.ts` 强制执行）：`private: true`，`version` 与根 `package.json` 一致，`type: module`，`main: "lib/index.js"`，`types: "lib/types/index.d.ts"`，`exports["."].types: "./lib/types/index.d.ts"`，`exports["."].default: "./lib/index.js"`，`@deepseek-ai/cordis` 同时出现在 peerDependencies 和 devDependencies 中（相同范围）。每个 dsh 对等依赖（peer dependency）都要在 devDependencies 中镜像。`@deepseek-ai/schemastery` 放在 `dependencies` 中（它是运行时校验器），与 agent-loop 保持一致。`files` 列表精确包含 `lib/index.js`、`lib/types/**/*.d.ts` 以及门禁认可的包专用运行时产物；发布 `./invariant` 的包还要包含 `lib/invariant.js`。如果包的运行时 export 指向输出树，还要包含 `lib/types/**/*.js`。不要发布 `src`、声明映射、JS map 或陈旧的根声明文件。带有 `bin` 的 CLI 应用包在 `files` 中将 `lib/bin.js` 紧跟在 `lib/index.js` 之后。
+package.json 不变式（由 `pnpm run constraints` / `scripts/check-workspace-constraints.ts` 强制执行）：`private: true`，`version` 与根 `package.json` 一致，`type: module`，`main: "lib/index.js"`，`types: "lib/types/index.d.ts"`，`exports["."].types: "./lib/types/index.d.ts"`，`exports["."].default: "./lib/index.js"`，`@deepseek-ai/cordis` 同时出现在 peerDependencies 和 devDependencies 中（相同范围）。每个 dsh 对等依赖（peer dependency）都要在 devDependencies 中镜像。`@deepseek-ai/schemastery` 放在 `dependencies` 中（它是运行时校验器），与 agent-loop 保持一致。`files` 列表精确包含 `lib/index.js`、`lib/types/**/*.d.ts` 以及门禁认可的包专用运行时产物。如果包的运行时 export 指向输出树，还要包含 `lib/types/**/*.js`。不要发布 `src`、声明映射、JS map 或陈旧的根声明文件。带有 `bin` 的 CLI 应用包在 `files` 中将 `lib/bin.js` 紧跟在 `lib/index.js` 之后。
 
 包内的相对导入在源码中使用显式 `.ts` 后缀（例如 `export * from './types.ts'`）。编译器在输出的 JS 中将其重写为 `.js`，在声明文件中保留显式 `.ts` 后缀；标准的 NodeNext/Node16 TypeScript 消费方会将其解析到同目录的 `.d.ts` 文件。
 
@@ -107,7 +107,7 @@ Append-only, prefix-stable, replacing, or independent behavior, including the ex
 
 根据实现填写 Model Experience。每个直接、条件、上限、生命周期或辅助的模型上下文条目使用一个 H3，包含上述三个有序 H4 字段，每个字段下有一个正文段落。引用包拥有的稳定文本：系统提示词放在引出它的字段下，用带标题的 H5 加 `markdown` 围栏表示，通常归入 `What the model sees`；其他短文本以命名占位符内联，其他长文本使用相同的嵌套形式。仅概述数据依赖或提供方拥有的文本。工具 schema 条目链接到生成的[工具目录](../tool-catalog.zh.md)中对应的锚定章节，仅说明该处缺失的差异。当作用域可以隐藏 prompt 或 schema 其中之一而不影响另一个时，将二者分开。填写 `KV Cache effect` 时，应区分仅追加增长、稳定重复的前缀、替换既有请求 token 和独立模型请求，并列出会使缓存复用失效、且由本包拥有的变化。“不使缓存失效”仅表示本包保留了已有的可复用前缀；缓存是否可用以及何时淘汰不属于本包约定。[行文标准](../../.agents/skills/dsh-prose-standard/SKILL.md)约束完整性与归属；验证器强制执行所需章节结构。
 
-没有上下文效果或仅有消费方拥有路径的包使用 [`SENTENCE_MODEL_EXPERIENCE`](../../scripts/verify-package-readme-model-experience.ts) 中经过审计的 `None, as ` 或 `Indirectly, through ` 语句，随后添加 `KV Cache effect` H4 和一个非空正文段落；与模型无关的通用包可以改为加入 `NO_MODEL_EXPERIENCE_SECTION`。两种情况都不要展开为对另一个包工作的描述。limitations [allowlist](../../scripts/verify-package-readme-limitations.ts) 独立管理。[Model Experience Agent Note](../../.agents/notes/implemented/process/2026-07-12-package-model-experience-contract.zh.md) 记录了设计动机。
+没有上下文效果或仅有消费方拥有路径的包使用 [`SENTENCE_MODEL_EXPERIENCE`](../../scripts/verify-package-readme-model-experience.ts) 中经过审计的 `None, as ` 或 `Indirectly, through ` 语句，随后添加 `KV Cache effect` H4 和一个非空正文段落；与模型无关的通用包可以改为加入 `NO_MODEL_EXPERIENCE_SECTION`。两种情况都不要展开为对另一个包工作的描述。limitations [allowlist](../../scripts/verify-package-readme-limitations.ts) 独立管理。[已归档的Model Experience Agent Note](../../.agents/notes/archived/process/2026-07-12-package-model-experience-contract.md) 记录了设计动机。
 
 <a id="plugin-display-metadata"></a>
 
@@ -140,12 +140,12 @@ Append-only, prefix-stable, replacing, or independent behavior, including the ex
 
 各字段先独立回退，再按页面规则格式化技术名称；回退优先经过现有 locale 语言链：
 
-- 标题：locale `meta.title` → `package.json.name` → 完整 Cordis 插件名。
-- 描述：locale `meta.description` → `package.json.description` → 不显示描述。
+- 标题：locale `meta.title` → 包根插件的 `package.json.name` → 完整 Cordis 插件名。
+- 描述：locale `meta.description` → 包根插件的 `package.json.description` → 不显示描述。
 
-导出 `<包名>/locale/en.json` 供 locale 查询；需要包字段回退或声明图标时，开放 `<包名>/package.json`。
+导出 `<包名>/locale/en.json` 供 locale 查询；需要包字段回退或声明图标时，开放 `<包名>/package.json`。`<包名>/search` 这样的子路径插件不是包，从不读取 `package.json`，即使导出了 `./search/package.json`；它用 `./search/locale/*.json` 提供文本，用 `./search/icon` 提供图片。
 
-要在组合包卡片、详情和组件行显示图片，在该导出清单顶层设置 `"icon": "./icon.svg"`，并将图片加入 `files`。路径相对于声明清单所在目录，独立导出的插件清单也遵循此规则。支持不超过 256 KiB 的 SVG、PNG、JPEG（`.jpg`/`.jpeg`）和 WebP 文件。绝对路径、URL、目录外路径，以及解析到目录外的符号链接均被拒绝。图片不需要单独导出，且必须自包含；SVG 作为图片渲染，不作为内联 HTML。Host 返回 data URL，不激活插件。声明无效或文件不可读时，显示元信息诊断并保留有效文本；图片缺失或无法解码时使用面板的默认插画。
+要在组合包卡片、详情和组件行显示图片，包根插件在导出清单顶层设置 `"icon": "./icon.svg"`，或在省略该字段时导出 `./icon`。子路径插件导出自己的图标，例如 `"./search/icon": "./search.svg"`。将每张图片加入 `files`。清单 `icon` 相对于清单所在目录；绝对路径、URL、目录外路径，以及解析到目录外的符号链接均被拒绝。导出的图标像 locale 资源一样经 Node exports 解析，且必须位于所属包内。支持不超过 256 KiB 的 SVG、PNG、JPEG（`.jpg`/`.jpeg`）和 WebP 文件。图片必须自包含；SVG 作为图片渲染，不作为内联 HTML。Host 返回 data URL，不激活插件。声明无效或文件不可读时，显示元信息诊断并保留有效文本，不再尝试导出的图标；图片缺失或无法解码时使用面板的默认插画。
 
 已安装 bundle 的卡片和详情、组件列表与配置详情、设置中的插件清单都展示这些元信息，包括禁用插件和预设内插件。读取时不激活插件。
 
@@ -157,8 +157,6 @@ Install 界面仍使用 `pnpm view` 返回的 npm registry 信息，不用 local
 
 1. 在仓库根目录运行 `pnpm run verify-package-meta`，检查字段、资源 exports 和发布文件覆盖。
 2. 对已安装插件，在适用的插件管理页与设置条目中切换中英文，检查标题、描述、逐字段回退，以及仅设置页使用的技术短名。
-
-资源归属与不激活插件的原因见[插件元信息 Agent Note](../../.agents/notes/implemented/architecture/2026-09-18-localized-package-metadata.zh.md)。
 
 ## 6. 验证
 

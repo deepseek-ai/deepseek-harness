@@ -89,5 +89,3 @@ These limits define the current feedback surface. They are current package const
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The plugin owns two slot registrations, one command decoration, the `feedbackUi` service, and one per-session controller-pair map, all released with the owning plugin fiber. The lifecycle spec verifies that the registrations and service are withdrawn and every controller pair is dropped when the fiber is disposed, so no second authority exists to check at runtime.

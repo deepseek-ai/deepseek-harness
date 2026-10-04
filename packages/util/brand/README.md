@@ -72,7 +72,6 @@ The package defines two intersection types, `string & { readonly [BRAND]: B }` a
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Branded string and number types with stateless constructors |
-| — | No runtime invariant companion is published; this pure utility owns no event stream or mutable runtime data; its value algebra is enforced by unit tests. |
 
 ### How values stay portable
 

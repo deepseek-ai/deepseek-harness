@@ -30,7 +30,7 @@ Adopt the following dependency swaps. Rejected — per-item evidence below; a fu
 
 **Data and validation:**
 
-- **Ajv for the tools JSON Schema validator**: the [schema-DSL note](../../implemented/architecture/2026-07-20-unified-json-value-schema-dsl.md) explicitly rejected accepting a larger schema language; the validator also does realm-intrinsic prototype checks Ajv does not.
+- **Ajv for the tools JSON Schema validator**: the [schema-DSL reference](../../../../packages/core/tools/README.md) explicitly rejected accepting a larger schema language; the validator also does realm-intrinsic prototype checks Ajv does not.
 - **`structuredClone` for session `snapshotJsonValue`/`isJsonValue`**: it is a validator + detacher enforcing the lossless-JSON boundary with single-read-per-getter and cross-realm intrinsic checks; `structuredClone` accepts Map/Date/-0 and enforces nothing. Same for the deliberately dependency-free `ptc-runtime-worker` mirror hardened against a model-mutated realm.
 - **`fast-deep-equal` for session surface `isDeepEqualJson`** and **`safe-stable-stringify` for repeat-tool-reminder canonicalization**: both swaps work mechanically but each trades ~17–20 commented, tested lines for the first external runtime dependency of a core package — negative net at this size.
 - **zod/valibot for durable-event strict decoders** (goal fold, tool-ralph, session): exact-key fail-loud decoders at durable boundaries with event-specific messages; a second schema library beside repo-standard schemastery is a policy change, not a deletion.
@@ -39,8 +39,8 @@ Adopt the following dependency swaps. Rejected — per-item evidence below; a fu
 
 **Filesystem, subprocess, terminal:**
 
-- **`write-file-atomic` for fs-local/storage-json atomic writes**: the packages lack the private 0700 staging dir, Win32 DACL copy/`ReplaceFileW`, AbortSignal support, and parent-dir fsync — each the point of the hand-roll. The koffi Win32 bindings themselves are justified by the [Windows durable-publish note](../../implemented/architecture/2026-07-05-windows-jsonl-durable-publish.md).
-- **`fzstd`/native zstd packages for JSONL frame scanning**: `node:zlib`'s builtin zstd already does the compression ([zstd note](../../implemented/architecture/2026-07-19-zstandard-jsonl-session-logs.md), which explicitly rejected an external native dependency); the remaining `scanZstdFrames` locates RFC 8878 frame boundaries *without decompressing* for torn-tail repair, which no package exposes.
+- **`write-file-atomic` for fs-local/storage-json atomic writes**: the packages lack the private 0700 staging dir, Win32 DACL copy/`ReplaceFileW`, AbortSignal support, and parent-dir fsync — each the point of the hand-roll. The koffi Win32 bindings themselves are justified by the [Windows durable-publish reference](../../../../packages/session/session-persistence-jsonl/src/win32.ts).
+- **`fzstd`/native zstd packages for JSONL frame scanning**: `node:zlib`'s builtin zstd already does the compression ([zstd reference](../../../../packages/session/session-persistence-jsonl/README.md), which explicitly rejected an external native dependency); the remaining `scanZstdFrames` locates RFC 8878 frame boundaries *without decompressing* for torn-tail repair, which no package exposes.
 - **`picomatch`/`tinyglobby`/`ignore` for fs search**: no glob engine exists — both discovery tools shell out to ripgrep per the [bash-backed discovery note](../../archived/feature/2026-07-09-bash-backed-grep-glob-discovery.md).
 - **`istextorbinary`/`chardet` for text detection**: the hand-roll is a ~15-line NUL-sample plus fatal `TextDecoder`; heuristic packages are larger and would change which files the model can read (model-visible `FS_NOT_TEXT` drift).
 - **`shell-quote` for POSIX single-quoting**: two 1-line quoting helpers with exhaustive tests versus a maintenance-mode package with a CVE history and different escaping output — a safety boundary is the wrong place to save one line.
@@ -62,7 +62,7 @@ Adopt the following dependency swaps. Rejected — per-item evidence below; a fu
 
 **Repo tooling:**
 
-- **`wireit` for `run-gates.ts`**: could express the `needs:` graph, but allowFailure observational legs and mode-specific concurrency caps have no equivalent, caching must be defensively disabled for a correctness gate runner, and every CI workflow invocation would restructure. The [parallel-gates note](../../implemented/process/2026-07-06-parallel-pre-push-gates.md) accepts a custom scheduler as the cost; keep is defensible.
+- **`wireit` for `run-gates.ts`**: could express the `needs:` graph, but allowFailure observational legs and mode-specific concurrency caps have no equivalent, caching must be defensively disabled for a correctness gate runner, and every CI workflow invocation would restructure. The [parallel-gates reference](../../../../scripts/run-gates.ts) accepts a custom scheduler as the cost; keep is defensible.
 - **`@arethetypeswrong/cli` for `verify-node-next-types`**: attw is per-package (100+ invocations vs one fast whole-workspace compile) and does not check the repo-specific explicit-`.ts`-specifier invariant, so the scan half stays regardless. Recorded as considered; keep the script.
 - **`syncpack`/`manypkg` for `check-workspace-constraints.ts`**: they cover ~20 lines of range alignment; the load-bearing 200+ lines (computed `files` lists, cordis peer=dev pairing, hierarchy shape) are repo policy no generic engine expresses.
 - **`remark-validate-links` for `verify-md-links.ts`**: the gate rides the repo's shared mdast toolchain; adopting remark-cli adds a second markdown stack to delete one small file.

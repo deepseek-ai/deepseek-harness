@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/jobs.md
 /background-job-runtime:
-  en: c2ca80844a3afaf3
-  zh: a8b48d41aa75427a
+  en: dd515d8548864a91
+  zh: 16a117d39989a373
 /background-job-runtime/ids-and-status:
   en: 529f401da4757a98
   zh: 041ff5e86b5dd8db

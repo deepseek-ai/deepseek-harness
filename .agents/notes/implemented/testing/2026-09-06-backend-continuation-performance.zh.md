@@ -23,7 +23,7 @@ Status: implemented
 
 工具执行管线、请求准备、这些服务所需的 Session 投影、持久化和目录观察均保留生产代码。只有模型适配器和有界工具体是合成的。适配器只保留请求计数，不保留请求对象，因此 fixture（测试前置数据）不会制造不断增长的保留成本。顺序输入使每个空闲区间对应此 worker 提交的唯一请求；这不代表并发输入时可以把空闲状态推广为逐消息完成 API。
 
-SDK fixture 通过 profile patch 显式插入 `fs-local` 和 `str_replace_editor`。这使经校准的文件查看负载不依赖[极简 profile 只提供 shell 的默认组合](../simplification/2026-09-03-minimal-profiles-persistent-shell-only.zh.md)。文件读取、计时终点和预算保持不变。
+SDK fixture 通过 profile patch 显式插入 `fs-local` 和 `str_replace_editor`。这使经校准的文件查看负载不依赖[极简 profile 只提供 shell 的默认组合](../../../../packages/bundle/sdk-minimal/README.zh.md)。文件读取、计时终点和预算保持不变。
 
 五个样本报告原始壁钟时间、CPU 用户态／内核态时间、峰值 RSS、终点计数及总壁钟时间的最小值、中位数和最大值。每份汇总报告还在计时 worker 退出后记录 CPU 型号、可用并行度、平台、架构以及 Node/V8 版本。预算约束未经舍入的中位数。续聊还相对已初始化 Host 测量保留堆内存：计时操作前后各执行两次显式 GC，中间让出一次事件循环，空闲 Agent 始终可达。因此该增量包含常驻历史 Session 和实时追加，而不只是新轮次。GC 与资源释放不计时；flush 计时。请求历史的内存基线从恢复后开始，只作诊断。目录峰值 RSS 仅作诊断；没有保留堆预算声称衡量已经释放的父会话观察。
 
@@ -39,7 +39,7 @@ SDK fixture 通过 profile patch 显式插入 `fs-local` 和 `str_replace_editor
 | 工具续聊 | 358.953, 324.790, 318.861, 320.119, 322.896 | 324.280, 321.952, 340.409, 325.470, 324.312 | 322.896 / 324.312 | 340 | 850 |
 | 子会话目录 | 318.730, 309.006, 311.404, 308.565, 310.105 | 308.670, 310.030, 280.086, 303.084, 284.829 | 310.105 / 303.084 | 320 | 800 |
 
-续聊保留约 22.295 MiB；源码期望值为 23 MiB，预算为 28.75 MiB。SDK 时间期望值使用现有[校准辅助函数](../../../../benchmarks/support/calibration.ts)：2× 共享 CI 时间比例和 1.25× 波动余量。请求历史使用[请求冻结校准](../simplification/2026-09-06-agent-request-freeze-evidence.zh.md)中的直接托管期望值，不乘以 2× 比例。内存只使用 1.25× 余量。比例继承现有通道的校准，并非这些用例的新 Linux 实测值；runner 特征变化时仍需 CI 证据。基线预算保护实测实现；更紧预算属于有测量依据且保持行为的修复。
+续聊保留约 22.295 MiB；源码期望值为 23 MiB，预算为 28.75 MiB。SDK 时间期望值使用现有[校准辅助函数](../../../../benchmarks/support/calibration.ts)：2× 共享 CI 时间比例和 1.25× 波动余量。请求历史使用[请求历史基准](../../../../benchmarks/agent-continuation/agent-continuation.bench.ts)中的直接托管期望值，不乘以 2× 比例。内存只使用 1.25× 余量。比例继承现有通道的校准，并非这些用例的新 Linux 实测值；runner 特征变化时仍需 CI 证据。基线预算保护实测实现；更紧预算属于有测量依据且保持行为的修复。
 
 独立的纯 Node 请求历史 CPU profile 在一次 211.300 ms 操作中，将 132.876 ms 采样自身时间归因于 buildRequest 调用的 deepFreeze。这把重复遍历已冻结历史定位为聚焦调查目标，不是已证实的优化结果。目录首次／重复时间分别报告第一次和第二次 parent 目录观察。
 

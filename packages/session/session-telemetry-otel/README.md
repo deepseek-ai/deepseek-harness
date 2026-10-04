@@ -152,5 +152,3 @@ These limits define where SDK behavior governs and where export guarantees end. 
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. Mode selection changes capture handoff, SDK setup, and local diagnostics without mutating session or service state an independent companion can compare. Collector delivery cannot be inferred from local queue state.

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-file-reference",
   "description": "File-reference discovery contract and shared @file grammar",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-07-23-acp-automation-only-protocol.md
 /agent-note-acp-as-an-automation-only-protocol:
-  en: e8a5a82b0137b656
-  zh: 8b371b4add7c17b4
+  en: 2881e2b2f824bbb5
+  zh: 8c9020f06bd61a0e
 /agent-note-acp-as-an-automation-only-protocol/problem:
   en: 5123f99030ae618e
   zh: fa62dc7b9a4b9fef

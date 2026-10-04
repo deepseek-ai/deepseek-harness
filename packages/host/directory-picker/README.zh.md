@@ -109,5 +109,3 @@ web GUI 让操作者通过 OS 选择器或应用内浏览器选择工作区目�
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。这个无状态 Service Definition 只定义 capability vocabulary，观察由 backend 与 Remote controller 负责。

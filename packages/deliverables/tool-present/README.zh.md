@@ -53,8 +53,6 @@ kind: "package-reference"
 
 纯 `./types` 入口声明 `PresentedFile` 与 Session 事件，不导入 Host 运行时代码。Web 消费方在展示或打开文件前校验持久声明。事件不保存 Session ID，因此 fork 历史中的相对路径按当前查看的 Session 工作区解析。
 
-**运行时不变式：** 不发布伴生入口。工具与事件注册归 effect 所有，Session 日志拥有文件声明；插件不维护独立的文件内容存储。
-
 </details>
 
 -----

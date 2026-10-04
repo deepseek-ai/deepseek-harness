@@ -8,8 +8,8 @@
     - tab "Trajectory"
 - text: Begin your reply with the plain sentence "Reading the workspace now." as text, and in that same message call the bash tool with the command "echo alpha". After the tool result, reply with the single word DONE and stop. {{clock}}
 - button "Copy"
-- status: Worked
-- button "Took {{duration}}"
+- status: Completed
+- button "Completed in {{duration}}"
 - paragraph: DONE
 - button "Copy"
 - button "Good response"

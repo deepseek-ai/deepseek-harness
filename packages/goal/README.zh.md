@@ -37,7 +37,7 @@ goal 组让一个 agent（智能体）会话在重启、恢复和 fork 后继续
 - [目标子系统](../../docs/subsystems/goal.zh.md)——目标类型、持久的 `goal/change` 事件与生成的服务 API。
 - [生成的工具目录](../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-goal)——模型接收的三个目标工具 schema。
 - [生成的配置目录](../../docs/config-catalog.zh.md#deepseek-aidsh-goal)——目标服务的每个受支持配置字段。
-- [目标领域 Agent Note](../../.agents/notes/implemented/feature/2026-07-19-persisted-same-session-goal-domain.zh.md)——领域设计及其决策。
+- [历史目标领域 Agent Note](../../.agents/notes/archived/feature/2026-07-19-persisted-same-session-goal-domain.md)——领域设计及其决策。
 
 -----
 

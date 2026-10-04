@@ -6,7 +6,13 @@
     "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
   },
   "files": [
+    "src/css-modules.d.ts",
+    "src/client/bottom/page.tsx",
+    "src/client/bottom/resize.tsx",
+    "src/client/bottom/locales.ts",
+    "src/client/bottom/keyboard.ts",
     "src/client/bridge/controller.ts",
+    "src/client/bridge/locales.ts",
     "src/client/bridge/dispatcher.ts",
     "src/client/bridge/lifecycle.ts",
     "src/client/bridge/publisher.ts",
@@ -76,15 +82,25 @@
     "src/shared/cordis/projector.ts",
     "src/shared/cordis/reader.ts",
     "src/shared/cordis/snapshot.ts",
+    "src/shared/dispose.ts",
     "src/shared/identity.ts",
     "src/shared/index.ts",
     "src/shared/json.ts",
     "src/shared/network/event-source.ts",
     "src/shared/network/observation.ts",
     "src/shared/service.ts",
-    "src/shared/validation.ts"
+    "src/shared/validation.ts",
+    "src/shared/web.ts"
   ],
   "references": [
+    { "path": "../../client/ui-renderer" },
+    { "path": "../../client/ui-layout" },
+    { "path": "../../client/shortcuts/tsconfig.client.json" },
+    { "path": "../../client/store" },
+    { "path": "../../client/ui-slots" },
+    { "path": "../../client/ui-primitives" },
+    { "path": "../../client/locale/tsconfig.client.json" },
+    { "path": "../../client/connection/tsconfig.client.json" },
     {
       "path": "../../util/brand"
     },

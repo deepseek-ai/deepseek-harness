@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsdown'
 
-/** Build the package root and invariant companion as independent bundles. */
+/** Build the package root as a self-contained bundle. */
 export default defineConfig([
   {
     entry: ['lib/types/index.js'],

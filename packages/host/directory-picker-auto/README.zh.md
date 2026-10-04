@@ -118,5 +118,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。唯一 effect 是由插件 fiber 持有的 boot-time Loader-entry mount，存储是权威来源。

@@ -79,7 +79,7 @@ Desktop 原生菜单和内嵌 frame 使用与 DOM 输入相同的命令注册表
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 功能 owner 显式声明 Windows 和 macOS Web 的默认键位：Mod+Slash、Mod+Comma、Mod+Backslash 和 Control+Backquote 保持双键；其他不含 Alt 的默认键位使用 Mod+Alt，含 Alt 的使用 Mod+Shift，全屏除外，使用 Mod+Alt+Enter。macOS Web 的“刷新当前页”默认不绑定快捷键，以保留浏览器自身的 Command+Option+R 操作；刷新按钮和用户显式绑定仍然可用。Mod 在 macOS 上为 Command，在 Windows 上为 Control。Windows 和 macOS 的 Web、Desktop 均接受任意三个或四个不同修饰键的组合。Web 还接受上述组合及 Mod+Shift 组合；浏览器或系统能否送达按键需在对应平台测试。Linux Web 接受 Mod+Slash、Mod+Shift+Comma 和 Mod+Shift+Period。未送达窗口的操作系统快捷键无法被拦截。双键组合等待第二个键时，不延迟或消费第一个键；原生操作或焦点变化可能使组合无法完成。命令注册或注销会使打开的编辑草稿过期，即使保存的偏好未改变。Desktop 在每次命令目录更新时重新读取文件，不设置文件 watcher。
+- 功能 owner 显式声明 Windows 和 macOS Web 的默认键位：Mod+Slash、Mod+Backslash 和 Control+Backquote 保持双键；其他不含 Alt 的默认键位使用 Mod+Alt，含 Alt 的使用 Mod+Shift，其中全屏使用 Mod+Alt+Enter，会话重命名使用 Mod+Alt+G。Web 设置使用 Mod+Alt+Comma，将 Mod+Comma 留给浏览器。macOS Web 的“刷新当前页”默认不绑定快捷键，以保留浏览器自身的 Command+Option+R 操作；刷新按钮和用户显式绑定仍然可用。Mod 在 macOS 上为 Command，在 Windows 上为 Control。Windows 和 macOS 的 Web、Desktop 均接受任意三个或四个不同修饰键的组合。Web 还接受上述组合及 Mod+Shift 组合；浏览器或系统能否送达按键需在对应平台测试。Linux Web 接受 Mod+Slash、Mod+Shift+Comma 和 Mod+Shift+Period。未送达窗口的操作系统快捷键无法被拦截。双键组合等待第二个键时，不延迟或消费第一个键；原生操作或焦点变化可能使组合无法完成。命令注册或注销会使打开的编辑草稿过期，即使保存的偏好未改变。Desktop 在每次命令目录更新时重新读取文件，不设置文件 watcher。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -90,5 +90,3 @@ Desktop 原生菜单和内嵌 frame 使用与 DOM 输入相同的命令注册表
 无。
 
 </details>
-
-**Runtime invariant:** 不发布配套检查模块。目录和键位索引由私有注册表同步派生，没有独立维护、需要检查的运行时关系。

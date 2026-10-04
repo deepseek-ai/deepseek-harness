@@ -7,13 +7,8 @@
   flex-shrink: 0;
 }
 
-.chevron {
-  color: var(--dsw-alias-label-secondary);
-}
-
 .title {
   font-weight: 400;
-  transition: color 100ms ease;
 }
 
 .separator {
@@ -29,17 +24,10 @@
   min-width: 0;
   overflow: hidden;
   flex: 1 1 auto;
-  color: var(--dsw-alias-label-tertiary);
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: color 100ms ease;
-}
-
-.row:hover .title,
-.row:hover .summary:not([data-error]) {
-  color: var(--dsw-alias-label-primary);
 }
 
 .summary[data-error],

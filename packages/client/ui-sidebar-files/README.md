@@ -27,7 +27,7 @@ Browse a Session's workspace tree and open files in Sidebar previews. The root a
 The `workspace.files` command opens or focuses the file page in the focused pane; from the conversation it uses the current Session's active dock pane. A guide gives way to the file page, and repeated opens retain one file page per pane. Desktop defaults to Mod+P. The guide entry displays the effective shortcut; Windows and macOS Web use the [shortcut service’s platform defaults](../shortcuts/README.md); Linux Web leaves this command unbound by default.
 
 - **The type** — `ctx.sidebarRightTabs.register(...)` with kind `files`, id `@deepseek-ai/dsh-client-ui-sidebar-files`, band `builtin`, no patterns, and one guide entry (order 10, its title and description from the `sidebarFiles` namespace, its glyph a yellow folder) that opens the type.
-- **The body** — the keyed `sidebar.right.pane.tab` seat under that id: a header row under the strip, then the tree. The shared [`PathLabel`](../ui-primitives/README.md#component-catalog) displays the root path with subdued directories and a primary final segment. A clipped path retains its trailing characters with a left-edge fade; hovering reveals the full path. The reload control stays at its right.
+- **The body** — the keyed `sidebar.right.pane.tab` seat under that id: a header row under the strip, then the tree. The shared [`PathLabel`](../ui-primitives/README.md#component-catalog) displays the root path with subdued directories and a primary final segment. A clipped path retains its trailing characters with a left-edge fade; hovering reveals the full path. The reload control and the Session-scoped `sidebar.right.tab.files.actions` list stay at its right, with the displayed root passed as `absolutePath`; [`ui-open-in-app`](../ui-open-in-app/README.md) contributes the workspace directory opener.
 - **The chip title** — the keyed `sidebar.right.pane.tab.title` seat under that id: a shared `FileTypeIcon` folder glyph at 16px before the type's label. The tree's own rows never draw this sheet.
 
 Source files under `src/client/`: `definition.tsx` (the type), `store.ts` (what it keeps), `face.ts` (Remote reads and watches), `directory-node.ts` (open directories and their lifetimes), `FilesBody.tsx` (what it draws, with its ordering and failure-line helpers), `FilesTitle.tsx` (the chip title), `locales.ts` (what it says), and `index.ts` (the wiring).
@@ -75,5 +75,3 @@ None.
 The page refresh shortcut refreshes the focused file tree through its ordinary directory reader. The reload control displays the effective binding on hover and keyboard focus.
 
 </details>
-
-**Runtime invariant:** No companion is published. The tab-owned face keeps directory reads and watches private, and writes displayed state through its Slot store; tab cancellation releases both. The package exposes no independent observation for a runtime comparison.

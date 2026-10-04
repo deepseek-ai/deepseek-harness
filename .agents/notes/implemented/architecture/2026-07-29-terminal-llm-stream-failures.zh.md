@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-07-29-terminal-llm-stream-failures.md) | 中文
 
-本说明仅取代[有界 LLM（大语言模型）请求恢复](2026-06-21-bounded-llm-request-recovery.zh.md)与[调用后上下文溢出恢复](2026-07-10-after-call-compaction-pressure-and-overflow-recovery.zh.md)中关于抛出错误身份和调用局部 sidecar 的机制。上述说明继续规定结构化失败事实、重试策略、持久尝试与压缩（compaction）恢复。
+本说明取代[有界 LLM（大语言模型）请求恢复](2026-06-21-bounded-llm-request-recovery.zh.md)中的抛出错误身份和调用局部 sidecar 机制；该说明仍负责结构化失败事实、重试策略与持久尝试。[压缩（compaction）参考](../../../../packages/compaction/compaction-basic/README.zh.md)定义当前溢出恢复。
 
 ## Problem
 
@@ -16,7 +16,7 @@ Status: implemented
 
 `LlmRuntime` 是一次适配器尝试的规范化边界。它只捕获最终适配器选择、同步分发、iterator 构造与 `next()` 失败，将抛出值转换为不可变 `LlmFailure`，并发出一个终止 `finish`。调用方取消或 `ABORTED` 失败选择 aborted 结束原因；其他适配器失败选择 error 结束原因。适配器也可以直接发出任一终止原因。
 
-适配器所属的 catch 会在每个分片被 yield 前结束。来自 `llm/stream` middleware、嵌套调用、适配器清理、分片消费方、日志记录、signal 检查与组装的错误仍作为缺陷或生命周期失败抛出；它们绝不进入模型请求恢复。部分 delta 之后的传输失败可能留下未关闭块，因此流 invariant 只允许在终止 finish 的结束原因为 error 或 aborted 时存在未关闭块。不会从这些不完整输出组装 assistant 消息或工具调用。
+适配器所属的 catch 会在每个分片被 yield 前结束。来自 `llm/stream` middleware、嵌套调用、适配器清理、分片消费方、日志记录、signal 检查与组装的错误仍作为缺陷或生命周期失败抛出；它们绝不进入模型请求恢复。部分 delta 之后的传输失败可能在结束原因为 error 或 aborted 的终止 finish 之前留下未关闭块。不会从这些不完整输出组装 assistant 消息或工具调用。
 
 `PreparedLlmCall` 公开随其配置和注册捕获的不可变重试策略。一次性句柄复用与配置不匹配仍是同步的 `INVALID_PREPARED_CALL` 误用错误。完全由 `llm/stream` middleware 提供服务的路由没有准备完成的注册，因此也没有服务策略。
 

@@ -68,7 +68,6 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`mode` 配置、把 `ctx.tools.presentAs` 接到挂载作用域的 `apply` |
-| — | 不发布运行时不变式伴生入口；本包只对 `ctx.tools` 发起一次 scoped 调用，不持有自己的事件或快照；它建立的是「某个 agent 的组装采用哪种呈现方式」这一关系，该关系由工具注册表持有，`dsh-tools` 会在工具注册表中观察该关系。 |
 
 ### 行为说明
 
@@ -86,7 +85,7 @@ kind: "package-reference"
 - [tools 包](../tools/README.zh.md)——工具呈现模式与 `presentAs` API。
 - [agent-presets 包](../../preset/agent-preset-registry/README.zh.md)——preset 如何组合 agent 及其常驻挂载。
 - [Node ptc-runtime 包](../../ptc-runtime/ptc-runtime-node/README.zh.md)——PTC 模式所需的 TypeScript 运行时。
-- [PTC mode 执行器塌缩 note](../../../.agents/notes/implemented/bug-fix/2026-08-07-ptc-executor-collapse.zh.md)——通告面与可调用面为何保持一致。
+- [历史PTC mode 执行器塌缩 note](../../../.agents/notes/archived/bug-fix/2026-08-07-ptc-executor-collapse.md)——通告面与可调用面为何保持一致。
 - [core 分组地图](../README.zh.md)——core 各包如何组合。
 
 -----

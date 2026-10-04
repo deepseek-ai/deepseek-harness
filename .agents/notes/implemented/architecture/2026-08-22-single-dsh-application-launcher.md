@@ -34,7 +34,7 @@ Profile manifests own patch reload:
 
 Custom profiles default to `live`. A startup profile still applies its bundle, profile, home-level, and invocation `--patch` layers, but it does not watch them after boot. `dsh-base` inserts the module-HMR row disabled; a profile with a tested source-module reload lifecycle must enable it explicitly. None of the shipped profiles enable server module HMR: `patchReload: live` uses the launcher's config-only watcher while the startup profiles install no watcher. SDK and ACP cannot safely replace their server, agents, persistence, or tool registry inside one owned stdio connection.
 
-The shipped protocol profiles reserve stdout for protocol frames, expose help without starting transport, and route stdin EOF and signals through bounded root disposal. ACP remains automation-only. The SDK JSON-RPC methods, notification fields, and `initialize.serverInfo.name` remain stable. Full-profile model-visible tool and persistence defaults come from `dsh-base`, including its [default editor selection](../simplification/2026-09-05-base-default-file-editor.md); `sdk-minimal` owns its explicit defaults. Runnable snapshots own the assembled application outputs.
+The shipped protocol profiles reserve stdout for protocol frames, expose help without starting transport, and route stdin EOF and signals through bounded root disposal. ACP remains automation-only. The SDK JSON-RPC methods, notification fields, and `initialize.serverInfo.name` remain stable. Full-profile model-visible tool and persistence defaults come from `dsh-base`, including its [default editor selection](../../../../packages/bundle/base/README.md); `sdk-minimal` owns its explicit defaults. Runnable snapshots own the assembled application outputs.
 
 ### TypeScript SDK customization
 
@@ -46,7 +46,7 @@ Direct SDK use follows normal Harness-home resolution: explicit `dshHome`, inher
 
 ### Python runtime
 
-The Python runtime wheel stages [`python/sdk-runtime/runtime-bootstrap.mjs`](../../../../python/sdk-runtime/runtime-bootstrap.mjs) as the `dsh-python-runtime-closure` entry. Its ordinary branch calls the public CLI export; a provider-private selector dispatches to the internal subprocess runner before CLI parsing and is not an application entry point. The [native-containment decision](2026-08-28-subprocess-native-containment.md) owns that private dispatch. The Python client selects `dsh --profile sdk` by default, ordered patch files, and an explicit Harness home; the runnable example under `python/sdk/examples` selects `sdk-minimal`. The installed `dsh` console command exposes the same profile grammar, including the `web` profile.
+The Python runtime wheel stages [`python/sdk-runtime/runtime-bootstrap.mjs`](../../../../python/sdk-runtime/runtime-bootstrap.mjs) as the `dsh-python-runtime-closure` entry. Its ordinary branch calls the public CLI export; a provider-private selector dispatches to the internal subprocess runner before CLI parsing and is not an application entry point. The [native-containment reference](../../../../packages/subprocess/subprocess-local/README.md) owns that private dispatch. The Python client selects `dsh --profile sdk` by default, ordered patch files, and an explicit Harness home; the runnable example under `python/sdk/examples` selects `sdk-minimal`. The installed `dsh` console command exposes the same profile grammar, including the `web` profile.
 
 The executable family is `deepseek-harness-sdk-runtime-<platform>-<arch>`. The SDK wire, wheel and import distribution names, sidecar names, and wire identity `deepseek-harness-sdk-runtime` remain stable. The SDK package family is `@deepseek-ai/dsh-sdk-client`, `@deepseek-ai/dsh-sdk-protocol`, and `@deepseek-ai/dsh-sdk-jsonrpc-server`; `@deepseek-ai/dsh-acp` remains the ACP protocol plugin. There is no Python-specific Node application, checked-in complete config, compatibility package, forwarding executable, fallback parser, or SDK/ACP launcher alias. [docs/architecture.md](../../../../docs/architecture.md) owns this launch, and the [`python/sdk-runtime` README](../../../../python/sdk-runtime/README.md) owns the Windows carrier.
 
@@ -56,7 +56,7 @@ The executable family is `deepseek-harness-sdk-runtime-<platform>-<arch>`. The S
 
 ## Existing decisions and supersession
 
-[Profile command shorthand](../feature/2026-09-15-profile-command-shorthand.md) supersedes this note's Web-only shorthand mechanism; this note retains authority over application composition and lifecycle ownership.
+The [CLI reference](../../../../apps/cli/reference/README.md) documents shorthand for every profile; this note retains authority over application composition and lifecycle ownership.
 
 This decision supersedes the application-launch and package-name facts in [profile plugin bundles](2026-08-05-profile-plugin-bundles.md), [TypeScript SDK client and subagent backend](../../archived/feature/2026-07-27-typescript-sdk-and-sdk-subagent-backend.md), [remove the SDK project toolchain](../../archived/simplification/2026-08-11-remove-sdk-project-toolchain.md), and [single-file Python SDK runtime distribution](2026-07-10-single-file-executable-sdk-runtime-distribution.md). Those notes retain independent authority for profile layering, client/wire semantics, deleted project tooling, and native packaging.
 

@@ -55,7 +55,7 @@ Connection 拥有请求 URL 解析、request correlation、`/api` carrier、trus
 
 ## Conversation 与 presentation
 
-Web 和桌面端共享[代码工作工具偏好](../../packages/client/ui-settings/README.zh.md#use-this-package)。它控制诊断 View、新会话预设选择、改动文件卡片和内置 HTML 预览策略，不改变 Session 记录。
+Web 和桌面端共享[代码工作工具偏好](../../packages/client/ui-settings/README.zh.md#use-this-package)。它控制诊断 View、[可用的预设选项](../../packages/client/ui-agent-preset/README.zh.md)、改动文件卡片和内置 HTML 预览策略，不改变 Session 记录。
 
 `ui-session` 安装 Session scope adapter，并提供 `useSessions`、`useSessionStatus`、`useSessionRetainInfo`、`useSession`、`sessionId` 和 `useProjection`。`SessionProvider` 可以继承外围 binding，也可以绑定显式 `SessionReference`，因此并存子树可以指向不同 Session。领域 adapter 可以继续添加标准 source，但不会把 React hook 放进 model object。
 

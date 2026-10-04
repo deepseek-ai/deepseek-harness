@@ -45,6 +45,7 @@ const KIND_TEMPLATES: Readonly<Record<string, string>> = {
   'persistence-change': '.agents/skills/dsh-doc/templates/persistence-change.md',
   'persistence-release': '.agents/skills/dsh-doc/templates/persistence-release.md',
   'persistence-format': '.agents/skills/dsh-doc/templates/persistence-format.md',
+  'upgrade-guide': '.agents/skills/dsh-doc/templates/upgrade-guide.md',
 }
 
 /**

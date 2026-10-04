@@ -62,6 +62,17 @@
   flex-shrink: 0;
 }
 
+.waitButton {
+  white-space: nowrap;
+}
+
+.waitStatus {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 24px;
+  white-space: nowrap;
+}
+
 /* Figma 1019:36938 header, user-tuned: heading block left, close right; the
    pager sits in the footer to balance the card. */
 .header {
@@ -291,6 +302,16 @@
   font-size: 14px;
   line-height: 24px;
   font-weight: 400;
+}
+
+/* Read-only note standing in for a question the user skipped: it takes the
+   option rows' horizontal padding so it lines up with the choices above it. */
+.reviewNote {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 14px;
+  line-height: 24px;
 }
 
 /* Custom answer row (figma 973:36427): an option-shaped row whose copy is an

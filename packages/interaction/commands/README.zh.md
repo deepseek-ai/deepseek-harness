@@ -82,7 +82,6 @@ ctx.commands.register({
 | [`src/index.ts`](src/index.ts) | `CommandRuntime` 服务：注册、作用域、分派、生命周期事件 |
 | [`src/types.ts`](src/types.ts) | 命令定义、描述符、执行与结果类型 |
 | [`src/brand.ts`](src/brand.ts) | 稳定命令定义标识和每次执行的生命周期 id |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件：按会话日志配对 `command/run` 与 `command/done` |
 
 ### 生命周期事件
 
@@ -106,7 +105,7 @@ ctx.commands.register({
 当包级约定不够用时阅读以下页面。它们从共享命令词汇逐步进入设计证据与相邻表面。
 
 - [命令子系统参考](../../../docs/subsystems/commands.zh.md)——注册表语义、输入元数据与 `ctx.commands` 的 Cordis 接口面。
-- [命令注册 Agent Note](../../../.agents/notes/implemented/feature/2026-07-19-plugin-command-registration.zh.md)——此服务背后的边界与分发约定。
+- [历史命令注册 Agent Note](../../../.agents/notes/archived/feature/2026-07-19-plugin-command-registration.md)——此服务背后的边界与分发约定。
 - [交互组映射](../README.zh.md)——相邻的审批、权限与问答包。
 - [Plan mode 包](../../plan/plan-mode/README.zh.md)——一个驱动模型可见工作的已交付命令生产方。
 

@@ -75,7 +75,7 @@ These pages cover the engine, the renderer, and the composition model.
 - [ui-renderer](../ui-renderer/README.md) — the React slot renderer implementing this package's install contract.
 - [Slot system standard](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.md) — the definitive composition model.
 - [Component Factories](../../../.agents/notes/implemented/architecture/2026-09-10-component-factories-and-local-slots.md) — reusable definitions, local Component selection, and occurrence lifetimes.
-- [Web client architecture](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.md) — the loading chain and object layer this registry plugs into.
+- [Web client architecture](../../../docs/subsystems/web-client.md) — the loading chain and object layer this registry plugs into.
 
 -----
 
@@ -107,5 +107,3 @@ These limits define the registry's scaling behavior and accepted type noise; the
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. This is a zero-dependency pure registry core; it emits no Cordis events itself (the `ui-renderer` SlotRegistry owns the event bridge and its invariants); define/register/dispose sequencing is asserted directly by this package's behavior specs.

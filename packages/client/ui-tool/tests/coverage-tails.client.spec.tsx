@@ -13,6 +13,7 @@ import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/t
 import { ToolRow } from '../src/client/tool/components/ToolRow.tsx'
 import { BashRow } from '../src/client/tool/toolviews/bash-sample.tsx'
 import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 
 type BashRowProps = Parameters<typeof BashRow>[0]
 
@@ -55,6 +56,7 @@ describe('Tool presentation tails', () => {
   it('a settled others-variant row renders the sparkle icon in the leading slot', () => {
     const settled: ToolResultNode = {
       kind: 'tool-result', seq: 2, time: 2_000, callId: 'c5',
+      name: 'todo_write', args: PartialArguments.fromText('{"note":"x"}'),
       call: { name: 'todo_write', argsRaw: '{"note":"x"}' },
       callTime: 1_000,
       content: [], isError: false, subCalls: [],
@@ -71,6 +73,7 @@ describe('Tool presentation tails', () => {
   it('BashRow summarizes the description without a row click target', () => {
     const settled: ToolResultNode = {
       kind: 'tool-result', seq: 3, time: 3_000, callId: 'c1',
+      name: 'bash', args: PartialArguments.fromText('{"command":"make build","description":"Build"}'),
       call: { name: 'bash', argsRaw: '{"command":"make build","description":"Build"}' },
       callTime: 2_000,
       content: [], isError: false, subCalls: [],
@@ -84,11 +87,12 @@ describe('Tool presentation tails', () => {
 
   it('BashRow retains its business icon for failed and stopped states', () => {
     const running: StartedToolCall = {
-      phase: 'start' as const, callId: 'c1', name: 'bash', argsRaw: '{"command":"ls","description":"List"}',
+      phase: 'start' as const, args: PartialArguments.fromText('{"command":"ls","description":"List"}'), callId: 'c1', name: 'bash', argsRaw: '{"command":"ls","description":"List"}',
       turn: 1, step: 1, time: 1_000, subCalls: [],
     }
     const errorResult: ToolResultNode = {
       kind: 'tool-result', seq: 1, time: 1_000, callId: 'c1',
+      name: 'bash', args: PartialArguments.fromText('{"command":"boom"}'),
       call: { name: 'bash', argsRaw: '{"command":"boom"}' },
       callTime: 500,
       content: [], isError: true, subCalls: [],

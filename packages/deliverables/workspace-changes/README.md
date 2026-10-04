@@ -59,8 +59,6 @@ One `TurnRecorder` per Session serializes its git work. `turn/start` queues the 
 
 Git runs through the `subprocess` capability with a scrubbed environment, `GIT_CONFIG_COUNT=0` (ambient indexed configuration is excluded because the credential scrub removes its key entries), `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, the configured timeout, and bounded output. A failing step abandons that turn's record with a warning; the next turn starts afresh. Session disposal and plugin disposal abort queued work, forget the summaries, and remove the temporary directory.
 
-**Runtime invariant:** No companion is published. Event listeners are effect-owned and the recorder owns the summaries, the snapshot trees, and the captured copies for its Session's lifetime; no independent observation can diverge from them.
-
 </details>
 
 -----
@@ -70,7 +68,7 @@ Git runs through the `subprocess` capability with a scrubbed environment, `GIT_C
 
 - [Web deliverables](../../client/ui-deliverables/README.md) — the changed-files card that reads the served summary and opens its files.
 - [Subprocess capability](../../subprocess/README.md) — the seam git runs through.
-- [Turn changed-files card decision](../../../.agents/notes/implemented/feature/2026-09-11-turn-changed-files-card.md) — snapshot design, coverage rules, the deferred shadow repository, and rejected alternatives.
+- [historical Turn changed-files card decision](../../../.agents/notes/archived/feature/2026-09-11-turn-changed-files-card.md) — snapshot design, coverage rules, the deferred shadow repository, and rejected alternatives.
 
 <a id="model-experience"></a>
 ## Model Experience

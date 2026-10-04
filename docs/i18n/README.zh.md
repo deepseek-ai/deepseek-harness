@@ -23,7 +23,7 @@
 
   一侧的第 `i` 个分节对应另一侧的第 `i` 个分节。每侧的 hash 覆盖该分节的全部顶层块，只排除围栏代码块和生成区域——门禁已要求这两类内容在两侧一致；只是碰巧相同的内容仍计入 hash。没有剩余块的分节没有条目。重新生成区域或在两侧同时修改代码块不会改变记录；修改不同分节会改动记录中不同的行，因此 Git 默认文本合并（包括 GitHub 的合并）能组合它们。只有两个分支都修改了同一分节中计入 hash 的内容时，记录才会冲突；解决 Markdown 冲突后重新记录该配对。失去同步的配对是「按被改一侧的 diff 最小化地修补另一侧」，从不整篇重译；门禁会指出每个发生变化的分节。日常工作会直接完成这份修补；用户显式调用扩展工作流时，`pnpm run gen-translation-brief <pair>` 会从内容能生成所记录条目的最新提交中还原上次确认的文本，以能安全对齐的最窄粒度汇集这次更新，并可由 `--apply` 在结构校验后拼接仅涉及围栏代码块的改动。两侧对齐后，`pnpm run verify-translation-pairing --write <pair>` 重新记录这些条目；那份 YAML diff 就是「确认一致」这个动作本身，可以被评审，也正因如此，`--write` 要求点名你确认过的配对（`--write --all` 是显式的全语料形式）。
 
-  中文文件必须保留指向英文的反向链接；普通撰写的英文源必须保留指向中文的链接，而清单内的生成英文源不作此要求。[按分节记录配对 Agent Note](../../.agents/notes/implemented/process/2026-09-23-section-keyed-translation-pairing-records.zh.md) 负责记录该记录格式与备选方案。
+  中文文件必须保留指向英文的反向链接；普通撰写的英文源必须保留指向中文的链接，而清单内的生成英文源不作此要求。[已归档的按分节记录配对 Agent Note](../../.agents/notes/archived/process/2026-09-23-section-keyed-translation-pairing-records.md) 记录了格式选择与备选方案。
 - **语言切换行。** 中文文件一律在 H1 标题后立即以 `[English](foo.md) | 中文` 链回英文。普通撰写的英文文件在同一位置以 `English | [中文](foo.zh.md)` 互链；清单内的生成英文源省略此行，以便与生成器输出逐字节一致。发布到 GitHub 以外位置的 README（例如 PyPI 项目元数据）可以改用指向同一对侧文件的规范 `https://github.com/deepseek-ai/deepseek-harness/blob/master/<repository-path>` URL，使切换行在该位置仍可访问。
 - **结构与另一侧一一对应。** 标题深度与顺序、列表类型、有序列表起始编号、列表项数量、表格行列数、保留原样 query/fragment 后缀的语义链接目标，以及逐字节一致的代码块在配对两侧一一对应。相对文档链接的目标属于活跃双语语料时，英文侧使用其 `.md` 路径，中文侧使用其 `.zh.md` 路径。该范围内缺少对侧属于配对完整性错误，不得回退；范围外的目标保留原路径。完整保持规则见 [translation-rules.md](translation-rules.zh.md)。既有 Markdown 门禁对 `.zh.md` 文件原样生效（`verify-md-wrap`、`verify-md-links`）。
 

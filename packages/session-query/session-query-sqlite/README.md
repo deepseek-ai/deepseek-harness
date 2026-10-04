@@ -98,7 +98,6 @@ The design history lives in the [SQLite FTS5 session search note](../../../.agen
 | [`src/index.ts`](src/index.ts) | Service: config, openAt lifecycle, serialized reconciliation, query execution, cursors |
 | [`src/query.ts`](src/query.ts) | Request normalization, parameterized predicates, snippets, predicate and binding budgets |
 | [`src/schema.ts`](src/schema.ts) | Database schema, application-id ownership, in-place reset, owner-only file creation |
-| — | No runtime invariant companion is published; reconciliation, cursor generations, and derived-index ownership are validated at each serialized query boundary. |
 
 ### Index lifecycle
 

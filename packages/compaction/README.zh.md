@@ -40,8 +40,8 @@ kind: "package-group"
 先从子系统参考了解共享词汇，再阅读两份 Agent Note 了解设计依据。
 
 - [压缩子系统参考](../../docs/subsystems/compaction.zh.md)——压缩词汇、结果与服务行为。
-- [压缩能力 seam Agent Note](../../.agents/notes/implemented/feature/2026-06-18-compaction-capability-seam.zh.md)——家族如何拆分，以及为何依赖会话与 LLM 词汇。
-- [排队手动压缩 Agent Note](../../.agents/notes/implemented/feature/2026-07-30-queued-manual-compaction.zh.md)——按需 `/compact` 如何与运行中的轮次串行化。
+- [历史压缩能力 seam Agent Note](../../.agents/notes/archived/feature/2026-06-18-compaction-capability-seam.md)——家族如何拆分，以及为何依赖会话与 LLM 词汇。
+- [排队手动压缩 参考](compaction/README.zh.md)——按需 `/compact` 如何与运行中的轮次串行化。
 - [能力 seam](../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.zh.md)——本家族遵循的 Service Definition / Service Provider / Consumer 拆分。
 
 <a id="dev-note"></a>

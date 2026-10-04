@@ -2,7 +2,7 @@
 
 Status: implemented
 
-The CPython PTC runtime lives at `packages/experimental/ptc-runtime-python` and publishes as `@deepseek-ai/dsh-experimental-ptc-runtime-python`; the [publication decision](../process/2026-09-12-publish-all-experimental-packages.md) preserves its experimental status.
+The CPython PTC runtime lives at `packages/experimental/ptc-runtime-python` and publishes as `@deepseek-ai/dsh-experimental-ptc-runtime-python`; the [publication policy](../../../../packages/experimental/README.md) preserves its experimental status.
 
 English | [中文](2026-07-31-ptc-runtime-python-fd3-protocol.zh.md)
 
@@ -22,7 +22,7 @@ The experimental package contains both the protocol and runtime implementation: 
 
 `py/protocol.py` mirrors the message shapes as `TypedDict`s and re-declares the two surfaces both sides EXECUTE against — `PROTOCOL_FD = 3` and `log_truncation_marker` — with byte-identical text.
 
-The package ships the runtime alongside the protocol; it remains independently buildable. `check-workspace-constraints` reads every `packages/<group>/<pkg>/package.json` unconditionally, while the coverage and invariant-topology checks exercise the package as soon as its directory exists.
+The package ships the runtime alongside the protocol; it remains independently buildable. `check-workspace-constraints` reads every `packages/<group>/<pkg>/package.json` unconditionally, while the coverage check exercises the package as soon as its directory exists.
 
 ## Wire contract
 
@@ -36,7 +36,7 @@ Frames are JSON-lines on fd 3, one object per line, leaving stdout/stderr free f
 
 **Require a future Python JSON codec (`_encode_json_plain` / `_decode_json_plain`) to live in `py/protocol.py` for cross-side symmetry with `protocol.ts`.** Rejected. The repository's "prefer symmetry for parallel values" rule points at genuinely parallel values; these are not. The host-side codec in `protocol.ts` validates hostile input and is self-contained. A child-side codec would produce trusted output and belong with bootstrap-owned emission and cost accounting; forcing only its entry points into `protocol.py` would couple the vocabulary mirror to runtime internals or create an import cycle. `protocol.py` remains a pure wire-vocabulary mirror; the codec (`_encode_json_plain` / `_decode_json_plain`) lives in `bootstrap.py` with the runtime it serves.
 
-**Keep the protocol files outside a buildable package until a runtime ships.** Rejected: the workspace-constraint, coverage, and invariant-topology checks require every directory under `packages/<group>/<pkg>` to be a buildable package, and the protocol has independent tests and a public wire vocabulary.
+**Keep the protocol files outside a buildable package until a runtime ships.** Rejected: the workspace-constraint and coverage checks require every directory under `packages/<group>/<pkg>` to be a buildable package, and the protocol has independent tests and a public wire vocabulary.
 
 ## Consequences
 

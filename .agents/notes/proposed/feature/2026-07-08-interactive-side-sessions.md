@@ -6,7 +6,7 @@ English | [中文](2026-07-08-interactive-side-sessions.zh.md)
 
 ## Problem
 
-A user may want to explore a question from a live session without changing its main context. Existing primitives do not expose that product shape: [session-store fork](../../archived/feature/2026-06-30-session-store-fork-api.md) creates an unattached session, while [fork subagents](../../implemented/feature/2026-06-21-subagent-capability-seam.md) are model-driven tasks whose transcript collapses into one tool result. Neither gives the user a separate conversation, and neither records a conclusion in the parent together with the side session that produced it.
+A user may want to explore a question from a live session without changing its main context. Existing primitives do not expose that product shape: [session-store fork](../../archived/feature/2026-06-30-session-store-fork-api.md) creates an unattached session, while [fork subagents](../../../../packages/subagent/subagent-fork-in-process/README.md) are model-driven tasks whose transcript collapses into one tool result. Neither gives the user a separate conversation, and neither records a conclusion in the parent together with the side session that produced it.
 
 ## Proposal
 
@@ -36,6 +36,6 @@ Rewind productization, session-tree views, a model-facing side-session tool, and
 
 ## Risks
 
-- Read-only behavior is advisory until a `tools/pre-execute` deny gate enforces it; [the interception point](../../implemented/feature/2026-06-30-interception-extension-points.md) can add that gate without changing these mechanics.
+- Read-only behavior is advisory until a `tools/pre-execute` deny gate enforces it; [the interception point](../../../../docs/tool-execution-pipeline.md) can add that gate without changing these mechanics.
 - A compacted source forks its compacted view, so a bound UI should disclose that the child inherits summaries rather than replaced turns.
 - Repeated handbacks consume parent context. The per-merge length cap bounds each note; later consolidation belongs to compaction.

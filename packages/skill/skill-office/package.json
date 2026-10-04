@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-skill-office",
   "description": "Bundled Word, PowerPoint, and Excel workflows and structural checks",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -37,7 +37,7 @@
     "@deepseek-ai/cordis-plugin-include": "workspace:~"
   },
   "dependencies": {
-    "@deepseek-ai/libreoffice-kit": "^0.1.1",
+    "@deepseek-ai/libreoffice-kit": "^0.1.5",
     "@deepseek-ai/schemastery": "workspace:~",
     "yaml": "^2.4.2"
   }

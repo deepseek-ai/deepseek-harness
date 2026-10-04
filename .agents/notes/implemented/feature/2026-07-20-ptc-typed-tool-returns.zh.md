@@ -10,13 +10,13 @@ PTC mode 过去会把每个嵌套工具的结果从 `ContentBlock[]` 重新投�
 
 运行时还把绑定值和程序最终返回值当作展示数据。日志和完成值分别设置上限，导致过大或无法克隆的完成值可能被替换为检查后生成的文本，而中间值本来就不会进入模型上下文。这种设计使程序化组合产生信息损失，也混淆了内存边界与提示词边界。
 
-[规范工具输出约定](../architecture/2026-07-20-canonical-tool-output-contract.zh.md)确立了单一、经过校验的执行期值，并将 Native 渲染器与之分离。PTC mode 应直接消费该值，在跨越 worker 边界时完整保留它，并且只限制程序有意返回给模型的最终输出。
+[规范工具输出约定](../../../../packages/core/tools/README.zh.md)确立了单一、经过校验的执行期值，并将 Native 渲染器与之分离。PTC mode 应直接消费该值，在跨越 worker 边界时完整保留它，并且只限制程序有意返回给模型的最终输出。
 
 ## 决策
 
 PTC mode 是可见工具注册表的类型化投影。每个成功的绑定调用都会解析为 post-execute 策略处理后的最终规范 `JsonValue`，失败的绑定调用则会以真正的 `ToolCallError` 拒绝 Promise。中间值只存在于本次运行中，并完整跨越 worker 边界。外层 `run_code` 的日志、完成值或失败诊断会进入可配置的输出账本以及面向模型的输出落盘流水线；如果成功结算的子调用最终 Native 内容包含图片，其完整有序内容还会经父结果延后为写入日志且带来源归属的上下文。
 
-本文档定义叠加在原始 [PTC mode 基础](2026-06-15-ptc.zh.md)之上的返回值与失败约定。统一 schema 词汇由 [JSON 值 schema DSL Agent Note](../architecture/2026-07-20-unified-json-value-schema-dsl.zh.md)负责定义；Native 渲染与策略投影仍由规范输出 Agent Note 负责定义。
+本文档定义叠加在原始 [PTC mode 基础](2026-06-15-ptc.zh.md)之上的返回值与失败约定。统一 schema 词汇由 [JSON 值 schema DSL reference](../../../../packages/core/tools/README.zh.md)负责定义；Native 渲染与策略投影仍由规范输出 Agent Note 负责定义。
 
 ### 生成的 SDK
 
@@ -67,7 +67,7 @@ PTC mode 通过运行时请求中的 `{ name: "ToolCallError", memberNamePropert
 
 ### 类型化句柄与生命周期
 
-后台生产方返回类型化的规范句柄，例如 `{ kind: 'background', jobId }`，同时保留既有的 Native 语句。已预先中止的后台调用仍是失败，因为成功输出承诺返回 id，而此时并未创建任务。`ctx.jobs.start()` 发布 id 后，工作由任务自有的取消机制控制：外围 `run_code` 调用完成，或随后被取消，都不会终止该任务。后续程序可以把返回的 id 传给 `job_output`；任务取消则由 `job_kill`、所有者的 dispose（资源释放）或服务 teardown 流程负责。前台执行仍与本次调用的信号耦合。任务生命周期约定由[后台任务运行时 Agent Note](../architecture/2026-06-20-generic-long-running-tool-runtime.zh.md)定义。
+后台生产方返回类型化的规范句柄，例如 `{ kind: 'background', jobId }`，同时保留既有的 Native 语句。已预先中止的后台调用仍是失败，因为成功输出承诺返回 id，而此时并未创建任务。`ctx.jobs.start()` 发布 id 后，工作由任务自有的取消机制控制：外围 `run_code` 调用完成，或随后被取消，都不会终止该任务。后续程序可以把返回的 id 传给 `job_output`；任务取消则由 `job_kill`、所有者的 dispose（资源释放）或服务 teardown 流程负责。前台执行仍与本次调用的信号耦合。任务生命周期约定由[后台任务运行时 reference](../../../../packages/jobs/jobs/README.zh.md)定义。
 
 临时 Cordis 插件遵循同一规则：`cordis_mount` 返回 `{ id, pluginName, state, provides, waitingFor }`，因此程序可以直接读取 `mounted.id`，检查 active 或 pending 状态，并把该 id 传给 `cordis_unmount`，无需解析稳定的 Native 语句。
 
@@ -75,7 +75,7 @@ PTC mode 通过运行时请求中的 `{ name: "ToolCallError", memberNamePropert
 
 嵌套分发在 `tool/ptc-dispatch` 上记录子调用完整渲染后的 `content`/`isError`，但不会持久化规范值。`tool/result` 继续只持久化渲染后的内容、错误和可选元数据。包含图片的成功最终内容序列还会包装成带来源归属的用户消息，并经外层结果延后；普通会话事件使该模型可见输入可以重建。[PTC mode note](2026-06-15-ptc.zh.md) 负责持久事件名称与历史标识保留规则；回放无法重建程序的规范中间值。
 
-不透明的 `exec.parent` token 用于标识嵌套调用。展示元数据以及通用或工具自有的 spill 投影都会跳过这些调用；它们的规范值永远不会进入上下文。Client 可以从原始分发事件派生[嵌套 terminal 卡片](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)，无需元数据。外层 `run_code` 调用产生面向模型的结果，并且可能对 post-policy 处理后的最终展示执行 spill；`run_code` 有意既不声明结果展示器，也不声明展示元数据，因此 UI 适配器会通过通用的原始内容回退机制，使用持久化的 `tool/result.content` 补全该卡片。
+不透明的 `exec.parent` token 用于标识嵌套调用。展示元数据以及通用或工具自有的 spill 投影都会跳过这些调用；它们的规范值永远不会进入上下文。Client 可以从原始分发事件派生[嵌套 terminal 卡片](../../../../packages/client/ui-tool/README.zh.md)，无需元数据。外层 `run_code` 调用产生面向模型的结果，并且可能对 post-policy 处理后的最终展示执行 spill；`run_code` 有意既不声明结果展示器，也不声明展示元数据，因此 UI 适配器会通过通用的原始内容回退机制，使用持久化的 `tool/result.content` 补全该卡片。
 
 ## 测试
 

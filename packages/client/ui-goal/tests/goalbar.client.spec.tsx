@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GoalSnapshot } from '@deepseek-ai/dsh-goal/client'
 import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
@@ -94,6 +94,25 @@ describe('GoalBar', () => {
     await waitFor(() => { expect(screen.getByText('进行中的目标')).toBeTruthy() })
   })
 
+  it('edits a multi-line objective: Shift+Enter and IME confirmation do not save', () => {
+    const actions = makeActions()
+    render(<GoalBar goal={makeGoal({ objective: 'Line one\nLine two' })} {...actions} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: '编辑目标' }))
+    const box = screen.getByRole('textbox', { name: '目标内容' })
+    expect(box).toHaveProperty('value', 'Line one\nLine two')
+
+    fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })
+    fireEvent.keyDown(box, { key: 'Enter', isComposing: true })
+    fireEvent.keyDown(box, { key: 'Enter', keyCode: 229 })
+    expect(actions.onEdit).not.toHaveBeenCalled()
+
+    fireEvent.change(box, { target: { value: 'Line one\nLine three' } })
+    const enter = createEvent.keyDown(box, { key: 'Enter' })
+    fireEvent(box, enter)
+    expect(enter.defaultPrevented).toBe(true)
+    expect(actions.onEdit).toHaveBeenCalledWith('Line one\nLine three')
+  })
+
   it('Esc cancels the edit without calling onEdit', () => {
     const actions = makeActions()
     render(<GoalBar goal={makeGoal()} {...actions} t={t} />)
@@ -134,10 +153,10 @@ describe('GoalBar', () => {
     expect(actions.onPause).toHaveBeenCalledTimes(1)
   })
 
-  it('active disarmed goal: "未运行的目标" with a resume action instead of pause', () => {
+  it('active disarmed goal: "已暂停的目标" with a resume action instead of pause', () => {
     const actions = makeActions()
     render(<GoalBar goal={makeGoal()} activation="disarmed" {...actions} t={t} />)
-    expect(screen.getByText('未运行的目标')).toBeTruthy()
+    expect(screen.getByText('已暂停的目标')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '恢复目标' }))
     expect(actions.onResume).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: '暂停目标' })).toBeNull()

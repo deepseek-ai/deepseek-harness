@@ -9,7 +9,7 @@
 # ordinary Cordis service. Rows configured from flags inject that service, so
 # Loader resolves their expressions only after it exists. The web runtime then
 # provides bind-dependent `webRuntime` values to the trust fence.
-# `dsh --profile web --help` provides neither service, so no server binds.
+# `dsh --profile web --help` provides no `webStartup`, so no server binds.
 
 # ── surface-specific values the base deliberately omits ─────────────────────
 
@@ -132,6 +132,13 @@
     - id: workspace-files
       name: '@deepseek-ai/dsh-api-workspace-files'
 
+    # The Schedule service owns the task store and delivers each due occurrence
+    # as a follow-up in its original Session. The clock reading and the four
+    # reminder tools belong to the `standard`, `cordis`, and `ptc` presets,
+    # which declare them in their own scope.
+    - id: schedule
+      name: '@deepseek-ai/dsh-schedule'
+
     # Configuration-surface reads and writes over Typert Remote. Each method
     # reports an actionable error when its settings-domain provider is absent.
     - id: ui-settings-account
@@ -164,8 +171,10 @@
     # ── layer 2: transport/service ──────────────────────────────────────────────
 
     # Plain route-registration carrier; host and port come from the app's
-    # webStartup provider, with these deployment fallbacks. The dist is served by
-    # the web-runtime row below through the fallback seat.
+    # webStartup provider, with these deployment fallbacks. The dist is served
+    # by the web-runtime row below through the fallback seat. Routing and
+    # browser-facing asset paths do not depend on the advertised URL, which the
+    # web-runtime row owns.
     - id: webserver
       name: '@deepseek-ai/dsh-host-webserver'
       inject: [webStartup]
@@ -180,18 +189,20 @@
     # assembly fact of dsh-web-app, never user config), mounts the
     # frontend-static fallback owner, registers the web-surface prompt
     # section and the bash runtime variable, prints the URL line, and opens the
-    # canonical local URL after the full Loader tree settles and the required-
-    # entry audit passes. The
-    # webStartup provider supplies invocation-only values; after the server binds, this row samples
-    # LAN trust once and provides `webRuntime`. A complete agent-preset persona
-    # suppresses the prompt section for that agent while retaining the host-owned
-    # shell variable.
+    # canonical URL after the full Loader tree settles and the required-
+    # entry audit passes. Invocation-only values come from the webStartup
+    # provider; the advertised application URL is this row's `publicUrl` (the
+    # loopback URL when unset). After the server binds, this row samples LAN
+    # trust once and provides `webRuntime`. A complete agent-preset persona
+    # suppresses the prompt section for that agent while retaining the
+    # host-owned shell variable.
     - id: web-runtime
       name: '@deepseek-ai/dsh-web-app'
       inject: [webStartup]
       config:
         openBrowser: !!js ctx.webStartup.openBrowser
         printUrl: true
+        publicUrl: !!js ctx.webStartup.publicUrl
         surfaceContext: true
         trustedHosts: !!js ctx.webStartup.trustedHosts
 
@@ -212,7 +223,9 @@
       name: '@deepseek-ai/dsh-client-modules'
 
     # Owns both ends of the web transport: node half binds the gateway to the
-    # webserver under /api; browser half is the fetch/SSE client.
+    # webserver under /api; browser half is the fetch/SSE client. Every API
+    # request and upgrade passes the loopback plus trustedHosts policy; an
+    # advertised public URL contributes nothing to it.
     - id: connection
       name: '@deepseek-ai/dsh-client-connection'
       inject: [webRuntime]
@@ -371,6 +384,11 @@
     - id: ui-jobs
       name: '@deepseek-ai/dsh-client-ui-jobs'
 
+    # Task management and Session reminder catalog over the Host Schedule
+    # service mounted above.
+    - id: ui-schedule
+      name: '@deepseek-ai/dsh-client-ui-schedule'
+
     # Goal surface: GoalBar in the input dock over the goal session projection.
     - id: ui-goal
       name: '@deepseek-ai/dsh-client-ui-goal'
@@ -392,6 +410,9 @@
     # sessions created later. Absent a roster it renders nothing.
     - id: ui-agent-preset
       name: '@deepseek-ai/dsh-client-ui-agent-preset'
+
+    - id: ui-settings-session-log
+      name: '@deepseek-ai/dsh-client-ui-settings-session-log'
 
     # The Built-in plugins settings section: the navigation entry and the tab
     # row the inventory tab registers into. The official configuration pages

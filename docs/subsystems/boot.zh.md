@@ -10,13 +10,13 @@
 
 `PluginInfo` 包含模块标识、实际启停状态、fiber 阶段和可选的展示 `meta`，以及唯一的 `patchId` 或 `readOnlyReason`。
 
-`BundleInfo` 包含包名、可选的安装版本、组合层选择状态、删除可用性及可选的解析错误。它的可选 `meta` 与各行的 `BundleRowInfo.meta` 包含展示文本或元信息诊断；Client 在渲染时选择语言。
+`BundleInfo` 包含包名、可选的安装版本、组合层选择状态、删除可用性、可选的解析错误；由 profile 自身依赖提供、且安装不提供的组合包还带有 `source`，即该依赖在 `pnpm add` 中可用的 spec。它的可选 `meta` 与各行的 `BundleRowInfo.meta` 包含展示文本或元信息诊断；Client 在渲染时选择语言。
 
 `InstallBundleOptions.enabled` 默认为 true，false 表示安装但不选择组合包层。`approvedBuilds` 在安装前向指定的待审批包名授予持久脚本权限。`registry` 指定首先询问的注册表；缺省为配置的那个。
 
 `PluginRegistries` 携带配置的第一个注册表（`null` 即 pnpm 自身配置指定的那个）、随后依次询问的备选注册表，以及 `resolved`——pnpm 自身配置指向的 URL，未读到时为 `null`。`InspectOptions.registry` 指定一次查询首先询问的注册表。
 
-`ChangeResult.changed` 报告磁盘修改，独立于 `application`：`applied`、`restart-required`、`overridden` 或 `failed`。可选的 `error` 包含可本地化的错误码和外部诊断。`packageResult` 记录 pnpm 退出码、有界输出、截断标志及完整诊断日志路径；当管理器终止了一个停止打印的运行，还记录 `timedOut`。被终止的运行不论信号留下什么退出状态都归类为 `timeout`，因此安装与删除都报告失败而非成功，也不会再询问下一个注册表。`pendingBuilds` 列出整个 profile 尚未决定的包；`approvedBuilds` 记录本次操作授予权限的包名；`registries` 按顺序列出一次安装问过的注册表；`failedAt` 说明最后一次失败的运行连不上的是所问的注册表，还是 git 或 tarball spec 自身拉取的主机。
+`ChangeResult.changed` 报告磁盘修改，独立于 `application`：`applied`、`restart-required`、`overridden` 或 `failed`。可选的 `error` 包含可本地化的错误码和外部诊断。`packageResult` 记录 pnpm 退出码、有界输出、截断标志及完整诊断日志路径；当管理器终止了一个停止打印的运行，还记录 `timedOut`。被终止的运行不论信号留下什么退出状态都归类为 `timeout`，因此安装与删除都报告失败而非成功，也不会再询问下一个注册表。`pendingBuilds` 列出整个 profile 尚未决定的包；`approvedBuilds` 记录本次操作授予权限的包名；`registries` 按顺序列出一次安装问过的注册表；`bundle` 与 `version` 给出完成的安装新增的包及其清单版本；`failedAt` 说明最后一次失败的运行连不上的是所问的注册表，还是 git 或 tarball spec 自身拉取的主机。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -111,8 +111,8 @@ Manage profile files and apply their declared reload lifecycle.
 
 /** Read the profile's installed bundles, the bundles this dsh installation supplies, and the selected names that are not bundles.
  * A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.
- * @returns Package versions, manifest descriptions, rows, optional display metadata, activation selections,
- * whether the installation offers the bundle, and removal availability.
+ * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
+ * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
  */
 @Remote listBundles(): Promise<BundleInfo[]>
 
@@ -170,8 +170,9 @@ Manage profile files and apply their declared reload lifecycle.
  */
 @Remote async cancelInstall(requestId: PluginInstallRequestId): Promise<PluginInstallCancellation>
 
-/** Unload and remove a profile-owned bundle dependency through dsh plugin's pnpm path.
- * @param name Installed dependency name.
+/** Unload and remove a profile-owned bundle dependency through dsh plugin's pnpm path; a selected name no
+ * dependency holds is only deselected.
+ * @param name Installed dependency or selected bundle name.
  * @returns Removal diagnostics and the remaining profile state.
  */
 @Remote removeBundle(name: string): Promise<ChangeResult>

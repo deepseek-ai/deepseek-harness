@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`ask_user_question` lets a model pause work and ask the human for confirmation, a choice, or missing information. It accepts one or more questions and returns their answers as compact JSON. The call waits until an answer is accepted or the turn is cancelled; if no answer handler accepts it, the model receives an error. A live child agent owned by another agent cannot call this tool and must report unresolved questions in its final result. The package does not render or collect input, so callers must provide a compatible user interaction surface.
+`ask_user_question` asks the user for confirmation, a choice, or missing information. It waits for an answer by default. With `mode: timed`, a deadline can release the model to continue independent work while the question stays answerable; `timeout: -1` waits indefinitely. A live child agent cannot call the tool. Callers provide the answer UI.
 
 ## Table of Contents
 
@@ -25,11 +25,23 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Compose this plugin wherever the model should be able to pause for a human decision: it provides the `ask_user_question` tool and needs the `ctx.userQuestions` seam with an answerer that accepts the scoped request. Without one, the tool call fails with an error instead of degrading.
+Compose this plugin with `ctx.userQuestions` when the model needs a user decision. Without an answerer, blocking calls fail; finite timed calls return pending at their deadline.
+
+Shipped presets use blocking mode. To enable timed mode, set `mode: timed` on the `tool-ask-user` row in the active preset's `config.plugins` list:
+
+```yaml
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+  config:
+    mode: timed
+    timeout: 120
+```
+
+This is a plugin row, not a top-level `--patch` entry. In the Web profile, change the `preset-standard` plugin list or use the Agent Preset editor. `mode: legacy` or omitted config keeps the blocking schema. The row's `timeout` applies to each timed call by default; `-1` waits indefinitely unless the model supplies a positive timeout. A model-supplied `-1` applies only to that call, including all its questions.
 
 ### When to call the tool
 
-The model calls `ask_user_question` when it needs confirmation, a choice, or missing information before proceeding. Send one or more questions, each with a stable `id` that is echoed in the answer; a recommended option goes first with `(Recommended)` appended to its label.
+Send one or more questions with ids unique within the call; the answer echoes those ids. Put a recommended option first and append `(Recommended)` to its label. The optional per-call `timeout` is in seconds; use `-1` when work cannot safely continue without an answer. A timeout is never approval. In the Web card, editing or choosing Take time also holds that Client's wait until submission or cancellation.
 
 ```json
 {
@@ -49,7 +61,9 @@ The model calls `ask_user_question` when it needs confirmation, a choice, or mis
 
 ### What the model gets back
 
-The tool returns one answer object per question: `selected` holds the chosen option labels, and `custom` carries a free-form answer — supplementing `selected` for a multi-select question and overriding it for a single-select question. The Native renderer preserves the compact JSON text shape.
+An answer returns one item per question. `selected` holds option labels; `custom` supplements a multi-select answer or replaces a single-select choice. A skipped item has empty `selected` and no `custom`.
+
+For a finite timed call, `{ "pending": true, "callId": "…" }` means the foreground wait ended without an answer. The question remains answerable, and the model may continue independent work. A later answer arrives as a user message identified by `kind`, `tool`, and `callId`. Web chat pairs its questions and answers; other consumers receive compact JSON text.
 
 ```json
 { "answers": [{ "id": "cleanup", "selected": ["Yes, delete them (Recommended)"] }] }
@@ -57,7 +71,7 @@ The tool returns one answer object per question: `selected` holds the chosen opt
 
 ### When the call fails
 
-The tool call blocks until the human answers and cancels only through the turn's signal. No accepting answerer, an aborted call, or a caller that is not the exact live runtime root each settles as an error the model sees in the tool result — most notably, a live child agent owned by another agent is rejected (`DELEGATED_CALLER`) and must include the unresolved question or decision in its final result.
+Legacy and `timeout: -1` calls wait for an answer or cancellation; without an accepting answerer, they return an error. A finite timed call without an answerer returns pending at its deadline. Cancellation and a caller that is not the exact live runtime root also return errors. A live child agent is rejected with `DELEGATED_CALLER` and must include the unresolved decision in its final result.
 
 -----
 
@@ -73,12 +87,12 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Tool registration: `ask_user_question` schema, execute path, result render |
-| — | No runtime invariant companion is published; this model-facing adapter has no independent lifecycle stream; execution relations are owned by the capability seam it calls. |
+| [`src/index.ts`](src/index.ts) | Default blocking tool definition and mode selection |
+| [`src/timed.ts`](src/timed.ts) | Opt-in timed tool definition and result rendering |
 
 ### Consumer role
 
-The plugin registers one `defineTool` entry on `ctx.tools` with injects `['tools', 'userQuestions']`. `execute` maps model arguments into an `AskUserQuestionRequest`, forwards the exact calling agent and the turn's signal, and maps the accepted answer back into the canonical `answers` array. The seam owns identity checks, intent validation, waterfall dispatch, and the error taxonomy; this package only translates.
+The plugin registers one tool definition. Legacy mode calls `ask()`; timed mode calls `askTimed()` for positive timeouts and `ask()` for `-1`. Both forward the calling agent and turn signal to `ctx.userQuestions`. Timed requests include the tool call id in `wait`, so a Client can reopen their card. The projection identifies timed native calls from the `timeout` field in the recorded tool schema, even when a call omits that argument.
 
 ### Result rendering
 
@@ -107,7 +121,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The model sees the generated [`ask_user_question` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-ask-user), including question ids, prompts, headings, options, and multi-select flags.
+The shipped presets expose the original blocking [`ask_user_question` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-ask-user). A custom Cordis row with `mode: timed` switches to the alternate schema, including question ids, prompts, headings, options, multi-select flags, `timeout`, and the pending result; the model sees only the selected definition.
 
 #### Token effect
 
@@ -121,7 +135,7 @@ Prefix-stable while the definition and visibility are unchanged. Plugin lifecycl
 
 #### What the model sees
 
-The model's full questions remain in the assistant tool-call arguments. After the human answers, the next step sees compact JSON in the exact shape `{"answers":[{"id":"<id>","selected":["<label>"],"custom":"<text>"}]}`; `custom` is omitted when unused and `selected` can contain zero, one, or several labels. UI interaction while the call is pending is not model context.
+The assistant tool call retains the questions. An answer during the wait appears in the next step as compact `{"answers":[{"id":"<id>","selected":["<label>"],"custom":"<text>"}]}` JSON; unused `custom` is omitted. A timed-out call returns `{"pending":true,"callId":"<pending-call-id>","message":"<instruction>"}`. A later answer arrives as a user message with `kind: "answer_to_pending_question"`, `tool: "ask_user_question"`, the call id, the original questions, and the answers. UI activity before submission is not model context.
 
 #### Token effect
 
@@ -138,7 +152,8 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 These limits define when the tool is a poor fit. They are current package constraints, not a UI backlog.
 
-- **A pending question blocks the tool call until the human answers** — the tool declares no `timeout-policy` budget; cancellation rides the turn's `exec.signal` only.
+- **The legacy tool never reports pending** — it returns an answer or an error. Native legacy calls do not enter the `userQuestions` projection, and interrupted calls cannot take late answers.
+- **An interrupted PTC wait may lose its question** — if the `run_code` process ends before an `ask_user_question` sub-call records its `tool/ptc-dispatch` result, the projection cannot reconstruct that sub-call for a late answer.
 - **Runtime-owned subagents cannot ask the user** — `ask_user_question` rejects a live child owned by another agent with `DELEGATED_CALLER`; the child must include the unresolved question or decision in its final result. Durable lineage does not decide this boundary, so a lineage-bearing session resumed as a runtime root may ask normally.
 - **Native answers render as JSON text** — the canonical value remains structured, but the model-facing result uses compact JSON rather than a richer content-block vocabulary.
 
@@ -148,6 +163,6 @@ These limits define when the tool is a poor fit. They are current package constr
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-None.
+The [`userQuestions` projection](../user-questions/src/projection.ts) reads each recorded tool schema rather than the call arguments: timed calls may omit `timeout`, and timed `-1` calls still use the timed schema. Changes to the projection fold require a `stateVersion` bump so stored caches refold from the log.
 
 </details>

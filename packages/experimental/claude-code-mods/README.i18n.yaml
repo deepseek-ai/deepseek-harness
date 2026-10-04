@@ -1,0 +1,85 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/claude-code-mods/README.md
+/:
+  en: 2330eeb4e52d6577
+  zh: bcd3e315c445acb6
+/deepseek-ai-dsh-experimental-claude-code-mods:
+  en: bf54b493565f1624
+  zh: 6f28a518f7b0dea8
+/deepseek-ai-dsh-experimental-claude-code-mods/summary:
+  en: e4fbe86dd316b2af
+  zh: 6d056c3d9a6d50c3
+/deepseek-ai-dsh-experimental-claude-code-mods/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-experimental-claude-code-mods/use-this-package:
+  en: 95dcbcd789f3a4dd
+  zh: 34aa7c9d225f6fe4
+/deepseek-ai-dsh-experimental-claude-code-mods/use-this-package/which-events-your-mod-receives:
+  en: 909e5c93c27ed388
+  zh: 2377524dbb845ff1
+/deepseek-ai-dsh-experimental-claude-code-mods/use-this-package/the-band-above-the-prompt:
+  en: 2b04be6b58e61a74
+  zh: f4854198d8999d11
+/deepseek-ai-dsh-experimental-claude-code-mods/use-this-package/which-members-your-mod-can-call:
+  en: 9ca1aff59b65305f
+  zh: c6043a8b7aadbdec
+/deepseek-ai-dsh-experimental-claude-code-mods/use-this-package/test-a-mod:
+  en: 5848fccf79f41e0a
+  zh: 62bb20c4d7e4d8c2
+/deepseek-ai-dsh-experimental-claude-code-mods/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: cfcb757213648bd9
+/deepseek-ai-dsh-experimental-claude-code-mods/understand-the-implementation/loading:
+  en: 7b48e62da7d73a85
+  zh: a7f8e46cecb726cf
+/deepseek-ai-dsh-experimental-claude-code-mods/understand-the-implementation/the-chain:
+  en: 5330d8f5a6c9b992
+  zh: 8f6d167642a1c263
+/deepseek-ai-dsh-experimental-claude-code-mods/understand-the-implementation/mapping-onto-the-harness:
+  en: fbbc266cc3657e17
+  zh: be505d92315c0882
+/deepseek-ai-dsh-experimental-claude-code-mods/understand-the-implementation/source-map:
+  en: a141066b146cef7c
+  zh: fe91851f05c008c4
+/deepseek-ai-dsh-experimental-claude-code-mods/further-exploration:
+  en: 43c558ca826febdd
+  zh: 3dfd87ca60c6548d
+/deepseek-ai-dsh-experimental-claude-code-mods/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-claude-code-mods/model-experience/prompt-context-and-submitted-prompts:
+  en: 2e9d6b50a26a5e10
+  zh: d884e62e639cad69
+/deepseek-ai-dsh-experimental-claude-code-mods/model-experience/prompt-context-and-submitted-prompts/what-the-model-sees:
+  en: 6a1d174d923e84f2
+  zh: a27f777d11741880
+/deepseek-ai-dsh-experimental-claude-code-mods/model-experience/prompt-context-and-submitted-prompts/what-the-model-sees/framing-of-a-prompt-a-mod-submits:
+  en: f521d5aba5ab7027
+  zh: 5aa721441103f9a7
+/deepseek-ai-dsh-experimental-claude-code-mods/model-experience/prompt-context-and-submitted-prompts/token-effect:
+  en: 04a7869d92d45eb8
+  zh: 8ddbd20f844dba65
+/deepseek-ai-dsh-experimental-claude-code-mods/model-experience/prompt-context-and-submitted-prompts/kv-cache-effect:
+  en: 75b19101cbd036ff
+  zh: 193106a75b280c73
+/deepseek-ai-dsh-experimental-claude-code-mods/model-experience/tool-outcomes-a-mod-decides:
+  en: fe8166c6d3eb962a
+  zh: 5f8fe74778a78166
+/deepseek-ai-dsh-experimental-claude-code-mods/model-experience/tool-outcomes-a-mod-decides/what-the-model-sees:
+  en: 5b4aa2a1ec36106b
+  zh: c28c286f2a04d716
+/deepseek-ai-dsh-experimental-claude-code-mods/model-experience/tool-outcomes-a-mod-decides/token-effect:
+  en: cbf27f737c6254e6
+  zh: 333cbb22f97f8955
+/deepseek-ai-dsh-experimental-claude-code-mods/model-experience/tool-outcomes-a-mod-decides/kv-cache-effect:
+  en: ca31263f47f654d9
+  zh: 17d55e6641705627
+/deepseek-ai-dsh-experimental-claude-code-mods/known-limitations-and-deferred-work:
+  en: 99aaa73c8ef9c609
+  zh: 46fab480bd2b1706
+/deepseek-ai-dsh-experimental-claude-code-mods/known-limitations-and-deferred-work/dev-note:
+  en: 4d1e26f4cc9c3c1c
+  zh: d80209b56c56b11c

@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-23-desktop-close-to-background-and-quit-confirmation.md
 /agent-note-hide-the-desktop-window-on-close-and-confirm-interruptible-quits:
-  en: 9e029938c58bf143
-  zh: f60f9cf2067a02ee
+  en: 92bb54cd9fe6b168
+  zh: b0952405c6066416
 /agent-note-hide-the-desktop-window-on-close-and-confirm-interruptible-quits/problem:
   en: 782e934449eae28c
   zh: 0941465dff3a26d9

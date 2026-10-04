@@ -107,7 +107,6 @@ The [committed-corpus test](tests/session-format-corpus.spec.ts) restores each v
 |---|---|
 | [`src/index.ts`](src/index.ts) | Types, fixture derivation, override validation, placeholder resolution, session binding, `installLlmReplay`, and the plugin export |
 | [`tests/session-format-corpus.spec.ts`](tests/session-format-corpus.spec.ts) | Committed-generation restoration and exact historical refusal checks |
-| — | No runtime invariant companion is published; this test-only adapter consumes a fixed replay script; its stream grammar is checked by the LLM companion and fixture derivation tests. |
 
 ### Binding and stream flow
 

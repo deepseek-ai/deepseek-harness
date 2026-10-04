@@ -10,7 +10,7 @@ Status: implemented
 
 ACP（Agent Client Protocol）对两种 identity 使用相同值。Stdio 和钩子也在会话事件流上工作，并且直接需要对应的存活 agent；没有生产路径会把一个存活 agent 对象重新附着到多个会话，或通过多个 agent id 驱动一个会话。
 
-[agent 范围运行时](../architecture/2026-07-12-agent-scope-runtime-design.zh.md)使用同一个 `AgentCreationTransaction` 执行创建和恢复，agent/会话条目共享相同的最终条目冲突规则。第二个 identity 并不代表单独的存活性、回滚或完全停稳；它只会围绕同一事务增加 API 与转换状态。
+[agent 范围运行时](../../../../packages/core/agent-loop/README.zh.md)使用同一个 `AgentCreationTransaction` 执行创建和恢复，agent/会话条目共享相同的最终条目冲突规则。第二个 identity 并不代表单独的存活性、回滚或完全停稳；它只会围绕同一事务增加 API 与转换状态。
 
 会话 identity 同样只有一个归属，即 `Session.header.id`；`Session.id` 是派生访问器，而非需要重复验证的独立状态。
 

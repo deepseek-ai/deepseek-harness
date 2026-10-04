@@ -16,7 +16,7 @@ AgentLoop holds its existing maintenance activity through setup and creation dis
 
 Creation dispatch retains the scope and Session while listeners await. Disposal cancels initialization and joins the dispatch before releasing those resources. A listener must not await its own Agent's idle state or its owner's disposal, because each waits for that listener to finish. Background work on another Agent follows that Agent's own initialization lifecycle.
 
-This decision owns asynchronous creation timing. The [scope runtime decision](2026-07-12-agent-scope-runtime-design.md) retains registry identity and teardown ownership, while the [interception decision](../feature/2026-06-30-interception-extension-points.md) retains policy and tool-event semantics.
+This decision owns asynchronous creation timing. The [scope runtime reference](../../../../packages/core/agent-loop/README.md) retains registry identity and teardown ownership, while the [interception reference](../../../../docs/tool-execution-pipeline.md) retains policy and tool-event semantics.
 
 ## Alternatives considered
 

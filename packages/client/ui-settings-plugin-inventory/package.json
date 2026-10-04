@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-settings-plugin-inventory",
   "description": "Read-only Cordis Loader inventory tab in Web Plugins settings",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

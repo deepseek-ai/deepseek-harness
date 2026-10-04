@@ -14,7 +14,7 @@ Web 插件页只管理用户装进 profile 的组合包。像 Agent Teams 这样
 
 默认产品隔离的规则保持不变，只声明一个例外：可选组合包的依赖图在默认产品之外。静态门禁跳过从 `@deepseek-ai/dsh` 到列表中组合包的 `dependencies` 边，仍然拒绝运行时 import、随附组合、preset 或默认模板对它的引用，拒绝列表没有点名的实验依赖，也拒绝不是运行时依赖或不是组合包的列表项。workspace 约束检查接受同样的 `dependencies` 边而不接受其他运行时依赖段；发布时的 packed-install 检查对已安装入口包跳过这些边，并要求列表中的每个组合包都已安装。
 
-[单组合包决策](../architecture/2026-09-18-agent-teams-single-bundle.zh.md)将两个 Agent Teams 选项替换为一个 `@deepseek-ai/dsh-experimental-agent-team-profile` 选项。本记录保留由安装方决定可选组合包的策略；[实验能力的可选 bundle 决策](../architecture/2026-09-21-experimental-capabilities-as-optional-bundles.zh.md)列出当前名单以及每一项携带的显示元数据。
+[单组合包参考](../../../../packages/experimental/agent-team-profile/README.zh.md)将两个 Agent Teams 选项替换为一个 `@deepseek-ai/dsh-experimental-agent-team-profile` 选项。本记录保留由安装方决定可选组合包的策略；[实验能力的可选 bundle 决策](../architecture/2026-09-21-experimental-capabilities-as-optional-bundles.zh.md)列出当前名单以及每一项携带的显示元数据。
 
 ## 考虑过的替代方案
 

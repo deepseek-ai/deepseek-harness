@@ -310,6 +310,32 @@ describe('same-session goal driving', () => {
       && event.data.source.kind === 'goal' && event.data.source.round > 0)).toBe(false)
   })
 
+  it('withdraws a round parked behind cancelled human work so later input runs', async () => {
+    const test = await harness(['hang', 'hang', textResponse('answered 1')])
+    test.ctx.goals.create(test.agent, { objective: 'park behind human work' })
+    await waitForRequests(test.adapter, 1)
+    test.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'human X' }], source: { kind: 'user' } }))
+    test.agent.cancel({ kind: 'user' }, { keepInbox: true })
+    const paused = await waitForGoal(test.ctx, test.agent, goal => goal?.phase === 'paused')
+    // Resuming reserves the next round behind the parked human prompt.
+    test.ctx.goals.resume(test.agent, { id: paused!.id, revision: paused!.revision })
+    await waitForRequests(test.adapter, 2)
+    expect(test.agent.inbox.nextTurn.map(message => message.source.kind)).toEqual(['goal'])
+
+    test.agent.cancel({ kind: 'user' }, { keepInbox: true })
+    await test.agent.whenIdle()
+    expect(test.agent.inbox.nextTurn).toEqual([])
+    // The cancelled turn belonged to human work, so continuation disarms without pausing.
+    expect(test.ctx.goals.get(test.agent)).toMatchObject({ phase: 'active', activation: 'disarmed' })
+    expect(test.agent.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced').at(-1)?.data)
+      .toEqual({ target: 'next-turn', start: 0, removedCount: 1, inserted: [], outcome: 'canceled' })
+    test.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'human 1' }], source: { kind: 'user' } }))
+    await waitForRequests(test.adapter, 3)
+
+    expect(requestText(test.adapter.requests[2]!)).toContain('human 1')
+    expect(test.agent.inbox.nextTurn).toEqual([])
+  })
+
   it('pauses an admitted round when cancellation aborts an active step', async () => {
     const test = await harness(['hang'])
     test.ctx.goals.create(test.agent, { objective: 'stop in flight' })

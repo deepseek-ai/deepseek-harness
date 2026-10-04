@@ -12,7 +12,7 @@ Agent 产出的文件是最尖锐的案例。产出文件 chip 或 `read` 行的
 
 ## Decision
 
-右列是每会话一份的停靠面（分栏 pane、tab、浮动面板与可撤销的操作序列），由 `ui-sidebar-right` 基于 `ui-dockkit` 引擎持有，取代原来的 Detail 面板。本篇只管这个面：引擎、框架的右列、面板的两种呈现与控件、每会话的状态。面里放什么由别处决定：插件如何声明 tab 类型、打开内容、拿到 props 见[tab 类型与导航](../architecture/2026-09-05-sidebar-tab-types-and-navigation.zh.md)；地址背后的活数据见[客户端资源模型](../architecture/2026-09-05-client-resource-model.zh.md)；读工作区文件见[工作区文件服务](../architecture/2026-09-05-workspace-files-service.zh.md)；引导页、文本预览与文件树见[随包类型](2026-09-05-sidebar-text-preview-and-file-tree.zh.md)。
+右列是每会话一份的停靠面（分栏 pane、tab、浮动面板与可撤销的操作序列），由 `ui-sidebar-right` 基于 `ui-dockkit` 引擎持有，取代原来的 Detail 面板。本篇只管这个面：引擎、框架的右列、面板的两种呈现与控件、每会话的状态。面里放什么由别处决定：插件如何声明 tab 类型、打开内容、拿到 props 见[tab 类型与导航](../../../../packages/client/ui-sidebar-right/README.zh.md)；地址背后的活数据见[客户端资源模型](../architecture/2026-09-05-client-resource-model.zh.md)；读工作区文件见[工作区文件服务](../architecture/2026-09-05-workspace-files-service.zh.md)；引导页、文本预览与文件树见[随包类型](../../../../packages/client/ui-sidebar-documentpreview/README.zh.md)。
 
 ### 包拓扑
 
@@ -33,23 +33,23 @@ Agent 产出的文件是最尖锐的案例。产出文件 chip 或 `read` 行的
 
 ### 框架的右列
 
-[响应式 Sidebar 与标签信息](../architecture/2026-09-07-sidebar-responsive-tab-info.zh.md)取代本记录中的无让步布局、覆盖模式与产品窗格上限。`ui-layout` 仍拥有三列几何与像素宽度偏好，Sidebar 占位项通过 `ctx.layout.openRightbar(track, fullscreen)` 和 `closeRightbar()` 报告呈现方式，框架不注入 Sidebar 包。具体宽度规则见 [ui-layout](../../../../packages/client/ui-layout/README.zh.md)。
+[响应式 Sidebar 与标签信息](../../../../packages/client/ui-sidebar-right/README.zh.md)取代本记录中的无让步布局、覆盖模式与产品窗格上限。`ui-layout` 仍拥有三列几何与像素宽度偏好，Sidebar 占位项通过 `ctx.layout.openRightbar(track, fullscreen)` 和 `closeRightbar()` 报告呈现方式，框架不注入 Sidebar 包。具体宽度规则见 [ui-layout](../../../../packages/client/ui-layout/README.zh.md)。
 
 右栏在普通与全屏模式下使用同一棵已挂载内容树；隐藏保留已保活的标签状态，全屏覆盖视口并保留底层列占位。`DockLayout` 在同一棵树中渲染稳定 Grid cell 与 fixed 定位的浮动 frame，前台浮窗不随右栏关闭。产品限制为两个水平窗格与 20–80% 分割比例，通用引擎保留自己的默认值。
 
 ### 状态
 
-[默认页](2026-09-08-sidebar-default-pages.zh.md)取代此处的默认补入引导页；[最后一个 tab 的关闭规则](2026-09-08-sidebar-last-tab-close-rules.zh.md)负责显式关闭，移动 tab 仍会处理被清空的格。
+[Sidebar 引导页规则](../../../../packages/client/ui-sidebar-right/README.zh.md#the-guide)定义默认页选择与显式关闭，移动 tab 仍会处理被清空的格。
 
-`ui-sidebar-right` 为每个会话 id 保存一份 `SurfaceState`——布局、历史与铸造计数——住在坑位注册时声明的 store 里。每个 action 先铸造意图所需的 id，向库的 planner 索取操作，对结果跑一遍 settle planner，把整个意图记为一条历史账，再把该会话的 surface 整体赋回；没有 action 就地改布局。settle 是产品规则：最后一个 tab 被关闭、拖走或悬浮出去的停靠 pane 会被合并掉；展开且为空的根 pane 会填入当前默认页。折叠的布局可以保持为空，直到下次展开；没有单独的关闭 pane 手势。[布局持久化与 provider 恢复](../architecture/2026-09-14-sidebar-layout-provider-recovery.zh.md)负责 Session 作用域的浏览器存储和刷新。布局是呈现状态，永不进入会话日志。
+`ui-sidebar-right` 为每个会话 id 保存一份 `SurfaceState`——布局、历史与铸造计数——住在坑位注册时声明的 store 里。每个 action 先铸造意图所需的 id，向库的 planner 索取操作，对结果跑一遍 settle planner，把整个意图记为一条历史账，再把该会话的 surface 整体赋回；没有 action 就地改布局。settle 是产品规则：最后一个 tab 被关闭、拖走或悬浮出去的停靠 pane 会被合并掉；展开且为空的根 pane 会填入当前默认页。折叠的布局可以保持为空，直到下次展开；没有单独的关闭 pane 手势。[布局持久化与 provider 恢复](../../../../packages/client/ui-sidebar-right/README.zh.md)负责 Session 作用域的浏览器存储和刷新。布局是呈现状态，永不进入会话日志。
 
 ### 面之外
 
-这个面渲染的 tab 正文它自己并不认识：每个 tab 带一个 `kind`，面板向类型注册表询问该 kind 生效的实现，再派发到其 keyed 正文坑位。正文能依赖的一切——它的记录、所在格、是否可见、如何被导航到、中止信号、可做的动作——均通过框架注入的 `useTabInfo()` 从标签域读取。注册表、导航面 `ctx.sidebarRight`、坑位与 标签信息 在[tab 类型与导航](../architecture/2026-09-05-sidebar-tab-types-and-navigation.zh.md)里定；展示数据的正文经[客户端资源模型](../architecture/2026-09-05-client-resource-model.zh.md)读取。
+这个面渲染的 tab 正文它自己并不认识：每个 tab 带一个 `kind`，面板向类型注册表询问该 kind 生效的实现，再派发到其 keyed 正文坑位。正文能依赖的一切——它的记录、所在格、是否可见、如何被导航到、中止信号、可做的动作——均通过框架注入的 `useTabInfo()` 从标签域读取。注册表、导航面 `ctx.sidebarRight`、坑位与 标签信息 在[tab 类型与导航](../../../../packages/client/ui-sidebar-right/README.zh.md)里定；展示数据的正文经[客户端资源模型](../architecture/2026-09-05-client-resource-model.zh.md)读取。
 
 ### 入口与删除
 
-`ui-chat` 的 `openFile(path, { line? })`——工具行路径链接、产出文件 chip 与收尾消息提及都经由它——现在经导航面把文件开进 Sidebar（见[tab 类型与导航](../architecture/2026-09-05-sidebar-tab-types-and-navigation.zh.md)）。`Show in folder` 动作及其 `canOpenWorkspacePath` 探针从 `ui-deliverables` 移除：Sidebar 没有目录形态，产品也不保留次级入口。`DetailsPanel`、`ToolDetails`、tool-node reader、chat store 的 selection、`ToolDetailsProps` 与 `CENTER_MIN` 一并删除。`session/openWorkspacePath` 留在 Host 上，已无 web 调用方。
+`ui-chat` 的 `openFile(path, { line? })`——工具行路径链接、产出文件 chip 与收尾消息提及都经由它——现在经导航面把文件开进 Sidebar（见[tab 类型与导航](../../../../packages/client/ui-sidebar-right/README.zh.md)）。`Show in folder` 动作及其 `canOpenWorkspacePath` 探针从 `ui-deliverables` 移除：Sidebar 没有目录形态，产品也不保留次级入口。`DetailsPanel`、`ToolDetails`、tool-node reader、chat store 的 selection、`ToolDetailsProps` 与 `CENTER_MIN` 一并删除。`session/openWorkspacePath` 留在 Host 上，已无 web 调用方。
 
 ## Alternatives considered
 

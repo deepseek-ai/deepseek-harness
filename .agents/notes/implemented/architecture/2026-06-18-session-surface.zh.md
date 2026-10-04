@@ -45,7 +45,7 @@ surface 元数据仅属于四种 surface 事件类型（`system/message`、`user
 
 ### 不变式
 
-`Session` 在始终启用的 seed/append 边界校验 `sourceEventSeqs` 与 `surfaceOp`：source list 必须非空、唯一、更早且已知；`assistant/message` 不携带 source list；replacement endpoint 必须存在于 surface 顺序中；`sourceEventSeqs` 必须覆盖每个被遮蔽的节点。这些是单记录接纳与存储投影规则，不是由可选 invariant service 提供的规则。
+`Session` 在始终启用的 seed/append 边界校验 `sourceEventSeqs` 与 `surfaceOp`：source list 必须非空、唯一、更早且已知；`assistant/message` 不携带 source list；replacement endpoint 必须存在于 surface 顺序中；`sourceEventSeqs` 必须覆盖每个被遮蔽的节点。这些是单记录接纳与存储投影规则。
 
 每个可进入 surface 的事件都必须携带 `surfaceOp`，否则它将从派生历史中消失。类型化的 `append` 重载对字面事件类型强制执行此规则；`append` 和种子构造函数中的运行时检查覆盖宽化联合类型和当前已加载日志。已发布格式的校验与转换属于各自版本化迁移边，而不属于通用 Session 代码；参见 [V2 到 V3 位置规则](../../../../packages/session/session-format-v2-to-v3/README.zh.md#canonical-envelopes)。
 

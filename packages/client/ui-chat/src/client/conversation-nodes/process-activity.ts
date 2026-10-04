@@ -1,4 +1,5 @@
 /** Tool-category and live-detail interpretation owned by Chat grouping. */
+import type { ToolArgs } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ProcessActivity, ProcessActivitySummary } from '../contract/process-groups.ts'
 import type { ChatNode } from '../contract/chat-nodes.ts'
 import { isRunningTool } from '../contract/chat-nodes.ts'
@@ -21,11 +22,33 @@ function activity(name: string): ProcessActivity {
 }
 
 const LIVE_TOOL_DETAIL_MAX_CHARS = 160
+const LIVE_TOOL_DETAIL_PREFIX_CHARS = 512
 const LIVE_TOOL_DETAIL_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 const LIVE_TOOL_DETAIL_KEYS = [
   'title', 'description', 'objective', 'task', 'task_name', 'name', 'question', 'questions', 'prompt', 'message',
   'command', 'cmd', 'queries', 'query', 'pattern', 'url', 'uri', 'file_path', 'path', 'target', 'action', 'status',
 ] as const
+
+interface NormalizedDetail {
+  readonly text: string
+  readonly truncated: boolean
+}
+
+function normalizeLiveToolText(text: string): NormalizedDetail {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= LIVE_TOOL_DETAIL_MAX_CHARS) return { text: normalized, truncated: false }
+  const chars: string[] = []
+  for (const { segment } of LIVE_TOOL_DETAIL_SEGMENTER.segment(normalized)) {
+    if (chars.length === LIVE_TOOL_DETAIL_MAX_CHARS) {
+      return {
+        text: `${chars.slice(0, LIVE_TOOL_DETAIL_MAX_CHARS - 1).join('').trimEnd()}…`,
+        truncated: true,
+      }
+    }
+    chars.push(segment)
+  }
+  return { text: normalized, truncated: false }
+}
 
 function normalizeLiveToolDetail(value: unknown): string {
   const text = typeof value === 'string'
@@ -33,11 +56,30 @@ function normalizeLiveToolDetail(value: unknown): string {
     : Array.isArray(value) && value.every(item => typeof item === 'string')
       ? value.join(', ')
       : ''
-  const normalized = text.replace(/\s+/g, ' ').trim()
-  const chars = Array.from(LIVE_TOOL_DETAIL_SEGMENTER.segment(normalized), part => part.segment)
-  return chars.length <= LIVE_TOOL_DETAIL_MAX_CHARS
-    ? normalized
-    : `${chars.slice(0, LIVE_TOOL_DETAIL_MAX_CHARS - 1).join('').trimEnd()}…`
+  return normalizeLiveToolText(text).text
+}
+
+function argumentTextDetail(args: ToolArgs, key: string): string | undefined {
+  let limit = LIVE_TOOL_DETAIL_PREFIX_CHARS
+  while (true) {
+    let prefix = args.textPrefix(key, limit)
+    if (prefix === undefined) return undefined
+    const last = prefix.charCodeAt(prefix.length - 1)
+    if (last >= 0xd800 && last <= 0xdbff) {
+      // The extra prefix read also observes a low surrogate arriving in a later delta.
+      const extended = args.textPrefix(key, limit + 1) as string
+      const next = extended.charCodeAt(prefix.length)
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        prefix = extended
+        limit++
+      } else if (extended.length === prefix.length && !args.isSealed && !args.complete(key)) {
+        prefix = prefix.slice(0, -1)
+      }
+    }
+    const detail = normalizeLiveToolText(prefix)
+    if (detail.truncated || !args.stringExceeds(key, limit)) return detail.text
+    limit *= 2
+  }
 }
 
 function questionDetail(value: unknown): string {
@@ -67,23 +109,21 @@ function liveReasoningDetail(nodes: readonly ChatNode[]): string {
   return ''
 }
 
-function liveToolDetail(name: string, argsRaw: string): string {
-  let args: unknown
-  try {
-    args = JSON.parse(argsRaw)
-  } catch (_error: unknown) {
-    // Partial or free-form arguments have no safe one-line task detail.
-    return normalizeLiveToolDetail(name)
-  }
-  if (args === null || typeof args !== 'object') return normalizeLiveToolDetail(name)
+/**
+ * One-line task detail from the argument view, read the same way while the
+ * arguments stream and after dispatch: the first detail key present with text
+ * so far or a closed value. Without one, the tool name stands in once no further
+ * field can arrive; a field still to come is not named early.
+ */
+function liveToolDetail(name: string, args: ToolArgs): string {
   for (const key of LIVE_TOOL_DETAIL_KEYS) {
-    if (key in args) {
-      const value: unknown = Reflect.get(args, key)
-      const detail = key === 'questions' ? questionDetail(value) : normalizeLiveToolDetail(value)
-      if (detail !== '') return detail
-    }
+    if (!args.has(key)) continue
+    const detail = key === 'questions'
+      ? questionDetail(args.value(key))
+      : argumentTextDetail(args, key) ?? normalizeLiveToolDetail(args.value(key))
+    if (detail !== '') return detail
   }
-  return normalizeLiveToolDetail(name)
+  return args.closed() ? normalizeLiveToolDetail(name) : ''
 }
 
 /**
@@ -107,9 +147,7 @@ export function processActivity(nodes: readonly ChatNode[]): ProcessActivitySumm
       if (isRunningTool(tool) && tool.time >= runningTime) {
         running = kind
         preparing = tool.phase === 'preparing'
-        runningDetail = tool.phase === 'preparing'
-          ? kind === 'tools' ? tool.name : ''
-          : liveToolDetail(tool.name, tool.argsRaw)
+        runningDetail = liveToolDetail(tool.name, tool.args)
         runningTime = tool.time
       }
       counts.set(kind, (counts.get(kind) ?? 0) + 1)

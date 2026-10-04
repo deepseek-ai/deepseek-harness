@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/testing/2026-09-27-oxlint-contract-spawn-case-budgets.md
+2026-09-27-oxlint-contract-spawn-case-budgets.md: ccfaa054a5c201350e0c92ef75c9ae62ebe3013f
+2026-09-27-oxlint-contract-spawn-case-budgets.zh.md: 7170e37ef876b595d57b27e28bf53849116102ef

@@ -76,7 +76,6 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 提供方注册：前缀计算、`Config` schema、能力声明 |
-| — | 不发布运行时不变式伴生入口；本包没有独立事件序列或可变数据关系，相关约定在所属 seam 强制执行。 |
 
 ### 运行流程
 
@@ -144,7 +143,7 @@ fork 会把保留的已完成历史复制到子 agent 的请求中，子 agent �
 
 - **初始内容是一次性快照**——子 agent 只能看到 fork 时父级已完成的轮次，看不到父级此后记录的任何内容；不会实时共享上下文。
 - **fork 生命周期策略因组合而异**——base 组合包与 ACP/headless 示例使用一次性 fork，CLI 预设使用可继续 fork。两者都因父级与子级的消息定义逐字节相同而让继承前缀保持可复用；显式 persona、工具过滤、生成 SDK 或路由变化仍可破坏相等性。理由见[保持 fork 缓存的 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.zh.md)。
-- **随附 fork 工具不公开子级 LLM（大语言模型）路由选择**——它们继承父级提供方与模型，使复制的历史仍有资格复用 KV Cache。在某项改动能保留复用或公开有界重算成本前，路由选择保持禁用；[模型选择路由 Agent Note](../../../.agents/notes/implemented/feature/2026-08-18-model-selected-subagent-routes.zh.md)说明这项限制。
+- **随附 fork 工具不公开子级 LLM（大语言模型）路由选择**——它们继承父级提供方与模型，使复制的历史仍有资格复用 KV Cache。在某项改动能保留复用或公开有界重算成本前，路由选择保持禁用。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -4,7 +4,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 import { hasSpillNotice } from '@deepseek-ai/dsh-spill-policy/notice'
 import type { ToolCallBlock } from './tool-call-model.ts'
-import { parsedToolCall, singleResultText, validEscalationFields } from './raw-tool-call.ts'
+import { parsedToolCall, singleResultText } from './raw-tool-call.ts'
 
 /**
  * Build the TerminalBlock display copy from the conversation locale seat —
@@ -189,7 +189,9 @@ function shellCall(name: string, args: Record<string, unknown>): ShellCall | nul
   if (timeoutMs !== undefined && (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0)) return null
   if (workdir !== undefined && typeof workdir !== 'string') return null
   if (background !== undefined && typeof background !== 'boolean') return null
-  if (!validEscalationFields(args)) return null
+  // Escalation fields stay unchecked: their validity depends on the Session's
+  // sandbox mode, which only the Host knows, and a rejected call settles as an
+  // error result on the generic body.
   if (description === undefined) {
     // Standard dsh-tool-bash and dsh-tool-pwsh schemas require `description`;
     // persistent shell providers omit it. Their parameter roots stay open, so

@@ -23,7 +23,7 @@
         - text: Add workspace Ctrl + Alt + O
       - listitem:
         - button "Edit shortcut for Rename session"
-        - text: Rename session Ctrl + Shift + R
+        - text: Rename session Ctrl + Alt + G
       - listitem:
         - button "Edit shortcut for Fork session"
         - text: Fork session Ctrl + Shift + F
@@ -32,7 +32,7 @@
         - text: Archive session Ctrl + Alt + A
       - listitem:
         - button "Edit shortcut for Open settings"
-        - text: Open settings Ctrl + ,
+        - text: Open settings Ctrl + Alt + ,
       - listitem:
         - button "Edit shortcut for Toggle right sidebar"
         - text: Toggle right sidebar Ctrl + Shift + B

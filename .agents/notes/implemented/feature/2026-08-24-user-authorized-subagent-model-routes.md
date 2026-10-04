@@ -40,4 +40,4 @@ Model selection has no unrestricted static mode. The default-off Host setting is
 
 ## Related decisions
 
-The route arguments, adapter preflight, discovery tool, and fork cache restriction remain owned by [model-selected subagent routes](2026-08-18-model-selected-subagent-routes.md).
+The route arguments, adapter preflight, discovery tool, and fork cache restriction remain owned by [model-selected subagent routes](../../../../packages/subagent/tool-subagent/README.md).

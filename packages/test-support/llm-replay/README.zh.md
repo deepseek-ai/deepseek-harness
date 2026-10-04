@@ -107,7 +107,6 @@ parent agent 委托给进程内 subagent 的场景会为每个 Session 记录一
 |---|---|
 | [`src/index.ts`](src/index.ts) | 类型、fixture 派生、override 校验、占位符解析、会话绑定、`installLlmReplay` 与插件导出 |
 | [`tests/session-format-corpus.spec.ts`](tests/session-format-corpus.spec.ts) | 已提交代际还原与精确历史拒绝检查 |
-| — | 不发布运行时不变式伴生入口；该仅测试适配器消费固定的回放脚本；其流语法由 LLM 伴生插件与 fixture 派生测试检验。 |
 
 ### 绑定与流式流程
 

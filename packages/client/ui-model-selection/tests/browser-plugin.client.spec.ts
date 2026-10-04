@@ -225,31 +225,38 @@ describe('ui-model-selection dual entry', () => {
     expect(b.seat().locale).toBe('model')
   })
 
-  it('localizes built-in descriptions and preserves external provider descriptions', async () => {
-    const b = await bench()
+  it.each(['zh', 'en'] as const)('shows names and providers without catalog descriptions (%s)', async (locale) => {
+    const b = await bench(locale)
     b.mint('s1')
     const options = await b.popup().options(projection('s1'), new AbortController().signal)
     expect(options.map((o: SelectOption) => o.label)).toEqual([
       'DeepSeek-V4-Flash', 'DeepSeek-V4-Pro', 'External Flash',
     ])
-    expect(options[0]).toMatchObject({
-      active: true,
-      detail: 'DeepSeek · 快速、高效且经济；适合目标明确、常规或并行任务。',
-    })
-    expect(options[1]?.detail)
-      .toBe('DeepSeek · 更强的自主编码、知识与复杂推理能力；适合复杂或质量优先的任务，但成本更高。')
-    expect(options[2]?.detail).toBe('External Provider · Provider-authored description.')
+    expect(options.map(option => option.group?.label)).toEqual(['DeepSeek', 'DeepSeek', 'External Provider'])
+    expect(options.every(option => option.detail === undefined)).toBe(true)
+    expect(b.popup().searchMode).toBe('fuzzy-label')
+    expect(options[0]?.active).toBe(true)
     expect(options[1]?.active).toBeUndefined()
+    expect(b.popup().searchLabels?.()).toEqual(locale === 'zh'
+      ? { placeholder: '搜索模型…', empty: '没有可用的模型。', noResults: '没有匹配的模型。' }
+      : { placeholder: 'Search models…', empty: 'No models available.', noResults: 'No matching models.' })
   })
 
-  it('keeps built-in descriptions unchanged in English', async () => {
-    const b = await bench('en')
-    b.mint('s1')
-    const options = await b.popup().options(projection('s1'), new AbortController().signal)
-    expect(options[0]?.detail)
-      .toBe('DeepSeek · Fast, efficient, and economical; suited to focused, routine, or parallel tasks.')
-    expect(options[1]?.detail)
-      .toBe('DeepSeek · Stronger agentic coding, knowledge, and difficult reasoning; suited to complex or quality-critical tasks at higher cost.')
+  it('orders popup provider groups account-first while retaining third-party catalog order', async () => {
+    const b = await bench()
+    try {
+      b.setGroups([
+        GROUPS[1]!, GROUPS[0]!, { ...GROUPS[0]!, id: 'deepseek-account', name: 'DeepSeek Account' },
+        { ...GROUPS[1]!, id: 'last-provider', name: 'Last Provider' },
+      ])
+      b.remote.emit('llm/adapters-updated', [])
+      b.mint('s1')
+      const options = await b.popup().options(projection('s1'), new AbortController().signal)
+      expect([...new Set(options.map(option => option.group?.name))])
+        .toEqual(['deepseek-account', 'deepseek-official', 'external', 'last-provider'])
+    } finally {
+      await b.ctx.fiber.dispose()
+    }
   })
 
   it('a seat selection is the current the popup marks active next — one shared state', async () => {
@@ -291,14 +298,14 @@ describe('ui-model-selection dual entry', () => {
     })
   })
 
-  it.each(['en', 'zh'] as const)('localizes account provider details in the %s model popup', async (locale) => {
+  it.each(['en', 'zh'] as const)('localizes account provider headings in the %s model popup', async (locale) => {
     const b = await bench(locale)
     try {
       b.setGroups([{ ...GROUPS[0]!, id: 'deepseek-account', name: 'DeepSeek Account' }])
       b.remote.emit('llm/adapters-updated', [])
       b.mint('s1')
       const options = await b.popup().options(projection('s1'), new AbortController().signal)
-      expect(options[0]?.detail).toContain(locale === 'zh' ? 'DeepSeek 账号' : 'DeepSeek Account')
+      expect(options[0]?.group?.label).toBe(locale === 'zh' ? 'DeepSeek 账号' : 'DeepSeek Account')
     } finally {
       await b.ctx.fiber.dispose()
     }
@@ -311,14 +318,14 @@ describe('ui-model-selection dual entry', () => {
       b.remote.emit('llm/adapters-updated', [])
       b.mint('s1')
       const before = await b.popup().options(projection('s1'), new AbortController().signal)
-      expect(before.some(option => option.detail?.includes('DeepSeek Account'))).toBe(true)
+      expect(before.some(option => option.group?.label === 'DeepSeek Account')).toBe(true)
       b.setGroups(GROUPS)
       b.remote.emit('credentials/record-updated', ['deepseek-account-platform'])
       await vi.waitFor(() => {
         expect(b.ctx.modelDirectories.directoryFor(sid('s1')).store.getSnapshot().groups).toEqual(GROUPS)
       })
       const after = await b.popup().options(projection('s1'), new AbortController().signal)
-      expect(after.some(option => option.detail?.includes('DeepSeek Account'))).toBe(false)
+      expect(after.some(option => option.group?.label === 'DeepSeek Account')).toBe(false)
       expect(after.length).toBeGreaterThan(0)
     } finally {
       await b.ctx.fiber.dispose()

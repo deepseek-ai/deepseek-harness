@@ -100,7 +100,6 @@ kind: "package-reference"
 | [`src/documents.ts`](src/documents.ts) | 表层感知的语义文档投影 |
 | [`src/tracing.ts`](src/tracing.ts) | 一次性会话血缘与事件关系追踪 |
 | [`src/sources.ts`](src/sources.ts) | 不可变 header 兼容性检查 |
-| — | 不发布运行时不变式伴生入口；查询结果是每次调用产生的不可变投影，其血缘与事件关系会在构建时完成校验；服务不保留可观察的结果状态。 |
 
 ### 语料库解析
 

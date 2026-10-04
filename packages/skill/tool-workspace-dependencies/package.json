@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-workspace-dependencies",
   "description": "The load_workspace_dependencies tool: absolute paths into a bundled Python, Node.js, and pnpm payload",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

@@ -10,7 +10,7 @@
  * `ResizeObserver` does not exist.
  */
 import { useRef } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { useAnchoredPosition } from '../src/useAnchoredPosition.ts'
 
@@ -64,6 +64,26 @@ function Host({ open, align }: { open: boolean; align?: 'start' | 'end' }) {
 }
 
 describe('useAnchoredPosition', () => {
+  it.each([{ fullscreen: false, top: 60 }, { fullscreen: true, top: 20 }])('keeps an anchored panel at $top with fullscreen=$fullscreen', ({ fullscreen, top }) => {
+    const root = document.documentElement
+    const previous = root.getAttribute('style')
+    const priorFullscreen = root.getAttribute('data-fullscreen')
+    onTestFinished(() => {
+      if (previous === null) root.removeAttribute('style')
+      else root.setAttribute('style', previous)
+      if (priorFullscreen === null) root.removeAttribute('data-fullscreen')
+      else root.setAttribute('data-fullscreen', priorFullscreen)
+      vi.restoreAllMocks()
+    })
+    root.style.setProperty('--dsh-frame-top-clearance', '40px')
+    root.toggleAttribute('data-fullscreen', fullscreen)
+    vi.spyOn(HTMLButtonElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 0, 200, 10))
+    vi.spyOn(HTMLDivElement.prototype, 'offsetHeight', 'get').mockReturnValue(400)
+    vi.stubGlobal('innerHeight', 600)
+    const { getByTestId } = render(<Host open />)
+    expect(getByTestId('panel').style.top).toBe(`${top}px`)
+  })
+
   it('lines the panel up with the anchor\'s right edge when aligned to the end', () => {
     // jsdom lays nothing out: the anchor's rect and the panel's width are stated, and the placement read back.
     const rect = { left: 100, right: 300, top: 10, bottom: 30, width: 200, height: 20, x: 100, y: 10, toJSON: () => ({}) } as DOMRect

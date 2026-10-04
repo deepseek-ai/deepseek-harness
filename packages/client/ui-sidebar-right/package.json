@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-sidebar-right",
   "description": "Right Sidebar: the docking surface's session-bound state, its panel and header expand control, and the navigation service over it",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

@@ -72,13 +72,15 @@ kind: "package-reference"
 
 ### 平台 profile
 
-bwrap profile 组合只读宿主根目录、全新 `/dev` 与私有 PID 命名空间中的 `/proc`——命令可管理其后代，但看不到宿主进程，因此 procfs 魔法链接无法绕过挂载；`workspace-write` 另加临时的 `/tmp` 与可写工作区绑定挂载。[私有 PID 笔记](../../../.agents/notes/implemented/bug-fix/2026-08-06-bwrap-private-pid-namespace.zh.md)记录该边界。
+bwrap profile 组合只读宿主根目录、全新 `/dev` 与私有 PID 命名空间中的 `/proc`——命令可管理其后代，但看不到宿主进程，因此 procfs 魔法链接无法绕过挂载；`workspace-write` 另加临时的 `/tmp` 与可写工作区绑定挂载。[历史私有 PID 笔记](../../../.agents/notes/archived/bug-fix/2026-08-06-bwrap-private-pid-namespace.md)记录该边界。
 
 `@deepseek-ai/node-addon-system/landlock-run` API 提供平台 launcher、功能探测与授权词汇；此提供方只做模式到授权的映射，把路径解析与探测解析保留在带版本的 binary 中。
 
 Seatbelt profile 默认允许，带 `(deny file-write*)` 与来自共享 `writableRoots` 辅助函数的写入 allow-list，因此恰好管辖模式承诺的文件操作；每个根目录都经过规范化，因为 Seatbelt 匹配解析后的路径（`/tmp` 就是 `/private/tmp`）。
 
 Windows 档为每个工作区保留一个确定性写入 SID 和常驻 ACE，同时为每个活跃的会话/工作区对分配一个随机私有临时目录，以及不同的 SID 和可撤销 ACE——共享工作区的会话共享其预期写权限，却不会继承彼此的临时目录权限。新的提供方总会选择新的临时路径和 SID，因此崩溃残留既无法阻止恢复的会话，也无法向其授权。该档报告 `partial` 强制执行，因为 NTFS 硬链接会把同一文件对象别名为多个路径、读取仍不受限，且被其他 AppContainer 工具以包 SID 标记过的目录树对 Low 完整性子进程不可读。
+
+当内置 Windows runner 与技能注册表同时可用时，此提供方会注册 [ACL 诊断技能](../sandbox-windows-acl/README.zh.md#failures-and-recovery)。自定义 `runnerCommand` 不注册该技能；提供方释放时移除技能及其提取的资源。
 
 构建后的 ACL runner 缺失时，源码启动将 `tsx/esm/api` 加载器和 TypeScript 路径映射固定到本安装目录。命令的工作目录和环境中的 `TSX_TSCONFIG_PATH` 无法选择 runner 的源码依赖。
 
@@ -92,7 +94,6 @@ Windows 档为每个工作区保留一个确定性写入 SID 和常驻 ACE，同
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：runner 链选择、功能探测、逐调用包装、ACL 授权生命周期 |
 | [`src/profiles.ts`](src/profiles.ts) | 各平台 profile 构建器：bwrap 挂载、Landlock 授权、Seatbelt SBPL |
-| — | 不发布运行时不变式伴生入口；除所属 seam 强制执行的约定外，本包不公开独立的事件序列或可变数据关系。 |
 
 </details>
 
@@ -107,7 +108,7 @@ Windows 档为每个工作区保留一个确定性写入 SID 和常驻 ACE，同
 - [沙箱 seam 包](../sandbox/README.zh.md)——本提供方实现的服务约定。
 - [Bash 沙箱执行器](../../shell/bash-sandbox/README.zh.md)——受限的 bash 消费方。
 - [Windows ACL 受限令牌档](../sandbox-windows-acl/README.zh.md)——本提供方挂载的 win32 后端。
-- [子进程沙箱决策](../../../.agents/notes/implemented/feature/2026-07-06-sandbox.zh.md)——能力边界与 runner 选择语义。
+- [历史子进程沙箱决策](../../../.agents/notes/archived/feature/2026-07-06-sandbox.md)——能力边界与 runner 选择语义。
 
 -----
 
@@ -143,6 +144,6 @@ Windows 档为每个工作区保留一个确定性写入 SID 和常驻 ACE，同
 
 #### 未来：环境一致的能力组
 
-[沙箱决策](../../../.agents/notes/implemented/feature/2026-07-06-sandbox.zh.md)把环境一致的能力组示例（例如 bash 加 fs 针对同一个容器）列为延期阶段；该方向尚未决定。
+环境一致的能力组示例（例如 bash 加 fs 针对同一个容器）仍未决定。
 
 </details>

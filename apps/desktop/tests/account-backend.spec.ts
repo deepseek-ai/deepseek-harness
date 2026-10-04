@@ -17,6 +17,12 @@ it('projects only safe account fields and refuses non-browser authorization sche
   expect(() => accountView({ ...state, attempt: { ...state.attempt, errorCode: 'raw-server-message' } })).toThrow()
 })
 
+it('accepts a no-response login failure without discarding the account projection', () => {
+  const state = { status: 'signed-out', attempt: { id: 'test', phase: 'failed', errorCode: 'no-response' },
+    links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' } }
+  expect(accountView(state)).toEqual(state)
+})
+
 it('uses account Remote commands without returning additional wire fields', async () => {
   const requests: unknown[] = []
   const backend = desktopAccountBackend('http://127.0.0.1:1234', (request) => {

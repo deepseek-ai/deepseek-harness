@@ -90,7 +90,6 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SessionProjectionCache` 服务、后台写入监听器、缓存读取 |
 | [`src/spec.ts`](src/spec.ts) | `session_projcache` 域 spec 与记录身份类型 |
-| — | 不发布运行时不变式伴生入口；完整正确性关系只能通过对持久化日志重新执行折叠来检查；持久化边界通过 schema 校验，读路径的版本与水位防护由包规范证明，相关局部约束在写入与读取路径强制执行。 |
 
 </details>
 

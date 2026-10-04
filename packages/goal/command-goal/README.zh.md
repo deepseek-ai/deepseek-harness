@@ -84,7 +84,6 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：命令语法、状态渲染、附件提交 |
-| — | 不发布运行时不变式伴生入口；此命令适配器不拥有事件流或状态投影；已接受的变更由 goal 领域检查，命令分发行为由包测试覆盖。 |
 
 </details>
 
@@ -97,7 +96,7 @@ kind: "package-reference"
 
 - [goal 服务](../goal/README.zh.md)——命令变更的状态与生命周期。
 - [命令服务](../../interaction/commands/README.zh.md)——命令注册表约定与分发。
-- [Harness 层目标式执行 Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.zh.md)——用户体验与组合决策。
+- [历史Harness 层目标式执行 Agent Note](../../../.agents/notes/archived/feature/2026-07-16-harness-level-loop.md)——用户体验与组合决策。
 
 -----
 

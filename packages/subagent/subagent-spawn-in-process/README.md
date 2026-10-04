@@ -72,7 +72,6 @@ One separation: this backend contributes only the provider registration and the 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Provider registration: `Config` schema, capability declaration, `start()` |
-| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Run flow
 

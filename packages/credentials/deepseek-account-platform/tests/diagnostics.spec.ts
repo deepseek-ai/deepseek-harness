@@ -44,9 +44,9 @@ it('reports transport failure without exposing the thrown error', async () => {
   const fetcher = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('private-network-detail'))
   try {
     await expect(requestPlatform('https://platform.deepseek.com', 'auth_init', {},
-      new AbortController().signal, {})).rejects.toThrow('account: network')
+      new AbortController().signal, {})).rejects.toThrow('account: no-response')
     const logged = JSON.stringify(output.mock.calls)
-    expect(logged).toContain('network')
+    expect(logged).toContain('no-response')
     expect(logged).not.toContain('private-network-detail')
   } finally {
     fetcher.mockRestore()

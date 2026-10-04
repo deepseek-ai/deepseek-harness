@@ -170,6 +170,7 @@ describe('web e2e: skill invocation policy through the real host', () => {
     await skill.click()
     const preview = page.locator('[data-document-markdown]')
     await expect.poll(() => preview.textContent()).toContain('policy-shared')
+    await preview.locator('[data-document-frontmatter] dl').waitFor()
     expect(await input.textContent()).toBe(draft)
     const snapshot = await captureStableAria(page, '[data-document-markdown]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'preview.expected.md'), snapshot, MODE)

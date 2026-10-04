@@ -10,7 +10,6 @@
     { "path": "../../../vendor/cordis" },
     { "path": "../../util/brand" },
     { "path": "../../core/agent" },
-    { "path": "../../core/scope" },
     { "path": "../../core/session" },
     { "path": "../../attachment/attachment" },
     { "path": "../../interaction/commands" },

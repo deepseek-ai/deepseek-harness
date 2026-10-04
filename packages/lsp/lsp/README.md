@@ -87,7 +87,6 @@ This section explains the design decisions behind the seam and where the code re
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Lsp` service, `registerProvider`/`query`, `finalExtension`, `LspError` codes |
 | [`src/types.ts`](src/types.ts) | Seam vocabulary: request, result, provider, and service contracts |
 | [`src/brand.ts`](src/brand.ts) | `LspProviderId` branded-id type and factory |
-| — | No runtime invariant companion is published; provider ids and extension routes are private, atomically updated state; the seam exposes neither an enumerable snapshot nor lifecycle events to compare independently. |
 
 ### Registration and selection lifecycle
 

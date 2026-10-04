@@ -31,7 +31,7 @@ Start independent subagent delegations together in one assistant message and con
 
 ## Writing code for run_code
 
-`run_code` takes two required arguments: `code` — the body of an async Python function (top-level `await` and `return` both work) — and `description`, a short summary of what the program does. At run time exactly two of the names declared below are bound: `tools` and `ToolCallError`. Everything else is a STATIC STUB describing argument and return types — in particular the `TypedDict` classes do NOT exist at run time, so build arguments as plain `dict`/`list` JSON values: `await tools.name({"field": 1})`, never `FooArgs(field=1)`, which raises `NameError`. Inside the program:
+`run_code` takes two required arguments: `description`, a short summary of what the program does, and `code` — the body of an async Python function (top-level `await` and `return` both work). At run time exactly two of the names declared below are bound: `tools` and `ToolCallError`. Everything else is a STATIC STUB describing argument and return types — in particular the `TypedDict` classes do NOT exist at run time, so build arguments as plain `dict`/`list` JSON values: `await tools.name({"field": 1})`, never `FooArgs(field=1)`, which raises `NameError`. Inside the program:
 
 - Call tools as `await tools.name(args)` — subscript access for exotic, reserved, or underscore-leading names: `await tools["my-tool"](args)`. Every call resolves to the tool's typed canonical JSON value (each method's return type below). Tool arguments must be lossless JSON.
 - A FAILED tool call raises `ToolCallError`, whose `toolName` identifies the failed tool and whose message is human-readable — wrap in `try/except` to handle and continue.
@@ -47,10 +47,10 @@ class ToolCallError(Exception):
     toolName: str
 
 class BashArgs(TypedDict):
-    # The bash command to execute.
-    command: str
     # Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: "ls" → "List files in current directory"; "git status" → "Show working tree status"; "npm install" → "Install package dependencies".
     description: str
+    # The bash command to execute.
+    command: str
     # Timeout in milliseconds. The executor applies its configured default and cap; on expiry the command moves to the background as a job instead of being killed.
     timeoutMs: NotRequired[float]
     # Working directory for this command. Defaults to the session workspace; a relative path is resolved against it.
@@ -129,7 +129,7 @@ class CreateGoalOutput2(TypedDict):
     activation: Literal["armed", "disarmed"]
 
 class EditArgs(TypedDict):
-    # Path to edit, resolved by the filesystem backend.
+    # Path to edit, resolved by the filesystem backend. Provide `file_path` before `old_string` and `new_string` in the arguments.
     file_path: str
     # Literal text to replace.
     old_string: str
@@ -494,7 +494,7 @@ class WebSearchOutput(TypedDict):
     truncated: bool
 
 class WriteArgs(TypedDict):
-    # Path to write, resolved by the filesystem backend.
+    # Path to write, resolved by the filesystem backend. Provide `file_path` before `content` in the arguments.
     file_path: str
     # Full UTF-8 text content to write.
     content: str
@@ -512,7 +512,7 @@ class WriteOutput(TypedDict):
 
 class Tools(Protocol):
     async def bash(self, args: BashArgs) -> BashOutput1 | BashOutput2 | BashOutput3:
-        """Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell; pass `workdir` instead of using `cd`. Managed `$DSH_*` variables expose current harness environment facts. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]`, a policy denial: do not retry another way."""
+        """Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell; pass `workdir` instead of using `cd`. Managed `$DSH_*` variables expose current harness environment facts. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Provide `description` before `command` in the arguments. Before any delete or move, verify that the resolved absolute target path is the intended one; never run it against a computed path you have not checked. An unset variable expands to an empty string, so guard variables in such paths with `${VAR:?}`. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]`, a policy denial: do not retry another way."""
     async def create_goal(self, args: CreateGoalArgs) -> CreateGoalOutput1 | CreateGoalOutput2:
         """Create a persisted goal that keeps this session working across automatic continuation rounds. Use it when the direct human request is a long-running objective, even if the user did not say \"goal\"; not for single-turn work."""
     async def edit(self, args: EditArgs) -> EditOutput:

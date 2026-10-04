@@ -5,7 +5,7 @@ import { resolvePwshPath } from './packages/shell/pwsh-local/src/resolve.ts'
 import { defineConfig } from 'vitest/config'
 import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
 import { COVERAGE_EXEMPT_ENV, coverageExemptHeavySuites } from './scripts/coverage-exempt.ts'
-import { COVERAGE_PARTITION_MODE_ENV } from './scripts/coverage-partitions.ts'
+import { COVERAGE_PARTITION_MODE_ENV, COVERAGE_TEST_TIMEOUT_ENV, coverageTestTimeoutOptions } from './scripts/coverage-partitions.ts'
 
 // Prints exact `path:line:col` records for every uncovered statement, branch
 // path, and function when a file misses the per-file 100% gate — the built-in
@@ -144,6 +144,12 @@ if (coveragePartitionRaw !== undefined && coveragePartitionRaw !== '' && coverag
 }
 const coveragePartitionMode = coveragePartitionRaw === '1'
 
+// Lanes on shared hosts raise the per-test, hook, and expect.poll defaults
+// together through DSH_COVERAGE_TEST_TIMEOUT_MS; it lands in each inline
+// project below because CLI flags do not reach them (coverageTestTimeoutOptions
+// owns the rule and its reach).
+const laneTestBudget = coverageTestTimeoutOptions(process.env[COVERAGE_TEST_TIMEOUT_ENV])
+
 // These suites exercise process-global state, process APIs, or timing-sensitive process I/O
 // that worker threads cannot isolate reliably under aggregate gate contention.
 // Keep the narrow exception in forks while the rest of the inventory avoids per-file processes.
@@ -158,10 +164,17 @@ const processBoundTests = [
   'packages/workflow/workflow-ptc/tests/workflow-ptc.spec.ts',
 ]
 
+// Claude Code's test-kit module names, served by the mods bridge's test support so the example mods' tests import them unchanged.
+const claudeCodeTestingAliases = {
+  'claude-code/testing': fileURLToPath(new URL('./packages/experimental/claude-code-mods/tests/support/claude-code-testing.ts', import.meta.url)),
+  'claude-code': fileURLToPath(new URL('./packages/experimental/claude-code-mods/tests/support/claude-code.ts', import.meta.url)),
+}
+
 export default defineConfig({
   plugins: [pathsPlugin(), standardDecoratorPlugin()],
+  resolve: { alias: claudeCodeTestingAliases },
   test: {
-    setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts', './scripts/test-dom-environment.ts'],
+    setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts'],
     // .tsx: client component specs (jsdom via per-file @vitest-environment pragma).
     include: testIncludes,
     exclude: platformUnsupportedTests,
@@ -170,6 +183,7 @@ export default defineConfig({
     projects: [
       {
         plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        resolve: { alias: claudeCodeTestingAliases },
         test: {
           name: 'thread-safe',
           execArgv: vitestExecArgv,
@@ -177,7 +191,8 @@ export default defineConfig({
           // MaybeLocal in cjs_lexer::Parse) from worker threads on macOS,
           // Linux, and Windows. Forked workers avoid that shared thread path.
           pool: 'forks',
-          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts', './scripts/test-dom-environment.ts'],
+          ...laneTestBudget,
+          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts'],
           include: testIncludes,
           exclude: [
             ...platformUnsupportedTests,
@@ -188,11 +203,13 @@ export default defineConfig({
       },
       {
         plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        resolve: { alias: claudeCodeTestingAliases },
         test: {
           name: 'process-bound',
           execArgv: vitestExecArgv,
           pool: 'forks',
-          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts', './scripts/test-dom-environment.ts'],
+          ...laneTestBudget,
+          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts'],
           include: processBoundTests,
           exclude: [
             ...platformUnsupportedTests,
@@ -291,11 +308,9 @@ export default defineConfig({
         // whose remaining branches need real-composition/process harnesses.
         // TODO(gui): cover and remove with the client test lane above.
         'packages/client/modules/src/index.ts',
-        'packages/client/modules/src/invariant.ts',
         'packages/client/modules/src/client/index.ts',
         'packages/client/modules/src/client/manifest.ts',
         'packages/client/hmr/src/index.ts',
-        'packages/client/hmr/src/invariant.ts',
         'packages/client/connection/src/index.ts',
         'packages/client/connection/src/http-bridge.ts',
         // This assembly imports generated Host-for-Client code that exists
@@ -308,6 +323,9 @@ export default defineConfig({
         // The speech entry also imports generated Remote definitions; voice-input.e2e.ts
         // exercises the built entry, while source tests cover mountVoiceInput.
         'packages/experimental/client-ui-voice-input/src/client/index.ts',
+        // The mods band entry imports the bridge's generated Remote contribution, which exists only in lib;
+        // the Web snapshot exercises the built entry, while source tests cover mountModsBand.
+        'packages/experimental/client-ui-claude-code-mods/src/client/index.ts',
         // Slash/command/input round: per-file gaps deferred with the same
         // client-lane debt. TODO(gui): cover and remove with the lane above.
         'packages/client/ui-commands/src/index.ts',
@@ -348,7 +366,6 @@ export default defineConfig({
         // registry's drive tails need the same maturing lanes. TODO(gui):
         // cover and remove with the client test lane above.
         'packages/interaction/commands/src/index.ts',
-        'packages/interaction/commands/src/invariant.ts',
         'packages/session/session-projection/src/index.ts',
         ...windowsUnsupportedCoveragePackages.map(path => `${path}/src/**/*.ts`),
         ...windowsOnlyCoverageExclusions,
@@ -357,8 +374,8 @@ export default defineConfig({
       ],
       // 100% or it doesn't merge (docs/testing.md: excessive tests are welcome).
       // Per-file so a well-covered big file can't subsidize a bare one.
-      // Every v8 ignore comment must carry a reason — see the quality-gates Agent Note
-      // (.agents/notes/implemented/process/2026-06-11-quality-gates.md).
+      // Every v8 ignore comment must carry a reason — see the testing policy
+      // (docs/testing.md).
       thresholds: coveragePartitionMode
         ? undefined
         : {

@@ -103,21 +103,6 @@
     - id: jobs
       name: '@deepseek-ai/dsh-jobs-local'
 
-    - id: invariants
-      name: '@deepseek-ai/dsh-invariants'
-
-    - id: session-invariant
-      name: '@deepseek-ai/dsh-session/invariant'
-
-    - id: agent-invariant
-      name: '@deepseek-ai/dsh-agent/invariant'
-
-    - id: scope-invariant
-      name: '@deepseek-ai/dsh-scope/invariant'
-
-    - id: agent-loop-invariant
-      name: '@deepseek-ai/dsh-agent-loop/invariant'
-
     - id: agent-loop
       name: '@deepseek-ai/dsh-agent-loop'
       config:

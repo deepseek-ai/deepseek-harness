@@ -56,7 +56,7 @@ Read these pages when the brand surface is not enough. They move from the slots 
 
 - [ui-sidebar](../ui-sidebar/README.md) — declares `sidebar.brand.mark` and `sidebar.brand.name` and renders their fallbacks.
 - [ui-conversation](../ui-conversation/README.md) — declares `conversation.hero.brand.mark` in the hero.
-- [Web client architecture](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.md) — how browser plugin rows load and register slots.
+- [Web client architecture](../../../docs/subsystems/web-client.md) — how browser plugin rows load and register slots.
 
 -----
 
@@ -88,5 +88,3 @@ These limits define how brand presentation is supplied. They are current package
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The package retains no mutable state, and its three slot occupants install and leave through one transactional effect.

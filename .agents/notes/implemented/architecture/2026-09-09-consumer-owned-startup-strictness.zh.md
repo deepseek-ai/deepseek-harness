@@ -18,7 +18,7 @@ Required id 为 `agent-loop`、`webserver`、`modules`、`connection`、`headles
 
 该审计只在应用首次启动时运行。之后的 config HMR 仍采用 best effort，并保留 failed candidate 供后续修复。
 
-该策略适用于 [Web host 启动](2026-07-24-web-config-tree-boot-and-transport-layering.zh.md)，包括其 [client 插件名册](2026-07-23-client-plugin-loading-model.zh.md)。[按会话的 preset](2026-09-18-declarative-agent-presets.zh.md)持有独立的严格子树审计。
+该策略适用于 [Web host 启动](../../../../packages/boot/app-boot/README.zh.md)，包括其 [client 插件名册](2026-07-23-client-plugin-loading-model.zh.md)。[按会话的 preset](2026-09-18-declarative-agent-presets.zh.md)持有独立的严格子树审计。
 
 ## 考虑过的替代方案
 
@@ -36,6 +36,6 @@ Required id 为 `agent-loop`、`webserver`、`modules`、`connection`、`headles
 
 App-boot 单元测试覆盖缺失和禁用的 required id、optional import failure、config evaluation failure、同步和异步 `apply()` failure、pending dependency，以及 required failure teardown。单元预期输出固定诊断分组、原始错误对象与导入日志的保留、exporter 清理、完整诊断值、私有文件创建、并发报告命名以及写入失败回退行为。构建后的 Web-profile acceptance 断言端口冲突堆栈只输出一次且不包含 Node 包装输出，验证已保存的诊断文件及其 stderr 回退，并会在 optional failure 存在时继续提供完整 UI，并在 required HTTP port 被占用或 `modules`、`connection` 无法激活时以非零码退出，且不报告就绪。
 
-[Web 进程矩阵](../../../../apps/cli/tests/profiles/web/tests/web-failure-matrix.expected.e2e.ts)分别验证启动时和原生补丁文件修改后的 optional 与 required 失败。经过认证的 HTTP 请求和插件生命周期文件区分可用应用与仅存活的进程。这些无需密钥的进程检查与[受控事件投递单元测试](../testing/2026-09-09-user-patch-hmr-test-delivery.zh.md)互补：单元测试隔离配置协调失败，进程测试还要求随附启动器、原生监听器和有界关闭流程协同工作。
+[Web 进程矩阵](../../../../apps/cli/tests/profiles/web/tests/web-failure-matrix.expected.e2e.ts)分别验证启动时和原生补丁文件修改后的 optional 与 required 失败。经过认证的 HTTP 请求和插件生命周期文件区分可用应用与仅存活的进程。这些无需密钥的进程检查与[受控事件投递单元测试](../../../../packages/boot/app-boot/tests/user-patches.spec.ts)互补：单元测试隔离配置协调失败，进程测试还要求随附启动器、原生监听器和有界关闭流程协同工作。
 
 矩阵启用 Chokidar 的 `awaitWriteFinish`，在每次重载前确认文件内容已稳定；否则它的短暂 change 事件抑制窗口可能丢弃下一次测试编辑。测试仍然依赖原生事件，并等待观察到激活或失败，而不是固定时长的休眠。这是显式测试配置，不能证明默认监听器的时序行为。

@@ -3,10 +3,12 @@ import { readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Context } from '@deepseek-ai/cordis'
 import { chromium, type Browser, type Page } from 'playwright'
 import WebSocket, { type RawData } from 'ws'
 import { afterEach, describe, expect, it } from 'vitest'
 import { startInspector, type InspectorHandle } from '../src/host/bridge/controller.ts'
+import { publishCordisTree } from '../src/shared/cordis/publisher.ts'
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url))
 const clientBundlePath = join(packageDirectory, 'lib/client.js')
@@ -112,6 +114,58 @@ describe.skipIf(!built)('Inspector built Client in Chromium', () => {
     browser = undefined
     inspector = undefined
     server = undefined
+  })
+
+  it('preserves Chrome node identities across recursive and shallower Cordis expansion', async (test) => {
+    const host = new Context()
+    test.onTestFinished(async () => { await host.fiber.dispose() })
+    const outer = await host.plugin({
+      name: 'browser-tree-outer',
+      apply(ctx: Context) { ctx.plugin({ name: 'browser-tree-inner', apply() {} }) },
+    })
+    inspector = await startInspector({ port: 0, captureFetch: false, startupTimeoutMs: test.task.timeout })
+    const stopObserving = publishCordisTree(host, inspector.source, { maxNodes: 100, maxBytes: 64 * 1024 })
+    test.onTestFinished(stopObserving)
+    browser = await chromium.launch({ executablePath: chromium.executablePath() })
+    page = await browser.newPage()
+    const errors: string[] = []
+    page.on('pageerror', (error) => { errors.push(error.message) })
+    await page.goto(inspector.endpoint.devtoolsFrontendUrl)
+    await page.getByRole('treeitem').first().waitFor()
+
+    // Chrome's Elements view retains DOMNode objects while getSubtree requests missing descendants.
+    const result: unknown = await page.evaluate(`(async () => {
+      const SDK = await import('./core/sdk/sdk.js')
+      const model = SDK.TargetManager.TargetManager.instance().models(SDK.DOMModel.DOMModel)[0]
+      const host = model.existingDocument().children()[0]
+      const root = host.children()[0]
+      const outer = root.children().find(node => node.getAttribute('uid') === ${JSON.stringify(String(outer.uid))})
+      const before = outer.children()
+      await host.getSubtree(100, true)
+      const owned = outer.children()?.[0]
+      const inner = owned?.children()?.[0]
+      const innerContext = inner?.children()?.[0]
+      await host.getSubtree(1, true)
+      return {
+        before,
+        sameRoot: host.children()[0] === root,
+        sameFiber: root.children().find(node => node.id === outer.id) === outer,
+        sameOwned: outer.children()?.[0] === owned,
+        sameInner: owned?.children()?.[0] === inner,
+        sameInnerContext: inner?.children()?.[0] === innerContext,
+        names: [owned, inner, innerContext].map(node => node?.nodeName() ?? null),
+      }
+    })()`)
+    expect(result).toEqual({
+      before: null,
+      sameRoot: true,
+      sameFiber: true,
+      sameOwned: true,
+      sameInner: true,
+      sameInnerContext: true,
+      names: ['CONTEXT', 'FIBER', 'CONTEXT'],
+    })
+    expect(errors).toEqual([])
   })
 
   it('forwards Console values and exposes the built bundle as read-only source', async () => {
@@ -262,6 +316,7 @@ const root = {
   events: { _hooks: {} },
   async effect(callback) { const dispose = await callback(); disposers.push(dispose); return dispose; },
   on() { return () => {}; },
+  inject() { return { dispose() {} }; },
   provide(name, value) { this[name] = value; return () => { delete this[name]; }; },
 };
 root.root = root;

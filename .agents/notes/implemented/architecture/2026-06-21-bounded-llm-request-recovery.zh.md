@@ -8,7 +8,7 @@ Status: implemented
 
 ## 问题
 
-提供方适配器可能在分发或迭代时抛出异常，也可能以 `finish { kind: 'error' | 'aborted' }` 结束。最终适配器边界会在 `dsh-agent-loop` 接收前把抛出值规范化为该终止 finish 协议；middleware 与结果处理缺陷仍会抛出。loop 会将终止模型请求失败交给 `agent/request-error`。未被处理的失败是终态；处理失败的监听器修复策略自有状态，返回 `{ kind: 'retry' }`，并停止 waterfall（瀑布式事件）委托。[重试动作决策](../simplification/2026-07-27-request-error-retry-action.zh.md)规定这一返回约定。
+提供方适配器可能在分发或迭代时抛出异常，也可能以 `finish { kind: 'error' | 'aborted' }` 结束。最终适配器边界会在 `dsh-agent-loop` 接收前把抛出值规范化为该终止 finish 协议；middleware 与结果处理缺陷仍会抛出。loop 会将终止模型请求失败交给 `agent/request-error`。未被处理的失败是终态；处理失败的监听器修复策略自有状态，返回 `{ kind: 'retry' }`，并停止 waterfall（瀑布式事件）委托。[重试动作说明](../../../../packages/core/agent/README.zh.md)规定这一返回约定。
 
 该边界已能安全地再次发起请求。每个失败 stream 会提交一个包含精确紧凑 stream 的仅日志 `assistant/attempt`，message derivation 会忽略它；系统只会在 terminal finish 成功并组装 `assistant/message` 后分派工具调用，重试则从持久 surface 重建下一次 attempt。因此，harness 无需引入第二套响应生命周期或暂定输出协议，即可分隔两次 attempt。
 
@@ -134,6 +134,6 @@ agent loop（智能体循环）会将终止 finish 的 `LlmFailure` 传给 `agen
 - [结构化错误分类体系](../../archived/architecture/2026-06-11-structured-error-taxonomy.md)负责稳定、可供机器路由的 code 与 cause chaining。
 - [可重建请求](../../implemented/architecture/2026-07-05-reconstructable-requests.zh.md)使提供方／模型和完整请求输入在分发前持久化。
 - [超时 deadline 库](../../implemented/architecture/2026-07-06-timeout-deadline-library.zh.md)将共享的 deadline 分类与能力自身拥有的终止操作分开。
-- [调用后压缩压力与上下文溢出恢复](../../implemented/architecture/2026-07-10-after-call-compaction-pressure-and-overflow-recovery.zh.md)负责当前已关闭步骤的请求恢复扩展点与有界溢出重试。
+- [压缩参考](../../../../packages/compaction/compaction-basic/README.zh.md)负责压力测量、进展检查与有界溢出重试。
 - [提供方路由的 LLM 适配器](../../implemented/architecture/2026-07-14-provider-routed-llm-adapters.zh.md)负责显式提供方／模型路由与每个提供方仅有一个适配器的不变量。
 - [Terminal turn errors survive same-turn retry history](../../archived/bug-fix/2026-08-20-turn-error-survives-same-turn-retry-history.md)负责移除曾藏掉耗尽恢复终态错误行的 Web 重试历史抑制。

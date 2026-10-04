@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-time-context` 给模型一只时钟：在符合条件的步骤上，它追加一条持久、带来源的读数，包含当前时间、附加到当前开放请求的浏览器时区，以及自前一条模型可见消息以来的经过时长。它帮助模型按用户的浏览器时区解释未明确限定时区的日期与时间；时区来源混杂或缺失时，它告诉模型去询问。随发行版交付的 Web 组合不含该行；可选的 `@deepseek-ai/dsh-experimental-schedule-bundle` 在插件管理页会插入它并随 Schedule 一起挂载。读数默认采用 10 分钟的最小间隔；`refreshIntervalMs: 0` 会在每个符合条件的步骤注入。
+`dsh-time-context` 给模型一只时钟：在符合条件的步骤上，它追加一条持久、带来源的读数，包含当前时间、附加到当前开放请求的浏览器时区，以及自前一条模型可见消息以来的经过时长。它帮助模型按用户的浏览器时区解释未明确限定时区的日期与时间；时区来源混杂或缺失时，它告诉模型去询问。随发行版交付的 Web 组合不含该行；`standard`、`cordis` 与 `ptc` 声明它。读数默认采用 10 分钟的最小间隔；`refreshIntervalMs: 0` 会在每个符合条件的步骤注入。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当模型需要按用户所在时区解释未限定的日期与时间，且请求本地浏览器时区可用或已配置的回退值可接受时，挂载此插件。每次注入都是持久历史中额外的一条 user 角色消息；当按步骤读数超出对话需要时，用 `refreshIntervalMs` 调度。
+当模型需要按用户所在时区解释未限定的日期与时间，且请求本地浏览器时区可用或已配置的回退值可接受时，挂载此插件。每次注入都是持久历史中额外的一条 user 角色消息；当按步骤读数超出对话需要时，用 `refreshIntervalMs` 调度。随发行版交付的 Web 组合不含宿主 `time-context` 行，由 `standard`、`cordis` 与 `ptc` preset 把它声明在消费它的提醒工具旁，而 `minimal` 两者都不声明。
 
 ### 模型能得到什么
 
@@ -64,7 +64,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-插件前置注册一个 `agent/pre-step` 监听器，先委托下游，需要注入且下游决策进入步骤时追加一条带来源的 `UserMessage`。每个读数都使用确切的快照来源 `{ kind: 'plugin', plugin: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text }] }`，不变式配套模块会校验该形状，根据原始 `user-rpc` 消息重新派生当前轮次的浏览器策略，并检查时间戳时区与经过时长基线。
+插件前置注册一个 `agent/pre-step` 监听器，先委托下游，需要注入且下游决策进入步骤时追加一条带来源的 `UserMessage`。每个读数都使用确切的快照来源 `{ kind: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text }] }`。
 
 ### 源码地图
 
@@ -73,7 +73,6 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：pre-step 监听器、到期调度、读数组合 |
 | [`src/request-zone.ts`](src/request-zone.ts) | 从开放轮次 `user-rpc` 来源派生浏览器时区策略 |
 | [`src/timestamp.ts`](src/timestamp.ts) | `Intl.DateTimeFormat` 创建与时间戳格式化 |
-| [`src/invariant.ts`](src/invariant.ts) | 快照约定的不变式配套模块 |
 
 ### 主要流程
 

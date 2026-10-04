@@ -8,7 +8,7 @@ English | [中文](2026-09-19-retire-prompt-registry-change-event.zh.md)
 
 [`SystemPrompt`](../../../../packages/core/system-prompt/src/index.ts) emits `system-prompt/change` when providers register or dispose. Repository searches find no executing product listener, but generated Host discovery advertises the event. Tests maintain notification counts and rollback after listener exceptions. This is a public extension with maintenance obligations, even without a first-party subscriber.
 
-The active [Remote event delivery decision](../../implemented/architecture/2026-08-10-remote-event-delivery.md) explicitly retains this extension despite having no shipped consumer. Per-step assembly predates that promise and serves a different purpose: rebuilding model input does not replace push observation of registry changes.
+The active [Remote event delivery reference](../../../../packages/api/remotes/README.md) explicitly retains this extension despite having no shipped consumer. Per-step assembly predates that promise and serves a different purpose: rebuilding model input does not replace push observation of registry changes.
 
 ## Proposal
 

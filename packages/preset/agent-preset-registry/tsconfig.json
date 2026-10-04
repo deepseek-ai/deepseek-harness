@@ -54,9 +54,6 @@
       "path": "../../util/atomic-write"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../../boot/hmr"
     },
     {

@@ -51,7 +51,7 @@ The `@` source remains deliberately separate and inert: candidates are zero-RPC 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The catalog and composer behavior are specified by the [Web subagent conversations note](../../../.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.md) and the [current-turn interrupt note](../../../.agents/notes/implemented/feature/2026-08-06-continuable-subagent-interrupt.md).
+The [subagent runtime](../../subagent/subagent/README.md) owns continuation and interruption; the [conversation reference](../ui-conversation/README.md) documents composer behavior.
 
 ### Catalog derivation
 
@@ -83,8 +83,8 @@ These pages cover the conversation surface, the host seam, and the design notes.
 - [ui-conversation](../ui-conversation/README.md) — the chat surface hosting the header action and composer chain.
 - [ui-input-trigger](../ui-input-trigger/README.md) — the suggestion machinery hosting the `@` source.
 - [subagent](../../subagent/subagent/README.md) — the host-side capability seam behind continuable children.
-- [Web subagent conversations](../../../.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.md) — the catalog and composer specification.
-- [Current-turn interrupt](../../../.agents/notes/implemented/feature/2026-08-06-continuable-subagent-interrupt.md) — the independent Stop semantics.
+- [historical Web subagent conversations](../../../.agents/notes/archived/feature/2026-07-27-web-subagent-conversations.md) — the catalog and composer specification.
+- [Current-turn interrupt](../../subagent/subagent/README.md) — the independent Stop semantics.
 
 -----
 
@@ -124,5 +124,3 @@ These limits define what the catalog can show and what `@` references mean; they
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The plugin registers a single slash source whose disposal is proven by the HMR-safety spec; it emits no Cordis events and owns no cross-plugin mutable state.

@@ -92,7 +92,7 @@ The package is the one concrete implementation of the public `Agent` contract. I
 
 After `agent/request`, `ctx.llm.prepareCall()` validates adapter-owned fields and resolves reasoning-effort and output-token defaults under the active turn signal. The loop retains that exact adapter through resolution, `request/header` logging, and dispatch. It writes a full header for the first request, a changed envelope (config or tools — the prompt is not part of the header), an explicit message-series start, a request after a surface replacement or image-offload decision, and resume; unchanged steps, retries, and ordinary later turns in the same series inherit the latest header, and an in-history prompt append is not a replacement, so the request that follows it inherits the header too. Beside the header, the loop logs `request/context` — provider, model, `contextWindow`, and the route's `systemPromptUpdate` mode from `prepareCall()` — only when one of those differs from the latest snapshot. Before the next waterfall, the loop removes adapter-default fields so the current route resolves them again, while explicit settings persist. An unhandled route still fails with `NO_ADAPTER`.
 
-The loop deep-freezes each derived message identity on its first request and reuses that proof only within the same agent. Restored messages keep their identity; request construction does not freeze their containing event wrappers. Each request freezes its local canonical header, fresh message array, and envelope while leaving the cancellation signal live. The [request-freeze decision](../../../.agents/notes/implemented/simplification/2026-09-06-agent-request-freeze-evidence.md) explains ownership and measurement.
+The loop deep-freezes each derived message identity on its first request and reuses that proof only within the same agent. Restored messages keep their identity; request construction does not freeze their containing event wrappers. Each request freezes its local canonical header, fresh message array, and envelope while leaving the cancellation signal live. The [archived request-freeze decision](../../../.agents/notes/archived/simplification/2026-09-06-agent-request-freeze-evidence.md) explains ownership and measurement.
 
 ### Source map
 
@@ -104,7 +104,6 @@ The loop deep-freezes each derived message identity on its first request and reu
 | [`src/tool-calls.ts`](src/tool-calls.ts) | Tool scheduling: exclusive barriers and the bounded parallel pool |
 | [`src/runtime-context.ts`](src/runtime-context.ts) | Per-step runtime-context snapshot handling |
 | [`src/constants.ts`](src/constants.ts) | `DEFAULT_MAX_PARALLEL_TOOL_CALLS` |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: request reconstruction from the session log |
 
 ### Creation and teardown
 
@@ -124,9 +123,9 @@ Prompt admission uses the actual `prepareCall()` result, not the preceding `requ
 
 `turn/end` declares `TurnEndCancelCause`; cancellation records a fresh `AgentCancelCause` there, retaining the caller's `kind` and the hook's `reason` text. The live `AbortSignal.reason` remains the caller's object, which a transport may extend — Node's fetch assigns a `stack` onto it — so the copy keeps that trace out of the log and keeps the ending appendable.
 
-Final adapter selection, dispatch, and iteration failures arrive as terminal finishes and enter `agent/request-error`; a handling listener returns `{ kind: 'retry' }` without calling `next()`, while an unhandled failure is terminal. Middleware, result-processing, tool, and other extension failures remain thrown and close the turn directly — plugin failure ends the turn, not the loop. Undispatched model tool calls after cancellation receive synthetic `tool/call` plus `ABORTED_BEFORE_DISPATCH` result pairs. The [explicit-cancellation decision](../../../.agents/notes/implemented/architecture/2026-07-16-explicit-turn-cancellation.md) owns the signal lifecycle.
+Final adapter selection, dispatch, and iteration failures arrive as terminal finishes and enter `agent/request-error`; a handling listener returns `{ kind: 'retry' }` without calling `next()`, while an unhandled failure is terminal. Middleware, result-processing, tool, and other extension failures remain thrown and close the turn directly — plugin failure ends the turn, not the loop. Undispatched model tool calls after cancellation receive synthetic `tool/call` plus `ABORTED_BEFORE_DISPATCH` result pairs.
 
-Before closing a failed step, the driver records an error result for each unanswered assistant tool call. A recorded `tool/call` without a committed result receives `TOOL_OUTCOME_UNKNOWN`; a request without a call record receives `TOOL_NOT_STARTED`. Committed results remain intact, started dispatches settle before recovery, and the turn retains the original failure. These results let later requests use paired tool history without automatically retrying uncertain operations ([decision](../../../.agents/notes/implemented/bug-fix/2026-09-19-failed-step-tool-results.md)).
+Before closing a failed step, the driver records an error result for each unanswered assistant tool call. A recorded `tool/call` without a committed result receives `TOOL_OUTCOME_UNKNOWN`; a request without a call record receives `TOOL_NOT_STARTED`. Committed results remain intact, started dispatches settle before recovery, and the turn retains the original failure. These results let later requests use paired tool history without automatically retrying uncertain operations.
 
 </details>
 
@@ -141,7 +140,6 @@ The package-level contract is enough for most consumers; read these when you nee
 - [Core subsystem](../../../docs/subsystems/core.md) — the turn flow and interception decisions.
 - [Session subsystem](../../../docs/subsystems/session.md) — the durable log the loop writes and derives from.
 - [Tools subsystem](../../../docs/subsystems/tools.md) — the pipeline the loop dispatches through.
-- [Explicit-cancellation Agent Note](../../../.agents/notes/implemented/architecture/2026-07-16-explicit-turn-cancellation.md) — signal lifetime and cancellation races.
 - [Core group map](../README.md) — how the core packages compose.
 
 -----

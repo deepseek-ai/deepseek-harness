@@ -5,7 +5,7 @@ description: Use when auditing or fixing prose that reads like a leaked reasonin
 
 # Trimming Chain-of-Thought Leakage
 
-Chain-of-thought leakage is prose whose vantage is the authoring session rather than the repository: it cites artifacts only that session could see, narrates the change instead of the state, or argues with a reviewer who has left. The fix is never deletion alone when a passage carries factual clauses — restate each so it stands at HEAD, then delete the transcript around it; a passage carrying none (an audit code, control-flow narration) is deleted outright. **REQUIRED BACKGROUND:** [dsh-prose-standard](../dsh-prose-standard/SKILL.md) owns the complete-proposition rule this skill applies; the [committed-artifact-citations note](../../notes/implemented/process/2026-08-09-committed-artifact-citations.md) owns the citation rule's rationale. It is guidance, not a script.
+Chain-of-thought leakage is prose whose vantage is the authoring session rather than the repository: it cites artifacts only that session could see, narrates the change instead of the state, or argues with a reviewer who has left. The fix is never deletion alone when a passage carries factual clauses — restate each so it stands at HEAD, then delete the transcript around it; a passage carrying none (an audit code, control-flow narration) is deleted outright. **REQUIRED BACKGROUND:** [dsh-prose-standard](../dsh-prose-standard/SKILL.md) owns the complete-proposition rule this skill applies; the [archived committed-artifact-citations note](../../notes/archived/process/2026-08-09-committed-artifact-citations.md) records the citation rule's historical rationale. It is guidance, not a script.
 
 ## The one test
 

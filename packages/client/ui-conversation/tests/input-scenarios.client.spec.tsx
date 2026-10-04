@@ -136,6 +136,10 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
   const serialize = vi.fn((ids: readonly DraftAttachmentId[]) => Promise.resolve(ids.map(() => PNG)))
   const release = vi.fn()
   const shell = new SessionInputShell({ actx, inputTriggers: () => controller, defaultSink: sink, commandAttachments: { serialize, release, unsupportedNotice: (token: string) => `${token.trim()} attachments-unsupported` } })
+  actx.effect(() => {
+    shell.refreshLexiconSubscription()
+    return () => { shell.dispose() }
+  }, 'test input shell')
   // The hub's listener wiring, verbatim.
   actx.on('slash/input-begin-command', req => shell.beginCommand(req.claim, req.span) ? true : undefined)
   actx.on('slash/input-insert-reference', req => shell.insertReference(req.reference, req.span) ? true : undefined)
@@ -354,8 +358,8 @@ describe('scenario H: backspace breaks the token', () => {
   })
 })
 
-describe('scenario: reference decoration lights up when the lexicon settles', () => {
-  it('a typed /name token gains the text-ref mark without further input once the roll goes hot', async () => {
+describe('scenario: reference decoration follows the current lexicon', () => {
+  it('decorates only the current text when its catalog arrives and clears decoration for an empty catalog', async () => {
     let roll: readonly string[] | undefined
     let notify: (() => void) | undefined
     const b = await scopedBench((inputTriggers) => {
@@ -370,17 +374,32 @@ describe('scenario: reference decoration lights up when the lexicon settles', ()
         },
       } as never)
     })
-    // Typed before the catalog settled: a plain token, no decoration.
-    b.type('/deploy now')
+    b.type('/older now')
     expect(b.view.container.querySelector('[data-composer-text-ref]')).toBeNull()
-    // The catalog settles (ui-skill's settle path fires the same notification).
+    b.type('/deploy now')
+    const draft = b.shell.draftSnapshot
+    expect(b.view.container.querySelector('[data-composer-text-ref]')).toBeNull()
     act(() => {
-      roll = ['deploy']
+      roll = ['older']
       notify?.()
     })
-    act(() => { b.shell.editor.update(() => {}, { discrete: true }) }) // flush the queued re-scan
-    const mark = b.view.container.querySelector('[data-composer-text-ref]')
-    expect(mark?.textContent).toBe('/deploy')
+    expect(b.controller.lexicon.getSnapshot().get('/')).toEqual(['older'])
+    expect(b.view.container.querySelector('[data-composer-text-ref]')).toBeNull()
+    act(() => {
+      roll = ['older', 'deploy']
+      notify?.()
+    })
+    await vi.waitFor(() => {
+      expect(b.view.container.querySelector('[data-composer-text-ref]')?.textContent).toBe('/deploy')
+    })
+    expect(b.shell.draftSnapshot).toBe(draft)
+    act(() => {
+      roll = []
+      notify?.()
+    })
+    await vi.waitFor(() => { expect(b.view.container.querySelector('[data-composer-text-ref]')).toBeNull() })
+    expect(b.shell.draftSnapshot).toBe(draft)
+    expect(b.shell.snapshot.draft).toBe('/deploy now')
   })
 })
 

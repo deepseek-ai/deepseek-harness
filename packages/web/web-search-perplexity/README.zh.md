@@ -84,7 +84,6 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：配置 schema、环境变量回退、提供方注册 |
 | [`src/provider.ts`](src/provider.ts) | `PerplexitySearchProvider`：请求分发、中止分类、答案与来源映射 |
 | [`src/types.ts`](src/types.ts) | chat-completions 响应的 Perplexity 协议类型 |
-| — | 不发布运行时不变量配套入口；除所属 seam 强制执行的约定外，本包不公开独立的事件序列或可变数据关系。 |
 
 ### 请求与映射流程
 

@@ -14,7 +14,7 @@ Status: implemented
 
 macOS File 菜单通过同一个 owner 路由“关闭页面或窗口”，并显示已接受的单键绑定。原生关闭要求配置 revision 仍为当前值、产品窗口已聚焦且启用，并且没有在录制快捷键。现有窗口生命周期直接生效，不增加快捷键专用确认：macOS 最后一个窗口关闭后保留应用；Windows 和 Linux 退出并停止 Host。
 
-本决策接管[标准 macOS 菜单记录](../bug-fix/2026-09-16-desktop-window-menus.zh.md)中 close role 选择所涉及的 File 菜单和关闭行为。该记录保留原生 Window 与应用隐藏命令的理由。[快捷键偏好持久化](2026-09-20-device-local-shortcut-preferences.zh.md)负责已接受绑定及 revision 发布。
+本决策负责 File 菜单与关闭行为；[Desktop 参考](../../../../apps/desktop/README.zh.md)说明原生 Window 与应用隐藏命令。[快捷键偏好持久化](2026-09-20-device-local-shortcut-preferences.zh.md)负责已接受绑定及 revision 发布。
 
 ## 考虑过的替代方案
 

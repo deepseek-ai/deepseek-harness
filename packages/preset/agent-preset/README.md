@@ -93,5 +93,3 @@ A live Agent’s composition stays stable; new Agents can use an updated definit
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. This plugin submits registry-owned definitions and has no independently mutable runtime state.

@@ -83,8 +83,7 @@ export type CheckpointRecord = z.infer<typeof checkpointRecord>
  * keep structurally valid predecessor records available for a later current
  * checkpoint rewrite. Records without `formatVersion` remain unusable as fold
  * shortcuts because they cannot prove which Session event semantics produced
- * their rows; the per-record version map and disposition live in the read-compat Agent Note
- * (.agents/notes/implemented/architecture/2026-09-02-projcache-cross-version-read-compat.md).
+ * their rows; the per-record version map and disposition live in this package's README.
  * The per-row `ver` guard and the identity match still discard anything the
  * current fold semantics cannot vouch for.
  *

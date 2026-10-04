@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-07-23-client-plugin-loading-model.md) | 中文
 
-> 范围：浏览器侧插件装载机件——代码如何到达、Cordis 如何治理代码，以及热重载如何搭乘这套模型。本 Note 拥有装载链；[client 外壳分层 Note](2026-08-15-client-shells-and-dynamic-packages.zh.md)拥有包分类、构建 face、共享模块请求与 npm 依赖声明，[Web 客户端架构笔记](2026-07-19-gui-web-client-architecture.zh.md)则拥有 slot 与数据对象层。
+> 范围：浏览器侧插件装载机件——代码如何到达、Cordis 如何治理代码，以及热重载如何搭乘这套模型。本 Note 拥有装载链；[client 外壳分层 Note](2026-08-15-client-shells-and-dynamic-packages.zh.md)拥有包分类、构建 face、共享模块请求与 npm 依赖声明，[Web 客户端架构笔记](../../../../docs/subsystems/web-client.zh.md)则拥有 slot 与数据对象层。
 
 ## Problem
 

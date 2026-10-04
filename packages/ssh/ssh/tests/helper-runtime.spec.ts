@@ -2,6 +2,8 @@
 import { symlink, writeFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { LocalSandboxProvider } from '@deepseek-ai/dsh-sandbox-local'
+import { SubprocessExecutableNotFoundError } from '@deepseek-ai/dsh-subprocess'
+import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import { z } from 'zod'
 import { createHelperHarness as helper } from './fixtures/helper.ts'
 import { targetSchema, writeResultSchema, editResultSchema, infoSchema, entriesSchema } from '../src/schemas.ts'
@@ -89,6 +91,7 @@ describe.skipIf(process.platform === 'win32')('SSH helper runtime', () => {
     const confine = vi.spyOn(LocalSandboxProvider.prototype, 'confine').mockImplementation(async argv => ({
       argv: ['confined', ...argv], enforcement: 'full', denialSignatures: [], runnerFailureRules: [],
     }))
+    const resolveExecutable = vi.spyOn(LocalSubprocessRuntime.prototype, 'resolveExecutable')
     try {
       await expect(test.client.request('sandbox', { argv: ['true'], policy: { mode: 'danger-full-access', workspaceRoot: test.root } }, z.unknown())).rejects.toThrow('does not need')
       expect(await test.client.request('executable', { command: process.execPath, env: { REMOVED: null } }, z.string())).toBe(process.execPath)
@@ -96,9 +99,14 @@ describe.skipIf(process.platform === 'win32')('SSH helper runtime', () => {
       expect(await test.client.request('terminal.environment', {}, z.unknown())).toMatchObject({ platform: 'posix' })
       await expect(test.client.request('executable', { command: `${test.root}/absent` }, z.string())).rejects.toMatchObject({ code: 'SUBPROCESS_EXECUTABLE_NOT_FOUND' })
       await expect(test.client.request('executable', { command: './relative' }, z.string())).rejects.toThrow('relative')
+      const missing = Object.assign(new Error('absent module copy'), { name: 'SubprocessExecutableNotFoundError' })
+      expect(missing).not.toBeInstanceOf(SubprocessExecutableNotFoundError)
+      resolveExecutable.mockRejectedValueOnce(missing)
+      await expect(test.client.request('executable', { command: 'foreign-missing' }, z.string()))
+        .rejects.toMatchObject({ code: 'SUBPROCESS_EXECUTABLE_NOT_FOUND', message: 'absent module copy' })
       const wrapped = await test.client.request('sandbox', { argv: ['true'], policy: policy(test.root) }, z.looseObject({ argv: z.array(z.string()), enforcement: z.enum(['full', 'partial']) }))
       expect(wrapped.argv).toEqual(['confined', 'true'])
       expect(confine).toHaveBeenCalledWith(['true'], policy(test.root), expect.any(AbortSignal))
-    } finally { confine.mockRestore(); await test.close() }
+    } finally { resolveExecutable.mockRestore(); confine.mockRestore(); await test.close() }
   })
 })

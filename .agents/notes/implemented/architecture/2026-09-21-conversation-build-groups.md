@@ -35,7 +35,7 @@ The grouping foundation provides a separate, Node-input `ConversationGroupDefini
 | Record | Relationship |
 |---|---|
 | [Business Node assembly](2026-08-09-client-conversation-node-assembly.md) | Retains event matching, Contexts, Locations, one business Node per Context, and target Builders; grouping adds another input category. |
-| [Chat scroll and footer](../bug-fix/2026-09-22-chat-scroll-follow-and-footer-geometry.md) | Owns clipping and independent nested following without changing Group Definition membership. |
+| [Chat scroll and footer](../../../../packages/client/ui-chat/README.md) | Owns clipping and independent nested following without changing Group Definition membership. |
 
 Grouping preserves the independent Node-assembly decisions. Cross-View navigation and `toolCallFocus` remain separate responsibilities; Group references carry no View handles or resource-navigation policy.
 

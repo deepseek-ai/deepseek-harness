@@ -128,7 +128,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Subagent subsystem](../../../docs/subsystems/subagent.md) — the service contract, provider contract, and terminal result semantics.
 - [dsh-subagent seam](../subagent/README.md) — the registry and start API this provider registers on.
 - [Codex subagent provider](../subagent-codex/README.md) — the sibling product backend over the official app-server protocol.
-- [Claude Code and Codex backends](../../../.agents/notes/implemented/feature/2026-08-04-claude-code-and-codex-subagent-backends.md) — the design record for the product providers.
+- [historical Claude Code and Codex backends](../../../.agents/notes/archived/feature/2026-08-04-claude-code-and-codex-subagent-backends.md) — the design record for the product providers.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-subagent-claude-code) — every accepted config field and its source declaration.
 
 -----
@@ -193,5 +193,3 @@ This Dev Note is working context for maintainers: open questions and undecided d
 - **Version-pinned protocol** — the runtime dependency is pinned to Agent SDK 0.3.263; upgrading pins a new SDK version and requires re-running the keyless real-product and loader-composition evidence.
 
 </details>
-
-**Runtime invariant:** No companion is published. Lifecycle pairing belongs to the shared subagent service, and managed-range ownership belongs to the subprocess service.

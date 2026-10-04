@@ -84,7 +84,6 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | `send_message` 与 `interrupt_agent` 注册 |
 | [`src/list-agents.ts`](src/list-agents.ts) | `list_agents` 注册：作用域、状态细化、投影 |
-| — | 不发布运行时不变式伴生入口；这个面向模型的适配器没有独立的生命周期流；投递与激活关系由其调用的 subagent 服务负责。 |
 
 </details>
 

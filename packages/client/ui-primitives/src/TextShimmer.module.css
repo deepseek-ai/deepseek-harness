@@ -1,27 +1,88 @@
-.root[data-text-shimmer] {
-  background-image: linear-gradient(
-    90deg,
-    currentColor calc(50% - var(--dsh-text-shimmer-spread)),
-    color-mix(in oklab, currentColor 50%, transparent),
-    currentColor calc(50% + var(--dsh-text-shimmer-spread))
-  );
-  background-position: 100% center;
-  background-repeat: no-repeat;
-  background-size: 250% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: dsh-text-shimmer 1.5s cubic-bezier(0.33, 0, 0.67, 1) infinite;
+.root {
+  position: relative;
+  display: inline-grid;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: top;
+  color: inherit;
 }
 
-@keyframes dsh-text-shimmer {
-  66.6667%, 100% { background-position: 0% center; }
+.content {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.text {
+  color: inherit;
+}
+
+.text[data-shimmer-text]::after {
+  content: attr(data-shimmer-text);
+}
+
+.decoration {
+  position: absolute;
+  inset: 0;
+  /* The moving mask must not enlarge any ancestor's scrollable area. */
+  overflow: clip;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sweep {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-shimmer);
+  mask-image: linear-gradient(105deg, transparent 0%, black 40% 60%, transparent 100%);
+  transform: translateX(-100%);
+  animation-name: dsh-row-shimmer-sweep;
+}
+
+/* Semantic base colors stay on the real content; the overlay supplies one tint. */
+.sweep * {
+  color: inherit !important;
+}
+
+.sweep [data-shimmer-decoration] {
+  background: currentColor;
+}
+
+/* Opposite transforms keep every glyph aligned while their shared mask moves. */
+.highlight {
+  width: 100%;
+  height: 100%;
+  transform: translateX(100%);
+  animation-name: dsh-row-shimmer-highlight;
+}
+
+.sweep,
+.highlight {
+  animation-duration: 1.5s;
+  animation-delay: 0.3s;
+  animation-timing-function: steps(48, end);
+  animation-iteration-count: infinite;
+}
+
+@keyframes dsh-row-shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  66.6667%, 100% { transform: translateX(100%); }
+}
+
+@keyframes dsh-row-shimmer-highlight {
+  0% { transform: translateX(100%); }
+  66.6667%, 100% { transform: translateX(-100%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .root[data-text-shimmer] {
-    background-image: none;
-    -webkit-text-fill-color: currentColor;
+  .decoration {
+    display: none;
+  }
+
+  .sweep,
+  .highlight {
     animation: none;
   }
 }

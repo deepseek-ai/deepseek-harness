@@ -31,6 +31,6 @@ Status: rejected — 单个轮次可以包含大量真实工作，包括多个�
 
 ## 相关
 
-本提案是对[会话持久化](../../implemented/architecture/2026-06-14-session-persistence.zh.md)与历史上的[通用轮次封闭规则](../../archived/architecture/2026-06-15-turn-enclosure-invariant.md)的直接简化。它还移除了持久化步骤边界事件的大部分动机，使[移除持久化步骤边界事件](2026-06-20-drop-durable-step-boundaries.zh.md)的改动更小。
+本提案是对[会话持久化](../../../../packages/session/session-persistence/README.zh.md)与历史上的[通用轮次封闭规则](../../archived/architecture/2026-06-15-turn-enclosure-invariant.md)的直接简化。它还移除了持久化步骤边界事件的大部分动机，使[移除持久化步骤边界事件](2026-06-20-drop-durable-step-boundaries.zh.md)的改动更小。
 
 <!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->

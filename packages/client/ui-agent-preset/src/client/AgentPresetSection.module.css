@@ -61,7 +61,7 @@
 }
 
 
-.card:hover:not(.cardActive):not(.cardSelectionDisabled) {
+.card:hover:not(.cardActive) {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
@@ -75,14 +75,6 @@
 
 /* Mode selection is off, not the preset itself: mute only the selectable
    body while the independent view/copy/location actions stay fully usable. */
-.cardSelectionDisabled {
-  background: var(--dsw-alias-bg-module-platform);
-}
-
-.cardSelectionDisabled .cardMain {
-  opacity: 0.48;
-}
-
 /* A broken preset reads as damaged before anything else: the card cannot be
    picked, so its border carries the warning the disabled body cannot. */
 .cardBroken {

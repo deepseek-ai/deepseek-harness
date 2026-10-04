@@ -255,9 +255,21 @@ describe('dsh family version coherence', () => {
 })
 
 describe('package payload constraints', () => {
-  it.each(['./art/icon.svg', 'art/icon.svg'])('includes declared icon %s in the canonical payload', (icon) => {
-    expect(expectedDshPackageFiles({ icon, exports: { './locale/*.json': './locale/*.json' } })).toEqual([
-      'art/icon.svg', 'locale/*.json', 'lib/index.js', 'lib/types/**/*.d.ts',
+  it.each([
+    ['./art/icon.svg', ['art/icon.svg']],
+    [{ import: './art/icon.svg', default: './art/fallback.svg' }, ['art/icon.svg', 'art/fallback.svg']],
+    [['./art/icon.svg', './art/icon.svg'], ['art/icon.svg']],
+  ] as const)('includes exported icon targets in the canonical payload: %j', (icon, expected) => {
+    expect(expectedDshPackageFiles({ exports: { './icon': icon } })).toEqual([...expected, 'lib/index.js', 'lib/types/**/*.d.ts'])
+  })
+
+  it.each(['icon.svg', './icon.svg'])('includes and deduplicates manifest icon %s', (icon) => {
+    expect(expectedDshPackageFiles({ icon, exports: { './icon': './icon.svg' } })).toEqual(['icon.svg', 'lib/index.js', 'lib/types/**/*.d.ts'])
+  })
+
+  it('includes manifest, root, and subpath icon targets', () => {
+    expect(expectedDshPackageFiles({ icon: './legacy.svg', exports: { './icon': './fallback.svg', './search/icon': './search.svg' } })).toEqual([
+      'legacy.svg', 'fallback.svg', 'search.svg', 'lib/index.js', 'lib/types/**/*.d.ts',
     ])
   })
 
@@ -371,6 +383,16 @@ it('requires the local speech worker and locked runtime in the published payload
   const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
   expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
   for (const omitted of ['lib/worker.js', 'runtime/assets.json']) {
+    expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: manifest.files!.filter(file => file !== omitted) } }))
+      .toEqual([expect.stringContaining('package.json files must be')])
+  }
+})
+
+it('requires the Inspector Worker, Client chunks, and mirrored DevTools resources in the published payload', () => {
+  const dir = 'packages/experimental/inspector'
+  const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+  expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+  for (const omitted of ['lib/client.*.js', 'lib/worker.js', 'lib/devtools/**']) {
     expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: manifest.files!.filter(file => file !== omitted) } }))
       .toEqual([expect.stringContaining('package.json files must be')])
   }

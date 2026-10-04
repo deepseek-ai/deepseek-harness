@@ -70,7 +70,6 @@ The plugin prepends an `agent/pre-step` listener that runs only on the first ste
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: first-step listener, shell query, change suppression, scheduling |
-| — | No runtime invariant companion is published; a reading is a per-turn snapshot of external tmux state, so the session holds no cross-event relation to check; scheduling and format are owned by pipeline tests. |
 
 ### Main flow
 

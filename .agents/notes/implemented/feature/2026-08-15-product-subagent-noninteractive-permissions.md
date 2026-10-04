@@ -6,9 +6,9 @@ English | [中文](2026-08-15-product-subagent-noninteractive-permissions.zh.md)
 
 ## Problem
 
-The [Claude Code and Codex product providers](2026-08-04-claude-code-and-codex-subagent-backends.md) run without a human interface. Native permission prompts, user dialogs, or MCP elicitation therefore cannot wait for a person, but relying on either product's ambient default can still select an interactive mode. A deployment also needs to choose broader native modes without giving the parent model or one tool call a way to raise its own authority.
+The [Claude Code and Codex product providers](../../../../packages/subagent/subagent-codex/README.md) run without a human interface. Native permission prompts, user dialogs, or MCP elicitation therefore cannot wait for a person, but relying on either product's ambient default can still select an interactive mode. A deployment also needs to choose broader native modes without giving the parent model or one tool call a way to raise its own authority.
 
-A failed product run previously reached the [subagent seam](2026-06-21-subagent-capability-seam.md) only as a stop reason. Logs could retain the product error, but the foreground parent and a [one-shot background Job](../../archived/feature/2026-08-12-product-subagent-one-shot-background-tasks.md) could not distinguish a permission refusal from another failure. Reusing assistant output for that fact would misattribute infrastructure detail to the child model.
+A failed product run previously reached the [subagent seam](../../../../packages/subagent/subagent/README.md) only as a stop reason. Logs could retain the product error, but the foreground parent and a [one-shot background Job](../../archived/feature/2026-08-12-product-subagent-one-shot-background-tasks.md) could not distinguish a permission refusal from another failure. Reusing assistant output for that fact would misattribute infrastructure detail to the child model.
 
 ## Decision
 

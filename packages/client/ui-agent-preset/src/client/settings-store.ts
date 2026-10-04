@@ -11,6 +11,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { AgentPresetRoster } from '@deepseek-ai/dsh-agent-preset-registry/types'
+import { isBuiltInPreset } from './locales.ts'
 
 /** The agent-preset settings namespace on the host wire. */
 export const AGENT_PRESET_SETTINGS_NS = 'agent-preset-registry'
@@ -23,13 +24,15 @@ export const AGENT_PRESET_SETTINGS_NS = 'agent-preset-registry'
  * the host resolves at session creation.
  * @param ctx - the browser plugin context carrying the Remote namespaces.
  * @param id - the preset to make default.
+ * @param expectedRevision - optional fence for an automatic correction based on a previous settings read.
  * @returns the failure message, or undefined once the write landed.
  */
 export async function writeDefaultPreset(
   ctx: ClientContext,
   id: string,
+  expectedRevision?: number,
 ): Promise<string | undefined> {
-  const response = await ctx.remote.settings.update(AGENT_PRESET_SETTINGS_NS, { selectedDefault: id }, undefined)
+  const response = await ctx.remote.settings.update(AGENT_PRESET_SETTINGS_NS, { selectedDefault: id }, expectedRevision)
   return response.ok ? undefined : response.error.message
 }
 
@@ -41,6 +44,14 @@ export interface AgentPresetOption {
   name?: string
   /** One sentence on what the preset is for. */
   description?: string
+}
+
+/** Whether a shipped preset requires the Coding Tools preference.
+ * @param preset Roster entry; named custom overrides keep their own behavior.
+ * @returns True only for the built-in PTC and Minimal presets.
+ */
+export function requiresCodingTools(preset: AgentPresetOption | undefined): boolean {
+  return preset !== undefined && isBuiltInPreset(preset) && (preset.id === 'ptc' || preset.id === 'minimal')
 }
 
 /** One roster entry exactly as the host reports it. */

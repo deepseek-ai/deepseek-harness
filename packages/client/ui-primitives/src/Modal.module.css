@@ -1,6 +1,6 @@
 /* Full-viewport layer (figma Mask + Dialog 451:18655): mask + centered card.
    24px of air on every side; the top/bottom widen to the frame's published
-   top clearance (the macOS window strip) so a tall card stays clear of it.
+   overlay inset so a tall card stays clear of it.
    Cards size against this padding box: consumers cap growth with
    `max-height: 100%`, never their own viewport calc. */
 .root {
@@ -11,13 +11,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: max(24px, var(--dsh-frame-top-clearance, 24px)) 24px;
+  padding: max(24px, var(--dsh-frame-overlay-top, 24px)) 24px;
 }
 
-/* The mask dims the page; dark theme raises its opacity. */
+/* Only paint excludes the native caption; the root still blocks background clicks. */
 .mask {
   position: absolute;
-  inset: 0;
+  inset: var(--dsh-frame-chrome-top, 0px) 0 0;
   backdrop-filter: var(--dsw-mask-blur);
 }
 
@@ -31,6 +31,7 @@
 
 /* Dialogs use the prominent elevation on the secondary layer. */
 .dialog {
+  box-sizing: border-box;
   position: relative;
   z-index: 1;
   display: flex;

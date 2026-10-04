@@ -14,7 +14,7 @@ The `deepseek-harness/libreoffice-kit` repository owns the reusable `@deepseek-a
 
 Kit releases run independently of Harness releases. The kit repository qualifies and publishes the Node API and engine npm packages at a shared version, starting at `0.0.1`. Harness consumes an exact npm version and commits its dependency resolution in `pnpm-lock.yaml`; Harness releases neither build nor publish kit packages.
 
-The upstream API declares platform engines as optional dependencies. The [platform engine decision](2026-09-15-platform-office-engines.md) supersedes the original required-WASM fallback policy. Desktop installs the kit as an external npm dependency. Python sidecars keep the Worker, selected engine, and their dependency closure on the real filesystem, outside the executable’s virtual filesystem. Conversion requires neither downloads nor GitHub credentials.
+The upstream API declares platform engines as optional dependencies. The [platform engine reference](../../../../packages/document/office-to-pdf/README.md) supersedes the original required-WASM fallback policy. Desktop installs the kit as an external npm dependency. Python sidecars keep the Worker, selected engine, and their dependency closure on the real filesystem, outside the executable’s virtual filesystem. Conversion requires neither downloads nor GitHub credentials.
 
 The kit repository owns engine qualification and corresponding source materials. MPL-2.0 declarations, source availability, and redistribution notices accompany the API and engines; Harness retains these materials when packaging them. The notices check accepts the exact API, WASM, macOS ARM64/x64, and Windows ARM64/x64 package identities only at MPL-2.0; unrelated packages and changed license terms still reject.
 

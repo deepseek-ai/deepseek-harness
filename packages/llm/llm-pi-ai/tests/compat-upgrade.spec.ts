@@ -50,8 +50,18 @@ describe('pi-ai gateway compatibility declarations', () => {
     expect(() => resolved(compat, 'anthropic-messages')).toThrow(/compat/)
   })
 
-  it.each(['supportsMidConvoEffort', 'allowedFallbackModels'])('withholds catalog-owned %s', (field) => {
+  it.each([
+    'supportsMidConvoEffort', 'allowedFallbackModels', 'supportsMidConvoSystemMessages',
+    'supportsMidConvoToolAdditions', 'supportsMidConvoToolChanges', 'sessionAffinityFormat',
+  ])('withholds catalog-owned %s', (field) => {
     expect(() => resolved({ [field]: true }, 'anthropic-messages'))
+      .toThrow(/which is not configurable here/)
+  })
+
+  it('withholds Mistral conversation capabilities', () => {
+    expect(() => resolveProfiles({
+      mistral: { compat: { supportsMidConvoSystemMessages: true } as never },
+    }))
       .toThrow(/which is not configurable here/)
   })
 

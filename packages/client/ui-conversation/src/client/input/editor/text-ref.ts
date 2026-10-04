@@ -4,7 +4,7 @@ import type { EditorConfig, LexicalEditor, SerializedTextNode } from 'lexical'
 import { TextNode } from 'lexical'
 import { registerLexicalTextEntity } from '@lexical/text'
 import { mergeRegister } from '@lexical/utils'
-import { $getRoot } from 'lexical'
+import { $getRoot, HISTORY_MERGE_TAG } from 'lexical'
 import { scanTextRefs } from '../decorations.ts'
 import css from './composer-editor.module.css'
 
@@ -112,5 +112,5 @@ export function registerTextRefDecoration(
 export function rescanTextRefs(editor: LexicalEditor): void {
   editor.update(() => {
     for (const node of $getRoot().getAllTextNodes()) node.markDirty()
-  })
+  }, { tag: HISTORY_MERGE_TAG })
 }

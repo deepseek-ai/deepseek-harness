@@ -122,7 +122,6 @@ Lead 可以停止 teammate 的当前轮次，而不会删除其排队的消息�
 | [`src/task-view.ts`](src/task-view.ts) | 任务板与客户端视图共用的纯任务派生：就绪状态、owner 名称与写入范围重叠 |
 | [`src/activity.ts`](src/activity.ts) | 一次性变更等待者与 dispose（资源释放）时的等待解除 |
 | [`src/lifecycle.ts`](src/lifecycle.ts) | 共享准入截止与有界结算 |
-| [`src/invariant.ts`](src/invariant.ts) | 在 append 前回放候选事件的不变式伴生插件 |
 
 ### Team 身份与 roster
 
@@ -144,7 +143,7 @@ Lead 可以停止 teammate 的当前轮次，而不会删除其排队的消息�
 
 ### 持久性模型
 
-Team 事件追加到精确的 live Lead 会话，并在操作报告成功或唤醒等待者之前 flush。`team/member`、`team/task`、`team/message/queued` 与 `team/message/delivered` 仅存在于日志：它们从不进入会话表面，因此派生模型历史不受协作记录影响。顺序与时间由会话事件的 `seq` 与 `time` 负责，快照不重复保存。`./invariant` 伴生插件把每条候选 Team 事件对照已提交前缀回放，并在 append 前拒绝非法转换。
+Team 事件追加到精确的 live Lead 会话，并在操作报告成功或唤醒等待者之前 flush。`team/member`、`team/task`、`team/message/queued` 与 `team/message/delivered` 仅存在于日志：它们从不进入会话表面，因此派生模型历史不受协作记录影响。顺序与时间由会话事件的 `seq` 与 `time` 负责，快照不重复保存。
 
 原生 V4 的 Team 事件及检查点准入会拒绝退役的 `tool-result` 内容，防止它进入邮箱状态。历史转换由 Session 格式迁移负责，Team 投影不转换旧包装。
 
@@ -166,7 +165,7 @@ dispose 会关闭准入、中止并等待已获准的创建与 mailbox dispatch 
 - [Agent Teams 子系统](../../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与 `ctx.agentTeams` 服务 API。
 - [tool-agent-team 包](../tool-agent-team/README.zh.md)——让模型创建 teammate、向其发送消息并进行协调的工具。
 - [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-05-agent-teams.zh.md)——身份、mailbox、任务与共享 checkout 决策。
-- [实验包决策](../../../.agents/notes/implemented/architecture/2026-08-18-experimental-agent-teams-packages.zh.md)——位置、公开发布与依赖隔离。
+- [实验包参考](../AGENTS.md)——位置、公开发布与依赖隔离。
 
 -----
 

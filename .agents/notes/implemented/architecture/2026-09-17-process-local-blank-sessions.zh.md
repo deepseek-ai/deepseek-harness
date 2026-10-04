@@ -14,7 +14,7 @@ Session 列表包含持久化空白会话。启动恢复选择已保存的空白
 
 Agent 在整个生命周期内持有取得的句柄。检查占用后释放探测锁，会在恢复前留下竞态。持久化数据与 Remote schema 均不引入 PID 或进程身份。
 
-本决策扩展 [Client Session scope 决策](2026-07-25-web-client-session-scope-and-provide-channel.zh.md)中的空白会话复用策略；其真实 Session 支持 slash 以及 Provider 收养的理由仍然有效。
+本决策扩展 [Client Session scope 参考](2026-09-15-client-session-references.zh.md)中的空白会话复用策略；其真实 Session 支持 slash 以及 Provider 收养的理由仍然有效。
 
 ## Alternatives considered
 

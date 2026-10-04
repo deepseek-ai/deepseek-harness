@@ -184,5 +184,3 @@ Use session_search to find relevant work from prior sessions, or session_event_s
 字符串精确 `cwd` 相等是刻意保守的选择；符号链接感知或规范路径的工作区身份会改变哪些会话共享权限，尚未决定。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。这个只读模型适配器不拥有任何超出注册表范围的事件关系或可变数据关系；这些注册表已经负责校验注册。

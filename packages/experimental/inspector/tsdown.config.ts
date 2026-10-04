@@ -1,6 +1,7 @@
 import type { UserConfig } from 'tsdown'
 import { clientBundle } from '../../client/tsdown.client.ts'
 import { profileWorkerBanner } from '../../tsdown.worker.ts'
+import { buildDevtools } from './scripts/build-devtools.ts'
 
 const worker: UserConfig = {
   entry: { worker: 'lib/types/worker/entry.js' },
@@ -22,5 +23,13 @@ const worker: UserConfig = {
 export default clientBundle(
   '@deepseek-ai/dsh-experimental-inspector',
   ['lib/types/index.js'],
-  { hostPhase: true, companions: [worker] },
+  {
+    hostPhase: true,
+    companions: [worker],
+    lib: {
+      hooks: {
+        'build:done': async () => { await buildDevtools() },
+      },
+    },
+  },
 )

@@ -133,21 +133,6 @@ describe('contained update fan-out', () => {
     await new Promise(resolve => setTimeout(resolve, 10))
   })
 
-  it('rethrows an invariant-coded failure after the commit and the remaining listeners', async () => {
-    const dir = await tempDir()
-    const path = join(dir, '.credentials.yaml')
-    const ctx = await boot({ path, watch: false })
-    ctx.on('credentials/reference-updated', () => {
-      throw Object.assign(new Error('forged relation'), { code: 'INVARIANT' })
-    })
-    const second = vi.fn()
-    ctx.on('credentials/reference-updated', second)
-    await expect(ctx.credentials.set(ALPHA, 'one')).rejects.toThrow(/forged relation/)
-    // Harness-fatal by design — but the write itself committed first.
-    expect(second).toHaveBeenCalledWith(ALPHA)
-    expect(await readFile(path, 'utf8')).toContain(`${ALPHA}: one`)
-    expect(await ctx.credentials.resolve(ALPHA)).toEqual({ value: 'one', source: 'file' })
-  })
 })
 
 describe('document editor', () => {

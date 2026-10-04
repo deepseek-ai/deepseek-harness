@@ -1,0 +1,16 @@
+[
+  {
+    "message": "Desktop 命令已安装。",
+    "buttons": [
+      "关闭",
+      "修复",
+      "移除"
+    ]
+  },
+  {
+    "message": "Desktop 命令已安装。",
+    "buttons": [
+      "关闭"
+    ]
+  }
+]

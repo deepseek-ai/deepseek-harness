@@ -17,7 +17,7 @@ async function host(): Promise<Context> {
   // The tool registry injects `systemPrompt`; nothing under test registers a prompt section.
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRegistry)
-  await ctx.plugin(CordisInspectRegistryService)
+  await ctx.plugin(CordisInspectRegistryService, 10_000)
   return ctx
 }
 

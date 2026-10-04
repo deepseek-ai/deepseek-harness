@@ -1,6 +1,6 @@
 /**
  * Models settings and product-onboarding plugin, browser half. It registers
- * the Models page plus the ordered internal-testing and official-DeepSeek
+ * the Models page plus the ordered preview-notice and official-DeepSeek
  * onboarding dialogs, whose UI shares this package's modal wrapper. The Host
  * settings and credential contracts stay behind their existing wire APIs.
  * Export discipline:

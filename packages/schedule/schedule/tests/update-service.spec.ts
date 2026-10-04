@@ -341,7 +341,7 @@ it('rejects persistence failures without publishing the new rule and permits a l
   await expect(test.service.update(request(record))).rejects.toThrow('Schedule service is stopping')
 })
 
-it('does not append historical Session events and exposes the in-place update tool', async () => {
+it('does not append historical Session events and registers no tool', async () => {
   const test = await setup()
   const agent = agentFor(test.ctx, sessionId)
   await test.ctx.agents.register(agent)
@@ -349,8 +349,8 @@ it('does not append historical Session events and exposes the in-place update to
   const events = agent.session.snapshotEvents()
   expect(await test.service.update(request(record))).toMatchObject({ updated: true })
   expect(agent.session.snapshotEvents()).toEqual(events)
-  expect(test.ctx.tools.get('schedule_update', agent)).toBeDefined()
-  expect(test.ctx.tools.get('schedule_create', agent)).toBeDefined()
+  expect(test.ctx.tools.get('schedule_update', agent)).toBeUndefined()
+  expect(test.ctx.tools.get('schedule_create', agent)).toBeUndefined()
   expect(test.resolve).not.toHaveBeenCalled()
 })
 

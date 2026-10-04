@@ -1,0 +1,19 @@
+.copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  white-space: normal;
+}
+
+.description {
+  display: -webkit-box;
+  max-height: 36px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

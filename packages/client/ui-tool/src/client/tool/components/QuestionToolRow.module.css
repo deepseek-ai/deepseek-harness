@@ -1,0 +1,29 @@
+.panelButton {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 0 10px;
+  height: calc(22px + var(--dsh-content-font-delta, 0px));
+  border: none;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-button-floating-fill);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+
+.panelButton svg {
+  width: 13px;
+  height: 13px;
+}
+
+.panelButton:hover {
+  background: var(--dsw-alias-button-floating-hover);
+}

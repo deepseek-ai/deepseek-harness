@@ -126,7 +126,7 @@ describe('ReasoningRow', () => {
     )
     expect(view.getByText('运行中')).toBeTruthy()
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('false')
-    expect(view.getByText('Newest reasoning tokens').parentElement?.getAttribute('data-streaming'))
+    expect(view.getByText('Newest reasoning tokens').closest('[data-streaming]')?.getAttribute('data-streaming'))
       .toBe('true')
 
     view.rerender(
@@ -138,7 +138,7 @@ describe('ReasoningRow', () => {
         renderMessageImages={renderMessageImages}
       />,
     )
-    expect(view.getByText('Newest reasoning tokens').parentElement
+    expect(view.getByText('Newest reasoning tokens').closest('[data-streaming]')
       ?.getAttribute('data-streaming')).toBe('true')
     expect(view.queryByText('Checking boundaries')).toBeNull()
 
@@ -167,7 +167,7 @@ describe('ReasoningRow', () => {
     const settledSummary = view.getByText('Inspect the session')
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('false')
     expect(view.queryByText('运行中')).toBeNull()
-    expect(settledSummary.parentElement?.hasAttribute('data-streaming')).toBe(false)
+    expect(settledSummary.closest('[data-streaming]')).toBeNull()
   })
 
   it('expands from either Think or the reasoning summary', () => {

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/feature/2026-08-26-shell-execute-projection-and-jobs-at-start.md
+2026-08-26-shell-execute-projection-and-jobs-at-start.md: 8786d7b727d6c3bf219cd0a1fed4b9e565bd10bc
+2026-08-26-shell-execute-projection-and-jobs-at-start.zh.md: 9dd7753c295aed973fa0891aca1cf8ab24b3e602

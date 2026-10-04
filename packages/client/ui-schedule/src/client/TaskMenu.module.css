@@ -54,7 +54,7 @@
 /* Viewport fit: the card stops 12px short of the viewport's top/bottom edges
  * (the hook's margin) and taller content scrolls inside .viewport. */
 .scrollable {
-  max-height: calc(100vh - 12px - max(12px, var(--dsh-frame-top-clearance, 12px)));
+  max-height: calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
 }
 
 .viewport {

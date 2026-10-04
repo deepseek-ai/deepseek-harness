@@ -88,7 +88,7 @@ function TabHost({ state, callbacks, intents, tab, pane, column, floats, focusRe
         data-dockkit-float-active={floating && state.activePaneId === pane.id || undefined}
         data-dockkit-column={!floating ? column : undefined}
         style={rect === undefined ? undefined : {
-          left: rect.x, top: rect.y, width: rect.width, height: rect.height,
+          left: rect.x, top: `max(var(--dsh-dockkit-float-top, 0px), ${rect.y}px)`, width: rect.width, height: rect.height,
         }}
         onPointerDown={() => { if (floating) floats.raise(pane.id) }}
         onClick={() => { if (!floating && state.activePaneId !== pane.id) callbacks.onFocusPane(pane.id) }}>

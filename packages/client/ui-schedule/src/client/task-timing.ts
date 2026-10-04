@@ -189,6 +189,7 @@ export function timingError(code: Extract<ScheduleUpdateResult, { code: string }
     case 'schedule_conflict': return 'timing.conflict'
     case 'schedule_ended': return 'timing.inactive'
     case 'schedule_not_found': return 'timing.notFound'
+    case 'subagent_session': return 'timing.subagentSession'
     case 'invalid_time_zone': return 'timing.invalidZone'
     case 'not_future': return 'timing.notFuture'
     case 'frequency_too_high': return 'timing.invalidInterval'

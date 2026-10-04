@@ -9,6 +9,7 @@ The setup tutorial takes a new contributor from prerequisites to a checked check
 ### Prerequisites
 
 - Node.js supports 22.19+ and 24+. CI covers 22.19, 24, and 26; see the [Node engine floor Agent Note](../.agents/notes/implemented/process/2026-07-06-node-engine-floor.md).
+- Node.js TypeScript type stripping enabled. The repository build scripts load `tsdown.config.ts` with tsdown's native config loader, so they fail when `--no-experimental-strip-types` is in `NODE_OPTIONS` or the Node.js build lacks TypeScript support; `pnpm run build` checks this first and names the cause.
 - Corepack-enabled pnpm. The repo pins `pnpm@11.7.0` in `package.json`; run `corepack enable` if `pnpm --version` does not resolve through Corepack.
 - Git 2.26 or newer; hook setup enables Git's worktree-specific configuration extension.
 - Optional: a DeepSeek API key for the Web, headless, and ACP automation demos and real-API e2e tests.
@@ -23,6 +24,8 @@ Install dependencies separately in each environment because native binaries and 
 
 ### First-time setup
 
+pnpm uses its strict symlinked linker so undeclared dependencies fail instead of relying on hoisting. Keep dependency build scripts explicitly allowlisted in `pnpm-workspace.yaml`.
+
 Install dependencies from the repo root:
 
 ```sh
@@ -30,6 +33,8 @@ pnpm install
 ```
 
 The install also configures worktree-local Lefthook hooks through `scripts/install-lefthook.mjs`. The [worktree-local hooks Agent Note](../.agents/notes/implemented/process/2026-07-27-worktree-local-lefthook.md) owns the hook-path safety contract.
+
+The [DevTools frontend](../packages/experimental/inspector/README.md#use-this-package) is compiled locally from a pinned npm source package and Vite. After dependencies are installed, its build needs no network access or browser installation. Workspace and published-package installation run no DevTools resource-download hook; published Inspector packages contain the built frontend.
 
 If the hooks are missing because dependencies were restored from cache or `postinstall` was skipped, install them manually:
 
@@ -86,7 +91,7 @@ Typert runs only during Host tsdown, seeded by `tsconfig.host.json`. It analyzes
 
 `pnpm run build` embeds the root package version, the seven-character source commit, and a dirty marker when Git reports local changes; it also inherits other caller-supplied `DSH_CLIENT_*` values. `pnpm run build:official` is the cross-platform local equivalent of the CI and release artifact build and omits the local dirty marker. Each successful complete build writes a gitignored record that binds the exact public values to the Vite output and dynamic client bundles; release packing and built Web tests reject a missing record or artifacts changed by a later partial build. `pnpm run dev:web` runs that complete build first (`--skip-build` reuses an existing artifact tree instead), then samples the current version and Git state once and shares that environment across every watcher stage for the session; it does not validate the complete-build record because the watcher stages rewrite its recorded artifacts.
 
-Static analysis and tests resolve workspace imports through the base `paths` map to `src` and must pass on a clean tree; gates that consume built `lib/` output declare that dependency explicitly. Generated Host-for-Client Remote declarations are the deliberate exception: the public `typecheck`, `lint`, and `doc-typecheck` commands generate them first, while internal `*:contracts-ready` scripts assume that an invoking public command or scheduler gate already depends on the Typert contract-generation pass or the complete build. See the [ts-build-config note](../.agents/notes/implemented/process/2026-06-17-ts-build-config.md) for tsc-first emit ownership and the [Typert Remote note](../.agents/notes/implemented/architecture/2026-08-02-typert-remote-method-calls.md) for the gate-preparation contract.
+Static analysis and tests resolve workspace imports through the base `paths` map to `src` and must pass on a clean tree; gates that consume built `lib/` output declare that dependency explicitly. Generated Host-for-Client Remote declarations are the deliberate exception: the public `typecheck`, `lint`, and `doc-typecheck` commands generate them first, while internal `*:contracts-ready` scripts assume that an invoking public command or scheduler gate already depends on the Typert contract-generation pass or the complete build. See the [Typert Remote note](../.agents/notes/implemented/architecture/2026-08-02-typert-remote-method-calls.md) for the gate-preparation contract.
 
 Business services declare callable methods on the Host with `@Remote` or `@RemoteScope`; the Host build generates Host-for-Client types and runtime contributions, and the Client's `api-remotes` composition loads those contributions under `ctx.remote` and scoped `agentCtx.remote` namespaces. See [API Gateway](api-gateway.md) for the generated artifacts on both sides, their assembly relationships, the SRC development fallback, and the Web build order.
 
@@ -127,9 +132,9 @@ Contributors can opt into the comprehensive local gate set with `pnpm run check:
 
 ### CI gates
 
-The keyless [CI workflow](../.github/workflows/ci.yml) groups independent gates into broad lanes and runs a smaller compatibility signal across supported Node versions. Artifact consumers wait for one build within their lane. Required benchmarks run separately on standard GitHub-hosted Linux; the [benchmark runner decision](../.agents/notes/implemented/testing/2026-09-06-standard-hosted-benchmark-runner.md) owns routing and the job timeout. The separate real-API workflow runs `pnpm run test:e2e` with its configured worker bound. See [scripts/run-gates.ts](../scripts/run-gates.ts) and the workflow files for the current gate and job inventory.
+The keyless [CI workflow](../.github/workflows/ci.yml) groups independent gates into broad lanes and runs a smaller compatibility signal across supported Node versions. Artifact consumers wait for one build within their lane. Required benchmarks run separately on standard GitHub-hosted Linux; the [benchmark runner reference](../benchmarks/AGENTS.md) owns routing and the job timeout. The separate real-API workflow runs `pnpm run test:e2e` with its configured worker bound. See [scripts/run-gates.ts](../scripts/run-gates.ts) and the workflow files for the current gate and job inventory.
 
-The credential-free dsh dependency-layout and dsh/vendor pack rehearsals use the existing Linux self-hosted pool only when `DSH_CI_FAILOVER_LINUX=selfhosted` and the event is a trusted master push or same-repository, non-fork, non-Dependabot pull request. All other cases, including manual dispatch, use `ubuntu-24.04`; manual publication stays hosted. See the [release rehearsal runner decision](../.agents/notes/implemented/process/2026-09-06-release-rehearsal-selfhosted.md) for persistent-store isolation and fallback limits.
+The credential-free dsh dependency-layout and dsh/vendor pack rehearsals use the existing Linux self-hosted pool only when `DSH_CI_FAILOVER_LINUX=selfhosted` and the event is a trusted master push or same-repository, non-fork, non-Dependabot pull request. All other cases, including manual dispatch, use `ubuntu-24.04`; manual publication stays hosted. See the [release rehearsal runner reference](../.agents/notes/implemented/process/2026-07-26-ci-failover-runbook.md) for persistent-store isolation and fallback limits.
 
 ### Daily commands
 

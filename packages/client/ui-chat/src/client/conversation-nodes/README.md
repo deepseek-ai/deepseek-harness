@@ -101,6 +101,8 @@ Paging adds older content above the retained anchor without jumping to the new t
 
 While the Session runs, Chat appends a Session-level indicator at the bottom of the current transcript, after pending submission or steering rows: a whale tail beside shimmering elapsed time. Before the current Turn start time arrives, the indicator shows status text without a duration. The clock updates in whole seconds, starts at one second, and uses hours from 60 minutes. When the Session stops running, the indicator disappears; the closed Turn process control shows the fixed duration, cancellation, or failure status. Lifecycle changes have a polite announcement; clock ticks do not. The whale is hidden from assistive technology and remains static under reduced motion.
 
+The top duration/status control and trigger title use the group-title font size and follow the font-size setting. Completed duration digits use the code font with tabular numerals; running and completed minutes and seconds have no leading zero. The timed running label ends with a space and “···”; completion shows “Completed in”.
+
 Automatic collapse keeps the process open if hiding it would hide keyboard focus. Manual closing focuses the process control before hiding its members. Closing a whole Turn resets its groups and inner reasoning/tool disclosures; it does not reset unrelated renderer state. Browser find can reveal searchable hidden content.
 
 -----
@@ -132,7 +134,7 @@ Reading a default does not automatically save configuration. When the user chang
 
 A closed group's header names the first three categories from its ranked summary, without displaying counts. A group without categories uses the thinking label. A running header names its live tool category, otherwise thinking; Standard appends live detail. Live titles remain visible for at least 150ms, retaining only the newest pending title.
 
-All three stages share the tool-name classification below. A preparing Tool node uses its category's preparation label: read files for `read`, read images for `read_image`, write files for `write`, edit files for `edit` and `apply_patch`, and update the plan for `todo_write` and goal tools. Only the generic “Preparing tool calls” category appends the wire tool name in Standard mode; other categories omit it. It contributes one call without parsing arguments and renders one non-expandable row. A named live delta can create this node; historical calls start directly from tool/call without replaying preparation.
+All three stages share the tool-name classification below. A preparing Tool node uses its category's preparation label: read files for `read`, read images for `read_image`, write files for `write`, edit files for `edit` and `apply_patch`, and update the plan for `todo_write` and goal tools. Standard mode appends available argument detail using the same readers as dispatched calls. It contributes one call and renders one non-expandable row. A named live delta can create this node; historical calls start directly from tool/call without replaying preparation.
 
 The labels below describe recorded activity, not successful outcomes. For example, a failed read still participates in the “Read files” category.
 
@@ -165,7 +167,7 @@ The labels below describe recorded activity, not successful outcomes. For exampl
 
 English lowercases the initial letter of joined labels after the first. Closing a group immediately selects the completed summary; the 150ms minimum applies to running-title changes, not to delaying completion. Detailed hides group headers in running Turns, including groups ended by a reply or steering before their Turn ends. Verbose also hides historical group headers.
 
-Group headers show a category icon, replace it with a down arrow on hover or keyboard focus, and show an up arrow while open. Manually expanded group bodies use 8px row spacing, a `min(400px, 50vh)` height cap, and 24px directional fades. Wheel scrolling can continue into the outer transcript at an edge. Detailed removes the group-level cap and uses 16px row spacing in running Turns; Verbose applies this layout to historical Turns as well.
+Group headers show a category icon, replace it with a down arrow on hover or keyboard focus, and show an up arrow while open. Manually expanded group bodies use 6px row spacing, a `min(400px, 50vh)` height cap, and 24px directional fades. Wheel scrolling can continue into the outer transcript at an edge. Detailed removes the group-level cap in running Turns; Verbose applies this layout to historical Turns as well. Process rows retain 6px spacing in both modes; Assistant responses have 12px clearance. Expanded group titles sit 8px above their content; Turn process controls retain 16px clearance.
 
 An open capped group follows content growth only while its own scroll position is at the bottom. Scrolling away pauses that group's following; returning to the bottom resumes it, independently of outer transcript following. Manually opening an unclosed group starts at the bottom and follows growth; manually opening a closed group starts at the top with following disabled, even when its initial content fits without scrolling. Closing the group in the data or restoring its height cap through a mode change does not reset an already-open reader's position. Browser find retains its own reveal position.
 
@@ -181,6 +183,8 @@ Switching modes retains manually opened groups and inner disclosures. It changes
 [process-groups.ts](process-groups.ts) groups visible Chat content; [process-activity.ts](process-activity.ts) summarizes the activity inside each group. Both follow the rules below.
 
 A group collects adjacent process content within one Turn. Step-number changes alone do not split it. All four modes use the same grouping result. A group's `closed` flag means its content segment has ended, not that its UI disclosure is collapsed.
+
+When `question-reply` and `turn-trigger` project the same message id, grouping references only the question reply. Both Nodes stay in the Node Store; the duplicate trigger neither renders nor splits a group. The Turn control precedes the group containing an opening reply. This aggregation also applies before the owning Turn is loaded.
 
 | Input | Membership and segmentation |
 |---|---|
@@ -272,7 +276,11 @@ Exact-name rules also mean that a recorded name such as `functions.read`, `mcp.r
 
 ### Live activity and detail
 
-Preparing calls use their first named delta time; only the generic tool category provides the tool name as detail. Dispatched calls use their tool/call time and complete arguments.
+Preparing calls use their first named delta time; dispatched calls use their tool/call time. Both read detail from the block's lazy `args` view.
+
+The Tool Definition alone retains streamed argument fragments. Assistant blocks keep tool identity and timing without accumulating argument deltas; `block-end` and the durable message supply their complete text. A Tool reader compares its fragments directly against `block-end` and `tool/call` arguments, retaining its indexed fields only for an exact match. Final text replaces missing or conflicting deltas.
+
+TurnProcess and TurnTail retain tool-argument Matches as Location evidence when the Turn start is outside the loaded window, even when those fragments do not change their State.
 
 Among running calls, the greatest `time` selects the live category and detail; equal times select the later visited call. With no running call, the category is absent and detail comes from the last nonempty reasoning paragraph of the latest running Assistant with nonempty reasoning, in member order. Reasoning detail removes `**` markers and does not require a newline-terminated first line; the individual reasoning-row preview has separate rules.
 
@@ -287,7 +295,7 @@ Live selection uses call start `time`, not the latest output/progress time. A ca
 | No running tool or usable running reasoning; the group is not closed | No live tool category and empty detail, even when category counts are nonzero. |
 | A reply or another group boundary closes the group while a tool still lacks a result | Published live category and detail are cleared. Group closure takes precedence over the unfinished call. |
 
-Tool detail uses the first nonempty supported argument field in this priority order: `title`, `description`, `objective`, `task`, `task_name`, `name`, `question`, `questions`, `prompt`, `message`, `command`, `cmd`, `queries`, `query`, `pattern`, `url`, `uri`, `file_path`, `path`, `target`, `action`, `status`. Strings and arrays consisting entirely of strings are supported; arrays join with `, `. The `questions` field instead selects the first nonempty `question` in its object array. Invalid, partial, or free-form JSON and arguments without usable detail fall back to the tool name.
+Tool detail uses the first nonempty supported argument field in this priority order: `title`, `description`, `objective`, `task`, `task_name`, `name`, `question`, `questions`, `prompt`, `message`, `command`, `cmd`, `queries`, `query`, `pattern`, `url`, `uri`, `file_path`, `path`, `target`, `action`, `status`. Strings may still be streaming; arrays become available when complete and must contain only strings, joined with `, `. The `questions` field instead selects the first nonempty `question` in its object array. Without usable detail, every category stays empty while fields can still arrive and falls back to the tool name only once the view is closed, invalid, or sealed after dispatch.
 
 The priority list is shared by every tool, not specialized per category. For example, `description` can override `command` on a shell call, and `title` can override a file path. The first field whose supported value remains nonempty after whitespace normalization wins; unsupported values are skipped.
 
@@ -305,6 +313,6 @@ The priority list is shared by every tool, not specialized per category. For exa
 | `run_code` with only `{"code":"print(1)"}` | `run_code`; `code` is not in the detail-field list. |
 | `apply_patch` with raw patch text rather than a JSON object | `apply_patch`; no patch-path extraction. |
 | Any tool with `{"description":" ","command":42,"path":"src/app.ts"}` | `src/app.ts`; whitespace-only strings and numbers are skipped. |
-| Partial JSON, a JSON scalar, a mixed-type array, or only unsupported fields | Use the tool name if no other usable field exists. No partial-argument guessing. |
+| No usable field yet | Empty while arguments can grow; otherwise the tool name. |
 
-All live detail collapses whitespace, trims its ends, and is limited to 160 grapheme clusters, including a final `…` when truncated. A closed group's published summary clears its live category and detail while retaining category counts.
+All live detail collapses whitespace, trims its ends, and is limited to 160 grapheme clusters, including a final `…` when truncated. String arguments initially supply at most 512 decoded UTF-16 units; normalization expands that prefix only when whitespace or multi-unit clusters leave too little text to determine truncation. Each truncation pass reads at most 161 clusters. A closed group's published summary clears its live category and detail while retaining category counts.

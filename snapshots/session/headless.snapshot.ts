@@ -475,6 +475,11 @@ async function seedWorkspace(scenario: HeadlessScenario, cwd: string): Promise<v
 }
 
 const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
+  async 'windows-acl-skill'(cwd) {
+    const target = join(cwd, '.dsh', 'skills', 'diagnose-windows-sandbox-acl', 'SKILL.md')
+    await mkdir(dirname(target), { recursive: true })
+    await copyFile(join(repoRoot, 'packages/sandbox/sandbox-windows-acl/assets/diagnose-windows-sandbox-acl/SKILL.md'), target)
+  },
   async 'office-skills'(cwd) {
     await cp(join(repoRoot, 'packages/skill/skill-office/assets'), join(cwd, 'office-skills'), { recursive: true })
     await symlink(process.execPath, join(cwd, 'office-node'))

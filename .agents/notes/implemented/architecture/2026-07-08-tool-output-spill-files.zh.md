@@ -10,7 +10,7 @@ Status: implemented
 
 这项改动之前的行为并不一致。`dsh-bash-local` 已经会在内存尾部溢出时，把完整 stdout／stderr 流写入私有的临时 spill 文件；普通文本工具结果则仍以内联形式返回，除非工具自行实现上限。[工具结果保留库](../../archived/architecture/2026-07-06-tool-result-retention-library.md)负责预览机制，但不负责存储，也不负责把这些机制应用于最终工具结果的执行流水线策略。
 
-其形态与超时策略设计一致：工具作者声明规范值与 Native renderer（原生渲染器），由策略插件在渲染后的内容上执行部署默认的上下文预算。工具仍可在提供方采集上限处提前 spill；由工具负责的展示 spill 可以保留已完整采集的规范值，而只替换展示内容。[规范工具输出约定](2026-07-20-canonical-tool-output-contract.zh.md)规定了这项区分。
+其形态与超时策略设计一致：工具作者声明规范值与 Native renderer（原生渲染器），由策略插件在渲染后的内容上执行部署默认的上下文预算。工具仍可在提供方采集上限处提前 spill；由工具负责的展示 spill 可以保留已完整采集的规范值，而只替换展示内容。[规范工具输出约定](../../../../packages/core/tools/README.zh.md)规定了这项区分。
 
 ## 决策
 
@@ -22,7 +22,7 @@ Status: implemented
 | `@deepseek-ai/dsh-spill-local` | 本地后端：在宿主文件系统中提供私有、会话作用域的文件存储。 |
 | `@deepseek-ai/dsh-spill-policy` | 工具结果策略插件：包装分发后的最终文本结果，并以保留预览和 spill 定位符替换超大结果。 |
 
-工具结果消费方是 `dsh-spill-policy`，它通过 `tools/post-execute` waterfall（瀑布式事件）使用最终工具结果。模型按照后端随定位符返回的检索提示读取内容。[会话引用 spill 复用](../bug-fix/2026-09-05-session-reference-spill-reuse.zh.md)增加一个直接存储消费方，采用独立的预览、来源信息与失败语义；它不改变工具结果策略。
+工具结果消费方是 `dsh-spill-policy`，它通过 `tools/post-execute` waterfall（瀑布式事件）使用最终工具结果。模型按照后端随定位符返回的检索提示读取内容。[会话引用 spill 复用](../../../../packages/context/session-reference/README.zh.md)增加一个直接存储消费方，采用独立的预览、来源信息与失败语义；它不改变工具结果策略。
 
 ### spill seam
 
@@ -66,7 +66,7 @@ interface SpillRef {
 
 ### spill 策略
 
-`dsh-spill-policy` 在执行后策略接受结果之后，按 `maxInlineTokens` 对文字和图片共同计量并保留首尾。完整结果仍通过 `saveText()` 保存，图片本体留在附件存储，结果文件记录可读取路径。图片投影顺序、整图省略和模型计量由[图文结果保留决策](../../implemented/bug-fix/2026-09-21-multimodal-tool-result-retention.zh.md)负责。省略配置时不安装监听器，存储失败时保留原结果；`read` 的模型可见结果跳过自动省略，避免重复读取产生循环。
+`dsh-spill-policy` 在执行后策略接受结果之后，按 `maxInlineTokens` 对文字和图片共同计量并保留首尾。完整结果仍通过 `saveText()` 保存，图片本体留在附件存储，结果文件记录可读取路径。图片投影顺序、整图省略和模型计量由[图文结果保留参考](../../../../packages/spill/spill-policy/README.zh.md)负责。省略配置时不安装监听器，存储失败时保留原结果；`read` 的模型可见结果跳过自动省略，避免重复读取产生循环。
 
 ## 示例：web_fetch
 

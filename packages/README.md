@@ -81,7 +81,6 @@ Every package lives in exactly one group; new packages join existing groups, and
 | [`host/`](host/README.md) | Web GUI host services, directory picking, application launch, plugin inventory, and product telemetry |
 | [`client/`](client/README.md) | Web-GUI browser half: shell, wire, object services, slots, `ui-*` plugins |
 | [`test-support/`](test-support/README.md) | Test infrastructure (testkits, replay, Loader smokes) |
-| [`runtime-diagnostics/`](runtime-diagnostics/README.md) | Runtime diagnostics: package-owned invariant checks and reports |
 | [`util/`](util/README.md) | Low-level zero-dependency utilities shared across groups (`Branded<B>`, home/path helpers, timeout, retention) |
 
 -----
@@ -89,7 +88,7 @@ Every package lives in exactly one group; new packages join existing groups, and
 <a id="release-expectations"></a>
 ## Release expectations
 
-Most groups are product — stable API. The exceptions: `experimental/` publishes without stability or support promises, and `test-support/`, `runtime-diagnostics/`, and `util/` are support with lower compatibility expectations.
+Most groups are product — stable API. The exceptions: `experimental/` publishes without stability or support promises, and `test-support/` and `util/` are support with lower compatibility expectations.
 
 -----
 
@@ -105,7 +104,7 @@ The dependency graph is generated: [docs/module-graph.md](../docs/module-graph.m
 <a id="package-readme-contracts"></a>
 ## Package README contracts
 
-Every package README covers purpose, configuration, extension points, and [Model Experience](../docs/cookbook/adding-a-package.md#4-write-the-package-readme) unless the model-agnostic [omission allowlist](../scripts/verify-package-readme-model-experience.ts) exempts it. It also carries `## Known Limitations and Deferred Work` or uses its [allowlist](../scripts/verify-package-readme-limitations.ts). Package conventions — exports, service access, invariants, tests — live in [packages/AGENTS.md](AGENTS.md).
+Every package README covers purpose, configuration, extension points, and [Model Experience](../docs/cookbook/adding-a-package.md#4-write-the-package-readme) unless the model-agnostic [omission allowlist](../scripts/verify-package-readme-model-experience.ts) exempts it. It also carries `## Known Limitations and Deferred Work` or uses its [allowlist](../scripts/verify-package-readme-limitations.ts). Package conventions — exports, service access, tests — live in [packages/AGENTS.md](AGENTS.md).
 
 -----
 

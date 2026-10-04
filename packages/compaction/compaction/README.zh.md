@@ -69,7 +69,7 @@ kind: "package-reference"
 该 seam 建立在一个拆分与三项承诺之上：
 
 - **抽象约定，具体后端。** 接口规定压缩做什么；提供方拥有策略、保留与摘要，因此各角色可独立演进、独立替换。
-- **会话与 LLM（大语言模型）词汇是约定的一部分。** 操作作用于 `Session`，摘要使用 `ContentBlock`，因此尽管有通用的 Cordis-only 指引，Service Definition 仍依赖 `dsh-session` 与 `dsh-llm`——这是一项有意的偏离，记录在[压缩能力 seam Agent Note](../../../.agents/notes/implemented/feature/2026-06-18-compaction-capability-seam.zh.md) 中。
+- **会话与 LLM（大语言模型）词汇是约定的一部分。** 操作作用于 `Session`，摘要使用 `ContentBlock`，因此尽管有通用的 Cordis-only 指引，Service Definition 仍依赖 `dsh-session` 与 `dsh-llm`——这是一项有意的偏离，记录在[历史压缩能力 seam Agent Note](../../../.agents/notes/archived/feature/2026-06-18-compaction-capability-seam.md) 中。
 - **日志记录的标记对就是锁。** `compaction/start` 在摘要让出控制权之前追加，`compaction/end` 释放；每次失败都恰好进行一次闭合尝试，闭合失败会留下未匹配 start 作为有意的 busy 信号。
 - **表层只变更一次。** 摘要承载在标记对内的一条 `user/message` 替换上；所有 `compaction/*` 事件仅写入日志。
 
@@ -105,7 +105,6 @@ kind: "package-reference"
 | [`src/tool-pairing.ts`](src/tool-pairing.ts) | 两个边界 helper 背后的每会话切分点平衡缓存 |
 | [`src/checkpoint.ts`](src/checkpoint.ts) | 无 Cordis 依赖的检查点来源构造函数与谓词（`./checkpoint` 叶子） |
 | [`src/brand.ts`](src/brand.ts) | `CompactionId` 品牌化标识 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变量配套组件：校验 `compaction/start`→`summary`→`end` 标记对、其属主轮次包裹与检查点关联 |
 
 ### 锁与串行化
 
@@ -129,7 +128,7 @@ kind: "package-reference"
 - [工具结果修剪器](../compaction-tool-result-pruner/README.zh.md)——先修剪超大工具输出的可选配套工具。
 - [面向用户的 /compact 命令](../command-compact/README.zh.md)——按需触发压缩的入口。
 - [Token meter](../../llm/token-meter/README.zh.md)——决定何时压缩的测量服务。
-- [压缩能力 seam Agent Note](../../../.agents/notes/implemented/feature/2026-06-18-compaction-capability-seam.zh.md)——拆分及 session/llm 依赖的依据。
+- [历史压缩能力 seam Agent Note](../../../.agents/notes/archived/feature/2026-06-18-compaction-capability-seam.md)——拆分及 session/llm 依赖的依据。
 
 -----
 

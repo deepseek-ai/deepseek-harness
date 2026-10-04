@@ -9,7 +9,7 @@ import type { MenuItemConstructorOptions, MessageBoxOptions } from 'electron'
 import { DESKTOP_IPC, type DesktopUpdateState } from '../src/ipc.ts'
 import { MANDATORY_IPC } from '../src/mandatory-update-ipc.ts'
 import { DesktopHostFatalError, DesktopHostUncleanExitError } from '../src/host-process.ts'
-import { en } from '../src/locale.ts'
+import { en, zh } from '../src/locale.ts'
 import { DesktopUpdatePreparationError } from '../src/update-error.ts'
 import { writeCrashReport } from '../src/crash-report.ts'
 
@@ -57,6 +57,10 @@ const harness = await vi.hoisted(async () => {
   const platformDispose = vi.fn(() => platformDisposeDeferred?.promise ?? Promise.resolve())
   let platformCloseDeferred: ReturnType<typeof deferred> | undefined
   const platformCloseAndWait = vi.fn(() => platformCloseDeferred?.promise ?? Promise.resolve())
+  const readLoginShell = async (base: NodeJS.ProcessEnv) => ({
+    environment: { ...base, DSH_TEST_LOGIN_SHELL: 'login' }, failures: [{ shell: '/account/shell', reason: 'timeout' }],
+  })
+  const loginShell = vi.fn((base: NodeJS.ProcessEnv, _config: unknown, _options: { signal?: AbortSignal }) => readLoginShell(base))
   const updateCheck = vi.fn(async (_manual?: boolean): Promise<DesktopUpdateState> => updateState)
   const updateDownload = vi.fn(async (_version: string): Promise<DesktopUpdateState> => updateState)
   const updateInstall = vi.fn(async (_version: string): Promise<DesktopUpdateState> => updateState)
@@ -189,7 +193,7 @@ const harness = await vi.hoisted(async () => {
     failWindow(error: Error) { windowFailure = error },
     windows, hosts, handlers, app, FakeWindow, FakeHost, powerMonitor, nativeTheme, analytics,
     trays, FakeTray, backgroundNotice, shellDialog,
-    menu, popup, socketHeaders: vi.fn(), updateCheck, updateDownload, updateInstall,
+    menu, popup, socketHeaders: vi.fn(), loginShell, readLoginShell, updateCheck, updateDownload, updateInstall,
     platformDispose,
     platformCloseAndWait,
 
@@ -247,6 +251,7 @@ const harness = await vi.hoisted(async () => {
       publishUpdate = undefined
       updateState = { phase: 'idle' }
       updateCheck.mockReset().mockImplementation(async () => updateState)
+      loginShell.mockReset().mockImplementation(base => readLoginShell(base))
       updateDownload.mockReset().mockImplementation(async () => updateState)
       updateInstall.mockReset().mockImplementation(async () => updateState)
       nativeTheme.themeSource = 'system'; nativeTheme.shouldUseDarkColors = false
@@ -307,6 +312,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     return encoding === undefined ? original.readFile(path) : original.readFile(path, encoding)
   }) }
 })
+vi.mock('../src/login-shell-environment.ts', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/login-shell-environment.ts')>(),
+  readDesktopLoginShellEnvironment: harness.loginShell,
+}))
 vi.mock('../src/runtime-tree.ts', () => ({ readDesktopRuntime: () => ({ release: { version: '1.0.0' } }) }))
 vi.mock('../src/paths.ts', () => ({ resolveDesktopPaths: () => ({ profile: 'desktop-test-profile' }) }))
 vi.mock('../src/project-manager.ts', () => ({
@@ -399,6 +408,7 @@ beforeEach(() => {
   })
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'info').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.stubEnv('DSH_DESKTOP_PNPM_ENTRY', 'test-pnpm')
   vi.stubEnv('DSH_DESKTOP_DSH_DIR', 'test-runtime')
   vi.stubEnv('DSH_DESKTOP_PRIMARY_RUNTIME_DIR', 'test-primary-runtime')
@@ -717,8 +727,8 @@ describe('desktop main startup', () => {
     expect((await handler(new Request('dsh-app://foreign/index.html'))).status).toBe(404)
   })
 
-  it('relays the macOS fullscreen state on transitions and after each load', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+  it.each(['darwin', 'win32'] as const)('relays the %s fullscreen state on transitions and after each load', async (platform) => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
     await import('../src/main.ts')
     await harness.preparing.promise
     const window = harness.windows[0]!
@@ -740,7 +750,7 @@ describe('desktop main startup', () => {
     expect(sent()).toHaveLength(relayed)
   })
 
-  it.each(['win32', 'linux'] as const)('registers no fullscreen relay on %s', async (platform) => {
+  it.each(['linux'] as const)('registers no fullscreen relay on %s', async (platform) => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -835,7 +845,7 @@ describe('desktop main startup', () => {
     expect(() => handler(event, 'application', NaN, 34)).toThrow('invalid popup request')
     const application = handler(event, 'application', 48, 34)
     expect(harness.menu.buildFromTemplate.mock.lastCall![0].map(item => item.label ?? item.type)).toEqual([
-      '关于 DeepSeek Harness', 'separator', '检查更新…', 'separator', '退出',
+      '关于 DeepSeek Harness', 'separator', '检查更新…', '管理 dsh 命令…', 'separator', '退出',
     ])
     expect(harness.popup.mock.lastCall![0]).toMatchObject({ window, x: 48, y: 34 })
     expect(harness.popup.mock.lastCall![0].callback).toBeTypeOf('function')
@@ -872,12 +882,12 @@ describe('desktop main startup', () => {
       : ['Application', 'editMenu'])
     const application = template[0]!.submenu as MenuItemConstructorOptions[]
     expect(application.filter(item => item.visible !== false).map(describeItem)).toEqual(platform === 'darwin'
-      ? ['about', 'separator', en.checkUpdatesMenu, 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit']
+      ? ['about', 'separator', en.checkUpdatesMenu, en.cliCommandMenu, 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit']
       : ['about', 'separator', en.checkUpdatesMenu, 'separator', 'quit'])
     expect(harness.menu.setApplicationMenu).toHaveBeenCalledOnce()
   })
 
-  it.each(['en-US', 'zh-CN'])('localizes macOS visibility and quit commands without changing the application name (%s)', async (locale) => {
+  it.each(['en-US', 'zh-CN'])('localizes macOS application commands without changing the application name (%s)', async (locale) => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     vi.spyOn(harness.app, 'getLocale').mockReturnValue(locale)
     vi.spyOn(harness.app, 'getPreferredSystemLanguages').mockReturnValue([locale])
@@ -887,7 +897,9 @@ describe('desktop main startup', () => {
       await import('../src/main.ts')
       await harness.preparing.promise
       const commands = applicationMenuItems().filter(item =>
-        item.role === 'hide' || item.role === 'hideOthers' || item.role === 'unhide' || item.role === 'quit')
+        item.role === 'hide' || item.role === 'hideOthers' || item.role === 'unhide' || item.role === 'quit'
+        || item.label === en.checkUpdatesMenu || item.label === zh.checkUpdatesMenu
+        || item.label === en.cliCommandMenu || item.label === zh.cliCommandMenu)
       await expect(JSON.stringify(commands, null, 2) + '\n')
         .toMatchFileSnapshot(`./expected/application-menu-${locale}.json`)
       expect(harness.app.name).toBe('@deepseek-ai/dsh-desktop')
@@ -2042,6 +2054,27 @@ describe('desktop main startup', () => {
     expect(harness.windows[0]!.urls).toEqual(['dsh-app://app/'])
   })
 
+  it('creates the Host only after the login-shell read and ends the read on quit', async () => {
+    let finishRead!: () => void
+    const read = new Promise<void>((resolve) => { finishRead = resolve })
+    harness.loginShell.mockImplementation(async (base) => { await read; return harness.readLoginShell(base) })
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const boot = invoke(DESKTOP_IPC.boot)
+    harness.prepared.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.hosts).toHaveLength(0)
+    finishRead()
+    await harness.hostStarted.promise
+    expect(harness.hosts[0]!.environment?.DSH_TEST_LOGIN_SHELL).toBe('login')
+    harness.hosts[0]!.ready.resolve()
+    await Promise.all([boot, harness.navigated.promise])
+    const { signal } = harness.loginShell.mock.calls[0]![2]
+    expect(signal?.aborted).toBe(false)
+    harness.app.emit('will-quit')
+    expect(signal?.aborted).toBe(true)
+  })
+
   it('prepares recovery offscreen and starts one Host before choosing the first visible window', async () => {
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -2068,6 +2101,8 @@ describe('desktop main startup', () => {
     })
     expect(harness.hosts[0]!.environment).not.toBe(process.env)
     expect(harness.hosts[0]!.environment?.DSH_CLIENT_VERSION).toBe('1.2.3')
+    expect(harness.hosts[0]!.environment?.DSH_TEST_LOGIN_SHELL).toBe('login')
+    expect(console.warn).toHaveBeenCalledWith('desktop login shell: /account/shell failed (timeout)')
     expect(harness.analytics).toHaveBeenCalledExactlyOnceWith({ eventName: 'desktop_app_launch', timestamp: Date.now(), attributes: {} })
     expect(harness.hosts[0]!.start).toHaveBeenCalledTimes(1)
     expect(harness.windows).toHaveLength(1)

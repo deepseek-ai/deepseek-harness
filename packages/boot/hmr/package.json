@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-hmr",
   "description": "Coordinated module and profile configuration hot reload",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -38,6 +38,7 @@
   "dependencies": {
     "@babel/code-frame": "^7.29.0",
     "chokidar": "^4.0.3",
+    "node-addon-require-builtin": "^0.1.6",
     "picomatch": "^4.0.3",
     "@deepseek-ai/schemastery": "workspace:~"
   },

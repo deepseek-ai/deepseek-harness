@@ -143,7 +143,6 @@ records:
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 提供方：层解析、严格文档解析、写锁下的引用与记录写路径、watcher 生命周期、权限检查 |
-| — | 未发布运行时不变式配套入口；Service Definition 的配套入口（`dsh-credentials/invariant`）负责 `credentials/reference-updated` 生命周期约定；本提供方的文件与环境分层属于异步 I/O，并由其单元测试套件加以约束。 |
 
 ### 解析与写入路径
 

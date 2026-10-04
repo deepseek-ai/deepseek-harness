@@ -31,6 +31,12 @@ kind: "package-reference"
 
 贡献项是客户端自有命令，与宿主命令同名会明确报错。它的 UI 是 popupSelect 规格或动作：裸调用消费触发 token 后运行回调，不提交消息。业务包负责自己的动作及可用性，输入框通过同一 API 注册「文件」。装饰为已有宿主命令添加裸调用弹窗或动作，并保留其目录行、参数认领与生命周期记录；没有匹配的宿主行时不触发。菜单查询按顺序、不区分大小写地模糊匹配命令名与标题的子序列，前缀优先，不显示小节标题。
 
+popupSelect 规格可提供 `searchLabels()`，在每次打开时解析占位文字、空目录提示和无匹配提示。未提供时保留外壳的通用文案；一个弹窗的文案不会沿用到下一个弹窗。
+
+选项可携带 `group: { name, label }`：`name` 标识分组，`label` 提供本地化吸顶标题。同名选项归入同一组；分组保持在已加载选项中首次出现的顺序，即使查询隐藏了较早的行也不变。未分组选项在首次出现的位置组成一个无标题区块。没有匹配行的分组会隐藏。
+
+可选的 `searchMode` 默认为 `'substring'`，不区分大小写地匹配 `label` 与 `detail` 的子串，不进行相关性排序。`'fuzzy-label'` 仅匹配标签中按顺序、不区分大小写的子序列，并在组内排序：前缀优先，其次按匹配得分，最后按原始行顺序。两种模式均忽略查询首尾空格；空查询按分组顺序保留所有行。渲染、键盘导航与选择使用相同的筛选顺序。`/model` 启用 `'fuzzy-label'`；其他命令未显式启用时仍使用子串匹配。
+
 ### 内置行的展示面
 
 内置命令定义携带稳定的 `definitionId`。客户端按标识选择本地化标题、说明、图标和输入写法，修改宿主说明不会改变选择结果。没有匹配标识的同名覆盖保留自己的文案，也不获得内置别名。在任何界面语言下，中英文写法都通过同一个会话有效目录解析，草稿保留手输写法，提交使用宿主注册名。贡献项提供自己的 `label`、`description` 和 `icon`，每次生成候选项时读取。空查询按名称确定小节顺序，未列出的行排在「指令」末尾。
@@ -44,7 +50,7 @@ composer 携带图片或通用文件提交时，只有声明了 `input.attachmen
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。
+弹窗选择面板撑满 composer 浮层宽度，与斜杠菜单一致。弹窗搜索框在浅／深色主题下均保持背景和边框透明。分组选项使用 [ui-primitives](../ui-primitives/README.zh.md#understand-the-implementation) 共享的 `MenuGroup` 标题与 `observeStickyMenuGroups`；普通 effect 负责异步观察，并在渲染分组变化时清理和重建观察器。菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。
 
 <details>
 <summary>实现细节——点击展开</summary>
@@ -95,5 +101,3 @@ composer 携带图片或通用文件提交时，只有声明了 `input.attachmen
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。这是基于 wire 命令目录的浏览器侧 source，不发出 Cordis 事件，也不持有跨插件可变状态；dispatch 与 cache 行为由包测试覆盖。

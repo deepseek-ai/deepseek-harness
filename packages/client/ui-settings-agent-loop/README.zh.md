@@ -65,7 +65,6 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - **只编辑命名空间的一个字段**——Host 的这一节只承载并行上限；组合进来的 `agents` 数组属于启动组合而非用户设置，这里没有对应字段。
-- **运行时不变量：**不发布伴生。本页没有自己拥有的关系：它显示的内容派生自设置镜像，它写入的内容由 Host 校验。
 
 <a id="dev-note"></a>
 ### 开发备注

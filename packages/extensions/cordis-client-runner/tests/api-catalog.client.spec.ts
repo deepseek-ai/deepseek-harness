@@ -26,7 +26,7 @@ describe('Client Cordis inspect catalog', () => {
         'openWorkspace(workspaceId: WorkspaceId, beforeOpen?: (sessionId: SessionId) => void): Promise<void>',
         'forkSession(sessionId: SessionId, onCreated?: (childId: SessionId) => void): Promise<SessionId>',
         'connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>',
-        'startSession(workspaceId?: WorkspaceId): void',
+        'startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void',
         'archiveSession(sessionId: SessionId, options?: { readonly stopActivity?: boolean }): Promise<void>',
         'unarchiveSession(sessionId: SessionId): Promise<void>',
         'pickDirectory(): Promise<string | null>',
@@ -38,6 +38,21 @@ describe('Client Cordis inspect catalog', () => {
   it('contains one entry per visible Client event', () => {
     const names = EVENT_API.map(event => event.name)
     expect(new Set(names).size).toBe(names.length)
+  })
+
+  it('describes text-only draft initialization in Workspace navigation', () => {
+    const result = queryServiceApi('uiWorkspace') as {
+      referencedTypes: readonly { name: string; declaration: string }[]
+    }
+    expect(result.referencedTypes.find(type => type.name === 'StartSessionOptions')?.declaration)
+      .toContain('DraftInitializationOptions')
+    expect(result.referencedTypes.find(type => type.name === 'DraftInitializationOptions')?.declaration)
+      .toContain('readonly prompt?: string')
+    expect(result.referencedTypes.find(type => type.name === 'DraftInitializationOptions')?.declaration)
+      .toContain('readonly clearPreviousDraft?: boolean')
+    expect(result.referencedTypes.map(type => type.name)).not.toEqual(expect.arrayContaining([
+      'DraftInput', 'DraftSnapshot', 'DraftReference',
+    ]))
   })
 
   it('includes the current referenced type closure for the Sessions service', () => {

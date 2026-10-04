@@ -75,7 +75,6 @@ The service retains its validated Config references and samples them in `current
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Live default selection and profile-backed writes |
-| — | No invariant companion is published because Config references are the only owned values. |
 
 ### Behavior notes
 

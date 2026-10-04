@@ -65,7 +65,6 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - **页面跟随组合进来的执行器**——POSIX 与 PowerShell 两个执行器家族共用 `shell` 命名空间，因为一台主机只组合其中一个，所以服务出来的 schema 因平台而异（PowerShell 多一个 `pwshPath`），而页面在两个平台上编辑的都是同样两个字段。
-- **运行时不变量：**不发布伴生。本页没有自己拥有的关系：它显示的内容派生自设置镜像，它写入的内容由 Host 校验。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -220,7 +220,7 @@ describe('HoverCard', () => {
   it('keeps previews below the desktop frame clearance', () => {
     const prior = document.documentElement.style.getPropertyValue('--dsh-frame-top-clearance')
     const priority = document.documentElement.style.getPropertyPriority('--dsh-frame-top-clearance')
-    document.documentElement.style.setProperty('--dsh-frame-top-clearance', '120px')
+    document.documentElement.style.setProperty('--dsh-frame-top-clearance', '100px')
     try {
       const { wrapper } = mount({ variant: 'preview' })
       wrapper.getBoundingClientRect = () => DOMRect.fromRect({ x: 100, y: 600, width: 600, height: 32 })

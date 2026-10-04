@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { inspectorId } from '../../shared/identity.ts'
 import type { InspectorRealmId } from '../../shared/cdp/ids.ts'
 import type { InspectorSourceDescriptor } from '../../shared/bridge/messages/observation.ts'
+import type { InspectorSourceId } from '../../shared/bridge/ids.ts'
 import type { InspectorRealmEvent, InspectorRealmRegistry } from '../inspection/realm-store.ts'
 import type { InspectorRealm, InspectorRealmSession } from '../inspection/realm.ts'
 import type { InspectorConnectionId } from './ids.ts'
@@ -13,7 +14,7 @@ export type InspectorRealmSessionEvent =
   | { readonly type: 'opened'; readonly session: InspectorRealmSession }
   | { readonly type: 'closed'; readonly session: InspectorRealmSession }
 
-/** Owns exactly one backend session per active realm for one DevTools connection. */
+/** Owns one backend session per visible realm for one DevTools connection. */
 export class InspectorRealmSessionSet {
   /** Opaque identity shared by every domain and object table on this DevTools connection. */
   readonly connectionId: InspectorConnectionId = inspectorId<'InspectorConnectionId'>(randomUUID(), 'connectionId')
@@ -22,14 +23,14 @@ export class InspectorRealmSessionSet {
   private readonly unsubscribeRealms: () => void
   private closed = false
 
-  constructor(private readonly realms: InspectorRealmRegistry) {
-    for (const realm of realms.realms()) this.open(realm)
+  constructor(private readonly realms: InspectorRealmRegistry, private readonly clientSourceId?: InspectorSourceId) {
+    for (const realm of realms.realms()) if (this.includes(realm)) this.open(realm)
     this.unsubscribeRealms = realms.subscribe((event) => { this.receiveRealm(event) })
   }
 
   /**
    * Return active sessions in the registry's deterministic order.
-   * @returns Host followed by connected Clients.
+   * @returns Host followed by connected Clients included in this connection.
    */
   all(): InspectorRealmSession[] {
     return this.realms.realms()
@@ -98,6 +99,7 @@ export class InspectorRealmSessionSet {
   }
 
   private receiveRealm(event: InspectorRealmEvent): void {
+    if (!this.includes(event.realm)) return
     if (event.type === 'opened') {
       const session = this.open(event.realm)
       this.emit({ type: 'opened', session })
@@ -108,6 +110,10 @@ export class InspectorRealmSessionSet {
     this.sessions.delete(event.realm.descriptor.realmId)
     session.close()
     this.emit({ type: 'closed', session })
+  }
+
+  private includes(realm: InspectorRealm): boolean {
+    return this.clientSourceId === undefined || realm.descriptor.kind === 'host' || realm.descriptor.sourceId === this.clientSourceId
   }
 
   private open(realm: InspectorRealm): InspectorRealmSession {

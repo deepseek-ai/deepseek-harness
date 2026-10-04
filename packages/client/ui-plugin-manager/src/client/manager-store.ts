@@ -85,8 +85,12 @@ export interface PackageView {
   readonly meta?: PluginLocalizedMeta
   /** Whether the profile's own dependencies hold the package; false for a bundle the installation supplies. */
   readonly installed: boolean
+  /** Present for a profile dependency the installation does not also supply: the spec `pnpm add` accepts. */
+  readonly source?: string
   /** Whether the installation ships the bundle for the person to switch on: official, off until selected, never removable. */
   readonly optional: boolean
+  /** Whether the Host removes the bundle: a profile dependency, or a selection that neither the profile nor the installation holds. */
+  readonly removable: boolean
   /** Whether the bundle is in the profile's layer list. */
   readonly enabled: boolean
   /** Why the Host refuses to switch the bundle off or remove it, when it does. */
@@ -148,7 +152,8 @@ export function offeredRegistries(registries: PluginRegistries | null): Registry
 
 /** Why the typed spec was refused before anything installed. */
 export interface InstallInputError {
-  readonly problem: PluginInspectProblem
+  /** The Host's refusal, or `shipped` for a listed bundle the installation supplies. */
+  readonly problem: PluginInspectProblem | 'shipped'
   readonly reason: string
   /** The registries the check asked, in order, when the refusal came from asking them. */
   readonly registries?: readonly Registry[]
@@ -203,6 +208,8 @@ export interface InstallState {
   readonly detailsOpen: boolean
   /** The bundle the finished run added, left off until enabled from the installed screen. */
   readonly installed: string | null
+  /** The version the finished run installed, when its manifest declares one; null otherwise. */
+  readonly installedVersion: string | null
   /** Whether the finished run's bundle waits for the next start to load. */
   readonly restartRequired: boolean
   /**
@@ -421,9 +428,11 @@ export function packageView(bundle: BundleInfo, plugins: readonly PluginInfo[]):
     name: bundle.name,
     installed: bundle.installed,
     optional: bundle.optional,
+    removable: bundle.removable,
     enabled: bundle.enabled,
     rows,
     ...bundle.version === undefined ? {} : { version: bundle.version },
+    ...bundle.source === undefined ? {} : { source: bundle.source },
     ...bundle.description === undefined ? {} : { description: bundle.description },
     ...bundle.meta === undefined ? {} : { meta: bundle.meta },
     ...bundle.readOnlyReason === undefined ? {} : { readOnlyReason: bundle.readOnlyReason },
@@ -444,7 +453,7 @@ export function sortPackages(packages: readonly PackageView[]): PackageView[] {
 const IDLE_INSTALL: InstallState = {
   open: false, spec: '', registries: null, registry: OFFICIAL_REGISTRY, registryOpen: false, registryError: false, attempts: null,
   phase: 'idle', inputError: null, subject: null, runs: [], detailsOpen: false,
-  installed: null, restartRequired: false, failure: null, approvedBuilds: [], enabling: false,
+  installed: null, installedVersion: null, restartRequired: false, failure: null, approvedBuilds: [], enabling: false,
 }
 
 /** The dialog back at its spec: the run and its outcome forgotten, the spec and the registries kept. */
@@ -838,9 +847,10 @@ export class PluginManagerController {
       this.ctx.get('productAnalytics')?.track('plugin_install_click', { input_value: sanitizeInstallInput(spec) })
     }
     // A name the list already shows is refused at once, before the Host is asked.
-    if (state.packages.some(pkg => pkg.name === spec)) {
+    const listed = state.packages.find(pkg => pkg.name === spec)
+    if (listed !== undefined) {
       this.finishAnalytics('failed', 'already-installed')
-      this.patchInstall({ phase: 'idle', inputError: { problem: 'already-installed', reason: spec } })
+      this.patchInstall({ phase: 'idle', inputError: { problem: listed.installed ? 'already-installed' : 'shipped', reason: spec } })
       return
     }
     const choice = install.registry
@@ -855,7 +865,7 @@ export class PluginManagerController {
     this.inspectAbort = controller
     this.patchInstall({
       phase: 'checking', inputError: null, subject: null, runs: [], detailsOpen: false, attempts: null, registryOpen: false,
-      installed: null, restartRequired: false, failure: null, approvedBuilds: [],
+      installed: null, installedVersion: null, restartRequired: false, failure: null, approvedBuilds: [],
     })
     const read = this.registryRead
     if (read !== undefined && choice === read.choice && read.done !== undefined) {
@@ -893,7 +903,7 @@ export class PluginManagerController {
     const requestId = randomUUID() as PluginInstallRequestId
     const request: InstallRequest = { requestId, acknowledged: false, replyLost: false, recovering: false }
     this.request = request
-    this.patchInstall({ phase: 'starting', requestId, subject, runs: [], attempts: null, failure: null, installed: null, approvedBuilds: [] })
+    this.patchInstall({ phase: 'starting', requestId, subject, runs: [], attempts: null, failure: null, installed: null, installedVersion: null, approvedBuilds: [] })
     // The Host announces `plugin-manager/changed` while the run is still on
     // the wire, and every such event reads again; those reads must not cancel
     // the run's settlement.
@@ -954,6 +964,7 @@ export class PluginManagerController {
       this.patchInstall({
         phase: 'done', runs: settledRuns(runs, 0), failure: null,
         installed: result.bundle ?? null,
+        installedVersion: result.version ?? null,
         restartRequired: result.application === 'restart-required',
         approvedBuilds: result.approvedBuilds ?? [],
         ...asked,

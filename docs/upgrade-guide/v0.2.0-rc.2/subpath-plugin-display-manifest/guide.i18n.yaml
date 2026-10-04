@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.0-rc.2/subpath-plugin-display-manifest/guide.md
+/:
+  en: 671d5c0f87811869
+  zh: 442229358c471ea8
+/subpath-plugins-read-subpath-icon-instead-of-subpath-package-json:
+  en: 4e7a5119af04d780
+  zh: e70b1fc5f253d6f4
+/subpath-plugins-read-subpath-icon-instead-of-subpath-package-json/change:
+  en: 4793cf77e0c3a9ba
+  zh: a4fbe548044af6e6
+/subpath-plugins-read-subpath-icon-instead-of-subpath-package-json/migration:
+  en: bd32f99339b4a69e
+  zh: b0d6b46724bc57cc

@@ -565,6 +565,12 @@
   padding-bottom: 1px;
   margin-bottom: -1px;
   overflow-x: auto;
+  /* A narrow strip still scrolls its tabs, without a visible bar (both engines). */
+  scrollbar-width: none;
+}
+
+.detailTabs::-webkit-scrollbar {
+  display: none;
 }
 
 .detailActions {
@@ -1272,6 +1278,16 @@
   align-items: center;
   min-width: 0;
   max-width: 200px;
+}
+
+/* A disabled entry passes the pointer to this wrapper, whose tooltip names the
+   compact icon; the wrapper keeps the disabled cursor. */
+.detailContext:has(> button:disabled) {
+  cursor: not-allowed;
+}
+
+.detailContext > button:disabled {
+  pointer-events: none;
 }
 
 /* The staged-edit bar: it appears under the detail tab strip only while the

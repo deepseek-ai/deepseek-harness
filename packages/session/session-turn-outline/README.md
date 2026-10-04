@@ -71,7 +71,6 @@ The unit is a pure fold over committed session events. `turn/start` — not the 
 | [`src/index.ts`](src/index.ts) | Plugin entry: `inject`, unit registration on the mounting fiber |
 | [`src/projection.ts`](src/projection.ts) | The fold: entry append, preview fill, wire view |
 | [`src/types.ts`](src/types.ts) | One home of the `turnOutline` projection-key declaration and entry types |
-| — | No runtime invariant companion is published: the package owns one pure projection fold, `session-projection` schema-validates its served values, and re-folding the same log would duplicate the implementation instead of comparing independently maintained observations; session and agent-loop own turn-boundary ordering. |
 
 ### Fold rules
 

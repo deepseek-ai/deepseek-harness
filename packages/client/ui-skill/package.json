@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-skill",
   "description": "Web skill references and the dedicated skill tool row",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -65,6 +65,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*"
   },
   "files": [

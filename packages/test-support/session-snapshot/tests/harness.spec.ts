@@ -1000,7 +1000,12 @@ describe('runScenario', () => {
     )).rejects.toThrow(/did not persist goal phase "blocked" within 20ms/)
   })
 
-  it('identifies the child wait when its first log harvest outlasts the deadline', async () => {
+  it.each([
+    { label: 'session', step: { op: 'waitForTurnEnd', timeoutMs: 20 }, expected: 'did not persist turn/end within 20ms' },
+    { label: 'child', step: { op: 'waitForSubagentTurnEnd', child: 2, timeoutMs: 20 },
+      expected: 'subagent child #2 did not persist closed turn 1 within 20ms' },
+  ] satisfies { label: string; step: InputStep; expected: string }[])
+  ('identifies the $label wait when its first log harvest outlasts the deadline', async ({ step, expected }) => {
     const { fixtureFile } = await scenario({})
     const reading = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -1016,14 +1021,15 @@ describe('runScenario', () => {
       return await originalReaddir(...args)
     })
     const run = runScenario(
-      { steps: [...boot, { op: 'waitForSubagentTurnEnd', child: 2, timeoutMs: 20 }] },
+      { steps: [...boot, step] },
       { agent: AGENT, mode: 'replay', fixtureFile },
     )
-    const rejected = expect(run).rejects.toThrow(/subagent child #2 did not persist closed turn 1 within 20ms/)
+    const rejected = expect(run).rejects.toThrow(expected)
     try {
       await Promise.race([reading.promise, rejected])
       expect(pendingRead).toBeDefined()
       await rejected
+      await expect(run).rejects.toHaveProperty('cause', expect.any(Error))
     } finally {
       release.resolve(undefined)
       await Promise.allSettled([pendingRead, run, rejected])

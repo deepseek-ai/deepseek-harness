@@ -1,0 +1,23 @@
+.editor {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 28px;
+  /* Six 20px text lines plus padding and border, then the editor scrolls. */
+  max-height: 127px;
+  margin: 0;
+  padding: 3px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-sm);
+  outline: none;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  font-family: Inter, var(--dsw-font-family);
+  overflow-y: auto;
+  resize: none;
+}
+
+.editor:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+}

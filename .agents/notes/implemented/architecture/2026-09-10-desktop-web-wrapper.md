@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-09-10-desktop-web-wrapper.zh.md)
 
-The [Electron runtime decision](2026-09-11-desktop-electron-node-runtime.md) supersedes the separate upstream Node executable; other decisions in this note remain applicable.
+Desktop uses Electron as its Node runtime under the [current runtime reference](../../../../apps/desktop/README.md); other decisions in this note remain applicable.
 
 ## Problem
 
@@ -12,7 +12,7 @@ Separate Desktop composition and request transport require their own configurati
 
 ## Decision
 
-The private Desktop Host invokes the CLI's shared profile runner against the independently owned Desktop profile. The complete Web composition owns authentication, HTTP routes, client assets, RPC, and response streaming. Electron loads packaged static Web assets before the child is ready. Child IPC carries readiness, structured boot injections, and shutdown. The [immediate-window decision](2026-09-09-desktop-immediate-window-and-direct-start.md) owns local-document HTTP forwarding and authenticated WebSocket access; Web retains application dispatch and stream framing.
+The private Desktop Host invokes the CLI's shared profile runner against the independently owned Desktop profile. The complete Web composition owns authentication, HTTP routes, client assets, RPC, and response streaming. Electron loads packaged static Web assets before the child is ready. Child IPC carries readiness, structured boot injections, and shutdown. The [immediate-window reference](../../../../apps/desktop/README.md) owns local-document HTTP forwarding and authenticated WebSocket access; Web retains application dispatch and stream framing.
 
 The shared runner owns profile and Harness-home patches, proxy setup, telemetry defaults, the runtime resolution, configuration reload, and application lifecycle. Desktop initializes profiles from the shared Web template and uses its Plugin Manager in the main application. Electron owns windows, menus, native directory selection, recovery, and release updates.
 

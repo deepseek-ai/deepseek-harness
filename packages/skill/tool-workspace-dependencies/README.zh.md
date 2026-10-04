@@ -65,7 +65,6 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 清单校验、路径推导、原地与安装两种准备方式、工具注册。 |
-| — | 不发布运行时不变量伴随入口：每次准备都校验 payload 清单，工具注册表负责注册生命周期。 |
 
 </details>
 
@@ -122,7 +121,5 @@ kind: "package-reference"
 
 <details>
 <summary>维护者的工作上下文——点击展开</summary>
-
-包归属与载体选择记录在[共享运行时 Agent Note](../../../.agents/notes/implemented/architecture/2026-09-17-shared-office-runtime.zh.md) 中。
 
 </details>

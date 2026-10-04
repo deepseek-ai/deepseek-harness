@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { ConversationTimelineSnapshot, TurnLocation } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ChatNode } from '../src/client/contract/chat-nodes.ts'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+import type { ChatConversationViewNode, ChatNode } from '../src/client/contract/chat-nodes.ts'
 import { ChatSnapshotBuilder } from '../src/client/conversation-nodes/chat-snapshot-builder.ts'
 import { ProcessState } from '../src/client/conversation-nodes/process-groups.ts'
+import { processActivity } from '../src/client/conversation-nodes/process-activity.ts'
 import { ConversationGroupStore } from '../../ui-conversation/src/client/conversation/group-store.ts'
 import type { ProcessGroupData } from '../src/client/contract/process-groups.ts'
 
@@ -35,7 +37,7 @@ function tool(key: string, seq: number, name = 'bash', owner = turn): ChatNode<'
   return {
     key, id: key, kind: 'tool-call', target: 'chat', anchorSeq: seq,
     location: { kind: 'turn', turn: owner }, visibility: 'visible',
-    data: { root: { phase: 'start' as const, callId: key, name, argsRaw: '{"command":"pwd"}', turn: owner.turn, step: 1, time: seq, subCalls: [] } },
+    data: { root: { phase: 'start' as const, args: PartialArguments.fromText('{"command":"pwd"}'), callId: key, name, argsRaw: '{"command":"pwd"}', turn: owner.turn, step: 1, time: seq, subCalls: [] } },
   }
 }
 
@@ -48,7 +50,19 @@ function separator(seq: number, inTurn: boolean): ChatNode<'user'> | ChatNode<'s
   return inTurn ? { ...user, kind: 'steering', data: { ...user.data, kind: 'steering', messageId: 'steer' as MessageId } } : user
 }
 
-function harness(nodes: ChatNode[], currentTimeline = timeline) {
+function replyNodes(inTurn: boolean): readonly [ChatConversationViewNode, ChatConversationViewNode] {
+  const trigger: ChatConversationViewNode = {
+    key: 'generic-reply', id: 'reply-message', kind: 'turn-trigger', target: 'chat', anchorSeq: 6,
+    location: inTurn ? { kind: 'turn', turn } : { kind: 'session' }, visibility: 'visible',
+    data: {
+      kind: 'context', seq: 6, time: 6, content: [{ type: 'text', text: 'answer' }],
+      source: { kind: 'user-question-reply' }, producer: { role: 'inject', label: null }, form: null,
+    },
+  }
+  return [trigger, { ...trigger, key: 'question-reply', kind: 'question-reply', data: {} }]
+}
+
+function harness(nodes: readonly ChatConversationViewNode[], currentTimeline = timeline) {
   const builder = new ChatSnapshotBuilder()
   const state = new ProcessState()
   const store = new ConversationGroupStore<ProcessGroupData>()
@@ -67,10 +81,116 @@ function harness(nodes: ChatNode[], currentTimeline = timeline) {
 }
 
 describe('Definition-owned Chat process groups', () => {
+  it.each([
+    ['whitespace', '  one\t\n two  ', 'one two'],
+    ['empty text', ' \t\n ', 'bash'],
+    ['exact limit', 'x'.repeat(160), 'x'.repeat(160)],
+    ['overflow', 'x'.repeat(161), `${'x'.repeat(159)}…`],
+    ['space at cutoff', `${'x'.repeat(158)} \n yz`, `${'x'.repeat(158)}…`],
+    ['combining marks', 'e\u0301'.repeat(161), `${'e\u0301'.repeat(159)}…`],
+    ['emoji at limit', '👩‍💻'.repeat(160), '👩‍💻'.repeat(160)],
+    ['emoji overflow', '👩‍💻'.repeat(161), `${'👩‍💻'.repeat(159)}…`],
+    ['sealed unpaired surrogate', 'x'.repeat(159) + '\ud83d', 'x'.repeat(159) + '\ud83d'],
+  ])('preserves normalized live detail for %s', (_label, command, expected) => {
+    const node = tool('call', 2)
+    const argsRaw = JSON.stringify({ command })
+    const root = { ...node.data.root, argsRaw, args: PartialArguments.fromText(argsRaw) }
+    expect(processActivity([{ ...node, data: { root } }]).runningDetail).toBe(expected)
+  })
+
+  it('keeps 160 graphemes when the bounded prefix splits a surrogate pair', () => {
+    const command = '👩‍💻'.repeat(87) + '☀️' + 'a'.repeat(71) + '👩‍💻'
+    expect(command).toHaveLength(513)
+    const argsRaw = JSON.stringify({ command })
+    const args = PartialArguments.fromText(argsRaw)
+    const node: ChatNode<'tool-call'> = {
+      ...tool('call', 2),
+      data: { root: { phase: 'start', argsRaw, args, callId: 'call', name: 'bash', turn: 1, step: 1, time: 2, subCalls: [] } },
+    }
+    const prefix = vi.spyOn(args, 'textPrefix')
+    const text = vi.spyOn(args, 'text')
+    try {
+      expect(processActivity([node]).runningDetail).toBe(command)
+      expect(text).not.toHaveBeenCalled()
+      expect(prefix.mock.calls.every(([, limit]) => limit <= 513)).toBe(true)
+    } finally {
+      prefix.mockRestore()
+      text.mockRestore()
+    }
+  })
+
+  it.each([false, true])('waits for a low surrogate across deltas before truncating (escaped=%s)', (escaped) => {
+    const command = '👩‍💻'.repeat(87) + '☀️' + 'a'.repeat(71) + '👩‍💻'
+    const args = new PartialArguments()
+    args.append(`{"command":"${command.slice(0, 511)}${escaped ? '\\ud83d' : command[511]}`)
+    const node: ChatNode<'tool-call'> = {
+      ...tool('call', 2),
+      data: { root: { phase: 'preparing', args, callId: 'call', name: 'bash', turn: 1, step: 1, time: 2, subCalls: [] } },
+    }
+    expect(processActivity([node]).runningDetail).toBe(command.slice(0, 511))
+    args.append(escaped ? '\\udcbb' : command[512]!)
+    expect(args.refresh()).toBe(true)
+    expect(processActivity([node]).runningDetail).toBe(command)
+    args.append('x"}')
+    expect(args.refresh()).toBe(true)
+    expect(processActivity([node]).runningDetail).toBe(`${command.slice(0, -5)}…`)
+  })
+
+  it.each(['"}', 'x"}'])('counts an unpaired surrogate once its continuation is known (%s)', (ending) => {
+    const command = '👩‍💻'.repeat(87) + '☀️' + 'a'.repeat(71) + '👩‍\ud83d'
+    const args = new PartialArguments()
+    args.append(`{"command":"${command}`)
+    const node: ChatNode<'tool-call'> = {
+      ...tool('call', 2),
+      data: { root: { phase: 'preparing', args, callId: 'call', name: 'bash', turn: 1, step: 1, time: 2, subCalls: [] } },
+    }
+    expect(processActivity([node]).runningDetail).toBe(command.slice(0, -1))
+    args.append(ending)
+    expect(args.refresh()).toBe(true)
+    expect(processActivity([node]).runningDetail).toBe(`${command.slice(0, -4)}…`)
+  })
+
+  it('bounds grapheme traversal while allowing a later description to replace a long command', () => {
+    const args = new PartialArguments()
+    args.append(`{"command":"${'x'.repeat(1024)}`)
+    const node: ChatNode<'tool-call'> = {
+      ...tool('call', 2),
+      data: { root: { phase: 'preparing', args, callId: 'call', name: 'bash', turn: 1, step: 1, time: 2, subCalls: [] } },
+    }
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+    const segment = segmenter.segment.bind(segmenter)
+    let visited = 0
+    const spy = vi.spyOn(Intl.Segmenter.prototype, 'segment').mockImplementation((input) => {
+      const segments = segment(input)
+      const iterator = segments[Symbol.iterator]()
+      segments[Symbol.iterator] = function* () {
+        for (const part of iterator) {
+          visited++
+          yield part
+        }
+        return undefined
+      }
+      return segments
+    })
+    try {
+      expect(processActivity([node]).runningDetail).toBe(`${'x'.repeat(159)}…`)
+      expect(visited).toBeLessThanOrEqual(161)
+      args.append('y'.repeat(1024))
+      expect(args.refresh()).toBe(false)
+      args.append('","description":"Run focused tests"}')
+      expect(args.refresh()).toBe(true)
+      spy.mockClear()
+      expect(processActivity([node]).runningDetail).toBe('Run focused tests')
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
   it('clears preparation from a closed group while retaining its recorded activity', () => {
     const preparing: ChatNode<'tool-call'> = {
       ...tool('call', 2, 'write'),
-      data: { root: { phase: 'preparing', callId: 'call', name: 'write', turn: 1, step: 1, time: 2, subCalls: [] } },
+      data: { root: { phase: 'preparing', args: PartialArguments.EMPTY, callId: 'call', name: 'write', turn: 1, step: 1, time: 2, subCalls: [] } },
     }
     const h = harness([preparing])
     const group = h.store.entries[0]!
@@ -91,17 +211,22 @@ describe('Definition-owned Chat process groups', () => {
     ['list_mcp_resources', 'tools'], ['list_mcp_resource_templates', 'tools'], ['read_mcp_resource', 'tools'],
   ] as const)('%s keeps its activity category through preparation, dispatch, and result', (name, kind) => {
     const started = tool('call', 2, name)
+    const args = new PartialArguments()
     const preparing: ChatNode<'tool-call'> = {
       ...started,
-      data: { root: { phase: 'preparing', callId: 'call', name, turn: 1, step: 1, time: 2, subCalls: [] } },
+      data: { root: { phase: 'preparing', args, callId: 'call', name, turn: 1, step: 1, time: 2, subCalls: [] } },
     }
     const h = harness([preparing])
     const group = h.store.entries[0]!
     if (group.kind !== 'group') throw new Error('expected group')
     const source = h.store.groupSource(group.key)
     expect(source.getSnapshot()?.data.summary).toEqual({
-      counts: [{ kind, count: 1 }], running: kind, preparing: true, runningDetail: kind === 'tools' ? name : '',
+      counts: [{ kind, count: 1 }], running: kind, preparing: true, runningDetail: '',
     })
+    args.append('{}')
+    h.builder.apply({ upserts: [{ ...preparing, data: { root: { ...preparing.data.root } } }], timeline })
+    h.commit()
+    expect(source.getSnapshot()?.data.summary.runningDetail).toBe(name)
     h.builder.apply({ upserts: [started], timeline })
     h.commit()
     expect(source.getSnapshot()?.data.summary).toEqual({ counts: [{ kind, count: 1 }], running: kind, runningDetail: 'pwd' })
@@ -109,12 +234,78 @@ describe('Definition-owned Chat process groups', () => {
       ...started,
       data: { root: {
         kind: 'tool-result', callId: 'call', seq: 3, time: 3, callTime: 2,
+        name, args: PartialArguments.fromText('{"command":"pwd"}'),
         call: { name, argsRaw: '{"command":"pwd"}' }, content: [], isError: false, subCalls: [],
       } },
     }
     h.builder.apply({ upserts: [settled], timeline })
     h.commit()
     expect(source.getSnapshot()?.data.summary).toEqual({ counts: [{ kind, count: 1 }], running: undefined, runningDetail: '' })
+  })
+
+  it.each(['a-trigger', 'z-trigger'])('renders one question reply without splitting its group for duplicate %s', (key) => {
+    const [generic, reply] = replyNodes(true)
+    const trigger = { ...generic, key }
+    const h = harness([tool('before', 4), trigger, reply, tool('after', 8)])
+    expect(h.store.entries.map(entry => entry.kind)).toEqual(['group'])
+    const group = h.store.entries[0]!
+    if (group.kind !== 'group') throw new Error('expected group')
+    expect(h.store.groupSource(group.key).getSnapshot()?.members.map(member => member.key))
+      .toEqual(['before', reply.key, 'after'])
+    expect(h.snapshot.nodes.get(trigger.key)).toBeDefined()
+    expect(h.snapshot.nodes.get(reply.key)).toBeDefined()
+  })
+
+  it.each([0.9, 5])('keeps the Turn control before its coalesced opening reply at seq %s', (anchorSeq) => {
+    const control: ChatNode<'turn-process'> = {
+      key: 'control', id: '1', kind: 'turn-process', target: 'chat', anchorSeq,
+      location: { kind: 'turn', turn }, visibility: 'visible',
+      data: {
+        turn: 1, controlAnchorSeq: 1, processStartSeq: 1, answerAnchorSeq: null,
+        answerStep: null, inlineReasoning: false, messageCount: 0, toolCallCount: 1, subagentCount: 0,
+      },
+    }
+    const h = harness([control, ...replyNodes(true), tool('after', 8)])
+    expect(h.store.entries.map(entry => entry.kind)).toEqual(['node', 'group'])
+    expect(h.store.entries[0]).toEqual({ kind: 'node', key: control.key })
+  })
+
+  it('aggregates a newly projected reply with its existing trigger', () => {
+    const [trigger, reply] = replyNodes(true)
+    const h = harness([tool('before', 4), trigger, tool('after', 8)])
+    h.builder.apply({ upserts: [reply], timeline })
+    h.commit()
+    expect(h.store.entries.map(entry => entry.kind)).toEqual(['group'])
+    const group = h.store.entries[0]!
+    if (group.kind !== 'group') throw new Error('expected group')
+    expect(h.store.groupSource(group.key).getSnapshot()?.members.map(member => member.key))
+      .toEqual(['before', reply.key, 'after'])
+
+    h.builder.apply({ upserts: [{ ...reply, visibility: 'hidden' }], timeline })
+    h.commit()
+    expect(h.store.entries.map(entry => entry.kind)).toEqual(['group', 'node', 'group'])
+    expect(h.store.entries[1]).toEqual({ kind: 'node', key: trigger.key })
+  })
+
+  it('aggregates reply projections before their Turn has been loaded', () => {
+    const [trigger, reply] = replyNodes(false)
+    const h = harness([trigger, reply])
+    expect(h.store.entries).toEqual([{ kind: 'node', key: reply.key }])
+    expect(h.snapshot.nodes.get(trigger.key)).toBeDefined()
+  })
+
+  it('keeps unscoped aggregation current when a reply arrives', () => {
+    const [trigger, reply] = replyNodes(false)
+    const h = harness([trigger])
+    h.builder.apply({ upserts: [reply], timeline })
+    h.commit()
+    expect(h.store.entries).toEqual([{ kind: 'node', key: reply.key }])
+  })
+
+  it.each([true, false])('does not merge identical text from different messages, scoped: %s', (inTurn) => {
+    const [trigger, reply] = replyNodes(inTurn)
+    const h = harness([trigger, { ...reply, id: 'different-message', data: trigger.data }])
+    expect(h.store.entries).toContainEqual({ kind: 'node', key: trigger.key })
   })
 
   it('retains a group through repeated prepends and a later append', () => {
@@ -260,7 +451,7 @@ describe('Definition-owned Chat process groups', () => {
     const previous = h.store.groupSource(history.key).getSnapshot()
     const live = tool('live', 4)
     h.builder.apply({
-      upserts: [{ ...live, data: { root: { ...live.data.root, argsRaw: '{"command":"ls"}' } } }],
+      upserts: [{ ...live, data: { root: { ...live.data.root, argsRaw: '{"command":"ls"}', args: PartialArguments.fromText('{"command":"ls"}') } } }],
       timeline,
     })
     const input = h.builder.groupInput()

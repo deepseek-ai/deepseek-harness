@@ -84,7 +84,6 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：后端注册、`path`／`journalMode` 配置、单元表 |
 | [`src/schema.ts`](src/schema.ts) | 打开顺序、物理布局版本、元数据表、记录表命名 |
 | [`src/unit.ts`](src/unit.ts) | 一个已打开单元：预处理语句、JSON 值解析、关闭 |
-| — | 不发布运行时不变式伴生入口；schema 版本与单元版本的一致性在打开时检查，不一致时会在单元创建前拒绝打开；持久性需要由共享 KV 符合性测试套件中的后端往返测试验证；本包不暴露可持续观察的进程内关系。 |
 
 </details>
 

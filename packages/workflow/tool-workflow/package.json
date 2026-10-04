@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-workflow",
   "description": "Model-facing workflow tool: run a JavaScript orchestration script over ctx.workflowEngine",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -18,10 +18,6 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./types": {
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
@@ -31,7 +27,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
@@ -39,7 +34,6 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-jobs": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
@@ -54,7 +48,6 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-jobs": "workspace:*",
     "@deepseek-ai/dsh-jobs-local": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",

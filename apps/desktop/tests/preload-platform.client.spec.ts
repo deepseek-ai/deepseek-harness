@@ -12,14 +12,14 @@ afterEach(() => {
   on.mockClear()
 })
 
-it.each(['win32', 'linux'] as const)('subscribes no fullscreen channel on %s', (platform) => {
+it.each(['linux'] as const)('subscribes no fullscreen channel on %s', (platform) => {
   vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
   syncWindowFullscreen()
   expect(on).not.toHaveBeenCalled()
 })
 
-it('mirrors the sent fullscreen state onto html[data-fullscreen] on darwin', () => {
-  vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+it.each(['darwin', 'win32'] as const)('mirrors the sent fullscreen state onto html[data-fullscreen] on %s', (platform) => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
   syncWindowFullscreen()
   expect(on).toHaveBeenCalledExactlyOnceWith(DESKTOP_IPC.windowFullscreen, expect.any(Function))
   const handler = on.mock.calls[0]?.[1] as (event: unknown, fullscreen: boolean) => void

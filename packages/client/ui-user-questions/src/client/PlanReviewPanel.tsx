@@ -27,20 +27,26 @@ function tooltip(description: string | undefined): { title?: string } {
  * @returns The plan-review takeover for this request.
  */
 export function PlanReviewPanel({ pending, review, t, renderSlot }: PlanReviewPanelProps) {
-  // The panel waits for the host's resolved frame before leaving, so repeated
-  // clicks must not resubmit. A failed send re-enables it and shows the error.
+  // Foreground decisions wait for the resolved frame; accepted Remote decisions
+  // hide the panel. A failed send re-enables the buttons and shows the error.
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const settle = (send: () => Promise<void>): void => {
+  const settle = (send: () => Promise<void>, remote = false): void => {
     setBusy(true)
     setError(null)
-    void send().catch((cause: unknown) => {
-      setBusy(false)
-      setError(cause instanceof Error ? cause.message : String(cause))
-    })
+    void send()
+      .then(() => {
+        if (!remote) return
+        setBusy(false)
+        void pending.dismiss().catch(() => { setError(t('status.sent')) })
+      })
+      .catch((cause: unknown) => {
+        setBusy(false)
+        setError(cause instanceof Error ? cause.message : String(cause))
+      })
   }
   const decide = (label: string): void => {
-    settle(() => pending.answer({ answers: [{ id: review.id, selected: [label] }] }))
+    settle(() => pending.answer({ answers: [{ id: review.id, selected: [label] }] }), pending.snapshot().channel === 'rpc')
   }
   const summary = useMemo(() => {
     const title = extractMarkdownPlainText(review.plan, { mode: 'first-line' })
@@ -67,7 +73,7 @@ export function PlanReviewPanel({ pending, review, t, renderSlot }: PlanReviewPa
           <div className={css.actions}>
             <Button
               variant="outline" className={css.discuss} icon={<IconEditOutlineRegular size={14} />}
-              disabled={busy} onClick={() => { settle(() => pending.cancel()) }}
+              disabled={busy} onClick={() => { settle(() => pending.dismiss()) }}
             >
               {t('plan.discuss')}
             </Button>

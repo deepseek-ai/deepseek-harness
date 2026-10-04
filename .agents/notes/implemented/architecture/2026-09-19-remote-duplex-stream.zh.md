@@ -604,6 +604,6 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 ## 相关
 
-- [Remote 事件投递](2026-08-10-remote-event-delivery.zh.md)：`$events/result` 的 unary 回答路径；「后续」里的双工 `$events` 落地后部分取代它。
+- [Remote 事件投递](../../../../packages/api/remotes/README.zh.md)：`$events/result` 的 unary 回答路径；「后续」里的双工 `$events` 落地后部分取代它。
 - [会话历史与事件传输](2026-08-18-session-history-and-event-transport.zh.md)：`$stream()` 监督器与其上的 journal / snapshot 协议，本 Note 不改它们。
 - [Web 侧边栏终端](../feature/2026-09-09-web-sidebar-terminal.zh.md)：终端按键的 unary `write` 与 `attachmentId`；「后续」里的 `attach` 流落地后取代它。

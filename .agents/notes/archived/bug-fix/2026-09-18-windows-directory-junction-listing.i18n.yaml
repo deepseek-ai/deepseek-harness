@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-09-18-windows-directory-junction-listing.md
+2026-09-18-windows-directory-junction-listing.md: ad8f410fb197f4348e7b4f9d7106acc48ce63472
+2026-09-18-windows-directory-junction-listing.zh.md: b1a70b44467c78fc9623d8a741427251fef9ab16

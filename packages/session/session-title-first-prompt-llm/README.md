@@ -115,5 +115,3 @@ These limits define when this provider stops representing the session. They are 
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. This thin provider delegates request and result validation to the shared title service and LLM helper and retains no independent mutable state.

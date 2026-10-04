@@ -33,6 +33,8 @@ Client journal 在发布 follow 快照、live entry 或历史页之前验证当�
 
 每个 endpoint 都声明自己的激活策略。列表只读取持久化 header 与 projection cache row，绝不调用逐 Session stat 或打开冷 Session body。当前格式 cache identity 可以提供全部列表 hint；生命周期匹配的 predecessor cache 只能提供版本兼容的 title，作为可能过时的展示事实，绝不能作为权威 fold seed。搜索、附件、历史页、日志跟随、skill 发现和工作区路径打开可以在不激活 Agent 的情况下检查 persistence；`canOpenWorkspacePath()` 无需指定 Session 即可报告原生打开能力。取消要求 live 状态；queue 变更、模型、重命名、prompt 和文件引用操作可以解析或恢复普通 Session。提示词会在解析 Agent 或追加 Session 事件前，拒绝既没有非空白文本也没有附件的 content；queue edit 只接受非空文本 content。prompt 准入从注入的 [`fileUploads`](../../client/file-upload/README.zh.md) Host 服务取得不透明凭证，在把完整有序内容列表交给 `ctx.attachments` 前解析每个属于同一 Agent 的凭证。`requestId` 已进入 queue 或日志时，prompt 重试直接返回原来的接受结果，不会重复插入消息。只有 create 与 fork 会直接创建新 Agent。该服务把同一套感知 preset 的恢复策略和 subagent ownership fence 同时用于自身方法，以及其他 Remote namespace 使用的 Typert Agent 与 Session lookup。Queue 变更只有一个狭窄例外：当前 projection identity 为 continuable 且来自自身非 seed suffix 的在线 child，可以在两个 inbox 目标上使用普通 Edit、Remove 与 QueueDock Steer action。One-shot、缺失、未知、损坏、仅含 seed identity 或冷 child 继续被拒绝，且不会恢复。skill 目录优先使用已有 live Agent，否则使用所记录 preset 的常驻 scope，因此列表查询绝不会启动 Agent。经过鉴权的文件交付路由通过 `workspaceDesktop()` 获取提供服务的 Host 名称和文件管理器行为。`openWorkspacePath({ path, action: "reveal" })` 将文件管理器导航委托给原生适配器；省略 `action` 时按文件类型关联打开，包括 HTML 和 SVG。两种操作都要求当前文件系统将请求的 Host 路径映射到同一个规范进程路径；无法映射的远端路径会在执行原生命令之前被拒绝。 `session.projections` 通过一次 live-preferred Session observation 读取完整基线，不激活 Agent。Session 不存在时返回 null，并可提供任意已注册的 projection key。Client 通过 `projectionsBySession` 暴露共享值和显式读取状态，由领域选择自身的 key。Session 列表摘要携带 `agentAvailable`，通过已有摘要与状态事件更新，与持久化 projection 相互独立。初始读取与实时 projection 帧使用相同的序号排序规则。
 
+Host 仅在配置的工作时间片耗尽时，于完整条目之间让出事件循环；剩余工作较少时直接返回，不强制让出。每行及每次让出之后检查请求取消，取消时拒绝返回部分结果。每行同步计算；列表不承诺跨 Session 的统一快照。已经进入冷态队列的 Session 若在让出期间接入，仍返回缓存行：Client 对进行中请求的变更重放会纠正其可用性，带序号的投影会覆盖缓存提示。
+
 Client 列表行和驻留 Session 使用当前 `sessionListMetadata` 投影纠正过期的空白会话提示；最近活动时间取摘要时间戳与投影中最后一次用户提示词时间的较晚值。当 SessionManager 在列表行到达前创建实例时，会使用已保留的该 Session 元数据对账空白状态。因此，即使旧列表响应仍将已有对话标为空白，新会话操作也不会复用已经打开过的对话。
 
 显式 ID 的 `session.create` 会收养活动 Session，或恢复持久化 Session 并持续持有其写锁。写锁争用返回 `session/writer-held`；调用方可以尝试其他空白会话，同时保留其他失败。`session.list` 根据缓存元数据列出持久化空白会话，不打开冷日志正文。
@@ -92,6 +94,7 @@ GUI 模型选择要求确切提供方／模型对出现在可用目录中；不�
 | 字段 | 默认值 | 含义 |
 |---|---:|---|
 | `nativeOpen` | 平台探测 | 是否能把 Session 工作区路径交给原生桌面打开器 |
+| `listWorkSliceMs` | `16` | 列表工作时间片，单位为毫秒，取正整数；在完整条目之间检查 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-api-session-controller)是所有受支持字段及其 JSDoc 的完整来源。
 
@@ -110,6 +113,7 @@ GUI 模型选择要求确切提供方／模型对出现在可用目录中；不�
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- 单个摘要、查询提供方自身的枚举、最终排序和响应序列化都可能超出列表时间片目标；它不是 Host 延迟的硬上限。
 - 图片字节上限不校验解码后的尺寸或像素数。
 - follow 恢复失败会对调用方可见，而不会无限重试。
 - 浏览器原始字节上传使用一次不带断点续传偏移的流式 HTTP 请求；重试会从第零字节重新传输整个文件。
@@ -127,5 +131,3 @@ GUI 模型选择要求确切提供方／模型对出现在可用目录中；不�
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。每个分页与帧都会对照其指向的持久 Session 校验。

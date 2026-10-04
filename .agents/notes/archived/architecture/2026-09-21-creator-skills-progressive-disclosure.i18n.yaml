@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/architecture/2026-09-21-creator-skills-progressive-disclosure.md
+2026-09-21-creator-skills-progressive-disclosure.md: 8b0de4a3de6d43e5529f35ad7803df5c582d2417
+2026-09-21-creator-skills-progressive-disclosure.zh.md: c91164dd822008e06ff619526b902b9fb7df5231

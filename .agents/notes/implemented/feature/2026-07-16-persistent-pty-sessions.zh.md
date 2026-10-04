@@ -45,7 +45,7 @@ agent scope dispose（资源释放）时先撤销注册，再等待全部所属 
 
 沙箱限制本地进程副作用，但不会让任意 shell 输入自动安全：网络调用和其他外部副作用仍由部署策略治理。工具描述会说明 PTY 会话比一次性工具更难审计，只应在确实需要持久状态或交互式 stdin 时使用。
 
-本地子进程终端原语只使用 `node-pty` 的公开能力：子进程 PID、`data` 与 `exit` 通知、`write` 和 `kill`。它不假设能访问原生 master fd，也不从 TypeScript 调用 `waitpid`。在受支持的 Linux 宿主上，[原生收容 owner](../architecture/2026-08-28-subprocess-native-containment.zh.md)会在 user-systemd scope 内启动同一条 PTY 命令，同时保持 PID、session、控制终端、前台进程组与就绪语义。该原语下的平台进程检查器仍在 Linux 上通过 `/proc`、在 macOS 上通过 `ps` 推导前台进程组和 fallback 父子进程身份。[可移植执行环境决策](../architecture/2026-07-28-portable-execution-world-consumers.zh.md)负责定义这种进程／消费方拆分。
+本地子进程终端原语只使用 `node-pty` 的公开能力：子进程 PID、`data` 与 `exit` 通知、`write` 和 `kill`。它不假设能访问原生 master fd，也不从 TypeScript 调用 `waitpid`。在受支持的 Linux 宿主上，[原生收容 owner](../../../../packages/subprocess/subprocess-local/README.zh.md)会在 user-systemd scope 内启动同一条 PTY 命令，同时保持 PID、session、控制终端、前台进程组与就绪语义。该原语下的平台进程检查器仍在 Linux 上通过 `/proc`、在 macOS 上通过 `ps` 推导前台进程组和 fallback 父子进程身份。[可移植执行环境决策](../architecture/2026-07-28-portable-execution-world-consumers.zh.md)负责定义这种进程／消费方拆分。
 
 ### 6 个面向模型的工具
 

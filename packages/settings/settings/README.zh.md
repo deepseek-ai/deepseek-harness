@@ -46,7 +46,7 @@ Settings 启动后、Loader 完成所有条目的加载时，早期版本留在 
 
 [表单投影](src/schema.ts) 去除运行时引用和普通字段。[服务](src/index.ts) 提供带修订号的描述符，在委托持久化前按完整插件 Config 验证编辑。业务插件直接读取自己的 Config 引用。
 
-秘密角色从实际值、继承值、profile 覆盖值和 schema 默认值中隐藏；客户端接收存在性标记。路径编辑保留客户端未收到的字段。此服务投影 Loader 配置，不维护独立的权威值，因此不发布 invariant companion。
+秘密角色从实际值、继承值、profile 覆盖值和 schema 默认值中隐藏；客户端接收存在性标记。路径编辑保留客户端未收到的字段。
 
 </details>
 

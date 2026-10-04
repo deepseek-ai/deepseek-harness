@@ -26,7 +26,7 @@ Status: implemented
 
 **路由替换是注册表的操作，不是调用方的一串步骤。**`registerAdapter` 返回一个携带 `replace(providers)` 的句柄：候选集合先被完整校验（冲突、名称、提供方元数据），再在一个同步区段内完成替换。被拒绝的替换会让先前的路由保持注册并继续服务，而调用方的事实缓存只有在注册表确实持有新集合之后才会推进，因此改回可用配置时会重新生效。pi-ai 的注册事实按提供方排序，因此仅仅调换键顺序的设置文档不再算作路由变更。
 
-**已提交的凭据写入采用收容式发布。**`CredentialProvider.notifyUpdated` 逐个监听器扇出 `credentials/reference-updated`；同步抛错与异步 rejection 都只记日志，不改变已提交操作的结果，而带 `INVARIANT` 代码的失败会在每个监听器都运行完之后重抛——与 settings seam 处理 `settings/updated` 的形状相同。`SettingsProvider.installSection()` 的清理会区分它的两个触发来源：提供方脱离时仍回退到组合的 entry 配置并重新推导，而消费方自身卸载时立即返回，不在拆卸过程中重新注册路由。
+**已提交的凭据写入采用收容式发布。**`CredentialProvider.notifyUpdated` 逐个监听器扇出 `credentials/reference-updated`；同步抛错与异步 rejection 都只记日志，不改变已提交操作的结果。`SettingsProvider.installSection()` 的清理会区分它的两个触发来源：提供方脱离时仍回退到组合的 entry 配置并重新推导，而消费方自身卸载时立即返回，不在拆卸过程中重新注册路由。
 
 ## 曾考虑的替代方案
 

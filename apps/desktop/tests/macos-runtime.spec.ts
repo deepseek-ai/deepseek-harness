@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -21,7 +21,7 @@ it('signs Mach-O files in their final locations and verifies each signature', as
   const path = root()
   writeFileSync(join(path, 'addon.node'), Buffer.from('cffaedfe00000000', 'hex'))
   writeFileSync(join(path, 'source.js'), 'export {}')
-  await expect(signMacOSRuntime(path, 'com.example.app', identity)).resolves.toBe(1)
+  await expect(signMacOSRuntime(path, 'com.example.app', identity, 'arm64')).resolves.toBe(1)
   expect(signMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'addon.node'), expect.stringMatching(/^com\.example\.app\.runtime\.[a-f0-9]{64}$/u), identity, undefined)
   expect(verifyMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'addon.node'), identity)
 })
@@ -38,7 +38,7 @@ it('awaits other signers before rejecting and permitting output cleanup', async 
     await barrier
   })
   let completed = false
-  const result = signMacOSRuntime(path, 'com.example.app', identity).catch((error: unknown) => { completed = true; return error })
+  const result = signMacOSRuntime(path, 'com.example.app', identity, 'arm64').catch((error: unknown) => { completed = true; return error })
   try {
     await ready
     expect(completed).toBe(false)
@@ -47,16 +47,21 @@ it('awaits other signers before rejecting and permitting output cleanup', async 
   expect(verifyMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'b.node'), identity)
 })
 
-it('grants JIT only to the standalone Node interpreter and native Office helpers', async () => {
+it.each(['arm64', 'x64'] as const)('selects %s Node entitlements and keeps helpers JIT-only', async (arch) => {
   const path = root()
   mkdirSync(join(path, 'dependencies/node/bin'), { recursive: true })
   const node = join(path, 'dependencies/node/bin/node')
   const addon = join(path, 'addon.node')
-  const helpers = ['arm64', 'x64'].map(arch => join(path, 'node_modules/@deepseek-ai', `libreoffice-kit-darwin-${arch}`, 'bin/libreoffice-kit'))
+  const helpers = ['arm64', 'x64'].map(helperArch => join(path, 'node_modules/@deepseek-ai', `libreoffice-kit-darwin-${helperArch}`, 'bin/libreoffice-kit'))
   for (const helper of helpers) mkdirSync(join(helper, '..'), { recursive: true })
   for (const file of [node, addon, ...helpers]) writeFileSync(file, Buffer.from('cffaedfe00000000', 'hex'))
-  await signMacOSRuntime(path, 'com.example.app', identity)
-  for (const file of [node, ...helpers]) {
+  await signMacOSRuntime(path, 'com.example.app', identity, arch)
+  const nodePlist = join(import.meta.dirname, '../scripts', arch === 'x64' ? 'node-x64-entitlements.plist' : 'jit-entitlements.plist')
+  expect(signMacOSRuntimeCode).toHaveBeenCalledWith(node, expect.any(String), identity, nodePlist)
+  const xml = readFileSync(nodePlist, 'utf8')
+  expect(xml).toMatch(/<key>com\.apple\.security\.cs\.allow-jit<\/key>\s*<true\s*\/>/u)
+  expect(/<key>com\.apple\.security\.cs\.allow-unsigned-executable-memory<\/key>\s*<true\s*\/>/u.test(xml)).toBe(arch === 'x64')
+  for (const file of helpers) {
     expect(signMacOSRuntimeCode).toHaveBeenCalledWith(file, expect.any(String), identity,
       join(import.meta.dirname, '../scripts/jit-entitlements.plist'))
   }

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-cordis",
   "description": "Cordis dynamic-plugin definition card: the keyed cordis_define tool row with its run/stop switch",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -60,6 +60,7 @@
     "@deepseek-ai/dsh-client-ui-session": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-client-ui-tool": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*",
     "@types/react": "~18.3.1",
     "@deepseek-ai/cordis": "workspace:~",
     "react": "^18.2.0"

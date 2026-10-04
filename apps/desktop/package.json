@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-desktop",
   "description": "Electron desktop shell for a bundled dsh runtime and external plugins",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -9,7 +9,7 @@
   "scripts": {
     "test:installer": "node scripts/test-windows-installer.mjs",
     "build": "tsc -b && pnpm run bundle",
-    "bundle": "tsdown",
+    "bundle": "tsdown --config-loader native",
     "dev": "tsx scripts/dev.ts",
     "start": "tsx scripts/dev.ts --skip-build",
     "test:updates:local": "pnpm run build && node scripts/test-local-updater.mjs",
@@ -35,7 +35,10 @@
     "package:win:x64:dir": "tsx scripts/package-target.ts win-x64 --dir",
     "upload:mac:arm64": "tsx scripts/upload-target.ts mac-arm64",
     "upload:mac:x64": "tsx scripts/upload-target.ts mac-x64",
-    "upload:win:x64": "tsx scripts/upload-target.ts win-x64"
+    "upload:win:x64": "tsx scripts/upload-target.ts win-x64",
+    "upload:latest:mac:arm64": "tsx scripts/upload-target.ts mac-arm64 --latest",
+    "upload:latest:mac:x64": "tsx scripts/upload-target.ts mac-x64 --latest",
+    "upload:latest:win:x64": "tsx scripts/upload-target.ts win-x64 --latest"
   },
   "dependencies": {
     "electron-updater": "^6.8.9",

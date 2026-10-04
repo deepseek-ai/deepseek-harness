@@ -65,7 +65,6 @@ None; this package neither assembles nor sends a provider request.
 <a id="known-limitations-and-deferred-work"></a>
 
 - **One field of the namespace** — the Host section carries only the parallel cap; the composed `agents` array is boot composition, not a user setting, and has no field here.
-- **Runtime invariant:** No companion is published. The page holds no owned relationship of its own: what it shows derives from the settings mirror, and what it writes the Host validates.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -4,7 +4,7 @@
 
 事件日志的**持久性 seam**。[session.md](session.zh.md) 描述了内存中的 `Session`：仅追加的 `SessionEvent` 日志即为真源。本页描述如何使该日志持久化：抽象的 `SessionPersistence` 服务、它的提供方模型与随产品交付的 JSONL 后端、flush 检查点、崩溃恢复，以及随日志一同存储的元数据头。日志承载的事件词汇在生成的[持久化日志事件目录](../persistence-catalog.zh.md)中逐项列举。
 
-该 seam 是一个[能力 seam](../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.zh.md)：一个抽象服务（[dsh-session-persistence](../../packages/session/session-persistence)，`ctx.sessionPersistence`）在现有 `SessionEvent` 上暴露 `create`/`open`/`stat`/`list`——**没有平行的持久化事件类型**——其中 `create` 与 `open` 返回逐会话的 `SessionHandle`（`read`/`append`/`flush`/`close`），它承载全部日志访问与单写者所有权。仓库随产品交付 [dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl) 作为其 provider；仓库外 provider 可以实现同一服务约定。见[基于句柄的持久化 Agent Note](../../.agents/notes/implemented/architecture/2026-08-27-handle-based-session-persistence.zh.md)与 [session-persistence Agent Note](../../.agents/notes/implemented/architecture/2026-06-14-session-persistence.zh.md)。
+该 seam 是一个[能力 seam](../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.zh.md)：一个抽象服务（[dsh-session-persistence](../../packages/session/session-persistence)，`ctx.sessionPersistence`）在现有 `SessionEvent` 上暴露 `create`/`open`/`stat`/`list`——**没有平行的持久化事件类型**——其中 `create` 与 `open` 返回逐会话的 `SessionHandle`（`read`/`append`/`flush`/`close`），它承载全部日志访问与单写者所有权。仓库随产品交付 [dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl) 作为其 provider；仓库外 provider 可以实现同一服务约定。见[基于句柄的持久化 Agent Note](../../.agents/notes/implemented/architecture/2026-08-27-handle-based-session-persistence.zh.md)与 [session-persistence reference](../../packages/session/session-persistence/README.zh.md)。
 
 ## `SessionHandle`——通向已存储会话的一条打开通道
 

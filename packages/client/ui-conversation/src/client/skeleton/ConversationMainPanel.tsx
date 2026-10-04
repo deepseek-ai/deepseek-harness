@@ -3,6 +3,8 @@ import { conversationPhase } from '../contract/snapshot.ts'
 import { ConversationWidthControls } from './ConversationWidthControls.tsx'
 import css from './ConversationRoot.module.css'
 
+const CONTENT_SLOTS = { widthControls: ConversationWidthControls }
+
 /**
  * Render the existing main Conversation frame around the extracted content.
  * @param props - the original `main.conversation` Slot props.
@@ -48,7 +50,7 @@ export function ConversationMainPanel(props: ConversationSlotProps) {
         phase,
         hero,
       }, {
-        slots: { widthControls: ConversationWidthControls },
+        slots: CONTENT_SLOTS,
       })}
     </div>
   )

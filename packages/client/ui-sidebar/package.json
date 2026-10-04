@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-sidebar",
   "description": "Sidebar plugin: session multi-level tree, search, grouping, state dots",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

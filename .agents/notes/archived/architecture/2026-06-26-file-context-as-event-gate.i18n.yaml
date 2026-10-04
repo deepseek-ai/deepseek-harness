@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/architecture/2026-06-26-file-context-as-event-gate.md
+2026-06-26-file-context-as-event-gate.md: 96962f6a7260cc4da393a90349528aece3c23ce1
+2026-06-26-file-context-as-event-gate.zh.md: 22fb85fc1246bb67bc0793f8cf7816b6134f11ae

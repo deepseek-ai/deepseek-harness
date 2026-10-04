@@ -59,7 +59,6 @@ declare module 'cordis' {
 - **状态永远靠计算得出，绝不入日志。** 日志只存事件；单元的状态住在框架的按会话水位线缓存里（每单元一份 `{state, observedSeq}`），并在后续阶段进入 domain-KV 存储 seam 上的**持久投影缓存（persisted projection cache）**：形如 `(sessionId, key, ver, seq, val)` 的行（`ver` = 单元的 `stateVersion`，`seq` = 水位线，`val` = 状态 JSON）。一行永远不会是错的，至多是陈旧的——其 `seq` 精确说明陈旧到哪。冷读与活读共用同一套读取配方：取缓存状态（或 `init()`），只对超出其水位线的事件做正向 `apply`，再对结果做 `view`。冷列表（跨全部 workspace 列出每个会话的标题）变成一次索引读，至多外加一小段尾部回放；session-persistence seam 在同一后续阶段为这段尾部补一个按 seq 起读的原语。写入策略：节流（次数/间隔，可配置）外加两个强制点——`turn/end` 与 detach（由活转冷的时刻）。两次写入之间崩溃的代价是尾部回放更长一些，绝不会是值出错。
 - 领域的输入事件集由领域自己选择：todos 只折叠 `todo/write`；plan 折叠 `plan/mode` 外加它自己的 `/plan` `command/run` 记录（见 plan 一节）；goal 折叠 `goal/change` 元数据；会话标题折叠其标题事件（顺带下线专设的 `session/title` 帧与客户端的标题快照表——这是该 seam 收编的第四个手工投影）。
 - 注册是 effect（disposer 随 fiber 走）：插件卸载后其 key 从后续响应中消失，客户端将其读作能力缺失——HMR（热模块替换）语义随之自动成立。key 重复直接 throw。领域插件在 `ctx.inject(['sessionProjections'], …)` 下注册，因此不带注册表的 headless 组装完全不受影响。
-- 该包拥有 `./invariant`（每个被服务的 key 都有一条存活的注册）。
 
 ### 已交付的消费方：subagent 身份单元
 
@@ -128,7 +127,7 @@ type UseProjection = {
 'command/done': { commandId: string; kind: 'success' | 'error'; text?: string }
 ```
 
-host 侧命令执行器（`packages/interaction/commands`）在调用处理器前追加 `command/run`，在结算时追加 `command/done`——在接收 agent（智能体）的会话上直接独立追加，与[合成轮次移除](../../implemented/simplification/2026-07-28-remove-synthetic-log-only-turns.zh.md)之后所有插件自有 log-only 事件同一形状：没有轮次包裹它们（轮次只描述模型循环执行），持久化在常规检查点排空它们，run/done 配对由 commands 包自己的 invariant 伴生插件把守。载荷是结构化的——`name` 以及默认携带的 `args` 来自解析器自己的切分（`parseCommand` 的 name 与 rawInput），因此消费方（折叠自己命令记录的投影单元、富命令卡片）永远无需重新解析行文本。当载荷由权威领域事件持有时，命令定义会设置 `recordInput: false`；此时 `command/run` 省略 `args`，而不是重复该载荷。`text` 是处理器的原样结果——与 `tool/result.content` 同一性质的事实数据，不是呈现（版式如何编排仍由客户端在渲染时计算，满足「呈现永不入日志」这条红线）。想让模型知道结果的领域保持既有行为（plan 的旁白、goal 的注入）——那是领域自己的决定，保持不变。
+host 侧命令执行器（`packages/interaction/commands`）在调用处理器前追加 `command/run`，在结算时追加 `command/done`——在接收 agent（智能体）的会话上直接独立追加，与[合成轮次移除](../../implemented/simplification/2026-07-28-remove-synthetic-log-only-turns.zh.md)之后所有插件自有 log-only 事件同一形状：没有轮次包裹它们（轮次只描述模型循环执行），持久化在常规检查点排空它们。载荷是结构化的——`name` 以及默认携带的 `args` 来自解析器自己的切分（`parseCommand` 的 name 与 rawInput），因此消费方（折叠自己命令记录的投影单元、富命令卡片）永远无需重新解析行文本。当载荷由权威领域事件持有时，命令定义会设置 `recordInput: false`；此时 `command/run` 省略 `args`，而不是重复该载荷。`text` 是处理器的原样结果——与 `tool/result.content` 同一性质的事实数据，不是呈现（版式如何编排仍由客户端在渲染时计算，满足「呈现永不入日志」这条红线）。想让模型知道结果的领域保持既有行为（plan 的旁白、goal 的注入）——那是领域自己的决定，保持不变。
 
 由于已提交事件会在 mux 流上广播，刷新后仍在、多标签页同步、fork/恢复后可还原这三件事随之全部自动获得。`command.execute` RPC 退化为准入判定——`{ matched, commandId? }`：该行是否匹配命中，以及命中时新铸的配对 id，发起命令的客户端据此把自己的请求与生命周期事件产出的 flow 节点关联起来。一次性通知通道（`runDetached` → `noticeFor`）就此下线。
 
@@ -184,7 +183,7 @@ host 侧命令执行器（`packages/interaction/commands`）在调用处理器�
 ## 风险
 
 - **全量值规则是承重结构**：未来某个领域若只记裸增量，就无法凭其最新事件服务消费方，还会让自己的单元复杂化。缓解：该规则写明在本 Note 与投影包的 README 里；单元约定让完整状态在每次转移处都是显式的。
-- **单元的同步纪律**：`init`/`apply`/`view` 一旦 await 就会撕裂一致性切面。注册表在文档中申明这条纪律，invariant 配套在可行范围内断言同步性；其余由评审把关。
+- **单元的同步纪律**：`init`/`apply`/`view` 一旦 await 就会撕裂一致性切面。注册表在文档中申明这条纪律，由评审把关。
 - **注册表的实时增删不做推送**：会话中途加载或卸载领域插件会改变键集，但不会触发任何会话事件、也不会推任何帧；开着的客户端持有陈旧的 key 直到下次尾页拉取（重连、缺口修补、打开）。接受为仅开发期（HMR）的陈旧时窗——日后可以在变更流上加一个注册表变更推送，约定不受影响。
 - **忙碌会话上的主动驱动开销**：每个已提交事件都要过每个已注册单元的 `apply`。按构造，单元的逐事件开销很低（全量值规则），不匹配的事件返回同一引用，且已注册领域的数量很小；若真出现热点路径，可以加按单元的事件类型预过滤，约定不变。
 - **投影载荷膨胀**：每个尾页携带每个已注册的 key。载荷是 UI 量级状态的全量值（一张 todo 清单、一份 goal 快照）；将来若某领域的值很大，可以在请求上加逐 key 的 opt-out 或惰性 key，模型本身不用改。

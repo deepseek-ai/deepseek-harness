@@ -15,6 +15,12 @@ export class HostNativeDomainSession {
       if (!this.owns(message.method)
         || message.method === 'Runtime.consoleAPICalled'
         || message.method === 'Runtime.exceptionThrown') return
+      if (message.method === 'Runtime.executionContextCreated') {
+        const context = message.params?.context
+        if (typeof context !== 'object' || context === null || !('auxData' in context)) return
+        const auxData = context.auxData
+        if (typeof auxData !== 'object' || auxData === null || !('isDefault' in auxData) || auxData.isDefault !== true) return
+      }
       this.transport.send(message)
     })
   }

@@ -3,13 +3,9 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { DailyScheduleRecord, ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule'
 import { expect, it } from 'vitest'
 import { withDefaultWeb, webGet, webRequest } from './default-web-process.ts'
-
-/** The optional Schedule bundle is the switch this built-Web scenario turns on. */
-const patches = [fileURLToPath(new URL('../../../../../../packages/experimental/schedule-bundle/cordis.patch.yml', import.meta.url))]
 
 const id = 'retained-remote-task' as DailyScheduleRecord['id']
 const sessionId = 'unloaded-owner' as ScheduleCatalogEntry['sessionId']
@@ -86,7 +82,7 @@ it('edits a retained task through built Remote bindings and preserves its identi
     expect(await rpc('schedule/update', { request: { sessionId: 'other-owner', id, expected: updated, change } }))
       .toEqual({ ok: true, value: { id, updated: false, code: 'schedule_not_found' } })
     expect(await readFile(taskPath(root), 'utf8')).toBe(persisted)
-  }, { patches, prepare: root => seed(root, persisted) })
+  }, { prepare: root => seed(root, persisted) })
 
   await withDefaultWeb(test, async ({ root, url }) => {
     const rpc = await connect(url, test.signal)
@@ -96,7 +92,7 @@ it('edits a retained task through built Remote bindings and preserves its identi
       sessionId, id, expected: updated, change: { kind: 'daily', daily: { time: updated.time, time_zone: 'Etc/UTC' } },
     } })).toEqual({ ok: true, value: { id, updated: false, record: updated } })
     expect(await readFile(taskPath(root), 'utf8')).toBe(persisted)
-  }, { patches, prepare: root => seed(root, persisted) })
+  }, { prepare: root => seed(root, persisted) })
 })
 
 it('creates and idempotently adopts the explicit Session id bound to seeded task data without touching its task file', async (test) => {
@@ -118,5 +114,5 @@ it('creates and idempotently adopts the explicit Session id bound to seeded task
     expect(await rpc('schedule/list', { request: { sessionId } })).toEqual(expectedList)
     expect(await rpc('schedule/history', { request: { sessionId, id, limit: 20 } })).toEqual(expectedHistory)
     expect(await readFile(taskPath(root), 'utf8')).toBe(persisted)
-  }, { patches, prepare: root => seed(root, persisted) })
+  }, { prepare: root => seed(root, persisted) })
 })

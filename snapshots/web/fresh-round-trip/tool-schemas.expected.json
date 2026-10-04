@@ -65,17 +65,17 @@
     },
     {
       "name": "bash",
-      "description": "Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell; pass `workdir` instead of using `cd`. Managed `$DSH_*` variables expose current harness environment facts. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]`, a policy denial: do not retry another way.",
+      "description": "Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell; pass `workdir` instead of using `cd`. Managed `$DSH_*` variables expose current harness environment facts. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Provide `description` before `command` in the arguments. Before any delete or move, verify that the resolved absolute target path is the intended one; never run it against a computed path you have not checked. An unset variable expands to an empty string, so guard variables in such paths with `${VAR:?}`. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]`, a policy denial: do not retry another way.",
       "parameters": {
         "type": "object",
         "properties": {
-          "command": {
-            "type": "string",
-            "description": "The bash command to execute."
-          },
           "description": {
             "type": "string",
             "description": "Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: \"ls\" → \"List files in current directory\"; \"git status\" → \"Show working tree status\"; \"npm install\" → \"Install package dependencies\"."
+          },
+          "command": {
+            "type": "string",
+            "description": "The bash command to execute."
           },
           "timeoutMs": {
             "type": "number",
@@ -103,8 +103,8 @@
           }
         },
         "required": [
-          "command",
-          "description"
+          "description",
+          "command"
         ]
       }
     },
@@ -136,7 +136,7 @@
         "properties": {
           "file_path": {
             "type": "string",
-            "description": "Path to edit, resolved by the filesystem backend."
+            "description": "Path to edit, resolved by the filesystem backend. Provide `file_path` before `old_string` and `new_string` in the arguments."
           },
           "old_string": {
             "type": "string",
@@ -393,6 +393,273 @@
         },
         "required": [
           "file_path"
+        ]
+      }
+    },
+    {
+      "name": "schedule_create",
+      "description": "Create a reminder in the current session that delivers prompt when it becomes due. Supply exactly one timing parameter: after_seconds, at, every_seconds, daily, weekly, or cron. Local times that do not exist in the zone are skipped; repeated local times fire once, at the earlier instant. After downtime, a recurring reminder delivers only its latest missed occurrence. Delivery can repeat after a crash.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Reminder content to present when the target becomes due."
+          },
+          "title": {
+            "type": "string",
+            "description": "Task name of at most 120 characters, shown on the task card and in task lists."
+          },
+          "after_seconds": {
+            "type": "number",
+            "description": "Delay in whole seconds."
+          },
+          "every_seconds": {
+            "type": "number",
+            "description": "Fixed-rate interval in whole seconds, at least 60, aligned to the creation time; changing it with schedule_update re-aligns it to the save time."
+          },
+          "daily": {
+            "type": "object",
+            "description": "Every day at a local time.",
+            "additionalProperties": false,
+            "properties": {
+              "time": {
+                "type": "string",
+                "description": "HH:mm:ss with optional 1-3 fractional digits, for example 23:00:00."
+              },
+              "time_zone": {
+                "type": "string",
+                "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
+              }
+            },
+            "required": [
+              "time",
+              "time_zone"
+            ]
+          },
+          "weekly": {
+            "type": "object",
+            "description": "On the given weekdays at a local time.",
+            "additionalProperties": false,
+            "properties": {
+              "time": {
+                "type": "string",
+                "description": "HH:mm:ss with optional 1-3 fractional digits, for example 09:00:00."
+              },
+              "time_zone": {
+                "type": "string",
+                "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
+              },
+              "weekdays": {
+                "type": "array",
+                "description": "ISO weekdays, Monday 1 through Sunday 7, without repetitions.",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            },
+            "required": [
+              "time",
+              "time_zone",
+              "weekdays"
+            ]
+          },
+          "cron": {
+            "type": "object",
+            "description": "Five-field Vixie cron expression in a time zone.",
+            "additionalProperties": false,
+            "properties": {
+              "expression": {
+                "type": "string",
+                "description": "minute hour day-of-month month day-of-week, for example \"*/15 9-17 * * 1-5\". When both day fields are restricted, a date matches if either one matches."
+              },
+              "time_zone": {
+                "type": "string",
+                "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
+              }
+            },
+            "required": [
+              "expression",
+              "time_zone"
+            ]
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "date": {
+                    "type": "string"
+                  },
+                  "time": {
+                    "type": "string"
+                  },
+                  "time_zone": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "date",
+                  "time",
+                  "time_zone"
+                ]
+              }
+            ],
+            "description": "Absolute target: an RFC 3339 date-time with offset, or a local date, time, and IANA time_zone."
+          }
+        },
+        "required": [
+          "prompt",
+          "title"
+        ]
+      }
+    },
+    {
+      "name": "schedule_delete",
+      "description": "Delete a reminder in the current session, active or inactive. Deletion does not retract a reminder message that is already queued.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Exact schedule id."
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "schedule_list",
+      "description": "List the active reminders in the current session.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "schedule_update",
+      "description": "Change a reminder in place, keeping its id. Supply a new title, prompt, or at most one timing parameter; omitted fields keep their stored values. To change a relative delay, create a new reminder.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Schedule id returned by schedule_list."
+          },
+          "title": {
+            "type": "string",
+            "description": "New task name of at most 120 characters."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "New reminder content."
+          },
+          "every_seconds": {
+            "type": "number",
+            "description": "Fixed-rate interval in whole seconds, at least 60, aligned to the creation time; changing it with schedule_update re-aligns it to the save time."
+          },
+          "daily": {
+            "type": "object",
+            "description": "Every day at a local time.",
+            "additionalProperties": false,
+            "properties": {
+              "time": {
+                "type": "string",
+                "description": "HH:mm:ss with optional 1-3 fractional digits, for example 23:00:00."
+              },
+              "time_zone": {
+                "type": "string",
+                "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
+              }
+            },
+            "required": [
+              "time",
+              "time_zone"
+            ]
+          },
+          "weekly": {
+            "type": "object",
+            "description": "On the given weekdays at a local time.",
+            "additionalProperties": false,
+            "properties": {
+              "time": {
+                "type": "string",
+                "description": "HH:mm:ss with optional 1-3 fractional digits, for example 09:00:00."
+              },
+              "time_zone": {
+                "type": "string",
+                "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
+              },
+              "weekdays": {
+                "type": "array",
+                "description": "ISO weekdays, Monday 1 through Sunday 7, without repetitions.",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            },
+            "required": [
+              "time",
+              "time_zone",
+              "weekdays"
+            ]
+          },
+          "cron": {
+            "type": "object",
+            "description": "Five-field Vixie cron expression in a time zone.",
+            "additionalProperties": false,
+            "properties": {
+              "expression": {
+                "type": "string",
+                "description": "minute hour day-of-month month day-of-week, for example \"*/15 9-17 * * 1-5\". When both day fields are restricted, a date matches if either one matches."
+              },
+              "time_zone": {
+                "type": "string",
+                "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
+              }
+            },
+            "required": [
+              "expression",
+              "time_zone"
+            ]
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "date": {
+                    "type": "string"
+                  },
+                  "time": {
+                    "type": "string"
+                  },
+                  "time_zone": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "date",
+                  "time",
+                  "time_zone"
+                ]
+              }
+            ],
+            "description": "Absolute target: an RFC 3339 date-time with offset, or a local date, time, and IANA time_zone."
+          }
+        },
+        "required": [
+          "id"
         ]
       }
     },
@@ -688,7 +955,7 @@
         "properties": {
           "file_path": {
             "type": "string",
-            "description": "Path to write, resolved by the filesystem backend."
+            "description": "Path to write, resolved by the filesystem backend. Provide `file_path` before `content` in the arguments."
           },
           "content": {
             "type": "string",

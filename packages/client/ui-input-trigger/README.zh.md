@@ -57,7 +57,7 @@ kind: "package-reference"
 - [ui-commands](../ui-commands/README.zh.md)——把 `/` 命令 source 注册进本流水线并拥有命令弹窗外壳。
 - [ui-reference](../ui-reference/README.zh.md)——注册 `@` 文件与会话引用 source。
 - [ui-conversation](../ui-conversation/README.zh.md)——声明输入浮层 slot 并拥有 composer 与输入状态机。
-- [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——浏览器插件行如何加载并注册 slot。
+- [Web 客户端架构](../../../docs/subsystems/web-client.zh.md)——浏览器插件行如何加载并注册 slot。
 
 -----
 
@@ -89,5 +89,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。触发流水线是浏览器侧纯内核（检测／归约／匹配）加一个注册表，其资源释放已由 HMR（热模块替换）安全性测试证明；它不发出 Cordis 事件，也不持有跨插件可变状态。

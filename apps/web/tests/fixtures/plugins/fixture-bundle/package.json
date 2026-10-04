@@ -7,10 +7,12 @@
   "type": "module",
   "main": "index.js",
   "exports": {
+    "./icon": "./fallback-icon.svg",
     ".": "./index.js",
     "./package.json": "./package.json",
     "./search": "./search.js",
     "./search/package.json": "./search.package.json",
+    "./search/icon": "./fallback-icon.svg",
     "./review": "./review.js",
     "./search/locale/*.json": "./locale/search/*.json",
     "./review/locale/*.json": "./locale/review/*.json"

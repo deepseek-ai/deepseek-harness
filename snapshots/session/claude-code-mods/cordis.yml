@@ -1,0 +1,15 @@
+# Live-recording patch for the Claude Code mods composition: the bridge, a
+# scenario-local mod whose prompt context and tool denial reach the Session
+# log, and two of the three example mods from the Claude Code blog post.
+# Blast Radius holds a risky command until a button press, which a headless
+# run cannot deliver; the Web snapshot composes it.
+
+- insert:
+    - id: claude-code-mods
+      name: '@deepseek-ai/dsh-experimental-claude-code-mods'
+    - id: claude-code-mod-snapshot-guard
+      name: './demo-mod.ts'
+    - id: claude-code-mod-replay-theater
+      name: '@deepseek-ai/dsh-experimental-claude-code-mods/examples/replay-theater/index.ts'
+    - id: claude-code-mod-token-weather
+      name: '@deepseek-ai/dsh-experimental-claude-code-mods/examples/token-weather/index.ts'

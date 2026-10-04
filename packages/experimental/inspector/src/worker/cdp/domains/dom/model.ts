@@ -1,6 +1,7 @@
 /** Worker projection from Cordis snapshots to a connection-neutral semantic DOM. */
 
 import type { CordisTreeNode } from '../../../../shared/cordis/snapshot.ts'
+import type { InspectorSourceId } from '../../../../shared/bridge/ids.ts'
 import type { InspectorSourceDescriptor } from '../../../../shared/bridge/messages/observation.ts'
 import type { InspectorObjectReference } from '../../../../shared/cordis/object-reference.ts'
 import type { InspectorRealmDescriptor } from '../../../inspection/realm.ts'
@@ -11,7 +12,7 @@ import type {
   CordisTreeStore,
 } from '../../../inspection/cordis-store.ts'
 
-/** One Worker-global backend node independent of any DevTools connection. */
+/** One backend-owned node independent of any DevTools connection. */
 export interface CordisDomNode {
   readonly backendNodeId: CdpBackendNodeId
   readonly key: string
@@ -22,7 +23,7 @@ export interface CordisDomNode {
   readonly children: readonly CordisDomNode[]
 }
 
-/** Immutable document revision shared by all current DevTools sessions. */
+/** Immutable document revision shared by the consumers of one backend. */
 export interface CordisDomDocument {
   readonly revision: number
   readonly root: CordisDomNode
@@ -76,15 +77,30 @@ export class CordisDomBackend {
   private readonly unsubscribe: () => void
   private readonly nodeByObject = new Map<string, CordisDomNode>()
 
-  constructor(private readonly trees: CordisTreeStore) {
+  /**
+   * @param trees - Shared store; this backend owns only its subscription and projection.
+   * @param clientSourceId - Restrict Clients to this source; omission includes every retained Client.
+   */
+  constructor(private readonly trees: CordisTreeStore, private readonly clientSourceId?: InspectorSourceId) {
     this.documentValue = this.build()
     this.unsubscribe = trees.subscribe((event) => {
       const previous = this.documentValue
       this.documentValue = this.build()
-      if (event.type === 'source-disconnected') this.emit({ type: 'source-disconnected', source: event.source })
+      if (event.type === 'source-disconnected' && this.includesSource(event.source)) {
+        this.emit({ type: 'source-disconnected', source: event.source })
+      }
       const mutations = diffDocument(previous, this.documentValue)
       if (mutations.length > 0) this.emit({ type: 'tree-mutated', mutations })
     })
+  }
+
+  /**
+   * Create an independent Host-and-Client projection over the same retained snapshots.
+   * @param sourceId - Client source to include across its reconnect generations.
+   * @returns A new backend whose caller must close; closing it leaves this backend and the store intact.
+   */
+  forClient(sourceId: InspectorSourceId): CordisDomBackend {
+    return new CordisDomBackend(this.trees, sourceId)
   }
 
   /**
@@ -105,7 +121,7 @@ export class CordisDomBackend {
     return () => { this.listeners.delete(listener) }
   }
 
-  /** Release repository subscriptions at Worker shutdown. */
+  /** Release only this backend's store subscription and listeners. */
   close(): void {
     this.unsubscribe()
     this.listeners.clear()
@@ -128,8 +144,16 @@ export class CordisDomBackend {
    * @returns The current projected node, when present.
    */
   nodeForObjectKind(kind: InspectorSourceDescriptor['kind'], reference: InspectorObjectReference): CordisDomNode | undefined {
+    if (kind === 'client' && this.clientSourceId !== undefined) {
+      const tree = this.trees.tree().clients.find(tree => tree.source.sourceId === this.clientSourceId)
+      return tree === undefined ? undefined : this.nodeForObject(tree.source, reference)
+    }
     const route = this.trees.resolveObjectInKind(kind, reference)
     return route === undefined ? undefined : this.nodeForObject(route.source, reference)
+  }
+
+  private includesSource(source: InspectorSourceDescriptor): boolean {
+    return this.clientSourceId === undefined || source.kind === 'host' || source.sourceId === this.clientSourceId
   }
 
   /**
@@ -154,7 +178,11 @@ export class CordisDomBackend {
     if (tree.host !== null) host.children.push(this.entity(tree.host, tree.host.snapshot.root))
     const clients = this.node('clients', 'clients', [], '<clients>')
     for (const clientTree of tree.clients) {
-      const client = this.node(`client:${clientTree.source.sourceId}`, 'client', [], '<client>')
+      if (!this.includesSource(clientTree.source)) continue
+      const attributes: readonly (readonly [string, string])[] = clientTree.connection.state === 'disconnected'
+        ? [['disconnected', '']]
+        : []
+      const client = this.node(`client:${clientTree.source.sourceId}`, 'client', attributes, elementDescription('client', attributes))
       client.children.push(this.entity(clientTree, clientTree.snapshot.root))
       clients.children.push(client)
     }

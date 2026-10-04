@@ -52,8 +52,6 @@ console.log([...iterateChunkedList(second)])
 | [`src/index.ts`](src/index.ts) | 持久化列表操作与检查点校验 |
 | [`tests/chunked-list.spec.ts`](tests/chunked-list.spec.ts) | 版本隔离、顺序、结构共享与检查点接受条件 |
 
-此库没有独立变化的观测值，因此不发布运行时不变式伴随模块；其操作返回调用方拥有的不可变值。
-
 </details>
 
 -----

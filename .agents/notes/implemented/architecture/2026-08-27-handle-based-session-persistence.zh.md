@@ -36,7 +36,7 @@ Status: implemented
 
 ## 相关
 
-- [作为抽象服务的会话持久化](2026-06-14-session-persistence.zh.md)——本 Note 重塑的 seam；其接口列表已反映句柄 API。
+- [作为抽象服务的会话持久化](../../../../packages/session/session-persistence/README.zh.md)——本 Note 重塑的 seam；其接口列表已反映句柄 API。
 - [持久化 export() 与预发布读取路径精简](../../archived/simplification/2026-08-27-persistence-export-and-pre-release-trims.md)——预备性的移除，包括已退役的冷空白探测。
 - [保留可忽略的外部会话事件](2026-08-30-retain-ignorable-external-session-events.zh.md)——读取侧的拒绝约定，现经由 `storage-contract` 辅助函数共享。
 - [为会话持久化写入批处理设定上界](../../archived/architecture/2026-08-08-bounded-session-persistence-write-batching.md)——被路由写路径作为内部调度策略保留的批处理语义。

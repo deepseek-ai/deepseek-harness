@@ -195,6 +195,10 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: { client: 'src.ts' }, outDir: 'lib', format: 'cjs', platform: 'browser', dts: false, clean: false,
   outputOptions: { entryFileNames: 'client.js' },
+  hooks: { 'build:done': async () => {
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(new URL('./hook-complete', import.meta.url), 'ready')
+  } },
 })
 `)
     const sourcePath = join(root, 'src.ts')
@@ -202,6 +206,7 @@ export default defineConfig({
     await writeFile(sourcePath, 'export const version = "watch-v1"\n')
     bundles = await watchClientPlugins(root, ['.'], 50)
     expect(await readFile(bundlePath, 'utf8')).toContain('watch-v1')
+    expect(await readFile(join(root, 'hook-complete'), 'utf8')).toBe('ready')
 
     await new Promise(resolve => setTimeout(resolve, 1_000))
     await writeFile(sourcePath, `export const version = "watch-v2-${'x'.repeat(100)}"\n`)

@@ -7,6 +7,12 @@ name: Release publish (vendor)
 
 on:
   workflow_dispatch:
+    inputs:
+      dist-tag:
+        description: Optional unused npm channel. Leave empty for latest (stable) or next (prerelease).
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -111,4 +117,10 @@ jobs:
       - name: Publish tarballs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm run release:publish --family vendor --from dist/npm-vendor
+          RELEASE_DIST_TAG: ${{ inputs.dist-tag }}
+        run: |
+          args=()
+          if [[ -n "$RELEASE_DIST_TAG" ]]; then
+            args+=(--dist-tag "$RELEASE_DIST_TAG")
+          fi
+          pnpm run release:publish --family vendor --from dist/npm-vendor "${args[@]}"

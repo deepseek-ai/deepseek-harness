@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 导航节点
 
-运行使用 32 像素行，带常驻 chevron、行内状态点与状态文字；阶段使用 disclosure 行，在主区显示标题与成员数、在固定尾部显示聚合状态；成员使用 16 像素状态点槽、可省略名称区与固定状态列。打开成员的子 Session 需要成员与子级均在运行，且子级属于当前 Session 的直接子级目录。子级活动状态使用统一 UI status，未知时使用 Session 摘要。Session 摘要不建立成员关系；目录中缺失、父级不符或终态的条目不可交互。
+运行与阶段标题行在标题、数量和状态字段之间保留 6px 间距，状态靠右对齐。运行使用 32 像素行，带常驻 chevron、行内状态点与状态文字；阶段使用 disclosure 行，在主区显示标题与成员数、在固定尾部显示聚合状态；成员使用 16 像素状态点槽、可省略名称区与固定状态列。打开成员的子 Session 需要成员与子级均在运行，且子级属于当前 Session 的直接子级目录。子级活动状态使用统一 UI status，未知时使用 Session 摘要。Session 摘要不建立成员关系；目录中缺失、父级不符或终态的条目不可交互。
 
 ### 状态与完成
 
@@ -98,5 +98,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。浏览器插件只贡献由 effect 持有的 Conversation Definition、keyed renderer 与 dictionary；测试证明资源释放时会撤销这三项贡献；Host tool 包负责持久事件不变式。

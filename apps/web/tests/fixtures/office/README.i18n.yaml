@@ -3,5 +3,5 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write apps/web/tests/fixtures/office/README.md
 /binary-office-fixtures:
-  en: 285c49550e034ce9
-  zh: 1d9b91573398456d
+  en: 3a543ab88220f323
+  zh: f5127b514290e64c

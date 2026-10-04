@@ -36,7 +36,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`@anthropic-ai/sdk`](https://github.com/anthropics/anthropic-sdk-typescript) | MIT |
 | [`@babel/code-frame`](https://github.com/babel/babel) | MIT |
 | [`@browserbasehq/stagehand`](https://github.com/browserbase/stagehand) | MIT |
-| [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-harness/libreoffice-kit) | MPL-2.0 |
+| [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) | MPL-2.0 |
 | [`@earendil-works/pi-ai`](https://github.com/earendil-works/pi) | MIT |
 | [`@eslint-community/regexpp`](https://github.com/eslint-community/regexpp) | MIT |
 | [`@fortune-sheet/core`](https://github.com/ruilisi/fortune-sheet) | MIT |
@@ -78,6 +78,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`big.js`](https://github.com/MikeMcl/big.js) | MIT |
 | [`buffer`](https://github.com/feross/buffer) | MIT |
 | [`chokidar`](https://github.com/paulmillr/chokidar) | MIT |
+| [`chrome-devtools-frontend`](https://github.com/ChromeDevTools/devtools-frontend) | BSD-3-Clause |
 | [`chrome-devtools-mcp`](https://github.com/ChromeDevTools/chrome-devtools-mcp) | Apache-2.0 |
 | [`clsx`](https://github.com/lukeed/clsx) | MIT |
 | [`commander`](https://github.com/tj/commander.js) | MIT |
@@ -121,6 +122,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`readable-stream`](https://github.com/nodejs/readable-stream) | MIT |
 | [`resolve.exports`](https://github.com/lukeed/resolve.exports) | MIT |
 | [`semver`](https://github.com/npm/node-semver) | ISC |
+| [`serve-static`](https://github.com/expressjs/serve-static) | MIT |
 | [`sharp`](https://github.com/lovell/sharp) | Apache-2.0 |
 | [`sherpa-onnx-node`](https://github.com/csukuangfj/sherpa-onnx) | Apache-2.0 |
 | [`shiki`](https://github.com/shikijs/shiki) | MIT |
@@ -139,13 +141,18 @@ External packages installed for runtime use or distributed inside the prebuilt b
 
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:
 
-- `@earendil-works/pi-ai@0.85.1` — [`patches/@earendil-works__pi-ai@0.85.1.patch`](patches/@earendil-works__pi-ai@0.85.1.patch)
+- `@earendil-works/pi-ai@0.87.1` — [`patches/@earendil-works__pi-ai@0.87.1.patch`](patches/@earendil-works__pi-ai@0.87.1.patch)
 - `@electron/osx-sign@1.3.3` — [`patches/@electron__osx-sign@1.3.3.patch`](patches/@electron__osx-sign@1.3.3.patch)
 - `@fortune-sheet/core@1.0.4` — [`patches/@fortune-sheet__core@1.0.4.patch`](patches/@fortune-sheet__core@1.0.4.patch)
 - `@fortune-sheet/react@1.0.4` — [`patches/@fortune-sheet__react@1.0.4.patch`](patches/@fortune-sheet__react@1.0.4.patch)
 - `@yao-pkg/pkg@6.21.0` — [`patches/@yao-pkg__pkg@6.21.0.patch`](patches/@yao-pkg__pkg@6.21.0.patch)
 - `exceljs@4.4.0` — [`patches/exceljs@4.4.0.patch`](patches/exceljs@4.4.0.patch)
 - `node-pty@1.2.0-beta.15` — [`patches/node-pty@1.2.0-beta.15.patch`](patches/node-pty@1.2.0-beta.15.patch)
+
+## Chrome DevTools frontend
+
+The optional experimental Inspector distributes a locally compiled copy of [chrome-devtools-frontend 1.0.1638082](https://www.npmjs.com/package/chrome-devtools-frontend/v/1.0.1638082), from upstream revision [0e1186138ed519d9659c1874bf6375eca4483c72](https://chromium.googlesource.com/devtools/devtools-frontend/+/0e1186138ed519d9659c1874bf6375eca4483c72). The build includes the Chromium [BSD-3-Clause license](packages/experimental/inspector/assets/devtools/LICENSE) and the third-party license and notice files supplied by the npm source. The Chromium root license does not replace those dependencies' licenses.
+
 
 ## Official Claude Code platform payloads
 
@@ -169,7 +176,7 @@ The installed SDK 0.3.263 declares the following optional platform packages. Eac
 
 `@deepseek-ai/libreoffice-kit`, `@deepseek-ai/libreoffice-kit-wasm`, `@deepseek-ai/libreoffice-kit-darwin-arm64`, `@deepseek-ai/libreoffice-kit-darwin-x64`, `@deepseek-ai/libreoffice-kit-win32-arm64`, `@deepseek-ai/libreoffice-kit-win32-x64` declare MPL-2.0, which remains outside the permissive-license allowlist; the notices check accepts only these package identities at those terms. The [distribution decision](.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md) records the source obligations.
 
-The [kit repository](https://github.com/deepseek-harness/libreoffice-kit) supplies the corresponding LibreOffice source pin, modifications, build instructions, Node API, and artifact validation. Its engine packages retain their license and third-party notices; the Node API retains its MPL-2.0 declaration and NOTICE. Recipients must have access to those corresponding sources and notices.
+The [kit repository](https://github.com/deepseek-ai/dsh-libreoffice-kit) supplies the corresponding LibreOffice source pin, modifications, build instructions, Node API, and artifact validation. Its engine packages retain their license and third-party notices; the Node API retains its MPL-2.0 declaration and NOTICE. Recipients must have access to those corresponding sources and notices.
 
 
 ## Development-only npm dependencies
@@ -205,6 +212,7 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`@types/react-dom`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/readable-stream`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/semver`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
+| [`@types/serve-static`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/spdx-expression-parse`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/turndown`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/use-sync-external-store`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |

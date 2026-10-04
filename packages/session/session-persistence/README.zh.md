@@ -96,7 +96,6 @@ await ctx.sessionPersistence.flush()                           // backend-wide d
 | [`src/storage-contract.ts`](src/storage-contract.ts) | 共享校验：版本门禁、未知事件词汇拒绝、批次实体化、连续性 |
 | [`src/errors.ts`](src/errors.ts) | 稳定的句柄/所有权失败与格式拒绝 |
 | [`src/revision.ts`](src/revision.ts) | 带品牌类型的不透明修订值 token |
-| — | 不发布运行时不变式伴生入口；持久化正确性需要后端往返与崩溃尾部测试；本包不暴露可持续观察的进程内关系。 |
 
 ### 写入路径概览
 

@@ -2,7 +2,7 @@
 import { memo, useEffect, useState } from 'react'
 import { TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
-import { formatLiveRunDuration, LIVE_RUN_CLOCK_INTERVAL_MS } from './message-chrome.ts'
+import { formatRunDuration, LIVE_RUN_CLOCK_INTERVAL_MS } from './message-chrome.ts'
 import { RunningWhaleTail } from './RunningWhaleTail.tsx'
 import a11yCss from './accessibility.module.css'
 import css from './ChatView.module.css'
@@ -26,7 +26,7 @@ export const RunningStatus = memo(function RunningStatus({ startTime, t }: Runni
     return () => { clearInterval(timer) }
   }, [startTime])
   const label = startTime === undefined ? t('chat.deepDiving') : t('chat.deepDivingFor', {
-    duration: formatLiveRunDuration(Math.max(1000, now - startTime), t),
+    duration: formatRunDuration(Math.max(1000, now - startTime), t).map(part => part.text).join(''),
   })
   return (
     <div className={css.running} data-chat-running>

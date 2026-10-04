@@ -42,7 +42,7 @@ The endpoint and credential reference come from one configuration resolution. In
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Registrations and listeners dispose with the plugin. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route. No invariant companion is published: discovery derives directly from configuration without an independent copy.
+Registrations and listeners dispose with the plugin. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route.
 
 <a id="further-exploration"></a>
 ## Further Exploration

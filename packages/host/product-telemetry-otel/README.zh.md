@@ -68,7 +68,7 @@ kind: "package-reference"
 
 适配器注入 `otel`，通过 `ctx.otel.createEventReporter()` 创建独立的普通事件通道。[共享 OTel 插件](../../telemetry/otel/README.zh.md) 负责传输和 SDK 聚合；本适配器负责埋点配置及关闭取消期限。不安装全局 OTel provider。
 
-[`src/index.ts`](src/index.ts) 负责配置与提交。不发布运行时不变量伴随模块：本地没有独立的送达确认可与 SDK 队列比较。
+[`src/index.ts`](src/index.ts) 负责配置与提交。
 
 </details>
 

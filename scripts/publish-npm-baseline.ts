@@ -561,7 +561,6 @@ class BaselinePackager {
       )
       this.runner.run('pnpm', ['run', 'build'], worktree.path)
       this.runner.run('pnpm', ['run', 'publint'], worktree.path)
-      this.runner.run('pnpm', ['run', 'verify-built-package-invariants'], worktree.path)
       this.runner.run('pnpm', [
         '--filter', './vendor/**',
         '--filter', './packages/**',

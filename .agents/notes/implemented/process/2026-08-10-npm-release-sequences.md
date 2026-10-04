@@ -22,7 +22,7 @@ Two hard blockers sat in the way. All 217 workspace manifests set `private: true
 
 | Sequence | Members | Version baseline | Tag | Workflow |
 |---|---|---|---|---|
-| dsh | Publish set: public members of `packages/*/*` + `apps/*`, with [private experimental exceptions](2026-09-12-experimental-publication-denylist.md); private packages join only the shared version bump | one version for the publish set, private dsh packages, and workspace root, `0.0.x` | `dsh-v<version>` | `release.yml` (pack) / `release-publish.yml` (publish) |
+| dsh | Publish set: public members of `packages/*/*` + `apps/*`, with [private experimental exceptions](../../../../packages/experimental/README.md); private packages join only the shared version bump | one version for the publish set, private dsh packages, and workspace root, `0.0.x` | `dsh-v<version>` | `release.yml` (pack) / `release-publish.yml` (publish) |
 | vendored framework | the nine `vendor/*` packages | each package on its own version line | `vendor-<package>-v<version>` (one per package) | `release-vendor.yml` (pack) / `release-vendor-publish.yml` (publish) |
 | native | `native/system/packages/*` | its own `0.0.x` | `node-addon-system-v<version>` | `node-addon-system-release.yml` |
 
@@ -36,9 +36,9 @@ Each sequence has one bump-and-commit command: it derives the target version, wr
 
 For equal release numbers, SemVer compares alphanumeric prerelease identifiers lexically: `alpha` is lower than `canary`, `canary` is lower than `rc`, and every prerelease is lower than the stable version. npm dist-tags are mutable aliases and do not participate in version precedence.
 
-### vendor: publish what changed, and let tags be the ledger
+### vendor: advance the complete family with per-package tags
 
-The vendored packages are decoupled from upstream by their scope but keep their own version lines. The published version is the higher of the manifest version and the last published version, with the patch incremented — which also drops an upstream prerelease segment. The first published versions:
+The vendored packages are decoupled from upstream by their scope but keep their own version lines. The next version uses the higher of the manifest version and the latest tagged version, incrementing the patch after a stable version. The first published versions:
 
 | Package | Upstream version | First published version |
 |---|---|---|
@@ -52,13 +52,13 @@ The vendored packages are decoupled from upstream by their scope but keep their 
 | `@deepseek-ai/cordis-plugin-group` | 1.0.0 | 1.0.1 |
 | `@deepseek-ai/cordis-plugin-logger-console` | 1.0.0 | 1.0.1 |
 
-Taking the last published version as the baseline is what survives a re-sync: upstream restoring `4.0.0-rc.8` after this repository published `4.0.1` would otherwise compute `4.0.1` again and collide. `--prerelease rc.1` publishes a rehearsal instead, which takes `--tag next` and leaves the release numbers free: a prerelease has lower precedence than the release it precedes, so `4.0.1` still follows `4.0.1-rc.1`. That ordering is computed here rather than read from `git tag --sort=v:refname`, which places a prerelease above its release.
+Taking the latest tagged version as the baseline prevents reuse after a re-sync: upstream restoring `4.0.0-rc.8` after this repository tagged `4.0.1` would otherwise compute `4.0.1` again. `release:vendor --prerelease rc.1` or `--prerelease alpha.1` selects a prerelease, whose default npm dist-tag is `next`. Later prereleases and the stable release reuse its release numbers: `4.0.1` follows `4.0.1-rc.1`. The script compares SemVer precedence rather than using `git tag --sort=v:refname`, which places a prerelease above its release.
 
-Only changed packages publish, and the change judgement adds no state file: **each package has its own tag, and that tag records the commit it last published from**. For each package, bump reads the newest `vendor-<package>-v*` tag and diffs the package directory against it. A path counts when the manifest's `files` selects it, when npm publishes it regardless (`package.json`, `README*`, `LICENSE*`), or — for a package whose `files` selects `lib/` — when it is a build input (`src/**`, `tsconfig*.json`, a build config). That last rule exists because a built payload is not tracked by git: without it, a real source change reads as "nothing changed" and the next publication fails on a version whose bytes moved.
+Every vendor release advances all nine packages, each with its own version and `vendor-<package>-v<version>` tag. Repacking from another repository state can change a member's dependency ranges or built payload even when its directory has no source changes. Advancing the complete family avoids reusing an existing version for those different bytes.
 
-A tag is a commit pointer, not proof of publication. Bump asks the registry whether the version its newest tag names exists and fails for a human to resolve when it does not, because a tag pushed for a publication that then failed would otherwise read as "already published" and skip the package indefinitely. Querying a private package needs credentials, so an unauthenticated machine reports the gap instead of failing.
+A tag reserves a package version and identifies its commit; it does not establish successful publication. Bump uses the latest tag even if its publication failed. The publisher checks registry versions and integrity, and the release manager verifies completion for the complete family.
 
-`vendor/cordis` publishes `src` as well. Its export map declares `"./src/*"`, so a tarball without those files points consumers at absent paths, and `files` selecting only build output left the change judgement with no tracked path to match.
+`vendor/cordis` publishes `src` as well. Its export map declares `"./src/*"`, so a tarball without those files points consumers at absent paths.
 
 ### Publication runs only on GitHub, and the registry decides what goes out
 
@@ -76,11 +76,15 @@ All three sequences decide this way, including the native one: it publishes thro
 
 Two registry behaviours shape how a publish is attempted. Writes are spaced by at least two seconds and retried with a backoff, because publishing several packages back to back outruns the registry's own processing and earns `E409 Failed to save packument`. And every retry re-reads the registry first: a reported failure can answer a write that landed anyway, so a version that now exists with this tarball's integrity counts as published rather than as a version to place again.
 
+For dsh and vendor, `release:publish --dist-tag <tag>` overrides the family's default publication channel. The vendor publish workflow accepts the optional `dist-tag` input; omitting it preserves the family default. An override must be a valid npm dist-tag. Before publishing any tarball, the publisher checks every packed member: the selected tag must already name the intended version, or both that tag and the version must be absent. A tag bound elsewhere, or an already published version without the selected tag, rejects the entire attempt before any upload. Existing integrity checks and retries still apply. Skipped versions are never retagged.
+
+The preflight does not reserve npm tags atomically. The release manager coordinates external publishers that could change a binding after the check. A dedicated dist-tag also does not exclude stable versions from existing dependency ranges: isolation requires prerelease versions and an audit of the actual packed dependency ranges.
+
 ### Workspace-internal references use the `workspace:` protocol
 
-Every reference to a workspace member uses the `workspace:` protocol. The [release-range policy](2026-09-22-workspace-release-ranges.md) requires exact `workspace:*` DSH references and `workspace:~` vendor/native references in every dependency section and consumer, including the native entry's optional platform packages. Local workspace linking is unchanged.
+Every reference to a workspace member uses the `workspace:` protocol. Every dependency section and consumer uses exact `workspace:*` DSH references and `workspace:~` vendor/native references, including the native entry's optional platform packages. Vendor and native patch releases must preserve consumer-facing APIs and binary interfaces. Local workspace linking is unchanged.
 
-`scripts/check-workspace-constraints.ts` reads every member declared in `pnpm-workspace.yaml` plus the root manifest and enforces ranges by dependency target, not consumer directory. The invariant-companion rule requires `workspace:*` for `@deepseek-ai/dsh-invariants`; the dependency repairer preserves vendor/native tilde ranges. Published DSH peers therefore require the matching release instead of admitting later compatible versions.
+`scripts/check-workspace-constraints.ts` reads every member declared in `pnpm-workspace.yaml` plus the root manifest and enforces ranges by dependency target, not consumer directory. The dependency repairer preserves vendor/native tilde ranges. Published DSH peers therefore require the matching release instead of admitting later compatible versions.
 
 ### Published dependency faces use an explicit policy
 
@@ -138,10 +142,6 @@ The installed-consumer probe captures npm's HTTP diagnostics and includes them w
 | `vendor/README.md` | records `src` joining `cordis`'s `files` as a local modification |
 | the three native packages | `publishConfig.access: public`, and their workflow passes no `--access` |
 
-### Relationship to the earlier proposal
-
-This Agent Note replaces the version scheme and the release-set boundary in [artifact-first npm baseline publication](../../rejected/process/2026-08-04-artifact-first-npm-baseline-publication.md): its `<base>-<timestamp>-<short SHA>` prerelease versions and `dev-<base>` dist-tag are not adopted, and vendor is not excluded from the release set. What both agree on stands: pack and publish are separate, publish consumes only verified tarballs, and the payload and installed-artifact probes are release gates.
-
 ## Alternatives considered
 
 **A `<base>-<timestamp>-<short SHA>` version.** Planned for continuous dev publication. It conflicts with keeping the published version in the repository: the version embeds a commit SHA, and writing the version back produces a new commit, so the SHA can only name the parent commit that was published and the link needs a convention to explain it. With numbered versions, a prerelease such as `0.0.1-rc.1` already covers "verify first, then release".
@@ -150,9 +150,9 @@ This Agent Note replaces the version scheme and the release-set boundary in [art
 
 **Event-level tags (`vendor-r1`, `vendor-r2`).** Prepared for one release event carrying several package versions. Once the registry decides what publishes, the workflow no longer infers the set from the tag, so per-package tags suffice — and each one names its own package's real version.
 
-**Putting the nine vendored packages on one `4.0.x` line.** It removes change detection, but cosmokit would jump from `1.8.1` to `4.0.1` and lose its upstream lineage; the upstream ranges inside the nine (`^1.8.1` and friends) would stop matching immediately, forcing a rewrite of the vendored manifests.
+**Putting the nine vendored packages on one `4.0.x` line.** Cosmokit would jump from `1.8.1` to `4.0.1` and lose its upstream lineage; the upstream ranges inside the nine (`^1.8.1` and friends) would stop matching immediately, forcing a rewrite of the vendored manifests.
 
-**Incrementing every vendored package on every vendor release, with no change detection.** The least machinery, at the cost of new version numbers for packages whose content is byte-identical to the previous release. Tags reduce change detection to reading one tag and running one diff, which is not worth trading for inflated version numbers.
+**Publishing only changed vendor directories.** A directory diff does not establish that repacking from another repository state produces identical bytes. Advancing all nine packages avoids integrity collisions for unchanged directories at the cost of additional versions.
 
 **Deciding "already published" from the version alone, without comparing content.** The reference flow queries no registry: publish uploads each tarball and npm rejects a duplicate version. Skipping on the version alone misses code that changed without a bump, which is the only failure that quietly leaves stale bytes on the registry. The cost is a registry query and a dependency on reproducible builds.
 
@@ -170,14 +170,14 @@ This Agent Note replaces the version scheme and the release-set boundary in [art
 
 ## Consequences
 
-The release scripts are importable modules behind a guarded entry point, and their judgements carry unit tests: tag naming, publish order and cycle reporting, version-baseline arithmetic, the payload change judgement, and each family's payload policy. Two defects the first draft carried — a publish command that ran the pack command on import, and a change judgement blind to `vendor/cordis` source edits — are exactly what a test at that seam catches.
+The release scripts are importable modules behind a guarded entry point, and their judgements carry unit tests: tag naming, publish order and cycle reporting, version-baseline arithmetic, and each family's payload policy. The entry guard prevents an import from executing a release command.
 
 A pull request runs the full pack for both sequences without credentials and installs the packed dsh tarballs into a throwaway consumer, where plain Node drives `dsh --version`. That probe is deliberately one command: it proves `files` selected a complete payload and that the published ranges resolve, and says nothing about interactive behavior.
 
 What this costs:
 
-- **Tags can drift from the registry.** A tag pushed for a publication that then failed is caught by bump's registry check, but only where credentials exist; an unauthenticated machine reports the gap and continues.
-- **The change judgement depends on visible tags.** A shallow clone, or a checkout without tags, degrades the vendored judgement to "publish everything for the first time". `fetch-depth: 0` is a precondition, not an optimization.
+- **Tags can drift from the registry.** Tags reserve versions even when publication fails; the release manager verifies registry completion separately.
+- **The version baseline depends on visible tags.** A shallow clone or a checkout without tags can reuse a reserved vendor version. `fetch-depth: 0` is a precondition, not an optimization.
 - **The protocol rewrite touched 1504 dependency declarations.** It does not change local resolution — pnpm already resolves from the workspace — but it changes the ranges that go out.
 - **Private packages need credentials to install.** Every consumer — CI, sandbox e2e, outside users — needs scope credentials, including for the Landlock packages, which have never been published and so cut off no existing anonymous path.
 - **`repository` names a different organization than the one running the workflows.** Token-based publication is unaffected; npm's OIDC attestation requires the two to agree, so adopting it means either repointing `repository` or publishing from the organization it names.

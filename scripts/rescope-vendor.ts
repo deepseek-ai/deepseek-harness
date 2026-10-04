@@ -152,7 +152,6 @@ const POSTCONDITIONS: readonly PostCondition[] = [
   { file: 'vendor/hmr/package.json', text: '"name": "@deepseek-ai/cordis-plugin-hmr"', count: 1 },
   { file: 'scripts/cordis-walk.ts', text: '@deepseek-ai\\/cordis', count: 1 },
   { file: 'scripts/cordis-walk.ts', text: '!== \'@deepseek-ai/cordis\'', count: 1 },
-  { file: 'scripts/gen-scoped-events.ts', text: '=== \'@deepseek-ai/cordis\'', count: 1 },
   { file: 'packages/typert/generator/src/analyzer.ts', text: '!== \'@deepseek-ai/cordis\'', count: 2 },
   { file: 'scripts/check-workspace-constraints.ts', text: '?.[\'@deepseek-ai/cordis\']', count: 2 },
   { file: 'packages/boot/app-boot/tsdown.config.ts', text: '[\'@deepseek-ai/cordis-plugin-include\']', count: 1 },

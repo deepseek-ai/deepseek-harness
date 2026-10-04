@@ -103,7 +103,6 @@ Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与
 | [`src/bootstrap.ts`](src/bootstrap.ts) | 程序求值、绑定代理与输出捕获 |
 | [`src/channel.ts`](src/channel.ts) | 分帧、有界写入与协议失败 |
 | [`src/output-ledger.ts`](src/output-ledger.ts) | Host 外层结果计量 |
-| — | 不发布运行时不变式配套模块；分帧与进程清理跨进程边界强制执行，不依靠同进程中的独立观测。 |
 
 </details>
 

@@ -126,7 +126,7 @@ dsh --profile <name>
 - [Subagent 子系统](../../../docs/subsystems/subagent.zh.md)——服务约定、提供方约定与终态结果语义。
 - [dsh-subagent seam](../subagent/README.zh.md)——本提供方注册于其上的注册表与启动 API。
 - [Claude Code subagent 提供方](../subagent-claude-code/README.zh.md)——经官方 Agent SDK 的兄弟产品后端。
-- [Claude Code 与 Codex 后端](../../../.agents/notes/implemented/feature/2026-08-04-claude-code-and-codex-subagent-backends.zh.md)——产品提供方的设计记录。
+- [历史Claude Code 与 Codex 后端](../../../.agents/notes/archived/feature/2026-08-04-claude-code-and-codex-subagent-backends.md)——产品提供方的设计记录。
 - [生成配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-subagent-codex)——每个受支持配置字段及其源声明。
 
 -----
@@ -191,5 +191,3 @@ Codex 子级会在一个全新的临时线程中，以单个轮次接收这些�
 - **版本锁定的协议**——运行时依赖锁定为 `@openai/codex@0.153.4`；升级需要重新生成上游 schema 证据并重新运行带凭证的随机数测试。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。生命周期配对属于共享 subagent service，受管范围的所有权属于 subprocess service。

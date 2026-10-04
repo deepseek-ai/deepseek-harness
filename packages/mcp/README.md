@@ -37,9 +37,9 @@ The client owns each configured connection, the manager runs a settings-driven f
 
 Try the worked example configurations to see the plugin in action, then read the Agent Note for the behavior decisions behind it.
 
-- [MCP client plugin Agent Note](../../.agents/notes/implemented/feature/2026-07-07-mcp-client-plugin.md) — the bridge's design: server-qualified naming, discovery, execution, and environment scrubbing.
+- [historical MCP client plugin Agent Note](../../.agents/notes/archived/feature/2026-07-07-mcp-client-plugin.md) — the bridge's design: server-qualified naming, discovery, execution, and environment scrubbing.
 - [MCP manager Agent Note](../../.agents/notes/implemented/feature/2026-08-31-mcp-manager-plugin.md) — the settings-driven fleet: reconcile semantics, templates, status surface, and rejected alternatives.
-- [Resources and instructions Agent Note](../../.agents/notes/implemented/feature/2026-09-12-mcp-resources-and-instructions.md) — on-demand resource access and scoped server guidance.
+- [Resources and instructions reference](mcp-resources/README.md) — on-demand resource access and scoped server guidance.
 - [Third-party memory MCP guide](../../docs/user/guide/mcp-memory.md) — runnable overlay rows and setup instructions.
 - [Tools subsystem reference](../../docs/subsystems/tools.md) — the `ToolRuntime` that receives the registered tools.
 

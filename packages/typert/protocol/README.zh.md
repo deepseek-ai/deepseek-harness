@@ -107,7 +107,6 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 | [`src/json-value.ts`](src/json-value.ts) | 各载体共享的无损 JSON 校验 `isRemoteJsonValue` 与 `isRemoteUplinkItem` |
 | [`src/remote-error.ts`](src/remote-error.ts) | `RemoteError` 与结构式识别函数 `remoteErrorOf` |
 | [`src/types.ts`](src/types.ts) | 协议映射、`RemoteErrorDetailsMap`、`RemoteResult`、`RemoteStream`、`RemoteStreamHandle`、`PeerScope`、`RemoteInvocation`、`InvocationDescriptor`、编解码器、提供方约定、注册表接口、`TypertClientRemote` |
-| — | 不发布运行时不变量伴生入口；decorator 只保留私有不可变声明，binding 也是冻结值，没有可供交叉核对的独立事件流。 |
 
 </details>
 

@@ -9,8 +9,8 @@
   en: 06c7d7624947a72a
   zh: ac4ca82984564825
 /deepseek-ai-dsh-client-ui-theme/summary:
-  en: c2a579fd56c0c4e2
-  zh: f1842fbb209f876c
+  en: c98899d108fd8318
+  zh: ae2103e46d723784
 /deepseek-ai-dsh-client-ui-theme/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,8 +18,8 @@
   en: 5d64b3d918d5edfa
   zh: fc929354a0faf33a
 /deepseek-ai-dsh-client-ui-theme/use-this-package/appearance-and-font-size:
-  en: 0b0177e1afefe4a7
-  zh: 52d88f12a8369ee8
+  en: ec98904b19d1b12b
+  zh: 59d5823ddb168195
 /deepseek-ai-dsh-client-ui-theme/use-this-package/registering-a-theme:
   en: 2cd32ccaba33b3e9
   zh: 53ea78d19929ea02
@@ -27,20 +27,20 @@
   en: 54296471349d9f77
   zh: 8ca162b7b57b822e
 /deepseek-ai-dsh-client-ui-theme/understand-the-implementation:
-  en: 8fbfdb050e880f9b
-  zh: dd201f049036c5c4
+  en: 687ff0a8bccc9c0c
+  zh: 463d6b7afd4bd4a4
 /deepseek-ai-dsh-client-ui-theme/understand-the-implementation/stylesheets:
-  en: b3fe877c28a600d8
-  zh: c8a28e4d9189c0ea
+  en: a6f0aaf2d24a913b
+  zh: 4116ea5685953a9c
 /deepseek-ai-dsh-client-ui-theme/understand-the-implementation/scrollbar-rebinding:
   en: bf76e7c34a331595
   zh: 5accd0260ef7c61e
 /deepseek-ai-dsh-client-ui-theme/understand-the-implementation/preference-persistence:
-  en: 2d3e5c0ef3f40ffa
-  zh: d1bc9a86f68ec84b
+  en: 818da56a938d5394
+  zh: e6fd46a9e964b0a4
 /deepseek-ai-dsh-client-ui-theme/further-exploration:
-  en: fb1b98ad71d7d9c2
-  zh: c7fa18ab56739e0c
+  en: 10664fe91f2ca00b
+  zh: 086f8dffdc223c22
 /deepseek-ai-dsh-client-ui-theme/model-experience:
   en: 3120df665299c634
   zh: 1d9f365d091d0d2a
@@ -51,5 +51,5 @@
   en: 0d328dbced31a041
   zh: 2951de356ba6bb82
 /deepseek-ai-dsh-client-ui-theme/known-limitations-and-deferred-work/dev-note:
-  en: f1a2942985b11203
-  zh: 8196d82321e024b0
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

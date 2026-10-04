@@ -77,7 +77,6 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config`、扫描器、manifest 校验、注册装配逻辑 |
-| — | 不发布运行时不变式伴生入口；Loader 配置项的生命周期直接持有每个对应的注册表资源释放函数，集成测试会观察注册与移除。 |
 
 </details>
 

@@ -41,6 +41,7 @@ root.loader.update(id, { config: { enabled: false } })
 | `loader.update(id, options, parent?, position?)` | Update, move, and restart an entry. |
 | `loader.remove(id)` | Stop and delete an entry. |
 | `loader.resolve(id)` | Resolve an entry by id, including nested `a:b` ids. |
+| `loader.resolve(id).moduleNamespace` | Raw import result before export normalization; HMR updates it after a successful reload. |
 | `loader.resolveGroup(id)` | Resolve the root group or a nested group. |
 | `loader.await()` | Wait for pending entry imports and fiber reloads. |
 | `loader.locate(fiber?)` | Return the loader entry id that owns a fiber. |

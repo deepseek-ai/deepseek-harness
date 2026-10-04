@@ -13,8 +13,13 @@ export interface AccountClientMetadata {
 
 /** Identity of one local login attempt, unrelated to the platform request ID. */
 export type SignInAttemptId = Branded<'SignInAttemptId'>
-/** Safe failure codes rendered through the caller's locale dictionary. */
-export type SignInErrorCode = 'network' | 'protocol' | 'expired' | 'storage'
+/**
+ * Safe failure codes rendered through the caller's locale dictionary.
+ * `no-response`: fetch returned no Response; `network`: HTTP or account-detail retrieval failure.
+ * `protocol`: invalid response or authorization data; `expired`: authorization expired;
+ * `storage`: local credential access or commit failed.
+ */
+export type SignInErrorCode = 'no-response' | 'network' | 'protocol' | 'expired' | 'storage'
 /** Latest login attempt, including terminal outcomes until the next attempt. */
 export interface SignInAttemptView {
   readonly id: SignInAttemptId

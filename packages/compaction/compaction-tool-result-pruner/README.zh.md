@@ -88,7 +88,6 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：`ToolResultPruner` 服务、`pruneSession` / `pruneContent` / `measureContent` |
 | [`src/config.ts`](src/config.ts) | `PRUNE_MARKER`、默认值、码点计数、预算验证 |
 | [`src/types.ts`](src/types.ts) | `ToolResultPruneConfig`、`ResolvedConfig`、`PrunedEntry`、`PruneResult` |
-| — | 不发布运行时不变式伴生入口；Session 会验证每次仅改写内容的操作，其伴生条目负责维护跨事件包围关系。 |
 
 </details>
 

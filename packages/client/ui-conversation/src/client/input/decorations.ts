@@ -37,7 +37,7 @@ const SLASH_TOKEN_END_RE = /^(?:\s|$)/
  * exact lexicon member; a `/name` token must end at whitespace or the draft
  * end ('/name/x' is a path, '/name。' is prose).
  * @param draft - draft text.
- * @param lexicon - per-trigger name lists (a missing trigger scans nothing).
+ * @param lexicon - per-trigger name lists; missing catalogs match no named tokens.
  * @returns matched ranges in draft order.
  */
 export function scanTextRefs(
@@ -45,17 +45,15 @@ export function scanTextRefs(
 ): TextRefRange[] {
   if (draft === '') return []
   const out: TextRefRange[] = []
-  if (lexicon.size > 0) {
-    TEXT_REF_RE.lastIndex = 0
-    let m: RegExpExecArray | null
-    while ((m = TEXT_REF_RE.exec(draft)) !== null) {
-      const trigger = m[2] as '/' | '@'
-      const name = m[3] ?? ''
-      if (trigger === '/' && !SLASH_TOKEN_END_RE.test(draft.slice(m.index + m[0].length))) continue
-      if (lexicon.get(trigger)?.includes(name)) {
-        const start = m.index + (m[1]?.length ?? 0)
-        out.push({ start, end: start + 1 + name.length, trigger })
-      }
+  TEXT_REF_RE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = TEXT_REF_RE.exec(draft)) !== null) {
+    const trigger = m[2] as '/' | '@'
+    const name = m[3] ?? ''
+    if (trigger === '/' && !SLASH_TOKEN_END_RE.test(draft.slice(m.index + m[0].length))) continue
+    if (lexicon.get(trigger)?.includes(name)) {
+      const start = m.index + (m[1]?.length ?? 0)
+      out.push({ start, end: start + 1 + name.length, trigger })
     }
   }
   FOLDER_REF_RE.lastIndex = 0

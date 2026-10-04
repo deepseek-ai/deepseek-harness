@@ -10,7 +10,7 @@ Desktop 通常运行本地 dsh server，无法依靠远程业务错误可靠触�
 
 ## 提案
 
-本文记录尚未完成的发布与后端工作；[已实施的客户端决策](../../implemented/feature/2026-09-11-desktop-mandatory-update-client.zh.md)和[桌面 README](../../../../apps/desktop/README.zh.md)负责当前行为。
+本文记录尚未完成的发布与后端工作；[桌面 README](../../../../apps/desktop/README.zh.md)负责当前客户端行为。
 
 | 文档 | 负责内容 |
 |---|---|

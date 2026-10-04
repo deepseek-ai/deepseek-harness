@@ -83,7 +83,6 @@ kind: "package-reference"
 | [`src/admission.ts`](src/admission.ts) | 对编码图片和文件上传强制执行规范 base64 并委托存储 |
 | [`src/error.ts`](src/error.ts) | `AttachmentError` 类与 `isImageAdmissionError` 运行时子集 |
 | [`src/brand.ts`](src/brand.ts) | `AttachmentId` 带类型标记的不透明标识符 |
-| — | 不发布运行时不变式伴生入口；这个无状态 seam 承载类型，实现则负责强制执行不可变存储检查。 |
 
 </details>
 

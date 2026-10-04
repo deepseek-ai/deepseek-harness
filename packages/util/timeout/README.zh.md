@@ -92,7 +92,6 @@ timer 只在某个迭代器 `next()` 尚未完成时启动，并会因不产生�
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `clampTimeout`、`deadline`、`idleWatchdog`、`timeoutOf`、`TimeoutReason`、`MAX_TIMER_DELAY_MS` |
-| — | 不发布运行时不变式伴生入口；这个纯工具不拥有事件流或可变运行时数据；其值代数约束由单元测试保障。 |
 
 ### deadline 如何融合来源
 

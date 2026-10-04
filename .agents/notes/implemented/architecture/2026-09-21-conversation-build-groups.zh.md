@@ -35,7 +35,7 @@ Chat Builder 汇总整个目标的节点及索引。在其中固定创建 Chat �
 | 记录 | 关系 |
 |---|---|
 | [业务节点组装](2026-08-09-client-conversation-node-assembly.zh.md) | 保留事件匹配、Context、Location、每个 Context 一个业务 Node 及目标 Builder，分组增加另一种输入类别。 |
-| [Chat 滚动与页脚](../bug-fix/2026-09-22-chat-scroll-follow-and-footer-geometry.zh.md) | 负责裁剪与独立的嵌套跟随，不改变 Group Definition 成员关系。 |
+| [Chat 滚动与页脚](../../../../packages/client/ui-chat/README.zh.md) | 负责裁剪与独立的嵌套跟随，不改变 Group Definition 成员关系。 |
 
 分组保留独立的节点组装决策。跨 View 导航与 `toolCallFocus` 仍是独立职责，Group 引用不携带 View 句柄或资源导航策略。
 

@@ -47,7 +47,7 @@ export default defineConfig({
   plugins: [tsconfigPaths({ projects: ['./tsconfig.base.json'] }), standardDecoratorPlugin()],
   test: {
     execArgv: vitestExecArgv,
-    setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
+    setupFiles: ['./scripts/test-proxy-environment.ts'],
     include: [
       'scripts/session-snapshot-corpus.corpus.ts',
       // The assembled Web snapshot executes generated client bundles; source

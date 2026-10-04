@@ -17,6 +17,7 @@ interface SourceJson {
   metadata: boolean
   invalid: boolean
   icon?: unknown
+  packageName?: string
 }
 
 function sourceJsonFiles(dir: string): SourceJson[] {
@@ -31,7 +32,12 @@ function sourceJsonFiles(dir: string): SourceJson[] {
     if (typeof contents !== 'object' || contents === null || Array.isArray(contents)) {
       return { file, metadata: false, invalid: true }
     }
-    return { file, metadata: Object.hasOwn(contents, 'meta'), invalid: false, icon: 'icon' in contents ? contents.icon : undefined }
+    const name = 'name' in contents ? contents.name : undefined
+    return {
+      file, metadata: Object.hasOwn(contents, 'meta'), invalid: false,
+      icon: 'icon' in contents ? contents.icon : undefined,
+      ...basename(file) === 'package.json' && typeof name === 'string' && name.trim() !== '' ? { packageName: name } : {},
+    }
   })
 }
 
@@ -71,6 +77,9 @@ function packageProblems(manifestPath: string): string[] {
   const dir = realpathSync(dirname(manifestPath))
   const pkg = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest
   const documents = sourceJsonFiles(dir)
+  const nestedPackages = documents.filter(document => document.file !== 'package.json' && document.packageName !== undefined)
+    .map(document => ({ file: document.file, prefix: `${dirname(document.file).replaceAll('\\', '/')}/` }))
+  const children = nestedPackages.filter(child => !nestedPackages.some(parent => child !== parent && child.file.startsWith(parent.prefix)))
   const byPath = new Map(documents.map(document => [join(dir, document.file), document]))
   const parentURL = pathToFileURL(join(dir, 'package.json')).href
   const specifierOf = (plugin: string): string => pkg.name + (plugin === '.' ? '' : plugin.slice(1))
@@ -81,7 +90,7 @@ function packageProblems(manifestPath: string): string[] {
     if (!key.startsWith('.')) continue
     if (!key.includes('*')) {
       candidates.add(key)
-      if (key.endsWith('/package.json')) candidates.add(key.slice(0, -'/package.json'.length))
+      if (key.endsWith('/icon')) candidates.add(key.slice(0, -'/icon'.length))
     }
     const plugin = pluginOf(key)
     if (plugin !== undefined && !plugin.includes('*')) candidates.add(plugin)
@@ -90,7 +99,6 @@ function packageProblems(manifestPath: string): string[] {
         const value = substitution(pattern, `./${document.file}`)
         if (value === undefined) continue
         const request = key.replaceAll('*', value)
-        if (request.endsWith('/package.json')) candidates.add(request.slice(0, -'/package.json'.length))
         const owner = pluginOf(request)
         if (owner === undefined) continue
         candidates.add(owner)
@@ -122,24 +130,36 @@ function packageProblems(manifestPath: string): string[] {
       const file = lookup(resourceOf(filename))
       return file === undefined ? [] : [{ filename, file }]
     })
-    const iconManifest = lookup(`${specifier}/package.json`)
-    const iconDocument = iconManifest === undefined ? undefined : byPath.get(iconManifest)
-    let iconChecked = false
-    if (candidate === '.' && pkg.icon !== undefined && iconManifest !== join(dir, 'package.json')) {
+    const displayManifest = candidate === '.' ? lookup(`${specifier}/package.json`) : undefined
+    if (candidate === '.' && pkg.icon !== undefined && displayManifest !== join(dir, 'package.json')) {
       problems.push(`${manifestPath}: exports must expose its icon declaration through ${pkg.name}/package.json`)
     }
-    if (iconDocument?.icon !== undefined && resources.every(({ file }) => byPath.has(file))) {
-      iconChecked = true
+    const iconExport = `${candidate}/icon`
+    const exportsIcon = exported.some(([key]) => key === iconExport)
+    if (exportsIcon && lookup(`${specifier}/icon`) === undefined) {
+      problems.push(`${manifestPath}: exports["${iconExport}"] must resolve to a file`)
+    }
+    const iconDocument = displayManifest === undefined ? undefined : byPath.get(displayManifest)
+    // Build output is not validated source; reading it would make the result depend on stale artifacts.
+    const sourceManifest = displayManifest === undefined || iconDocument !== undefined
+    if (!sourceManifest) {
+      problems.push(`${specifier}/package.json: display manifest must resolve to source JSON, received ${displayManifest}`)
+    }
+    if (sourceManifest && resources.every(({ file }) => byPath.has(file))) {
       const meta = readPluginMeta(specifier, parentURL)
       if (meta?.error !== undefined) problems.push(meta.error)
-      if (meta?.icon !== undefined && typeof iconDocument.icon === 'string') {
-        const iconFile = relative(dir, resolve(dirname(join(dir, iconDocument.file)), iconDocument.icon)).replaceAll('\\', '/')
-        if (pkg.files !== undefined && !published(iconFile, pkg.files)) problems.push(`${manifestPath}: files must include ${iconFile}`)
-        if (iconDocument.file !== 'package.json' && pkg.files !== undefined && !published(iconDocument.file, pkg.files)) {
-          problems.push(`${manifestPath}: files must include ${iconDocument.file}`)
+      const iconTarget = meta?.icon === undefined ? undefined
+        : displayManifest !== undefined && typeof iconDocument?.icon === 'string'
+          ? resolve(dirname(displayManifest), iconDocument.icon)
+          : lookup(`${specifier}/icon`)
+      for (const target of [displayManifest, iconTarget]) {
+        if (target === undefined) continue
+        const file = relative(dir, target).replaceAll('\\', '/')
+        if (file !== 'package.json' && pkg.files !== undefined && !published(file, pkg.files)) {
+          problems.push(`${manifestPath}: files must include ${file}`)
         }
       }
-    } else if (iconDocument?.icon !== undefined) {
+    } else if (sourceManifest && (exportsIcon || iconDocument?.icon !== undefined)) {
       problems.push(`${specifier}: icon metadata requires locale resources to resolve to source JSON`)
     }
     if (!resources.some(({ file }) => byPath.get(file)?.metadata || byPath.get(file)?.invalid)) continue
@@ -154,19 +174,13 @@ function packageProblems(manifestPath: string): string[] {
       continue
     }
     const directory = dirname(english)
-    let sourceResources = true
     for (const { filename, file } of resources) {
       if (!byPath.has(file)) {
         problems.push(`${resourceOf(filename)}: locale metadata must resolve to source JSON, received ${file}`)
-        sourceResources = false
       }
       if (dirname(file) !== directory) {
         problems.push(`${resourceOf(filename)}: ${file} must share the English locale directory ${directory}`)
       }
-    }
-    if (sourceResources && !iconChecked) {
-      const meta = readPluginMeta(specifier, parentURL)
-      if (meta?.error !== undefined) problems.push(meta.error)
     }
     for (const document of documents.filter(document => dirname(join(dir, document.file)) === directory)) {
       const resource = resourceOf(basename(document.file))
@@ -184,6 +198,8 @@ function packageProblems(manifestPath: string): string[] {
 
   for (const document of documents) {
     const requests = alternatives.get(document.file)
+    // Named nested packages own unclaimed resources; explicit outer exports still require validation.
+    if (requests === undefined && children.some(child => document.file.startsWith(child.prefix))) continue
     if (!document.file.split('/').includes('locale') && requests === undefined) continue
     if (!document.metadata && !document.invalid) continue
     if (claimed.has(join(dir, document.file))) continue
@@ -193,11 +209,11 @@ function packageProblems(manifestPath: string): string[] {
     })) continue
     problems.push(`${manifestPath}: exports must expose ${document.file} as a plugin locale resource with an en.json discovery baseline`)
   }
-  return problems
+  return problems.concat(children.flatMap(child => packageProblems(join(dir, child.file))))
 }
 
 /**
- * Check static plugin locale metadata and resource publication without evaluating plugin entries or reading built output.
+ * Check workspace and named nested package metadata without evaluating plugin entries or reading built output.
  * @param root - repository or fixture root.
  * @returns diagnostics for an empty package corpus, invalid metadata, inaccessible resources, or omitted publication files.
  */

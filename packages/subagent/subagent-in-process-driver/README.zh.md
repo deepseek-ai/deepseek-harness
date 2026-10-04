@@ -73,7 +73,6 @@ kind: "package-library"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 运行驱动器：创建、单轮驱动、结果读取、dispose |
 | [`src/structured.ts`](src/structured.ts) | 结构化输出运行时：捕获工具、提示词段、防护、提交 |
-| — | 不发布运行时不变式伴生入口；本包没有独立事件序列或可变数据关系，相关约定在所属 seam 强制执行。 |
 
 </details>
 
@@ -87,7 +86,7 @@ kind: "package-library"
 - [Subagent 子系统](../../../docs/subsystems/subagent.zh.md)——启动请求、结果、提供方约定与进程内深度和初始内容。
 - [dsh-subagent-spawn-in-process](../subagent-spawn-in-process/README.zh.md)——构建于本驱动器之上的全新子 agent 后端。
 - [dsh-subagent-fork-in-process](../subagent-fork-in-process/README.zh.md)——构建于本驱动器之上的带初始内容的子 agent 后端。
-- [委派策略决策](../../../.agents/notes/implemented/feature/2026-07-25-subagent-policy-inheritance.zh.md)——父级沙箱与审批策略如何到达子 agent。
+- [委派策略参考](../subagent/README.zh.md)——父级沙箱与审批策略如何到达子 agent。
 
 -----
 

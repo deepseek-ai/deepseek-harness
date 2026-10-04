@@ -1,22 +1,14 @@
-/* Two icon pills side by side under the composer, 12/20 tertiary text tier
-   with a hover-pill affordance; each pill's click-open panel wears the shared
-   stat-dialog.module.css skin. */
+/* Icon pills under the composer, each one composer-dock entry laid out by the
+   dock's flex row; 12/20 tertiary text tier with a hover-pill affordance; each
+   pill's click-open panel wears the shared stat-dialog.module.css skin. */
 
-.root {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
-  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
-  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
-}
-
-/* Dialog anchor: shrink-wraps its pill so the panel clamp measures the pill. */
+/* Entry root and dialog anchor: shrink-wraps its pill so the panel clamp
+   measures the pill. */
 .anchor {
   display: inline-flex;
   min-width: 0;
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
 }
 
 .pill {

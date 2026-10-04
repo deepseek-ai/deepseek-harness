@@ -30,7 +30,7 @@ export interface PlanReviewOpenInjected {
   /** Open the logged plan, or the request's temporary document when no invocation exists. */
   openReview: (review: PropsRuntime<'conversation.plan-review.actions'>['review'], requestKey: string) => void
   readonly hooks: {
-    /** The session whose right Sidebar seat is mounted; `undefined` while none is on screen. */
+    /** The Session on screen, whose right Sidebar the opens land in; `undefined` while none is. */
     readonly sidebarMounted: HostObservable<SessionId | undefined>
   }
 }
@@ -62,10 +62,10 @@ export function PlanCards({ turn, usePlans, openPlan, t }: PropsRuntime<'convers
 /**
  * Open each pending plan automatically and retain a manual opener without answering it.
  *
- * The automatic open waits for a mounted Sidebar seat: a review that arrives
- * while the Conversation is off screen mounts in the same commit as the seat,
- * ahead of it, and the seat binds from its own effect. Reading the bound
- * session through the hook opens once that binding exists.
+ * The automatic open waits for a Session on screen. `ctx.sidebarRight` names
+ * the Session before the commit that brings its Conversation back renders, so
+ * a review that arrived while the Conversation was off screen opens from the
+ * effect of the commit that mounts it.
  * @param props - Review identity, Session store, localized copy, and navigation.
  * @returns an opener for either logged or temporary plan text.
  */

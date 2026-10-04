@@ -144,5 +144,21 @@ export const turnTailDefinition: ConversationNodeDefinition<TurnTailState> = {
  * @param ctx - owning UI Conversation context.
  */
 export function registerTurnTailConversationNode(ctx: Context): void {
-  ctx.uiConversation.events.register(turnTailDefinition)
+  const match = turnTailDefinition.match.bind(turnTailDefinition)
+  ctx.uiConversation.events.register({
+    ...turnTailDefinition,
+    match: {
+      'turn/start': match,
+      'turn/end': match,
+      'tool/call': match,
+      'tool/result': match,
+      'assistant/message': match,
+      'assistant/attempt': match,
+      'assistant/live-chunk': match,
+      'step/start': match,
+      'step/end': match,
+      'llm/retry': match,
+      'llm/retry-started': match,
+    },
+  })
 }

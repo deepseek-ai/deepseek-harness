@@ -2,7 +2,9 @@
 - text: 安装、启用和配置插件
 - button "插件说明"
 - button "刷新" [disabled]
-- button "添加插件" [disabled]
+- group "添加插件":
+  - button "添加插件" [disabled]
+  - button "选择添加插件方式" [disabled]
 - status "正在读取插件…"
 
 1680px: 4 rows; page/group headers, rows, icons, text lines and blank action spaces align within 0.1px

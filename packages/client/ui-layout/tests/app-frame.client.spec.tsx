@@ -209,12 +209,13 @@ describe('AppFrame', () => {
     expect(slotCalls.find(c => c.key === 'main')).toEqual({ key: 'main', props: {}, options: { entryKey: 'conversation' } })
   })
 
-  it('renders the main, sidebar, and root-scoped rightbar outlets without a current Session', () => {
+  it('renders the column and bottom outlets without a current Session', () => {
     selectedSession = undefined
     const { frame, getByTestId } = mountFrame()
     expect(getByTestId('main-content').getAttribute('data-entry-key')).toBe('conversation')
     expect(getByTestId('sidebar-content')).toBeTruthy()
     expect(getByTestId('rightbar-content')).toBeTruthy()
+    expect(getByTestId('shell.bottom-content').parentElement?.hasAttribute('data-shell-bottom')).toBe(true)
     expect(tracks(frame)).toEqual([280, 0])
   })
 

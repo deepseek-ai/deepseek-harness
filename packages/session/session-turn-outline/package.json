@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-turn-outline",
   "description": "Whole-log turn outline projection (turnOutline) for the DeepSeek Harness",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

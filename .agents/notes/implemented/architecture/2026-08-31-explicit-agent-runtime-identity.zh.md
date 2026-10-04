@@ -20,7 +20,7 @@ Agent 的 Cordis Context 拥有注册及其清理。Agent 身份则为某项操�
 
 `SubagentContinuationManager` 会把确切父级放进全新创建与冷恢复的 options。因此，存活的可续跑子级不会出现在 `AgentRegistry.roots()` 中，并且满足 `isOwnedBy(child.id, parent)`。持久化 `parentSession` 元数据不能代替这项关系：没有存活 Agent 拥有 fork 或已恢复会话时，它仍可成为 runtime root。
 
-[Agent 注册作用域决策](2026-07-08-agent-scope-contexts.zh.md)、其[运行时设计](2026-07-12-agent-scope-runtime-design.zh.md)和[发起方作用域决策](2026-07-15-agent-initiator-scope.zh.md)继续拥有各自独立的注册、生命周期及私有调用链理由。本决策只取代其中描述的反向 Context 关联和隐式运行时所属方推导。
+[作用域参考](../../../../packages/core/scope/README.zh.md)与 [Agent loop 参考](../../../../packages/core/agent-loop/README.zh.md)说明注册和生命周期行为。[发起方作用域决策](2026-07-15-agent-initiator-scope.zh.md)负责私有调用链理由；显式运行时归属不改变因果发起关系或注册生命周期。
 
 ## 验证
 

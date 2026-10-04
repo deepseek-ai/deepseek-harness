@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-24-scheduled-message-framing.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-24-scheduled-message-framing.md
+/agent-note-delivered-reminders-are-framed-as-scheduled-messages-from-the-user:
+  en: f524c3b0ee74c586
+  zh: ec4e85f0fd853532
+/agent-note-delivered-reminders-are-framed-as-scheduled-messages-from-the-user/problem:
+  en: c4156e2a8a3ad379
+  zh: 992b76509f83d61f
+/agent-note-delivered-reminders-are-framed-as-scheduled-messages-from-the-user/decision:
+  en: b9b203da394f58e5
+  zh: ac511458d60dab49
+/agent-note-delivered-reminders-are-framed-as-scheduled-messages-from-the-user/alternatives-considered:
+  en: 8074a2b9b9f5d782
+  zh: 1604b7ee5d34375e
+/agent-note-delivered-reminders-are-framed-as-scheduled-messages-from-the-user/consequences:
+  en: 85e03b541bfce57c
+  zh: 77decbb804f6a0b9

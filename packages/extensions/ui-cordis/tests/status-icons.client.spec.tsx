@@ -4,6 +4,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { CordisDynamicPackageId, CordisDynamicPluginId, CordisDynamicPluginRunId, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { CordisActionRow } from '../src/client/CordisActionRow.tsx'
 import { CordisDefineRow } from '../src/client/CordisDefineRow.tsx'
 import { CordisRunRow } from '../src/client/CordisRunRow.tsx'
@@ -16,6 +17,7 @@ const t = ((key: keyof typeof zh) => zh[key]) as Parameters<typeof CordisActionR
 function failed(name: string): ToolResultNode {
   return {
     kind: 'tool-result', seq: 2, time: 2, callId: `call-${name}`,
+    name, args: PartialArguments.fromText('{}'),
     call: { name, argsRaw: '{}' }, callTime: 1,
     content: [{ type: 'text', text: 'failed' }], isError: true, subCalls: [],
   }
@@ -36,7 +38,7 @@ describe('Cordis tool failure icons', () => {
     const props = {
       ...callbacks,
       phase: 'preparing', toolName, callId: 'call', t,
-      block: { phase: 'preparing', name: toolName, callId: 'call', turn: 1, step: 1, time: 1, subCalls: [] },
+      block: { phase: 'preparing', args: PartialArguments.EMPTY, name: toolName, callId: 'call', turn: 1, step: 1, time: 1, subCalls: [] },
       useInventory: unused, useLoaded: unused, useRunCards: unused, useActiveRuns: unused, useDisclosure: unused,
     } as Parameters<typeof CordisDefineRow>[0] & Parameters<typeof CordisRunRow>[0]
     const view = render(<Component {...props} />)
@@ -101,6 +103,7 @@ describe('Cordis tool failure icons', () => {
     const pluginRunId = 'run-1' as CordisDynamicPluginRunId
     const block: ToolResultNode = {
       kind: 'tool-result', seq: 3, time: 3, callId: 'call-cordis_run', callTime: 2,
+      name: 'cordis_run', args: PartialArguments.fromText(JSON.stringify({ pluginId, packageId, mode: 'run' })),
       call: { name: 'cordis_run', argsRaw: JSON.stringify({ pluginId, packageId, mode: 'run' }) },
       content: [], isError: false, subCalls: [], meta: { pluginId, packageId, pluginRunId },
     }

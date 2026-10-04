@@ -156,4 +156,4 @@ This Dev Note is non-authoritative working context: notes for maintainers and op
 
 </details>
 
-**Runtime invariant:** No companion is published. Usage folds replace samples within each attempt; totals need not be monotone. Composition and measurement share the positional replacement planner and fixed estimator, so their heuristic surface totals agree by construction rather than through independent mutable observations. Route-priced totals deliberately differ.
+Usage folds replace samples within each attempt; totals need not be monotone. Composition and measurement share the positional replacement planner and fixed estimator, so their heuristic surface totals agree by construction. Route-priced totals deliberately differ.

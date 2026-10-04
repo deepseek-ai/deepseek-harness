@@ -75,7 +75,6 @@ await ctx.agentDefaultModel.saveSelection({ provider, model, reasoningEffort: 'h
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 即时默认选择与 profile 写入 |
-| — | 不发布 invariant 配套模块，因为 Config 引用是唯一由此包维护的值。 |
 
 ### 行为说明
 

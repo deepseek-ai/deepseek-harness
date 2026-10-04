@@ -75,7 +75,7 @@ A background call registers the run through `jobs.start` inside the job starter,
 
 ### Durable session records
 
-For a root transport execution (`exec.parent` absent), the tool projects the run into the calling Agent's Session with four log-only events: run-start after `start()` returns, member starts and endings filtered by `run.id`, then run-end only after the result is available and disposal reaches quiescence. Nested transport calls execute normally but write no record. The first failed Session append disables later recording for that run with one warning, leaving either no record or a legal continuous prefix without changing the tool result or cleanup. The package invariant rejects duplicate starts, unpaired members, terminal events with open members, and updates after run-end on both cold load and live append, while accepting missing terminal suffixes.
+For a root transport execution (`exec.parent` absent), the tool projects the run into the calling Agent's Session with four log-only events: run-start after `start()` returns, member starts and endings filtered by `run.id`, then run-end only after the result is available and disposal reaches quiescence. Nested transport calls execute normally but write no record. The first failed Session append disables later recording for that run with one warning, leaving either no record or a legal continuous prefix without changing the tool result or cleanup.
 
 The engine's `workflow/phase` and `workflow/log` events have no per-line durable surface from this tool: the session log deliberately records run and member lifecycle only, and the Web transcript derives from those records. A background run's lines reach a human through the job observation record instead, which is transient by design.
 
@@ -90,7 +90,6 @@ Decided up front per the [render-intent Agent Note](../../../.agents/notes/imple
 | [`src/index.ts`](src/index.ts) | Plugin entry: tool registration, run lifecycle, background job registration, recorder wiring |
 | [`src/record.ts`](src/record.ts) | Background runs' live-progress mirror into the job's output ring |
 | [`src/types.ts`](src/types.ts) | The four log-only record event payloads and their `SessionEventMap` declaration |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: durable workflow-record protocol validation |
 
 </details>
 
@@ -106,7 +105,7 @@ Read these pages when the tool-level contract is not enough. They move from the 
 - [PTC workflow engine](../workflow-ptc/README.md) — the engine that executes the scripts.
 - [subagent tool](../../subagent/tool-subagent/README.md) — the plain-delegation alternative for one or two children.
 - [Group map](../README.md) — the workflow capability family and its packages.
-- [Dynamic workflows Agent Note](../../../.agents/notes/implemented/feature/2026-07-05-dynamic-workflows.md) — the seam design and its decisions.
+- [historical Dynamic workflows Agent Note](../../../.agents/notes/archived/feature/2026-07-05-dynamic-workflows.md) — the seam design and its decisions.
 
 -----
 

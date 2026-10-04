@@ -10,7 +10,7 @@ import { overlayTopMargin } from './overlay-top-margin.ts'
 
 /**
  * Safe distance kept between the overlay and the viewport top edge (mirrors
- * the Menu portal margin); the frame's published top clearance widens it.
+ * the Menu portal margin); the frame's overlay inset widens it.
  */
 const MARGIN = 12
 
@@ -20,8 +20,8 @@ const MARGIN = 12
  * @param cap - design max-height in px (the clamp never exceeds it).
  * @param signal - re-measure trigger: pass the overlay's render state so anchor
  *   moves (composer growth) re-fit; resize/scroll re-fit while mounted.
- * @param margin - viewport top margin floor in px; the frame's published top
- *   clearance widens it. Callers under fixed chrome (the conversation header)
+ * @param margin - viewport top margin floor in px; the frame's overlay
+ *   inset widens it. Callers under fixed chrome (the conversation header)
  *   raise it past their chrome's height.
  * @returns the max-height to apply inline, in px.
  */

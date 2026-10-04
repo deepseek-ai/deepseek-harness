@@ -152,5 +152,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。模式选择只改变 capture handoff、SDK setup 与本地 diagnostics，不改变可由独立 companion 对照的会话或服务状态。无法根据本地队列状态推断 collector 是否收到记录。

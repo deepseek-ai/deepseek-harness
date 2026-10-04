@@ -75,7 +75,7 @@ register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 
 - [ui-renderer](../ui-renderer/README.zh.md)——实现本包安装约定的 React slot 渲染器。
 - [slot 系统标准](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.zh.md)——权威组合模型。
 - [Component Factory](../../../.agents/notes/implemented/architecture/2026-09-10-component-factories-and-local-slots.zh.md)——可复用 definitions、局部 Component 选择与 occurrence 生命周期。
-- [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——本注册表接入的加载链与对象层。
+- [Web 客户端架构](../../../docs/subsystems/web-client.zh.md)——本注册表接入的加载链与对象层。
 
 -----
 
@@ -107,5 +107,3 @@ register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。这是零依赖的纯注册表核心，本身不发出 Cordis 事件；`ui-renderer` SlotRegistry 负责事件桥及其不变式。本包的行为规范直接断言 define/register/dispose 的执行顺序。

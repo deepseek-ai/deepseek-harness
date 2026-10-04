@@ -95,14 +95,9 @@ patch 叠加在 `dsh-base` 之上：继承投影缓存与共享 PTC 运行时，
 | [`src/startup.ts`](src/startup.ts) | `headless-startup` 提供方：任务位置参数、`--session-id`、`--json` 与 `--help` |
 | [`src/json-stream.ts`](src/json-stream.ts) | `--json` 投影：事件词汇、提交点发射、字符串限长 |
 | [`cordis.patch.yml`](cordis.patch.yml) | 叠加在 `dsh-base` 之上的一次性 patch |
-| — | 不发布运行时不变式伴生入口；runner 的可观察约定（stderr 中的提供方推理、stdout 中的最终文本、按轮次结束原因决定的退出码）属于进程级，并由启动器 e2e 负责；runner 不注册任何内容，树内也没有任何可变关系可审计。 |
 | [`tests/headless.spec.ts`](tests/headless.spec.ts) | 运行流程、汇总、flush、Session 沿用与退出映射 |
 | [`tests/json-stream.spec.ts`](tests/json-stream.spec.ts) | 投影顺序、提交点发射、限长与释放 |
 | [`tests/startup.spec.ts`](tests/startup.spec.ts) | 在真实 Loader 树上的命令行解析 |
-
-### 不变式归属
-
-不发布不变式伴生入口，因为 runner 的可观察约定（stdout 的最终文本、按轮次结束原因决定的退出码）是进程级的、由启动器 e2e 负责；插件不注册任何内容，树内也没有任何可变关系可审计。
 
 </details>
 

@@ -58,7 +58,7 @@ This section explains the fixed-script design and the validation and lifecycle m
 
 ### Design concept
 
-The loop is a deployment-owned fixed script: the model supplies data only and cannot alter the loop, provider route, schema, or handoff validation. The tool is an ordinary plugin over `ctx.workflowEngine` and `ctx.subagents` — no Ralph mode or fresh-agent loop is added to `agent-loop`, and the same-session goal domain stays independent. The [harness-level goal-based execution Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.md) owns the policy and deferred work.
+The loop is a deployment-owned fixed script: the model supplies data only and cannot alter the loop, provider route, schema, or handoff validation. The tool is an ordinary plugin over `ctx.workflowEngine` and `ctx.subagents` — no Ralph mode or fresh-agent loop is added to `agent-loop`, and the same-session goal domain stays independent.
 
 ### Fixed script and routing
 
@@ -81,7 +81,6 @@ The pending call is a `generic` card titled `ralph` with the immutable objective
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: fixed script, provider routing, report validation, tool registration |
-| — | No runtime invariant companion is published; this model-facing orchestration adapter owns no independent event stream; workflow and subagent owners validate the runs and child lifecycles it starts. |
 
 </details>
 
@@ -97,7 +96,7 @@ Read these pages when the tool-level contract is not enough. They move from the 
 - [PTC workflow engine](../workflow-ptc/README.md) — the engine that executes the fixed script.
 - [subagent seam](../../subagent/subagent/README.md) — the fresh-child provider contract.
 - [Goal group](../../goal/goal/README.md) — same-session goal tools for ordinary long-running objectives.
-- [Harness-level goal-based execution Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.md) — the policy, provider requirements, and deferred work.
+- [historical Harness-level goal-based execution Agent Note](../../../.agents/notes/archived/feature/2026-07-16-harness-level-loop.md) — the policy, provider requirements, and deferred work.
 
 -----
 
@@ -159,10 +158,11 @@ Each fresh child has an independent request cache. The parent result appends aft
 
 These limits define what the tool does not yet support. They are current constraints, not a task backlog.
 
-- **Completion is worker self-declaration** — there is no independent evaluator or verifier deciding whether the objective is complete; evaluator policy and evaluator-driven continuation are deferred.
+- **Completion is worker self-declaration** — there is no independent evaluator or verifier deciding whether the objective is complete; evaluator policy and evaluator-driven continuation are deferred. An evaluator needs separately defined inputs, tool access, deterministic checks, provider choice, isolation, and authority before it can certify completion or drive continuation.
 - **Foreground only** — there is no job id, background collection, process-resume checkpoint, scheduler, or wall-clock start policy.
 - **The workspace is the only cross-round long-term memory** — one bounded report is the explicit handoff, and uncommitted conversational reasoning disappears with each child.
 - **One round is one fresh child** — there is no within-round fan-out, model or provider switching, fork context, or model-call-selected provider.
+- **No enforced recursive-Ralph denial** — structural denial is not implemented; prompt guidance does not enforce a recursion ban.
 - **Ordinary child failure is terminal for the run** — the fixed script reports the failed round and last successful handoff but does not retry; fatal workflow infrastructure failures can end before that state is returned.
 - **Only round count bounds aggregate effort** — token, price, and elapsed-time budgets are deferred.
 

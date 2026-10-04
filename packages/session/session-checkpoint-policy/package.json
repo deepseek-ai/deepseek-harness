@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-checkpoint-policy",
   "description": "Semantic session durability checkpoints before model requests and tool side effects",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

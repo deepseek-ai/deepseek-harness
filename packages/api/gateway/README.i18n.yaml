@@ -15,8 +15,8 @@
   en: d9859219cdb0f367
   zh: 2a3cfa8cb786e327
 /deepseek-ai-dsh-api-gateway/host-service-typertgatewayservice-ctx-key-typertgateway:
-  en: 65092c0f187de45c
-  zh: 453bbb826aa7c242
+  en: 5179435c09004549
+  zh: c904462396531947
 /deepseek-ai-dsh-api-gateway/client-service-clientremote-ctx-key-remote:
   en: c106f0ca3e547f84
   zh: 833e30d7151c41c7
@@ -30,5 +30,5 @@
   en: 3ade2903f40a0a98
   zh: 9af1d557fefdbd89
 /deepseek-ai-dsh-api-gateway/known-limitations-and-deferred-work/dev-note:
-  en: 365f5c32056ff39a
-  zh: 9556fd36702f5ecd
+  en: 10727471030aee01
+  zh: e6bee82abd12127d

@@ -1,0 +1,66 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cosmokit"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/scope"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../interaction/commands"
+    },
+    {
+      "path": "../../interaction/user-questions"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../llm/token-meter"
+    },
+    {
+      "path": "../../session/session-projection"
+    },
+    {
+      "path": "../../storage/storage-domain"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../util/crypto"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../../typert/protocol"
+    }
+  ]
+}

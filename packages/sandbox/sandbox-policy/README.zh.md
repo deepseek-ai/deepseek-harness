@@ -77,7 +77,7 @@ kind: "package-reference"
 
 ### 模型可见文本
 
-`sandbox:policy` 贡献说明该模式与具体能力无关的文件操作约定，以及 `workspace-write` 下已记录的会话工作区。它不枚举已挂载能力；工具插件保留特定于操作的拒绝与升权引导，批准策略单独贡献给同一份快照，计划引导仍由 `dsh-plan-mode` 的系统段落管理。可选的 `./invariant` 配套组件会拒绝值超出封闭模式词汇的伪造持久 `sandbox/mode` 事件。
+`sandbox:policy` 贡献说明该模式与具体能力无关的文件操作约定，以及 `workspace-write` 下已记录的会话工作区。它不枚举已挂载能力；工具插件保留特定于操作的拒绝与升权引导，批准策略单独贡献给同一份快照，计划引导仍由 `dsh-plan-mode` 的系统段落管理。
 
 ### 源码地图
 
@@ -85,7 +85,6 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SandboxPolicyService`、`Config` schema、策略解析与上下文贡献 |
 | [`src/session-mode.ts`](src/session-mode.ts) | `sandbox/mode` 事件、其 fold 与写入路径 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式配套组件：拒绝超出封闭词汇的 `sandbox/mode` 值 |
 
 </details>
 
@@ -98,7 +97,7 @@ kind: "package-reference"
 
 - [进程沙箱子系统](../../../docs/subsystems/sandbox.zh.md)——模式、逐调用策略与强制执行语义。
 - [沙箱 seam 包](../sandbox/README.zh.md)——每个强制执行能力实现的隔离约定。
-- [跨家族文件沙箱决策](../../../.agents/notes/implemented/feature/2026-07-14-cross-family-fs-sandbox.zh.md)——为何存在统一的共享策略归属位置。
+- [历史跨家族文件沙箱决策](../../../.agents/notes/archived/feature/2026-07-14-cross-family-fs-sandbox.md)——为何存在统一的共享策略归属位置。
 
 -----
 
@@ -147,6 +146,8 @@ Current DSH file policy: danger-full-access. The DSH file sandbox does not restr
 - **每个会话只有一个主要工作区根目录**——策略解析 `SessionHeader.cwd`；额外可写根目录不属于 `SandboxExecutionPolicy`。
 - **仅限文件操作模式**——`SandboxMode` 管控文件操作；网络和进程策略不在其词汇中，因此这里没有限制它们的旋钮。
 - **有意概述临时区域**——强制执行后端会授予不同的平台临时区域，这些区域在策略解析后才会选定，因此无法在当前上下文中如实枚举。
+
+替换策略上下文时，必须使用先遭拒绝、再可申请升权的任务做反向验证，确认模型仍会尝试初次工具调用。[历史上十二轮中五轮没有工具调用的测量](../../../.agents/notes/archived/feature/2026-07-06-sandbox.md)记录了这项检查要防止的失败。
 
 <a id="dev-note"></a>
 ### 开发备注

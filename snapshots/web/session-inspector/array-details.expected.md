@@ -1,0 +1,9 @@
+- group:
+  - text: "blocks: Array(2)"
+  - list:
+    - listitem:
+      - group: "Other properties: Object"
+    - listitem:
+      - group: "0: Object"
+    - listitem:
+      - group: "1: Object"

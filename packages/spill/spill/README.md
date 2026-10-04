@@ -89,7 +89,6 @@ The package is built on one separation and a deliberate minimum:
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: the abstract `SpillStore` service and its `saveText` contract |
 | [`src/types.ts`](src/types.ts) | Vocabulary: `SaveTextSpill`, `SpillRef`, branded `SpillLocator`, `SpillOwner`, `SpillSource` |
-| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Data model
 

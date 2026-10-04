@@ -92,7 +92,6 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 | [`src/provider.ts`](src/provider.ts) | `HttpFetchProvider`：固定连接、重定向跟随、有界读取、charset 解码 |
 | [`src/network.ts`](src/network.ts) | 公开地址解析、DNS64 发现与连接固定 |
 | [`src/policy.ts`](src/policy.ts) | URL 校验、同源检查、内容类型分类、charset 解析 |
-| — | 不发布运行时不变量配套入口；除所属 seam 强制执行的约定外，本包没有独立的事件序列或可变数据关系。 |
 
 ### 读取路径
 

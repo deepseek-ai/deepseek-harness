@@ -22,7 +22,7 @@ The required result is one raw Session journal and one Client presentation owner
 
 ## Decision
 
-The visual-equivalence requirements below exclude the separately approved [nested terminal-card fix](../bug-fix/2026-09-05-nested-terminal-cards.md) and [compact tool details](2026-09-10-compact-tool-details.md); all other presentation and ownership constraints remain.
+The visual-equivalence requirements below exclude the separately approved [nested terminal-card fix](../../../../packages/client/ui-tool/README.md) and [recorded tool details](../../../../packages/client/ui-tool/README.md); all other presentation and ownership constraints remain.
 
 The Session Remote journal sends only raw, validated, persistable Session events. `session.page` and `session.follow` do not parse tool arguments, query the Tools registry, restore a presenter scope, execute `presentCall` or `presentResult`, or construct or clone any tool view.
 
@@ -51,7 +51,7 @@ The Host `ToolDefinition.presentCall`, `ToolDefinition.presentResult`, `ToolCall
 | Retained | the Session log format, Remote journal lifecycle, and Conversation identity/topology |
 | Retained | the existing keyed slot, Generic fallback, and Chat, Details, and Trajectory structure |
 | Forbidden | a new Client presenter service, parallel registry, or wire renderer id |
-| Forbidden | new cards, visual redesign, interaction redesign, or PTC dispatch rich-card enhancements except the [nested terminal-card exception](../bug-fix/2026-09-05-nested-terminal-cards.md) and [compact tool details](2026-09-10-compact-tool-details.md) |
+| Forbidden | new cards, visual redesign, interaction redesign, or PTC dispatch rich-card enhancements except the [nested terminal-card exception](../../../../packages/client/ui-tool/README.md) and [recorded tool details](../../../../packages/client/ui-tool/README.md) |
 | Forbidden | compatibility dual-writing, version negotiation, or retention of the old `view` field |
 
 ## Terminology
@@ -634,7 +634,7 @@ An on-demand RPC would turn one page read into N network calls and would still r
 
 ### Allow presentation enhancements
 
-Bundling richer PTC dispatch cards, missing-call-head inference, or other historical presentation enhancements with the ownership change would prevent snapshots from proving equivalence. This decision rejects that coupling; the [nested terminal-card exception](../bug-fix/2026-09-05-nested-terminal-cards.md) does not relax nonterminal child restrictions.
+Bundling richer PTC dispatch cards, missing-call-head inference, or other historical presentation enhancements with the ownership change would prevent snapshots from proving equivalence. This decision rejects that coupling; the [nested terminal-card exception](../../../../packages/client/ui-tool/README.md) does not relax nonterminal child restrictions.
 
 ### Accept temporary Generic degradation
 
@@ -686,7 +686,7 @@ The absence of optional `view` is a prerelease wire-type decision shared by all 
 
 ## Relationship to Existing Decisions
 
-[Nested terminal cards](../bug-fix/2026-09-05-nested-terminal-cards.md) partially supersedes only the terminal child-card prohibition and its visual-equivalence requirement. This note remains active for raw-journal ownership, Client derivation, and the diff/read/search/web child restrictions.
+The current [terminal-card rules](../../../../packages/client/ui-tool/README.md) permit nested terminal cards, replacing only the terminal child-card prohibition and its visual-equivalence requirement. This note remains active for raw-journal ownership, Client derivation, and the diff/read/search/web child restrictions.
 
 This note partially supersedes the implementation fact in [Client tool presentation ownership](../../archived/architecture/2026-08-08-client-tool-presentation-ownership.md) that “card models receive Host views.” Its core decisions remain: `ui-tool` owns presentation, business plugins use keyed slots, and Conversation owns only lifecycle and topology.
 
@@ -698,12 +698,12 @@ This note updates the entry contract from [Session history and Remote event tran
 
 This note follows [Conversation Node assembly](2026-08-09-client-conversation-node-assembly.md): the Tool Definition owns event pairing and the call tree, while concrete card models remain in `ui-tool`.
 
-This note preserves result metadata from the [canonical tool output contract](2026-07-20-canonical-tool-output-contract.md), because it is the lossless, replayable input to Client derivation.
+This note preserves result metadata from the [canonical tool output contract](../../../../packages/core/tools/README.md), because it is the lossless, replayable input to Client derivation.
 
 ## Deferred
 
 - A separate explicit decision may evaluate deleting Host presenters if they remain without production consumers; this decision does not prejudge it.
-- Specialized diff, read, search, and web cards for PTC dispatch subcalls require a separate design and visible-snapshot updates; terminal calls are covered by the linked partial supersession.
+- Specialized diff, read, search, and web cards for PTC dispatch subcalls require a separate design and visible-snapshot updates; terminal calls follow the linked current card rules.
 - A third-party mutation tool that joins Deliverables requires a new Client-owned contribution; this decision does not create a registry for an absent consumer.
 - Distinct Client presentation for same-named providers first requires a stable, non-presentational identity; it must not restore per-page Host views.
 - If Client card-model performance needs measurement, an immutable-block microbenchmark can be added; the shipped architecture already prohibits scanning the Session window.

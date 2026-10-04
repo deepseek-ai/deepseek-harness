@@ -1,3 +1,7 @@
+/**
+ * Process-spawning cases set Vitest's case timeout to 90 seconds, including
+ * plain local runs without a CI override. Configuration-only cases keep the default.
+ */
 import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -205,7 +209,7 @@ export const longProbe = 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 +
 
     expect(result.error).toBeUndefined()
     expect(result.status, normalizedOutput(result)).toBe(0)
-  })
+  }, 90_000)
 
   it('keeps repository lint workflows Oxlint-only', async () => {
     const packageJson: unknown = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8'))
@@ -356,7 +360,7 @@ export function unrelatedRead(): void {
 
     expect(result.error).toBeUndefined()
     expect(result.status, normalizedOutput(result)).toBe(0)
-  })
+  }, 90_000)
 
   it('keeps staged validation project-free while preserving source rules', async () => {
     const configPath = join(repositoryRoot, '.oxlintrc.staged.json')
@@ -392,7 +396,7 @@ export function unrelatedRead(): void {
     } finally {
       await rm(path, { force: true })
     }
-  })
+  }, 90_000)
 
   it('preserves successful fix output channels', async () => {
     const suffix = randomUUID()
@@ -416,7 +420,7 @@ export function unrelatedRead(): void {
     } finally {
       await rm(path, { force: true })
     }
-  })
+  }, 90_000)
 
   it('prints only the final diagnostics when a fix retry still fails', async () => {
     const suffix = randomUUID()
@@ -440,7 +444,7 @@ export function unrelatedRead(): void {
     } finally {
       await rm(path, { force: true })
     }
-  })
+  }, 90_000)
 
   it.each(['--fix', '--fix-suggestions', '--fix-dangerously'])(
     'converges overlapping staged stylistic fixes through Oxlint under %s',

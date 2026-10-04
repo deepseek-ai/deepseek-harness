@@ -5,7 +5,7 @@ Probes for [the taxonomy](../SKILL.md#taxonomy), tuned during the 2026-08 purge.
 ## Invocation rules
 
 - Add `--hidden --glob '!.git/**'` so `.agents/` is searched; ripgrep skips dot-directories by default and the purge's biggest miss risk was Agent Notes.
-- Exclusions go last so a later include cannot re-admit them: `--glob '!vendor/**' --glob '!node_modules/**' --glob '!.agents/notes/archived/**' --glob '!.agents/skills/dsh-trim-cot-leakage/**'` (the skill's own files quote leaked wording as calibration), plus recorded fixture and snapshot directories in scope. The [owning note](../../../notes/implemented/process/2026-08-09-committed-artifact-citations.md) also self-hits through its quoted evidence; judge it as evidence, not usage.
+- Exclusions go last so a later include cannot re-admit them: `--glob '!vendor/**' --glob '!node_modules/**' --glob '!.agents/notes/archived/**' --glob '!.agents/skills/dsh-trim-cot-leakage/**'` (the skill's own files quote leaked wording as calibration), plus recorded fixture and snapshot directories in scope. The [owning reference](../SKILL.md) also self-hits through its quoted evidence; judge it as evidence, not usage.
 - Natural-language lines carry `-i` so sentence-initial capitals hit ("This PR adds…", "Probably fine…"); the first line, which matches code patterns, stays case-sensitive — `-i` would turn `\bT\d\b` and `\bP-I\b` into noise.
 - Bound complete phrases. `\bthis PR\b` must match "this PR adds" without matching "this project", "this process", or "this provider".
 - A zero-hit pattern proves nothing until it matches a known positive, and a noisy pattern proves nothing until it rejects a near-miss negative. Calibrate both before trusting a corpus result.

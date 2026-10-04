@@ -1,6 +1,6 @@
 /** Assistant reasoning disclosure, independent of Tool-call presentation. */
 import { memo, useMemo } from 'react'
-import { DisclosureRow, IconThinkOutlineRegular, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconThinkOutlineRegular, MarkdownText, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps, UseDisclosure, UsePresentation } from '../contract/slots.ts'
 import { markdownLabels } from '../markdown-labels.ts'
 import a11yCss from './accessibility.module.css'
@@ -59,9 +59,11 @@ export const ReasoningRow = memo(function ReasoningRow({ text, running, usePrese
     && (running || policy.settledReasoningPreview))
   const collapsedContent = useMemo(() => (
     <>
-      <span className={css.separator} aria-hidden />
+      <span className={css.separator} data-shimmer-decoration aria-hidden />
       <span className={css.summary} data-streaming={running || undefined}>
-        <span className={css.summaryText}>{summary}</span>
+        <span className={css.summaryText}>
+          <TextShimmer>{summary}</TextShimmer>
+        </span>
       </span>
     </>
   ), [running, summary])
@@ -84,9 +86,9 @@ export const ReasoningRow = memo(function ReasoningRow({ text, running, usePrese
         rowClassName={css.row}
         leadingClassName={css.leading}
         titleClassName={css.title}
-        chevronClassName={css.chevron}
         icon={THINK_ICON}
         title={t('message.think')}
+        running={running}
         open={expanded}
         expandable
         expandOnRowClick

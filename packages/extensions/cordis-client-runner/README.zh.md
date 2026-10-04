@@ -143,5 +143,3 @@ React 可能在加载成功后失败。Client 报告其拥有的每个 entry 失
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。所属关系（一个 live Plugin 的 loader entry 仅在一个 Plugin Run ID 存活期间存在）是只能通过 Client 半服务访问的浏览器侧状态，Node 平面的伴生入口无法观察。该关系改由本包自己的装载与拆除测试直接断言。

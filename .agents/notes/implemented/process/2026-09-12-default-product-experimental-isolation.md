@@ -22,7 +22,7 @@ Build-time input checks cover both browser bundling stages. The [client preset](
 
 [`verify-packed-install`](../../../../scripts/release/verify-packed-install.ts) follows the installed dependency graph from `@deepseek-ai/dsh`, using resolved manifest names to detect aliases and external transitive dependencies. Development dependencies and unrelated tarballs installed beside the product are excluded. Missing required dependencies fail; omitted optional dependencies remain allowed unless they name an experimental package.
 
-This check enforces the existing [experimental dependency isolation rules](../architecture/2026-08-18-experimental-agent-teams-packages.md). The [publication policy](2026-09-12-experimental-publication-denylist.md) independently determines which experimental packages explicit consumers may install.
+This check enforces the existing [experimental dependency isolation rules](../../../../packages/experimental/AGENTS.md). The [publication policy](../../../../packages/experimental/README.md) independently determines which experimental packages explicit consumers may install.
 
 ## Alternatives considered
 

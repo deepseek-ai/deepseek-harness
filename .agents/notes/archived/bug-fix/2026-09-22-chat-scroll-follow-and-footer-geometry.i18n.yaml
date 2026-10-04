@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-09-22-chat-scroll-follow-and-footer-geometry.md
+2026-09-22-chat-scroll-follow-and-footer-geometry.md: c54140e53266ca49d9aaab3b5c9b1e8bf1e9ef20
+2026-09-22-chat-scroll-follow-and-footer-geometry.zh.md: 2bcda3f673ba3d654c24931d91610a7198455565

@@ -114,7 +114,7 @@ One doctrine and four consequences:
 - **Consumers resolve per operation.** Resolution is a per-call read with no cross-operation cache; that read is the hot-update mechanism.
 - **An empty stored value is absent.** `resolve` skips it, `describe` reports it unconfigured — a blank can never masquerade as a configured secret.
 - **Records are durable, and presence is the fact.** A record is stored per `<scope>/<id>` and survives restarts; the empty-value rule does not apply, so an `api-key` record carrying neither a key nor environment values is a deliberate statement, not a blank.
-- **Listener failures are contained.** `notifyUpdated` fans `credentials/reference-updated` out so every listener runs; a sync throw or async rejection is logged without changing the committed operation's outcome, except `INVARIANT`-coded failures, which rethrow after every listener ran.
+- **Listener failures are contained.** `notifyUpdated` fans `credentials/reference-updated` out so every listener runs; a sync throw or async rejection is logged without changing the committed operation's outcome.
 
 ### The credentials/reference-updated event
 
@@ -132,7 +132,6 @@ One doctrine and four consequences:
 |---|---|
 | [`src/index.ts`](src/index.ts) | Service Definition: the `credentialRef`/`credentialKey` brands, `ResolvedCredential`/`CredentialRecordInfo`, the abstract provider over both key spaces, contained fan-out |
 | [`src/types.ts`](src/types.ts) | Client-safe type surface: the `CredentialRef` and `CredentialKey` brands, the stored-record union, the `CredentialInfo` reference view, the `credentials/reference-updated` and `credentials/record-updated` declarations |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: `credentials/reference-updated` only fires while a credentials service is live |
 
 ### Client-safe types
 
@@ -140,7 +139,7 @@ The `./types` subpath export holds the event declarations together with the `Cre
 
 ### Lifecycle
 
-The service is a Cordis `Service` registered by the provider: disposing the mounting fiber removes `ctx.credentials`. The invariant companion checks that `credentials/reference-updated` never fires without a live service — an emission after disposal means a provider leaked work past its teardown quiescence.
+The service is a Cordis `Service` registered by the provider: disposing the mounting fiber removes `ctx.credentials`.
 
 </details>
 

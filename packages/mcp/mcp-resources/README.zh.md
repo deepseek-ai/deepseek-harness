@@ -64,8 +64,6 @@ kind: "package-reference"
 | [`src/tools.ts`](src/tools.ts) | 共享资源操作与参数 schema |
 | [`src/render.ts`](src/render.ts) | 带归属信息且不内联二进制载荷的文本投影 |
 
-不发布 `./invariant` 配套入口：工具、提示词名称与派发均源于同一组由 effect 拥有的提供方注册。它们没有可供核对的独立观测值；注册表 effect 检查不属于运行时不变式。
-
 </details>
 
 -----
@@ -77,8 +75,8 @@ kind: "package-reference"
 
 - [MCP 客户端](../mcp-client/README.zh.md)——服务器传输、指令与连接生命周期。
 - [工具子系统](../../../docs/subsystems/tools.zh.md)——规范值与模型可见结果。
-- [资源可见性决策](../../../.agents/notes/implemented/feature/2026-09-13-mcp-resources-in-profiles.zh.md)——profile 统一挂载及由已配置服务器决定的可见性。
-- [资源与指令决策](../../../.agents/notes/implemented/feature/2026-09-12-mcp-resources-and-instructions.zh.md)——作用域、按需访问及未纳入的机制。
+- [资源可见性参考](README.zh.md)——profile 统一挂载及由已配置服务器决定的可见性。
+- [资源与指令参考](README.zh.md)——作用域、按需访问及未纳入的机制。
 
 -----
 

@@ -115,5 +115,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。唯一受本包所有的关系是单个回退席位，但无法从 teardown 流中探测它：`internal/plugin` 在正在释放的 fiber 执行 effect disposer 前触发，因此通知发出时合法所有者仍占据席位，任何占位探测都会把每次正确释放误报为失败；这不同于 webserver companion 对保留路径的探测，后者不会与存活注册冲突。席位的注册／释放对称性由本包真实组合的 HMR（热模块替换）安全测试覆盖。

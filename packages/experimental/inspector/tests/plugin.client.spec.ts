@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply } from '../src/client/index.ts'
 import { ClientRealmSource } from '../src/client/inspection/realm.ts'
 import type { InspectorClientBootstrap } from '../src/shared/bridge/messages/control.ts'
+import { INSPECTOR_BOOTSTRAP_ROUTE } from '../src/shared/web.ts'
 
 class FakeWebSocket extends EventTarget {
   static readonly CONNECTING = 0
@@ -68,12 +69,41 @@ describe('experimental Inspector Client plugin', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
     FakeWebSocket.sockets.length = 0
     globalThis.WebSocket = nativeWebSocket
     globalThis.fetch = nativeFetch
     sessionStorage.clear()
     delete globalThis.__DSH_INSPECTOR__
     Reflect.deleteProperty(globalThis, '__DSH_BOOT__')
+  })
+
+  it('removes the source on pagehide and reconnects once when the cached page resumes', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+    globalThis.__DSH_INSPECTOR__ = bootstrap
+    const ctx = new Context()
+    try {
+      await ctx.plugin({ apply }).await()
+      const first = FakeWebSocket.sockets[0]!
+      first.open()
+      const opened = JSON.parse(first.sent[0]!) as { source: { sourceId: string; generation: string } }
+      first.receive({ v: 0, t: 'source/accepted', sourceId: opened.source.sourceId, generation: opened.source.generation })
+      window.dispatchEvent(new Event('visibilitychange'))
+      expect(first.readyState).toBe(FakeWebSocket.OPEN)
+      window.dispatchEvent(new Event('pagehide'))
+      expect(first.readyState).toBe(FakeWebSocket.CLOSED)
+      expect(first.sent.map(value => JSON.parse(value) as { t: string }).at(-1)?.t).toBe('source/close')
+      window.dispatchEvent(new Event('pageshow'))
+      window.dispatchEvent(new Event('pageshow'))
+      expect(FakeWebSocket.sockets).toHaveLength(2)
+      const second = FakeWebSocket.sockets[1]!
+      second.open()
+      const resumed = JSON.parse(second.sent[0]!) as { source: { sourceId: string; generation: string } }
+      expect(resumed.source.sourceId).toBe(opened.source.sourceId)
+      expect(resumed.source.generation).not.toBe(opened.source.generation)
+    } finally { await ctx.fiber.dispose() }
+    window.dispatchEvent(new Event('pageshow'))
+    expect(FakeWebSocket.sockets).toHaveLength(2)
   })
 
   it('provides ctx.inspector and sends observations after the Worker accepts the source', async () => {
@@ -366,11 +396,11 @@ describe('experimental Inspector Client plugin', () => {
       rev: 'graph',
       entries: [{
         id: '@deepseek-ai/dsh-experimental-inspector',
-        url: 'plugins/@deepseek-ai/dsh-experimental-inspector/client.js?rev=bundle-rev',
+        url: 'plugins/??@deepseek-ai/dsh-experimental-inspector/client.js&rev=bundle-rev',
         rev: 'bundle-rev',
       }],
     })
-    const source = 'const clientBundleMarker = "你好"\n'
+    const source = 'const clientBundleMarker = "你好"\n//# sourceMappingURL=??@deepseek-ai/dsh-experimental-inspector/client.js.map&rev=bundle-rev\n'
     const sourceMap = '{"version":3,"sources":["client/index.ts"]}'
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
@@ -409,9 +439,9 @@ describe('experimental Inspector Client plugin', () => {
         outcome?: { result?: { scripts?: Array<{ scriptKey: string; url: string; sourceMapUrl: string }> } }
       }).find(frame => frame.requestId === 'source-request-1')
       const script = response?.outcome?.result?.scripts?.[0]
-      expect(script?.url).toContain('/plugins/@deepseek-ai/dsh-experimental-inspector/client.js?rev=bundle-rev')
+      expect(script?.url).toContain('/plugins/??@deepseek-ai/dsh-experimental-inspector/client.js&rev=bundle-rev')
       expect(script?.sourceMapUrl)
-        .toContain('/plugins/@deepseek-ai/dsh-experimental-inspector/client.js.map?rev=bundle-rev')
+        .toContain('/plugins/??@deepseek-ai/dsh-experimental-inspector/client.js.map&rev=bundle-rev')
       scriptKey = script?.scriptKey
     })
     socket.receive({
@@ -436,17 +466,77 @@ describe('experimental Inspector Client plugin', () => {
     await fiber.dispose()
   })
 
-  it('fails loud when the Host did not inject a bootstrap', async () => {
-    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+  it('connects without index injection and reuses the source after a connection reset', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+    const fetch = vi.fn(async (url: string) => {
+      expect(url).toBe(INSPECTOR_BOOTSTRAP_ROUTE)
+      expect(new URL(url, 'https://host.example/tools/dsh/').pathname)
+        .toBe('/tools/dsh/api/experimental-inspector/bootstrap')
+      return Response.json(bootstrap)
+    })
+    vi.stubGlobal('fetch', fetch)
     const ctx = new Context()
-    const fiber = ctx.plugin({ apply })
-    await expect(fiber).rejects.toThrow('Host bootstrap is missing; reload the page after enabling the Inspector')
-    await fiber.dispose()
+    try {
+      const fiber = ctx.plugin({ apply })
+      await fiber.await()
+      expect(ctx.get('inspector')).toBeDefined()
+      expect(FakeWebSocket.sockets).toHaveLength(1)
+      ctx.emit('connection/reset')
+      await vi.waitFor(() => { expect(fetch).toHaveBeenCalledTimes(2) })
+      expect(FakeWebSocket.sockets).toHaveLength(1)
+      await fiber.dispose()
+      expect(FakeWebSocket.sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED)
+    } finally { await ctx.fiber.dispose() }
   })
 
-  it('closes the Client source when a later plugin registration fails', async () => {
-    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+  it('retries a missing bootstrap and replaces a source after the Host generation changes', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+    let response = new Response(null, { status: 503 })
+    vi.stubGlobal('fetch', vi.fn(async () => response))
+    const ctx = new Context()
+    try {
+      await ctx.plugin({ apply }).await()
+      expect(ctx.get('inspector')).toBeUndefined()
+      response = Response.json(bootstrap)
+      ctx.emit('connection/reset')
+      await vi.waitFor(() => { expect(FakeWebSocket.sockets).toHaveLength(1) })
+      const first = FakeWebSocket.sockets[0]!
+      response = Response.json({ ...bootstrap, protocol: 'dsh-inspector-v0-new-worker' })
+      ctx.emit('connection/reset')
+      await vi.waitFor(() => { expect(FakeWebSocket.sockets).toHaveLength(2) })
+      expect(first.readyState).toBe(FakeWebSocket.CLOSED)
+      expect(FakeWebSocket.sockets[1]!.protocol).toBe('dsh-inspector-v0-new-worker')
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('does not install a late bootstrap after disposal begins', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
     globalThis.__DSH_INSPECTOR__ = bootstrap
+    let respond!: (response: Response) => void
+    const pending = new Promise<Response>((resolve) => { respond = resolve })
+    const fetch = vi.fn(() => pending)
+    vi.stubGlobal('fetch', fetch)
+    const ctx = new Context()
+    try {
+      const fiber = ctx.plugin({ apply })
+      await fiber.await()
+      ctx.emit('connection/reset')
+      await vi.waitFor(() => { expect(fetch).toHaveBeenCalledOnce() })
+      const disposed = fiber.dispose()
+      respond(Response.json({ ...bootstrap, protocol: 'dsh-inspector-v0-late-worker' }))
+      await disposed
+      expect(FakeWebSocket.sockets).toHaveLength(1)
+      expect(FakeWebSocket.sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED)
+    } finally {
+      respond(Response.json(bootstrap))
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each([true, false])('closes the Client source when registration fails (injected=%s)', async (injected) => {
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+    if (injected) globalThis.__DSH_INSPECTOR__ = bootstrap
+    else vi.stubGlobal('fetch', vi.fn(async () => Response.json(bootstrap)))
     const ctx = new Context()
     ctx.provide('inspector', {
       publish: () => undefined,
@@ -458,5 +548,106 @@ describe('experimental Inspector Client plugin', () => {
     expect(FakeWebSocket.sockets).toHaveLength(1)
     expect(FakeWebSocket.sockets[0]?.readyState).toBe(FakeWebSocket.CLOSED)
     await fiber.dispose()
+  })
+
+  it.each([true, false])('retains reconnect recovery after transport setup fails (injected=%s)', async (injected) => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(bootstrap)))
+    if (injected) globalThis.__DSH_INSPECTOR__ = bootstrap
+    vi.spyOn(ClientRealmSource, 'claim').mockRejectedValueOnce(new Error('identity temporarily unavailable'))
+    const ctx = new Context()
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+    try {
+      await ctx.plugin({ apply }).await()
+      expect(warn).toHaveBeenCalledOnce()
+      expect(ctx.get('inspector')).toBeUndefined()
+      ctx.emit('connection/reset')
+      await vi.waitFor(() => { expect(ctx.get('inspector')).toBeDefined() })
+      expect(FakeWebSocket.sockets).toHaveLength(1)
+    } finally { await ctx.fiber.dispose() }
+    expect(FakeWebSocket.sockets[0]?.readyState).toBe(FakeWebSocket.CLOSED)
+    expect(ctx.get('inspector')).toBeUndefined()
+  })
+
+  it.each([true, false])('rejects invalid bootstrap data during startup (injected=%s)', async (injected) => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+    if (injected) globalThis.__DSH_INSPECTOR__ = null
+    else vi.stubGlobal('fetch', vi.fn(async () => Response.json(null)))
+    const ctx = new Context()
+    try {
+      await expect(ctx.plugin({ apply }).await()).rejects.toThrow()
+      expect(FakeWebSocket.sockets).toHaveLength(0)
+      expect(ctx.get('inspector')).toBeUndefined()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('retains recovery after a bootstrap network failure', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new TypeError('network unavailable')).mockResolvedValue(Response.json(bootstrap)))
+    const ctx = new Context()
+    try {
+      await ctx.plugin({ apply }).await()
+      expect(ctx.get('inspector')).toBeUndefined()
+      ctx.emit('connection/reset')
+      await vi.waitFor(() => { expect(ctx.get('inspector')).toBeDefined() })
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('settles an aborted bootstrap refresh without warning after disposal', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+    globalThis.__DSH_INSPECTOR__ = bootstrap
+    const pending = Promise.withResolvers<Response>()
+    const aborted = Promise.withResolvers<undefined>()
+    const fetch = vi.fn((_url: string, init: RequestInit) => {
+      init.signal?.addEventListener('abort', () => { aborted.resolve(undefined) }, { once: true })
+      return pending.promise
+    })
+    vi.stubGlobal('fetch', fetch)
+    const ctx = new Context()
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+    const fiber = ctx.plugin({ apply })
+    try {
+      await fiber.await()
+      ctx.emit('connection/reset')
+      await vi.waitFor(() => { expect(fetch).toHaveBeenCalledOnce() })
+      const disposed = fiber.dispose()
+      await aborted.promise
+      pending.reject(new Error('aborted request'))
+      await disposed
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      pending.resolve(Response.json(bootstrap))
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('joins service-consumer cleanup before claiming a replacement source', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+    globalThis.__DSH_INSPECTOR__ = bootstrap
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ...bootstrap, protocol: 'replacement-worker' })))
+    const claimed = vi.spyOn(ClientRealmSource, 'claim')
+    const started = Promise.withResolvers<undefined>()
+    const released = Promise.withResolvers<undefined>()
+    const ctx = new Context()
+    try {
+      await ctx.plugin({ apply }).await()
+      await ctx.plugin({ inject: ['inspector'], apply(child) {
+        child.effect(() => async () => {
+          started.resolve(undefined)
+          await released.promise
+        })
+      } }).await()
+      ctx.emit('connection/reset')
+      await started.promise
+      expect(claimed).toHaveBeenCalledTimes(1)
+      expect(ctx.get('inspector')).toBeUndefined()
+      released.resolve(undefined)
+      await vi.waitFor(() => { expect(FakeWebSocket.sockets).toHaveLength(2) })
+      expect(FakeWebSocket.sockets[0]?.readyState).toBe(FakeWebSocket.CLOSED)
+      expect(ctx.get('inspector')).toBeDefined()
+    } finally {
+      released.resolve(undefined)
+      await ctx.fiber.dispose()
+    }
   })
 })

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-deliverables",
   "description": "Changed-files card with per-file comparison tabs, delivery cards, and clickable final-response file references for Web",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -73,6 +73,7 @@
     "@deepseek-ai/dsh-tool-present": "workspace:*",
     "@deepseek-ai/dsh-workspace-changes": "workspace:*",
     "@deepseek-ai/dsh-api-session-controller": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@deepseek-ai/dsh-api-workspace-files": "workspace:*",
     "@deepseek-ai/dsh-fs": "workspace:*",

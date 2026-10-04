@@ -4,7 +4,7 @@
 
 subagent seam 让一个 agent（智能体）将工作委派给子 agent。与 [bash](shell.zh.md) 一样，它是**一项可选能力**，不属于 agent loop（智能体循环），因此其类型定义在此而非 [core.md](core.zh.md) 中。它不同于其他能力 seam，因为**同一上下文中可共存多个提供方实现**，并按名称注册（`ctx.subagents`），而 bash 只允许一个执行器。该注册表遵循 [LLM（大语言模型）适配器注册表](llm-streaming.zh.md)，而非单服务的 bash 执行器。
 
-Service Definition：[dsh-subagent](../../packages/subagent/subagent)（`ctx.subagents` + 下文词汇）。Service Provider 是六个兄弟包：`dsh-subagent-spawn-in-process`、`dsh-subagent-fork-in-process`、`dsh-subagent-acp`、`dsh-subagent-codex`、`dsh-subagent-claude-code`、`dsh-subagent-dsh-sdk`；面向模型的 Consumer 包括 [dsh-tool-subagent](../../packages/subagent/tool-subagent)（按提供方委派）和 [dsh-tool-subagent-control](../../packages/subagent/tool-subagent-control)（可选的全局 `send_message`、`interrupt_agent` 与 `list_agents` 控制工具）。同一个 `ctx.subagents` 服务通过内部激活管理器负责可继续子 agent 编排，通过 parent 目录发现直接 child，并通过父目录递归发现后代。产品提供方设计理由见 [Codex 与 Claude Code Agent Note](../../.agents/notes/implemented/feature/2026-08-04-claude-code-and-codex-subagent-backends.zh.md)；通用 seam 的设计理由见 [subagent Agent Note](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.zh.md)、[可继续 subagent Agent Note](../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.zh.md)和[相邻 Agent 消息 Agent Note](../../.agents/notes/implemented/architecture/2026-08-27-adjacent-agent-steer-messaging.zh.md)；[已归档的列表身份投影记录](../../.agents/notes/archived/architecture/2026-08-06-subagent-list-identity-projection.md)记录了最初的列表身份决策。
+Service Definition：[dsh-subagent](../../packages/subagent/subagent)（`ctx.subagents` + 下文词汇）。Service Provider 是六个兄弟包：`dsh-subagent-spawn-in-process`、`dsh-subagent-fork-in-process`、`dsh-subagent-acp`、`dsh-subagent-codex`、`dsh-subagent-claude-code`、`dsh-subagent-dsh-sdk`；面向模型的 Consumer 包括 [dsh-tool-subagent](../../packages/subagent/tool-subagent)（按提供方委派）和 [dsh-tool-subagent-control](../../packages/subagent/tool-subagent-control)（可选的全局 `send_message`、`interrupt_agent` 与 `list_agents` 控制工具）。同一个 `ctx.subagents` 服务通过内部激活管理器负责可继续子 agent 编排，通过 parent 目录发现直接 child，并通过父目录递归发现后代。产品提供方设计理由见 [历史Codex 与 Claude Code Agent Note](../../.agents/notes/archived/feature/2026-08-04-claude-code-and-codex-subagent-backends.md)；通用 seam 的设计理由见 [历史subagent Agent Note](../../.agents/notes/archived/feature/2026-06-21-subagent-capability-seam.md)、[可继续 subagent Agent Note](../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.zh.md)和[相邻 Agent 消息 Agent Note](../../.agents/notes/implemented/architecture/2026-08-27-adjacent-agent-steer-messaging.zh.md)；[已归档的列表身份投影记录](../../.agents/notes/archived/architecture/2026-08-06-subagent-list-identity-projection.md)记录了最初的列表身份决策。
 
 源码：[`packages/subagent/subagent/src/types.ts`](../../packages/subagent/subagent/src/types.ts)、[`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)和 [`packages/subagent/subagent/src/continuation.ts`](../../packages/subagent/subagent/src/continuation.ts)
 
@@ -151,7 +151,7 @@ Agent 收件箱是唯一队列。每条 Agent 消息都使用 `Agent.steer()`：
 
 对于 `startContinuable()`、`sendMessage()` 与浏览器 prompt 投递，调用方 signal 仅在收件箱接受之前掌管查找、物化与准入。此后管理器独立掌管该 Activation：之后的调用方取消既不会取消已接受的轮次，也不会 dispose 子 agent。公开 subagent 服务不暴露由调用方选择的 Agent 消息调度；浏览器人类 Queue 与 Steer 仍是内部适配器选择。
 
-在线 queue occurrence 变更属于 Session 域。只有在线 subagent-owned Agent 的当前 projection identity 为 continuable，且其 descriptor 序号位于该 child 自身的非 seed suffix 时，`session.updateQueue` 才会接纳普通 Edit、Remove 与 QueueDock Steer。Identity projection 以 last-wins 方式折叠 descriptor，因此 child descriptor 会覆盖 fork lineage 保留的 descriptor；own-suffix 序号检查会阻止仅来自 seed 的祖先 identity 授权变更。One-shot、缺失、未知、损坏或冷 child 会被拒绝，queue 变更绝不会冷恢复 child。这些变更以目标 Session id 作为人类权限，包括待处理 `nextStep` steering 或注入 context。Steer 要求 queued `MessageId`，且 command 开始时 Agent 必须报告 running；准入后发生取消时，会使用 Agent 已接受的唤醒 `nextTurn` fallback。Edit 会在同一个 `MessageId` 下改写内容，且 Edit 与 Steer 都会同步完成 Inbox 变更，因此 settlement 只会观察最终状态。`agent/inbox/claimed` 与 `agent/inbox/discarded` 都会唤醒 watcher 重新读取是否仍有待处理 occurrence；这样，直接 Agent 投递可以恢复停放工作，而移除最后一个停放 occurrence 可使 idle child 结算。[人类 inbox 控制 Agent Note](../../.agents/notes/implemented/feature/2026-08-27-continuable-subagent-human-inbox-control.zh.md)拥有这些语义。
+在线 queue occurrence 变更属于 Session 域。只有在线 subagent-owned Agent 的当前 projection identity 为 continuable，且其 descriptor 序号位于该 child 自身的非 seed suffix 时，`session.updateQueue` 才会接纳普通 Edit、Remove 与 QueueDock Steer。Identity projection 以 last-wins 方式折叠 descriptor，因此 child descriptor 会覆盖 fork lineage 保留的 descriptor；own-suffix 序号检查会阻止仅来自 seed 的祖先 identity 授权变更。One-shot、缺失、未知、损坏或冷 child 会被拒绝，queue 变更绝不会冷恢复 child。这些变更以目标 Session id 作为人类权限，包括待处理 `nextStep` steering 或注入 context。Steer 要求 queued `MessageId`，且 command 开始时 Agent 必须报告 running；准入后发生取消时，会使用 Agent 已接受的唤醒 `nextTurn` fallback。Edit 会在同一个 `MessageId` 下改写内容，且 Edit 与 Steer 都会同步完成 Inbox 变更，因此 settlement 只会观察最终状态。`agent/inbox/claimed` 与 `agent/inbox/discarded` 都会唤醒 watcher 重新读取是否仍有待处理 occurrence；这样，直接 Agent 投递可以恢复停放工作，而移除最后一个停放 occurrence 可使 idle child 结算。[人类 inbox 控制 参考](../../packages/api/session-controller/README.zh.md)拥有这些语义。
 
 `SubagentRuntime.interrupt(targetSessionId, authority)` 是唯一的公开停止操作：它同步完成鉴权，对在线目标发出 `Agent.cancel(cause, { keepInbox: true })`，然后不等待完全停稳即返回。Activation、其尚未领取的待处理 inbox 工作与已发布的后代均不受影响；已被领取进入中断轮次的工作不会重新入队。被中断的 driver 进入 idle 后，一次唤醒发送会恢复被暂停的 FIFO 队列。不存在的目标——未知、一次性或已结算——以及未绑定管理器的组合是被接受的 no-op。对在线目标，错误的 parent 地址或不在其在线祖先链中的调用方会以 `UNAUTHORIZED` 拒绝；陈旧的 ancestor 对象和指向自身的 ancestor 请求会在查找目标前拒绝。
 
@@ -463,7 +463,7 @@ spawn 和 fork 后端通过 `parent.ctx` 创建一个普通的单次 agent，将
 - **委派权限**在首次 await 前捕获。Auto 与 Full access 父级在 fresh child 完成 fork seed 和 sandbox／approval override 后，追加捕获的 `permission/preset` 身份。单次与可继续 child 共用此路径；cold resume 只读取 child 日志。Read Only 与 Workspace Write 保留继承的 sandbox override 加 `approval: never`，不匹配预设的组合仍为 `custom`。每个 Auto child 调用都使用既有 `parentSession`、创建 prompt 和经过核验的 human／直接父级消息独立审查。[Auto review 决策](../../.agents/notes/implemented/feature/2026-08-28-auto-review.zh.md)定义 low／medium／high 语义；不增加 委派记录、receipt、Header 字段、descriptor 字段或 Session format。
 
 - **委派深度**由持久 `SessionHeader.delegationDepth` 与可合并扩展的运行时字段 `AgentOptions.subagentDepth` 共同表示；缺失表示顶层深度为零，存在的较大值具有权威性。两个字段都归该 seam 所有——循环既不设置也不读取它们——因此进程内子 agent 会持久保存 parent 深度 + 1，冷恢复无法降低深度，而且每次 start 都会拒绝超出安全整数域、或高于已定义绝对 `request.maxDepth` 上限的派生深度。
-- **Fork 种子注入**使用 [`CreateAgentOptions.seed`](core.zh.md#creation-and-ownership)（一个 `SessionEvent[]` 前缀，经由 `AgentLoop.createAgent` → `ctx.sessions.prepare({ seed })` 传递，与 `ctx.agents.resume()` 使用的原语相同）。fork 后端传入父级日志的一段*平衡的已完成轮次前缀*——父级事件直到并包括其最后一个 `turn/end`——因此种子从 0 连续，[invariants](../../packages/runtime-diagnostics/invariants) 回放可以接受它（进行中的、未平衡的轮次被排除在外）。
+- **Fork 种子注入**使用 [`CreateAgentOptions.seed`](core.zh.md#creation-and-ownership)（一个 `SessionEvent[]` 前缀，经由 `AgentLoop.createAgent` → `ctx.sessions.prepare({ seed })` 传递，与 `ctx.agents.resume()` 使用的原语相同）。fork 后端传入父级日志的一段*平衡的已完成轮次前缀*——父级事件直到并包括其最后一个 `turn/end`——因此种子从 0 连续，且只包含平衡的轮次（进行中的、未平衡的轮次被排除在外）。
 
 `SubagentCatalogEntry` 描述一条完整或未知模式的直接子级目录记录；`SubagentCatalogState` 是仅 host 使用的 projection state。`listChildren()` 拥有一次 live-preferred 父 Session observation，不打开子级日志。浏览器消费者通过共享 Session projection store 读取 `subagentCatalog`，并将成员关系与 Session 列表活动状态组合。`SubagentCatalogRow` 属于递归目录列表。[父目录决策](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.zh.md) 规定持久事实与读取语义。
 
@@ -694,7 +694,6 @@ A published child settled. Scope-filtered dispatch uses the same delegating pare
  * parent carrier as `subagent/start`, so the lifecycle pair reaches the
  * same scoped audience.
  * @param info - the run identity and terminal outcome.
- * @dshScopeScan unsupported
  * @mode emit
  */
 'subagent/end'(this: Scoped<SubagentRuntime>, info: SubagentRunEndInfo): void
@@ -752,7 +751,6 @@ A provider established a published child. For in-process providers, `ctx.agents.
  * parent-scoped listener observes only its own delegations. Paired with
  * `subagent/end`.
  * @param info - the provider and published child identity.
- * @dshScopeScan unsupported
  * @mode emit
  */
 'subagent/start'(this: Scoped<SubagentRuntime>, info: SubagentRunInfo): void

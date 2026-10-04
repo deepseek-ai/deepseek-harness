@@ -77,7 +77,6 @@ Multiple `tools/execute` listeners compose by Cordis registration order, which c
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `TOOL_TIMEOUT`, `name`/`inject`/`apply`, the `tools/execute` wrapper |
-| — | No runtime invariant companion is published; this stateless policy plugin owns no package-local event history or mutable data relation beyond the seam it intercepts. |
 
 </details>
 

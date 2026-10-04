@@ -47,6 +47,8 @@ After the build, `lib/typert.host.js` and `lib/typert.host.d.ts` exist and the [
 
 Static consumers call `WorkspaceAnalyzer` directly against the workspace's `tsconfig.host.json` and `tsconfig.client.json` aggregates, select a face and package subset, and read the resulting `FaceModel` and type graph without emitting or loading runtime artifacts. `analyzeInBatches()` processes a large package selection through bounded compiler programs with the same model shape, and `discoverPackages()` finds contributing packages without building a type-checker program.
 
+JSON, YAML, SVG, PNG, JPEG, and WebP resource exports contribute no TypeScript declarations and are excluded from the API model. Missing JavaScript or TypeScript export sources remain errors.
+
 ### Running generation inside a tsdown build
 
 The package's `./tsdown` subpath provides `typertPlugin()` for the root tsdown config: it lowers standard decorators in TypeScript dependencies before bundling and emits the model-driven face artifacts at the package output root. In `package` mode it emits only the bundled package; in `workspace` mode it emits every explicit contributor once.
@@ -141,5 +143,3 @@ These limits define what the generator cannot model or emit; they are current pa
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The source-project analyzer and build-time emitter run outside any Cordis runtime; model snapshots, executable artifacts, and consuming-package typechecks enforce the output contract.

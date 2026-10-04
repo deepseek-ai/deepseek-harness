@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-subagent-spawn-in-process",
   "description": "In-process spawn subagent backend: runs a fresh child agent on ctx.agents",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -41,7 +41,6 @@
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
     "@deepseek-ai/dsh-bash-local": "workspace:*",
     "@deepseek-ai/dsh-subprocess-local": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-llm-deepseek": "workspace:*",
     "@deepseek-ai/dsh-llm-deepseek-api-key": "workspace:*",

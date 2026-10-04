@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-permission-presets",
   "description": "User-facing permission presets (ctx.permissionPresets) for the DeepSeek Harness: one product-level Permissions select bundling the sandbox-mode and approval-policy knobs, written through to their own session events",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -17,10 +17,6 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
-    },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
     },
     "./types": {
       "types": "./lib/types/types.d.ts",
@@ -43,7 +39,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "lib/typert.host.js",
@@ -55,7 +50,6 @@
   "peerDependencies": {
     "@deepseek-ai/dsh-shell": "workspace:*",
     "@deepseek-ai/dsh-commands": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
@@ -71,7 +65,6 @@
   "devDependencies": {
     "@deepseek-ai/dsh-shell": "workspace:*",
     "@deepseek-ai/dsh-commands": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",

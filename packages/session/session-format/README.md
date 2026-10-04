@@ -27,7 +27,7 @@ English | [中文](README.zh.md)
 
 ### When to use it
 
-Use this library from persistence or format-catalog code that must classify a physical Session header, restore current logical values, or compose released adjacent migrations. It is not a Cordis plugin and has no profile mount row. No runtime invariant companion is published because each completed operation validates its result; decoder and transformer state belongs to one unfinished streaming restore and is never shared across restores.
+Use this library from persistence or format-catalog code that must classify a physical Session header, restore current logical values, or compose released adjacent migrations. It is not a Cordis plugin and has no profile mount row.
 
 ### Entry point
 

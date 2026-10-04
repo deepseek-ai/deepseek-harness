@@ -118,5 +118,3 @@ The isolation policy deliberately gives up some browser compatibility:
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. Each navigation provider owns its live state and publishes checkpoints directly; the UI consumes the same provider state through its controller.

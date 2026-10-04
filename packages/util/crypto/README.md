@@ -67,5 +67,3 @@ No direct invalidation; identifier-minting consumers own any request changes.
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. This pure utility owns no event stream or mutable runtime data; its value algebra is enforced by unit tests.

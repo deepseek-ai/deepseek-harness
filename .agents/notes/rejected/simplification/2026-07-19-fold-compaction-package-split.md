@@ -8,7 +8,7 @@ English | [中文](2026-07-19-fold-compaction-package-split.zh.md)
 
 Compaction is split between `@deepseek-ai/dsh-compaction`, which owns an abstract two-method service and shared types, and `@deepseek-ai/dsh-compaction-basic`, which owns the only complete provider. Shipped configurations load only the basic package, and no production package independently consumes the Service Definition package except that provider.
 
-The split adds a package manifest, README, project boundary, dependency edge, abstract forwarding class, generated catalog entries, and composition wiring without demonstrating backend substitution. The [capability-seam decision](../../implemented/architecture/2026-06-13-capability-seams.md) requires a real interface, implementation, and consumer rather than a preemptive split; the [compaction decision](../../implemented/feature/2026-06-18-compaction-capability-seam.md) records that its independent consumer was deferred.
+The split adds a package manifest, README, project boundary, dependency edge, abstract forwarding class, generated catalog entries, and composition wiring without demonstrating backend substitution. The [capability-seam decision](../../implemented/architecture/2026-06-13-capability-seams.md) requires a real interface, implementation, and consumer rather than a preemptive split; the [historical compaction decision](../../archived/feature/2026-06-18-compaction-capability-seam.md) records that its independent consumer was deferred.
 
 ## Proposal
 

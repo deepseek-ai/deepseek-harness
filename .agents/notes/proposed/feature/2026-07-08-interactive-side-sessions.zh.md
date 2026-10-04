@@ -6,7 +6,7 @@ Status: proposed
 
 ## 问题
 
-用户可能希望在不改变当前会话主上下文的前提下，探索一个来自活跃会话的问题。现有原语无法提供这种产品形态：[会话存储 fork](../../archived/feature/2026-06-30-session-store-fork-api.md) 创建的是一个未绑定的会话，而 [fork subagent](../../implemented/feature/2026-06-21-subagent-capability-seam.zh.md) 是模型驱动的任务，其 transcript（文本记录）会折叠为一条工具结果。两者都不能给用户一个独立的对话，也都不能在父会话中同时记录结论和产生该结论的侧会话。
+用户可能希望在不改变当前会话主上下文的前提下，探索一个来自活跃会话的问题。现有原语无法提供这种产品形态：[会话存储 fork](../../archived/feature/2026-06-30-session-store-fork-api.md) 创建的是一个未绑定的会话，而 [fork subagent](../../../../packages/subagent/subagent-fork-in-process/README.zh.md) 是模型驱动的任务，其 transcript（文本记录）会折叠为一条工具结果。两者都不能给用户一个独立的对话，也都不能在父会话中同时记录结论和产生该结论的侧会话。
 
 ## 提案
 
@@ -36,6 +36,6 @@ Status: proposed
 
 ## 风险
 
-- 只读行为在 `tools/pre-execute` 拒绝门禁强制执行之前仅为建议性质；[拦截点](../../implemented/feature/2026-06-30-interception-extension-points.zh.md)可在不改变本机制的前提下添加该门禁。
+- 只读行为在 `tools/pre-execute` 拒绝门禁强制执行之前仅为建议性质；[拦截点](../../../../docs/tool-execution-pipeline.zh.md)可在不改变本机制的前提下添加该门禁。
 - 经过压缩（compaction）的源会话 fork 出的是其压缩视图，因此绑定的界面应当告知用户子会话继承的是摘要而非被替换的轮次。
 - 反复的 handback 会消耗父会话上下文。每次合并的长度上限约束了单条笔记的大小；后续的合并整理属于上下文压缩的职责。

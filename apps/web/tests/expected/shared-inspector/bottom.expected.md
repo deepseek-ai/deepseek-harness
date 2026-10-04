@@ -1,0 +1,6 @@
+- shortcut: Ctrl/Cmd+Shift+.
+- header: 12px, X collapse button
+- opened: main 495px, bottom 405px
+- resized up/down: main 540px, bottom 360px
+- collapsed: main 900px, iframe retained
+- reopened: same iframe document and height, Sources still selected

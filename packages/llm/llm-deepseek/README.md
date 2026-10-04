@@ -158,7 +158,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Session-log upload](../../session/session-log-deepseek/README.md) — the default-on incremental `dsh_session_log` contribution.
 - [Plugin package inventory](../plugin-package-inventory-deepseek/README.md) — the default-on `dsh_plugin_packages` contribution.
 - [Twin LLM adapters](../../../.agents/notes/implemented/architecture/2026-06-13-twin-llm-adapters.md) — why DeepSeek ships two structurally different adapters.
-- [Mandatory app attribution headers](../../../.agents/notes/implemented/architecture/2026-06-21-mandatory-app-attribution-headers.md) — the identity every provider request carries.
+- [Mandatory app attribution headers](../../../docs/subsystems/llm-streaming.md) — the identity every provider request carries.
 
 -----
 
@@ -204,7 +204,7 @@ These limits define where the adapter stops and future work begins. They are cur
 - **Replacing `models` replaces the complete catalog list** — use path edits when changing one model entry.
 - **`tool_choice` is not mapped** — not part of the core vocabulary (shared with the pi-ai twin).
 - **Requests use raw `fetch`, not `@cordisjs/plugin-http`** — no shared proxy or interception configuration.
-- **Messages in-history system updates require a retained user or tool-result turn** — if all user input after an update is omitted and the preceding wire turn is assistant, serialization fails with `UNSUPPORTED_CONTENT` before the next assistant or at the end of the request. Text or an empty tool result can retain that turn. Moving the update to an earlier turn is not supported; the [input-history decision](../../../.agents/notes/implemented/bug-fix/2026-09-18-messages-input-history-compatibility.md) records the ordering constraint.
+- **Messages in-history system updates require a retained user or tool-result turn** — if all user input after an update is omitted and the preceding wire turn is assistant, serialization fails with `UNSUPPORTED_CONTENT` before the next assistant or at the end of the request. Text or an empty tool result can retain that turn. Moving the update to an earlier turn is not supported; the [input-history reference](README.md) records the ordering constraint.
 - **Images are input-only durable attachments** — direct external URLs and assistant image output are not supported; DeepSeek input normally uses the Files API and uses inline base64 only for per-request recovery.
 - The default catalog advertises `deepseek-flash` and its text/image and in-history capabilities without probing gateway availability. Requests can fail with `INVALID_REQUEST` until the gateway enables the id.
 - Real API checks in [adapter.e2e.ts](tests/adapter.e2e.ts) and [runtime.e2e.ts](tests/runtime.e2e.ts) require `DEEPSEEK_API_KEY`. Set `DEEPSEEK_IN_HISTORY_MODEL` to a supported nonempty model id to run system-update checks: the adapter suite uses `high` effort, while the runtime suite compares cache reuse with thinking disabled and can be sensitive to instruction-following instability. The runtime image cases additionally require `DEEPSEEK_FLASH_E2E=1` or `DEEPSEEK_VISION_E2E=1`.
@@ -213,7 +213,5 @@ These limits define where the adapter stops and future work begins. They are cur
 ### Dev Note
 
 None.
-
-**Runtime invariant:** No companion is published. This package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam.
 
 `deepseek-official` uses only its configured API-key reference; `deepseek-account` uses only the stored DSH grant for the account provider’s allowed inference origin. Both routes share the Messages transport with independently configured model and file settings. Missing or ineligible account credentials reject the request with a sign-in prompt; neither route falls back to the other. Chat and Files requests reject redirects. The account provider owns sign-out cancellation using running Agents’ logged request contexts, including tool execution; the transport receives the existing request abort signal.

@@ -16,7 +16,7 @@ This grouping changes behavior, not just the number of model calls. One ordinary
 
 Each successful `send()` creates one independent FIFO queue item. If that item runs, it is the only ordinary message in its turn. An item can be dropped before it starts, so the precise guarantee is at most one turn rather than exactly one; two sends are never silently combined.
 
-Before inserting a message, `send()` checks the agent state and accepts an already identified, deeply frozen value. The durable splice and `agent/inbox/inserted { message }` retain its `MessageId`; the pending message remains addressable through `Inbox.replace()` and `Inbox.remove()` until the driver claims or discards it. The [claimed pre-step inbox decision](../architecture/2026-07-31-claimed-pre-step-inbox-lifecycle.md) owns the current lifecycle.
+Before inserting a message, `send()` checks the agent state and accepts an already identified, deeply frozen value. The durable splice and `agent/inbox/inserted { message }` retain its `MessageId`; the pending message remains addressable through `Inbox.replace()` and `Inbox.remove()` until the driver claims or discards it. The [claimed pre-step inbox reference](../../../../packages/core/agent-loop/README.md) owns the current lifecycle.
 
 If messages A and B are both processed, B's turn starts only after A records `turn/end` and A's durability checkpoint settles. B's request therefore sees whatever closed result A left in the same session log. A checkpoint error is reported, but settlement only releases this ordering barrier; it does not make a failed write durable. Broad `cancel()`, disposal, or a failure before `turn/start` can instead discard an unstarted item without opening an empty turn.
 

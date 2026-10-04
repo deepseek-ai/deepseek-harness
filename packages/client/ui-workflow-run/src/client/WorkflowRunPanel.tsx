@@ -219,6 +219,8 @@ function RunHeader({ children, count, name, onToggle, open, status, t }: {
       previewChevron={false}
       keepContentWhenOpen
       rowClassName={css.runHeader}
+      contentClassName={css.headerContent}
+      contentLayoutClassName={css.headerContentLayout}
       leadingClassName={css.runLeading}
       titleClassName={css.runTitle}
       collapsedContent={(
@@ -312,6 +314,8 @@ function PhaseSection({
         previewChevron={false}
         keepContentWhenOpen
         rowClassName={css.phaseHeader}
+        contentClassName={css.headerContent}
+        contentLayoutClassName={css.headerContentLayout}
         leadingClassName={css.phaseLeading}
         titleClassName={css.phaseTitle}
         collapsedContent={(

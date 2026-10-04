@@ -12,7 +12,7 @@ Host 进程重启后，所有 fork 出来的会话（`SessionHeader.isSeeded ===
 
 ### 机制
 
-缓存记录（记录格式与前代恢复见 [投影缓存前代恢复与 Session 格式绑定](2026-09-02-projcache-cross-version-read-compat.zh.md)）绑定一份 lifecycle identity：`formatVersion + createdAt + cwd + isSeeded + inheritedEventCount`，`identityMatches` 做全等匹配。其中 `inheritedEventCount`（fork 继承的事件前缀长度，下称 cut）从 #3346 起不再出现在逻辑 header 里：header 只保留 `isSeeded` 这一位，精确 cut 跟随正文。Session 格式 v2 起（#3398），物理 header 行也不再存 `seedLength`，reader 从正文里 `session/end-seed {inherited: true}` 标记的 seq 推出 cut。
+缓存记录（记录格式与前代恢复见 [投影缓存前代恢复与 Session 格式绑定](../../../../packages/session/session-projection-cache/README.zh.md)）绑定一份 lifecycle identity：`formatVersion + createdAt + cwd + isSeeded + inheritedEventCount`，`identityMatches` 做全等匹配。其中 `inheritedEventCount`（fork 继承的事件前缀长度，下称 cut）从 #3346 起不再出现在逻辑 header 里：header 只保留 `isSeeded` 这一位，精确 cut 跟随正文。Session 格式 v2 起（#3398），物理 header 行也不再存 `seedLength`，reader 从正文里 `session/end-seed {inherited: true}` 标记的 seq 推出 cut。
 
 于是 header-only 的读取拿不到 cut：JSONL 后端 `fromHeaderLine` 对 header-only 读取硬编码 `inheritedEventCount: 0`，`SessionPersistenceSnapshot` 只有 header、revision 和可选的 eventCount。Session 列表与引用消费者都因此加了同一个守卫：
 

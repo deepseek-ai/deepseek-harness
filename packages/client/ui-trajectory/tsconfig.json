@@ -21,6 +21,9 @@
       "path": "../ui-conversation/tsconfig.client.json"
     },
     {
+      "path": "../../util/values"
+    },
+    {
       "path": "../ui-renderer"
     },
     {

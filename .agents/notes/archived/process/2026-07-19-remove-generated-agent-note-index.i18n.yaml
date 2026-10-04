@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/process/2026-07-19-remove-generated-agent-note-index.md
+2026-07-19-remove-generated-agent-note-index.md: c8c943582bc05cfa5de57023bf7a35db5951eed1
+2026-07-19-remove-generated-agent-note-index.zh.md: 8e474536d63d534195f7a87978a7eef220fa42c9

@@ -28,7 +28,7 @@ harness 中存在两种有用但不同的上下文概念。Cordis `Context` 负�
 
 宿主感知的传输层可以从 `ctx.agents.requireInitiator().session.id` 推导由部署方拥有的 `X-Harness-Session-Id` 等请求头；模型可见 schema 和参数中不包含该请求头。本决策不让现有生产 MCP 或 Web 传输层采用此请求头。测试替身传输层用于证明可信边界，而不会把宿主路由策略分配给现有的提供方无关 seam。
 
-本决策扩展 [Agent 注册作用域约定](2026-07-08-agent-scope-contexts.zh.md)及其[运行时设计](2026-07-12-agent-scope-runtime-design.zh.md)，不会改变其中 `agent.ctx` 的静态含义。[显式运行时身份决策](2026-08-31-explicit-agent-runtime-identity.zh.md)把发起方作用域限制在私有异步调用链内，同时让生命周期、归属、事件和协议接口直接携带各自的主体。
+本决策扩展 [Agent 注册作用域约定](../../../../packages/core/scope/README.zh.md)及其[运行时设计](../../../../packages/core/agent-loop/README.zh.md)，不会改变其中 `agent.ctx` 的静态含义。[显式运行时身份决策](2026-08-31-explicit-agent-runtime-identity.zh.md)把发起方作用域限制在私有异步调用链内，同时让生命周期、归属、事件和协议接口直接携带各自的主体。
 
 ## 验证
 

@@ -48,7 +48,8 @@ export type { ConfigLedger, OfficialItem } from './config-ledger.ts'
 export type { PluginManagerFace } from './manager-store.ts'
 export type { PluginManagerLocaleKey } from './locales.ts'
 export type {
-  ConfigPageForm, PluginActivationOwnerProps, PluginConfigViewProps, PluginDetailProps, PluginPackageRef, PluginRowRef, PluginsSubject,
+  ConfigPageForm, PluginActivationOwnerProps, PluginAddActionsProps,
+  PluginConfigViewProps, PluginDetailProps, PluginPackageRef, PluginRowRef, PluginsSubject,
 } from './slot-contract.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -116,6 +117,7 @@ export function apply(ctx: ClientContext): void {
       store,
       inject: () => face,
       children: {
+        'plugins.add.actions': { kind: 'list', scope: 'root' },
         'plugins.item': { kind: 'list', scope: 'root' },
         'plugins.bundle.activation': { kind: 'keyed', scope: 'root' },
         'plugins.bundle.config': { kind: 'keyed', scope: 'root' },

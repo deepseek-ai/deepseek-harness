@@ -50,6 +50,16 @@ export default defineConfig([
   {
     ...shared,
     entry: {
+      'session-corpus.worker': 'session-corpus/session-corpus.worker.ts',
+      'projection-list.worker': 'session-corpus/projection-list.worker.ts',
+    },
+    outDir: '.dsh-build/session-corpus',
+    clean: true,
+    tsconfig: 'tsconfig.host.json',
+  },
+  {
+    ...shared,
+    entry: {
       'conversation-fold.worker': 'conversation-fold/conversation-fold.worker.client.ts',
     },
     outDir: '.dsh-build/conversation-fold',

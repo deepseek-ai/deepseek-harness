@@ -46,13 +46,13 @@ export function apply(ctx: Context) {
 - **抛出异常或返回无效值意味着 `isError`。** 注册表会捕获异常，并在观察者运行前收敛 schema、渲染器、元数据投影器和无损 JSON 失败。基础设施故障请抛异常。成功的领域结果即使表示不理想的状态，也应写入规范值；其 Native 渲染器可以解释该状态，例如进程以非零状态退出。
 - **遵守 `exec.signal`。** 信号触发时取消进行中的工作。
 - **使用 `presentationMeta` 投影持久化的卡片数据（可选）。** `output.presentationMeta(args, value)` 从同一个规范值派生可回放的 JSON。核心将其持久化在 `tool/result` 上并传给 `presentResult`，因此需要结果期事实的卡片——例如 `write`／`edit` 的已应用 hunk——无需持久化规范值也能在回放中重现。嵌套 Code 分发没有卡片，因此会跳过该投影器。
-- **使用 `exec.agent` 发送异步通知。** `agent.inject({ content, source: { kind: 'plugin', plugin: '<name>' } })` 追加持久化上下文，下一次模型请求会看到它——这不是唤醒（空闲的 agent（智能体）保持空闲）。请防范已 dispose 的 agent（try/catch）。
+- **使用 `exec.agent` 发送异步通知。** `agent.inject({ content, source: { kind: 'my-plugin' } })` 追加持久化上下文，下一次模型请求会看到它——这不是唤醒（空闲的 agent（智能体）保持空闲）。在插件里通过 [`MessageSourceMap`](../subsystems/llm-streaming.zh.md#content-blocks-and-messages) 声明该 `kind`：session format V4 在消息准入处拒绝退役的 `{ kind: 'plugin', plugin: '<name>' }` 包装。请防范已 dispose 的 agent（try/catch）。
 
 ## 长时间运行的工作
 
 通过 producer 配置控制 `run_in_background`，然后使用 `ctx.jobs.start({ kind, label, owner: exec.agent, run })` 注册任务。注册表会在进入 producer 主体前将已预先中止的调用判为失败；运行时会在 `run()` 启动工作前校验 owner 和任务控制器是否可用，随后提供 id、会话围栏、通用控制工具、通知和 owner cleanup。成功的后台分支会返回类型化的规范句柄，如 `{ kind: 'background', jobId }`；其 Native 渲染器可以保留 `started background job bash-1` 这类供人阅读的自然语言，但 PTC mode 绝不能通过解析该文本取得 id。
 
-spec 提供同步的 `cancel`、在资源清理后 settle 且不 reject 的 `done`，以及由注册表泵入 job 输出环的拉取式 `output` 源或经 starter 收到的 `JobHandle` 推送的追加；模型的消费式读取由 `dsh-tool-jobs` 从该环渲染。预先中止的调用属于失败，因为此时没有任务，其 id 无法满足成功输出 schema。`ctx.jobs.start()` 发布 id 后，应使用任务自有的取消信号，而不是 `exec.signal`：之后取消外层调用只会停止等待本次调用，不会终止已经发布的工作；该生命周期归 `job_kill`、owner dispose 和服务 teardown 所有。前台工作仍与 `exec.signal` 耦合。流式 producer 的示例和完整约定见[后台任务运行时 Agent Note](../../.agents/notes/implemented/architecture/2026-06-20-generic-long-running-tool-runtime.zh.md)与 `dsh-tool-bash`。
+spec 提供同步的 `cancel`、在资源清理后 settle 且不 reject 的 `done`，以及由注册表泵入 job 输出环的拉取式 `output` 源或经 starter 收到的 `JobHandle` 推送的追加；模型的消费式读取由 `dsh-tool-jobs` 从该环渲染。预先中止的调用属于失败，因为此时没有任务，其 id 无法满足成功输出 schema。`ctx.jobs.start()` 发布 id 后，应使用任务自有的取消信号，而不是 `exec.signal`：之后取消外层调用只会停止等待本次调用，不会终止已经发布的工作；该生命周期归 `job_kill`、owner dispose 和服务 teardown 所有。前台工作仍与 `exec.signal` 耦合。流式 producer 的示例和完整约定见[后台任务运行时 reference](../../packages/jobs/jobs/README.zh.md)与 `dsh-tool-bash`。
 
 <a id="execution-policy-and-observation"></a>
 

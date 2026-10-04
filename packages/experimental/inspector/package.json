@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-inspector",
   "description": "Experimental cross-realm CDP hub for Host debugging and Client Runtime inspection",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
@@ -23,19 +23,15 @@
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
+    "./locale/*.json": "./locale/*.json",
     "./src/*": "./src/*",
-    "./package.json": "./package.json",
-    "./cordis.patch.yml": "./cordis.patch.yml",
-    "./locale/*.json": "./locale/*.json"
+    "./package.json": "./package.json"
   },
   "dsh": {
     "client": {
       "inject": [],
       "platform": "web",
       "immediately": true
-    },
-    "bundle": {
-      "patch": "./cordis.patch.yml"
     }
   },
   "files": [
@@ -43,8 +39,9 @@
     "locale/*.json",
     "lib/index.js",
     "lib/client.js",
-    "cordis.patch.yml",
+    "lib/client.*.js",
     "lib/worker.js",
+    "lib/devtools/**",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -53,19 +50,37 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-util-crypto": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
+    "open": "^11.0.0",
+    "serve-static": "^2.2.1",
     "ws": "^8.21.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-client-modules": "workspace:*",
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-host-webserver": "workspace:*"
   },
   "devDependencies": {
+    "chrome-devtools-frontend": "1.0.1638082",
+    "@types/serve-static": "^2.2.0",
+    "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
+    "@testing-library/react": "^16.1.0",
+    "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
+    "@types/react": "~18.3.1",
+    "@deepseek-ai/dsh-client-ui-layout": "workspace:*",
+    "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
+    "@deepseek-ai/dsh-client-store": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
+    "@deepseek-ai/dsh-client-locale": "workspace:*",
+    "react": "^18.2.0",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
+    "@deepseek-ai/dsh-cmdline": "workspace:*",
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@types/ws": "^8.18.1",
     "playwright": "^1.49.0",
     "tsx": "^4.19.2"

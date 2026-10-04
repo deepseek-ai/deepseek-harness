@@ -76,6 +76,6 @@ kind: "package-reference"
 <details>
 <summary>维护者工作上下文 — 点击展开</summary>
 
-本包不发布不变式伴随入口。消息校验及所属文件系统、子进程和沙箱提供方执行可观察的约束；此适配器没有增加可独立观察的状态关系。
+无。
 
 </details>

@@ -20,7 +20,7 @@ Scope-aware registries continue to use the opaque scope key only for registratio
 
 `SubagentContinuationManager` puts the exact parent in both fresh-creation and cold-resume options. A live continuable child is therefore excluded from `AgentRegistry.roots()` and satisfies `isOwnedBy(child.id, parent)`. Durable `parentSession` metadata does not substitute for this relation: a fork or resumed Session may be a runtime root when no live Agent owns it.
 
-The [Agent registration-scope decision](2026-07-08-agent-scope-contexts.md), its [runtime design](2026-07-12-agent-scope-runtime-design.md), and the [initiator-scope decision](2026-07-15-agent-initiator-scope.md) retain their independent registration, lifecycle, and private-chain rationale. This decision supersedes only the reverse Context association and implicit runtime-owner derivation described there.
+The [scope reference](../../../../packages/core/scope/README.md) and [Agent loop reference](../../../../packages/core/agent-loop/README.md) document registration and lifecycle behavior. The [initiator-scope decision](2026-07-15-agent-initiator-scope.md) owns private-chain rationale; explicit runtime ownership does not change causal initiation or registration lifetime.
 
 ## Verification
 

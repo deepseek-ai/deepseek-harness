@@ -86,7 +86,7 @@ This section explains the design of the test utilities; the observable behavior 
 
 ### Design
 
-`mountAgentLoopTestDependencies` mounts six service plugins in a fixed dependency order — LLM, session, session-projection registry, system-prompt registry, tool registry, then agent registry — and stops before `AgentLoop`, so the caller controls loop load order. `mountAgentLoopTestHarness` mounts the public production plugin, creates Agents through its service, and exposes the production driver's claim operation without exporting the loop's concrete Inbox class or projection definition. [`src/inbox.ts`](src/inbox.ts) contains only the process-local mutable stub and the fail-fast unsupported placeholder; it owns no projection or durable event implementation. The mounting and driver implementation lives in [`src/index.ts`](src/index.ts). No invariant companion is published because the package owns only test helpers and has no independent production observations that can diverge.
+`mountAgentLoopTestDependencies` mounts six service plugins in a fixed dependency order — LLM, session, session-projection registry, system-prompt registry, tool registry, then agent registry — and stops before `AgentLoop`, so the caller controls loop load order. `mountAgentLoopTestHarness` mounts the public production plugin, creates Agents through its service, and exposes the production driver's claim operation without exporting the loop's concrete Inbox class or projection definition. [`src/inbox.ts`](src/inbox.ts) contains only the process-local mutable stub and the fail-fast unsupported placeholder; it owns no projection or durable event implementation. The mounting and driver implementation lives in [`src/index.ts`](src/index.ts).
 
 </details>
 

@@ -1,0 +1,14 @@
+#!/bin/sh
+# Run the installed CLI without changing the invoking shell or working directory.
+set -e
+launcher=$0
+while [ -L "$launcher" ]; do
+  directory=$(CDPATH= cd -- "$(dirname -- "$launcher")" && pwd -P)
+  target=$(readlink "$launcher")
+  case "$target" in
+    /*) launcher=$target ;;
+    *) launcher=$directory/$target ;;
+  esac
+done
+resources=$(CDPATH= cd -- "$(dirname -- "$launcher")/../../.." && pwd -P)
+ELECTRON_RUN_AS_NODE=1 exec "$resources/../MacOS/DeepSeek Harness" --expose-internals "$resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js" "$@"

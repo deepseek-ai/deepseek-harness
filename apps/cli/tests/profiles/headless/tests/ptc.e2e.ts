@@ -226,7 +226,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
     expect(taskOutput.job).toMatchObject({ id: jobId, kind: 'bash', status: 'completed' })
   }, 15_000)
 
-  it('pre-abort spawns nothing; post-publication abort leaves job_kill as the cancellation owner', async () => {
+  it('pre-abort spawns nothing; post-publication abort leaves job_kill as the cancellation owner', { timeout: 15_000, retry: 0 }, async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-ptc-task-cancel-'))
     ctx = await backgroundPtcModeHarness(workdir)
 
@@ -238,15 +238,27 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
     expect(preResult.isError).toBe(true)
     expect(ctx.jobs.list()).toEqual([])
 
+    const jobs = ctx.jobs
+    // Registration is announced after the job's ownership has committed.
+    const registered = new Promise<void>((resolve) => {
+      onTestFinished(jobs.events.subscribe({ owners: 'all' }, (event) => {
+        if (event.type === 'registered') resolve()
+      }))
+    })
     const afterPublication = new AbortController()
     const running = runCode(ctx, `
       const started = await tools.bash({ command: 'sleep 10', description: 'Wait for explicit task kill', run_in_background: true });
       console.log(started.jobId);
       await new Promise(() => {});
     `, afterPublication.signal)
-    for (let attempt = 0; attempt < 100 && ctx.jobs.list().length === 0; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 10))
-    }
+    await Promise.race([
+      registered,
+      running.then((result) => {
+        // Promise.race handles a late rejection after registration, too.
+        completion(result)
+        throw new Error('run_code completed before background job registration')
+      }),
+    ])
     const job = ctx.jobs.list()[0]
     expect(job).toMatchObject({ id: 'bash-1', status: 'running' })
     afterPublication.abort('outer-call-cancelled')
@@ -261,7 +273,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
       return await tools.job_output({ job_id: ${JSON.stringify(job!.id)}, wait: true, timeout_ms: 5000 });
     `))
     expect(settled).toMatchObject({ job: { id: job!.id, status: 'killed' } })
-  }, 15_000)
+  })
 
   it('keeps foreground bash coupled to the outer signal', async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-ptc-foreground-cancel-'))

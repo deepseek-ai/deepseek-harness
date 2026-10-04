@@ -84,7 +84,6 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：配置 schema、环境变量回退、提供方注册 |
 | [`src/provider.ts`](src/provider.ts) | `ExaSearchProvider`：请求分发、中止分类、结果映射 |
 | [`src/types.ts`](src/types.ts) | Exa 协议类型：`ExaSearchResponse`、`ExaResult`、`ExaError` |
-| — | 不发布运行时不变量配套入口；除所属 seam 强制执行的约定外，本包没有独立的事件序列或可变数据关系。 |
 
 ### 请求与映射流程
 

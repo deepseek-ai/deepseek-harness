@@ -13,6 +13,7 @@ import {
 import { ToolRow } from '../src/client/tool/components/ToolRow.tsx'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
 import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 
 afterEach(() => {
   cleanup()
@@ -21,17 +22,24 @@ afterEach(() => {
 
 const t: GenericToolCardProps['t'] = makeTranslate(zh, commonZh)
 
-const running = (over?: Partial<StartedToolCall>): StartedToolCall => ({
-  phase: 'start' as const, callId: 'c1', name: 'bash', argsRaw: '{"command":"ls -la","description":"List files"}',
-  turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
-})
+const running = (over?: Partial<StartedToolCall>): StartedToolCall => {
+  const argsRaw = over?.argsRaw ?? '{"command":"ls -la","description":"List files"}'
+  return {
+    phase: 'start' as const, args: PartialArguments.fromText(argsRaw), callId: 'c1', name: 'bash', argsRaw,
+    turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
+  }
+}
 
-const result = (over?: Partial<ToolResultNode>): ToolResultNode => ({
-  kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
-  call: { name: 'bash', argsRaw: '{"command":"ls -la","description":"List files"}' },
-  callTime: 1_000,
-  content: [], isError: false, subCalls: [], ...over,
-})
+const result = (over?: Partial<ToolResultNode>): ToolResultNode => {
+  const call = over?.call === undefined ? { name: 'bash', argsRaw: '{"command":"ls -la","description":"List files"}' } : over.call
+  return {
+    kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
+    name: call?.name ?? '', args: call === null ? PartialArguments.EMPTY : PartialArguments.fromText(call.argsRaw),
+    call,
+    callTime: 1_000,
+    content: [], isError: false, subCalls: [], ...over,
+  }
+}
 
 describe('tool-call-model', () => {
   it('classifies known tools and falls back to others', () => {
@@ -100,6 +108,23 @@ describe('tool-call-model', () => {
     expect(t(m.titleKey)).toBe('运行命令')
     expect(m.summary).toBe('List files')
     expect(toolRowModel('bash', running({ argsRaw: '{"command":"pwd"}' })).summary).toBe('pwd')
+  })
+
+  it.each([
+    { name: 'web_search', variant: 'search', prefix: '' },
+    { name: 'custom-tool', variant: 'others', prefix: 'custom-tool · ' },
+  ])('prefers description for $variant summaries and retains the raw-argument fallback', ({ name, variant, prefix }) => {
+    for (const withDescription of [true, false]) {
+      const argsRaw = JSON.stringify({
+        query: 'First argument',
+        ...withDescription ? { description: 'Preferred description\nSecond line' } : {},
+      })
+      for (const block of [running({ name, argsRaw }), result({ call: { name, argsRaw } })]) {
+        expect(toolRowModel(name, block)).toMatchObject({
+          variant, summary: prefix + (withDescription ? 'Preferred description' : 'First argument'),
+        })
+      }
+    }
   })
 
   it('keeps summaries single-line and falls back for opaque args', () => {
@@ -309,10 +334,11 @@ describe('ToolRow', () => {
         newText: 'start\nsecond\nthird\nnew\nfourth\nfifth\nend',
       }] },
     }} />)
-    expect(view.getByText('+1 -1')).toBeTruthy()
+    expect(view.container.querySelector('[data-disclosure-row]')?.textContent).toContain('+1 -1')
     expect(view.container.querySelector('[data-diff]')).toBeNull()
     fireEvent.click(view.getByRole('button'))
-    expect(view.getAllByText('+1 -1')).toHaveLength(1)
+    expect(view.getAllByText('+1')).toHaveLength(1)
+    expect(view.getAllByText('-1')).toHaveLength(1)
     expect(view.getAllByText('start')).toHaveLength(1)
     expect(view.getAllByText('end')).toHaveLength(1)
     expect(view.getByText('old', { exact: true })).toBeTruthy()
@@ -437,6 +463,18 @@ describe('ToolRow', () => {
       <ToolRow {...rowProps} state="error" errorSummary="boom" summarySuffix="+2" />,
     )
     expect(failed.queryByText('+2')).toBeNull()
+  })
+
+  it('places the summary suffix before diff totals without replacing them', () => {
+    const diff = { card: { diffs: [{ path: 'out.txt', oldText: null, newText: 'one\ntwo\n' }] } }
+    const view = render(<ToolRow {...rowProps} variant="write" summary="out.txt" summarySuffix="2KB" diff={diff} />)
+    expect(view.container.querySelector('[data-disclosure-row]')?.textContent).toMatch(/2KB.*\+2 -0/)
+    for (const state of ['error', 'stopped'] as const) {
+      view.rerender(<ToolRow {...rowProps} state={state} summarySuffix="2KB" diff={diff} />)
+      expect(view.queryByText('2KB')).toBeNull()
+      expect(view.queryByText('+2')).toBeNull()
+      expect(view.queryByText('-0')).toBeNull()
+    }
   })
 
   it('an error file row drops the open-file link (the summary is failure prose, not the path)', () => {

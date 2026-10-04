@@ -53,4 +53,4 @@ Bought: deletes confined through every authority Windows accepts AND confined to
 ## Related
 
 - [Windows sandbox rung: raw ACL restricted tokens](2026-08-08-windows-acl-restricted-token-sandbox.md) — the rung this change extends (kept active; this note supersedes only its delete-route boundary).
-- [Sandbox decision](2026-07-06-sandbox.md) — the platform chains and the `partial` enforcement vocabulary.
+- [Sandbox reference](../../../../packages/sandbox/sandbox-local/README.md) — the platform chains and the `partial` enforcement vocabulary.

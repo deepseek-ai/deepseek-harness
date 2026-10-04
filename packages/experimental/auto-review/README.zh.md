@@ -61,8 +61,6 @@ Reviewer 从当前 Session surface 与待执行调用重建五个分区：固定
 
 卸载时先关闭选择与 review admission，经由既有 preset writer 将存活 Auto Session 迁移到 Full access，再中止并等待在途 review 结清，最后撤回 listener 与 contribution。迁移通过 Session writer 写入 `never` 审批策略，不排入策略变更通知；模型在下一次 runtime-context 快照中看到新策略。沙箱值与持久终端在迁移中保持不变。持久 Auto Session 缺少完整 integration 时不能发布；安装后重新打开需要用户显式操作。重装只恢复选项，不把存活 Session 切回 Auto。
 
-本包不发布 runtime invariant companion：同一个 effect 拥有选择准入、review 登记、取消与清理，不存在能与这些自有操作相互偏离的独立观察。
-
 </details>
 
 -----

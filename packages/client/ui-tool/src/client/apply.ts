@@ -7,7 +7,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { ToolCallTree } from './tool/ToolCallTree.tsx'
-import { bindToolCallArgumentsPartial } from './tool/tool-call-arguments-partial.ts'
 import { CONVERSATION_NS as NS } from './locale.ts'
 import { askQuestionToolview } from './tool/toolviews/ask-question-row.tsx'
 import { bashToolviewSample } from './tool/toolviews/bash-sample.tsx'
@@ -37,10 +36,7 @@ export function apply(ctx: ClientContext): void {
     key: 'tool-call',
     locale: NS,
     children: {
-      'tool.call.toolview': {
-        kind: 'keyed', scope: 'session',
-        inject: { hooks: { toolCallArgumentsPartial: bindToolCallArgumentsPartial } },
-      },
+      'tool.call.toolview': { kind: 'keyed', scope: 'session' },
     },
     inject: toolInject,
   }, ToolCallTree))

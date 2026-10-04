@@ -65,5 +65,3 @@ Client 入口安装 `ctx.jobs`（`IJobs`），由包内部的 `ClientJobsModel` 
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。控制器是 `ctx.jobs` 读取的无状态投影；这些流转发的事件协议与事件对读取的关系由注册表自己的 `@deepseek-ai/dsh-jobs/invariant` 拥有。

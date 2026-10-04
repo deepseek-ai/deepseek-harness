@@ -78,5 +78,5 @@ terminal 意图只用于展示。harness 仍通过自身的 bash 服务执行命
 ## 相关
 
 - 取代早先被否决的折叠工具自有呈现提案（已否决——「等两个真实工具和两个真实消费方，然后做带标签 render-intent 联合类型」）中的推迟决定。该条件现已满足；本 Agent Note 即为那个联合类型。
-- 被[结果时已应用 hunk 差异](../../archived/architecture/2026-07-02-result-time-applied-hunk-diffs.md)（已归档）扩展：后者添加了一个持久化的 `meta` 通道，使 write/edit 在结果时输出 `DiffResultView`（应用后的变更：带上下文行的 contextual hunk / 每个 `replace_all` 位点一个，或创建时的整文件 diff）——值/呈现拆分与持久化的 `presentationMeta` 通道现由[规范工具输出约定](2026-07-20-canonical-tool-output-contract.zh.md)拥有。
+- 被[结果时已应用 hunk 差异](../../archived/architecture/2026-07-02-result-time-applied-hunk-diffs.md)（已归档）扩展：后者添加了一个持久化的 `meta` 通道，使 write/edit 在结果时输出 `DiffResultView`（应用后的变更：带上下文行的 contextual hunk / 每个 `replace_all` 位点一个，或创建时的整文件 diff）——值/呈现拆分与持久化的 `presentationMeta` 通道现由[规范工具输出约定](../../../../packages/core/tools/README.zh.md)拥有。
 - 将 `ToolTerminal` 折入当前 UI 传输层使用的带标签 `terminal` 视图。

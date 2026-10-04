@@ -12,7 +12,7 @@ Status: implemented
 
 [Electron 欢迎窗口](../../../../apps/desktop/src/welcome-window.ts)负责原生材质和窗口控件。独立打包的 React 渲染器提供入口、账号登录状态和 API Key 表单。它与 Web UI 共用 `StateDot` 加载组件，不启动 Web 插件图。Desktop 构建将本地 JavaScript 和 CSS 输出到 `lib/welcome`，并纳入应用安装包；文档继续使用禁止网络访问的内容安全策略。窄接口 preload 提供强类型桌面文案、仅写密钥操作和跳过操作；IPC 拒绝其他窗口和子 frame。每个沙箱 preload 都独立打包，因为 Electron 受限的 require 无法加载同目录中的拆分模块。Electron 主进程通过共享 Web 启动 URL 认证，并通过现有设置和凭证 RPC 方法解析官方提供方的引用。[Web 薄壳](2026-09-10-desktop-web-wrapper.zh.md)负责 HTTP 服务；引导不增加 Host 端点或子进程 IPC 操作。响应只包含元数据或安全结果，不包含密钥或提供方的私有诊断。
 
-冷启动在账号凭证与模型 API Key 均未配置时打开入口。保存会在持久化成功后进入工作区；跳过会直接进入，不保存草稿或凭证入口完成标记。下次进程启动时会重新检查凭证。Desktop preload 标记抑制自动 Web 凭证步骤和欢迎须知；设置与显式 API Key 编辑仍然可用。[Desktop 引导决策](../feature/2026-09-16-desktop-onboarding.zh.md)负责账号登录后独立的设备本地介绍流程。其他原生壳可以通过 Models Host 插件注入页面的 `credentialOnboarding` 值仅禁用凭证步骤。模块图传递的是包标识，而不是任意 Host 配置，因此单独配置 Host 行不会配置其 Client 半部。[账号提供方](2026-09-14-deepseek-account-login.zh.md)提供登录与退出登录状态，同时保留独立存储的 API Key。
+冷启动在账号凭证与模型 API Key 均未配置时打开入口。保存会在持久化成功后进入工作区；跳过会直接进入，不保存草稿或凭证入口完成标记。下次进程启动时会重新检查凭证。Desktop preload 标记抑制自动 Web 凭证步骤和欢迎须知；设置与显式 API Key 编辑仍然可用。[Desktop 引导参考](../../../../packages/client/ui-settings-account/README.zh.md)负责账号登录后独立的设备本地介绍流程。其他原生壳可以通过 Models Host 插件注入页面的 `credentialOnboarding` 值仅禁用凭证步骤。模块图传递的是包标识，而不是任意 Host 配置，因此单独配置 Host 行不会配置其 Client 半部。[账号提供方](2026-09-14-deepseek-account-login.zh.md)提供登录与退出登录状态，同时保留独立存储的 API Key。
 
 生成的开发项目沿已声明的 workspace 依赖建立链接，因为单独依赖 pnpm 的提升索引会漏掉配置插件。
 

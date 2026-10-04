@@ -24,8 +24,8 @@
   en: 91b35cbebe8c2a1d
   zh: a4fee6d7102bc874
 /chat-conversation-node-rules/whole-turn-folding:
-  en: 69989cc6a42c137a
-  zh: ceca703426315b88
+  en: f8674438930c268c
+  zh: cb8d007db714de6f
 /chat-conversation-node-rules/display-modes:
   en: ada5a60d2c46f6a8
   zh: f3eaeb5cb4d9b3de
@@ -33,11 +33,11 @@
   en: a47e16132ba3c736
   zh: fbed2b6f43a93287
 /chat-conversation-node-rules/display-modes/group-title-rules:
-  en: 49fc1aa60cbd239e
-  zh: 44b0f9a96ec5b112
+  en: 5b40d65e660549b7
+  zh: 09b6894aa00154e7
 /chat-conversation-node-rules/process-grouping:
-  en: 276a97b95610f5e8
-  zh: 7627b2afb0a7c0f4
+  en: c2650489ded57503
+  zh: f2554d74e75ae0f9
 /chat-conversation-node-rules/process-grouping/examples:
   en: 2a550f7e04bce4b0
   zh: b8f95b687448cd77
@@ -54,5 +54,5 @@
   en: e7796e7ba825c3d6
   zh: c377d9eab0a8869f
 /chat-conversation-node-rules/activity-summaries/live-activity-and-detail:
-  en: d4256eadd2e9ba96
-  zh: ff6eeb1187ac683a
+  en: e0ca09c305690be7
+  zh: fb35d0238b1a827b

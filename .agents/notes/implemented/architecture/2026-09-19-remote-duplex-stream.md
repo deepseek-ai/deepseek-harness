@@ -604,6 +604,6 @@ Retention cases in `gateway-stream.host.spec.ts` and `gateway.client.spec.ts` co
 
 ## Related
 
-- [Remote event delivery](2026-08-10-remote-event-delivery.md): the unary `$events/result` answer path; the duplex `$events` item under Deferred partially supersedes it once it lands.
+- [Remote event delivery](../../../../packages/api/remotes/README.md): the unary `$events/result` answer path; the duplex `$events` item under Deferred partially supersedes it once it lands.
 - [Session history and event transport](2026-08-18-session-history-and-event-transport.md): the `$stream()` supervisor and the journal / snapshot protocols above it, which this note leaves unchanged.
 - [Web sidebar terminal](../feature/2026-09-09-web-sidebar-terminal.md): the unary terminal `write` and `attachmentId`; the `attach` stream under Deferred replaces it once it lands.

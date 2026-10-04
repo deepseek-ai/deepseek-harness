@@ -99,7 +99,6 @@ kind: "package-reference"
 | [`src/normalization.ts`](src/normalization.ts) + [`src/encoding.ts`](src/encoding.ts) | 提供方无关的规范化与有界格式／质量候选 |
 | [`src/request-image.ts`](src/request-image.ts) | 路由专用请求变换、缓存身份与 singleflight |
 | [`src/image.ts`](src/image.ts) | 完整光栅解码与元数据校验 |
-| — | 不发布运行时不变式伴生入口；不可变写入与校验读取在后端边界直接强制。 |
 
 </details>
 

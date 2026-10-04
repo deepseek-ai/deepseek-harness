@@ -73,7 +73,6 @@ The row registers scoped persona prefix and suffix sections using the registry's
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, persona section registration, runtime-context suppression |
-| — | No runtime invariant companion is published; this row owns no event stream or mutable runtime data — it registers prompt sections and the prompt registry owns identity, complete-prompt enforcement, shadowing, and disposal. |
 
 </details>
 

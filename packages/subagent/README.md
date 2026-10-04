@@ -41,7 +41,7 @@ The subagent package family lets an agent delegate a task to a child, continue t
 ## Related documentation
 
 - [Subagent subsystem](../../docs/subsystems/subagent.md) — the service contract, provider contract, and terminal result semantics.
-- [Subagent capability seam](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.md) — the design record for the delegation capability family.
+- [historical Subagent capability seam](../../.agents/notes/archived/feature/2026-06-21-subagent-capability-seam.md) — the design record for the delegation capability family.
 - [Continuable subagents](../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.md) — durable children that accept follow-up turns.
 - [tool-subagent-control README](tool-subagent-control/README.md) — the follow-up, interrupt, and listing surface.
 

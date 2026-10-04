@@ -42,6 +42,8 @@ Stream cancellation and stopping keep read-local state, not a history of deliver
 
 Host composition can register one application event source through `registerRemoteEvents()`. Gateway reserves the internal `$events` logical endpoint for that source, accepts only empty `args`, and aborts streams opened by the registration when the source is withdrawn. API Remotes owns the event selection, argument validation, per-Client queues, and the Host home sent in the opening `{ type: 'ready', clientId, host: { home } }` frame. Its source factory attaches incremental listeners synchronously, so the Client publishes the generation and starts baseline reads only after incremental delivery is ready.
 
+`hasLiveClient()` checks the existing `$events` records for an uncancelled stream. A cancelled stream does not count even while its iterator is still awaiting cleanup; a bare WebSocket does not count. This synchronous observation does not guarantee delivery or Client provider readiness.
+
 <a id="client-service-clientremote-ctx-key-remote"></a>
 ## Client service: `ClientRemote` (ctx key: `remote`)
 
@@ -97,7 +99,5 @@ No direct effect; invoked business Services own any model-visible result.
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. Host calls re-read authoritative Cordis and Typert state, while Client methods, descriptors, and `$on` subscriptions mutate in one owned effect.
 
 The ./stream-protocol export supplies the shared Remote stream framing and parser to native Desktop callers. These callers use the same authenticated WebSocket endpoint as the browser client.

@@ -16,13 +16,13 @@ Desktop 将 Python、Node.js、pnpm、数据处理库和 Office 创作库作为�
 
 共享 Node 构建入口下载并校验完整锁定 wheel 集的哈希，将库文件解压到 site-packages。这避免选择构建主机的 Python 和 pip 版本，也无需实现依赖解析或通用 wheel 安装。XlsxWriter 的 VBA 提取脚本等辅助脚本保留在 wheel 的 `.data/scripts` 目录中；命令行入口包装器不属于该库产物。其他 `.data` 安装方案会被拒绝。本机 smoke 在临时文件删除后执行最终产物，检查精确锁定的分发包集合与内置 pip、Python 与固定 wheel 版本、依赖完整性及可编辑 Office 文档的写入和读取，因此解释器链接必须在迁移后仍有效。Smoke 检查禁用字节码写入，避免把验证产物纳入分发内容。
 
-macOS 仅向独立 Node 可执行文件授予 `com.apple.security.cs.allow-jit`。缺少此权限的强化运行时签名会阻止 V8 分配代码区域。解释器和库的 smoke 检查在签名后以及暂存清理后执行；签名有效本身不能证明程序可运行。
+macOS 向独立 Node 可执行文件和 LibreOffice 辅助程序授予 `com.apple.security.cs.allow-jit`。x64 Node 可执行文件还需要 `com.apple.security.cs.allow-unsigned-executable-memory`：仅授予 JIT 权限时，内置 x64 Node 在 Rosetta 下启动会在 V8 `OS::SetPermissions` 中失败。ARM64 Node 和 LibreOffice 辅助程序保持仅有 JIT 权限；额外权限仅授予需要它的解释器。解释器和库的 smoke 检查在签名后以及暂存清理后执行；签名有效本身不能证明程序可运行。
 
 Windows 签名打包通过受监督的签名阶段覆盖第一方运行时和应用生产依赖，将文件准备与执行分开。PE 检查独立于扩展名识别文件内容，排除其他平台的非 PE Node 原生插件，并拒绝目录链接。公钥验签每个进程处理最多 32 个文件，同时最多运行四个进程，返回失败前等待当前批次全部结束；硬件操作仍串行执行。有效的上游签名保持不变；仅未签名文件使用配置的 EV 证书签名。已有签名无效时，在访问硬件前失败；每个新签名通过有效性、时间戳和证书身份检查后，才处理下一个文件。electron-builder 复制阶段的签名钩子仅在逐字节比对和验签通过后保留运行时可执行文件；保留验证失败时，同一串行队列拒绝后续任务。硬件调用复用现有的用户级互锁、串行签名器和脱敏日志；硬件失败不允许重试或继续后续阶段。公开时间戳尝试遵循[签名完成规则](../process/2026-09-17-windows-signature-completion.zh.md)。运行时执行不接收签名凭据，并在完整验签后进行。开发和未签名准备保留本机 smoke，不自动访问硬件。运行时清单记录签名后的字节。electron-builder 将检测到的依赖 PE 文件放在归档外，并保留已签名的副本。发布完成前，最终签名检查以及 ASAR 载荷和 Host 冒烟检查使用私有原生缓存。
 
 Desktop ZIP 解压通过定向依赖覆盖为 `extract-zip` 固定 `yauzl` 3.4.0。2.x 读取器在 Node 26 上可能无法完成较大 deflate 条目的读取（[上游问题](https://github.com/thejoshwolfe/yauzl/issues/176)）；保留现有解压器可保留其路径校验和 wheel 条目检查。开发启动器使用顶层 await，避免准备未完成却成功退出。大压缩 wheel 回归测试检查完整的解压字节。
 
-[共享运行时决策](../architecture/2026-09-17-shared-office-runtime.zh.md)持有 Desktop 与 SDK 载体的构建器、锁文件和查询包归属，覆盖 GNU/Linux x64 与 Python-only payload。Desktop 保留本文的安装与签名行为，并要求完整的 Python、Node.js 和 pnpm payload。
+[共享运行时参考](../../../../packages/skill/tool-workspace-dependencies/README.zh.md)持有 Desktop 与 SDK 载体的构建器、锁文件和查询包归属，覆盖 GNU/Linux x64 与 Python-only payload。Desktop 保留本文的安装与签名行为，并要求完整的 Python、Node.js 和 pnpm payload。
 
 ## Alternatives considered
 

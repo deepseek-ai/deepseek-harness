@@ -82,7 +82,7 @@ profile 导入插件前，DSH 会检查其 `peerDependencies` 中对 `@deepseek-
 
 ### 读取插件展示元信息
 
-使用 `readPluginMeta(specifier, parentURL)` 或 `ctx.pluginPackages.metaOf(specifier, parentURL)` 读取已安装包的展示文本，无需导入或激活插件。查询使用完整包标识与调用方的解析基准，并遵循 Node exports。文件路径与文件 URL 不解析资源，直接返回无元信息。缺失的 locale 字段回退到该地址下可访问的 `package.json`；格式错误的元信息返回 `error` 诊断。结果保留翻译，由 Client 选择语言。即使 locale 文本完整，读取器也会将 `package.json.icon` 加载为图片 data URL；图标出错时，保留有效文本并附上诊断。作者格式见[插件展示元信息](../../../docs/cookbook/adding-a-package.zh.md#plugin-display-metadata)。
+使用 `readPluginMeta(specifier, parentURL)` 或 `ctx.pluginPackages.metaOf(specifier, parentURL)` 读取已安装包的展示文本，无需导入或激活插件。查询使用完整包标识与调用方的解析基准，并遵循 Node exports。文件路径与文件 URL 不解析资源，直接返回无元信息。包根标识缺失的 locale 字段回退到可访问的 `package.json`；子路径标识从不读取 `package.json`。格式错误的元信息返回 `error` 诊断。结果保留翻译，由 Client 选择语言。即使 locale 文本完整，读取器也会加载图片 data URL：包根使用清单 `icon`，省略该字段时使用 `<包名>/icon`；子路径使用 `<标识>/icon`。图标出错时，保留有效文本并附上诊断。作者格式见[插件展示元信息](../../../docs/cookbook/adding-a-package.zh.md#plugin-display-metadata)。
 
 <a id="startup-and-reload-failures"></a>
 ### 启动与重载失败
@@ -135,7 +135,7 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 - **包元数据。** `ctx.pluginPackages.packageOf` 定位所属包，不加载代码，也不要求导出 `package.json`；子路径选择其所属包，不校验该文件。安装 runtime resolution 后，即使查询未命中也以其选包规则为准。仅安装服务而不提供 runtime resolution 的底层嵌入方保留原生查询。展示元数据使用上文另述的入口感知读取器。
 - **两个 Loader builtin。** `mountRootInclude` 把 `cordis:include` 与 `cordis:group` 注册为 Loader builtin：group 行能把一个提供方与它的消费方放进同一个 `isolate` realm，而位于本工作区之外的 agent preset 无法按名称解析 `@deepseek-ai/cordis-plugin-group`。两者都通过宿主的模块管线加载，而非被包含树自身的说明符解析。
 - **由 consumer 持有严格语义。** 普通 Loader group 保留成功 sibling。App-boot 在首次结算后应用全局 required-entry policy；agent preset 与动态多 entry 组合在需要 all-or-nothing setup 时，持有并拆卸各自的独立 Loader 子树。App-boot 读取 failed fiber 来报告已记录的错误，并在一个进程检查点内合并 Loader 重复的 rejection 通知。
-- **唯一 runtime resolution。** 安装优先、有序 bundle 逐根 breadth-first 遍历生成运行时表。runtime 解析不创建链接；runtime resolution 条目占据 `$DSH_HOME/profiles/node_modules` 上各自的包名位置，其余包名把该目录当作普通祖先。profile 加载时删除 Link 后端发布版写进 profile 的 `.dsh-module-fallback` 投影；pnpm 安装的包保留。package `imports` 选中的外部 bare target 使用相同的选包顺序，映射、conditions 和精确 target 解析仍由 Node 负责。完整后继 runtime resolution 可以在既有包映射和本地包名约束内原子增加 package name、更新 linked root 集合。
+- **唯一 runtime resolution。** 安装优先、有序 bundle 逐根 breadth-first 遍历生成运行时表。runtime 解析不创建链接；runtime resolution 条目占据 `$DSH_HOME/profiles/node_modules` 上各自的包名位置，其余包名把该目录当作普通祖先。profile 加载时删除 Link 后端发布版写进 profile 的 `.dsh-module-fallback` 投影；pnpm 安装的包保留。package `imports` 选中的外部 bare target 使用相同的选包顺序，映射、conditions 和精确 target 解析仍由 Node 负责。完整后继 runtime resolution 可以原子地增加 package name、移除 profile 范围的映射和 profile 本地包名、更新 linked root 集合；保留映射的规范化目录、版本和作用域不变。安装范围的锚点不变；profile 映射可以更换声明来源。[插件管理器](../plugin-manager/README.zh.md)在包操作之后发布后继代（[决策](../../../.agents/notes/implemented/architecture/2026-09-30-profile-package-refresh-and-manifest-invalidation.zh.md)）。
 - **移除链接拦截。** 后继 generation 可以移除 linked root，无需重启。目录不再被任何剩余 root 覆盖时，后续请求使用原生查询，可能找到开发副本，也可能报告缺包。已有模块引用和 Node 缓存保持不变。同名、同目标可以重新加入；曾发布的名称改指向不同目标时，即使中间移除过也会被拒绝（[generation 规则](../../../.agents/notes/implemented/architecture/2026-09-09-profile-resolution-generations.zh.md#immutable-generations)）。
 - **应用自有 profile。** 应用自有 profile 使用相同的 runtime resolution。目标位于当前 profile 目录内的链接（包括 pnpm store 链接）不算外部 root，即使 profile 位于共享 profiles 树外。解析过程不修改其 `node_modules`；已安装包由 pnpm 管理。
 - **自有 Worker。** Worker 构建 banner 会在业务 bundle 前导入 `@deepseek-ai/dsh-app-boot/worker/profile-resolution-bootstrap`。每个 Worker 在自己的 isolate 中安装结构化克隆的 runtime resolution。bootstrap bundle 不静态导入任何包。源码 Worker 入口保留自包含依赖，第三方 Worker 不接受注入。
@@ -159,7 +159,6 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 | [`src/profile-sanitize.ts`](src/profile-sanitize.ts) | profile patch 备份与恢复 bundle 启用状态 |
 | [`src/config-schema/`](src/config-schema/) | Profile schema 生成、发现、原生投影与结果类型 |
 | [`src/profile-resolution/`](src/profile-resolution/) | 运行时 resolver、package metadata 服务与构建后 Worker bootstrap |
-| — | 不发布运行时不变式伴生入口；每个 runtime resolution 只有一个拦截所有。 |
 
 </details>
 
@@ -177,7 +176,7 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 - [dsh-home-paths](../../util/home-paths/README.zh.md)——harness home 解析器（`resolveDshHome`）。
 - [配置来源归属](../../../.agents/notes/implemented/architecture/2026-08-04-configuration-source-ownership.zh.md)——被发现的文件为何不得决定 bootstrap 行为。
 - [Profile 插件组合包](../../../.agents/notes/implemented/architecture/2026-08-05-profile-plugin-bundles.zh.md)——profile 与组合包组合设计。
-- [用户 patch HMR 测试](../../../.agents/notes/implemented/testing/2026-09-09-user-patch-hmr-test-delivery.zh.md)——实时 patch 行为与原生文件系统投递的验证归属。
+- [用户 patch HMR 测试](tests/user-patches.spec.ts)——实时 patch 行为与原生文件系统投递的验证归属。
 
 -----
 

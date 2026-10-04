@@ -25,7 +25,7 @@ export function accountView(value: unknown): AccountView {
     || !('phase' in attempt) || !['initializing', 'waiting-browser', 'exchanging', 'committing', 'succeeded', 'cancelled', 'expired', 'failed'].includes(String(attempt.phase))
     || ('authorizeUrl' in attempt && typeof attempt.authorizeUrl !== 'string')
     || ('expiresAt' in attempt && (typeof attempt.expiresAt !== 'number' || !Number.isFinite(attempt.expiresAt)))
-    || ('errorCode' in attempt && !['network', 'protocol', 'expired', 'storage'].includes(String(attempt.errorCode))))) {
+    || ('errorCode' in attempt && !['no-response', 'network', 'protocol', 'expired', 'storage'].includes(String(attempt.errorCode))))) {
     throw new Error('desktop account: invalid attempt')
   }
   if (attempt !== null && 'authorizeUrl' in attempt) {

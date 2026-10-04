@@ -3,6 +3,15 @@ import { bindingKey, initialShortcutConfig, normalizeBinding, presentBinding } f
 import type { ShortcutCommandId } from '../src/protocol.ts'
 import { ShortcutRegistry } from '../src/client/registry.ts'
 import { isWebBindingAllowed } from '../src/binding.ts'
+
+it.each(['macos', 'windows'] as const)('admits the existing single-modifier Web keys on %s', (platform) => {
+  const primary = platform === 'macos' ? 'meta' : 'control'
+  for (const code of ['Comma', 'Backslash']) {
+    expect(isWebBindingAllowed({ code, modifiers: [primary] }, platform)).toBe(true)
+    expect(isWebBindingAllowed({ code, modifiers: ['alt'] }, platform)).toBe(false)
+  }
+  expect(isWebBindingAllowed({ code: 'Backquote', modifiers: ['control'] }, platform)).toBe(true)
+})
 import type { ShortcutCommand, ShortcutGesture } from '../src/client/types.ts'
 
 const context = { region: 'page', modal: null, target: null } as const

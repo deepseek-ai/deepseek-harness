@@ -6,7 +6,7 @@ Status: proposed
 
 ## 问题
 
-[紧凑 Assistant 流实现](../../../../packages/llm/llm/src/assistant-stream.ts)导出五个可见性查询：`isVisibleChunk`、`chunkHasVisibleText`、`runFirstVisibleTime`、`assistantStreamHasVisibleContent` 和 `assistantStreamHasVisibleText`。仓库搜索未找到这组函数之外的生产调用方。其余消费方是[单元测试](../../../../packages/llm/llm/tests/assistant-stream.spec.ts)、包文档和[记录读取器决策](../../implemented/architecture/2026-09-06-embedded-stream-record-readers.zh.md)。包根入口和发布的 `./assistant-stream` 入口向外部调用方暴露这些函数；本次搜索无法确定外部使用情况。
+[紧凑 Assistant 流实现](../../../../packages/llm/llm/src/assistant-stream.ts)导出五个可见性查询：`isVisibleChunk`、`chunkHasVisibleText`、`runFirstVisibleTime`、`assistantStreamHasVisibleContent` 和 `assistantStreamHasVisibleText`。仓库搜索未找到这组函数之外的生产调用方。其余消费方是[单元测试](../../../../packages/llm/llm/tests/assistant-stream.spec.ts)、包文档和[记录读取器参考](../../../../packages/llm/llm/README.zh.md)。包根入口和发布的 `./assistant-stream` 入口向外部调用方暴露这些函数；本次搜索无法确定外部使用情况。
 
 保留的首 token 读取器已有 [Session Stats](../../../../packages/session/session-stats/src/projection.ts) 和 [Trajectory](../../../../packages/client/ui-trajectory/src/client/trajectory-assistant-definition.ts) 消费方。它们的计时要求不依赖单独区分空白文本的可见性分类。
 
@@ -16,7 +16,7 @@ Status: proposed
 
 移除专门的可见性测试；混合读取器测试只删除过时断言。保留验证首 token 计时、提前退出、原始分片、文本拼接和组装等价性的混合 fixture（测试前置数据）与断言。
 
-记录读取器决策只被部分替代：其分配开销方面的理由和仍被使用的读取器继续有效。实施本提案时，更新该现行说明、[包 README](../../../../packages/llm/llm/README.zh.md) 和 [LLM 子系统页面](../../../../docs/subsystems/llm-streaming.zh.md)及其双语对侧。添加本提案时不删除所属说明，也不修改归档记录。
+[包 README](../../../../packages/llm/llm/README.zh.md)负责紧凑读取器的行为：保留的读取器避免将逐成员展开结果实体化，持久化输入仍使用带校验的展开操作。保留这些约束和仍被使用的读取器。实施本提案时，更新该 README、[LLM 子系统页面](../../../../docs/subsystems/llm-streaming.zh.md)及其双语对侧；归档记录保持不变。
 
 ## 备选方案
 

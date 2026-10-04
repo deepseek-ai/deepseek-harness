@@ -52,7 +52,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Running a command
 
-The tool executes `pwsh -Command <command>` and returns the combined output. Commands run in a fresh pwsh process every call, so state never persists — pass `workdir` instead of `cd`. Paths use native Windows form and environment variables are read with `$env:NAME`. A non-zero exit is reported as `[exit code: N]`; on Windows a force-killed command settles as `[exit code: 1]` without a signal marker, so the agent treats a bare exit 1 after an interruption as a termination, not a command failure. Background runs, output truncation, and the `description`/`timeoutMs`/`workdir` arguments behave exactly as in [`dsh-tool-bash`](../tool-bash/README.md#running-long-commands-in-the-background), including job-owned cancellation during asynchronous shell preparation.
+The tool executes `pwsh -Command <command>` and returns the combined output. Commands run in a fresh pwsh process every call, so state never persists — pass `workdir` instead of `cd`. Paths use native Windows form and environment variables are read with `$env:NAME`. A non-zero exit is reported as `[exit code: N]`; on Windows a force-killed command settles as `[exit code: 1]` without a signal marker, so the agent treats a bare exit 1 after an interruption as a termination, not a command failure. The schema lists `description` before `command` and asks the model to emit it first, without enforcing JSON member order. The description tells the agent to verify the resolved absolute target path before any delete or move and not to assign to automatic variables such as `$HOME`. Background runs, output truncation, and the `description`/`timeoutMs`/`workdir` arguments behave exactly as in [`dsh-tool-bash`](../tool-bash/README.md#running-long-commands-in-the-background), including job-owned cancellation during asynchronous shell preparation.
 
 ### Foreground commands as jobs
 
@@ -78,7 +78,7 @@ This section explains the design decisions behind the tool and points at the cod
 
 ### Design philosophy
 
-- **A deliberate twin of `dsh-tool-bash`.** Foreground and background execution, the managed environment, the sandbox escalation surface, and the marker/truncation rendering mirror the bash tool call-for-call, so consumers of one accept the other's wire shape ([pwsh tool bash parity Agent Note](../../../.agents/notes/implemented/feature/2026-08-02-pwsh-tool-bash-parity.md)).
+- **A deliberate twin of `dsh-tool-bash`.** Foreground and background execution, the managed environment, the sandbox escalation surface, and the marker/truncation rendering mirror the bash tool call-for-call, so consumers of one accept the other's wire shape ([pwsh tool bash parity reference](README.md)).
 - **PowerShell-dialect contract.** The tool contract is PowerShell: native paths and `$env:` variables, executed via `pwsh -Command` with no intermediate shell.
 - **Windows sandbox facts taught in the description.** The ConstrainedLanguage and named-pipe contracts are Windows-restricted-token behavior; the gate for teaching them is "any confining executor is mounted", which is safe because every shipped pairing is win32-only.
 - **Non-zero exits are reported, not errored.** Only infrastructure failures (spawn errors, aborts) surface as tool errors, matching the bash story.
@@ -90,7 +90,6 @@ This section explains the design decisions behind the tool and points at the cod
 | [`src/index.ts`](src/index.ts) | Plugin entry: tool registration, prompt section, arg validation, escalation, request assembly |
 | [`src/background.ts`](src/background.ts) | Map a settled process onto generic job outcome vocabulary and render a ring read as a process read |
 | [`src/render.ts`](src/render.ts) | Model-facing result text: streams, markers, truncation notices (bash twin) |
-| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Rendering and exit markers
 
@@ -109,7 +108,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Bash executor subsystem](../../../docs/subsystems/shell.md) — request/spec vocabulary, results, and background processes.
 - [shell-env](../shell-env/README.md) — the managed `DSH_*` environment every call receives.
 - [tool-jobs](../../jobs/tool-jobs/README.md) — `job_output`, `job_list`, and `job_kill` controls for background runs.
-- [pwsh tool bash parity Agent Note](../../../.agents/notes/implemented/feature/2026-08-02-pwsh-tool-bash-parity.md) — why the tool mirrors the bash tool.
+- [historical pwsh tool bash parity Agent Note](../../../.agents/notes/archived/feature/2026-08-02-pwsh-tool-bash-parity.md) — why the tool mirrors the bash tool.
 - [Windows ACL restricted-token sandbox Agent Note](../../../.agents/notes/implemented/feature/2026-08-08-windows-acl-restricted-token-sandbox.md) — the language-mode and named-pipe contracts.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-pwsh) — the exact `pwsh` argument schema.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-pwsh) — every accepted config field and its source declaration.

@@ -61,8 +61,6 @@ The reviewer reconstructs five sections from the current Session surface and pen
 
 Unloading closes selection and review admission, migrates live Auto Sessions to Full access through the existing preset writer, then aborts and drains reviews before withdrawing the listener and contribution. The migration writes the `never` approval policy through the Session writer without queuing a policy-change notice; the model sees the new policy in the next runtime-context snapshot. The sandbox value and persistent terminals survive the migration. A persisted Auto Session cannot publish without the complete integration; reopening it after installation is an explicit user action. Reinstalling the layer restores the option but does not switch live Sessions back to Auto.
 
-No runtime invariant companion is published: this single effect owns selection admission, review enrollment, cancellation, and cleanup; it has no independent observation that can diverge from those owned operations.
-
 </details>
 
 -----

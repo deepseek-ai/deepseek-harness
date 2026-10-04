@@ -70,8 +70,8 @@ const FAILED_KEYS = {
 } satisfies Record<FailedAction, PluginManagerLocaleKey>
 
 /**
- * What a management error reads as: the code's sentence, one sentence per
- * package an incompatibility names, or, for an operation error, the Host's diagnostic as it is.
+ * What a management error reads as: the code's sentence; for an incompatibility, one sentence per
+ * package it names, then the remedy for an install or for an installed plugin; or, for an operation error, the Host's diagnostic as it is.
  * @param error - the Host's code, its diagnostic, and the packages an incompatibility names.
  * @param t - the manager's translate seat.
  * @returns the sentence.
@@ -80,12 +80,18 @@ export function managementText(error: {
   readonly code: ManagementError['code']
   readonly diagnostic?: string
   readonly incompatible?: readonly IncompatiblePlugin[]
+  /** Set when the refused package is being installed rather than already installed; selects the incompatibility remedy. */
+  readonly installing?: true
 }, t: Translate): string {
-  if (error.code === 'incompatible-version' && error.incompatible !== undefined && error.incompatible.length > 0) {
-    return error.incompatible.map(plugin => t('reasonIncompatibleVersion', {
-      plugin: `${plugin.name}@${plugin.version}`, runtime: plugin.runtimeVersion,
-      peers: Object.entries(plugin.peers).map(([name, range]) => `${name} ${range}`).join(', '),
-    })).join(' ')
+  if (error.code === 'incompatible-version') {
+    const named = error.incompatible ?? []
+    const sentences = named.length === 0
+      ? [t('reasonIncompatibleVersionUnnamed')]
+      : named.map(plugin => t('reasonIncompatibleVersion', {
+        plugin: `${plugin.name}@${plugin.version}`, runtime: plugin.runtimeVersion,
+        peers: Object.entries(plugin.peers).map(([name, range]) => `${name} ${range}`).join(', '),
+      }))
+    return [...sentences, t(error.installing ? 'reasonIncompatibleInstall' : 'reasonIncompatibleInstalled')].join(t('sentenceSeparator'))
   }
   if (error.code !== 'operation-error') return t(CODE_KEYS[error.code])
   return error.diagnostic === undefined || error.diagnostic === '' ? t('reasonOperationError') : error.diagnostic

@@ -303,7 +303,7 @@ Source: [`packages/attachment/attachment/src/index.ts`](../../packages/attachmen
 
 ### `ctx.fileUploads` — `FileUploads`
 
-Host service owning upload storage and Agent-scoped staged receipts.
+Host service owning upload storage and receipts keyed by each receiving Agent's exact Session.
 
 ```ts cordis-catalog
 /**
@@ -330,7 +330,7 @@ registerAgentResolver(resolve: AgentResolver): () => void
 async uploadStream(request: { readonly sessionId: SessionId readonly data: AsyncIterable<Uint8Array> readonly signal?: AbortSignal readonly name?: string }): Promise<FileUploadValue>
 
 /**
- * Resolve one staged receipt inside its receiving Agent scope.
+ * Resolve one staged receipt for the receiving Agent's exact Session.
  * @param agent - receiving Agent.
  * @param receiptId - opaque receipt minted for one completed upload.
  * @returns durable file reference, or `undefined` for an unknown or foreign receipt.

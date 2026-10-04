@@ -77,7 +77,6 @@ Verdicts (resolvable specifier, export presence) and imported manifests are cach
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config`, scanner, manifest validation, registration wiring |
-| — | No runtime invariant companion is published; the Loader entry lifecycle directly owns each exact registry disposer, and integration tests observe registration and removal. |
 
 </details>
 

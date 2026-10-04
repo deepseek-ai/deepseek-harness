@@ -3,6 +3,7 @@
  * turns fetch-shaped calls into `req` frames and rebuilds Responses from the
  * worker's `res` / `res-head`+`res-chunk`+`res-end` frames, so every consumer
  * (boot payload, bundle transport, ApiClient, Typert RPC) speaks plain HTTP.
+ * The worker's unsolicited `view-text` frame opens the page's text viewer.
  */
 
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
@@ -18,6 +19,7 @@ import type {
   TunnelStreamItemFrame,
   TunnelStreamOpenFrame,
 } from '../transport/frames.ts'
+import { showTextViewer } from './text-viewer.ts'
 
 /** Boot payload of the tunnel bootstrap route. */
 export interface BootPayload {
@@ -542,6 +544,10 @@ export class WorkerTunnel {
         this.bodyStreams.delete(frame.id)
         this.releaseSignal(frame.id)
         controller.error(reason)
+        return
+      }
+      case 'view-text': {
+        showTextViewer(frame.path, frame.text)
         return
       }
       case 'stream-item':

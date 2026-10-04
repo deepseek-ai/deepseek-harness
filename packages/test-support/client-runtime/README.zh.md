@@ -135,7 +135,6 @@ test('registers into the sidebar', async ({ remote, start }) => {
 | [`src/assembly/remote-default-responses.ts`](src/assembly/remote-default-responses.ts) | `remoteDefaultResponses`：roster 启动期 Remote 端点的默认响应 |
 | [`src/assembly/remote-proxies.ts`](src/assembly/remote-proxies.ts) | 经 Connection 的无契约 `remote.<ns>` 代理：`remoteNamespacesOf`、`remoteProxiesPlugin` |
 | [`src/assembly/bundle-roster.ts`](src/assembly/bundle-roster.ts) | `bundleRoster` 与 `webApp`：用 include 插件自己的 schema 与补丁应用从 bundle 补丁文件读出浏览器 roster |
-| — | 不发布运行时不变式伴生入口；本测试支持包不拥有生产事件流或可变数据，而是围绕测试替身组装生产 SlotRegistry 与渲染器。所挂载的生产包拥有各自的不变式，本包行为由本包测试检验。 |
 
 ### 生命周期
 

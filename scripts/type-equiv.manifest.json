@@ -1053,6 +1053,36 @@
     },
     {
       "doc": "docs/subsystems/user-questions.md",
+      "symbol": "AskUserQuestionRequestEvent",
+      "source": "packages/interaction/user-questions/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/user-questions.md",
+      "symbol": "TimedUserQuestionResult",
+      "source": "packages/interaction/user-questions/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/user-questions.md",
+      "symbol": "UserQuestionState",
+      "source": "packages/interaction/user-questions/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/user-questions.md",
+      "symbol": "PendingUserQuestion",
+      "source": "packages/interaction/user-questions/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/user-questions.md",
+      "symbol": "SettledUserQuestion",
+      "source": "packages/interaction/user-questions/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/user-questions.md",
+      "symbol": "UserQuestionProjectionView",
+      "source": "packages/interaction/user-questions/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/user-questions.md",
       "symbol": "UserQuestionError",
       "source": "packages/interaction/user-questions/src/index.ts"
     },
@@ -1855,21 +1885,6 @@
       "doc": "docs/subsystems/plan.md",
       "symbol": "PlanModeConfig",
       "source": "packages/plan/plan-mode/src/index.ts"
-    },
-    {
-      "doc": "docs/subsystems/invariants.md",
-      "symbol": "Config",
-      "source": "packages/runtime-diagnostics/invariants/src/index.ts"
-    },
-    {
-      "doc": "docs/subsystems/invariants.md",
-      "symbol": "InvariantFailure",
-      "source": "packages/runtime-diagnostics/invariants/src/index.ts"
-    },
-    {
-      "doc": "docs/subsystems/invariants.md",
-      "symbol": "InvariantInstaller",
-      "source": "packages/runtime-diagnostics/invariants/src/index.ts"
     },
     {
       "doc": "docs/subsystems/web-server.md",

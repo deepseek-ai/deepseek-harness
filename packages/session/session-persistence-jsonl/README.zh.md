@@ -101,7 +101,7 @@ kind: "package-reference"
 
 ### 物理编码
 
-默认产物是独立 [Zstandard 帧](../../../.agents/notes/implemented/architecture/2026-07-19-zstandard-jsonl-session-logs.zh.md) 的标准拼接：一个仅包含 header 行的带校验和帧，后跟每个持久 append 批次一个带校验和帧，使用 Node 内置 Zstandard API 的默认压缩级别（无级别开关）。当前格式为每个事件写一行；`sourceEventSeqs` 使用无损存储形式：至少包含三个序列号的连续段会变成 `[start, end]` 区间对，其他列表原样保留；读取时会展开回精确的内存数组。历史迁移会复用一个 Zstandard decoder，让已解析行流经有状态格式 Stage，并通过一个压缩 context 以约 1 MiB 主线程分片流式写入当前记录，同时只保留最终当前事件、有界 decoder 状态与必需的序号重映射表。列表只读取并验证 header 帧。`compression: 'none'` 保留相同的存储形式逻辑行，但不使用帧压缩。一个根只属于一种编码：启动发现与定向查找会拒绝使用另一后缀的 generation；格式迁移保留已配置编码，而压缩转换、混合根回退与双写仍不受支持。冻结的 v0 与 v1 codec 仅为历史 generation 保留 packed-row decoder。
+默认产物是独立 Zstandard 帧 的标准拼接：一个仅包含 header 行的带校验和帧，后跟每个持久 append 批次一个带校验和帧，使用 Node 内置 Zstandard API 的默认压缩级别（无级别开关）。当前格式为每个事件写一行；`sourceEventSeqs` 使用无损存储形式：至少包含三个序列号的连续段会变成 `[start, end]` 区间对，其他列表原样保留；读取时会展开回精确的内存数组。历史迁移会复用一个 Zstandard decoder，让已解析行流经有状态格式 Stage，并通过一个压缩 context 以约 1 MiB 主线程分片流式写入当前记录，同时只保留最终当前事件、有界 decoder 状态与必需的序号重映射表。列表只读取并验证 header 帧。`compression: 'none'` 保留相同的存储形式逻辑行，但不使用帧压缩。一个根只属于一种编码：启动发现与定向查找会拒绝使用另一后缀的 generation；格式迁移保留已配置编码，而压缩转换、混合根回退与双写仍不受支持。冻结的 v0 与 v1 codec 仅为历史 generation 保留 packed-row decoder。
 
 ### 源码地图
 
@@ -114,7 +114,6 @@ kind: "package-reference"
 | [`src/migration-verifier.ts`](src/migration-verifier.ts) | stage 与竞争 generation 校验的 Worker 生命周期 |
 | [`src/zstd.ts`](src/zstd.ts) | Zstandard 帧压缩、解码与帧扫描 |
 | [`src/win32.ts`](src/win32.ts) | Windows write-through 发布与目录创建 |
-| — | 不发布运行时不变式伴生入口；身份在存储层强制；持久化正确性依赖后端往返与崩溃尾部测试，本包不公开可持续观察的进程内关系。 |
 
 </details>
 
@@ -127,8 +126,6 @@ kind: "package-reference"
 
 - [会话持久化子系统](../../../docs/subsystems/persistence.zh.md)——后端无关的服务语义与提供方关系。
 - [会话持久化 seam](../session-persistence/README.zh.md)——本后端实现的服务约定。
-- [项目会话目录决策](../../../.agents/notes/implemented/architecture/2026-07-24-project-session-directories.zh.md)——项目与会话目录布局背后的取舍。
-- [Zstandard JSONL 会话日志](../../../.agents/notes/implemented/architecture/2026-07-19-zstandard-jsonl-session-logs.zh.md)——带校验和帧编码的理由。
 - [已发布 Session 格式迁移](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.zh.md)——不可变 generation、相邻迁移边与发布规则。
 
 -----

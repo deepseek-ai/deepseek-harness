@@ -79,7 +79,12 @@ declare module '@deepseek-ai/cordis' {
 export interface Config {
   /** Override platform desktop-opener detection. */
   readonly nativeOpen?: boolean
+  /** Positive integral milliseconds of list work before yielding between complete rows. */
+  readonly listWorkSliceMs?: number
 }
+
+/** Deployment policy after schema defaults have been applied. */
+type ResolvedConfig = Config & { readonly listWorkSliceMs: number }
 
 /** Host integrations replaceable by direct unit tests. */
 export interface SessionControllerInternals {
@@ -111,8 +116,9 @@ export class SessionController extends TypertRemoteService {
     'workspaceRegistry',
   ]
 
-  static Config: z<Config> = z.object({
+  static Config: z<Config, ResolvedConfig> = z.object({
     nativeOpen: z.boolean(),
+    listWorkSliceMs: z.natural().min(1).default(16),
   })
 
   private readonly agents: ApiSessionAgentController
@@ -129,11 +135,12 @@ export class SessionController extends TypertRemoteService {
 
   /**
    * @param ctx - Host context containing the Session capability assembly.
-   * @param config - native-opener deployment policy.
+   * @param config - native-opener and list-scheduling deployment policy.
    * @param internals - host integrations replaceable by direct unit tests.
    */
   constructor(ctx: Context, config: Config, internals: SessionControllerInternals = {}) {
     super(ctx, 'sessionController', { namespace: 'session' })
+    const resolved = SessionController.Config(config)
     installModelSelectionProjection(ctx)
     this.agents = new ApiSessionAgentController(ctx)
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
@@ -149,7 +156,7 @@ export class SessionController extends TypertRemoteService {
       await Promise.allSettled([...this.promotions])
     }, 'session-controller.promotions')
     this.history = new SessionHistoryController(ctx, (observation) => { this.promote(observation) })
-    this.listState = new ApiSessionList(ctx)
+    this.listState = new ApiSessionList(ctx, resolved.listWorkSliceMs)
     this.fileApplications = internals.fileApplications ?? nativeFileApplications
     this.openFileApplication = internals.openFileApplication ?? openNativeFileApplication
     this.openPath = internals.openPath ?? openNativeAssociatedPath
@@ -245,7 +252,7 @@ export class SessionController extends TypertRemoteService {
   /**
    * Read all visible Session rows without resuming an Agent.
    * @param _request - reserved empty list request.
-   * @param signal - cancellation for persistence reads.
+   * @param signal - cancellation for persistence reads and summary generation.
    * @returns visible Session summaries ordered by activity.
    */
   @Remote('list')

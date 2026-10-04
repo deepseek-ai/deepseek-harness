@@ -52,7 +52,7 @@ kind: "package-reference"
 
 ### 运行命令
 
-工具执行 `bash -c <command>` 并返回合并后的输出。命令每次调用都运行在全新 shell 中，因此状态从不保留——请传 `workdir` 而不是 `cd`。非零退出以 `[exit code: N]` 报告给 agent 解读，而不是作为工具错误抛出。主动语态的 `description`（5–10 个词）在 UI 中标注该调用；`timeoutMs` 覆盖执行器的默认值与上限。超出执行器流上限的输出会被截断为尾部，完整输出保存到 spill 文件并报告其路径。
+工具执行 `bash -c <command>` 并返回合并后的输出。命令每次调用都运行在全新 shell 中，因此状态从不保留——请传 `workdir` 而不是 `cd`。非零退出以 `[exit code: N]` 报告给 agent 解读，而不是作为工具错误抛出。主动语态的 `description`（5–10 个词）在 UI 中标注该调用；schema 将它列在 `command` 前并要求模型先输出它，但不强制 JSON 成员顺序。`timeoutMs` 覆盖执行器的默认值与上限。超出执行器流上限的输出会被截断为尾部，完整输出保存到 spill 文件并报告其路径。工具描述要求 agent 在任何删除或移动前校验解析后的绝对目标路径，并用 `${VAR:?}` 保护此类路径中的变量。
 
 <a id="running-long-commands-in-the-background"></a>
 ### 后台运行长时间命令
@@ -95,7 +95,6 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：工具注册、提示词区段、参数校验、升权、请求组装 |
 | [`src/background.ts`](src/background.ts) | 管理异步 shell 准备、将进程结算映射为任务结果，并把输出环读取渲染为进程读取 |
 | [`src/render.ts`](src/render.ts) | 模型侧结果文本：流、标记、截断通知 |
-| — | 不发布运行时不变式伴生入口；环境注册表在每次变更和读取时校验所有权及收集值，且不发布可供伴生入口交叉核对的独立快照；执行关系由能力 seam 负责。 |
 
 ### 请求解析
 
@@ -118,7 +117,7 @@ kind: "package-reference"
 - [Bash 执行器子系统](../../../docs/subsystems/shell.zh.md)——请求／spec 词汇、结果与后台进程。
 - [shell-env](../shell-env/README.zh.md)——每次调用都会收到的受管 `DSH_*` 环境。
 - [tool-jobs](../../jobs/tool-jobs/README.zh.md)——后台运行的 `job_output`、`job_list` 与 `job_kill` 控制。
-- [沙箱 Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-sandbox.zh.md)——升权与模式切换的理由。
+- [历史沙箱 Agent Note](../../../.agents/notes/archived/feature/2026-07-06-sandbox.md)——升权与模式切换的理由。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-bash)——`bash` 参数 schema 的确切内容。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-bash)——每个受支持配置字段及其源声明。
 

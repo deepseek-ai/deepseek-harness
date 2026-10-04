@@ -15,6 +15,8 @@ kind: "package-reference"
 
 设置中的账号页面显示 DeepSeek 登录状态，并提供浏览器登录和取消；侧边栏账号菜单提供 Platform 退出登录。Desktop 用户还会进入可恢复的引导，了解账号额度并选择展示偏好。
 
+登录弹窗仅对 `no-response` 失败提示检查网络。HTTP、业务、响应校验、存储和账号状态流失败仍显示通用重试提示。
+
 ## 目录
 
 - [使用此包](#use-this-package)
@@ -40,7 +42,7 @@ Desktop 的用量、充值与引导充值操作在 48px 返回栏下方打开同
 
 Chat 通过 `shell.overlay` 中的宿主把已绑定 Session 的实时欠费交给全局 `shell.quota-notice` 链，提示的生命周期因此长于上报它的 Chat 面板。账号条目认领 `ACCOUNT_QUOTA`：已存储账号凭证且存在共享宿主条目时，Modal 提供取消和去充值。只要通过该共享请求通道请求的页面正在显示，原生视图就会盖住本页，因此该条目既不绘制 Modal 也不绘制 Toast。在 Account 设置页已打开页面的情况下新到达的欠费不会被保持：它仍受最新提示替换规则约束，返回后若该提示仍是最新一条就显示 Modal。该 Modal 报告的是原始请求的失败，而不是账号当前余额：返回时的重读是一次独立读取，返回本身既不证明支付成功，也不会自动撤下该提示。提示自身的去充值属于被保持的情形：它调用 `keepOpen()` 并通过共享请求通道申请 `top-up` 页面，使该提示与其页面在后续欠费期间保持挂载。存在共享宿主条目时，该条目会等待首个账号快照，而不是渲染一个可能被自身计时器丢弃的 Toast；快照报告未存储凭证，或账号流失败且无快照时，才由该条目自行渲染同一段中立警告 Toast，缺少该宿主条目时则立即渲染该 Toast，而不依赖 Chat 宿主回退。该条目持有保持与页面请求，并在自身卸载时释放二者，因此后续欠费会重新发布而不重放已丢弃的提示；关闭与退出登录也会清除保持和页面请求。关闭、取消、退出登录或离开该提示自己的内嵌页面都会撤下提示，且不会重试请求。
 
-账号菜单的“意见反馈”入口在系统浏览器中打开飞书问卷。每次点击都按当时的上下文取值：profile ready 且带 id 时的账号 UID、以 harness_version 表示的构建版本、界面语言、屏幕物理分辨率，以及 device_info。所有上下文字段同时设置 hide_*=1，配置的表单 URL 中这些字段的 stale prefill 参数先被清除，uid、device_info 与 harness_version 的隐藏参数不依赖配置 URL 的取值。不传 token 或脱敏联系方式；未登录、profile 仍在加载或读取失败时都不填写 prefill_uid。Desktop 桥接没有 deviceInfo 读取器时，打开的表单以 navigator.userAgent 作为 device_info。Desktop 端暴露可选的 dshDesktop.deviceInfo 读取器，其字段格式由 [Desktop README](../../../apps/desktop/README.zh.md) 负责；该读取器的结果取代 user-agent，读取失败时仍打开表单、仅 device_info 留空，而 device_info 描述的是上报的环境而非硬件型号。可在 ui-settings-account 插件配置 contactFormUrl，切换到另一个 HTTPS 问卷；问卷支持 Harness 来源选项前，contactSource 默认为空。
+账号菜单的“意见反馈”入口在系统浏览器中打开飞书问卷。每次点击都按当时的上下文取值：profile ready 且带 id 时的账号 UID、以 harness_version 表示的构建版本，以及 device_info。device_info 以 screen_resolution=宽x高 包含屏幕物理分辨率，尺寸乘以 devicePixelRatio 后四舍五入；屏幕尺寸不可用时省略此项。所有上下文字段同时设置 hide_*=1，配置的表单 URL 中这些字段的 stale prefill 参数先被清除，uid、device_info 与 harness_version 的隐藏参数不依赖配置 URL 的取值。URL 不携带 os_version、device_brand、app_locale 或独立的 screen_resolution 参数；配置 URL 中这些字段的 prefill 与 hide 参数会被移除。不传 token 或脱敏联系方式；未登录、profile 仍在加载或读取失败时都不填写 prefill_uid。Desktop 桥接没有 deviceInfo 读取器时，打开的表单以 navigator.userAgent 作为 device_info。Desktop 端暴露可选的 dshDesktop.deviceInfo 读取器，其字段格式由 [Desktop README](../../../apps/desktop/README.zh.md) 负责；该读取器的结果取代 user-agent，读取失败时仍打开表单，device_info 保留可获取的屏幕分辨率，而 device_info 描述的是上报的环境而非硬件型号。可在 ui-settings-account 插件配置 contactFormUrl，切换到另一个 HTTPS 问卷；问卷支持 Harness 来源选项前，contactSource 默认为空。
 
 账号资料与余额卡片共用[设置卡片材质与圆角](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)。用量与充值链接与标准 Button 尺寸一致；授权操作使用公共 Button。
 
@@ -64,9 +66,9 @@ Desktop preload 标记在账号凭证已存储后启用引导。进度属于本�
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-仅登录后在设置导航首位显示账号页；账号状态加载完成前以及退出登录后隐藏该页。 插件持有一条 Host 快照流，通过框架 hook 供 settings.section 和 settings.launcher 共享。入口菜单可打开设置，并仅在已存储账号凭证时提供退出登录。Platform 请求失败时保留菜单，以供重试。插件不维护独立凭证状态，因此不发布 invariant。
+仅登录后在设置导航首位显示账号页；账号状态加载完成前以及退出登录后隐藏该页。 插件持有一条 Host 快照流，通过框架 hook 供 settings.section 和 settings.launcher 共享。入口菜单可打开设置，并仅在已存储账号凭证时提供退出登录。Platform 请求失败时保留菜单，以供重试。插件不维护独立凭证状态。
 
-桌面控制器通过 Host 设置将进度写入 `ui-settings-account`。完成时先一并应用 `ui-chat.transcriptView` 与 `ui-chat.performanceUsage`，再通过共享代码工作工具偏好保存 `ui-settings.enabled`，最后保存完成标记；写入被拒绝时保留引导以供重试。成功完成后通过 180ms 淡出显露工作区；选择和普通翻页立即预览，写入在后台按顺序执行。队列最后一次写入失败时恢复已保存进度，并允许重试。完成操作会等待选择队列及偏好保存成功，再关闭页面；减少动态效果偏好会跳过淡出。onboarding 选项 compact、standard、detailed 直接应用到对应的 Chat 工作过程模式。API Key 进入与显式跳过均采用 standard；onboarding 不选择 verbose。完整 Figma 示意图层以透明、调色板压缩的 3× PNG 资源打包；欢迎页图层合并并烘焙侧栏局部模糊；充值页前景窗口不透明度为 70%，仅烘焙其覆盖插图区域的模糊，标题使用已打包的 Montserrat 品牌字体，英文标题和描述使用 Light（300），标题中的 DeepSeek Harness 使用 Medium（500）；卡片标题选中前后均使用 Regular（400）。英文底部导航使用 Light（300）。确认进入引导后，窗口最小宽度设为 960px，较窄窗口自动放大；完成后解除宽度限制，但不恢复原尺寸。加载中或已完成引导的启动不改变窗口尺寸。底部导航空白区域透过鼠标事件，避免遮挡主操作。卡片区域不参与原生窗口拖动，复选框的键盘焦点仅在卡片外框展示。账号包负责引导覆盖层和控件尺寸样式。每个步骤和确认弹窗各有独立组件，流程组件协调导航、切换动画和充值。初始账号与进度加载期间，覆盖层隐藏工作区。答题标题和卡片独立于操作按钮，位置对齐 Figma 的 1440 × 920 和 960 × 600 断点。macOS 的内容层清除 body 浮层继承的 no-drag，位于内容之前的拖拽层保留 8px 原生缩放边缘；交互控件和后续弹窗排除自身区域；原生平台页面打开时禁用底层引导拖拽层。上方工作区弹窗插画在两种语言和主题下均使用不透明背景，下层侧边栏不绘制选中行高亮。欢迎页保持示意图的原始尺寸，在窄窗口内调整插图位置并裁切，在宽窗口内展示完整插图。[引导决策](../../../.agents/notes/implemented/feature/2026-09-16-desktop-onboarding.zh.md)记录持久化与展示方面的取舍。
+桌面控制器通过 Host 设置将进度写入 `ui-settings-account`。完成时先一并应用 `ui-chat.transcriptView` 与 `ui-chat.performanceUsage`，再通过共享代码工作工具偏好保存 `ui-settings.enabled`，最后保存完成标记；写入被拒绝时保留引导以供重试。成功完成后通过 180ms 淡出显露工作区；选择和普通翻页立即预览，写入在后台按顺序执行。队列最后一次写入失败时恢复已保存进度，并允许重试。完成操作会等待选择队列及偏好保存成功，再关闭页面；减少动态效果偏好会跳过淡出。onboarding 选项 compact、standard、detailed 直接应用到对应的 Chat 工作过程模式。API Key 进入与显式跳过均采用 standard；onboarding 不选择 verbose。完整 Figma 示意图层以透明、调色板压缩的 3× PNG 资源打包；欢迎页图层合并并烘焙侧栏局部模糊；充值页前景窗口不透明度为 70%，仅烘焙其覆盖插图区域的模糊，标题使用已打包的 Montserrat 品牌字体，英文标题和描述使用 Light（300），标题中的 DeepSeek Harness 使用 Medium（500）；卡片标题选中前后均使用 Regular（400）。英文底部导航使用 Light（300）。确认进入引导后，窗口最小宽度设为 960px，较窄窗口自动放大；完成后解除宽度限制，但不恢复原尺寸。加载中或已完成引导的启动不改变窗口尺寸。底部导航空白区域透过鼠标事件，避免遮挡主操作。卡片区域不参与原生窗口拖动，复选框的键盘焦点仅在卡片外框展示。账号包负责引导覆盖层和控件尺寸样式。每个步骤和确认弹窗各有独立组件，流程组件协调导航、切换动画和充值。初始账号与进度加载期间，覆盖层隐藏工作区。答题标题和卡片独立于操作按钮，位置对齐 Figma 的 1440 × 920 和 960 × 600 断点。macOS 的内容层清除 body 浮层继承的 no-drag，位于内容之前的拖拽层保留 8px 原生缩放边缘；交互控件和后续弹窗排除自身区域；原生平台页面打开时禁用底层引导拖拽层。上方工作区弹窗插画在两种语言和主题下均使用不透明背景，下层侧边栏不绘制选中行高亮。欢迎页保持示意图的原始尺寸，在窄窗口内调整插图位置并裁切，在宽窗口内展示完整插图。[历史引导决策](../../../.agents/notes/archived/feature/2026-09-16-desktop-onboarding.md)记录持久化与展示方面的取舍。
 
 <a id="further-exploration"></a>
 ## 深入探索
@@ -77,7 +79,7 @@ Desktop preload 标记在账号凭证已存储后启用引导。进度属于本�
 
 账户状态流的终止错误会显示在登录对话框或账户设置中。插件卸载后不再报告延迟到达的错误。
 
-余额卡片分行展示充值余额与赠金余额。赠金行在登录态下常驻；没有正额赠金时显示暂无可用赠金。余额或赠金读取失败时，沿用既有的不可用文案并改为指向 Platform 的链接，目标与行为同“查询用量”一致：Desktop 打开内嵌页面，其它环境新开标签页；加载中与暂无赠金仍为纯文本。不同币种分别显示；日期只在服务端自己的消息中出现。
+余额卡片分行展示充值余额与赠金余额。登录态下，赠金行在加载中、余额读取失败以及存在正额赠金时显示；读取成功但没有正额赠金时不显示该行。余额或赠金读取失败时，沿用既有的不可用文案并改为指向 Platform 的链接，目标与行为同“查询用量”一致：Desktop 打开内嵌页面，其它环境新开标签页；加载中仍为纯文本。不同币种分别显示；日期只在服务端自己的消息中出现。
 
 
 登录成功时，若其他提供方均未配置 API key，则将 `deepseek-account` 的第一个可用模型设为默认值，即使此前保存过默认选择。其他提供方只要配置了 key，就保留原默认值，即使其没有可用模型。会话内的显式选择保持不变。

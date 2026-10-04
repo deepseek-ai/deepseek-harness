@@ -223,7 +223,7 @@ type StreamChunk =
 
 `snapshot()` 返回分离且不可变的 stream。`expandAssistantStream()` 会严格检查 record key、成员数、index、时间戳、tool-call identity 与无损 JSON，再重建精确的带时间 chunk 序列。Session 日志会把该 stream 嵌入作为 surface result 的 `assistant/message`，或嵌入没有 surface message 的 `assistant/attempt`。
 
-进程本地 `agent/assistant-stream` frame 承载实时呈现。持久回放与恢复校验仍会展开内嵌 settlement；遥测、token 记账与 Host 折叠直接读取紧凑记录。记录级读取器（`assistantStreamFirstTokenTime`、`assistantStreamHasVisibleContent`、`assistantStreamHasVisibleText`、`lastAssistantStreamChunk`、`assistantStreamChunks`、`joinAssistantStreamText`、`assembleAssistantStream` 以及按 run 的 `runFirstTokenTime` 与 `runFirstVisibleTime`）以提前退出在一次扫描内回答消费方问题，因此大历史每次结算的代价为 O(records) 而非 O(members) 展开（[折叠决策](../../.agents/notes/implemented/architecture/2026-09-06-embedded-stream-record-readers.zh.md)）。`expandAssistantStream()` 仍是持久边界读取记录与需要每个成员的消费方的校验路径。
+进程本地 `agent/assistant-stream` frame 承载实时呈现。持久回放与恢复校验仍会展开内嵌 settlement；遥测、token 记账与 Host 折叠直接读取紧凑记录。记录级读取器（`assistantStreamFirstTokenTime`、`assistantStreamHasVisibleContent`、`assistantStreamHasVisibleText`、`lastAssistantStreamChunk`、`assistantStreamChunks`、`joinAssistantStreamText`、`assembleAssistantStream` 以及按 run 的 `runFirstTokenTime` 与 `runFirstVisibleTime`）以提前退出在一次扫描内回答消费方问题，因此大历史每次结算的代价为 O(records) 而非 O(members) 展开（[折叠参考](../../packages/llm/llm/README.zh.md)）。`expandAssistantStream()` 仍是持久边界读取记录与需要每个成员的消费方的校验路径。
 
 <a id="llmfailure"></a>
 
@@ -313,7 +313,7 @@ interface LlmImageRequestPricing {
 
 ## `AppIdentity`：应用归属
 
-每个适配器都会向提供方发送的静态公开应用标识（[`packages/llm/llm/src/attribution.ts`](../../packages/llm/llm/src/attribution.ts)）。`attributionHeaders(identity?)` 只把它映射到标准 `User-Agent` header；该约定有意不支持 OpenRouter 特有的应用归属 header。默认 `APP_IDENTITY` 从包 manifest（元数据清单）获取版本；每个字段都是公开产品事实——不含 secret、路径、会话 id 或逐用户标识，且任何逐请求信息都不得影响这些值。设计理由见[强制 `User-Agent` 归属](../../.agents/notes/implemented/architecture/2026-06-21-mandatory-app-attribution-headers.zh.md)。
+每个适配器都会向提供方发送的静态公开应用标识（[`packages/llm/llm/src/attribution.ts`](../../packages/llm/llm/src/attribution.ts)）。`attributionHeaders(identity?)` 只把它映射到标准 `User-Agent` header；该约定有意不支持 OpenRouter 特有的应用归属 header。默认 `APP_IDENTITY` 从包 manifest（元数据清单）获取版本；每个字段都是公开产品事实——不含 secret、路径、会话 id 或逐用户标识，且任何逐请求信息都不得影响这些值。
 
 ```ts type-equiv
 /**
@@ -746,7 +746,7 @@ interface LlmDiscoveredModel {
 
 `agent/request` 接收冻结的调用配置种子，并可返回替代值以切换提供方、模型、推理强度或采样参数。waterfall（瀑布式事件）开始前，循环会移除标记为适配器默认值的值，使确切模型准备过程填入所选路由的当前值；未带标记的显式设置仍保留在提议中。waterfall 结束后，准备过程会在轮次信号控制下拒绝显式指定但不受支持的推理强度 ID（不自动调整），并记录生效配置以及由适配器默认值提供的字段。步骤准入时，该 waterfall 与准备过程在组装和 `step/start` 之后、系统提示词与已接纳用户批次提交之前运行；在任一阶段取消都不会提交这两者。已准备调用的能力决定提示词协调，调用直至分派完成始终持有同一项适配器注册。到达 `llm/stream` 的请求会被深度冻结，因此变更会抛异常；请求还携带进程本地循环标识，使观察者不会把单独记录的冻结辅助调用误认成对话请求。
 
-在协议中，循环构建的请求只有派生历史：渲染后的提示词作为开头的 `system` 角色消息（surface 第 0 号节点，即一个 `system/message` 事件）传输，并且当已准备调用声明 `systemPromptUpdate: 'in-history'` 时，变化后的非空提示词可以作为后续的 `system` 角色消息跟在已缓存历史之后，由模型读作有效提示词；请求的 `system` 字段不设置——`GenerateOptions.system` 服务于标题提供方等直接单次调用方。空渲染文本使派生历史不包含任何系统消息，即使先前请求保留了多个提示词版本。已记录的请求会以最新的 `user/message`（轮次首步）或上一步的工具结果（后续步骤）结尾。开发不变式针对每个循环构建的请求精确重算此等式，并拒绝携带 `system` 字段的循环请求。
+在协议中，循环构建的请求只有派生历史：渲染后的提示词作为开头的 `system` 角色消息（surface 第 0 号节点，即一个 `system/message` 事件）传输，并且当已准备调用声明 `systemPromptUpdate: 'in-history'` 时，变化后的非空提示词可以作为后续的 `system` 角色消息跟在已缓存历史之后，由模型读作有效提示词；请求的 `system` 字段不设置——`GenerateOptions.system` 服务于标题提供方等直接单次调用方。空渲染文本使派生历史不包含任何系统消息，即使先前请求保留了多个提示词版本。已记录的请求会以最新的 `user/message`（轮次首步）或上一步的工具结果（后续步骤）结尾。
 
 FIXME(call-config-shape)：重新审视其余哪些字段出于缓存目的确实属于 epoch 层级（`model` 和模型持有的推理强度已明确属于；采样标量目前出于谨慎保留在此）。
 

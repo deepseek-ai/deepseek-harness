@@ -1,7 +1,7 @@
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type {
   ISessions, SessionListState, SessionReference, SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -16,8 +16,11 @@ import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { LayoutController } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
+import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import type { DraftInitializationOptions, SessionInputResolver } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { RowToast } from '../src/client/contract/slots.ts'
 import { DirectoryBrowseError, UiWorkspaceService } from '../src/client/navigation.ts'
+import { en, zh } from '../src/client/locales.ts'
 import { createWorkspaceViewStore, FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
 import { UNGROUPED_KEY } from '../src/client/tree.ts'
 
@@ -153,6 +156,9 @@ class FakeSessions implements ISessions {
     return reference
   })
   readonly subagentAddress = vi.fn<ISessions['subagentAddress']>()
+  readonly binding = vi.fn<ISessions['binding']>(sessionId =>
+    this.retained.findLast(item => item.reference.sessionId === sessionId
+      && item.release.mock.calls.length === 0)?.reference.binding)
   declare readonly using: ISessions['using']
   declare readonly retainInfo: ISessions['retainInfo']
   declare readonly searchResultLimit: ISessions['searchResultLimit']
@@ -161,7 +167,6 @@ class FakeSessions implements ISessions {
   declare readonly scope: ISessions['scope']
   declare readonly scopeOf: ISessions['scopeOf']
   declare readonly sessionOf: ISessions['sessionOf']
-  declare readonly binding: ISessions['binding']
 
   constructor(initial: SessionListState) {
     this.list = new MutableSource(initial)
@@ -266,6 +271,7 @@ class FakeDirectoryPicker {
 }
 
 interface BenchOptions {
+  readonly conversation?: boolean
   readonly configureWorkspaces?: (workspaces: FakeWorkspaces) => void
   readonly workspaces?: WorkspaceSnapshot
   readonly sessions?: SessionListState
@@ -275,6 +281,12 @@ interface BenchOptions {
 function bench(options: BenchOptions = {}) {
   const ctx = new Context()
   contexts.push(ctx)
+  const locale = new LocaleRuntime(ctx)
+  locale.setLocale('en')
+  ctx.effect(() => locale.register('workspace', { en, zh }))
+  ctx.provide('locale', locale)
+  const requestDraftInitialization = vi.fn<SessionInputResolver['requestDraftInitialization']>(() => 'applied')
+  if (options.conversation !== false) ctx.provide('conversation', { input: { requestDraftInitialization } })
   const layout = new LayoutController({
     selectPanel: vi.fn(), retainMainPanels: vi.fn(),
     setSidebar: vi.fn(), toggleSidebar: vi.fn(), setViewportWidth: vi.fn(),
@@ -298,7 +310,13 @@ function bench(options: BenchOptions = {}) {
     view.actions,
     notify,
   )
-  return { ctx, directoryPicker, sessions, uiWorkspace, workspaces, layout, selectPanel, view, notify }
+  return { ctx, directoryPicker, sessions, uiWorkspace, workspaces, layout, selectPanel, view, notify, requestDraftInitialization }
+}
+
+function lastOpening(open: MockInstance<UiWorkspaceService['openWorkspace']>): Promise<void> {
+  const result = open.mock.results.at(-1)
+  if (result?.type !== 'return') throw new Error('startSession did not start Workspace navigation')
+  return result.value
 }
 
 describe('UiWorkspaceService', () => {
@@ -736,6 +754,197 @@ describe('UiWorkspaceService', () => {
     b.uiWorkspace.startSession()
 
     expect(b.selectPanel).toHaveBeenCalledWith(null)
+  })
+
+  describe('startSession draft initialization', () => {
+    it.each<{ name: string; options: DraftInitializationOptions }>([
+      { name: 'plain text', options: { prompt: '草稿 🧭\nsecond line', clearPreviousDraft: true } },
+      { name: 'empty text', options: { prompt: '' } },
+      { name: 'clear without prompt', options: { clearPreviousDraft: true } },
+      { name: 'reference-like text', options: { prompt: '🧭 @notes.md' } },
+    ])('prepares $name on the retained target before replacing the current selection', async ({ options }) => {
+      const backing = persistSelection({})
+      const b = bench({ workspaces: workspaceState([workspace('a')]) })
+      const opening = vi.spyOn(b.uiWorkspace, 'openWorkspace')
+      b.uiWorkspace.openSession(sid('previous'))
+      const previous = b.sessions.retained[0]!
+      b.selectPanel.mockClear()
+      b.sessions.create.mockResolvedValueOnce(sid('actual-target'))
+      b.requestDraftInitialization.mockImplementation((binding) => {
+        const target = b.sessions.retained[1]!
+        expect(binding).toBe(target.reference.binding)
+        expect(binding.sessionId).toBe(sid('actual-target'))
+        expect(target.release).not.toHaveBeenCalled()
+        expect(previous.release).not.toHaveBeenCalled()
+        expect(JSON.parse(backing.get('dsh.sessions.current')!)).toEqual({ sessionId: sid('previous') })
+        expect(b.selectPanel).not.toHaveBeenCalled()
+        return 'applied'
+      })
+
+      b.uiWorkspace.startSession(wid('a'), options)
+      await lastOpening(opening)
+
+      expect(b.requestDraftInitialization).toHaveBeenCalledExactlyOnceWith(b.sessions.retained[1]!.reference.binding, options)
+      expect(b.sessions.binding).toHaveBeenCalledExactlyOnceWith(sid('actual-target'))
+      expect(previous.release).toHaveBeenCalledOnce()
+      expect(b.sessions.retained[1]!.release).not.toHaveBeenCalled()
+      expect(JSON.parse(backing.get('dsh.sessions.current')!)).toEqual({ sessionId: sid('actual-target') })
+      expect(b.notify).not.toHaveBeenCalled()
+    })
+
+    it.each([undefined, {}, { clearPreviousDraft: false }])('does not invoke the draft API for default options %j', async (options) => {
+      const b = bench({ workspaces: workspaceState([workspace('a')]) })
+      const opening = vi.spyOn(b.uiWorkspace, 'openWorkspace')
+
+      b.uiWorkspace.startSession(wid('a'), options)
+      await lastOpening(opening)
+
+      expect(b.sessions.retain).toHaveBeenCalledExactlyOnceWith(sid('created-a'), { source: 'mainView' })
+      expect(b.sessions.binding).not.toHaveBeenCalled()
+      expect(b.requestDraftInitialization).not.toHaveBeenCalled()
+      expect(b.notify).not.toHaveBeenCalled()
+    })
+
+    it('opens the retained target when its draft is preserved', async () => {
+      const backing = persistSelection({})
+      const b = bench({ workspaces: workspaceState([workspace('a')]) })
+      const opening = vi.spyOn(b.uiWorkspace, 'openWorkspace')
+      b.uiWorkspace.openSession(sid('previous'))
+      b.requestDraftInitialization.mockReturnValue('preserved')
+
+      b.uiWorkspace.startSession(wid('a'), { prompt: 'keep the existing draft' })
+      await lastOpening(opening)
+
+      expect(b.requestDraftInitialization).toHaveBeenCalledExactlyOnceWith(
+        b.sessions.retained[1]!.reference.binding, { prompt: 'keep the existing draft' },
+      )
+      expect(b.sessions.retained[0]!.release).toHaveBeenCalledOnce()
+      expect(b.sessions.retained[1]!.release).not.toHaveBeenCalled()
+      expect(JSON.parse(backing.get('dsh.sessions.current')!)).toEqual({ sessionId: sid('created-a') })
+      expect(b.notify).not.toHaveBeenCalled()
+    })
+
+    it('captures prompt text and clear intent before asynchronous Session creation', async () => {
+      const b = bench({ workspaces: workspaceState([workspace('a')]) })
+      const created = Promise.withResolvers<SessionId>()
+      b.sessions.create.mockReturnValueOnce(created.promise)
+      const opening = vi.spyOn(b.uiWorkspace, 'openWorkspace')
+      const options = {
+        prompt: '🧭 @notes.md',
+        clearPreviousDraft: true,
+      }
+      const expected = { ...options }
+      b.uiWorkspace.startSession(wid('a'), options)
+      const completion = lastOpening(opening)
+      expect(b.sessions.create).toHaveBeenCalledOnce()
+      expect(b.requestDraftInitialization).not.toHaveBeenCalled()
+
+      options.clearPreviousDraft = false
+      options.prompt = 'caller replaced the prompt'
+      created.resolve(sid('captured'))
+      await completion
+
+      expect(b.requestDraftInitialization).toHaveBeenCalledExactlyOnceWith(
+        b.sessions.retained[0]!.reference.binding, expected,
+      )
+      expect(b.requestDraftInitialization.mock.calls[0]![1]).not.toBe(options)
+    })
+
+    it.each(['workspace', 'session', 'panel', 'disposal'] as const)(
+      'never initializes a pending target superseded by %s', async (kind) => {
+        const b = bench({ workspaces: workspaceState([workspace('a'), workspace('b')]) })
+        const created = Promise.withResolvers<SessionId>()
+        b.sessions.create.mockReturnValueOnce(created.promise)
+        const opening = vi.spyOn(b.uiWorkspace, 'openWorkspace')
+        b.uiWorkspace.startSession(wid('a'), { prompt: 'late draft' })
+        const completion = lastOpening(opening)
+        expect(b.sessions.create).toHaveBeenCalledOnce()
+        expect(b.requestDraftInitialization).not.toHaveBeenCalled()
+
+        if (kind === 'workspace') {
+          b.uiWorkspace.startSession(wid('b'), { prompt: 'chosen draft' })
+          await lastOpening(opening)
+        } else if (kind === 'session') b.uiWorkspace.openSession(sid('chosen'))
+        else if (kind === 'panel') b.layout.selectPanel('other-panel' as MainPanelId)
+        else await b.ctx.fiber.dispose()
+        created.resolve(sid('late'))
+        await completion
+
+        expect(b.sessions.retained.some(item => item.reference.sessionId === sid('late'))).toBe(false)
+        expect(b.sessions.binding).not.toHaveBeenCalledWith(sid('late'))
+        if (kind === 'workspace') {
+          expect(b.requestDraftInitialization).toHaveBeenCalledExactlyOnceWith(
+            b.sessions.retained[0]!.reference.binding, { prompt: 'chosen draft' },
+          )
+        } else expect(b.requestDraftInitialization).not.toHaveBeenCalled()
+        expect(b.notify).not.toHaveBeenCalled()
+      },
+    )
+
+    it.each(['blocked', 'missing conversation', 'missing binding'] as const)(
+      'keeps the previous selection and releases the target after %s', async (failure) => {
+        const backing = persistSelection({})
+        const b = bench({ workspaces: workspaceState([workspace('a')]), conversation: failure !== 'missing conversation' })
+        const opening = vi.spyOn(b.uiWorkspace, 'openWorkspace')
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+        b.uiWorkspace.openSession(sid('previous'))
+        b.selectPanel.mockClear()
+        b.requestDraftInitialization.mockReturnValue('blocked')
+        if (failure === 'missing binding') b.sessions.binding.mockReturnValueOnce(undefined)
+
+        b.uiWorkspace.startSession(wid('a'), { prompt: 'unsent' })
+        await expect(lastOpening(opening)).rejects.toThrow('Could not fill the draft. Please try again shortly.')
+
+        expect(b.notify).toHaveBeenCalledExactlyOnceWith({
+          kind: 'createFailed', message: 'Could not fill the draft. Please try again shortly.',
+        })
+        expect(warning).toHaveBeenCalledExactlyOnceWith('new session failed:', expect.any(Error))
+        expect(b.sessions.retained[0]!.release).not.toHaveBeenCalled()
+        expect(b.sessions.retained[1]!.release).toHaveBeenCalledOnce()
+        expect(b.sessions.binding(sid('created-a'))).toBeUndefined()
+        expect(JSON.parse(backing.get('dsh.sessions.current')!)).toEqual({ sessionId: sid('previous') })
+        expect(b.selectPanel).not.toHaveBeenCalled()
+        expect(b.requestDraftInitialization).toHaveBeenCalledTimes(failure === 'blocked' ? 1 : 0)
+      },
+    )
+
+    it('requests a Workspace without clearing the current selection when no Workspace is available', () => {
+      const backing = persistSelection({})
+      const b = bench()
+      b.uiWorkspace.openSession(sid('ungrouped'))
+      b.selectPanel.mockClear()
+
+      b.uiWorkspace.startSession(undefined, { prompt: 'unsent' })
+
+      expect(b.notify).toHaveBeenCalledExactlyOnceWith({ kind: 'createFailed', message: 'Choose a workspace first.' })
+      expect(b.sessions.create).not.toHaveBeenCalled()
+      expect(b.requestDraftInitialization).not.toHaveBeenCalled()
+      expect(b.sessions.retained[0]!.release).not.toHaveBeenCalled()
+      expect(JSON.parse(backing.get('dsh.sessions.current')!)).toEqual({ sessionId: sid('ungrouped') })
+      expect(b.selectPanel).not.toHaveBeenCalled()
+    })
+
+    it('reports an unknown explicit Workspace without preparing a draft or changing selection', async () => {
+      const backing = persistSelection({})
+      const b = bench()
+      const opening = vi.spyOn(b.uiWorkspace, 'openWorkspace')
+      const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      b.uiWorkspace.openSession(sid('previous'))
+      b.selectPanel.mockClear()
+
+      b.uiWorkspace.startSession(wid('missing'), { prompt: 'unsent' })
+      await expect(lastOpening(opening)).rejects.toThrow('unknown workspace missing')
+
+      expect(b.notify).toHaveBeenCalledExactlyOnceWith({
+        kind: 'createFailed', message: 'uiWorkspace.connectWorkspace: unknown workspace missing',
+      })
+      expect(warning).toHaveBeenCalledExactlyOnceWith('new session failed:', expect.any(Error))
+      expect(b.requestDraftInitialization).not.toHaveBeenCalled()
+      expect(b.sessions.retained).toHaveLength(1)
+      expect(b.sessions.retained[0]!.release).not.toHaveBeenCalled()
+      expect(JSON.parse(backing.get('dsh.sessions.current')!)).toEqual({ sessionId: sid('previous') })
+      expect(b.selectPanel).not.toHaveBeenCalled()
+    })
   })
 
   it('releases a prepared Workspace target when synchronous preparation supersedes it', async () => {

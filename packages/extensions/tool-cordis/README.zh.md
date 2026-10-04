@@ -35,7 +35,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-Host provider 结合生成的 Service/Event 目录、经 app-boot Config 投影器投影的运行中 Loader 树，以及请求 agent 的工具注册表。Client provider 通过现有检查注册表同步清单，并从已连接页面回答查询。宿主入口持有 Host provider 的注册，preset 行持有两个工具，都通过 Cordis effect；注册表拒绝重复的 provider id，所以 provider 按进程注册一次而不是按 preset 注册。检查直接读取 provider，不维护独立运行时投影，因此不发布不变式配套插件。
+Host provider 结合生成的 Service/Event 目录、经 app-boot Config 投影器投影的运行中 Loader 树，以及请求 agent 的工具注册表。Client provider 通过现有检查注册表同步清单，并从已连接页面回答查询。宿主入口持有 Host provider 的注册，preset 行持有两个工具，都通过 Cordis effect；注册表拒绝重复的 provider id，所以 provider 按进程注册一次而不是按 preset 注册。
 
 </details>
 
@@ -68,7 +68,7 @@ Host provider 结合生成的 Service/Event 目录、经 app-boot Config 投影�
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Client 查询等待页面响应或取消。检查不能调用服务方法、配置插件或执行生成代码。
+- Client 查询需要页面响应，并采用 Host runner 的[有界等待与重试策略](../cordis-host-runner/README.zh.md#client-inspection)。检查不能调用服务方法、配置插件或执行生成代码。
 - `Config.listConfigs` 只遍历 profile 的 Loader 树。Agent preset 的 `plugins` 列表挂载在独立的 preset 树中，所以只出现在 preset 声明里的插件不会被列出，除非 profile 树也挂载了它。
 
 <a id="dev-note"></a>

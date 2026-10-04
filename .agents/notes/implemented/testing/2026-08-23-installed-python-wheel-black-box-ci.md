@@ -30,7 +30,7 @@ Fork and Dependabot pull requests never receive the repository secret. Their nat
 
 ### Required targets
 
-The pull-request `python-runtime` job calls the reusable builder for Linux x64 and Windows x64; master pushes select Linux arm64 and both macOS architectures under the [master-only platform policy](../process/2026-09-06-master-only-platform-ci.md). Its aggregate result remains a dependency of `all checks passed`, so a failed, cancelled, or missing native carrier blocks the required verdict. The [sdk-runtime README](../../../../python/sdk-runtime/README.md) owns the Windows target and its PowerShell-specific minimal snapshot.
+The pull-request `python-runtime` job calls the reusable builder for Linux x64 and Windows x64; master pushes select Linux arm64 and both macOS architectures under the [master-only platform policy](../../../../.github/workflows/ci-master.yml). Its aggregate result remains a dependency of `all checks passed`, so a failed, cancelled, or missing native carrier blocks the required verdict. The [sdk-runtime README](../../../../python/sdk-runtime/README.md) owns the Windows target and its PowerShell-specific minimal snapshot.
 
 ## Existing decisions and supersession
 

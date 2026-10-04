@@ -89,6 +89,18 @@
   align-items: center;
   height: calc(24px + var(--dsh-content-font-delta, 0px));
   min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  transition: color 100ms ease;
+}
+
+.root:hover {
+  color: var(--dsw-alias-label-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    transition: none;
+  }
 }
 
 .leading {
@@ -100,7 +112,7 @@
   align-items: center;
   justify-content: center;
   margin-right: 6px;
-  color: var(--dsw-alias-label-tertiary);
+  color: inherit;
 }
 
 /* Same glyph-scaling rule as DisclosureRow's leading: the CSS edge overrides
@@ -115,7 +127,7 @@
 }
 
 .chevron {
-  color: var(--dsw-alias-label-secondary);
+  color: inherit;
 }
 
 /* Hover preview on the expandable row: the idle icon crossfades (100ms) into
@@ -146,8 +158,6 @@
   flex: none;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-secondary);
-  transition: color 100ms ease;
 }
 
 .sep {
@@ -167,13 +177,6 @@
   white-space: nowrap;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-tertiary);
-  transition: color 100ms ease;
-}
-
-.root:hover .title,
-.root:hover .summary:not(.errorSummary):not(.stoppedSummary) {
-  color: var(--dsw-alias-label-primary);
 }
 
 /* Error row's collapsed summary: the failure's first line in the error color. */

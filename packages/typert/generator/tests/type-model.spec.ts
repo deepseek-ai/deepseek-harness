@@ -1137,6 +1137,8 @@ describe('WorkspaceAnalyzer', { timeout: 60_000 }, () => {
       './client/typert': './lib/typert.client.js',
       './wildcard': './lib/*.js',
       './data': './lib/data.json',
+      './icon': './assets/icon.svg',
+      ...Object.fromEntries(['png', 'jpg', 'jpeg', 'webp', 'PNG'].map(extension => [`./image-${extension}`, `./assets/icon.${extension}`])),
       ignored: './lib/index.js',
     }
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
@@ -1147,6 +1149,7 @@ describe('WorkspaceAnalyzer', { timeout: 60_000 }, () => {
     expect(exports.some(item => item.subpath === './fallback' && item.name === 'RuntimeOnly')).toBe(true)
     expect(exports.some(item => item.subpath === './direct' && item.name === 'Direct')).toBe(true)
     expect(exports.some(item => item.subpath === './empty')).toBe(false)
+    expect(exports.some(item => item.subpath === './icon' || item.subpath.startsWith('./image-'))).toBe(false)
 
     manifest.exports = './lib/index.js'
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)

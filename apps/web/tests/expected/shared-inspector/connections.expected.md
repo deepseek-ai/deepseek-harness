@@ -1,0 +1,3 @@
+- embedded page one: 2 contexts (Host + own Client)
+- embedded page two: own Client evaluates embedding-page-two
+- direct devtools: 3 contexts (Host + both Clients)

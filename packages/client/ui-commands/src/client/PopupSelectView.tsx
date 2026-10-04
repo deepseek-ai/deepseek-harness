@@ -10,13 +10,15 @@
  * null; the overlay slot stays mounted. The card height clamps to the space
  * above the composer.
  */
-import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
-import { useEffect, useRef } from 'react'
+import { MenuGroup, MenuSurface, observeStickyMenuGroups } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Fragment, useEffect, useMemo, useRef } from 'react'
 import { useSyncExternalStore } from 'react'
 import clsx from 'clsx'
 import { IconCheckOutlineRegular, RiskConfirmation, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { filterOptions } from './popup.ts'
+import type { SelectOption } from './contract.ts'
+import { groupOptions } from './option-groups.ts'
 import type { PopupSelectController } from './popup.ts'
 import css from './PopupSelectView.module.css'
 
@@ -44,6 +46,15 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
   )
   const cardRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const rows = useMemo(() => filterOptions(state.options, state.search, state.searchMode),
+    [state.options, state.search, state.searchMode])
+  const groups = useMemo(() => groupOptions(rows), [rows])
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (viewport === null) return
+    return observeStickyMenuGroups(viewport)
+  }, [state.open, state.status, state.confirming, groups])
   // The card is bottom-anchored above the composer; clamp the design cap to
   // the space above it, re-measured on every store update.
   const maxHeight = useAnchoredMaxHeight(cardRef, MAX_HEIGHT, state)
@@ -54,7 +65,7 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
   useEffect(() => {
     if (active === null) return
     cardRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
-  }, [active])
+  }, [active, rows, state.confirming])
 
   // Focus ownership: the search input grabs on open, and ANY outside
   // pointer interaction dismisses —
@@ -78,8 +89,10 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
 
   if (!state.open) return null
 
-  const rows = filterOptions(state.options, state.search)
   const confirmation = state.confirming?.confirmation
+  const emptyLabel = state.searchLabels === null
+    ? t('status.empty')
+    : state.options.length === 0 ? state.searchLabels.empty : state.searchLabels.noResults
 
   const onKeyDown = (ev: React.KeyboardEvent<HTMLDivElement>): void => {
     // ArrowLeft/ArrowRight fall through on purpose: the search input keeps
@@ -118,6 +131,25 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
     }
   }
 
+  const renderOption = (option: SelectOption, index: number) => (
+    <div
+      key={option.id}
+      role="option"
+      aria-selected={index === state.active}
+      aria-label={option.badge === undefined ? undefined : `${option.label} ${option.badge}`}
+      className={clsx(css.row, index === state.active && css.rowActive)}
+      onClick={() => { void popup.select(index) }}
+      onMouseEnter={() => { popup.highlight(index) }}
+    >
+      <span className={css.label}>
+        <span className={css.labelText}>{option.label}</span>
+        {option.badge !== undefined && <sup className={css.badge}>{option.badge}</sup>}
+      </span>
+      {option.detail !== undefined && <span className={css.detail}>{option.detail}</span>}
+      {option.active === true && <span className={css.check}><IconCheckOutlineRegular /></span>}
+    </div>
+  )
+  let optionIndex = 0
   return (
     <>
       {state.confirming === null && (
@@ -132,7 +164,7 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
             ref={searchRef}
             className={css.search}
             type="text"
-            placeholder={t('search.placeholder')}
+            placeholder={state.searchLabels?.placeholder ?? t('search.placeholder')}
             aria-label={t('search.aria')}
             value={state.search}
             readOnly={state.submitting}
@@ -148,30 +180,14 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
           )}
           {state.status === 'pending' && <div className={css.status}>{t('status.loading')}</div>}
           {state.submitting && <div className={css.status}>{t('status.applying')}</div>}
-          {state.status === 'ready' && rows.length === 0 && <div className={css.status}>{t('status.empty')}</div>}
+          {state.status === 'ready' && rows.length === 0 && <div className={css.status}>{emptyLabel}</div>}
           {state.status === 'ready' && (
-            <div role="listbox" aria-label={t('listbox.aria', { command: String(state.command) })} className={css.viewport}>
-              {rows.map((option, index) => (
-                <div
-                  key={option.id}
-                  role="option"
-                  aria-selected={index === state.active}
-                  aria-label={option.badge === undefined ? undefined : `${option.label} ${option.badge}`}
-                  className={clsx(css.row, index === state.active && css.rowActive)}
-                  // mousedown would race the document capture listener; the shell
-                  // owns focus anyway, so a plain click (inside the card → no
-                  // dismiss) works.
-                  onClick={() => { void popup.select(index) }}
-                  onMouseEnter={() => { popup.highlight(index) }}
-                >
-                  <span className={css.label}>
-                    <span className={css.labelText}>{option.label}</span>
-                    {option.badge !== undefined && <sup className={css.badge}>{option.badge}</sup>}
-                  </span>
-                  {option.detail !== undefined && <span className={css.detail}>{option.detail}</span>}
-                  {option.active === true && <span className={css.check}><IconCheckOutlineRegular /></span>}
-                </div>
-              ))}
+            <div ref={viewportRef} role="listbox" aria-label={t('listbox.aria', { command: String(state.command) })} className={css.viewport}>
+              {groups.map(({ group, rows: groupRows }) => group === undefined
+                ? <Fragment key="ungrouped">{groupRows.map(option => renderOption(option, optionIndex++))}</Fragment>
+                : <MenuGroup key={`group:${group.name}`} label={group.label}>
+                  {groupRows.map(option => renderOption(option, optionIndex++))}
+                </MenuGroup>)}
             </div>
           )}
         </MenuSurface>

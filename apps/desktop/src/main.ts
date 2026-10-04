@@ -34,6 +34,7 @@ import { readDeviceInfo } from './device-info.ts'
 import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
 import { claimDesktopSingleInstance } from './single-instance.ts'
 import { DesktopUpdateCoordinator } from './update-coordinator.ts'
+import { DesktopCommandManager } from './command-management.ts'
 import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-document.ts'
 import { DesktopFatalRecovery } from './fatal-recovery.ts'
 import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'
@@ -45,6 +46,7 @@ import { DesktopUpdatePreparationError } from './update-error.ts'
 import { DesktopUpdateSchedule, resolveDesktopUpdateScheduleConfig } from './update-schedule.ts'
 import { desktopUpdateErrorSummary, presentDesktopUpdate } from './update-presentation.ts'
 import { desktopErrorState } from './startup-error.ts'
+import { readDesktopLoginShellEnvironment, resolveDesktopLoginShellConfig } from './login-shell-environment.ts'
 import { DesktopMandatoryUpdatePolicy, resolveDesktopPolicyConfig, type DesktopPolicyState } from './mandatory-update-policy.ts'
 import { desktopClientMetadata, desktopClientVersion } from './client-metadata.ts'
 import { DesktopMandatoryUpdateWindow } from './mandatory-update-window.ts'
@@ -238,9 +240,8 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     if (['http:', 'https:'].includes(new URL(url).protocol)) void shell.openExternal(url)
     return { action: 'deny' }
   })
-  if (process.platform === 'darwin') {
-    // macOS hides the traffic lights in fullscreen; the page drops its
-    // clearance for them off the html[data-fullscreen] flag this feeds.
+  if (process.platform === 'darwin' || process.platform === 'win32') {
+    // Fullscreen hides native window controls; overlays drop their caption clearance.
     const sendFullscreen = (): void => {
       if (!window.isDestroyed()) window.webContents.send(DESKTOP_IPC.windowFullscreen, window.isFullScreen())
     }
@@ -249,6 +250,8 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     // Reloads and navigations re-register the preload listener; resend the
     // current state so a fullscreen reload does not fall back to windowed CSS.
     window.webContents.on('did-finish-load', sendFullscreen)
+  }
+  if (process.platform === 'darwin') {
     // Deminiaturize reattaches the NSVisualEffectView material late
     // (electron/electron#25368), so a transparent window shows the desktop
     // through the sidebar until then. Paint an opaque base while minimized or
@@ -321,6 +324,18 @@ async function main(): Promise<void> {
     : join(process.resourcesPath, 'runtime', 'primary-runtime')
   const activeProject = paths.profile
   const manager = new DesktopProjectManager(paths, resources)
+  // Dock and Finder launches inherit only launchd's environment; every Host shares one login-shell read.
+  const loginShellRead = new AbortController()
+  // The probe runs in its own process group, which outlives Desktop unless the read is aborted.
+  app.on('will-quit', () => { loginShellRead.abort() })
+  const loginShell = readDesktopLoginShellEnvironment(process.env, resolveDesktopLoginShellConfig(process.env), {
+    signal: loginShellRead.signal,
+  }).then((result) => {
+    for (const failure of result.failures) console.warn(`desktop login shell: ${failure.shell} failed (${failure.reason})`)
+    return result.environment
+  })
+  let hostEnvironment: NodeJS.ProcessEnv = process.env
+  const prepareHostEnvironment = async (): Promise<void> => { hostEnvironment = await loginShell }
   let quitting = false
   let startup: Promise<void> | undefined
   let workspaceRecovery: Promise<void> | undefined
@@ -371,6 +386,15 @@ async function main(): Promise<void> {
       detail: formatDesktopMessage(locale.messages.aboutVersion, { version: app.getVersion() }),
       buttons: [locale.messages.updateAcknowledge], cancelId: 0 })
   }
+  const commandManager = new DesktopCommandManager({
+    resources: process.resourcesPath,
+    isPackaged: app.isPackaged,
+    isInstalledLocation: () => process.platform !== 'darwin' || app.isInApplicationsFolder(),
+    isInstalling: () => updateState.phase === 'installing',
+    isQuitting,
+    messages: () => currentDesktopLocale().messages,
+    show: ordinaryMessageBox,
+  })
   const appPreload = fileURLToPath(new URL('./preload-app.cjs', import.meta.url))
   const applicationUrl = `${SCHEME}://app/`
   let hostUrl: string | undefined
@@ -418,7 +442,7 @@ async function main(): Promise<void> {
   const backend = new DesktopBackendController((onFailure) => {
     const hostInspectPort = developmentHostInspectPort(development)
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
-      hostInspectPort, { ...process.env, DSH_CLIENT_VERSION: desktopClientVersion() }, onFailure,
+      hostInspectPort, { ...hostEnvironment, DSH_CLIENT_VERSION: desktopClientVersion() }, onFailure,
       primaryRuntime,
       resources, (next) => { platformView.setSession(next) })
     return {
@@ -514,7 +538,7 @@ async function main(): Promise<void> {
       updateStoppedHost = false
       if (restoreHost) {
         // Only confirmed process exit permits replacement before another installation confirmation.
-        const hostReady = backend.start(async () => {})
+        const hostReady = backend.start(prepareHostEnvironment)
         startup = hostReady
         const recovery = hostReady.then(async () => {
           if (quitting) return
@@ -544,7 +568,7 @@ async function main(): Promise<void> {
     startup ??= (async () => {
       await navigateMain(applicationUrl)
       await backend.start(async () => {
-        await manager.applyRelease()
+        await Promise.all([manager.applyRelease(), prepareHostEnvironment()])
       })
       if (backend.host !== undefined) await openInitialWindow()
       if (backend.host !== undefined) updateJournal?.action('workspace-ready')
@@ -560,6 +584,7 @@ async function main(): Promise<void> {
   const updates = new DesktopUpdateCoordinator(
     publishUpdate,
     async () => {
+      await commandManager.idle()
       await workspaceRecovery
       await startup?.catch(() => undefined)
       const host = backend.host
@@ -609,6 +634,7 @@ async function main(): Promise<void> {
     },
     undefined, undefined, undefined,
     (success, reason) => { void track('desktop_upgrade_download_result', { is_success: success, ...reason === undefined ? {} : { error_reason: reason } }) },
+
   )
 
   const updateSchedule = new DesktopUpdateSchedule(updates, resolveDesktopUpdateScheduleConfig(process.env))
@@ -927,6 +953,8 @@ async function main(): Promise<void> {
       : { label: currentDesktopLocale().messages.aboutMenu, role: 'about' },
     { type: 'separator' },
     { label: currentDesktopLocale().messages.checkUpdatesMenu, click: () => { void openUpdatePrompt(true) } },
+    ...process.platform === 'darwin' || process.platform === 'win32'
+      ? [{ label: currentDesktopLocale().messages.cliCommandMenu, click: () => { void commandManager.show() } }] : [],
     ...development ? [
       { type: 'separator' as const },
       { label: currentDesktopLocale().messages.reloadPageMenu, role: 'reload' as const },

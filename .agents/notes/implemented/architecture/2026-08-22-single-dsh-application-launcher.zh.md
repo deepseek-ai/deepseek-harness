@@ -34,7 +34,7 @@ Profile manifest 负责 patch 重载：
 
 自定义 profile 默认为 `live`。`startup` profile 仍会应用组合包、profile、home 级与调用时 `--patch` 各层，但启动后不会监视这些文件。`dsh-base` 插入的模块 HMR（热模块替换）配置项默认禁用；具有经过验证的源码模块重载生命周期的 profile 必须显式启用它。随附 profile 均不启用服务器模块 HMR：`patchReload: live` 使用启动器的仅配置 watcher，`startup` profile 则不安装 watcher。SDK 与 ACP 无法在一个自有 stdio 连接内安全替换其服务器、agent、持久化或工具注册表。
 
-随附协议 profile 将 stdout 保留给协议帧，显示帮助时不启动 transport，并通过有界根节点 dispose（资源释放）处理 stdin EOF 与信号。ACP 继续仅用于自动化。SDK JSON-RPC 方法、通知字段与 `initialize.serverInfo.name` 保持稳定。完整 profile 的模型可见工具与持久化默认值来自 `dsh-base`，包括其[默认编辑器选择](../simplification/2026-09-05-base-default-file-editor.zh.md)；`sdk-minimal` 拥有自己的显式默认值。可运行快照负责固定已组装的应用输出。
+随附协议 profile 将 stdout 保留给协议帧，显示帮助时不启动 transport，并通过有界根节点 dispose（资源释放）处理 stdin EOF 与信号。ACP 继续仅用于自动化。SDK JSON-RPC 方法、通知字段与 `initialize.serverInfo.name` 保持稳定。完整 profile 的模型可见工具与持久化默认值来自 `dsh-base`，包括其[默认编辑器选择](../../../../packages/bundle/base/README.zh.md)；`sdk-minimal` 拥有自己的显式默认值。可运行快照负责固定已组装的应用输出。
 
 ### TypeScript SDK 自定义
 
@@ -46,7 +46,7 @@ SDK 用户通过 profile 自定义插件。`dsh plugin --profile <name> ...` 管
 
 ### Python 运行时
 
-Python 运行时 wheel 将 [`python/sdk-runtime/runtime-bootstrap.mjs`](../../../../python/sdk-runtime/runtime-bootstrap.mjs) 暂存为 `dsh-python-runtime-closure` 入口。其普通分支调用公开 CLI export；提供方私有选择会在 CLI 解析前分派到内部子进程 runner，而不是应用入口。[原生 containment 决策](2026-08-28-subprocess-native-containment.zh.md)负责该私有分派。Python 客户端默认选择 `dsh --profile sdk`、有序 patch 文件与显式 Harness home；`python/sdk/examples` 下的可运行示例选择 `sdk-minimal`。安装的 `dsh` 控制台命令暴露相同的 profile 语法，包括 `web` profile。
+Python 运行时 wheel 将 [`python/sdk-runtime/runtime-bootstrap.mjs`](../../../../python/sdk-runtime/runtime-bootstrap.mjs) 暂存为 `dsh-python-runtime-closure` 入口。其普通分支调用公开 CLI export；提供方私有选择会在 CLI 解析前分派到内部子进程 runner，而不是应用入口。[原生 containment 参考](../../../../packages/subprocess/subprocess-local/README.zh.md)负责该私有分派。Python 客户端默认选择 `dsh --profile sdk`、有序 patch 文件与显式 Harness home；`python/sdk/examples` 下的可运行示例选择 `sdk-minimal`。安装的 `dsh` 控制台命令暴露相同的 profile 语法，包括 `web` profile。
 
 可执行文件族是 `deepseek-harness-sdk-runtime-<platform>-<arch>`。SDK 协议格式、wheel 与 import 分发名称、伴随文件名称，以及协议 identity `deepseek-harness-sdk-runtime` 保持稳定。SDK 包族是 `@deepseek-ai/dsh-sdk-client`、`@deepseek-ai/dsh-sdk-protocol` 与 `@deepseek-ai/dsh-sdk-jsonrpc-server`；`@deepseek-ai/dsh-acp` 继续作为 ACP 协议插件。仓库不保留 Python 专用 Node 应用、检入的完整配置、兼容包、转发可执行文件、后备解析器或 SDK／ACP 启动别名。[docs/architecture.md](../../../../docs/architecture.zh.md)负责该启动方式，[`python/sdk-runtime` README](../../../../python/sdk-runtime/README.zh.md)负责 Windows 载体。
 
@@ -56,7 +56,7 @@ Python 运行时 wheel 将 [`python/sdk-runtime/runtime-bootstrap.mjs`](../../..
 
 ## 既有决策与取代关系
 
-[Profile 命令简写](../feature/2026-09-15-profile-command-shorthand.zh.md)取代本 Note 中仅为 Web 提供简写的机制；本 Note 继续负责应用组合与生命周期的所有权。
+[CLI 参考](../../../../apps/cli/reference/README.zh.md)说明每个 profile 的命令简写；本 Note 继续负责应用组合与生命周期的所有权。
 
 本决策取代 [profile 插件组合包](2026-08-05-profile-plugin-bundles.zh.md)、[TypeScript SDK 客户端与 SDK subagent 后端](../../archived/feature/2026-07-27-typescript-sdk-and-sdk-subagent-backend.md)、[移除 SDK 项目工具链](../../archived/simplification/2026-08-11-remove-sdk-project-toolchain.md)和[单文件 Python SDK 运行时分发](2026-07-10-single-file-executable-sdk-runtime-distribution.zh.md)中的应用启动与包名事实。这些 Note 对 profile 分层、客户端／协议语义、已删除的项目工具链与原生打包仍分别具有独立权威。
 

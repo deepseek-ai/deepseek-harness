@@ -89,7 +89,6 @@ const ref = await ctx.spillStore.saveText({
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：抽象 `SpillStore` 服务及其 `saveText` 约定 |
 | [`src/types.ts`](src/types.ts) | 词汇：`SaveTextSpill`、`SpillRef`、带品牌类型 `SpillLocator`、`SpillOwner`、`SpillSource` |
-| — | 不发布运行时不变式伴生入口；除归属 seam 强制执行的约定外，本包不暴露独立的事件序列或可变数据关系。 |
 
 ### 数据模型
 

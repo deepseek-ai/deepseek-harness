@@ -51,7 +51,7 @@ kind: "package-reference"
 
 徽章占据 conversation 声明的 `conversation.input.plan` 单实例座位；node 半部是空 apply（roster 行）。读取经 standard-kit 的 `useProjection` 走通用投影对：有效目标是 `pending ? !active : active`——折叠的宿主值而非客户端乐观态，因此到达的帧无论哪个方向都会纠正徽章。座位注入面携带一个动词 `exitPlanMode`，经 `ctx.remote.commands.execute` 执行 `/plan off`，并把准入失败映射为一行内联错误。placeholder 与提示文案位于 ui-conversation 的 `conversation` locale 命名空间，与已认领 `/plan` 命令的提示逐字共用。
 
-计划卡片通过 Conversation Definition 从原生 `tool/call` 或 PTC dispatch 参数派生，并使用每次调用已解析的回合位置。它们与文件产物一起贡献到可追加的 `conversation.chat.turnTail` 列表。计划资源地址标识调用及完整的普通会话地址或子会话直接父级地址；provider 读取已有会话历史及较早分页，不把正文存入侧边栏布局。提问插件拥有审批操作插槽，并提供请求键、完整正文和可选的调用标识。自动打开通过绑定的 hook 读取 `ctx.sidebarRight.mounted`，在座位出现在屏幕上后才执行：全局面板打开期间到达的审批，会在返回时与座位在同一次提交里先挂载、早于座位完成绑定。[决策记录](../../../.agents/notes/implemented/feature/2026-09-17-persistent-plan-cards.zh.md)说明审批与文档为何保持独立生命周期。 子代理计划地址也保留未知模式，以便历史读取解析子 descriptor。
+计划卡片通过 Conversation Definition 从原生 `tool/call` 或 PTC dispatch 参数派生，并使用每次调用已解析的回合位置。它们与文件产物一起贡献到可追加的 `conversation.chat.turnTail` 列表。计划资源地址标识调用及完整的普通会话地址或子会话直接父级地址；provider 读取已有会话历史及较早分页，不把正文存入侧边栏布局。提问插件拥有审批操作插槽，并提供请求键、完整正文和可选的调用标识。自动打开通过绑定的 hook 读取 `ctx.sidebarRight.mounted`，在有会话出现在屏幕上后才执行：Sidebar 在挂载审批的那次提交渲染之前就已给出返回的会话，因此在全局面板或其他会话占据屏幕期间到达的审批，会在那次提交的 effect 里打开。[历史决策记录](../../../.agents/notes/archived/feature/2026-09-17-persistent-plan-cards.md)说明审批与文档为何保持独立生命周期。 子代理计划地址也保留未知模式，以便历史读取解析子 descriptor。
 
 框架绑定的 `usePlans(turn)` 只提供该回合的已提交计划数据。Chat 随节点更新维护成员索引，并在读取时排列该集合；卡片渲染不扫描整段对话，也不订阅其他回合或节点类型。
 
@@ -100,5 +100,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。plan state 与 boundary 的所有权由 dsh-plan-mode 审计；本包的 control 是一种 slot effect，其声明、注册与清理由本包执行。

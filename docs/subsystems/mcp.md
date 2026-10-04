@@ -107,9 +107,9 @@ MCP prompt templates, human-input elicitation, task-based execution, and resourc
 
 - [MCP package group](../../packages/mcp/README.md) — package entry points.
 - [MCP resources](../../packages/mcp/mcp-resources/README.md) — shared tools and resource-provider semantics.
-- [Resource visibility decision](../../.agents/notes/implemented/feature/2026-09-13-mcp-resources-in-profiles.md) — shared profile mounting and visibility from configured servers.
+- [Resource visibility reference](../../packages/mcp/mcp-resources/README.md) — shared profile mounting and visibility from configured servers.
 - [Third-party memory servers](../user/guide/mcp-memory.md) — product configuration guide.
-- [Protocol negotiation decision](../../.agents/notes/implemented/feature/2026-09-12-mcp-sdk-protocol-negotiation.md) — SDK ownership and compatibility decisions.
+- [Protocol negotiation reference](../../packages/mcp/mcp-client/README.md) — SDK ownership and compatibility decisions.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

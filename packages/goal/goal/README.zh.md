@@ -109,7 +109,6 @@ view.activation                        // 'armed' | 'disarmed' — not persisted
 | [`src/types.ts`](src/types.ts) | 纯客户端安全类型：`GoalView`、`GoalSnapshot`、`GoalActivationChanged`、投影键声明 |
 | [`src/fold.ts`](src/fold.ts) | 持久 goal 变更的严格回放折叠与解码器 |
 | [`src/runtime.ts`](src/runtime.ts) | `GoalId` 品牌、`GoalError` 代码、变更版本常量 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式配套模块：对每个已挂接会话的独立增量折叠 |
 
 ### 事件与归属
 
@@ -127,7 +126,7 @@ view.activation                        // 'armed' | 'disarmed' — not persisted
 - [goal 子系统](../../../docs/subsystems/goal.zh.md)——goal 类型、持久的变更载荷与生成的服务 API。
 - [goal 组地图](../README.zh.md)——goal 各包及其组合方式。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-goal)——每个受支持配置字段及其源声明。
-- [goal 领域 Agent Note](../../../.agents/notes/implemented/feature/2026-07-19-persisted-same-session-goal-domain.zh.md)——领域设计、备选方案与决策。
+- [历史goal 领域 Agent Note](../../../.agents/notes/archived/feature/2026-07-19-persisted-same-session-goal-domain.md)——领域设计、备选方案与决策。
 
 -----
 

@@ -85,26 +85,14 @@
 
 /* ---- Inline edit form ---- */
 
-.objectiveInput {
-  flex: 1;
-  min-width: 0;
-  height: 26px;
-  padding: 0 8px;
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-base);
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--dsw-alias-label-primary);
-  outline: none;
-}
-
-.objectiveInput:focus {
-  border-color: var(--dsw-alias-state-business-primary);
-}
-
-.objectiveInput::placeholder {
-  color: var(--dsw-alias-label-caption);
+/* The edit strip grows with a multi-line objective; actions stay on the last line. */
+.editBar {
+  height: auto;
+  min-height: 36px;
+  align-items: flex-end;
+  /* The editor scrolls inside this elevated menu-surface strip. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 /* ---- Icon actions ---- */

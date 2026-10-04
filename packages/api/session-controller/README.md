@@ -33,6 +33,8 @@ The Client journal validates current Session event envelopes before publishing f
 
 Each endpoint states its activation policy. List reads only stored headers and projection-cache rows: it never calls per-session stat or opens a cold Session body. A current-format cache identity may supply every list hint; a lifecycle-matching predecessor cache may supply only its version-compatible title as a stale display fact, never as an authoritative fold seed. Search, attachment, history pages, log following, skill discovery, and workspace-path opening can inspect persistence without activating an Agent; `canOpenWorkspacePath()` reports native-opening availability without addressing a Session. Cancellation requires live state; queue mutation, model, rename, prompt, and file-reference operations may resolve or resume an ordinary Session. Prompt rejects content with neither non-whitespace text nor an attachment before resolving the Agent or appending Session events; queue edits accept only non-empty text content. Prompt admission consumes opaque receipts from the injected [`fileUploads`](../../client/file-upload/README.md) Host service and resolves every same-Agent receipt before sending the complete ordered content list through `ctx.attachments`. Prompt retries whose `requestId` is already queued or logged return the original acceptance without inserting another message. Create and fork are the only operations that create a new Agent directly. The service applies one preset-aware resume policy and subagent ownership fence to its own methods and to the Typert Agent and Session lookups used by other Remote namespaces. Queue mutation has one narrow exception: a live child whose current projected identity is continuable and comes from its own non-seed suffix accepts the ordinary Edit, Remove, and QueueDock Steer actions across both inbox destinations. One-shot, missing, unknown, corrupt, seed-only, or cold children remain rejected without resume. The skill catalog uses a live Agent when present or the recorded preset's standing scope when cold, so listing never starts an Agent. The authenticated delivery routes use `workspaceDesktop()` for the serving Host name and file-manager behavior. `openWorkspacePath({ path, action: "reveal" })` delegates file-manager navigation to the native adapter; omitting `action` opens the file-type association, including HTML and SVG. Both operations require the composed filesystem to map the requested Host path to the same canonical process path; unmapped remote paths are refused before a native command runs. `session.projections` reads one complete baseline through a live-preferred Session observation without activating an Agent. It returns null for a missing Session and serves any registered projection keys. The Client exposes shared values and explicit-read state through `projectionsBySession`; domains select their own keys. Session-list summaries carry `agentAvailable`, updated through existing summary and status events independently of durable projections. Initial reads and live projection frames use the same sequence ordering.
 
+Host list generation yields between complete rows only when its configured work slice is exhausted; cheap remaining work returns without a forced yield. Request cancellation is checked per row and after each yield and rejects without partial results. Each row is synchronous; the list does not promise one cross-Session snapshot. A Session already queued as cold remains a cached row if it attaches during a yield: Client in-flight mutation replay corrects its availability, and sequenced projections supersede cached hints.
+
 Client list rows and resident Sessions use the current `sessionListMetadata` projection to reject stale blank-session hints; recency is the later of the summary timestamp and the projected last user prompt. When SessionManager creates an instance before its list row arrives, it reconciles blankness with metadata already retained for that Session. An opened conversation is therefore not reused by New Session even when an older list response still marks it blank.
 
 Explicit-id `session.create` adopts a live Session or resumes a persisted Session while retaining its writer lock. Writer contention returns `session/writer-held`; callers may try another blank without suppressing unrelated failures. `session.list` includes persisted blanks using cached metadata, without opening cold log bodies.
@@ -92,6 +94,7 @@ A successful `selectModel` response acknowledges the Session-local selection wit
 | Field | Default | Meaning |
 |---|---:|---|
 | `nativeOpen` | platform-detected | Whether Session workspace paths can be handed to a native desktop opener |
+| `listWorkSliceMs` | `16` | Positive integral list-work time slice in milliseconds; checks occur between complete rows |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-api-session-controller) is the exhaustive source for accepted fields and their JSDoc.
 
@@ -110,6 +113,7 @@ No direct effect; model requests remain owned by the Agent and LLM packages.
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- A single summary, the query provider's own enumeration, final sorting, and response serialization can exceed the list work-slice target; it is not a hard Host latency bound.
 - The image byte cap does not validate decoded dimensions or pixel count.
 - A failed follow resumption remains visible to the caller instead of retrying indefinitely.
 - The raw browser upload is one streaming HTTP request without resumable offsets; a retry sends the file again from byte zero.
@@ -127,5 +131,3 @@ No direct effect; model requests remain owned by the Agent and LLM packages.
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. Every page and frame is checked against the addressed durable Session.

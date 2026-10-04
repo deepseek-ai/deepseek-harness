@@ -41,7 +41,7 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-注册和监听随插件生命周期释放。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由。无需 invariant companion：目录直接由同一次配置和凭据读取派生，不维护独立副本。
+注册和监听随插件生命周期释放。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由。
 
 共享传输判定为 `QUOTA` 的失败请求离开本提供方前会被改写为 `ACCOUNT_QUOTA`，HTTP 402 响应与流内 SSE 错误都适用。共享传输与 `deepseek-official` 路由保留 `QUOTA`，因此账号路由的充值操作不会出现在 API Key 或第三方失败上。
 

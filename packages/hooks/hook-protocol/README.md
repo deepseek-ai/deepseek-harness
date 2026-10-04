@@ -60,20 +60,20 @@ This section explains the design decisions behind the library and points at the 
 
 ### Processing pipeline
 
-The library is a chain of single-purpose steps, one function each: validate the matcher pattern, run the command through the `dsh-shell` executor, decode the outcome, merge every matched hook's outcome into one most-restrictive result, and record the durable `hook/*` event pair. The matcher's `mode` parameter is the single axis the dialects differ on — `claude-code` interprets a pattern as literal alternatives or a regex, `codex` always as an unanchored regex. Every step degrades to a contained outcome instead of throwing, so a hook can never crash the calling turn: an invalid regex is a non-match, an executor rejection becomes a `HookOutput` with no exit code, exit 2 blocks with stderr as the reason, and every other failure stays non-blocking. Merging applies `deny > ask > allow` precedence, keeps the first `continue: false` stop sticky, and accumulates context in hook order. Detached runs are tracked so `fiber.dispose()` reaches quiescence, and the invariant companion rejects `hook/*` records outside an open turn. The steps live in [`src/matcher.ts`](src/matcher.ts), [`src/runner.ts`](src/runner.ts), [`src/codec.ts`](src/codec.ts), [`src/merge.ts`](src/merge.ts), [`src/events.ts`](src/events.ts), [`src/detached.ts`](src/detached.ts), and [`src/invariant.ts`](src/invariant.ts).
+The library is a chain of single-purpose steps, one function each: validate the matcher pattern, run the command through the `dsh-shell` executor, decode the outcome, merge every matched hook's outcome into one most-restrictive result, and record the durable `hook/*` event pair. The matcher's `mode` parameter is the single axis the dialects differ on — `claude-code` interprets a pattern as literal alternatives or a regex, `codex` always as an unanchored regex. Every step degrades to a contained outcome instead of throwing, so a hook can never crash the calling turn: an invalid regex is a non-match, an executor rejection becomes a `HookOutput` with no exit code, exit 2 blocks with stderr as the reason, and every other failure stays non-blocking. Merging applies `deny > ask > allow` precedence, keeps the first `continue: false` stop sticky, and accumulates context in hook order. Detached runs are tracked so `fiber.dispose()` reaches quiescence. The steps live in [`src/matcher.ts`](src/matcher.ts), [`src/runner.ts`](src/runner.ts), [`src/codec.ts`](src/codec.ts), [`src/merge.ts`](src/merge.ts), [`src/events.ts`](src/events.ts), and [`src/detached.ts`](src/detached.ts).
 
 ### `hook/*` session events
 
 The `hook/invoked` and `hook/result` events are declaration-merged into `SessionEventMap` as log-only records: like `compaction/*`, they are not surface events and carry no `surfaceOp`. A `hook/result` pairs with its `hook/invoked` by `handlerId`, and `appendHookResult` owns the decision rule. Payloads and per-event JSDoc live in the generated [persistence log event catalog](../../../docs/persistence-catalog.md).
 
-Invocation and result records must sit inside an open turn: `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and `Stop` satisfy that relation by construction, while `SessionStart` runs before turn 1 and gets no `hook/*` record — its injected context is delivered instead. The invariant companion registers on `ctx.invariants` and rejects `hook/*` events appended outside an open turn, a result without a matching invoked, an unknown dialect, or a non-finite duration.
+Invocation and result records must sit inside an open turn: `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and `Stop` satisfy that relation by construction, while `SessionStart` runs before turn 1 and gets no `hook/*` record — its injected context is delivered instead.
 
 ### Design philosophy
 
 - **One axis of difference collapsed into `mode`.** The dialects differ only in how a matcher pattern is interpreted, so the matcher takes the mode as a parameter instead of duplicating the engine.
 - **The executor owns process control.** Commands run through the `dsh-shell` executor rather than a bespoke spawn: the executor already provides the scrubbed-but-overridable environment, process-group cancellation, and timeout the protocol needs.
 - **Never throw into the loop.** Every failure mode — malformed JSON, an invalid regex, an executor rejection — degrades to a contained outcome or a non-match, so a hook can never crash the calling turn.
-- **Log-only, turn-enclosed events.** The `hook/*` records are durable evidence of what ran and what it decided; they are not surface events, and the invariant companion rejects them outside an open turn.
+- **Log-only, turn-enclosed events.** The `hook/*` records are durable evidence of what ran and what it decided; they are not surface events.
 
 The [hook-protocol-lib Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-protocol-lib.md) records the shared-versus-per-dialect split and the alternatives considered.
 
@@ -89,7 +89,6 @@ The [hook-protocol-lib Agent Note](../../../.agents/notes/archived/feature/2026-
 | [`src/events.ts`](src/events.ts) | `hook/*` event declaration, append helpers, stderr summary |
 | [`src/detached.ts`](src/detached.ts) | Detached-run quiescence tracking |
 | [`src/types.ts`](src/types.ts) | `HookOutput`, `MatcherGroup`, `CommandHook`, and the `hook/*` payload types |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: pairing, turn enclosure, dialect, and duration checks |
 
 </details>
 
@@ -103,7 +102,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Hooks group map](../README.md) — the sibling group page and its package table.
 - [Hook protocol library Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-protocol-lib.md) — why the protocol core is shared and what each bridge owns.
 - [Hook bridges Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-bridges.md) — how the two bridges use these primitives.
-- [Interception extension-points Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-interception-extension-points.md) — the typed-Decision surface the bridges map onto.
+- [Interception extension-points reference](../../../docs/tool-execution-pipeline.md) — the typed-Decision surface the bridges map onto.
 - [Generated persistence log event catalog](../../../docs/persistence-catalog.md) — the `hook/*` event payloads and per-event JSDoc.
 
 -----

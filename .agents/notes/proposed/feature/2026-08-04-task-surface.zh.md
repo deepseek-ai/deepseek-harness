@@ -83,7 +83,7 @@ Task Surface 服务通过受 schema 校验的配置定义限制。初始默认�
 
 工具定义省略 `isConcurrencySafe`。根据现有工具注册表约定，省略该字段会将每次调用归类为独占排序屏障，无需新增 `ToolDefinition` 字段。该工具只会组装到同时挂载 Host 服务和 Web 渲染器的 Web profile 中。版本 1 支持 `native` 和 `both` 工具模式；仅支持 `ptc` 的 profile 不会向模型公布该工具，因为 PTC mode 分发属于嵌套调用，无法把呈现元数据传到外层结果。
 
-浏览器安全的领域包从 `@deepseek-ai/dsh-brand` 以仅类型方式导入 `Branded` 原语，并拥有全部三个 Task Surface ID。根据[规范工具输出约定](../../implemented/architecture/2026-07-20-canonical-tool-output-contract.zh.md)，规范值仅存在于本次执行中。因此，回放通过 `output.presentationMeta(args, value)` 将以下带标签的载荷随 `tool/result.meta` 一并持久化：
+浏览器安全的领域包从 `@deepseek-ai/dsh-brand` 以仅类型方式导入 `Branded` 原语，并拥有全部三个 Task Surface ID。根据[规范工具输出约定](../../../../packages/core/tools/README.zh.md)，规范值仅存在于本次执行中。因此，回放通过 `output.presentationMeta(args, value)` 将以下带标签的载荷随 `tool/result.meta` 一并持久化：
 
 ```ts
 import type { Branded } from '@deepseek-ai/dsh-brand'

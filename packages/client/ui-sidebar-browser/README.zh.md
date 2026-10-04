@@ -118,5 +118,3 @@ Desktop 主进程批准 guest 租约，并执行挂载、导航和权限策略�
 无。
 
 </details>
-
-**运行时不变量：** 不发布 companion。每个导航 provider 拥有自身的实时状态并直接发布检查点；UI 通过 controller 消费同一份 provider 状态。

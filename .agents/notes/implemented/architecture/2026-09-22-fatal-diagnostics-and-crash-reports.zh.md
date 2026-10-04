@@ -28,7 +28,7 @@ macOS 上，启动审计把一组 Web 客户端行列为 `import failed (see con
 
 ## 与既有决定的关系
 
-本 note 部分取代 [Desktop 原生致命恢复](2026-09-15-desktop-native-fatal-recovery.zh.md)：对话框指向的记录现在是崩溃报告文件而非 Electron 控制台，对话框详情多出报告路径一行；该 note 对对话框归属、按钮集合与 profile 恢复的决定仍然有效。`uncaughtException` 的处理把 [fail-loud release](../bug-fix/2026-07-31-fail-loud-releases-the-terminal.zh.md) note 的 release 机制扩展到同步抛出。
+本 note 部分取代 [Desktop 原生致命恢复](2026-09-15-desktop-native-fatal-recovery.zh.md)：对话框指向的记录现在是崩溃报告文件而非 Electron 控制台，对话框详情多出报告路径一行；该 note 对对话框归属、按钮集合与 profile 恢复的决定仍然有效。`uncaughtException` 的处理把 [fail-loud release](../../../../packages/boot/app-boot/README.zh.md) note 的 release 机制扩展到同步抛出。
 
 ## 与 Desktop 日志体系设计的关系
 

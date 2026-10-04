@@ -87,7 +87,6 @@ kind: "package-reference"
 | [`src/events.ts`](src/events.ts) | 按 scope 分层的事件路由：`{ owner }`、`{ owners: 'all' }` 与 `{ owners: 'scope' }` 订阅 |
 | [`src/ring.ts`](src/ring.ts) | 每个任务的有界输出环：追加、保留裁剪、按偏移读取 |
 | [`src/pump.ts`](src/pump.ts) | 注册表拥有的拉取泵：每个任务一个定时器，结算前最后一次排干 |
-| — | 不发布运行时不变式伴生入口；事件协议与事件对读取的检查位于 `@deepseek-ai/dsh-jobs/invariant`。此提供方的准入决策使用私有配置，并且必须在后端启动器运行前失败；当前生产方由 `LocalJobRegistry.start()` 同步执行该决策。发布后再重复聚合只会向 companion 暴露私有配置，也无法验证失败发生在启动前。 |
 
 ### scope 分层
 
@@ -114,7 +113,7 @@ kind: "package-reference"
 - [jobs 组映射](../README.zh.md)——同级组页面及其包表格。
 - [注册表约定](../jobs/README.zh.md)——本包实现的抽象 `ctx.jobs` 服务。
 - [模型侧任务控制](../tool-jobs/README.zh.md)——`job_output`、`job_list` 与 `job_kill` 工具及完成通知。
-- [通用长时间运行工具运行时 Agent Note](../../../.agents/notes/implemented/architecture/2026-06-20-generic-long-running-tool-runtime.zh.md)——后台任务运行时背后的设计。
+- [通用长时间运行工具运行时 reference](../jobs/README.zh.md)——后台任务运行时背后的设计。
 - [任务注册表 seam Agent Note](../../../.agents/notes/archived/architecture/2026-07-26-job-registry-seam.md)——按所有者隔离的注册表约定及其理由。
 
 -----

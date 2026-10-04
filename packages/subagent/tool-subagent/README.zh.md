@@ -118,7 +118,7 @@ kind: "package-reference"
 - [生成工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent)——默认 schema 与各模式的措辞。
 - [生成配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-subagent)——每个受支持配置字段。
 - [后台优先的可继续委派](../../../.agents/notes/archived/feature/2026-08-11-background-first-continuable-delegation.md)——可继续工作为何默认在后台运行。
-- [模型选择 subagent 路由](../../../.agents/notes/implemented/feature/2026-08-18-model-selected-subagent-routes.zh.md)——选择策略、继承、发现与 fork 限制。
+- [历史模型选择 subagent 路由](../../../.agents/notes/archived/feature/2026-08-18-model-selected-subagent-routes.md)——选择策略、继承、发现与 fork 限制。
 
 -----
 

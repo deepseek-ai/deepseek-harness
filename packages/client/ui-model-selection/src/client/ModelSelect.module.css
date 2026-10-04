@@ -33,7 +33,7 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.trigger:focus-visible {
+.trigger:focus-visible:not([data-selection-focus]) {
   box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
 }
 
@@ -155,25 +155,67 @@
   cursor: pointer;
 }
 
+.searchRow {
+  position: relative;
+  flex-shrink: 0;
+  margin: 2px 0 3px;
+}
+
+.searchRow .search {
+  display: flex;
+  height: auto;
+  padding: 5px 7px;
+  border: 0 solid transparent;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+}
+
+.searchRow .searchWithQuery {
+  padding-right: 34px;
+}
+
+.searchClear {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  corner-shape: round;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.searchClear:hover,
+.searchClear:focus-visible {
+  outline: none;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.searchRow .search:focus-within {
+  border-color: transparent;
+}
+
+.searchRow .search input {
+  padding: 0;
+  font-size: 12px;
+  line-height: normal;
+}
+
+.searchRow .search input::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
 .groups {
   min-height: 0;
   overflow-y: auto;
-}
-
-.group + .group {
-  margin-top: 3px;
-}
-
-.groupTitle {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 4px 7px 2px;
-  background: var(--dsw-specific-menu);
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 500;
 }
 
 .option {
@@ -194,8 +236,9 @@
   cursor: pointer;
 }
 
-.option:hover:not(:disabled),
-.option:focus-visible {
+.option:not(.modelOption):hover:not(:disabled),
+.option:focus-visible,
+.optionActive:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
@@ -222,7 +265,7 @@
   color: inherit;
   font-size: 13px;
   line-height: 18px;
-  font-weight: 500;
+  font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -257,9 +300,11 @@
   line-height: 20px;
   cursor: pointer;
   text-align: left;
+  outline: none;
 }
 
-.cell:hover {
+.cell:hover,
+.cell:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 

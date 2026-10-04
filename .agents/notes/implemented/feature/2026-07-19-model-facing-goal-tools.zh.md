@@ -62,7 +62,7 @@ Status: implemented
 ## 已知限制与暂缓事项
 
 - 是否属于重大目标、是否要求继续、目标是否完成以及阻塞条件是否相同，仍由模型进行语义分类。独立评估器或完成证书予以延期。
-- 模型不能恢复持久 paused goal；该用户独占路径由独立的[用户独占 goal 暂停决策](../bug-fix/2026-09-03-user-owned-goal-pause-activation.zh.md)强制执行。
+- 模型不能恢复持久 paused goal；该用户独占路径由独立的[用户独占 goal 暂停参考](../../../../packages/goal/tool-goal/README.zh.md)强制执行。
 - 这些工具会改变目标状态，但不调度 Goal Round、不分类异常驱动停止，也不取消活跃轮次；这些行为由同会话驱动器负责。
 - 除非另行挂载的继续执行驱动器接纳了目标来源的用户轮次，否则 Goal Round 权限路径处于休眠状态；本工具包本身不会制造这种权限。
 - 面向人类的斜杠命令发现与渲染由独立的 [`dsh-command-goal`](../../../../packages/goal/command-goal/README.zh.md) 插件负责。

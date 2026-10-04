@@ -2,7 +2,7 @@
 
 [English](webhook.md) | 中文
 
-Webhook 子系统会把已通过身份验证的外部交付转换为可选的普通根 Session。提供方适配器拥有身份验证与通用 JSON 接收；受信任的程序化规则拥有条件与外部调用；`ctx.webhookRuntime` 拥有回调生命周期以及基于 Workspace 的 Session 创建。[已实现决策](../../.agents/notes/implemented/feature/2026-08-22-fire-and-forget-webhook-sessions.zh.md)记录了 runtime 为何不保留交付或完成状态。
+Webhook 子系统会把已通过身份验证的外部交付转换为可选的普通根 Session。提供方适配器拥有身份验证与通用 JSON 接收；受信任的程序化规则拥有条件与外部调用；`ctx.webhookRuntime` 拥有回调生命周期以及基于 Workspace 的 Session 创建。[历史已实现决策](../../.agents/notes/archived/feature/2026-08-22-fire-and-forget-webhook-sessions.md)记录了 runtime 为何不保留交付或完成状态。
 
 ## 共享值
 

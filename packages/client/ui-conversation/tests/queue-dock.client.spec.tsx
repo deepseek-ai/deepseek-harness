@@ -328,16 +328,21 @@ describe('QueueDock', () => {
     const header = view.getByRole('button', { name: '2 条排队消息' })
     expect(header.getAttribute('aria-expanded')).toBe('false')
     expect(document.getElementById(header.getAttribute('aria-controls')!)).toBeTruthy()
+    // Collapsed exposes the count header only: the row actions are not rendered.
+    expect(view.getAllByRole('button')).toEqual([header])
     expect(view.queryByText('one')).toBeNull()
     expect(view.queryByText('two')).toBeNull()
 
     fireEvent.click(header)
     expect(header.getAttribute('aria-expanded')).toBe('true')
+    // Expanded renders one Edit/Remove/Steer group per row, plus the header.
+    expect(view.getAllByRole('button')).toHaveLength(1 + 2 * 3)
     expect(view.getByText('one')).toBeTruthy()
     expect(view.getByText('two')).toBeTruthy()
 
     fireEvent.click(header)
     expect(header.getAttribute('aria-expanded')).toBe('false')
+    expect(view.getAllByRole('button')).toEqual([header])
     expect(view.queryByText('one')).toBeNull()
   })
 

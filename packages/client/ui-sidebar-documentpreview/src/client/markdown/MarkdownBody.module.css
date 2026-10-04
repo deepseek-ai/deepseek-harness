@@ -5,3 +5,27 @@
   font-family: var(--dsw-font, inherit);
   white-space: normal;
 }
+
+/* Leading YAML frontmatter: a bordered metadata box above the body, never heading text. */
+.frontmatter {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  font: var(--dsw-font-markdown-small);
+  color: var(--dsw-alias-label-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A document without frontmatter content leaves the box empty. */
+.frontmatter:empty {
+  display: none;
+}
+
+.frontmatterSource {
+  margin: 0;
+  font-family: var(--ds-font-family-code);
+  white-space: inherit;
+}

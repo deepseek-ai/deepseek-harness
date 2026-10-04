@@ -72,7 +72,6 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `BrowseDirectoryPicker` 服务：列举、创建、有界窗口、错误映射 |
-| — | 不发布运行时不变式伴生入口；每次列举或创建都是一次无状态的文件系统往返；文件系统本身保存的状态具有权威性。 |
 
 </details>
 

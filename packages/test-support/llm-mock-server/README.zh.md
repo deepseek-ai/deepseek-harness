@@ -117,7 +117,6 @@ CLI 公开 `--success-text`、`--partial-text`、`--reasoning-text`、`--chunk-s
 | [`src/index.ts`](src/index.ts) | `startMockLlmServer`：listener、行为表、种子随机、遥测（telemetry）、捕获的请求记录 |
 | [`src/cli.ts`](src/cli.ts) | `--sequence` 与时序/内容选项解析、JSONL stdout 遥测 |
 | [`src/bin.ts`](src/bin.ts) | `pnpm run mock:llm` 源入口 |
-| — | 不发布运行时不变式伴生组件；该独立测试服务器不拥有 Cordis 事件流或共享数据；其协议行为和生命周期通过直接 HTTP 测试及组装后的循环测试进行检验。 |
 
 ### 协议流程
 

@@ -44,7 +44,7 @@ kind: "package-group"
 先从子系统参考文档了解共享词汇与错误分类体系，再看塑造该家族的设计决策。
 
 - [文件系统子系统](../../docs/subsystems/filesystem.zh.md)——目标、结果、防护、策略事件与错误分类体系。
-- [跨能力族 fs 沙箱决策](../../.agents/notes/implemented/feature/2026-07-14-cross-family-fs-sandbox.zh.md)——文件系统 seam 上共享的沙箱模式围栏。
+- [跨能力族 fs 沙箱参考](../sandbox/sandbox-policy/README.zh.md)——文件系统 seam 上共享的沙箱模式围栏。
 - [可移植执行世界消费方决策](../../.agents/notes/implemented/architecture/2026-07-28-portable-execution-world-consumers.zh.md)——文件系统与子进程提供方为何共享一个执行世界。
 
 <a id="dev-note"></a>

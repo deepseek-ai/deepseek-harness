@@ -9,8 +9,8 @@
   en: a85684740ecd278a
   zh: 7c54099b9edccf01
 /deepseek-ai-dsh-web-app/summary:
-  en: 0ebb6c3ca8c0a84e
-  zh: 4d85e02c769ddae0
+  en: fd97ee0c14fb5378
+  zh: 0e1ccba47bc408d9
 /deepseek-ai-dsh-web-app/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -21,23 +21,26 @@
   en: b7ab01cfe9fed40f
   zh: 23703ab7727c3ab5
 /deepseek-ai-dsh-web-app/use-this-package/configuration:
-  en: a93760e9e451faa6
-  zh: 5dab82dd20aa952f
-/deepseek-ai-dsh-web-app/use-this-package/lan-access-and-trusted-hosts:
-  en: 2522c806db384ddc
-  zh: 7e96f11194af9f9f
+  en: a9ee366c5af68a6c
+  zh: 2711d7a3926e1101
+/deepseek-ai-dsh-web-app/use-this-package/listening-trust-and-public-deployments:
+  en: a79add86cb73d966
+  zh: 78b58259f98ed063
 /deepseek-ai-dsh-web-app/use-this-package/running-over-ssh:
-  en: 1fe96dde34f21b23
-  zh: 5689c4f4186805c1
+  en: 45db677dcc91c5c9
+  zh: 75b765f7f1e15035
 /deepseek-ai-dsh-web-app/use-this-package/per-session-agent-setup:
   en: ccd6fc264b51e44b
   zh: 3265c68477a89ec9
 /deepseek-ai-dsh-web-app/understand-the-implementation:
-  en: 4eb00d95238e3b92
-  zh: 0d6ca9e1a3e7db84
+  en: fb819d10930089a8
+  zh: f2dee0ff170a4d41
 /deepseek-ai-dsh-web-app/understand-the-implementation/patch-semantics:
-  en: f0078127aa8dd273
-  zh: c954c137599b486f
+  en: 954a424ea7182c8f
+  zh: 9339bc21dba44d40
+/deepseek-ai-dsh-web-app/understand-the-implementation/advertised-application-url:
+  en: ca977d2b2bcf72c5
+  zh: 2b81b377c133c1a8
 /deepseek-ai-dsh-web-app/understand-the-implementation/readiness:
   en: 973128fd346869df
   zh: 54e6792f9f82a192
@@ -45,11 +48,8 @@
   en: b5ed8ff0056ca9da
   zh: fdc1fa4f14cb00b3
 /deepseek-ai-dsh-web-app/understand-the-implementation/source-map:
-  en: 0d08e95f0a5543cb
-  zh: 5a3e8e4102678cb7
-/deepseek-ai-dsh-web-app/understand-the-implementation/invariant-ownership:
-  en: 34767bb4c0471622
-  zh: e6d76e7c7a0b9ce8
+  en: e41444bed021a121
+  zh: 44088a90df50d5b4
 /deepseek-ai-dsh-web-app/further-exploration:
   en: f81694f7424e2988
   zh: 6643f9227039e228
@@ -60,17 +60,17 @@
   en: e6febc53efe0f51d
   zh: 9177816a8678d65d
 /deepseek-ai-dsh-web-app/model-experience/harness-source-and-web-surface-context/what-the-model-sees:
-  en: 359b949dd483477f
-  zh: 1476006614a82282
+  en: 583592075e04687d
+  zh: 9defddfd77bab0f7
 /deepseek-ai-dsh-web-app/model-experience/harness-source-and-web-surface-context/token-effect:
   en: 908fc84d6849a830
   zh: 56fe5e418bab60ba
 /deepseek-ai-dsh-web-app/model-experience/harness-source-and-web-surface-context/kv-cache-effect:
-  en: da0f568d6d661c5e
-  zh: 606919b7d37c95bf
+  en: 1d7d87f54b20b563
+  zh: d150a51615d278e8
 /deepseek-ai-dsh-web-app/known-limitations-and-deferred-work:
-  en: fead2f7bcd17e1ab
-  zh: 80949c203c0a0732
+  en: d6de1d07249ef3b0
+  zh: 49d01329256e2eb3
 /deepseek-ai-dsh-web-app/known-limitations-and-deferred-work/dev-note:
   en: 3f81b4f3beb74a0d
   zh: 2e377ca40822d093

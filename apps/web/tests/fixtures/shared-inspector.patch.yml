@@ -1,0 +1,6 @@
+- id: experimental-inspector
+  config:
+    port: 0
+    captureFetch: false
+- id: session-inspector
+  disabled: true

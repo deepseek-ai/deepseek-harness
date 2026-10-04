@@ -36,7 +36,7 @@ The core patch also skips drawing freeze dividers when `allowEdit === false`, re
 
 **Replace ExcelJS or require users to rewrite their files.** A parser replacement puts retained fonts, borders, merges, and frozen panes at risk. Rewriting a source file makes a viewer defect the user's responsibility. A temporary preview copy preserves both the existing adapter and the user's file.
 
-**Keep PDF as an Excel fallback or calculate every formula on import.** PDF retains neither spreadsheet interaction nor formula inspection, while recalculation can change saved results. The [Office engine decision](../architecture/2026-09-11-node-office-kit.md) remains applicable to Word/PowerPoint previews and independent conversion consumers; its conversion capability still supports spreadsheets.
+**Keep PDF as an Excel fallback or calculate every formula on import.** PDF retains neither spreadsheet interaction nor formula inspection, while recalculation can change saved results. The [Office engine reference](../../../../packages/document/office-to-pdf/README.md) remains applicable to Word/PowerPoint previews and independent conversion consumers; its conversion capability still supports spreadsheets.
 
 ## Consequences
 

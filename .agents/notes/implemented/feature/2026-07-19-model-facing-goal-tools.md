@@ -62,7 +62,7 @@ Unit coverage pins registration and disposal, exclusive scheduling, generated pr
 ## Known limitations and deferred work
 
 - Semantic classification of a substantial goal, a request to continue, objective completion, and the same blocking condition remains model judgment. An independent evaluator or completion certificate is deferred.
-- The model cannot resume a durable paused goal; that user-owned path is enforced by the separate [user-owned goal pause decision](../bug-fix/2026-09-03-user-owned-goal-pause-activation.md).
+- The model cannot resume a durable paused goal; that user-owned path is enforced by the separate [user-owned goal pause reference](../../../../packages/goal/tool-goal/README.md).
 - These tools mutate goal state but do not schedule goal rounds, classify abnormal driver stops, or cancel an active turn; the same-session driver owns those behaviors.
 - Goal-round authority is dormant unless a separately mounted continuation driver admits goal-sourced user turns; this tool package never manufactures that authority itself.
 - Human slash-command discovery and rendering are owned by the separate [`dsh-command-goal`](../../../../packages/goal/command-goal/README.md) plugin.

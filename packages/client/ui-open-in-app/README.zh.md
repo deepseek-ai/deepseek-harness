@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 预期行为
 
-会话标题栏和文档标题栏共用同一个高 24px、圆角 9px 的分体按钮。两个标题栏都只显示图标，悬停提示显示默认应用名称或文件定位动作。两者都显示默认动作的图标，在菜单的默认应用后标注“（默认）”，仅在自己的操作执行期间禁用，并通过短暂提示报告失败。目录适配器使用已有的跨平台应用列表，将最后一次成功选择保存在 `dsh.open-in-app.choice` 中；原选择不可用时回退到第一个可用应用。
+会话标题栏、文件树标题栏和文档标题栏共用同一个高 24px、圆角 9px 的分体按钮。这些标题栏都只显示图标，悬停提示显示默认应用名称或文件定位动作。它们都显示默认动作的图标，在菜单的默认应用后标注“（默认）”，仅在自己的操作执行期间禁用，并通过短暂提示报告失败。文件树打开按钮以 `absolutePath` 传入的显示目录为目标，并与会话头部共享应用选择和启动状态。目录适配器使用已有的跨平台应用列表，将最后一次成功选择保存在 `dsh.open-in-app.choice` 中；原选择不可用时回退到第一个可用应用。
 
 **在本地打开**快捷键捕获主会话的目录，并使用与头部按钮相同的已记住应用。按钮 tooltip 和 `aria-keyshortcuts` 显示当前有效绑定；Web 遵循[快捷键服务的平台默认值](../shortcuts/README.zh.md)。只有选中会话界面、且头部按钮有可打开的目录和已安装应用时，命令才执行。启动尚未结束时也会阻止命令。鼠标与键盘操作共享 controller 的启动状态，重复操作不会启动两次，也不会在启动期间更改已记住的选择。
 
@@ -45,7 +45,7 @@ kind: "package-reference"
 <details>
 <summary>实现内幕——点击展开</summary>
 
-插件通过标准 slot/inject 机制把分体按钮注册到 `conversation.session.header.utilities`，并以一个 effect 注册 `open-in-app` 词典。一个页面生命周期的 controller（[`src/client/controller.ts`](src/client/controller.ts)）拥有每页一次的可用性读取、持久化选择的 snapshot store 与启动 POST；组件经 inject 的 `hooks` 隔间接收共享源，因此所有会话头部共享同一份事实。文档相对的路由形式与 wire 载荷类型来自主机包的浏览器安全子路径 `@deepseek-ai/dsh-host-open-in-app/shared`。controller 守卫执行中的启动，并发布所捕获的目录与状态；头部控件从该源派生延迟出现的等待态和短暂错误态。
+两个目录插槽均通过显式的 `absolutePath` 使用 `OpenInAppAction`。`conversation.session.header.utilities` 的注册函数读取会话 cwd，`sidebar.right.tab.files.actions` 则接收所属组件传入的显示目录。插件以一个 effect 注册 `open-in-app` 词典。一个页面生命周期的 controller（[`src/client/controller.ts`](src/client/controller.ts)）拥有每页一次的可用性读取、持久化选择的 snapshot store 与启动 POST；组件经 inject 的 `hooks` 隔间接收共享源，因此所有会话头部共享同一份事实。文档相对的路由形式与 wire 载荷类型来自主机包的浏览器安全子路径 `@deepseek-ai/dsh-host-open-in-app/shared`。controller 守卫执行中的启动，并发布所捕获的目录与状态；头部控件从该源派生延迟出现的等待态和短暂错误态。
 
 目录和文件适配器把应用信息与操作交给 [`OpenTargetButton`](src/client/OpenTargetButton.tsx)，由它统一管理菜单顺序、默认标记、图标、尺寸和操作反馈。文件标题栏和空态共用 `FileOpenTarget`，`OpenPathInjected.applications` 通过 [`open-path.ts`](src/client/open-path.ts) 查询 `session.workspacePathApplications`。打开操作使用 `session.openWorkspacePath`，Host 在启动前重新验证指定的关联应用。`FileRouteAction` 通过 `deliverables.file.actions` 和 `deliverables.review.file.actions` 为交付卡片和变更对比页提供同一控件，其认证路由保留会话文件校验。目录适配器继续使用已有的应用列表路由，文件查询失败或不可用时无需增加平台专用的界面实现。
 
@@ -60,7 +60,7 @@ kind: "package-reference"
 - [dsh-session-log-export](../../session-query/session-log-export/README.zh.md)——会话头部的姊妹动作。
 - [ui-sidebar-documentpreview](../ui-sidebar-documentpreview/README.zh.md)——声明文件控件所占头部与空态子 slot 的文档预览。
 - [ui-deliverables](../ui-deliverables/README.zh.md)——交付卡片，仍通过自己的路由打开声明过的文件。
-- [Web client 架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——浏览器插件行如何加载并注册 slot。
+- [Web client 架构](../../../docs/subsystems/web-client.zh.md)——浏览器插件行如何加载并注册 slot。
 
 -----
 
@@ -82,7 +82,7 @@ Host 在打开或定位前通过当前文件系统验证路径。没有对应 Ho
 - **词典把守菜单。** 主机目录的新条目若在两份词典中没有对应的 `app.<id>` 条目，将保持不可见而不是显示裸 id；扩展目录意味着同时扩展 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 与本包的 locale。
 - **可用性每页只读一次。** 页面打开期间安装的应用要重新加载页面后才出现（主机侧还需主机重启）；文件控件背后的桌面回答同样每页只读一次。
 - **所有平台共用一个定位标签。** Session Remote 只报告有没有桌面，不报告它跑的是哪个文件管理器，所以菜单写「显示文件位置」，而不像交付卡片那样点名访达或文件资源管理器。
-- **交付卡片保留自己的打开器。** [`ui-deliverables`](../ui-deliverables/README.zh.md) 仍通过自己按 Session 与事件定位的路由打开声明过的文件；把这些卡片并到这里的文件控件上，延后到 [Agent Note](../../../.agents/notes/implemented/feature/2026-09-16-open-in-default-app-for-sidebar-files.zh.md) 记录的后续工作。
+- **交付卡片保留自己的打开器。** [`ui-deliverables`](../ui-deliverables/README.zh.md) 仍通过自己按 Session 与事件定位的路由打开声明过的文件；把这些卡片并到这里的文件控件上仍属延期工作。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -90,8 +90,6 @@ Host 在打开或定位前通过当前文件系统验证路径。没有对应 Ho
 <details>
 <summary>维护者工作语境——点击展开</summary>
 
-功能层面的各项决定，包括拆分为主机包与本表面包，记录在[转正 Agent Note](../../../.agents/notes/implemented/feature/2026-08-25-promote-open-anywhere-plugin.zh.md)；文档预览的文件控件记录在[默认应用 Agent Note](../../../.agents/notes/implemented/feature/2026-09-16-open-in-default-app-for-sidebar-files.zh.md)。
+功能层面的各项决定，包括拆分为主机包与本表面包，记录在[历史转正 Agent Note](../../../.agents/notes/archived/feature/2026-08-25-promote-open-anywhere-plugin.md)；文档预览的文件控件记录在[历史默认应用 Agent Note](../../../.agents/notes/archived/feature/2026-09-16-open-in-default-app-for-sidebar-files.md)。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。插件注册一个词典 effect 和五个 slot 条目，HMR 安全性 spec 证明它们都会在资源释放时撤销；应用可用性、选择与桌面回答存储在控制器的快照存储中，不存在可能与之分歧的第二份副本。

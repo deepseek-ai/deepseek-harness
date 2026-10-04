@@ -89,16 +89,6 @@ describe('llm/adapters-updated', () => {
     expect(observed).toEqual([['a']])
   })
 
-  it('rethrows the first INVARIANT-coded listener failure after notifying the rest', async () => {
-    const ctx = await setup()
-    const later = vi.fn()
-    ctx.on('llm/adapters-updated', () => {
-      throw Object.assign(new Error('registry incoherent'), { code: 'INVARIANT' })
-    })
-    ctx.on('llm/adapters-updated', later)
-    expect(() => ctx.llm.registerAdapter(['a'], new NoopAdapter())).toThrow('registry incoherent')
-    expect(later).toHaveBeenCalledTimes(1)
-  })
 })
 
 describe('configurable-provider directory', () => {

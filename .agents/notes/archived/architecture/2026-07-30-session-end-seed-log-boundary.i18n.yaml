@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/architecture/2026-07-30-session-end-seed-log-boundary.md
+2026-07-30-session-end-seed-log-boundary.md: d7025aac7a69ffafd4f64a2f73d202e7107452b2
+2026-07-30-session-end-seed-log-boundary.zh.md: 5c6227c5866b8a12506709726a1a0f93a8a6dcdc

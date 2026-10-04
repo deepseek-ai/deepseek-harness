@@ -59,8 +59,6 @@ kind: "package-reference"
 
 git 通过 `subprocess` 能力运行，使用净化后的环境、`GIT_CONFIG_COUNT=0`（凭据清理会移除索引配置的键，因此不继承这些环境配置）、`GIT_TERMINAL_PROMPT=0`、`GIT_OPTIONAL_LOCKS=0`、配置的超时与有界输出。任何步骤失败都会放弃本轮记录并给出警告；下一轮重新开始。Session 释放与插件释放会中止排队的工作、忘记摘要并删除临时目录。
 
-**运行时不变式：** 不发布伴生入口。事件监听归 effect 所有，记录器在其 Session 存活期间同时拥有摘要、快照树与捕获的副本；没有独立观察会与它们分歧。
-
 </details>
 
 -----
@@ -70,7 +68,7 @@ git 通过 `subprocess` 能力运行，使用净化后的环境、`GIT_CONFIG_CO
 
 - [Web 产出物](../../client/ui-deliverables/README.zh.md)——读取所提供摘要并打开其文件的改动文件卡片。
 - [子进程能力](../../subprocess/README.zh.md)——git 运行所经过的接缝。
-- [本轮改动文件卡片决策](../../../.agents/notes/implemented/feature/2026-09-11-turn-changed-files-card.zh.md)——快照设计、覆盖规则、暂缓的影子仓库与被否决的备选方案。
+- [历史本轮改动文件卡片决策](../../../.agents/notes/archived/feature/2026-09-11-turn-changed-files-card.md)——快照设计、覆盖规则、暂缓的影子仓库与被否决的备选方案。
 
 <a id="model-experience"></a>
 ## 模型体验

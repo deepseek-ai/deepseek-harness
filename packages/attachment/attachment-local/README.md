@@ -99,7 +99,6 @@ Generic-file bytes have one canonical object at `<DSH_HOME>/attachments/v1/file-
 | [`src/normalization.ts`](src/normalization.ts) + [`src/encoding.ts`](src/encoding.ts) | Provider-independent normalization and bounded format/quality candidates |
 | [`src/request-image.ts`](src/request-image.ts) | Route-specific request transforms, cache identity, and singleflight |
 | [`src/image.ts`](src/image.ts) | Full raster decode and metadata verification |
-| — | No runtime invariant companion is published; immutable writes and verified reads are enforced directly at the backend boundary. |
 
 </details>
 

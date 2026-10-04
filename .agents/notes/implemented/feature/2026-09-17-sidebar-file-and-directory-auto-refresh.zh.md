@@ -342,4 +342,4 @@ FS、Workspace API、预览和 Files 各自的测试覆盖监听生命周期、�
 - [Workspace 文件服务](../../implemented/architecture/2026-09-05-workspace-files-service.zh.md)：读取与列表接口职责不变；目标级系统监听替代仅转发操作观察的 Session 流。
 - [文档预览操作](../../implemented/architecture/2026-09-08-document-preview-operations.zh.md)：正文加载所有权和三种加载方式不变；自动刷新使用其现有 reload 路径。
 - [Workspace 文件读取授权](../../implemented/architecture/2026-09-09-workspace-file-read-authority.zh.md)：保留文件读取与目录浏览的不同访问范围；目标 watch 分别遵循对应规则。
-- [Sidebar 文本预览与文件树](../../implemented/feature/2026-09-05-sidebar-text-preview-and-file-tree.zh.md)：按 Tab 的展开、导航和滚动状态不变；已打开节点负责目录自动失效与监听。
+- [Sidebar 文本预览与文件树](../../../../packages/client/ui-sidebar-files/README.zh.md)：按 Tab 的展开、导航和滚动状态不变；已打开节点负责目录自动失效与监听。

@@ -65,7 +65,6 @@ Fiber 状态映射到公共阶段词汇，其中 `disposed` 折叠为 `null`—�
 |---|---|
 | [`src/index.ts`](src/index.ts) | `PluginInventoryGateway`：`pluginInventory` Remote 服务与 Loader 投影 |
 | [`src/types.ts`](src/types.ts) | 公共 payload 类型：`PluginInventoryEntry`、`PluginInventorySnapshot`、`PluginFiberPhase` |
-| — | 不发布运行时不变式配套项；每个快照都投影 Loader 持有的状态。 |
 
 Typert 生成由 `./typert` 与 `./remote` 导出的 Host 和 Client Remote 产物。
 

@@ -92,5 +92,3 @@ These limits define the current permission surfaces. They are current package co
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The command and slot contribution lifecycles are proven by the HMR-safety spec, while the browser-only Settings controller owns no host events or cross-plugin mutable state.

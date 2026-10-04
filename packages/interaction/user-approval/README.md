@@ -71,7 +71,6 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 |---|---|
 | [`src/index.ts`](src/index.ts) | `ApprovalService`: request dispatch, policy fold and write path, runtime-context contribution |
 | [`src/types.ts`](src/types.ts) | `ApprovalRequestId` brand and outcome types |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion pairing `approval/asked` with `approval/decided` inside an open turn |
 
 ### Dispatch
 
@@ -83,7 +82,7 @@ The system-prompt contribution `approval:policy` states the complete current mea
 
 ### Audit
 
-`request()` appends `approval/asked` with the request identity and tool, then `approval/decided` with the closed outcome; the exact appended fields live in [`src/index.ts`](src/index.ts). Both are log-only; the invariant validates the pair by id within one open turn and the closed outcome vocabulary.
+`request()` appends `approval/asked` with the request identity and tool, then `approval/decided` with the closed outcome; the exact appended fields live in [`src/index.ts`](src/index.ts). Both are log-only.
 
 </details>
 
@@ -96,7 +95,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Approval subsystem reference](../../../docs/subsystems/approval.md) — the shared request/outcome vocabulary and the `ctx.approval` Cordis surface.
 - [Approval seam Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-approval-seam.md) — design rationale for the seam.
-- [Sandbox Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-sandbox.md) — how the sandboxed bash tool consumes approvals for escalated retries.
+- [Sandbox reference](../../shell/tool-bash/README.md) — how the sandboxed bash tool consumes approvals for escalated retries.
 - [Interaction group map](../README.md) — adjacent permission preset and question packages.
 
 -----

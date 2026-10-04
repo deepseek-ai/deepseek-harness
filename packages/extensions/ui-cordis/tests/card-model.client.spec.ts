@@ -3,21 +3,25 @@
 
 import { describe, expect, it } from 'vitest'
 import type { StartedToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { cordisActionCard, cordisDefineCard } from '../src/client/card-model.ts'
 
 const ARGS = '{"name":"clock","purpose":"顶栏时钟","code":{"client":"return {}","host":"harness.handle(\'now\', () => Date.now())"}}'
 
 function running(over: Partial<StartedToolCall> = {}): StartedToolCall {
+  const argsRaw = over.argsRaw ?? ARGS
   return {
-    phase: 'start' as const, callId: 'call-1', name: 'cordis_define', argsRaw: ARGS, turn: 1, step: 1, time: 1_000,
+    phase: 'start' as const, args: PartialArguments.fromText(argsRaw), callId: 'call-1', name: 'cordis_define', argsRaw, turn: 1, step: 1, time: 1_000,
     subCalls: [], ...over,
   }
 }
 
 function settled(over: Partial<ToolResultNode> = {}): ToolResultNode {
+  const call = over.call === undefined ? { name: 'cordis_define', argsRaw: ARGS } : over.call
   return {
     kind: 'tool-result', seq: 2, time: 2_000, callId: 'call-1',
-    call: { name: 'cordis_define', argsRaw: ARGS }, callTime: 1_000,
+    name: call?.name ?? '', args: call === null ? PartialArguments.EMPTY : PartialArguments.fromText(call.argsRaw),
+    call, callTime: 1_000,
     content: [{ type: 'text', text: 'defined dyn-1' }], isError: false,
     meta: { pluginId: 'dyn-1', packageId: 'pkg-1' }, subCalls: [], ...over,
   }

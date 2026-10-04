@@ -6,7 +6,7 @@ English | [中文](2026-08-25-electron-desktop-packaging-and-updates.zh.md)
 
 Plugin management and native recovery follow the [shared Web wrapper decision](2026-09-10-desktop-web-wrapper.md).
 
-The [Electron runtime decision](2026-09-11-desktop-electron-node-runtime.md) supersedes the separate upstream Node executable; other decisions in this note remain applicable.
+Desktop uses Electron as its Node runtime under the [current runtime reference](../../../../apps/desktop/README.md); other decisions in this note remain applicable.
 
 ## Problem
 
@@ -18,7 +18,7 @@ The current GUI protocol binds the Web client and backend release. Independently
 
 ## Decision
 
-Ship a small Electron shell and pinned pnpm; the [runtime decision](2026-09-11-desktop-electron-node-runtime.md) owns the executable choice. The [thin-wrapper decision](2026-09-10-desktop-web-wrapper.md) owns Host boot and transport: the private Host runs the shared Web profile runner, Electron loads its authenticated HTTP URL, and child IPC carries lifecycle messages.
+Ship a small Electron shell and pinned pnpm; the [runtime reference](../../../../apps/desktop/README.md) owns the executable choice. The [thin-wrapper decision](2026-09-10-desktop-web-wrapper.md) owns Host boot and transport: the private Host runs the shared Web profile runner, Electron loads its authenticated HTTP URL, and child IPC carries lifecycle messages.
 
 Electron owns the reserved profile at `.dsh/profiles/desktop`. The [bundled-runtime decision](2026-09-08-desktop-bundled-runtime-and-external-plugins.md) owns core resource storage, external plugin dependencies, shared package links, and profile reconciliation. The private Desktop Host remains outside the public CLI package and is never published to npm.
 
@@ -71,7 +71,7 @@ Core materialization, first launch, plugin installation, and shared-module resol
 
 Electron update uses one `electron-updater` release stream and signed `electron-builder` artifacts. Its version is the Desktop release version; there is no independent dsh manifest, compatibility range, or dsh-only update operation. A foreground install waits for an in-flight background check rather than reusing its result as an install result. The update dialog downloads and installs the Electron artifact, then restarts into the new release.
 
-The [immediate-window decision](2026-09-09-desktop-immediate-window-and-direct-start.md) owns the local loading page, direct Host startup, and recovery in the main window. Profile reconciliation follows the [bundled-runtime decision](2026-09-08-desktop-bundled-runtime-and-external-plugins.md).
+The [immediate-window reference](../../../../apps/desktop/README.md) owns the local loading page, direct Host startup, and recovery in the main window. Profile reconciliation follows the [bundled-runtime decision](2026-09-08-desktop-bundled-runtime-and-external-plugins.md).
 
 `DSH_DESKTOP_AUTO_UPDATE_ENV` selects the test deployment by default or the production deployment for both the target-specific generic-provider URL and COS destination. Release automation supplies the test HTTPS origin through `DOWNLOAD_TEST_ORIGIN` and each deployment's bucket through `DOWNLOAD_TEST_COS_BUCKET` or `DOWNLOAD_PROD_COS_BUCKET`; keeping mutable test routing and COS storage identities out of source lets deployment infrastructure change without a code release, while the public production origin remains fixed. Packaging resolves only the public updater URL, disables electron-builder publishing, removes every COS credential field from its subprocess environment, and writes a completion record only after electron-builder and every signing or notarization hook succeeds. Target upload additionally requires the selected bucket, then requires the completion record, root dsh version, Desktop version, version-derived channel metadata, artifact names, sizes, and SHA-512 values to agree before it reads the selected credentials or sends data. It uploads immutable versioned updater payloads and any separate blockmaps before replacing the channel metadata emitted by electron-builder, and it never deletes historical objects. Stable versions use the `latest` metadata name; prereleases use the first semantic-version prerelease identifier. NSIS embeds its blockmap in the signed executable; the macOS ZIP carries a separate blockmap. Both let electron-updater download changed blocks when supported, while application replacement and the local pnpm package operation remain separate operations.
 
@@ -91,7 +91,7 @@ Windows package invocations force `ELECTRON_BUILDER_7Z_FILTER=BCJ`. The bundled 
 
 Local Windows installation testing uses an explicit `--unsigned` package invocation with the same build and runtime preparation. It strips certificate inputs, isolates artifacts in `unsigned-artifacts`, and omits updater configuration and the release completion record. The regular package command explicitly selects signed mode even when its parent environment requests unsigned mode. This separation permits installation diagnosis without an EV token while preventing local test output from qualifying for release upload.
 
-Windows application replacement follows the [directory-installation decision](2026-09-11-windows-directory-installation.md): extract beside the destination with a command-line tool that returns failure status, then rename complete directories on the same volume. The installer retains the old directory through staging and restores it if promotion fails. Registration, shortcuts, and the signed uninstaller remain owned by electron-builder.
+Windows application replacement follows the [directory-installation reference](../../../../apps/desktop/README.md): extract beside the destination with a command-line tool that returns failure status, then rename complete directories on the same volume. The installer retains the old directory through staging and restores it if promotion fails. Registration, shortcuts, and the signed uninstaller remain owned by electron-builder.
 
 Packaged applications ignore development resource and project environment overrides. Only an unpackaged Electron process can replace the pnpm entry, dsh resources, or active project.
 

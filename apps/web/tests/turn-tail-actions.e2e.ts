@@ -251,7 +251,7 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
       element.closest<HTMLElement>('[data-chat-flow-kind="turn-process"]')?.getBoundingClientRect().bottom)
     const answerTop = await page.getByText('DONE', { exact: true }).evaluate(element =>
       element.closest<HTMLElement>('[data-chat-flow-kind="assistant-step"]')?.getBoundingClientRect().top)
-    expect(answerTop).toBe((processBottom ?? 0) + 8)
+    expect(answerTop).toBe((processBottom ?? 0) + 16)
     await process.focus()
     const completed = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)
     await compareOrRefreshGolden(COMPLETED_EXPECTED, completed, MODE)

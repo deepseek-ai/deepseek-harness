@@ -10,7 +10,7 @@ Desktop usually runs a local dsh server, so remote business errors cannot reliab
 
 ## Proposal
 
-This proposal records outstanding release and backend work; the [implemented client decision](../../implemented/feature/2026-09-11-desktop-mandatory-update-client.md) and [Desktop README](../../../../apps/desktop/README.md) own current behavior.
+This proposal records outstanding release and backend work; the [Desktop README](../../../../apps/desktop/README.md) owns current client behavior.
 
 | Document | Owns |
 |---|---|

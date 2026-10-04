@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-09-10-desktop-web-wrapper.md) | 中文
 
-[Electron 运行时决策](2026-09-11-desktop-electron-node-runtime.zh.md)替代独立上游 Node 可执行文件的选择；本文其他决策仍然适用。
+Desktop 按[当前运行时参考](../../../../apps/desktop/README.zh.md)使用 Electron 作为 Node 运行时；本文其他决策仍然适用。
 
 ## Problem
 
@@ -12,7 +12,7 @@ Status: implemented
 
 ## Decision
 
-私有 Desktop Host 针对独立归属的 Desktop profile 调用 CLI 的共享 profile runner。完整 Web 组合负责认证、HTTP 路由、客户端资源、RPC 与响应流。Electron 在子进程就绪前加载打包静态 Web 资源。子进程 IPC 承载就绪、结构化启动注入与关闭。[立即显示窗口决策](2026-09-09-desktop-immediate-window-and-direct-start.zh.md)规定本地文档 HTTP 转发与认证 WebSocket 访问；Web 保留应用分派与流帧处理。
+私有 Desktop Host 针对独立归属的 Desktop profile 调用 CLI 的共享 profile runner。完整 Web 组合负责认证、HTTP 路由、客户端资源、RPC 与响应流。Electron 在子进程就绪前加载打包静态 Web 资源。子进程 IPC 承载就绪、结构化启动注入与关闭。[立即显示窗口参考](../../../../apps/desktop/README.zh.md)规定本地文档 HTTP 转发与认证 WebSocket 访问；Web 保留应用分派与流帧处理。
 
 共享 runner 负责 profile 与 Harness-home patch、代理设置、遥测默认值、runtime resolution、配置重载和应用生命周期。Desktop 从共享 Web 模板初始化 profile，并在主应用中使用其插件管理器。Electron 负责窗口、菜单、原生目录选择、恢复和发布更新。
 

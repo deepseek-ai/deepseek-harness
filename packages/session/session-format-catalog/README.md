@@ -27,7 +27,7 @@ English | [中文](README.zh.md)
 
 ### When to use it
 
-Import this library from persistence and test-support readers that need the complete first-party released-format inventory before any feature plugin mounts. Feature compositions do not register or reorder its entries. No runtime invariant companion is published because construction rejects an invalid static inventory and each completed restore validates its result; mutable row-decoder state belongs to one caller-owned streaming restore.
+Import this library from persistence and test-support readers that need the complete first-party released-format inventory before any feature plugin mounts. Feature compositions do not register or reorder its entries.
 
 ### Entry point
 

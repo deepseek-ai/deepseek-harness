@@ -36,7 +36,7 @@ This decision removes one provider family. It changes neither PTC execution nor 
 
 Custom compositions that depend on the repository's E2B packages lose that supplied backend. External adoption is unknown. Removing the integration also removes its live remote composition evidence; remaining local and delayed-provider tests protect their own contracts, not an unimplemented replacement.
 
-The [native containment](../architecture/2026-08-28-subprocess-native-containment.md), [outbound proxy](../architecture/2026-08-27-outbound-proxy-policy.md) and [workspace-file service](../architecture/2026-09-05-workspace-files-service.md) decisions remain active. Their E2B implementation and verification inventories are retired while their process ownership, routing and file-access requirements remain intact. The portability decision is partially superseded only in its E2B realization.
+The [native containment](../../../../packages/subprocess/subprocess-local/README.md), [outbound proxy](../architecture/2026-08-27-outbound-proxy-policy.md) and [workspace-file service](../architecture/2026-09-05-workspace-files-service.md) decisions remain active. Their E2B implementation and verification inventories are retired while their process ownership, routing and file-access requirements remain intact. The portability decision is partially superseded only in its E2B realization.
 
 ## Reintroduction conditions
 

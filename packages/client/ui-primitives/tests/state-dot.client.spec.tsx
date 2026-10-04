@@ -81,4 +81,18 @@ describe('StateDot ongoing phase', () => {
       delete proto.getAnimations
     }
   })
+
+  it('re-pins animations that restart after mount', () => {
+    const animations = [{ startTime: 0 }]
+    const proto = SVGElement.prototype as { getAnimations?: () => { startTime: number }[] }
+    proto.getAnimations = () => animations
+    try {
+      const { container } = render(<StateDot state="ongoing" />)
+      animations[0]!.startTime = 438
+      container.querySelector('circle')!.dispatchEvent(new Event('animationstart', { bubbles: true }))
+      expect(animations[0]!.startTime).toBe(0)
+    } finally {
+      delete proto.getAnimations
+    }
+  })
 })

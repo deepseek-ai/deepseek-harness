@@ -1,0 +1,70 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/schedule/tool-schedule/README.md
+/:
+  en: 5bcd39034f505033
+  zh: 9bfd85a1ad52bc67
+/deepseek-ai-dsh-tool-schedule:
+  en: eb91320d8594cfca
+  zh: 7a900a2029baafa5
+/deepseek-ai-dsh-tool-schedule/summary:
+  en: 3552ccd992a1540e
+  zh: 13241608f0b9fc8a
+/deepseek-ai-dsh-tool-schedule/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tool-schedule/use-this-package:
+  en: a692cac1bda0f1bc
+  zh: 3cc2e4bff8062e4e
+/deepseek-ai-dsh-tool-schedule/use-this-package/when-to-choose-it:
+  en: a9203babc3d8db01
+  zh: 4b26bfe528f39972
+/deepseek-ai-dsh-tool-schedule/use-this-package/the-four-tools:
+  en: f8aae686d0531c29
+  zh: 3cccd1ba81aae48d
+/deepseek-ai-dsh-tool-schedule/use-this-package/minimal-configuration:
+  en: eef3a83c0ffb2931
+  zh: 9b527abfde4c3406
+/deepseek-ai-dsh-tool-schedule/understand-the-implementation:
+  en: 065702b7a82b8fa1
+  zh: 642037baaa2c0f1d
+/deepseek-ai-dsh-tool-schedule/understand-the-implementation/source-map:
+  en: 676c4e0595fcc8dd
+  zh: f02ed861f66e7747
+/deepseek-ai-dsh-tool-schedule/further-exploration:
+  en: 1484566b323c3cff
+  zh: 1b1b9fbf85daf3fa
+/deepseek-ai-dsh-tool-schedule/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-schedule/model-experience/tool-schemas:
+  en: 3039bc5e7a796b21
+  zh: 6b7a9eaf69c9ea53
+/deepseek-ai-dsh-tool-schedule/model-experience/tool-schemas/what-the-model-sees:
+  en: 82465f7520c67ddd
+  zh: eb9014c758b687c5
+/deepseek-ai-dsh-tool-schedule/model-experience/tool-schemas/token-effect:
+  en: 70fb9094859d0804
+  zh: 30726b045484713c
+/deepseek-ai-dsh-tool-schedule/model-experience/tool-schemas/kv-cache-effect:
+  en: 332231fb9f1b8146
+  zh: eace0b2e789d1c0f
+/deepseek-ai-dsh-tool-schedule/model-experience/reminder-results:
+  en: ffeb087f9476fddf
+  zh: 94569d39555d5192
+/deepseek-ai-dsh-tool-schedule/model-experience/reminder-results/what-the-model-sees:
+  en: 68ce690c2d5c2312
+  zh: d3a9fca950518702
+/deepseek-ai-dsh-tool-schedule/model-experience/reminder-results/token-effect:
+  en: a08931b2c5048399
+  zh: 758ea2131adb23e4
+/deepseek-ai-dsh-tool-schedule/model-experience/reminder-results/kv-cache-effect:
+  en: 2fbf2175168e8244
+  zh: 9c4c1964ae59e661
+/deepseek-ai-dsh-tool-schedule/known-limitations-and-deferred-work:
+  en: b1631143d20598e5
+  zh: 39da52b36da27b03
+/deepseek-ai-dsh-tool-schedule/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: b2ee0fbaa165910d

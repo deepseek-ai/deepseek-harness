@@ -46,7 +46,7 @@ Only dispatch and the tool body overlap. `tools/pre-execute` and `tools/post-exe
 
 Each started call appends `tool/call` immediately before its pre-execute gate. Completed dispatches occupy model-order slots, and a commit cursor appends `tool/result` and collects `additionalContexts` only when the next slot is ready. Live surfaces may show several pending calls, but results and post-tool context remain model-ordered.
 
-An abort stops replenishment, waits for already-started calls, commits their results in order, drains accepted batch context after those results, and records synthetic aborted call/result pairs for undispatched calls. An unexpected scheduler failure stops new dispatches, waits for every already-started dispatch to settle, and rethrows the first failure. The driver records missing results before closing the failed step under the [failed-step recovery decision](../bug-fix/2026-09-19-failed-step-tool-results.md).
+An abort stops replenishment, waits for already-started calls, commits their results in order, drains accepted batch context after those results, and records synthetic aborted call/result pairs for undispatched calls. An unexpected scheduler failure stops new dispatches, waits for every already-started dispatch to settle, and rethrows the first failure. The driver records missing results before closing the failed step under the [failed-step recovery reference](../../../../packages/core/agent-loop/README.md).
 
 PTC mode remains outside this scheduler because the model emits one native `run_code` call. `run_code` and its internal dispatch queue remain serial; native sibling calls in `mode: 'both'` use the normal scheduler.
 

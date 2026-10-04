@@ -28,7 +28,7 @@ Four decisions ship together.
 
 ## Relationship to earlier decisions
 
-This partially supersedes the [native Desktop fatal recovery](2026-09-15-desktop-native-fatal-recovery.md) note: the crash report file, not the Electron console, is now the record the dialog points to, and the dialog detail carries the report-path line; that note's dialog ownership, button set, and profile recovery remain active. The `uncaughtException` handling extends the release mechanism of the [fail-loud release](../bug-fix/2026-07-31-fail-loud-releases-the-terminal.md) note to synchronous throws.
+This partially supersedes the [native Desktop fatal recovery](2026-09-15-desktop-native-fatal-recovery.md) note: the crash report file, not the Electron console, is now the record the dialog points to, and the dialog detail carries the report-path line; that note's dialog ownership, button set, and profile recovery remain active. The `uncaughtException` handling extends the release mechanism of the [fail-loud release](../../../../packages/boot/app-boot/README.md) note to synchronous throws.
 
 ## Relationship to the Desktop logging design
 

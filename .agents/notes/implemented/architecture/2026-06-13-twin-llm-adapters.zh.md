@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-`dsh-llm` 拥有一套提供方无关的流式词汇：`StreamChunk` 协议（`block-start`、`text-delta`、`reasoning-delta`、`tool-call-delta`、`block-end`、`usage`、`finish`）以及内容块类型（[内容块词汇](2026-06-11-content-block-vocabulary.zh.md)）。如果词汇仅针对单个适配器定义，就有可能将该适配器的特异行为固化到「中立」约定中：唯一实现碰巧做了什么，什么就成为事实上的规范；在第二个提供方到来之前，抽象层未经验证——而届时修复这种泄漏的代价已经很高。
+`dsh-llm` 拥有一套提供方无关的流式词汇：`StreamChunk` 协议（`block-start`、`text-delta`、`reasoning-delta`、`tool-call-delta`、`block-end`、`usage`、`finish`）以及内容块类型（[内容块词汇](../../../../packages/llm/llm/README.zh.md)）。如果词汇仅针对单个适配器定义，就有可能将该适配器的特异行为固化到「中立」约定中：唯一实现碰巧做了什么，什么就成为事实上的规范；在第二个提供方到来之前，抽象层未经验证——而届时修复这种泄漏的代价已经很高。
 
 ## 决策
 

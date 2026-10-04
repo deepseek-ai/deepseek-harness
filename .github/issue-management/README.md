@@ -45,16 +45,18 @@ REST reads use the repository `GITHUB_TOKEN`. Project validation uses a separate
 
 Approval-only and comment-only reviews do not allocate a lifecycle runner. PR pushes and label changes, and Issue assignment changes, do not trigger lifecycle work. Other subscribed Issue events maintain membership, state, and audit comments; exact subscriptions live in the workflow.
 
-PR opening initializes an empty Project `Start Date` for every referenced Issue, including informational references, using the PR creation date in the configured time zone. This lifecycle operation can add Project membership and needs Project write access; the informational-reference read exemption applies only to PR validation. [Planning-field ownership](../../.agents/notes/implemented/process/2026-09-02-project-local-issue-planning-fields.md) defines date preservation.
+PR opening initializes an empty Project `Start Date` for every referenced Issue, including informational references, using the PR creation date in the configured time zone. This lifecycle operation can add Project membership and needs Project write access; the informational-reference read exemption applies only to PR validation. Existing Start Date values are preserved.
 
 -----
 
 <a id="configuration-and-limitations"></a>
 ## Configuration and limitations
 
-[config.json](config.json) selects the repository, Project, field names, statuses, lifecycle actor, and time zone. The policy reads the Project custom single-select `Priority` field, not a native organization Issue Priority field. Maintainers set Project Priority manually; skill guidance that directs edits to native Issue fields does not populate this value. Issue audits remove PR-only kinds and retired label aliases before validating the remaining metadata. There is no field migration or Priority synchronization.
+[config.json](config.json) selects the repository, Project, field names, statuses, lifecycle actor, and time zone. The policy reads the Project custom single-select `Priority` field, not a native organization Issue Priority field. Project-local planning fields need no separate organization Issue Fields permission. Maintainers set Project Priority manually; skill guidance that directs edits to native Issue fields does not populate this value. Issue audits remove PR-only kinds and retired label aliases before validating the remaining metadata. There is no field migration or Priority synchronization.
 
-Lifecycle processing is event-driven, not a reconciler. Omitted events do not repair Project state, and concurrent Project mutations have no atomic compare-and-swap. Selective evaluation does not redesign required-check authority or guarantee measured Actions-minute savings. The [selective-evaluation decision](../../.agents/notes/implemented/process/2026-09-07-selective-issue-policy-evaluation.md) records the trade-offs.
+Before removing a legacy organization field, compare every value with its Project value, including archived Project items.
+
+Lifecycle processing is event-driven, not a reconciler. Omitted events do not repair Project state, and concurrent Project mutations have no atomic compare-and-swap. Selective evaluation does not redesign required-check authority or guarantee measured Actions-minute savings. The [archived selective-evaluation decision](../../.agents/notes/archived/process/2026-09-07-selective-issue-policy-evaluation.md) records the trade-offs.
 
 -----
 

@@ -16,7 +16,7 @@ The V4 format restorer and current JSONL scanner share one mandatory cross-event
 
 An unfinished tail may retain an open turn, step, tool call, or compaction. A closing event must settle the relationships it closes. An inherited unfinished compaction ends at its `session/end-seed` marker; it does not constrain the child's lifecycle. Repair message identities retain their historical numeric suffix after earlier migrations change sequence coordinates. Fork repairs retain their separately validated native identities.
 
-Installed Session adoption continues to own event envelopes, message roles and metadata, canonical request headers, and surface replacement reference coverage. Optional runtime invariants provide diagnostics; their installation is not required for durable admission. Native system-message admission also validates coordinates, identity, content blocks, and known image/tool-call fields before physical recovery can discard rows. Additional JSON fields and unknown nonempty content tags remain intact; retired tool-result wrappers are refused. Retired `request/header.header.system` and required `tool/code-dispatch*` tags remain hard refusals before recovery; obsolete ignorable PTC records remain opaque. Physical framing alone does not establish semantic validity.
+Installed Session adoption continues to own event envelopes, message roles and metadata, canonical request headers, and surface replacement reference coverage. Native system-message admission also validates coordinates, identity, content blocks, and known image/tool-call fields before physical recovery can discard rows. Additional JSON fields and unknown nonempty content tags remain intact; retired tool-result wrappers are refused. Retired `request/header.header.system` and required `tool/code-dispatch*` tags remain hard refusals before recovery; obsolete ignorable PTC records remain opaque. Physical framing alone does not establish semantic validity.
 
 A retired tool-result wrapper outside its owning `tool/result` row would require changing the event, role, or source to represent it in V4. The adjacent migration lifts only the canonical owned wrapper; target restoration refuses wrappers remaining in interpreted content. Native row admission applies the same refusal before recoverable tail suppression. The check follows declared message, content, and Assistant-stream slots instead of recursively inspecting JSON, so tool arguments, replay state, schema parameters, nested extensions, and unknown ignorable payloads retain their recorded values.
 
@@ -25,8 +25,6 @@ A retired tool-result wrapper outside its owning `tool/result` row would require
 ## Alternatives considered
 
 **Project V4 back into a frozen V3 validation view.** This couples current acceptance to retired representations and invites new fields to disappear in the projection. Frozen generations remain independently readable, while the current restorer interprets its own fields.
-
-**Rely on optional runtime invariants.** Detached readers and restoration paths may not install diagnostic companions. A required relationship must be checked before publication or consumption of the restored Session.
 
 ## Consequences
 

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-speech-to-text-sensevoice",
   "description": "Local SenseVoice ONNX transcription with a managed sherpa-onnx process",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

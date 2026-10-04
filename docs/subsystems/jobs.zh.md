@@ -2,7 +2,7 @@
 
 [English](jobs.md) | 中文
 
-长时间运行的生产方、`ctx.jobs` 与任务控制命令共用的类型。[seam 收敛 Agent Note](../../.agents/notes/implemented/architecture/2026-09-03-jobs-seam-consolidation.zh.md) 负责当前设计，[运行时 Agent Note](../../.agents/notes/implemented/architecture/2026-06-20-generic-long-running-tool-runtime.zh.md) 记录其起源；本页记录 [`packages/jobs/jobs/src/types.ts`](../../packages/jobs/jobs/src/types.ts) 与客户端安全叶子 [`view.ts`](../../packages/jobs/jobs/src/view.ts) 中的确切字段与变体。
+长时间运行的生产方、`ctx.jobs` 与任务控制命令共用的类型。[seam 收敛 Agent Note](../../.agents/notes/implemented/architecture/2026-09-03-jobs-seam-consolidation.zh.md) 负责当前设计，[运行时 reference](../../packages/jobs/jobs/README.zh.md) 记录其起源；本页记录 [`packages/jobs/jobs/src/types.ts`](../../packages/jobs/jobs/src/types.ts) 与客户端安全叶子 [`view.ts`](../../packages/jobs/jobs/src/view.ts) 中的确切字段与变体。
 
 ## ID 与状态
 

@@ -21,6 +21,8 @@ getUnnotifiedBonuses returns the granted bonuses Platform has not yet recorded a
 
 Account consumers read stored login state, start or cancel a browser login, and sign out without editing API keys. Host model consumers resolve account credentials only for the provider-configured inference origin.
 
+`SignInErrorCode` distinguishes `no-response` (fetch returned no Response) from HTTP and response-validation failures so clients can offer network troubleshooting.
+
 `getDeviceIdentity()` returns existing device and account IDs plus the login OS version string, without credentials or device creation.
 
 ## Table of Contents
@@ -43,7 +45,7 @@ Account model failures with `ACCOUNT_SIGN_IN_REQUIRED` emit `deepseek-account/mo
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-The service defines account operations without maintaining a second credential index; no invariant companion is published. The provider owns persistence and login lifecycle checks.
+The service defines account operations without maintaining a second credential index. The provider owns persistence and login lifecycle checks.
 
 <a id="further-exploration"></a>
 ## Further Exploration

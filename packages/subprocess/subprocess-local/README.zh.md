@@ -101,7 +101,6 @@ Linux 普通进程和终端进程即使在 bootstrap 消费启动请求前被取
 | [`src/terminal.ts`](src/terminal.ts) | `node-pty` 终端句柄：Linux scope 绑定、前台检查与 fallback 清理 |
 | [`src/process-inspector.ts`](src/process-inspector.ts) | POSIX 进程树与会话检查 |
 | [`src/windows-inspector.ts`](src/windows-inspector.ts) | 经 koffi 的 Windows Toolhelp32 进程表检查 |
-| — | 不发布运行时不变式伴生入口；除所属 seam 强制执行的约定外，本包不公开独立的事件序列或可变数据关系。 |
 
 ### 主流程
 

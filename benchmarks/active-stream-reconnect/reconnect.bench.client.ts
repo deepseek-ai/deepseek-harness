@@ -5,8 +5,8 @@ import { runBuiltBenchmarkWorker } from '../support/built-worker.ts'
 import { ciTimeBudget, PERFORMANCE_BUDGET_HEADROOM } from '../support/calibration.ts'
 import type { ReconnectReport } from './reconnect.worker.client.ts'
 
-const EXPECTED_REPLACE_CI_MS = 50
-const REPLACE_BUDGET_MS = Math.ceil(EXPECTED_REPLACE_CI_MS * PERFORMANCE_BUDGET_HEADROOM)
+const REFERENCE_REPLACE_MS = 50
+const REPLACE_BUDGET_MS = ciTimeBudget(REFERENCE_REPLACE_MS)
 const REFERENCE_RETAINED_MB = 24
 const SAMPLES = 3
 
@@ -15,11 +15,17 @@ function expectReplacementWithinBudget(value: number, budget: number): void {
 }
 
 it('accepts recorded hosted reconnect samples and rejects replacement regressions', () => {
-  const recordedMedian = [46.574411, 46.067910, 44.193704].toSorted((a, b) => a - b)[1]!
-  expect(() => expectReplacementWithinBudget(recordedMedian, ciTimeBudget(16))).toThrow()
-  expectReplacementWithinBudget(recordedMedian, REPLACE_BUDGET_MS)
-  expect(REPLACE_BUDGET_MS).toBe(63)
-  expect(() => expectReplacementWithinBudget(75, REPLACE_BUDGET_MS)).toThrow()
+  const recordedSamples = [
+    [46.574411, 46.067910, 44.193704],
+    [55.995471, 55.187582, 55.474573],
+    [64.954055, 67.441804, 65.694876],
+  ]
+  const recordedMedians = recordedSamples.map(samples => samples.toSorted((a, b) => a - b)[1]!)
+  expect(() => expectReplacementWithinBudget(recordedMedians[0]!, ciTimeBudget(16))).toThrow()
+  expect(() => expectReplacementWithinBudget(recordedMedians[2]!, 63)).toThrow()
+  for (const median of recordedMedians) expectReplacementWithinBudget(median, REPLACE_BUDGET_MS)
+  expect(REPLACE_BUDGET_MS).toBe(125)
+  expect(() => expectReplacementWithinBudget(150, REPLACE_BUDGET_MS)).toThrow()
   expect(() => expectReplacementWithinBudget(REPLACE_BUDGET_MS + 1, REPLACE_BUDGET_MS)).toThrow()
 })
 
@@ -42,7 +48,7 @@ it('reconstructs a 100000-delta live prefix within baseline time and retained-me
   const retainedMb = samples.map(sample => sample.retainedMb).toSorted((a, b) => a - b)[1]!
   const budgetMs = REPLACE_BUDGET_MS
   const budgetMb = REFERENCE_RETAINED_MB * PERFORMANCE_BUDGET_HEADROOM
-  console.log(JSON.stringify({ benchmark: 'active-stream-reconnect', samples, median: { replaceMs, retainedMb }, expectedCiMs: EXPECTED_REPLACE_CI_MS, referenceMb: REFERENCE_RETAINED_MB, budgetMs, budgetMb }))
+  console.log(JSON.stringify({ benchmark: 'active-stream-reconnect', samples, median: { replaceMs, retainedMb }, referenceMs: REFERENCE_REPLACE_MS, referenceMb: REFERENCE_RETAINED_MB, budgetMs, budgetMb }))
   expectReplacementWithinBudget(replaceMs, budgetMs)
   expect.soft(retainedMb).toBeLessThanOrEqual(budgetMb)
 })

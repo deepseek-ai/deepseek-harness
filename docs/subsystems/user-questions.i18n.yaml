@@ -10,7 +10,7 @@
   zh: 8e1d2627823b1ffc
 /user-interaction/presentation-intent:
   en: aca3811ea3f0c2ef
-  zh: 91f93dc33d12e343
+  zh: 6cf2aea40c7dece8
 /user-interaction/question-item:
   en: 1ad4373e6fdfe4c7
   zh: efb8d41ebe7224f8
@@ -18,8 +18,11 @@
   en: e10cf6c8c9c20962
   zh: 0b347b40c12b6b25
 /user-interaction/answer:
-  en: 4235b687a9975881
-  zh: 350d000d4bfa7400
+  en: efd2dbb95a885d0e
+  zh: 7a20c75c4ea6a9e0
+/user-interaction/timed-questions-and-late-replies:
+  en: 74fa698d4a115e80
+  zh: 4e9b03b5eab2ae5e
 /user-interaction/errors:
-  en: 33cc3bf5e352e223
-  zh: 143279cc3f355453
+  en: 5762b1498a426ab6
+  zh: bb9987ec82103620

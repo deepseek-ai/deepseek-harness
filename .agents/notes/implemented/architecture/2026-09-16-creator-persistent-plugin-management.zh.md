@@ -12,7 +12,7 @@ agent 需要安装能力并在同一段对话中使用。生成代码工具在�
 
 创造模式启用现有的 `plugin_manager` 工具。agent 将包和 Loader YAML patch 写入工作区文件，再通过 `install_bundle` 安装。MCP 连接是插入已安装 `dsh-mcp-client` 的纯配置组合包；UI 组合包包含 Host 入口和 Client 产物。profile 锁、包安装、启停和 HMR 继续由现有管理器负责。 整个管理工具要求 `danger-full-access` 或单次调用的批准：profile 变更能以宿主权限加载代码，并影响其他会话。每次执行（包括查询列表）都会先使用共享沙箱提权函数和审批服务，再访问管理器。在较低沙箱模式下，`ask` 请求审批，`never` 拒绝；完整权限会话无需额外审批。批准不改变会话权限，但本次操作的 profile 变更会持久化。这让与 shell 等价的宿主访问需要明确授权，同时不必永久提升整个会话的权限。由用户直接操作的 Web 和 CLI 控件保持原有行为。
 
-模型可见两个只读 Cordis 检查工具，不再提供生成代码的 define/run/stop/undefine 和动态自省工具 API。现有运行时和 Client 消费者保留其服务；历史会话卡片仍然可读。这仅取代[自引用工具集决策](../feature/2026-07-08-self-referential-cordis-toolset.zh.md)中的模型侧变更流程；其运行时所有权和沙箱依据仍有独立价值。[profile 事务决策](2026-09-14-current-profile-plugin-management.zh.md)继续规定锁、包安装和部分失败行为。
+模型可见两个只读 Cordis 检查工具，不再提供生成代码的 define/run/stop/undefine 和动态自省工具 API。现有运行时和 Client 消费者保留其服务；历史会话卡片仍然可读。这仅取代[自引用工具集参考](../../../../packages/extensions/cordis-host-runner/README.zh.md)中的模型侧变更流程；其运行时所有权和沙箱依据仍有独立价值。[profile 事务决策](2026-09-14-current-profile-plugin-management.zh.md)继续规定锁、包安装和部分失败行为。
 
 除非用户指定其他目标，视觉创建请求默认通过已安装的 Client 插件显示在当前 Web 页面。开发 skill 提供最小包和由 effect 管理的 Client 注册示例。已知所需 API 后结束探查，在可选视觉优化之前先安装能工作的初版。有条件时使用已连接页面验证。浏览器认证或操作系统设置不是安装插件的前提，mock 预览不能证明应用内结果。
 

@@ -53,7 +53,7 @@ handle.agent.followup({
 })
 handle.agent.steer({
   content: [{ type: 'text', text: 'Focus on the tests.' }],
-  source: { kind: 'plugin', plugin: 'my-plugin' },
+  source: { kind: 'my-plugin' },
 })
 await handle.agent.whenIdle()
 ```
@@ -100,7 +100,6 @@ The package is built on one separation: the public `Agent` surface and registry 
 | [`src/dispatch.ts`](src/dispatch.ts) | `agentEvents` fused dispatcher and `assembleContextFor(agent)` |
 | [`src/consumed-work.ts`](src/consumed-work.ts) | `foldConsumedWork(events)`: what the log's consumed work became |
 | [`src/model-selection.ts`](src/model-selection.ts) | `installModelSelection`: coupling one selection to assembly and routing |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: no-op `agent/status` transitions fail |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | The `turn` family of the Workspace registry's archive admission: a running turn and its user-cause cancel |
 
 ### Registry and lifecycle

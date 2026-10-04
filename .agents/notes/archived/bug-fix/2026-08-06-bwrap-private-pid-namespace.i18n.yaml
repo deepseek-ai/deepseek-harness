@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-08-06-bwrap-private-pid-namespace.md
+2026-08-06-bwrap-private-pid-namespace.md: eb5818a9292d7c96d7d1623865058182befd891b
+2026-08-06-bwrap-private-pid-namespace.zh.md: 396ee74b1b2377e31a4b8753d9a165081c6dac82

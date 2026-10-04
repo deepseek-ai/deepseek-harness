@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-09-24-preparing-tool-arguments.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-24-preparing-tool-arguments.md
+/agent-note-incremental-tool-argument-scanning-and-argument-order-during-preparation:
+  en: 07f6420c67ea2700
+  zh: b9b53250e050cf6e
+/agent-note-incremental-tool-argument-scanning-and-argument-order-during-preparation/problem:
+  en: c97b3edd4ef1d063
+  zh: 5c8b6065e662f326
+/agent-note-incremental-tool-argument-scanning-and-argument-order-during-preparation/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-incremental-tool-argument-scanning-and-argument-order-during-preparation/decision/a-lazily-computed-argument-view-lives-in-dsh-util-values:
+  en: eb004194b0c08464
+  zh: d09c6353ed7138de
+/agent-note-incremental-tool-argument-scanning-and-argument-order-during-preparation/decision/parsing-happens-in-the-tool-definition-not-in-react:
+  en: 518206f94d82993d
+  zh: c6cab3b2f71dd18b
+/agent-note-incremental-tool-argument-scanning-and-argument-order-during-preparation/decision/argument-declaration-order:
+  en: 0fd7c9f0b8cf6a28
+  zh: 7d410403283b9996
+/agent-note-incremental-tool-argument-scanning-and-argument-order-during-preparation/alternatives-considered:
+  en: 7a033f81c557c58f
+  zh: 2ec66b0db6cf5d9e
+/agent-note-incremental-tool-argument-scanning-and-argument-order-during-preparation/verification:
+  en: c1e09085a137be1c
+  zh: ec79806f84f59dec
+/agent-note-incremental-tool-argument-scanning-and-argument-order-during-preparation/consequences:
+  en: f1c44f9d58d36920
+  zh: bb297337882ec407

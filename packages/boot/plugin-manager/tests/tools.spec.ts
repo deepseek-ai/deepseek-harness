@@ -195,10 +195,10 @@ it('keeps UI translation metadata out of model-facing plugin and bundle lists', 
     entries: [{ entryId: 'include:plugin', enabled: true }], total: 1, nextOffset: null,
   })
   manager.listBundles.mockImplementationOnce(async () => [{
-    name: 'bundle', enabled: true, meta, rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
+    name: 'bundle', source: 'bundle@^1.0.0', enabled: true, meta, rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
   }])
   expect(JSON.parse(resultText(await call({ action: 'list_bundles' })))).toEqual({
-    entries: [{ name: 'bundle', enabled: true, rows: [{ rowId: 'plugin', moduleName: 'plugin' }] }], total: 1, nextOffset: null,
+    entries: [{ name: 'bundle', source: 'bundle@^1.0.0', enabled: true, rows: [{ rowId: 'plugin', moduleName: 'plugin' }] }], total: 1, nextOffset: null,
   })
 })
 

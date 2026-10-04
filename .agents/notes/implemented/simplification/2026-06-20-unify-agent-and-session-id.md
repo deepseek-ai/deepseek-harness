@@ -10,7 +10,7 @@ A live agent/session pair needs one identity for registry routing, event sourcin
 
 ACP uses the same value for both identities. Stdio and hooks also operate on the session event stream and need the corresponding live agent directly; no production path reattaches one live agent object to several sessions or drives one session through several agent ids.
 
-The [agent-scope runtime](../architecture/2026-07-12-agent-scope-runtime-design.md) uses one `AgentCreationTransaction` for create and resume, and agent/session entries share the same final-entry collision rule. A second identity would not represent separate liveness, rollback, or quiescence; it would only add API and translation state around the same transaction.
+The [agent-scope runtime](../../../../packages/core/agent-loop/README.md) uses one `AgentCreationTransaction` for create and resume, and agent/session entries share the same final-entry collision rule. A second identity would not represent separate liveness, rollback, or quiescence; it would only add API and translation state around the same transaction.
 
 Session identity likewise has one home in `Session.header.id`; `Session.id` is a derived accessor rather than independent state that needs duplicate validation.
 

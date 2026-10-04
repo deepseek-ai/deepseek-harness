@@ -458,11 +458,15 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     await input.fill(STEER_TWO)
     await input.press('Enter')
     const dock = page.locator('[data-queue-dock]')
-    // Both messages queued: the two-row dock shows a collapsed count header,
-    // and Playwright text matching skips the hidden rows — expand the list,
-    // then assert each row's content.
-    await dock.getByText('2 queued messages').waitFor({ timeout: 10_000 })
-    await dock.getByRole('button').click()
+    // Both messages queued: the two-row dock is collapsed, so it renders the
+    // count header and no rows. Expand it through the header, then assert each
+    // row's content. Target the header by its accessible name: every visible row
+    // renders its own Edit/Remove/Steer buttons, so a bare button role query also
+    // matches those while a row is rendered.
+    const queueHeader = dock.getByRole('button', { name: '2 queued messages' })
+    await queueHeader.waitFor({ timeout: 10_000 })
+    await expect.poll(() => queueHeader.getAttribute('aria-expanded'), { timeout: 10_000 }).toBe('false')
+    await queueHeader.click()
     await dock.getByText(STEER_ONE, { exact: true }).waitFor({ timeout: 10_000 })
     await dock.getByText(STEER_TWO, { exact: true }).waitFor({ timeout: 10_000 })
     expect(await page.locator('[data-pending-steering]').count()).toBe(0)

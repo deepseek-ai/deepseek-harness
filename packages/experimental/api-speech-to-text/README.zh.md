@@ -37,7 +37,7 @@ kind: "package-reference"
 <details>
 <summary>维护者信息 — 点击展开</summary>
 
-`catalog()` 暴露 Provider 标识、默认选择与录音限制。`transcribe()` 在解析指定 Provider 前校验规范 base64 与 16 kHz 单声道 PCM16 WAV。现有网关负责认证和取消传输。音频是临时数据，不成为 Session 事件或附件；只有用户之后的普通提交才记录识别文字。不发布运行时不变量伴随模块，因为校验无状态，准备属于 Provider。
+`catalog()` 暴露 Provider 标识、默认选择与录音限制。`transcribe()` 在解析指定 Provider 前校验规范 base64 与 16 kHz 单声道 PCM16 WAV。现有网关负责认证和取消传输。音频是临时数据，不成为 Session 事件或附件；只有用户之后的普通提交才记录识别文字。
 
 `follow()` 推送包含准备状态和当前偏好的完整目录。`prepare()` 启动或加入 Host 任务；`cancelPreparation()` 显式取消任务。`configure()` 持久化传入的偏好字段。观察连接断开不会取消准备。
 

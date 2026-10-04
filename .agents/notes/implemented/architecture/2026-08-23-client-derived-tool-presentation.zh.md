@@ -22,7 +22,7 @@ Host presenter 与 Client keyed renderer 分担展示会形成对同一事件的
 
 ## Decision
 
-下述展示对等要求不包含已独立批准的[嵌套 terminal 卡片修复](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)和[紧凑工具详情](2026-09-10-compact-tool-details.zh.md)；其他展示与所有权约束全部保留。
+下述展示对等要求不包含已独立批准的[嵌套 terminal 卡片修复](../../../../packages/client/ui-tool/README.zh.md)和[记录结果的工具详情](../../../../packages/client/ui-tool/README.zh.md)；其他展示与所有权约束全部保留。
 
 Session Remote journal 只下发原始、已验证、可持久化的 Session event。`session.page` 和 `session.follow` 不解析工具参数，不查询 Tools registry，不恢复 presenter scope，不执行 `presentCall`／`presentResult`，也不构造或克隆任何 tool view。
 
@@ -51,7 +51,7 @@ Host 的 `ToolDefinition.presentCall`、`ToolDefinition.presentResult`、`ToolCa
 | 保留 | Session 日志格式、Remote journal 生命周期与 Conversation identity/topology |
 | 保留 | 现有 keyed slot、Generic fallback、Chat、Details 与 Trajectory 结构 |
 | 禁止 | 新 Client presenter service、平行 registry 或 wire renderer id |
-| 禁止 | 新卡片、视觉改版、交互改版或 PTC dispatch rich-card 增强，[嵌套 terminal 卡片例外](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)和[紧凑工具详情](2026-09-10-compact-tool-details.zh.md)除外 |
+| 禁止 | 新卡片、视觉改版、交互改版或 PTC dispatch rich-card 增强，[嵌套 terminal 卡片例外](../../../../packages/client/ui-tool/README.zh.md)和[记录结果的工具详情](../../../../packages/client/ui-tool/README.zh.md)除外 |
 | 禁止 | 为兼容保留双写、版本协商或旧 `view` 字段 |
 
 ## 术语
@@ -634,7 +634,7 @@ read 行结构、applied diff、search 分组、web sources 和有效 truncation
 
 ### 允许展示增强
 
-将更丰富的 PTC dispatch 卡片、缺失 call head 的推断或其他历史展示增强与所有权变更捆绑，会使快照无法证明对等。本决定拒绝这种捆绑；[嵌套 terminal 卡片例外](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)不放宽非 terminal 子调用限制。
+将更丰富的 PTC dispatch 卡片、缺失 call head 的推断或其他历史展示增强与所有权变更捆绑，会使快照无法证明对等。本决定拒绝这种捆绑；[嵌套 terminal 卡片例外](../../../../packages/client/ui-tool/README.zh.md)不放宽非 terminal 子调用限制。
 
 ### 接受临时 Generic 退化
 
@@ -686,7 +686,7 @@ optional `view` 的缺失是所有 consumer 共同遵守的预发布 wire 类型
 
 ## 与现有决策的关系
 
-[嵌套 terminal 卡片](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)仅部分取代 terminal 子调用卡片禁令及其展示对等要求。本文继续负责原始 journal 所有权、Client 派生以及 diff/read/search/web 子调用限制。
+当前[terminal 卡片规则](../../../../packages/client/ui-tool/README.zh.md)允许嵌套 terminal 卡片，仅替代 terminal 子调用卡片禁令及其展示对等要求。本文继续负责原始 journal 所有权、Client 派生以及 diff/read/search/web 子调用限制。
 
 本文部分取代 [Client 工具展示所有权](../../archived/architecture/2026-08-08-client-tool-presentation-ownership.md) 中“card model 接收 Host view”的实现事实；`ui-tool` 拥有展示、业务插件使用 keyed slot、Conversation 只拥有生命周期与拓扑的核心决定保持不变。
 
@@ -698,12 +698,12 @@ optional `view` 的缺失是所有 consumer 共同遵守的预发布 wire 类型
 
 本文遵循 [Conversation Node 组装](2026-08-09-client-conversation-node-assembly.zh.md)：Tool Definition 负责事件配对与调用树，具体 card model 留在 `ui-tool`。
 
-本文保留 [规范工具输出约定](2026-07-20-canonical-tool-output-contract.zh.md) 的 result metadata，因为它是无损、可重放 Client 派生的输入。
+本文保留 [规范工具输出约定](../../../../packages/core/tools/README.zh.md) 的 result metadata，因为它是无损、可重放 Client 派生的输入。
 
 ## Deferred
 
 - Host presenter 若长期没有生产消费者，可由另一项明确决策评估删除；本决定不预判。
-- PTC dispatch 子调用的 diff、read、search 和 web 专用卡片仍需独立设计并更新可见快照；terminal 调用由链接的部分取代决策负责。
+- PTC dispatch 子调用的 diff、read、search 和 web 专用卡片仍需独立设计并更新可见快照；terminal 调用遵循链接的当前卡片规则。
 - 第三方 mutation tool 若要加入 Deliverables，需新增 Client-owned 贡献；本决定不为尚无消费者的扩展性建 registry。
 - 同名 provider 若要不同 Client 展示，需先定义稳定、非展示性的 identity；不得恢复按页 Host view。
 - Client card model 若需量化性能，可以增加 immutable-block 微基准；已交付架构禁止扫描 Session window。

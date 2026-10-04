@@ -2,12 +2,14 @@
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ConversationStoreState } from './contract/views.ts'
+import type { DraftInput, DraftSnapshot } from './contract/draft-editor.ts'
+import { parseStoredDraft } from './draft.ts'
 
 const CONVERSATION_STORE_KEY = 'dsh.conversation'
 
 /** Declared write set for the Conversation shell. */
 type ConversationActions = {
-  setDraft: (draft: ConversationStoreState, text: string) => void
+  setDraft: (draft: ConversationStoreState, text: DraftInput) => void
   setView: (draft: ConversationStoreState, view: string) => void
   openView: (draft: ConversationStoreState, view: string, focus: string) => void
   completeViewRequest: (draft: ConversationStoreState) => void
@@ -22,7 +24,7 @@ export function createConversationStore(): EngineStoreHandle<ConversationStoreSt
     init: (): ConversationStoreState => ({ draft: '', view: null, viewRequest: null }),
     persist: CONVERSATION_STORE_KEY,
     actions: {
-      setDraft: (d, text: string) => { d.draft = text },
+      setDraft: (d, text: DraftInput) => { d.draft = text },
       setView: (d, view: string) => { d.view = view },
       openView: (d, view: string, focus: string) => {
         d.view = view
@@ -31,6 +33,26 @@ export function createConversationStore(): EngineStoreHandle<ConversationStoreSt
       completeViewRequest: (d) => { d.viewRequest = null },
     },
   })
+}
+
+/**
+ * Read a Session's draft before its input source is published to React.
+ * @param sessionId - Session-scoped persistence suffix.
+ * @returns saved semantic content, or an empty document when storage is absent or invalid.
+ */
+export function readConversationDraft(sessionId: SessionId): DraftSnapshot {
+  const empty: DraftSnapshot = { text: '', references: [] }
+  if (typeof localStorage === 'undefined') return empty
+  try {
+    const raw = localStorage.getItem(`${CONVERSATION_STORE_KEY}.${sessionId}`)
+    if (raw === null) return empty
+    const stored: unknown = JSON.parse(raw)
+    if (typeof stored !== 'object' || stored === null || !('draft' in stored)) return empty
+    return parseStoredDraft(stored.draft) ?? empty
+  } catch (_error: unknown) {
+    // Unavailable browser storage or malformed JSON has no usable saved draft.
+    return empty
+  }
 }
 
 /**

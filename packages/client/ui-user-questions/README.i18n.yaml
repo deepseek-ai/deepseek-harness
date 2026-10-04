@@ -3,41 +3,47 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-user-questions/README.md
 /:
-  en: b50469addda9db2d
-  zh: ae560611295a5f4d
+  en: 50286bfa65e45456
+  zh: 2347492bb65bd1b4
 /deepseek-ai-dsh-client-ui-user-questions:
   en: f109e91b29d71f55
   zh: 73200984bad7f908
 /deepseek-ai-dsh-client-ui-user-questions/summary:
-  en: 7e81c6a53759ff37
-  zh: b83f666c4ef4cbd3
+  en: 1aa6291852d48a08
+  zh: 414eed268fb2cf1f
 /deepseek-ai-dsh-client-ui-user-questions/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-user-questions/use-this-package:
-  en: 4aa048dcb7282f12
-  zh: d2731da0870aa6a0
+  en: 8d3815c19858ac85
+  zh: 94fc905fa202d334
 /deepseek-ai-dsh-client-ui-user-questions/use-this-package/answering:
-  en: 8b6f37bfb11a2c3a
-  zh: 59d8951211f9b21b
+  en: cc19c065d0aeac1e
+  zh: 91c8cbe08b438e7f
+/deepseek-ai-dsh-client-ui-user-questions/use-this-package/reading-a-settled-question-back:
+  en: 10975f68ff9c6fcc
+  zh: 92246aadc363f0eb
 /deepseek-ai-dsh-client-ui-user-questions/use-this-package/the-plan-review-card:
   en: 6b12f1362c614a39
   zh: 27d9cf54d4cbd5d2
 /deepseek-ai-dsh-client-ui-user-questions/use-this-package/failure-and-recovery:
-  en: da530ef485c07417
-  zh: b07525cfcd5034f0
+  en: 3509678f4d183834
+  zh: 625542b79e434eb5
 /deepseek-ai-dsh-client-ui-user-questions/understand-the-implementation:
   en: 77e1b2585acdf67b
   zh: d433ec185c6b8f57
+/deepseek-ai-dsh-client-ui-user-questions/understand-the-implementation/reopening-a-panel:
+  en: 4350f2fbc41f6c86
+  zh: a11ef5e97d0c936e
 /deepseek-ai-dsh-client-ui-user-questions/understand-the-implementation/intent-surface-election:
-  en: 7f3e0e2460317462
-  zh: cb6b9410410e2f29
+  en: 126a889edbc42edd
+  zh: 7e08968cd61d42a2
 /deepseek-ai-dsh-client-ui-user-questions/understand-the-implementation/copy-and-locale:
-  en: 1a144dbf8bf39d43
-  zh: 66bccf9c343395c7
+  en: 00b3f92cdad70faf
+  zh: ab672ddc2faef857
 /deepseek-ai-dsh-client-ui-user-questions/further-exploration:
-  en: 70e1ae005fa86e3c
-  zh: 9c779d63b3f921cc
+  en: dc98d242987579a3
+  zh: a193b9f33a197089
 /deepseek-ai-dsh-client-ui-user-questions/model-experience:
   en: 198421eb8ed8923f
   zh: 84f719be6e6dfe62
@@ -45,8 +51,8 @@
   en: 1032ba29b7d7f9d7
   zh: 01f1dbf4c2164fd2
 /deepseek-ai-dsh-client-ui-user-questions/known-limitations-and-deferred-work:
-  en: beb6dc6d1496e799
-  zh: d92150a88a797c21
+  en: d61767a407077aaf
+  zh: 891e7bffa61f3017
 /deepseek-ai-dsh-client-ui-user-questions/known-limitations-and-deferred-work/dev-note:
-  en: 7c763299daed17e4
-  zh: fb410b366b407ec7
+  en: 4ff0c667c1b130df
+  zh: 3f42eaff797dc46d

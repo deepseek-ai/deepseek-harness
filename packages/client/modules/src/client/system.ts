@@ -63,15 +63,20 @@ function chunkUrl(row: BootModuleRow, fileName: string, rev: string): string {
   return `${url.slice(0, resourceStart)}/${row.id}/${fileName}?${url.slice(revisionStart + 1)}`
 }
 
+/** Untagged <style> elements present before a factory runs; the factory must not claim them. */
+const untaggedStyles = (): ReadonlySet<Element> =>
+  typeof document === 'undefined' ? new Set() : new Set(document.querySelectorAll('style:not([data-plugin])'))
+
 /**
  * Claim and inventory the <style> tags a factory injected during
  * materialization: preset-emitted tags arrive pre-tagged with data-plugin;
- * any untagged tag is claimed for the materializing plugin (HMR bookkeeping).
+ * an untagged tag that was absent from `before` is claimed for the
+ * materializing plugin (HMR bookkeeping).
  */
-const claimStyles = (id: string): string[] => {
+const claimStyles = (id: string, before: ReadonlySet<Element>): string[] => {
   if (typeof document === 'undefined') return []
-  for (const el of document.querySelectorAll('style:not([data-plugin])')) {
-    el.setAttribute('data-plugin', id)
+  for (const el of untaggedStyles()) {
+    if (!before.has(el)) el.setAttribute('data-plugin', id)
   }
   const owned: string[] = []
   for (const el of document.querySelectorAll(`style[data-plugin=${JSON.stringify(id)}]`)) {
@@ -300,13 +305,15 @@ export class ClientModuleSystem implements ClientModuleLoader {
       throw new Error(`client-modules: require cycle through "${id}" (factory-form CJS cannot deliver partial exports)`)
     }
     this.materializing.add(id)
+    const before = untaggedStyles()
     try {
       const edges = new Set<string>()
       const exports = registered.factory(this.makeRequire(ownerId, edges))
-      const record: ClientModuleRecord = { id, exports, styles: claimStyles(ownerId), edges }
+      const record: ClientModuleRecord = { id, exports, styles: claimStyles(ownerId, before), edges }
       this.loadCache.set(id, record)
       return record
     } catch (error) {
+      claimStyles(ownerId, before)
       removeOwnedStyles(ownerId)
       throw error
     } finally {

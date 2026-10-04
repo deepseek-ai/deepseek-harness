@@ -36,7 +36,7 @@ Header 显式提供。服务不会附加 channel header，也不继承环境中�
 
 `src/index.ts` 注册服务；`event-log.ts` 负责普通事件的 SDK 聚合；`session-log.ts` 负责字节和条数调度；`transport.ts` 提供 Session 的 SDK JSON HTTP delegate；`event-transport.ts` 使用 Got 实现可取消的普通事件 HTTP 请求和重试等待，序列化与导出计数仍由 SDK 负责。不安装全局 OTel provider。Session processor 对每条记录只计量一次，按保守大小组包，并在每次回调后等待 SDK 并发队列清理完成才发送下一请求。
 
-不发布运行时不变式伴生入口：通道创建不注册独立领域状态，无法从本地队列推断 collector 是否收到记录。组合测试覆盖独立通道和服务移除；适配器测试覆盖依赖 fiber 清理与反馈授权。
+组合测试覆盖独立通道和服务移除；适配器测试覆盖依赖 fiber 清理与反馈授权。
 
 <a id="further-exploration"></a>
 ## 进一步探索

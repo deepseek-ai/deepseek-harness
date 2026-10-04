@@ -260,7 +260,7 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
           openFontSize: getComputedStyle(open).fontSize,
         }
       })
-      expect(geometry.answerToPresented).toBeCloseTo(20, 1)
+      expect(geometry.answerToPresented).toBeCloseTo(16, 1)
       expect(geometry.presentedToActions).toBeCloseTo(20, 1)
       expect(geometry.cardHeight).toBeCloseTo(60, 1)
       expect(geometry.cardColumnGap).toBeCloseTo(10, 1)

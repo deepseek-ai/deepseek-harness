@@ -16,8 +16,7 @@
  * or leaving plan mode changes only the prompt section, not the request tool
  * catalog.
  *
- * Agent Note:
- * - .agents/notes/implemented/simplification/2026-07-22-plan-specific-collaboration-state.md
+ * See packages/plan/plan-mode/README.md.
  *
  * @module @deepseek-ai/dsh-plan-mode
  */

@@ -52,7 +52,7 @@ const manifest: DshPackageManifest = {
 | `dsh.manifestVersion` | manifest（元数据清单）格式标识；声明的格式为 `1`，独立于 npm 包版本和 Session 格式版本。 |
 | `engines.dsh` | 作者声明的兼容 DSH 版本，使用 SemVer 范围，也可填写精确的预发布版本。此字段与 `engines.node`、`engines.npm` 并列；engines 对象可省略 `dsh`。 |
 
-`LocalizedText` 携带字面文本或带必需英文回退值的语言映射。`PluginLocalizedMeta` 携带已安装插件的可选展示标题、描述、从 `package.json.icon` 解析的图片 data URL，以及元信息诊断。[App boot](../../boot/app-boot/README.zh.md) 读取这些值；本包只提供其类型。
+`LocalizedText` 携带字面文本或带必需英文回退值的语言映射。`PluginLocalizedMeta` 携带已安装插件的可选展示标题、描述、从包根 `package.json.icon` 或导出的 `<标识>/icon` 解析的图片 data URL，以及元信息诊断。[App boot](../../boot/app-boot/README.zh.md) 读取这些值；本包只提供其类型。
 
 公共组合声明定义在 [`src/types.ts`](src/types.ts) 中。内部 `configTrees`、`sessionFormatMigration` 和生成的 `moduleFallback` 元数据分别由镜像打包器、目录生成器和启动器读取方拥有；公共类型不暴露这些字段。
 
@@ -64,7 +64,7 @@ const manifest: DshPackageManifest = {
 <details>
 <summary>实现细节——点击展开</summary>
 
-包根仅重新导出 [`src/types.ts`](src/types.ts) 中的声明。本包不发布运行时不变量伴随模块，因为它没有运行时状态或可独立观察的关系。
+包根仅重新导出 [`src/types.ts`](src/types.ts) 中的声明。本包
 
 </details>
 

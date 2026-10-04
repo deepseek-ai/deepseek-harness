@@ -36,6 +36,7 @@ import { GuideBody, type GuideInjected } from './tabs/guide/GuideBody.tsx'
 import { GuideTitle } from './tabs/guide/GuideTitle.tsx'
 import { ExpandButton } from './shell/ExpandButton.tsx'
 import { RightbarSeat, type SidebarRightInjected } from './shell/SidebarRight.tsx'
+import { closeWithPaneFocus, openWithPaneFocus } from './shell/close-focus.ts'
 import { RightbarRoot, type RightbarRootInjected } from './shell/RightbarRoot.tsx'
 import { SidebarSessionViews } from './session-views.ts'
 import { createSidebarRightController, type SidebarRightController } from './service.ts'
@@ -53,7 +54,7 @@ export type { GuideBodyProps, GuideInjected } from './tabs/guide/GuideBody.tsx'
 export type { ExpandButtonProps } from './shell/ExpandButton.tsx'
 export type { SidebarRightState, SurfaceState } from './stores.ts'
 export type {
-  ISidebarRight, SidebarRightBinding, SidebarRightOpenResourceOptions, SidebarRightOpenTabOptions,
+  ISidebarRight, SidebarRightOpenResourceOptions, SidebarRightOpenTabOptions,
   SidebarRightPlacement, SidebarRightCloseHandler, SurfaceActions,
 } from './service.ts'
 export type {
@@ -115,10 +116,37 @@ export function apply(ctx: ClientContext): void {
     sync()
     return () => { unsubscribe(); views.dispose() }
   }, 'ui-sidebar-right: retained Session views')
-  const { controller, adopt, forget } = createSidebarRightController(
+  const layout: ILayout = ctx.layout
+  // The automatic fullscreen rule as the seats last rendered it: the frame
+  // hands them its width as owner props, and every seat reports the same rule.
+  let autoFullscreen = false
+  const { controller, adopt, forget, show, measure } = createSidebarRightController(
     tabs,
     (address, signal) => { ctx.resources.pin(address, signal) },
+    {
+      autoFullscreen: () => autoFullscreen,
+      openWithFocus: (sessionId, open) => { openWithPaneFocus(document, sessionId, open) },
+      closeWithFocus: (sessionId, paneId, close) => { closeWithPaneFocus(document, sessionId, paneId, close) },
+    },
   )
+  // The Session on screen: the selected one while the Conversation fills the
+  // main column. Both sources notify before React renders their change, so the
+  // service names the arriving Session before any component of that commit
+  // reads it, and its seat mints the Session's store in the same render.
+  ctx.effect(() => {
+    const sync = (): void => {
+      const selected = views.source.getSnapshot().find(view => view.selected)
+      show(layout.panelInfo.getSnapshot().activePanelId === null ? selected?.sessionId : undefined)
+    }
+    const unsubscribeViews = views.source.subscribe(sync)
+    const unsubscribePanel = layout.panelInfo.subscribe(sync)
+    sync()
+    return () => {
+      unsubscribeViews()
+      unsubscribePanel()
+      show(undefined)
+    }
+  }, 'ui-sidebar-right: on-screen Session')
   const disposeRegistry = ctx.reflect.provide('sidebarRightTabs', tabs)
   const disposeService = ctx.reflect.provide('sidebarRight', controller)
   // Registered first, so it tears down last: the faces outlive every seat and
@@ -157,13 +185,12 @@ export function apply(ctx: ClientContext): void {
         } }
       },
     }
-    const layout: ILayout = ctx.layout
-    const injected: Omit<SidebarRightInjected, 'keyedHooks' | 'occurrence' | 'closeTab'> = {
+    const injected: Omit<SidebarRightInjected, 'keyedHooks' | 'occurrence' | 'closeTab' | 'measureRoom'> = {
       syncPresentation({ shown, track, fullscreen }) {
         if (shown) layout.openRightbar(track, fullscreen)
         else layout.closeRightbar()
       },
-      bindService: binding => controller.bind(binding),
+      reportAutoFullscreen: (value) => { autoFullscreen = value },
       splitPane: (paneId) => { controller.split(paneId) },
       toggleFullscreen: () => { const target = controller.commandTarget(); if (target !== undefined) controller.toggleFullscreen(target) },
       openTab: (kind, options) => { controller.openTab(kind, options) },
@@ -194,6 +221,7 @@ export function apply(ctx: ClientContext): void {
         store,
         inject: (sessionId): SidebarRightInjected => ({
           ...injected,
+          measureRoom: (canSplitPane) => { measure(sessionId, canSplitPane) },
           closeTab: (tabId) => {
             try { controller.closeIn(sessionId, tabId) }
             catch (error) { console.error('Sidebar tab close failed:', error) }

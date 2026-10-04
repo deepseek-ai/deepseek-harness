@@ -21,6 +21,9 @@
       "path": "../../../vendor/cordis"
     },
     {
+      "path": "../../../vendor/schemastery"
+    },
+    {
       "path": "../../llm/llm"
     },
     {
@@ -34,9 +37,6 @@
     },
     {
       "path": "../../interaction/user-approval"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     },
     {
       "path": "../../sandbox/sandbox"

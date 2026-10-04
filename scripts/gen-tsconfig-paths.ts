@@ -2,10 +2,9 @@
  * Expand the workspace path aliases that a wildcard would otherwise resolve by
  * probing every package group in turn.
  *
- * `tsconfig.base.json` is the resolution facade for the whole repository, and
- * two of its aliases used one key per *group* rather than per package:
- * `@deepseek-ai/dsh-*` listed 49 candidate globs and `@deepseek-ai/dsh-*\/invariant`
- * listed 45. TypeScript and tsx try those candidates in order, so a specifier
+ * `tsconfig.base.json` is the resolution facade for the whole repository. A
+ * `@deepseek-ai/dsh-*` wildcard would list one candidate glob per package
+ * group. TypeScript and tsx try those candidates in order, so a specifier
  * whose package sits late in the list pays for every earlier miss. Under tsx's
  * ESM hook each miss is an `ERR_MODULE_NOT_FOUND` that Node decorates with a
  * full CommonJS resolution walk, which dominated source-launch boot.
@@ -37,8 +36,6 @@ interface PackageAlias {
   readonly specifier: string
   /** Repository-relative source directory, e.g. `./packages/session/session/src`. */
   readonly source: string
-  /** Whether the package carries `src/invariant.ts`, which earns a second alias. */
-  readonly hasInvariant: boolean
 }
 
 /**
@@ -62,7 +59,6 @@ function packageName(manifest: string): string | undefined {
 interface WorkspacePackage {
   readonly group: string
   readonly directory: string
-  readonly packageDir: string
   readonly name: string
 }
 
@@ -80,7 +76,7 @@ function workspacePackages(): WorkspacePackage[] {
       const packageDir = join(groupDir, directory)
       const name = packageName(join(packageDir, 'package.json'))
       if (name === undefined || !name.startsWith(PREFIX)) continue
-      if (existsSync(join(packageDir, 'src'))) found.push({ group, directory, packageDir, name })
+      if (existsSync(join(packageDir, 'src'))) found.push({ group, directory, name })
     }
   }
   return found
@@ -100,7 +96,7 @@ function workspacePackages(): WorkspacePackage[] {
  */
 export function collectPackageAliases(): PackageAlias[] {
   const bySpecifier = new Map<string, PackageAlias & { directory: string }>()
-  for (const { group, directory, packageDir, name } of workspacePackages()) {
+  for (const { group, directory, name } of workspacePackages()) {
     if (name !== `${PREFIX}${directory}`) continue
     const previous = bySpecifier.get(name)
     if (previous !== undefined) {
@@ -112,12 +108,11 @@ export function collectPackageAliases(): PackageAlias[] {
     bySpecifier.set(name, {
       specifier: name,
       source: `./packages/${group}/${directory}/src`,
-      hasInvariant: existsSync(join(packageDir, 'src', 'invariant.ts')),
       directory: `${group}/${directory}`,
     })
   }
   return [...bySpecifier.values()]
-    .map(({ specifier, source, hasInvariant }) => ({ specifier, source, hasInvariant }))
+    .map(({ specifier, source }) => ({ specifier, source }))
     .sort((left, right) => left.specifier.localeCompare(right.specifier))
 }
 
@@ -181,10 +176,6 @@ export function renderAliases(aliases: readonly PackageAlias[], handWritten: Rea
   for (const alias of aliases) {
     if (!handWritten.has(alias.specifier)) {
       lines.push(`      ${JSON.stringify(alias.specifier)}: [${JSON.stringify(alias.source)}]`)
-    }
-    const invariant = `${alias.specifier}/invariant`
-    if (alias.hasInvariant && !handWritten.has(invariant)) {
-      lines.push(`      ${JSON.stringify(invariant)}: [${JSON.stringify(`${alias.source}/invariant.ts`)}]`)
     }
   }
   // The region closes `paths`, so the last member carries no trailing comma.

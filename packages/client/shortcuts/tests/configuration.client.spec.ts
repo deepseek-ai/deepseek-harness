@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { bindingIssue, editShortcutDocument, effectiveShortcuts, normalizeBinding, parseBinding, parseShortcutDefinitions,
-  parseShortcutDocument, parseShortcutEdit } from '../src/protocol.ts'
+import { bindingIssue, editShortcutDocument, effectiveShortcuts, normalizeBinding, overlappingBindings, parseBinding,
+  parseShortcutDefinitions, parseShortcutDocument, parseShortcutEdit } from '../src/protocol.ts'
 import type { ShortcutCommandId, ShortcutDefinition, ShortcutDocument } from '../src/protocol.ts'
 
 const id = (value: string) => value as ShortcutCommandId
+it('distinguishes identical two-key chords from pairs sharing only one key', () => {
+  const left = { code: 'KeyA', secondCode: 'KeyB', modifiers: [] }
+  expect(overlappingBindings(left, { code: 'KeyB', secondCode: 'KeyA', modifiers: [] })).toBe(true)
+  expect(overlappingBindings(left, { code: 'KeyB', secondCode: 'KeyC', modifiers: [] })).toBe(false)
+})
+it.each(['macos', 'windows', 'linux'] as const)('accepts Mod+Shift+Period on %s without permitting shift-only Web bindings', (platform) => {
+  const binding = normalizeBinding({ code: 'Period', modifiers: ['primary', 'shift'] }, platform)
+  for (const runtime of ['web', 'desktop'] as const) expect(bindingIssue(binding, runtime, platform)).toBeNull()
+  for (const code of ['Period', 'F12', 'KeyJ']) {
+    expect(bindingIssue(normalizeBinding({ code, modifiers: ['shift'] }, platform), 'web', platform)).toBe('modifier-required')
+  }
+})
 it('reserves the macOS Web control-command combination', () => {
   expect(bindingIssue({ code: 'KeyB', modifiers: ['control', 'meta'] }, 'web', 'macos')).toBe('reserved')
 })

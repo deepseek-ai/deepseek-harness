@@ -174,6 +174,30 @@ afterEach(async () => {
   context = undefined
 })
 
+describe('retry projection', () => {
+  it('keeps the same state when a recorded retry is applied again', async () => {
+    type Definition = { key: string; apply(state: object, event: SessionEvent): object }
+    const definitions: Definition[] = []
+    const { ctx } = await harness(new ScriptedAdapter([]), undefined, (inner) => {
+      const projections = inner.sessionProjections
+      const register = projections.register.bind(projections)
+      projections.register = (spec: Definition) => {
+        definitions.push(spec)
+        return register(spec as never)
+      }
+    })
+    const definition = definitions.find(spec => spec.key === 'llmRetry')!
+    const event: SessionEvent = {
+      type: 'llm/retry',
+      data: { provider: 'mock', policyKey: 'policy', retry: 1, retryId: 'retry-1' },
+    } as never
+    const state = definition.apply({}, event)
+
+    expect(definition.apply(state, event)).toBe(state)
+    await ctx.fiber.dispose()
+  })
+})
+
 describe('provider-routed retry policy', () => {
   it('records the scheduled delay before retrying the request', async () => {
     vi.useFakeTimers()

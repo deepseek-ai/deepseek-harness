@@ -3,12 +3,36 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
+import Group from '@deepseek-ai/cordis-plugin-group'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { getDshRuntimeVersion, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import { expect, it, onTestFinished } from 'vitest'
 import { harness, declare } from './harness.ts'
-import { auditRows, mountPreset, livePresetMounts, type PresetMount } from '../src/mount.ts'
-import { mountedCompositionRows } from '../src/composition-inventory.ts'
+import { auditRows, mountPreset, type PresetMount } from '../src/mount.ts'
+import { activeCompositionModules, mountedCompositionRows } from '../src/composition-inventory.ts'
+
+it('keeps active module order without a base URL and excludes inactive, disabled, and group rows', async () => {
+  const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(Loader)
+  ctx.loader.builtins.first = { apply() {} }
+  ctx.loader.builtins.last = { apply() {} }
+  ctx.loader.builtins.group = Group
+  ctx.loader.builtins.waiting = { inject: ['unavailableForInspection'], apply() {} }
+  await ctx.loader.root.update([
+    { id: 'first', name: 'cordis:first' },
+    { id: 'group', name: 'cordis:group', group: true, config: [] },
+    { id: 'disabled', name: 'cordis:last', disabled: true },
+    { id: 'waiting', name: 'cordis:waiting' },
+    { id: 'missing', name: 'cordis:unavailableForInspection' },
+    { id: 'last', name: 'cordis:last' },
+  ])
+  expect(activeCompositionModules(ctx.loader.root.tree)).toEqual([
+    { moduleName: 'cordis:first', useHostBase: true },
+    { moduleName: 'cordis:last', useHostBase: true },
+  ])
+})
 
 it('preserves individual causes of import and plugin failures', async () => {
   const ctx = await harness()
@@ -72,8 +96,8 @@ it('reports grouped and conditional plugin rows from the activated tree', async 
   await declare(ctx, { id: 'standard', plugins: [{ name: 'cordis:group', group: true, config: [
     { id: 'off', name: 'missing', disabled: { __jsExpr: 'true' } },
   ] }] })
-  const tree = livePresetMounts(ctx.fiber)[0]!.tree
-  expect(mountedCompositionRows(tree)).toEqual([{ entryId: 'off', moduleName: 'missing', enabled: false, condition: 'true' }])
+  const [composition] = await ctx.agentPresets.compositionInventory()
+  expect(composition!.rows).toEqual([{ entryId: 'off', moduleName: 'missing', enabled: false, condition: 'true' }])
 })
 
 it('mounts a profile-denied row disabled and the same row active once exempted', async () => {

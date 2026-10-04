@@ -71,7 +71,6 @@ agent（智能体）及宿主 UI 可以用各 agent 本地工作区中经过排�
 |---|---|
 | [`src/index.ts`](src/index.ts) | `LocalFileReferenceService`：配置校验、按 agent 搜索、提示词安装 |
 | [`src/search.ts`](src/search.ts) | `WorkspaceFileSearch`：遍历、排序、排除、陈旧标记与后台重建 |
-| — | 不发布运行时不变式伴生入口；按 agent 的 index 是私有 advisory cache，其失效与 dispose 行为通过服务测试直接观察。 |
 
 ### 主要流程
 

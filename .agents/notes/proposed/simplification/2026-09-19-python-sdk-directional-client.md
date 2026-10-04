@@ -8,7 +8,7 @@ English | [中文](2026-09-19-python-sdk-directional-client.zh.md)
 
 The [Python client](../../../../python/sdk/src/deepseek_harness/client.py) keeps an incoming-request queue, close-time wake-up, and `next_request`, `respond`, `respond_error`, and `notify` methods. The [SDK server](../../../../packages/sdk/server/src/server.ts) receives requests and emits notifications; it declares no server-originated request or client-notification handler. Searches across Python sources, examples, and runtime profiles found the reverse direction only in client implementation and [synthetic client tests](../../../../python/sdk/tests/test_client.py). The exported `IncomingRequest` model consequently has no supported runtime producer.
 
-This is a narrower continuation of the [directional JSON-RPC proposal](../../rejected/simplification/2026-07-19-make-jsonrpc-directional.md), whose rejection explicitly permits transport narrowing separately. Its completion redesign remains rejected. Its claim about the shared TypeScript transport is now inapplicable: the [Codex wire adapter](../../../../packages/subagent/subagent-codex/src/wire.ts) uses requests and notifications in both directions.
+This proposal narrows only the Python client. The [SDK server](../../../../packages/sdk/server/README.md) retains its durable enqueue receipt and streamed Session events; prompt responses do not represent turn completion. The shared TypeScript transport remains bidirectional because the [Codex wire adapter](../../../../packages/subagent/subagent-codex/src/wire.ts) uses requests and notifications in both directions.
 
 ## Proposal
 

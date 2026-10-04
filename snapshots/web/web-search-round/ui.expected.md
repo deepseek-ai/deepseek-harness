@@ -8,8 +8,8 @@
     - tab "Trajectory"
 - text: Use web_search once with queries ["DeepSeek Harness snapshot search","DeepSeek Harness multi-query search"]. Then reply exactly SEARCH_DONE and stop. {{clock}}
 - button "Copy"
-- status: Worked
-- button "Took {{duration}}" [expanded]
+- status: Completed
+- button "Completed in {{duration}}" [expanded]
 - button "Searched the web" [expanded]
 - button "Search DeepSeek Harness snapshot search, DeepSeek Harness multi-query search"
 - paragraph: SEARCH_DONE

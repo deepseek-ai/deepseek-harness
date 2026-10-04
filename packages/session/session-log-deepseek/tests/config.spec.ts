@@ -20,9 +20,9 @@ describe('session-log upload configuration', () => {
       // Import under each environment to catch environment-dependent schema defaults.
       vi.resetModules()
       const { Config } = await import('../src/index.ts')
-      expect(Config({}).enabled).toBe(enabled)
-      expect(Config({ enabled: true }).enabled).toBe(true)
-      expect(Config({ enabled: false }).enabled).toBe(false)
+      expect(Config({}).enabled.get()).toBe(enabled)
+      expect(Config({ enabled: true }).enabled.get()).toBe(true)
+      expect(Config({ enabled: false }).enabled.get()).toBe(false)
     } finally {
       vi.unstubAllEnvs()
       vi.resetModules()

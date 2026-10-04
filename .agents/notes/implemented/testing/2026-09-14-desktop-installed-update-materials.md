@@ -10,7 +10,7 @@ An installed-update walkthrough needs two increasing versions with a shared appl
 
 ## Decision
 
-Version derivation follows the [release version decision](../process/2026-09-16-desktop-release-version-derivation.md); this record continues to govern material, application identity, and user-data isolation.
+Version derivation follows the [release version reference](../../../../apps/desktop/README.md); this record continues to govern material, application identity, and user-data isolation.
 
 The [material preparer](../../../../apps/desktop/scripts/prepare-installed-update-runtime.ts) accepts a retained test-only manifest with a random identity and distribution namespace. It copies a verified source runtime into separate derived test versions, changes only release-family versions and matching dependency references, and seals and verifies both inventories. The original runtime is verified again and its descriptor hash must remain unchanged. Existing output directories are not overwritten; a failed copy retains a failure record and cannot create a completion receipt.
 

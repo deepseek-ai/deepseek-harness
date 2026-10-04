@@ -42,7 +42,7 @@ kind: "package-group"
 - [命令子系统](../../docs/subsystems/commands.zh.md)——命令注册表语义与 `ctx.commands` 的 Cordis 接口面。
 - [审批子系统](../../docs/subsystems/approval.zh.md)——请求／结果词汇、应答者瀑布与按会话策略。
 - [权限预设子系统](../../docs/subsystems/permission-presets.zh.md)——预设表与旋钮写穿。
-- [用户交互子系统](../../docs/subsystems/user-questions.zh.md)——问题词汇、answerer waterfall 与呈现意图。
+- [用户交互子系统](../../docs/subsystems/user-questions.zh.md)——问题词汇、answerer waterfall 与待处理问题生命周期。
 - [ACP 组](../acp/README.zh.md)——仅自动化的传输，为其自有 agent 回答审批请求。
 
 <a id="dev-note"></a>

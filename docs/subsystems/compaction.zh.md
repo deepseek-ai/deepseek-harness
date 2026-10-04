@@ -2,13 +2,13 @@
 
 [English](compaction.md) | 中文
 
-压缩 seam 是一个[能力 seam](../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.zh.md)，与 bash 一样分为 Service Definition（[dsh-compaction](../../packages/compaction/compaction)，`ctx.compaction`）、Service Provider（例如 [dsh-compaction-basic](../../packages/compaction/compaction-basic) 后端）和面向用户的 Consumer（[dsh-command-compact](../../packages/compaction/command-compact)）。压缩是**一项可选能力**，不属于 agent loop（智能体循环）主干，因此其词汇定义在此而非 [core.md](core.zh.md) 中。基于 tokenizer 或模板的后端是实现同一接口的兄弟包。与 bash 不同，该接口必然依赖 `dsh-session` 和 `dsh-llm`：其动词作用于 agent 所有的 `Session`，而其持久摘要事件使用 `ContentBlock` 词汇（见[压缩能力 seam Agent Note](../../.agents/notes/implemented/feature/2026-06-18-compaction-capability-seam.zh.md)）。
+压缩 seam 是一个[能力 seam](../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.zh.md)，与 bash 一样分为 Service Definition（[dsh-compaction](../../packages/compaction/compaction)，`ctx.compaction`）、Service Provider（例如 [dsh-compaction-basic](../../packages/compaction/compaction-basic) 后端）和面向用户的 Consumer（[dsh-command-compact](../../packages/compaction/command-compact)）。压缩是**一项可选能力**，不属于 agent loop（智能体循环）主干，因此其词汇定义在此而非 [core.md](core.zh.md) 中。基于 tokenizer 或模板的后端是实现同一接口的兄弟包。与 bash 不同，该接口必然依赖 `dsh-session` 和 `dsh-llm`：其动词作用于 agent 所有的 `Session`，而其持久摘要事件使用 `ContentBlock` 词汇（见[压缩能力 seam 参考](../../packages/compaction/compaction/README.zh.md)）。
 
 源码：[`packages/compaction/compaction/src/types.ts`](../../packages/compaction/compaction/src/types.ts)
 
 ## `compaction/*` 会话事件
 
-压缩通过声明合并为 [`SessionEventMap`](session.zh.md) 扩展三种事件类型。三者都**仅写入日志**——它们记录锁、摘要、选中范围、被遮蔽事件 seq、token 数以及模型调用，绝不进入 surface。这里有意不扩展 `SurfaceEventType`（只有产生消息的事件才到达模型），因此摘要本身承载在另一条带有 `surfaceOp: { op: 'replace', startSeq, endSeq }` 的 `user/message` 上——这是摘要压缩执行的唯一 surface 变更。[Agent Note](../../.agents/notes/implemented/feature/2026-06-18-compaction-capability-seam.zh.md) 负责复用 `user/message` 的决策依据。
+压缩通过声明合并为 [`SessionEventMap`](session.zh.md) 扩展三种事件类型。三者都**仅写入日志**——它们记录锁、摘要、选中范围、被遮蔽事件 seq、token 数以及模型调用，绝不进入 surface。这里有意不扩展 `SurfaceEventType`（只有产生消息的事件才到达模型），因此摘要本身承载在另一条带有 `surfaceOp: { op: 'replace', startSeq, endSeq }` 的 `user/message` 上——这是摘要压缩执行的唯一 surface 变更。[历史Agent Note](../../.agents/notes/archived/feature/2026-06-18-compaction-capability-seam.md) 负责复用 `user/message` 的决策依据。
 
 | 事件 | 载荷 | 作用 |
 |---|---|---|

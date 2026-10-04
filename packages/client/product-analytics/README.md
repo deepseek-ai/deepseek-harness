@@ -39,7 +39,7 @@ Only `plugin_toggle` carries `plugin_type`: plugin rows use `plugin`, and packag
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Presentational components receive callbacks. Shared Client services resolve the optional Desktop analytics sender, which requires both the native preload marker and the synchronized Host policy. The sender retains its own RPC context when called by other plugins. Native actions use the authenticated Host API; its generated Typert validator accepts only the typed event fields. The Host enriches identity immediately before queueing. It observes live compaction events without replaying Session history. No runtime invariant companion is published because collection has no independent delivery acknowledgement to compare.
+Presentational components receive callbacks. Shared Client services resolve the optional Desktop analytics sender, which requires both the native preload marker and the synchronized Host policy. The sender retains its own RPC context when called by other plugins. Native actions use the authenticated Host API; its generated Typert validator accepts only the typed event fields. The Host enriches identity immediately before queueing. It observes live compaction events without replaying Session history.
 
 </details>
 

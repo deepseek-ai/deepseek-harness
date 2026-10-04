@@ -1,5 +1,7 @@
 /** Cold-safe Session list and search projection. */
 
+import { performance } from 'node:perf_hooks'
+import { scheduler } from 'node:timers/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type { ImageAttachmentLimits } from '@deepseek-ai/dsh-attachment'
@@ -74,8 +76,11 @@ export function truncateUnicodeCodePoints(value: string, maximum: number): strin
 
 /** Owns list projection registration, bounded cold summaries, and authorized search. */
 export class ApiSessionList {
-  /** @param ctx - Host context carrying Session, query, persistence, and projection services. */
-  constructor(private readonly ctx: Context) {
+  /**
+   * @param ctx - Host context carrying Session, query, persistence, and projection services.
+   * @param workSliceMs - Resolved positive integral list-work budget in milliseconds.
+   */
+  constructor(private readonly ctx: Context, private readonly workSliceMs: number) {
     ctx.sessionProjections.register<'sessionListMetadata', SessionListMetadata>({
       key: 'sessionListMetadata',
       stateSchema: sessionListMetadataSchema,
@@ -120,7 +125,7 @@ export class ApiSessionList {
 
   /**
    * Read every visible attached and persisted Session without activating an Agent.
-   * @param signal - optional cancellation for persistence reads.
+   * @param signal - optional cancellation for persistence reads and summary generation.
    * @returns visible Session summaries ordered by activity.
    */
   async list(signal?: AbortSignal): Promise<SessionSummary[]> {
@@ -129,16 +134,31 @@ export class ApiSessionList {
     signal?.throwIfAborted()
     const items: SessionSummary[] = []
     const cold: SessionHeader[] = []
+    let yieldDeadline = performance.now() + this.workSliceMs
     for (const record of records) {
+      signal?.throwIfAborted()
       const live = this.ctx.sessions.get(record.header.id)
       if (live !== undefined) {
         items.push(this.summaryFor(live))
-        continue
+      } else if (record.header.cwd !== undefined) {
+        cold.push(record.header)
       }
-      if (record.header.cwd === undefined) continue
-      cold.push(record.header)
+      if (performance.now() >= yieldDeadline) {
+        await scheduler.yield()
+        signal?.throwIfAborted()
+        yieldDeadline = performance.now() + this.workSliceMs
+      }
     }
-    for (const header of cold) items.push(this.summarizeCold(header))
+    for (const header of cold) {
+      signal?.throwIfAborted()
+      items.push(this.summarizeCold(header))
+      if (performance.now() >= yieldDeadline) {
+        await scheduler.yield()
+        signal?.throwIfAborted()
+        yieldDeadline = performance.now() + this.workSliceMs
+      }
+    }
+    signal?.throwIfAborted()
     items.sort((left, right) => right.updatedAt - left.updatedAt)
     return items
   }

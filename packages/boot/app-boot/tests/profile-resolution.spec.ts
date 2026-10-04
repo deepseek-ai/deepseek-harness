@@ -1619,6 +1619,14 @@ describe('runtime resolution', { concurrent: false }, () => {
       })
     }).toThrow(/requires a process restart/u)
     expect(() => {
+      registration.replace({
+        ...first,
+        entries: first.entries.map(entry => entry.name === '@deepseek-ai/dsh-core'
+          ? { ...entry, declarer: join(f.root, 'another-bundle', 'package.json') }
+          : entry),
+      })
+    }).toThrow(/requires a process restart/u)
+    expect(() => {
       registration.replace({ ...first, localPackageNames: ['@deepseek-ai/dsh-core'] })
     }).toThrow(/requires a process restart/u)
     expect(() => {
@@ -1629,7 +1637,6 @@ describe('runtime resolution', { concurrent: false }, () => {
     }).toThrow(/cannot change its profile scope/u)
     registration.replace({ ...first, localPackageNames: ['new-local'] })
     registration.replace({ ...first, localPackageNames: ['new-local'] })
-    expect(() => { registration.replace(first) }).toThrow(/removing local package/u)
     const linked = { name: 'linked-plugin', realPath: join(f.root, 'work', 'a') }
     const withLocal = { ...first, localPackageNames: ['new-local'] }
     registration.replace({ ...withLocal, linkedRoots: [linked] })
@@ -1641,6 +1648,104 @@ describe('runtime resolution', { concurrent: false }, () => {
     expect(registration.packageDir(
       '@deepseek-ai/dsh-core', pathToFileURL(join(f.profile.dir, 'entry.mjs')).href,
     )).toBe(f.installed)
+  })
+
+  it('removes profile mappings and local names while retaining changed profile mappings as restarts', async () => {
+    const f = fixture()
+    const firstDir = join(f.root, 'bundle-a', 'node_modules', 'private-lib')
+    const secondDir = join(f.root, 'bundle-b', 'node_modules', 'private-lib')
+    pkg(firstDir, 'private-lib', 1)
+    pkg(secondDir, 'private-lib', 2)
+    const base = await resolutionOf(f)
+    const entry = {
+      name: 'private-lib', packageDir: firstDir, version: '1.0.0',
+      declarer: join(firstDir, 'package.json'), scope: 'profile' as const,
+    }
+    const first = { ...base, entries: [...base.entries, entry], localPackageNames: ['local-lib'] }
+    const registration = installRuntimeInterception(first)
+    registrations.push(registration)
+    const parent = pathToFileURL(join(f.profile.dir, 'entry.mjs')).href
+    expect(registration.packageDir('private-lib', parent)).toBe(firstDir)
+    expect(() => {
+      registration.replace({ ...first, entries: [...base.entries, {
+        ...entry, packageDir: secondDir, version: '2.0.0', declarer: join(secondDir, 'package.json'),
+      }] })
+    }).toThrow(/replacing "private-lib" requires a process restart/u)
+    expect(registration.packageDir('private-lib', parent)).toBe(firstDir)
+    registration.replace(base)
+    expect(registration.packageDir('private-lib', parent)).toBeUndefined()
+    expect(() => resolveFrom('private-lib', parent)).toThrow(expect.objectContaining({ code: 'ERR_MODULE_NOT_FOUND' }))
+    registration.replace(first)
+    expect(registration.packageDir('private-lib', parent)).toBe(firstDir)
+  })
+
+  it('accepts another profile declarer for the same normalized package directory and version', async () => {
+    const f = fixture()
+    const shared = join(f.root, 'shared', 'node_modules', 'private-lib')
+    pkg(shared, 'private-lib', 1)
+    const firstAnchor = pkg(join(f.root, 'shared', 'bundle-a'), 'bundle-a', 1, { 'private-lib': '*' })
+    const nextAnchor = pkg(join(f.root, 'shared', 'bundle-b'), 'bundle-b', 1, { 'private-lib': '*' })
+    const alias = join(f.root, 'private-lib-alias')
+    symlinkSync(shared, alias, process.platform === 'win32' ? 'junction' : 'dir')
+    try {
+      const base = await resolutionOf(f)
+      const entry = { name: 'private-lib', packageDir: shared, declarer: firstAnchor, version: '1.0.0', scope: 'profile' as const }
+      const registration = installRuntimeInterception({ ...base, entries: [...base.entries, entry] })
+      registrations.push(registration)
+      const parent = pathToFileURL(join(f.profile.dir, 'entry.mjs')).href
+      const require = createRequire(parent)
+      expect(registration.packageDir('private-lib', parent)).toBe(shared)
+      expect(require.resolve('private-lib')).toBe(join(shared, 'index.cjs'))
+      expect(resolveFrom('private-lib', parent)).toBe(pathToFileURL(join(shared, 'index.js')).href)
+
+      registration.replace({ ...base, entries: [...base.entries, { ...entry, packageDir: alias, declarer: nextAnchor }] })
+
+      expect(registration.packageDir('private-lib', parent)).toBe(alias)
+      expect(require.resolve('private-lib')).toBe(join(shared, 'index.cjs'))
+      expect(resolveFrom('private-lib', parent)).toBe(pathToFileURL(join(shared, 'index.js')).href)
+    } finally {
+      unlinkSync(alias)
+    }
+  })
+
+  it.each(['directory', 'version', 'scope'] as const)('rejects a retained profile mapping with a different %s', async (change) => {
+    const f = fixture()
+    const packageDir = join(f.root, 'bundle', 'node_modules', 'private-lib')
+    pkg(packageDir, 'private-lib', 1)
+    const base = await resolutionOf(f)
+    const entry = { name: 'private-lib', packageDir, declarer: join(packageDir, 'package.json'), version: '1.0.0', scope: 'profile' as const }
+    const registration = installRuntimeInterception({ ...base, entries: [...base.entries, entry] })
+    registrations.push(registration)
+    const successor = {
+      ...entry,
+      packageDir: change === 'directory' ? join(f.root, 'different') : entry.packageDir,
+      version: change === 'version' ? '2.0.0' : entry.version,
+      scope: change === 'scope' ? 'installation' as const : entry.scope,
+    }
+
+    expect(() => { registration.replace({ ...base, entries: [...base.entries, successor] }) })
+      .toThrow(/replacing "private-lib" requires a process restart/u)
+    expect(registration.packageDir('private-lib', pathToFileURL(join(f.profile.dir, 'entry.mjs')).href)).toBe(packageDir)
+  })
+
+  it('recomputes from the captured directory without retaining synthetic profile layers', async () => {
+    const f = fixture()
+    const profileDir = f.profile.dir
+    const bundleDir = join(f.root, 'synthetic-bundle')
+    pkg(bundleDir, 'synthetic-bundle', 1, { 'private-lib': '*' })
+    pkg(join(bundleDir, 'node_modules', 'private-lib'), 'private-lib', 1)
+    f.profile.layers.push({ packageName: 'synthetic-bundle', packageDir: bundleDir, patchPaths: [], patches: [] })
+    const first = await createRuntimeResolution({ installAnchor: f.installAnchor, home: f.root, profile: f.profile })
+    expect(first.entries.some(entry => entry.name === 'private-lib')).toBe(true)
+    f.profile.dir = join(f.root, 'another-profile')
+    file(join(f.profile.dir, 'package.json'), JSON.stringify({ name: 'another-profile' }))
+
+    const latest = await first.computeLatestResolution()
+
+    expect(latest.profileDir).toBe(profileDir)
+    expect(latest.entries.some(entry => entry.name === 'private-lib')).toBe(false)
+    expect(first.profileDir).toBe(profileDir)
+    expect(first.entries.some(entry => entry.name === 'private-lib')).toBe(true)
   })
 
   it('leaves non-package and out-of-scope metadata lookups to native resolution', async () => {

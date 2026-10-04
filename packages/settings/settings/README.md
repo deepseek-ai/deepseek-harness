@@ -46,7 +46,7 @@ Each form reports `autoGenerate`, enabled by default, for clients that build pag
 
 The [form projection](src/schema.ts) strips runtime references and ordinary fields. The [service](src/index.ts) supplies revisioned descriptors and validates edits against the full plugin Config before delegating persistence. Business plugins read their Config references directly.
 
-Secret roles are redacted from values, inherited values, profile overrides, and schema defaults; clients receive presence markers. Path edits preserve fields a client did not receive. No invariant companion is published because the service projects Loader configuration rather than maintaining an independent authoritative value.
+Secret roles are redacted from values, inherited values, profile overrides, and schema defaults; clients receive presence markers. Path edits preserve fields a client did not receive.
 
 </details>
 

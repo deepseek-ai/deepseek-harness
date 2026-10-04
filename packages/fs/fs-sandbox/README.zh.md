@@ -92,7 +92,7 @@ kind: "package-reference"
 - [fs-local](../fs-local/README.zh.md)——本后端扩展的本地后端。
 - [sandbox-policy](../../sandbox/sandbox-policy/README.zh.md)——本后端所需的共享逐会话策略解析器。
 - [进程沙箱子系统](../../../docs/subsystems/sandbox.zh.md)——模式、逐调用策略与故障关闭错误。
-- [跨能力族 fs 沙箱决策](../../../.agents/notes/implemented/feature/2026-07-14-cross-family-fs-sandbox.zh.md)——共享模式围栏及其升级编排。
+- [跨能力族 fs 沙箱参考](../../sandbox/sandbox-policy/README.zh.md)——共享模式围栏及其升级编排。
 
 -----
 
@@ -133,5 +133,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。这个无状态适配器把策略与文件系统关系委托给各自所属的 seam。

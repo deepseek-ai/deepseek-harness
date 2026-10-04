@@ -1,0 +1,37 @@
+.group {
+  position: relative;
+}
+
+.start {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.group + .group {
+  margin-top: 3px;
+}
+
+.heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 4px 7px 2px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+}
+
+.heading[data-stuck] {
+  background: var(--dsw-alias-menu-group-header-fill);
+}
+
+:global(html:not([data-platform='darwin'])) .heading {
+  border-radius: var(--dsw-radius-md);
+}

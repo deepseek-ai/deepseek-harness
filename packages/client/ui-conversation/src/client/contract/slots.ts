@@ -17,7 +17,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { ComposerBlock } from './composer-blocks.ts'
 import type { DraftAttachmentId, InputActions, InputNotice, InputState } from './input.ts'
-import type { ComposerKeyboard, EditSelection } from './draft-editor.ts'
+import type { ComposerKeyboard, DraftSnapshot, EditSelection } from './draft-editor.ts'
 import type { createConversationStore } from '../stores.ts'
 import type { BusyEnterBehavior } from './composer-submission.ts'
 import type { ConversationSnapshot } from './snapshot.ts'
@@ -341,7 +341,7 @@ export interface ConversationSessionInjected {
     readonly inspectCall: ObservableSnapshot<ConvViewOwnerProps['inspectCall']>
   }
   /** Bind input draft persistence to the Session-owned store instance. */
-  bindDraftMirror: (write: (text: string) => void) => () => void
+  bindDraftPersistence: (write: (draft: DraftSnapshot) => void) => () => void
   /** Select and activate one View while addressing an opaque focus request to it. */
   openView: (view: string, focus: string) => void
 }

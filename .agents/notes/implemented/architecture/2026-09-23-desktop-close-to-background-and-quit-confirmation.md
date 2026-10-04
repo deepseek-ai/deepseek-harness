@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-09-23-desktop-close-to-background-and-quit-confirmation.zh.md)
 
-Window timing and shutdown ownership otherwise follow [showing the window before the Host starts](2026-09-09-desktop-immediate-window-and-direct-start.md); the task rule reuses the [update restart check](2026-08-25-electron-desktop-packaging-and-updates.md). This partially supersedes the [standard macOS window menus](../bug-fix/2026-09-16-desktop-window-menus.md) decision: ⌘W no longer destroys the window through Electron's role, and Dock activation reopens the hidden window when no window is visible instead of only when none exists. That note's menu declarations stay in force.
+Window timing and shutdown ownership otherwise follow [showing the window before the Host starts](../../../../apps/desktop/README.md); the task rule reuses the [update restart check](2026-08-25-electron-desktop-packaging-and-updates.md). ⌘W does not destroy the window through Electron's role, and Dock activation reopens the hidden window when no window is visible instead of only when none exists. The native menu declarations in the [Desktop reference](../../../../apps/desktop/README.md) stay in force.
 
 ## Problem
 

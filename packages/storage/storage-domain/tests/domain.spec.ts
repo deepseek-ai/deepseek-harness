@@ -32,8 +32,6 @@ async function harness(options?: { pool?: MemoryMediaPool; config?: Partial<Conf
   const backend = new MemoryStorageBackend(options?.pool)
   ctx.storage.backend.register('memory', backend)
   const facility = new DomainFacility(ctx, { backend: 'memory', routes: {}, ...options?.config })
-  // Mounted, not just constructed: the package invariant resolves the form
-  // through ctx.storage to cross-check every domain/changed emission.
   ctx.storage.mount('domain', facility)
   const changes: DomainChanged[] = []
   ctx.on('domain/changed', (change) => { changes.push(change) })
@@ -117,8 +115,7 @@ describe('DomainFacility.open', () => {
 
   it('falls back to the default backend when no route table is configured', async () => {
     // A second, unmounted facility whose config omits `routes` entirely
-    // (exactOptionalPropertyTypes forbids an explicit undefined). Opening
-    // emits no events, so the mounted facility's invariant never consults it.
+    // (exactOptionalPropertyTypes forbids an explicit undefined).
     const { ctx } = await harness()
     const routeless = new DomainFacility(ctx, { backend: 'memory' })
     await expect(routeless.open(bareSpec)).resolves.toBeDefined()

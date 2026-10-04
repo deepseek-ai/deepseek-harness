@@ -1,13 +1,14 @@
 /** Tool UI slot declarations and their composed component props. */
 import type {
-  HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, SlotHookFactory,
+  HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, SessionIdOf,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type {
-  AssistantChatData, OpenFileOptions, PreparingToolCall, StartedToolCall,
+  OpenFileOptions, PreparingToolCall, StartedToolCall,
   ToolResultNode, UseDisclosure,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { MessageImageLoader, MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { AskUserQuestionAnswerItem, AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions/types'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -18,16 +19,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * `key: '<tool name>'`; a typo never renders.
      *
      * Registering an occupied key replaces its view; unclaimed keys use the
-     * generic row. The owner supplies the call identity and frozen running
-     * or settled node through explicit phase props. Preparing blocks have no dispatched
-     * arguments; useToolCallArgumentsPartial optionally subscribes to their raw prefix.
+     * generic row. The owner supplies the call identity and running
+     * or settled node through explicit phase props. Every stage supplies
+     * `name` and a lazy `args` view; preparing arguments may be incomplete.
      */
     'tool.call.toolview': {
       kind: 'keyed'
       scope: 'session'
       owner: ToolCallOwnerProps
-      hookContext: ToolCallHookContext
-      inject: ToolCallInjected
     }
     /**
      * Durable images of a settled image-bearing Tool call, rendered through
@@ -43,23 +42,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * slot.
      */
     'tool.call.images': { kind: 'single'; scope: 'session'; owner: ToolImagesOwnerProps }
-  }
-}
-
-/** Subscribe to this preparing call's raw argument prefix; other phases return an empty string. */
-export type UseToolCallArgumentsPartial = () => string
-
-/** Call-local sources supplied by the Tool tree to the slot's Hook binding. */
-export interface ToolCallHookContext {
-  readonly callId: string
-  /** This call's Step source, present only while preparing. */
-  readonly assistant: HostObservable<Readonly<AssistantChatData> | undefined> | undefined
-}
-
-/** Framework-bound subscriptions available to atomic Tool views on demand. */
-export interface ToolCallInjected {
-  hooks: {
-    toolCallArgumentsPartial: SlotHookFactory<'tool.call.toolview', UseToolCallArgumentsPartial>
   }
 }
 
@@ -107,6 +89,53 @@ export type ToolCallViewProps = PropsRuntime<'tool.call.toolview'>
 
 /** Existing argument/result business components exclude the preparation stage. */
 export type StartedToolCallViewProps = Exclude<ToolCallViewProps, { readonly phase: 'preparing' }>
+
+/**
+ * One settled `ask_user_question` call as its transcript row read it. The row
+ * reads the questions from the recorded call JSON, and the answers from
+ * whichever recorded them: its own result when the answer arrived in time, or
+ * the `userQuestions` projection when a late reply settled the call.
+ */
+export interface UserQuestionRecord {
+  /** The call's questions, with the option lists the panel renders. */
+  readonly questions: readonly AskUserQuestionItem[]
+  /** The recorded answer batch; an item with no selection and no custom text was skipped. */
+  readonly answers: readonly AskUserQuestionAnswerItem[]
+}
+
+/**
+ * Optional answer-panel provider consumed by the ask-question row. A timed
+ * `ask_user_question` call stays answerable after its result is recorded, and
+ * its panel can be closed, so the transcript row is the way back to it. A
+ * composition without a question UI has no panel to show.
+ */
+export interface UserQuestionPanels {
+  /**
+   * Put one call's answer panel back in the composer, ahead of any other
+   * pending question.
+   * @param sessionId - Session the call belongs to.
+   * @param callId - `ask_user_question` call whose panel to show.
+   * @returns whether a panel for that call was there to show.
+   */
+  reveal(sessionId: SessionIdOf, callId: string): boolean
+  /**
+   * Show one settled call's recorded answers as a read-only panel, ahead of
+   * any other pending question. Closing that panel drops it for good; the row
+   * builds it again from the same record.
+   * @param sessionId - Session the call belongs to.
+   * @param callId - `ask_user_question` call whose record to show.
+   * @param record - the call's questions and recorded answers.
+   * @returns whether the panel was shown.
+   */
+  review(sessionId: SessionIdOf, callId: string, record: UserQuestionRecord): boolean
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Optional user-question answer-panel provider. */
+    userQuestionPanels: UserQuestionPanels
+  }
+}
 
 /** Injected Host description for POSIX home-path display. */
 export type ToolHostInfoInjected = {

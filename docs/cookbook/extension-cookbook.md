@@ -97,7 +97,7 @@ Shipped applications contribute profile layers through `packages/bundle/*/cordis
 
 ## The feature → mechanism map
 
-Every product feature maps to a listener on a documented extension point — the microkernel claim made checkable ([microkernel Agent Note](../../.agents/notes/implemented/architecture/2026-06-11-microkernel-event-taxonomy.md)). No row modifies the loop.
+Every product feature maps to a listener on a documented extension point — the microkernel claim made checkable ([microkernel reference](../architecture.md)). No row modifies the loop.
 
 `system-prompt/assemble` is an expert cooperative whole-assembly transform: its returned assembly is authoritative, so listener authors own preserving active PTC mode and structured-output protocol contributions. Prefer `ctx.tools.restrict()` for tool filtering that must stay aligned across presentation, lookup, and execution.
 
@@ -108,7 +108,7 @@ Every product feature maps to a listener on a documented extension point — the
 | `/loop` | on the `turn/end` session event, `followup()` the next iteration; or force-continue |
 | Dynamic workflow | `ctx.workflowEngine` + the PTC workflow engine + the `workflow` tool; structured in-process children enforce output with scoped prompt/tool registrations, a monotonic tool guard, final `tools/result` commit (including enclosing `run_code`), and the structured-output execution's monotonic `concludeTurn()` marker |
 | Queued + steering messages | core `Agent.followup()` / `Agent.steer()` |
-| Context compaction (auto + manual) | the `ctx.compaction` seam + `dsh-compaction-basic`; automatic pressure runs on serial `agent/pre-step`, canonical overflow recovery runs on `agent/request-error`, and manual callers use the same compact service ([compaction Agent Note](../../.agents/notes/implemented/feature/2026-06-18-compaction-capability-seam.md)) |
+| Context compaction (auto + manual) | the `ctx.compaction` seam + `dsh-compaction-basic`; automatic pressure runs on serial `agent/pre-step`, canonical overflow recovery runs on `agent/request-error`, and manual callers use the same compact service ([compaction reference](../../packages/compaction/compaction/README.md)) |
 | System prompt configurability | `ctx.systemPrompt.section()` with ordering and scope-local shadowing |
 | AGENTS.md (root) | a section provider reading the file |
 | AGENTS.md (subdir, on-touch) + file-change notices | `agent.inject()` from a watcher / tool-result listener |
@@ -124,7 +124,7 @@ Every product feature maps to a listener on a documented extension point — the
 | MCP | one plugin per server: discover tools → `ctx.tools.register()` |
 | Skills | section + tool registration; `inject()` skill content on invocation |
 | Memory | section provider + tool |
-| Scheduled tasks (cron) | a plugin registers model-callable scheduling tools; timer fires → `followup(…, {source: {kind: 'plugin', plugin: 'schedule'}})` when idle / `inject()` notification when busy |
+| Scheduled tasks (cron) | a plugin registers model-callable scheduling tools; a due timer delivers through `followup(…, {source: {kind: 'schedule'}})` |
 | UI (GUI; CLI emits JSONL) | listen to `agent/assistant-stream` for live chunks and `session/event` for durable settlements, boundaries, and tool activity; input → `followup()` |
 | Web Client Chat business node | register a `ConversationNodeDefinition` and `conversation.chat.node` keyed renderer |
 | SessionTelemetryBackend / replayable trace | `session/event` → JSONL; replay = `sessions.create(id, { seed })` |

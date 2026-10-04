@@ -76,5 +76,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。每次请求直接读取权威 Loader fiber 状态与 package manifest，插件不保留独立可变 inventory。

@@ -5,7 +5,7 @@
  * output and error material from the settled result node. A supported terminal
  * call gets its expanded body from `terminalCardModel` instead.
  */
-import type { ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { ToolArgs, ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { LocaleKeysOf } from '@deepseek-ai/dsh-client-ui-slots'
 import { abbreviateHomePath, relativizeToCwd } from '@deepseek-ai/dsh-util-workspace-path'
 
@@ -146,8 +146,9 @@ export interface ToolRowModel {
   summary: string
   /**
    * Filesystem path from args (`path` / `file_path`) when the row is a file
-   * tool; absent for URL reads and non-file tools. The chat view resolves
-   * relative values against the session cwd before opening.
+   * tool; absent for URL reads and non-file tools. A `file_path` argument
+   * supplies it at every stage once its string is complete. The chat view
+   * resolves relative values against the session cwd before opening.
    */
   filePath: string | undefined
   /** Original argument JSON retained for expansion-time body formatting. */
@@ -193,7 +194,7 @@ function parseArgs(argsRaw: string): unknown {
   try {
     return JSON.parse(argsRaw)
   } catch {
-    // Non-JSON args (mid-stream truncation): summary/body fall back to the raw string.
+    // Non-JSON args (mid-stream truncation or a rejected call kept verbatim): summary/body fall back to the raw string.
     return undefined
   }
 }
@@ -228,7 +229,7 @@ function deriveSummary(variant: ToolRowVariant, argsRaw: string): string {
   if (typeof parsed !== 'object' || parsed === null) return firstLine(argsRaw)
   const args = parsed as Record<string, unknown>
   if (variant === 'search' && Array.isArray(args.queries)) {
-    const queries = args.queries.filter((query): query is string => typeof query === 'string' && query !== '')
+    const queries = args.queries.filter((query: unknown): query is string => typeof query === 'string' && query !== '')
     if (queries.length > 0) return queries.map(firstLine).join(', ')
   }
   const picked = pickString(args, SUMMARY_KEYS[variant])
@@ -244,6 +245,24 @@ const FILE_PATH_KEYS = ['path', 'file_path'] as const
 
 /** File-tool variants whose summary may be an openable workspace path. */
 const FILE_PATH_VARIANTS: ReadonlySet<ToolRowVariant> = new Set(['read', 'write', 'edit'])
+
+/**
+ * Summary material read the same way at every stage from the argument view: a
+ * complete `file_path` for file tools, otherwise the `description` text so far.
+ * Empty when the view carries neither, so the caller falls back to the raw text.
+ */
+function argumentSummary(
+  variant: ToolRowVariant, args: ToolArgs, cwd?: string, home?: string,
+): { summary: string; filePath: string | undefined } {
+  if (FILE_PATH_VARIANTS.has(variant)) {
+    const path = args.complete('file_path') ? args.text('file_path') : undefined
+    // Decoding text can discover an invalid escape and make complete() false.
+    const filePath = path !== undefined && path !== '' && args.complete('file_path') ? firstLine(path) : undefined
+    return { summary: filePath === undefined ? '' : abbreviateHomePath(relativizeToCwd(filePath, cwd), home), filePath }
+  }
+  const description = args.text('description')
+  return { summary: description === undefined ? '' : firstLine(description), filePath: undefined }
+}
 
 function deriveFilePath(variant: ToolRowVariant, argsRaw: string): string | undefined {
   if (!FILE_PATH_VARIANTS.has(variant)) return undefined
@@ -288,7 +307,9 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   const state: ToolRowState = !done ? block.phase === 'preparing' ? 'preparing' : 'running'
     : block.error?.code === 'interrupted' ? 'stopped'
       : block.isError ? 'error' : 'ok'
-  const base = argsRaw === null ? ''
+  const primary = argumentSummary(variant, block.args, cwd, home)
+  // The argument view serves every stage; the raw text is the fallback when it carries nothing useful.
+  const base = primary.summary !== '' || argsRaw === null ? primary.summary
     : argsRaw === '' ? block.callId
       : abbreviateHomePath(relativizeToCwd(deriveSummary(variant, argsRaw), cwd), home)
   const summary = [titleKey === 'tool.title.generic' ? toolName : '', base].filter(Boolean).join(' · ')
@@ -302,7 +323,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
     variant,
     titleKey,
     summary,
-    filePath: argsRaw === null ? undefined : deriveFilePath(variant, argsRaw),
+    filePath: primary.filePath ?? (argsRaw === null ? undefined : deriveFilePath(variant, argsRaw)),
     bodyRaw,
     output,
     errorSummary,

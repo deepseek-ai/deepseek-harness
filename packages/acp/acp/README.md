@@ -102,7 +102,6 @@ The decision history lives in the [ACP as an automation-only protocol note](../.
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, `AgentSideConnection` wiring, per-session records, admission and settlement, teardown |
 | [`src/content.ts`](src/content.ts) | Wire-content admission and projection: image validation, route recheck, prompt reconstruction, assistant block conversion |
 | [`src/codec.ts`](src/codec.ts) | Pure turn-ending to ACP `stopReason` mapping |
-| — | No runtime invariant companion is published; this transport owns no durable package-local event stream; protocol and lifecycle tests cover its mapping. |
 
 ### Admission and prompt settlement
 

@@ -112,7 +112,7 @@ Host 通过 settings 服务为 loopback 页面持久化偏好。Client 会刻意
 当仅阅读 locale 约定不足以解答问题时，请继续阅读以下页面，了解它实现的 slot 接口、依托的设置机制，以及偏好背后的持久化决策。
 
 - [客户端 slot 系统](../ui-slots/README.zh.md)——本包实现的 slot 模型与 `LocaleFace` 席位。
-- [Host 支撑偏好决策](../../../.agents/notes/implemented/bug-fix/2026-08-06-host-backed-web-preferences.zh.md)——偏好为何持久化在 Host 设置中而非浏览器里。
+- [历史Host 支撑偏好决策](../../../.agents/notes/archived/bug-fix/2026-08-06-host-backed-web-preferences.md)——偏好为何持久化在 Host 设置中而非浏览器里。
 - [设置组地图](../../settings/README.zh.md)——存储该偏好的设置服务。
 - [客户端组地图](../README.zh.md)——本包所属的浏览器半侧。
 
@@ -146,5 +146,3 @@ Host 通过 settings 服务为 loopback 页面持久化偏好。Client 会刻意
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。locale catalog 与字典没有可供交叉核对的独立运行时来源；注册释放、偏好解析和 fallback 查找由行为测试覆盖。

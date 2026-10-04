@@ -6,17 +6,17 @@ Status: implemented
 
 ## 问题
 
-[CI](../../../../.github/workflows/ci.yml) 中三个必需的 Linux 工作作业（`node 24 / static`、`node 24 / coverage`、`node 24 / snapshots and artifacts`）运行在托管的企业级 32 核池上；聚合它们的必需判定作业（`all checks passed`）运行在标准 `ubuntu-latest` 上；[原生 Windows 作业](2026-08-08-native-windows-pull-request-ci.zh.md)运行在托管的 `dsh-windows-2025-16core` 大型运行器上。当企业池发生故障——作业无限排队或企业标签消失——所有开启的拉取请求都无法合并，而"合并一个修复"这一常规恢复手段本身正被那些无法运行的必需检查死锁。**适用范围：两个独立开关，每个平台一个。**`DSH_CI_FAILOVER_LINUX` 恢复企业级 Linux 池故障（三个必需的 Linux 工作作业加 `all checks passed` 判定作业）；`DSH_CI_FAILOVER_WINDOWS` 恢复托管 Windows 池故障（原生 Windows 作业）。Linux 池故障无需重定向 Windows 作业，反之亦然。[Node 兼容性作业](2026-09-06-node-compatibility-selfhosted.zh.md)也通过隔离设置跟随 Linux 开关；判定作业的 `node-24-bench`、`python-sdk` 和 `python-runtime` 依赖仍留在标准托管运行器上；若更大范围的 GitHub 托管容量故障连标准池一并击倒，这些依赖仍会阻塞 `all checks passed`。因此故障需要一个任何具备仓库写权限的响应者都能在不合并任何代码的情况下触发的开关。
+[CI](../../../../.github/workflows/ci.yml) 中三个必需的 Linux 工作作业（`node 24 / static`、`node 24 / coverage`、`node 24 / snapshots and artifacts`）运行在托管的企业级 32 核池上；聚合它们的必需判定作业（`all checks passed`）运行在标准 `ubuntu-latest` 上；[原生 Windows 作业](2026-08-08-native-windows-pull-request-ci.zh.md)运行在托管的 `dsh-windows-2025-16core` 大型运行器上。当企业池发生故障——作业无限排队或企业标签消失——所有开启的拉取请求都无法合并，而"合并一个修复"这一常规恢复手段本身正被那些无法运行的必需检查死锁。**适用范围：两个独立开关，每个平台一个。**`DSH_CI_FAILOVER_LINUX` 恢复企业级 Linux 池故障（三个必需的 Linux 工作作业加 `all checks passed` 判定作业）；`DSH_CI_FAILOVER_WINDOWS` 恢复托管 Windows 池故障（原生 Windows 作业）。Linux 池故障无需重定向 Windows 作业，反之亦然。[Node 兼容性作业](../../../../.github/workflows/ci.yml)也通过隔离设置跟随 Linux 开关；判定作业的 `node-24-bench`、`python-sdk` 和 `python-runtime` 依赖仍留在标准托管运行器上；若更大范围的 GitHub 托管容量故障连标准池一并击倒，这些依赖仍会阻塞 `all checks passed`。因此故障需要一个任何具备仓库写权限的响应者都能在不合并任何代码的情况下触发的开关。
 
 ## 决策
 
 三个主要 Linux 作业（`node-24`、`node-24-coverage`、`node-24-consumers`）、三个 `node-compat` 矩阵条目和 `all-checks-passed` 通过 `DSH_CI_FAILOVER_LINUX` 解析；原生 Windows 作业通过 `DSH_CI_FAILOVER_WINDOWS` 解析。一个平台的开关不会重定向另一个平台。仓库写者将变量设为 `selfhosted` 时，适用的可信作业选择 `vm-backup` 或 `dsh-win-ci`；`blacksmith` 取值按 [blacksmith 故障切换支路笔记](2026-09-09-blacksmith-failover-leg.zh.md) 路由参与切换的作业；未设置或任何其它值保留工作流定义的托管回退。Node 兼容性作业要求同仓库且非 fork 的头部以及非 Dependabot 作者，使用隔离运行时设置，并在未设置与非特殊值下保留 `ubuntu-latest` 回退；blacksmith 分支不带上述任何条件。在 `selfhosted` 取值下，Linux 故障切换会限制快照并发，并跳过托管软件包缓存恢复。判定作业跟随工作作业，避免继续在不可用的托管池排队。每个开关都是写者可管理的仓库状态而非一次合并，因此在检查失败时仍然有效。`serial / linux (self-hosted standby)` 与 `serial / windows (self-hosted standby)` 通道在 master 推送上重新验证完整的未分片聚合流程。
 
-[被取代 CI 的取消策略](2026-09-09-cancel-superseded-ci.zh.md) 管理同一工作流/引用组内的 master 推送和手动运行，包括热备演练。master 快速更新可能让演练因反复被取消而始终无法得出结论。判断就绪状态时，使用最近一次已完成的热备结论，并核对其时间和提交；已取消或仅被调度的运行不构成就绪证据。
+[被取代 CI 的取消策略](../../../../.github/workflows/ci.yml) 管理同一工作流/引用组内的 master 推送和手动运行，包括热备演练。master 快速更新可能让演练因反复被取消而始终无法得出结论。判断就绪状态时，使用最近一次已完成的热备结论，并核对其时间和提交；已取消或仅被调度的运行不构成就绪证据。
 
 ### 发布演练共用 Linux 开关
 
-`DSH_CI_FAILOVER_LINUX=selfhosted` 还会将符合条件的同仓库 PR 和 master 推送中的无凭据依赖布局作业与 dsh/vendor 两个打包作业路由到 `vm-backup`。[发布演练决策](2026-09-06-release-rehearsal-selfhosted.zh.md) 负责更严格的事件准入规则及保留托管的手动触发。这种耦合是有意的：持续设置变量来节省发布分钟，也会让符合条件的主 CI Linux 作业持续使用自托管。清除变量会让两类负载的后续运行返回各自的托管目标；发布操作始终保留托管。
+`DSH_CI_FAILOVER_LINUX=selfhosted` 还会将符合条件的同仓库 PR 和 master 推送中的无凭据依赖布局作业与 dsh/vendor 两个打包作业路由到 `vm-backup`。[发布演练说明](../../../../.github/workflows/release.yml) 负责更严格的事件准入规则及保留托管的手动触发。这种耦合是有意的：持续设置变量来节省发布分钟，也会让符合条件的主 CI Linux 作业持续使用自托管。清除变量会让两类负载的后续运行返回各自的托管目标；发布操作始终保留托管。
 
 ### 自有池是什么
 
@@ -40,7 +40,7 @@ Status: implemented
 
 ## 切换期间的容量
 
-Linux 开关启用期间，容量需覆盖 master 热备、主 CI 作业，以及每个符合条件的 PR 或 master 推送的三个发布演练作业。每个可信 PR 还会增加三个门禁并发度为一的 Node 兼容性作业，包括需要构建的 Node 22 条目和冷临时运行时下载。发布演练工作流依据[取消策略](2026-09-09-cancel-superseded-ci.zh.md)取消各工作流/引用组内被取代的运行；不同引用仍可能增加并发构建、打包和安装负载。延长自托管运行前，检查当前 CPU、内存、磁盘和队列压力；同一虚拟机上新增注册只增加调度槽位，不增加机器资源。不能只依据热备负载推断空闲容量。主机资源允许增加注册实例时，使用组织级注册 token（组织 Settings → Actions → Runners → New runner）。复制现有 runner 目录时**必须排除身份文件**——`rsync -a --exclude '.runner*' --exclude '.credentials*' --exclude '_diag' --exclude '_work' <src>/ <dst>/`（通配同时排除 `.runner_migrated`/`.credentials_migrated`——GitHub 会在迁移过的运行器上写入这些文件，它们同样会触发 already-configured 拒绝）——再跑 `config.sh`（原样拷贝 `.runner`/`.credentials` 会使其以 "already configured" 拒绝），然后**启动监听器**：`sudo ./svc.sh install ubuntu && sudo ./svc.sh start`。仅注册不会上线；启动服务增加的是调度槽位，而非 CPU 或内存。
+Linux 开关启用期间，容量需覆盖 master 热备、主 CI 作业，以及每个符合条件的 PR 或 master 推送的三个发布演练作业。每个可信 PR 还会增加三个门禁并发度为一的 Node 兼容性作业，包括需要构建的 Node 22 条目和冷临时运行时下载。发布演练工作流依据[取消策略](../../../../.github/workflows/ci.yml)取消各工作流/引用组内被取代的运行；不同引用仍可能增加并发构建、打包和安装负载。延长自托管运行前，检查当前 CPU、内存、磁盘和队列压力；同一虚拟机上新增注册只增加调度槽位，不增加机器资源。不能只依据热备负载推断空闲容量。主机资源允许增加注册实例时，使用组织级注册 token（组织 Settings → Actions → Runners → New runner）。复制现有 runner 目录时**必须排除身份文件**——`rsync -a --exclude '.runner*' --exclude '.credentials*' --exclude '_diag' --exclude '_work' <src>/ <dst>/`（通配同时排除 `.runner_migrated`/`.credentials_migrated`——GitHub 会在迁移过的运行器上写入这些文件，它们同样会触发 already-configured 拒绝）——再跑 `config.sh`（原样拷贝 `.runner`/`.credentials` 会使其以 "already configured" 拒绝），然后**启动监听器**：`sudo ./svc.sh install ubuntu && sudo ./svc.sh start`。仅注册不会上线；启动服务增加的是调度槽位，而非 CPU 或内存。
 
 
 ### 切回
@@ -59,4 +59,4 @@ Linux 开关启用期间，容量需覆盖 master 热备、主 CI 作业，以�
 
 ## 后果
 
-从托管池故障中恢复只需切换受影响平台的变量（任何写者可设）加一次重跑，关键路径上没有合并。代价是每个平台都要维护第二套运行器拓扑：master 推送会调度热备通道，但依据[取消策略](2026-09-09-cancel-superseded-ci.zh.md)，只有已完成的结论才能证明就绪状态；而 `ci.yml` 中的快照并发与缓存恢复分支带有一条 `selfhosted` 支路（仅 Linux），必须与托管支路保持同步。按平台拆分开关多了一个需要管理的变量，但把每个开关的影响范围限定在单个平台的作业上。
+从托管池故障中恢复只需切换受影响平台的变量（任何写者可设）加一次重跑，关键路径上没有合并。代价是每个平台都要维护第二套运行器拓扑：master 推送会调度热备通道，但依据[取消策略](../../../../.github/workflows/ci.yml)，只有已完成的结论才能证明就绪状态；而 `ci.yml` 中的快照并发与缓存恢复分支带有一条 `selfhosted` 支路（仅 Linux），必须与托管支路保持同步。按平台拆分开关多了一个需要管理的变量，但把每个开关的影响范围限定在单个平台的作业上。

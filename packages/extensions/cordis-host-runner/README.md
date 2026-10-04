@@ -38,8 +38,16 @@ Mount this plugin for the inspection registry or programmatic dynamic-package li
 | Field | Default | Meaning |
 |---|---|---|
 | `vmTimeoutMs` | `5000` | Milliseconds the synchronous portion of a host half may run in the vm before evaluation is aborted |
+| `clientInspectTimeoutMs` | `10000` | Maximum wait for a valid Client inspect response; an integer from 1 to 2147483647 milliseconds |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-cordis-host-runner) is the exhaustive source for every accepted field.
+
+<a id="client-inspection"></a>
+### Client inspection
+
+When Gateway is mounted, a Client query with no live event stream fails before dispatch. This check does not subscribe to disconnections: queries already dispatched retain their original deadline. Standalone event transports without Gateway retain the same timeout behavior.
+
+Client queries accept the first valid page response within `clientInspectTimeoutMs`. A failed page does not prevent another page from answering successfully. If no valid result arrives, the query rejects with the first Client failure or output-validation diagnostic; when no page answers, it asks the caller to open or reconnect the Harness page and retry. Cancellation and registry disposal also end pending queries. Reconnecting a page does not replay a missed request, so retry after the connection is restored. Host queries are unaffected by this timeout.
 
 ### What a run does
 
@@ -51,7 +59,7 @@ Definitions are session-scoped and process-local: other sessions read them as ab
 
 ### Trust stance
 
-The sandbox isolates globals but is not a security boundary: Node globals are absent or redirect to Cordis services (`ctx.fs`, `ctx.web`, `ctx.bash`, the timer helpers), and a host half receives a façade without framework internals, yet the services it declares reach the live runtime. Treat a dynamic package like bash access — see the [self-referential toolset Agent Note](../../../.agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md).
+The sandbox isolates globals but is not a security boundary: Node globals are absent or redirect to Cordis services (`ctx.fs`, `ctx.web`, `ctx.bash`, the timer helpers), and a host half receives a façade without framework internals, yet the services it declares reach the live runtime. Treat a dynamic package like bash access — see the [self-referential toolset reference](README.md).
 
 -----
 
@@ -97,7 +105,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [UI package](../ui-cordis/README.md) — the panel users approve and operate runs with.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-cordis-host-runner) — every accepted config field.
 - [Extensions subsystem](../../../docs/subsystems/extensions.md) — the generated `ctx.cordisInspect` and `ctx.dynamicCordisRunner` API and `cordis/*` events.
-- [Self-referential Cordis toolset Agent Note](../../../.agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md) — sandbox semantics, lifecycle, and composition rationale.
+- [historical Self-referential Cordis toolset Agent Note](../../../.agents/notes/archived/feature/2026-07-08-self-referential-cordis-toolset.md) — sandbox semantics, lifecycle, and composition rationale.
 
 -----
 
@@ -142,5 +150,3 @@ These limits define when the runner needs special care. They are current package
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The definition registry is process memory with no event stream to observe, and its one owned relation (a running definition owns a settled host-half fiber and its handler table) is established and unwound inside single awaited verbs, so package tests assert it directly.

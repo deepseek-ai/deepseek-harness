@@ -45,8 +45,30 @@ async function bootHmr(dir: string, root: string[] = [], usePolling?: boolean): 
   return ctx
 }
 
-async function eventually(test: () => boolean, message: string): Promise<void> {
-  const deadline = Date.now() + 10_000
+/**
+ * Block until this process's native directory watches deliver events. Chokidar
+ * reports `ready` once `fs.watch()` returns, but libuv on darwin builds the
+ * per-process FSEvents stream later on its CoreFoundation thread
+ * (`uv__fsevents_init` only signals that thread), and a write that lands before
+ * then is never reported. Closing any directory handle runs `uv__fsevents_close`,
+ * whose `uv_sem_wait` returns only after `uv__fsevents_reschedule` has rebuilt
+ * and started the stream with the remaining handles (libuv `src/unix/fsevents.c`,
+ * unchanged across the libuv 1.x releases bundled by Node 22–24), so a watcher
+ * registered before this call observes the next write. Any existing directory
+ * works because the stream is per process. Per-file handles use kqueue and leave
+ * the stream alone, so one call after registration covers the later change and
+ * unlink steps. Linux inotify and Windows `ReadDirectoryChangesW` are armed
+ * inside `fs.watch()`, so there this is an immediate open and close. Should a
+ * libuv release drop the close-time wait, these cases regain the darwin loss
+ * rate this call removes rather than failing deterministically.
+ */
+function ensureNativeWatchLive(dir: string): void {
+  fs.watch(dir).close()
+}
+
+/** Poll `test` every 10 ms under the calling case's effective budget. */
+async function eventually(test: () => boolean, message: string, budget: number): Promise<void> {
+  const deadline = Date.now() + budget
   while (!test()) {
     if (Date.now() >= deadline) throw new Error(message)
     await new Promise(resolve => setTimeout(resolve, 10))
@@ -109,12 +131,14 @@ describe('HMR exact config paths', () => {
     }
   })
 
-  it('observes add, change, and unlink outside its module roots', { timeout: 20_000 }, async () => {
+  it('observes add, change, and unlink outside its module roots', { timeout: 20_000 }, async ({ task, onTestFailed }) => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-config-'))
     hmrRoots.push(dir)
     const filename = join(dir, 'plugins.yml')
     const ctx = await bootHmr(dir)
     const observed: string[] = []
+    // The case budget fires before eventually() can name the pending step.
+    onTestFailed(() => { console.error(`refresh observed ${JSON.stringify(observed)}`) })
     try {
       await watchConfig(ctx, filename, {}, () => {
         try {
@@ -124,38 +148,42 @@ describe('HMR exact config paths', () => {
           observed.push('missing')
         }
       })
+      ensureNativeWatchLive(dir)
 
       writeFileSync(filename, 'one', { flag: 'wx' })
-      await eventually(() => observed.includes('one'), 'HMR did not observe config creation')
+      await eventually(() => observed.includes('one'), 'HMR did not observe config creation', task.timeout)
       writeFileSync(filename, 'two')
-      await eventually(() => observed.includes('two'), 'HMR did not observe config change')
+      await eventually(() => observed.includes('two'), 'HMR did not observe config change', task.timeout)
       unlinkSync(filename)
-      await eventually(() => observed.includes('missing'), 'HMR did not observe config removal')
+      await eventually(() => observed.includes('missing'), 'HMR did not observe config removal', task.timeout)
     } finally {
       await ctx.fiber.dispose()
     }
   })
 
-  it('observes creation when the config parent did not exist at registration', { timeout: 20_000 }, async () => {
+  it('observes creation when the config parent did not exist at registration', { timeout: 20_000 }, async ({ task, onTestFailed }) => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-hmr-config-'))
     hmrRoots.push(root)
     const dir = join(root, 'later')
     const filename = join(dir, 'plugins.yml')
     const ctx = await bootHmr(root)
     const observed: string[] = []
+    // The case budget fires before eventually() can name the pending step.
+    onTestFailed(() => { console.error(`refresh observed ${JSON.stringify(observed)}`) })
     try {
       await watchConfig(ctx, filename, {}, () => {
         observed.push(readFileSync(filename, 'utf8'))
       })
+      ensureNativeWatchLive(root)
       mkdirSync(dir)
       writeFileSync(filename, 'created')
-      await eventually(() => observed.includes('created'), 'HMR did not observe config creation under a new parent')
+      await eventually(() => observed.includes('created'), 'HMR did not observe config creation under a new parent', task.timeout)
     } finally {
       await ctx.fiber.dispose()
     }
   })
 
-  it('processes native events for a watcher registered during a transaction', async () => {
+  it('processes native events for a watcher registered during a transaction', { timeout: 20_000 }, async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-transaction-watch-'))
     const filename = join(dir, 'plugins.yml')
     onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })
@@ -168,6 +196,7 @@ describe('HMR exact config paths', () => {
     await hmr.runExclusive(() => hmr.watchConfig(filename, async () => {
       observed.resolve(readFileSync(filename, 'utf8'))
     }))
+    ensureNativeWatchLive(dir)
     writeFileSync(filename, 'created-after-transaction')
     expect(await observed.promise).toBe('created-after-transaction')
   })

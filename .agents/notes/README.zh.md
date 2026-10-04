@@ -16,7 +16,7 @@
 
 文件名中的日期是该主题**首次提出**的时间（以 git 历史为准）。Agent Note 之间的交叉引用使用相对 Markdown 链接（`[topic](../../implemented/architecture/2026-…-….md)`），从不使用纯文字或编号，这样既可机械检查，也能在文件夹间移动时保持有效。
 
-活跃生命周期目录树就是工作清单：浏览其生命周期/类别文件夹，或搜索仓库即可。请勿添加集中式 `INDEX.md`；设计理由见[不设索引的 Agent Note](implemented/process/2026-07-19-remove-generated-agent-note-index.zh.md)。具有历史决策价值但未来指导价值较低的已实施记录会移至下文所述、单独冻结的 [`archived/`](archived/AGENTS.md) 目录树。
+活跃生命周期目录树就是工作清单：浏览其生命周期/类别文件夹，或搜索仓库即可。请勿添加集中式 `INDEX.md`：它重复路径元数据，并让无关记录的变更争用同一个生成文件。具有历史决策价值但未来指导价值较低的已实施记录会移至下文所述、单独冻结的 [`archived/`](archived/AGENTS.md) 目录树。
 
 <a id="classification"></a>
 
@@ -59,7 +59,7 @@
 
 ## 文件格式
 
-每份活跃 Agent Note 遵循统一的文件内格式，由 `pnpm run verify-agent-note-format`（[scripts/verify-agent-note-format.ts](../../scripts/verify-agent-note-format.ts)，`doc-sync`（文档同步门禁）的一环）强制执行；该格式的设计动机及其否决的替代方案见[统一格式 Agent Note](implemented/process/2026-07-05-uniform-agent-note-format.zh.md)。归档记录保留封存时的格式，并增加上述归档日期行。
+每份活跃 Agent Note 遵循统一的文件内格式，由 `pnpm run verify-agent-note-format`（[scripts/verify-agent-note-format.ts](../../scripts/verify-agent-note-format.ts)，`doc-sync`（文档同步门禁）的一环）强制执行；该格式的设计动机及其否决的替代方案见[已归档的统一格式 Agent Note](archived/process/2026-07-05-uniform-agent-note-format.md)。归档记录保留封存时的格式，并增加上述归档日期行。
 
 ### 头部块
 

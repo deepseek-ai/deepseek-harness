@@ -92,5 +92,3 @@ General Settings 行经 `ctx.configForms` 读取显式暴露的 `permission` Set
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。命令与 slot 贡献的生命周期由 HMR（热模块替换）安全性测试验证；浏览器侧设置控制器不持有宿主事件或跨插件可变状态。

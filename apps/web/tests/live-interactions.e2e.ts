@@ -161,7 +161,7 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
       () => page.getByRole('status').filter({ hasText: 'Deep diving' }).isVisible(),
       { timeout: 10_000 },
     ).toBe(true)
-    await page.locator('[data-streaming="true"]')
+    await page.locator('[data-streaming="true"]:not([inert] *)')
       .getByText('partial', { exact: true })
       .waitFor({ timeout: 30_000 })
     const loadingSnapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)
@@ -195,7 +195,7 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     // (awaited above), but the abort frame reaches the browser over SSE — the
     // frozen-partial swap is eventually consistent, so poll rather than count.
     await expect.poll(() => page.locator('[data-composer-input]').first().isEnabled(), { timeout: 10_000 }).toBe(true)
-    await expect.poll(() => page.locator('[data-streaming="true"]').count(), { timeout: 10_000 }).toBe(0)
+    await expect.poll(() => page.locator('[data-streaming="true"]:not([inert] *)').count(), { timeout: 10_000 }).toBe(0)
     await expect.poll(() => page.getByRole('tooltip').count()).toBe(0)
     // Golden of the aborted end-state: the prompt bubble plus the frozen
     // partial ('partial' is the hang entry's replayed prefix) and no more.
@@ -222,7 +222,7 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     // AUTH is outside llm-retry's retryable set: no retry record.
     expect(sessionEvents.filter(e => e.type === 'llm/retry').length).toBe(0)
     await expect.poll(() => page.locator('[data-composer-input]').first().isEnabled(), { timeout: 10_000 }).toBe(true)
-    expect(await page.locator('[data-streaming="true"]').count()).toBe(0)
+    expect(await page.locator('[data-streaming="true"]:not([inert] *)').count()).toBe(0)
     const errorStatus = page.getByRole('status').filter({ hasText: 'This turn failed' })
     await errorStatus.waitFor({ timeout: 10_000 })
     expect(await errorStatus.textContent()).toContain('API key is invalid')
@@ -291,6 +291,40 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   }, 120_000)
+
+  it.skipIf(MODE === 'record')('wraps an active retry label inside a narrow conversation column', async () => {
+    await launch(() => ({ patches: [{ at: 0, entry: { kind: 'throw', chunks: [], message: 'upstream 503', code: 'SERVER' } }] }),
+      { mode: 'normal', maxRetries: 1, retryableCodes: ['SERVER'],
+        backoff: { initialDelayMs: 60_000, maxDelayMs: 60_000, jitterRatio: 0 } })
+    await scaffold!.ctx.settings.update('ui-theme', { fontSize: 17 })
+    const { settled } = await sendPrompt(90_000)
+    const retry = page.locator('details[data-active="true"]')
+    await retry.waitFor()
+    const originalStyle = await retry.getAttribute('style')
+    try {
+      const geometry = await retry.evaluate((element) => {
+        element.style.width = '200px'
+        const summary = element.querySelector('summary')!
+        const status = summary.querySelector('[role="status"]')!
+        return { width: summary.getBoundingClientRect().width,
+          scrollWidth: summary.scrollWidth, clientWidth: summary.clientWidth,
+          height: status.getBoundingClientRect().height,
+          lineHeight: Number.parseFloat(getComputedStyle(status).lineHeight) }
+      })
+      expect(geometry.width).toBeLessThanOrEqual(200)
+      expect(geometry.scrollWidth).toBe(geometry.clientWidth)
+      expect(geometry.height).toBeGreaterThan(geometry.lineHeight)
+      expect(await retry.getByRole('status').textContent()).toContain('Retrying')
+    } finally {
+      await retry.evaluate((element, style) => {
+        if (style === null) element.removeAttribute('style')
+        else element.setAttribute('style', style)
+      }, originalStyle)
+      await page.getByRole('button', { name: 'Stop generating', exact: true }).click()
+      await settled
+    }
+    expect(tripwire.pageErrors).toEqual([])
+  })
 
   it.skipIf(MODE === 'record')('recovers a transient SERVER failure through llm-retry and completes', async () => {
     const derived = deriveReplayScript(parseSessionLog(await readFile(FIXTURE, 'utf8')))
@@ -366,7 +400,7 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     expect(turnEndReasons(sessionEvents).at(-1)).toBe('error')
     expect(sessionEvents.filter(e => e.type === 'llm/retry').length).toBe(2)
     await expect.poll(() => page.locator('[data-composer-input]').first().isEnabled(), { timeout: 10_000 }).toBe(true)
-    expect(await page.locator('[data-streaming="true"]').count()).toBe(0)
+    expect(await page.locator('[data-streaming="true"]:not([inert] *)').count()).toBe(0)
     // The terminal error row must render even though the turn owns a retry
     // chain: exhausted recovery shares the failing turn, so suppressing the
     // row by retry history would leave the failure invisible.

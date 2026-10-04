@@ -538,31 +538,6 @@ describe('GoalService mutations', () => {
     })
   })
 
-  it('rejects a corrupt append while preserving the valid prefix', async () => {
-    const { ctx, agent, session } = await harness()
-    expect(ctx.goals.get(agent)).toBeUndefined()
-    const change: GoalSnapshotChangeMeta = {
-      kind: 'goal/change',
-      version: 1,
-      operation: 'create',
-      goal: {
-        id: GoalId('goal-valid-prefix'),
-        revision: 1,
-        objective: 'valid prefix',
-        phase: 'active',
-        maxGoalRounds: 4,
-      },
-      roundsStarted: 0,
-      createdAt: 12,
-      updatedAt: 12,
-    }
-    session.append('goal/change', change)
-    expect(() => {
-      session.append('goal/change', { ...change, operation: 'edit', extra: true } as never)
-    }).toThrow('snapshot change must have exactly')
-
-    expect(ctx.goals.get(agent)).toMatchObject({ id: change.goal.id, objective: 'valid prefix' })
-  })
 })
 
 describe('goal replay validation', () => {

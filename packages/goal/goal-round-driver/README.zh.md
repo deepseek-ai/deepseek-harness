@@ -50,7 +50,7 @@ kind: "package-reference"
 
 ### 何时停止续行
 
-Round 只在整个 agent 进入 idle 时启动；完成、暂停和阻塞会阻止续行；宿主发起的暂停还会中止正在运行的轮次，而模型在自己轮次内发起的暂停会正常结束。编辑只会通过修订栅栏使进行中的 Round 失效，驱动器会继续新修订。驱动器也会在以下情况自行停止：轮次因 max tokens 结束、持久性写入失败、agent 被取消、插件卸载，或 Round 上限耗尽——上限耗尽时它会以稳定代码 `round-limit` 记录一个 blocker。取消绝不会自动重启 Round：Round 已在进行或已排入队列的 goal 会在下一次 idle 时被暂停；与 goal 尝试无关的取消只会停用续行。
+Round 只在整个 agent 进入 idle 时启动；完成、暂停和阻塞会阻止续行；宿主发起的暂停还会中止正在运行的轮次，而模型在自己轮次内发起的暂停会正常结束。编辑只会通过修订栅栏使进行中的 Round 失效，驱动器会继续新修订。驱动器也会在以下情况自行停止：轮次因 max tokens 结束、持久性写入失败、agent 被取消、插件卸载，或 Round 上限耗尽——上限耗尽时它会以稳定代码 `round-limit` 记录一个 blocker。取消绝不会自动重启 Round：Round 已在进行的 goal 会在下一次 idle 时被暂停；与 goal 尝试无关的取消只会停用续行。agent 进入 idle 时仍在排队的 Round 提示会从收件箱移除，后续人类输入不会排在它后面等待；被取消的轮次属于其他工作时，续行会被停用而不是暂停。
 
 ### resume、fork 或卸载之后
 
@@ -79,11 +79,10 @@ Round 只在整个 agent 进入 idle 时启动；完成、暂停和阻塞会阻�
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：驱动器状态机、竞态防护、teardown |
 | [`src/prompt.ts`](src/prompt.ts) | 保留的 `<goal_round>` 续行提示词 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生：goal-round 消息必须与包自有提示词一致 |
 
 ### Round 提示词
 
-保留的提示词是一个文本块：前几行为 JSON 引用的目标与 `round/maxGoalRounds`，其后是工作指令。不变式伴生会从持久前缀重建 goal，并拒绝内容与该提示词不完全一致的任何 goal 来源消息。
+保留的提示词是一个文本块：前几行为 JSON 引用的目标与 `round/maxGoalRounds`，其后是工作指令。
 
 </details>
 

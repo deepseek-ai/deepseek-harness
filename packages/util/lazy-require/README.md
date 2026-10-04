@@ -80,8 +80,6 @@ None.
 - **CommonJS-compatible dependencies only** — ESM-only packages require an asynchronous factory owned by their caller.
 - **WebWorker packaging needs an explicit request** — the static packer does not discover dependencies named only in `createLazyRequire()` calls. A package used in a Preview image must keep the dependency reachable through a supported literal request until the packer recognizes this helper.
 
-No runtime invariant companion is published because the loader holds no independently observable mutable relationship.
-
 <a id="dev-note"></a>
 ### Dev Note
 

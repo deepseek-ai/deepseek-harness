@@ -1,7 +1,7 @@
-- button "Edit large.txt +130 -130" [expanded]:
+- button "Edit large.txt 4KB +130 -130" [expanded]:
   - text: Edit
   - button "large.txt"
-  - text: +130 -130
+  - text: 4KB +130 -130
 - text: Code block
 - button "Wrap lines"
 - button "Copy"

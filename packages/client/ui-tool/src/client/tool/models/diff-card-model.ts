@@ -1,7 +1,7 @@
 /** Pure diff-card derivation from raw file-mutation calls and result metadata. @module */
 import type { DiffBlockProps, DiffHunk } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ToolCallBlock } from './tool-call-model.ts'
-import { parsedToolCall, validEscalationFields } from './raw-tool-call.ts'
+import { parsedToolCall } from './raw-tool-call.ts'
 
 /** Room for a path, one removed/added pair, and three context lines on each side. */
 export const CHAT_DIFF_MAX_LINES = 9
@@ -66,7 +66,6 @@ function intendedDiff(block: ToolCallBlock): IntendedDiff | null {
   }
   const { file_path: path } = parsed.args
   if (typeof path !== 'string' || path.trim() === '') return null
-  if (!validEscalationFields(parsed.args)) return null
   if (parsed.name === 'write') {
     const { content } = parsed.args
     return typeof content === 'string'

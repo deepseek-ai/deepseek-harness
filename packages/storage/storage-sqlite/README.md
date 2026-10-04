@@ -84,7 +84,6 @@ Opening the database creates the parent as `0o700`, exclusively creates a missin
 | [`src/index.ts`](src/index.ts) | Plugin entry: backend registration, `path`/`journalMode` config, unit table |
 | [`src/schema.ts`](src/schema.ts) | Open sequence, physical layout version, metadata tables, record table naming |
 | [`src/unit.ts`](src/unit.ts) | One opened unit: prepared statements, JSON value parse, close |
-| — | No runtime invariant companion is published; schema-version and unit-version consistency are open-time checks that reject before a unit exists, and durability needs the backend round-trip tests in the shared KV conformance suite; this package exposes no continuously observable in-process relation. |
 
 </details>
 

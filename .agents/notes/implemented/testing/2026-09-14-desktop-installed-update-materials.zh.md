@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-版本派生遵循[发布版本决策](../process/2026-09-16-desktop-release-version-derivation.zh.md)；本记录继续规定物料、应用身份和用户数据的隔离。
+版本派生遵循[发布版本说明](../../../../apps/desktop/README.zh.md)；本记录继续规定物料、应用身份和用户数据的隔离。
 
 [物料准备器](../../../../apps/desktop/scripts/prepare-installed-update-runtime.ts)接受保留的 test 专用清单，其中包含随机身份和分发命名空间。它将已验证的原始运行时复制为独立的派生测试版本，仅修改发布家族版本和匹配的依赖引用，再生成并验证两个完整性清单。原始运行时再次验证，其描述文件哈希必须保持不变。已有输出目录不被覆盖；复制失败保留失败记录，不能生成完成回执。
 

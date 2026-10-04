@@ -79,7 +79,8 @@ describe('generateConfigSchema', () => {
     ]
     const original = structuredClone(layers)
     const installAnchor = join(dir, 'installation.json')
-    const resolve = vi.spyOn(profileOperations, 'createRuntimeResolution').mockResolvedValue(resolution)
+    const resolve = vi.spyOn(profileOperations, 'createRuntimeResolution')
+      .mockResolvedValue(new profileOperations.ProfileRuntimeResolution({ installAnchor: '', home: '', profileDir: undefined }, resolution))
     const result = await generateConfigSchema(profile, layers, installAnchor)
     expect(resolve).toHaveBeenCalledExactlyOnceWith({ installAnchor, profile })
     expect(result['x-cordis'].entries.map(entry => [entry.path, entry.name])).toEqual([

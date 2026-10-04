@@ -1,0 +1,67 @@
+{
+  "dialogs": [
+    {
+      "type": "info",
+      "title": "Manage dsh Command",
+      "message": "Add the Desktop command to your terminal.",
+      "detail": "Desktop command: /usr/local/bin/dsh",
+      "buttons": [
+        "Install",
+        "Cancel"
+      ],
+      "defaultId": 0,
+      "cancelId": 1
+    },
+    {
+      "type": "info",
+      "title": "Manage dsh Command",
+      "message": "The Desktop command is installed.",
+      "detail": "Desktop command: /usr/local/bin/dsh\n\nCurrent dsh command: /usr/local/bin/dsh",
+      "buttons": [
+        "Close",
+        "Repair",
+        "Remove"
+      ],
+      "defaultId": 0,
+      "cancelId": 0
+    },
+    {
+      "type": "info",
+      "title": "Manage dsh Command",
+      "message": "The Desktop command needs repair.",
+      "detail": "Desktop command: /usr/local/bin/dsh",
+      "buttons": [
+        "Close",
+        "Repair",
+        "Remove"
+      ],
+      "defaultId": 0,
+      "cancelId": 0
+    },
+    {
+      "type": "warning",
+      "title": "Manage dsh Command",
+      "message": "The Desktop command is installed.",
+      "detail": "Desktop command: /usr/local/bin/dsh\n\nCurrent dsh command: /opt/homebrew/bin/dsh\n\nAnother dsh takes precedence. Remove or reorder that installation to use the Desktop command by default. You can also run the Desktop command by its full path.",
+      "buttons": [
+        "Close",
+        "Repair",
+        "Remove"
+      ],
+      "defaultId": 0,
+      "cancelId": 0
+    },
+    {
+      "type": "info",
+      "title": "Manage dsh Command",
+      "message": "Add the Desktop command to your terminal.",
+      "detail": "Desktop command: /usr/local/bin/dsh\n\nYour shell command could not be verified. An alias or another dsh installation may take precedence.",
+      "buttons": [
+        "Install",
+        "Cancel"
+      ],
+      "defaultId": 0,
+      "cancelId": 1
+    }
+  ]
+}

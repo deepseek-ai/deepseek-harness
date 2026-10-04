@@ -92,7 +92,6 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：配置、固定策略文本与九个 scoped 工具注册 |
-| — | 不发布运行时不变式伴生入口；Team 服务拥有持久化与授权关系。 |
 
 ### 策略与工具
 

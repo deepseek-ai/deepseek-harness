@@ -58,12 +58,12 @@
 
 /* Viewport fit: the card stops 12px short of the viewport's top/bottom edges
  * (the portal MARGIN in Menu.tsx; the top side widens to the frame's published
- * top clearance, the macOS window strip) and taller content scrolls inside
+ * overlay inset) and taller content scrolls inside
  * .viewport, so a pinned .footer stays visible. Menus with submenu rows skip
  * this class — the overflow clip would crop the side card, so they rely on
  * staying short. */
 .scrollable {
-  max-height: calc(100vh - 12px - max(12px, var(--dsh-frame-top-clearance, 12px)));
+  max-height: calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
 }
 
 .viewport {

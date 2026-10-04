@@ -6,7 +6,7 @@ English | [中文](2026-06-11-mutation-testing.zh.md)
 
 ## Problem
 
-The per-file 100% coverage gate ([the quality-gates decision](../../implemented/process/2026-06-11-quality-gates.md)) proves every line *executes* under test — not that any assertion would notice if the line were wrong. Under agent-written tests, coverage pressure can produce execution-without-assertion. Mutation testing measures what coverage cannot: whether the suite *kills* deliberately injected bugs.
+The per-file 100% coverage gate ([the quality-gates reference](../../../../docs/testing.md)) proves every line *executes* under test — not that any assertion would notice if the line were wrong. Under agent-written tests, coverage pressure can produce execution-without-assertion. Mutation testing measures what coverage cannot: whether the suite *kills* deliberately injected bugs.
 
 ## Proposal
 

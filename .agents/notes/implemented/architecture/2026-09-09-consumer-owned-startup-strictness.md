@@ -18,7 +18,7 @@ The audit treats a throwing `disabled` expression as an entry failure, not a dis
 
 The audit runs only during initial application boot. Later config HMR remains best effort and keeps the failed candidate visible for repair.
 
-This policy governs [Web host boot](2026-07-24-web-config-tree-boot-and-transport-layering.md), including its [client plugin roster](2026-07-23-client-plugin-loading-model.md). [Per-session presets](2026-09-18-declarative-agent-presets.md) own a separate strict subtree audit.
+This policy governs [Web host boot](../../../../packages/boot/app-boot/README.md), including its [client plugin roster](2026-07-23-client-plugin-loading-model.md). [Per-session presets](2026-09-18-declarative-agent-presets.md) own a separate strict subtree audit.
 
 ## Alternatives considered
 
@@ -36,6 +36,6 @@ The compact terminal report keeps the failing plugins visible; a separate file r
 
 App-boot unit tests cover absent and disabled required ids, optional import failure, config evaluation failure, synchronous and asynchronous `apply()` failure, pending dependencies, and required failure teardown. Unit expectations pin diagnostic grouping, preservation of original error objects and import logs, exporter cleanup, complete diagnostic values, private file creation, concurrent report names, and failed-write fallback. The built Web-profile acceptance asserts a single port-conflict stack without Node wrapper output, verifies the saved diagnostic file and its stderr fallback, serves the full UI with optional failures and exits nonzero without readiness when the required HTTP port is occupied or `modules` or `connection` cannot activate.
 
-The [Web process matrix](../../../../apps/cli/tests/profiles/web/tests/web-failure-matrix.expected.e2e.ts) independently exercises optional and required failures at startup and after native patch-file edits. Authenticated HTTP requests and plugin lifecycle files distinguish a usable application from a surviving process. These keyless process checks complement the [controlled-delivery unit tests](../testing/2026-09-09-user-patch-hmr-test-delivery.md): unit tests isolate reconciliation failures, while the process tests also require the shipped launcher, native watcher, and bounded shutdown to work together.
+The [Web process matrix](../../../../apps/cli/tests/profiles/web/tests/web-failure-matrix.expected.e2e.ts) independently exercises optional and required failures at startup and after native patch-file edits. Authenticated HTTP requests and plugin lifecycle files distinguish a usable application from a surviving process. These keyless process checks complement the [controlled-delivery unit tests](../../../../packages/boot/app-boot/tests/user-patches.spec.ts): unit tests isolate reconciliation failures, while the process tests also require the shipped launcher, native watcher, and bounded shutdown to work together.
 
 The matrix enables Chokidar's `awaitWriteFinish` to acknowledge stable file contents before each reload; otherwise its short change-event suppression window can discard the next test edit. Native events remain required, and assertions wait for observed activation or failure rather than a fixed settling sleep. This is explicit test configuration, not evidence for the default watcher timing.

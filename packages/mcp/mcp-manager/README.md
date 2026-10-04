@@ -110,7 +110,6 @@ This section explains the design decisions and points at the code; the observabl
 |---|---|
 | [`src/index.ts`](src/index.ts) | The service: schema, validation, reconcile, restart, probe, status registry |
 | [`src/types.ts`](src/types.ts) | The status union, list view, and the `mcp-manager/status` event declaration |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: status emissions name a server the live manager lists |
 
 ### Lifecycle notes
 

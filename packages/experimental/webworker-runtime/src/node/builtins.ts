@@ -21,6 +21,7 @@
  * other import. Deferring a shim's own start-up cost therefore belongs inside
  * that shim, on the path that first needs it.
  */
+import * as nodeAssertStrict from './builtin_modules/implemented/assert/strict.ts'
 import * as nodeAsyncHooks from './builtin_modules/implemented/async_hooks.ts'
 import * as nodeBuffer from './builtin_modules/implemented/buffer.ts'
 import * as nodeCrypto from './builtin_modules/implemented/crypto.ts'
@@ -61,6 +62,7 @@ import type { StaticModuleFactory } from '../module-system/module-loader.ts'
 
 /** Builtin modules, keyed with and without the `node:` prefix. */
 const BUILTINS: Record<string, StaticModuleFactory> = {
+  'assert/strict': () => nodeAssertStrict,
   async_hooks: () => nodeAsyncHooks,
   buffer: () => nodeBuffer,
   child_process: () => nodeChildProcess,

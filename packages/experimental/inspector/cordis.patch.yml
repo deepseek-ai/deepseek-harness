@@ -1,6 +1,5 @@
-# Explicitly installed bundle: the cross-realm inspector. The Host row
-# activates only where a Web server exists.
+# Explicit local debugging overlay; the Host prints its debugging URL.
 
 - insert:
     - id: experimental-inspector
-      name: '@deepseek-ai/dsh-experimental-inspector'
+      name: './lib/index.js'

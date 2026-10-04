@@ -78,9 +78,10 @@ describe('desktop package-set selection', () => {
     ])
   })
 
-  it('requires the Desktop Host entry', () => {
+  it('requires both Desktop Host and public CLI entries', () => {
     const files = [
       'package/lib/index.js',
+      'package/lib/cli.js',
     ]
     expect(() => {
       assertDesktopHostPackageFiles(files)
@@ -88,5 +89,6 @@ describe('desktop package-set selection', () => {
     expect(() => {
       assertDesktopHostPackageFiles(files.slice(1))
     }).toThrow(/lib\/index\.js/u)
+    expect(() => { assertDesktopHostPackageFiles(files.slice(0, 1)) }).toThrow(/lib\/cli\.js/u)
   })
 })

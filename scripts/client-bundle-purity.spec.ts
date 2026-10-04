@@ -39,7 +39,7 @@ interface InputIsolationPlugin {
 const REQUESTING_PACKAGE = '@deepseek-ai/dsh-client-ui-conversation'
 
 function clientConfigs(id = REQUESTING_PACKAGE) {
-  return clientBundle(id, ['lib/types/index.js', 'lib/types/invariant.js'])(
+  return clientBundle(id, ['lib/types/index.js'])(
     { env: { DSH_BUILD_FACE: 'client' } },
   ).filter(config => config.platform === 'browser')
 }
@@ -89,8 +89,6 @@ function clientSourceMapPath(packagePath: string): string {
 }
 
 function purityResolveId(id = REQUESTING_PACKAGE): ResolveId {
-  // libEntry is spelled at every call site (no default) so the
-  // package-invariants text check can see the invariant entry per package.
   const configs = clientConfigs(id)
   const plugins = (configs[0] as { plugins: { name: string; resolveId?: unknown }[] }).plugins
   const gate = plugins.find(p => p.name === 'dsh-client-bundle-purity')

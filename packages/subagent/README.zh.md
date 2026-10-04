@@ -41,7 +41,7 @@ subagent 包家族让 agent（智能体）将任务委派给子 agent、继续�
 ## 相关文档
 
 - [Subagent 子系统](../../docs/subsystems/subagent.zh.md)——服务约定、提供方约定与终态结果语义。
-- [Subagent 能力 seam](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.zh.md)——委派能力家族的设计记录。
+- [历史Subagent 能力 seam](../../.agents/notes/archived/feature/2026-06-21-subagent-capability-seam.md)——委派能力家族的设计记录。
 - [可继续的 subagent](../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.zh.md)——接受后续轮次的持久子级。
 - [tool-subagent-control README](tool-subagent-control/README.zh.md)——后续消息、中断与列举接口。
 

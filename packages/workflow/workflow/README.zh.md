@@ -77,7 +77,6 @@ return { reviewed: reviews.length }
 | [`src/index.ts`](src/index.ts) | 服务定义、`workflow/*` 事件声明、`WorkflowError` 及其 fatal 标志 |
 | [`src/types.ts`](src/types.ts) | 浏览器安全词汇：`WorkflowMeta`、`WorkflowResult`、运行与 agent 事件信息 |
 | [`src/runtime-types.ts`](src/runtime-types.ts) | 仅宿主的 `WorkflowStartRequest` 与 `WorkflowRun` 句柄 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件：事件配对与身份校验 |
 
 ### 生命周期与归属
 
@@ -104,7 +103,7 @@ return { reviewed: reviews.length }
 - [组地图](../README.zh.md)——工作流能力家族及其包。
 - [workflow 工具](../tool-workflow/README.zh.md)——拥有调用 schema 与结果包络的模型侧消费方。
 - [PTC 工作流引擎](../workflow-ptc/README.zh.md)——当前执行引擎及其隔离边界。
-- [动态工作流 Agent Note](../../../.agents/notes/implemented/feature/2026-07-05-dynamic-workflows.zh.md)——seam 设计及其决策。
+- [历史动态工作流 Agent Note](../../../.agents/notes/archived/feature/2026-07-05-dynamic-workflows.md)——seam 设计及其决策。
 
 -----
 

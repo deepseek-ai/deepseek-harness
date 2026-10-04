@@ -75,6 +75,14 @@ Temp isolation is per live session/workspace pair: sessions sharing a workspace 
 
 `init()` throws on any Win32 failure — the child is never spawned unrestricted. A runner that fails before executing the command prints `windows-acl-run: <detail>` to stderr and exits 127, which the seam's runner-failure rules classify as a broken sandbox rather than a denial. Cleanup is best-effort by design: `dispose()` attempts every temp revocation and aggregates failures into an `AggregateError`.
 
+A denial this backend cannot explain is diagnosed by the `diagnose-windows-sandbox-acl` skill bundled in `assets/`. `registerAclDiagnosisSkill` contributes it when `dsh-sandbox-local` uses its built-in Windows runner and a skill registry is available. Registration extracts resources for external PowerShell, including in ASAR and SEA deployments; fiber disposal unregisters the provider and removes its copy. Missing assets fail registration.
+
+One run diagnoses and repairs. The script has no modes: it reads the requested path and every ancestor, adds the signed-in user's full-control allow ACE to chain directories that lack effective `WRITE_DAC` or `WRITE_OWNER`, and removes explicit package allow ACEs at their sources, ancestor first, verifying each change by re-reading it. Repairs preserve denies, owner, inheritance and SACL, and back up each changed DACL. An object is modified only when it is `-AllowRoot` or strictly inside it, so a workspace root can repair itself; reparse paths and managed application trees are refused, and a repair needs effective `WRITE_DAC`. Failed repairs restore attempted changes in reverse order and exit nonzero. Follow the [bundled skill](assets/diagnose-windows-sandbox-acl/SKILL.md) for the single command, original-operation verification and recovery.
+
+Every run prints `REPORT` JSON records of observations, actions, reasons and verification, then a final `RECAP` line carrying the verdicts, changes, verifications, refusals and scans, and a summary with the counts, recovery commands and `nextAction`; unknown observations remain unknown. The same run writes every record to `-Out\acl-report-*.jsonl`, because tool output keeps only its tail. `-Out` also receives two recovery files per change: the DACL the object owned before that change and the independent script that restores it. Action completion records API execution; verification records the observed result. The [recovery decisions](../../../.agents/notes/implemented/feature/2026-08-08-windows-acl-restricted-token-sandbox.md#acl-diagnosis-and-recovery) explain resource ownership and rollback limits.
+
+Inspection visits the requested object and each ancestor through the filesystem root. Each ACL observation's `path` identifies the inspected object; the classification's `details.packageObjects` lists objects carrying package allow ACEs without establishing the cause of the original failure. Each package removal is verified per object by comparing the recorded own ACEs with the re-read DACL, so a deny that shares the removed allow's SID remains visible in the verification details.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -156,13 +164,15 @@ Start with the subsystem reference for the shared vocabulary, then the provider 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through [`dsh-bash-sandbox`](../../shell/bash-sandbox/README.md), [`dsh-pwsh-sandbox`](../../shell/pwsh-sandbox/README.md), and their tools, which render this backend's partial-enforcement and denial facts (the confined stderr the tool layer classifies through `denialSignatures`) while the [`dsh-sandbox`](../sandbox/README.md) seam owns the `SANDBOX_UNAVAILABLE` text and `sandbox-local` owns runner selection.
+Indirectly, through [`dsh-bash-sandbox`](../../shell/bash-sandbox/README.md), [`dsh-pwsh-sandbox`](../../shell/pwsh-sandbox/README.md), and their tools, which render this backend's partial-enforcement and denial facts (the confined stderr the tool layer classifies through `denialSignatures`) while the [`dsh-sandbox`](../sandbox/README.md) seam owns the `SANDBOX_UNAVAILABLE` text and `sandbox-local` owns runner selection. On Windows this package also contributes one catalog entry, the bundled `diagnose-windows-sandbox-acl` skill, which is where the model learns to diagnose a denial the tool layer can only report.
 
 #### KV Cache effect
 
-None directly; the denial surface belongs to the tool layer.
+One extra catalog entry on Windows: the skill's description enters context with the catalog, and the body enters only when invoked. Resource extraction happens at registration and does not add script contents to model context. The denial surface itself stays in the tool layer.
 
 ## Known Limitations and Deferred Work
+
+- **Diagnosis preserves integrity labels** — it cannot fix Low-labeled executables affecting programs launched outside DSH. It also cannot repair a caller's missing `WRITE_DAC`; extracted and recovery scripts are user-writable and are not supported elevated entrypoints. Resource directories can remain after an unclean shutdown.
 
 <a id="known-limitations-and-deferred-work"></a>
 
@@ -178,6 +188,7 @@ These limits define when the backend is a poor fit or needs special operational 
 - **Read-side confinement and network policy are out of scope** — `WRITE_RESTRICTED` intersects write accesses only; pair this backend with a read-side policy for stronger confinement.
 - **Reads stop at objects another AppContainer-based tool has ACL'd with a package SID** — a file whose DACL carries an ACE for a package SID (`S-1-15-2-…`) is inaccessible to a Low-integrity token on this host, even when the same DACL grants the user full control and Everyone read (observed: adding that single ACE to a fresh file reproduces the denial, granting Everyone read does not lift it, and the same bytes copied elsewhere stay readable). The kernel rule behind it is unconfirmed and not this package's to change; tools that sandbox themselves with AppContainers stamp such ACEs, so a tree they touched becomes unreadable to this backend's child. Removing the foreign ACE (or re-installing the affected tree) restores access.
 - **Wide-directory and FAT-volume warnings are deferred; the FAT-class residue is unverified** — the UI-side warnings are not implemented, a FAT volume as a grant root fails loudly, and a FAT-class target outside the granted roots stores no security descriptor; its effective integrity label is assigned by the system rather than recorded on the object, so the label layer's behavior there is untested. FAT stays legacy residue.
+- **The bundled diagnosis skill needs an unconfined caller** — both the classification and the repairs read or write security descriptors a confined child cannot reach, so the session must escalate that one call; with no approval channel the escalation fails closed and the path stays undiagnosed.
 - **PowerShell language mode differs by confined mode** — under `read-only`, PowerShell cannot create its AppLocker probe files in temp and conservatively starts in ConstrainedLanguage (`Add-Type`, non-core .NET static calls, COM, and reflection fail); the shipped `workspace-write` path lets the probe complete, so pwsh stays in FullLanguage unless host-wide WDAC/AppLocker policy says otherwise, while a direct `AclSandbox` with `tempDir: null` has no such guarantee. This split is PowerShell startup behavior, not part of the ACL write boundary.
 
 <a id="dev-note"></a>
@@ -193,5 +204,3 @@ This Dev Note is working context for maintainers: undecided directions and open 
 The warn-only posture for unusually wide directories and FAT-class volumes is documented in the limitations above but not implemented, and a cleanup command that reaps standing workspace ACEs from renamed workspaces is undecided. Both are open directions, not shipped behavior.
 
 </details>
-
-**Runtime invariant:** No companion is published. This package exposes no independent event sequence or mutable data relation beyond the fail-closed contracts it enforces at each Win32 call boundary.

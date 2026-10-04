@@ -103,7 +103,6 @@ Source execution loads an erasable-only bootstrap closure without relying on sib
 | [`src/bootstrap.ts`](src/bootstrap.ts) | Program evaluation, binding proxies and output capture |
 | [`src/channel.ts`](src/channel.ts) | Framing, bounded writes and protocol failures |
 | [`src/output-ledger.ts`](src/output-ledger.ts) | Host accounting for the outer result |
-| — | No runtime invariant companion is published; framing and process cleanup are enforced across the process boundary rather than through independent same-process observations. |
 
 </details>
 

@@ -13,7 +13,7 @@ import { assemble, type AssembledResult } from './assemble.ts'
  * and exercises a replayed tool follow-up. Key-gated.
  */
 
-const FLASH = 'deepseek-v4-flash'
+const FLASH = 'deepseek-flash'
 const contexts: Context[] = []
 
 async function harness(_model: string, config: Partial<PiAiProviderProfile> = {}) {

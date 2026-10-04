@@ -73,6 +73,6 @@ This provider contributes no request-prefix content. Its consumers own model-vis
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-No invariant companion is published. Wire validation and the owning filesystem, subprocess and sandbox providers enforce the observable obligations; this adapter adds no independently observed state relation.
+None.
 
 </details>

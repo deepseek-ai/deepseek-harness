@@ -58,7 +58,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-循环是部署方拥有的固定脚本：模型只提供数据，无法改变循环、提供方路由、schema 或交接校验。该工具是基于 `ctx.workflowEngine` 与 `ctx.subagents` 的普通插件——不会向 `agent-loop` 添加 Ralph 模式或全新 agent loop，同会话的 goal 领域也保持独立。[Harness 层目标式执行 Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.zh.md)拥有策略与暂缓事项。
+循环是部署方拥有的固定脚本：模型只提供数据，无法改变循环、提供方路由、schema 或交接校验。该工具是基于 `ctx.workflowEngine` 与 `ctx.subagents` 的普通插件——不会向 `agent-loop` 添加 Ralph 模式或全新 agent loop，同会话的 goal 领域也保持独立。
 
 ### 固定脚本与路由
 
@@ -81,7 +81,6 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：固定脚本、提供方路由、报告校验、工具注册 |
-| — | 不发布运行时不变式伴生入口；该面向模型的编排适配器不拥有独立事件流；工作流与 subagent 归属方会校验该适配器启动的运行及其子 agent 生命周期。 |
 
 </details>
 
@@ -97,7 +96,7 @@ kind: "package-reference"
 - [PTC 工作流引擎](../workflow-ptc/README.zh.md)——执行固定脚本的引擎。
 - [subagent seam](../../subagent/subagent/README.zh.md)——全新子 agent 的提供方约定。
 - [goal 组](../../goal/goal/README.zh.md)——面向普通长期目标的同会话 goal 工具。
-- [Harness 层目标式执行 Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.zh.md)——策略、提供方要求与暂缓事项。
+- [历史Harness 层目标式执行 Agent Note](../../../.agents/notes/archived/feature/2026-07-16-harness-level-loop.md)——策略、提供方要求与暂缓事项。
 
 -----
 
@@ -159,10 +158,11 @@ Use the ralph tool ONLY when the direct human explicitly asks for a Ralph loop o
 
 这些限制说明该工具尚未支持什么。它们是当前约束，不是任务积压。
 
-- **完成由 worker 自行声明**——没有独立评估器或验证器判断目标是否完成；评估器策略与评估器驱动的延续均暂缓。
+- **完成由 worker 自行声明**——没有独立评估器或验证器判断目标是否完成；评估器策略与评估器驱动的延续均暂缓。评估器须先单独定义输入、工具访问、确定性检查、提供方选择、隔离与授权规则，才能认证完成或驱动延续。
 - **仅支持前台**——没有 job id、后台收集、进程恢复检查点、调度器或基于挂钟时间的启动策略。
 - **工作区是唯一的跨 Round 长期记忆**——一份有界报告作为显式交接，每个子 agent 结束后，未提交的对话推理都会消失。
 - **一个 Round 对应一个全新子 agent**——Round 内没有扇出、模型或提供方切换、fork 上下文或由模型调用选择的提供方。
+- **没有强制拒绝递归 Ralph**——结构性拒绝尚未实现；提示词引导不能强制禁止递归。
 - **普通子 agent 失败会终止运行**——固定脚本报告失败的 Round 与上一次成功交接，但不会重试；致命的工作流基础设施失败可能在该状态返回前结束。
 - **聚合工作量仅受 Round 数量限制**——token、价格与耗时预算均暂缓。
 

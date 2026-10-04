@@ -1,0 +1,11 @@
+- tablist "Panels":
+  - tab "Elements"
+  - tab "Console"
+  - tab "Sources" [selected]
+  - tab "Network"
+  - tab "Performance"
+  - tab "Memory"
+  - tab "Application"
+  - tab "Security"
+  - tab "Lighthouse"
+  - tab "Recorder"

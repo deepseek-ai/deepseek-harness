@@ -207,7 +207,7 @@ declare module './types.ts' {
    * turn and runs when the aborted activity converges to idle; a `disposed`
    * cancel leaves it parked. A wake submitted while already idle always opens
    * its turn boundary, even when its message is cleared before the driver
-   * claims ([cancel-convergence wake latch](../../../../.agents/notes/implemented/bug-fix/2026-08-07-cancel-convergence-wake-latch.md)).
+   * claims ([driver wake convergence](../../agent-loop/src/agent.ts)).
    * @param message - identified content and the source that supplied it.
    * @param target - the preferred next-turn or next-step inbox boundary.
    * @param wakeup - whether delivery may wake the driver.

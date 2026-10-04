@@ -33,7 +33,7 @@ hooks 组让 agent 运行可以复用为 Claude Code 或 Codex 编写的 shell �
 <a id="related-documentation"></a>
 ## 相关文档
 
-- [拦截扩展点 Agent Note](../../.agents/notes/implemented/feature/2026-06-30-interception-extension-points.zh.md)——桥接所面向的类型化 Decision 接口面。
+- [拦截扩展点 参考](../../docs/tool-execution-pipeline.zh.md)——桥接所面向的类型化 Decision 接口面。
 - [钩子桥接 Agent Note](../../.agents/notes/archived/feature/2026-06-30-hook-bridges.md)——桥接设计及其决策映射。
 - [钩子协议库 Agent Note](../../.agents/notes/archived/feature/2026-06-30-hook-protocol-lib.md)——共享库负责的内容及其原因。
 

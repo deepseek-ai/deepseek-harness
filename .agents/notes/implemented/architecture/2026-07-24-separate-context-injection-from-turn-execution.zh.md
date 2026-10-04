@@ -42,7 +42,7 @@ enter 分支的 `PreStepDecision.messages` 是拟议步骤的完整批次。wate
 
 跨会话引用采用这种领域组合方式：TUI 先准备快照，然后在 idle 直接消息的 pre-step 中把快照与该消息一同返回，或在 running 轮次中先注入快照再唤醒 steering。目标日志包含两条简单消息，因此来源会话后续变化不会改变回放，transcript 消费方也不需要提示词封套。本决策取代[跨会话引用决策](../../archived/feature/2026-07-21-cross-session-references.md)中的附件机制，但保留其快照与信任边界规则。
 
-本决策保留[移除注入内容封套](../simplification/2026-07-20-unwrap-injected-content-envelopes.zh.md)确立的由调用方决定内容框架的原则，以及[一次 send、一个轮次](../simplification/2026-07-17-one-send-one-turn.zh.md)确立的单条目轮次规则。后续的[独立纯日志事件决策](../simplification/2026-07-28-remove-synthetic-log-only-turns.zh.md)将同样的「轮次仅表示执行」语义应用于插件所属记录。
+本决策保留[移除注入内容封套](../../../../packages/core/session/README.zh.md)确立的由调用方决定内容框架的原则，以及[一次 send、一个轮次](../simplification/2026-07-17-one-send-one-turn.zh.md)确立的单条目轮次规则。后续的[独立纯日志事件决策](../simplification/2026-07-28-remove-synthetic-log-only-turns.zh.md)将同样的「轮次仅表示执行」语义应用于插件所属记录。
 
 ## 曾考虑的替代方案
 
@@ -64,7 +64,7 @@ enter 分支的 `PreStepDecision.messages` 是拟议步骤的完整批次。wate
 - idle 状态下的 `inject()` 会立即追加一条持久 inbox 插入记录，但不会追加模型可见的 `user/message`；后续可唤醒投递可能开始 pre-step 处理。
 - 活跃轮次中的注入会在最近的后续 pre-step 边界领取，并位于完整工具结果批次之后、消费它的请求之前。
 - pre-step reject 或失败会丢弃其已领取批次；领取后插入的输入继续保持待处理。
-- 单元测试、持久化与 resume 测试、不变量测试和 TUI 覆盖会固定事件顺序、领取归属和持久回放。
+- 单元测试、持久化与 resume 测试和 TUI 覆盖会固定事件顺序、领取归属和持久回放。
 
 ## 后果
 

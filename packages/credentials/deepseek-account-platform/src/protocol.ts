@@ -1,11 +1,11 @@
 /** Validated platform HTTP messages and restricted browser destinations. */
 import { z } from 'zod'
-import type { AccountBonusOrderId } from '@deepseek-ai/dsh-deepseek-account/types'
+import type { AccountBonusOrderId, SignInErrorCode } from '@deepseek-ai/dsh-deepseek-account/types'
 
 /** Protocol errors expose a stable code, never a response body or authorization URL. */
 export class PlatformAuthError extends Error {
   /** @param code - safe error classification. */
-  constructor(readonly code: 'network' | 'protocol' | 'expired' | 'storage') { super(`account: ${code}`) }
+  constructor(readonly code: SignInErrorCode) { super(`account: ${code}`) }
 }
 
 /** An authenticated Platform request was rejected with HTTP 401 or code 40003. */
@@ -170,8 +170,8 @@ async function platformRequest(url: string, init: RequestInit, signal: AbortSign
   try {
     response = await fetch(url, { ...init, redirect: 'error', signal })
   } catch {
-    console.info('[deepseek-account] request failed', { path, errorCode: 'network', aborted: signal.aborted })
-    throw new PlatformAuthError('network')
+    console.info('[deepseek-account] request failed', { path, errorCode: 'no-response', aborted: signal.aborted })
+    throw new PlatformAuthError('no-response')
   }
   console.info('[deepseek-account] response', { path, status: response.status })
   if (response.status === 401 && new Headers(init.headers).has('x-dsh-auth-token')) {

@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-harness 通过 Cordis 事件分类体系扩展 agent loop（智能体循环）（见[微内核事件分类体系 Agent Note](2026-06-11-microkernel-event-taxonomy.zh.md)）。随着该分类体系的增长，三个事件域之间的界限变得模糊：
+harness 通过 Cordis 事件分类体系扩展 agent loop（智能体循环）（见[微内核事件分类体系 reference](../../../../docs/architecture.zh.md)）。随着该分类体系的增长，三个事件域之间的界限变得模糊：
 
 - `session/*` 承载持久的、事件溯源的日志（`SessionEventMap`）。
 - `agent/*` 承载运行时实时信号，向插件传递 `Agent` 句柄。

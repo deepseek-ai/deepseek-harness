@@ -12,20 +12,20 @@
   en: a15c7c13f167e5ac
   zh: 63bcc2ef60c2f344
 /agent-note-private-npm-publication-as-three-independent-sequences/decision/three-independent-sequences:
-  en: 6cd23b2407935500
-  zh: 6d50f5f4fb867342
+  en: c1d7c618fa93ab10
+  zh: 887ad2a37ed18035
 /agent-note-private-npm-publication-as-three-independent-sequences/decision/versions-land-in-the-repository-from-a-local-command-ci-only-checks-and-uploads:
   en: 71d4cda384013bfb
   zh: 909d853c18496925
-/agent-note-private-npm-publication-as-three-independent-sequences/decision/vendor-publish-what-changed-and-let-tags-be-the-ledger:
-  en: 7f578bb18f7f8693
-  zh: 49f25210f7c1a61f
+/agent-note-private-npm-publication-as-three-independent-sequences/decision/vendor-advance-the-complete-family-with-per-package-tags:
+  en: 321f48c7e4afac24
+  zh: 974a7fa1a75c810d
 /agent-note-private-npm-publication-as-three-independent-sequences/decision/publication-runs-only-on-github-and-the-registry-decides-what-goes-out:
-  en: 4f399390f58d7a34
-  zh: 9df67248acfc61c8
+  en: 8c8cd90e6eabe07d
+  zh: 7035b71a6eeeb379
 /agent-note-private-npm-publication-as-three-independent-sequences/decision/workspace-internal-references-use-the-workspace-protocol:
-  en: 6cff087e7e2d0ac7
-  zh: 5d45a3abdd960d9c
+  en: 82a7925d449fc283
+  zh: 653358a1ffbad80a
 /agent-note-private-npm-publication-as-three-independent-sequences/decision/published-dependency-faces-use-an-explicit-policy:
   en: 30a64e0e919a27c0
   zh: 19729d7ebee35439
@@ -41,12 +41,9 @@
 /agent-note-private-npm-publication-as-three-independent-sequences/decision/repository-changes-this-carried:
   en: c505237cad2c4128
   zh: 55364ba462536680
-/agent-note-private-npm-publication-as-three-independent-sequences/decision/relationship-to-the-earlier-proposal:
-  en: 298382a27013dcfb
-  zh: ab89cf392232f9bb
 /agent-note-private-npm-publication-as-three-independent-sequences/alternatives-considered:
-  en: 11877d09e5a84f6e
-  zh: ea372c779254be93
+  en: ed22fa8a47b5c4b6
+  zh: 7b367971a51a67ff
 /agent-note-private-npm-publication-as-three-independent-sequences/consequences:
-  en: f961ebb927e30b5c
-  zh: 019f1628fb1f2c56
+  en: 46f82110175ea3f7
+  zh: 1cdd1c99bfb88440

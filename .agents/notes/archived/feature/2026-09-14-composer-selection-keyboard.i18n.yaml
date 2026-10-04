@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/feature/2026-09-14-composer-selection-keyboard.md
+2026-09-14-composer-selection-keyboard.md: f8be46c1054989f02e76d4a6c0be8eb79d50607a
+2026-09-14-composer-selection-keyboard.zh.md: 41cac14718e441f9d568624671eaadeeb72f9608

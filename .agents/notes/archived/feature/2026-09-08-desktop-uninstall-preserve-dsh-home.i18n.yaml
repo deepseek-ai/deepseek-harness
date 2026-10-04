@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/feature/2026-09-08-desktop-uninstall-preserve-dsh-home.md
+2026-09-08-desktop-uninstall-preserve-dsh-home.md: f4c9b1b63a2f47840ae28ea8e91f4d277d0f8533
+2026-09-08-desktop-uninstall-preserve-dsh-home.zh.md: c195049b1cbd35d02ff9a7b7283d731f7702f593

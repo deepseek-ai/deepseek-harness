@@ -53,7 +53,7 @@ Read these pages when the picking surface is not enough. They move from the brow
 - [dsh-host-directory-picker-browse](../../host/directory-picker-browse/README.md) — the directory-listing backend this surface drives.
 - [ui-workspace](../ui-workspace/README.md) — declares the directory-flow slots and owns the picking conversation.
 - [ui-directory-picker-native](../ui-directory-picker-native/README.md) — the native OS-chooser alternative for local deployments.
-- [Web client architecture](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.md) — how browser plugin rows load and register slots.
+- [Web client architecture](../../../docs/subsystems/web-client.md) — how browser plugin rows load and register slots.
 
 -----
 
@@ -85,5 +85,3 @@ These limits define the current browse surface. They are current package constra
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The plugin registers one workspace directory-flow owner whose disposal the HMR-safety spec proves, and every listing it shows is re-read from the Host on demand rather than held here.

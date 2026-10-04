@@ -100,7 +100,6 @@ ctx.systemPrompt.variable('cwd', ({ agent }) => agent?.session.header.cwd)
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SystemPrompt` 服务、配置、组装流水线、`renderPrompt` |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式配套 |
 
 ### 组装与渲染
 

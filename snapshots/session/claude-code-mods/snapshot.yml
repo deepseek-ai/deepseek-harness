@@ -1,0 +1,10 @@
+version: 1
+scenario: claude-code-mods
+profile: headless
+composition: claude-code-mods
+recording: live
+header:
+  class: claude-code-mods
+  pin: true
+workspace:
+  final: true

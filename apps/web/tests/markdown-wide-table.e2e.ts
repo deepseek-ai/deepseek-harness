@@ -111,7 +111,7 @@ function tablesMarkdown(): string {
   ].join('\n')
 }
 
-/** Build one closed, invariant-checked session fixture carrying the tables. */
+/** Build one closed session fixture carrying the tables. */
 function wideTableFixture(): string {
   const session = Session.create(SessionId('markdown-wide-table-source'))
   const eventTimeOrigin = new Date().setHours(12, 0, 0, 0)

@@ -1,4 +1,4 @@
-/** Durable, credential-free evidence for test and production release uploads. */
+/** Durable, credential-free evidence for test and production Desktop uploads. */
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
@@ -52,7 +52,7 @@ function streamedBody(artifact: DesktopUploadArtifact): Readable {
 }
 
 /**
- * Upload an already validated release, flushing intent and response evidence around every PUT.
+ * Upload an already validated installer or update plan, flushing intent and response evidence around every PUT.
  *
  * Each object is sent as one streamed PUT with an explicit length and Content-MD5, which is also
  * what keeps the COS SDK's internal retry path unreachable: it repeats a request only when the

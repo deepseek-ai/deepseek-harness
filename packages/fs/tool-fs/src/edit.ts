@@ -85,7 +85,11 @@ export function applyEditTool(ctx: Context, sandbox: FsSandboxController): void 
     name: 'edit',
     description: 'Edit an existing UTF-8 text file by replacing literal text.',
     parameters: {
-      file_path: { type: 'string', required: true, description: 'Path to edit, resolved by the filesystem backend.' },
+      file_path: {
+        type: 'string', required: true,
+        description: 'Path to edit, resolved by the filesystem backend. '
+          + 'Provide `file_path` before `old_string` and `new_string` in the arguments.',
+      },
       old_string: { type: 'string', required: true, description: 'Literal text to replace.' },
       new_string: { type: 'string', required: true, description: 'Literal replacement text. Use an empty string to delete the match.' },
       replace_all: { type: 'boolean', description: 'Replace all matches. Defaults to false; when false, old_string must appear exactly once.' },

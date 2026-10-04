@@ -12,31 +12,16 @@
   align-items: center;
   height: calc(24px + var(--dsh-content-font-delta, 0px));
   min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  transition: color 100ms ease;
+}
+
+.row:hover {
+  color: var(--dsw-alias-label-secondary);
 }
 
 .row[data-expandable] {
   cursor: pointer;
-}
-
-.card[data-state='running'] .row::after,
-.card[data-state='preparing'] .row::after {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 300px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--dsw-alias-bg-base) 60%, transparent) 55%,
-    transparent 100%
-  );
-  animation: dsh-skill-row-sweep 2.6s ease-out infinite;
-  pointer-events: none;
-}
-
-@keyframes dsh-skill-row-sweep {
-  0% { left: -300px; }
-  90%, 100% { left: 100%; }
 }
 
 .leading {
@@ -48,7 +33,7 @@
   align-items: center;
   justify-content: center;
   margin-right: 6px;
-  color: var(--dsw-alias-label-tertiary);
+  color: inherit;
 }
 
 .leading svg {
@@ -57,7 +42,7 @@
 }
 
 .chevron {
-  color: var(--dsw-alias-label-secondary);
+  color: inherit;
 }
 
 .iconIdle {
@@ -86,7 +71,6 @@
   flex: none;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-secondary);
 }
 
 .separator {
@@ -106,7 +90,6 @@
   white-space: nowrap;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-tertiary);
 }
 
 .errorSummary {
@@ -210,11 +193,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card[data-state='running'] .row::after {
-    animation: none;
-    display: none;
-  }
-
+  .row,
   .iconIdle,
   .chevronHover,
   .inspectButton {

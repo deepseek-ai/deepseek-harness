@@ -29,14 +29,14 @@
   align-items: center;
   justify-content: center;
   margin-right: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: inherit;
 }
 
 .runTitle {
   overflow: hidden;
   flex: none;
   max-width: 42%;
-  color: var(--dsw-alias-label-secondary);
+  color: inherit;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   font-weight: 510;
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
@@ -48,7 +48,7 @@
   overflow: hidden;
   flex: 1;
   min-width: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: inherit;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(18px + var(--dsh-content-font-delta-secondary, 0px));
   text-overflow: ellipsis;
@@ -65,7 +65,7 @@
   font-size: 11px;
   font-weight: 510;
   line-height: 16px;
-  color: var(--dsw-alias-label-secondary);
+  color: inherit;
   white-space: nowrap;
 }
 
@@ -93,7 +93,7 @@
   align-items: center;
   justify-content: center;
   margin-right: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: inherit;
 }
 
 .phaseTitle {
@@ -101,7 +101,7 @@
   flex: 0 1 auto;
   min-width: 0;
   max-width: 42%;
-  color: var(--dsw-alias-label-secondary);
+  color: inherit;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   text-overflow: ellipsis;
@@ -112,7 +112,7 @@
   overflow: hidden;
   flex: 1;
   min-width: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: inherit;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   text-overflow: ellipsis;
@@ -125,7 +125,7 @@
   /* Column width scales with the text (~132/13 ≈ 10px per font-size px) so
      larger sizes keep the same status text visible instead of truncating. */
   width: calc(132px + var(--dsh-content-font-delta-secondary, 0px) * 10);
-  color: var(--dsw-alias-label-secondary);
+  color: inherit;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   text-align: right;
@@ -263,4 +263,12 @@
   .members {
     padding-left: 12px;
   }
+}
+
+.headerContent {
+  flex: 1;
+}
+
+.headerContentLayout {
+  gap: 6px;
 }

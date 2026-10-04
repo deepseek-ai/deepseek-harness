@@ -92,8 +92,6 @@ env -u NODE_USE_ENV_PROXY DSH_STAGEHAND_E2E=1 pnpm exec vitest run --config vite
 
 [原生运行时](src/native.ts)将显式模型配置传入 Stagehand 的公开初始化 API。Stagehand 在其浏览器扩展中负责模型请求、响应验证与 token 计量。DSH 通过现有 Session 日志记录浏览器工具输入和返回数据，包括 SDK 结果元数据。底层推理请求/响应捕获及其与 DSH Session 用量计量的集成均属暂缓工作。
 
-此包不发布不变量配套模块：每次浏览器操作都使用资源所有者获取的唯一句柄，没有独立维护、需要比较的浏览器关系。
-
 </details>
 
 -----

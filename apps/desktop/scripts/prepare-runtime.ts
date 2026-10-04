@@ -10,6 +10,8 @@ import { downloadArtifact } from '@electron/get'
 import extractZip from 'extract-zip'
 import { resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
 import { preparePrimaryRuntime } from './prepare-primary-runtime.ts'
+import { prepareDesktopCli } from './prepare-cli.ts'
+import { prepareCommandLink } from './prepare-command-link.ts'
 
 const BUILD_PATHS = resolveDesktopTargetBuildPaths()
 const RUNTIME_ROOT = BUILD_PATHS.runtime
@@ -41,6 +43,8 @@ async function main(): Promise<void> {
   const nodeVersion = execFileSync(executable, ['-p', 'process.versions.node'], {
     encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
   }).trim()
+  const macosMinimumVersion = platform === 'darwin' ? execFileSync('/usr/libexec/PlistBuddy',
+    ['-c', 'Print LSMinimumSystemVersion', join(BUILD_PATHS.electron, 'Electron.app', 'Contents', 'Info.plist')], { encoding: 'utf8' }).trim() : undefined
   rmSync(RUNTIME_ROOT, { recursive: true, force: true })
   mkdirSync(RUNTIME_ROOT, { recursive: true })
   const pnpmVersion = preparePnpm()
@@ -51,6 +55,11 @@ async function main(): Promise<void> {
     node: nodeVersion,
     pnpm: pnpmVersion,
   }, undefined, 2)}\n`)
+  await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:cli',
+    async () => prepareDesktopCli(join(RUNTIME_ROOT, 'cli'), platform))
+  if (macosMinimumVersion !== undefined) prepareCommandLink(join(RUNTIME_ROOT, 'cli'), arch, macosMinimumVersion)
+  cpSync(join(import.meta.dirname, '..', 'lib', 'command-manager-entry.js'), join(RUNTIME_ROOT, 'cli', 'command-manager.js'))
+  cpSync(join(import.meta.dirname, 'command-path.ps1'), join(RUNTIME_ROOT, 'cli', 'command-path.ps1'))
   await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:primary-runtime',
     () => preparePrimaryRuntime({ deferSmoke: values['defer-primary-runtime-smoke'] }))
 }

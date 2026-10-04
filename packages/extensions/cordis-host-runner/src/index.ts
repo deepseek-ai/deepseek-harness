@@ -93,6 +93,8 @@ declare module '@deepseek-ai/cordis' {
 export interface Config {
   /** Maximum synchronous VM evaluation time in milliseconds. */
   vmTimeoutMs?: number
+  /** Maximum wait for a valid Client inspect response in milliseconds. */
+  clientInspectTimeoutMs?: number
 }
 
 type ResolvedConfig = Required<Config>
@@ -131,6 +133,7 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
 
   static Config: z<Config> = z.object({
     vmTimeoutMs: z.number().min(1).default(5000),
+    clientInspectTimeoutMs: z.number().step(1).min(1).max(2_147_483_647).default(10_000),
   })
 
   private readonly rootCtx: Context
@@ -145,7 +148,7 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
     super(ctx, 'dynamicCordisRunner')
     this.rootCtx = ctx
     this.resolved = config as ResolvedConfig
-    this.inspectRegistry = new CordisInspectRegistryService(ctx)
+    this.inspectRegistry = new CordisInspectRegistryService(ctx, this.resolved.clientInspectTimeoutMs)
   }
 
   /**
@@ -506,11 +509,12 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
   }
 
   /**
-   * Claim one pending Client inspect query with its live result.
+   * Submit a Client inspect result or failure for a pending query.
    * @param agent - Session that owns the query.
    * @param requestId - exact pending query identity.
    * @param resolution - provider result or structured refusal.
-   * @returns whether this answer won the query.
+   * @returns acknowledgement with accepted true only for a valid success that settles the query;
+   * pending-query failures return { accepted: false } and retain only the first diagnostic.
    */
   @Remote('resolveInspectQuery')
   resolveInspectQuery(

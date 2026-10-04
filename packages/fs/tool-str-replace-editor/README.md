@@ -145,5 +145,3 @@ These limits define when the editor tool is a poor fit or needs special operatio
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The tool adapter owns no independent durable state; filesystem mutation relations stay with the provider and policy plugins.

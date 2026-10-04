@@ -6,13 +6,13 @@ import css from './ConversationRoot.module.css'
 
 /**
  * Renders the active Session view inside the resident scrollport and keeps
- * the input draft mirrored while blank Hero chrome is visible.
+ * the input draft persisted while blank Hero chrome is visible.
  * @param props - Strict Session input/store, view ledger, and render shares.
  * @returns the active view area, or null while the Session remains blank.
  */
 export function DefaultConversationViews({
-  view, useSession, useConversation, useConversationViews, useInput, inputActions, useStore, actions,
-  renderSlot, bindDraftMirror, openView, useInspectCall,
+  view, useSession, useConversation, useConversationViews, inputActions, useStore, actions,
+  renderSlot, bindDraftPersistence, openView, useInspectCall,
 }: ConversationSessionSlotProps) {
   const tabs = useConversationViews(value => value)
   const inspectCall = useInspectCall(value => value)
@@ -20,16 +20,13 @@ export function DefaultConversationViews({
   const active = resolveActiveView(tabs, selectedId)
   const session = useSession(s => s)
   const conversation = useConversation(s => s)
-  const inputState = useInput(s => s)
-  const storedDraft = useStore(s => s.draft)
   const viewRequest = useStore(s => s.viewRequest ?? null)
 
   useEffect(() => {
-    if (inputState.draft === '' && storedDraft !== '') inputActions.setDraft(storedDraft)
-    const unmirror = bindDraftMirror(actions.setDraft)
-    return () => { unmirror() }
-    // Mount-only (deps pinned to inputActions): later store writes come from
-    // the machine mirror, not this seed effect.
+    const unbindDraftPersistence = bindDraftPersistence(actions.setDraft)
+    inputActions.persistDraft()
+    return () => { unbindDraftPersistence() }
+    // The Session input owns content before this persistence writer is attached.
   }, [inputActions])
 
   if (session.blank && conversationPhase(session, conversation) === 'blank') return null

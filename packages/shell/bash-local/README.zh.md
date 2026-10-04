@@ -88,7 +88,6 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`LocalBashExecutor`、`Config`、设置段接线 |
-| — | 不发布运行时不变式伴生入口；除由所属 seam 强制执行的约定外，本包不公开独立的事件序列或可变数据关系。 |
 | `tests/executor.spec.ts` | 已演练的行为：预算、分类、后台句柄、归属 |
 | `tests/settings.spec.ts` | 设置段叠加在组合条目之上 |
 

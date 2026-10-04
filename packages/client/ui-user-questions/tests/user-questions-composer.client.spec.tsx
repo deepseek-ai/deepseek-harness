@@ -2,11 +2,13 @@
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { useSyncExternalStore } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { PendingQuestion, type QuestionComposerProps } from '../src/client/contract/slots.ts'
+import type { AskUserQuestionAnswerItem } from '@deepseek-ai/dsh-user-questions/types'
+import { createWaterfallRequest, PendingQuestion, type QuestionCardSnapshot, type QuestionComposerProps } from '../src/client/contract/slots.ts'
 import { createQuestionDraftStore } from '../src/client/draft-store.ts'
-import { QuestionComposer, parseRecommendedLabel } from '../src/client/QuestionComposer.tsx'
+import { QuestionComposer as Composer, parseRecommendedLabel } from '../src/client/QuestionComposer.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -107,7 +109,7 @@ const inputState: InputState = {
 /** Framework standard-kit stubs: the composer consumes the locale and draft-store seats;
  *  the composed props type mandates delivery of the rest (framework hooks are
  *  plain stubs per the client testing discipline). */
-const kitBase: Omit<QuestionComposerProps, 'matched' | 'useStore' | 'actions'> = {
+const kitBase: Omit<QuestionComposerProps, 'matched' | 'useStore' | 'useQuestionCard' | 'actions'> = {
   renderSlot: () => null,
   SessionProvider: ({ children }) => children,
   session: undefined,
@@ -128,6 +130,7 @@ const kitBase: Omit<QuestionComposerProps, 'matched' | 'useStore' | 'actions'> =
     captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
     insertText: () => false,
     setDraft: () => { throw new Error('unused') },
+    persistDraft: () => { throw new Error('unused') },
     addAttachments: () => { throw new Error('unused') },
     removeAttachment: () => { throw new Error('unused') },
     pruneAttachments: () => { throw new Error('unused') },
@@ -137,10 +140,22 @@ const kitBase: Omit<QuestionComposerProps, 'matched' | 'useStore' | 'actions'> =
   t: seatOver(zh, commonZh),
 }
 
-let kit: Omit<QuestionComposerProps, 'matched'>
+let kit: Omit<QuestionComposerProps, 'matched' | 'useQuestionCard'>
+let draftInstance: ReturnType<ReturnType<typeof createQuestionDraftStore>['create']>
+
+function QuestionComposer(props: Omit<QuestionComposerProps, 'useQuestionCard'>) {
+  const source = props.matched
+  const useQuestionCard = ((_key: string, selector?: (value: QuestionCardSnapshot | undefined) => unknown) => {
+    const value = useSyncExternalStore(source.subscribe, source.getSnapshot)
+    return selector === undefined ? value : selector(value)
+  }) as QuestionComposerProps['useQuestionCard']
+  return <Composer {...props} useQuestionCard={useQuestionCard} />
+}
 
 beforeEach(() => {
+  localStorage.clear()
   const instance = createQuestionDraftStore().create(SID)
+  draftInstance = instance
   const useStore: QuestionComposerProps['useStore'] = selector => useSyncExternalStore(
     listener => instance.subscribe(listener),
     () => selector(instance.getSnapshot()),
@@ -168,17 +183,65 @@ const QUESTIONS: PendingQuestion['questions'] = [
 ]
 
 /** Pending waterfall fixture with observable Client response methods. */
-function wait(questions: PendingQuestion['questions'] = QUESTIONS) {
+function wait(questions: PendingQuestion['questions'] = QUESTIONS, deadline?: number) {
   const carrier = new PendingQuestion(SID, questions)
+  const request = createWaterfallRequest(deadline, undefined, (channel) => { carrier.detachWaterfall(channel) })
+  carrier.attachWaterfall(request.channel)
   const answer = vi.spyOn(carrier, 'answer')
-  const cancel = vi.spyOn(carrier, 'cancel')
-  void carrier.result.catch(() => {})
-  return { carrier, answer, cancel }
+  const dismiss = vi.spyOn(carrier, 'dismiss')
+  void request.result.catch(() => {})
+  return { carrier, answer, dismiss }
 }
 
 const answerBatch = (answers: object[]) => ({ answers })
 
 describe('QuestionComposer', () => {
+  it('a blocking request shows no wait status before or after the first edit, exactly as before timed questions', () => {
+    // The blocking card never carried a countdown, so there is nothing for a
+    // held or frozen label to describe; the header keeps only the question and its two controls.
+    const { carrier } = wait()
+    const view = render(<QuestionComposer matched={carrier} {...kit} />)
+    const status = () => view.container.querySelector('[class*="waitStatus"]')
+
+    expect(status()).toBeNull()
+    expect(screen.queryByText('会一直等你回答')).toBeNull()
+    fireEvent.click(screen.getByRole('radio', { name: /工程落地型/ }))
+    expect(carrier.snapshot()).toMatchObject({ waitState: 'editing', countdown: undefined })
+    expect(status()).toBeNull()
+    expect(screen.queryByText('会一直等你回答')).toBeNull()
+    expect(screen.queryByRole('button', { name: '慢慢回答' })).toBeNull()
+    expect(screen.getByRole('button', { name: '放弃整组问题' })).toBeTruthy()
+  })
+
+  it('keeps a recommended default selected without pausing a timed wait', () => {
+    const { carrier } = wait(QUESTIONS, Date.now() + 30_000)
+    try {
+      const view = render(<QuestionComposer matched={carrier} {...kit} />)
+      expect(screen.getByRole('radio', { name: /工程落地型/ }).getAttribute('aria-checked')).toBe('true')
+      expect(carrier.snapshot().countdown?.running).toBe(true)
+
+      fireEvent.click(screen.getByLabelText('下一题'))
+      view.unmount()
+      render(<QuestionComposer matched={carrier} {...kit} />)
+      expect(carrier.snapshot().countdown?.running).toBe(true)
+      expect(screen.getByText('2 / 3')).toBeTruthy()
+    } finally {
+      carrier.timeout()
+    }
+  })
+
+  it('treats Enter on an unselected option as submit, without selecting it', () => {
+    const { carrier, answer } = wait([{
+      id: 'mode', question: 'Which mode?', options: [{ label: 'Alpha' }, { label: 'Beta' }],
+    }])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+    const option = screen.getByRole('radio', { name: 'Alpha' })
+    expect(fireEvent.keyDown(option, { key: 'Enter' })).toBe(false)
+    expect(option.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('status').textContent).toBe('请先完成这道问题。')
+    expect(answer).not.toHaveBeenCalled()
+  })
+
   it('collects single, custom, and multi-select answers before one batch submit', () => {
     const { carrier, answer } = wait()
     render(<QuestionComposer matched={carrier} {...kit} />)
@@ -187,13 +250,12 @@ describe('QuestionComposer', () => {
     expect(screen.getByText('1 / 3')).toBeTruthy()
     expect(screen.getByText('推荐')).toBeTruthy()
     expect(screen.getByText('工程落地型')).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /工程落地型/ }).getAttribute('aria-checked')).toBe('true')
     const detail = screen.getByText('按当前空缺岗位的优先级选择。')
     const scrollRegion = detail.closest('[data-question-scroll]')
     expect(scrollRegion).toBeTruthy()
     expect(scrollRegion?.contains(screen.getByRole('radio', { name: /工程落地型/ }))).toBe(true)
     expect(scrollRegion?.contains(screen.getByText('下一题').closest('button'))).toBe(false)
-    fireEvent.keyDown(screen.getByRole('radio', { name: /工程落地型/ }), { key: 'Enter' })
-    expect(answer).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('radio', { name: /工程落地型/ }))
 
     expect(screen.getByText('2 / 3')).toBeTruthy()
@@ -247,7 +309,8 @@ describe('QuestionComposer', () => {
     const { carrier, answer } = wait()
     render(<QuestionComposer matched={carrier} {...kit} />)
 
-    expect((screen.getByText('下一题').closest('button') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('radio', { name: /工程落地型/ }).getAttribute('aria-checked')).toBe('true')
+    expect((screen.getByText('下一题').closest('button') as HTMLButtonElement).disabled).toBe(false)
     fireEvent.click(screen.getByRole('radio', { name: '研究潜力型' }))
     expect(screen.getByText('2 / 3')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '跳过' }))
@@ -341,8 +404,8 @@ describe('QuestionComposer', () => {
   })
 
   it('surfaces cancellation failures and re-arms the controls', async () => {
-    const { carrier, cancel } = wait()
-    cancel
+    const { carrier, dismiss } = wait()
+    dismiss
       .mockRejectedValueOnce(new Error('第一次取消失败'))
       .mockRejectedValueOnce(new Error('第二次取消失败'))
     render(<QuestionComposer matched={carrier} {...kit} />)
@@ -413,31 +476,35 @@ describe('QuestionComposer', () => {
 })
 
 describe('PendingQuestion domain face', () => {
-  it('resolves the waterfall result with the answer batch and settles once', async () => {
-    const question = new PendingQuestion(SID, QUESTIONS)
-    const batch = { answers: [{ id: 'mode', selected: ['Fast'] }] }
-    await expect(question.answer(batch)).resolves.toBeUndefined()
-    await expect(question.result).resolves.toBe(batch)
-    await expect(question.answer(batch)).rejects.toThrow(/already settled/)
-  })
-
-  it('rejects the waterfall result with ASK_CANCELLED and settles once', async () => {
-    const question = new PendingQuestion(SID, QUESTIONS)
-    const result = question.result.catch((error: unknown) => error)
-    await expect(question.cancel()).resolves.toBeUndefined()
-    await expect(result).resolves.toMatchObject({
-      name: 'UserQuestionError',
-      code: 'ASK_CANCELLED',
-      message: 'the user cancelled ask_user_question',
-    })
-    await expect(question.cancel()).rejects.toThrow(/already settled/)
-  })
-
   it('exposes its Client render identity and scoped request values', () => {
     const question = new PendingQuestion(SID, QUESTIONS)
-    expect(question.key).toMatch(/^question:\d+$/)
+    expect(question.key).toMatch(/^question:[0-9a-f]{32}:\d+$/)
+    expect(new PendingQuestion(SID, QUESTIONS).key).not.toBe(question.key)
     expect(question.sessionId).toBe(SID)
     expect(question.questions).toBe(QUESTIONS)
+  })
+
+  it('does not restore an old unnamed request draft into a new card', () => {
+    draftInstance.actions.replace('question:1', {
+      index: 7,
+      drafts: [{ selected: ['stale'], custom: '', skipped: false }],
+    })
+    const question = new PendingQuestion(SID, QUESTIONS)
+    render(<QuestionComposer matched={question} {...kit} />)
+
+    expect(question.key).not.toBe('question:1')
+    expect(screen.getByText('1 / 3')).toBeTruthy()
+    expect(screen.queryByText('stale')).toBeNull()
+  })
+
+  it('ignores persisted progress that no longer matches the question batch', () => {
+    const carrier = new PendingQuestion(SID, QUESTIONS, ToolCallId('stale-progress'))
+    draftInstance.actions.replace(carrier.key, { index: 7, drafts: [] })
+
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    expect(screen.getByRole('heading', { name: QUESTIONS[0]!.question })).toBeTruthy()
+    expect(screen.getByText(`1 / ${QUESTIONS.length}`)).toBeTruthy()
   })
 
   it('collapses the card to the header strip and expands it back', () => {
@@ -486,5 +553,384 @@ describe('parseRecommendedLabel', () => {
     expect(parseRecommendedLabel('稳妥（推荐）')).toEqual({ label: '稳妥', recommended: true })
     expect(parseRecommendedLabel('稳妥 (推荐)')).toEqual({ label: '稳妥', recommended: true })
     expect(parseRecommendedLabel('Plain')).toEqual({ label: 'Plain', recommended: false })
+  })
+})
+
+const TIMED: PendingQuestion['questions'] = [{
+  id: 'scope', question: '选择范围', options: [{ label: '仅工具' }, { label: '全部' }],
+}]
+
+/** A timed card as the Remote Event listener builds it: waterfall channel with a Client-decided deadline. */
+function timedCard(deadline: number, callId = ToolCallId('ask-timed')) {
+  const carrier = new PendingQuestion(SID, TIMED, callId)
+  const request = createWaterfallRequest(deadline, undefined, (channel) => { carrier.detachWaterfall(channel) })
+  carrier.attachWaterfall(request.channel)
+  void request.result.catch(() => {})
+  return { carrier, request }
+}
+
+describe('timed card', () => {
+  it.each([true, false])('does not autofocus before claiming and respects manual focus until readiness: %s', async (stillFocused) => {
+    vi.useFakeTimers()
+    const carrier = new PendingQuestion(SID, [{ id: 'free', question: '补充说明' }], ToolCallId('claiming'))
+    const request = createWaterfallRequest(Date.now() + 2_000, undefined,
+      (channel) => { carrier.detachWaterfall(channel) })
+    try {
+      render(<QuestionComposer matched={carrier} {...kit} />)
+      const field = screen.getByPlaceholderText(zh['custom.placeholder'])
+      expect(document.activeElement).not.toBe(field)
+
+      fireEvent.focus(field)
+      if (!stillFocused) fireEvent.blur(field, { relatedTarget: document.body })
+      act(() => { carrier.attachWaterfall(request.channel) })
+      expect(carrier.snapshot().countdown).toEqual({ remainingMs: 2_000, running: !stillFocused })
+      if (stillFocused) {
+        await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+        expect(carrier.snapshot().channel).toBe('waterfall')
+        fireEvent.blur(field, { relatedTarget: document.body })
+        expect(carrier.snapshot().countdown).toEqual({ remainingMs: 2_000, running: true })
+      }
+    } finally {
+      act(() => { request.channel.resolve({ answers: [{ id: 'free', selected: [] }] }) })
+      await request.result
+      cleanup()
+      carrier.close()
+      vi.useRealTimers()
+    }
+  })
+
+  it('pauses a pristine countdown while the answer surface has focus and resumes its remainder on blur', async () => {
+    vi.useFakeTimers()
+    try {
+      const { carrier, request } = timedCard(Date.now() + 2_000)
+      let settled = false
+      void request.result.then(() => { settled = true }, () => { settled = true })
+      render(<QuestionComposer matched={carrier} {...kit} />)
+      const option = screen.getByRole('radio', { name: '仅工具' })
+
+      fireEvent.focus(option)
+      expect(carrier.snapshot()).toMatchObject({ waitState: 'focused', countdown: { running: false } })
+      expect(screen.getByText(/已暂停/)).toBeTruthy()
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+      expect(settled).toBe(false)
+
+      fireEvent.blur(option, { relatedTarget: document.body })
+      expect(carrier.snapshot()).toMatchObject({ waitState: 'counting' })
+      await act(async () => { await vi.advanceTimersByTimeAsync(2_100) })
+      expect(settled).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the first edited draft indefinite and restores that choice after remount', async () => {
+    vi.useFakeTimers()
+    try {
+      const first = timedCard(Date.now() + 1_000)
+      let firstSettled = false
+      void first.request.result.then(() => { firstSettled = true }, () => { firstSettled = true })
+      const view = render(<QuestionComposer matched={first.carrier} {...kit} />)
+
+      fireEvent.click(screen.getByRole('radio', { name: '仅工具' }))
+      expect(first.carrier.snapshot()).toMatchObject({ waitState: 'editing', countdown: { running: false } })
+      expect(draftInstance.getSnapshot().progressByRequest[first.carrier.key]?.wait).toBe('editing')
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+      expect(firstSettled).toBe(false)
+
+      view.unmount()
+      const restored = timedCard(Date.now() + 1_000)
+      let restoredSettled = false
+      void restored.request.result.then(() => { restoredSettled = true }, () => { restoredSettled = true })
+      render(<QuestionComposer matched={restored.carrier} {...kit} />)
+      await act(async () => { await Promise.resolve() })
+      expect(restored.carrier.snapshot()).toMatchObject({ waitState: 'editing', countdown: { running: false } })
+      expect(screen.getByText('会一直等你回答')).toBeTruthy()
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+      expect(restoredSettled).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('counts down locally, settles the waterfall with ASK_TIMED_OUT at zero, and waits for the projection', async () => {
+    vi.useFakeTimers()
+    try {
+      const { carrier, request } = timedCard(Date.now() + 1_500)
+      const rejection = expect(request.result).rejects.toMatchObject({ name: 'UserQuestionError', code: 'ASK_TIMED_OUT' })
+      render(<QuestionComposer matched={carrier} {...kit} />)
+      expect(screen.getByText(/秒后继续工作/)).toBeTruthy()
+      expect(screen.getByRole('button', { name: '慢慢回答' })).toBeTruthy()
+      await act(async () => { await vi.advanceTimersByTimeAsync(2_100) })
+
+      await rejection
+      expect(carrier.snapshot()).toEqual({
+        state: 'open', waitState: 'counting', countdown: undefined,
+        channel: 'none', closed: false,
+      })
+      expect(screen.queryByText(/秒后继续工作/)).toBeNull()
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: '提交' }).disabled).toBe(true)
+
+      const answer = vi.fn(async () => true)
+      act(() => {
+        carrier.attachRpc({ answer })
+        carrier.setState('continued')
+      })
+      expect(screen.getByText('已继续工作，仍可回答')).toBeTruthy()
+      fireEvent.click(screen.getByRole('radio', { name: '仅工具' }))
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: '提交' }).disabled).toBe(false)
+      fireEvent.click(screen.getByRole('button', { name: '提交' }))
+      await act(async () => { await Promise.resolve() })
+      expect(answer).toHaveBeenCalledWith({ answers: [{ id: 'scope', selected: ['仅工具'] }] })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets the user cancel this countdown and keep the request blocking', async () => {
+    vi.useFakeTimers()
+    try {
+      const { carrier, request } = timedCard(Date.now() + 1_000)
+      let settled = false
+      void request.result.then(() => { settled = true }, () => { settled = true })
+      render(<QuestionComposer matched={carrier} {...kit} />)
+
+      fireEvent.click(screen.getByRole('button', { name: '慢慢回答' }))
+
+      expect(screen.queryByText(/秒后继续工作/)).toBeNull()
+      expect(screen.queryByRole('button', { name: '慢慢回答' })).toBeNull()
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+      expect(settled).toBe(false)
+      expect(carrier.snapshot()).toMatchObject({ channel: 'waterfall', waitState: 'waiting' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-arms the controls with a resubmit hint when a sent answer is dropped', async () => {
+    const { carrier, request } = timedCard(Date.now() + 60_000)
+    render(<QuestionComposer matched={carrier} {...kit} />)
+    fireEvent.click(screen.getByRole('radio', { name: '仅工具' }))
+    fireEvent.click(screen.getByRole('button', { name: '提交' }))
+
+    await expect(request.result).resolves.toEqual({ answers: [{ id: 'scope', selected: ['仅工具'] }] })
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在提交…' }).disabled).toBe(true)
+    expect(draftInstance.getSnapshot().progressByRequest[carrier.key]).toBeDefined()
+
+    act(() => { carrier.setState('continued') })
+
+    expect(screen.getByText('回答未送达，工作已继续，请再提交一次。')).toBeTruthy()
+    expect(screen.getByRole('radio', { name: '仅工具' }).getAttribute('aria-checked')).toBe('true')
+    const answer = vi.fn(async () => true)
+    act(() => { carrier.attachRpc({ answer }) })
+    fireEvent.click(screen.getByRole('button', { name: '提交' }))
+    await vi.waitFor(() => { expect(answer).toHaveBeenCalledWith({ answers: [{ id: 'scope', selected: ['仅工具'] }] }) })
+  })
+
+  it('steers an RPC reply, hides the panel, and rejects a duplicate before discard', async () => {
+    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-retry'))
+    const answer = vi.fn(async () => true)
+    const hide = vi.fn()
+    answer.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('a reply is already queued for this question'))
+    carrier.attachRpc({ answer })
+    carrier.attachSeat({ hide })
+    carrier.setState('continued')
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    fireEvent.click(screen.getByRole('radio', { name: '仅工具' }))
+    fireEvent.click(screen.getByRole('button', { name: '提交' }))
+    await vi.waitFor(() => { expect(hide).toHaveBeenCalledOnce() })
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '提交' }).disabled).toBe(false)
+    expect(screen.queryByText(zh['status.sent'])).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '提交' }))
+    expect(await screen.findByText('a reply is already queued for this question')).toBeTruthy()
+    expect(answer).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByRole('button', { name: '提交' }))
+    await vi.waitFor(() => { expect(answer).toHaveBeenCalledTimes(3) })
+    await vi.waitFor(() => {
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: '提交' }).disabled).toBe(false)
+    })
+  })
+
+  it('unlocks an older reply when the rendered channel lags its continued state', async () => {
+    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-stale-channel'))
+    const hide = vi.fn()
+    carrier.attachRpc({ answer: vi.fn(async () => true) })
+    carrier.attachSeat({ hide })
+    carrier.setState('continued')
+    const rendered = { ...carrier.snapshot(), state: 'open' as const, channel: 'waterfall' as const }
+    const useQuestionCard = ((_key: string, selector?: (value: QuestionCardSnapshot | undefined) => unknown) =>
+      selector === undefined ? rendered : selector(rendered)) as QuestionComposerProps['useQuestionCard']
+    render(<Composer matched={carrier} {...kit} useQuestionCard={useQuestionCard} />)
+
+    fireEvent.click(screen.getByRole('radio', { name: '仅工具' }))
+    fireEvent.click(screen.getByRole('button', { name: '提交' }))
+
+    await vi.waitFor(() => { expect(hide).toHaveBeenCalledOnce() })
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '提交' }).disabled).toBe(false)
+  })
+
+  it('closing a continued panel only withdraws it from the seat and sends nothing', async () => {
+    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-continued'))
+    const answer = vi.fn(async () => true)
+    const hide = vi.fn()
+    carrier.attachRpc({ answer })
+    carrier.attachSeat({ hide })
+    carrier.setState('continued')
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    expect(screen.getByText('已继续工作，仍可回答')).toBeTruthy()
+    expect(screen.queryByText(/秒后继续工作/)).toBeNull()
+    // The close button names the reopen path, not a dismissal of the question.
+    expect(screen.queryByLabelText('放弃整组问题')).toBeNull()
+    fireEvent.click(screen.getByLabelText('收起问题面板，可从工具调用重新打开'))
+
+    await vi.waitFor(() => { expect(hide).toHaveBeenCalledOnce() })
+    expect(answer).not.toHaveBeenCalled()
+    expect(carrier.snapshot()).toMatchObject({ state: 'continued', channel: 'rpc', closed: false })
+  })
+
+  it('closing a card-keyed panel with no channel left still just withdraws it', () => {
+    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-gap'))
+    const hide = vi.fn()
+    carrier.attachSeat({ hide })
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    fireEvent.click(screen.getByLabelText('收起问题面板，可从工具调用重新打开'))
+
+    expect(hide).toHaveBeenCalledOnce()
+    expect(screen.queryByText('当前无法提交，请稍候再试。')).toBeNull()
+  })
+
+  it('reports an unavailable channel instead of cancelling into the gap', () => {
+    // A request the Host never named: closing it is the cancellation, so with
+    // no channel to carry the rejection there is nothing to do but say so.
+    const carrier = new PendingQuestion(SID, TIMED)
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    fireEvent.click(screen.getByLabelText('放弃整组问题'))
+
+    expect(screen.getByText('当前无法提交，请稍候再试。')).toBeTruthy()
+  })
+
+  it('prunes drafts no card owns on mount and clears its own draft when the card closes', () => {
+    kit.actions.replace('question:stale', { index: 0, drafts: [{ selected: [], custom: 'old', skipped: false }] })
+    const { carrier } = timedCard(Date.now() + 60_000)
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    expect(draftInstance.getSnapshot().progressByRequest['question:stale']).toBeUndefined()
+    fireEvent.click(screen.getByRole('radio', { name: '全部' }))
+    expect(draftInstance.getSnapshot().progressByRequest[carrier.key]?.drafts[0]?.selected).toEqual(['全部'])
+
+    act(() => { carrier.close() })
+
+    expect(draftInstance.getSnapshot().progressByRequest[carrier.key]).toBeUndefined()
+  })
+})
+
+const REVIEWED_CALL = 'ask-answered'
+/** One settled call's answers in record order, which is not the question order. */
+const RECORDED: readonly AskUserQuestionAnswerItem[] = [
+  { id: 'signals', selected: [] },
+  { id: 'profile', selected: ['工程落地型 (Recommended)'] },
+  { id: 'detail', selected: [], custom: '要能独立排查线上问题' },
+]
+/** A record whose multi-select answer used the custom row beside a checked option. */
+const RECORDED_CUSTOM: readonly AskUserQuestionAnswerItem[] = [
+  { id: 'profile', selected: ['研究潜力型'] },
+  { id: 'detail', selected: [], custom: '要能独立排查线上问题' },
+  { id: 'signals', selected: ['系统设计'], custom: '沟通能力' },
+]
+
+/** A read-only card as the panel provider builds it from a settled call's transcript record. */
+function reviewCard(review: readonly AskUserQuestionAnswerItem[] = RECORDED) {
+  const carrier = new PendingQuestion(SID, QUESTIONS, ToolCallId(REVIEWED_CALL), undefined, review)
+  const hide = vi.fn()
+  carrier.attachSeat({ hide })
+  return { carrier, hide }
+}
+
+describe('review card', () => {
+  it('walks a settled call record with every answer surface frozen', () => {
+    const { carrier } = reviewCard()
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    expect(screen.getByText(zh['review.status'])).toBeTruthy()
+    // The recorded selection is paired by question id, not by record order.
+    const chosen = screen.getByRole<HTMLButtonElement>('radio', { name: '工程落地型' })
+    expect(chosen.getAttribute('aria-checked')).toBe('true')
+    expect(chosen.disabled).toBe(true)
+    // Nothing is left to send, and the unused free-text field would read as
+    // somewhere to type.
+    expect(screen.queryByRole('button', { name: '跳过' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '提交' })).toBeNull()
+    expect(screen.queryByPlaceholderText('输入你的答案')).toBeNull()
+
+    fireEvent.click(screen.getByLabelText('下一题'))
+
+    expect(screen.getByText('2 / 3')).toBeTruthy()
+    const optionless = screen.getByPlaceholderText<HTMLTextAreaElement>('输入你的答案')
+    expect(optionless.value).toBe('要能独立排查线上问题')
+    expect(optionless.disabled).toBe(true)
+    expect(document.activeElement).not.toBe(optionless)
+
+    fireEvent.click(screen.getByLabelText('下一题'))
+
+    expect(screen.getByText('3 / 3')).toBeTruthy()
+    expect(screen.getByText(zh['review.skipped'])).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: '系统设计' }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.queryByPlaceholderText('输入你的答案')).toBeNull()
+  })
+
+  it('reads the record back instead of a draft the live card left under the same key', () => {
+    kit.actions.replace(PendingQuestion.keyOf(SID, REVIEWED_CALL), {
+      index: 2,
+      drafts: [
+        { selected: [], custom: '没提交的草稿', skipped: false },
+        { selected: [], custom: '', skipped: false },
+        { selected: ['代码质量'], custom: '', skipped: false },
+      ],
+    })
+    const { carrier } = reviewCard(RECORDED_CUSTOM)
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    // The page the live card was on is restored; its half-typed answers are not.
+    expect(screen.getByText('3 / 3')).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: '系统设计' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('checkbox', { name: '代码质量' }).getAttribute('aria-checked')).toBe('false')
+    const custom = screen.getByPlaceholderText<HTMLTextAreaElement>('输入你的答案')
+    expect(custom.value).toBe('沟通能力')
+    expect(custom.disabled).toBe(true)
+
+    fireEvent.click(screen.getByLabelText('上一题'))
+    fireEvent.click(screen.getByLabelText('上一题'))
+
+    expect(screen.getByRole('radio', { name: '研究潜力型' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.queryByDisplayValue('没提交的草稿')).toBeNull()
+  })
+
+  it('closing a read-only panel withdraws it and sends nothing', () => {
+    const { carrier, hide } = reviewCard()
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    // The card is keyed by its tool call, so closing names the reopen path.
+    expect(screen.queryByLabelText(zh['nav.cancel'])).toBeNull()
+    fireEvent.click(screen.getByLabelText(zh['nav.close']))
+
+    expect(hide).toHaveBeenCalledOnce()
+    expect(carrier.snapshot()).toEqual({
+      state: 'open', waitState: 'counting', countdown: undefined,
+      channel: 'none', closed: false,
+    })
+  })
+
+  it('renders the read-only copy through the English dictionary', () => {
+    const { carrier } = reviewCard()
+    render(<QuestionComposer matched={carrier} {...kit} t={seatOver(en, commonEn)} />)
+
+    expect(screen.getByText(en['review.status'])).toBeTruthy()
+    fireEvent.click(screen.getByLabelText(en['nav.next']))
+    fireEvent.click(screen.getByLabelText(en['nav.next']))
+    expect(screen.getByText(en['review.skipped'])).toBeTruthy()
   })
 })

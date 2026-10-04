@@ -147,6 +147,7 @@ describe('ui-plugin-manager browser plugin', () => {
     expect(icon.locale).toBe(NS)
     expect(resolveSlotLabel(icon.options.label)).toBe('插件')
     // The page declares the slots a plugin's configuration arrives through, and binds their projection beside its state.
+    expect(b.slots.spec('plugins.add.actions')).toMatchObject({ kind: 'list', scope: 'root' })
     expect(b.slots.spec('plugins.item')).toMatchObject({ kind: 'list', scope: 'root' })
     expect(b.slots.spec('plugins.bundle.config')).toMatchObject({ kind: 'keyed', scope: 'root' })
     expect(b.slots.spec('plugins.row.config')).toMatchObject({ kind: 'keyed', scope: 'root' })

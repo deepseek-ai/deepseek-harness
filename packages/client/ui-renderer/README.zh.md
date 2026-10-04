@@ -69,7 +69,7 @@ React、React DOM、Cordis、ui-slots 与 ui-primitives 通过 Web 外壳的静�
 - [ui-slots](../ui-slots/README.zh.md)——本渲染器绑定到 React 的 slot 注册表纯核心。
 - [web](../web/README.zh.md)——加载名册并调用 `mount` 的外壳。
 - [ui-session](../ui-session/README.zh.md)——提供本渲染器所绑定标准会话 source 与钩子的适配器。
-- [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——加载链、对象层与分层红线。
+- [Web 客户端架构](../../../docs/subsystems/web-client.zh.md)——加载链、对象层与分层红线。
 - [slot 系统标准](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.zh.md)——权威组合模型。
 - [Component Factory](../../../.agents/notes/implemented/architecture/2026-09-10-component-factories-and-local-slots.zh.md)——可复用 definitions、局部 Component 选择与 occurrence 生命周期。
 

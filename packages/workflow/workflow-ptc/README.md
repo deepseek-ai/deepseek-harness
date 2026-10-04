@@ -85,7 +85,6 @@ One self-contained guest program runs the existing VM and workflow helpers insid
 | [`src/runtime.ts`](src/runtime.ts) | VM evaluation, helper contracts and combinators |
 | [`src/realm.ts`](src/realm.ts) | Lossless-JSON materialization across VM realms |
 | [`src/meta.ts`](src/meta.ts) | Metadata validation and normalization |
-| — | No runtime invariant companion is published; the workflow service owns event pairing and PTC owns managed-process observations. |
 
 ### Values and child ownership
 

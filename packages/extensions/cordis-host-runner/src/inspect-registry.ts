@@ -3,6 +3,7 @@
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-api-gateway'
 import { snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { assertSupportedJsonSchema, validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import type { JsonSchemaNode } from '@deepseek-ai/dsh-tools'
@@ -31,6 +32,7 @@ export interface HostCordisInspectProviderRegistration {
 interface PendingClientQuery {
   request: CordisInspectQueryRequest
   method: CordisInspectMethodManifest
+  failure?: string
   settle(resolution: CordisInspectQueryResolution): void
 }
 
@@ -48,9 +50,18 @@ export class CordisInspectRegistryService extends Service {
   private clientManifest: readonly CordisInspectProviderManifest[] | undefined
   private nextRequest = 1
 
-  /** Register the process-global Host registry. */
-  constructor(ctx: Context) {
+  /**
+   * Register the process-global Host registry.
+   * @param ctx - owning Host context.
+   * @param clientQueryTimeoutMs - maximum wait for a valid Client response, in milliseconds.
+   */
+  constructor(ctx: Context, private readonly clientQueryTimeoutMs: number) {
     super(ctx, 'cordisInspect')
+    ctx.effect(() => () => {
+      for (const pending of this.pending.values()) {
+        pending.settle({ ok: false, reason: 'cancelled', message: 'Client inspect registry was disposed' })
+      }
+    }, 'cordis-inspect: pending queries')
   }
 
   /**
@@ -102,7 +113,8 @@ export class CordisInspectRegistryService extends Service {
    * @param input - optional lossless JSON input.
    * @param agent - requesting Agent and scope.
    * @param signal - tool-call cancellation.
-   * @returns provider JSON data.
+   * @returns provider JSON data; Client queries fail fast when Gateway has no live Client
+   * and retain only the first observed failure diagnostic for timeout reporting.
    */
   async query(
     platform: CordisInspectPlatform,
@@ -130,7 +142,7 @@ export class CordisInspectRegistryService extends Service {
    * @param agent - Agent whose Session owns the query.
    * @param requestId - Pending Client query identity.
    * @param resolution - Client provider result or failure.
-   * @returns whether this response settled the still-pending query.
+   * @returns acknowledgement with accepted true only for a success that settles the query; only the first failure diagnostic is retained.
    */
   resolveClientQuery(
     agent: Agent,
@@ -139,18 +151,21 @@ export class CordisInspectRegistryService extends Service {
   ): CordisInspectResolveAck {
     const pending = this.pending.get(requestId)
     if (pending === undefined || pending.request.agentId !== agent.id) return { accepted: false }
-    if (!resolution.ok) return { accepted: false }
+    // A failed page must not prevent another page from supplying a valid result.
+    if (!resolution.ok) {
+      pending.failure ??= `${resolution.reason}: ${resolution.message}`
+      return { accepted: false }
+    }
     try {
       resolution = {
         ok: true,
         data: validateOutput('Client', pending.request.provider, pending.method, resolution.data),
       }
-    } catch {
+    } catch (error) {
+      pending.failure ??= error instanceof Error ? error.message : String(error)
       return { accepted: false }
     }
-    this.pending.delete(requestId)
     pending.settle(resolution)
-    this.ctx.emit('cordis/inspect-query-resolved', { requestId })
     return { accepted: true }
   }
 
@@ -166,6 +181,10 @@ export class CordisInspectRegistryService extends Service {
     const method = findMethod(provider, methodName)
     validateInput('Client', providerId, method, input)
     signal.throwIfAborted()
+    const gateway = this.ctx.get('typertGateway')
+    if (gateway !== undefined && !gateway.hasLiveClient()) {
+      throw new Error(`Client inspect query ${providerId}.${methodName} has no connected Harness page. Open or reconnect the Harness page, then retry.`)
+    }
     const requestId = `inspect-${this.nextRequest++}` as CordisInspectRequestId
     const request: CordisInspectQueryRequest = {
       requestId,
@@ -175,24 +194,50 @@ export class CordisInspectRegistryService extends Service {
       ...input === undefined ? {} : { input },
     }
     const result = new Promise<CordisInspectQueryResolution>((resolve) => {
-      this.pending.set(requestId, { request, method, settle: resolve })
+      this.pending.set(requestId, {
+        request,
+        method,
+        settle: (resolution) => {
+          this.pending.delete(requestId)
+          resolve(resolution)
+          try {
+            this.ctx.emit('cordis/inspect-query-resolved', { requestId })
+          } catch (error) {
+            console.error('[cordis-host-runner] notifying Client inspect completion failed:', error)
+          }
+        },
+      })
     })
     const onAbort = (): void => {
+      this.pending.get(requestId)?.settle({
+        ok: false,
+        reason: 'cancelled',
+        message: `Client inspect query ${providerId}.${methodName} was cancelled`,
+      })
+    }
+    const timer = setTimeout(() => {
       const pending = this.pending.get(requestId)
       if (pending === undefined) return
-      this.pending.delete(requestId)
-      pending.settle({ ok: false, reason: 'cancelled', message: `Client inspect query ${providerId}.${methodName} was cancelled` })
-      this.ctx.emit('cordis/inspect-query-resolved', { requestId })
-    }
+      const detail = pending.failure === undefined
+        ? 'Open or reconnect the Harness page, then retry.'
+        : `Client failure: ${pending.failure}`
+      pending.settle({
+        ok: false,
+        reason: 'provider-error',
+        message: `Client inspect query ${providerId}.${methodName} timed out after ${this.clientQueryTimeoutMs}ms. ${detail}`,
+      })
+    }, this.clientQueryTimeoutMs)
     signal.addEventListener('abort', onAbort, { once: true })
-    if (signal.aborted) onAbort()
-    else this.ctx.emit('cordis/inspect-query', request)
     try {
+      if (signal.aborted) onAbort()
+      else this.ctx.emit('cordis/inspect-query', request)
       const resolution = await result
       if (!resolution.ok) throw new Error(`${providerId}.${methodName}: ${resolution.message}`)
       return resolution.data
     } finally {
+      clearTimeout(timer)
       signal.removeEventListener('abort', onAbort)
+      this.pending.delete(requestId)
     }
   }
 }

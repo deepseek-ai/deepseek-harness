@@ -3,35 +3,38 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/inspector/README.md
 /:
-  en: ff4e1ec5ccd5d0b3
-  zh: d29383843e3decc8
+  en: b5b7ccdfa1cc2907
+  zh: d575593a7efa37fd
 /deepseek-ai-dsh-experimental-inspector:
   en: 1060bee3ef37134d
   zh: 7a7b0096714f4279
 /deepseek-ai-dsh-experimental-inspector/summary:
-  en: 65ed8a4c21915cc0
-  zh: dcb1ae527e6bfc8c
+  en: e2a633d32f00aa99
+  zh: 1d48f445800e3a35
 /deepseek-ai-dsh-experimental-inspector/table-of-contents:
-  en: 2650c2b268bf6dff
-  zh: 43a08863d2c75ad1
+  en: 331f844c32631a82
+  zh: a9bc365f7d61d9ed
+/deepseek-ai-dsh-experimental-inspector/use-this-package:
+  en: 426fcb436dd12d08
+  zh: 1eb502409031216e
 /deepseek-ai-dsh-experimental-inspector/runtime-layout:
-  en: a713d2910acf48c9
-  zh: 152dcdba78e73115
+  en: 30dad7b7fe3b3465
+  zh: 2bda395981802f59
 /deepseek-ai-dsh-experimental-inspector/configuration:
-  en: 95f1c9c4ea6ba8b8
-  zh: 16b56e2dd8c7408a
+  en: d094842893700446
+  zh: 7a7f880ba795948f
 /deepseek-ai-dsh-experimental-inspector/observation-api:
   en: d32f994e6c9d0c4a
   zh: ac2f35f5799aeae0
 /deepseek-ai-dsh-experimental-inspector/cordis-tree-inspection:
-  en: 9abe1a8cd52386fb
-  zh: a5e96ec22a503153
+  en: d2a470558b97acbd
+  zh: 2a7d0ce6951b7b52
 /deepseek-ai-dsh-experimental-inspector/host-fetch-capture:
   en: 187859f65acc45d7
   zh: 606e93905c8275e6
 /deepseek-ai-dsh-experimental-inspector/security:
-  en: 2372c96aba1ce7e6
-  zh: 823ceaa99cfb1f6a
+  en: dc390db1bce00de1
+  zh: c4257690ffcabebc
 /deepseek-ai-dsh-experimental-inspector/model-experience:
   en: 6ac8fb2f45b3a97c
   zh: 9162ffb1a133e11b
@@ -39,8 +42,8 @@
   en: ca75c51c89c2c9b0
   zh: 64715dc7e6d02f71
 /deepseek-ai-dsh-experimental-inspector/known-limitations-and-deferred-work:
-  en: a35e1559aff5e7aa
-  zh: fbe20422dbe4a0f6
+  en: 74e9eb329f240bb7
+  zh: 25612a9b993582c0
 /deepseek-ai-dsh-experimental-inspector/known-limitations-and-deferred-work/dev-note:
-  en: 59a59a4788c80163
-  zh: db23a6b9dc0880ba
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

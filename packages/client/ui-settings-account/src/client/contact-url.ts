@@ -1,4 +1,4 @@
-/** Feishu questionnaire context: Harness build, locale, screen and reported environment. */
+/** Feishu questionnaire context: Harness build and reported environment. */
 import type { AccountUserId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { ContactConfig } from '../contact-config.ts'
 
@@ -11,7 +11,6 @@ import type { ContactConfig } from '../contact-config.ts'
 export function contactUrl(config: ContactConfig, context: {
   uid: AccountUserId | null | undefined
   version: string | undefined
-  locale: string
   deviceInfo: string
   width: number
   height: number
@@ -21,10 +20,11 @@ export function contactUrl(config: ContactConfig, context: {
   const ratio = Number.isFinite(context.pixelRatio) ? context.pixelRatio : 1
   const width = Math.round(context.width * ratio)
   const height = Math.round(context.height * ratio)
+  const deviceInfo = [context.deviceInfo]
+  if (width > 0 && height > 0) deviceInfo.push(`screen_resolution=${width}x${height}`)
   const fields = {
     uid: context.uid, source: config.contactSource, harness_version: context.version,
-    os_version: undefined, device_brand: undefined, device_info: context.deviceInfo,
-    app_locale: context.locale, screen_resolution: width > 0 && height > 0 ? `${width}x${height}` : undefined,
+    device_info: deviceInfo.filter(Boolean).join('; '),
   }
   for (const [name, value] of Object.entries(fields)) {
     url.searchParams.set(`hide_${name}`, '1')
@@ -32,9 +32,9 @@ export function contactUrl(config: ContactConfig, context: {
     if (value) url.searchParams.set(`prefill_${name}`, value)
   }
   // Exclude unsupported questionnaire fields from configured URLs.
-  url.searchParams.delete('prefill_app_version')
-  url.searchParams.delete('hide_app_version')
-  url.searchParams.delete('prefill_device_model')
-  url.searchParams.delete('hide_device_model')
+  for (const name of ['os_version', 'device_brand', 'app_locale', 'screen_resolution', 'app_version', 'device_model']) {
+    url.searchParams.delete(`prefill_${name}`)
+    url.searchParams.delete(`hide_${name}`)
+  }
   return url.href
 }

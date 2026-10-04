@@ -124,5 +124,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。插件只注册一个 keyed toolview，其资源释放已由 HMR 安全性测试证明。本包拥有的唯一可变关系，即 per-definition run-state 观察量，只存在于浏览器进程中，Host 不变式服务无法触及；Node 端不发出任何 Cordis 事件，也不持有任何跨插件状态。

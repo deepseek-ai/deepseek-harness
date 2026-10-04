@@ -16,7 +16,7 @@ The registry owns each revision's scope and Loader tree. Agents link their own s
 
 The Web editor and `agent_preset` tool accept only child plugin YAML. Saving writes the active profile's user patch, preserving display metadata and unrelated configuration. Revision checks and profile locking prevent overwriting concurrent saves; validation rejects a higher-priority override that would defeat the edit. Persistence and activation outcomes are reported separately. Tool writes require approval or full access because configuration executes in the Host.
 
-Session data continues to record the preset identity. Restart resolves that identity against current configuration and rejects a missing definition. Old executable revisions are process-local, not serialized. The saved user default and blank-session selection remain; `selectedDefault` is what an unnamed new session resolves, and the Client's Developer tools preference decides only whether the choice is shown.
+Session data continues to record the preset identity. Restart resolves that identity against current configuration and rejects a missing definition. Old executable revisions are process-local, not serialized. New sessions without an explicit preset resolve `selectedDefault`; Client choice filtering and default correction follow [the preset UI policy](../../../../packages/client/ui-agent-preset/README.md).
 
 ## Alternatives considered
 

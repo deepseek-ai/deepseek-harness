@@ -35,7 +35,7 @@ dsh rescue
 
 | Profile | 参数 |
 |---|---|
-| `web` | `--host`、`--port`、可重复的 `--trusted-host`、`--no-open` |
+| `web` | `--host`、`--port`、`--public-url`、可重复的 `--trusted-host`、`--no-open` |
 | `headless` | 任务文本，作为位置参数 |
 | `sdk` | 无选项；stdio 携带 JSON-RPC 协议 |
 | `sdk-minimal` | 无选项；stdio 携带相同的 JSON-RPC 协议 |
@@ -106,6 +106,8 @@ dsh --profile tui
 
 `dsh web` 使用 profile 简写。启动器先解析自身的 flag，其余 flag 属于 web 应用，由组合包中的普通提供方解析。`--host` 和 `--port` 覆盖承载它们的那些行的组合取值，可重复的 `--trusted-host` 通过 `ctx.webRuntime.trustedHosts` 提供本次调用的 authority（部署表达式会拼接自己的 authority），`--no-open` 则只对本次调用关闭默认浏览器交接。客户端插件 HMR（热模块替换）接收器始终挂载，在 `pnpm run dev:web` 重建客户端 bundle 之前保持空闲；该命令先构建一次，再启动这同一个启动器并持续重建客户端 bundle，加 `--no-serve` 则只运行 watcher、配合别处启动的 `dsh web`。
 
+`--public-url <url>` 公告唯一的 HTTP(S) 应用根——可带转发前缀——替代监听器的 loopback URL。它不授予信任，因此浏览器可见的 authority 仍需用 `--trusted-host` 点名；[在反向代理之后发布 Web UI](../../../docs/user/guide/public-deployments.zh.md)列出了前置代理必须提供的内容。
+
 ```sh
 dsh web
 dsh web --no-open
@@ -114,7 +116,7 @@ dsh web --dump-config
 dsh web --help
 ```
 
-生产 Web 运行器需要已构建的包和前端产物（`pnpm run build`）。默认服务地址是 `http://127.0.0.1:3080`；本机启动时，只在完整 Loader 配置树结算后才用默认浏览器打开该规范宿主机 URL。继承的 `SSH_CONNECTION` 或 `SSH_TTY` 非空时会跳过浏览器交接，因为本地转发地址由 SSH 客户端或编辑器持有；宿主机 URL 仍会打印。CLI 有意不支持 `--host 0.0.0.0`，并会以用法错误退出。本机交接前会打印英文提示 `dsh web: opening the default browser; pass --no-open to disable`；若操作系统交接失败，stderr 诊断会说明原因、给出 URL 供手动访问，服务器仍继续运行。`--trusted-host` 可添加 `/api` 浏览器信任围栏接受的具名 authority。
+生产 Web 运行器需要已构建的包和前端产物（`pnpm run build`）。默认服务地址是 `http://127.0.0.1:3080`；本机启动时，只在完整 Loader 配置树结算后才用默认浏览器打开该规范宿主机 URL（配置了 `--public-url` 时即为公告根）。继承的 `SSH_CONNECTION` 或 `SSH_TTY` 非空时会跳过浏览器交接，因为本地转发地址由 SSH 客户端或编辑器持有；宿主机 URL 仍会打印。CLI 有意不支持 `--host 0.0.0.0`，并会以用法错误退出。本机交接前会打印英文提示 `dsh web: opening the default browser; pass --no-open to disable`；若操作系统交接失败，stderr 诊断会说明原因、给出 URL 供手动访问，服务器仍继续运行。`--trusted-host` 可添加 `/api` 浏览器信任围栏接受的具名 authority。
 
 进程关闭时，插件树最多有 5 秒完成 dispose。首次收到 `SIGINT` 或 `SIGTERM` 时会开始优雅排空：`SIGTERM` 是监督进程发出的常规停止请求，在所有运行模式下都以 0 退出；`SIGINT` 则报告 130。第二次收到信号时会立即强制退出。如果一次性运行在正常结束时已经卡在 dispose 阶段，第一次按下 `Ctrl+C` 就会直接升级为强制退出，而不会被忽略。
 
@@ -128,7 +130,7 @@ dsh web --help
 
 基础组合包挂载原生 DeepSeek 适配器、settings 与凭据提供方、稳定的 `web_search` 和 `web_fetch`、仅限公网的 HTTP fetch 提供方，默认开启的 DeepSeek 会话日志上传，以及面向所有用户的反馈门控 OTel 上传。提供方凭据依次从继承环境、`$DSH_HOME/.credentials.yaml`、调用目录的 `.env` 和 `$DSH_HOME/.env` 解析；受管文档从不物化进 `process.env`，而两个 `.env` 文件都是普通启动环境层。搜索使用 `DEEPSEEK_API_KEY` 并接受 `DEEPSEEK_SEARCH_BASE_URL`。已启用的抓取调用会在所有 sandbox 与审批模式下执行，无需逐次确认；提供方会在连接前拒绝非公开目的地址。Web app 会禁用 base 工具配置项，再通过 `cordis`、`ptc` 与 `standard` agent preset 暴露相同工具。
 
-反馈记录在会话日志中，不会启动模型工作。[DeepSeek 会话日志贡献器](../../../packages/session/session-log-deepseek/README.zh.md)默认随后续 DeepSeek 请求发送尚未确认接收的完整日志后缀，包括经已配置网关发送的请求；将其 `enabled` 配置设为 `false` 可关闭上传。[OTel 会话上传](../../../packages/session/session-telemetry-otel/README.zh.md)适用于所有用户和提供方，包括 `deepseek-official`，无需请求头。基础配置默认使用 `FEEDBACK_ONLY`：新的自身文本反馈、消息评分、编辑与撤回会释放截至该事件的完整规范日志前缀，包含存储的上下文；后续记录等待下一次显式反馈。继承的父级反馈不构成 fork 的授权。请求、恢复、挂载和 HMR 不触发捕获。SDK 批处理可完成已授权上传，无需进一步交互或模型工作。`DSH_TELEMETRY_MODE=DISABLED` 禁止 OTel 投递；`FULL` 被拒绝，任何非空的 `DSH_TELEMETRY_DISABLED` 都会禁用其配置行。`DSH_TELEMETRY_OTLP_URL` 选择采集端。交接尽力而为，不代表采集端接受；不提供持久化 outbox 或重试保证。这些 OTel 设置不会开启或关闭 DeepSeek 贡献。两条路径都不改变模型输入，但导出可能包含消息文本、工具参数和结果，以及工作区路径。
+反馈记录在会话日志中，不会启动模型工作。[DeepSeek 会话日志贡献器](../../../packages/session/session-log-deepseek/README.zh.md)默认随后续 DeepSeek 请求发送尚未确认接收的完整日志后缀，包括经已配置网关发送的请求；可在 Web 的**设置 → 通用 → 在使用官方模型 API 时上传 Session Log**中关闭上传，或将其 `enabled` 配置设为 `false`。[OTel 会话上传](../../../packages/session/session-telemetry-otel/README.zh.md)适用于所有用户和提供方，包括 `deepseek-official`，无需请求头。基础配置默认使用 `FEEDBACK_ONLY`：新的自身文本反馈、消息评分、编辑与撤回会释放截至该事件的完整规范日志前缀，包含存储的上下文；后续记录等待下一次显式反馈。继承的父级反馈不构成 fork 的授权。请求、恢复、挂载和 HMR 不触发捕获。SDK 批处理可完成已授权上传，无需进一步交互或模型工作。`DSH_TELEMETRY_MODE=DISABLED` 禁止 OTel 投递；`FULL` 被拒绝，任何非空的 `DSH_TELEMETRY_DISABLED` 都会禁用其配置行。`DSH_TELEMETRY_OTLP_URL` 选择采集端。交接尽力而为，不代表采集端接受；不提供持久化 outbox 或重试保证。这些 OTel 设置不会开启或关闭 DeepSeek 贡献。两条路径都不改变模型输入，但导出可能包含消息文本、工具参数和结果，以及工作区路径。
 
 通过 `dsh plugin --profile <name> add <package-or-git-spec>` 安装外部插件组合包。安装的包拥有其依赖，并贡献其声明的 `cordis.patch.yml` 层。CLI 还随附 `@deepseek-ai/dsh-mcp-client` 作为供 patch 层使用的依赖，但默认不启用 MCP 服务器，因为每条服务器命令都是 agent 沙箱之外的受信任可执行代码。
 

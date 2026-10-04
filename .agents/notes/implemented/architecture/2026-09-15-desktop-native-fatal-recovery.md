@@ -16,7 +16,7 @@ The first report claims presentation before awaiting the dialog. Later reports r
 
 The Web document stays in place. A carrier callback owns startup failure presentation while the shared boot page retains its spinner; ordinary browser boot still renders its own failure report. Only the primary application frame may report a Web boot failure. Backend state remains in the main process, and native recovery directly owns disabling all third-party bundles. Desktop has no profile reset or emergency recovery document. A fatal backend failure requires one of the native recovery actions rather than an in-process retry.
 
-This supersedes recovery-page and reset behavior in the [immediate-window decision](2026-09-09-desktop-immediate-window-and-direct-start.md), whose immediate visibility and direct Host startup rationale remain active. The [Web wrapper decision](2026-09-10-desktop-web-wrapper.md) owns shared plugin management and native profile preparation.
+The [Desktop reference](../../../../apps/desktop/README.md) defines immediate window visibility and direct Host startup; this decision owns native fatal recovery. The [Web wrapper decision](2026-09-10-desktop-web-wrapper.md) owns shared plugin management and native profile preparation.
 
 ## Alternatives considered
 

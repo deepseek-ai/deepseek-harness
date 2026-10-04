@@ -36,17 +36,17 @@ V4 的已接受兼容性基线保存在[检查点](persistence-changes/finalized
 
 定稿不冻结 V4 之后的每项新增，也不表示已发布。下方发布记录保留独立验证的已发布版本。普通注释、别名、源码位置，以及保留已接受含义的实现修复，不改变该基线。
 
-首次发布 V4 前，每次集成仍写入 V3 的较新 master 都必须对已记录的本地源提交执行[显式 V3 词汇校验](cookbook/adding-a-session-format-version.zh.md#final-v3-vocabulary)。更新迁移所有的集合前，要核验源 pin 的新鲜度并审查新事件 payload 的转换。发布后，最终 V3 词汇保持为历史定义，与当前 V4 新增事件无关。
+最终 [V3 词汇](cookbook/adding-a-session-format-version.zh.md#final-v3-vocabulary)保持为历史定义，与当前 V4 新增事件无关。
 
 <a id="release-record"></a>
 ## 发布记录
 
 ```yaml session-format-release
-latestReleasedVersion: 3
-evidenceTag: dsh-v0.1.5-alpha.1
+latestReleasedVersion: 4
+evidenceTag: dsh-v0.2.0-rc.2
 ```
 
-证据：已发布产品标签 `dsh-v0.1.5-alpha.1`；该标签的写入器路径：`packages/core/session/src/types.ts`。
+证据：已发布产品标签 `dsh-v0.2.0-rc.2`；该标签的写入器路径：`packages/core/session/src/types.ts`。
 
 <a id="updating-the-record"></a>
 ## 更新记录

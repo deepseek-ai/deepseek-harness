@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-trajectory",
   "description": "Trajectory event ledger with an interactive timing overview: pure-consumer plugin registering into the conversation ViewMap (no service)",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -51,6 +51,7 @@
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-compaction": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",

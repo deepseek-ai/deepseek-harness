@@ -450,21 +450,6 @@ describe('the settled fan-out', () => {
     await new Promise(resolve => setTimeout(resolve, 10))
   })
 
-  it('rethrows an invariant-coded listener failure after the remaining listeners', async () => {
-    const ctx = await harness()
-    ctx.authorization.registerFlow(committingFlow(ctx))
-    ctx.on('authorization/settled', () => {
-      throw Object.assign(new Error('forged relation'), { code: 'INVARIANT' })
-    })
-    const second = vi.fn()
-    ctx.on('authorization/settled', second)
-
-    await expect(ctx.authorization.begin({ key: KEY, interaction: surface() }))
-      .rejects.toThrow(/forged relation/)
-    // Harness-fatal by design — but the record itself committed first.
-    expect(second).toHaveBeenCalledWith(KEY, 'authorized')
-    expect(await ctx.credentials.readRecord(KEY)).toEqual({ kind: 'grant', payload: { token: 'granted' } })
-  })
 })
 
 it('rejects a commit attempted after local cancellation', async () => {

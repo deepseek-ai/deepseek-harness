@@ -2,7 +2,7 @@
 
 [English](permission-presets.md) | 中文
 
-[dsh-permission-presets](../../packages/interaction/permission-presets) 的权限预设层（`ctx.permissionPresets`，`PermissionPresetService`）把两个相互独立的强制执行 knob，即[沙箱模式](sandbox.zh.md)（`sandbox/mode`）与[审批策略](approval.zh.md)（`approval/policy`），捆绑成具名预设，供客户端作为单个 Permissions 选择器提供。配置表拥有未来会话默认值，而固定的 `registerAuto(admit)` 钩子让 [Auto review](../../packages/experimental/auto-review/README.zh.md) integration 在一个 effect 生命周期内发布仅限当前会话的选项。该层是可选能力，且不拥有执行策略：提示词叙述与回放仍读取各自 knob 的折叠结果，额外强制执行由 Auto review 拥有。[包 README](../../packages/interaction/permission-presets/README.zh.md)负责组合状态与限制；[沙箱切换设计](../../.agents/notes/implemented/feature/2026-07-06-sandbox.zh.md)负责原始旋钮依据。
+[dsh-permission-presets](../../packages/interaction/permission-presets) 的权限预设层（`ctx.permissionPresets`，`PermissionPresetService`）把两个相互独立的强制执行 knob，即[沙箱模式](sandbox.zh.md)（`sandbox/mode`）与[审批策略](approval.zh.md)（`approval/policy`），捆绑成具名预设，供客户端作为单个 Permissions 选择器提供。配置表拥有未来会话默认值，而固定的 `registerAuto(admit)` 钩子让 [Auto review](../../packages/experimental/auto-review/README.zh.md) integration 在一个 effect 生命周期内发布仅限当前会话的选项。该层是可选能力，且不拥有执行策略：提示词叙述与回放仍读取各自 knob 的折叠结果，额外强制执行由 Auto review 拥有。[包 README](../../packages/interaction/permission-presets/README.zh.md)负责组合状态与限制；[历史沙箱切换设计](../../.agents/notes/archived/feature/2026-07-06-sandbox.md)负责原始旋钮依据。
 
 源码：[`packages/interaction/permission-presets/src/index.ts`](../../packages/interaction/permission-presets/src/index.ts)
 

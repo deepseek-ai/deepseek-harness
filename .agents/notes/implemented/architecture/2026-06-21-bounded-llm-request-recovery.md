@@ -8,7 +8,7 @@ The [per-provider request retry policy](../../archived/feature/2026-07-24-provid
 
 ## Problem
 
-Provider adapters can fail by throwing during dispatch or iteration or by ending with `finish { kind: 'error' | 'aborted' }`. The final adapter boundary normalizes thrown values to that terminal finish protocol before `dsh-agent-loop` receives them; middleware and result-processing defects remain thrown. The loop offers a terminal model-request failure to `agent/request-error`. An unhandled failure is terminal; a handling listener repairs policy-owned state, returns `{ kind: 'retry' }`, and stops waterfall delegation. The [retry-action decision](../simplification/2026-07-27-request-error-retry-action.md) owns this return contract.
+Provider adapters can fail by throwing during dispatch or iteration or by ending with `finish { kind: 'error' | 'aborted' }`. The final adapter boundary normalizes thrown values to that terminal finish protocol before `dsh-agent-loop` receives them; middleware and result-processing defects remain thrown. The loop offers a terminal model-request failure to `agent/request-error`. An unhandled failure is terminal; a handling listener repairs policy-owned state, returns `{ kind: 'retry' }`, and stops waterfall delegation. The [retry-action reference](../../../../packages/core/agent/README.md) owns this return contract.
 
 That boundary is already safe for another request attempt. Each failed stream commits one log-only `assistant/attempt` with its exact compact stream, message derivation ignores it, tool calls are dispatched only after a successful terminal finish and assembled `assistant/message`, and a retry reconstructs its next attempt from the durable surface. The harness therefore does not need a second response lifecycle or tentative-output protocol to keep two attempts separate.
 
@@ -134,6 +134,6 @@ If recovery is exhausted, the final failure is stored once on `turn/end.reason` 
 - [Structured error taxonomy](../../archived/architecture/2026-06-11-structured-error-taxonomy.md) owns stable machine-routable codes and cause chaining.
 - [Reconstructable requests](../../implemented/architecture/2026-07-05-reconstructable-requests.md) makes provider/model and complete request inputs durable before dispatch.
 - [Timeout deadline library](../../implemented/architecture/2026-07-06-timeout-deadline-library.md) separates shared deadline classification from capability-owned termination.
-- [After-call compaction pressure and context-overflow recovery](../../implemented/architecture/2026-07-10-after-call-compaction-pressure-and-overflow-recovery.md) owns the current closed-step request-recovery extension point and bounded overflow retry.
+- The [compaction reference](../../../../packages/compaction/compaction-basic/README.md) owns pressure measurement, progress checks, and bounded overflow retry.
 - [Provider-routed LLM adapters](../../implemented/architecture/2026-07-14-provider-routed-llm-adapters.md) owns explicit provider/model routing and the one-adapter-per-provider invariant.
 - [Terminal turn errors survive same-turn retry history](../../archived/bug-fix/2026-08-20-turn-error-survives-same-turn-retry-history.md) owns the removal of the Web retry-history suppression that hid exhausted recovery's terminal error row.

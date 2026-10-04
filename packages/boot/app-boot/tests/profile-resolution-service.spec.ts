@@ -1,6 +1,6 @@
 /** Package metadata queries share the active runtime resolution. */
 
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -9,7 +9,7 @@ import { getEnvironmentData } from 'node:worker_threads'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it } from 'vitest'
 import { PluginPackages } from '../src/profile-resolution/service.ts'
-import type { RuntimeResolution } from '../src/profile.ts'
+import { createRuntimeResolution, initProfile, loadProfileDirectory, type RuntimeResolution } from '../src/profile.ts'
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -53,6 +53,71 @@ function resolution(
 }
 
 describe('profile package metadata service', () => {
+  it('refreshes the installed resolution from its own profile and installation', async () => {
+    const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-package-service-refresh-')))
+    roots.push(root)
+    const installAnchor = join(root, 'install', 'package.json')
+    file(installAnchor, JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.0.0' }))
+    const profileDir = join(root, 'profiles', 'test')
+    initProfile(profileDir, ['extra'])
+    const bundleDir = join(profileDir, 'node_modules', 'extra')
+    const privateDir = join(bundleDir, 'node_modules', 'metadata-lib')
+    file(join(bundleDir, 'package.json'), JSON.stringify({
+      name: 'extra', version: '1.0.0', dependencies: { 'metadata-lib': '1.0.0' }, dsh: { bundle: { patch: './cordis.patch.yml' } },
+    }))
+    file(join(bundleDir, 'cordis.patch.yml'), '[]\n')
+    const parentURL = pathToFileURL(join(profileDir, 'caller.mjs')).href
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(PluginPackages, {
+      resolution: await createRuntimeResolution({ installAnchor, home: root, profile: loadProfileDirectory('dsh', profileDir, installAnchor) }),
+    })
+    expect(ctx.pluginPackages.packageOf('metadata-lib', parentURL)).toBeUndefined()
+
+    pkg(privateDir, '1.0.0')
+    const manifest = JSON.parse(readFileSync(join(profileDir, 'package.json'), 'utf8')) as Record<string, unknown>
+    writeFileSync(join(profileDir, 'package.json'), JSON.stringify({ ...manifest, dependencies: { extra: '1.0.0' } }))
+    await ctx.pluginPackages.refresh()
+
+    expect(ctx.pluginPackages.packageOf('metadata-lib', parentURL)).toMatchObject({ dir: privateDir, version: '1.0.0' })
+    expect(createRequire(join(profileDir, 'caller.cjs')).resolve('metadata-lib')).toBe(join(privateDir, 'index.cjs'))
+  })
+
+  it('refreshes a computed resolution without a profile', async () => {
+    const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-package-service-installation-')))
+    roots.push(root)
+    const installAnchor = join(root, 'install', 'package.json')
+    file(installAnchor, JSON.stringify({ name: 'installation', version: '1.0.0', dependencies: { 'metadata-lib': '*' } }))
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(PluginPackages, { resolution: await createRuntimeResolution({ installAnchor, home: root }) })
+    const parentURL = pathToFileURL(join(root, 'profiles', 'test', 'caller.cjs')).href
+    expect(ctx.pluginPackages.packageOf('metadata-lib', parentURL)).toBeUndefined()
+    const packageDir = join(root, 'install', 'node_modules', 'metadata-lib')
+    pkg(packageDir, '1.0.0')
+
+    await ctx.pluginPackages.refresh()
+
+    expect(ctx.pluginPackages.packageOf('metadata-lib', parentURL)).toMatchObject({ dir: packageDir, version: '1.0.0' })
+    expect(createRequire(parentURL).resolve('metadata-lib')).toBe(join(packageDir, 'index.cjs'))
+  })
+
+  it('rejects refreshing a plain-data or absent resolution', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-package-service-plain-'))
+    roots.push(root)
+    const packageDir = join(root, 'lib')
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(PluginPackages, {
+      resolution: resolution(join(root, 'profiles'), join(root, 'profiles', 'test'), packageDir, pkg(packageDir, '1.0.0'), '1.0.0'),
+    })
+    await expect(ctx.pluginPackages.refresh()).rejects.toThrow('plugin-packages: the installed runtime resolution cannot be recomputed')
+    const bare = new Context()
+    contexts.push(bare)
+    await bare.plugin(PluginPackages)
+    await expect(bare.pluginPackages.refresh()).rejects.toThrow('plugin-packages: the installed runtime resolution cannot be recomputed')
+  })
+
   it('reads translated metadata from the selected local package without importing its entry', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-localized-package-service-'))
     roots.push(root)

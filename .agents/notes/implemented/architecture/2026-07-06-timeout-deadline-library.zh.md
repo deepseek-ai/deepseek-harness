@@ -12,7 +12,7 @@ Status: implemented
 - **web_fetch**（[packages/web/web-fetch-http/src/provider.ts](../../../../packages/web/web-fetch-http/src/provider.ts)）有一套正确但*手写*的超时：构造一个 `AbortController`，连接 `setTimeout(() => controller.abort(new WebError(…, 'WEB_FETCH_TIMEOUT')))`，手动添加和移除上游信号监听器，在 `finally` 中清除定时器，并在 `translateAbortOrNetwork` 辅助函数中从 `signal.reason` 恢复超时原因（因为 reader 只抛出裸 `AbortError`）。
 - **web_search**（[packages/web/tool-web/src/search.ts](../../../../packages/web/tool-web/src/search.ts)）**完全没有超时**：`WebSearchRequest`（[packages/web/web/src/types.ts](../../../../packages/web/web/src/types.ts)）不携带 `timeoutMs` 字段，各提供方的 `search()` 只转发 `exec.signal`。（web_search 在本次设计中保持无超时——见「后果」。）
 
-每个新的外部进程或网络工具都要重新推导同样四件事：钳位请求值、启动定时器、将超时与上游取消融合、在出口处区分「超时」与「已取消」。而融合与原因恢复恰恰是最容易出微妙错误的部分（web_fetch 的 `signal.reason` 处理就是证据）。与此同时，各能力执行的*终止*操作不可归约地不同：bash 请求其子进程提供方终止由 OS 拥有的范围，而 web 中止一个进程内的 `fetch`，由 undici 拆除 socket。[原生 containment 决策](2026-08-28-subprocess-native-containment.zh.md)负责本地 scope、Job 与 fallback 机制；不存在一个能停止所有能力工作的单一机制。
+每个新的外部进程或网络工具都要重新推导同样四件事：钳位请求值、启动定时器、将超时与上游取消融合、在出口处区分「超时」与「已取消」。而融合与原因恢复恰恰是最容易出微妙错误的部分（web_fetch 的 `signal.reason` 处理就是证据）。与此同时，各能力执行的*终止*操作不可归约地不同：bash 请求其子进程提供方终止由 OS 拥有的范围，而 web 中止一个进程内的 `fetch`，由 undici 拆除 socket。[原生 containment 参考](../../../../packages/subprocess/subprocess-local/README.zh.md)负责本地 scope、Job 与 fallback 机制；不存在一个能停止所有能力工作的单一机制。
 
 ## 决策
 

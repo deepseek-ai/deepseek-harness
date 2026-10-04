@@ -92,6 +92,12 @@ function updateChunk(
   seq: number,
   time: number,
 ): AssistantState {
+  if (chunk.type === 'tool-call-delta') {
+    const previous = state.blocks[chunk.index]
+    if (previous?.kind === 'tool-call' && previous.callId !== ''
+      && (chunk.name === undefined || chunk.name === previous.name)
+      && (state.firstTokenTime !== undefined || !isTokenDelta(chunk))) return state
+  }
   const blocks = [...state.blocks]
   let changedIndex = -1
   let previousVisible = false
@@ -119,14 +125,12 @@ function updateChunk(
       const previous = blocks[chunk.index]
       changedIndex = chunk.index
       previousVisible = blockIsVisible(previous)
-      const base = previous?.kind === 'tool-call'
-        ? previous
-        : { kind: 'tool-call' as const, callId: '', name: '', argsRaw: '' }
+      // Tool Nodes own streamed arguments; Assistant protocol blocks retain identity until full settlement.
       blocks[chunk.index] = {
         kind: 'tool-call',
-        callId: base.callId || String(chunk.id),
-        name: chunk.name ?? base.name,
-        argsRaw: base.argsRaw + chunk.argumentsDelta,
+        callId: (previous?.kind === 'tool-call' ? previous.callId : '') || String(chunk.id),
+        name: chunk.name ?? (previous?.kind === 'tool-call' ? previous.name : ''),
+        argsRaw: previous?.kind === 'tool-call' ? previous.argsRaw : '',
       }
       break
     }
@@ -356,5 +360,14 @@ export const assistantDefinition: ConversationNodeDefinition<AssistantState> = {
  * @param ctx - owning UI Conversation context.
  */
 export function registerAssistantConversationNode(ctx: Context): void {
-  ctx.uiConversation.events.register(assistantDefinition)
+  const match = assistantDefinition.match.bind(assistantDefinition)
+  ctx.uiConversation.events.register({
+    ...assistantDefinition,
+    match: {
+      'step/start': match,
+      'assistant/live-chunk': match,
+      'assistant/message': match,
+      'llm/retry': match,
+    },
+  })
 }

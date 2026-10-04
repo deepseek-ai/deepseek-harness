@@ -53,7 +53,7 @@ This package owns the event declaration, reference validation, immutable image p
 
 Summary failures use the synchronous `compaction/summary-error` waterfall. The plugin selects only the supplied summary region and returns true after recording an omission. The compaction backend re-derives and re-prices that region before retrying; each retry omits additional retained occurrences, so recovery ends when none remain. Cancellation and unrelated selection changes reject the summary. Recorded omissions survive later failure or cancellation.
 
-No runtime invariant companion is published: the pure projection rejects invalid or repeated image references before Session commits the event, and this executor retains no separate mutable offload state.
+The pure projection rejects invalid or repeated image references before Session commits the event, and this executor retains no separate mutable offload state.
 
 </details>
 

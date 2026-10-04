@@ -2,7 +2,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { bindScopeParent, createScope, scopeOf, type Scope, type ScopeKey, type ScopeParentBinding } from '@deepseek-ai/dsh-scope'
+import { bindScopeParent, createScope, scopeOf, scopeParentOf, type Scope, type ScopeKey, type ScopeParentBinding } from '@deepseek-ai/dsh-scope'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { dump } from 'js-yaml'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -13,12 +13,13 @@ import type { AgentPresetDocument, AgentPresetRoster } from './types.ts'
 import { entryListProblem, type PresetDefinition } from './definition.ts'
 import type { AgentPreset, Config } from './preset.ts'
 import { agentPresetProjectionDefinition } from './session.ts'
-import { auditRows, mountPreset, standingMountFor, serviceForAgent, type PresetMount } from './mount.ts'
-import { definitionComposition, mountedCompositionRows, type AgentPresetComposition } from './composition-inventory.ts'
+import { auditRows, leakedServices, mountPreset, serviceForMount, type PresetMount } from './mount.ts'
+import { activeCompositionModules, definitionComposition, mountedCompositionRows, type AgentPresetComposition, type AgentPresetInspection } from './composition-inventory.ts'
 
 export { agentPresetProjectionDefinition } from './session.ts'
 export { entryListProblem, type PresetDefinition } from './definition.ts'
-export { auditRows, livePresetMounts, leakedServices, serviceForAgent, standingMountFor, type PresetMount, type RowAudit } from './mount.ts'
+export { auditRows, leakedServices, type PresetMount, type RowAudit } from './mount.ts'
+export type { AgentPresetInspection } from './composition-inventory.ts'
 export type { AgentPreset, Config } from './preset.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -108,7 +109,10 @@ export class AgentPresetRegistry extends TypertRemoteService {
       const context = scope.ctx.extend({ baseUrl: record.context.baseUrl })
       const mount = await mountPreset(context, record.config.id, record.config.plugins)
       const generation: Generation = { scope, key, mount, users: 0, retired: false }
-      this.generations.set(key, generation)
+      context.effect(() => {
+        this.generations.set(key, generation)
+        return () => { this.generations.delete(key) }
+      }, 'agent-preset.mount')
       record.generation = generation
     } catch (error) {
       record.broken = (error as Error).message
@@ -145,6 +149,26 @@ export class AgentPresetRegistry extends TypertRemoteService {
     if (!generation.retired || generation.users !== 0) return
     this.generations.delete(generation.key)
     await generation.scope.dispose()
+  }
+
+  private generationFor(ctx: Context): Generation | undefined {
+    const key = scopeOf(ctx)
+    const parent = key === undefined ? undefined : scopeParentOf(key)
+    return parent === undefined ? undefined : this.generations.get(parent)
+  }
+
+  /** Inspect retained revisions, or the exact revision an Agent joined.
+   * @param ctx - optional Agent context; omission includes all retained revisions.
+   * @returns detached module references and isolation diagnostics; no match returns an empty list.
+   */
+  inspectCompositions(ctx?: Context): AgentPresetInspection[] {
+    const joined = ctx === undefined ? undefined : this.generationFor(ctx)
+    const generations = ctx === undefined ? [...this.generations.values()] : joined === undefined ? [] : [joined]
+    return generations.map(({ mount }) => ({
+      id: mount.presetId,
+      modules: activeCompositionModules(mount.tree),
+      leakedServices: leakedServices(this.owner, mount.fiber),
+    }))
   }
 
   /** Read every declared preset, including activation failures.
@@ -271,23 +295,26 @@ export class AgentPresetRegistry extends TypertRemoteService {
    * @returns Inherited preset id, or undefined in a preset-free composition.
    */
   composeFrom(ctx: Context, parent: Context): string | undefined {
-    const mounted = standingMountFor(parent)
-    if (mounted === undefined) return undefined
-    const generation = this.generations.get(mounted.key)
-    if (generation === undefined) throw new Error('Parent preset revision is unavailable')
+    const generation = this.generationFor(parent)
+    if (generation === undefined) {
+      if (parent.get('agentPresets')?.composedPreset(parent) !== undefined) {
+        throw new Error('Parent preset revision is unavailable')
+      }
+      return undefined
+    }
     // A child has no existing binding, so this path has no asynchronous cleanup.
     const key = scopeOf(ctx)
     if (key === undefined) throw new Error('Child preset binding requires a scope')
     if (this.bindings.has(key)) throw new Error('Child already joined a preset')
     this.join(ctx, key, generation)
-    return mounted.presetId
+    return generation.mount.presetId
   }
 
   /** Read the preset a live Agent uses.
    * @param ctx Agent context.
    * @returns Its preset id, if bound.
    */
-  composedPreset(ctx: Context): string | undefined { return standingMountFor(ctx)?.presetId }
+  composedPreset(ctx: Context): string | undefined { return this.generationFor(ctx)?.mount.presetId }
 
   /** Read a service supplied inside an Agent's isolated preset group.
    * @param agent Agent whose composition is queried.
@@ -295,7 +322,8 @@ export class AgentPresetRegistry extends TypertRemoteService {
    * @returns The service, or undefined.
    */
   serviceFor<K extends string & keyof Context>(agent: { ctx: Context }, name: K): Context[K] | undefined {
-    return serviceForAgent(this.owner, agent, name)
+    const mount = this.generationFor(agent.ctx)?.mount
+    return mount === undefined ? undefined : serviceForMount(this.owner, mount, name)
   }
 
   /** Rebind a blank Agent; the caller owns the blank-session check.

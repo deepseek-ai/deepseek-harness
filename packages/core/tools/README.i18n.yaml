@@ -18,8 +18,8 @@
   en: 6e722ebac4878621
   zh: 0946eb94f78b7029
 /deepseek-ai-dsh-tools/use-this-package/register-a-tool:
-  en: 02fce53c21a33d74
-  zh: 01110c4714dfd602
+  en: 9d2e6caa39c53d62
+  zh: 096a777f828c7565
 /deepseek-ai-dsh-tools/use-this-package/configure-the-presentation-mode:
   en: f843dfaf6ab6e19e
   zh: 8e3b8816a4e51e7b
@@ -39,14 +39,14 @@
   en: 92e8af53e6067bad
   zh: 33c7b99b42c5acac
 /deepseek-ai-dsh-tools/understand-the-implementation/source-map:
-  en: 7f61ed30a231b7ba
-  zh: c7587af984650f8b
+  en: c14e20d6a5c4c408
+  zh: ab9dc0fd38006749
 /deepseek-ai-dsh-tools/understand-the-implementation/execution-and-cancellation:
   en: dc44a88997777988
   zh: 56454aeace1c8b77
 /deepseek-ai-dsh-tools/understand-the-implementation/ptc-mode:
-  en: 9e67cfffae432d15
-  zh: 3a061b8e805c07cd
+  en: 57d088544df19dd3
+  zh: 92e289d2ece3171c
 /deepseek-ai-dsh-tools/understand-the-implementation/extension-points:
   en: c2a14d6f22bc9428
   zh: 89c1414fca465931
@@ -72,8 +72,8 @@
   en: eaefd7303f22977d
   zh: 9c425f9501128224
 /deepseek-ai-dsh-tools/model-experience/ptc-mode-schema-and-system-prompt/what-the-model-sees:
-  en: ded2d4fca7d15cab
-  zh: befc42f701394a00
+  en: e24f232bd9e5e58c
+  zh: f2e3aa11a945052d
 /deepseek-ai-dsh-tools/model-experience/ptc-mode-schema-and-system-prompt/what-the-model-sees/typescript-ptc-mode-sdk-instructions-with-bash:
   en: 3a8df15e4ae32f9e
   zh: fc4a800ba363e835

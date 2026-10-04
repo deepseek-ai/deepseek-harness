@@ -339,6 +339,55 @@ afterEach(async () => {
 })
 
 describe('Typert Remote streams', () => {
+  it('reports Client event streams without counting a bare WebSocket', async () => {
+    const { ctx } = await setup(true)
+    const source = new RemoteEventSourceProbe()
+    const unregister = ctx.effect(() => ctx.typertGateway.registerRemoteEvents(source.source, REMOTE_HOST))
+    expect(ctx.typertGateway.hasLiveClient()).toBe(false)
+    expect(await acceptsSocket(ctx)).toBe(true)
+    expect(ctx.typertGateway.hasLiveClient()).toBe(false)
+    const first = await openEventClient(ctx, 'first-live')
+    const second = await openEventClient(ctx, 'second-live')
+    expect(ctx.typertGateway.hasLiveClient()).toBe(true)
+    const firstClosed = once(first.socket, 'close')
+    first.socket.close()
+    await firstClosed
+    expect(ctx.typertGateway.hasLiveClient()).toBe(true)
+    const secondClosed = once(second.socket, 'close')
+    second.socket.close()
+    await secondClosed
+    await vi.waitFor(() => { expect(ctx.typertGateway.hasLiveClient()).toBe(false) })
+    await unregister()
+  })
+
+  it('ignores cancelled event streams before their paused consumers finish cleanup', async () => {
+    const { ctx } = await setup(false)
+    const source = new RemoteEventSourceProbe()
+    const unregister = ctx.effect(() => ctx.typertGateway.registerRemoteEvents(source.source, REMOTE_HOST))
+    const abort = new AbortController()
+    const empty = (async function* () {})()
+    const events = await ctx.typertGateway.wireStream.open('$events', { args: {} }, empty, undefined, abort.signal)
+    const first = events[Symbol.asyncIterator]()
+    await first.next()
+    expect(ctx.typertGateway.hasLiveClient()).toBe(true)
+    abort.abort()
+    expect(ctx.typertGateway.hasLiveClient()).toBe(false)
+    const replacement = await ctx.typertGateway.wireStream.open('$events', { args: {} }, empty, undefined, new AbortController().signal)
+    const second = replacement[Symbol.asyncIterator]()
+    try {
+      await second.next()
+      expect(ctx.typertGateway.hasLiveClient()).toBe(true)
+      await first.return?.()
+      expect(ctx.typertGateway.hasLiveClient()).toBe(true)
+      await unregister()
+      expect(ctx.typertGateway.hasLiveClient()).toBe(false)
+    } finally {
+      await unregister()
+      await first.return?.()
+      await second.return?.()
+    }
+  })
+
   it.each([false, true])('accepts WebSockets only after application readiness (already ready: %s)', async (alreadyReady) => {
     const startup = new StartupProbe()
     if (alreadyReady) startup.commit()

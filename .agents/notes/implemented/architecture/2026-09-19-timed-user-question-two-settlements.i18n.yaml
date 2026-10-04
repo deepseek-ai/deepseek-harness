@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for 2026-09-19-timed-user-question-two-settlements.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-19-timed-user-question-two-settlements.md
+/agent-note-timed-user-questions-as-two-settlements:
+  en: 5b6fa73158a11213
+  zh: b55c32342d6e6692
+/agent-note-timed-user-questions-as-two-settlements/problem:
+  en: f665127a9b5b8225
+  zh: b19845f62310f3a2
+/agent-note-timed-user-questions-as-two-settlements/decision:
+  en: ce869bf2eed04e81
+  zh: 5b1fcf44c44c6137
+/agent-note-timed-user-questions-as-two-settlements/decision/modes-and-scope:
+  en: adccc5dc758ad8f6
+  zh: 50304d68db42e8b1
+/agent-note-timed-user-questions-as-two-settlements/decision/ownership:
+  en: 0543678ad9d26fc5
+  zh: aa6ba207e661c567
+/agent-note-timed-user-questions-as-two-settlements/decision/foreground-wait-and-claim-lifetime:
+  en: 447713bbdf1ab4d8
+  zh: 2757678ae47822aa
+/agent-note-timed-user-questions-as-two-settlements/decision/durable-state-and-late-answers:
+  en: 93f3def953d10a2e
+  zh: e1106340e0043254
+/agent-note-timed-user-questions-as-two-settlements/decision/card-state-and-delivery-races:
+  en: 3dd7321bd37c51bf
+  zh: 2d1f058732bd6d0f
+/agent-note-timed-user-questions-as-two-settlements/decision/local-countdown-and-panel-actions:
+  en: 3a33f2583e30e32a
+  zh: 0ad7e8d1e47dc510
+/agent-note-timed-user-questions-as-two-settlements/decision/reply-node-and-grouping:
+  en: 10323b0e0340a40b
+  zh: a17fc3a4d4d820a7
+/agent-note-timed-user-questions-as-two-settlements/alternatives-considered:
+  en: bf61d0ec80c63bb4
+  zh: d4ce4d4438ffb013
+/agent-note-timed-user-questions-as-two-settlements/verification:
+  en: d912a73a5ff409eb
+  zh: 7b626794773e2301
+/agent-note-timed-user-questions-as-two-settlements/consequences:
+  en: 2bc99c99be8ca9da
+  zh: 8f262ec8b9b0945e

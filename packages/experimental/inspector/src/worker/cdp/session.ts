@@ -11,14 +11,17 @@ import { HostNativeDomainSession } from './domains/native.ts'
 import { InspectorRealmSessionSet } from './realm-sessions.ts'
 import type { InspectorRealmRegistry } from '../inspection/realm-store.ts'
 import type { CordisRuntimeTreeReader } from '../../shared/cordis/reader.ts'
+import { cordisRuntimeSourceId, type CordisRuntimeTree } from '../../shared/cordis/model.ts'
+import type { InspectorSourceId } from '../../shared/bridge/ids.ts'
 
-/** Per-connection CDP dispatcher. */
+/** Per-connection CDP dispatcher with optional Client selection; Host remains visible. */
 export class CdpSession implements NetworkSink {
   private readonly realms: InspectorRealmSessionSet
   private readonly nativeDomains: HostNativeDomainSession
   private readonly runtime: RuntimeDomainSession
   private readonly debugger: DebuggerDomainSession
   private readonly dom: CordisDomSession
+  private readonly scopedDom: CordisDomBackend | undefined
   private diagnosticsEnabled = false
   private readonly unsubscribeSources: () => void
 
@@ -30,18 +33,20 @@ export class CdpSession implements NetworkSink {
     realmRegistry: InspectorRealmRegistry,
     domBackend: CordisDomBackend,
     private readonly cordisTrees: CordisRuntimeTreeReader,
+    private readonly clientSourceId?: InspectorSourceId,
   ) {
-    this.realms = new InspectorRealmSessionSet(realmRegistry)
+    this.realms = new InspectorRealmSessionSet(realmRegistry, clientSourceId)
     const native = this.realms.host().nativeDomains
     if (native.state === 'unsupported') throw new Error(native.reason)
     this.nativeDomains = new HostNativeDomainSession(transport, native.backend)
     this.runtime = new RuntimeDomainSession(transport, this.realms)
     this.debugger = new DebuggerDomainSession(transport, this.realms, this.runtime)
-    this.dom = new CordisDomSession(transport, domBackend, this.runtime)
+    this.scopedDom = clientSourceId === undefined ? undefined : domBackend.forClient(clientSourceId)
+    this.dom = new CordisDomSession(transport, this.scopedDom ?? domBackend, this.runtime)
     this.runtime.setObjectObserver((objectId, realm, reference, group) =>
       this.dom.bindObject(objectId, realm, reference, group))
     this.unsubscribeSources = sources.subscribeStatus(() => {
-      if (this.diagnosticsEnabled) this.sendEvent('DSHInspector.sourcesChanged', { sources: this.sources.describe() })
+      if (this.diagnosticsEnabled) this.sendEvent('DSHInspector.sourcesChanged', { sources: this.visibleSources() })
     })
   }
 
@@ -72,15 +77,15 @@ export class CdpSession implements NetworkSink {
         result = this.network.handle(request.method, request.params, this)
       } else if (request.method === 'DSHInspector.enable') {
         this.diagnosticsEnabled = true
-        result = { sources: this.sources.describe() }
+        result = { sources: this.visibleSources() }
       } else if (request.method === 'DSHInspector.disable') {
         this.diagnosticsEnabled = false
         result = {}
       } else if (request.method === 'DSHInspector.getSources') {
-        result = { sources: this.sources.describe() }
+        result = { sources: this.visibleSources() }
       } else if (request.method === 'DSHInspector.getCordisTree') {
         void this.cordisTrees.getTree().then(
-          (tree) => { this.transport.send({ id: request.id, result: { tree } }) },
+          (tree) => { this.transport.send({ id: request.id, result: { tree: this.visibleTree(tree) } }) },
           (error: unknown) => {
             this.transport.send(cdpError(request.id, -32000, error instanceof Error ? error.message : String(error)))
           },
@@ -99,6 +104,17 @@ export class CdpSession implements NetworkSink {
     }
   }
 
+  private visibleSources(): ReturnType<InspectorSourceRegistry['describe']> {
+    return this.sources.describe().filter(source => this.clientSourceId === undefined
+      || source.kind === 'host' || source.sourceId === this.clientSourceId)
+  }
+
+  private visibleTree(tree: CordisRuntimeTree): CordisRuntimeTree {
+    if (this.clientSourceId === undefined) return tree
+    const sourceId = cordisRuntimeSourceId(this.clientSourceId)
+    return { ...tree, clients: tree.clients.filter(client => client.source.sourceId === sourceId) }
+  }
+
   /** Push one CDP event. */
   sendEvent(method: string, params: Readonly<Record<string, unknown>>): void {
     this.transport.send({ method, params })
@@ -109,6 +125,7 @@ export class CdpSession implements NetworkSink {
     this.unsubscribeSources()
     this.network.detach(this)
     this.dom.close()
+    this.scopedDom?.close()
     this.runtime.close()
     this.debugger.close()
     this.nativeDomains.close()

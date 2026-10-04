@@ -147,7 +147,7 @@ InvocationDescriptor {
 
 参数顺序来自方法签名，HTTP 字段来自参数名或 lookup 声明。取消 descriptor 只保留最后一个 `signal` 位置，并使其不进入具名 `args`；实际 signal 由 Connection 或直接调用 Gateway 的调用方提供。Gateway 不根据请求内容推断可选字段、Context 类型、lookup 类型或缺失参数，也不会合成业务默认值。
 
-LIB codec 带有只缓存成功结果的 Zod schema factory 和「package + 公共 subpath + export name」的规范 `typeSymbol`。Host Gateway 首次解码严格输入时调用参数与身份 factory。Client contribution 保留同一 codec 元数据，以在挂载时检查严格输入，但不实例化调用 schema；[仅在 Host 校验 Remote 输入](../simplification/2026-09-15-host-only-remote-input-validation.zh.md)规定了这个位置。SRC codec 只标记 `src-json`。
+LIB codec 带有只缓存成功结果的 Zod schema factory 和「package + 公共 subpath + export name」的规范 `typeSymbol`。Host Gateway 首次解码严格输入时调用参数与身份 factory。Client contribution 保留同一 codec 元数据，以在挂载时检查严格输入，但不实例化调用 schema；[仅在 Host 校验 Remote 输入](../../../../packages/api/gateway/README.zh.md)规定了这个位置。SRC codec 只标记 `src-json`。
 
 descriptor 只存在于两端本地 registry。wire 上只有 `/api` channel、endpoint 和 `{ args }` payload。Client 用自己的 descriptor 把位置参数和 Context identity 映射为具名字段；Host 用自己的 descriptor 校验这些字段、解析 receiver 并调用方法。
 

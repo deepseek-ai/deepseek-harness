@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-theme` lets Web GUI users choose `light`, `dark`, or `system` and set conversation content text from 12 to 17 px in Settings. A loopback client stores both values in the `ui-theme` settings namespace, which the local provider persists in `$DSH_HOME/cordis.patch.yml` by default. The plugin resolves `system` through `prefers-color-scheme` and publishes immutable `ThemeSnapshot`s; ui-layout applies each snapshot to the document. The package also ships the `--dsw-*` token stylesheets and injects a synchronous bootstrap so the selected palette and font size apply before the shell loads. Third-party themes can register alias-token overrides through `ctx.theme`.
+`dsh-client-ui-theme` lets Web GUI users choose `light`, `dark`, or `system` and set conversation content text from 10 to 22 px in Settings. A loopback client stores both values in the `ui-theme` settings namespace, which the local provider persists in `$DSH_HOME/cordis.patch.yml` by default. The plugin resolves `system` through `prefers-color-scheme` and publishes immutable `ThemeSnapshot`s; ui-layout applies each snapshot to the document. The package also ships the `--dsw-*` token stylesheets and injects a synchronous bootstrap so the selected palette and font size apply before the shell loads. Third-party themes can register alias-token overrides through `ctx.theme`.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Users switch the color scheme and content font size from two rows in Settings (G
 
 ### Appearance and font size
 
-The plugin registers Appearance preference cubes and a font-size stepper in the General section. The stepper accepts integer values from 12 through 17 px and defaults to 14 px. It changes conversation headings and base text by the same increment, including the user bubble and composer draft; flow-row titles, summaries, and tables follow one step under the body size, while small text and code keep fixed sizes. Each accepted change writes through the Host settings API. Rapid changes serialize in gesture order with namespace revisions, and a rejected latest write reloads the durable values. Non-loopback pages keep both choices process-local.
+The plugin registers Appearance preference cubes and a font-size stepper in the General section. The stepper accepts integer values from 10 to 22 px and defaults to 14 px. It changes conversation headings and base text by the same increment, including the user bubble and composer draft; flow-row titles, summaries, and tables follow one step under the body size, while small text and code keep fixed sizes. Each accepted change writes through the Host settings API. Rapid changes serialize in gesture order with namespace revisions, and a rejected latest write reloads the durable values. Non-loopback pages keep both choices process-local.
 
 ### Registering a theme
 
@@ -44,7 +44,7 @@ When the host composition includes an HTTP server, the host half embeds the regi
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Shared menus use `--dsw-menu-surface-fill` and blur through `MenuSurface`; platform code must preserve those token values. Other overlays consume `--dsw-specific-menu`, which keeps a nearly opaque macOS fill without a menu backing. The enforced source rules are defined in the [styling reference](../../../docs/web-styling.md#component-rules). Modal masks retain their dark translucent fill without background blur.
+Shared menus use `--dsw-menu-surface-fill` and blur through `MenuSurface`; platform code must preserve those token values. Sticky menu group headings can use `--dsw-alias-menu-group-header-fill`, a 94%-opaque light or dark fill, independently of the menu material. Other overlays consume `--dsw-specific-menu`, which keeps a nearly opaque macOS fill without a menu backing. The enforced source rules are defined in the [styling reference](../../../docs/web-styling.md#component-rules). Modal masks retain their dark translucent fill without background blur.
 
 <details>
 <summary>Implementation internals — click to expand</summary>
@@ -67,11 +67,15 @@ Menu icons use `--dsw-alias-menu-icon`: neutral-bluish 800 in light mode and `la
 
 System toasts use `--dsw-alias-toast-bg` and `--dsw-alias-toast-label` for a shared background and text color across callers. Document previews pair `--dsw-alias-bg-document-preview` with `--dsw-alias-label-document-preview` so the backdrop and status text follow the same theme. Tooltip keycaps use `--dsw-alias-tooltip-key-bg`, a lighter fill derived from the tooltip background in each palette. Switch thumbs read `--dsw-alias-switch-thumb`: white in light mode and neutral-bluish 400 in dark mode, so an off switch stays lighter than its track without the glare of pure white.
 
+`--dsw-alias-label-shimmer` supplies an overlay for the shared text shimmer: black at 30% alpha in the light palette and white at 45% alpha in the dark palette. `--dsw-alias-label-deep-diving` and `--dsw-alias-label-deep-diving-shimmer` supply the blue activity label and sweep; the dark palette uses a lighter, less saturated label with a brighter blue sweep.
+
+The `--dsw-alias-turn-trigger-*` tokens provide separate resting and hover backgrounds for Turn-trigger notices in each palette. Dark notices use brighter interactive layers so the resting card remains distinct from the transcript background.
+
 `brand-font.css` exports the local Montserrat Light, Regular and Medium faces (normal style, weights 300, 400 and 500), with `montserrat-light.woff2`, `montserrat-regular.woff2`, `montserrat-medium.woff2` and its SIL Open Font License in `lib/styles/`. Desktop bundles the same stylesheet, font and license for offline welcome brand text; ordinary UI keeps its system font stack.
 
 `corner-shape.css` smooths every rounded corner: inside `@supports (corner-shape: superellipse(1.5))` it defines `--dsw-corner-shape` and applies it to all elements and their `::before`/`::after` through the universal selector, so engines without `corner-shape` keep circular corners. Full-round shapes — `border-radius: 50%` circles and pill radii — pair `corner-shape: round` with their radius in the owning component sheet because a superellipse deforms them; the corner-shape stylesheet spec enforces that pairing across every package stylesheet.
 
-`gradient-shadow-text.css` derives `--dsh-content-font-delta` from `--dsh-content-font-size` and shifts the Markdown heading and base-text ladder by that increment. It also derives the secondary tier `--dsh-content-font-size-secondary` (setting −1 at ≤14, setting −2 above; 13px at the default) with its own `--dsh-content-font-delta-secondary` for the table variants and the flow rows one step under the body. Dense small and code variants stay fixed. Outside the ladder, the user bubble and composer draft read the body pair directly, and flow-row titles and summaries read the secondary pair. The sheet also owns the shadow scale (`--dsw-shadow-lv*`), the translucent-menu `--dsw-menu-backdrop-filter`, and the elevation tokens: `--dsw-elevation-stroke` draws a 0.5px hairline through the rebindable `--dsw-elevation-stroke-color`, and `--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft` (the composer's larger-blur, lower-alpha tier) layer two faint soft shadows over that stroke, so elevated surfaces set `border: 0` and carry no layout-consuming outline; the derived tokens are re-declared per element so a surface's stroke-color rebind takes effect. An elevated surface that paints `--dsw-specific-menu` also applies `backdrop-filter: var(--dsw-menu-backdrop-filter)` ([decision](../../../.agents/notes/implemented/feature/2026-09-17-compact-translucent-menu-surfaces.md)). Dark menus use a 45%-opaque gray fill and the `border-l3` stroke; light menus retain their `border-l1` stroke.
+`gradient-shadow-text.css` derives `--dsh-content-font-delta` from `--dsh-content-font-size` and shifts the Markdown heading and base-text ladder by that increment. It also derives the secondary tier `--dsh-content-font-size-secondary` (setting −1 at ≤14, setting −2 above; 13px at the default) with its own `--dsh-content-font-delta-secondary` for the table variants and the flow rows one step under the body. Dense small and code variants stay fixed. Outside the ladder, the user bubble and composer draft read the body pair directly, and flow-row titles and summaries read the secondary pair. The sheet also owns the shadow scale (`--dsw-shadow-lv*`), the translucent-menu `--dsw-menu-backdrop-filter`, and the elevation tokens: `--dsw-elevation-stroke` draws a 0.5px hairline through the rebindable `--dsw-elevation-stroke-color`, and `--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft` (the composer's larger-blur, lower-alpha tier) layer two faint soft shadows over that stroke, so elevated surfaces set `border: 0` and carry no layout-consuming outline; the derived tokens are re-declared per element so a surface's stroke-color rebind takes effect. An elevated surface that paints `--dsw-specific-menu` also applies `backdrop-filter: var(--dsw-menu-backdrop-filter)` ([styling reference](../../../docs/web-styling.md#component-rules)). Dark menus use a 45%-opaque gray fill and the `border-l3` stroke; light menus retain their `border-l1` stroke.
 
 `brand-font.css` references the bundled `montserrat-regular.woff2` / `montserrat-light.woff2` / `montserrat-medium.woff2`, Montserrat Regular, Light, and Medium under the SIL Open Font License shipped with the stylesheet and WOFF2 under `lib/styles/`. `--dsw-font-family-brand` selects this face for brand text; ordinary UI keeps the system font stack. The source is Google Fonts' Montserrat distribution. The Web entry imports the package's `./brand-font.css` export so Vite emits and resolves the font asset; the Web build also includes its license. The Web application, including Desktop onboarding, loads the font offline. The native credential welcome retains its system font.
 
@@ -83,7 +87,7 @@ System toasts use `--dsw-alias-toast-bg` and `--dsw-alias-toast-label` for a sha
 
 ### Preference persistence
 
-The service provides itself immediately with the schema defaults on a loopback browser, then loads the `ui-theme` namespace and writes each accepted theme or font-size change through the Host settings API. Pushed settings changes and reconnects refetch the namespace. Non-loopback pages do not create that Host-backed scope. The persistence boundary is owned by the [Host-backed preferences note](../../../.agents/notes/implemented/bug-fix/2026-08-06-host-backed-web-preferences.md).
+The service provides itself immediately with the schema defaults on a loopback browser, then loads the `ui-theme` namespace and writes each accepted theme or font-size change through the Host settings API. Pushed settings changes and reconnects refetch the namespace. Non-loopback pages do not create that Host-backed scope. The persistence boundary is owned by the [Host-backed preferences reference](../ui-settings/README.md).
 
 </details>
 
@@ -98,7 +102,7 @@ These pages cover the layout presenter, the token consumers, and the styling rul
 - [ui-sidebar](../ui-sidebar/README.md) — a consumer of the scrollbar rebinding contract.
 - [ui-conversation](../ui-conversation/README.md) — a consumer of `--dsh-scrollbar-width` for the composer seat.
 - [Web styling](../../../docs/web-styling.md) — the authoritative styling rules for web client components.
-- [Host-backed preferences](../../../.agents/notes/implemented/bug-fix/2026-08-06-host-backed-web-preferences.md) — the persistence boundary decision.
+- [historical Host-backed preferences](../../../.agents/notes/archived/bug-fix/2026-08-06-host-backed-web-preferences.md) — the persistence boundary decision.
 
 -----
 
@@ -130,5 +134,3 @@ These limits define the theme extension surface and the color authority; they ar
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The settings scope validates and publishes the durable theme section, while the registry emits `theme/change` synchronously with its own mutations. Store/registry agreement is covered directly by this package's Host, scope, and service behavior specs.

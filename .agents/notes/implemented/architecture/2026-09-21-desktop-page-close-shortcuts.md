@@ -14,7 +14,7 @@ The sidebar page owner resolves close against live focus and captures the target
 
 The macOS File menu routes Close Page or Window through the same owner and displays the accepted single-key binding. Native closure requires the current configuration revision, a focused and enabled product window, and inactive shortcut recording. The existing window lifecycle applies without a shortcut-specific confirmation: macOS keeps the application alive after its last window closes; Windows and Linux quit and stop the Host.
 
-This decision owns File-menu and close behavior in place of the close-role choice in [the standard macOS menu note](../bug-fix/2026-09-16-desktop-window-menus.md). That note retains the rationale for native Window and application hide commands. [Shortcut preference persistence](2026-09-20-device-local-shortcut-preferences.md) owns accepted bindings and revision publication.
+This decision owns File-menu and close behavior; the [Desktop reference](../../../../apps/desktop/README.md) documents native Window and application hide commands. [Shortcut preference persistence](2026-09-20-device-local-shortcut-preferences.md) owns accepted bindings and revision publication.
 
 ## Alternatives considered
 

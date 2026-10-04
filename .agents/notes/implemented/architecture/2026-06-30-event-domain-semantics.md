@@ -6,7 +6,7 @@ English | [中文](2026-06-30-event-domain-semantics.zh.md)
 
 ## Problem
 
-The harness extends the agent loop through a Cordis event taxonomy (see [the microkernel event-taxonomy Agent Note](2026-06-11-microkernel-event-taxonomy.md)). As that taxonomy grew, the line between the three event domains blurred:
+The harness extends the agent loop through a Cordis event taxonomy (see [the microkernel event-taxonomy reference](../../../../docs/architecture.md)). As that taxonomy grew, the line between the three event domains blurred:
 
 - `session/*` carries the durable, event-sourced log (`SessionEventMap`).
 - `agent/*` carries live runtime signals that hand a plugin the `Agent` handle.

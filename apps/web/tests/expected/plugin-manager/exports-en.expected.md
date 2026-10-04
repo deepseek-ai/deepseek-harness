@@ -14,7 +14,7 @@
     - code: fixture-row
     - text: "Off"
   - listitem:
-    - text: File Search Search package introduction.
+    - text: File Search
     - code: fixture-search
     - code: "@fixture/bundle/search"
     - text: "Off"
@@ -22,3 +22,9 @@
     - text: "@fixture/bundle/review"
     - code: fixture-review
     - text: "Off"
+- heading "Source" [level=4]
+- term: Code source
+- definition:
+  - code: file:{{fixtures}}/fixture-bundle
+- term: Current version
+- definition: 0.0.1

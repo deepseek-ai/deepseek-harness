@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RequestView } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import type {
   TrajectoryContribution, TrajectoryConversationViewNode, TrajectoryRequestHeaderState,
 } from '../src/client/trajectory-contract.ts'
@@ -216,7 +217,7 @@ describe('TrajectorySnapshotBuilder', () => {
       contribution('tool', 7, {
         kind: 'tool',
         root: {
-          phase: 'start' as const, callId: 'call-edit',
+          phase: 'start' as const, args: PartialArguments.fromText('{}'), callId: 'call-edit',
           name: 'edit',
           argsRaw: '{}',
           turn: 1,

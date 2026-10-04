@@ -1,0 +1,62 @@
+[
+  {
+    "environment": "production",
+    "target": "mac-arm64",
+    "bucket": "production-download-bucket-1250000000",
+    "publicUrl": "https://download.deepseek.com/desktop/dsh-latest-macos-arm64.dmg",
+    "filename": "dsh-latest-macos-arm64.dmg",
+    "key": "desktop/dsh-latest-macos-arm64.dmg",
+    "contentType": "application/x-apple-diskimage",
+    "channelMetadata": false
+  },
+  {
+    "environment": "production",
+    "target": "mac-x64",
+    "bucket": "production-download-bucket-1250000000",
+    "publicUrl": "https://download.deepseek.com/desktop/dsh-latest-macos-x64.dmg",
+    "filename": "dsh-latest-macos-x64.dmg",
+    "key": "desktop/dsh-latest-macos-x64.dmg",
+    "contentType": "application/x-apple-diskimage",
+    "channelMetadata": false
+  },
+  {
+    "environment": "production",
+    "target": "win-x64",
+    "bucket": "production-download-bucket-1250000000",
+    "publicUrl": "https://download.deepseek.com/desktop/dsh-latest-windows-x64.exe",
+    "filename": "dsh-latest-windows-x64.exe",
+    "key": "desktop/dsh-latest-windows-x64.exe",
+    "contentType": "application/vnd.microsoft.portable-executable",
+    "channelMetadata": false
+  },
+  {
+    "environment": "test",
+    "target": "mac-arm64",
+    "bucket": "test-download-bucket-1250000000",
+    "publicUrl": "https://desktop-updates.example.com/desktop/dsh-latest-macos-arm64.dmg",
+    "filename": "dsh-latest-macos-arm64.dmg",
+    "key": "desktop/dsh-latest-macos-arm64.dmg",
+    "contentType": "application/x-apple-diskimage",
+    "channelMetadata": false
+  },
+  {
+    "environment": "test",
+    "target": "mac-x64",
+    "bucket": "test-download-bucket-1250000000",
+    "publicUrl": "https://desktop-updates.example.com/desktop/dsh-latest-macos-x64.dmg",
+    "filename": "dsh-latest-macos-x64.dmg",
+    "key": "desktop/dsh-latest-macos-x64.dmg",
+    "contentType": "application/x-apple-diskimage",
+    "channelMetadata": false
+  },
+  {
+    "environment": "test",
+    "target": "win-x64",
+    "bucket": "test-download-bucket-1250000000",
+    "publicUrl": "https://desktop-updates.example.com/desktop/dsh-latest-windows-x64.exe",
+    "filename": "dsh-latest-windows-x64.exe",
+    "key": "desktop/dsh-latest-windows-x64.exe",
+    "contentType": "application/vnd.microsoft.portable-executable",
+    "channelMetadata": false
+  }
+]

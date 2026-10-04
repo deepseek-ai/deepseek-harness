@@ -59,6 +59,16 @@ describe('Pill', () => {
 })
 
 describe('Input', () => {
+  it('exposes its native input for focus and releases the ref on unmount', () => {
+    const ref = createRef<HTMLInputElement>()
+    const { unmount } = render(<Input ref={ref} aria-label="Search" />)
+    expect(ref.current).toBe(screen.getByRole('textbox', { name: 'Search' }))
+    ref.current?.focus()
+    expect(document.activeElement).toBe(ref.current)
+    unmount()
+    expect(ref.current).toBeNull()
+  })
+
   it('forwards value/onChange and renders the leading icon', () => {
     const onChange = vi.fn()
     render(<Input icon={<svg data-testid="ic" />} value="q" onChange={onChange} placeholder="search" />)

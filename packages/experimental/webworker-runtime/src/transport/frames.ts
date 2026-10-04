@@ -133,8 +133,17 @@ export interface TunnelStreamErrorFrame {
     }
 }
 
+/** Worker request to show one VFS text file in the page's read-only viewer; no reply follows. */
+export interface TunnelViewTextFrame {
+  readonly t: 'view-text'
+  /** Absolute VFS path, shown as the viewer title. */
+  readonly path: string
+  readonly text: string
+}
+
 /** Frames the worker emits. */
 export type TunnelOutboundFrame =
+  | TunnelViewTextFrame
   | TunnelResponseFrame
   | TunnelResponseHeadFrame
   | TunnelResponseChunkFrame

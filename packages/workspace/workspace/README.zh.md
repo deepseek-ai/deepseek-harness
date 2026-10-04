@@ -66,7 +66,7 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 
 目录解析器仅在允许创建时于变更队列内运行。它返回绝对路径；注册表创建缺失的父目录、规范化路径、重新检查 Session 历史，再一起提交 Workspace 和初始化标记，标题取所请求目录（而非规范路径）的最后一段，因此该路径上的符号链接不会让工作区改用链接目标的名称。已存在的目录直接复用；文件冲突或目录操作失败时拒绝初始化。[Host 控制器](../../api/workspace-controller/README.zh.md#first-use-workspace)提供 Documents 路径策略。
 
-首次成功登记会持久保存工作区身份。重复调用直接返回它，不再解析目录；改名保留该身份，删除登记也不会允许再次自动创建。目录或登记失败时，初始化状态保持未设置，可以重试。后续步骤失败前已创建的目录会保留在磁盘上。目录解析成功后，调用方取消操作不会回滚目录创建或登记。[首次使用决策](../../../.agents/notes/implemented/feature/2026-09-20-default-workspace.zh.md)说明这一生命周期。
+首次成功登记会持久保存工作区身份。重复调用直接返回它，不再解析目录；改名保留该身份，删除登记也不会允许再次自动创建。目录或登记失败时，初始化状态保持未设置，可以重试。后续步骤失败前已创建的目录会保留在磁盘上。目录解析成功后，调用方取消操作不会回滚目录创建或登记。[历史首次使用决策](../../../.agents/notes/archived/feature/2026-09-20-default-workspace.md)说明这一生命周期。
 
 ### 将会话归入项目
 
@@ -75,6 +75,8 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 ### 隐藏、恢复会话与移除项目
 
 当会话不应再出现在分组中时隐藏它：它会从可见列表中消失，但其会话、历史与在项目中的位置都保持不变。仍有工作在跑的会话——它自己的回合、运行中的子代理、后台任务或活跃提醒——不会被藏在这些工作之下：注册表会拒绝并列出还在跑的内容；调用方若要求先停止这些工作，注册表会按用户自己的停止操作同样的方式停掉它们，然后再隐藏。当被隐藏的会话应重新出现时恢复它：它会回到其项目下记录的位置；不属于任何项目时则回到 Ungrouped，并从一份正常收尾的日志继续对话。项目不再需要时移除它：它离开列表，而其文件夹、文件与会话历史绝不受影响——这些会话变成 Ungrouped。之后再次添加同一目录会从空项目开始，不会带回旧会话。
+
+Workspace 注册不意味着拥有其目录。未来的破坏性文件系统操作必须单独命名、获得明确确认，并执行所有权与安全检查。
 
 -----
 
@@ -110,7 +112,6 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 | [`src/spec.ts`](src/spec.ts) | 领域声明：记录 schema、注册表状态、`defineDomain` 规范 |
 | [`src/types.ts`](src/types.ts) | 公开 `Workspace` 接口与 `WorkspaceId` 品牌 |
 | [`src/paths.ts`](src/paths.ts) | `realpath` 唯一性规范 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件：实体缓存镜像持久表 |
 
 ### 持久形态
 
@@ -123,10 +124,6 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 ### 失败与恢复
 
 创建或删除的第二次写入失败时，缓存与先前顺序会回滚；当操作与回滚都失败时，持久标记仍指明被中断的操作，下一次启动会补全或回滚它。已提交的删除即使标记清理失败仍报告成功，下一次启动会幂等地清除该标记。
-
-### 不变式
-
-`workspace-invariant` 伴生插件注册归属关系：`workspaces` 表的每个持久 `domain/changed` 都必须指向实体缓存已持有的记录——只有在注册表从缓存移除实体之后删除才有效，因此绕过注册表的写入路径会触发不变式失败。
 
 </details>
 
@@ -141,7 +138,7 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 - [Workspace 包映射](../README.zh.md)——本组唯一的包及其仓库位置。
 - [领域 KV 存储 Agent Note](../../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)——为什么项目记录使用领域数据形式。
 - [Workspace UI 产品流 Agent Note](../../../.agents/notes/archived/feature/2026-07-25-workspace-ui-product-flow.md)——首次启动如何从会话历史构建项目，以及 GUI 如何排序。
-- [删除 Workspace 注册记录决策](../../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.zh.md)——为什么移除项目绝不会删除其文件夹或会话。
+- [历史删除 Workspace 注册记录决策](../../../.agents/notes/archived/feature/2026-07-27-workspace-registration-deletion.md)——为什么移除项目绝不会删除其文件夹或会话。
 
 -----
 
@@ -169,7 +166,7 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 
 这些限制说明项目列表何时不合适，或何时需要特别的运维注意。它们是当前包约束，不是任务积压。
 
-- **移除绝不删除数据**——移除项目会保留其文件夹、文件与会话历史；这些会话变成 Ungrouped，而会话删除与文件夹移除是彼此独立且尚未提供的功能（参见[决策记录](../../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.zh.md)）。
+- **移除绝不删除数据**——移除项目会保留其文件夹、文件与会话历史；这些会话变成 Ungrouped，而会话删除与文件夹移除是彼此独立且尚未提供的功能。
 - **只有带记录目录的会话才能加入**——只有记录中带有可解析为项目路径的目录的会话才属于项目；没有目录的会话保持 Ungrouped，来自其他目录的会话无法移入。
 - **外部变更延迟可见**——如果另一进程删除或损坏目录，项目只能在下次刷新或重启后反映出来。
 - **归档与取消归档执行不同的会话校验**——恢复只是从归档集合中移除 id，因此会话已不存在的条目仍能取消归档，也不会留下未知引用；对未归档 id 执行恢复不写盘即完成，而 `archiveSession` 会拒绝既非实时也未持久化的会话。

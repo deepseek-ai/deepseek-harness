@@ -1,12 +1,12 @@
 /** One retained task's rule, saved deliveries, run-time edits, deletion, and original-Session link. */
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconChevronUpOutlineRegular,
   IconClockOutlineRegular, IconCloseOutlineRegular,
-  IconEllipsisOutlineRegular, IconTrashOutlineRegular, Modal, Pill,
+  IconEllipsisOutlineRegular, IconTrashOutlineRegular, Modal, Pill, ReferenceIconRegular, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
@@ -308,6 +308,49 @@ export function TaskDetail({
   const sessionLink = sessionLinkState(task.sessionId, sessions, workspaces)
   const linkedSession = sessionLabel(task.sessionId, sessions)
   const sessionNotice = sessionLink === 'available' ? undefined : t(sessionLinkMessages[sessionLink])
+  const linkedShown = tab === 'rule' && withinSession !== task.sessionId
+  const linkedText = t('detail.session')
+  const [linkedCompact, setLinkedCompact] = useState(false)
+  const linkedRef = useRef<HTMLSpanElement>(null)
+  // The expanded entry's width for its current label, measured while it last
+  // rendered expanded; the compact icon cannot report it.
+  const linkedExpanded = useRef<{ label: string; width: number } | undefined>(undefined)
+  const linkedAction = linkedSession.titled
+    ? t('detail.openSessionTitle', { title: linkedSession.text })
+    : t('detail.openSession')
+  // The Session name is the entry's visually hidden accessible description in both layouts.
+  const linkedName = <span id={`${id}-session`} className={css.linkedSessionName}>{linkedSession.text}</span>
+  const linkedDescribedBy = `${id}-session${sessionNotice === undefined ? '' : ` ${id}-session-state`}`
+  useLayoutEffect(() => {
+    if (!linkedShown) return
+    const tabs = detailTabsRef.current as HTMLDivElement
+    const linked = linkedRef.current as HTMLSpanElement
+    const measure = (): void => {
+      const width = linked.getBoundingClientRect().width
+      if (!linkedCompact) linkedExpanded.current = { label: linkedText, width }
+      // The first measurement is always expanded, so a width is recorded; a
+      // label changed while compact has no expanded width for that label yet.
+      const expanded = linkedExpanded.current as { label: string; width: number }
+      if (expanded.label !== linkedText) {
+        setLinkedCompact(false)
+        return
+      }
+      // The tab list grows into the strip's free width, so its own width cannot
+      // tell whether its tabs overflow; the tabs' extent can. The expanded entry
+      // fits only when that extent still fits in the width it would leave.
+      const extent = (tabs.lastElementChild as Element).getBoundingClientRect().right
+        - (tabs.firstElementChild as Element).getBoundingClientRect().left
+      // Expanding again takes 1px more room than collapsing, so whole-pixel
+      // clientWidth rounding cannot switch the two layouts back and forth.
+      setLinkedCompact(extent > tabs.clientWidth - (expanded.width - width) - (linkedCompact ? 1 : 0))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(tabs)
+    // A tab label can widen, as when a web font loads, without resizing the list.
+    for (const tab of tabs.children) observer.observe(tab)
+    return () => { observer.disconnect() }
+  }, [linkedShown, linkedCompact, linkedText])
   const taskIdentity = `${task.sessionId}\u0000${task.id}`
   const [edit, setEdit] = useState<RuleEdit>(() => initialRuleEdit(task))
   // The elapsed-interval unit lives here, not in the Run time card, so the saved
@@ -688,24 +731,35 @@ export function TaskDetail({
               tabs and the task's own actions, so it stays visible while the
               detail scrolls. Rules-only: the records view has no linked row. A
               detail hosted inside the linked Session itself omits the entry. */}
-          {tab === 'rule' && withinSession !== task.sessionId && <span className={css.detailContext}>
-            <Button
-              className={css.linkedSession}
-              title={linkedSession.titled ? linkedSession.text : task.sessionId}
-              aria-label={linkedSession.titled
-                ? t('detail.openSessionTitle', { title: linkedSession.text })
-                : t('detail.openSession')}
-              aria-describedby={`${id}-session${sessionNotice === undefined ? '' : ` ${id}-session-state`}`}
-              disabled={sessionLink !== 'available'}
-              onClick={() => { onOpenSession(task.sessionId) }}
-            >
-              <span className={css.linkedSessionLabel}>{t('detail.session')}</span>
-              <span className={css.linkedSessionTarget}>
-                <span id={`${id}-session`} className={css.linkedSessionName}>{linkedSession.text}</span>
-                <IconChevronRightOutlineRegular />
-              </span>
-            </Button>
-          </span>}
+          {/* One Button serves both layouts, so crossing the fit threshold keeps
+              its keyboard focus. The tooltip anchors on the wrapper, which still
+              receives hover while the Button is disabled. */}
+          {linkedShown && <Tooltip label={linkedText} side="bottom" portal disabled={!linkedCompact}>
+            <span ref={linkedRef} className={css.detailContext}>
+              <Button
+                size={linkedCompact ? 'sm' : 'md'}
+                className={linkedCompact ? css.detailIconButton : css.linkedSession}
+                title={linkedCompact ? undefined : linkedSession.titled ? linkedSession.text : task.sessionId}
+                aria-label={linkedAction}
+                aria-describedby={linkedDescribedBy}
+                disabled={sessionLink !== 'available'}
+                onClick={() => { onOpenSession(task.sessionId) }}
+              >
+                {linkedCompact
+                  ? <>
+                    <ReferenceIconRegular kind="session" />
+                    {linkedName}
+                  </>
+                  : <>
+                    <span className={css.linkedSessionLabel}>{linkedText}</span>
+                    <span className={css.linkedSessionTarget}>
+                      {linkedName}
+                      <IconChevronRightOutlineRegular />
+                    </span>
+                  </>}
+              </Button>
+            </span>
+          </Tooltip>}
           {/* The menu closes Escape from its own document keydown listener; this
               wrapper covers a menu whose own listener stands down, where the page's
               Escape handler would otherwise close the whole detail with it. */}

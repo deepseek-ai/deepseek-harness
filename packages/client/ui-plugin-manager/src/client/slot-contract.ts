@@ -72,8 +72,16 @@ export interface PluginActivationOwnerProps {
   readonly onOpenDetails: () => void
 }
 
+/** Add-plugin menu actions, independent of any selected bundle or Session. */
+export interface PluginAddActionsProps {
+  /** Close the add-plugin menu before starting the contributed action. */
+  readonly onDismiss: () => void
+}
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    /** Additional MenuItemButton rows after installation: 72px high, with a title and a description capped at two lines. */
+    'plugins.add.actions': { kind: 'list'; scope: 'root'; owner: PluginAddActionsProps }
     /** Optional guidance after the user enables a bundle from the list, keyed by npm package name. */
     'plugins.bundle.activation': { kind: 'keyed'; scope: 'root'; owner: PluginActivationOwnerProps }
     /**

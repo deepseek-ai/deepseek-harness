@@ -29,7 +29,7 @@ import { EMPTY_CHAT_SNAPSHOT } from './contract/snapshot.ts'
 import { ApprovalCommand } from './chat/ApprovalCommand.tsx'
 import { ChatView } from './chat/ChatView.tsx'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
-import { StatsPills } from './chat/StatsPills.tsx'
+import { ActivityPill, UsagePill } from './chat/StatsPills.tsx'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
 import { QuotaNoticeHost } from './chat/QuotaNoticeHost.tsx'
 import { en, NS, zh } from './locale.ts'
@@ -133,7 +133,7 @@ export function apply(ctx: Context): void {
     scope.slots.inject('settings.general.item', () => scope.slots.register({
       name: 'settings.general.item',
       id: 'link-opening',
-      order: 14,
+      order: 17,
       locale: NS,
       inject: (): LinkOpeningRowInjected => ({
         hooks: { linkOpening, browserAvailable },
@@ -156,7 +156,7 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
     id: 'performance-usage',
-    order: 13,
+    order: 30,
     locale: NS,
     inject: (): PerformanceUsageRowInjected => ({
       hooks: { performanceUsage },
@@ -281,11 +281,16 @@ export function apply(ctx: Context): void {
     }),
   }, QuotaNoticeHost))
 
-  ctx.slots.inject('conversation.composer.dock', () =>
-    ctx.slots.register({
-      name: 'conversation.composer.dock', id: 'stats', order: 0, locale: NS,
-      inject: () => ({ hooks: { performanceUsage } }),
-    }, StatsPills))
+  // One dock entry per pill, so a plugin replaces or adds a single pill by id.
+  const statPillInject = () => ({ hooks: { performanceUsage } })
+  ctx.slots.inject('conversation.composer.dock', function* () {
+    yield ctx.slots.register({
+      name: 'conversation.composer.dock', id: 'activity', order: 0, locale: NS, inject: statPillInject,
+    }, ActivityPill)
+    yield ctx.slots.register({
+      name: 'conversation.composer.dock', id: 'usage', order: 1, locale: NS, inject: statPillInject,
+    }, UsagePill)
+  })
 
   ctx.slots.inject('conversation.approval.detail', () =>
     ctx.slots.register({ name: 'conversation.approval.detail' }, ApprovalCommand))

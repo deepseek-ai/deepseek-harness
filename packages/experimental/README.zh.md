@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-实验组包含约定可能变更且不提供支持承诺的原型能力。所有当前包都以 `@deepseek-ai/dsh-experimental-*` 名称发布，包括显式启用的 Agent Teams 组合、Auto review、Cua Driver 提供方、浏览器操作后端、跨 realm Inspector、CPython PTC 后端与浏览器 worker 预览库。组外已发布产品不得依赖实验性包。dsh 安装将 Agent Teams、语音输入、Auto review 与定时包作为可选 bundle 一起发布，可从 Web 侧边栏“插件”页启用（[决策](../../.agents/notes/implemented/architecture/2026-09-21-experimental-capabilities-as-optional-bundles.zh.md)）；其余包是库或显式组合。
+实验性原型的约定可能变更，且不提供支持承诺。新包默认发布；私有包还必须列入[私有例外列表](../../scripts/experimental-package-policy.ts)。所有当前包都以 `@deepseek-ai/dsh-experimental-*` 名称发布，包括显式启用的 Agent Teams 组合、Auto review、Cua Driver 提供方、浏览器操作后端、跨 realm Inspector、CPython PTC 后端与浏览器 worker 预览库。组外已发布产品不得依赖实验性包。dsh 安装将 Agent Teams、语音输入与 Auto review 包作为可选 bundle 一起发布，可从 Web 侧边栏“插件”页启用（[决策](../../.agents/notes/implemented/architecture/2026-09-21-experimental-capabilities-as-optional-bundles.zh.md)）；其余包是库或显式组合。
 
 ## 目录
 
@@ -33,7 +33,8 @@ kind: "package-group"
 | [`agent-team`](agent-team/README.zh.md) | 具名 teammate，成员之间持久消息与共享任务板 | `ctx.agentTeams` |
 | [`client-ui-agent-team`](client-ui-agent-team/README.zh.md) | Web Team roster、任务板与 teammate 导航 | — |
 | [`auto-review`](auto-review/README.zh.md) | 显式 Web 层，在每个原生或 PTC inner 工具调用前使用同一模型审查 | — |
-| [`schedule-bundle`](schedule-bundle/README.zh.md) | 为出厂 Web 组合按需加入定时服务、任务页面与时间上下文 | — |
+| [`claude-code-mods`](claude-code-mods/README.zh.md) | 把 Claude Code 模组作为插件运行：钩子链落在 harness 扩展点上，并在提示框上方绘制横幅 | `ctx.claudeCodeMods` |
+| [`client-ui-claude-code-mods`](client-ui-claude-code-mods/README.zh.md) | 在提示框上方绘制模组树并把按钮点击发回的 Web 横幅 | — |
 | [`ptc-runtime-python`](ptc-runtime-python/README.zh.md) | PTC 执行 seam 的 CPython 子进程后端 | `ctx.ptcRuntime` |
 | [`computer-use-cua-driver-mcp`](computer-use-cua-driver-mcp/README.zh.md) | 通过 MCP 使用已安装的 Cua Driver | `ctx.computerUse` |
 | [`computer-use-cua-driver-native`](computer-use-cua-driver-native/README.zh.md) | 嵌入 Cua Driver 原生 npm 运行时 | `ctx.computerUse` |
@@ -42,6 +43,8 @@ kind: "package-group"
 | [`browser-use-stagehand-native`](browser-use-stagehand-native/README.zh.md) | Stagehand 浏览器操作与显式配置的原生模型 | `ctx.browserUse` |
 | [`browser-use-runtime`](browser-use-runtime/README.zh.md) | 实验性提供方共享的 Session 浏览器资源 | — |
 | [`inspector`](inspector/README.zh.md) | 用于 Host 调试、Client Runtime 检查、网络采集与 Cordis 树的跨 realm CDP hub | `ctx.inspector` |
+| [`session-inspector`](session-inspector/README.zh.md) | 展示原始 Session 日志与 Chat 节点的 Sidebar 表格 | — |
+| [`inspector-profile`](inspector-profile/README.zh.md) | 用于 Session 日志与 Chat 节点检查的可选 Web 组合包 | — |
 | [`tool-agent-team`](tool-agent-team/README.zh.md) | 让模型创建、发消息与协调 teammate 的九个工具 | 按作用域注册工具到 `ctx.tools` |
 | [`webworker-packer`](webworker-packer/README.zh.md) | 构建浏览器 worker 预览所消费的 gzip 压缩虚拟文件系统（VFS）镜像 | 库与 CLI（命令行界面），不使用 ctx key |
 | [`webworker-runtime`](webworker-runtime/README.zh.md) | 在专用浏览器 worker 中运行 harness 插件树 | 库与 worker 入口，不使用 ctx key |
@@ -51,7 +54,7 @@ kind: "package-group"
 <a id="related-documentation"></a>
 ## 相关文档
 
-- [实验包发布决策](../../.agents/notes/implemented/process/2026-09-12-experimental-publication-denylist.zh.md)——默认公开与私有例外。
+- [实验包发布说明](../../scripts/experimental-package-policy.ts)——默认公开与私有例外。
 - [计算机操作](../../docs/subsystems/computer-use.zh.md)——桌面提供方选择。
 - [浏览器操作](../../docs/subsystems/browser-use.zh.md)——浏览器提供方选择与 Session 所有权。
 - [Agent Teams 子系统](../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与 `ctx.agentTeams` 服务 API。

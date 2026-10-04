@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
   "description": "Extensible Sidebar previews for Office documents, spreadsheets, Markdown, code, images, PDF, HTML, and plain text",
-  "version": "0.1.7-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -85,7 +85,8 @@
     "pdfjs-dist": "6.3.289",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "yaml": "^2.9.0"
   },
   "files": [
     "lib/index.js",

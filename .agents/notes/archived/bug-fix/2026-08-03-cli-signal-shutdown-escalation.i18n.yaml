@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-08-03-cli-signal-shutdown-escalation.md
+2026-08-03-cli-signal-shutdown-escalation.md: 8f8dce5f4d09c71a4a93b719138c995e79e82f8b
+2026-08-03-cli-signal-shutdown-escalation.zh.md: 1b3a56ed3741bf08f54f12e18d1482edcf1d08b2

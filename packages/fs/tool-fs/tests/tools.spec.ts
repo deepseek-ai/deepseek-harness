@@ -164,6 +164,22 @@ describe('registration', () => {
     expect(ctx.tools.schemas().map(s => s.name).sort()).toEqual(['edit', 'read', 'write'])
   })
 
+  it.each([
+    { name: 'write', fields: ['content'], hint: 'Provide `file_path` before `content` in the arguments.' },
+    { name: 'edit', fields: ['old_string', 'new_string'], hint: 'Provide `file_path` before `old_string` and `new_string` in the arguments.' },
+  ])('requests file_path before content fields for $name', async ({ name, fields, hint }) => {
+    const { ctx } = await setup()
+    try {
+      const schema = ctx.tools.schemas().find(tool => tool.name === name)!
+      expect(Object.keys(schema.parameters.properties as Record<string, unknown>).slice(0, fields.length + 1))
+        .toEqual(['file_path', ...fields])
+      expect(schema.parameters).toHaveProperty('required', ['file_path', ...fields])
+      expect(schema.parameters).toHaveProperty('properties.file_path.description', expect.stringContaining(hint))
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('declares read parallel-safe while write/edit remain exclusive', async () => {
     const { ctx } = await setup()
     expect(ctx.tools.executionMode({ signal: testToolSignal, callId: ToolCallId('read-safe'), name: 'read', arguments: { file_path: 'a.txt' } }))

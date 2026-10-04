@@ -316,6 +316,11 @@ interface TypertGateway {
   /** Carrier adapter shared by WebSocket and in-process transports. */
   readonly wireStream: TypertGatewayWireStream
   /**
+   * Check for an active Client event stream.
+   * @returns whether a stream is open and has not been cancelled.
+   */
+  hasLiveClient(): boolean
+  /**
    * Register the application-selected forwarded-event source.
    * @param source - stream factory installed by the Remote assembly.
    * @param host - stable Host facts included in each Client generation's opening frame.
@@ -437,8 +442,6 @@ listPackages(filter: TypertPackageFilter = {}): TypertPackageRecord[]
 toJSONSchema(key: string, params?: z.core.ToJSONSchemaParams): z.core.JSONSchema.BaseSchema
 ```
 
-Types: [TypertContribution](invariants.zh.md) · [TypertFace](invariants.zh.md) · [TypertPackageFilter](invariants.zh.md) · [TypertPackageRecord](invariants.zh.md) · [TypertSchemaFilter](invariants.zh.md) · [TypertSchemaRecord](invariants.zh.md)
-
 Source: [`packages/typert/registry/src/service.ts`](../../packages/typert/registry/src/service.ts)
 
 <a id="ctxtypertgateway--typertgatewayservice"></a>
@@ -448,6 +451,12 @@ Source: [`packages/typert/registry/src/service.ts`](../../packages/typert/regist
 Resolve strict generated definitions or conservative SRC markers against current Cordis Services and Typert providers.
 
 ```ts cordis-catalog
+/**
+ * Check for an active Client event stream.
+ * @returns whether a stream is open and has not been cancelled.
+ */
+hasLiveClient(): boolean
+
 /**
  * Register the sole application-selected forwarded-event source.
  * @param source - stream factory installed by the Remote assembly.

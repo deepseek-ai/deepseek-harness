@@ -6,7 +6,7 @@ import type { Readable, Writable } from 'node:stream'
 import { Context } from '@deepseek-ai/cordis'
 import { FsError, type FsTarget, type FsWriteIntent, type FsVersion } from '@deepseek-ai/dsh-fs'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
-import { SubprocessExecutableNotFoundError } from '@deepseek-ai/dsh-subprocess'
+import type {} from '@deepseek-ai/dsh-subprocess'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import { LocalSandboxProvider } from '@deepseek-ai/dsh-sandbox-local'
 import { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
@@ -135,7 +135,11 @@ export async function runSshHelper(transport: HelperTransport): Promise<void> {
       try {
         return await ctx.subprocess.resolveExecutable(input.command, env, signal)
       } catch (error) {
-        if (error instanceof SubprocessExecutableNotFoundError) throw new RemoteOperationError(error.message, 'SUBPROCESS_EXECUTABLE_NOT_FOUND')
+        if (typeof error === 'object' && error !== null
+          && 'name' in error && error.name === 'SubprocessExecutableNotFoundError'
+          && 'message' in error && typeof error.message === 'string') {
+          throw new RemoteOperationError(error.message, 'SUBPROCESS_EXECUTABLE_NOT_FOUND')
+        }
         throw error
       }
     }

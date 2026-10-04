@@ -66,7 +66,7 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 
 The directory resolver runs inside the mutation queue only when creation is eligible. It returns an absolute path; the registry creates missing parent directories, canonicalizes the path, rechecks Session history, and commits the Workspace with its initialization marker, titled after the requested directory's final segment rather than the canonical one, so a symlink at that path does not retitle the Workspace after its target. An existing directory is reused; a file conflict or directory failure rejects initialization. The [Host controller](../../api/workspace-controller/README.md#first-use-workspace) supplies the Documents path policy.
 
-The first successful registration records its identity durably. Repeated calls return it without resolving a directory again; renaming keeps that identity, and deleting its registration does not permit another automatic creation. Directory or registration failure leaves initialization unset for retry. Directories created before a later failure remain on disk. Once directory resolution succeeds, caller cancellation does not roll back directory creation or registration. The [first-use decision](../../../.agents/notes/implemented/feature/2026-09-20-default-workspace.md) explains this lifetime.
+The first successful registration records its identity durably. Repeated calls return it without resolving a directory again; renaming keeps that identity, and deleting its registration does not permit another automatic creation. Directory or registration failure leaves initialization unset for retry. Directories created before a later failure remain on disk. Once directory resolution succeeds, caller cancellation does not roll back directory creation or registration. The [historical first-use decision](../../../.agents/notes/archived/feature/2026-09-20-default-workspace.md) explains this lifetime.
 
 ### Grouping sessions under a project
 
@@ -75,6 +75,8 @@ A session joins the project of the directory it runs in: create a session in a p
 ### Hiding and restoring sessions, and removing projects
 
 Hide a session from the grouping when it should stop appearing there: it disappears from the visible list, while its session, history, and place in the project stay intact. A session with running work — its own turn, a running subagent, a background job, or an active reminder — is not hidden underneath that work: the registry refuses with the list of what runs, and a caller that asks to stop the work first has it stopped the way the user's own stop actions do, then hidden. Restore a hidden session when it should appear again: it returns to its recorded position under its project, or to the ungrouped sessions when it belongs to none, and continues the conversation from a regularly ended log. Remove a project when it is no longer needed: it leaves the list, and its folder, files, and session histories are never touched — those sessions become ungrouped. Adding the same directory again afterwards starts a fresh project without the old sessions.
+
+Workspace registration does not establish ownership of its directory. A future destructive filesystem action must be separately named, explicitly confirmed, and enforce ownership and safety checks.
 
 -----
 
@@ -109,7 +111,6 @@ Archive admission is a capability seam over two Host events this package declare
 | [`src/spec.ts`](src/spec.ts) | Domain declaration: record schema, registry state, `defineDomain` spec |
 | [`src/types.ts`](src/types.ts) | Public `Workspace` interface and `WorkspaceId` brand |
 | [`src/paths.ts`](src/paths.ts) | The `realpath` uniqueness canon |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: the entity cache mirrors the durable table |
 
 ### Durable shape
 
@@ -122,10 +123,6 @@ On start, the registry opens the domain, completes a marked mutation if one is p
 ### Failure and recovery
 
 A create or delete whose second write fails rolls the cache and the prior order back; when both the operation and its rollback fail, the durable marker still names the interrupted operation and the next startup completes or rolls it back. A committed delete whose marker cleanup fails still reports success, and the next startup clears the marker idempotently.
-
-### Invariant
-
-The `workspace-invariant` companion registers the owned relationship: every durable `domain/changed` for the `workspaces` table must name a record the entity cache already holds — a delete is valid only after the registry removed the entity from its cache, so a bypassing write path fails the invariant.
 
 </details>
 
@@ -140,7 +137,7 @@ Read these pages when this package's view is not enough: the subsystem reference
 - [Workspace package map](../README.md) — the group's single package and its repository position.
 - [domain KV storage Agent Note](../../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md) — why project records use the domain data form.
 - [Workspace UI product-flow Agent Note](../../../.agents/notes/archived/feature/2026-07-25-workspace-ui-product-flow.md) — how the first start builds projects from session history and how the GUI orders them.
-- [Workspace registration deletion decision](../../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md) — why removing a project never deletes its folder or sessions.
+- [historical Workspace registration deletion decision](../../../.agents/notes/archived/feature/2026-07-27-workspace-registration-deletion.md) — why removing a project never deletes its folder or sessions.
 
 -----
 
@@ -168,7 +165,7 @@ Independent of live requests: the package never touches a request prefix, so it 
 
 These limits define when the project list is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
-- **Removal never deletes data** — removing a project leaves its folder, files, and session histories in place; those sessions become ungrouped, and session deletion or folder removal are separate, absent capabilities ([decision](../../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md)).
+- **Removal never deletes data** — removing a project leaves its folder, files, and session histories in place; those sessions become ungrouped, and session deletion or folder removal are separate, absent capabilities.
 - **A session joins only with a recorded directory** — a session belongs to a project only when its record carries a directory that resolves to the project's path; sessions without one stay ungrouped, and a session from another directory cannot be moved in.
 - **External changes are seen late** — if another process deletes or damages a directory, the project reflects it only at the next refresh or restart.
 - **Archive and unarchive enforce different session checks** — a restore only drops an id from the archive set, so an entry whose session is gone still unarchives and leaves no unknown referent; a restore of an id that is not archived resolves without writing, while `archiveSession` rejects a session that is neither live nor persisted.

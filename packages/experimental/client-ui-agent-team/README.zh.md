@@ -100,5 +100,3 @@ Client export 通过 Cordis effect 注册 locale dictionary 与一个 conversati
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。Host 投影是权威来源，本包只持有一个可释放的 slot 注册。

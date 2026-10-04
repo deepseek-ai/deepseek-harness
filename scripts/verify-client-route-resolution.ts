@@ -24,7 +24,7 @@
  * `packages/client/modules/tests/node-half.client.spec.ts` owns the regression
  * signal for composed graph rows, batch descriptors, and the source-map trailer.
  *
- * Rationale: .agents/notes/implemented/architecture/2026-09-17-web-feature-routes-and-route-gate.md.
+ * Rationale: .agents/notes/implemented/architecture/2026-09-14-web-document-relative-app-routes.md.
  */
 
 import { existsSync, globSync, readFileSync } from 'node:fs'

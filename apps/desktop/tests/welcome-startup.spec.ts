@@ -102,6 +102,10 @@ vi.mock('electron', () => ({
 vi.mock('../src/tray.ts', () => ({ DesktopTray: class { relabel() {} dispose() {} } }))
 
 vi.mock('../src/paths.ts', () => ({ resolveDesktopPaths: () => ({ profile: '/profile' }) }))
+vi.mock('../src/login-shell-environment.ts', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/login-shell-environment.ts')>(),
+  readDesktopLoginShellEnvironment: async (base: NodeJS.ProcessEnv) => ({ environment: base, failures: [] }),
+}))
 vi.mock('../src/project-manager.ts', () => ({ DesktopProjectManager: class {
   applyRelease = vi.fn(async () => {})
   canRecoverProfile = vi.fn(() => true)

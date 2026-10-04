@@ -304,3 +304,5 @@ export class WeakMapWithValues<Key extends object, Value> {
     this.valueSet.clear()
   }
 }
+
+export { PartialArguments, type LengthReadOptions } from './partial-json.ts'

@@ -65,9 +65,20 @@
 /* `hidden="until-found"` retains a zero-height box so browser find can reveal
    its subtree. Direct Chat Node Seats and auxiliary rows share one flow;
    hidden and empty Seats do not contribute spacing. */
-.column > :not([hidden]):not(.flowItem:empty)
-  ~ :not([hidden]):not(.flowItem:empty) {
-  margin-top: var(--dsh-chat-flow-gap, 16px);
+.column > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))
+  ~ :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) {
+  margin-top: var(--dsh-chat-flow-gap, 6px);
+}
+
+/* Process rows sit 6px apart; an Assistant response is separated from its
+   neighbours by 12px. */
+.flowItem[data-chat-group-part="response"] {
+  --dsh-chat-flow-gap: 12px;
+}
+
+.column > [data-chat-group-part="response"]:not([hidden]):not(:empty)
+  + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running) {
+  --dsh-chat-flow-gap: 12px;
 }
 
 /* Settled-flow identity boundary. It is neutral until it becomes the natural
@@ -76,15 +87,16 @@
   min-width: 0;
 }
 
-/* A closed process reads as one summary immediately followed by its answer.
-   Expanded process rows return to the ordinary 16px rhythm. */
-.flowItem[data-turn-process-answer] {
-  --dsh-chat-flow-gap: 8px;
+/* The Turn header has 16px clearance from its input and following content. */
+.flowItem[data-chat-flow-kind="turn-process"],
+.flowItem[data-turn-process-answer],
+.column > [data-chat-flow-kind="turn-process"] + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running) {
+  --dsh-chat-flow-gap: 16px;
 }
 
-/* Empty Seats retain ordered layout positions for Turn lookup without
-   contributing height or the sibling gap. */
-.flowItem:empty {
+/* Empty Seats, including retained empty slot anchors, preserve Turn lookup
+   without contributing height or the sibling gap. */
+.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)) {
   height: 0;
 }
 
@@ -106,6 +118,7 @@
   flex-direction: column;
   align-items: flex-start;
   --dsh-chat-flow-gap: 12px;
+  --dsw-alias-label-shimmer: var(--dsw-alias-label-deep-diving-shimmer);
   color: var(--dsw-alias-label-deep-diving);
   font-size: calc(var(--dsh-content-font-size, 14px) - 2px);
   line-height: calc(22px + var(--dsh-content-font-delta, 0px));
@@ -142,23 +155,40 @@
 }
 
 .runningIcon {
+  position: relative;
   display: inline-flex;
   flex: none;
   width: calc(14px + var(--dsh-content-font-delta, 0px));
   height: calc(14px + var(--dsh-content-font-delta, 0px));
+  /* The fixed footprint contains the animation's layout and paint. */
+  contain: strict;
+  overflow: hidden;
+}
+
+.runningWhaleAnimated {
+  display: none;
+  position: absolute;
+  inset: 0;
 }
 
 .runningWhaleStill {
-  display: none;
+  display: initial;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .runningWhaleAnimated {
-    display: none;
-  }
+@supports (mask-mode: alpha) and (mask-image: url('')) {
+  @media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+    .runningWhaleAnimated {
+      display: block;
+      background: currentColor;
+      mask: url('./running-whale@2x.png') center / 100% 100% no-repeat;
+      mask-mode: alpha;
+      /* Keep animated-mask repaints on an icon-sized composited layer. */
+      will-change: transform;
+    }
 
-  .runningWhaleStill {
-    display: initial;
+    .runningWhaleStill {
+      display: none;
+    }
   }
 }
 

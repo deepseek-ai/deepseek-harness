@@ -233,12 +233,8 @@ function buildInstructionText(
 ): string {
   const marker = markerText(maxBytes, omitted, truncated)
   const body = [marker, style.intro, ...files.map(file => style.section(file))].filter(block => block.length > 0)
-  // Caller-owned framing: the plugin bakes the complete `<system-reminder>`
-  // frame into the message content. The session surface projects context
-  // verbatim and does not wrap it, so any framing must live here in the
-  // producer's content (the pattern a future `meta`-driven renderer would
-  // generalize — see the deferred note in
-  // ../../../../.agents/notes/implemented/simplification/2026-07-20-unwrap-injected-content-envelopes.md).
+  // This producer owns the complete <system-reminder> frame. Session adds no
+  // wrapper; see Derived history in packages/core/session/README.md.
   return [SYSTEM_REMINDER_OPEN, escapeInstructionFrameBody(body.join('\n\n')), SYSTEM_REMINDER_CLOSE].join('\n')
 }
 

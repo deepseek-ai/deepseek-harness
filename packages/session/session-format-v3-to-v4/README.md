@@ -294,7 +294,7 @@ Unknown required events are refused by vocabulary-aware restoration. Unknown ign
 
 The migration declaration creates independent streaming stages. Compact runs expand as iterables without an intermediate event array. The V3-to-V4 stage rewrites historical message sources, lifts historical tool-result wrappers, and inserts evidenced interrupted turn endings while emitting V4 events. It retains one source-to-target sequence entry per source event for local reference remapping. The V4 codec uses the released V2 codec only for physical header and source-range framing, and validates native tool-role rows directly; it does not invoke the released V3 validator or source-conversion views. JSONL scanners call `assertV4RowAdmission` before suppressing recoverable rows and the shared mandatory relationship validator before returning the completed logical prefix.
 
-The target restorer validates native fields and mandatory cross-event relationships, then returns the original artifact. Unknown ignorable events remain opaque, and unfinished inherited compactions expire at the end-seed marker. No runtime invariant companion is published because this pure library owns no independently maintained runtime observations.
+The target restorer validates native fields and mandatory cross-event relationships, then returns the original artifact. Unknown ignorable events remain opaque, and unfinished inherited compactions expire at the end-seed marker.
 
 </details>
 

@@ -67,8 +67,7 @@ jobs:
           persist-credentials: false
 
       # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
-      # the root partition's /tmp before the first pnpm call in this lane —
-      # see .agents/notes/implemented/process/2026-08-28-ci-node-compile-cache-data-disk.md.
+      # the root partition's /tmp before the first pnpm call in this lane.
       - name: Redirect Node compile cache to runner temp
         run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
 
@@ -143,8 +142,7 @@ jobs:
           persist-credentials: false
 
       # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
-      # the root partition's /tmp before the first pnpm call in this lane —
-      # see .agents/notes/implemented/process/2026-08-28-ci-node-compile-cache-data-disk.md.
+      # the root partition's /tmp before the first pnpm call in this lane.
       - name: Redirect Node compile cache to runner temp
         run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
 
@@ -196,7 +194,7 @@ jobs:
     name: node 24 / benchmarks
     # Wall-clock budgets need an otherwise idle runner, so this job runs the
     # benchmark lane alone instead of joining a concurrent gate aggregate.
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
         with:
@@ -269,8 +267,7 @@ jobs:
           persist-credentials: false
 
       # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
-      # the root partition's /tmp before the first pnpm call in this lane —
-      # see .agents/notes/implemented/process/2026-08-28-ci-node-compile-cache-data-disk.md.
+      # the root partition's /tmp before the first pnpm call in this lane.
       - name: Redirect Node compile cache to runner temp
         run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
 

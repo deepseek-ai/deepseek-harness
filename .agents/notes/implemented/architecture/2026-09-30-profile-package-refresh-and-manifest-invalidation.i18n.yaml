@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for 2026-09-30-profile-package-refresh-and-manifest-invalidation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-30-profile-package-refresh-and-manifest-invalidation.md
+/agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration:
+  en: ea66719b3dcdd21c
+  zh: 893364551594ddaf
+/agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/problem:
+  en: e59e3f5c61158701
+  zh: 2ced78e3c84f604e
+/agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/decision:
+  en: a15c7c13f167e5ac
+  zh: a15c7c13f167e5ac
+/agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/decision/responsibilities:
+  en: 3ffd0c78fa204b04
+  zh: f468bab00a7ff357
+/agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/decision/runtime-resolution:
+  en: ca45b973e1968533
+  zh: 002f23bb70e4fed7
+/agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/decision/plugin-manager:
+  en: 9b04926c175f22e8
+  zh: fbf05dd4065b0738
+/agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/decision/hmr-package-configuration-expiry:
+  en: c7de8dafe47a5587
+  zh: 6010a70d8451edd1
+/agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/decision/future-work:
+  en: 31818f8f7f80470b
+  zh: ecb7ac85bb49cf6d
+/agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/alternatives-considered:
+  en: 7c1c6d21570cda0d
+  zh: e6f8334c85f1b404
+/agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/verification:
+  en: 939cedceed200cb2
+  zh: c7bb02d0da400c8d
+/agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/consequences:
+  en: 1b9e31b4e773fac5
+  zh: c140ce07fc64bd55

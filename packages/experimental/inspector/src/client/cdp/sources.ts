@@ -28,7 +28,8 @@ export interface ClientSourceAsset {
   readonly scriptKey: RuntimeScriptKey
   readonly url: string
   readonly hash: string
-  readonly sourceMapUrl?: string
+  /** Map URL, available after loadSource when derived from the script's emitted trailer. */
+  readonly sourceMapUrl?: string | undefined
   readonly isModule?: boolean
   loadSource(): Promise<string>
   loadSourceMap?(): Promise<string | undefined>
@@ -151,8 +152,9 @@ export class ClientSourceCatalog {
     return entry.sourceBytes
   }
 
-  private sourceMapBytes(entry: LoadedAsset, maxContentBytes: number): Promise<Uint8Array | undefined> {
-    if (entry.asset.loadSourceMap === undefined) return Promise.resolve(undefined)
+  private async sourceMapBytes(entry: LoadedAsset, maxContentBytes: number): Promise<Uint8Array | undefined> {
+    if (entry.asset.loadSourceMap === undefined) return undefined
+    await this.source(entry, maxContentBytes)
     entry.sourceMapBytes ??= entry.asset.loadSourceMap().then(value =>
       value === undefined ? undefined : new TextEncoder().encode(value),
     ).catch((error: unknown) => {
@@ -168,7 +170,7 @@ export class ClientSourceCatalog {
 }
 
 /**
- * Discover this package's bundle URL from the Host-injected web boot graph.
+ * Discover this package's bundle URL from the Host-injected web boot graph and its map from the loaded script trailer.
  * @returns A lazy catalog, or `undefined` outside the assembled web application.
  */
 export function discoverInspectorClientSourceCatalog(): ClientSourceCatalog | undefined {
@@ -184,16 +186,20 @@ export function discoverInspectorClientSourceCatalog(): ClientSourceCatalog | un
   const base = documentBase()
   if (base === undefined) return undefined
   const sourceUrl = new URL(row.url, base)
-  const sourceMapUrl = new URL(sourceUrl.href)
-  sourceMapUrl.pathname = `${sourceMapUrl.pathname}.map`
+  let sourceMapUrl: string | undefined
   return new ClientSourceCatalog([{
     scriptKey: CLIENT_SCRIPT_KEY,
     url: sourceUrl.href,
     hash: row.rev,
-    sourceMapUrl: sourceMapUrl.href,
+    get sourceMapUrl() { return sourceMapUrl },
     isModule: false,
-    loadSource: async () => fetchText(sourceUrl.href),
-    loadSourceMap: async () => fetchText(sourceMapUrl.href),
+    loadSource: async () => {
+      const source = await fetchText(sourceUrl.href)
+      const reference = /\/\/#\s*sourceMappingURL=(\S+)\s*$/u.exec(source)?.[1]
+      if (reference !== undefined) sourceMapUrl = new URL(reference, sourceUrl).href
+      return source
+    },
+    loadSourceMap: async () => sourceMapUrl === undefined ? undefined : fetchText(sourceMapUrl),
   }])
 }
 

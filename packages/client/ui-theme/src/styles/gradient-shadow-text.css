@@ -48,14 +48,11 @@ body[data-ds-dark-theme] {
 /* 由 @deepseek-figma-plugin/custom-variable-name 插件导出 */
 /* Markdown 阶梯整体按 0.875（正文 16 → 14）等比缩放，四舍五入到整数像素；
    重新从 Figma 导出时需要保留这一缩放。 */
-/* 正文字号调节：--dsh-content-font-size 由主题 bootstrap 与 ThemePresenter
-   写在 body 上（整数 px，12–17，默认 14）。标题与正文变体按同一像素增量
-   （--dsh-content-font-delta）随动，保持层级。低一档文本（think、工具/bash
-   行的标题与摘要、markdown 表格、流内次级说明等）统一读
-   --dsh-content-font-size-secondary：设置 ≤14 时为设置值 −1，>14 时为
-   设置值 −2（12→11、13→12、14→13、15→13、16→14、17→15）。式中
-   max(13px,·) 的作用是让低设置取 −1 而非 −2，不是结果下限——12 设置下
-   层级触底 11px。small、code 属于密集次级文本，保持固定。 */
+/* Bootstrap and ThemePresenter set the integer content size on body (10–22px,
+   default 14px). Headings and body variants share its pixel delta. Secondary
+   text uses size − 1 through 14px, then size − 2: 10→9, 14→13, 15→13, 22→20.
+   max(13px, ...) selects the delta, not a font-size floor. Small and code
+   typography keep their fixed sizes. */
 body {
   --dsh-content-font-delta: calc(var(--dsh-content-font-size, 14px) - 14px);
   --dsh-content-font-size-secondary: min(calc(var(--dsh-content-font-size, 14px) - 1px), max(13px, calc(var(--dsh-content-font-size, 14px) - 2px)));

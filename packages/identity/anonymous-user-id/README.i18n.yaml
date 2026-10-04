@@ -30,11 +30,11 @@
   en: 16370ef642feec6a
   zh: a546774827234300
 /deepseek-ai-dsh-anonymous-user-id/understand-the-implementation/design-philosophy:
-  en: a2803ccc98c906bb
-  zh: b2bdb8bdaf1aca6c
+  en: d7c0a68199976734
+  zh: f78f4ef1d11bde94
 /deepseek-ai-dsh-anonymous-user-id/understand-the-implementation/source-map:
-  en: 9d5c4a91346f43ff
-  zh: d5fc162f91906d3f
+  en: b816e46019ff3b61
+  zh: a3c7be6ca0683c03
 /deepseek-ai-dsh-anonymous-user-id/understand-the-implementation/the-api:
   en: 23acd1995e7dfa39
   zh: 18b13b5351458aab
@@ -57,8 +57,5 @@
   en: 124d523659df72f1
   zh: 50c25ecb9268109f
 /deepseek-ai-dsh-anonymous-user-id/known-limitations-and-deferred-work/dev-note/open-file-format-evolution:
-  en: 334ca8ec1326f6fd
-  zh: da5c85b6f264cd70
-/deepseek-ai-dsh-anonymous-user-id/known-limitations-and-deferred-work/dev-note/open-invariant-observation-point:
-  en: 9bcd1765116ee52c
-  zh: 296c60cd65f3016a
+  en: 42a6aabaa8d88937
+  zh: 26581bc5f900c9ce

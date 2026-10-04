@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/feature/2026-08-26-human-job-kill.md
+2026-08-26-human-job-kill.md: 22885aac4ef185103492dd2a99cf40e71139760a
+2026-08-26-human-job-kill.zh.md: 2d9736f41d810436ec467e1661e51ad88a0caa7e

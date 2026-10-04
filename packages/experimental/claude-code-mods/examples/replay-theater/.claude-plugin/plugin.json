@@ -1,0 +1,6 @@
+{
+  "name": "replay-theater",
+  "version": "0.1.0",
+  "description": "Step through the last turn's edits, one diff at a time.",
+  "author": { "name": "You" }
+}

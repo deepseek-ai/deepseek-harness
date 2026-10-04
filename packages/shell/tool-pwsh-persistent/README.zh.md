@@ -73,7 +73,7 @@ kind: "package-reference"
 ### 设计理念
 
 - **`dsh-tool-bash-persistent` 的刻意孪生。** 会话注册表、轮询循环与重置约定按设计镜像持久 bash 工具（[pwsh 持久 PTY Agent Note](../../../.agents/notes/archived/architecture/2026-08-11-pwsh-persistent-pty.md)）。
-- **后端拥有提示符就绪。** shell 的 `prompt` 函数属于后端：它打印 BEL 结尾的 OSC 标记加受控的可打印提示符，该确切提示符文本让每条命令都经由后端快路径结算。工具既不安装也不匹配自己的提示符，因此只有模型重定义 `prompt` 才会把就绪降级到静默层级。
+- **后端拥有提示符就绪。** shell 的 `prompt` 函数属于后端：它打印 BEL 结尾的 OSC 标记加受控的可打印提示符。后端通过快路径接受已识别的提示符文本，否则使用其自身的就绪检查或静默层级。工具既不安装也不匹配自己的提示符。
 - **PSReadLine 回显靠锚定剥离。** PowerShell 会把提交的输入渲染回流中；标记锚定提取与包装源码剥离移除回显，而跨终端宽度换行的包装可能在部分输出结果中留下部分回显。
 - **重置，而非修复。** 任何不确定状态——显式 `exit`、超时、发送失败、中止——都会关闭 shell 并让下一次调用从全新状态开始。
 
@@ -82,11 +82,10 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：shell 注册表、命令包装、scrollback 轮询、提取与渲染 |
-| — | 不发布运行时不变式伴生入口；适配器私有的 owner-to-shell 缓存不存在可观察的事件或数据关系。生命周期测试无需仅为不变式增加公共 API 即可验证其清理。 |
 
 ### 命令流程
 
-首条命令通过 `ctx.terminals.spawn` 生成 shell，其 pwsh 启动流程安装受控的 `prompt` 函数，并只在该 shell 达到就绪后返回。随后每条命令都包装成一行物理文本——`Write-Output` 起始标记、用反引号转义进双引号字符串的命令体、`Write-Output` 结束标记加退出状态——因此 PSReadLine 对换行包装的回显无法伪造完成。工具以 1,000 行一页轮询 scrollback，直到出现结束标记或该 send 以 `stdin_read` 结算，提取区间、剥离回显的包装，并连同任何状态标记一起渲染。超时会中止截止时间、捕获部分输出并重置 shell。
+首条命令通过 `ctx.terminals.spawn` 生成 shell，其 pwsh 启动流程安装受控的 `prompt` 函数，并只在该 shell 达到就绪后返回。随后每条命令都包装成一行物理文本——`Write-Output` 起始标记、用反引号转义进双引号字符串的命令体、`Write-Output` 结束标记加退出状态——因此 PSReadLine 对换行包装的回显无法伪造完成。解析器允许状态码数字后的 ASCII 空格，但仍要求以 LF 或 CRLF 结束。命令输出中的空格保持不变。工具以 1,000 行一页轮询 scrollback，直到出现完整的结束标记状态行或该 send 以 `stdin_read` 结算，提取区间、剥离回显的包装，并连同任何状态标记一起渲染。超时会中止截止时间、捕获部分输出并重置 shell。
 
 </details>
 

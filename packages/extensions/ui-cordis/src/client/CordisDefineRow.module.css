@@ -7,7 +7,7 @@
   flex-direction: column;
 }
 
-/* The shared cordis accent (matches ui-tool's [data-tool^='cordis_'] rows). */
+/* Definition cards keep a brand accent to distinguish their editable source. */
 .card .title,
 .card .chevron {
   color: var(--dsw-alias-state-business-primary);

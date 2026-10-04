@@ -14,7 +14,7 @@ Desktop 在业务 server 为本地进程、用户尚未登录时也需要获取�
 
 ### 接口与访问
 
-[客户端决策](../../implemented/feature/2026-09-11-desktop-mandatory-update-client.zh.md)负责已实现的轮询和阻塞界面。本接口提案仍负责后端部署与真实联调；本地 fixture（测试前置数据）不能认证服务。
+[客户端参考](../../../../apps/desktop/README.zh.md)负责已实现的轮询和阻塞界面。本接口提案仍负责后端部署与真实联调；本地 fixture（测试前置数据）不能认证服务。
 
 ```http
 GET /api/v0/check_client_update

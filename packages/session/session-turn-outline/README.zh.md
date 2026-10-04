@@ -71,7 +71,6 @@ wire 值是按 `turn` 严格递增的完整条目数组（整值规则）：消�
 | [`src/index.ts`](src/index.ts) | 插件入口：`inject`、在挂载 fiber 上注册单元 |
 | [`src/projection.ts`](src/projection.ts) | 折叠：条目追加、预览填充、wire 视图 |
 | [`src/types.ts`](src/types.ts) | `turnOutline` 投影键声明与条目类型的唯一归属 |
-| — | 不发布运行时不变式伴生入口：本包仅拥有一个纯投影折叠，`session-projection` 会对其对外值执行 schema 校验；重新折叠同一日志只会复制实现，无法比较独立维护的观测，而轮次边界顺序由 session 与 agent-loop 负责。 |
 
 ### 折叠规则
 

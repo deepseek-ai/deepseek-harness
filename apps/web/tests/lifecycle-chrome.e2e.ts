@@ -344,7 +344,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
           await reasoningComplete.promise
           expect(await thinking.getAttribute('data-preview')).toBeNull()
           expect(await thinking.getByRole('button').getAttribute('aria-expanded')).toBe('false')
-          expect(await thinking.locator('[data-streaming]').isVisible()).toBe(false)
+          expect(await thinking.locator('[data-streaming]:not([inert] *)').isVisible()).toBe(false)
         }
         observedReasoning.resolve(undefined)
         return await settled

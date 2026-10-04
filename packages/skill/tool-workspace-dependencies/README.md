@@ -65,7 +65,6 @@ A container can copy both directories into an immutable image layer and set `DSH
 | File | Responsibility |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Manifest validation, path derivation, in-place and installed preparation, tool registration. |
-| — | No runtime invariant companion is published: the payload manifest is validated on every preparation, and the tool registry owns registration lifecycle. |
 
 </details>
 
@@ -122,7 +121,5 @@ Append-only tool result in the turn history; no prompt section is added.
 
 <details>
 <summary>Working context for maintainers — click to expand</summary>
-
-Placement and carrier choices are recorded in the [shared-runtime Agent Note](../../../.agents/notes/implemented/architecture/2026-09-17-shared-office-runtime.md).
 
 </details>

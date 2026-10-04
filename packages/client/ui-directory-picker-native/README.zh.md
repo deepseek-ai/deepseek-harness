@@ -55,7 +55,7 @@ kind: "package-reference"
 - [dsh-host-directory-picker-native](../../host/directory-picker-native/README.zh.md)——本表面驱动的操作系统选择器后端。
 - [ui-workspace](../ui-workspace/README.zh.md)——声明目录流程 slot 并拥有拾取对话。
 - [ui-directory-picker-browse](../ui-directory-picker-browse/README.zh.md)——面向远程与进程内部署的应用内浏览替代方案。
-- [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——浏览器插件行如何加载并注册 slot。
+- [Web 客户端架构](../../../docs/subsystems/web-client.zh.md)——浏览器插件行如何加载并注册 slot。
 
 -----
 
@@ -88,5 +88,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。插件将一个无渲染 flow occupant 作为一个事务性 effect 注册到两个 workspace hole；HMR 安全性规范证明该 effect 的释放行为，并且插件在各次 pick 之间不保留状态。

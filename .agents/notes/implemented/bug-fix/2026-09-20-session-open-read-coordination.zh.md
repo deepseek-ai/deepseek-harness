@@ -84,5 +84,5 @@ Header 根目录缺失仍是明确的覆盖缺口：若它属于未打开的 par
 
 - [Session observation 与 projection 所有的客户端状态](../architecture/2026-08-25-session-observations-and-projection-owned-client-state.zh.md)继续拥有读取切面和共享值的职责划分。本记录补充缓存生产者身份与首帧消费顺序；旧记录中“包括未完成冷加载的共享”描述与当前 reader 实现不一致，不能作为本次 singleflight 已实现的依据。
 - [Client Session 引用、引用来源与 UI 状态](../architecture/2026-09-15-client-session-references.zh.md)继续拥有 `retain`、`ready`、`using` 与显式地址语义。本记录限定四类辅助读取作为独立异步操作持有临时引用，不把额外引用扩展到所有 UI 动作。
-- [Web 子代理目录消费共享 projection](../simplification/2026-09-08-web-subagent-catalog-projections.zh.md)继续拥有通用 projection store、显式目录读取和 control 更新。本次实现落实“打开会话使用 follow baseline”的规则，不替换整个目录机制。
-- [Web subagent 目录与用户继续交互](../feature/2026-07-27-web-subagent-conversations.zh.md)继续拥有展示和 continuation 授权。本记录只调整导航前置读取及根菜单刷新时机，不取消子会话自身的 Host 校验；旧记录对缺失根目录交互加载的描述需与这里的覆盖缺口一起核对。
+- [Web 子代理目录消费共享 projection](../../../../packages/client/ui-subagent/README.zh.md)继续拥有通用 projection store、显式目录读取和 control 更新。本次实现落实“打开会话使用 follow baseline”的规则，不替换整个目录机制。
+- [Web subagent 目录与用户继续交互](../../../../packages/client/ui-subagent/README.zh.md)继续拥有展示和 continuation 授权。本记录只调整导航前置读取及根菜单刷新时机，不取消子会话自身的 Host 校验；旧记录对缺失根目录交互加载的描述需与这里的覆盖缺口一起核对。

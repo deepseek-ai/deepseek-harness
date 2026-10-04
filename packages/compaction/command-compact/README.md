@@ -95,7 +95,6 @@ Every resolved invocation records the executor-owned log-only pair `command/run`
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `/compact` registration, argument rejection, error-code mapping, lifecycle drain |
-| — | No runtime invariant companion is published; this command adapter owns no state or event stream; the compaction seam owns the balanced durable transaction and the command registry owns registration and dispatch lifecycle. |
 
 </details>
 
@@ -110,7 +109,7 @@ Read these pages when the package-level contract is not enough; they move from t
 - [Compaction basic backend](../compaction-basic/README.md) — the shipped backend that condenses automatically and on demand.
 - [Commands package](../../interaction/commands/README.md) — the registry and dispatch contract behind chat commands.
 - [Compaction subsystem reference](../../../docs/subsystems/compaction.md) — the condensation vocabulary, results, and service behavior.
-- [Queued manual compaction Agent Note](../../../.agents/notes/implemented/feature/2026-07-30-queued-manual-compaction.md) — how on-demand condensation serializes against running turns.
+- [Queued manual compaction reference](../compaction/README.md) — how on-demand condensation serializes against running turns.
 
 -----
 

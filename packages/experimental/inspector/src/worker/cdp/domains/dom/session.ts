@@ -41,6 +41,7 @@ interface BoundDomObject {
 export class CordisDomSession {
   private readonly nodeIdByBackend = new Map<CdpBackendNodeId, CdpNodeId>()
   private readonly backendByNodeId = new Map<CdpNodeId, CdpBackendNodeId>()
+  private readonly nodesSent = new Set<CdpBackendNodeId>()
   private readonly childrenSent = new Set<CdpBackendNodeId>()
   private readonly backendByObjectId = new Map<CdpRemoteObjectId, BoundDomObject>()
   private readonly objectIdsByGroup = new Map<string, Set<CdpRemoteObjectId>>()
@@ -127,20 +128,17 @@ export class CordisDomSession {
         this.enabled = false
         this.resetDocument()
         return {}
-      case 'DOM.getDocument':
+      case 'DOM.getDocument': {
+        const depth = depthParam(params.depth, DEFAULT_DOCUMENT_DEPTH)
         this.enabled = true
-        return { root: this.serialize(this.backend.document().root, 0, depthParam(params.depth, DEFAULT_DOCUMENT_DEPTH), true) }
+        this.nodesSent.clear()
+        this.childrenSent.clear()
+        return { root: this.serialize(this.backend.document().root, 0, depth, true) }
+      }
       case 'DOM.requestChildNodes': {
         const node = this.fromNodeId(params.nodeId)
         const depth = depthParam(params.depth, 1)
-        this.childrenSent.add(node.backendNodeId)
-        this.transport.send({
-          method: 'DOM.setChildNodes',
-          params: {
-            parentId: numberParam(params.nodeId, 'nodeId'),
-            nodes: node.children.map(child => this.serialize(child, this.nodeId(node), depth - 1, true)),
-          },
-        })
+        this.pushChildNodes(node, depth)
         return {}
       }
       case 'DOM.describeNode': {
@@ -270,7 +268,10 @@ export class CordisDomSession {
     const withChildren = remaining > 0
     // `DOM.describeNode` results are out-of-band descriptions the frontend does not merge into its tree,
     // so only delivery payloads record which nodes already carried their children.
-    if (delivery && withChildren) this.childrenSent.add(node.backendNodeId)
+    if (delivery) {
+      this.nodesSent.add(node.backendNodeId)
+      if (withChildren) this.childrenSent.add(node.backendNodeId)
+    }
     return {
       nodeId,
       backendNodeId: node.backendNodeId,
@@ -286,6 +287,21 @@ export class CordisDomSession {
     }
   }
 
+  /** Preserve frontend DOMNode identities by delivering each child list only once. */
+  private pushChildNodes(node: CordisDomNode, depth: number): void {
+    if (depth <= 0) return
+    if (this.childrenSent.has(node.backendNodeId)) {
+      for (const child of node.children) this.pushChildNodes(child, depth - 1)
+      return
+    }
+    const parentId = this.nodeId(node)
+    this.childrenSent.add(node.backendNodeId)
+    this.transport.send({
+      method: 'DOM.setChildNodes',
+      params: { parentId, nodes: node.children.map(child => this.serialize(child, parentId, depth - 1, true)) },
+    })
+  }
+
   /** Deliver the not-yet-sent ancestor levels of one node so its NodeId attaches to the frontend tree. */
   private pushNodePath(node: CordisDomNode): void {
     const document = this.backend.document()
@@ -297,18 +313,11 @@ export class CordisDomSession {
       chain.unshift(parent)
       backendId = document.parentByBackendId.get(parent.backendNodeId)
     }
-    for (const ancestor of chain) {
-      if (this.childrenSent.has(ancestor.backendNodeId)) continue
-      const parentId = this.nodeId(ancestor)
-      this.childrenSent.add(ancestor.backendNodeId)
-      this.transport.send({
-        method: 'DOM.setChildNodes',
-        params: { parentId, nodes: ancestor.children.map(child => this.serialize(child, parentId, 0, true)) },
-      })
-    }
+    for (const ancestor of chain) this.pushChildNodes(ancestor, 1)
   }
 
   private forgetSubtree(node: CordisDomNode): void {
+    this.nodesSent.delete(node.backendNodeId)
     this.childrenSent.delete(node.backendNodeId)
     for (const child of node.children) this.forgetSubtree(child)
   }
@@ -336,6 +345,7 @@ export class CordisDomSession {
     this.backendByObjectId.clear()
     this.objectIdsByGroup.clear()
     this.searches.clear()
+    this.nodesSent.clear()
     this.childrenSent.clear()
   }
 
@@ -344,8 +354,30 @@ export class CordisDomSession {
       this.releaseSourceObjects(event.source)
       return
     }
-    if (this.enabled) for (const mutation of event.mutations) this.sendMutation(mutation)
+    if (this.enabled) {
+      const changedCounts = new Set<CdpBackendNodeId>()
+      for (const mutation of event.mutations) {
+        if ('parentBackendNodeId' in mutation && !this.childrenSent.has(mutation.parentBackendNodeId)) {
+          changedCounts.add(mutation.parentBackendNodeId)
+        } else {
+          this.sendMutation(mutation)
+        }
+      }
+      for (const backendNodeId of changedCounts) {
+        const nodeId = this.sentNodeId(backendNodeId)
+        const node = this.backend.document().byBackendId.get(backendNodeId)
+        if (nodeId === undefined || node === undefined) continue
+        this.transport.send({
+          method: 'DOM.childNodeCountUpdated',
+          params: { nodeId, childNodeCount: node.children.length },
+        })
+      }
+    }
     this.pruneDocumentState()
+  }
+
+  private sentNodeId(backendNodeId: CdpBackendNodeId): CdpNodeId | undefined {
+    return this.nodesSent.has(backendNodeId) ? this.nodeIdByBackend.get(backendNodeId) : undefined
   }
 
   private sendMutation(mutation: CordisDomMutation): void {
@@ -355,11 +387,11 @@ export class CordisDomSession {
         this.transport.send({ method: 'DOM.documentUpdated', params: {} })
         return
       case 'child-inserted': {
-        const parentNodeId = this.nodeIdByBackend.get(mutation.parentBackendNodeId)
+        const parentNodeId = this.sentNodeId(mutation.parentBackendNodeId)
         if (parentNodeId === undefined) return
         const previousNodeId = mutation.previousBackendNodeId === 0
           ? 0
-          : this.nodeIdByBackend.get(mutation.previousBackendNodeId)
+          : this.sentNodeId(mutation.previousBackendNodeId)
         if (previousNodeId === undefined) return
         // A reconnected source reuses backend ids; the collapsed payload resets any earlier delivery record.
         this.forgetSubtree(mutation.node)
@@ -374,15 +406,15 @@ export class CordisDomSession {
         return
       }
       case 'child-removed': {
-        const parentNodeId = this.nodeIdByBackend.get(mutation.parentBackendNodeId)
-        const nodeId = this.nodeIdByBackend.get(mutation.node.backendNodeId)
+        const parentNodeId = this.sentNodeId(mutation.parentBackendNodeId)
+        const nodeId = this.sentNodeId(mutation.node.backendNodeId)
         this.forgetSubtree(mutation.node)
         if (parentNodeId === undefined || nodeId === undefined) return
         this.transport.send({ method: 'DOM.childNodeRemoved', params: { parentNodeId, nodeId } })
         return
       }
       case 'children-replaced': {
-        const parentNodeId = this.nodeIdByBackend.get(mutation.parentBackendNodeId)
+        const parentNodeId = this.sentNodeId(mutation.parentBackendNodeId)
         if (parentNodeId === undefined) return
         // Replacement payloads carry no grandchildren, so the frontend forgets any it knew below this parent.
         for (const child of mutation.children) this.forgetSubtree(child)
@@ -397,7 +429,7 @@ export class CordisDomSession {
         return
       }
       case 'attribute-modified': {
-        const nodeId = this.nodeIdByBackend.get(mutation.backendNodeId)
+        const nodeId = this.sentNodeId(mutation.backendNodeId)
         if (nodeId !== undefined) {
           this.transport.send({
             method: 'DOM.attributeModified',
@@ -407,7 +439,7 @@ export class CordisDomSession {
         return
       }
       case 'attribute-removed': {
-        const nodeId = this.nodeIdByBackend.get(mutation.backendNodeId)
+        const nodeId = this.sentNodeId(mutation.backendNodeId)
         if (nodeId !== undefined) {
           this.transport.send({ method: 'DOM.attributeRemoved', params: { nodeId, name: mutation.name } })
         }
@@ -424,6 +456,7 @@ export class CordisDomSession {
       if (document.byBackendId.has(backendNodeId)) continue
       this.nodeIdByBackend.delete(backendNodeId)
       this.backendByNodeId.delete(nodeId)
+      this.nodesSent.delete(backendNodeId)
     }
     for (const backendNodeId of this.childrenSent) {
       if (!document.byBackendId.has(backendNodeId)) this.childrenSent.delete(backendNodeId)

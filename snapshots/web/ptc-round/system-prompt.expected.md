@@ -32,9 +32,9 @@ Start independent subagent_fork delegations together in one assistant message an
 
 ## Writing code for run_code
 
-`run_code` takes two required arguments: `code` — the body of an async TypeScript function (erasable syntax only — no `enum` or namespaces; type annotations are advisory, the code runs type-stripped) — and `description`, a short summary of what the program does. The declarations below are SDK bindings for this program. A declaration does not make its name a directly callable tool; only names supplied as separate tool schemas may be called directly. When no separate `bash` schema is supplied, invoke a declared `bash` binding inside `run_code`:
+`run_code` takes two required arguments: `description`, a short summary of what the program does, and `code` — the body of an async TypeScript function (erasable syntax only — no `enum` or namespaces; type annotations are advisory, the code runs type-stripped). The declarations below are SDK bindings for this program. A declaration does not make its name a directly callable tool; only names supplied as separate tool schemas may be called directly. When no separate `bash` schema is supplied, invoke a declared `bash` binding inside `run_code`:
 
-`run_code({ code: "return await tools.bash({ command: 'pwd', description: 'Show current directory' })", description: "Show current directory" })`
+`run_code({ description: "Show current directory", code: "return await tools.bash({ description: 'Show current directory', command: 'pwd' })" })`
 
 Inside the program:
 
@@ -70,12 +70,12 @@ interface ToolArgsMap {
       multi_select?: boolean;
     } & Record<string, JsonValue>)[];
   } & Record<string, JsonValue>;
-  /** Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell; pass `workdir` instead of using `cd`. Managed `$DSH_*` variables expose current harness environment facts. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]`, a policy denial: do not retry another way. */
+  /** Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell; pass `workdir` instead of using `cd`. Managed `$DSH_*` variables expose current harness environment facts. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Provide `description` before `command` in the arguments. Before any delete or move, verify that the resolved absolute target path is the intended one; never run it against a computed path you have not checked. An unset variable expands to an empty string, so guard variables in such paths with `${VAR:?}`. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]`, a policy denial: do not retry another way. */
   bash: {
-    /** The bash command to execute. */
-    command: string;
     /** Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: "ls" → "List files in current directory"; "git status" → "Show working tree status"; "npm install" → "Install package dependencies". */
     description: string;
+    /** The bash command to execute. */
+    command: string;
     /** Timeout in milliseconds. The executor applies its configured default and cap; on expiry the command moves to the background as a job instead of being killed. */
     timeoutMs?: number;
     /** Working directory for this command. Defaults to the session workspace; a relative path is resolved against it. */
@@ -96,7 +96,7 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Edit an existing UTF-8 text file by replacing literal text. */
   edit: {
-    /** Path to edit, resolved by the filesystem backend. */
+    /** Path to edit, resolved by the filesystem backend. Provide `file_path` before `old_string` and `new_string` in the arguments. */
     file_path: string;
     /** Literal text to replace. */
     old_string: string;
@@ -184,6 +184,93 @@ interface ToolArgsMap {
     /** Path to the image file, resolved by the filesystem backend. */
     file_path: string;
   } & Record<string, JsonValue>;
+  /** Create a reminder in the current session that delivers prompt when it becomes due. Supply exactly one timing parameter: after_seconds, at, every_seconds, daily, weekly, or cron. Local times that do not exist in the zone are skipped; repeated local times fire once, at the earlier instant. After downtime, a recurring reminder delivers only its latest missed occurrence. Delivery can repeat after a crash. */
+  schedule_create: {
+    /** Reminder content to present when the target becomes due. */
+    prompt: string;
+    /** Task name of at most 120 characters, shown on the task card and in task lists. */
+    title: string;
+    /** Delay in whole seconds. */
+    after_seconds?: number;
+    /** Fixed-rate interval in whole seconds, at least 60, aligned to the creation time; changing it with schedule_update re-aligns it to the save time. */
+    every_seconds?: number;
+    /** Every day at a local time. */
+    daily?: {
+      /** HH:mm:ss with optional 1-3 fractional digits, for example 23:00:00. */
+      time: string;
+      /** UTC or IANA Area/Location, for example Asia/Shanghai. */
+      time_zone: string;
+    };
+    /** On the given weekdays at a local time. */
+    weekly?: {
+      /** HH:mm:ss with optional 1-3 fractional digits, for example 09:00:00. */
+      time: string;
+      /** UTC or IANA Area/Location, for example Asia/Shanghai. */
+      time_zone: string;
+      /** ISO weekdays, Monday 1 through Sunday 7, without repetitions. */
+      weekdays: number[];
+    };
+    /** Five-field Vixie cron expression in a time zone. */
+    cron?: {
+      /** minute hour day-of-month month day-of-week, for example "*\/15 9-17 * * 1-5". When both day fields are restricted, a date matches if either one matches. */
+      expression: string;
+      /** UTC or IANA Area/Location, for example Asia/Shanghai. */
+      time_zone: string;
+    };
+    /** Absolute target: an RFC 3339 date-time with offset, or a local date, time, and IANA time_zone. */
+    at?: string | {
+      date: string;
+      time: string;
+      time_zone: string;
+    };
+  } & Record<string, JsonValue>;
+  /** Delete a reminder in the current session, active or inactive. Deletion does not retract a reminder message that is already queued. */
+  schedule_delete: {
+    /** Exact schedule id. */
+    id: string;
+  } & Record<string, JsonValue>;
+  /** List the active reminders in the current session. */
+  schedule_list: Record<string, JsonValue>;
+  /** Change a reminder in place, keeping its id. Supply a new title, prompt, or at most one timing parameter; omitted fields keep their stored values. To change a relative delay, create a new reminder. */
+  schedule_update: {
+    /** Schedule id returned by schedule_list. */
+    id: string;
+    /** New task name of at most 120 characters. */
+    title?: string;
+    /** New reminder content. */
+    prompt?: string;
+    /** Fixed-rate interval in whole seconds, at least 60, aligned to the creation time; changing it with schedule_update re-aligns it to the save time. */
+    every_seconds?: number;
+    /** Every day at a local time. */
+    daily?: {
+      /** HH:mm:ss with optional 1-3 fractional digits, for example 23:00:00. */
+      time: string;
+      /** UTC or IANA Area/Location, for example Asia/Shanghai. */
+      time_zone: string;
+    };
+    /** On the given weekdays at a local time. */
+    weekly?: {
+      /** HH:mm:ss with optional 1-3 fractional digits, for example 09:00:00. */
+      time: string;
+      /** UTC or IANA Area/Location, for example Asia/Shanghai. */
+      time_zone: string;
+      /** ISO weekdays, Monday 1 through Sunday 7, without repetitions. */
+      weekdays: number[];
+    };
+    /** Five-field Vixie cron expression in a time zone. */
+    cron?: {
+      /** minute hour day-of-month month day-of-week, for example "*\/15 9-17 * * 1-5". When both day fields are restricted, a date matches if either one matches. */
+      expression: string;
+      /** UTC or IANA Area/Location, for example Asia/Shanghai. */
+      time_zone: string;
+    };
+    /** Absolute target: an RFC 3339 date-time with offset, or a local date, time, and IANA time_zone. */
+    at?: string | {
+      date: string;
+      time: string;
+      time_zone: string;
+    };
+  } & Record<string, JsonValue>;
   /** Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer. */
   send_message: {
     /** The agent id of your direct continuable child, or your direct parent when you are a resident continuable child. */
@@ -251,7 +338,7 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Create or fully replace a UTF-8 text file. */
   write: {
-    /** Path to write, resolved by the filesystem backend. */
+    /** Path to write, resolved by the filesystem backend. Provide `file_path` before `content` in the arguments. */
     file_path: string;
     /** Full UTF-8 text content to write. */
     content: string;
@@ -436,6 +523,300 @@ interface ToolOutputMap {
         height: number;
       };
     };
+  };
+  schedule_create: {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "after";
+    afterSeconds: number;
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "at";
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "every";
+    everySeconds: number;
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "daily";
+    time: string;
+    timeZone: string;
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "weekly";
+    time: string;
+    timeZone: string;
+    weekdays: number[];
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "cron";
+    expression: string;
+    timeZone: string;
+  } | {
+    code: "invalid_prompt";
+    message: string;
+  } | {
+    code: "invalid_selector";
+    message: string;
+  } | {
+    code: "invalid_rule";
+    message: string;
+  } | {
+    code: "invalid_time_zone";
+    message: string;
+  } | {
+    code: "not_future";
+    message: string;
+  } | {
+    code: "time_out_of_range";
+    message: string;
+  } | {
+    code: "frequency_too_high";
+    message: string;
+  } | {
+    code: "subagent_session";
+    message: string;
+  } | {
+    code: "internal_error";
+    message: string;
+  };
+  schedule_delete: {
+    id: string;
+    deleted: true;
+  } | {
+    id: string;
+    deleted: false;
+    code: "schedule_not_found";
+  } | {
+    code: "invalid_prompt";
+    message: string;
+  } | {
+    code: "invalid_selector";
+    message: string;
+  } | {
+    code: "invalid_rule";
+    message: string;
+  } | {
+    code: "invalid_time_zone";
+    message: string;
+  } | {
+    code: "not_future";
+    message: string;
+  } | {
+    code: "time_out_of_range";
+    message: string;
+  } | {
+    code: "frequency_too_high";
+    message: string;
+  } | {
+    code: "subagent_session";
+    message: string;
+  } | {
+    code: "internal_error";
+    message: string;
+  };
+  schedule_list: ({
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "after";
+    afterSeconds: number;
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "at";
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "every";
+    everySeconds: number;
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "daily";
+    time: string;
+    timeZone: string;
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "weekly";
+    time: string;
+    timeZone: string;
+    weekdays: number[];
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "cron";
+    expression: string;
+    timeZone: string;
+  })[] | {
+    code: "invalid_prompt";
+    message: string;
+  } | {
+    code: "invalid_selector";
+    message: string;
+  } | {
+    code: "invalid_rule";
+    message: string;
+  } | {
+    code: "invalid_time_zone";
+    message: string;
+  } | {
+    code: "not_future";
+    message: string;
+  } | {
+    code: "time_out_of_range";
+    message: string;
+  } | {
+    code: "frequency_too_high";
+    message: string;
+  } | {
+    code: "subagent_session";
+    message: string;
+  } | {
+    code: "internal_error";
+    message: string;
+  };
+  schedule_update: {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "after";
+    afterSeconds: number;
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "at";
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "every";
+    everySeconds: number;
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "daily";
+    time: string;
+    timeZone: string;
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "weekly";
+    time: string;
+    timeZone: string;
+    weekdays: number[];
+  } | {
+    id: string;
+    title: string;
+    prompt: string;
+    scheduledAt: string;
+    state: "scheduled" | "overdue";
+    deliveryMode: "host";
+    kind: "cron";
+    expression: string;
+    timeZone: string;
+  } | {
+    id: string;
+    updated: false;
+    code: "schedule_not_found" | "schedule_ended" | "schedule_conflict";
+  } | {
+    code: "invalid_prompt";
+    message: string;
+  } | {
+    code: "invalid_selector";
+    message: string;
+  } | {
+    code: "invalid_rule";
+    message: string;
+  } | {
+    code: "invalid_time_zone";
+    message: string;
+  } | {
+    code: "not_future";
+    message: string;
+  } | {
+    code: "time_out_of_range";
+    message: string;
+  } | {
+    code: "frequency_too_high";
+    message: string;
+  } | {
+    code: "subagent_session";
+    message: string;
+  } | {
+    code: "internal_error";
+    message: string;
   };
   send_message: {
     messageId: string;

@@ -100,7 +100,6 @@ The package is a registry plus a cooperative assembly pipeline. One `assemble()`
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SystemPrompt` service, config, assembly pipeline, `renderPrompt` |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion |
 
 ### Assembly and rendering
 

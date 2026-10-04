@@ -13,7 +13,7 @@ The host's only persistence surface is the session event log (`packages/session/
 
 Separately, Session deletion needs a `SessionPersistence` delete primitive and a `session.delete` endpoint. That gap's design is settled in this note, but its implementation remains future work.
 
-The later [Workspace registration deletion decision](../../implemented/feature/2026-07-27-workspace-registration-deletion.md) supersedes only that coupling: deleting a Workspace registration preserves its Sessions and their logs, while Session deletion remains separate future work. The cascade design below is therefore not the Workspace GUI delete semantic.
+The [Workspace reference](../../../../packages/workspace/workspace/README.md) defines non-destructive registration removal: deleting a Workspace registration preserves its Sessions and their logs, while Session deletion remains separate future work. The cascade design below is therefore not the Workspace GUI delete semantic.
 
 ## Proposal
 
@@ -106,7 +106,7 @@ export function apply(ctx: Context, config: Config) {
 }
 ```
 
-(Facility unmount order: dispose each domain first (drain its write chain), then remove the name from the hub — in-flight writes still emit `domain/changed` during the drain, and the event-consistency invariant resolves domains back through the facility, so the name must stay resolvable at that point.)
+(Facility unmount order: dispose each domain first (drain its write chain), then remove the name from the hub — in-flight writes still emit `domain/changed` during the drain, so the name must stay resolvable at that point.)
 
 Domain declarations (the spec object is defined and exported by the package that owns the domain — the single source of type and runtime truth; schemas use zod with `z.infer` deriving the types without re-declaration — the record model projects into RPC wire schemas next phase and the wire boundary is all zod; schemastery still owns plugin Config only):
 
@@ -243,7 +243,7 @@ export class WorkspaceRegistry extends Service {
 - **Path canon**: the stored value = `fs.realpath(input)` (trailing slashes, `..`, and symlinks all resolved); uniqueness = string equality after normalization (a symlink resolving to the same directory counts as a collision). A missing directory makes create reject outright (realpath fails — a workspace must point at an existing directory; "Create new = make the directory" is upper-layer interaction: mkdir first, then create). The session cwd in attach checks follows the same canon. Single-valued cwd + unique path ⇒ one session structurally belongs to at most one workspace; double bookkeeping is impossible on the write side.
 - **Title**: a display name, defaults to `basename(path)`, mutable, duplicates allowed. Ownership is never derived from cwd as a fallback — cwd cannot express ordering, and ownership is a workspace-side fact; sessions started headless belong to no workspace.
 - Consumers see only the `Workspace` interface; `WorkspaceEntity` stays inside the package (a single implementation does not pre-split a seam). Entities are unique per id (registry cache); the record snapshot is swapped in place after each write, and the outside sees getters only. Every write funnels through the entity's internal `mutate(fn)` → `table.update`, with `updatedAt` refreshed inside mutate. Domain objects never cross RPC; next phase the wire layer projects records into zod wire schemas.
-- **Session deletion remains future work.** The later [Workspace registration deletion decision](../../implemented/feature/2026-07-27-workspace-registration-deletion.md) ships `ctx.workspaceRegistry.delete(id)` as a metadata-only operation that preserves Sessions and logs. Recursive Session deletion, running checks, and crash-rerun convergence belong to a separate `session.delete` capability.
+- **Session deletion remains future work.** The [Workspace registry](../../../../packages/workspace/workspace/README.md) provides `ctx.workspaceRegistry.delete(id)` as a metadata-only operation that preserves Sessions and logs. Recursive Session deletion, running checks, and crash-rerun convergence belong to a separate `session.delete` capability.
 
 Consistency doctrine (the ledger = the only ownership authority; the implementation and test baseline):
 

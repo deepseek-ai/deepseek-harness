@@ -832,6 +832,37 @@ describe('style claiming', () => {
     expect(foreign.getAttribute('data-plugin')).toBe('other')
   })
 
+  it('leaves untagged style tags inserted before materialization unclaimed', async () => {
+    const earlier = document.createElement('style')
+    document.head.appendChild(earlier)
+    const b = bench([row('a')], { a: () => ({}) })
+    await b.loader.import('a', '', {})
+    removeOwnedStyles('a')
+    expect(earlier.isConnected).toBe(true)
+    expect(earlier.hasAttribute('data-plugin')).toBe(false)
+  })
+
+  it('assigns an untagged style to the factory that inserted it before a nested require', async () => {
+    const outer = document.createElement('style')
+    const b = bench([row('b'), row('a', { external: ['b'] })], {
+      a: (require) => {
+        document.head.appendChild(outer)
+        require('b')
+        return {}
+      },
+      b: () => ({}),
+    })
+    await b.loader.import('a', '', {})
+    expect(outer.getAttribute('data-plugin')).toBe('a')
+  })
+
+  it('removes untagged styles inserted by a factory that throws', async () => {
+    const leaked = document.createElement('style')
+    const b = bench([row('a')], { a: () => { document.head.appendChild(leaked); throw new Error('factory exploded') } })
+    await expect(b.loader.import('a', '', {})).rejects.toThrow('factory exploded')
+    expect(leaked.isConnected).toBe(false)
+  })
+
   it('materialization without a document skips the style inventory', async () => {
     const b = bench([row('a')], { a: () => ({}) })
     vi.stubGlobal('document', undefined)

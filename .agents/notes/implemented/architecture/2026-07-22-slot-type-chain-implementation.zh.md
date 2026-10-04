@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-07-22-slot-type-chain-implementation.md) | 中文
 
-> 范围：Web 客户端 slot 体系的终版设计——UI 插件如何拼合页面、渲染权威落在哪里、组件 props 如何定型、业务活数据住在哪里。周边语境（装载链、对象层、服务）归 [Web 客户端架构 RFC](2026-07-19-gui-web-client-architecture.zh.md) 所有，其 slot 各节移交本文。
+> 范围：Web 客户端 slot 体系的终版设计——UI 插件如何拼合页面、渲染权威落在哪里、组件 props 如何定型、业务活数据住在哪里。[Web 客户端参考](../../../../docs/subsystems/web-client.zh.md)说明周边的装载链、对象层与服务。
 
 ## 问题
 
@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-全局主面板选择及其 root 生命周期由[全局主面板决策](2026-09-08-global-main-panels.zh.md)定义。
+全局主面板选择及其 root 生命周期由[全局主面板参考](../../../../packages/client/ui-layout/README.zh.md)定义。
 
 一句话：**ui-renderer 只渲染 `'root'`；插件用单独一次 `register` 调用组合 UI——这一次调用同时占用 slot、声明并授权子 slot、声明 store、注入业务面；组件是纯函数，props 分四份额到达，每一份额都从各自唯一的真源自动推导。**
 

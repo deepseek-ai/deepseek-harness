@@ -24,11 +24,12 @@ function magic(path: string): string {
  * @param root - Self-contained production runtime without symlinks.
  * @param appId - Release application identifier.
  * @param expected - Required signing identity.
- * @param cacheDirectory Optional content-addressed cache; requires the keychain-owned signing probe.
+ * @param arch - Target runtime architecture, independent of the signing host.
+ * @param cacheDirectory - Optional content-addressed cache; requires the keychain-owned signing probe.
  * @returns Number of signed native files.
  */
 export async function signMacOSRuntime(
-  root: string, appId: string, expected: MacOSSigningEnvironment, cacheDirectory?: string,
+  root: string, appId: string, expected: MacOSSigningEnvironment, arch: 'arm64' | 'x64', cacheDirectory?: string,
 ): Promise<number> {
   const files = inventoryDesktopRuntime(root).map(file => file.path).filter(path => MACH_O_MAGICS.has(magic(join(root, path))))
   const policy = cacheDirectory === undefined ? undefined : macOSCachePolicy(process.env.DSH_DESKTOP_MACOS_SIGNING_PROBE ?? '')
@@ -40,9 +41,12 @@ export async function signMacOSRuntime(
       const path = files[next++]
       if (path === undefined) return
       const identifier = `${appId}.runtime.${createHash('sha256').update(path).digest('hex')}`
-      const needsJit = path === 'dependencies/node/bin/node'
+      const isNode = path === 'dependencies/node/bin/node'
+      const needsJit = isNode
         || /^node_modules\/@deepseek-ai\/libreoffice-kit-darwin-(?:arm64|x64)\/bin\/libreoffice-kit$/u.test(path)
-      const entitlements = needsJit ? join(import.meta.dirname, 'jit-entitlements.plist') : undefined
+      const entitlementsFile = isNode && arch === 'x64'
+        ? 'node-x64-entitlements.plist' : 'jit-entitlements.plist'
+      const entitlements = needsJit ? join(import.meta.dirname, entitlementsFile) : undefined
       const file = join(root, path)
       const thin = ['cefaedfe', 'cffaedfe', 'feedface', 'feedfacf'].includes(magic(file))
       if (cacheDirectory !== undefined && policy !== undefined && thin) {

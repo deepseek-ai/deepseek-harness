@@ -6,6 +6,8 @@
   position: absolute;
   bottom: calc(100% + 4px);
   left: 0;
+  right: 0;
+  box-sizing: border-box;
   z-index: 100;
   padding: 3px;
   display: flex;
@@ -107,7 +109,7 @@
 .search {
   margin: 2px 2px 3px;
   padding: 5px 7px;
-  border: 0.5px solid var(--dsw-alias-border-inverted);
+  border: 0.5px solid transparent;
   border-radius: var(--dsw-radius-md);
   background: transparent;
   font-size: 12px;

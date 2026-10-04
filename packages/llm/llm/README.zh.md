@@ -107,7 +107,7 @@ for await (const chunk of ctx.llm.stream({
 
 请求会对照其精确模型的能力校验，包括上下文窗口、输出默认值、推理强度、输入模态与 `systemPromptUpdate` 模式，并填入任何适配器配置的默认值。运行时保留已冻结输入的冻结状态；手动构建请求的调用方负责保证输入不可变。`prepareCall()` 把这些事实、分离的上下文与重试策略绑定到执行最终分发的精确适配器代次，因此 HMR（热模块替换）或动态设置无法把一个代次的图片能力与另一代次的端点混用。支持图片的适配器把持久引用投影为路由专用请求版本；`resolveImageAttachmentAccess()` 会单独把附件提供方的可选宿主对象映射进当前工具执行世界，而不改变请求图片或其 `variantId`。纯文本路由接收确定性的逐图片占位符，包括 tool-role 结果图片，而不会改写仅追加会话历史。持久 `FileBlock` 引用永远不会到达任何适配器：请求组装把每个引用（包括 tool-role 结果中的出现）替换为确定性句柄文本，指出文件与其只读保存路径，路径经由挂载的附件与文件系统提供方解析。`ctx.llm.fileRequestText(ref)` 向请求计量公开相同的同步投影。派生后带有 `offloaded: true` 的图片出现位置，经 `projectOffloadedImages()` 以占位文本到达每条路由。支持图片的路由在保留的出现位置按精确字节超过其 `LlmImageRequestBudget` 时，以 `IMAGE_OFFLOAD_REQUIRED` 失败并说明还需省略多少最老的出现位置（`requiredImageOffload()`），绝不发送未记录的投影；`dsh-compaction-image-offload` 用一条 `image/offload` 事件记录所选位置并重试。对视觉 token 收费的适配器声明按路由的 `imageRequestPricing`，`ctx.llm.imageRequestPricing(provider, model)` 为 token meter 同步解析它。分发经过 `llm/stream` waterfall（瀑布式事件），随后分片以 token 级增量返回，每个适配器结果都以唯一一个终止 `finish` 分片到达消费方。
 
-文件检测在每次请求时读取当前内容，包括 tool-role 结果内容，不缓存消息身份或冻结状态。[文件扫描决策](../../../.agents/notes/implemented/simplification/2026-09-07-file-content-scan.zh.md)记录了实测遍历成本。
+文件检测在每次请求时读取当前内容，包括 tool-role 结果内容，不缓存消息身份或冻结状态。[已归档的文件扫描决策](../../../.agents/notes/archived/simplification/2026-09-07-file-content-scan.md)记录了实测遍历成本。
 
 ### 不变式
 

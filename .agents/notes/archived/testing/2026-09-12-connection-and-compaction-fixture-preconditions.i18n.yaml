@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/testing/2026-09-12-connection-and-compaction-fixture-preconditions.md
+2026-09-12-connection-and-compaction-fixture-preconditions.md: ab7e0989db489e7f457a56061567e49886feb58a
+2026-09-12-connection-and-compaction-fixture-preconditions.zh.md: 8810fc279955dcd7d0fb035960259e0824aec288

@@ -41,7 +41,7 @@ An account request HTTP 401 maps to `ACCOUNT_TOKEN_INVALID` independently of the
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Registrations and listeners dispose with the plugin. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route. No invariant companion is published: discovery derives directly from configuration and credentials without an independent copy.
+Registrations and listeners dispose with the plugin. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route.
 
 A failed request the shared transport classifies as `QUOTA` is rewritten to `ACCOUNT_QUOTA` before it leaves this provider, covering an HTTP 402 response and an in-band SSE error alike. The shared transport and the `deepseek-official` route keep `QUOTA`, so the account route's top-up action never appears for an API-key or third-party failure.
 

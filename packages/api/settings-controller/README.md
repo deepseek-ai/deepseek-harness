@@ -67,5 +67,3 @@ No direct effect; reading or writing these configuration values does not alter m
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The settings and credential seams own storage and update events, while this package only projects their methods onto the wire.

@@ -25,9 +25,15 @@ describe('ToolRow.module.css summary line', () => {
   it.each([
     ['ToolRow', '../src/client/tool/components/ToolRow.module.css'],
     ['BashRow', '../src/client/tool/toolviews/bash-sample.module.css'],
-  ] as const)('%s keeps stopped and error summaries outside hover darkening', (_name, path) => {
+  ] as const)('%s leaves row text color to the shared disclosure header', (_name, path) => {
+    // The header supplies tertiary at rest and secondary on hover; a tool sheet
+    // that restates a row text color, or brightens the row text on hover, would
+    // pin one state against the shared process-row colors. The Inspect button
+    // keeps its own solid hover fill and is not row text.
     const sheet = readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
-    expect(sheet).toContain('.summary:not(.errorSummary):not(.stoppedSummary)')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    expect(sheet).not.toMatch(/\.(title|summary|summarySuffix)\s*\{[^{}]*\bcolor:/)
+    expect(sheet).not.toMatch(/:hover\s+\.(title|summary|summarySuffix)\b/)
   })
 
   it('keeps the summary suffix on one line and unshrunk', () => {

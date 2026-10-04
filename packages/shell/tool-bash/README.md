@@ -52,7 +52,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Running a command
 
-The tool executes `bash -c <command>` and returns the combined output. Commands run in a fresh shell every call, so state never persists — pass `workdir` instead of `cd`. A non-zero exit is reported as `[exit code: N]` for the agent to interpret, not surfaced as a tool error. A `description` in active voice (5–10 words) labels the call in the UI; `timeoutMs` overrides the executor's default and cap. Output beyond the executor's stream caps is truncated to its tail, with the full output saved to a spill file whose path is reported.
+The tool executes `bash -c <command>` and returns the combined output. Commands run in a fresh shell every call, so state never persists — pass `workdir` instead of `cd`. A non-zero exit is reported as `[exit code: N]` for the agent to interpret, not surfaced as a tool error. A `description` in active voice (5–10 words) labels the call in the UI; the schema lists it before `command` and asks the model to emit it first, without enforcing JSON member order. `timeoutMs` overrides the executor's default and cap. Output beyond the executor's stream caps is truncated to its tail, with the full output saved to a spill file whose path is reported. The description tells the agent to verify the resolved absolute target path before any delete or move and to guard variables in such paths with `${VAR:?}`.
 
 <a id="running-long-commands-in-the-background"></a>
 ### Running long commands in the background
@@ -95,7 +95,6 @@ This section explains the design decisions behind the tool and points at the cod
 | [`src/index.ts`](src/index.ts) | Plugin entry: tool registration, prompt section, arg validation, escalation, request assembly |
 | [`src/background.ts`](src/background.ts) | Own asynchronous shell preparation, map process settlement onto job outcomes, and render a ring read as a process read |
 | [`src/render.ts`](src/render.ts) | Model-facing result text: streams, markers, truncation notices |
-| — | No runtime invariant companion is published; the environment registry validates ownership and collected values at each mutation/read; it publishes no independent snapshot that a companion could cross-check. |
 
 ### Request resolution
 
@@ -118,7 +117,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Bash executor subsystem](../../../docs/subsystems/shell.md) — request/spec vocabulary, results, and background processes.
 - [shell-env](../shell-env/README.md) — the managed `DSH_*` environment every call receives.
 - [tool-jobs](../../jobs/tool-jobs/README.md) — `job_output`, `job_list`, and `job_kill` controls for background runs.
-- [sandbox Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-sandbox.md) — escalation and mode-switching rationale.
+- [historical sandbox Agent Note](../../../.agents/notes/archived/feature/2026-07-06-sandbox.md) — escalation and mode-switching rationale.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-bash) — the exact `bash` argument schema.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-bash) — every accepted config field and its source declaration.
 

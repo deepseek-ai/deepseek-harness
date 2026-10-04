@@ -8,7 +8,7 @@ Status: proposed
 
 [`SystemPrompt`](../../../../packages/core/system-prompt/src/index.ts) 在提供方注册或 dispose（资源释放）时发出 `system-prompt/change`。仓库搜索未找到执行的产品监听者，但生成的 Host 发现目录会展示该事件。测试维护通知次数及监听者抛出异常后的回滚行为。即使没有第一方订阅者，它仍是具有维护义务的公开扩展。
 
-活动的 [Remote 事件投递决策](../../implemented/architecture/2026-08-10-remote-event-delivery.zh.md) 明确保留了这一扩展，尽管没有随产品提供的消费方。逐步骤组装早于该承诺，且用途不同：重新构建模型输入不能替代注册表变更的推送观测。
+活动的 [Remote 事件投递参考](../../../../packages/api/remotes/README.zh.md) 明确保留了这一扩展，尽管没有随产品提供的消费方。逐步骤组装早于该承诺，且用途不同：重新构建模型输入不能替代注册表变更的推送观测。
 
 ## 提案
 

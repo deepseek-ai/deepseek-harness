@@ -1,0 +1,10 @@
+version: 1
+scenario: cordis-inspect-liveness
+profile: headless
+composition: cordis-inspect-liveness
+recording: authored
+header:
+  class: advanced
+  pin: true
+  systemPromptSource: cordis-inspect-jsdoc
+  toolSchemasSource: cordis-inspect-jsdoc

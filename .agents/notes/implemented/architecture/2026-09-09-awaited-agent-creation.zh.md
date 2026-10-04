@@ -16,7 +16,7 @@ AgentLoop 在 setup 与创建分发期间保留现有的维护活动。初始化
 
 创建分发在监听器等待期间保留作用域与 Session。Dispose（资源释放）会取消初始化，并在释放这些资源前等待分发结束。监听器不得等待自身 Agent 的空闲状态或自身所有者的 dispose，因为两者都要等待该监听器完成。另一个 Agent 上的后台工作遵循该 Agent 自己的初始化生命周期。
 
-本决策拥有异步创建时序。[作用域运行时决策](2026-07-12-agent-scope-runtime-design.zh.md)继续拥有注册表身份与 teardown 归属，[拦截决策](../feature/2026-06-30-interception-extension-points.zh.md)继续拥有策略与工具事件语义。
+本决策拥有异步创建时序。[作用域运行时参考](../../../../packages/core/agent-loop/README.zh.md)继续拥有注册表身份与 teardown 归属，[拦截参考](../../../../docs/tool-execution-pipeline.zh.md)继续拥有策略与工具事件语义。
 
 ## 考虑过的替代方案
 

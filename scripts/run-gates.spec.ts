@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi, type MockInstance } from 'vitest'
 import {
   cliGateOptions,
   ciWorkerEnvironment,
@@ -15,18 +15,27 @@ import {
   type GateResult,
 } from './run-gates.ts'
 
-// Graph fixtures select their own browser pool instead of inheriting the CI host's pool.
-beforeEach(() => vi.stubEnv('DSH_WEB_SNAPSHOT_WORKERS', undefined))
+// Graph fixtures select their own browser pool instead of inheriting the CI
+// host's pool, and coverage gates take their shape from the values each case
+// sets, not from the lane that runs this file (a partitioned lane exports
+// DSH_COVERAGE_PARTITIONS to every child).
+beforeEach(() => {
+  vi.stubEnv('DSH_WEB_SNAPSHOT_WORKERS', undefined)
+  vi.stubEnv('DSH_COVERAGE_MAX_WORKERS', undefined)
+  vi.stubEnv('DSH_COVERAGE_PARTITIONS', undefined)
+})
 afterEach(() => vi.unstubAllEnvs())
 
 /**
  * Capture output a gate streams through runGate's streamOutput path.
+ * @param onOutput - optional observer called after each captured chunk.
  * @returns the accumulated chunks and the stdout spy to restore in finally.
  */
-function captureStreamedOutput(): { writes: string[]; write: MockInstance } {
+function captureStreamedOutput(onOutput?: (chunks: readonly string[]) => void): { writes: string[]; write: MockInstance } {
   const writes: string[] = []
   const write = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
     writes.push(String(chunk))
+    onOutput?.(writes)
     return true
   })
   return { writes, write }
@@ -140,6 +149,13 @@ function withEnv<T>(name: string, value: string | undefined, action: () => T): T
   }
 }
 
+// Mutates worker-global state: only use for synchronous, non-concurrent graph inspection.
+function withPlatform<T>(platform: NodeJS.Platform, action: () => T): T {
+  const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+  Object.defineProperty(process, 'platform', { ...original, value: platform })
+  try { return action() } finally { Object.defineProperty(process, 'platform', original) }
+}
+
 describe('CI worker allocation', () => {
   it.each([1, 2, 4, 8, 16, 64])('shares a %i CPU coverage budget without multiplying pools', (cpus) => {
     const env = ciWorkerEnvironment('ci-coverage', {}, cpus)
@@ -183,6 +199,13 @@ describe('CI worker allocation', () => {
       .not.toHaveProperty('DSH_COVERAGE_PARTITIONS')
   })
 
+  it('leaves the plain unit inventory with the environment pnpm run test finds', () => {
+    // A 3-CPU host would otherwise receive DSH_COVERAGE_PARTITIONS=2, which
+    // the inventory's own coverage-gate tests read as a partitioned lane.
+    expect(ciWorkerEnvironment('ci-unit', {}, 3)).toEqual({})
+    expect(ciWorkerEnvironment('ci-unit', {}, 16)).toEqual({})
+  })
+
   it.each(['0', '-1', 'NaN', '2.5'])('rejects invalid worker budget %s', (raw) => {
     expect(() => ciWorkerEnvironment('ci-coverage', { DSH_COVERAGE_MAX_WORKERS: raw }, 16))
       .toThrow('DSH_COVERAGE_MAX_WORKERS must be a positive integer')
@@ -200,6 +223,7 @@ describe('gate graph validation', () => {
     'ci-static',
     'ci-lint-contracts-ready',
     'ci-coverage',
+    'ci-unit',
     'ci-bench',
     'ci-snapshot',
     'ci-artifacts',
@@ -234,7 +258,7 @@ describe('gate graph validation', () => {
     })
     expect(scripts['test:bench']).toBe('npm run build:bench && npm run build:web && npm run test:bench:built')
     expect(scripts['build:bench']).toBe(
-      'npm run build:native-system && npm run build:lib && tsdown --config benchmarks/tsdown.config.ts',
+      'npm run build:native-system && npm run build:lib && tsdown --config-loader native --config benchmarks/tsdown.config.ts',
     )
     expect(scripts['build:native-system']).toBe('tsx native/system/scripts/build.ts --host-addon-only')
     expect(scripts['test:bench:built']).toBe('vitest run --config vitest.bench.config.ts')
@@ -317,7 +341,7 @@ describe('gate graph validation', () => {
 
     expect(ids).toEqual([
       'rescope-vendor', 'publint', 'constraints', 'default-product-isolation', 'package-dependencies', 'application-entrypoints',
-      'dsh-package-licenses', 'package-invariants', 'built-package-invariants', 'node-next-types',
+      'dsh-package-licenses', 'node-next-types',
       'optional-dependency-imports', 'client-packages', 'client-ui-i18n', 'client-route-resolution', 'no-bare-dispatcher',
       'no-unknown-casts',
       'cordis-config', 'runtime-closure',
@@ -336,9 +360,9 @@ describe('gate graph validation', () => {
   it('schedules the longest documentation leaves before short checks', () => {
     const ids = withPnpmEntrypoint(() => gatesForMode('doc-sync').map(subject => subject.id))
 
-    expect(ids.slice(0, 11)).toEqual([
+    expect(ids.slice(0, 10)).toEqual([
       'doc-typecheck', 'docs-site-build', 'doc-graphs', 'markdown-links', 'type-equivalence',
-      'cordis-catalog', 'cordis-inspect-catalog', 'workflow-guest', 'mermaid', 'scoped-events', 'translation-pairing',
+      'cordis-catalog', 'cordis-inspect-catalog', 'workflow-guest', 'mermaid', 'translation-pairing',
     ])
   })
 
@@ -439,7 +463,7 @@ describe('gate graph validation', () => {
   it('keeps native Windows coverage blocking and behind the complete build', () => {
     const complete = withPnpmEntrypoint(() => gatesForMode('ci-windows-complete'))
     const observational = withPnpmEntrypoint(() => gatesForMode('ci-windows-observational-ready'))
-      .filter(gate => gate.id !== 'docs-site-build')
+      .filter(gate => gate.id !== 'docs-site-build' && gate.id !== 'electron-install')
     const byId = new Map(complete.map(subject => [subject.id, subject]))
 
     expect(byId.get('coverage')?.allowFailure).not.toBe(true)
@@ -518,34 +542,126 @@ describe('gate graph validation', () => {
     expect(results.some(result => result.status === 'skipped')).toBe(false)
   })
 
-  it('applies one configured test, polling, and hook timeout to both coverage gates', () => {
-    const gates = withEnv('DSH_COVERAGE_TEST_TIMEOUT_MS', '15000', () =>
+  it.each([undefined, '3'])('provisions Electron before Windows coverage with partition count %s', async (partitions) => {
+    const gates = withEnv('DSH_COVERAGE_PARTITIONS', partitions, () =>
       withPnpmEntrypoint(() => gatesForMode('ci-windows-complete')))
+    const installers = gates.filter(gate => gate.id === 'electron-install')
+    expect(installers).toHaveLength(1)
+    expect(installers[0]?.allowFailure).not.toBe(true)
+    expect(installers[0]?.needs ?? []).not.toContain('build')
+    expect(gates.find(gate => gate.id === 'coverage')?.needs).toContain('electron-install')
+    let installed = false
+    await runGates(gates, 8, async (subject) => {
+      if (subject.id === 'electron-install') installed = true
+      if (subject.id === 'coverage') expect(installed).toBe(true)
+      return resultFor(subject, 'passed')
+    })
+  })
 
-    for (const id of ['coverage', 'coverage-exempt-heavy']) {
-      expect(gates.find(subject => subject.id === id)?.args).toEqual(expect.arrayContaining([
-        '--testTimeout=15000',
-        '--expect.poll.timeout=15000',
-        '--hookTimeout=15000',
-      ]))
+  it.each(['ci-windows-complete', 'ci-windows-observational-ready'] as const)(
+    'provisions the locked Electron binary before built smoke in %s', (mode) => {
+      const gates = withPnpmEntrypoint(() => gatesForMode(mode))
+      const install = gates.find(gate => gate.id === 'electron-install')
+      expect(install).toMatchObject({
+        command: process.execPath,
+        args: ['/private/pnpm.cjs', '--filter', '@deepseek-ai/dsh-desktop', 'exec', 'install-electron'],
+        env: { ELECTRON_GET_USE_PROXY: '1' },
+      })
+      expect(gates.find(gate => gate.id === 'built-bin-smoke')?.needs).toContain('electron-install')
+      expect(gates.filter(gate => gate.id !== 'electron-install').every(gate => gate.env?.ELECTRON_GET_USE_PROXY === undefined)).toBe(true)
+    },
+  )
+
+  it.each(['ci-windows-complete', 'ci-windows-observational-ready'] as const)(
+    'keeps failed Electron provisioning visible without stopping unrelated diagnostics in %s', async (mode) => {
+      const gates = withPnpmEntrypoint(() => gatesForMode(mode))
+      const attempted: string[] = []
+      const results = await runGates(gates, 8, async (subject) => {
+        attempted.push(subject.id)
+        return resultFor(subject, subject.id === 'electron-install' ? 'failed' : 'passed')
+      })
+      expect(results.filter(result => result.status === 'failed').map(result => result.gate.id)).toEqual(['electron-install'])
+      expect(attempted).not.toContain('built-bin-smoke')
+      expect(results.find(result => result.gate.id === 'built-bin-smoke')?.status).toBe('skipped')
+      expect(results.find(result => result.gate.id === 'doc-graphs')?.status).toBe('passed')
+      if (mode === 'ci-windows-complete') {
+        expect(results.filter(result => result.status === 'failed' && !result.gate.allowFailure).map(result => result.gate.id))
+          .toEqual(['electron-install'])
+        expect(attempted).not.toContain('coverage')
+        expect(results.find(result => result.gate.id === 'coverage')?.status).toBe('skipped')
+        expect(results.find(result => result.gate.id === 'coverage-exempt-heavy')?.status).toBe('passed')
+      }
+    },
+  )
+
+  it.each(['ci-coverage', 'ci-artifacts', 'ci-windows-blocking'] as const)(
+    'only provisions Electron for native Windows coverage in %s', (mode) => {
+      const original = Object.getOwnPropertyDescriptor(process, 'platform')
+      for (const platform of ['linux', 'darwin', 'win32'] as const) {
+        const gates = withPlatform(platform, () => withPnpmEntrypoint(() => gatesForMode(mode)))
+        const needed = platform === 'win32' && mode === 'ci-coverage'
+        expect(gates.filter(gate => gate.id === 'electron-install')).toHaveLength(needed ? 1 : 0)
+        if (needed) {
+          expect(gates.find(gate => gate.id === 'coverage')?.needs).toContain('electron-install')
+          expect(gates.find(gate => gate.id === 'electron-install')?.env).toEqual({ ELECTRON_GET_USE_PROXY: '1' })
+          expect(gates.filter(gate => gate.id !== 'electron-install').every(gate => gate.env?.ELECTRON_GET_USE_PROXY === undefined)).toBe(true)
+        }
+      }
+      expect(Object.getOwnPropertyDescriptor(process, 'platform')).toEqual(original)
+    },
+  )
+
+  it('restores the platform descriptor when coverage configuration is rejected', () => {
+    const original = Object.getOwnPropertyDescriptor(process, 'platform')
+    expect(() => withEnv('DSH_COVERAGE_PARTITIONS', '1', () =>
+      withPlatform('win32', () => withPnpmEntrypoint(() => gatesForMode('ci-coverage')))))
+      .toThrow('DSH_COVERAGE_PARTITIONS must be an integer greater than 1')
+    expect(Object.getOwnPropertyDescriptor(process, 'platform')).toEqual(original)
+  })
+
+  it('leaves the lane test budget to the inherited environment on both coverage gates', () => {
+    // vitest.config.ts reads DSH_COVERAGE_TEST_TIMEOUT_MS per inline project
+    // (coverageTestTimeoutOptions); a gate argument would add a second owner.
+    for (const budget of ['15000', undefined]) {
+      const gates = withEnv('DSH_COVERAGE_TEST_TIMEOUT_MS', budget, () =>
+        withPnpmEntrypoint(() => gatesForMode('ci-windows-complete')))
+      for (const id of ['coverage', 'coverage-exempt-heavy']) {
+        const gate = gates.find(subject => subject.id === id)
+        if (gate === undefined) throw new Error(`ci-windows-complete must define the ${id} gate`)
+        expect(gate.args).not.toEqual(expect.arrayContaining([
+          expect.stringMatching(/^--(?:testTimeout|expect\.poll\.timeout|hookTimeout)=/),
+        ]))
+        expect(gate.env ?? {}).not.toHaveProperty('DSH_COVERAGE_TEST_TIMEOUT_MS')
+      }
     }
   })
 
-  it('keeps Vitest timeout defaults when the coverage override is absent', () => {
-    const gates = withEnv('DSH_COVERAGE_TEST_TIMEOUT_MS', undefined, () =>
-      withPnpmEntrypoint(() => gatesForMode('ci-windows-complete')))
-
-    for (const id of ['coverage', 'coverage-exempt-heavy']) {
-      expect(gates.find(subject => subject.id === id)?.args).not.toEqual(expect.arrayContaining([
-        expect.stringMatching(/^--(?:testTimeout|expect\.poll\.timeout|hookTimeout)=/),
-      ]))
+  it('runs the plain unit inventory after the native build and leaves its budget to the inherited environment', () => {
+    const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+      scripts: Record<string, string>
     }
-  })
+    expect(scripts['check:ci:unit']).toBe('tsx scripts/run-gates.ts ci-unit')
 
-  it('rejects an invalid coverage timeout before starting a gate', () => {
-    expect(() => withEnv('DSH_COVERAGE_TEST_TIMEOUT_MS', '0', () =>
-      withPnpmEntrypoint(() => gatesForMode('ci-windows-complete'))))
-      .toThrow('DSH_COVERAGE_TEST_TIMEOUT_MS must be a positive integer')
+    // The aggregate is the `test` package script's two segments, in order,
+    // so a step added to one cannot silently leave the other. The lane sets
+    // DSH_COVERAGE_TEST_TIMEOUT_MS; vitest.config.ts reads it per inline
+    // project (coverageTestTimeoutOptions), so the gate passes no budget flag.
+    const [nativeBuild, unitRun, ...rest] = (scripts.test ?? '').split(' && ')
+    expect(rest).toEqual([])
+    for (const budget of ['15000', undefined]) {
+      const gates = withEnv('DSH_COVERAGE_TEST_TIMEOUT_MS', budget, () =>
+        withPnpmEntrypoint(() => gatesForMode('ci-unit')))
+      expect(gates.map(gate => gate.id)).toEqual(['native-system', 'unit'])
+      expect(gates[0]).toMatchObject({ displayCommand: nativeBuild })
+      expect(gates[1]?.displayCommand).toBe(`pnpm exec ${unitRun}`)
+      expect(gates[1]).toMatchObject({
+        label: 'test',
+        needs: ['native-system'],
+        streamOutput: true,
+        args: ['/private/pnpm.cjs', 'exec', 'vitest', 'run'],
+      })
+      expect(gates[1]?.env ?? {}).not.toHaveProperty('DSH_COVERAGE_TEST_TIMEOUT_MS')
+    }
   })
 
   it('selects partitioned coverage only when explicitly configured', () => {
@@ -733,7 +849,6 @@ describe('Node 24 lane ownership', () => {
       'build',
       'node-compat',
       'publint',
-      'built-package-invariants',
       'lint-and-duplication',
       'snapshot',
       'expected-output',
@@ -749,8 +864,7 @@ describe('Node 24 lane ownership', () => {
     expect(subject.find(item => item.id === 'node-compat')?.env).toEqual({
       DSH_BUILD_CLIENT_PROFILE: 'official',
     })
-    expect(subject.find(item => item.id === 'built-package-invariants')?.needs).toEqual(['build'])
-    expect(subject.find(item => item.id === 'lint-and-duplication')?.needs).toEqual(['built-package-invariants'])
+    expect(subject.find(item => item.id === 'lint-and-duplication')?.needs).toEqual(['build'])
     for (const id of [
       'snapshot',
       'expected-output',
@@ -759,7 +873,7 @@ describe('Node 24 lane ownership', () => {
       'node-next-types',
       'built-bin-smoke',
     ]) {
-      expect(subject.find(item => item.id === id)?.needs).toEqual(['built-package-invariants'])
+      expect(subject.find(item => item.id === id)?.needs).toEqual(['build'])
     }
     expect(subject.find(item => item.id === 'snapshot')?.env).toEqual({ DSH_EXAMPLE_MODE: 'lib' })
     expect(subject.find(item => item.id === 'expected-output')?.env).toEqual({ DSH_EXAMPLE_MODE: 'lib' })
@@ -770,6 +884,7 @@ describe('Node 24 lane ownership', () => {
     expect(subject.find(item => item.id === 'built-bin-smoke')?.args).toEqual(
       expect.arrayContaining([
         'apps/cli/tests/profiles/headless/tests/source-tool.built.e2e.ts',
+        'apps/desktop/tests/acl-skill.built.e2e.ts',
         'packages/subprocess/subprocess-local/tests/spawn-runner-built.e2e.ts',
         'packages/subagent/subagent-codex/tests/loader-composition.e2e.ts',
         'packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts',
@@ -800,7 +915,7 @@ describe('Linux primary graph', () => {
     expect(web).toMatchObject({
       displayCommand: 'DSH_SNAPSHOT=replay pnpm run test:web:built',
       env: { DSH_SNAPSHOT: 'replay' },
-      needs: ['built-package-invariants'],
+      needs: ['build'],
     })
   })
 })
@@ -904,29 +1019,41 @@ describe('fail-fast scheduling', () => {
   })
 
   it.skipIf(process.platform === 'win32')('marks a zero-exit child as aborted when the signal fired', async () => {
-    const { writes, write } = captureStreamedOutput()
+    const marker = 'signal-trap-armed'
+    const armed = Promise.withResolvers<undefined>()
+    const controller = new AbortController()
+    let promise: Promise<GateResult> | undefined
+    const { write } = captureStreamedOutput((chunks) => {
+      if (chunks.join('').split('\n').slice(0, -1).includes(marker)) armed.resolve(undefined)
+    })
+    const cleanup = async (): Promise<void> => {
+      controller.abort()
+      try { await promise } finally { write.mockRestore() }
+    }
+    onTestFinished(cleanup)
     try {
-      const controller = new AbortController()
-      const child = gate('traps-signal', {
-        args: ['-e', "process.stdout.write('ready\\n'); process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 1000)"],
-        streamOutput: true,
-      })
-      const promise = runGate(child, controller.signal)
-      // Wait for the child to register its SIGTERM trap before aborting, so
-      // the signal is caught and the child really exits zero.
-      const deadline = Date.now() + 5000
-      while (!writes.join('').includes('ready') && Date.now() < deadline) {
-        await new Promise(resolve => setTimeout(resolve, 10))
-      }
+      // Readiness belongs after native signal-handler registration.
+      const script = [
+        "process.on('SIGTERM', () => process.exit(0))",
+        `process.stdout.write(${JSON.stringify(`${marker}\n`)})`,
+        'setInterval(() => {}, 1000)',
+      ].join(';')
+      const child = gate('traps-signal', { args: ['-e', script], streamOutput: true })
+      promise = runGate(child, controller.signal)
+      await Promise.race([
+        armed.promise,
+        promise.then((result) => { throw new Error(`signal fixture exited before readiness: ${formatGateResultReason(result)}`) }),
+      ])
       controller.abort()
       const result = await promise
 
       // The child trapped the signal and exited zero; the drain must not
       // report this gate passed, so the raw outcome carries the abort mark.
-      expect(result.status).toBe('passed')
-      expect(result.aborted).toBe(true)
+      expect(result, formatGateResultReason(result)).toMatchObject({
+        status: 'passed', exitCode: 0, signalCode: null, aborted: true,
+      })
     } finally {
-      write.mockRestore()
+      await cleanup()
     }
   })
 

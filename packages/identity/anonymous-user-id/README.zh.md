@@ -66,14 +66,13 @@ const userId = getOrCreateAnonymousUserId() // stable for the process lifetime
 - **随机生成，绝不派生。** id 来自 `crypto.randomUUID()`；绝不从 hostname、网络地址、git remote 或任何其他可识别来源派生，因此匿名性是生成过程的属性。
 - **同步且记忆化。** 一个进程对每个解析后的文件路径只触碰一次磁盘：读写都是同步的，结果按解析后的文件路径记忆化。
 - **Best-effort 持久化。** 写入失败仍会为本次运行返回可用 id，遥测与反馈因此不会因 home 不可写而阻塞。
-- **库而非插件。** 没有 Cordis 插件入口或配置。不发布不变式伴生入口，因为本包不拥有任何事件流或公开可变关系，无法在不产生创建 id 这一副作用的情况下比较。
+- **库而非插件。** 没有 Cordis 插件入口或配置。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 库入口：`getOrCreateAnonymousUserId`、文件持久化、按路径记忆化 |
-| — | 不发布运行时不变式伴生入口；该 API 仅拥有一个私有记忆化值和一个 best-effort 文件，不存在独立事件流或公开可变关系可供伴生入口在不产生创建身份这一副作用的情况下比较。 |
 | [`tests/anonymous-user-id.spec.ts`](tests/anonymous-user-id.spec.ts) | 测试覆盖的行为：生成、持久化、损坏、并发、记忆化 |
 
 ### API
@@ -135,9 +134,5 @@ const userId = getOrCreateAnonymousUserId() // stable for the process lifetime
 #### 开放：文件格式演进
 
 持久化约定是没有任何版本标记的裸 UUID 行。在 id 旁边增加第二个值，或用容器包裹该行，对现有文件都没有迁移方案；带版本的行格式是让此类变更安全的一种方式。
-
-#### 开放：不变式观测点
-
-不发布不变式伴生入口，因为任何关系都无法在不产生创建 id 这一副作用的情况下检查。未来若有安全的观测点，可以把重新读取的持久化文件与记忆化的 id 进行比较。
 
 </details>

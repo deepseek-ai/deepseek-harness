@@ -51,7 +51,7 @@ Tab 提供 Body 保活持有，而不独立申请会话引用。View 的稳定 `
 | 应用重启或窗口刷新 | 展示保存的标题和 URL，显式恢复或提交地址后才加载。 |
 | guest 崩溃 | 通过提供方重试；页面内存和原生 history 不持久化。 |
 
-[布局与提供方恢复](2026-09-14-sidebar-layout-provider-recovery.zh.md)仍然独立：持久化的 Tab 身份、位置和地址支持冷启动，而不是序列化 DOM。隐藏页面可能继续执行脚本、播放媒体或联网。
+[布局与提供方恢复](../../../../packages/client/ui-sidebar-right/README.zh.md)仍然独立：持久化的 Tab 身份、位置和地址支持冷启动，而不是序列化 DOM。隐藏页面可能继续执行脚本、播放媒体或联网。
 
 ## Alternatives considered
 

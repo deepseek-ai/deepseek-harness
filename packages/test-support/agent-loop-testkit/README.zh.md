@@ -86,7 +86,7 @@ harness 不会挂载任何 LLM（大语言模型）适配器。若测试发送�
 
 ### 设计
 
-`mountAgentLoopTestDependencies` 按固定依赖顺序——LLM、会话、会话投影注册表、系统提示词注册表、工具注册表、agent 注册表——挂载六个服务插件，并在 `AgentLoop` 之前停下，使调用方控制 loop 加载顺序。`mountAgentLoopTestHarness` 挂载公开的生产插件，通过其服务创建 Agent，并公开生产驱动的认领操作，而不导出 loop 的具体 Inbox 类或投影定义。[`src/inbox.ts`](src/inbox.ts) 仅包含进程内可变桩和快速失败且不支持操作的占位值；它不持有投影或持久事件实现。挂载与驱动实现位于 [`src/index.ts`](src/index.ts)。本包不发布 invariant companion，因为它只持有测试辅助工具，不存在可能相互偏离的独立生产观测。
+`mountAgentLoopTestDependencies` 按固定依赖顺序——LLM、会话、会话投影注册表、系统提示词注册表、工具注册表、agent 注册表——挂载六个服务插件，并在 `AgentLoop` 之前停下，使调用方控制 loop 加载顺序。`mountAgentLoopTestHarness` 挂载公开的生产插件，通过其服务创建 Agent，并公开生产驱动的认领操作，而不导出 loop 的具体 Inbox 类或投影定义。[`src/inbox.ts`](src/inbox.ts) 仅包含进程内可变桩和快速失败且不支持操作的占位值；它不持有投影或持久事件实现。挂载与驱动实现位于 [`src/index.ts`](src/index.ts)。
 
 </details>
 

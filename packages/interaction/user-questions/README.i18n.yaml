@@ -9,26 +9,17 @@
   en: 79d2910e509a2512
   zh: 7af1982658f00d64
 /deepseek-ai-dsh-user-questions/summary:
-  en: d27ce8b495269248
-  zh: 691a7cc7f3d892d0
+  en: 2c1ade8d86e6a8c7
+  zh: 97d43dcf997d6ff7
 /deepseek-ai-dsh-user-questions/table-of-contents:
-  en: ad3919bb107cc38d
-  zh: 557af29a8318b65c
-/deepseek-ai-dsh-user-questions/service-userquestionservice-ctx-key-userquestions:
-  en: 1ba3467a2588da42
-  zh: 74f6e516f71116d9
-/deepseek-ai-dsh-user-questions/service-userquestionservice-ctx-key-userquestions/public-api:
-  en: f7c183c8728b05cd
-  zh: f0104632d8eb2938
-/deepseek-ai-dsh-user-questions/service-userquestionservice-ctx-key-userquestions/key-types:
-  en: 10637ca40891d520
-  zh: 015662eb651d19cb
-/deepseek-ai-dsh-user-questions/service-userquestionservice-ctx-key-userquestions/presentation-intent:
-  en: d3809cfa854f1c02
-  zh: f9bcc88f1db8fd83
+  en: 382a21c0ea17b2e4
+  zh: 1a4335e571de92dd
+/deepseek-ai-dsh-user-questions/ask-a-question:
+  en: 0c45d3161b0df13a
+  zh: efff84a7917a799e
 /deepseek-ai-dsh-user-questions/role:
-  en: 1d4b9680e35350a7
-  zh: fcba25211099b880
+  en: 1a321b5a204dc4dd
+  zh: 5e30055a3774e606
 /deepseek-ai-dsh-user-questions/model-experience:
   en: 95167d0c957a0ab5
   zh: 582c04395648786c
@@ -36,8 +27,8 @@
   en: 40294c1c31b74824
   zh: cd40bdfe1a1c37dc
 /deepseek-ai-dsh-user-questions/known-limitations-and-deferred-work:
-  en: 9c2d868427856d56
-  zh: f0d19979fd90d826
+  en: a2334c0fcb02d2d8
+  zh: 4592c204397387ac
 /deepseek-ai-dsh-user-questions/known-limitations-and-deferred-work/dev-note:
-  en: f5f2c82d2e085ccf
-  zh: d04ca73d1db0ef0f
+  en: 23f77437b2447181
+  zh: 30115a0a4bda7a61

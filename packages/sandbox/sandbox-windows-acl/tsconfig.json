@@ -25,6 +25,9 @@
     },
     {
       "path": "../../util/lazy-require"
+    },
+    {
+      "path": "../../skill/skill"
     }
   ]
 }
