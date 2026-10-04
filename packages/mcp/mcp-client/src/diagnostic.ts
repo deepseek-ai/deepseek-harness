@@ -1,37 +1,25 @@
 /**
- * Connection diagnostics retain cause chains for literal configuration.
- * Template-expanded configuration exposes only local reasons and known error
- * codes because upstream messages can contain resolved credentials.
+ * Connection diagnostics retain cause chains. Configurations that resolve
+ * secrets replace every known secret value before text leaves the instance.
  */
-
-import { SdkErrorCode } from '@modelcontextprotocol/client'
 
 /** Local failure whose message contains no expanded configuration or upstream text. */
 export class McpLocalError extends Error {}
 
-const SAFE_ERROR_CODES = new Set<string>([
-  ...Object.values(SdkErrorCode),
-  'ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT',
-  'ENOENT', 'EACCES', 'EPERM', 'EPIPE', 'ERR_INVALID_URL',
-  'CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
-  'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_SOCKET',
-])
+/** Placeholder written in place of a known secret value. */
+const REDACTED = '[redacted]'
 
 /**
- * Describe a failure without copying expanded configuration from upstream errors.
- * @param error - caught failure, including nested transport causes.
- * @returns a local reason, known error code, or a generic failure message.
+ * Replace every occurrence of known secret values, longest first so a secret
+ * that contains another is replaced whole.
+ * @param text - diagnostic or upstream text.
+ * @param secrets - non-empty secret values known to the instance.
+ * @returns the text with each occurrence replaced by `[redacted]`.
  */
-export function describeTemplateError(error: unknown): string {
-  const seen = new Set<Error>()
-  while (error instanceof Error && !seen.has(error)) {
-    if (error instanceof McpLocalError) return error.message
-    seen.add(error)
-    const code = 'code' in error ? error.code : undefined
-    if (typeof code === 'string' && SAFE_ERROR_CODES.has(code)) return code
-    error = error.cause
-  }
-  return 'operation failed (upstream details omitted to protect credentials)'
+export function redactSecrets(text: string, secrets: Iterable<string>): string {
+  let out = text
+  for (const secret of [...secrets].sort((left, right) => right.length - left.length)) out = out.replaceAll(secret, REDACTED)
+  return out
 }
 
 /** One readable segment of the chain; generic `Error` names are noise and dropped. */

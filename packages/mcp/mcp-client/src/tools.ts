@@ -23,7 +23,7 @@ import type { ToolDefinition, ToolExecution, ToolExecutionResult } from '@deepse
 import { assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonSchemaNode } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { McpLocalError } from './diagnostic.ts'
+import { describeError, McpLocalError } from './diagnostic.ts'
 
 /** Resolved options relevant to tool bridging. */
 export interface ToolBridgeOptions {
@@ -32,11 +32,11 @@ export interface ToolBridgeOptions {
   /** Generation cancellation combined with each tool execution's signal. */
   signal: AbortSignal
   /**
-   * Format tool-call failures before they reach callers.
-   * @param error - transport, protocol, or MCP tool-result failure.
-   * @returns the error safe to expose for this instance's configuration.
+   * Remove secret values from tool-call failures before they reach callers.
+   * @param text - transport or protocol failure text, or MCP `isError` result text.
+   * @returns the text with secret values replaced.
    */
-  error?: (error: unknown) => Error
+  redact?: (text: string) => string
 }
 
 /** Registration failed after the prior generation was removed and partial registrations were rolled back. */
@@ -156,10 +156,11 @@ export async function syncTools(
             { signal: AbortSignal.any([execution.signal, opts.signal]),
               timeout: opts.toolCallTimeoutMs, toolDefinition: tool },
           )
-          if (result.isError === true && opts.error !== undefined) throw new Error(extractText(result.content as JsonValue[], tool.name))
-          return result
+          if (result.isError !== true || opts.redact === undefined) return result
+          return { isError: true, content: [{ type: 'text', text: opts.redact(extractText(result.content as JsonValue[], tool.name)) }] }
         } catch (error) {
-          throw opts.error?.(error) ?? error
+          if (opts.redact === undefined) throw error
+          throw new Error(opts.redact(describeError(error)))
         }
       },
     }))
@@ -180,9 +181,8 @@ export async function syncTools(
     // registration occupies this server's namespace. Roll back so the model
     // sees either the full generation or none of it — never a partial set.
     for (const dispose of disposers.values()) dispose()
-    const failure = opts.error?.(error) ?? error
-    ctx.logger.error(`mcp-client(${opts.serverName}): tool registration failed, no tools registered: ${String(failure)}`)
-    throw new McpToolRegistrationError('MCP tool registration failed', { cause: failure })
+    ctx.logger.error(`mcp-client(${opts.serverName}): tool registration failed, no tools registered: ${String(error)}`)
+    throw new McpToolRegistrationError('MCP tool registration failed', { cause: error })
   }
   return disposers
 }

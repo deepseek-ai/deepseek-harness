@@ -22,7 +22,8 @@ import type { ServerContext } from './server-context.ts'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { withDeadline } from './deadline.ts'
 import { McpLocalError } from './diagnostic.ts'
-import type { McpCloseResult, McpStatusCell } from './status.ts'
+import type { McpStatusCell } from './status.ts'
+import type { McpCloseResult } from './types.ts'
 import { McpGeneration } from './generation.ts'
 import { McpTemplateBinding } from './credentials.ts'
 import { MissingTemplateValue } from './templates.ts'
@@ -141,7 +142,6 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   let syncChain: Promise<void> = Promise.resolve()
   let settling: Promise<void> = Promise.resolve()
   let reconnectTimer: NodeJS.Timeout | undefined
-  let healthTimer: NodeJS.Timeout | undefined
   let failedAttempts = 0
   let closureFailure: McpCloseResult | undefined
   let checkingCredentials: Promise<void> | undefined
@@ -150,9 +150,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
 
   function stopTimers(): void {
     clearTimeout(reconnectTimer)
-    clearTimeout(healthTimer)
     reconnectTimer = undefined
-    healthTimer = undefined
   }
 
   function clearTools(): void {
@@ -189,7 +187,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
           serverName: config.serverName,
           toolCallTimeoutMs: config.toolCallTimeoutMs,
           signal,
-          ...config.expandTemplates ? { error: (error: unknown) => new McpLocalError(diagnostic(error, 'tools')) } : {},
+          ...config.expandTemplates ? { redact: (text: string) => binding.redact(text) } : {},
         }, disposers, () => isCurrent(record))
       })
     })
@@ -230,29 +228,10 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   function lost(record: Generation, error: string): void {
     if (!isCurrent(record)) return
     current = undefined
-    clearTimeout(healthTimer)
-    healthTimer = undefined
     settling = close(record).then((confirmed) => {
       readiness.resolve({ error: new Error(error) })
       if (confirmed) scheduleReconnect(error, record.connectedAt)
     })
-  }
-
-  function armHealthCheck(record: Generation): void {
-    if (!isCurrent(record) || config.healthCheckIntervalMs === 0) return
-    healthTimer = setTimeout(() => {
-      healthTimer = undefined
-      void record.wire.run((signal) => {
-        const client = record.wire.client
-        return client.getProtocolEra() === 'modern'
-          ? client.discover({ signal }).then(() => undefined)
-          : client.ping({ signal }).then(() => undefined)
-      }, config.healthCheckTimeoutMs).then(
-        () => { armHealthCheck(record) },
-        (error: unknown) => { lost(record, diagnostic(error, 'health check')) },
-      )
-    }, config.healthCheckIntervalMs)
-    healthTimer.unref()
   }
 
   function isStopped(): boolean { return disposed || closureFailure !== undefined }
@@ -332,9 +311,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         : config.startupTimeoutMs - (Date.now() - startedAt)
       const resolved = await record.wire.run(signal => binding.resolve(signal), remaining())
       bindingValue = { config: resolved }
-      await record.wire.connect(resolved, remaining(), config.expandTemplates && config.transport === 'streamable-http'
-        ? (url, init) => record.wire.run(signal => binding.fetch(resolved, url, init, signal, requestCredentialRefresh))
-        : undefined)
+      await record.wire.connect(resolved, remaining())
       if (!isCurrent(record)) return
       const text = client.getInstructions()?.trimEnd() ?? ''
       const instructions = text ? `### MCP server: ${config.serverName}\n\n${text}` : ''
@@ -348,7 +325,6 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       serverInstructions = instructions
       record.connectedAt = Date.now()
       status.update({ state: 'connected', toolCount: disposers.size, connectedAt: record.connectedAt })
-      armHealthCheck(record)
       readiness.resolve({})
       if (failedAttempts > 0) ctx.logger.info(`${label}: reconnected and re-synced tools (attempt ${failedAttempts}/${policy.maxAttempts})`)
     } catch (error) {

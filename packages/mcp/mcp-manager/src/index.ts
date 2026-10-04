@@ -1,13 +1,14 @@
 /**
- * MCP server manager (`ctx.mcpServers`): one Config-driven fleet of
- * `dsh-mcp-client` instances. Volatile `Config.servers` supplies the resolved
- * server set. Settings exposes it under the owning Loader entry id, with
- * profile inheritance and revision checks. Every committed configuration change
+ * MCP server manager (`ctx.mcpServers`): one fleet of `dsh-mcp-client`
+ * instances built from two sources. Volatile `Config.servers` holds configured
+ * entries, which Settings exposes under the owning Loader entry id with profile
+ * inheritance and revision checks; plugins contribute registered entries for
+ * their own lifetime through `register()`. Every change to either source
  * reconciles the live instance set: new entries mount, removed or disabled
  * entries unmount, and a changed entry is rebuilt. Connection handling stays
- * entirely in mcp-client; the manager owns configuration validation, instance
- * lifecycle, the aggregated status registry, and the manual `restart` and
- * `probe` operations a management surface needs.
+ * entirely in mcp-client; the manager owns entry validation, instance
+ * lifecycle, the aggregated status registry, and the `restart`, `probe`, and
+ * `watch` operations a management surface calls through Remote.
  *
  * Service package (default-exports the service class). All child instances
  * mount under the manager's fiber, so disposing the manager unwinds every
@@ -17,6 +18,7 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Fiber, Volatile, VolatileSnapshot } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
@@ -45,7 +47,7 @@ export interface McpManagedServerEntry {
   command: string
   /** stdio: arguments passed without shell interpolation. */
   args: string[]
-  /** stdio: extra child environment; values may use `${env:…}` / `${credential:…}` templates. */
+  /** stdio: extra child environment; values may use `${credential:…}` templates. */
   env: Record<string, string>
   /** stdio: working directory for the child process. */
   cwd: string
@@ -59,10 +61,6 @@ export interface McpManagedServerEntry {
   toolCallTimeoutMs?: number
   /** Per-attempt startup budget in milliseconds; the manager schema defaults to 30000. */
   startupTimeoutMs: number
-  /** Health-check spacing override in milliseconds; omission uses the mcp-client default. */
-  healthCheckIntervalMs?: number
-  /** Per-health-check timeout override in milliseconds; omission uses the mcp-client default. */
-  healthCheckTimeoutMs?: number
   /** Cleanup budget override in milliseconds; omission uses the mcp-client default. */
   closeTimeoutMs?: number
   /** Reconnect policy; the schema fills the mcp-client defaults. */
@@ -81,6 +79,11 @@ interface ConfigInput {
   servers?: Record<string, EntryInput>
 }
 
+/** One server a plugin contributes for its own lifetime; it is enabled while registered. */
+export type McpServerRegistration = Omit<EntryInput, 'enabled'>
+
+type ResolvedEntry = VolatileSnapshot<McpManagedServerEntry>
+
 const ServerEntrySchema = z.object({
   transport: z.union(['stdio', 'streamable-http']).required(),
   command: z.string().default(''),
@@ -92,15 +95,13 @@ const ServerEntrySchema = z.object({
   enabled: z.boolean().default(true),
   toolCallTimeoutMs: z.number(),
   startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(30_000),
-  healthCheckIntervalMs: z.union([z.const(0), z.number().min(1_000).max(MAX_TIMER_DELAY_MS)]),
-  healthCheckTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS),
   closeTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS),
   reconnect: ReconnectSchema,
-})
+}) as z<EntryInput, McpManagedServerEntry>
 
 
 /** Fields of one entry that may carry template tokens, with their config paths. */
-function templatedStrings(name: string, entry: VolatileSnapshot<McpManagedServerEntry>): Array<[value: string, where: string]> {
+function templatedStrings(name: string, entry: ResolvedEntry): Array<[value: string, where: string]> {
   const path = `servers.${name}`
   if (entry.transport === 'stdio') {
     return [
@@ -117,15 +118,14 @@ function templatedStrings(name: string, entry: VolatileSnapshot<McpManagedServer
 }
 
 /**
- * Reject a server set the manager could not act on: an invalid entry key, a
+ * Reject entries the manager could not act on: an invalid entry key, a
  * missing or cross-transport field, or a malformed template token. Runs at
- * composition load for the entry config and at every settings write for the
- * user layer, so a broken entry is refused where it is written instead of
- * silently disabling its server.
- * @param config - the resolved manager configuration.
+ * composition load, at every settings write, and at registration, so a broken
+ * entry is refused where it is written instead of silently disabling its server.
+ * @param entries - resolved entries keyed by server name.
  */
-function validateServers(config: Config): void {
-  for (const [name, entry] of Object.entries(config.servers.get())) {
+function validateEntries(entries: Readonly<Record<string, ResolvedEntry>>): void {
+  for (const [name, entry] of Object.entries(entries)) {
     const path = `servers.${name}`
     if (!SERVER_NAME_PATTERN.test(name)) {
       throw new Error(`${path}: server name must match ${String(SERVER_NAME_PATTERN)} — rename the entry key`)
@@ -167,7 +167,7 @@ function validateServers(config: Config): void {
 /** One server's child instance, probes, and any cleanup failure retained by the manager. */
 interface ManagedRecord {
   /** Entry before template expansion, retained for change detection. */
-  entrySnapshot: VolatileSnapshot<McpManagedServerEntry>
+  entrySnapshot: ResolvedEntry
   /** The child mcp-client fiber. */
   handle?: Fiber
   probes: Map<AbortController, Promise<McpProbeResult>>
@@ -186,11 +186,11 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /**
- * The manager service. Configuration reconciliation and `restart` serialize
- * instance replacement. Probes run independently and are cancelled before
- * replacement or disposal waits for their cleanup.
+ * The manager service. Reconciliation and `restart` serialize instance
+ * replacement. Probes run independently and are cancelled before replacement
+ * or disposal waits for their cleanup.
  */
-export default class McpServerManager extends Service {
+export default class McpServerManager extends TypertRemoteService {
   /** Schema for {@link Config}; Settings exposes its volatile fields. */
   static Config = z.object({
     servers: z.dict(ServerEntrySchema).default({}).volatile(),
@@ -201,6 +201,12 @@ export default class McpServerManager extends Service {
   private readonly ownerContext: Context
   private readonly instances = new Map<string, ManagedRecord>()
   private readonly statuses = new Map<string, McpManagedServerStatus>()
+  /** Plugin-contributed entries, each owned by its registering plugin's effect. */
+  private readonly registrations = new Map<string, ResolvedEntry>()
+  /** Wake callbacks of active `watch` streams. */
+  private readonly watchers = new Set<() => void>()
+  /** Aborted at service dispose so `watch` streams end. */
+  private readonly lifetime = new AbortController()
   /** Settled operation tail serializing every lifecycle operation. */
   private tail: Promise<unknown> = Promise.resolve()
   /** Set at service dispose: refuse new operations while queued ones drain. */
@@ -214,7 +220,7 @@ export default class McpServerManager extends Service {
   constructor(ctx: Context, public config: Config) {
     super(ctx, 'mcpServers')
     this.ownerContext = ctx
-    validateServers(config)
+    validateEntries(config.servers.get())
   }
 
   /**
@@ -230,26 +236,25 @@ export default class McpServerManager extends Service {
       for (const [name, record] of [...this.instances]) await this.unmount(name, record)
     }
     const owner = this.ctx.fiber
+    const registrations = this.registrations
     this.ctx.on('internal/config', function (this: Fiber, _raw, next) {
       const raw: unknown = next()
-      if (this === owner) validateServers(McpServerManager.Config(raw as ConfigInput))
+      if (this !== owner) return raw
+      const servers = McpServerManager.Config(raw as ConfigInput).servers.get()
+      validateEntries(servers)
+      const taken = Object.keys(servers).find(name => registrations.has(name))
+      if (taken !== undefined) throw new Error(`servers.${taken}: a plugin already registers this server name — rename the entry key`)
       return raw
     })
     this.ctx.on('internal/plugin', (fiber) => {
       if (fiber === owner && fiber.uid === null) this.stop()
     }, { global: true })
-    this.ctx.on('loader/volatile-update', () => {
-      for (const [name, record] of this.instances) {
-        if (!deepEqualJson(record.entrySnapshot, this.config.servers.get()[name])) this.retire(record)
-      }
-      this.schedule(() => this.reconcileOnce(), 'config reconcile')
-    })
-    // The service is visible to dependents only once this fiber is ACTIVE, and
-    // the status event asserts a reachable manager, so the first reconcile
-    // waits for activation instead of racing it.
+    this.ctx.on('loader/volatile-update', () => { void this.entriesChanged('config reconcile') })
+    // The service is visible to dependents only once this fiber is ACTIVE, so
+    // the first reconcile waits for activation instead of racing it.
     void this.ctx.fiber.await().then(
       () => {
-        this.schedule(() => this.reconcileOnce(), 'initial reconcile')
+        void this.schedule(() => this.reconcileOnce(), 'initial reconcile')
       },
       /* v8 ignore next 2 -- init is this fiber's whole startup and this registration is its
          last statement, so a rejected activation cannot reach a registered continuation */
@@ -258,33 +263,106 @@ export default class McpServerManager extends Service {
   }
 
   /**
-   * Read configured servers and retained runtime records without mounting or probing.
-   * @returns configured entries in document order, followed by retained records for removed entries.
+   * Read configured and registered servers and retained runtime records without mounting or probing.
+   * @returns configured entries in document order, then registered entries, then retained records for removed entries.
    */
   list(): McpManagedServerView[] {
-    const servers = this.config.servers.get()
-    return [...new Set([...Object.keys(servers), ...this.instances.keys()])].map(name => ({
+    const entries = this.entries()
+    return [...new Set([...Object.keys(entries), ...this.instances.keys()])].map(name => ({
       name,
-      configured: Object.hasOwn(servers, name),
+      configured: Object.hasOwn(entries, name),
       status: this.statuses.get(name)
-        ?? (servers[name]?.enabled ? { state: 'connecting', attempt: 0 } : { state: 'disabled' }),
+        ?? (entries[name]?.enabled ? { state: 'connecting', attempt: 0 } : { state: 'disabled' }),
     }))
   }
 
   /**
-   * Rebuild one server from its current configuration: dispose the live
-   * instance (if any) and mount a fresh one with a fresh reconnect budget.
-   * Incomplete cleanup blocks replacement until the Host restarts.
-   * @param name - the configured entry key.
-   * @throws when the manager is disposed, no entry is configured, or cleanup is incomplete.
+   * Contribute one server for the calling plugin's lifetime. A registered
+   * entry is enabled while registered; its removal awaits the instance's
+   * unmount, so plugin disposal withdraws the server's tools before settling.
+   * @param name - server key and tool namespace, unique across configured and registered servers.
+   * @param entry - transport, endpoint, and budgets, validated like a configured entry.
+   * @returns an idempotent disposer that removes the registration.
+   * @throws when the name is taken, the entry is invalid, or the manager is disposed.
    */
+  register(name: string, entry: McpServerRegistration): () => void {
+    const resolved = ServerEntrySchema({ ...entry, enabled: true })
+    validateEntries({ [name]: resolved })
+    const dispose = this.ctx.effect(() => {
+      if (this.stopped) throw new Error('mcp-manager: the manager is disposed')
+      if (Object.hasOwn(this.config.servers.get(), name) || this.registrations.has(name)) {
+        throw new Error(`mcp-manager: server "${name}" is already configured or registered`)
+      }
+      this.registrations.set(name, resolved)
+      void this.entriesChanged(`registration of "${name}"`)
+      return () => {
+        this.registrations.delete(name)
+        // A stopping manager unmounts every instance itself.
+        if (!this.stopped) return this.entriesChanged(`removal of "${name}"`)
+      }
+    }, 'mcpServers.register()')
+    return () => void dispose()
+  }
+
+  /**
+   * Stream server views for a management surface: the current list on
+   * subscription, then the complete list again after each status or entry change.
+   * @param signal - subscription lifetime; aborting ends only this stream.
+   * @returns coalesced server lists until the subscriber or the manager stops.
+   */
+  @Remote({ mode: 'stream' })
+  async* watch(signal: AbortSignal): AsyncIterable<McpManagedServerView[]> {
+    const ended = AbortSignal.any([signal, this.lifetime.signal])
+    // Read through a call: the flag changes while the stream awaits.
+    const aborted = (): boolean => ended.aborted
+    let wake = Promise.withResolvers<void>()
+    let dirty = true
+    const notify = (): void => {
+      dirty = true
+      wake.resolve()
+    }
+    this.watchers.add(notify)
+    ended.addEventListener('abort', notify, { once: true })
+    try {
+      while (!aborted()) {
+        if (!dirty) await wake.promise
+        if (aborted()) break
+        dirty = false
+        wake = Promise.withResolvers<void>()
+        yield this.list()
+      }
+    } finally {
+      this.watchers.delete(notify)
+      ended.removeEventListener('abort', notify)
+    }
+  }
+
+  /**
+   * Rebuild one server from its current entry: dispose the live instance (if
+   * any) and mount a fresh one with a fresh reconnect budget. Incomplete
+   * cleanup blocks replacement until the Host restarts.
+   * @param name - the configured or registered server key.
+   * @throws when the manager is disposed, no such entry exists, or cleanup is incomplete.
+   */
+  @Remote
   async restart(name: string): Promise<void> {
     await this.enqueue(async () => {
-      if (this.config.servers.get()[name] === undefined) {
-        throw new Error(`mcp-manager: unknown server "${name}" — it is not configured under servers`)
+      if (this.entries()[name] === undefined) {
+        throw new Error(`mcp-manager: unknown server "${name}" — it is neither configured nor registered`)
       }
       await this.remount(name)
     })
+  }
+
+  /**
+   * Probe one server for a management surface; see {@link McpServerManager.probe}.
+   * @param name - the configured or registered server key.
+   * @param signal - caller cancellation.
+   * @returns the stage-classified probe outcome and independent cleanup result.
+   */
+  @Remote('probe')
+  probeFromClient(name: string, signal: AbortSignal): Promise<McpProbeResult> {
+    return this.probe(name, { signal })
   }
 
   /**
@@ -292,7 +370,7 @@ export default class McpServerManager extends Service {
    * the entry's templates, connect, list tools, close. A disabled entry can be
    * probed — that is how a management surface tests it before enabling.
    * Configuration changes and manager disposal cancel the probe.
-   * @param name - the configured entry key.
+   * @param name - the configured or registered server key.
    * @param options - probe budget, listing caps, and abort signal.
    * @returns the stage-classified probe outcome and independent cleanup result.
    * @throws when the manager is disposed, the entry is absent or changing, cleanup is
@@ -300,7 +378,7 @@ export default class McpServerManager extends Service {
    */
   async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult> {
     if (this.stopped) throw new Error('mcp-manager: the manager is disposed')
-    const entry = this.config.servers.get()[name]
+    const entry = this.entries()[name]
     if (entry === undefined) throw new Error(`mcp-manager: unknown server "${name}"`)
     let record = this.instances.get(name)
     if (record === undefined) {
@@ -332,12 +410,33 @@ export default class McpServerManager extends Service {
 
   private stop(): void {
     this.stopped = true
+    this.lifetime.abort()
     for (const record of this.instances.values()) this.retire(record)
   }
 
+  /** Configured entries in document order, followed by registered entries. */
+  private entries(): Readonly<Record<string, ResolvedEntry>> {
+    return { ...this.config.servers.get(), ...Object.fromEntries(this.registrations) }
+  }
+
+  /** Retire records whose entry changed or disappeared, then queue reconciliation. */
+  private entriesChanged(what: string): Promise<void> {
+    const entries = this.entries()
+    for (const [name, record] of this.instances) {
+      if (!deepEqualJson(record.entrySnapshot, entries[name])) this.retire(record)
+    }
+    this.changed()
+    return this.schedule(() => this.reconcileOnce(), what)
+  }
+
+  /** Wake every `watch` stream. */
+  private changed(): void {
+    for (const notify of this.watchers) notify()
+  }
+
   /** Queue one lifecycle operation on the serialized tail and contain its failure. */
-  private schedule(op: () => Promise<void>, what: string): void {
-    void this.enqueue(op).catch((error: unknown) => {
+  private schedule(op: () => Promise<void>, what: string): Promise<void> {
+    return this.enqueue(op).catch((error: unknown) => {
       this.ctx.logger.error(`mcp-manager: ${what} failed`)
       this.ctx.logger.error(error)
     })
@@ -355,9 +454,9 @@ export default class McpServerManager extends Service {
     return run
   }
 
-  /** Reconcile the live instance set against the current configuration. */
+  /** Reconcile the live instance set against the current entries. */
   private async reconcileOnce(): Promise<void> {
-    const servers = this.config.servers.get()
+    const servers = this.entries()
     for (const [name, record] of this.instances) {
       const entry = servers[name]
       if (!record.retired && entry !== undefined && deepEqualJson(entry, record.entrySnapshot)) continue
@@ -366,6 +465,7 @@ export default class McpServerManager extends Service {
     for (const name of this.statuses.keys()) {
       if (servers[name] === undefined && !this.instances.has(name)) this.statuses.delete(name)
     }
+    this.changed()
     for (const [name, entry] of Object.entries(servers)) {
       const record = this.instances.get(name)
       if (record?.retired || record?.failure !== undefined) continue
@@ -383,7 +483,7 @@ export default class McpServerManager extends Service {
     if (record !== undefined && !await this.unmount(name, record)) {
       throw new Error(`mcp-manager: cleanup for "${name}" is incomplete; restart the Host`)
     }
-    const entry = this.config.servers.get()[name]
+    const entry = this.entries()[name]
     if (entry === undefined || this.stopped) return
     if (!entry.enabled) {
       this.setStatus(name, { state: 'disabled' })
@@ -392,8 +492,8 @@ export default class McpServerManager extends Service {
     this.mount(name, entry)
   }
 
-  private mount(name: string, entry: VolatileSnapshot<McpManagedServerEntry>, existing?: ManagedRecord): void {
-    if (this.stopped || !deepEqualJson(this.config.servers.get()[name], entry)) return
+  private mount(name: string, entry: ResolvedEntry, existing?: ManagedRecord): void {
+    if (this.stopped || !deepEqualJson(this.entries()[name], entry)) return
     const record: ManagedRecord = existing ?? { entrySnapshot: entry, probes: new Map() }
     this.instances.set(name, record)
     this.setStatus(name, { state: 'connecting', attempt: 0 })
@@ -416,7 +516,7 @@ export default class McpServerManager extends Service {
       publish()
     }).catch((error: unknown) => {
       if (record.retired || this.stopped) return
-      this.schedule(async () => {
+      void this.schedule(async () => {
         if (record.retired) return
         if (await this.unmount(name, record)) this.setStatus(name, { state: 'failed', reason: 'load', lastError: String(error) })
       }, `failed startup of "${name}"`)
@@ -446,7 +546,7 @@ export default class McpServerManager extends Service {
   }
 
   /**
-   * Publish changed statuses for configured entries or retained runtime records.
+   * Publish changed statuses for configured or registered entries and retained runtime records.
    * Removed entries with incomplete cleanup remain observable; disposed managers
    * retain the final status without emitting events.
    */
@@ -454,11 +554,12 @@ export default class McpServerManager extends Service {
     // A lifecycle operation that entered before disposal may still be
     // finishing while the service is torn down; nothing may emit for a
     // manager that is no longer live.
-    if (this.config.servers.get()[name] === undefined && !this.instances.has(name)) return
+    if (this.entries()[name] === undefined && !this.instances.has(name)) return
     const previous = this.statuses.get(name)
     if (previous !== undefined && deepEqualJson(previous, status)) return
     this.statuses.set(name, status)
     if (this.stopped) return
+    this.changed()
     void this.ctx.parallel('mcp-manager/status', name, status).catch((error: unknown) => {
       this.ctx.logger.error(`mcp-manager: a mcp-manager/status listener failed for "${name}"`)
       this.ctx.logger.error(error)
@@ -470,16 +571,14 @@ export default class McpServerManager extends Service {
    * expansion. Non-strict startup exposes connection failures through status;
    * the manager schema supplies its startup budget.
    */
-  private toClientConfig(name: string, entry: VolatileSnapshot<McpManagedServerEntry>): McpClient.Config {
+  private toClientConfig(name: string, entry: ResolvedEntry): McpClient.Config {
     const shared = {
       serverName: name,
       failOnStartupError: false as const,
       expandTemplates: true,
       ...entry.closeTimeoutMs === undefined ? {} : { closeTimeoutMs: entry.closeTimeoutMs },
-      ...entry.healthCheckTimeoutMs === undefined ? {} : { healthCheckTimeoutMs: entry.healthCheckTimeoutMs },
       ...entry.toolCallTimeoutMs === undefined ? {} : { toolCallTimeoutMs: entry.toolCallTimeoutMs },
       startupTimeoutMs: entry.startupTimeoutMs,
-      ...entry.healthCheckIntervalMs === undefined ? {} : { healthCheckIntervalMs: entry.healthCheckIntervalMs },
       reconnect: entry.reconnect,
     }
     // Resolving through the client's own schema fills its defaults here (no

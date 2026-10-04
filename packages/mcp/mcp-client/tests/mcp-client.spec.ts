@@ -1100,7 +1100,6 @@ describe('createTransport', () => {
       cwd: '/tmp',
       toolCallTimeoutMs: 60_000,
       startupTimeoutMs: 30_000,
-      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     })
     const transport = createTransport(config)
@@ -1117,7 +1116,6 @@ describe('createTransport', () => {
       headers: {},
       toolCallTimeoutMs: 60_000,
       startupTimeoutMs: 30_000,
-      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     })
     const transport = createTransport(config)
@@ -1134,7 +1132,6 @@ describe('createTransport', () => {
       headers: { Authorization: 'Bearer token' },
       toolCallTimeoutMs: 60_000,
       startupTimeoutMs: 30_000,
-      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     })
     const transport = createTransport(config)
@@ -1160,7 +1157,6 @@ describe('createTransport', () => {
         cwd: '',
         toolCallTimeoutMs: 60_000,
         startupTimeoutMs: 30_000,
-        healthCheckIntervalMs: 30_000,
         failOnStartupError: false,
       })
       // StdioClientTransport keeps its env private; the observable contract is
@@ -1188,7 +1184,6 @@ describe('createTransport', () => {
       cwd: '',
       toolCallTimeoutMs: 60_000,
       startupTimeoutMs: 30_000,
-      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     })
     const transport = createTransport(config)

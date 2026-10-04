@@ -5,7 +5,7 @@
  * @module @deepseek-ai/dsh-mcp-manager/types
  */
 
-import type { McpCloseResult, McpConnectionStatus } from '@deepseek-ai/dsh-mcp-client'
+import type { McpCloseResult, McpConnectionStatus } from '@deepseek-ai/dsh-mcp-client/types'
 
 /**
  * Status of one managed server. Extends the mcp-client connection status with
@@ -22,9 +22,9 @@ export type McpManagedServerStatus =
 
 /** One managed server as a management surface lists it. */
 export interface McpManagedServerView {
-  /** The `servers` key; also the instance's `serverName` tool namespace. */
+  /** The configured `servers` key or registered name; also the instance's `serverName` tool namespace. */
   name: string
-  /** Whether the entry still exists in configuration; false for retained cleanup failures after removal. */
+  /** Whether a configured or registered entry still exists; false for retained cleanup failures after removal. */
   configured: boolean
   /** Current runtime status. */
   status: McpManagedServerStatus
@@ -35,11 +35,11 @@ declare module '@deepseek-ai/cordis' {
     /**
      * One managed server's status transitioned. Emitted for every published
      * change while the manager is live and either the entry is configured or
-     * a runtime record remains. Removed entries may emit cleanup failures;
-     * observers learn configuration removals from plugin configuration.
+     * registered, or a runtime record remains. Removed entries may emit cleanup
+     * failures; `watch` and `list()` report removals.
      * Lifecycle operations do not wait for listeners. Synchronous throws and
      * returned promise rejections are logged without skipping other listeners.
-     * @param name - the `servers` entry key.
+     * @param name - the configured `servers` key or registered name.
      * @param status - the status now current for that server.
      * @mode parallel
      */

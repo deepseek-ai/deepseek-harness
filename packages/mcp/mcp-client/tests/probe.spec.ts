@@ -33,7 +33,6 @@ const { mockConnect, mockClose, mockListTools, mockGetServerVersion, MockClient,
       await mockConnect()
     }
     getServerCapabilities = () => ({ tools: {} })
-    ping = (): Promise<void> => Promise.resolve()
     close = mockClose
     request = mockRequest
     getServerVersion = mockGetServerVersion
@@ -65,7 +64,6 @@ function httpConfig(): Config {
     headers: {},
     toolCallTimeoutMs: 60_000,
     startupTimeoutMs: 30_000,
-    healthCheckIntervalMs: 30_000,
     failOnStartupError: false,
   })
 }

@@ -501,44 +501,6 @@ The full presentation field docs live in [`packages/core/tools/src/presentation.
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
-<a id="ctxmcpservers--mcpservermanager"></a>
-
-### `ctx.mcpServers` — `McpServerManager`
-
-The manager service. Configuration reconciliation and `restart` serialize instance replacement. Probes run independently and are cancelled before replacement or disposal waits for their cleanup.
-
-```ts cordis-catalog
-/**
- * Read configured servers and retained runtime records without mounting or probing.
- * @returns configured entries in document order, followed by retained records for removed entries.
- */
-list(): McpManagedServerView[]
-
-/**
- * Rebuild one server from its current configuration: dispose the live
- * instance (if any) and mount a fresh one with a fresh reconnect budget.
- * Incomplete cleanup blocks replacement until the Host restarts.
- * @param name - the configured entry key.
- * @throws when the manager is disposed, no entry is configured, or cleanup is incomplete.
- */
-async restart(name: string): Promise<void>
-
-/**
- * Probe one configured server without touching its live instance: resolve
- * the entry's templates, connect, list tools, close. A disabled entry can be
- * probed — that is how a management surface tests it before enabling.
- * Configuration changes and manager disposal cancel the probe.
- * @param name - the configured entry key.
- * @param options - probe budget, listing caps, and abort signal.
- * @returns the stage-classified probe outcome and independent cleanup result.
- * @throws when the manager is disposed, the entry is absent or changing, cleanup is
- * incomplete, options are invalid, or a required credentials provider is missing.
- */
-async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult>
-```
-
-Source: [`packages/mcp/mcp-manager/src/index.ts`](../../packages/mcp/mcp-manager/src/index.ts)
-
 <a id="ctxtools--toolruntime"></a>
 
 ### `ctx.tools` — `ToolRuntime`
@@ -636,33 +598,6 @@ async execute(exec: ToolExecutionInput): Promise<ToolExecutionResult>
 Types: [ScopeKey](scope.md)
 
 Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index.ts)
-
-<a id="mcp-manager-events"></a>
-
-### `mcp-manager/*` events
-
-<a id="mcp-managerstatus--parallel"></a>
-
-#### `mcp-manager/status` — parallel
-
-One managed server's status transitioned. Emitted for every published change while the manager is live and either the entry is configured or a runtime record remains. Removed entries may emit cleanup failures; observers learn configuration removals from plugin configuration. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.
-
-```ts cordis-catalog
-/**
- * One managed server's status transitioned. Emitted for every published
- * change while the manager is live and either the entry is configured or
- * a runtime record remains. Removed entries may emit cleanup failures;
- * observers learn configuration removals from plugin configuration.
- * Lifecycle operations do not wait for listeners. Synchronous throws and
- * returned promise rejections are logged without skipping other listeners.
- * @param name - the `servers` entry key.
- * @param status - the status now current for that server.
- * @mode parallel
- */
-'mcp-manager/status'(name: string, status: McpManagedServerStatus): void | Promise<void>
-```
-
-Source: [`packages/mcp/mcp-manager/src/types.ts`](../../packages/mcp/mcp-manager/src/types.ts)
 
 <a id="tools-events"></a>
 

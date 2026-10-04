@@ -19,7 +19,7 @@ vi.mock('../src/transport.ts', () => ({ createTransport: mockTransport }))
 
 const config = Config({
   transport: 'stdio', serverName: 'fixture', command: 'fixture', args: [], env: {}, cwd: '',
-  toolCallTimeoutMs: 60_000, startupTimeoutMs: 30_000, healthCheckIntervalMs: 30_000, failOnStartupError: true,
+  toolCallTimeoutMs: 60_000, startupTimeoutMs: 30_000, failOnStartupError: true,
 })
 
 async function connect(server: McpServer, options?: { resources: true }): Promise<Context> {

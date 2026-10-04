@@ -1,33 +1,12 @@
-/** Runtime template values and HTTP requests remain bound to their MCP session. */
+/** Runtime credential templates resolve per pass and every resolved value is redacted from diagnostics. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
-import { CredentialProvider, credentialRef } from '@deepseek-ai/dsh-credentials'
-import type {
-  CredentialInfo, CredentialRecord, CredentialRecordEntry, CredentialRecordInfo, CredentialRef, ResolvedCredential,
-} from '@deepseek-ai/dsh-credentials'
-import { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { Config, probeServer } from '@deepseek-ai/dsh-mcp-client'
 import { McpTemplateBinding } from '@deepseek-ai/dsh-mcp-client/src/credentials.ts'
+import { TestCredentials } from './credential-fixture.ts'
 import { startHttpMcpFixture } from './http-fixture.ts'
-
-class TestCredentials extends CredentialProvider {
-  values = new Map<string, string>()
-
-  resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined> {
-    const value = this.values.get(ref)
-    return Promise.resolve(value === undefined ? undefined : { value, source: 'fixture' })
-  }
-
-  describe(): Promise<CredentialInfo> { throw new Error('unexpected credential description') }
-  set(): Promise<void> { throw new Error('unexpected credential write') }
-  unset(): Promise<void> { throw new Error('unexpected credential removal') }
-  readRecord(): Promise<CredentialRecord | undefined> { throw new Error('unexpected record read') }
-  describeRecord(): Promise<CredentialRecordInfo> { throw new Error('unexpected record description') }
-  listRecords(): Promise<readonly CredentialRecordEntry[]> { throw new Error('unexpected record listing') }
-  modifyRecord(): Promise<CredentialRecord | undefined> { throw new Error('unexpected record write') }
-  deleteRecord(): Promise<void> { throw new Error('unexpected record removal') }
-}
 
 const ref = credentialRef('MCP_TOKEN')
 const url = 'https://mcp.invalid/fixture'
@@ -60,17 +39,14 @@ describe('McpTemplateBinding', () => {
   })
 
   it('resolves repeated references once per pass while keeping configuration unexpanded', async () => {
-    ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot([
-      { source: 'process', values: { MCP_EXECUTABLE: 'fixture-command' } },
-    ]))
     const config = Config({ transport: 'stdio', serverName: 'binding', expandTemplates: true,
-      command: '${env:MCP_EXECUTABLE}', args: ['${credential:MCP_TOKEN}', '${credential:MCP_TOKEN}'],
-      env: { TOKEN: '${credential:MCP_TOKEN}' }, cwd: '${env:MCP_EXECUTABLE}' })
+      command: 'fixture-command', args: ['${credential:MCP_TOKEN}', '${credential:MCP_TOKEN}'],
+      env: { TOKEN: '${credential:MCP_TOKEN}' }, cwd: '' })
     const binding = new McpTemplateBinding(ctx, config)
     const resolve = vi.spyOn(provider, 'resolve')
     const signal = new AbortController().signal
     expect(await binding.resolve(signal)).toMatchObject({ command: 'fixture-command',
-      args: ['first-token', 'first-token'], env: { TOKEN: 'first-token' }, cwd: 'fixture-command' })
+      args: ['first-token', 'first-token'], env: { TOKEN: 'first-token' }, cwd: '' })
     expect(resolve).toHaveBeenCalledExactlyOnceWith(ref)
     expect(config).toMatchObject({ args: ['${credential:MCP_TOKEN}', '${credential:MCP_TOKEN}'] })
     provider.values.set(ref, 'next-token')
@@ -78,69 +54,30 @@ describe('McpTemplateBinding', () => {
     expect(resolve).toHaveBeenCalledTimes(2)
   })
 
-  it('reports a provider unloaded after binding creation without sending a request', async () => {
+  it('reports a provider unloaded after binding creation at the next resolution', async () => {
     const binding = new McpTemplateBinding(ctx, httpConfig())
-    const bound = await binding.resolve(new AbortController().signal)
     await providerFiber.dispose()
-    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected HTTP request'))
-    await expect(binding.fetch(bound, url, undefined, new AbortController().signal)).rejects.toThrow('require a credentials provider')
-    expect(fetch).not.toHaveBeenCalled()
+    await expect(binding.resolve(new AbortController().signal)).rejects.toThrow('require a credentials provider')
   })
 
-  it('rejects a missing credential before sending and requests a binding refresh', async () => {
+  it('redacts every resolved value, including rotated and URL-encoded forms', async () => {
+    provider.values.set(ref, 'first/token')
     const binding = new McpTemplateBinding(ctx, httpConfig())
     const signal = new AbortController().signal
-    const bound = await binding.resolve(signal)
-    const changed = vi.fn()
-    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected HTTP request'))
-    provider.values.delete(ref)
-    await expect(binding.fetch(bound, url, undefined, signal, changed)).rejects.toThrow('credential "MCP_TOKEN" is not configured')
-    expect(changed).toHaveBeenCalledOnce()
-    expect(fetch).not.toHaveBeenCalled()
-  })
-
-  it('refuses to send changed credentials through an existing session', async () => {
-    const binding = new McpTemplateBinding(ctx, httpConfig())
-    const signal = new AbortController().signal
-    const bound = await binding.resolve(signal)
-    const changed = vi.fn()
-    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected HTTP request'))
+    await binding.resolve(signal)
     provider.values.set(ref, 'next-token')
-    await expect(binding.fetch(bound, url, undefined, signal, changed)).rejects.toThrow('credential binding changed')
-    expect(changed).toHaveBeenCalledOnce()
-    expect(fetch).not.toHaveBeenCalled()
-    expect(bound).toMatchObject({ headers: { Authorization: 'Bearer first-token' } })
+    await binding.resolve(signal)
+    provider.values.set(ref, '')
+    await binding.resolve(signal)
+    const upstream = new Error('rejected first/token, first%2Ftoken and next-token', { cause: new Error('echo next-token') })
+    expect(binding.diagnostic(upstream, 'startup')).toBe(
+      'mcp-client(binding): startup: Error: rejected [redacted], [redacted] and [redacted], cause: echo [redacted]')
+    expect(binding.redact('no secret here')).toBe('no secret here')
   })
 
-  it.each(['generation', 'request'] as const)('propagates %s cancellation to the HTTP request', async (source) => {
-    const binding = new McpTemplateBinding(ctx, httpConfig())
-    const generation = new AbortController()
-    const request = new AbortController()
-    const bound = await binding.resolve(generation.signal)
-    const sent: PromiseWithResolvers<AbortSignal> = Promise.withResolvers()
-    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      expect(input).toBe(url)
-      const signal = init?.signal
-      if (signal === undefined || signal === null) throw new Error('missing request signal')
-      sent.resolve(signal)
-      return new Promise<Response>((_resolve, reject) => {
-        signal.addEventListener('abort', () => { reject(new DOMException('The request was aborted', 'AbortError')) }, { once: true })
-      })
-    })
-    const pending = binding.fetch(bound, url, source === 'generation' ? undefined : { signal: request.signal }, generation.signal)
-    const failure = expect(pending).rejects.toThrow('HTTP request')
-    try {
-      const signal = await sent.promise
-      expect(signal.aborted).toBe(false)
-      const controller = source === 'generation' ? generation : request
-      controller.abort(new Error('fixture cancellation'))
-      await failure
-      expect(signal.aborted).toBe(true)
-      expect(fetch).toHaveBeenCalledOnce()
-    } finally {
-      generation.abort()
-      await pending.catch(() => undefined)
-    }
+  it('keeps literal diagnostics unprefixed and unredacted', () => {
+    const binding = new McpTemplateBinding(ctx, Config({ ...httpConfig(), expandTemplates: false }))
+    expect(binding.diagnostic(new Error('Bearer ${credential:MCP_TOKEN}'), 'startup')).toBe('Error: Bearer ${credential:MCP_TOKEN}')
   })
 
   it('probes with expanded HTTP credentials without calling any tool', async () => {

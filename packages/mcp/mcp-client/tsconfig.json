@@ -45,9 +45,6 @@
       "path": "../../credentials/credentials"
     },
     {
-      "path": "../../util/launch-environment"
-    },
-    {
       "path": "../../util/values"
     }
   ]

@@ -33,6 +33,9 @@
     },
     {
       "path": "../../util/values"
+    },
+    {
+      "path": "../../typert/protocol"
     }
   ]
 }

@@ -81,6 +81,9 @@
       "path": "../../boot/plugin-manager"
     },
     {
+      "path": "../../mcp/mcp-manager"
+    },
+    {
       "path": "../../host/plugin-inventory"
     },
     {

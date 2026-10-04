@@ -11,7 +11,7 @@
 
 import { Client } from '@modelcontextprotocol/client'
 import type { Context } from '@deepseek-ai/cordis'
-import type { McpCloseResult } from './status.ts'
+import type { McpProbeFailure, McpProbeResult, McpProbeStage, McpProbeSuccess } from './types.ts'
 import { McpTemplateBinding } from './credentials.ts'
 import { McpGeneration } from './generation.ts'
 import type { Config } from './index.ts'
@@ -30,35 +30,6 @@ export interface McpProbeOptions {
    */
   signal?: AbortSignal
 }
-
-/** Probe phase a failure is attributed to. */
-export type McpProbeStage = 'connect' | 'list'
-
-/** Successful probe: negotiation and any advertised tool listing completed. */
-export interface McpProbeSuccess {
-  ok: true
-  /** Server-reported identity from `initialize`, when the SDK captured one. */
-  serverInfo?: { name: string; version: string }
-  /** Advertised raw tool names, capped at the resolved `maxToolNames`. */
-  toolNames: string[]
-  /** Whether the advertised list was longer than the returned `toolNames`. */
-  truncated: boolean
-  /** Wall-clock duration of negotiation and listing, excluding cleanup, in milliseconds. */
-  durationMs: number
-}
-
-/** Failed probe, attributed to the stage that raised it. */
-export interface McpProbeFailure {
-  ok: false
-  stage: McpProbeStage
-  /** Diagnostic text of the failure. */
-  message: string
-  /** Wall-clock duration until the failure in milliseconds. */
-  durationMs: number
-}
-
-/** Outcome of one {@link probeServer} call. */
-export type McpProbeResult = (McpProbeSuccess | McpProbeFailure) & McpCloseResult
 
 /** Default whole-probe budget (ms): interactive surfaces need a bounded answer. */
 const DEFAULT_PROBE_TIMEOUT_MS = 10_000
@@ -101,9 +72,7 @@ export async function probeServer(ctx: Context, config: Config, options: McpProb
   let result: McpProbeSuccess | McpProbeFailure
   try {
     const resolved = await generation.run(signal => binding.resolve(signal), remaining())
-    await generation.connect(resolved, remaining(), config.expandTemplates && config.transport === 'streamable-http'
-      ? (url, init) => generation.run(signal => binding.fetch(resolved, url, init, signal))
-      : undefined)
+    await generation.connect(resolved, remaining())
     const identity = client.getServerVersion()
     const serverInfo = identity === undefined ? undefined : { name: identity.name, version: identity.version }
     stage = 'list'

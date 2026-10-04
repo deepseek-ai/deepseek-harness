@@ -11,6 +11,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { TestCredentials } from './credential-fixture.ts'
 import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
 // ---- Mock MCP SDK ----
@@ -18,14 +19,11 @@ import type { Config } from '@deepseek-ai/dsh-mcp-client'
 // vi.mock factories are hoisted above every import/const, so the mock fns and
 // class must be created inside vi.hoisted to exist when the factories run.
 const {
-  mockConnect, mockClose, mockPing, mockDiscover, mockProtocolEra,
+  mockConnect, mockClose,
   mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances,
 } = vi.hoisted(() => {
   const mockConnect = vi.fn<() => Promise<void>>()
   const mockClose = vi.fn<() => Promise<void>>()
-  const mockPing = vi.fn<(_options?: { signal?: AbortSignal }) => Promise<void>>()
-  const mockDiscover = vi.fn<() => Promise<unknown>>()
-  const mockProtocolEra = vi.fn<() => 'legacy' | 'modern'>()
   const mockListTools = vi.fn<(_params?: Record<string, unknown>) => Promise<unknown>>()
   const mockCallTool = vi.fn<(
     _params?: Record<string, unknown>, _options?: unknown,
@@ -42,9 +40,6 @@ const {
       await mockConnect.call(this)
     }
     close = mockClose
-    ping = mockPing
-    discover = mockDiscover
-    getProtocolEra = mockProtocolEra
     getServerCapabilities = () => ({ tools: {} })
     getInstructions(): string | undefined { return undefined }
     listResources = async () => ({ resources: [] })
@@ -57,7 +52,7 @@ const {
   }
   const instances: MockClient[] = []
   return {
-    mockConnect, mockClose, mockPing, mockDiscover, mockProtocolEra,
+    mockConnect, mockClose,
     mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances,
   }
 })
@@ -135,7 +130,6 @@ function stdioConfig(reconnect?: Config['reconnect']): Config {
     cwd: '',
     toolCallTimeoutMs: 60_000,
     startupTimeoutMs: 30_000,
-    healthCheckIntervalMs: 30_000,
     failOnStartupError: false,
     ...reconnect === undefined ? {} : { reconnect },
   })
@@ -156,125 +150,6 @@ function nextCallId(): ToolCallId {
 
 // ---- Tests ----
 
-describe('health check', () => {
-  let ctx: Context
-
-  beforeEach(async () => {
-    vi.clearAllMocks()
-    instances.length = 0
-    mockConnect.mockResolvedValue(undefined)
-    mockPing.mockResolvedValue(undefined)
-    mockDiscover.mockResolvedValue({})
-    mockProtocolEra.mockReturnValue('legacy')
-    mockClose.mockImplementation(function (this: { transport?: Transport }) {
-      this.transport?.onclose?.()
-      return Promise.resolve()
-    })
-    mockListTools.mockResolvedValue(listing('remote'))
-    ctx = await mountRegistry()
-  })
-
-  /** Supervisor under an owned lifecycle: every test disposes what it started. */
-  function superviseWith(config: Config): { seen: string[]; status: McpStatusCell; dispose: () => Promise<void>; ready: Promise<unknown> } {
-    const status = new McpStatusCell(() => {})
-    const seen: string[] = []
-    status.onChange((next) => {
-      seen.push(next.state === 'reconnecting' ? `reconnecting:${next.lastError}` : next.state)
-    })
-    const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'test'), status)
-    return { seen, status, dispose: handle.dispose.bind(handle), ready: handle.ready }
-  }
-
-  it.each(['legacy', 'modern'] as const)('checks %s liveness and reconnects after a failed check', async (era) => {
-    const { warns } = captureLogs(ctx)
-    mockProtocolEra.mockReturnValue(era)
-    const check = era === 'modern' ? mockDiscover : mockPing
-    check.mockResolvedValueOnce(undefined)
-    check.mockRejectedValueOnce(new Error('boom'))
-    const supervisor = superviseWith({ ...stdioConfig({ initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 3 }), healthCheckIntervalMs: 20 })
-    try {
-      await supervisor.ready
-      // A floor, not equality: checks resume on the recovery generation, so the
-      // count keeps growing and an exact-2 wait races the reconnect on slow runners.
-      await vi.waitFor(() => { expect(check.mock.calls.length).toBeGreaterThanOrEqual(2) })
-      await vi.waitFor(() => { expect(supervisor.seen.includes('reconnecting:Error: boom')).toBe(true) })
-      expect(warns.some(line => line.includes('connection lost; reconnecting'))).toBe(true)
-      // The supervisor recovers onto a fresh generation and resumes checking it.
-      await vi.waitFor(() => { expect(supervisor.seen.filter(state => state === 'connected').length).toBeGreaterThan(1) })
-      expect(instances.length).toBeGreaterThan(1)
-      expect(era === 'modern' ? mockPing : mockDiscover).not.toHaveBeenCalled()
-    } finally {
-      await supervisor.dispose()
-    }
-  })
-
-  it('bounds a health request independently from the check interval', async () => {
-    vi.useFakeTimers()
-    mockPing.mockImplementation(options => new Promise((_, reject) => {
-      options!.signal!.addEventListener('abort', () => { reject(new Error('request aborted')) }, { once: true })
-    }))
-    const supervisor = superviseWith({ ...stdioConfig({ enabled: false }), healthCheckIntervalMs: 10, healthCheckTimeoutMs: 100 })
-    try {
-      await supervisor.ready
-      await vi.advanceTimersByTimeAsync(10)
-      expect(mockPing).toHaveBeenCalledTimes(1)
-      await vi.advanceTimersByTimeAsync(99)
-      expect(supervisor.status.current().state).toBe('connected')
-      await vi.advanceTimersByTimeAsync(1)
-      expect(supervisor.status.current()).toEqual({
-        state: 'failed', reason: 'reconnect-disabled', lastError: 'Error: MCP operation timed out',
-      })
-      expect(supervisor.status.closure()).toEqual({ closeConfirmed: true })
-    } finally {
-      await supervisor.dispose()
-      vi.useRealTimers()
-    }
-  })
-
-  it('stops reconnecting when a failed health check cannot close its generation', async () => {
-    vi.useFakeTimers()
-    mockPing.mockRejectedValueOnce(new Error('gone'))
-    const supervisor = superviseWith({ ...stdioConfig({ initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 3 }), healthCheckIntervalMs: 15 })
-    try {
-      await supervisor.ready
-      mockClose.mockRejectedValue(new Error('cannot close'))
-      await vi.advanceTimersByTimeAsync(5_015)
-      expect(supervisor.status.current()).toEqual({
-        state: 'failed', reason: 'unclosed-generation', lastError: 'Error: cannot close',
-      })
-      expect(supervisor.status.closure()).toEqual({ closeConfirmed: false, cleanupError: 'Error: cannot close' })
-      expect(instances).toHaveLength(1)
-    } finally {
-      await supervisor.dispose()
-      vi.useRealTimers()
-    }
-  })
-
-  it.each(['resolve', 'reject'] as const)('a ping that settles by %s after its generation closes neither re-arms nor reports', async (outcome) => {
-    vi.useFakeTimers()
-    const { warns } = captureLogs(ctx)
-    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
-    mockPing.mockImplementation(() => gate.promise)
-    const supervisor = superviseWith({ ...stdioConfig({ enabled: false }), healthCheckIntervalMs: 10 })
-    try {
-      await supervisor.ready
-      await vi.advanceTimersByTimeAsync(10)
-      expect(mockPing).toHaveBeenCalledTimes(1)
-      instances[0]!.transport?.onclose?.()
-      if (outcome === 'resolve') gate.resolve()
-      else gate.reject(new Error('late'))
-      await vi.advanceTimersByTimeAsync(50)
-      expect(supervisor.seen).toContain('failed')
-      expect(warns.some(line => line.includes('health check failed'))).toBe(false)
-      expect(mockPing).toHaveBeenCalledTimes(1)
-    } finally {
-      gate.resolve()
-      await supervisor.dispose()
-      vi.useRealTimers()
-    }
-  })
-})
-
 describe('reconnect supervisor', () => {
   let ctx: Context
 
@@ -282,9 +157,6 @@ describe('reconnect supervisor', () => {
     vi.clearAllMocks()
     instances.length = 0
     mockConnect.mockResolvedValue(undefined)
-    mockPing.mockResolvedValue(undefined)
-    mockDiscover.mockResolvedValue({})
-    mockProtocolEra.mockReturnValue('legacy')
     mockClose.mockImplementation(function (this: { transport?: Transport }) {
       this.transport?.onclose?.()
       return Promise.resolve()
@@ -335,14 +207,16 @@ describe('reconnect supervisor', () => {
     }
   })
 
-  it('sanitizes tool and resource failures when template expansion is enabled', async () => {
+  it('redacts resolved credentials from tool and resource failures when template expansion is enabled', async () => {
     await ctx.plugin(McpResources)
-    const config = { ...stdioConfig({ enabled: false }), expandTemplates: true }
+    await ctx.plugin(TestCredentials)
+    ;(ctx.credentials as TestCredentials).values.set('MCP_TOKEN', 'private-token')
+    const config = { ...stdioConfig({ enabled: false }), env: { TOKEN: '${credential:MCP_TOKEN}' }, expandTemplates: true }
     const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'test'), new McpStatusCell(() => {}))
     try {
       await handle.ready
       ctx.mcpResources.register('srv', handle.resources)
-      const failure = Object.assign(new Error('private transport value'), { code: 'ECONNRESET' })
+      const failure = new Error('transport rejected private-token')
       mockCallTool.mockRejectedValue(failure)
       vi.spyOn(instances[0]!, 'listResources').mockRejectedValue(failure)
       for (const name of ['mcp__srv__remote', 'list_mcp_resources']) {
@@ -352,16 +226,18 @@ describe('reconnect supervisor', () => {
         })
         expect(result.isError).toBe(true)
         if (!result.isError) throw new Error('expected transport failure')
-        expect(result.error.message).toContain('ECONNRESET')
-        expect(result.error.message).not.toContain('private transport value')
+        expect(result.error.message).toContain('transport rejected [redacted]')
+        expect(result.error.message).not.toContain('private-token')
       }
     } finally {
       await handle.dispose()
     }
   })
 
-  it.each([true, false])('formats MCP tool errors for expandTemplates=%s', async (expandTemplates) => {
-    const config = { ...stdioConfig({ enabled: false }), expandTemplates }
+  it.each([true, false])('reports MCP tool error text for expandTemplates=%s, redacting resolved values', async (expandTemplates) => {
+    await ctx.plugin(TestCredentials)
+    ;(ctx.credentials as TestCredentials).values.set('MCP_TOKEN', 'test-secret')
+    const config = { ...stdioConfig({ enabled: false }), env: { TOKEN: '${credential:MCP_TOKEN}' }, expandTemplates }
     const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'test'), new McpStatusCell(() => {}))
     try {
       await handle.ready
@@ -370,9 +246,7 @@ describe('reconnect supervisor', () => {
       const result = await ctx.tools.execute({ name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal })
       expect(result.isError).toBe(true)
       if (!result.isError) throw new Error('expected MCP failure')
-      expect(result.error.message).toBe(expandTemplates
-        ? 'mcp-client(srv): tools: operation failed (upstream details omitted to protect credentials)'
-        : message)
+      expect(result.error.message).toBe(expandTemplates ? 'upstream rejected Bearer [redacted]' : message)
     } finally {
       await handle.dispose()
     }

@@ -20,7 +20,7 @@ vi.mock('../src/transport.ts', () => ({ createTransport: mockTransport }))
 const config: Config = {
   transport: 'stdio', serverName: 'fixture', command: 'fixture', args: [], env: {}, cwd: '',
   toolCallTimeoutMs: 60_000, startupTimeoutMs: 30, closeTimeoutMs: 5_000,
-  healthCheckIntervalMs: 0, healthCheckTimeoutMs: 10_000, expandTemplates: false, failOnStartupError: true,
+  expandTemplates: false, failOnStartupError: true,
 }
 
 it('unregisters tools when disposal interrupts the registration result', async () => {

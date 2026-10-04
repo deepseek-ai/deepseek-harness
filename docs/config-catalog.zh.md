@@ -2024,7 +2024,7 @@ export interface LspLocalServerConfig {
 ## `@deepseek-ai/dsh-mcp-client`
 
 - `inject`: `tools`
-- `source`: [`packages/mcp/mcp-client/src/index.ts:156`](../packages/mcp/mcp-client/src/index.ts)
+- `source`: [`packages/mcp/mcp-client/src/index.ts:138`](../packages/mcp/mcp-client/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for one stdio or Streamable HTTP MCP server. */
@@ -2054,16 +2054,8 @@ export interface StdioConfig {
   startupTimeoutMs?: number
   /** Budget for transport closure and local cleanup, in milliseconds (default 5000). */
   closeTimeoutMs: number
-  /** Timeout for each enabled health check, in milliseconds (default 10000). */
-  healthCheckTimeoutMs: number
-  /** Resolve `${env:…}` and `${credential:…}` in transport strings at runtime (default false). */
+  /** Resolve `${credential:…}` in transport strings at runtime and redact resolved values from diagnostics (default false). */
   expandTemplates: boolean
-  /**
-   * Spacing between health checks (legacy ping or modern discover), in
-   * milliseconds; `0` disables checks (default). A failed or timed-out check
-   * closes the generation and applies the reconnect policy.
-   */
-  healthCheckIntervalMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Maximum UTF-8 bytes of attributed server instructions (default 32768). */
@@ -2092,16 +2084,8 @@ export interface StreamableHttpConfig {
   startupTimeoutMs?: number
   /** Budget for transport closure and local cleanup, in milliseconds (default 5000). */
   closeTimeoutMs: number
-  /** Timeout for each enabled health check, in milliseconds (default 10000). */
-  healthCheckTimeoutMs: number
-  /** Resolve `${env:…}` and `${credential:…}` in transport strings at runtime (default false). */
+  /** Resolve `${credential:…}` in transport strings at runtime and redact resolved values from diagnostics (default false). */
   expandTemplates: boolean
-  /**
-   * Spacing between health checks (legacy ping or modern discover), in
-   * milliseconds; `0` disables checks (default). A failed or timed-out check
-   * closes the generation and applies the reconnect policy.
-   */
-  healthCheckIntervalMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Maximum UTF-8 bytes of attributed server instructions (default 32768). */
@@ -2131,7 +2115,7 @@ export interface ReconnectConfig {
 
 - `inject`: `tools`
 - `refs`: [`ReconnectConfig`](../packages/mcp/mcp-client/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/mcp/mcp-manager/src/index.ts:73`](../packages/mcp/mcp-manager/src/index.ts)
+- `source`: [`packages/mcp/mcp-manager/src/index.ts:71`](../packages/mcp/mcp-manager/src/index.ts)
 
 ```ts config-catalog
 /** Manager configuration with live server entries. */
@@ -2153,7 +2137,7 @@ export interface McpManagedServerEntry {
   command: string
   /** stdio: arguments passed without shell interpolation. */
   args: string[]
-  /** stdio: extra child environment; values may use `${env:…}` / `${credential:…}` templates. */
+  /** stdio: extra child environment; values may use `${credential:…}` templates. */
   env: Record<string, string>
   /** stdio: working directory for the child process. */
   cwd: string
@@ -2167,10 +2151,6 @@ export interface McpManagedServerEntry {
   toolCallTimeoutMs?: number
   /** Per-attempt startup budget in milliseconds; the manager schema defaults to 30000. */
   startupTimeoutMs: number
-  /** Health-check spacing override in milliseconds; omission uses the mcp-client default. */
-  healthCheckIntervalMs?: number
-  /** Per-health-check timeout override in milliseconds; omission uses the mcp-client default. */
-  healthCheckTimeoutMs?: number
   /** Cleanup budget override in milliseconds; omission uses the mcp-client default. */
   closeTimeoutMs?: number
   /** Reconnect policy; the schema fills the mcp-client defaults. */

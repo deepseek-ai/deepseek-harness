@@ -1,36 +1,23 @@
 /**
- * `${env:NAME}` / `${credential:REF}` syntax and substitution for MCP transport
- * strings. Managers validate syntax at configuration writes; the client
- * resolves values at runtime without changing the stored configuration.
+ * `${credential:REF}` syntax and substitution for MCP transport strings.
+ * Managers validate syntax at configuration writes; the client resolves values
+ * at runtime without changing the stored configuration.
  *
  * @module
  */
 
 import { McpLocalError } from './diagnostic.ts'
 
-/** A named template source has no configured value. */
+/** A referenced credential has no configured value. */
 export class MissingTemplateValue extends McpLocalError {}
 
-const TOKEN = /\$\{(env|credential):([A-Za-z_][A-Za-z0-9_]*)\}/g
+const TOKEN = /\$\{credential:([A-Za-z_][A-Za-z0-9_]*)\}/g
+
+/** One whole occurrence must BE a token; containment is not enough. */
+const TOKEN_EXACT = /^\$\{credential:[A-Za-z_][A-Za-z0-9_]*\}$/
 
 /** Any `${…}` occurrence, well-formed or not, for fail-loud validation. */
 const SUSPECT = /\$\{[^}]*\}/g
-
-/** Sources a resolver draws template values from. */
-export interface TemplateSources {
-  /**
-   * Environment lookup.
-   * @param name - the environment variable name.
-   * @returns the value, or `undefined` while unset.
-   */
-  env(name: string): string | undefined
-  /**
-   * Credential-reference lookup.
-   * @param ref - the credential reference name.
-   * @returns the secret value, or `undefined` while unconfigured.
-   */
-  credential(ref: string): Promise<string | undefined>
-}
 
 /**
  * The credential references one configured string names, read statically. A
@@ -41,14 +28,8 @@ export interface TemplateSources {
  * @returns the referenced credential names, in template order.
  */
 export function credentialRefsIn(value: string): string[] {
-  TOKEN.lastIndex = 0
-  return [...value.matchAll(TOKEN)]
-    .filter(token => token[1] === 'credential')
-    .map(token => token[2] as string)
+  return [...value.matchAll(TOKEN)].map(token => token[1] as string)
 }
-
-/** One whole occurrence must BE a token; containment is not enough. */
-const TOKEN_EXACT = /^\$\{(env|credential):([A-Za-z_][A-Za-z0-9_]*)\}$/
 
 /**
  * Reject a string whose `${…}` occurrences are not all well-formed template
@@ -58,13 +39,11 @@ const TOKEN_EXACT = /^\$\{(env|credential):([A-Za-z_][A-Za-z0-9_]*)\}$/
  */
 export function assertTemplateSyntax(value: string, where: string): void {
   for (const occurrence of value.matchAll(SUSPECT)) {
-    // Anchored equality, not containment: `${x${env:A}` contains a valid
-    // token but the resolver would leave its `${x` prefix behind as a
+    // Anchored equality, not containment: `${x${credential:A}` contains a
+    // valid token but the resolver would leave its `${x` prefix behind as a
     // literal, so only an occurrence that IS a token may pass.
     if (!TOKEN_EXACT.test(occurrence[0])) {
-      throw new Error(
-        `${where}: "${occurrence[0]}" is not a template token — use \${env:NAME} or \${credential:REF}`,
-      )
+      throw new Error(`${where}: "${occurrence[0]}" is not a template token — use \${credential:REF}`)
     }
   }
 }
@@ -73,38 +52,25 @@ export function assertTemplateSyntax(value: string, where: string): void {
  * Resolve every template token in one string.
  * @param value - the configured string.
  * @param where - configuration path used in thrown messages.
- * @param sources - environment and credential lookups.
+ * @param credential - credential-reference lookup returning `undefined` while unconfigured.
  * @returns the substituted string.
- * @throws when a named environment variable is unset or a named credential is unconfigured.
+ * @throws when a referenced credential is unconfigured.
  */
 export async function resolveTemplateString(
   value: string,
   where: string,
-  sources: TemplateSources,
+  credential: (ref: string) => Promise<string | undefined>,
 ): Promise<string> {
   let out = ''
   let cursor = 0
-  TOKEN.lastIndex = 0
   for (const token of value.matchAll(TOKEN)) {
-    const matched = token[0]
-    const scheme = token[1]
-    const name = token[2] as string
-    out += value.slice(cursor, token.index)
-    if (scheme === 'env') {
-      const resolved = sources.env(name)
-      if (resolved === undefined) {
-        throw new MissingTemplateValue(`${where}: environment variable "${name}" is not set — export it or remove the \${env:${name}} template`)
-      }
-      out += resolved
-    } else {
-      const resolved = await sources.credential(name)
-      if (resolved === undefined) {
-        throw new MissingTemplateValue(`${where}: credential "${name}" is not configured — store it through the credential seam or remove the \${credential:${name}} template`)
-      }
-      out += resolved
+    const name = token[1] as string
+    const resolved = await credential(name)
+    if (resolved === undefined) {
+      throw new MissingTemplateValue(`${where}: credential "${name}" is not configured — store it through the credential seam or remove the \${credential:${name}} template`)
     }
-    cursor = token.index + matched.length
+    out += value.slice(cursor, token.index) + resolved
+    cursor = token.index + token[0].length
   }
-  out += value.slice(cursor)
-  return out
+  return out + value.slice(cursor)
 }

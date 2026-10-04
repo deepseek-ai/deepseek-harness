@@ -30,10 +30,11 @@ import type {} from '@deepseek-ai/dsh-tools'
 export { createMcpToolDefinition } from './tools.ts'
 export type { McpResult, McpToolDefinitionOptions } from './tools.ts'
 export type { ReconnectConfig, ResolvedReconnectPolicy } from './connection.ts'
-export type { McpCloseResult, McpConnectionStatus, McpConnectionStatusHandle } from './status.ts'
+export type { McpConnectionStatusHandle } from './status.ts'
+export type * from './types.ts'
 export { probeServer } from './probe.ts'
 export { assertTemplateSyntax } from './templates.ts'
-export type { McpProbeOptions, McpProbeResult, McpProbeStage } from './probe.ts'
+export type { McpProbeOptions } from './probe.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'mcp-client'
@@ -46,9 +47,6 @@ const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
 
 /** Default budget for transport closure and local cleanup (ms). */
 const DEFAULT_CLOSE_TIMEOUT_MS = 5_000
-
-/** Default timeout for one health check on an established connection (ms). */
-const DEFAULT_HEALTH_CHECK_TIMEOUT_MS = 10_000
 
 /** Valid `serverName`, kept below the public tool-name budget. */
 export const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
@@ -96,16 +94,8 @@ export interface StdioConfig {
   startupTimeoutMs?: number
   /** Budget for transport closure and local cleanup, in milliseconds (default 5000). */
   closeTimeoutMs: number
-  /** Timeout for each enabled health check, in milliseconds (default 10000). */
-  healthCheckTimeoutMs: number
-  /** Resolve `${env:…}` and `${credential:…}` in transport strings at runtime (default false). */
+  /** Resolve `${credential:…}` in transport strings at runtime and redact resolved values from diagnostics (default false). */
   expandTemplates: boolean
-  /**
-   * Spacing between health checks (legacy ping or modern discover), in
-   * milliseconds; `0` disables checks (default). A failed or timed-out check
-   * closes the generation and applies the reconnect policy.
-   */
-  healthCheckIntervalMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Maximum UTF-8 bytes of attributed server instructions (default 32768). */
@@ -134,16 +124,8 @@ export interface StreamableHttpConfig {
   startupTimeoutMs?: number
   /** Budget for transport closure and local cleanup, in milliseconds (default 5000). */
   closeTimeoutMs: number
-  /** Timeout for each enabled health check, in milliseconds (default 10000). */
-  healthCheckTimeoutMs: number
-  /** Resolve `${env:…}` and `${credential:…}` in transport strings at runtime (default false). */
+  /** Resolve `${credential:…}` in transport strings at runtime and redact resolved values from diagnostics (default false). */
   expandTemplates: boolean
-  /**
-   * Spacing between health checks (legacy ping or modern discover), in
-   * milliseconds; `0` disables checks (default). A failed or timed-out check
-   * closes the generation and applies the reconnect policy.
-   */
-  healthCheckIntervalMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Maximum UTF-8 bytes of attributed server instructions (default 32768). */
@@ -155,10 +137,10 @@ export interface StreamableHttpConfig {
 /** Configuration for one stdio or Streamable HTTP MCP server. */
 export type Config = StdioConfig | StreamableHttpConfig
 
-type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'healthCheckIntervalMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'healthCheckTimeoutMs' | 'expandTemplates'>
-  & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'healthCheckIntervalMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'healthCheckTimeoutMs' | 'expandTemplates'>>
-type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'healthCheckIntervalMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'healthCheckTimeoutMs' | 'expandTemplates'>
-  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'healthCheckIntervalMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'healthCheckTimeoutMs' | 'expandTemplates'>>
+type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>
+  & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>>
+type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>
+  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>>
 type ConfigInput = StdioConfigInput | StreamableHttpConfigInput
 
 /**
@@ -187,9 +169,7 @@ export const Config = z.union([
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS),
     closeTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_CLOSE_TIMEOUT_MS),
-    healthCheckTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_HEALTH_CHECK_TIMEOUT_MS),
     expandTemplates: z.boolean().default(false),
-    healthCheckIntervalMs: z.union([z.const(0), z.number().min(1_000).max(MAX_TIMER_DELAY_MS)]).default(0),
     failOnStartupError: z.boolean().default(false),
     maxInstructionBytes: z.number().step(1).min(1).default(DEFAULT_MAX_INSTRUCTION_BYTES),
     reconnect: ReconnectSchema,
@@ -202,9 +182,7 @@ export const Config = z.union([
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS),
     closeTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_CLOSE_TIMEOUT_MS),
-    healthCheckTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_HEALTH_CHECK_TIMEOUT_MS),
     expandTemplates: z.boolean().default(false),
-    healthCheckIntervalMs: z.union([z.const(0), z.number().min(1_000).max(MAX_TIMER_DELAY_MS)]).default(0),
     failOnStartupError: z.boolean().default(false),
     maxInstructionBytes: z.number().step(1).min(1).default(DEFAULT_MAX_INSTRUCTION_BYTES),
     reconnect: ReconnectSchema,

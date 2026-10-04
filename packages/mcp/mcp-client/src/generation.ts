@@ -1,11 +1,11 @@
 /** One transport lifetime, including pending work and confirmed closure. */
 
-import type { Client, FetchLike, Transport } from '@modelcontextprotocol/client'
+import type { Client, Transport } from '@modelcontextprotocol/client'
 import { withDeadline } from './deadline.ts'
 import { McpLocalError } from './diagnostic.ts'
 import { createTransport } from './transport.ts'
 import type { Config } from './index.ts'
-import type { McpCloseResult } from './status.ts'
+import type { McpCloseResult } from './types.ts'
 
 /** Tracks actual tasks separately from their interruptible callers. */
 export class McpGeneration {
@@ -28,12 +28,11 @@ export class McpGeneration {
    * Connect within the caller's remaining startup or probe budget.
    * @param config - resolved transport configuration.
    * @param timeoutMs - remaining operation budget; undefined leaves the SDK default.
-   * @param fetch - optional per-request credential binding.
    * @returns completion of negotiation, or cancellation/deadline rejection.
    */
-  connect(config: Config, timeoutMs: number | undefined, fetch?: FetchLike): Promise<void> {
+  connect(config: Config, timeoutMs: number | undefined): Promise<void> {
     this.lifetime.signal.throwIfAborted()
-    const transport = this.transport = createTransport(config, fetch)
+    const transport = this.transport = createTransport(config)
     const close = transport.close.bind(transport)
     let closing: Promise<void> | undefined
     transport.close = () => closing ??= close()

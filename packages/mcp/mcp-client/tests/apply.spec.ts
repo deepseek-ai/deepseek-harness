@@ -32,7 +32,6 @@ const { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotification
       await transport.start()
       await mockConnect.call(this)
     }
-    ping = (): Promise<void> => Promise.resolve()
     close = mockClose
     listTools = mockListTools
     callTool = mockCallTool
@@ -101,7 +100,6 @@ const stdioConfig = ConfigSchema({
   cwd: '',
   toolCallTimeoutMs: 60_000,
   startupTimeoutMs: 30_000,
-  healthCheckIntervalMs: 30_000,
   failOnStartupError: false,
 })
 
@@ -152,8 +150,6 @@ describe('mcp-client plugin module exports', () => {
       command: 'echo',
     } as never)
     expect(omitted.startupTimeoutMs).toBeUndefined()
-    expect(omitted.healthCheckIntervalMs).toBe(0)
-    expect(omitted.healthCheckTimeoutMs).toBe(10_000)
     expect(omitted.closeTimeoutMs).toBe(5_000)
     expect(omitted.expandTemplates).toBe(false)
     expect(omitted.reconnect).toEqual({ enabled: true, initialDelayMs: 500, maxDelayMs: 30_000, maxAttempts: 10 })
@@ -467,7 +463,6 @@ describe('apply (plugin lifecycle)', () => {
       headers: { Authorization: 'Bearer x' },
       toolCallTimeoutMs: 30_000,
       startupTimeoutMs: 30_000,
-      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     })
 

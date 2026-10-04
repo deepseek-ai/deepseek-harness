@@ -18,12 +18,13 @@
 - insert:
     - id: mcp-template-error
       name: '@deepseek-ai/dsh-mcp-client'
+      inject: [credentials]
       config:
         transport: streamable-http
         serverName: protected
         url: !!js process.env.DSH_MCP_DEMO_URL
         headers:
-          Authorization: 'Bearer ${env:DSH_MCP_TEMPLATE_TOKEN}'
+          Authorization: 'Bearer ${credential:DSH_MCP_TEMPLATE_TOKEN}'
         expandTemplates: true
         failOnStartupError: true
         reconnect:

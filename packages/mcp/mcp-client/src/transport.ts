@@ -6,7 +6,7 @@
  * @module
  */
 
-import type { FetchLike, Transport } from '@modelcontextprotocol/client'
+import type { Transport } from '@modelcontextprotocol/client'
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
@@ -26,10 +26,9 @@ function buildChildEnv(extra: Record<string, string>): Record<string, string> {
  * Create an MCP transport from the resolved plugin config.
  *
  * @param config - Resolved plugin config discriminated on `transport`.
- * @param fetch - optional HTTP request implementation for credential checks.
  * @returns an unstarted MCP transport (stdio or Streamable HTTP).
  */
-export function createTransport(config: Config, fetch?: FetchLike): Transport {
+export function createTransport(config: Config): Transport {
   switch (config.transport) {
     case 'stdio':
       return new StdioClientTransport({
@@ -41,7 +40,7 @@ export function createTransport(config: Config, fetch?: FetchLike): Transport {
     case 'streamable-http':
       return new StreamableHTTPClientTransport(
         new URL(config.url),
-        { requestInit: { headers: config.headers }, ...fetch === undefined ? {} : { fetch } },
+        { requestInit: { headers: config.headers } },
       )
   }
 }

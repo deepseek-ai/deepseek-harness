@@ -98,7 +98,6 @@ function stdioConfig(overrides?: Partial<Extract<Config, { transport: 'stdio' }>
     cwd: '',
     toolCallTimeoutMs: 60_000,
     startupTimeoutMs: 30_000,
-    healthCheckIntervalMs: 30_000,
     failOnStartupError: false,
     ...overrides,
   })
@@ -278,7 +277,7 @@ describe('connection status surface', () => {
   })
 
   it('preserves the status handle and observers across a reload, then detaches observers on disposal', async () => {
-    const config = stdioConfig({ healthCheckIntervalMs: 0 })
+    const config = stdioConfig()
     const wrapper = ctx.plugin(McpClient, config)
     const fiber = await wrapper
     const handle = connectionStatusOf(wrapper)!
@@ -301,7 +300,7 @@ describe('connection status surface', () => {
     vi.useFakeTimers()
     try {
       captureWarns(ctx)
-      const config = stdioConfig({ healthCheckIntervalMs: 0, closeTimeoutMs: 100 })
+      const config = stdioConfig({ closeTimeoutMs: 100 })
       const fiber = await ctx.plugin(McpClient, config)
       const handle = connectionStatusOf(fiber)!
       mockClose.mockImplementation(function (this: { transport?: Transport }) {
@@ -326,7 +325,7 @@ describe('connection status surface', () => {
 
   it('closes a reload when its retained status observer disposes the Fiber', async () => {
     captureWarns(ctx)
-    const fiber = await ctx.plugin(McpClient, stdioConfig({ healthCheckIntervalMs: 0, reconnect: { enabled: false } }))
+    const fiber = await ctx.plugin(McpClient, stdioConfig({ reconnect: { enabled: false } }))
     const handle = connectionStatusOf(fiber)!
     const connect: PromiseWithResolvers<void> = Promise.withResolvers()
     mockConnect.mockImplementation(() => connect.promise)

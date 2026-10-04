@@ -1,18 +1,17 @@
-/** Runtime template resolution and per-request credential checks for one MCP instance. */
+/** Runtime template resolution and secret redaction for one MCP instance. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
-import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
-import { assertTemplateSyntax, credentialRefsIn, MissingTemplateValue, resolveTemplateString } from './templates.ts'
-import { describeError, describeTemplateError, McpLocalError } from './diagnostic.ts'
+import { assertTemplateSyntax, credentialRefsIn, resolveTemplateString } from './templates.ts'
+import { describeError, McpLocalError, redactSecrets } from './diagnostic.ts'
 import type { Config } from './index.ts'
 
-/** Resolves raw configuration using launch-time environment values and the current credential provider. */
+/** Resolves raw configuration through the current credential provider and redacts every value it resolved. */
 export class McpTemplateBinding {
   /** Enabled credential references from raw configuration, including currently unconfigured references. */
   readonly refs: ReadonlySet<string>
-  private readonly environment
+  /** Resolved values and their URL-encoded forms, retained for the instance lifetime. */
+  private readonly secrets = new Set<string>()
 
   constructor(private readonly ctx: Context, private readonly config: Config) {
     const strings = config.transport === 'stdio'
@@ -24,74 +23,54 @@ export class McpTemplateBinding {
       if (this.refs.size > 0 && ctx.get('credentials') === undefined) {
         throw new McpLocalError('MCP credential templates require a credentials provider')
       }
-      this.environment = launchEnvironmentOf(ctx)
     }
   }
 
   /**
-   * Format a failure without exposing expanded values when templates are enabled.
+   * Replace every value this binding resolved, including earlier rotations.
+   * @param text - diagnostic or upstream text.
+   * @returns the text with resolved values replaced by `[redacted]`.
+   */
+  redact(text: string): string {
+    return redactSecrets(text, this.secrets)
+  }
+
+  /**
+   * Format a failure, naming the operation and redacting resolved values when templates are enabled.
    * @param error - caught operation failure.
    * @param operation - local operation name for the diagnostic.
    * @returns diagnostic text safe for the configured template mode.
    */
   diagnostic(error: unknown, operation: string): string {
     if (!this.config.expandTemplates) return describeError(error)
-    return `mcp-client(${this.config.serverName}): ${operation}: ${describeTemplateError(error)}`
-  }
-
-  /**
-   * Send an HTTP request only while current template values match the session's binding.
-   * @param bound - resolved configuration used to establish this session.
-   * @param url - request URL supplied by the transport.
-   * @param init - transport request options, including its cancellation signal.
-   * @param signal - generation cancellation signal.
-   * @param changed - notification when credentials changed or became unavailable.
-   * @returns the HTTP response; rejects before sending if the binding changed.
-   */
-  async fetch(
-    bound: Config, url: string | URL, init: RequestInit | undefined, signal: AbortSignal, changed?: () => void,
-  ): Promise<Response> {
-    try {
-      const next = await this.resolve(signal)
-      if (!deepEqualJson(next, bound)) {
-        changed?.()
-        throw new McpLocalError('MCP credential binding changed')
-      }
-      signal.throwIfAborted()
-      return await globalThis.fetch(url, { ...init,
-        signal: AbortSignal.any([signal, ...init?.signal ? [init.signal] : []]),
-      })
-    } catch (error) {
-      if (error instanceof MissingTemplateValue) changed?.()
-      throw new McpLocalError(this.diagnostic(error, 'HTTP request'))
-    }
+    return `mcp-client(${this.config.serverName}): ${operation}: ${this.redact(describeError(error))}`
   }
 
   /**
    * Resolve transport strings without changing the plugin's raw configuration.
    * @param signal - cancellation checked before and after template resolution.
    * @returns resolved transport configuration, or the raw configuration when expansion is disabled.
-   * @throws when a template value or its credentials provider is unavailable.
+   * @throws when a credential or the credentials provider is unavailable.
    */
   async resolve(signal: AbortSignal): Promise<Config> {
     signal.throwIfAborted()
     if (!this.config.expandTemplates) return this.config
     const values = new Map<string, Promise<string | undefined>>()
-    const sources = {
-      env: (name: string) => this.environment?.get(name)?.value,
-      credential: (ref: string): Promise<string | undefined> => {
-        let value = values.get(ref)
-        if (value === undefined) {
-          const provider = this.ctx.get('credentials')
-          if (provider === undefined) throw new McpLocalError('MCP credential templates require a credentials provider')
-          value = provider.resolve(ref as CredentialRef).then(result => result?.value)
-          values.set(ref, value)
-        }
-        return value
-      },
+    const credential = (ref: string): Promise<string | undefined> => {
+      let value = values.get(ref)
+      if (value === undefined) {
+        const provider = this.ctx.get('credentials')
+        if (provider === undefined) throw new McpLocalError('MCP credential templates require a credentials provider')
+        value = provider.resolve(ref as CredentialRef).then((result) => {
+          if (result !== undefined && result.value !== '') this.secrets.add(result.value).add(encodeURIComponent(result.value))
+          return result?.value
+        })
+        values.set(ref, value)
+      }
+      return value
     }
     const resolve = async (value: string, path: string): Promise<string> => {
-      const result = await resolveTemplateString(value, path, sources)
+      const result = await resolveTemplateString(value, path, credential)
       signal.throwIfAborted()
       return result
     }

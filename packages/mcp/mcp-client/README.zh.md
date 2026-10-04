@@ -61,9 +61,7 @@ kind: "package-reference"
 | `toolCallTimeoutMs` | `60,000` | 每次 `tools/call` 或资源请求的超时 |
 | `startupTimeoutMs` | 未设置 | 模板解析、协商、连接及初次工具同步的可选预算 |
 | `closeTimeoutMs` | `5,000` | 传输关闭与待处理本地工作完全结算的预算 |
-| `healthCheckIntervalMs` | `0` | 旧版 `ping` 或现代 `discover` 健康检查的间隔；`0` 禁用检查 |
-| `healthCheckTimeoutMs` | `10,000` | 每次已启用健康检查的应答预算 |
-| `expandTemplates` | `false` | 在运行时解析传输字符串中的 `${env:NAME}` 与 `${credential:REF}` |
+| `expandTemplates` | `false` | 在运行时解析传输字符串中的 `${credential:REF}`，并在诊断中替换已解析的值 |
 | `maxInstructionBytes` | `32,768` | 包括服务器归属信息在内的服务器指令 UTF-8 字节上限；超出时连接失败 |
 | `failOnStartupError` | `false` | 初始连接或工具同步失败时拒绝插件激活 |
 | `reconnect.enabled` | `true` | 连接丢失后自动重新连接 |
@@ -93,18 +91,18 @@ kind: "package-reference"
 
 ### 启动、工具更新与重连
 
-服务器的工具会在 harness 开始首个轮次之前出现。设置 `startupTimeoutMs` 可约束每次连接尝试，包括模板解析与初次工具发现；省略时不添加覆盖整次尝试的截止时间。健康检查默认关闭。设置 `healthCheckIntervalMs` 可启用旧版 `ping` 或现代 `discover` 检查；`healthCheckTimeoutMs` 独立约束每次应答。检查失败或超时会进入重连路径，包括没有传输关闭信号、已悄然停止响应的 Streamable HTTP 服务器。工具列表通知会刷新已注册工具；发现失败保留上一组工具，注册冲突则关闭连接并按重连策略处理。
+服务器的工具会在 harness 开始首个轮次之前出现。设置 `startupTimeoutMs` 可约束每次连接尝试，包括模板解析与初次工具发现；省略时不添加覆盖整次尝试的截止时间。工具列表通知会刷新已注册工具；发现失败保留上一组工具，注册冲突则关闭连接并按重连策略处理。
 
 服务器连接断开时——例如本地服务器进程崩溃——插件会以从 500 ms 起逐次翻倍、上限 30 s 的延迟自动重连，并刷新工具集；重连进度在日志中可见。中断期间最后已知的工具仍会列出，但对它们的调用会失败，直到服务器恢复。连续失败十次后，该服务器的工具会被移除，重连停止，直到你重载配置或重启 harness；服务器持续连接一段时间后，该计数会重置。设置 `reconnect.enabled: false` 可禁用自动重连——此时工具在断开后仍会列出，但调用失败，直到你重载。编辑配置项会在原地重载服务器连接，未变的名称保持不变。
 
 <a id="runtime-templates-and-credentials"></a>
 ### 运行时模板与凭据
 
-启用 `expandTemplates: true` 后，`command`、`args`、`env` 值、`cwd`、`url` 与 `headers` 值接受 `${env:NAME}` 和 `${credential:REF}`。环境变量来自宿主启动快照；凭据值来自当前凭据提供方。原始插件配置保留模板字符串。使用凭据引用时，加载阶段必须存在凭据提供方。缺失值会进入 `waiting-credentials`，不消耗重连次数，严格启动拒绝激活的情况除外；被引用凭据更新时会重试解析。更改启动环境变量需要重启宿主。
+启用 `expandTemplates: true` 后，`command`、`args`、`env` 值、`cwd`、`url` 与 `headers` 值接受 `${credential:REF}`。当前凭据提供方解析每个引用；[本地提供方](../../credentials/credentials-local/README.zh.md)还会读取宿主继承的环境变量。原始插件配置保留模板字符串。使用凭据引用时，加载阶段必须存在凭据提供方。缺失值会进入 `waiting-credentials`，不消耗重连次数，严格启动拒绝激活的情况除外；被引用凭据更新时会重试解析。
 
-凭据通知只有在解析值变化时才重建连接；值相同的通知保留连接及其重连预算。替代连接启动前，旧连接必须关闭并完成本地清理。Streamable HTTP 在每次请求前重新解析模板，拒绝在旧会话中发送已变更的凭据。清理未完成会阻止替换，直到宿主重启。
+凭据通知只有在解析值变化时才重建连接；值相同的通知保留连接及其重连预算。替代连接启动前，旧连接必须关闭并完成本地清理。清理未完成会阻止替换，直到宿主重启。
 
-启用模板展开时，失败诊断会省略可能包含凭据的上游消息，包括 MCP `isError` 工具结果的内容。成功工具结果保留原始内容。
+启用模板展开时，失败诊断、工具调用失败与 MCP `isError` 工具结果文本保留上游消息，但会把本实例解析过的每个值（包括此前轮换的值及其 URL 编码形式）替换为 `[redacted]`。成功工具结果保留原始内容。
 
 -----
 
@@ -131,14 +129,16 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`serverName` 预留、激活等待 |
 | [`src/connection.ts`](src/connection.ts) | 连接监督器：客户端世代、重连策略、尝试预算、dispose（资源释放） |
 | [`src/generation.ts`](src/generation.ts) | 传输归属、取消、待处理工作与关闭确认 |
-| [`src/credentials.ts`](src/credentials.ts) | 运行时模板绑定与 HTTP 请求前的凭据检查 |
-| [`src/templates.ts`](src/templates.ts) | 模板语法、来源解析与凭据引用发现 |
+| [`src/credentials.ts`](src/credentials.ts) | 运行时模板绑定，并替换每个已解析的值 |
+| [`src/templates.ts`](src/templates.ts) | 凭据模板语法、替换与引用发现 |
 | [`src/server-context.ts`](src/server-context.ts) | 资源提供方注册与字面服务器指令 |
 | [`src/tools.ts`](src/tools.ts) | 工具桥接：发现、命名、注册交换、执行、图片投影 |
 | [`src/transport.ts`](src/transport.ts) | 传输工厂：带清洗环境的 stdio spawn、Streamable HTTP |
 | [`src/status.ts`](src/status.ts) | 以 Fiber 为键的状态单元，保留最终清理结果 |
 | [`src/probe.ts`](src/probe.ts) | 一次性探测：连接、取身份、列工具、关闭——不注册任何东西 |
 | [`src/deadline.ts`](src/deadline.ts) | 启动与探测预算共用的结算截止器 |
+| [`src/diagnostic.ts`](src/diagnostic.ts) | 原因链诊断与密钥值替换 |
+| [`src/types.ts`](src/types.ts) | 客户端可用的连接状态与探测结果类型（`./types`） |
 
 导出的 `createMcpToolDefinition(ctx, options)` 将上游工具 schema 和原始结果回调适配到相同的规范值、错误和持久化图像投影。每次回调都收到原样的 `ToolExecution`，包括其 Agent 和取消信号；SDK 的规范类型校验会在投影前检查返回结果。调用方负责注册、取消截止时间和提供方卸载。原生 Cua Driver 提供方使用此适配函数，无需打开 MCP 传输。
 
@@ -150,7 +150,7 @@ kind: "package-reference"
 
 SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器将每次重新同步排队并重新发布已连接的工具数；获取失败时保留之前的注册代，注册冲突则回滚本次尝试并关闭连接，再按重连策略处理。每次故障共享一个尝试预算：连续失败达到 `maxAttempts` 后注销工具并停止重连；连接持续超过 `maxDelayMs` 则重置预算。
 
-启用 `expandTemplates` 时，失败诊断保留操作名称、已知传输或 SDK 错误码，以及本地产生的失败原因。上游消息与原因链可能包含展开后的凭据，因此不输出原文。未启用模板展开的配置保留完整错误诊断。
+启用 `expandTemplates` 时，失败诊断标明操作名称并保留原因链，其中每个已解析的值都替换为 `[redacted]`。未启用模板展开的配置保留完整错误诊断。
 
 ### 工具执行内部细节
 
@@ -231,7 +231,7 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 
 - **资源按需读取**——随附 profile 提供[共享资源服务](../mcp-resources/README.zh.md)；资源订阅与 MCP 提示词模板不受支持。
 - **整次启动尝试的预算需主动配置**——设置 `startupTimeoutMs` 后，它覆盖模板解析、协商、连接与初次工具同步。通知驱动的重同步发出的 `tools/list` 请求使用 MCP SDK 的 60 秒请求默认值及其页数上限。插件卸载先关闭传输以中断待处理的启动请求，再等待清理。
-- **重连处理协商失败、传输关闭与健康检查失败**——初始探测失败、stdio 子进程崩溃或不再应答已启用健康检查的 Streamable HTTP 服务器都会使用配置的重连预算。普通 HTTP 请求失败使用 SDK 传输的恢复机制；凭据变化则替换连接。
+- **重连处理协商失败与传输关闭**——初始连接失败或 stdio 子进程崩溃都会使用配置的重连预算。普通 HTTP 请求失败使用 SDK 传输的恢复机制；凭据变化则替换连接。
 - **图片是唯一的持久丰富结果桥接**——PNG、JPEG、WebP 与 GIF 在确切能力得到证明后进入 Native 上下文。音频与嵌入资源载荷仍只存在于执行局部并带明确诊断，资源链接只以文本保留名称与 URI。
 - **无效的协议结果或输出 schema 由 SDK 拒绝**——桥接器不接受旧式 `toolResult` 替代结果，也不绕过已声明的 schema 校验。
 - **要求基于任务的 MCP 工具在调用时被拒绝**——要求使用基于任务的执行（task-based execution）扩展的工具会抛出异常而非被桥接；该扩展未实现。
