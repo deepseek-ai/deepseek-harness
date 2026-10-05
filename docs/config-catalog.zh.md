@@ -1539,6 +1539,30 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-worktree -->
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-feishu -->
+<a id="deepseek-aidsh-feishu"></a>
+
+## `@deepseek-ai/dsh-feishu`
+
+- `inject`: `skills` · `subprocess` · `shellEnv`
+- `source`: [`packages/connector/feishu/src/index.ts:21`](../packages/connector/feishu/src/index.ts)
+
+```ts config-catalog
+/** CLI location and limits for backend skill commands. */
+export interface Config extends FeishuCliLimits {
+  /** Absolute directory containing `lark-cli`; defaults to the installed `@larksuite/cli` package. */
+  binDir?: string
+}
+
+/** Deployment limits for one native command. */
+export interface FeishuCliLimits {
+  /** Deadline in milliseconds, including executable lookup. */
+  commandTimeoutMs: number
+  /** Maximum stdout bytes retained from one command. */
+  maxOutputBytes: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-feishu -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-file-reference-local -->
 <a id="deepseek-aidsh-file-reference-local"></a>

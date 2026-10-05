@@ -25,6 +25,7 @@ Each application plugin in this group is installed into a profile to use one thi
 | Package | Role | ctx key |
 |---|---|---|
 | [`cli-account/`](cli-account/README.md) | Runs a vendor CLI by its absolute path, gives the model that path in runtime context, and runs one Host-owned account operation at a time for CLI app plugins | — |
+| [`feishu/`](feishu/README.md) | Installs the official Feishu `lark-cli` on the private Shell PATH and registers its embedded skills | registers on `ctx.skills` and `ctx.shellEnv` |
 
 -----
 

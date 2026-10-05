@@ -294,6 +294,7 @@
     { "path": "./packages/boot/config-editor" },
     { "path": "./packages/client/connection/tsconfig.host.json" },
     { "path": "./packages/skill/skill-office" },
+    { "path": "./packages/connector/feishu" },
     { "path": "./packages/skill/tool-workspace-dependencies" },
     { "path": "./packages/browser-use/browser-use" },
     { "path": "./packages/experimental/browser-use-runtime" },

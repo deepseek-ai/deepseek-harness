@@ -234,6 +234,7 @@ flowchart TD
   end
   subgraph group_connector["packages/connector"]
     pkg_cli_account["cli-account"]
+    pkg_feishu["feishu"]
   end
   subgraph group_context["packages/context"]
     pkg_agent_instructions["agent-instructions"]

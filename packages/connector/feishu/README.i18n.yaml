@@ -1,0 +1,70 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/feishu/README.md
+/:
+  en: e57ca64308201282
+  zh: ea1b9be187481228
+/deepseek-ai-dsh-feishu:
+  en: 5b26d6ad2128b454
+  zh: 6d3ccfcdb716ef8d
+/deepseek-ai-dsh-feishu/summary:
+  en: 6bf72b5f8baab073
+  zh: 5fb53034f11958f4
+/deepseek-ai-dsh-feishu/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-feishu/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-feishu/use-this-package/install-into-a-profile:
+  en: e48f41c5c992f4a4
+  zh: 785ddef280a12013
+/deepseek-ai-dsh-feishu/use-this-package/what-you-get:
+  en: affd3411620f486b
+  zh: a8baf9b561b8c4ac
+/deepseek-ai-dsh-feishu/use-this-package/configure:
+  en: 8d825d4a9e266ef5
+  zh: f43a252b6bb33707
+/deepseek-ai-dsh-feishu/understand-the-implementation:
+  en: 10d310e4e6ebc514
+  zh: e32b95f44b9c5d31
+/deepseek-ai-dsh-feishu/further-exploration:
+  en: 4c98d4aa2fe2d1fe
+  zh: 5ef02d71983c4b18
+/deepseek-ai-dsh-feishu/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-feishu/model-experience/skill-catalog-entries:
+  en: 7265024b55daf9ef
+  zh: 3447e587c56a25d6
+/deepseek-ai-dsh-feishu/model-experience/skill-catalog-entries/what-the-model-sees:
+  en: 0ca23a4403d704a0
+  zh: ad0ace90de824494
+/deepseek-ai-dsh-feishu/model-experience/skill-catalog-entries/token-effect:
+  en: 77d5cd81ff936d7e
+  zh: 56acd95e5caf27f5
+/deepseek-ai-dsh-feishu/model-experience/skill-catalog-entries/kv-cache-effect:
+  en: b3875910bea34217
+  zh: cb942b8bb415d7f5
+/deepseek-ai-dsh-feishu/model-experience/loaded-skill-body:
+  en: 8955ac196848e69f
+  zh: 54aa7db097eafd3c
+/deepseek-ai-dsh-feishu/model-experience/loaded-skill-body/what-the-model-sees:
+  en: 574580d8e60a9e02
+  zh: bc42783630e402eb
+/deepseek-ai-dsh-feishu/model-experience/loaded-skill-body/what-the-model-sees/dsh-guidance:
+  en: 5c7ac466d9d28f26
+  zh: 01dfd0690f58c8bc
+/deepseek-ai-dsh-feishu/model-experience/loaded-skill-body/token-effect:
+  en: 25c4bdac3cbd261c
+  zh: 67cf97623c4b6c56
+/deepseek-ai-dsh-feishu/model-experience/loaded-skill-body/kv-cache-effect:
+  en: 1f6b842a95e14ce4
+  zh: 0d57cdec5e828828
+/deepseek-ai-dsh-feishu/known-limitations-and-deferred-work:
+  en: 4a19270abcaab1d4
+  zh: 607e2ef841eaf687
+/deepseek-ai-dsh-feishu/known-limitations-and-deferred-work/dev-note:
+  en: be15f75bf32de641
+  zh: 85de42dc5e1d934b

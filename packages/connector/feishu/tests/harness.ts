@@ -1,0 +1,145 @@
+/** Scripted lark-cli processes and a temporary bin directory for Feishu plugin specs. */
+
+import { chmod, mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import type {
+  SubprocessCollectedOutputs,
+  SubprocessHandle,
+  SubprocessOutcome,
+  SubprocessSpawnSpec,
+  SubprocessTerminalEnvironment,
+} from '@deepseek-ai/dsh-subprocess'
+
+/** Output and exit facts one scripted command reports. */
+export interface CliReply {
+  stdout?: string
+  stderr?: string
+  exitCode?: number | null
+  signal?: NodeJS.Signals | null
+  lossy?: boolean
+}
+
+/** A collect-mode process whose managed range exits on termination unless held. */
+export class ScriptedProcess implements SubprocessHandle {
+  readonly stdin = undefined
+  readonly stdout = undefined
+  readonly stderr = undefined
+  readonly control = undefined
+  readonly collected: SubprocessCollectedOutputs
+  readonly done: Promise<SubprocessOutcome>
+  terminated = false
+  holdExit = false
+  private readonly outcome = Promise.withResolvers<SubprocessOutcome>()
+  private readonly exit = Promise.withResolvers<boolean>()
+  private output: Required<Pick<CliReply, 'stdout' | 'stderr' | 'lossy'>> = { stdout: '', stderr: '', lossy: false }
+
+  constructor(readonly spec: SubprocessSpawnSpec) {
+    this.done = this.outcome.promise
+    const reader = (stream: 'stdout' | 'stderr') => ({
+      readFrom: () => ({
+        text: this.output[stream],
+        nextOffset: Buffer.byteLength(this.output[stream]),
+        lossy: stream === 'stdout' && this.output.lossy,
+      }),
+    })
+    this.collected = { stdout: reader('stdout'), stderr: reader('stderr') }
+    spec.signal?.addEventListener('abort', () => { this.terminate() }, { once: true })
+  }
+
+  /** Finish the command with the given output; the managed range stays alive until termination. */
+  reply(reply: CliReply): void {
+    this.output = { stdout: reply.stdout ?? '', stderr: reply.stderr ?? '', lossy: reply.lossy ?? false }
+    this.outcome.resolve({ exitCode: reply.exitCode === undefined ? 0 : reply.exitCode, signal: reply.signal ?? null })
+  }
+
+  terminate(): void {
+    this.terminated = true
+    this.outcome.resolve({ exitCode: null, signal: 'SIGTERM' })
+    if (!this.holdExit) this.exit.resolve(true)
+  }
+
+  /** Empty a held managed range. */
+  release(): void {
+    this.exit.resolve(true)
+  }
+
+  waitForExit(): Promise<boolean> {
+    return this.exit.promise
+  }
+}
+
+/** Host subprocess runtime whose lookups and spawns are recorded and answered by `respond`. */
+export class ScriptedSubprocess extends SubprocessRuntime {
+  readonly lookups: Array<{ command: string; env: Readonly<Record<string, string>> | undefined }> = []
+  readonly processes: ScriptedProcess[] = []
+  host = true
+  lookup: (signal?: AbortSignal) => Promise<string> = () => Promise.resolve('/fixture/bin/lark-cli')
+  respond: (process: ScriptedProcess) => void = (process) => { process.reply({ stdout: '{}' }) }
+
+  override get runsOnHost(): boolean {
+    return this.host
+  }
+
+  override resolveExecutable(command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal): Promise<string> {
+    this.lookups.push({ command, env })
+    return this.lookup(signal)
+  }
+
+  override terminalEnvironment(): Promise<SubprocessTerminalEnvironment> {
+    return Promise.resolve({ platform: 'posix' })
+  }
+
+  override spawn(spec: SubprocessSpawnSpec): ScriptedProcess {
+    spec.signal?.throwIfAborted()
+    const process = new ScriptedProcess(spec)
+    this.processes.push(process)
+    queueMicrotask(() => { this.respond(process) })
+    return process
+  }
+
+  override spawnTerminal(): Promise<never> {
+    throw new Error('lark-cli commands never allocate a terminal')
+  }
+}
+
+/**
+ * Answer each command by its arguments after the executable.
+ * @param replies - reply per space-joined argument list.
+ * @returns a `respond` function that fails unknown commands.
+ */
+export function byArguments(replies: Record<string, CliReply>): (process: ScriptedProcess) => void {
+  return (process) => {
+    const reply = replies[process.spec.argv.slice(1).join(' ')]
+    process.reply(reply ?? { exitCode: 1, stderr: `unexpected command: ${process.spec.argv.join(' ')}` })
+  }
+}
+
+/**
+ * Create a temporary directory holding an executable `lark-cli` placeholder.
+ * @returns the absolute bin directory.
+ */
+export async function createBinDir(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), 'dsh-feishu-bin-'))
+  await writeFile(join(directory, 'lark-cli'), '')
+  await chmod(join(directory, 'lark-cli'), 0o755)
+  return directory
+}
+
+/** Two-skill catalog in the `skills list --json` format. */
+export const CATALOG = {
+  ok: true,
+  skills: [
+    { name: 'lark-doc', description: 'Feishu documents', version: '1.0.0' },
+    { name: 'lark-shared', description: 'Setup and sign-in', version: '1.1.0' },
+  ],
+}
+
+/** `skills read lark-doc --json` output with frontmatter, body, and vendor guidance. */
+export const DOC_SKILL = {
+  skill: 'lark-doc',
+  path: 'SKILL.md',
+  content: '---\nname: lark-doc\ndescription: Feishu documents\n---\n\n# docs\n\nRead documents.\n',
+  guidance: '> Tip: read this skill\'s own files with `lark-cli skills read lark-doc <relative-path>`.',
+}
