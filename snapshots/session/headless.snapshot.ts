@@ -1320,7 +1320,7 @@ describe('headless recorded-session snapshots', () => {
       let finalWorkspace: WorkspaceSnapshotEntry[] | undefined
       const spillRoot = await mkdtemp(join(tmpdir(), 'acp-snap-spill-'))
       const locatorRoot = snapshotSpillRoot(join(scenario.dir, fixtureFiles[0] as string))
-      const mcpDemo = ['plugin-manager-mcp', 'mcp-template-error', 'mcp-oauth-error', 'mcp-tool-loading'].includes(scenario.name)
+      const mcpDemo = ['plugin-manager-mcp', 'mcp-template-error', 'mcp-oauth-error', 'mcp-tool-loading', 'notion-plugin'].includes(scenario.name)
         ? await startHttpMcpFixture({ rejectToolCalls: scenario.name === 'mcp-template-error', authorizationFailure: scenario.name === 'mcp-oauth-error' }) : undefined
       let result: Awaited<ReturnType<typeof runLoaderSmoke>>
       try {
@@ -1459,6 +1459,11 @@ describe('headless recorded-session snapshots', () => {
               expect(log).toContain('# Office task routing')
             }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
+            if (scenario.name === 'notion-plugin' && mcpDemo !== undefined) {
+              // Without a saved grant the Notion server is never contacted and exposes no tools.
+              expect(mcpDemo.authorization).toEqual([])
+              expect(actualLogs[0]!.content).not.toContain('mcp__notion__ping')
+            }
             if (scenario.name === 'session-query-spill') {
               await verifySessionQuerySpill(actualLogs[0]!.content, spillRoot, locatorRoot)
             }

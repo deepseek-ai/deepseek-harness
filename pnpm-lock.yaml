@@ -105,6 +105,12 @@ importers:
       '@deepseek-ai/dsh-mcp-client':
         specifier: workspace:*
         version: link:packages/mcp/mcp-client
+      '@deepseek-ai/dsh-mcp-manager':
+        specifier: workspace:*
+        version: link:packages/mcp/mcp-manager
+      '@deepseek-ai/dsh-notion':
+        specifier: workspace:*
+        version: link:packages/connector/notion
       '@deepseek-ai/dsh-skill-office':
         specifier: workspace:*
         version: link:packages/skill/skill-office

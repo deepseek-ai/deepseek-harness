@@ -1,0 +1,8 @@
+version: 1
+scenario: notion-plugin
+profile: headless
+composition: notion-plugin
+recording: authored
+header:
+  class: notion-plugin
+  pin: true
