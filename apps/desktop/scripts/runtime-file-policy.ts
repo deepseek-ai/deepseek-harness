@@ -24,6 +24,12 @@ export function desktopRuntimeFileExclusion(
   const nameParts = packageParts[0]?.startsWith('@') ? 2 : 1
   const name = packageParts.slice(0, nameParts).join('/')
   const entry = packageParts.slice(nameParts).join('/')
+  if (name.startsWith('@deepseek-ai/dsh') && (entry === 'src' || entry.startsWith('src/'))) {
+    return 'published source'
+  }
+  if (name === '@deepseek-ai/dsh' && (entry === 'docs' || entry.startsWith('docs/'))) {
+    return 'published documentation'
+  }
   if (name.startsWith('@deepseek-ai/libreoffice-kit-')) {
     if (name !== `@deepseek-ai/libreoffice-kit-${officeEngine}`) return 'LibreOffice other platform'
   }

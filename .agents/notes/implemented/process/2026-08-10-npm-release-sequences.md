@@ -117,7 +117,7 @@ The entity in this domain is a **release family**: a set of packages sharing one
 | `publish` | the three registry states above |
 | `process` / `tarball` | the one home for spawning commands and for reading a packed tarball, including the entry guard that keeps every script importable |
 
-The dsh family applies the repository's publication payload policy, which rejects bundled JavaScript maps and publishes `src` with its declaration maps ([rationale](2026-10-08-published-source-and-docs.md)). The vendored family keeps upstream's payload, because upstream's manifest owns it and those manifests export `./src/*`.
+The dsh family applies the repository's publication payload policy, which publishes `src`, its declaration maps, and the JavaScript maps beside the bundles they describe ([rationale](2026-10-08-published-source-and-docs.md)). The vendored family keeps upstream's payload, because upstream's manifest owns it and those manifests export `./src/*`.
 
 ### Workflow shape: pack on PR/push, publish from a manual dispatch workflow
 

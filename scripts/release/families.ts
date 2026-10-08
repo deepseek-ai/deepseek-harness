@@ -15,7 +15,6 @@ import {
   officialClientBuildEnvironment,
   readClientBuildRecord,
 } from '../client-build-environment.ts'
-import { validateTarballPayload } from '../publication-payload.ts'
 import { ON_DEMAND_BUNDLES } from '../../packages/boot/app-boot/src/official-bundle-packages.ts'
 
 /**
@@ -387,15 +386,14 @@ class DshFamily extends ReleaseFamily {
   }
 
   /**
-   * Reject bundled JavaScript maps, and require the installed package to carry
-   * the documentation and source its manifest promises. `docs` exists only
-   * because `prepack` stages it, so a pack run that skips lifecycle scripts
-   * would otherwise publish the package without it.
+   * Require the installed package to carry the documentation and source its
+   * manifest promises. `docs` exists only because `prepack` stages it, and a
+   * stale tree in the checkout would satisfy a weaker check, so the staged
+   * copy must be complete for the pack that publishes it.
    * @param member - the packed member.
    * @param files - every path inside its tarball.
    */
   validatePayload(member: ReleaseMember, files: readonly string[]): void {
-    validateTarballPayload(files, member.name)
     if (member.name !== this.installedEntry.packageName) return
     if (!files.some(file => file.startsWith('package/docs/') && file.endsWith('.md'))) {
       throw new Error(`${member.name} packed no documentation`)
@@ -456,8 +454,7 @@ class VendorFamily extends ReleaseFamily {
   }
 
   /**
-   * Require the payload the vendored manifest declares, including upstream's
-   * `src` tree and declaration maps.
+   * Accept upstream's payload.
    *
    * Upstream's manifest owns that payload, so this family enforces no shape of
    * its own beyond a nonempty tarball. What must hold is that every path the

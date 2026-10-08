@@ -67,6 +67,13 @@ const ASSET_GLOBS = [
   'node_modules/@deepseek-ai/dsh-sandbox-windows-acl/assets/**/*',
 ]
 
+/** Published source and documentation: types and maps already describe the runtime, so no load path needs them. */
+const PUBLISHED_PAYLOAD_IGNORES = [
+  '**/node_modules/@deepseek-ai/dsh/src/**',
+  '**/node_modules/@deepseek-ai/dsh-*/src/**',
+  '**/node_modules/@deepseek-ai/dsh/docs/**',
+]
+
 const PLATFORMS = ['linux', 'macos', 'win'] as const
 const ARCHES = ['x64', 'arm64'] as const
 type Platform = (typeof PLATFORMS)[number]
@@ -380,7 +387,7 @@ class SingleExeBuild {
 
   /** Add the executable entry and pkg assets to the staged manifest. */
   async injectPkgConfig(): Promise<void> {
-    const patch = { bin: ENTRY_BIN, pkg: { assets: ASSET_GLOBS, ignore: OFFICE_ASSET_IGNORES } }
+    const patch = { bin: ENTRY_BIN, pkg: { assets: ASSET_GLOBS, ignore: [...OFFICE_ASSET_IGNORES, ...PUBLISHED_PAYLOAD_IGNORES] } }
     const manifestPath = join(this.staging, 'package.json')
     if (this.cli.dryRun) {
       console.log(`build-exe-for-python-sdk: [dry-run] patch ${manifestPath} with ${JSON.stringify(patch)}`)

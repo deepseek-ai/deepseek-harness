@@ -16,13 +16,15 @@
   },
   "files": [
     "lib/*.js",
+    "lib/*.js.map",
     "lib/types/*.d.ts",
     "lib/types/*.d.ts.map",
     "docs",
     "src"
   ],
   "scripts": {
-    "prepack": "tsx ../../scripts/stage-dsh-docs.ts"
+    "prepack": "tsx ../../scripts/stage-dsh-docs.ts",
+    "postpack": "tsx ../../scripts/stage-dsh-docs.ts --clean"
   },
   "license": "MIT",
   "dependencies": {

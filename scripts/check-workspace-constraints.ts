@@ -17,7 +17,7 @@ import {
   EXPERIMENTAL_PACKAGE_NAME_PREFIX,
   PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES,
 } from './experimental-package-policy.ts'
-import { hasTypertRemoteNavigation, isForbiddenPublicationFile } from './publication-payload.ts'
+import { hasTypertRemoteNavigation } from './publication-payload.ts'
 import type { DshBundleManifest } from '../packages/util/package-manifest/src/types.ts'
 import { OPTIONAL_BUNDLES, bundlePatchFiles } from '../packages/boot/app-boot/src/profile.ts'
 import { collectProjectReferenceFaceViolations } from './project-reference-faces.ts'
@@ -59,16 +59,15 @@ const standardReleaseMemberDirectory = /^(?:packages\/(?!experimental\/)[^/]+\/[
 const desktopApplicationDirectory = 'apps/desktop'
 const localArtifactDirs = new Set(['node_modules'])
 const appPackageFiles: Readonly<Record<string, readonly string[]>> = {
-  // `docs` carries the repository's Markdown documentation, staged by
-  // `scripts/stage-dsh-docs.ts` before packing.
-  '@deepseek-ai/dsh': ['lib/*.js', 'lib/types/*.d.ts', 'lib/types/*.d.ts.map', 'docs', 'src'],
+  // Only `prepack` stages `docs`; every other reader of this directory sees
+  // whatever the checkout holds.
+  '@deepseek-ai/dsh': ['lib/*.js', 'lib/*.js.map', 'lib/types/*.d.ts', 'lib/types/*.d.ts.map', 'docs', 'src'],
   '@deepseek-ai/dsh-desktop-host': [
     'lib/index.js', 'lib/cli.js',
   ],
-  // Bundled JavaScript maps stay out by payload policy; the worker-preview
-  // surface (dist/preview.html and dist/preview/) backs opt-in experimental
-  // packages and is not published.
-  '@deepseek-ai/dsh-web-frontend': ['dist', '!dist/**/*.map', '!dist/preview.html', '!dist/preview', 'src'],
+  // The worker-preview surface (dist/preview.html and dist/preview/) backs
+  // opt-in experimental packages and is not published.
+  '@deepseek-ai/dsh-web-frontend': ['dist', '!dist/preview.html', '!dist/preview', 'src'],
 }
 
 /** The subset of package.json fields this constraint check cares about. */
@@ -293,6 +292,9 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     // implementation behind an exported declaration, and lets a plugin author
     // read it without a repository checkout.
     'lib/types/**/*.d.ts.map',
+    // Every emitted map ships beside the JavaScript it describes, so a stack
+    // frame or a debugger session resolves into the published `src`.
+    'lib/**/*.js.map',
     ...hasExportPair(manifest, './typert', './lib/typert.host.d.ts', './lib/typert.host.js')
       ? ['lib/typert.host.js', 'lib/typert.host.d.ts']
       : [],
@@ -463,14 +465,6 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
 
   if (manifest.name && vendoredPackages.has(manifest.name)) {
     return errors
-  }
-
-  if (manifest.name?.startsWith('@deepseek-ai/')) {
-    for (const file of manifest.files ?? []) {
-      if (isForbiddenPublicationFile(file)) {
-        errors.push(`${label}: package.json files must not publish ${JSON.stringify(file)}`)
-      }
-    }
   }
 
   if (dir.startsWith('apps/') && dir !== desktopApplicationDirectory && manifest.name?.startsWith('@deepseek-ai/')) {

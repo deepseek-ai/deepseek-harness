@@ -486,6 +486,9 @@ function clientConfig(id: string, entry: string, clientBanner?: (fileName: strin
     // Plugin code is fetched outside Vite's module graph, so its own bundle
     // must carry the TS/TSX mapping consumed by browser profiling tools.
     sourcemap: true,
+    // Compress only: identifier names stay readable in the shipped bundle,
+    // and the source map still resolves through the published `src`.
+    minify: { compress: true, mangle: false },
     clean: false,
     deps: {
       neverBundle: isRequested,

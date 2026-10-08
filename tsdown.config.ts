@@ -30,6 +30,9 @@ export default defineConfig(({ env }) => {
     fixedExtension: false,
     dts: false,
     clean: false,
+    // Published packages carry their source and its maps, so the shipped
+    // JavaScript is compressed for size and identifier names stay readable.
+    minify: { compress: true, mangle: false },
     plugins: client ? [] : [typertPlugin({ mode: 'workspace', faces: ['host'] })],
   }
 })

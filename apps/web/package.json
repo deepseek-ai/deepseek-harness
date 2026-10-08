@@ -17,7 +17,6 @@
   },
   "files": [
     "dist",
-    "!dist/**/*.map",
     "!dist/preview.html",
     "!dist/preview",
     "src"

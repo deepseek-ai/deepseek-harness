@@ -1,4 +1,4 @@
-# Agent Note: Published source and documentation
+# Agent Note: Published source, maps, and documentation
 
 Status: implemented
 
@@ -6,36 +6,36 @@ English | [中文](2026-10-08-published-source-and-docs.zh.md)
 
 ## Problem
 
-A published `@deepseek-ai/dsh-*` package carried declarations, bundled runtime, and locale resources, but not the TypeScript the declarations describe. Its `exports` map nevertheless declared `./src/*`, so an installed consumer resolved that subpath to files the tarball did not contain. A plugin author who wanted the implementation behind a documented API had to read the declaration, the documentation website, or a checkout at the matching `dsh-v*` tag: the first stops at the declaration, and the other two are not the installed version. The repository's Markdown documentation reached readers only through the website, which tracks the published release.
+A published `@deepseek-ai/dsh-*` package carried declarations, bundled runtime, and locale resources, but neither the TypeScript the declarations describe nor the maps that resolve into it. Its `exports` map nevertheless declared `./src/*`, so an installed consumer resolved that subpath to files the tarball did not contain. A plugin author who wanted the implementation behind a documented API had to read the declaration, the documentation website, or a checkout at the matching `dsh-v*` tag: the first stops at the declaration, and the other two are not the installed version. The repository's Markdown documentation reached readers only through the website, which tracks the published release.
 
 ## Decision
 
-Every release member publishes its TypeScript source and the declaration maps that resolve into it, and `@deepseek-ai/dsh` publishes the repository's Markdown documentation.
+Every release member publishes its TypeScript source, the declaration maps that resolve into it, and the JavaScript maps beside the bundles they describe. `@deepseek-ai/dsh` publishes the documentation website's page set, and the build compresses emitted bundles without mangling identifiers.
 
-[`expectedDshPackageFiles`](../../../../scripts/check-workspace-constraints.ts) lists `lib/types/**/*.d.ts.map` after the declarations and `src` last; a package with Typert Remote navigation also lists `lib/typert.remote-client.d.ts.map`, which its generated declaration references through `sourceMappingURL`. [`isForbiddenPublicationFile`](../../../../scripts/publication-payload.ts) rejects only bundled JavaScript maps, so both additions pass the static manifest check and the release family's packed-tarball check. The `./src/*` export that 315 of the 332 release members already declared resolves for an installed consumer.
+[`expectedDshPackageFiles`](../../../../scripts/check-workspace-constraints.ts) lists `lib/types/**/*.d.ts.map`, `lib/**/*.js.map`, and `src`; a package with Typert Remote navigation also lists `lib/typert.remote-client.d.ts.map`, which its generated declaration references through `sourceMappingURL`. No payload member is forbidden, so the static manifest check owns the exact publication list. The `./src/*` export that 315 of the 332 release members declare resolves to those files, which serves editor navigation and reading; plain Node still cannot import them without a TypeScript loader.
 
-`@deepseek-ai/dsh` stages the repository `docs` tree into `apps/cli/docs` from its `prepack` lifecycle through [`scripts/stage-dsh-docs.ts`](../../../../scripts/stage-dsh-docs.ts). The staged copy omits `docs/persistence-changes/`, whose per-release migration records the current contract replaces, and the `*.i18n.yaml` consistency records the documentation gates own. Images and every other reader-facing asset ship with it.
+The workspace build and the client preset compress every emitted bundle (`minify: { compress: true, mangle: false }`). Identifiers keep their names, so a stack frame and the published map still name the original code.
 
-The vendored family keeps upstream's payload unchanged; upstream owns those manifests, and they export `./src/*` ([release sequences](2026-08-10-npm-release-sequences.md)).
+`@deepseek-ai/dsh` stages the documentation website's page set into `apps/cli/docs` from its `prepack` lifecycle through [`scripts/stage-dsh-docs.ts`](../../../../scripts/stage-dsh-docs.ts), which reads the publication manifest in [`website/docs.ts`](../../../../website/docs.ts), and removes that copy again from `postpack`. Non-Markdown assets under `docs/` ship with those pages; the generated `docs/persistence-changes/` records and the `docs/i18n/` guidelines do not. The vendored family keeps upstream's payload unchanged ([release sequences](2026-08-10-npm-release-sequences.md)).
 
-Desktop packaging keeps its own [runtime-file policy](../../../../apps/desktop/scripts/runtime-file-policy.ts), so the packaged application omits declarations and declaration maps and carries `src` and the staged `docs` tree, neither of which it loads.
+Desktop and the Python single-file executable pay nothing for either addition. [Desktop's runtime file policy](../../../../apps/desktop/scripts/runtime-file-policy.ts) omits `src/`, `docs/`, and every map from `@deepseek-ai/dsh*` packages while keeping third-party `src` trees that some of their `main` entries reach, and [`PUBLISHED_PAYLOAD_IGNORES`](../../../../scripts/build-exe-for-python-sdk.ts) excludes the same trees from the executable, so its contents no longer depend on a staged `docs` left in the checkout.
 
 ## Alternatives considered
 
 **Keep the payload declarations-only and send readers to the documentation website or the matching `dsh-v*` tag.** Rejected because neither is the installed version, and the website serves the latest published release rather than a prerelease. The declared `./src/*` export also has no meaning without those files.
 
-**Publish declaration maps without `src`.** Rejected because a map whose `sources` are absent resolves nothing, which is exactly the navigation the [Typert Remote design](../architecture/2026-08-02-typert-remote-method-calls.md) requires.
+**Publish maps without `src`.** Rejected because a map whose `sources` are absent resolves nothing, which is exactly the navigation the [Typert Remote design](../architecture/2026-08-02-typert-remote-method-calls.md) requires.
 
-**Publish bundled JavaScript maps alongside the runtime bundles.** Rejected because those are single-artifact builds whose maps describe a build tree that is not published.
+**Publish the whole `docs/` tree.** Rejected because that publishes RFCs, postmortems, testing guides, and maintainer workflows the website manifest deliberately withholds.
 
-**Ship the documentation as a separate `@deepseek-ai/dsh-docs` package.** Rejected because it adds a public package and a release member for content that belongs beside the command every install already has.
+**Mangle the bundles as well.** Rejected because mangled identifiers break the correspondence a published map exists to provide and make an unhandled stack frame unreadable.
 
-**Publish `docs/persistence-changes` with the rest of the documentation.** Rejected because those records answer a version-comparison question, and their 16 MB would dominate the payload.
+**Compress only `lib/index.js` and `lib/client.js`.** Rejected because one workspace build configuration emits every bundle, and a per-package exception would need a second configuration for no reader-visible gain.
 
 ## Consequences
 
-`src` adds about 29 MB and declaration maps about 10 MB across the release set, and the staged `docs` tree adds about 6.7 MB to `@deepseek-ai/dsh`. Package tarballs grow accordingly, and the Desktop application carries `src` it never loads.
+`src` adds about 29 MB and declaration maps about 10 MB across the release set; JavaScript maps add about 49 MB, and the staged documentation adds 5.9 MB to `@deepseek-ai/dsh`. Compression removes roughly half of a host bundle — `dsh-session`'s `lib/index.js` falls from 95 kB to 46 kB — and about a third of a client bundle. The Desktop application and the Python executable keep their previous payload.
 
-A consumer editor now follows a declaration to the installed implementation, and a plugin author reads that version's source and documentation without a checkout. The staged copy keeps the repository's relative links, so a link from a shipped page into an unshipped tree — `../packages/**`, or the omitted `docs/persistence-changes/` records — resolves only in a checkout. The documentation payload closes the website's release skew only for the version it shipped with; a consumer still compares `dsh --version` when the difference matters.
+A consumer editor now follows a declaration to the installed implementation, and a plugin author reads that version's documentation without a checkout. The staged copy keeps the repository's relative links, so a link from a shipped page into an unshipped tree — `../packages/**`, or the omitted `persistence-changes/` records — resolves only in a checkout. `docs/` exists in the working tree only between `prepack` and `postpack`, and `pnpm run clean` removes a copy an interrupted pack left behind.
 
-`pnpm run constraints` rejects a member whose `files` omits `src` or either declaration map, because the canonical list is exact. The release family's tarball validation rejects a bundled JavaScript map and requires `@deepseek-ai/dsh` to carry documentation and source, so a pack run that skips the staging hook fails instead of publishing without them.
+`pnpm run constraints` rejects a member whose `files` omits `src` or a map, because the canonical list is exact. The release family's tarball check requires `@deepseek-ai/dsh` to carry documentation and source, so a pack run that skips the staging hook fails instead of publishing without them.

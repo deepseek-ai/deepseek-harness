@@ -86,6 +86,7 @@
     "lib/client.js",
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
     "src"
   ]
 }

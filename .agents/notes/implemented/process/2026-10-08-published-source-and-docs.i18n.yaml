@@ -2,18 +2,18 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-08-published-source-and-docs.md
-/agent-note-published-source-and-documentation:
-  en: dcd10c6e1f5b6ceb
-  zh: 269cc2401be0f414
-/agent-note-published-source-and-documentation/problem:
-  en: 973cdfc5319db522
-  zh: b298d546b55b77ef
-/agent-note-published-source-and-documentation/decision:
-  en: 8c1fb9b17ef2377e
-  zh: fbc81e2633a61f0f
-/agent-note-published-source-and-documentation/alternatives-considered:
-  en: 538980c8b24caee7
-  zh: d076222bdbcbdebd
-/agent-note-published-source-and-documentation/consequences:
-  en: 1df4bdcfc4bfaa5b
-  zh: 32f65ff4dd9c6fba
+/agent-note-published-source-maps-and-documentation:
+  en: dbec3958b6bb3a8c
+  zh: f17abeb0533b4191
+/agent-note-published-source-maps-and-documentation/problem:
+  en: 699d35bd0bb12645
+  zh: c9e362c336c6b440
+/agent-note-published-source-maps-and-documentation/decision:
+  en: b5d394bd286b1e2d
+  zh: f5d3317115442caa
+/agent-note-published-source-maps-and-documentation/alternatives-considered:
+  en: 0bcc1a6864bcb340
+  zh: ff5d138040563624
+/agent-note-published-source-maps-and-documentation/consequences:
+  en: bd76714dd121f9aa
+  zh: 6d474d6ea90e1b5f
