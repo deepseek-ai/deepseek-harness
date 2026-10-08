@@ -2554,6 +2554,25 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-message-feedback -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-notion -->
+<a id="deepseek-aidsh-notion"></a>
+
+## `@deepseek-ai/dsh-notion`
+
+- `inject`: `mcpServers` · `systemPrompt`
+- `source`: [`packages/connector/notion/src/index.ts:26`](../packages/connector/notion/src/index.ts)
+
+```ts config-catalog
+/** Notion MCP endpoint and tool loading for the managed server entry. */
+export interface Config {
+  /** Streamable HTTP MCP endpoint; defaults to Notion's hosted server. */
+  url: string
+  /** `on-demand` (default) keeps Notion's tools hidden from each agent until it loads them; `eager` sends all of them. */
+  toolLoading: 'eager' | 'on-demand'
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-notion -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-office-to-pdf -->
 <a id="deepseek-aidsh-office-to-pdf"></a>
 
