@@ -31,7 +31,9 @@
     "lib/startup.js",
     "cordis.patch.yml",
     "lib/json-stream-*.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "src"
   ],
   "license": "MIT",
   "dsh": {

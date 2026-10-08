@@ -29,7 +29,9 @@
     "lib/bin.js",
     "bin.js",
     "lib/repository-*.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "src"
   ],
   "license": "MIT",
   "dependencies": {

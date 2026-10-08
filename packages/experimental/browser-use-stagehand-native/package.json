@@ -28,7 +28,9 @@
   "files": [
     "lib/index.js",
     "lib/worker.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {

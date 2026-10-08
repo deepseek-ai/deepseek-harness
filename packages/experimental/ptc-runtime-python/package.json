@@ -20,7 +20,9 @@
   "files": [
     "lib/index.js",
     "py/**/*.py",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {

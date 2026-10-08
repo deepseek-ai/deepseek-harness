@@ -16,8 +16,14 @@
   },
   "files": [
     "lib/*.js",
-    "lib/types/*.d.ts"
+    "lib/types/*.d.ts",
+    "lib/types/*.d.ts.map",
+    "docs",
+    "src"
   ],
+  "scripts": {
+    "prepack": "tsx ../../scripts/stage-dsh-docs.ts"
+  },
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/cordis": "workspace:~",

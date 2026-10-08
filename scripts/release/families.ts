@@ -387,12 +387,22 @@ class DshFamily extends ReleaseFamily {
   }
 
   /**
-   * Reject source and declaration-map members, the repository's publication policy.
+   * Reject bundled JavaScript maps, and require the installed package to carry
+   * the documentation and source its manifest promises. `docs` exists only
+   * because `prepack` stages it, so a pack run that skips lifecycle scripts
+   * would otherwise publish the package without it.
    * @param member - the packed member.
    * @param files - every path inside its tarball.
    */
   validatePayload(member: ReleaseMember, files: readonly string[]): void {
     validateTarballPayload(files, member.name)
+    if (member.name !== this.installedEntry.packageName) return
+    if (!files.some(file => file.startsWith('package/docs/') && file.endsWith('.md'))) {
+      throw new Error(`${member.name} packed no documentation`)
+    }
+    if (!files.some(file => file.startsWith('package/src/') && file.endsWith('.ts'))) {
+      throw new Error(`${member.name} packed no source`)
+    }
   }
 
   /** Publish every advertised on-demand package before the installation that offers it. */
@@ -449,11 +459,10 @@ class VendorFamily extends ReleaseFamily {
    * Require the payload the vendored manifest declares, including upstream's
    * `src` tree and declaration maps.
    *
-   * The harness policy that rejects both does not apply here: these manifests
-   * export `./src/*` for source navigation, so dropping `src` would publish a
-   * package whose export map points at absent files. What must hold instead is
-   * that every path the manifest selects is present, which `files` already
-   * decides and `pnpm pack` already enforces.
+   * Upstream's manifest owns that payload, so this family enforces no shape of
+   * its own beyond a nonempty tarball. What must hold is that every path the
+   * manifest selects is present, which `files` already decides and `pnpm pack`
+   * already enforces.
    * @param member - the packed member.
    * @param files - every path inside its tarball.
    */

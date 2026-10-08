@@ -23,33 +23,24 @@ function payloadPath(file: string): string {
 }
 
 /**
- * Whether a package payload path exposes source or map intermediates. Maps
- * serve editor navigation during development, where a workspace consumer
- * resolves their source through the package link; a published map resolves
- * nothing, so no payload publishes one.
+ * Whether a package payload path exposes JavaScript map intermediates. A
+ * declaration map pairs with the source and the declaration a consumer
+ * reaches; a JavaScript map describes bundler output that no published entry
+ * pairs with, so no payload publishes one.
  * @param file - manifest path or tarball member to classify.
  * @returns whether publishing this path is forbidden.
  */
 export function isForbiddenPublicationFile(file: string): boolean {
-  const normalized = payloadPath(file)
-  return normalized === 'src'
-    || normalized.startsWith('src/')
-    || normalized.endsWith('.d.ts.map')
-    || normalized.endsWith('.js.map')
+  return payloadPath(file).endsWith('.js.map')
 }
 
 /**
- * Reject source and map members in a packed npm tarball.
+ * Reject bundled JavaScript map members in a packed npm tarball.
  * @param files - tarball members to validate.
  * @param context - tarball identity named in the failure.
  */
 export function validateTarballPayload(files: readonly string[], context: string): void {
   for (const file of files) {
-    if (!isForbiddenPublicationFile(file)) continue
-    const normalized = payloadPath(file)
-    if (normalized === 'src' || normalized.startsWith('src/')) {
-      throw new Error(`${context} publishes source file ${file}`)
-    }
-    throw new Error(`${context} publishes source map ${file}`)
+    if (isForbiddenPublicationFile(file)) throw new Error(`${context} publishes JavaScript map ${file}`)
   }
 }
