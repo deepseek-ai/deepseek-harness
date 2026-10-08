@@ -14,7 +14,7 @@ Every release member publishes its TypeScript source, the declaration maps that 
 
 [`expectedDshPackageFiles`](../../../../scripts/check-workspace-constraints.ts) lists `lib/types/**/*.d.ts.map`, `lib/**/*.js.map`, and `src`; a package with Typert Remote navigation also lists `lib/typert.remote-client.d.ts.map`, which its generated declaration references through `sourceMappingURL`. No payload member is forbidden, so the static manifest check owns the exact publication list. The `./src/*` export that 315 of the 332 release members declare resolves to those files, which serves editor navigation and reading; plain Node still cannot import them without a TypeScript loader.
 
-The workspace build and the client preset compress every emitted bundle (`minify: { compress: true, mangle: false }`). Identifiers keep their names, so a stack frame and the published map still name the original code.
+The client preset compresses the browser bundle's text (`minify: { compress: false, mangle: false }`). Identifiers keep their names, so a stack frame and the published map still name the original code. Node-side entries stay uncompressed: the browser worker image lowers `yield*` only as a whole statement and rewrites `for await` loops by their source layout, and compressed input breaks both.
 
 `@deepseek-ai/dsh` stages the documentation website's page set into `apps/cli/docs` from its `prepack` lifecycle through [`scripts/stage-dsh-docs.ts`](../../../../scripts/stage-dsh-docs.ts), which reads the publication manifest in [`website/docs.ts`](../../../../website/docs.ts), and removes that copy again from `postpack`. Non-Markdown assets under `docs/` ship with those pages; the generated `docs/persistence-changes/` records and the `docs/i18n/` guidelines do not. The vendored family keeps upstream's payload unchanged ([release sequences](2026-08-10-npm-release-sequences.md)).
 
@@ -30,11 +30,11 @@ Desktop and the Python single-file executable pay nothing for either addition. [
 
 **Mangle the bundles as well.** Rejected because mangled identifiers break the correspondence a published map exists to provide and make an unhandled stack frame unreadable.
 
-**Compress only `lib/index.js` and `lib/client.js`.** Rejected because one workspace build configuration emits every bundle, and a per-package exception would need a second configuration for no reader-visible gain.
+**Compress the node-side entries as well.** Rejected because the browser worker image refuses compressed input: the packer rejects a `yield*` a compressor moved into an expression, and it produces unparseable code for `dsh-agent-instructions`. Both are lowering constraints, not size arguments.
 
 ## Consequences
 
-`src` adds about 29 MB and declaration maps about 10 MB across the release set; JavaScript maps add about 49 MB, and the staged documentation adds 5.9 MB to `@deepseek-ai/dsh`. Compression removes roughly half of a host bundle — `dsh-session`'s `lib/index.js` falls from 95 kB to 46 kB — and about a third of a client bundle. The Desktop application and the Python executable keep their previous payload.
+`src` adds about 29 MB and declaration maps about 10 MB across the release set; JavaScript maps add about 49 MB, and the staged documentation adds 5.9 MB to `@deepseek-ai/dsh`. Compression removes about a third of a browser bundle — `ui-chat`'s `lib/client.js` falls from 591 kB to 420 kB — while node-side entries keep their size until the worker image lowering accepts compressed input. The Desktop application and the Python executable keep their previous payload.
 
 A consumer editor now follows a declaration to the installed implementation, and a plugin author reads that version's documentation without a checkout. The staged copy keeps the repository's relative links, so a link from a shipped page into an unshipped tree — `../packages/**`, or the omitted `persistence-changes/` records — resolves only in a checkout. `docs/` exists in the working tree only between `prepack` and `postpack`, and `pnpm run clean` removes a copy an interrupted pack left behind.
 

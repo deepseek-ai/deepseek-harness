@@ -14,7 +14,7 @@ Status: implemented
 
 [`expectedDshPackageFiles`](../../../../scripts/check-workspace-constraints.ts) 列出 `lib/types/**/*.d.ts.map`、`lib/**/*.js.map` 与 `src`；带 Typert Remote 导航的包还会列出 `lib/typert.remote-client.d.ts.map`，其生成的声明通过 `sourceMappingURL` 引用该映射。没有任何载荷成员被禁止，发布清单由静态 manifest 检查精确持有。332 个发布成员中已有 315 个声明过 `./src/*`，该导出现在解析到这些文件，服务于编辑器导航与阅读；纯 Node 仍需 TypeScript loader 才能 import 它们。
 
-工作区构建与 client 预设会压缩每个产出的 bundle（`minify: { compress: true, mangle: false }`）。标识符保持原名，因此栈帧与已发布的 map 仍然指向原始代码。
+client 预设会压缩浏览器 bundle 的文本（`minify: { compress: false, mangle: false }`）。标识符保持原名，因此栈帧与已发布的 map 仍然指向原始代码。Node 侧入口不压缩：浏览器 worker 镜像只把 `yield*` 当作整条语句下沉，并按源码版式重写 `for await` 循环，压缩后的输入会同时破坏这两者。
 
 `@deepseek-ai/dsh` 通过 [`scripts/stage-dsh-docs.ts`](../../../../scripts/stage-dsh-docs.ts) 在自己的 `prepack` 生命周期里把文档网站的页面集合暂存到 `apps/cli/docs`，该脚本读取 [`website/docs.ts`](../../../../website/docs.ts) 中的发布清单，并在 `postpack` 中再次删除这份副本。`docs/` 下的非 Markdown 资产随这些页面一起发布；生成的 `docs/persistence-changes/` 记录与 `docs/i18n/` 规范不发布。vendored 族保持上游 payload 不变（[发布序列](2026-08-10-npm-release-sequences.zh.md)）。
 
@@ -30,11 +30,11 @@ Status: implemented
 
 **连标识符一起混淆。** 否决：混淆会破坏已发布 map 本应提供的对应关系，并使未处理栈帧无法阅读。
 
-**只压缩 `lib/index.js` 与 `lib/client.js`。** 否决：一次工作区构建配置产出所有 bundle，为单包开例外需要第二套配置，而读者看不到任何收益。
+**连 Node 侧入口一起压缩。** 否决：浏览器 worker 镜像拒绝压缩后的输入——打包器会拒绝被压缩器挪进表达式的 `yield*`，并且对 `dsh-agent-instructions` 产出无法解析的代码。这两条都是下沉变换的限制，不是体积上的理由。
 
 ## Consequences
 
-`src` 在整个发布集上增加约 29 MB，声明映射增加约 10 MB，JavaScript map 增加约 49 MB，暂存的文档给 `@deepseek-ai/dsh` 增加 5.9 MB。压缩让 host bundle 大约减半——`dsh-session` 的 `lib/index.js` 从 95 kB 降到 46 kB——client bundle 约减少三分之一。桌面应用与 Python 可执行体保持原有载荷。
+`src` 在整个发布集上增加约 29 MB，声明映射增加约 10 MB，JavaScript map 增加约 49 MB，暂存的文档给 `@deepseek-ai/dsh` 增加 5.9 MB。压缩让浏览器 bundle 约减少三分之一——`ui-chat` 的 `lib/client.js` 从 591 kB 降到 420 kB——而 Node 侧入口在 worker 镜像接受压缩输入之前保持原体积。桌面应用与 Python 可执行体保持原有载荷。
 
 消费方编辑器现在可以从声明跳转到已安装的实现，插件作者无需检出即可读到该版本的文档。暂存副本保留仓库的相对链接，因此从随包页面指向未随包目录的链接——`../packages/**`，或被排除的 `persistence-changes/` 记录——只在检出中可解析。`docs/` 只在 `prepack` 与 `postpack` 之间存在于工作树，`pnpm run clean` 会清掉被中断的打包留下的副本。
 

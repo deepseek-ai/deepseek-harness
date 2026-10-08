@@ -486,9 +486,12 @@ function clientConfig(id: string, entry: string, clientBanner?: (fileName: strin
     // Plugin code is fetched outside Vite's module graph, so its own bundle
     // must carry the TS/TSX mapping consumed by browser profiling tools.
     sourcemap: true,
-    // Compress only: identifier names stay readable in the shipped bundle,
-    // and the source map still resolves through the published `src`.
-    minify: { compress: true, mangle: false },
+    // Compress the browser bundle's text while identifier names stay readable
+    // and the source map still resolves through the published `src`. The
+    // compressor stays off: the browser worker image lowers `yield*` only as a
+    // whole statement, and a compressor that folds statements into expressions
+    // hides it.
+    minify: { compress: false, mangle: false },
     clean: false,
     deps: {
       neverBundle: isRequested,
