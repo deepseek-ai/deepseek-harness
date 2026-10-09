@@ -76,6 +76,7 @@ export const MODULE_PROXIES: Record<string, string> = {
   'sharp': './node/external_packages/sharp.ts',
   'node-pty': './node/external_packages/node-pty.ts',
   'execa': './node/external_packages/execa.ts',
+  'cross-spawn': './node/external_packages/cross-spawn.ts',
   'got': './node/external_packages/got.ts',
   '@vscode/ripgrep': './node/external_packages/ripgrep.ts',
   '@earendil-works/pi-ai': './node/external_packages/pi-ai.ts',

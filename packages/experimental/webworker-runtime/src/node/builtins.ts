@@ -53,6 +53,7 @@ import * as koffi from './external_packages/koffi.ts'
 import * as libreofficeKit from './external_packages/libreoffice-kit.ts'
 import * as nodePty from './external_packages/node-pty.ts'
 import * as execa from './external_packages/execa.ts'
+import * as crossSpawn from './external_packages/cross-spawn.ts'
 import * as got from './external_packages/got.ts'
 import * as piAi from './external_packages/pi-ai.ts'
 import * as ripgrep from './external_packages/ripgrep.ts'
@@ -101,6 +102,7 @@ const EXTERNALS: Record<string, StaticModuleFactory> = {
   'sharp': () => sharp,
   'node-pty': () => nodePty,
   'execa': () => execa,
+  'cross-spawn': () => crossSpawn,
   'got': () => got,
   'ws': () => ws,
   '@vscode/ripgrep': () => ripgrep,

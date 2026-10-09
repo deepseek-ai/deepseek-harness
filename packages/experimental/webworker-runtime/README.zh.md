@@ -56,6 +56,7 @@ kind: "package-library"
 - **`node:assert/strict` 仅支持真值断言**：对于假值，可调用的默认导出和 `ok` 使用传入的消息或通用文本抛出 `ERR_ASSERTION`，或原样抛出传入的 Error。其他断言 API 未提供。
 - **原生 TLS 监听器需要 Node Host**：worker 的 `node:https.createServer` 会拒绝激活，不会替换成明文。预览内部的 HTTP 隧道不绑定套接字；面向浏览器的 HTTPS 由部署服务器提供。
 - **桌面产品埋点不可用**：`got.post` 明确报告 worker host 不支持该调用。浏览器镜像不包含 Got 及其 Node HTTP 依赖；预览组合不启用桌面上报。
+- **stdio MCP 服务器需要 Node Host**：`cross-spawn` 明确报告 worker host 不支持该调用，已配置的 stdio 服务器无法连接；HTTP MCP 服务器不使用它。
 - **宿主包管理命令不可用**：`execa` 明确报告 worker host 不支持该调用；预览无法运行 pnpm、安装插件或安装原生依赖。
 - **PTC Node 程序不可用**：process shim 用 `/dsh/bin/node` 表示可执行文件身份，使 provider 能够激活，但 Worker 既没有 Node 可执行文件，也没有 `stripTypeScriptTypes`。程序执行会在启动子进程前失败。
 - **Office 转换需要 Node Host**：LibreOffice kit 的替代模块以 `unavailable` 拒绝创建转换器。浏览器镜像排除 kit 及其引擎依赖；Office 预览提示转换不可用。
