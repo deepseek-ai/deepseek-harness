@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-10-07-scaled-benchmark-report.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-10-07-scaled-benchmark-report.md
+/agent-note-scaled-machine-and-memory-pressure-benchmark-report:
+  en: 486b21866106fb62
+  zh: eb0f2e90eeb426a3
+/agent-note-scaled-machine-and-memory-pressure-benchmark-report/problem:
+  en: d8e9dee3e22d691a
+  zh: 53d9fae666f032b7
+/agent-note-scaled-machine-and-memory-pressure-benchmark-report/decision:
+  en: 5587ef207abde949
+  zh: a8c92e13b980c7c1
+/agent-note-scaled-machine-and-memory-pressure-benchmark-report/decision/machine-scaling:
+  en: f532650e0720e66a
+  zh: dfd6ffa6366c1f09
+/agent-note-scaled-machine-and-memory-pressure-benchmark-report/decision/memory-pressure:
+  en: bec0d7592ed58486
+  zh: 2be2350c142f133d
+/agent-note-scaled-machine-and-memory-pressure-benchmark-report/decision/exclusions:
+  en: dc685a11156d6cd3
+  zh: 519bbdbd0b4c69d7
+/agent-note-scaled-machine-and-memory-pressure-benchmark-report/alternatives-considered:
+  en: 9011ce1b4702608d
+  zh: 214f38794afe13fd
+/agent-note-scaled-machine-and-memory-pressure-benchmark-report/consequences:
+  en: af04c3e97e85f1e3
+  zh: 533a73e06f708c9d

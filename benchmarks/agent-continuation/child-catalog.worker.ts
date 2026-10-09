@@ -2,6 +2,7 @@
 
 import { performance } from 'node:perf_hooks'
 import { Context } from '@deepseek-ai/cordis'
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -74,6 +75,7 @@ async function run(root: string, mode: string): Promise<CatalogReport | { seeded
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd' })
     await ctx.plugin(CatalogQuery)
+    provideWorkingDirectoryFixture(ctx, '/bench')
     await ctx.plugin(SubagentRuntime)
     if (mode === 'seed') {
       await seed(ctx)

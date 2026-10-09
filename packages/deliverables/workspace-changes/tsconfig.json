@@ -28,6 +28,9 @@
     },
     {
       "path": "../../util/home-paths"
+    },
+    {
+      "path": "../../fs/fs"
     }
   ]
 }

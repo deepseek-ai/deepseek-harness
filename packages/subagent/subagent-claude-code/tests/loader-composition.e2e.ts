@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -13,24 +12,17 @@ const fixtureDir = fileURLToPath(new URL(
 ))
 const driver = join(fixtureDir, 'driver.ts')
 const configPath = join(fixtureDir, 'claude-code.patch.yml')
-const packageDir = fileURLToPath(new URL('..', import.meta.url))
-const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as {
-  dsh?: { bundle?: { patch?: string } }
-}
-const bundlePatch = manifest.dsh?.bundle?.patch
-if (bundlePatch === undefined) throw new Error('Claude Code package must declare a Bundle patch')
-const bundlePatchPath = join(packageDir, bundlePatch)
 const repoTsconfig = fileURLToPath(new URL('../../../../tsconfig.json', import.meta.url))
 
 describe('product-provider public Loader composition', () => {
-  it('loads the Bundle default, two named Claude instances, their tools, and Codex without starting either product', async () => {
+  it('loads the configured default, two named Claude instances, their tools, and Codex without starting either product', async () => {
     const { stdout, stderr } = await runLoaderSmoke({
       label: 'product-provider Loader composition',
       tempDirPrefix: 'dsh-product-provider-loader-',
       binScript: driver,
       libBinScript: driver,
       configPath,
-      binArgs: [configPath, bundlePatchPath],
+      binArgs: [configPath],
       tsconfigPath: repoTsconfig,
       processTimeoutMs: PRODUCTION_PROFILE_PROCESS_TIMEOUT_MS,
       env: {
@@ -91,22 +83,22 @@ describe('product-provider public Loader composition', () => {
       tools: [
         {
           name: 'subagent_codex',
-          parameterNames: ['description', 'prompt', 'run_in_background'],
+          parameterNames: ['cwd', 'description', 'prompt'],
           required: ['description', 'prompt'],
         },
         {
           name: 'subagent_claude_code',
-          parameterNames: ['description', 'prompt', 'run_in_background'],
+          parameterNames: ['cwd', 'description', 'prompt'],
           required: ['description', 'prompt'],
         },
         {
           name: 'subagent_claude_primary',
-          parameterNames: ['description', 'prompt', 'run_in_background'],
+          parameterNames: ['cwd', 'description', 'prompt'],
           required: ['description', 'prompt'],
         },
         {
           name: 'subagent_claude_secondary',
-          parameterNames: ['description', 'prompt', 'run_in_background'],
+          parameterNames: ['cwd', 'description', 'prompt'],
           required: ['description', 'prompt'],
         },
       ],

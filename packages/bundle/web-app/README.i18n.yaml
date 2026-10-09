@@ -9,8 +9,8 @@
   en: a85684740ecd278a
   zh: 7c54099b9edccf01
 /deepseek-ai-dsh-web-app/summary:
-  en: fd97ee0c14fb5378
-  zh: 0e1ccba47bc408d9
+  en: 0a2a9876194543e5
+  zh: ff472776a44ae260
 /deepseek-ai-dsh-web-app/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,38 +18,35 @@
   en: 3bd37b85139d2fa7
   zh: ba86c807eb83866e
 /deepseek-ai-dsh-web-app/use-this-package/starting-the-web-gui:
-  en: b7ab01cfe9fed40f
-  zh: 23703ab7727c3ab5
+  en: e3cac911f080d8ef
+  zh: 60749e9f5c39c1bc
 /deepseek-ai-dsh-web-app/use-this-package/configuration:
-  en: a9ee366c5af68a6c
-  zh: 2711d7a3926e1101
+  en: 2b09528c8fc8d370
+  zh: 7b374ebda8841172
 /deepseek-ai-dsh-web-app/use-this-package/listening-trust-and-public-deployments:
-  en: a79add86cb73d966
-  zh: 78b58259f98ed063
+  en: 177400de33509826
+  zh: dd88bc096accffc8
 /deepseek-ai-dsh-web-app/use-this-package/running-over-ssh:
-  en: 45db677dcc91c5c9
-  zh: 75b765f7f1e15035
+  en: df205a26b6d49168
+  zh: e46ed7cf9e06248a
 /deepseek-ai-dsh-web-app/use-this-package/per-session-agent-setup:
   en: ccd6fc264b51e44b
   zh: 3265c68477a89ec9
 /deepseek-ai-dsh-web-app/understand-the-implementation:
-  en: fb819d10930089a8
-  zh: f2dee0ff170a4d41
+  en: 2ea88398028ebff8
+  zh: 0e589c297aeb9d43
 /deepseek-ai-dsh-web-app/understand-the-implementation/patch-semantics:
-  en: 954a424ea7182c8f
-  zh: 9339bc21dba44d40
+  en: 8a2554b3d17daa1f
+  zh: 66f18946791cabb6
 /deepseek-ai-dsh-web-app/understand-the-implementation/advertised-application-url:
   en: ca977d2b2bcf72c5
   zh: 2b81b377c133c1a8
 /deepseek-ai-dsh-web-app/understand-the-implementation/readiness:
   en: 973128fd346869df
   zh: 54e6792f9f82a192
-/deepseek-ai-dsh-web-app/understand-the-implementation/lan-trust-sampling:
-  en: b5ed8ff0056ca9da
-  zh: fdc1fa4f14cb00b3
 /deepseek-ai-dsh-web-app/understand-the-implementation/source-map:
-  en: e41444bed021a121
-  zh: 44088a90df50d5b4
+  en: d4c7f39a9fd90683
+  zh: ac2dbf75b2ceb255
 /deepseek-ai-dsh-web-app/further-exploration:
   en: f81694f7424e2988
   zh: 6643f9227039e228
@@ -69,8 +66,8 @@
   en: 1d7d87f54b20b563
   zh: d150a51615d278e8
 /deepseek-ai-dsh-web-app/known-limitations-and-deferred-work:
-  en: d6de1d07249ef3b0
-  zh: 49d01329256e2eb3
+  en: 635c1336e2f4e821
+  zh: caabdecb02e2df14
 /deepseek-ai-dsh-web-app/known-limitations-and-deferred-work/dev-note:
   en: 3f81b4f3beb74a0d
   zh: 2e377ca40822d093

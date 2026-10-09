@@ -1,0 +1,4 @@
+# Order subagent completion before the next parent request.
+- insert:
+    - id: await-sdk-subagents
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/subagent-settlement-barrier.ts'

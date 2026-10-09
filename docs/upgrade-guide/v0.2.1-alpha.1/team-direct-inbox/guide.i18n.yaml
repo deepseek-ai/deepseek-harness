@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.1/team-direct-inbox/guide.md
+/:
+  en: d154c0e25274bb2f
+  zh: 7e59bdf067d2b141
+/agent-teams-messages-use-target-inboxes:
+  en: 04d7dcbdc1679eae
+  zh: 8b083641a9262d80
+/agent-teams-messages-use-target-inboxes/change:
+  en: 9968decf3dd340af
+  zh: 736a32caac4b5103
+/agent-teams-messages-use-target-inboxes/migration:
+  en: 7ffd442bfd55769e
+  zh: ffb11a143f11ce7f

@@ -185,6 +185,10 @@ export function collectLogEvents(scanRoot: string = root): LogEventEntry[] {
         }
         const name = member.name.text
         const where = `log event '${name}' (${src})`
+        if (name.startsWith('plugin:')) {
+          violations.push(`${where} uses the plugin: namespace, which holds ignorable plugin records outside SessionEventMap; choose a scope/name event type.`)
+          continue
+        }
         const prior = seen.get(name)
         if (prior) {
           violations.push(`${where} is already declared at ${prior}; an event type has exactly one declaration.`)

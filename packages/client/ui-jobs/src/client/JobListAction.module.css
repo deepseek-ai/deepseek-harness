@@ -1,7 +1,3 @@
-.root {
-  position: relative;
-}
-
 .trigger {
   display: inline-flex;
   align-items: center;
@@ -38,10 +34,11 @@
   margin: 0 5px;
 }
 
+/* Portaled and fixed in the viewport with coordinates supplied inline from the
+   trigger rect; the z-index layers above the right sidebar (at most 40) and
+   below modal overlays (1000). */
 .menu {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 0;
+  position: fixed;
   z-index: 100;
   box-sizing: border-box;
   display: flex;

@@ -3,29 +3,29 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.md
 /agent-note-continuable-subagents:
-  en: 14c7d31032237174
-  zh: ac2666670a0ca5ab
+  en: 110c0660aacfa3e4
+  zh: cf405fad1c5834f7
 /agent-note-continuable-subagents/problem:
   en: a72071eeedb77402
   zh: 818d16ce429fd610
 /agent-note-continuable-subagents/decision:
-  en: 445a8c9783aad214
-  zh: 9b5c576bb76100a4
+  en: 3420195435e02a8f
+  zh: 6156eedb3c23d360
 /agent-note-continuable-subagents/decision/materialization-and-public-operations:
-  en: c7c55e5738a7c0d8
-  zh: 54849d8938f7c77f
+  en: c3a83ff748a02143
+  zh: 468bf62c8ddabf70
 /agent-note-continuable-subagents/decision/durable-session-and-live-activation:
-  en: 92fd7302d4c8f2e5
-  zh: e821764c07070ebc
+  en: 5c96c0343564c64a
+  zh: 85686e022d870cc7
 /agent-note-continuable-subagents/decision/activation-lifecycle:
-  en: 68215c0ae5628608
-  zh: fdf038decac8f07a
+  en: 5b84e6825247850c
+  zh: 18d43381aa3e8b05
 /agent-note-continuable-subagents/decision/one-inbox-and-follow-up-delivery:
-  en: 065399ce5b1de59e
-  zh: b60af3c37851323e
+  en: 388934f4c4e50f65
+  zh: 545a66157a4c46c4
 /agent-note-continuable-subagents/decision/child-ownership:
-  en: 503fb4311cd94674
-  zh: 376fa98ec4d22b20
+  en: b6b62a4c083562b6
+  zh: 86d02714e997942d
 /agent-note-continuable-subagents/decision/adjacent-agent-messaging:
   en: a6899f5a82d5dceb
   zh: 0671b89b2dca9c4e
@@ -36,17 +36,17 @@
   en: f5ba7e9c5339ceef
   zh: 31ae1b2f57e44463
 /agent-note-continuable-subagents/decision/durability-disposal-and-recovery:
-  en: a15da9cc6f6cdb9d
-  zh: 48572ff7ca7fd623
+  en: 0bbc18843aa04ad3
+  zh: d56fab1d12a28a96
 /agent-note-continuable-subagents/decision/scope:
-  en: ba4a08a89bb9ec30
-  zh: db376a52db29774d
+  en: bb3e8b2f8054e075
+  zh: 15c126d51031fcb3
 /agent-note-continuable-subagents/alternatives-considered:
-  en: 485aef32231dac62
-  zh: 5e2c103afb3e2d6f
+  en: d786fd413fabe0f5
+  zh: c5d66f5b880d9758
 /agent-note-continuable-subagents/consequences:
-  en: 807a7d8176249fce
-  zh: b2fca8a83551f700
+  en: d7ba8e86c3f14eaa
+  zh: b31ba49dee6aa85d
 /agent-note-continuable-subagents/consequences/accepted-costs:
-  en: 17beb77521aa5dc7
-  zh: f607ec51bbeae380
+  en: 95199dfb2adab107
+  zh: e7644bcb70169368

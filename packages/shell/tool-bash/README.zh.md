@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+新命令从 Session 的当前工作目录启动。相对 `workdir` 从该目录解析；单次调用的覆盖值与后台任务不会改变该目录。
+
 在 agent 需要运行 bash 命令的任何组合中加载本插件：一旦挂载执行器提供方与 `dsh-shell-env` 注册表，它就注册 `bash` 工具，并在 `tools`、`shell`、`systemPrompt` 与 `shellEnv` 服务就绪之前保持等待。
 
 ### 最小配置
@@ -79,6 +81,8 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
+前台与后台的结构化结果均包含 `cwd`，即执行器解析后的启动目录。持久化展示元数据携带同一值，使已结束的调用卡片保留该次调用使用的目录。命令内部的 `cd` 不会改变这个启动值；原生结果文本仍由 stdout、stderr 与状态标记组成。
+
 本节解释工具背后的设计决策，并指出实现它们的代码位置；可观察行为已在[使用本包](#use-this-package)中完整说明。
 
 ### 设计理念
@@ -98,7 +102,7 @@ kind: "package-reference"
 
 ### 请求解析
 
-工具在 `ctx.shell.resolve()` 运行前解析 workdir：显式的相对 `workdir` 相对会话 cwd 解析，沙箱策略的规范化 workspace root 优先，使约束与启动使用同一身份。沙箱策略通过 `ctx.sandboxPolicy` 按调用解析；升权请求在任何执行前经由 `ctx.approval`，若执行器会约束命令却没有挂载策略服务，工具在加载时失败。
+工具在 `ctx.shell.resolve()` 运行前解析 workdir：显式的相对 `workdir` 相对 Session 当前目录解析，与沙箱权限根目录独立。沙箱策略通过 `ctx.sandboxPolicy` 按调用解析；升权请求在任何执行前经由 `ctx.approval`，若执行器会约束命令却没有挂载策略服务，工具在加载时失败。
 
 ### 渲染故事
 

@@ -187,8 +187,9 @@ function rawCall(
   )
 }
 
-function result(seq: number, callId: string, isError = false, turn = 1): SessionLiveEventEntry {
+function result(seq: number, callId: string, isError = false, turn = 1, meta?: unknown): SessionLiveEventEntry {
   return at(seq, 'tool/result', {
+    ...meta === undefined ? {} : { meta },
     turn,
     step: 1,
     message: {
@@ -226,6 +227,65 @@ describe('produced-file Turn data', () => {
     expect(selectProducedFiles(tailOwner(data, 6))).toEqual(['out/index.html', 'out/app.css'])
     expect(producedForClosing(undefined)).toEqual([])
     expect(selectProducedFiles(tailOwner(undefined, 9, () => {}, 2))).toBeNull()
+  })
+
+  it('opens a moved write at its recorded target when an absolute delivery names the same file', () => {
+    const path = '/project/child/report.txt'
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      call(2, 'write', 'write', { file_path: 'report.txt', content: 'CHILD FILE' }),
+      result(3, 'write', false, 1, { path, diffs: [] }),
+      at(4, 'deliverables/presented', { turn: 1, callId: 'present', files: [{ path }] }),
+    ])
+    const data = deliverablesOf(value)
+    const paths = producedForClosing(data)
+    expect(paths).toEqual([path])
+    const delivered = presentedForClosing(tailOwner(data, 5))
+    const opened = vi.fn()
+    const mentions = producedFileMentions([...new Set([...paths, ...delivered.map(file => file.path)])], opened, target => target)
+    mentions.resolve('report.txt')?.open()
+    expect(opened).toHaveBeenCalledWith(path)
+    expect(mentions.resolve('report.txt')?.title).toBe(path)
+  })
+
+  it('deduplicates canonical mutation targets and keeps same-basename files distinct', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      call(2, 'first', 'write', { file_path: 'report.txt', content: 'first' }),
+      result(3, 'first', false, 1, { path: '/project/a/report.txt' }),
+      call(4, 'alias', 'edit', { file_path: './report.txt', old_string: 'first', new_string: 'updated' }),
+      result(5, 'alias', false, 1, { path: '/project/a/report.txt' }),
+      call(6, 'second', 'write', { file_path: 'report.txt', content: 'second' }),
+      result(7, 'second', false, 1, { path: '/project/b/report.txt' }),
+    ])
+    const paths = producedForClosing(deliverablesOf(value))
+    expect(paths).toEqual(['/project/a/report.txt', '/project/b/report.txt'])
+    const mentions = producedFileMentions(paths, () => {}, target => target)
+    expect(mentions.resolve('report.txt')).toBeUndefined()
+    expect(mentions.resolve('/project/b/report.txt')?.title).toBe('/project/b/report.txt')
+  })
+
+  it.each([{ path: 'unknown/report.txt' }, { path: null }, { path: 42 }])('keeps a relative target inert when its recorded path is invalid: %j', (meta) => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      call(2, 'unknown', 'write', { file_path: 'report.txt', content: 'new' }),
+      result(3, 'unknown', false, 1, meta),
+    ])
+    expect(producedForClosing(deliverablesOf(value))).toEqual([])
+  })
+
+  it('opens an explicit absolute mutation target when its recorded path is unusable', () => {
+    const path = '/project/child/report.txt'
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      call(2, 'absolute', 'write', { file_path: path, content: 'new' }),
+      result(3, 'absolute', false, 1, { path: null }),
+    ])
+    const paths = producedForClosing(deliverablesOf(value))
+    expect(paths).toEqual([path])
+    const opened = vi.fn()
+    producedFileMentions(paths, opened, target => target).resolve('report.txt')?.open()
+    expect(opened).toHaveBeenCalledWith(path)
   })
 
   it('folds successful first-party mutation paths from their raw arguments', () => {
@@ -714,6 +774,32 @@ describe('ChangedFiles card', () => {
 describe('producedFileMentions resolver', () => {
   const label = (path: string) => `打开 ${path}`
 
+  it('does not let a legacy bare path override an ambiguous canonical basename', () => {
+    const resolver = producedFileMentions(['report.txt', '/project/child/report.txt'], () => {}, label)
+    expect(resolver.resolve('report.txt')).toBeUndefined()
+    expect(resolver.resolve('/project/child/report.txt')?.title).toBe('/project/child/report.txt')
+  })
+
+  it('maps only uniquely recorded argument aliases to their canonical targets', () => {
+    const first = '/project/one/out/report.txt'
+    const second = '/project/two/out/report.txt'
+    const opened = vi.fn()
+    const unique = producedFileMentions([first], opened, label, [
+      { path: first, argumentPath: 'out/report.txt' },
+      { path: first, argumentPath: './out/report.txt' },
+    ])
+    unique.resolve('out/report.txt')?.open()
+    expect(opened).toHaveBeenCalledWith(first)
+    expect(unique.resolve('./out/report.txt')?.title).toBe(first)
+    expect(unique.resolve('one/out/report.txt')).toBeUndefined()
+    const ambiguous = producedFileMentions([first, second], opened, label, [
+      { path: first, argumentPath: 'out/report.txt' },
+      { path: second, argumentPath: 'out/report.txt' },
+    ])
+    expect(ambiguous.resolve('out/report.txt')).toBeUndefined()
+    expect(ambiguous.resolve('report.txt')).toBeUndefined()
+  })
+
   it('resolves exact paths and unique basenames; ambiguity and unknowns stay unresolved', () => {
     const opened: string[] = []
     const resolver = producedFileMentions(
@@ -794,6 +880,13 @@ describe('plugin registration', () => {
     expect(mentions?.resolve('report.html')?.label).toBe('Open site/report.html in sidebar')
     mentions?.resolve('report.html')?.open()
     expect(opened).toEqual(['site/report.html'])
+    const canonical = '/project/child/out/report.txt'
+    const moved = tailOwner({ produced: [{ seq: 2, path: canonical, argumentPath: 'out/report.txt' }] }, 3, previewPath => opened.push(previewPath))
+    const movedMentions = service?.forClosing(moved, SessionId('moved-session'))
+    movedMentions?.resolve('out/report.txt')?.open()
+    expect(opened.at(-1)).toBe(canonical)
+    expect(movedMentions?.resolve('out/report.txt')?.title).toBe(canonical)
+
     const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetcher)
     const preview = vi.fn<(path: string) => void>()

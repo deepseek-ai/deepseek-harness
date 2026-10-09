@@ -96,7 +96,7 @@ export async function listDescendants(
     visited.add(entry.id)
     let children: SubagentCatalogEntry[]
     try {
-      children = await readChildren(entry.id)
+      children = entry.mode === 'external' ? [] : await readChildren(entry.id)
     } catch (error) {
       if (error instanceof SubagentError) throw error
       const code = error instanceof Error && 'code' in error ? error.code : undefined

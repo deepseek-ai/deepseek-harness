@@ -30,7 +30,7 @@ it.skipIf(process.platform !== 'darwin' || !electronInstalled).each(['workspace-
   await mkdir(cwd)
   vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
   vi.stubEnv('DSH_TEST_RUNTIME_SECRET', 'must-not-inherit')
-  const runtime = await mountRuntime(ctx, { nodeExecutable: electron }, { mode, workspaceRoot: cwd })
+  const runtime = await mountRuntime(ctx, { launch: { kind: 'node-script', executable: electron } }, { mode, workspaceRoot: cwd })
   const result = await runtime.run(runtime.resolve({
     // Bound startup failure before the outer test deadline, leaving time for managed cleanup.
     timeoutMs: 30_000,

@@ -22,11 +22,11 @@ describe.skipIf(process.platform === 'win32')('SSH helper wire and lifecycle bou
     const controller = new AbortController()
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {
-      await expect(runSshHelper({ input, output, entryPath, signal: controller.signal })).rejects.toThrow('POSIX host')
+      await expect(runSshHelper({ input, output, kind: 'node-script', entryPath, signal: controller.signal })).rejects.toThrow('POSIX host')
     } finally { platform.mockRestore() }
     controller.abort(new Error('startup cancelled'))
     try {
-      await expect(runSshHelper({ input, output, entryPath, signal: controller.signal })).rejects.toThrow('startup cancelled')
+      await expect(runSshHelper({ input, output, kind: 'node-script', entryPath, signal: controller.signal })).rejects.toThrow('startup cancelled')
     } finally { input.destroy(); output.destroy() }
   })
 
@@ -34,7 +34,7 @@ describe.skipIf(process.platform === 'win32')('SSH helper wire and lifecycle bou
     const input = new PassThrough()
     const output = new PassThrough()
     const controller = new AbortController()
-    const serving = runSshHelper({ input, output, entryPath, signal: controller.signal })
+    const serving = runSshHelper({ input, output, kind: 'node-script', entryPath, signal: controller.signal })
     controller.abort()
     try {
       await serving
@@ -47,14 +47,23 @@ describe.skipIf(process.platform === 'win32')('SSH helper wire and lifecycle bou
     const test = await createHelperHarness(false)
     try {
       for (const params of [
-        { protocol: 2, workspace: test.root, leaseMs: 3000 },
-        { protocol: 1, workspace: 'relative', leaseMs: 3000 },
-        { protocol: 1, workspace: test.root, leaseMs: 2999 },
+        { protocol: 1, workspace: test.root, leaseMs: 3000 },
+        { protocol: 2, workspace: 'relative', leaseMs: 3000 },
+        { protocol: 2, workspace: test.root, leaseMs: 2999 },
       ]) await expect(test.client.request('hello', params, helloSchema)).rejects.toThrow()
       const bootstrapPath = `${test.root}/bootstrap.js`
       await writeFile(bootstrapPath, 'export const identity = "test"\n')
-      const facts = await test.client.request('hello', { protocol: 1, workspace: test.root, leaseMs: 3000, bootstrapPath }, helloSchema)
+      const facts = await test.client.request('hello', { protocol: 2, workspace: test.root, leaseMs: 3000, bootstrapPath }, helloSchema)
       expect(facts.bootstrapHash).toBe(createHash('sha256').update(await readFile(bootstrapPath)).digest('hex'))
+    } finally { await test.close() }
+  })
+
+  it('refuses an external bootstrap for an executable helper', async () => {
+    const test = await createHelperHarness(false, 30_000, 'executable')
+    try {
+      await expect(test.client.request('hello', { protocol: 2, workspace: test.root, leaseMs: 3000, bootstrapPath: '/external/process.js' }, helloSchema))
+        .rejects.toThrow('embedded PTC bootstrap')
+      expect((await test.hello()).kind).toBe('executable')
     } finally { await test.close() }
   })
 

@@ -4,6 +4,7 @@ import { TeamError } from './error.ts'
 
 /** Owns the single Team runtime cancellation fact and disposal timeout. */
 export class TeamRuntimeLifecycle {
+  private readonly operations = new Set<Promise<unknown>>()
   private readonly controller = new AbortController()
 
   /**
@@ -44,6 +45,25 @@ export class TeamRuntimeLifecycle {
   /** Close Team runtime admission and cancel admitted interruptible work. */
   close(): void {
     this.controller.abort(new TeamError('Agent Teams service disposed', 'TEAM_DISPOSED'))
+  }
+
+  /**
+   * Track an admitted send or complete creation transaction until it settles.
+   * @param operation - asynchronous work owned by this runtime.
+   * @returns the same operation.
+   */
+  track<T>(operation: Promise<T>): Promise<T> {
+    this.operations.add(operation)
+    void operation.then(() => { this.operations.delete(operation) }, () => { this.operations.delete(operation) })
+    return operation
+  }
+
+  /**
+   * Capture outstanding operations after closing admission.
+   * @returns admitted work still awaiting settlement.
+   */
+  pending(): readonly Promise<unknown>[] {
+    return [...this.operations]
   }
 
   /**

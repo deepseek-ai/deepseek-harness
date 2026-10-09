@@ -66,9 +66,11 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
       throw new LlmError('DeepSeek Messages transport failed', 'TRANSPORT', { cause: error })
     } finally {
       consumer.abort()
-      try { await iterator.return(undefined) } catch (_abortedRequestCleanup) {
-        // The request already settled; aborting its reader cannot replace that outcome.
-      }
+      // The abort above owns the socket teardown. A demand the deadline abandoned
+      // can stay pending forever, and this generator queues its own return behind
+      // that demand, so awaiting the drain would re-hang the settled outcome.
+      /* v8 ignore next -- the detached drain only rejects while unwinding an abandoned request. */
+      void iterator.return(undefined).catch(() => {})
     }
   }
 
@@ -109,6 +111,8 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
           ...options.purpose === undefined ? {} : { purpose: options.purpose },
         }, this.dependencies.prepareExtensions, (fields, error) => {
           this.dependencies.onExtensionsOmitted?.({ provider: options.provider, model: options.model, fields, error })
+        }, (error) => {
+          this.dependencies.onExtensionsUnaccepted?.({ provider: options.provider, model: options.model, error })
         })
         signal.throwIfAborted()
         const betas = [

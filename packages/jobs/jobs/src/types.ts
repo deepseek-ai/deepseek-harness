@@ -124,7 +124,7 @@ export interface JobHooks {
  * the output ring.
  */
 export interface JobSpec {
-  /** Producer kind — also the id prefix (`bash`, `subagent`, …). */
+  /** Producer kind — also the id prefix (`bash`, …). */
   kind: JobKind
   /** One-line model-facing label (the command; the delegation description). */
   label: string

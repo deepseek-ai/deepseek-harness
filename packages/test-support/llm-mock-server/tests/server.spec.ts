@@ -68,7 +68,9 @@ describe('mock LLM server wire behaviors', () => {
     expect(body).toContain('"text":"ove"')
     expect(body).toContain('"text":"red"')
     expect(body).toContain('"stop_reason":"end_turn"')
-    expect(body).toContain('"type":"message_stop"')
+    expect(body).toContain('event: message_start\ndata:')
+    expect(body).toContain('event: content_block_delta\ndata:')
+    expect(body).toContain('event: message_stop\ndata: {"type":"message_stop"}')
     expect(server.requests).toEqual([expect.objectContaining({
       attempt: 1,
       behavior: 'success',

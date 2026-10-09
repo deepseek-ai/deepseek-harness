@@ -46,6 +46,9 @@
     },
     {
       "path": "../../sandbox/sandbox-policy"
+    },
+    {
+      "path": "../../session/working-directory"
     }
   ]
 }

@@ -17,6 +17,7 @@ import type {
   SessionListState, SessionLiveEventEntry,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq } from '@deepseek-ai/dsh-session'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import {
   chatSnapshot as emptyChatSnapshot, conversationSnapshot, makeTranslate, sessionSnapshot,
@@ -174,23 +175,47 @@ describe('workflow-run Conversation Definition', () => {
     expect(workflowData(value)).toEqual(workflowData(assembler(events)))
   })
 
-  it('shows missing terminal facts as interrupted only after the owning Location closes', () => {
+  it('keeps a background run running after its Tool Step and Turn end normally', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),
       at(2, 'step/start', { turn: 1, step: 1 }),
       at(3, 'tool-workflow/run-start', { runId: 'run-1', name: 'audit' }),
-      at(4, 'tool-workflow/agent-start', {
+      at(4, 'step/end', { turn: 1, step: 1 }),
+      at(5, 'turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } }),
+      at(6, 'tool-workflow/agent-start', {
         runId: 'run-1', seq: 1, label: 'worker', childId: 'child-1',
       }),
     ])
-    expect(workflowData(value)?.status).toBe('running')
-    value.append(at(5, 'step/end', { turn: 1, step: 1 }))
-    value.flush()
     expect(workflowData(value)).toMatchObject({
-      status: 'interrupted',
-      phases: [{ members: [{ status: 'interrupted' }] }],
+      status: 'running',
+      phases: [{ members: [{ status: 'running' }] }],
     })
+    value.append(at(7, 'tool-workflow/agent-end', { runId: 'run-1', seq: 1, outcome: 'completed' }))
+    value.append(at(8, 'tool-workflow/run-end', { runId: 'run-1', stopReason: 'completed' }))
+    value.flush()
+    expect(workflowData(value)?.status).toBe('completed')
   })
+
+  it.each(['interrupted', 'forked'] as const)(
+    'shows missing terminal facts as interrupted once a %s closer ends the owning Turn',
+    (kind) => {
+      const value = assembler([
+        at(1, 'turn/start', { turn: 1 }),
+        at(2, 'step/start', { turn: 1, step: 1 }),
+        at(3, 'tool-workflow/run-start', { runId: 'run-1', name: 'audit' }),
+        at(4, 'tool-workflow/agent-start', {
+          runId: 'run-1', seq: 1, label: 'worker', childId: 'child-1',
+        }),
+      ])
+      expect(workflowData(value)?.status).toBe('running')
+      value.append(at(5, 'turn/end', { turn: 1, reason: { kind } }))
+      value.flush()
+      expect(workflowData(value)).toMatchObject({
+        status: 'interrupted',
+        phases: [{ members: [{ status: 'interrupted' }] }],
+      })
+    },
+  )
 
   it('retains a zero-member run as its own completed node', () => {
     const value = assembler([
@@ -229,7 +254,7 @@ describe('workflow-run Conversation Definition', () => {
       at(3, 'tool-workflow/agent-start', {
         runId: 'turn', seq: 1, label: 'open', childId: 'child-1',
       }),
-      at(4, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(4, 'turn/end', { turn: 1, reason: { kind: 'interrupted' } }),
     ])
     expect(workflowData(interruptedTurn)?.status).toBe('interrupted')
   })
@@ -304,9 +329,9 @@ const listState = (overrides: Partial<SessionListState> = {}): SessionListState 
     },
   },
   phase: 'ready',
-  projectionsBySession: { [PARENT_ID]: { state: 'ready', error: null, values: { subagentCatalog: [
-    { createdAt: 1, id: CHILD_ID, mode: 'one-shot' },
-  ] } } },
+  projectionsBySession: { [CHILD_ID]: { state: 'ready', error: null, values: {
+    subagent: { mode: 'one-shot', seq: SessionSeq(0) },
+  } } },
   ...overrides,
 })
 
@@ -337,6 +362,7 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     useWorkspaces: selector => selector(panelWorkspace),
     useTurnData: () => undefined,
     useDisclosure: () => { throw new Error('unused') },
+    useGroupAction: () => { throw new Error('unused') },
     openSkill: vi.fn(),
     openFile: () => {},
     inspectCall: () => {},
@@ -669,10 +695,10 @@ describe('WorkflowRunPanel', () => {
   it('defers normal completion collapse until focused member content loses focus', () => {
     const sessions = listState({
       ids: [PARENT_ID, CHILD_ID, SECOND_ID],
-      projectionsBySession: { [PARENT_ID]: { state: 'ready', error: null, values: { subagentCatalog: [
-        { createdAt: 1, id: CHILD_ID, mode: 'one-shot' },
-        { createdAt: 1, id: SECOND_ID, mode: 'one-shot' },
-      ] } } },
+      projectionsBySession: {
+        [CHILD_ID]: { state: 'ready', error: null, values: { subagent: { mode: 'one-shot', seq: SessionSeq(0) } } },
+        [SECOND_ID]: { state: 'ready', error: null, values: { subagent: { mode: 'one-shot', seq: SessionSeq(0) } } },
+      },
       byId: {
         ...listState().byId,
         [SECOND_ID]: {
@@ -834,22 +860,24 @@ describe('WorkflowRunPanel', () => {
     expect(screen.getByRole('button', { name: /未分阶段/ }).getAttribute('aria-expanded')).toBe('true')
   })
 
-  it('opens a running member confirmed by the direct parent catalog', () => {
+  it.each(['one-shot', 'continuable'] as const)('opens a running %s member from its own identity without a parent catalog', (mode) => {
     const data: WorkflowRunChatData = {
       name: 'audit', status: 'running', phases: [phase()],
     }
     const openSession = vi.fn()
-    const sessions = listState()
+    const sessions = listState({ projectionsBySession: { [CHILD_ID]: { state: 'ready', error: null, values: {
+      subagent: { mode, label: 'worker', seq: SessionSeq(0) },
+    } } } })
     render(<WorkflowRunPanel {...panelProps(data, sessions, openSession)} />)
     fireEvent.click(screen.getByRole('button', { name: '打开 worker' }))
     expect(openSession).toHaveBeenCalledWith({
       parentSessionId: PARENT_ID,
       childSessionId: CHILD_ID,
-      mode: 'one-shot',
+      mode,
     })
   })
 
-  it('uses observed running state for a catalog-only member', () => {
+  it('uses observed running state for a member absent from the visible list', () => {
     const data: WorkflowRunChatData = { name: 'audit', status: 'running', phases: [phase()] }
     const sessions = listState({
       ids: [PARENT_ID],
@@ -868,7 +896,7 @@ describe('WorkflowRunPanel', () => {
     expect(screen.queryByRole('button', { name: '打开 worker' })).toBeNull()
   })
 
-  it('promotes a running member when its parent catalog arrives', () => {
+  it('promotes a running member when its own identity arrives', () => {
     const data: WorkflowRunChatData = {
       name: 'audit', status: 'running', phases: [phase()],
     }
@@ -879,9 +907,10 @@ describe('WorkflowRunPanel', () => {
   })
 
   it.each([
-    ['catalog absent', listState({ projectionsBySession: {} }), 'running'],
-    ['catalog empty', listState({ projectionsBySession: { [PARENT_ID]: { state: 'ready', error: null, values: { subagentCatalog: [] } } } }), 'running'],
-    ['wrong parent', listState({ projectionsBySession: { ['other' as SessionId]: { state: 'ready', error: null, values: { subagentCatalog: [{ createdAt: 1, id: CHILD_ID, mode: 'one-shot' }] } } } }), 'running'],
+    ['external execution', listState({ ids: [PARENT_ID], byId: { [PARENT_ID]: listState().byId[PARENT_ID]! }, projectionsBySession: {} }), 'running'],
+    ['identity absent', listState({ projectionsBySession: {} }), 'running'],
+    ['identity invalid', listState({ projectionsBySession: { [CHILD_ID]: { state: 'ready', error: null, values: { subagent: null } } } }), 'running'],
+    ['wrong parent', listState({ byId: { ...listState().byId, [CHILD_ID]: { ...listState().byId[CHILD_ID]!, parentId: 'other' as SessionId } } }), 'running'],
     ['child inactive', listState({ byId: { ...listState().byId, [CHILD_ID]: { ...listState().byId[CHILD_ID]!, running: false } } }), 'running'],
     ['member terminal', listState(), 'completed'],
   ] as const)('does not navigate when %s', (_name, sessions, memberStatus) => {

@@ -60,7 +60,11 @@ try {
     promptHasMarkerSection: prompt?.text.includes('Non-zero exits are reported as `[exit code: N]` markers') === true,
     // Normalize PowerShell's platform line endings (CRLF on Windows, LF elsewhere).
     foregroundText: foregroundText.replace(/\r\n/g, '\n'),
+    foregroundCwd: (foreground.value as { cwd: string }).cwd,
+    foregroundMeta: foreground.meta,
     backgroundText: backgroundText.replace(/\r\n/g, '\n'),
+    backgroundCwd: (background.value as { cwd: string }).cwd,
+    backgroundMeta: background.meta,
   }))
 } finally {
   await ctx.fiber.dispose()

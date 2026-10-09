@@ -61,7 +61,7 @@
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
-    "@testing-library/react": "^16.1.0",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.0",
     "react": "^18.2.0",

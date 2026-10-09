@@ -61,6 +61,9 @@
     },
     {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../session/working-directory"
     }
   ]
 }

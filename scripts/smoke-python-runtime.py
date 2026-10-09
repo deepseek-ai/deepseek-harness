@@ -22,10 +22,10 @@ import time
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Literal
 
 if TYPE_CHECKING:
-    from deepseek_harness import RunResult
+    from deepseek_harness import Notification, RunResult
 
 
 EXPECTED_TEXT = "runtime smoke ok"
@@ -85,7 +85,6 @@ LEGACY_CUSTOM_DISABLED_ROWS = (
     "tool-fs",
     "tool-fs-search",
     "tool-goal",
-    "tool-ralph",
     "tool-skill",
     "tool-str-replace-editor",
     "tool-subagent-control",
@@ -115,11 +114,10 @@ SNAPSHOT_WORKFLOW_SCRIPT = (
     f"const reply = await agent('{SNAPSHOT_WORKFLOW_CHILD_PROMPT}', {{ label: 'workflow-child' }})\n"
     "return { reply }"
 )
-ADVANCED_SNAPSHOT_DIRECTORY = (
-    Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "advanced"
-)
+ADVANCED_SNAPSHOT_ROOT = Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe"
+ADVANCED_SNAPSHOT_DIRECTORY = ADVANCED_SNAPSHOT_ROOT / "advanced"
 ADVANCED_SNAPSHOT_FILENAMES = (
-    "result.json", "session.v3.jsonl", "session.1.v3.jsonl", "session.2.v3.jsonl",
+    "result.json", "session.v4.jsonl", "session.1.v4.jsonl", "session.2.v4.jsonl",
 )
 MINIMAL_SNAPSHOT_DIRECTORY = (
     Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "minimal"
@@ -139,7 +137,7 @@ RESTART_SNAPSHOT_DIRECTORY = (
     Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "restart"
 )
 RESTART_SNAPSHOT_FILENAMES = (
-    "result.json", "requests.json", "session.1.v3.jsonl", "session.2.v3.jsonl",
+    "result.json", "requests.json", "session.1.v4.jsonl", "session.2.v4.jsonl",
 )
 RECOVERY_SNAPSHOT_DIRECTORY = (
     Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "scheduler-recovery"
@@ -242,10 +240,12 @@ def write_profile_patch(
     return path
 
 
-def write_advanced_profile_patch(root: Path, name: str, sessions: Path) -> Path:
+def write_advanced_profile_patch(
+    root: Path, name: str, sessions: Path, mode: Literal["native", "ptc"] = "native",
+) -> Path:
     """Write the shared custom, snapshot, and restart profile patch."""
     return write_profile_patch(root, name, sessions, [
-        {"id": "tools", "config": {"mode": "both"}},
+        {"id": "tools", "config": {"mode": mode}},
         {
             "id": "system-prompt",
             "config": {
@@ -261,7 +261,6 @@ def write_advanced_profile_patch(root: Path, name: str, sessions: Path) -> Path:
             "config": {
                 "provider": "spawn",
                 "toolName": "subagent",
-                "backgroundMode": "one-shot",
             },
         },
         {"insert": [
@@ -295,6 +294,7 @@ class MockModelHandler(BaseHTTPRequestHandler):
     """Return deterministic text, worker, and orchestration completions."""
 
     requests: list[dict[str, object]] = []
+    direct_child_finished = threading.Event()
 
     def do_POST(self) -> None:
         if self.path != "/v1/messages":
@@ -306,8 +306,13 @@ class MockModelHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("content-type", "text/event-stream")
         self.end_headers()
+        opening = message_start()
+        self.wfile.write(f"event: {opening['type']}\ndata: {json.dumps(opening)}\n\n".encode())
+        self.wfile.flush()
         chunks = completion_chunks(body)
-        for chunk in chunks:
+        if chunks[0] != opening:
+            raise AssertionError("model fixture response must begin with message_start")
+        for chunk in chunks[1:]:
             self.wfile.write(f"event: {chunk['type']}\ndata: {json.dumps(chunk)}\n\n".encode())
         self.wfile.flush()
 
@@ -440,13 +445,16 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
     if prompt == SNAPSHOT_WORKFLOW_CHILD_PROMPT:
         return text_chunks("WORKFLOW_CHILD_OK")
     if prompt == SNAPSHOT_PROMPT:
+        if "run_code" in advertised_tool_names(body):
+            if advertised_tool_names(body) != {"run_code"}:
+                raise AssertionError("PTC mode must advertise only run_code")
+            return tool_call_chunks(
+                "advanced-code", "run_code",
+                {"code": "return await tools.snapshot_double({ value: 21 })",
+                 "description": "Call the configured Plugin tool"},
+            )
         assert_advertised_tool(body, "snapshot_double")
-        assert_advertised_tool(body, "run_code")
-        return tool_call_chunks(
-            "advanced-code", "run_code",
-            {"code": "return await tools.snapshot_double({ value: 21 })",
-             "description": "Call the configured Plugin tool"},
-        )
+        return tool_call_chunks("advanced-native", "snapshot_double", {"value": 21})
     if prompt == RESTART_FIRST_PROMPT:
         return text_chunks(RESTART_FIRST_TEXT)
     if prompt == DYNAMIC_TOOLS_PROMPT:
@@ -615,15 +623,13 @@ def advanced_tool_followup(
     """Advance the executable snapshot's deterministic parent tool chain."""
     if not call_id.startswith("advanced-"):
         return None
+    if call_id == "advanced-native" and tool_name == "snapshot_double":
+        if tool_text != "42":
+            raise AssertionError(f"native call returned no configured-tool value: {tool_text}")
+        return tool_call_chunks("advanced-denied-native", "snapshot_double", {"value": -1})
     if call_id == "advanced-code" and tool_name == "run_code":
         if "42" not in tool_text:
             raise AssertionError(f"run_code returned no configured-tool value: {tool_text}")
-        return tool_call_chunks("advanced-denied-native", "snapshot_double", {"value": -1})
-    if call_id == "advanced-denied-native" and tool_name == "snapshot_double":
-        if 'Auto review rejected tool "snapshot_double"; its body was not executed' not in tool_text:
-            raise AssertionError(f"native denial did not preserve the model result: {tool_text}")
-        if "transport raw" in tool_text:
-            raise AssertionError("native denial leaked its user-facing reason to the model")
         return tool_call_chunks("advanced-denied-ptc", "run_code", {
             "code": "try { await tools.snapshot_double({ value: -1 }) } catch (error) { return error.message }",
             "description": "Catch a structured inner tool denial",
@@ -633,6 +639,12 @@ def advanced_tool_followup(
             raise AssertionError(f"PTC denial did not preserve the model result: {tool_text}")
         if "transport raw" in tool_text:
             raise AssertionError("PTC denial leaked its user-facing reason to the model")
+        return text_chunks(SNAPSHOT_FINAL_TEXT)
+    if call_id == "advanced-denied-native" and tool_name == "snapshot_double":
+        if 'Auto review rejected tool "snapshot_double"; its body was not executed' not in tool_text:
+            raise AssertionError(f"native denial did not preserve the model result: {tool_text}")
+        if "transport raw" in tool_text:
+            raise AssertionError("native denial leaked its user-facing reason to the model")
         assert_advertised_tool(body, "subagent")
         return tool_call_chunks(
             "advanced-direct-child",
@@ -643,8 +655,10 @@ def advanced_tool_followup(
             },
         )
     if call_id == "advanced-direct-child" and tool_name == "subagent":
-        if "DIRECT_CHILD_OK" not in tool_text:
-            raise AssertionError(f"subagent returned no expected child value: {tool_text}")
+        if not tool_text.startswith("started subagent "):
+            raise AssertionError(f"subagent returned no child identity: {tool_text}")
+        if not MockModelHandler.direct_child_finished.wait(timeout=30):
+            raise AssertionError("direct child did not emit its terminal SDK notification")
         assert_advertised_tool(body, "workflow")
         return tool_call_chunks(
             "advanced-workflow",
@@ -1121,7 +1135,7 @@ def smoke_sdk_live() -> None:
 
 
 def assert_live_turn(label: str, result: RunResult) -> None:
-    """Require completed model tool use and the smoke sentinel on the final answer line."""
+    """Require completed model tool use and a standalone smoke acknowledgement."""
     if result.finish_reason != "completed":
         event_types = [event.get("type") for event in result.events]
         turn_end_data = next(
@@ -1138,8 +1152,7 @@ def assert_live_turn(label: str, result: RunResult) -> None:
             f"{label} turn made no model-requested tool call; "
             f"final={result.final_response!r}"
         )
-    answer_lines = result.final_response.strip().splitlines()
-    if not answer_lines or answer_lines[-1].strip() != LIVE_API_SENTINEL:
+    if not any(line.strip() == LIVE_API_SENTINEL for line in result.final_response.splitlines()):
         raise AssertionError(f"{label} turn returned {result.final_response!r}")
 
 def safe_turn_end(value: object) -> object:
@@ -1198,33 +1211,35 @@ def smoke_sdk_default(base_url: str) -> None:
 def smoke_sdk_custom(base_url: str, executable: Path) -> None:
     from deepseek_harness import DeepSeekHarness
 
-    with tempfile.TemporaryDirectory(prefix="dsh-sdk-custom-") as temporary:
-        root = Path(temporary).resolve()
-        dsh_home = root / "home"
-        sessions = dsh_home / "sessions"
-        patch = write_advanced_profile_patch(root, "custom.patch.yml", sessions)
-        with DeepSeekHarness(
-            provider="deepseek-official",
-            model="smoke-model",
-            cwd=str(root),
-            dsh_bin=str(executable),
-            dsh_home=str(dsh_home),
-            patches=(str(patch),),
-            env={
-                "DSH_PERMISSION_MODE": "danger-full-access",
-                "DSH_TELEMETRY_DISABLED": "1",
-            },
-            api_key="sk-keyless-smoke",
-            base_url=base_url,
-            request_timeout_seconds=60,
-        ) as harness:
-            text_result = harness.run("reply with the smoke text", session_id="custom-smoke")
-            code_result = harness.run(CODE_PROMPT, session_id="custom-smoke")
-            workflow_result = harness.run(WORKFLOW_PROMPT, session_id="custom-smoke")
-        assert text_result.final_response == EXPECTED_TEXT, text_result.final_response
-        assert code_result.final_response == CODE_WORKER_TEXT, code_result.final_response
-        assert workflow_result.final_response == WORKFLOW_WORKER_TEXT, workflow_result.final_response
-        assert_session_log(sessions, root, EXPECTED_TEXT, CODE_WORKER_TEXT, WORKFLOW_WORKER_TEXT)
+    cases: tuple[tuple[Literal["native", "ptc"], tuple[tuple[str, str], ...]], ...] = (
+        ("native", (("reply with the smoke text", EXPECTED_TEXT), (WORKFLOW_PROMPT, WORKFLOW_WORKER_TEXT))),
+        ("ptc", ((CODE_PROMPT, CODE_WORKER_TEXT),)),
+    )
+    for mode, turns in cases:
+        with tempfile.TemporaryDirectory(prefix=f"dsh-sdk-custom-{mode}-") as temporary:
+            root = Path(temporary).resolve()
+            dsh_home = root / "home"
+            sessions = dsh_home / "sessions"
+            patch = write_advanced_profile_patch(root, "custom.patch.yml", sessions, mode)
+            with DeepSeekHarness(
+                provider="deepseek-official",
+                model="smoke-model",
+                cwd=str(root),
+                dsh_bin=str(executable),
+                dsh_home=str(dsh_home),
+                patches=(str(patch),),
+                env={
+                    "DSH_PERMISSION_MODE": "danger-full-access",
+                    "DSH_TELEMETRY_DISABLED": "1",
+                },
+                api_key="sk-keyless-smoke",
+                base_url=base_url,
+                request_timeout_seconds=60,
+            ) as harness:
+                for prompt, expected in turns:
+                    result = harness.run(prompt, session_id=f"custom-{mode}")
+                    assert result.final_response == expected, result.final_response
+            assert_session_log(sessions, root, *(expected for _, expected in turns))
 
 
 def smoke_sdk_minimal(
@@ -1293,7 +1308,11 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
     with tempfile.TemporaryDirectory(prefix="dsh-sdk-dynamic-tools-") as temporary:
         root = Path(temporary).resolve()
         dsh_home = root / "home"
+        user_home = root / "user-home"
+        user_home.mkdir()
         sessions = dsh_home / "sessions"
+        # Own the baseline instruction message instead of inheriting host instructions.
+        (root / "AGENTS.md").write_text("Use the tools requested by the user.\n", encoding="utf-8")
         task = root / "dynamic-tool-task.txt"
         task.write_text("Call snapshot_ping once.\n", encoding="utf-8")
         patch = write_profile_patch(root, "dynamic-tools.patch.yml", sessions, [
@@ -1303,6 +1322,8 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
             {"id": "tool-bash", "disabled": True},
             {"id": "tool-pwsh", "disabled": True},
             {"id": "session-title-llm", "disabled": True},
+            # Export acknowledgements can change the request header sequence numbers.
+            {"id": "session-log-deepseek", "config": {"enabled": False}},
             {"insert": [{
                 "id": "dynamic-tools",
                 "name": (Path(__file__).resolve().parent / "fixtures/python-sdk-dynamic-tools.mjs").as_uri(),
@@ -1311,7 +1332,11 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
         with DeepSeekHarness(
             provider="deepseek-official", model="smoke-model", cwd=str(root),
             dsh_bin=str(executable), dsh_home=str(dsh_home), patches=(str(patch),),
-            env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1"},
+            env={
+                "DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1",
+                "HOME": str(user_home), "USERPROFILE": str(user_home),
+                "DSH_AGENTS_HOME": str(user_home / ".agents"),
+            },
             api_key="sk-keyless-smoke", base_url=base_url, request_timeout_seconds=60,
         ) as harness:
             result = harness.run(DYNAMIC_TOOLS_PROMPT, session_id="dynamic-tools-smoke")
@@ -1514,14 +1539,22 @@ def smoke_sdk_profile_plugin(base_url: str) -> None:
 
 
 def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool) -> None:
-    """Drive and compare the advanced SDK/executable behavioral snapshot."""
+    """Exercise native and PTC calls in independent packaged-runtime compositions."""
+    for mode in ("native", "ptc"):
+        smoke_sdk_snapshot_mode(base_url, executable, update_snapshots, mode)
+
+
+def smoke_sdk_snapshot_mode(
+    base_url: str, executable: Path, update_snapshots: bool, mode: Literal["native", "ptc"],
+) -> None:
+    """Drive one supported presentation through the SDK and persistent Session log."""
     from deepseek_harness import DeepSeekHarness
 
     with tempfile.TemporaryDirectory(prefix="dsh-sdk-snapshot-") as temporary:
         root = Path(temporary).resolve()
         dsh_home = root / "home"
         sessions = dsh_home / "sessions"
-        patch = write_advanced_profile_patch(root, "snapshot.patch.yml", sessions)
+        patch = write_advanced_profile_patch(root, "snapshot.patch.yml", sessions, mode)
         feedback_patch = write_profile_patch(root, "feedback.patch.yml", sessions, [{"insert": [
             {"id": "snapshot-tool", "name": (
                 Path(__file__).resolve().parent / "fixtures/python-snapshot-tool.mjs"
@@ -1533,6 +1566,7 @@ def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool) 
                 Path(__file__).resolve().parent / "fixtures/python-snapshot-workflow-order.mjs"
             ).as_uri(), "config": {
                 "parentSessionId": SNAPSHOT_SESSION_ID, "prompt": SNAPSHOT_WORKFLOW_CHILD_PROMPT,
+                "direct": {"prompt": SNAPSHOT_DIRECT_CHILD_PROMPT, "callId": "advanced-direct-child"},
             }},
             {"id": "snapshot-message-feedback", "name": "@deepseek-ai/dsh-message-feedback",
              "config": {"maxNoteBytes": 1024}},
@@ -1561,9 +1595,18 @@ def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool) 
             base_url=base_url,
             request_timeout_seconds=60,
         ) as harness:
-            result = harness.run(SNAPSHOT_PROMPT, session_id=SNAPSHOT_SESSION_ID)
+            MockModelHandler.direct_child_finished.clear()
 
-        assert result.final_response == SNAPSHOT_FINAL_TEXT, result.final_response
+            def observe_child(notification: "Notification") -> None:
+                if (notification.method == "subagent.finished"
+                        and message_text(notification.payload.get("lastAssistantMessage")) == "DIRECT_CHILD_OK"):
+                    MockModelHandler.direct_child_finished.set()
+
+            result = harness.run(
+                SNAPSHOT_PROMPT, session_id=SNAPSHOT_SESSION_ID, on_notification=observe_child,
+            )
+
+        assert result.final_response == SNAPSHOT_FINAL_TEXT, (result.final_response, harness.client._runtime_diagnostics())
         offloads = [event for event in result.events if event.get("type") == "image/offload"]
         if len(offloads) != 1 or "surfaceOp" in offloads[0]:
             raise AssertionError(f"advanced snapshot expected one standalone image offload: {offloads}")
@@ -1575,11 +1618,13 @@ def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool) 
         if feedback_types != ["feedback/record", "feedback/record", "feedback/message-put", "feedback/message-put", "feedback/message-delete"]:
             raise AssertionError(f"advanced snapshot did not exercise all feedback mutations: {feedback_types}")
         methods = [notification.method for notification in result.notifications]
-        if methods.count("subagent.started") != 2 or methods.count("subagent.finished") != 2:
-            raise AssertionError(f"advanced snapshot emitted unexpected subagent lifecycle: {methods}")
+        expected_children = 2 if mode == "native" else 0
+        if methods.count("subagent.started") != expected_children or methods.count("subagent.finished") != expected_children:
+            raise AssertionError(f"{mode} advanced snapshot emitted unexpected subagent lifecycle: {methods}")
         ptc_events = [event for event in result.events
                       if event.get("type") in ("tool/ptc-dispatch-start", "tool/ptc-dispatch")]
-        if [event["type"] for event in ptc_events] != ["tool/ptc-dispatch-start", "tool/ptc-dispatch"] * 2:
+        expected_ptc_calls = 2 if mode == "ptc" else 0
+        if [event["type"] for event in ptc_events] != ["tool/ptc-dispatch-start", "tool/ptc-dispatch"] * expected_ptc_calls:
             raise AssertionError(f"advanced snapshot emitted unexpected PTC dispatch events: {ptc_events}")
         for index, event in enumerate(ptc_events):
             data = event["data"]
@@ -1593,21 +1638,23 @@ def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool) 
                   if event.get("type") in ("tool/result", "tool/ptc-dispatch") and "error" in event["data"]]
         assert errors == [{
             "name": "AutoReviewDeniedError", "code": "AUTO_REVIEW_DENIED", "reason": "  transport raw\r\nreason  ",
-        }] * 2, errors
+        }], errors
 
         logs = read_session_logs(sessions)
-        child_ids = snapshot_child_ids(result)
+        child_ids = snapshot_child_ids(result, expected_children)
         expected_ids = {SNAPSHOT_SESSION_ID, *child_ids}
         if set(logs) != expected_ids:
-            raise AssertionError(f"advanced snapshot expected parent plus two child logs: {sorted(logs)}")
-        if "DIRECT_CHILD_OK" not in render_jsonl(logs[child_ids[0]]):
-            raise AssertionError("first advanced child log has no direct-subagent result")
-        if "WORKFLOW_CHILD_OK" not in render_jsonl(logs[child_ids[1]]):
-            raise AssertionError("second advanced child log has no workflow-subagent result")
+            raise AssertionError(f"advanced snapshot expected parent plus {expected_children} child logs: {sorted(logs)}")
+        if mode == "native":
+            if "DIRECT_CHILD_OK" not in render_jsonl(logs[child_ids[0]]):
+                raise AssertionError("first advanced child log has no direct-subagent result")
+            if "WORKFLOW_CHILD_OK" not in render_jsonl(logs[child_ids[1]]):
+                raise AssertionError("second advanced child log has no workflow-subagent result")
 
         files = build_snapshot_files(result, logs, child_ids, root)
         compare_snapshot_files(
-            files, update_snapshots, ADVANCED_SNAPSHOT_DIRECTORY, ADVANCED_SNAPSHOT_FILENAMES,
+            files, update_snapshots, ADVANCED_SNAPSHOT_DIRECTORY if mode == "native" else ADVANCED_SNAPSHOT_ROOT / "advanced-ptc",
+            ADVANCED_SNAPSHOT_FILENAMES if mode == "native" else ("result.json", "session.v4.jsonl"),
             native_writer_output=True,
         )
 
@@ -1741,7 +1788,10 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
             raise AssertionError(f"scheduler recovery duplicated or lost tool outcomes: {tool_results}")
         if sum(record.get("type") == "todo/write" for record in records) != 1:
             raise AssertionError("scheduler recovery executed an unstarted todo update")
-        replacements = [(str(root), "{{cwd}}"), (RECOVERY_SESSION_ID, "{{parent}}")]
+        replacements = [
+            *snapshot_directory_replacements(root, "{{cwd}}"),
+            (RECOVERY_SESSION_ID, "{{parent}}"),
+        ]
         result_value = [{
             "session_id": result.session_id,
             "final_response": result.final_response,
@@ -2140,8 +2190,8 @@ def read_session_logs(sessions: Path) -> dict[str, list[dict[str, object]]]:
     return logs
 
 
-def snapshot_child_ids(result: "RunResult") -> list[str]:
-    """Return the two child session ids in their SDK notification order."""
+def snapshot_child_ids(result: "RunResult", expected_count: int) -> list[str]:
+    """Return the expected child session ids in their SDK notification order."""
     child_ids: list[str] = []
     for notification in result.notifications:
         if notification.method != "subagent.started":
@@ -2152,8 +2202,8 @@ def snapshot_child_ids(result: "RunResult") -> list[str]:
         child_id = payload.get("childSessionId")
         if isinstance(child_id, str) and child_id not in child_ids:
             child_ids.append(child_id)
-    if len(child_ids) != 2:
-        raise AssertionError(f"advanced snapshot expected two child session ids: {child_ids}")
+    if len(child_ids) != expected_count:
+        raise AssertionError(f"advanced snapshot expected {expected_count} child session ids: {child_ids}")
     return child_ids
 
 
@@ -2278,8 +2328,8 @@ def build_minimal_snapshot_files(
     kept verbatim: they carry what the deployment actually shows the model, so a plugin
     that contributes an unintended system section or user message cannot pass unnoticed.
     Assistant and tool payloads keep only their call identity because their text differs
-    across the platforms this expected output must replay on. The shipped profile omits
-    dynamic runtime context, so every message it emits is compared.
+    across the platforms this expected output must replay on. Required working-directory
+    context remains visible even when the profile disables optional runtime context.
     """
     snapshot = []
     for body in requests:
@@ -2329,10 +2379,18 @@ def minimal_snapshot_message(message: object, cwd: Path) -> dict[str, object]:
     raise AssertionError(f"minimal model request has an unexpected message role: {message}")
 
 
+def snapshot_directory_replacements(directory: Path, token: str) -> list[tuple[str, str]]:
+    """Pin the allocated fixture path in plain fields and JSON-quoted context text."""
+    path = str(directory)
+    return [(json.dumps(path, ensure_ascii=False)[1:-1], token), (path, token)]
+
+
 def minimal_snapshot_text(value: object, cwd: Path) -> object:
     """Replace the scenario's temporary working directory everywhere it appears."""
     if isinstance(value, str):
-        return value.replace(str(cwd), "{{cwd}}")
+        for actual, token in snapshot_directory_replacements(cwd, "{{cwd}}"):
+            value = value.replace(actual, token)
+        return value
     if isinstance(value, list):
         return [minimal_snapshot_text(item, cwd) for item in value]
     if isinstance(value, dict):
@@ -2346,9 +2404,10 @@ def build_snapshot_files(
     child_ids: list[str],
     cwd: Path,
 ) -> dict[str, str]:
-    """Render the SDK result and three persisted logs into stable expected outputs."""
-    replacements = [(str(cwd), "{{cwd}}"), (SNAPSHOT_SESSION_ID, "{{parent}}")]
-    replacements.append((snapshot_workflow_run_id(result), "{{workflow-run}}"))
+    """Render the SDK result and its persisted parent/child logs into stable expected outputs."""
+    replacements = snapshot_directory_replacements(cwd, "{{cwd}}") + [(SNAPSHOT_SESSION_ID, "{{parent}}")]
+    if child_ids:
+        replacements.append((snapshot_workflow_run_id(result), "{{workflow-run}}"))
     for index, child_id in enumerate(child_ids, start=1):
         replacements.append((child_id, f"{{{{child-{index}}}}}"))
         agent_id = snapshot_agent_id(result, child_id)
@@ -2419,8 +2478,8 @@ def build_restart_snapshot_files(
 ) -> dict[str, str]:
     """Render two SDK processes, isolated model histories, and durable logs."""
     replacements = [
-        (str(sessions), "{{sessions}}"),
-        (str(cwd), "{{cwd}}"),
+        *snapshot_directory_replacements(sessions, "{{sessions}}"),
+        *snapshot_directory_replacements(cwd, "{{cwd}}"),
         (RESTART_FIRST_SESSION_ID, "{{session-1}}"),
         (RESTART_SECOND_SESSION_ID, "{{session-2}}"),
     ]

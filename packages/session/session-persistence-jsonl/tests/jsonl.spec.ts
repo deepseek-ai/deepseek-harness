@@ -753,11 +753,16 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
     await mkdir(dirname(sourcePath), { recursive: true })
     await writeFile(sourcePath, source)
 
+    readTally.enabled = true
+    const formatStatus = 'migration-required'
     expect(await ctx.sessionPersistence.stat(header.id)).toMatchObject({
       header: { id: header.id, version: SESSION_FORMAT_VERSION },
+      formatStatus,
     })
     const [listed] = await ctx.sessionPersistence.list()
     expect(listed?.header).toMatchObject({ id: header.id, version: SESSION_FORMAT_VERSION })
+    expect(listed?.formatStatus).toBe(formatStatus)
+    expect(readTally.bySuffix.get(sourcePath) ?? 0).toBe(0)
     expect(await readFile(sourcePath)).toEqual(source)
     await expect(stat(currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
@@ -780,6 +785,9 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
     const userMessage = restored.events.find(event => event.type === 'user/message')
     expect(userMessage).toBeDefined()
     expect(Object.isFrozen(userMessage?.data)).toBe(true)
+    const formatStatus = 'migration-required'
+    expect((await ctx.sessionPersistence.stat(header.id))?.formatStatus).toBe(formatStatus)
+    expect((await ctx.sessionPersistence.list()).find(item => item.header.id === header.id)?.formatStatus).toBe(formatStatus)
     expect(await readFile(sourcePath)).toEqual(source)
     await expect(readFile(currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
     expect((await readdir(dirname(sourcePath))).filter(name => name.startsWith('session')).sort())
@@ -989,6 +997,9 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
       } else {
         await expect(readFile(currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
       }
+      const formatStatus = access === 'write' ? 'current' : 'migration-required'
+      expect((await ctx.sessionPersistence.stat(header.id))?.formatStatus).toBe(formatStatus)
+      expect((await ctx.sessionPersistence.list()).find(item => item.header.id === header.id)?.formatStatus).toBe(formatStatus)
       expect(await readFile(sourcePath)).toEqual(source)
     } finally {
       await handle.close()
@@ -1176,6 +1187,24 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
     })
   })
 
+  it('reports format metadata from the highest physical generation without body reads', async () => {
+    const header = meta('metadata-highest', '/work')
+    readTally.enabled = true
+    for (const version of [0, 3, SESSION_FORMAT_VERSION]) {
+      const path = generationLogPath(root, header.cwd, header.id, version, 'none')
+      await mkdir(dirname(path), { recursive: true })
+      const physical = version === 0 ? releasedV0Header(header) : { ...toHeaderLine(header), version }
+      await writeFile(path, `${JSON.stringify(physical)}\n`)
+      const formatStatus = version === SESSION_FORMAT_VERSION ? 'current' : 'migration-required'
+      expect(await ctx.sessionPersistence.stat(header.id)).toMatchObject({
+        header: { version: SESSION_FORMAT_VERSION }, formatStatus,
+      })
+      const [listed] = await ctx.sessionPersistence.list()
+      expect(listed?.formatStatus).toBe(formatStatus)
+      expect(readTally.bySuffix.size).toBe(0)
+    }
+  })
+
   it('selects a retained future generation above readable historical bytes', async () => {
     const header = meta('future-wins', '/work')
     const sourcePath = historicalLogPath(root, header.cwd, header.id)
@@ -1187,6 +1216,8 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
     await expect(ctx.sessionPersistence.open(header.id, 'read')).rejects.toMatchObject({
       name: 'SessionFormatUnsupportedError',
     })
+    await expect(ctx.sessionPersistence.stat(header.id)).rejects.toMatchObject({ name: 'SessionFormatUnsupportedError' })
+    expect(await ctx.sessionPersistence.list()).toEqual([])
     expect(await readFile(sourcePath, 'utf8')).toBe(`${JSON.stringify(releasedV0Header(header))}\n`)
     await expect(stat(rawLogPath(root, header.cwd, header.id))).rejects.toMatchObject({ code: 'ENOENT' })
   })
@@ -1359,13 +1390,18 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
     // created session is already visible to this process.
     const dir = sessionDir(root, '/work', m.id)
     await expect(stat(rawLogPath(root, '/work', m.id))).rejects.toThrow()
-    expect((await ctx.sessionPersistence.list()).map(s => s.header.id)).toContain(m.id)
-    expect((await ctx.sessionPersistence.stat(m.id))?.sizeBytes).toBeUndefined()
+    const pending = await ctx.sessionPersistence.stat(m.id)
+    const pendingRows = await ctx.sessionPersistence.list()
+    expect(pendingRows.map(s => s.header.id)).toContain(m.id)
+    expect(pending?.sizeBytes).toBeUndefined()
+    expect(pending?.formatStatus).toBeUndefined()
+    expect(pendingRows.find(s => s.header.id === m.id)?.formatStatus).toBeUndefined()
 
     await handle.append(oneTurnLog())
     expect((await stat(dir)).isDirectory()).toBe(true)
     expect((await stat(rawLogPath(root, '/work', m.id))).isFile()).toBe(true)
     expect((await ctx.sessionPersistence.list()).map(s => s.header.id)).toContain(m.id)
+    expect((await ctx.sessionPersistence.stat(m.id))?.formatStatus).toBe('current')
     await handle.close()
   })
 

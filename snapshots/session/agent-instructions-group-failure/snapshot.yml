@@ -1,0 +1,10 @@
+version: 1
+scenario: agent-instructions-group-failure
+profile: headless
+composition: agent-instructions-group-failure
+recording: authored
+header:
+  class: agent-instructions
+  pin: true
+  systemPromptSource: agent-instructions
+  toolSchemasSource: text-turn

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Claude Code 子智能体",
+    "description": "使用 Claude Code 原生认证和设置委派单个任务。"
+  }
+}

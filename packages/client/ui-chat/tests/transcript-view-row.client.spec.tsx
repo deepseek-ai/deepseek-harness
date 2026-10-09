@@ -12,6 +12,7 @@ import { PerformanceUsageRow } from '../src/client/settings/PerformanceUsageRow.
 import type { LinkOpening, PerformanceUsageMode, TranscriptViewMode } from '../src/chat-settings.ts'
 import { LinkOpeningRow } from '../src/client/settings/LinkOpeningRow.tsx'
 import { en, zh } from '../src/client/locale.ts'
+import type { CollapseTiming } from '../src/client/presentation-policy.ts'
 
 afterEach(cleanup)
 
@@ -36,7 +37,9 @@ const useResource = (() => ({ status: 'none' as const, value: undefined, failure
 
 function mount(mode: TranscriptViewMode = 'standard', dictionary: typeof en | typeof zh = en) {
   const source = createSnapshotStore<TranscriptViewMode>(mode)
+  const collapseTiming = createSnapshotStore<CollapseTiming>('completion')
   const setTranscriptView = vi.fn((next: TranscriptViewMode) => { source.set(next) })
+  const setCollapseTiming = vi.fn((next: CollapseTiming) => { collapseTiming.set(next) })
   const props: TranscriptViewRowProps = {
     usePanelInfo: selector => selector({ activePanelId: null }),
     useSessions: emptySessions(),
@@ -45,11 +48,13 @@ function mount(mode: TranscriptViewMode = 'standard', dictionary: typeof en | ty
     useSessionRetainInfo: () => undefined,
     useResource,
     useTranscriptView: bindSnapshotSelector(source),
+    useCollapseTiming: bindSnapshotSelector(collapseTiming),
     setTranscriptView,
+    setCollapseTiming,
     t: makeTranslate(dictionary),
   }
   render(<TranscriptViewRow {...props} />)
-  return { setTranscriptView, props }
+  return { setTranscriptView, setCollapseTiming, collapseTiming, props }
 }
 
 describe('TranscriptViewRow', () => {
@@ -58,6 +63,66 @@ describe('TranscriptViewRow', () => {
     expect(screen.getByText('Work details')).toBeDefined()
     expect(screen.getByText('Choose how much detail to show for tool calls')).toBeDefined()
     expect(screen.getByRole('button', { name: /Standard/ }).getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it.each([
+    [en, 'Work details', 'When to Collapse Work Details',
+      'Choose when to automatically collapse work details', 'On completion', 'On next message'],
+    [zh, '工作步骤展示', '工作步骤收起时机', '选择何时自动收起工作步骤', '回答结束后', '下次有新消息时'],
+  ] as const)('selects either collapse timing independently with localized labels (%s)', (dictionary, detailTitle, title, description, completion, nextInput) => {
+    const b = mount('standard', dictionary)
+    const titleElement = screen.getByText(title)
+    expect(screen.getByText(detailTitle).compareDocumentPosition(titleElement) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+    expect(screen.getByText(description)).toBeDefined()
+    expect(screen.getAllByRole('button')).toHaveLength(2)
+    const trigger = screen.getByRole('button', { name: completion })
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(trigger)
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([completion, nextInput])
+    fireEvent.click(screen.getByRole('menuitem', { name: nextInput }))
+    expect(b.setCollapseTiming).toHaveBeenLastCalledWith('next-input')
+    expect(b.collapseTiming.getSnapshot()).toBe('next-input')
+    expect(screen.queryByRole('menu')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: nextInput }))
+    fireEvent.click(screen.getByRole('menuitem', { name: completion }))
+    expect(b.setCollapseTiming).toHaveBeenLastCalledWith('completion')
+    expect(screen.getByRole('button', { name: completion }).getAttribute('aria-expanded')).toBe('false')
+    expect(b.setTranscriptView).not.toHaveBeenCalled()
+  })
+
+  it('follows timing changes and closes its menu without changing either preference', () => {
+    const b = mount()
+    act(() => { b.collapseTiming.set('next-input') })
+    const trigger = screen.getByRole('button', { name: 'On next message' })
+    fireEvent.click(trigger)
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(b.setCollapseTiming).not.toHaveBeenCalled()
+    expect(b.setTranscriptView).not.toHaveBeenCalled()
+  })
+
+  it('returns focus before publishing a timing change', async () => {
+    const b = mount()
+    const trigger = screen.getByRole('button', { name: 'On completion' })
+    fireEvent.click(trigger)
+    const item = screen.getByRole('menuitem', { name: 'On next message' })
+    item.focus()
+    const focus = vi.spyOn(trigger, 'focus')
+    const publish = b.setCollapseTiming.getMockImplementation()!
+    let focusedAtPublication = false
+    b.setCollapseTiming.mockImplementation((timing) => {
+      focusedAtPublication = document.activeElement === trigger
+      publish(timing)
+    })
+    try {
+      await act(async () => { fireEvent.click(item) })
+      expect(focusedAtPublication).toBe(true)
+      expect(document.activeElement).toBe(trigger)
+      expect(focus).toHaveBeenCalledExactlyOnceWith({ preventScroll: true })
+      expect(screen.queryByRole('menu')).toBeNull()
+    } finally {
+      focus.mockRestore()
+    }
   })
 
   it.each([

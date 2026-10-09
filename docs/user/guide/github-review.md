@@ -22,20 +22,17 @@ export DSH_GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 printf '%s\n' "$DSH_GITHUB_WEBHOOK_SECRET"
 ```
 
-From a development checkout:
+Install both experimental packages into the Web profile first. Profiles do not install peers automatically; the GitHub adapter needs the webhook runtime explicitly:
 
 ```sh
+dsh plugin --profile web add @deepseek-ai/dsh-webhook @deepseek-ai/dsh-webhook-github
 export DSH_GITHUB_REVIEW_WORKSPACE=/path/to/deepseek-harness
-pnpm dsh web --patch apps/cli/config/examples/github-review/cordis.yml
+dsh web --patch "${DSH_HOME:-$HOME/.dsh}/profiles/web/node_modules/@deepseek-ai/dsh-webhook-github/examples/github-review/cordis.yml"
 ```
 
-An installed DSH uses the same overlay through an absolute path:
+The adapter distributes the example, which loads from the profile's installation directory so its rule module can resolve profile-installed peers. Do not run the rule from an arbitrary directory outside the profile. To customize it, copy both example files to `$DSH_HOME/profiles/web/github-review/`, edit the configuration, and point `--patch` at that copy of `cordis.yml`; use `~/.dsh` when `DSH_HOME` is unset.
 
-```sh
-dsh web --patch /absolute/path/to/github-review/cordis.yml
-```
-
-For a permanent profile, place `github-ready-review-rule.mjs` beside `$DSH_HOME/profiles/web/cordis.patch.yml`, append the rows from `cordis.yml` to that patch, and start with `dsh web`. The shipped CLI already contains both webhook packages; the overlay alone activates them.
+The repository example lives under `packages/experimental/webhook-github/examples/github-review/`. The CLI does not install webhook packages or list them as Official plugins; installing the packages and supplying the overlay are separate steps.
 
 ## Expose the dedicated endpoint
 
@@ -65,7 +62,7 @@ Active:       yes
 
 ## Rule behavior
 
-The rule accepts only source `primary-github`, repository `deepseek-harness/deepseek-harness`, event `pull_request`, and action `ready_for_review`. It passes the exact head SHA plus selected PR fields to the review prompt, labeling the JSON as untrusted metadata and forbidding file, branch, PR, or GitHub mutation.
+The rule accepts only source `primary-github`, repository `deepseek-ai/deepseek-harness`, event `pull_request`, and action `ready_for_review`. It passes the exact head SHA plus selected PR fields to the review prompt, labeling the JSON as untrusted metadata and forbidding file, branch, PR, or GitHub mutation.
 
 The Session request selects the `standard` agent preset and `read-only` permission preset. `workspacePath` is canonicalized through `WorkspaceRegistry.create()`, so the first matching delivery creates the Web Workspace when absent and later deliveries reuse it.
 
@@ -89,7 +86,7 @@ It can also map repositories to different local paths:
 
 ```js
 const workspacePath = {
-  'deepseek-harness/deepseek-harness': '/path/to/deepseek-harness',
+  'deepseek-ai/deepseek-harness': '/path/to/deepseek-harness',
   'deepseek-harness/dsh-sdk': '/path/to/dsh-sdk',
 }[payload.repository.full_name]
 if (workspacePath === undefined) return null

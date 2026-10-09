@@ -18,20 +18,20 @@
   en: 7bea567207cd7e00
   zh: ffc050b05f07ba7f
 /deepseek-ai-dsh-system-prompt/use-this-package/configure-the-prompt:
-  en: 77c27acfc831cf4c
-  zh: ae4d89acd08eb204
+  en: 87e28893e6cf58d7
+  zh: 06f476b38c4d2038
 /deepseek-ai-dsh-system-prompt/use-this-package/contribute-a-prompt-section:
-  en: 15d70e3b8eddd636
-  zh: a3a67cab60eee86f
+  en: 165fecb5329b00b6
+  zh: a7c595d1787916c9
 /deepseek-ai-dsh-system-prompt/use-this-package/contribute-a-prompt-variable:
-  en: 39050b92755ceb21
-  zh: 9ddc7d24914b8f2e
+  en: b3e4c9b4ced59488
+  zh: d80c791e72bd5821
 /deepseek-ai-dsh-system-prompt/use-this-package/contribute-tool-schemas:
   en: 009ef267dac2f270
   zh: e79c24bff5cd836f
 /deepseek-ai-dsh-system-prompt/use-this-package/suppress-runtime-context:
-  en: 61e2c1a3f18b48dd
-  zh: 29ecab2639f60103
+  en: a664608a3b37f8d7
+  zh: d6dd60772f4d72b8
 /deepseek-ai-dsh-system-prompt/understand-the-implementation:
   en: ce7e776e9d516bdb
   zh: 59d2751743db7795
@@ -57,8 +57,8 @@
   en: cf78b9dd5596495f
   zh: bd44560f8c2435e8
 /deepseek-ai-dsh-system-prompt/model-experience/system-prompt/what-the-model-sees:
-  en: 9927fdee4f8aa8ec
-  zh: 3687314c357fa7f4
+  en: 0aaabee3a9883eea
+  zh: 13e6ead5b455fa30
 /deepseek-ai-dsh-system-prompt/model-experience/system-prompt/what-the-model-sees/harness-identity:
   en: 40effd71cb503319
   zh: 9969356237a4f398

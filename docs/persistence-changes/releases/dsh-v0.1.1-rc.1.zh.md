@@ -59,11 +59,11 @@ changes:
 
 <!-- persistence-release-changes:start -->
 
-检测到 1 个根类型变化、1 项结构差异。下表的最低要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
+检测到 1 个根类型变化、1 项结构差异。下表的审查要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
 
-| 路径 | 变化 | 当前最低要求 |
+| 路径 | 变化 | 审查要求 |
 |---|---|---|
-| `event:permission/preset.data.origin` | `optional-property-added` | `same-version` |
+| `event:permission/preset.data.origin` | `optional-property-added` | `not-required` |
 
 <!-- persistence-release-changes:end -->
 

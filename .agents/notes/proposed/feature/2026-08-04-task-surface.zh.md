@@ -81,7 +81,7 @@ Task Surface 服务通过受 schema 校验的配置定义限制。初始默认�
 
 `show_task_surface` 接收 `{ model: TaskSurfaceModelV1 }`。Host 解析并规范化完整模型；若该会话已有一个打开的 Task Surface，则拒绝调用；否则生成 `surfaceId`，并返回带规范化模型的规范值 `{ surfaceId, model }`。`presentationMeta` 持久化 `value.model`，使投影器和执行器不会对规范化结果产生分歧。Native 结果会指明该 Surface，并说明客户端无法渲染面板时，可以通过普通消息绕过它。随后工具调用 `exec.concludeTurn()`，防止 agent 越过所要求的人工检查点继续执行。
 
-工具定义省略 `isConcurrencySafe`。根据现有工具注册表约定，省略该字段会将每次调用归类为独占排序屏障，无需新增 `ToolDefinition` 字段。该工具只会组装到同时挂载 Host 服务和 Web 渲染器的 Web profile 中。版本 1 支持 `native` 和 `both` 工具模式；仅支持 `ptc` 的 profile 不会向模型公布该工具，因为 PTC mode 分发属于嵌套调用，无法把呈现元数据传到外层结果。
+工具定义省略 `isConcurrencySafe`。根据现有工具注册表约定，省略该字段会将每次调用归类为独占排序屏障，无需新增 `ToolDefinition` 字段。该工具只会组装到同时挂载 Host 服务和 Web 渲染器的 Web profile 中。版本 1 支持 `native` 工具模式；仅支持 `ptc` 的 profile 不会向模型公布该工具，因为 PTC mode 分发属于嵌套调用，无法把呈现元数据传到外层结果。
 
 浏览器安全的领域包从 `@deepseek-ai/dsh-brand` 以仅类型方式导入 `Branded` 原语，并拥有全部三个 Task Surface ID。根据[规范工具输出约定](../../../../packages/core/tools/README.zh.md)，规范值仅存在于本次执行中。因此，回放通过 `output.presentationMeta(args, value)` 将以下带标签的载荷随 `tool/result.meta` 一并持久化：
 
@@ -248,7 +248,7 @@ Web 插件将未提交值保存在一个有界、按会话持久化的 slot stor
 
 ## 验收标准
 
-- 在 `native` 或 `both` 工具模式下，真实模型可以调用一个稳定的 `show_task_surface` schema；调用结束当前轮次；具备相应能力的 Web 客户端在实时运行和回放后都能渲染同一份规范化模型；仅支持 `ptc` 的模式不会向模型公布该工具。
+- 在 `native` 工具模式下，真实模型可以调用一个稳定的 `show_task_surface` schema；调用结束当前轮次；具备相应能力的 Web 客户端在实时运行和回放后都能渲染同一份规范化模型；仅支持 `ptc` 的模式不会向模型公布该工具。
 - 静态 `TaskSurfaceDock` 是唯一的编辑器，即使活动结果位于已加载历史窗口之外也仍可操作；带 key 的 toolview 始终是 transcript 的只读摘要和回放。composer 接管会隐藏仍处于挂载状态的 Dock、保留其草稿，并在接管释放后重新显示同一个所有者。
 - 每个 `submissionId` 的提交操作恰好生成一条可见用户消息，通过普通队列接纳开始下一轮，并在保留 `source.kind: 'user'` 的同时维持带品牌类型的确切调用实例关联；关闭操作记录一条日志事件，且不启动轮次。
 - 客户端排队行保留已关联的消息来源。`getActive` 可在同一进程的重新连接前后公开 `queued` 或 `claiming`；持久化完成后会关闭投影，显式丢弃则会清除待处理状态并让 Surface 保持打开。队列行消失本身不会改变任何 UI 状态。系统会拒绝编辑和 steering，且移除操作只能在认领前成功。

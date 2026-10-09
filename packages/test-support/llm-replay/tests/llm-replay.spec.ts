@@ -1470,7 +1470,11 @@ describe('installLlmReplay (through the real LlmRuntime)', () => {
       maxDelayMs: 10_000,
       jitterRatio: 0.1,
     })
-    expect(await drain(ctx.llm.stream({ provider: 'deepseek', model: 'pro', messages: [] }))).toEqual(TEXT_CHUNKS)
+    const prepared = await ctx.llm.prepareCall({
+      provider: 'deepseek', model: 'flash',
+    }, undefined, (controls, model) => ({ ...controls, reasoningEffort: model.reasoning!.efforts[0]!.id }))
+    expect(prepared.config.reasoningEffort).toBe('off')
+    expect(await drain(prepared.stream({ ...prepared.config, messages: [] }))).toEqual(TEXT_CHUNKS)
 
     dispose()
     expect(ctx.llm.listProviders()).toEqual([])
@@ -2155,7 +2159,13 @@ describe('apply (the plugin entry)', () => {
     apply(ctx, {
       file,
       providers: [
-        { id: 'm', models: [{ id: 'm', inputModalities: ['image'] }, { id: 'text' }] },
+        {
+          id: 'm',
+          models: [
+            { id: 'm', inputModalities: ['image'], reasoningEfforts: ['low'] },
+            { id: 'text' },
+          ],
+        },
         { id: 'empty' },
       ],
       paceMs: 1,

@@ -32,6 +32,7 @@ afterEach(async (test) => {
     ...servers.splice(0).map(async server => (await server).close()),
   ])
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
   const failure = results.find(result => result.status === 'rejected')
   if (failure?.status === 'rejected') throw failure.reason
 })
@@ -257,6 +258,39 @@ describe('bounded retry through the real DeepSeek HTTP/SSE adapter', () => {
     expect(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry').map(event => event.data.failure.code))
       .toEqual(['TIMEOUT'])
     expect(finalAssistantText(agent)).toBe('recovered after timeout')
+  })
+
+  it('turns a body that never observes the abort into TIMEOUT and succeeds on the next request', async () => {
+    const server = await start(['success'], {
+      apiKey: 'mock-key',
+      successText: 'recovered from an ignored abort',
+    })
+    const realFetch = globalThis.fetch
+    let attempts = 0
+    // A transport that ignores the abort on an in-flight read, as undici does when
+    // the abort lands on a pending body read: the abandoned read never settles, so
+    // only the idle deadline can end this attempt.
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      attempts += 1
+      if (attempts > 1) return realFetch(input, init)
+      return Promise.resolve(new Response(
+        new ReadableStream<Uint8Array>({ start() {} }),
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      ))
+    })
+    context = await harness(server.baseURL, { streamIdleTimeoutMs: 1_000 })
+    const agent = await context.agentLoop.create(SessionId('wire-ignored-abort'), {
+      provider: 'deepseek-official',
+      model: 'mock-model',
+    })
+
+    await sendAndWait(context, agent)
+
+    expect(attempts).toBe(2)
+    expect(server.requests).toHaveLength(1)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry').map(event => event.data.failure.code))
+      .toEqual(['TIMEOUT'])
+    expect(finalAssistantText(agent)).toBe('recovered from an ignored abort')
   })
 
   it('stops after the configured transport retry budget is exhausted', async () => {

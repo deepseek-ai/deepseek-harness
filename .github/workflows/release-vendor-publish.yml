@@ -27,16 +27,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       # Complete history: the release scripts read tags.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5.0.0
         with:
           dest: ${{ runner.temp }}/setup-pnpm
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
 
@@ -48,7 +48,7 @@ jobs:
           store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
           echo "path=$store_path" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6.1.0
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
           key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -74,7 +74,7 @@ jobs:
       - name: Verify packed install
         run: pnpm run release:verify-packed-install --family vendor --from dist/npm-vendor
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: vendor-npm-tarballs
           path: dist/npm-vendor/*
@@ -93,15 +93,15 @@ jobs:
       contents: read
     steps:
       # Checkout and install carry the release scripts only; no build step.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5.0.0
         with:
           dest: ${{ runner.temp }}/setup-pnpm
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
           registry-url: https://registry.npmjs.org
@@ -109,7 +109,7 @@ jobs:
       - name: Install (immutable, no package scripts)
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: vendor-npm-tarballs
           path: dist/npm-vendor

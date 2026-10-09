@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package gives tests and demos a scriptable Messages-compatible HTTP/SSE endpoint, so they can exercise model-provider failures and successes without a provider key. Each accepted `/v1/messages` request consumes the next scripted behavior, including resets, stalls, malformed chunks, rate limits, server errors, completions, and tool calls. Test authors can run it with `pnpm run mock:llm` or call `startMockLlmServer`, which returns captured requests for assertions. Seeded `random` behavior supports reproducible mixed-failure stress runs.
+This package gives tests and demos a scriptable Messages-compatible HTTP/SSE endpoint with named events for native SDK consumers, so they can exercise model-provider failures and successes without a provider key. Each accepted `/v1/messages` request consumes the next scripted behavior, including resets, stalls, malformed chunks, rate limits, server errors, completions, and tool calls. Test authors can run it with `pnpm run mock:llm` or call `startMockLlmServer`, which returns captured requests for assertions. Seeded `random` behavior supports reproducible mixed-failure stress runs.
 
 ## Table of Contents
 

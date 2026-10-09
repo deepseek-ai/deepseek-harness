@@ -10,9 +10,13 @@ Web 插件页只提供两个可选 bundle：Agent Teams 与语音输入。Auto r
 
 ## 决策
 
-`OPTIONAL_BUNDLES` 列出 Agent Teams、语音输入、Auto review 与 Inspector profile。每个可选 bundle 都声明 `icon` 并导出带 `meta.title` 与 `meta.description` 的 `./locale/*.json`，官方分组因此能渲染本地化标题、描述和图片；`verify-default-product-isolation` 会拒绝缺少这些声明的可选 bundle。Inspector profile 管理按包名挂载的 bundle patch。独立 Inspector 的 `cordis.patch.yml` 通过本地构建入口提供显式仓库 overlay；[Session Inspector](../feature/2026-09-24-session-inspector.zh.md) 管理检查行为与启用选择。
+`OPTIONAL_BUNDLES` 管理安装随附且默认关闭的选项，包括维护中的可选能力与实验性能力。每个 bundle 声明 `icon`，并导出带 `meta.title` 与 `meta.description` 的 `./locale/*.json`；官方分组显示这些元数据。Bundle 的展示方式不决定其[实验性状态](../../../../packages/experimental/README.zh.md#status)。隔离检查校验准入，并继续拒绝非实验 bundle 的实验性依赖。
 
-可选 bundle 是安装的运行时依赖，其依赖图会随每次 `dsh` 安装一起下载。名单权衡新增安装成本：Auto review 复用安装闭包，Inspector profile 增加检查包、`serve-static`/`open`/`ws` 和 535 个镜像 DevTools 资源（未压缩约 11.95 MiB），但不携带另一个浏览器二进制。Inspector profile 在默认插件列表显示，选中前保持关闭。浏览器操作与电脑操作提供方仍保持显式组合：Playwright MCP、Chrome DevTools MCP 与原生 Cua Driver 运行时二进制会让每次安装多出约 85 MB、21 个包，无论 bundle 是否启用；而随附的 Cua Driver MCP 开关会提供一个安装本身并不携带其可执行文件的能力。这些提供方包保留 locale 显示元数据，供组件行使用。另有两个包因其他原因不纳入：`ptc-runtime-python` 会替换 PTC 运行时，而 `workflow-ptc` 在加载时拒绝非 TypeScript 运行时，且 Web preset 内含 bundle patch 无法触及的 `workflow-ptc` 行；`browser-use-stagehand-native` 在 schema 校验时就要求原生模型名称与 API 密钥，而插件页没有对应的配置表单。
+可选 bundle 的依赖随每次 `dsh` 安装下载。[思考过程翻译](2026-10-05-anonymous-reasoning-translation.zh.md)使用三个实验包，不增加第三方运行时依赖。因此准入需要考虑安装成本，以及开关能否在不增加配置表单的情况下提供可用组合。浏览器与电脑提供方仍使用显式组合，因为它们会增加较大的运行时或要求外部可执行文件。Stagehand 需要模型凭据；Python PTC 替换核心提供方，并与 TypeScript workflow 消费方冲突。演示性钩子、webhook 与模组不进入名单。[Session Inspector](../feature/2026-09-24-session-inspector.zh.md) 管理 Inspector 特有的激活行为。
+
+Bundle 插入普通 Host 行；可选模型工具注册到全局工具层，因此包括 minimal 在内的所有预设都会获得它们。插件管理、profile 组合与重载无需针对 bundle 的特殊行为。搜索、Ralph 与终端在 Host 组内提供自己的隔离服务。搜索按需打开一个内存索引；Host 搜索策略保持不变。徽章技能与标题提供方作用于 Host。切换 bundle 会为运行中的 Agent 注册或移除其工具，后续用户 patch 层继续优先。前一个标题提供方开始清理后，替代提供方即可注册；前一个提供方的迟到结果不会提交。
+
+Claude Code 与 Codex 通过独立的 `ON_DEMAND_BUNDLES` 目录按需安装，其成本、版本与离线发现取舍由[按需原生 bundle 决策](2026-10-05-official-on-demand-bundles.zh.md)管理。
 
 ## 考虑过的替代方案
 
@@ -20,6 +24,10 @@ Web 插件页只提供两个可选 bundle：Agent Teams 与语音输入。Auto r
 
 **在 `dsh-base` 中挂载仅负责注册的 `computer-use` 与 `browser-use` 服务。** 共享组合将携带只有可选提供方 bundle 才需要的行；提供方 bundle 可以从自己的 patch 和依赖插入服务行。
 
+**在运行时注册预设扩展。** 独立注册路径需要自己的排序、模块解析、代际更新与检查行为。Profile patch 为启动、配置导出、校验和用户覆盖保留同一个有效组合。
+
+**用 `preset` patch 操作向指定预设插入行。** 只把工具限定在完整预设中，需要在 profile 组合、重载、插件管理和插件页中引入第二套 patch 语言，并为保留代际增加删除检查。全局工具通过现有 Host 组合即可到达同样的 Agent。
+
 ## 后果
 
-官方分组包含四个可选 bundle 条目，每项都因实验包名而带实验性标签。即使组合包关闭，其运行时依赖也会安装。浏览器操作或电脑操作提供方仍需在 profile patch 或组合中同时挂载其 Service Definition 与提供方。
+官方发现不表示实验性状态，也不引入不同的插件生命周期。关闭 bundle 保留已安装文件；激活失败保留现有的已保存选择行为。Bundle 行是普通 Host 行，使用常规开关。独立与组合测试覆盖 Host 行及每个预设的工具目录；实时切换与已记录 Session 覆盖激活和模型可见行为。

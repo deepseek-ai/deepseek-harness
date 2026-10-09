@@ -23,34 +23,95 @@
     "src/skill-catalog.ts"
   ],
   "references": [
-    { "path": "../../../vendor/cordis" },
-    { "path": "../../../vendor/schemastery" },
-    { "path": "../../core/agent" },
-    { "path": "../../core/agent-default-model" },
-    { "path": "../../core/scope" },
-    { "path": "../../core/session" },
-    { "path": "../../context/file-reference" },
-    { "path": "../../attachment/attachment" },
-    { "path": "../../client/file-upload/tsconfig.host.json" },
-    { "path": "../../client/connection/tsconfig.host.json" },
-    { "path": "../../interaction/permission-presets" },
-    { "path": "../../jobs/jobs" },
-    { "path": "../../fs/fs" },
-    { "path": "../../llm/llm" },
-    { "path": "../../util/deque" },
-    { "path": "../../util/native-command" },
-    { "path": "../../preset/agent-preset-registry" },
-    { "path": "../../session/session-persistence" },
-    { "path": "../../session/session-projection" },
-    { "path": "../../session/session-projection-cache" },
-    { "path": "../../session/session-title" },
-    { "path": "../../session-query/session-query" },
-    { "path": "../../skill/skill" },
-    { "path": "../../subagent/subagent" },
-    { "path": "../../util/time" },
-    { "path": "../../util/values" },
-    { "path": "../../typert/protocol" },
-    { "path": "../../typert/registry" },
-    { "path": "../../workspace/workspace" }
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/agent-default-model"
+    },
+    {
+      "path": "../../core/scope"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../context/file-reference"
+    },
+    {
+      "path": "../../attachment/attachment"
+    },
+    {
+      "path": "../../client/file-upload/tsconfig.host.json"
+    },
+    {
+      "path": "../../client/connection/tsconfig.host.json"
+    },
+    {
+      "path": "../../interaction/permission-presets"
+    },
+    {
+      "path": "../../jobs/jobs"
+    },
+    {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../util/deque"
+    },
+    {
+      "path": "../../util/native-command"
+    },
+    {
+      "path": "../../preset/agent-preset-registry"
+    },
+    {
+      "path": "../../session/session-persistence"
+    },
+    {
+      "path": "../../session/session-projection"
+    },
+    {
+      "path": "../../session/session-projection-cache"
+    },
+    {
+      "path": "../../session/session-title"
+    },
+    {
+      "path": "../../session-query/session-query"
+    },
+    {
+      "path": "../../skill/skill"
+    },
+    {
+      "path": "../../subagent/subagent"
+    },
+    {
+      "path": "../../util/time"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../typert/registry"
+    },
+    {
+      "path": "../../workspace/workspace"
+    },
+    {
+      "path": "../../session/working-directory"
+    }
   ]
 }

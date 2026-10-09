@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS } from '../experimental-package-policy.ts'
 import { verifyInstalledProductIsolation } from './installed-product-isolation.ts'
 
 const roots: string[] = []
@@ -26,7 +27,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-describe('installed default-product isolation', () => {
+describe.each([experimental, ...Object.values(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS)])('installed default-product isolation: %s', (experimental) => {
   it('ignores development dependencies and unrelated installed experimental packages', () => {
     const root = fixture()
     const entry = writePackage(root, '@deepseek-ai/dsh', {

@@ -269,6 +269,15 @@ describe('client bundle experimental input isolation', () => {
     expect(existsSync(join(owner, 'lib/index.js'))).toBe(false)
   })
 
+  it.each(['static', 'dynamic'] as const)('keeps retained-name experimental %s inputs outside ordinary artifacts', async (kind) => {
+    const { root, owner, entry, prototype } = fixture()
+    const name = '@deepseek-ai/dsh-tool-terminal'
+    writeFileSync(join(root, 'prototype/package.json'), JSON.stringify({ name, type: 'module' }))
+    writeFileSync(entry, `export { marker } from ${JSON.stringify(importPath(entry, prototype))}\n`)
+    await expect(bundle(owner, config(kind))).rejects.toThrow(/client bundle isolation.*experimental/)
+    await expect(bundle(owner, config(kind, name))).resolves.toContain('experimental sentinel')
+  })
+
   it('proves the static library otherwise hides the experimental input in its emitted JavaScript', async () => {
     const { owner, entry, prototype } = fixture()
     writeFileSync(entry, `export { marker } from ${JSON.stringify(importPath(entry, prototype))}\n`)

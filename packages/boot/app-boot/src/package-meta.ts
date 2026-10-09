@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { ModuleLoader } from '@deepseek-ai/cordis-plugin-loader'
 import type { LocalizedText, PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
 import { barePackageName } from './profile-resolution/resolver.ts'
+import { realModuleFile } from './profile-resolution/legacy-links.ts'
 
 const LANGUAGE_ID = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u
 
@@ -32,7 +33,7 @@ function iconOf(
     label = manifestPath
     const root = realpathSync(dirname(manifestPath))
     target = resolve(root, icon)
-    const local = relative(root, realpathSync(target))
+    const local = relative(root, realModuleFile(target))
     if (local === '..' || local.startsWith(`..${sep}`) || isAbsolute(local)) {
       throw new Error(`${label}: icon must remain inside its manifest directory`)
     }
@@ -40,11 +41,11 @@ function iconOf(
     const exported = optionalResourcePath(`${specifier}/icon`, parentURL)
     if (exported === undefined) return undefined
     target = label = exported
-    assertPackageOwned(realpathSync(target), packageName)
+    assertPackageOwned(realModuleFile(target), packageName)
   }
   const mediaType = ICON_MEDIA_TYPES.get(extname(target).toLowerCase())
   if (mediaType === undefined) throw new Error(`${label}: icon must be SVG, PNG, JPEG, or WebP`)
-  const file = realpathSync(target)
+  const file = realModuleFile(target)
   const stat = statSync(file)
   if (!stat.isFile()) throw new Error(`${label}: icon must be a regular file`)
   if (stat.size > MAX_ICON_BYTES) throw new Error(`${label}: icon exceeds 256 KiB`)
@@ -64,7 +65,7 @@ function assertPackageOwned(file: string, name: string): void {
 
 /**
  * Resolve a plugin resource through the active Node ESM resolver without evaluating it.
- * @param specifier - complete resource module specifier, including its locale filename.
+ * @param specifier - plugin module or exported resource specifier.
  * @param parentURL - owning module-resolution base.
  * @returns the local filesystem path selected by Node and the active profile.
  * @throws when the resolver is unavailable or the resource cannot resolve to a local file.

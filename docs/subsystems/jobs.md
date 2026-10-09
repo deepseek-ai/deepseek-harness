@@ -15,7 +15,6 @@ Types shared by long-running producers, `ctx.jobs`, and job controls. The [seam 
  */
 interface JobKindMap {
   bash: 'bash'
-  subagent: 'subagent'
 }
 ```
 
@@ -33,7 +32,7 @@ A `JobSpec` declares identity, the owning session, optional pull `output` source
  * the output ring.
  */
 interface JobSpec {
-  /** Producer kind — also the id prefix (`bash`, `subagent`, …). */
+  /** Producer kind — also the id prefix (`bash`, …). */
   kind: JobKind
   /** One-line model-facing label (the command; the delegation description). */
   label: string
@@ -95,7 +94,7 @@ interface JobHandle {
 }
 ```
 
-`JobHooks.done` resolves after the producer releases its resources, not merely when work finishes. A job whose result is a value rather than a stream — a subagent's report, a workflow's rendered result — returns it as `JobOutcome.result`; the model's first read after settlement carries it once.
+`JobHooks.done` resolves after the producer releases its resources, not merely when work finishes. A job whose result is a value rather than a stream — a workflow's rendered result — returns it as `JobOutcome.result`; the model's first read after settlement carries it once.
 
 ```ts type-equiv
 /** Hooks through which the runtime controls and observes producer work. */

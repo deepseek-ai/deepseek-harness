@@ -1,0 +1,12 @@
+version: 1
+scenario: worktree
+profile: headless
+composition: worktree
+recording: authored
+header:
+  class: worktree
+  pin: true
+platform: posix
+workspace:
+  setup: git-worktree
+  final: true

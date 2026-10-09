@@ -1,0 +1,76 @@
+{
+  "formatVersion": 1,
+  "roots": [
+    {
+      "key": "event:working-directory/change",
+      "kind": "event",
+      "event": "working-directory/change",
+      "surface": false,
+      "digest": "124aa62078ca3311353b39cc3bf6c75da281338be6bbf672f8b361d828cddca3",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 3,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "cwd",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": "working-directory/change"
+          }
+        ]
+      }
+    }
+  ],
+  "types": []
+}

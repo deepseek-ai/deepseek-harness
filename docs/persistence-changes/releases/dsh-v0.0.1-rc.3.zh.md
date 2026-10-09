@@ -92,22 +92,22 @@ changes:
 
 <!-- persistence-release-changes:start -->
 
-检测到 12 个根类型变化、12 项结构差异。下表的最低要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
+检测到 12 个根类型变化、12 项结构差异。下表的审查要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
 
-| 路径 | 变化 | 当前最低要求 |
+| 路径 | 变化 | 审查要求 |
 |---|---|---|
-| `event:agent/inbox/spliced.data.inserted[].source.kind` | `type-changed` | `version-bump` |
-| `event:compact/end` | `root-removed` | `version-bump` |
-| `event:compact/prune` | `root-removed` | `version-bump` |
-| `event:compact/start` | `root-removed` | `version-bump` |
-| `event:compact/summary` | `root-removed` | `version-bump` |
-| `event:compaction/end` | `root-added` | `same-version` |
-| `event:compaction/prune` | `root-added` | `same-version` |
-| `event:compaction/start` | `root-added` | `same-version` |
-| `event:compaction/summary` | `root-added` | `same-version` |
-| `event:hook/invoked.data.dialect` | `type-changed` | `version-bump` |
-| `event:session/title-llm-request.data.messages[].source.kind` | `type-changed` | `version-bump` |
-| `event:user/message.data.source.kind` | `type-changed` | `version-bump` |
+| `event:agent/inbox/spliced.data.inserted[].source.kind` | `type-changed` | `review-required` |
+| `event:compact/end` | `root-removed` | `review-required` |
+| `event:compact/prune` | `root-removed` | `review-required` |
+| `event:compact/start` | `root-removed` | `review-required` |
+| `event:compact/summary` | `root-removed` | `review-required` |
+| `event:compaction/end` | `root-added` | `not-required` |
+| `event:compaction/prune` | `root-added` | `not-required` |
+| `event:compaction/start` | `root-added` | `not-required` |
+| `event:compaction/summary` | `root-added` | `not-required` |
+| `event:hook/invoked.data.dialect` | `type-changed` | `review-required` |
+| `event:session/title-llm-request.data.messages[].source.kind` | `type-changed` | `review-required` |
+| `event:user/message.data.source.kind` | `type-changed` | `review-required` |
 
 <!-- persistence-release-changes:end -->
 

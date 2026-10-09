@@ -29,6 +29,9 @@
     - id: replay
       name: '@deepseek-ai/dsh-llm-replay'
 
+    - id: await-subagents
+      name: '../../../../../packages/test-support/session-snapshot/tests/fixtures/subagent-settlement-barrier.ts'
+
     # Publish the persisted agent before the driver selects the single root.
     - id: resumed-agent
       name: './tests/fixtures/subagent-inheritance-agent.ts'

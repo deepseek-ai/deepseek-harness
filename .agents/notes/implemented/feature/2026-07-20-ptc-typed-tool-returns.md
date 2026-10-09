@@ -99,7 +99,7 @@ Keyless real-worker integration tests pin the two handle workflows that prose re
 
 ## Consequences
 
-Code programs can compose tools through stable values instead of reverse-engineering Native prose. Native and Both Mode retain their existing text and UI presentation, while PTC mode receives output-schema types and exact runtime JSON. Tool authors must treat the canonical value as their programmatic API and put display-only formatting in the renderer.
+Code programs can compose tools through stable values instead of reverse-engineering Native prose. Native mode retains its existing text and UI presentation, while PTC mode receives output-schema types and exact runtime JSON. Tool authors must treat the canonical value as their programmatic API and put display-only formatting in the renderer.
 
 The worker performs bounded-depth flat-wire transport and lossless validation but does not make intermediate values cheap or durable. Outer overflow is an explicit failed run, and error handling remains intentionally human-guided rather than a versioned code union.
 

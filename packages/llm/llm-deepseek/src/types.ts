@@ -95,6 +95,8 @@ export interface DeepSeekAdapterOptions<Connection extends DeepSeekConnectionOpt
   onReplayDegrade?: (detail: { provider: string; model: string; reason: string }) => void
   /** Report extension fields omitted from one request because the merged request failed to serialize. */
   onExtensionsOmitted?: (detail: { provider: string; model: string; fields: readonly string[]; error: unknown }) => void
+  /** Report an extension acceptance failure after HTTP 2xx; the request continues. */
+  onExtensionsUnaccepted?: (detail: { provider: string; model: string; error: unknown }) => void
   /** Provider label for selectors; omission uses the protocol family name. */
   providerName?: string
   /** Provider-owned catalog availability; omission exposes no discovery entries. */

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-08-desktop-shell-configuration.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-08-desktop-shell-configuration.md
+/agent-note-desktop-shell-configuration-independent-of-the-host:
+  en: 860c8afa57227b89
+  zh: bec6a19319050aed
+/agent-note-desktop-shell-configuration-independent-of-the-host/problem:
+  en: 9f652292b62cd015
+  zh: 14a97b5a4884c008
+/agent-note-desktop-shell-configuration-independent-of-the-host/decision:
+  en: e58311d3d5ebb6b6
+  zh: b4c791fcfde7b986
+/agent-note-desktop-shell-configuration-independent-of-the-host/alternatives-considered:
+  en: 349210f3cf5f168b
+  zh: 019acfc3c3d71b4b
+/agent-note-desktop-shell-configuration-independent-of-the-host/consequences:
+  en: a523f43819051d4b
+  zh: 69926bc3761195ea

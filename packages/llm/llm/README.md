@@ -60,6 +60,25 @@ After a successful mount, `ctx.llm.listProviders()` reports the registered route
 
 `GenerateOptions.messages` accepts durable `Message` values and request-only `RequestUserInput` values. Request-only inputs carry user-role content with no `id` or `source`; Session writes and Agent delivery still require durable messages. Callers keep auxiliary inputs unchanged until the stream settles. A caller that records its exact request, such as session-title generation, must use durable messages.
 
+`prepareCall(config, signal, configure?)` accepts concrete `LlmCallConfig` values. The optional synchronous, pure `ConfigureCall` function receives detached, deeply frozen `LlmCallControls` and model metadata from the captured adapter generation. Callers can compose ordinary functions to choose concrete controls; later writes replace earlier ones. Preparation retains the captured route, applies defaults to omitted controls, validates the result, and returns a frozen configuration for recording and dispatch. Callback failures or cancellation reject before dispatch. Preparation requires a registered adapter.
+
+Configuration functions select controls before adapter defaults are materialized. For example, combine least-effort selection with an explicit output cap, then pass `configure(maxTokens)` as the third argument:
+
+```ts
+import type { ConfigureCall } from '@deepseek-ai/dsh-llm'
+
+const leastReasoning: ConfigureCall = (controls, model) => {
+  const first = model.reasoning?.efforts[0]
+  return first === undefined ? controls : { ...controls, reasoningEffort: first.id }
+}
+
+const outputLimit = (maxTokens: number): ConfigureCall =>
+  controls => ({ ...controls, maxTokens })
+
+const configure = (maxTokens: number): ConfigureCall =>
+  (controls, model) => outputLimit(maxTokens)(leastReasoning(controls, model), model)
+```
+
 ### What you can do
 
 - **Stream one model call** — `ctx.llm.stream(options)` yields raw chunks (token-level deltas) for any registered provider and model; consumers assemble them with `BlockAssembler`.

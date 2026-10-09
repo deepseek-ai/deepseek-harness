@@ -558,6 +558,7 @@ describe('auditStartupEntries', () => {
   const requiredIds = [
     'agent-loop',
     'webserver',
+    'web-runtime',
     'modules',
     'connection',
     'headless-runner',
@@ -739,7 +740,7 @@ describe('auditStartupEntries', () => {
 
   it('omits an error cause when required plugins are only waiting for services', async () => {
     const error = await auditStartupEntries(ctxWith([
-      { fiber: fiber(0, undefined, { webRuntime: {} }), options: { id: 'connection', name: './connection.mjs' } },
+      { fiber: fiber(0, undefined, { webStartup: {} }), options: { id: 'connection', name: './connection.mjs' } },
     ]), NAME, vi.fn()).catch((error: unknown) => error)
     expect(error).toBeInstanceOf(StartupError)
     expect(Object.hasOwn(error as StartupError, 'cause')).toBe(false)
@@ -750,9 +751,9 @@ describe('auditStartupEntries', () => {
   it('keeps diagnostic metadata available without expanding it in ordinary error inspection', () => {
     const entries = [{
       id: 'connection', module: './connection.mjs', required: true, fiberState: 0,
-      outcome: { kind: 'pending' as const, missing: ['webRuntime'] },
+      outcome: { kind: 'pending' as const, missing: ['webStartup'] },
     }]
-    const error = new StartupError('waiting for webRuntime', entries)
+    const error = new StartupError('waiting for webStartup', entries)
     const startup = { configurationPath: '/private/cordis.yml', messages: [
       { ts: 1, name: 'loader', type: 'warn', args: ['raw diagnostic argument'] },
     ] }
@@ -760,7 +761,7 @@ describe('auditStartupEntries', () => {
     expect(error.entries).toBe(entries)
     expect(error.startup).toBe(startup)
     const output = inspect(error)
-    expect(output).toContain('waiting for webRuntime')
+    expect(output).toContain('waiting for webStartup')
     expect(output).not.toContain('connection.mjs')
     expect(output).not.toContain('/private/cordis.yml')
     expect(output).not.toContain('raw diagnostic argument')
@@ -792,12 +793,12 @@ describe('auditStartupEntries', () => {
     const error = await auditStartupEntries(ctxWith([
       { fiber: fiber(0, undefined, { webServer: {} }), options: { id: 'web-runtime', name: './web.mjs' } },
       { fiber: fiber(3, original), options: { id: 'webserver', name: '@deepseek-ai/dsh-host-webserver' } },
-      { fiber: fiber(0, undefined, { webRuntime: {} }), options: { id: 'connection', name: './connection.mjs' } },
+      { fiber: fiber(0, undefined, { webStartup: {} }), options: { id: 'connection', name: './connection.mjs' } },
       { fiber: fiber(0), options: { id: 'unknown', name: './unknown.mjs' } },
     ]), NAME, warn).catch((error: unknown) => error)
     expect(error).toBeInstanceOf(StartupError)
     expect((error as Error).message).toMatchInlineSnapshot(`
-      "dsh-test-bin: startup failed: 2 required plugins did not activate
+      "dsh-test-bin: startup failed: 3 required plugins did not activate
 
       Failed plugins (1):
         webserver (required)
@@ -806,10 +807,10 @@ describe('auditStartupEntries', () => {
               at Server.listen (node:net:1:2)
 
       Plugins waiting for services (3):
-        Plugin                 Missing services
-        connection (required)  webRuntime
-        web-runtime            webServer
-        unknown                unknown"
+        Plugin                  Missing services
+        web-runtime (required)  webServer
+        connection (required)   webStartup
+        unknown                 unknown"
     `)
     expect(warn).not.toHaveBeenCalled()
   })

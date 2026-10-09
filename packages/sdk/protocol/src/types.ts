@@ -1,6 +1,6 @@
 /**
- * Named wire types for the DeepSeek Harness SDK runtime protocol: the three
- * request/result pairs and the four server-to-client notification payloads
+ * Named wire types for the DeepSeek Harness SDK runtime protocol: its
+ * request/result pairs and server-to-client notification payloads
  * exchanged over the newline-delimited JSON-RPC stdio transport. The server
  * plugin (`@deepseek-ai/dsh-sdk-jsonrpc-server`) and SDK clients share these shapes;
  * `serverInfo.name` stays the wire-stable `deepseek-harness-sdk-runtime`.
@@ -56,6 +56,30 @@ export type SdkPromptContentBlock = ContentBlock | SdkEncodedImageBlock
 export interface SessionPromptResult {
   /** Identity of the queued user message. */
   messageId: string
+}
+
+/** Wait for an existing SDK session and its managed descendants to finish. */
+export interface SessionWaitParams {
+  /** An SDK-owned session id; waiting never creates a session. */
+  sessionId: string
+}
+
+/** Session whose effective working directory is requested; an unknown id creates the Session. */
+export interface SessionWorkingDirectoryParams {
+  /** SDK-side Session identity. */
+  sessionId: string
+}
+
+/** Change one Session's effective directory without changing its origin or permissions. */
+export interface SessionWorkingDirectorySetParams extends SessionWorkingDirectoryParams {
+  /** Directory to enter; relative paths resolve against the Session's current directory. */
+  path: string
+}
+
+/** Validated effective directory after a read, change, or missing-directory recovery. */
+export interface SessionWorkingDirectoryResult {
+  /** Absolute directory used by future independent operations and new processes. */
+  cwd: string
 }
 
 /** Deployment-mapped SDK outcome: `ok` for an accepted result, `error` otherwise. */
@@ -115,5 +139,8 @@ export interface HarnessSdkNotificationMap {
 export interface HarnessSdkRequestMap {
   'initialize': { params: InitializeParams; result: InitializeResult }
   'session/prompt': { params: SessionPromptParams; result: SessionPromptResult }
+  'session/wait': { params: SessionWaitParams; result: Record<string, never> }
+  'session/working-directory/get': { params: SessionWorkingDirectoryParams; result: SessionWorkingDirectoryResult }
+  'session/working-directory/set': { params: SessionWorkingDirectorySetParams; result: SessionWorkingDirectoryResult }
   'shutdown': { params: undefined; result: Record<string, never> }
 }

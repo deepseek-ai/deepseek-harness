@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-session-title-first-prompt-llm` 作为可选的 `ctx.sessionTitle` 提供方，通过 `ctx.llm` 总结第一条符合条件的用户消息。它注册 `first-prompt` 节奏，只在全新非 fork 会话首次创建回退时自动运行，并把结果归因于该消息的确切 seq。自动失败会保留回退，之后只能通过 `ctx.sessionTitle.refresh()` 重试。它使用 `dsh-session-title-llm` 的完整必填共享 LLM 配置，因此路由、提示词、预算与取消行为不会漂移。自动行为与配置优先；实现仅在共享策略之上进行轻量注册。
+`dsh-session-title-first-prompt-llm` 作为可选的 `ctx.sessionTitle` 提供方，通过 `ctx.llm` 总结第一条符合条件的用户消息。它注册 `first-prompt` 节奏，只在全新非 fork 会话首次创建回退时自动运行，并把结果归因于该消息的确切 seq。自动失败会保留回退，之后只能通过 `ctx.sessionTitle.refresh()` 重试。它拥有自己的系统指令、JSON 封装与输出解析；只与全消息提供方共享 `dsh-session-title-llm` 的[执行模块](../session-title-llm/README.zh.md)。自动行为与配置优先；实现是建立在该执行器之上的小型提供方策略。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当会话应从第一条符合条件用户消息生成标题时，在标题服务旁挂载此插件。它要求完整的[共享 LLM 配置](../session-title-llm/README.zh.md#configuration)，且无默认值。
+当会话应从第一条符合条件用户消息生成标题时，在标题服务旁挂载此插件。它要求自己的 `targetWords` 与 `targetCjkCharacters`，外加共享的[执行控制](../session-title-llm/README.zh.md#configuration)，且全部无默认值。
 
 ### 标题生成时机
 
@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 配置
 
-插件接受完整必填的[共享 LLM 配置](../session-title-llm/README.zh.md#configuration)：`targetWords`、`targetCjkCharacters`、`maxInputBytes`、`maxOutputTokens`、`timeoutMs`，以及可选成对的 `provider`/`model` 路由。同时省略二者，会继承当前已记录主请求的确切路由；同时设置二者，则让标题生成使用独立路由。生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-title-first-prompt-llm)是每个受支持字段的穷尽式真源。
+插件要求 `targetWords` 与 `targetCjkCharacters`，外加共享的[执行控制](../session-title-llm/README.zh.md#configuration)：`maxInputBytes`、`maxOutputTokens`、`timeoutMs`，以及可选成对的 `provider`/`model` 路由。同时省略二者，会继承当前已记录主请求的确切路由；同时设置二者，则让标题生成使用独立路由。生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-title-first-prompt-llm)是每个受支持字段的穷尽式真源。
 
 ### 失败与恢复
 
@@ -51,13 +51,13 @@ kind: "package-reference"
 
 ### 设计理念
 
-一个薄提供方插件：它注册 `first-prompt` 节奏，用选择器取第一条符合条件消息，其余全部委托给[共享 LLM 策略](../session-title-llm/README.zh.md)。
+一个小型提供方策略：它构建首消息系统指令与 JSON 输入，把组装后的响应解析为标题，只把路由、上限、取消、记录与组装委托给[共享执行模块](../session-title-llm/README.zh.md)。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：共享配置 schema、以首消息选择器注册提供方 |
+| [`src/index.ts`](src/index.ts) | 插件入口：配置 schema、首消息提示词与封装、输出解析与直接提供方注册 |
 
 ### 调度
 
@@ -70,10 +70,10 @@ kind: "package-reference"
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当提供方约定不够用时阅读以下页面。它们从共享策略逐步进入替代节奏与它所插入的服务。
+当提供方约定不够用时阅读以下页面。它们从共享执行模块逐步进入替代节奏与它所插入的服务。
 
-- [共享 LLM 标题策略](../session-title-llm/README.zh.md)——此提供方使用的生成辅助模块。
-- [全消息标题提供方](../session-title-all-prompts-llm/README.zh.md)——在每条新提示词后重新生成标题的节奏。
+- [共享 LLM 执行模块](../session-title-llm/README.zh.md)——此提供方使用的执行模块。
+- [全消息标题提供方](../../experimental/session-title-all-prompts-llm/README.zh.md)——在每条新提示词后重新生成标题的节奏。
 - [会话标题服务](../session-title/README.zh.md)——回退行为、重命名、刷新与提供方注册。
 - [会话包映射](../README.zh.md)——相邻的持久化、投影、标题与遥测包。
 
@@ -86,11 +86,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-标题模型会收到共享标题指令，以及一个只包含第一条符合条件用户消息的 JSON 数组。后续提示词与继承的 fork 历史不会触发再次自动调用。
+标题模型会收到此提供方的标题指令，以及一个只包含第一条符合条件用户消息的 JSON 数组，永远不会收到 `currentTitle`。后续提示词与继承的 fork 历史不会触发再次自动调用。
 
 #### Token 影响
 
-全新会话最多自动发出一次辅助请求，并受 `maxInputBytes` 与 `maxOutputTokens` 约束；显式刷新可能发出额外调用。主 agent 请求不会增加 token。
+全新会话最多自动发出一次辅助请求，并受 `maxInputBytes` 与 `maxOutputTokens` 约束；显式刷新可能发出额外调用。它选择路由支持的最低推理强度；路由没有可选强度时不指定。主 agent 请求不会增加 token。
 
 #### KV Cache 影响
 

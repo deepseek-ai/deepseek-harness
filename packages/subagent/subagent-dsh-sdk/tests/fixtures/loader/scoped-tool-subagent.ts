@@ -20,10 +20,6 @@ export function apply(ctx: Context, config: Config): void {
         provider: config.provider,
         modelSelectionSettings: true,
         ...(config.toolName === undefined ? {} : { toolName: config.toolName }),
-        ...(config.enableRunInBackground === undefined
-          ? {}
-          : { enableRunInBackground: config.enableRunInBackground }),
-        ...(config.backgroundMode === undefined ? {} : { backgroundMode: config.backgroundMode }),
         ...(config.agentOptions === undefined ? {} : { agentOptions: config.agentOptions }),
         ...(config.persona === undefined ? {} : { persona: config.persona }),
         ...(config.toolFilter === undefined ? {} : { toolFilter: config.toolFilter }),

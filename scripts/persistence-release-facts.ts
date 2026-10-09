@@ -35,12 +35,12 @@ function structuralChanges(entry: PersistenceReleaseEntry, language: Language): 
       : '规范化后的根类型及其传递引用摘要与前一 tag 相同。'
   }
   const summary = language === 'en'
-    ? `Detected ${count(entry.record.changes.length, 'changed root')} and ${count(entry.differences.length, 'structural difference')}. The minimum below is calculated using current rules for comparison only; it does not assert historical compliance, migration correctness, or runtime compatibility.`
-    : `检测到 ${entry.record.changes.length} 个根类型变化、${entry.differences.length} 项结构差异。下表的最低要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。`
-  const heading = language === 'en' ? '| Path | Change | Current minimum |' : '| 路径 | 变化 | 当前最低要求 |'
+    ? `Detected ${count(entry.record.changes.length, 'changed root')} and ${count(entry.differences.length, 'structural difference')}. The review requirement below is calculated using current rules for comparison only; it does not assert historical compliance, migration correctness, or runtime compatibility.`
+    : `检测到 ${entry.record.changes.length} 个根类型变化、${entry.differences.length} 项结构差异。下表的审查要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。`
+  const heading = language === 'en' ? '| Path | Change | Review requirement |' : '| 路径 | 变化 | 审查要求 |'
   const rows = entry.differences.map((change) => {
     const path = change.path.replaceAll('`', '\\`').replaceAll('|', '\\|')
-    return `| \`${path}\` | \`${change.kind}\` | \`${change.requiresVersionBump ? 'version-bump' : 'same-version'}\` |`
+    return `| \`${path}\` | \`${change.kind}\` | \`${change.requiresCompatibilityReview ? 'review-required' : 'not-required'}\` |`
   })
   return [summary, '', heading, '|---|---|---|', ...rows].join('\n')
 }

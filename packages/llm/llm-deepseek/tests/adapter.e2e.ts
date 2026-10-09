@@ -4,10 +4,11 @@ import * as Protocol from '@deepseek-ai/dsh-llm-deepseek'
  * System-update checks additionally require DEEPSEEK_IN_HISTORY_MODEL.
  */
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, LoggerLevel } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -139,6 +140,12 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('DeepSeek Messages real API', () 
   })
 
   it.each([false, true])('submits Loader package inventory and records HTTP acceptance with session-log enabled=%s', async (enabled) => {
+    const pluginRoot = await mkdtemp(join(tmpdir(), 'dsh-unversioned-plugin-e2e-'))
+    cleanups.push(() => rm(pluginRoot, { recursive: true, force: true }))
+    const unversionedName = 'unversioned-e2e-plugin'
+    await writeFile(join(pluginRoot, 'package.json'), JSON.stringify({ name: unversionedName, type: 'module' }))
+    await writeFile(join(pluginRoot, 'plugin.mjs'), 'export const name = "unversioned-e2e-plugin"\nexport function apply() {}\n')
+    const unversionedModule = pathToFileURL(join(pluginRoot, 'plugin.mjs')).href
     const ctx = await boot()
     await ctx.plugin(Loader)
     await ctx.plugin(AgentRegistry)
@@ -148,10 +155,12 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('DeepSeek Messages real API', () 
     ctx.baseUrl = import.meta.url
     // Select the source module while Loader owns its active package entry.
     ctx.loader.internal = sourceModuleLoader(async (specifier) => {
+      if (specifier === unversionedModule) return import(specifier)
       if (specifier !== '@deepseek-ai/dsh-plugin-package-inventory-deepseek') throw new Error(`unexpected Loader import: ${specifier}`)
       return PluginPackageInventoryDeepSeek
     })
     await ctx.loader.create({ name: '@deepseek-ai/dsh-plugin-package-inventory-deepseek' })
+    await ctx.loader.create({ name: unversionedModule })
     await ctx.loader.await()
     const packagePath = createRequire(import.meta.url).resolve('@deepseek-ai/dsh-plugin-package-inventory-deepseek/package.json')
     const packageIdentity = JSON.parse(await readFile(packagePath, 'utf8')) as { name: string; version: string }
@@ -166,9 +175,12 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('DeepSeek Messages real API', () 
       if (url !== `${Protocol.PUBLIC_BASE_URL}/v1/messages`) return fetchImpl(input, init)
       if (typeof init?.body !== 'string') throw new Error('expected a JSON Messages request')
       const body = JSON.parse(init.body) as Record<string, unknown>
-      expect(body).toMatchObject({ dsh_plugin_packages: {
-        version: 1, packages: [{ name: packageIdentity.name, version: packageIdentity.version }],
-      } })
+      expect(body.dsh_plugin_packages).toStrictEqual({
+        version: 1, packages: [
+          { name: packageIdentity.name, version: packageIdentity.version },
+          { name: unversionedName },
+        ],
+      })
       if (enabled) {
         expect(body).toMatchObject({ dsh_session_log: {
           version: 1, sessionFormatVersion: session.header.version, session: { id: session.id },

@@ -92,35 +92,35 @@ changes:
 
 <!-- persistence-release-changes:start -->
 
-检测到 12 个根类型变化、25 项结构差异。下表的最低要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
+检测到 12 个根类型变化、25 项结构差异。下表的审查要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
 
-| 路径 | 变化 | 当前最低要求 |
+| 路径 | 变化 | 审查要求 |
 |---|---|---|
-| `SessionEventEnvelope` | `union-variants-changed` | `version-bump` |
-| `SessionHeader.version` | `type-changed` | `version-bump` |
-| `event:assistant/message.sourceEventSeqs` | `property-removed` | `version-bump` |
-| `event:assistant/message.surfaceOp` | `property-made-required` | `version-bump` |
-| `event:assistant/message.surfaceOp.end` | `property-removed` | `version-bump` |
-| `event:assistant/message.surfaceOp.start` | `property-removed` | `version-bump` |
-| `event:assistant/message.surfaceOp.endSeq` | `required-property-added` | `version-bump` |
-| `event:assistant/message.surfaceOp.startSeq` | `required-property-added` | `version-bump` |
-| `event:request/context.data.systemPromptUpdate` | `optional-property-added` | `same-version` |
-| `event:request/header.data.header.system` | `property-removed` | `version-bump` |
-| `event:system/message` | `root-added` | `version-bump` |
-| `event:tool/code-dispatch` | `root-removed` | `version-bump` |
-| `event:tool/code-dispatch-start` | `root-removed` | `version-bump` |
-| `event:tool/ptc-dispatch` | `root-added` | `same-version` |
-| `event:tool/ptc-dispatch-start` | `root-added` | `same-version` |
-| `event:tool/result.surfaceOp` | `property-made-required` | `version-bump` |
-| `event:tool/result.surfaceOp.end` | `property-removed` | `version-bump` |
-| `event:tool/result.surfaceOp.start` | `property-removed` | `version-bump` |
-| `event:tool/result.surfaceOp.endSeq` | `required-property-added` | `version-bump` |
-| `event:tool/result.surfaceOp.startSeq` | `required-property-added` | `version-bump` |
-| `event:user/message.surfaceOp` | `property-made-required` | `version-bump` |
-| `event:user/message.surfaceOp.end` | `property-removed` | `version-bump` |
-| `event:user/message.surfaceOp.start` | `property-removed` | `version-bump` |
-| `event:user/message.surfaceOp.endSeq` | `required-property-added` | `version-bump` |
-| `event:user/message.surfaceOp.startSeq` | `required-property-added` | `version-bump` |
+| `SessionEventEnvelope` | `union-variants-changed` | `review-required` |
+| `SessionHeader.version` | `type-changed` | `review-required` |
+| `event:assistant/message.sourceEventSeqs` | `property-removed` | `review-required` |
+| `event:assistant/message.surfaceOp` | `property-made-required` | `review-required` |
+| `event:assistant/message.surfaceOp.end` | `property-removed` | `review-required` |
+| `event:assistant/message.surfaceOp.start` | `property-removed` | `review-required` |
+| `event:assistant/message.surfaceOp.endSeq` | `required-property-added` | `review-required` |
+| `event:assistant/message.surfaceOp.startSeq` | `required-property-added` | `review-required` |
+| `event:request/context.data.systemPromptUpdate` | `optional-property-added` | `not-required` |
+| `event:request/header.data.header.system` | `property-removed` | `review-required` |
+| `event:system/message` | `root-added` | `review-required` |
+| `event:tool/code-dispatch` | `root-removed` | `review-required` |
+| `event:tool/code-dispatch-start` | `root-removed` | `review-required` |
+| `event:tool/ptc-dispatch` | `root-added` | `not-required` |
+| `event:tool/ptc-dispatch-start` | `root-added` | `not-required` |
+| `event:tool/result.surfaceOp` | `property-made-required` | `review-required` |
+| `event:tool/result.surfaceOp.end` | `property-removed` | `review-required` |
+| `event:tool/result.surfaceOp.start` | `property-removed` | `review-required` |
+| `event:tool/result.surfaceOp.endSeq` | `required-property-added` | `review-required` |
+| `event:tool/result.surfaceOp.startSeq` | `required-property-added` | `review-required` |
+| `event:user/message.surfaceOp` | `property-made-required` | `review-required` |
+| `event:user/message.surfaceOp.end` | `property-removed` | `review-required` |
+| `event:user/message.surfaceOp.start` | `property-removed` | `review-required` |
+| `event:user/message.surfaceOp.endSeq` | `required-property-added` | `review-required` |
+| `event:user/message.surfaceOp.startSeq` | `required-property-added` | `review-required` |
 
 <!-- persistence-release-changes:end -->
 

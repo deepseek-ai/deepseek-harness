@@ -1,0 +1,10 @@
+version: 1
+scenario: agent-instructions-budget
+profile: headless
+composition: agent-instructions-budget
+recording: authored
+header:
+  class: agent-instructions
+  pin: true
+  systemPromptSource: agent-instructions
+  toolSchemasSource: text-turn

@@ -24,7 +24,7 @@ describe('Client Cordis inspect catalog', () => {
       .toEqual([
         'openSession(target: SessionTarget): void',
         'openWorkspace(workspaceId: WorkspaceId, beforeOpen?: (sessionId: SessionId) => void): Promise<void>',
-        'forkSession(sessionId: SessionId, onCreated?: (childId: SessionId) => void): Promise<SessionId>',
+        'forkSession( sessionId: SessionId, onCreated?: (childId: SessionId) => void, options?: Pick<Parameters<ISessions[\'fork\']>[0], \'allowMigration\'>, ): Promise<SessionId>',
         'connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>',
         'startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void',
         'archiveSession(sessionId: SessionId, options?: { readonly stopActivity?: boolean }): Promise<void>',

@@ -1,3 +1,4 @@
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -620,6 +621,7 @@ describe('dsh-tool-workflow', () => {
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(SessionProjectionRegistry)
+      provideWorkingDirectoryFixture(ctx)
       await ctx.plugin(SubagentRuntime)
       ctx.subagents.registerProvider({
         name: 'spawn',
@@ -655,6 +657,7 @@ describe('dsh-tool-workflow', () => {
       await ctx.plugin(LocalJobRegistry)
       await ctx.plugin(ToolTasks)
       await ctx.plugin(SessionProjectionRegistry)
+      provideWorkingDirectoryFixture(ctx)
       await ctx.plugin(SubagentRuntime)
       ctx.subagents.registerProvider({
         name: 'spawn',

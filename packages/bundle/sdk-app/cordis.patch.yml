@@ -1,11 +1,5 @@
 # The SDK application over dsh-base. Stdout belongs exclusively to JSON-RPC.
 
-- id: system-prompt
-  config:
-    personaSuffix: Your working directory is {{cwd}}.
-    personaPrefix: >-
-      You are a coding agent powered by the {{model}} model.
-
 - id: session-title-llm
   disabled: true
 

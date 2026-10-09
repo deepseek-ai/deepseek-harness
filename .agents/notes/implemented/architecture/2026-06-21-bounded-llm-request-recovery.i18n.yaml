@@ -21,8 +21,8 @@
   en: 57dbdd385f48bb3e
   zh: 5e15463fae4be582
 /agent-note-bounded-recovery-for-transient-llm-request-failures/decision/bound-stalled-streams-where-they-can-be-stopped:
-  en: f7369086e87192b9
-  zh: e2839ed8cc5c23b8
+  en: 6a55107caa329eea
+  zh: 13a76e482739141e
 /agent-note-bounded-recovery-for-transient-llm-request-failures/decision/keep-attempts-separate-in-the-existing-log:
   en: 8f57db4bfd6e1c22
   zh: 67ac62217bb68570
@@ -33,8 +33,8 @@
   en: a6d0306740d470ee
   zh: 700bd4b0aa58f3e8
 /agent-note-bounded-recovery-for-transient-llm-request-failures/verification:
-  en: db343f335a9d7cad
-  zh: 49b8300de55dcfeb
+  en: 7412edfd162c4a28
+  zh: 64108a11e6194e35
 /agent-note-bounded-recovery-for-transient-llm-request-failures/consequences:
   en: 08659e8606455ada
   zh: 862080f8df5f28ec

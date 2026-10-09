@@ -41,7 +41,7 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "@earendil-works/pi-ai": "^0.87.1"
+    "@earendil-works/pi-ai": "^1.0.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

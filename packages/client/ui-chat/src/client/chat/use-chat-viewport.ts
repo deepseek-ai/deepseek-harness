@@ -2,6 +2,7 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { ChatScrollPosition } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
+import { createFlowMotion } from './flow-motion.ts'
 import { scrollMetrics, ScrollFollow, type ViewportMetrics } from './use-scroll-follow.ts'
 export type { ViewportMetrics } from './use-scroll-follow.ts'
 
@@ -20,9 +21,11 @@ export interface ViewportLanding {
 
 interface ViewportEvents {
   scroll: (event: ViewportScroll) => void
-  scrollEnd: () => void
+  scrollEnd: (outer: boolean) => void
   resize: () => void
   interact: () => void
+  /** Any reading gesture, before paging ownership is consulted. */
+  intent?: () => void
 }
 
 interface ViewportElements {
@@ -30,6 +33,8 @@ interface ViewportElements {
   readonly column: HTMLElement
   readonly scroller: HTMLElement
   readonly composer: HTMLElement | null
+  /** Room below closing rows, retained until scrolling or content growth makes it unnecessary. */
+  readonly spacer: HTMLElement | null
 }
 
 interface PagingPosition {
@@ -49,6 +54,13 @@ export class ChatViewport {
   private turns: ReturnType<ChatSnapshot['navigation']['items']> = []
   private observation: { top: number; landing: ViewportLanding | null } = { top: 0, landing: null }
   private paging: PagingPosition | null = null
+  /** Transition state and row callbacks owned by this viewport's attachment. */
+  readonly motion = createFlowMotion(
+    (px) => { this.reserveBelow(px) },
+    (active) => {
+      if (this.elements !== null) this.elements.scroller.style.overflowAnchor = active ? 'none' : ''
+    },
+  )
 
   /**
    * Bind to the containing scrollport and observe content and viewport sizes.
@@ -59,14 +71,17 @@ export class ChatViewport {
     this.detach()
     const scroller = list.closest<HTMLElement>('[data-conversation-scroll]') ?? list
     const composer = scroller.querySelector<HTMLElement>('[data-composer-seat]')
-    const elements = { list, column, scroller, composer }
+    const spacer = list.querySelector<HTMLElement>('[data-chat-turn-spacer]')
+    const elements = { list, column, scroller, composer, spacer }
     this.elements = elements
+    if (spacer !== null) spacer.style.height = ''
     scroller.addEventListener('scroll', this.onScroll, { passive: true })
     scroller.addEventListener('scrollend', this.onScrollEnd, { passive: true, capture: true })
     for (const type of READING_INTENTS) scroller.addEventListener(type, this.onIntent, { passive: true, capture: true })
     if (typeof ResizeObserver !== 'undefined') {
       this.observer = new ResizeObserver(() => {
         if (this.elements !== elements) return
+        this.reclaimBelow()
         this.invalidate()
         this.events?.resize()
       })
@@ -79,6 +94,8 @@ export class ChatViewport {
   /** Disconnect DOM resources and clear observations for the detached view. */
   detach(): void {
     this.stopPreserving()
+    this.motion.clear()
+    if (this.elements !== null) this.elements.scroller.style.overflowAnchor = ''
     this.elements?.scroller.removeEventListener('scroll', this.onScroll)
     this.elements?.scroller.removeEventListener('scrollend', this.onScrollEnd, true)
     for (const type of READING_INTENTS) this.elements?.scroller.removeEventListener(type, this.onIntent, true)
@@ -121,12 +138,63 @@ export class ChatViewport {
     this.observation.landing = null
   }
 
+  private spacerHeight(): number {
+    const spacer = this.elements?.spacer
+    return spacer == null ? 0 : Number.parseFloat(spacer.style.height) || 0
+  }
+
+  private setSpacer(height: number): void {
+    const spacer = this.elements?.spacer
+    if (spacer == null) return
+    const next = height <= 0 ? '' : `${Math.ceil(height)}px`
+    if (spacer.style.height !== next) spacer.style.height = next
+  }
+
+  /**
+   * Add room below the flow before rows above the reader close, so the scrollport never clamps:
+   * the closing gap pulls the content below it upward while everything above stays put.
+   * @param px - height about to leave the flow.
+   */
+  reserveBelow(px: number): void {
+    if (px <= 0) return
+    this.setSpacer(this.spacerHeight() + px)
+  }
+
+  /**
+   * Give reserved room back after acknowledged scrolling or content growth without clamping the reader.
+   * Holds still during folds and unsampled movement; following includes the room that remains.
+   */
+  reclaimBelow(): void {
+    const elements = this.elements
+    if (elements === null || elements.spacer === null) return
+    const current = this.spacerHeight()
+    if (current === 0 || this.motion.foldActive()) return
+    const scroll = this.readScroll()
+    // Trimming the range before sampling could misclassify a reader's move as a layout clamp.
+    if (scroll === null || scroll.movedByReader) return
+    const floorWithoutSpacer = scroll.metrics.floor - current
+    this.setSpacer(Math.min(current, Math.max(0, scroll.metrics.top - floorWithoutSpacer)))
+  }
+
+  /**
+   * Stop an outstanding native follow animation at its current position before a reading gesture.
+   * @param follow - follow controller bound to this scrollport.
+   */
+  interruptFollow(follow: ScrollFollow): void {
+    if (!follow.animating) return
+    const metrics = this.metrics()
+    if (metrics === null || this.elements === null) return
+    follow.interrupt(this.elements.scroller, metrics)
+    this.observation = { top: metrics.top, landing: null }
+  }
+
   /**
    * Accept a sampled reader position without retaining a known landing.
    * @param metrics - settled reader position used as the next attribution baseline.
    */
   acknowledge(metrics: ViewportMetrics): void {
     this.observation = { top: metrics.top, landing: null }
+    this.reclaimBelow()
   }
 
   /**
@@ -221,7 +289,8 @@ export class ChatViewport {
     const first = this.turns[0]
     if (elements === null || metrics === null || first === undefined) return null
     const line = elements.scroller.getBoundingClientRect().top + Math.min(96, metrics.height * 0.2)
-    const rows = elements.column.children
+    // Slot anchors use display:contents: measure their rows, not the anchor's empty box.
+    const rows = (elements.column.querySelector(':scope > [data-slot="conversation.chat.flow"]') ?? elements.column).children
     let low = 0
     let high = rows.length
     let reading = first.turn
@@ -380,15 +449,19 @@ export class ChatViewport {
   }
 
   /**
-   * Align the scrollport with its current floor.
+   * Align with the physical floor, including fold room that newer content has not yet filled.
    * @param follow - independent follow intent and scrolling controller.
-   * @returns the actual floor landing, or null while detached.
+   * @param behavior - immediate positioning, or one native animation for a reader-caused tail change.
+   * @returns the actual floor landing, or null while detached. A smooth landing reports the starting
+   * position; native scroll delivery moves it.
    */
-  scrollToBottom(follow: ScrollFollow): ViewportLanding | null {
+  scrollToBottom(follow: ScrollFollow, behavior: 'instant' | 'smooth' = 'instant'): ViewportLanding | null {
     const metrics = this.metrics()
     if (metrics === null || this.elements === null) return null
+    this.observation = { top: metrics.top, landing: null }
+    this.reclaimBelow()
     const landing: ViewportLanding = {
-      metrics: follow.toBottom(this.elements.scroller, metrics, 'instant'),
+      metrics: follow.toBottom(this.elements.scroller, scrollMetrics(this.elements.scroller), behavior),
       position: null,
       turn: this.latestTurn,
     }
@@ -437,8 +510,10 @@ export class ChatViewport {
   }
 
   private readonly onScrollEnd = (event: Event): void => {
-    if (event.target === this.elements?.scroller
-      || (event.target instanceof HTMLElement && event.target.hasAttribute('data-step-process-body'))) this.events?.scrollEnd()
+    if (event.target === this.elements?.scroller) {
+      this.events?.scrollEnd(true)
+      this.reclaimBelow()
+    } else if (event.target instanceof HTMLElement && event.target.hasAttribute('data-step-process-body')) this.events?.scrollEnd(false)
   }
 
   private readonly onIntent = (event: Event): void => {
@@ -446,6 +521,7 @@ export class ChatViewport {
       if (event.target instanceof Element && event.target.closest('[data-composer-seat]') !== null) return
       if (event.type === 'keydown' && (!(event instanceof KeyboardEvent) || !SCROLL_KEYS.has(event.key))) return
     }
+    this.events?.intent?.()
     if (this.paging === null) return
     this.stopPreserving()
     this.events?.interact()

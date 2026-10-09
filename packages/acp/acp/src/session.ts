@@ -10,7 +10,7 @@ import {
   type SessionNotification,
   type StopReason,
 } from '@agentclientprotocol/sdk'
-import type { Agent, AgentHandle, AgentOptions, ModelSelection } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle, AgentOptions, AgentStatus, ModelSelection } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, errorChain, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { type Session, type SessionEvent, type SessionId, type TurnEndReason } from '@deepseek-ai/dsh-session'
 import { AcpContentError, admitAcpPrompt } from './content.ts'
@@ -19,10 +19,12 @@ import { mountAcpMcpServers } from './mcp.ts'
 import { AcpModelControl } from './model-control.ts'
 import { assistantUpdates, toolCallUpdate, toolResultUpdate } from './updates.ts'
 
-/** The continuable-subagent teardown used without depending on the subagent package. */
-interface ContinuableDrain {
-  /** Dispose continuable descendants below exact host-owned parents child-first. */
-  drainContinuableDescendants(parents: readonly Agent[]): Promise<void>
+/** Subagent completion and teardown without depending on the subagent package. */
+interface SubagentLifecycle {
+  /** Dispose subagent descendants below exact host-owned parents child-first. */
+  drainDescendants(parents: readonly Agent[]): Promise<void>
+  /** Observe currently managed descendants without closing future admission. */
+  waitForChildren(parent: Agent): Promise<boolean>
 }
 
 /** Inputs shared by fresh and resumed ACP session construction. */
@@ -55,7 +57,8 @@ interface InflightPrompt {
   admissionDone: Promise<void>
   finishAdmission: () => void
   admissionController: AbortController
-  cancelRequested: boolean
+  cancellationDone: PromiseWithResolvers<void>
+  cancelStartedIdle: boolean
   settlementStarted: boolean
   outputError: Error | undefined
   agentError: Error | undefined
@@ -234,7 +237,7 @@ export class AcpSession {
   }
 
   /**
-   * Admit, enqueue, and settle one prompt at whole-Agent quiescence.
+   * Admit one prompt and settle after the root, descendants, and updates finish.
    * @param params - standard ACP prompt request for this session.
    * @param imageEnabled - connection capability advertised at initialization.
    * @param requestSignal - JSON-RPC request cancellation signal.
@@ -260,7 +263,8 @@ export class AcpSession {
       admissionDone: admission.promise,
       finishAdmission: admission.resolve,
       admissionController,
-      cancelRequested: false,
+      cancellationDone: Promise.withResolvers<void>(),
+      cancelStartedIdle: false,
       settlementStarted: false,
       outputError: undefined,
       agentError: undefined,
@@ -308,7 +312,7 @@ export class AcpSession {
         inflight.finishAdmission()
       }
 
-      if (inflight.cancelRequested) {
+      if (inflight.admissionController.signal.aborted) {
         this.settleAfterQuiescence(inflight)
         return { stopReason: await completion.promise }
       }
@@ -343,6 +347,10 @@ export class AcpSession {
    * @param event - committed durable event.
    */
   onSessionEvent(session: Session, event: SessionEvent): void {
+    if (event.type === 'turn/start' && this.inflight?.turn !== undefined) {
+      this.inflight.turn = event.data.turn
+      this.inflight.endReason = undefined
+    }
     try {
       if (event.type === 'assistant/message') {
         const inflight = this.inflight?.turn === event.data.turn ? this.inflight : undefined
@@ -383,6 +391,7 @@ export class AcpSession {
       const inflight = this.inflight
       if (inflight !== undefined && event.type === 'turn/end' && inflight.turn === event.data.turn) {
         inflight.endReason = event.data.reason
+        inflight.agentError = undefined
       }
       if (event.type === 'turn/end') this.modelControl.releaseTurn(event.data.turn)
     }
@@ -402,17 +411,27 @@ export class AcpSession {
 
   /**
    * Correlate an Agent interval failure with the active ACP prompt.
-   * @param turn - failed turn number.
    * @param error - original same-process failure.
    */
-  onAgentError(turn: number, error: unknown): void {
+  onAgentError(error: unknown): void {
     const inflight = this.inflight
     if (inflight === undefined || !inflight.messageQueued) return
-    // AgentLoop balances an in-turn failure with durable turn/end; settlement
-    // reads that exact error reason. This slot records interval failures outside it.
-    if (inflight.turn === turn) return
+    // A later committed turn/end supersedes this live failure. Failed turn
+    // start/end appends have no terminal record and keep the failure observable.
     inflight.agentError = new Error(errorChain(error))
     this.settleAfterQuiescence(inflight)
+  }
+
+  /**
+   * Complete cancelled activity without following a later root driver.
+   * @param status - the emitted transition, which may precede a reentrant wake.
+   */
+  onAgentStatus(status: AgentStatus): void {
+    const inflight = this.inflight
+    if (inflight === undefined || !inflight.messageQueued || !inflight.admissionController.signal.aborted) return
+    // Maintenance remains publicly idle; its next running transition belongs
+    // to work released after the maintenance task finished.
+    if (status === 'idle' || inflight.cancelStartedIdle) inflight.cancellationDone.resolve(this.outputTail)
   }
 
   /** Await every update queued before this call. */
@@ -439,12 +458,12 @@ export class AcpSession {
       } catch (error: unknown) {
         failures.push(new Error('ACP session activity drain failed', { cause: error }))
       }
-      const subagents = this.ctx.get('subagents') as ContinuableDrain | undefined
+      const subagents = this.ctx.get('subagents') as SubagentLifecycle | undefined
       try {
-        await subagents?.drainContinuableDescendants([this.agent])
+        await subagents?.drainDescendants([this.agent])
       } catch (error: unknown) {
-        this.ctx.logger.warn(`acp: continuable subagent teardown failed: ${errorChain(error)}`)
-        failures.push(new Error('continuable subagent teardown failed', { cause: error }))
+        this.ctx.logger.warn(`acp: subagent teardown failed: ${errorChain(error)}`)
+        failures.push(new Error('subagent teardown failed', { cause: error }))
       }
       try {
         await this.ctx.sessions.flush(this.agent.session)
@@ -474,10 +493,20 @@ export class AcpSession {
   private cancelPrompt(detail: string): void {
     const inflight = this.inflight
     if (inflight === undefined) return
-    inflight.cancelRequested = true
+    const firstCancellation = !inflight.admissionController.signal.aborted
+    if (firstCancellation) inflight.cancelStartedIdle = this.agent.status === 'idle'
     inflight.admissionController.abort(new Error(detail))
     this.settleAfterQuiescence(inflight)
-    if (inflight.messageQueued) this.agent.cancel({ kind: 'user' })
+    if (!inflight.messageQueued) {
+      inflight.cancellationDone.resolve()
+      return
+    }
+    this.agent.cancel({ kind: 'user' })
+    if (firstCancellation) {
+      const done = inflight.cancellationDone
+      // Plugin disposal can detach status observers before this activity retires.
+      void this.agent.whenIdle().then(() => { done.resolve(this.outputTail) }, done.reject)
+    }
   }
 
   private settleAfterQuiescence(inflight: InflightPrompt): void {
@@ -486,13 +515,26 @@ export class AcpSession {
     void (async () => {
       await inflight.admissionDone
       if (inflight.messageQueued) {
-        await this.agent.whenIdle()
-        await this.outputTail
+        const subagents = this.ctx.get('subagents') as SubagentLifecycle | undefined
+        const cancelled = inflight.cancellationDone.promise
+        const isCancelled = (): boolean => inflight.admissionController.signal.aborted
+        const idleAt = (seq: Session['seq']): boolean => this.agent.status === 'idle' && this.agent.session.seq === seq
+        while (true) {
+          await Promise.race([this.agent.whenIdle(), cancelled])
+          if (isCancelled()) break
+          const idleSeq = this.agent.session.seq
+          const children = await Promise.race([subagents?.waitForChildren(this.agent), cancelled])
+          if (isCancelled()) break
+          if (children || !idleAt(idleSeq)) continue
+          await this.outputTail
+          if (isCancelled() || idleAt(idleSeq)) break
+        }
+        if (isCancelled()) await cancelled
       }
       /* v8 ignore next -- this prompt owns the slot until this exact settlement clears it. */
       if (this.inflight !== inflight) return
       this.inflight = undefined
-      if (inflight.cancelRequested) {
+      if (inflight.admissionController.signal.aborted) {
         inflight.resolve('cancelled')
         return
       }

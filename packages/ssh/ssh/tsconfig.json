@@ -43,6 +43,9 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../util/values"
     }
   ]
 }

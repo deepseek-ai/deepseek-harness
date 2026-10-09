@@ -17,8 +17,11 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { Config as SystemPromptConfig } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { Config as ToolRuntimeConfig } from '@deepseek-ai/dsh-tools'
+import FsLocal from '@deepseek-ai/dsh-fs-local'
+import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 
 export { createInboxStub, unsupportedInbox } from './inbox.ts'
+export { provideWorkingDirectoryFixture } from './working-directory-fixture.ts'
 
 interface DriverInbox extends Inbox {
   claim(target: InboxTarget, turn: number): UserMessage[]
@@ -46,6 +49,8 @@ export interface AgentLoopTestHarness {
 
 /** Configuration forwarded to the prerequisite service plugins. */
 export interface AgentLoopTestDependenciesOptions {
+  /** Mount the real directory owner and a local filesystem for directory-aware tests. */
+  readonly workingDirectory?: boolean
   /** Configuration for the system-prompt registry. */
   readonly systemPrompt?: SystemPromptConfig
   /** Configuration for the tool registry. */
@@ -72,6 +77,10 @@ export async function mountAgentLoopTestDependencies(
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, options.systemPrompt ?? {})
+  if (options.workingDirectory) {
+    if (ctx.get('fs') === undefined) await ctx.plugin(FsLocal)
+    await ctx.plugin(WorkingDirectory)
+  }
   await ctx.plugin(ToolRuntime, options.tools ?? {})
   await ctx.plugin(AgentRegistry)
 }

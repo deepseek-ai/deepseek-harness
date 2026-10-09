@@ -99,7 +99,7 @@ PTC mode 通过运行时请求中的 `{ name: "ToolCallError", memberNamePropert
 
 ## 后果
 
-PTC mode 程序可以通过稳定值组合工具，无需逆向解析 Native 自然语言。Native 和 Both Mode 保留现有文本与 UI 展示，PTC mode 则获得输出 schema 类型和精确的运行时 JSON。工具作者必须把规范值视为程序化 API，并将仅用于展示的格式化放入渲染器。
+PTC mode 程序可以通过稳定值组合工具，无需逆向解析 Native 自然语言。Native mode 保留现有文本与 UI 展示，PTC mode 则获得输出 schema 类型和精确的运行时 JSON。工具作者必须把规范值视为程序化 API，并将仅用于展示的格式化放入渲染器。
 
 worker 会以嵌套深度有界的扁平协议格式传输数据并执行无损校验，但不会降低中间值的开销，也不会使其具备持久性。外层输出溢出会显式导致运行失败，错误处理则有意由人类引导，而不是依赖带版本的错误代码联合。
 

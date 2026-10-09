@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ClaudeCodeMods, { defineMod } from '../src/index.ts'
 
 const fibers: Fiber[] = []
@@ -30,6 +31,7 @@ describe('defineMod', () => {
 
     const ctx = new Context()
     fibers.push(ctx.fiber)
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(ClaudeCodeMods, {})
     const fiber = await ctx.plugin(plugin, { history: 3 })
     await fiber.await()
@@ -49,6 +51,7 @@ describe('defineMod', () => {
     })
     const ctx = new Context()
     fibers.push(ctx.fiber)
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(ClaudeCodeMods, {})
     const fiber = ctx.plugin(slow, {})
     await vi.waitFor(() => { expect(release).toBeDefined() })
@@ -65,6 +68,7 @@ describe('defineMod', () => {
     const broken = defineMod({ name: 'broken', register: () => { throw new Error('no thanks') } })
     const ctx = new Context()
     fibers.push(ctx.fiber)
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(ClaudeCodeMods, {})
     const fiber = await ctx.plugin(bare, {})
     await fiber.await()

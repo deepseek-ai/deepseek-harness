@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-10-07-title-reasoning-effort.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-10-07-title-reasoning-effort.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-10-07-title-reasoning-effort:
+  en: 62238f237d762372
+  zh: 67c868935122faba
+/2026-10-07-title-reasoning-effort/summary:
+  en: a23a870e04888548
+  zh: a794ea9022adf492
+/2026-10-07-title-reasoning-effort/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-10-07-title-reasoning-effort/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-10-07-title-reasoning-effort/compatibility:
+  en: 2aef689aa3af8d1c
+  zh: dc468f9d2c98d70c
+/2026-10-07-title-reasoning-effort/verification:
+  en: 48ef9b977eaf074b
+  zh: b1183bda3a6a38be
+/2026-10-07-title-reasoning-effort/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Open the execution environment's default shell in a Session workspace from the Web sidebar. Reconnect to existing processes and close their complete provider-owned process ranges. Terminal output stays outside the Agent transcript. Keeping a terminal open retains its process and a bounded screen buffer.
+Open the execution environment's default shell in the Session's current working directory from the Web sidebar. Reconnect to existing processes and close their complete provider-owned process ranges. Terminal output stays outside the Agent transcript. Keeping a terminal open retains its process and a bounded screen buffer.
 
 ## Table of Contents
 
@@ -25,9 +25,9 @@ Open the execution environment's default shell in a Session workspace from the W
 <a id="use-this-package"></a>
 ## Use this package
 
-The Web bundle mounts this package with the subprocess provider, sandbox policy and Typert Gateway. Sandbox policy supplies only the fallback working directory for Sessions without a cwd. `remote.terminal` exposes `environment`, `shells`, `list`, `create`, `retain`, `follow`, `write`, `resize`, `rename` and `close`; each operation is scoped by Session identity. Listing reads retained Host terminals directly, so viewing an offline Session neither activates an Agent nor produces a recovery error.
+The Web bundle mounts this package with the subprocess provider, working-directory service, sandbox policy and Typert Gateway. `remote.terminal` exposes `environment`, `shells`, `list`, `create`, `retain`, `follow`, `write`, `resize`, `rename` and `close`; each operation is scoped by Session identity. Listing reads retained Host terminals directly, so viewing an offline Session neither activates an Agent nor produces a recovery error.
 
-Shell discovery lists the execution environment's declared default shell first. Only when the provider omits that default does resolution use `/bin/sh` on POSIX or `cmd.exe` on Windows. An optional `shell` profile overrides that choice with executable `path`, display `name` and `args` (default `[]`). The selector also probes `shellCandidates` through the execution provider and omits confirmed lookup misses. It lists each executable name once, ignoring letter case and `.exe`, and keeps the earliest entry, because PATH lookup can reach the default through another directory, such as `/usr/bin/bash` for `/bin/bash` on merged-`/usr` systems. Creation accepts a discovered `shellPath` and verifies it again; resolution or transport failure is reported without launching a different shell. Environment lookup returns the working directory and limits without resolving a shell, so an unavailable default does not prevent reattaching to an existing process. Automatic POSIX profiles start interactively, and PowerShell uses `-NoLogo`, so completion and startup configuration remain shell-owned. The Session workspace supplies the initial directory. User terminals run with the execution environment’s system-user permissions, independently of the Agent’s sandbox mode and approval policy. Operating-system and container restrictions still apply; DSH does not elevate the user. The subprocess provider retains its credential-environment scrubbing.
+Shell discovery lists the execution environment's declared default shell first. Only when the provider omits that default does resolution use `/bin/sh` on POSIX or `cmd.exe` on Windows. An optional `shell` profile overrides that choice with executable `path`, display `name` and `args` (default `[]`). The selector also probes `shellCandidates` through the execution provider and omits confirmed lookup misses. It lists each executable name once, ignoring letter case and `.exe`, and keeps the earliest entry, because PATH lookup can reach the default through another directory, such as `/usr/bin/bash` for `/bin/bash` on merged-`/usr` systems. Creation accepts a discovered `shellPath` and verifies it again; resolution or transport failure is reported without launching a different shell. Environment lookup reads the current directory and limits without filesystem validation or shell resolution, so unavailable directories or default shells do not prevent reattaching to an existing process. Automatic POSIX profiles start interactively, and PowerShell uses `-NoLogo`, so completion and startup configuration remain shell-owned. New terminals validate the current directory through the [working-directory service](../../session/working-directory/README.md) before spawning, including its recovery behavior. Existing terminals keep their process directories. User terminals run with the execution environment’s system-user permissions, independently of the Agent’s sandbox mode and approval policy. Operating-system and container restrictions still apply; DSH does not elevate the user. The subprocess provider retains its credential-environment scrubbing.
 
 | Configuration | Default | Meaning |
 |---|---|---|
@@ -76,11 +76,11 @@ Closing saves an unfinished cleanup request before releasing the tab, then await
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as this package handles user terminal interaction without adding model input.
+Indirectly, through [working-directory recovery](../../session/working-directory/README.md): creating a terminal may update directory user context, while terminal output stays outside model history.
 
 #### KV Cache effect
 
-None; terminal output travels only between the browser and Host.
+Directory recovery appends user context without replacing the system-prompt prefix; terminal output stays outside model requests.
 
 ## Known Limitations and Deferred Work
 

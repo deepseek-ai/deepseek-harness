@@ -5,4 +5,6 @@ composition: web-schedule
 recording: authored
 header:
   class: web-schedule
+  # This catalog-only v3 fixture has no request/header or system/message.
+  # Historical prompt/schema sidecars remain pinned for the UI inventory check.
   pin: true

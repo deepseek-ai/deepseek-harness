@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -17,6 +17,7 @@ import { PluginsPanelIcon } from '../src/client/PluginsPanelIcon.tsx'
 import type { PluginManagerFace } from '../src/client/manager-store.ts'
 
 usePinnedBrowserLanguages('zh-CN')
+beforeEach(() => { localStorage.clear() })
 afterEach(cleanup)
 
 async function bench() {
@@ -69,12 +70,17 @@ describe('ui-plugin-manager browser plugin', () => {
     const entry = b.slots.entries('main')[0]!
     assert(entry.store && 'create' in entry.store)
     const navigation = entry.store.create()
+    expect(navigation.getSnapshot()).toEqual({ view: { kind: 'list' } })
     b.ctx.pluginNavigation.openBundle('dsh-navigation-test')
     expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
     expect(navigation.getSnapshot()).toEqual({ view: { kind: 'package', name: 'dsh-navigation-test' } })
     b.selectPanel(null)
     expect(navigation.getSnapshot()).toEqual({ view: { kind: 'list' } })
     b.selectPanel(PANEL_ID)
+    expect(navigation.getSnapshot()).toEqual({ view: { kind: 'list' } })
+    assert(navigation.actions.setView)
+    navigation.actions.setView({ kind: 'more' })
+    b.selectPanel(null)
     expect(navigation.getSnapshot()).toEqual({ view: { kind: 'list' } })
     b.ctx.pluginNavigation.openBundle('dsh-navigation-test')
     removeRoot()

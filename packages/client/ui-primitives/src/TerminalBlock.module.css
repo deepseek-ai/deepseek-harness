@@ -110,18 +110,11 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* Default `pre`, not `nowrap`: the prompt row renders the command verbatim,
-   and `nowrap` would collapse the repeated spaces, tabs, and alignment of an
-   indented continuation. Hosts opt into wrapping long commands by rebinding
-   the variable to `pre-wrap`; the ellipsis then simply never engages, and
-   overflow-wrap is inert while white-space stays `pre`. */
+/* Each authored command line scrolls independently of its prompt and status.
+   `pre` preserves whitespace; hosts can opt into wrapping with `pre-wrap`. */
 .command {
-  min-width: 0;
+  --dsl-command-whitespace: var(--dsl-terminal-command-whitespace, pre);
   color: var(--dsw-alias-label-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: var(--dsl-terminal-command-whitespace, pre);
-  overflow-wrap: anywhere;
 }
 
 /* Capped to the prompt's line height (Pill's own 24px height would exceed a

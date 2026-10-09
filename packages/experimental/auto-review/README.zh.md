@@ -25,6 +25,8 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
+评审环境记录待执行操作对应的 Session 当前工作目录。
+
 ### 安装到 profile
 
 从源码 checkout 通过既有 CLI 将包安装到 Web profile：

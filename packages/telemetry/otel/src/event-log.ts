@@ -8,6 +8,7 @@ import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs
 import type { BatchLogRecordProcessorOptions, LogRecordExporter } from '@opentelemetry/sdk-logs'
 import type { SessionLogOptions } from './session-log.ts'
 import { createEventLogExporter } from './event-transport.ts'
+import type { LogExporterOptions } from './transport.ts'
 
 /** Scalar values accepted by the collector's Arrow attributes map. */
 export type OTelEventScalar = string | number | boolean
@@ -28,7 +29,7 @@ export interface OTelEventRecord {
 
 /** Ordinary-event transport, resource, scope, and count-batching options. */
 export interface EventLogOptions {
-  exporter: SessionLogOptions['exporter']
+  exporter: LogExporterOptions
   resourceAttributes: Attributes
   scope: { name: string; version?: string }
   processor: Omit<BatchLogRecordProcessorOptions, 'exporter'>

@@ -102,7 +102,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Terminal subsystem reference](../../../docs/subsystems/terminal.md) — shared types, backend and session contracts, and the generated `ctx.terminals` surface.
 - [terminal/ package map](../README.md) — the three-package family and how it composes.
 - [terminal-bash backend](../terminal-bash/README.md) — the shipped shell backend that provides the `shell` type.
-- [tool-terminal tools](../tool-terminal/README.md) — the six model-facing tools that operate sessions.
+- [tool-terminal tools](../../experimental/tool-terminal/README.md) — the six model-facing tools that operate sessions.
 - [Persistent PTY Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-persistent-pty-sessions.md) — design rationale, alternatives, and deferred boundaries.
 
 -----

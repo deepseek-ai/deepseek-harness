@@ -43,7 +43,7 @@ ctx.slots.inject('tool.call.toolview', () =>
   }, BusinessToolRow))
 ```
 
-owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、`phase` 判别字段及对应阶段的 `block`、可选 `cwd` 与 `home`、会话授权的 `loadImage` loader（供结果携带持久图像的视图使用），以及普通的 `openFile`/`inspect` 回调。PTC dispatch 块保留事件的 `parentCallId`；根会话调用没有该字段，因此后代调用都走同一条按 key 分发路径：已注册视图的调用（如 `read_image`）也会在嵌套处渲染对应卡片，未注册的后代调用则保持通用压平形式。路径摘要先相对会话 cwd 缩短，再把剩余的 POSIX Host home 写成 `~`；`filePath` 与 Host 打开仍使用作者给出的文件系统路径。注册项会收到常规的会话 slot 运行时共享数据，但不会收到 React 节点或运行时服务。
+owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、`phase` 判别字段及对应阶段的 `block`、可选 `cwd` 与 `home`、会话授权的 `loadImage` loader（供结果携带持久图像的视图使用），以及普通的 `openFile`/`inspect` 回调。PTC dispatch 块保留事件的 `parentCallId`；根会话调用没有该字段，因此后代调用都走同一条按 key 分发路径：已注册视图的调用（如 `read_image`）也会在嵌套处渲染对应卡片，未注册的后代调用则保持通用压平形式。路径摘要先相对会话 cwd 缩短，再把剩余的 POSIX Host home 写成 `~`；`filePath` 与 Host 打开优先使用操作发生时记录的绝对结果路径，显示标签仍保留原始参数。成功的旧根调用结果继续回退到原参数；运行中的相对路径等待结果。注册项会收到常规的会话 slot 运行时共享数据，但不会收到 React 节点或运行时服务。
 
 ### 内置视图
 
@@ -51,7 +51,7 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、`phase` 判别字
 
 文件工具行优先使用完整的 `file_path`；其他通用行（包括搜索和未注册的工具）优先使用非空 `description`，再回退到各自类别的参数摘要。应在渲染或构造视图时读取 `args`：准备态读器原地增长，后续仅在已观察答案变化时重新发布块。
 
-本包拥有 generic fallback，以及 shell/pwsh、read、read_image、write/edit、运行中的 `str_replace_editor` `create`／`str_replace`、grep/glob、web、todo、question 与 PTC dispatch 的内置展示。结构化卡片直接从第一方原始 event 字段派生；Host `presentCall` 与 `presentResult` 值不会进入 Client。运行中的原子工具行以同一道高光从左到右扫过标题、分隔符、摘要与后缀；已完成行保持静态。运行中与已完成的前台标准 `bash`/`pwsh` 和 `terminal_send` 调用，无论位于根还是 PTC dispatch 子调用中，都在通过相同的参数、结果和错误检查后使用 terminal 卡片。持久 `bash`/`pwsh` 调用仅在运行中使用 terminal 卡片。以已识别的 spill 策略提示结尾的 shell 输出，在 shell 行中使用可展开的 generic 输出，在 Details 中使用 generic 输出；位置被改变或被省略的退出标记无法证明成功。已完成的持久 shell 结果保持 generic 展示，因为 reset 与部分输出诊断不一定描述单个进程的退出状态；根调用的持久 shell 结果可展开，后台启动回执则保持折叠。带有 `AUTO_REVIEW_DENIED` 的原生或 PTC dispatch 失败会在折叠行显示 Auto review 裁决，展开时显示一行归一化后的“未执行”原因；原因缺失或只有空白时使用本地化 fallback 文案。`ui-skill` 展示了业务包自行拥有的 `skill` 注册项。
+本包拥有 generic fallback，以及 shell/pwsh、read、read_image、write/edit、运行中的 `str_replace_editor` `create`／`str_replace`、grep/glob、web、todo、question 与 PTC dispatch 的内置展示。结构化卡片直接从第一方原始 event 字段派生；Host `presentCall` 与 `presentResult` 值不会进入 Client。运行中的原子工具行以同一道高光从左到右扫过标题、分隔符、摘要与后缀；已完成行保持静态。运行中与已完成的前台标准 `bash`/`pwsh` 和 `terminal_send` 调用，无论位于根还是 PTC dispatch 子调用中，都在通过相同的参数、结果和错误检查后使用 terminal 卡片。持久 `bash`/`pwsh` 调用仅在运行中使用 terminal 卡片。以已识别的 spill 策略提示结尾的 shell 输出，在 shell 行中使用可展开的 generic 输出，在 Details 中使用 generic 输出；位置被改变或被省略的退出标记无法证明成功。已完成的持久 shell 结果保持 generic 展示，因为 reset 与部分输出诊断不一定描述单个进程的退出状态；根调用的持久 shell 结果可展开。后台 Bash 调用可展开查看原始参数与后台任务回执。输入内容可横向滚动，不自动折行，并可选中；仅横向溢出时添加具名的键盘聚焦目标。提供 Inspect 时也可使用。回执不表示后台任务的退出状态。带有 `AUTO_REVIEW_DENIED` 的原生或 PTC dispatch 失败会在折叠行显示 Auto review 裁决，展开时显示一行归一化后的“未执行”原因；原因缺失或只有空白时使用本地化 fallback 文案。`ui-skill` 展示了业务包自行拥有的 `skill` 注册项。
 
 问题行按 id 配对问题与答案；答案来自工具结果，迟到回答则来自 `userQuestions` 投影。可回答的调用提供按钮以重新打开面板。迟到回复进入 agent Inbox 后，问题行显示已提交的答案；等待准入期间，「查看回答」展开只读的行内记录。带有答案的已结算调用则以只读方式打开面板。没有答案的已关闭调用和无效记录不提供按钮。已取消和已中断的行显示裁决，不虚构答案。若面板提供方不接受按钮操作，点击会展开该行。不受支持或含糊的输入回退为压平的工具文本。
 
@@ -88,6 +88,8 @@ Auto 拒绝优先于按工具名选择的专门视图。其通用行保留调用
 记录结果的工具详情覆盖目标和定时任务工具、Cordis 检查、workflow 与 Ralph 报告、Session 事件／搜索／轨迹查询、Agent 与 teammate 控制、后台作业、持久终端以及 LSP 导航。展开内容读取成功的记录结果，为失败或不支持的数据保留通用输入／输出，并保留 Inspect。日期包含查看者的时区，状态反映调用结果而非当前会话状态。Session 轨迹保留后代的缩进。LSP 结果通过 Host 回调打开文件系统路径，其他 URI 则显示为文本。浏览器适配器消费已记录的 producer 文本与 JSON；Host service 对象和 presenter 回调不会进入 Client。
 
 展开后的状态圆点和文字使用静态语义色。操作回执和任务输出的标题保持中性色，展开时省略标题中的状态。中断回执仅确认已发出中断请求。
+
+终端提示标签使用结果记录的 `cwd`。成功的旧根 shell 调用回退到原始工作区与调用参数中的 workdir；运行中的调用只有在 workdir 为绝对路径时才显示目录。终端发送不会根据 Session 推测进程目录。
 
 terminal model 使用浏览器安全入口 `@deepseek-ai/dsh-spill-policy/notice` 的 `hasSpillNotice`，而非独立的 UI 匹配规则。[spill-policy README](../../spill/spill-policy/README.zh.md#shared-notice-ownership) 负责提示文本的格式化与识别。该检查保守地选择通用输出；匹配的文本无法证明其来源，回放也不改变已记录的结果字节。
 
@@ -131,6 +133,7 @@ terminal model 使用浏览器安全入口 `@deepseek-ai/dsh-spill-policy/notice
 这些限制定义分派深度与视图归属；它们是当前包约束。
 
 - **Host 不把 `run_code` 暴露为 PTC mode 程序 binding**：生产事件只产生一层分发；递归的运行时/UI 约定支持嵌套。
+- **历史嵌套相对位置**——缺少展示元数据的旧 PTC dispatch 不推断相对文件目标或命令目录；绝对调用路径仍可使用。
 - **第一方工具视图集中在本包**：它们可以通过 keyed slot 独立迁移到各自所属的业务包。
 - **Web 工具链接总是打开新标签页**：折叠的 `web_fetch` URL 与展开的 web 卡片链接不遵循 `ui-chat` 的链接打开方式设置，因为工具视图没有外部链接回调。
 - **工具文案复用 `ui-conversation` locale namespace**：工具标题、行 chrome 与无 Cordis 的 primitive label 使用该字典；展示转换器模型保留 locale key 或数据，而不是已渲染文案。

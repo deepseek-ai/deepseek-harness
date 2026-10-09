@@ -1,5 +1,5 @@
 ---
-description: "dsh Web 客户端的主题与正文字号设置：--dsw-* token 样式表、ThemeRuntime 状态、「通用」设置行与插件前引导。"
+description: "dsh Web 客户端的主题、字号与字体设置：--dsw-* token 样式表、ThemeRuntime 状态、「通用」设置行与插件前引导。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-ui-theme` 让 Web GUI 用户在设置中选择 `light`、`dark` 或 `system`，并把会话正文字号设为 10 至 22 px。回环客户端把两个值存入 `ui-theme` 设置命名空间，本地提供方默认将其持久化到 `$DSH_HOME/cordis.patch.yml`。插件通过 `prefers-color-scheme` 解析 `system` 并发布不可变的 `ThemeSnapshot`；ui-layout 把每份快照应用到文档。本包还提供 `--dsw-*` token 样式表，并注入同步引导，使所选调色板与字号在外壳加载前生效。第三方主题可通过 `ctx.theme` 注册别名 token 覆盖。
+`dsh-client-ui-theme` 让 Web GUI 用户在设置中选择 `light`、`dark` 或 `system`，并分别设置正文、代码与终端的字体和字号。回环客户端把这些值存入 `ui-theme` 设置命名空间，本地提供方默认将其持久化到 `$DSH_HOME/cordis.patch.yml`。插件通过 `prefers-color-scheme` 解析 `system` 并发布不可变的 `ThemeSnapshot`；ui-layout 把每份快照应用到文档。本包还提供 `--dsw-*` token 样式表，并注入同步引导，使所选调色板、字号与字体在外壳加载前生效。第三方主题可通过 `ctx.theme` 注册别名 token 覆盖。
 
 ## 目录
 
@@ -25,11 +25,15 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-用户从设置（「通用」分区）的两行中切换配色方案与正文字号；在回环浏览器上，两个选择都会跨重启持久化。功能插件通过 `ctx.theme` 消费当前快照，并在 CSS 中读取 `--dsw-*` token；它们不自行管理主题状态。
+用户从设置（「通用」分区）的各行中切换配色方案、字号与字体；在回环浏览器上，这些选择都会跨重启持久化。功能插件通过 `ctx.theme` 消费当前快照，并在 CSS 中读取 `--dsw-*` token；它们不自行管理主题状态。
 
 ### 外观与字号
 
-插件在「通用」分区注册外观偏好方块与字号步进器。步进器接受 10 至 22 px 的整数，默认值为 14 px。它以相同增量调整会话标题与基础文本，包括用户气泡与 composer 草稿；流内行的标题、摘要与表格跟随比正文低一档的字号，小号文本和代码保持固定字号。每次通过的变更都经 Host settings API 写入。连续快速变更按操作顺序携带命名空间 revision 串行写入，最新写入被拒时重新加载持久值。非 loopback 页面把两个选择都保留在进程内。
+插件在「通用」分区注册外观偏好方块与正文字号步进器。步进器后的「更多字体设置」按钮在其下方展开一个区域，每次打开设置时均为折叠状态，其中包含正文、代码与终端各自的字体行，以及代码与终端的字号步进器。正文步进器接受 10 至 22 px 的整数，默认值为 14 px。它以相同增量调整会话标题与基础文本，包括用户气泡与 composer 草稿；流内行的标题、摘要与表格跟随比正文低一档的字号，小号文本保持固定字号。代码步进器（10–16 px，默认 11）设置代码块字号；行内代码保持大 1 px，工具输出的小号变体使用相同字号。终端步进器（10–20 px，默认 13）设置侧栏终端的单元格字号；修改后保留 shell 与输出，并重新适配网格。每次通过的变更都经 Host settings API 写入。连续快速变更按操作顺序携带命名空间 revision 串行写入，最新写入被拒时重新加载持久值。非 loopback 页面把这些选择都保留在进程内。
+
+### 字体
+
+三行分别独立设置正文字体（界面与会话正文）、代码字体（代码块、行内代码及其他使用 `--ds-font-family-code` 的文本）与侧栏终端字体。每个输入框接受逗号分隔的字体名，失焦或按 Enter 时提交；清空输入框即恢复内置字体栈。服务会规范化每个列表：去掉引号、反斜杠、尖括号与控制字符，并给 CSS 通用字体族以外的名称加双引号，然后存入 `textFontFamily`、`codeFontFamily` 或 `terminalFontFamily`。用户列表排在该类内置字体栈之前，因此本机缺少的字体会回退到默认字体。输入框接受任何已安装字体的名称，但不枚举本地字体。
 
 ### 注册主题
 
@@ -37,7 +41,7 @@ kind: "package-reference"
 
 ### 插件前调色板
 
-当主机组合包含 HTTP 服务器时，宿主侧会把已注册的 `ui-theme` 设置或 schema 默认值嵌入每份 index 响应。head CSS 会在任何脚本运行前选择文档画布的配色方案，其中 `system` 偏好使用 `prefers-color-scheme` 查询；随后，body 脚本会在加载页面和应用脚本之前设置 `body[data-ds-dark-theme]` 与 `--dsh-content-font-size`，因此首帧绘制就采用所选调色板与字号。
+当主机组合包含 HTTP 服务器时，宿主侧会把已注册的 `ui-theme` 设置或 schema 默认值嵌入每份 index 响应。head CSS 会在任何脚本运行前选择文档画布的配色方案，其中 `system` 偏好使用 `prefers-color-scheme` 查询；随后，body 脚本会在加载页面和应用脚本之前设置 `body[data-ds-dark-theme]`、`--dsh-content-font-size`、`--dsh-code-font-size`、`--dsh-terminal-font-size` 以及每个非空的 `--dsh-font-family-<role>` 列表，因此首帧绘制就采用所选调色板与正文、代码字号，`ThemeRuntime` 也从已保存的字号与字体开始，不会先渲染默认值。
 
 -----
 
@@ -49,11 +53,11 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-服务拥有主题与字号状态并发布快照。ui-layout 展示转换器应用这些快照，token 样式表则拥有颜色与会话文本尺度。
+服务拥有主题、字号与字体状态并发布快照。ui-layout 展示转换器应用这些快照，token 样式表则拥有颜色与会话文本尺度。
 
 ### 样式表
 
-`base.css` 持有共享圆角尺度与设置卡片材质别名。材质别名在 `body` 上随当前色板解析。组件圆角选择遵循 [Web 样式参考](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)。
+`base.css` 持有共享圆角尺度、字体 token 与设置卡片材质别名。`--dsh-font-family-text-default` 与 `--dsh-font-family-code-default` 在 `:root` 上保存内置字体栈；在 `body` 上，`--dsw-font-family` 与 `--ds-font-family-code` 把 `--dsh-font-family-text` 与 `--dsh-font-family-code` 排在这些字体栈之前，未设置的列表解析为内置字体栈（重复一次，字体匹配会忽略重复项）。材质别名在 `body` 上随当前色板解析。组件圆角选择遵循 [Web 样式参考](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)。
 
 `src/styles/` 下有八张样式表，由 ui-theme 的动态客户端 entry 依次导入：`base.css`、`corner-shape.css`、`design-platform.css`、`focus.css`、`onboarding.css`、`scrollbar.css`、`gradient-shadow-text.css` 与 `shiki.css`。客户端 bundle 将其编译并注入为插件持有的全局样式，因此卸载与 HMR（热模块替换）会随 ui-theme 一同移除。`scrollbar.css` 消费 `--dsw-alias-scrollbar-*` token，必须排在声明这些 token 的 `design-platform.css` 之后。状态标记使用各自的语义状态 token。`--dsw-alias-bg-document-selection` 在两种主题中均使用 40% 不透明度的 blue-500，供保留文档原色的选区使用。`design-platform.css` 还负责代码差异底色的别名及其静态透明度色阶，以及文件对比所用的 `--dsw-alias-file-diff-*` 代码区、行号区和标记配色；`shiki.css` 负责语法颜色。
 
@@ -75,7 +79,7 @@ kind: "package-reference"
 
 `corner-shape.css` 平滑所有圆角：在 `@supports (corner-shape: superellipse(1.5))` 内定义 `--dsw-corner-shape`，并通过通配选择器应用到所有元素及其 `::before`/`::after`，因此不支持 `corner-shape` 的引擎保持普通圆弧。正圆形状——`border-radius: 50%` 的圆与胶囊半径——因超级椭圆会使其变形，须在所属组件样式表中把 `corner-shape: round` 与半径声明配对；corner-shape 样式表 spec 跨全部包样式表强制这一配对。
 
-`gradient-shadow-text.css` 从 `--dsh-content-font-size` 派生 `--dsh-content-font-delta`，并以该增量移动 Markdown 标题与基础文本阶梯。它同时派生低一档变量 `--dsh-content-font-size-secondary`（设置 ≤14 时为设置值 −1，>14 时为设置值 −2；默认设置下为 13 px）及配套的 `--dsh-content-font-delta-secondary`，供表格变体与比正文低一档的流内行使用。紧凑的小号文本与代码变体保持固定字号。阶梯之外，用户气泡与 composer 草稿直接读取正文字号变量对，流内行的标题及摘要读取低一档变量对。该表还持有阴影阶（`--dsw-shadow-lv*`）、半透明菜单使用的 `--dsw-menu-backdrop-filter` 与 elevation token：`--dsw-elevation-stroke` 经可重绑的 `--dsw-elevation-stroke-color` 画 0.5 px 发丝描边，`--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft`（composer 专用的更大模糊、更低透明度档）在描边之上叠两层极淡柔光，因此高层级表面设 `border: 0`，不会产生占布局的轮廓；派生 token 逐元素重声明，使表面对描边色的重绑真实生效。绘制 `--dsw-specific-menu` 的高层级表面还会应用 `backdrop-filter: var(--dsw-menu-backdrop-filter)`（[样式参考](../../../docs/web-styling.zh.md#component-rules)）。 深色菜单使用不透明度为 45% 的灰色底与 `border-l3` 描边；浅色菜单保留 `border-l1` 描边。
+`gradient-shadow-text.css` 从 `--dsh-content-font-size` 派生 `--dsh-content-font-delta`，并以该增量移动 Markdown 标题与基础文本阶梯。它同时派生低一档变量 `--dsh-content-font-size-secondary`（设置 ≤14 时为设置值 −1，>14 时为设置值 −2；默认设置下为 13 px）及配套的 `--dsh-content-font-delta-secondary`，供表格变体与比正文低一档的流内行使用。紧凑的小号文本变体保持固定字号。代码变体（`--dsw-font-markdown-code`、`-code-block`、`-code-block-small`）按 `--dsh-code-font-delta`（`--dsh-code-font-size` 与 11 px 之差）调整字号与行高。阶梯之外，用户气泡与 composer 草稿直接读取正文字号变量对，流内行的标题及摘要读取低一档变量对。该表还持有阴影阶（`--dsw-shadow-lv*`）、半透明菜单使用的 `--dsw-menu-backdrop-filter` 与 elevation token：`--dsw-elevation-stroke` 经可重绑的 `--dsw-elevation-stroke-color` 画 0.5 px 发丝描边，`--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft`（composer 专用的更大模糊、更低透明度档）在描边之上叠两层极淡柔光，因此高层级表面设 `border: 0`，不会产生占布局的轮廓；派生 token 逐元素重声明，使表面对描边色的重绑真实生效。绘制 `--dsw-specific-menu` 的高层级表面还会应用 `backdrop-filter: var(--dsw-menu-backdrop-filter)`（[样式参考](../../../docs/web-styling.zh.md#component-rules)）。 深色菜单使用不透明度为 45% 的灰色底与 `border-l3` 描边；浅色菜单保留 `border-l1` 描边。
 
 `brand-font.css` 引用随包提供的 `montserrat-regular.woff2` / `montserrat-light.woff2` / `montserrat-medium.woff2`，其中包含 Montserrat Regular、Light 和 Medium 字体，SIL Open Font License 与样式表和 WOFF2 一同随包保存在 `lib/styles/`。`--dsw-font-family-brand` 为品牌文字选择该字体，普通界面仍使用系统字体栈。源文件来自 Google Fonts 的 Montserrat 发布。Web 入口导入包的 `./brand-font.css` 导出，由 Vite 输出并解析字体资源，Web 构建也包含其许可。Web 应用（包括 Desktop 引导）可离线加载字体；原生凭证欢迎页保留系统字体。
 
@@ -87,7 +91,7 @@ kind: "package-reference"
 
 ### 偏好持久化
 
-在 loopback 浏览器上，服务先以 schema 默认值立即提供自身，随后加载 `ui-theme` 命名空间，并把每次通过的主题或字号变更经 Host settings API 写入。收到推送的设置变更时或重连后都会重新拉取该命名空间。非 loopback 页面不会创建该 Host-backed scope。该持久化边界由 [Host 支撑的偏好参考](../ui-settings/README.zh.md) 拥有。
+在 loopback 浏览器上，服务先以 schema 默认值立即提供自身，随后加载 `ui-theme` 命名空间，并把每次通过的主题、字号或字体变更经 Host settings API 写入。收到推送的设置变更时或重连后都会重新拉取该命名空间。自身写入尚未完成时，服务忽略重新拉取的配置段，避免较早写入的回显覆盖之后的修改；写入全部完成后再采用持久配置段。非 loopback 页面不会创建该 Host-backed scope。该持久化边界由 [Host 支撑的偏好参考](../ui-settings/README.zh.md) 拥有。
 
 </details>
 

@@ -2,6 +2,9 @@
  * Resolve the version one build publishes, which is not always the version the
  * repository declares.
  *
+ * Manual Windows CI uses UTC date, workflow run number and attempt as
+ * `.YYYYMMDD.run.attempt`; these identify unpublished builds, not release sequences.
+ *
  * A production release publishes the version in the manifests, aligned with the
  * `dsh` npm package. A test build publishes a version that appends a date and a
  * sequence number, so one test feed can carry several builds of a single
@@ -71,7 +74,8 @@ export function validateDesktopBuildVersion(buildVersion, productVersion) {
     && required.every((field, index) => build.prerelease[index] === field)
   if (!extendsProduct) {
     throw new Error(`desktop build version: ${buildVersion} must extend ${productVersion} as ${
-      desktopBuildVersionPrefix(productVersion)}<date>.<sequence>`)
+      desktopBuildVersionPrefix(productVersion)}<date>.<sequence> or ${
+      desktopBuildVersionPrefix(productVersion)}<date>.<run>.<attempt>`)
   }
   return build.version
 }

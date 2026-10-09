@@ -1,3 +1,4 @@
+import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -21,6 +22,7 @@ async function harness(options: { sessionQuery?: boolean } = {}): Promise<Contex
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   if (options.sessionQuery !== false) await ctx.plugin(TestSessionQuery)
+  await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   return ctx
 }
@@ -162,6 +164,7 @@ describe('Subagent archive admission: lifetime', () => {
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
+    await mountWorkingDirectoryFixture(ctx)
     const fiber = await ctx.plugin(SubagentRuntime)
     const parent = ctx.sessions.create(SessionId('watched'))
     await liveAgent(ctx, parent, 'idle')

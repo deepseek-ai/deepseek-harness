@@ -14,8 +14,9 @@ import type {} from '@deepseek-ai/dsh-fs'
 import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import { validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
-import { bootstrapArgs } from './launch.ts'
+import { bootstrapArgs, resolveLaunch } from './launch.ts'
 import type { LaunchConfig } from './launch.ts'
+export type { LaunchConfig } from './launch.ts'
 import { OutputLedger } from './output-ledger.ts'
 import { drainOutput } from './output-stream.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
@@ -23,7 +24,9 @@ import { decodePtcJsonWire, encodePtcJsonWire } from './json-wire.ts'
 import type { ProgramBootData } from './protocol.ts'
 
 /** Deployment-varying runtime bounds and launch choices. */
-export interface Config extends LaunchConfig {
+export interface Config {
+  /** Worker invocation in the subprocess world; omitted selects the local carrier. */
+  launch?: LaunchConfig
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */
@@ -40,7 +43,7 @@ export interface Config extends LaunchConfig {
   graceMs?: number
 }
 
-type ResolvedConfig = Required<Omit<Config, 'bootstrapPath'>> & Pick<Config, 'bootstrapPath'>
+type ResolvedConfig = Required<Config>
 interface LiveRun { controller: AbortController; finished: Promise<void> }
 const STRIP_PREFIX = 'async function __dsh_program__() {\n'
 const STRIP_SUFFIX = '\n}'
@@ -59,8 +62,10 @@ export class NodePtcRuntime extends PtcRuntime {
     maxMessageBytes: z.number().default(134_217_728),
     maxPendingCalls: z.number().default(128),
     graceMs: z.number().default(3_000),
-    nodeExecutable: z.string(),
-    bootstrapPath: z.string(),
+    launch: z.union([
+      z.object({ kind: z.const('node-script').required(), executable: z.string().required(), bootstrapPath: z.string() }),
+      z.object({ kind: z.const('embedded').required(), executable: z.string().required() }),
+    ]),
   })
   readonly language = 'typescript'
   readonly isolation = 'process'
@@ -73,7 +78,7 @@ export class NodePtcRuntime extends PtcRuntime {
 
   constructor(ctx: Context, config: Config) {
     super(ctx)
-    this.config = { ...config, nodeExecutable: config.nodeExecutable ?? process.execPath } as ResolvedConfig
+    this.config = { ...config, launch: resolveLaunch(config.launch) } as ResolvedConfig
     for (const [key, value] of Object.entries(this.config)) {
       if (typeof value === 'number' && (!Number.isFinite(value) || value <= 0)) throw new Error(`ptc-runtime-node: ${key} must be positive and finite`)
     }
@@ -84,8 +89,6 @@ export class NodePtcRuntime extends PtcRuntime {
     if (!Number.isSafeInteger(this.config.maxMessageBytes) || this.config.maxMessageBytes > 0xffff_ffff) throw new Error('ptc-runtime-node: maxMessageBytes must fit an unsigned 32-bit frame length')
     if (!Number.isSafeInteger(this.config.maxPendingCalls)) throw new Error('ptc-runtime-node: maxPendingCalls must be an integer')
     if (!Number.isSafeInteger(this.config.maxOldGenerationSizeMb)) throw new Error('ptc-runtime-node: maxOldGenerationSizeMb must be an integer')
-    if (this.config.nodeExecutable.length === 0) throw new Error('ptc-runtime-node: nodeExecutable must be non-empty')
-    if (this.config.bootstrapPath !== undefined && !isAbsolute(this.config.bootstrapPath)) throw new Error('ptc-runtime-node: bootstrapPath must be absolute')
     ctx.effect(() => async () => {
       this.disposed = true
       const active = [...this.live]
@@ -214,13 +217,14 @@ export class NodePtcRuntime extends PtcRuntime {
         })),
         maxOutputBytes: this.config.maxOutputBytes,
       }
-      const executable = await this.ctx.subprocess.resolveExecutable(this.config.nodeExecutable, undefined, signal)
+      const executable = await this.ctx.subprocess.resolveExecutable(this.config.launch.executable, undefined, signal)
       // Abort callbacks can settle execution before or during an awaited operation.
       // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (settled) return await result.promise
-      const packaged = 'pkg' in process && this.config.bootstrapPath === undefined
+      const packaged = this.config.launch.kind === 'embedded'
       const heapFlag = `--max-old-space-size=${this.config.maxOldGenerationSizeMb}`
-      const argv = [executable, ...packaged ? [] : [heapFlag], ...bootstrapArgs(this.ctx.fs, this.config, this.config.maxMessageBytes)]
+      const argv = [executable, ...packaged ? [] : [heapFlag],
+        ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes)]
       confined = policy.mode === 'danger-full-access' ? undefined : await this.ctx.sandbox.confine(argv, { ...policy, mode: policy.mode }, signal)
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cancellation can settle during awaited confinement.
       if (settled) return await result.promise

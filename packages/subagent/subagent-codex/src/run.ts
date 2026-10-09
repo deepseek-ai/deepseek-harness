@@ -138,7 +138,7 @@ export function codexAppServerArgv(): string[] {
 
 /** Fully resolved inputs for one Codex app-server run. */
 export interface CodexRunSpec {
-  /** Parent Session workspace, also supplied to `thread/start`. */
+  /** Selected child working directory, also supplied to `thread/start`. */
   readonly cwd: string
   /** Profile-selected native model; omitted to preserve Codex settings. */
   readonly model?: string

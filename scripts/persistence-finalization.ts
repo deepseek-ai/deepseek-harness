@@ -21,10 +21,9 @@ export interface PersistenceFinalizationCheckpoint {
   readonly acceptedRecords: Readonly<Record<string, string>>
 }
 
-/** Latest accepted baseline schemas and the record ids locked by retained checkpoints. */
+/** Latest finalized version and the record ids locked by retained checkpoints. */
 export interface PersistenceFinalization {
   readonly version: number
-  readonly roots: ReadonlyMap<string, PersistenceRoot>
   readonly acceptedRecords: ReadonlySet<string>
 }
 
@@ -105,7 +104,7 @@ function status(root: string, path: string): number | undefined {
 }
 
 /**
- * Validate retained checkpoints against accepted history and reconstruct the latest accepted baseline.
+ * Validate retained checkpoints against accepted history and collect their locked record ids.
  * @param root - checkout or isolated fixture root.
  * @param history - parsed acknowledgement entries, including later successors.
  * @returns finalization state, or undefined for a checkout with neither status nor checkpoints.
@@ -120,7 +119,6 @@ export function loadPersistenceFinalization(root: string, history: Pick<Persiste
   if (!files.includes(`v${version}.json`)) throw new Error(`missing persistence finalization checkpoint v${version}.json`)
   const entries = new Map(history.entries.map(entry => [entry.record.id, entry]))
   const acceptedRecords = new Set<string>()
-  let latestRoots: Map<string, PersistenceRoot> | undefined
   for (const file of files) {
     const match = /^v(0|[1-9]\d*)\.json$/u.exec(file)
     const capturedVersion = match === null ? NaN : Number(match[1])
@@ -165,8 +163,6 @@ export function loadPersistenceFinalization(root: string, history: Pick<Persiste
         || Object.entries(expected).some(([field, expectedValue]) => value[field] !== expectedValue)
     })) throw new Error(`${file}: finalized roots do not match complete accepted history`)
     if (writerVersion([...tips.values()]) !== capturedVersion) throw new Error(`${file}: accepted SessionHeader.version does not match finalized version`)
-    if (capturedVersion === version) latestRoots = tips
   }
-  if (latestRoots === undefined) throw new Error(`missing finalized schemas for Session format ${version}`)
-  return { version, roots: latestRoots, acceptedRecords }
+  return { version, acceptedRecords }
 }

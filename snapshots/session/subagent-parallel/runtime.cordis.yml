@@ -1,0 +1,3 @@
+- insert:
+    - id: subagent-parallel-order
+      name: './execution-order.mjs'

@@ -36,7 +36,8 @@
     "@deepseek-ai/dsh-workflow": "workspace:*",
     "@deepseek-ai/dsh-ptc-runtime": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
-    "@deepseek-ai/dsh-sandbox-policy": "workspace:*"
+    "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
+    "@deepseek-ai/dsh-working-directory": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",
@@ -66,6 +67,8 @@
     "@deepseek-ai/dsh-fs-local": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-subprocess-local": "workspace:*",
-    "@deepseek-ai/dsh-sandbox-local": "workspace:*"
+    "@deepseek-ai/dsh-sandbox-local": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
+    "@deepseek-ai/dsh-working-directory": "workspace:*"
   }
 }

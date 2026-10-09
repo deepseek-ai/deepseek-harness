@@ -1,9 +1,9 @@
-# Add the real ACP provider behind a one-shot delegation tool. The denied
+# Add the real ACP provider behind a managed delegation tool. The denied
 # execute permission returns `cancelled` and exercises diagnostic-bearing
 # remote-abort parity.
 - insert:
-    - id: acp-diagnostic-release-on-job-output
-      name: './release-on-job-output.mjs'
+    - id: acp-diagnostic-settlement-order
+      name: './settlement-order.mjs'
     - id: subagent-acp-diagnostic
       name: '@deepseek-ai/dsh-subagent-acp'
       config:
@@ -15,11 +15,9 @@
         env:
           MOCK_PERMISSION: '1'
           MOCK_TOOL_KIND: execute
-          MOCK_PROMPT_HOLD: .dsh/acp-diagnostic-prompt-hold
     - id: tool-subagent-acp-diagnostic
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
         provider: acp-diagnostic
         toolName: subagent_acp
-        backgroundMode: one-shot
         maxDepth: provider-managed

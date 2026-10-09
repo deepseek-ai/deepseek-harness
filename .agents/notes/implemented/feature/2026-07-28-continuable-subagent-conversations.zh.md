@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-07-28-continuable-subagent-conversations.md) | 中文
 
-本记录取代[可继续的后台 subagent](../../archived/feature/2026-07-21-continuable-background-subagents.md)中由 Task 支撑的继续执行管理器。它保留[将 subagent 控制合并到 subagent 服务](../../archived/simplification/2026-07-26-merge-subagent-control-service.md)确立的单一 `ctx.subagents` 服务，以及[以意图命名的 subagent 继续执行操作](../../archived/simplification/2026-07-27-intent-named-subagent-continuation-operations.md)确立的 `followup` 操作。
+本记录取代[可继续的后台 subagent](../../archived/feature/2026-07-21-continuable-background-subagents.md)中由 Task 支撑的继续执行管理器。它保留[将 subagent 控制合并到 subagent 服务](../../archived/simplification/2026-07-26-merge-subagent-control-service.md)确立的单一 `ctx.subagents` 服务。
 
 ## 问题
 
@@ -18,6 +18,8 @@ parent Agent 还需要在不改变当前轮次的前提下，向同一个在线 
 
 ## 决策
 
+共享 activation 入口、外部执行所有权，以及调用方与父级之间的结果投递选择由[统一 subagent activation](../simplification/2026-09-17-unified-subagent-activations.zh.md) 决策拥有。本记录保留下述独立理由。
+
 一个可继续 subagent 拥有一个持久化会话，并且至多拥有一个进程内激活：
 
 ```text
@@ -28,25 +30,25 @@ persisted Session
        -> zero or more owned child Activations
 ```
 
-激活是重建 child Agent 的一次驻留周期。它可以执行多个 FIFO 轮次，并在等待后代时保持驻留。它不是请求、结果、取消或 Task 边界。
+激活是重建 child Agent 的一次驻留周期。它可以执行多个 FIFO 轮次，并在等待后代时保持驻留。其回执持有这次确切驻留的结果与取消操作；它不会为每条已接受的消息分配独立结果或 Task。
 
 继续执行管理器负责激活准入、权限检查、在线所有权图、冷恢复和 child-first dispose。Agent loop 负责全部轮次排序与执行。没有任何可继续 subagent 拥有 Task、激活 FIFO 或 queued 激活状态。
 
 ### 物化与公开操作
 
-具名 subagent 提供方只参与准备初始创建规格，此时 `spawn` 与 `fork` 有所区别。其可选的 `prepareContinuable(request): Promise<ContinuableCreateSpec>` 方法就是可继续创建能力。返回的规格只包含与 Agent 实例分离且由提供方决定的创建输入，例如可选的 parent 历史种子；它不包含 Agent、`AgentHandle`、提示词投递、结果、dispose 或恢复操作。管理器会预留 child 身份，解析持久化描述符和通用 Agent 配置，通过私有 activation-owner 作用域调用 `ctx.agents.create()`，将返回的 `AgentHandle` 安装到激活中，建立适用的可继续 parent 所有权，然后调用 `Agent.followup(initialPrompt)`。inbox 接受消息后会产生一个 `MessageId`；`ctx.subagents.startContinuable()` 在此边界返回 `{ childId, messageId }`，不等待轮次开始，也不等待消息写入会话日志。
+具名 subagent 提供方只参与准备初始创建规格，此时 `spawn` 与 `fork` 有所区别。其可选的 `prepareContinuable(request): Promise<ContinuableCreateSpec>` 方法就是可继续创建能力。返回的规格只包含与 Agent 实例分离且由提供方决定的创建输入，例如可选的 parent 历史种子；它不包含 Agent、`AgentHandle`、提示词投递、结果、dispose 或恢复操作。管理器会预留 child 身份，解析持久化描述符和通用 Agent 配置，通过私有 activation-owner 作用域调用 `ctx.agents.create()`，将返回的 `AgentHandle` 安装到激活中，建立适用的可继续 parent 所有权，然后调用 `Agent.followup(initialPrompt)`。inbox 接受消息后会产生一个 `MessageId`；`ctx.subagents.startActivation()` 在此边界返回包含 `childId`、`messageId`、`result` 与 `dispose()` 的回执，不等待轮次开始，也不等待消息写入会话日志。
 
 inbox 接受消息前发生任何失败，操作都会在不返回任何 id 的情况下被拒绝。Agent 创建流程负责 handle 移交前的回滚；移交后，管理器会保留一个对并发投递和 drain 可见的关闭事务，dispose 已创建的 handle、移除激活并回滚 parent `ownedChildren` 中的任何成员关系，再拒绝操作。在驻留 start 事件发布前失败不会发布终止事件，start 发布后失败则通过正常 dispose 闭合生命周期配对。
 
-`backgroundMode: 'one-shot' | 'continuable'` 仍是部署策略。配置为 continuable 时要求存在 `prepareContinuable`；该方法是否存在会取代 `SubagentProvider.resume?()` 成为能力检查，而具备该能力的提供方仍可运行 one-shot 工作。
+提供方方法是否存在决定执行方式：`prepareContinuable()` 创建本地 activation，否则由 `start()` 启动外部执行。`delivery` 选择结果接收方，不改变本地生命周期。
 
-冷恢复不会通过 subagent 提供方分发。继续执行管理器会归并通用的进程内描述符，通过同一个 activation-owner 作用域调用 `ctx.agents.resume()`，安装返回的 `AgentHandle`，并提交等待中的 `next-turn`。`SubagentProvider.resume?()` 和 `SubagentProviderResumeRequest` 均不存在。初始提供方注销后，描述符仍保留其名称；该名称不赋予恢复能力，也不要求后续驻留时该提供方存在。远程提供方需要单独设计。
+冷恢复不会通过 subagent 提供方分发。继续执行管理器会归并通用的进程内描述符，通过同一个 activation-owner 作用域调用 `ctx.agents.resume()`，安装返回的 `AgentHandle`，并提交等待中的 `next-turn`。`SubagentProvider.resume?()` 和 `SubagentProviderResumeRequest` 均不存在。初始提供方注销后，描述符仍保留其名称；该名称不赋予恢复能力，也不要求后续驻留时该提供方存在。外部执行不支持冷恢复。
 
-`SubagentProvider.start()` 和 `SubagentRun` 只保留在不变的 one-shot 路径上。可继续激活直接持有自身的 `AgentHandle`，绝不创建、包装或保留 `SubagentRun`；因此，`SubagentRun.steer?()` 不存在。
+`SubagentProvider.start()` 与 `SubagentRun` 属于外部执行。本地 Activation 直接持有其 `AgentHandle`；两类执行共享管理器持有的容量、结算与 dispose。
 
-`ctx.subagents.sendMessage(sender, targetId, content, { signal })` 是唯一由模型编写的继续执行消息操作。确切在线 sender 授权向其直接 parent 或直接可继续 child 投递；冷恢复会在重建前检查直接 child 权限，每条路径还会在最终无 await 的 inbox 准入区间再次检查，因此在物化期间被注销或替换的 Agent 无法授权投递。服务从该 sender 推导持久化 `agent-message` 来源信息。面向模型的 `send_message` 工具只保留 `agent_id` 和 `message`，并使用固定 Steer 调度。start 与 send 都返回已接受的 `MessageId`，两者都不报告管理器如何物化 Activation。
+`ctx.subagents.sendMessage(sender, targetId, content, { signal })` 是唯一由模型编写的继续执行消息操作。确切在线 sender 授权向其直接 parent 或直接可继续 child 投递；冷恢复会在重建前检查直接 child 权限，每条路径还会在最终无 await 的 inbox 准入区间再次检查，因此在物化期间被注销或替换的 Agent 无法授权投递。服务从该 sender 推导持久化 `agent-message` 来源信息。面向模型的 `send_message` 工具只保留 `agent_id` 和 `message`，并使用固定 Steer 调度。本地 start 返回包含已接受 `MessageId` 的 activation 回执；send 直接返回 `MessageId`。两者都不暴露物化过程是创建还是恢复 Agent。
 
-对于 start 和 follow-up，调用方 signal 只在 inbox 接受消息前持有查找、物化和准入。操作返回 `MessageId` 后，管理器会独立持有该激活；调用方之后的取消不会取消已接受的轮次，也不会 dispose child。
+对于 start 和 follow-up，调用方 signal 只在 inbox 接受消息前持有查找、物化和准入。inbox 接受消息后，管理器会独立持有该激活；调用方之后的取消不会取消已接受的轮次，也不会 dispose child。
 
 ### 持久化会话与在线激活
 
@@ -54,7 +56,7 @@ inbox 接受消息前发生任何失败，操作都会在不返回任何 id 的�
 
 空闲的历史会话没有 `AgentHandle`。第一条通过鉴权的 `next-turn` 投递会根据持久化会话恢复激活，并将消息提交到其 inbox。冷恢复使用经过身份认证的确切在线 parent Agent 执行鉴权；当该 parent 有激活时，还使用它建立所有权，但绝不使用 parent 执行重建。
 
-激活会直接持有已发布的 `AgentHandle` 直至结算，而管理器的私有 activation-owner 作用域则是其 Cordis 结构化所有者。可继续 subagent 路径不创建任何中间的带结果执行包装层，包括 `SubagentRun`；一次性委派保持不变，且不属于该生命周期。远程提供方不在此处的范围内，引入时需要单独的激活所有权约定。激活 dispose 后，历史会话不消耗运行时内存。
+本地 Activation 直接持有已发布的 `AgentHandle` 直至结算；私有 activation-owner 作用域是其 Cordis 结构化所有者。它不创建中间 `SubagentRun`。统一管理器也通过提供方 handle 持有外部执行。dispose 后历史 Session 不保留 Agent 资源。
 
 ### 激活生命周期
 
@@ -81,21 +83,21 @@ no Activation
 
 管理器根据 Agent 是否完全停稳、Inbox 的待处理状态以及所持 child 集合派生这些状态，而不是维护第二套执行状态机。在 `running` 时投递的 `next-turn` 会进入 Agent inbox。在 `waiting` 时到达的唤醒投递会唤醒同一个 Agent，并使激活回到 `running`。在 dispose 完成后投递消息则会冷恢复新激活。
 
-管理器会针对每个持久化 child，将 manager 所有的投递、child 释放和 dispose 线性化。私有 `SubagentInbox` 会把 Queue 与 Steer 委托给 Agent inbox，并持有 Activation 既有的关闭事务。如果 manager 投递与最终 dispose 发生竞争，只有一方能越过这条准入截止点：投递要么进入仍在线的 Agent inbox，要么观察到正在关闭，并遵循该操作特有的拒绝或冷恢复路径。直接操作 Agent 的工作不经过这层包装，因此自然结算会通过短暂的 maintenance 占用，在最终 flush 与最终 dispose 决策之前验证 idle 阶段，并在 child lock 内重新验证 Session 序号、Inbox 待处理状态、wake generation 与 owned-child set。仍然活跃或改变 Session、Inbox 或所有权状态的已接受工作会让本次结算尝试失效，而不会被它取消；完全在 flush 期间开始并结束的 maintenance 已在截止点前完成。
+管理器会针对每个持久化 child，将 manager 所有的投递、child 释放和 dispose 线性化。管理器的私有投递将 Queue 与 Steer 委托给 Agent inbox，并检查 Activation 的 closing promise。如果 manager 投递与最终 dispose 发生竞争，只有一方能越过这条准入截止点：投递要么进入仍在线的 Agent inbox，要么观察到正在关闭，并遵循该操作特有的拒绝或冷恢复路径。直接操作 Agent 的工作不经过这层包装，因此自然结算会通过短暂的 maintenance 占用，在最终 flush 与最终 dispose 决策之前验证 idle 阶段，并在 child lock 内重新验证 Session 序号、Inbox 待处理状态、wake generation 与 owned-child set。仍然活跃或改变 Session、Inbox 或所有权状态的已接受工作会让本次结算尝试失效，而不会被它取消；完全在 flush 期间开始并结束的 maintenance 已在截止点前完成。
 
 ### 一个 inbox 与 follow-up 投递
 
-Agent inbox 是唯一队列。每条继续执行消息都使用 `Agent.followup()`，并成为一个 FIFO 轮次；继续执行管理器和宿主都不维护另一条消息队列。每个待处理 Inbox occurrence 都会让当前激活保持在线，直到它被 claim 或 discard。这条保守规则也会保留注入 context：完全停稳后仍存在的静默注入可以让 Activation 及其在线祖先继续驻留，直到唤醒投递将其 claim、queue 变更将其移除，或 manager teardown dispose 整棵树。
+Agent inbox 是唯一队列。Agent 消息使用 Steer；人类提示词选择 Queue 或 Steer。每个待处理 Inbox 项（包括静默注入的上下文）都会让当前 Activation 保持在线，直到被认领或丢弃。管理器与宿主都不维护第二条消息队列。
 
 路由只取决于激活的驻留状态：
 
-| 激活状态 | `followup` |
+| 激活状态 | 唤醒消息投递 |
 |---|---|
 | `running` | 在同一激活中排队 |
 | `waiting` | 唤醒同一激活 |
 | 无激活 | 冷恢复新激活 |
 
-继续执行层不定义单独的投递路由结果。成功投递 `ctx.subagents.followup()` 或 `send_message` 时会返回已接受的 `MessageId`，投递失败则会抛出异常。现有的 `agent/inbox/enqueue`、`agent/inbox/dequeue` 和 `agent/inbox/discard` 事件仍用于观测消息生命周期；适配器可以呈现通用的接受确认，但不暴露 `started`、`queued`、`resumed` 或其他 subagent 专属路由词汇。
+成功的 `sendMessage()` 返回已接受的 `MessageId`；投递失败则抛错。Inbox 事件仍是消息生命周期的观察来源。服务不暴露独立的 started/queued/resumed 路由结果。
 
 ### child 所有权
 
@@ -107,9 +109,9 @@ Agent inbox 是唯一队列。每条继续执行消息都使用 `Agent.followup(
 
 系统会一直保留所有权，直至 child 激活完成 dispose。后续改进可以更早释放限定到请求的 lease，但这需要精确关联轮次完成，而本 Task-free 设计特意不增加该机制。
 
-顶层拆卸由宿主负责，而不表示为另一次激活。管理器卸载会调用其内部的管理器全局 drain，同步关闭准入，等待每个已获准的物化过程完成发布或回滚，停止稳定的在线森林，并按 child-first 顺序释放。拥有选定顶层 Agent 的宿主使用 `drainContinuableDescendants(parents)`：确切的 Agent 身份只关闭这些根之下的准入，直到每个身份离开注册表，而无关森林和管理器全局准入保持在线；管理器会在第一次 await 之前停止其可见后代，只等待这些根之下已获准的物化过程，并且只释放选定分支。每个已物化的 start 和在线投递都会在与 inbox 提交相同的同步区间内重新检查调用方取消、适用的 draining 作用域、Activation dispose 和确切的 parent 权限，因此只要拆卸或 parent 替换先于接受发生，就会阻止向正在关闭的 handle 投递。只有适用的 drain 结算后，宿主才能 dispose 自己的顶层 Agent；只有管理器全局 drain 会先于管理器作用域 dispose。
+顶层拆卸由宿主负责，而不表示为另一次激活。管理器卸载会调用其内部的管理器全局 drain，同步关闭准入，等待每个已获准的物化过程完成发布或回滚，停止稳定的在线森林，并按 child-first 顺序释放。拥有选定顶层 Agent 的宿主使用 `drainDescendants(parents)`：确切的 Agent 身份只关闭这些根之下的准入，直到每个身份离开注册表，而无关森林和管理器全局准入保持在线；管理器会在第一次 await 之前停止其可见后代，只等待这些根之下已获准的物化过程，并且只释放选定分支。每个已物化的 start 和在线投递都会在与 inbox 提交相同的同步区间内重新检查调用方取消、适用的 draining 作用域、Activation dispose 和确切的 parent 权限，因此只要拆卸或 parent 替换先于接受发生，就会阻止向正在关闭的 handle 投递。只有适用的 drain 结算后，宿主才能 dispose 自己的顶层 Agent；只有管理器全局 drain 会先于管理器作用域 dispose。
 
-activation-owner 作用域之所以存在，是因为普通 Cordis owner effect 按注册逆序撤销，无法表达动态 child 图。管理器初始化时先注册私有作用域的结构化 disposer，再注册自身的 drain disposer，使逆序撤销先执行 drain、再释放该作用域；如果只在与后续 Agent handle 相同的作用域上注册 cleanup effect，结构化 handle dispose 就可能绕过 child-first 顺序。每个物化过程都会在启动内部事务前注册其屏障参与项，并对其确切的在线祖先建立快照，然后保持跟踪，直到安装 Activation 或完全回滚。Activation 会保留其在这组祖先中的弱成员关系，因此中间 Agent 即使离开注册表，也不会让仍在线的后代脱离宿主根节点的可见范围。其私有 `SubagentInbox` 会在取消或递归回调前安装一个记忆化的 closing promise，使限定作用域的宿主关闭、全局管理器卸载、child 释放和正常结算能够汇合，而不会重复释放。取消会在等待缓慢的后代清理之前自顶向下传播；handle 释放仍是 child-first。同级分支独立 drain；系统会记录单次 dispose 失败，但仍会尝试其余选中 handle，聚合 drain 则在所有选中分支结算后报告失败。这次进程内拆卸不会销毁持久化 child 会话。
+activation-owner 作用域之所以存在，是因为普通 Cordis owner effect 按注册逆序撤销，无法表达动态 child 图。管理器初始化时先注册私有作用域的结构化 disposer，再注册自身的 drain disposer，使逆序撤销先执行 drain、再释放该作用域；如果只在与后续 Agent handle 相同的作用域上注册 cleanup effect，结构化 handle dispose 就可能绕过 child-first 顺序。每个物化过程都会在启动内部事务前注册其屏障参与项，并对其确切的在线祖先建立快照，然后保持跟踪，直到安装 Activation 或完全回滚。Activation 会保留其在这组祖先中的弱成员关系，因此中间 Agent 即使离开注册表，也不会让仍在线的后代脱离宿主根节点的可见范围。管理器会在取消或递归回调前安装一个记忆化的 closing promise，使限定作用域的宿主关闭、全局管理器卸载、child 释放和正常结算能够汇合，而不会重复释放。取消会在等待缓慢的后代清理之前自顶向下传播；handle 释放仍是 child-first。同级分支独立 drain；系统会记录单次 dispose 失败，但仍会尝试其余选中 handle，聚合 drain 则在所有选中分支结算后报告失败。这次进程内拆卸不会销毁持久化 child 会话。
 
 ### 相邻 Agent 消息
 
@@ -129,7 +131,7 @@ activation-owner 作用域之所以存在，是因为普通 Cordis owner effect 
 
 ### 持久性、dispose 与恢复
 
-没有 Task 后，系统不再提供 `job_output`、`job_kill`、Task 状态或逐消息结果 promise。调用方 signal 只能在 inbox 接受消息前中止 start 或 follow-up。消息被接受后，parent 不能通过 `ctx.subagents` 取消已接受的消息或 dispose 激活；唯一的公开停止操作是后来的[当前轮次中断](../../../../packages/subagent/subagent/README.zh.md)，它以 `keepInbox` 取消在线目标的当前轮次，驻留、待处理工作与后代均保持不变。
+activation 回执无需 Jobs 即可暴露 `result` 与 `dispose()`。调用方 signal 持有未发布工作；回执 dispose 会取消确切的 activation，并等待后代启动回滚与 child-first 释放。[当前轮次中断](../../../../packages/subagent/subagent/README.zh.md)仅以 `keepInbox` 取消在线目标轮次，保留驻留、待处理工作与后代。
 
 宿主和管理器拆卸仍是生命周期停止路径。管理器卸载会全局应用它；宿主只会在自己确切拥有的顶层 Agent 之下应用它。两种形式都会关闭适用的准入作用域，停止选中的可见 Activation，等待该作用域中已获准的物化过程，按 child-first 顺序释放，并保留持久化 Session。
 
@@ -141,9 +143,9 @@ activation-owner 作用域之所以存在，是因为普通 Cordis owner effect 
 
 ### 范围
 
-本版本覆盖可继续的进程内 child，一次性委派保持不变。远程提供方必须具备单独的激活 handle，以及等价的认证控制与 child-first 完全停稳约定，才能支持同样的行为。
+本地可继续控制与外部执行共享 activation 所有权。只有本地 child 支持后续消息与冷恢复。
 
-它不新增 host-user 继续执行、subagent steering 操作、持久化邮箱、跨进程 lease、中断 inbox 工作的自动回放、团队权限、工作流权限、公开驻留查询、以及运行时缓存；后来的[当前轮次中断](../../../../packages/subagent/subagent/README.zh.md)在此生命周期之上补充了唯一的公开停止操作。现有委派深度策略保持不变。可选的 child 到 parent 报告是后续消费该生命周期的功能，不属于基础可继续能力。
+人工 Queue/Steer 投递和[当前轮次中断](../../../../packages/subagent/subagent/README.zh.md)使用此生命周期；回执释放会停止这次确切 activation 及其所属后代。持久化邮箱、跨进程 lease、中断 inbox 工作的自动回放、团队权限、工作流权限、公开驻留查询和运行时缓存仍不属于此能力。委派深度策略和相邻 Agent 消息授权各自由其原有组件管理。
 
 ## 曾考虑的替代方案
 
@@ -155,7 +157,7 @@ activation-owner 作用域之所以存在，是因为普通 Cordis owner effect 
 
 **让提供方通过 Agent handle 创建、恢复 child 或投递消息。** 初始提供方只持有 `prepareContinuable()` 及其分离式创建规格这一项差异：child 是全新启动，还是带有 parent 前缀。管理器必须通过私有 activation-owner 作用域自行调用 `ctx.agents.create()`，使该作用域成为每个 handle 的结构化所有者。持久化的进程内会话已经包含初始前缀及通用重建描述符，消息投递则属于 Agent inbox。让提供方持有任何后续 handle、`SubagentRun` 或消息所有权，会让提供方保留所有权，却没有已发布行为需要它。
 
-**将报告投递纳入基础生命周期。** 可重复的 child 到 parent 报告与该生命周期兼容，但静默投递还是 next-step 投递、确认、持久性和重试行为都是独立的产品决策。后续的 report 包保持可选，并消费一个显式的 child 设置钩子，因此可继续驻留不会默认授予返回通道。
+**把 child 编写的报告纳入驻留。** 相邻 Agent 消息通过 `send_message` 独立组合；其权限与调度独立于驻留。父级结果投递由管理器持有，即使 child 没有发消息，也会包含运行时结算通知。
 
 **将 `SessionHeader.parentSession` 视为在线所有权。** 持久化谱系不能证明已记录的 parent 当前持有 child。在线 parent 的 `ownedChildren` 成员关系会记录进程内关系，而不改变持久化 parent id。
 
@@ -176,28 +178,28 @@ activation-owner 作用域之所以存在，是因为普通 Cordis owner effect 
 本实现固定了以下行为：
 
 - 可继续 child 至多拥有一个在线激活和一个 Agent inbox；继续执行管理器没有激活 FIFO 或 queued 激活状态。
-- `SubagentProvider.prepareContinuable?()` 只返回分离式 `ContinuableCreateSpec`；配置为 continuable 时要求具备该能力，而 `backgroundMode` 仍是独立的策略选择。
-- 管理器通过私有 activation-owner 作用域调用 `ctx.agents.create()`，安装返回的 `AgentHandle` 并建立 parent 所有权，调用 `Agent.followup(initialPrompt)`，然后在 inbox 接受消息并产生 `MessageId` 时返回 `{ childId, messageId }`，而不等待轮次开始或消息写入会话日志。
+- `SubagentProvider.prepareContinuable?()` 返回独立的本地创建输入；`start()` 建立外部执行。
+- 管理器通过私有 activation-owner 作用域调用 `ctx.agents.create()`，安装返回的 `AgentHandle` 并建立 parent 所有权，调用 `Agent.followup(initialPrompt)`，然后在 inbox 接受消息并产生 `MessageId` 时返回包含 `childId`、`messageId`、`result` 与 `dispose()` 的回执，而不等待轮次开始或消息写入会话日志。
 - 初始提示词被 inbox 接受前的每条失败路径都会导致操作被拒绝且不返回 id，并通过一个对并发投递和 drain 可见的关闭事务回滚已创建的任何 handle、激活和 parent `ownedChildren` 成员关系；生命周期发布失败不会产生无配对的终止事件。
 - 冷恢复由继续执行管理器调用 `ctx.agents.resume()`，绝不通过或依赖初始 subagent 提供方；提供方移除后，描述符仍保留初始提供方名称，且 `SubagentProvider.resume?()` 和 `SubagentProviderResumeRequest` 均不存在。
-- 可继续激活直接持有 `AgentHandle`，绝不创建、包装或保留 `SubagentRun`；`SubagentProvider.start()` 和 `SubagentRun` 只用于 one-shot，且没有 `SubagentRun.steer?()`。
-- `followup()` 只接受确切的在线直接 parent，并在任何物化之后的最终无 await 的 inbox 准入边界再次检查该身份；持久化消息来源信息不能授权投递。
-- 继续执行消息始终使用 `Agent.followup()` 并共享其 inbox FIFO，包括 child 已有开放轮次的情况。
-- `ctx.subagents.followup()` 及其 `send_message` 适配器只返回已接受的 `MessageId`；继续执行层不接受投递 target，也不定义 subagent 专属路由结果。
-- 调用方 signal 只能在 inbox 接受消息前停止 start 和 follow-up，限定到宿主的拆卸与管理器全局拆卸则保留 child-first 清理；[当前轮次中断](../../../../packages/subagent/subagent/README.zh.md)是唯一的公开停止操作，且不进入拆卸流程。
-- 本版本不暴露 subagent steering 操作或当前轮次控制方状态。
+- 本地 Activation 直接持有 `AgentHandle`；外部 Activation 持有 `SubagentRun`。
+- `sendMessage()` 只接受确切在线的相邻 Agent，并在物化后的最终 inbox 准入处重新检查权限；记录的来源字段不能授权投递。
+- Agent 消息使用 Steer；人类 Queue 提示词保留 FIFO 轮次顺序。
+- `ctx.subagents.sendMessage()` 返回已接受的 `MessageId`，不暴露物化路由。
+- 调用方 signal 停止未发布工作；activation 回执与宿主 drain 持有 child-first 拆卸。[当前轮次中断](../../../../packages/subagent/subagent/README.zh.md)保留待处理工作与驻留。
+- 人类提示词投递与当前轮次中断保留各自的权限检查。
 - 带有在线所持 child 的空闲 Agent 会产生 `waiting` 激活，其 `AgentHandle` 继续保留。
 - 向 `waiting` 投递 `next-turn` 会唤醒同一个激活；完成 dispose 后投递消息会冷恢复新激活。
 - 每个由继续执行管理器管理的 parent 激活只会在直接持有的所有 child 激活完成 `AgentHandle` dispose 后进行 dispose；顶层 Agent 不加入等待图。
 - Activation 最终结算会在准入开放时等待 `ctx.sessions.flush(child.session)`，将其作为 best-effort 屏障；它会记录 rejection，但不会把 listener 参与解释为持久性证明，随后在 child lock 内重新验证最终状态，再关闭准入、dispose child handle 并释放 parent 所有权，使 flush 失败不会泄漏 `waiting` Activation。
 - 管理器拆卸会全局关闭准入；拥有选定顶层 Agent 的宿主则只关闭这些确切身份之下的准入，直到这些根离开注册表。两者都会按确切祖先关系跟踪已获准的物化过程，为每个选中的可见 Activation 安装一个记忆化 dispose 截止点，自顶向下传播取消，按 child-first 顺序释放 handle，即使个别分支失败也会等待所有选中分支，之后才 dispose 对应的顶层 Agent 或管理器作用域。
-- 基础生命周期不暴露隐式报告行为；可选的 report 包通过 setup 钩子贡献一个显式的 child 作用域工具。
+- parent 投递独立于 child 编写的消息发出运行时结算通知。
 - 会话日志只会重建实际写入的消息，并保留每条消息的提供来源；已被 inbox 接受但未写入日志的消息没有重启保证。
 - 可继续 subagent 路径不创建或依赖 Task、`JobId`、Task 完成通知、Task 取消或中间的带结果执行包装层。
-- 单元覆盖固定 `startContinuable()` 在 inbox 接受消息时的返回边界、每条接受前和生命周期发布失败路径的完整回滚、全局和限定到 parent 作用域的 drain 都会等待夹在 Agent 发布与 Activation 注册之间的物化过程完全停稳、同级森林隔离、中间 Agent 离开注册表后的确切祖先关系、不依赖提供方的冷恢复、冷恢复物化后的最终确切 parent 再授权、接受前后两个阶段的调用方 signal 与拆卸所有权，以及已接受但未写入日志的消息不会自动回放。
-- 单元覆盖固定仅由驻留状态决定的路由表、单 inbox 顺序、通过 inbox 事件关联 `MessageId`、在开放轮次期间 follow-up、等待唤醒、冷恢复、所有权注册与释放、child-first dispose、发送与 dispose 的竞争、在最终 flush await 期间接受的直接 Agent 轮次、仅修改 Session 的工作与 maintenance、没有 listener 和 listener 失败时的 best-effort 最终 flush，以及不存在公开 subagent 取消和 steering。
-- report 包的单元覆盖会分别固定仅 child 可见性、setup 撤销、权限、投递模式、稳定消息身份和生命周期竞争。
-- 一项无密钥整套应用快照覆盖 parent 委派和 follow-up 排队、不存在 subagent steering 和隐式 report 投递、保留 waiting 中的 `AgentHandle` 以及 child-first dispose。另一项 report 快照覆盖可选的显式返回通道。
+- 单元覆盖固定 `startActivation()` 在 inbox 接受消息时的返回边界、每条接受前和生命周期发布失败路径的完整回滚、全局和限定到 parent 作用域的 drain 都会等待夹在 Agent 发布与 Activation 注册之间的物化过程完全停稳、同级森林隔离、中间 Agent 离开注册表后的确切祖先关系、不依赖提供方的冷恢复、冷恢复物化后的最终确切 parent 再授权、接受前后两个阶段的调用方 signal 与拆卸所有权，以及已接受但未写入日志的消息不会自动回放。
+- 单元覆盖固定仅由驻留状态决定的路由表、单 inbox 顺序、通过 inbox 事件关联 `MessageId`、在开放轮次期间 follow-up、等待唤醒、冷恢复、所有权注册与释放、child-first dispose、发送与 dispose 的竞争、在最终 flush await 期间接受的直接 Agent 轮次、仅修改 Session 的工作与 maintenance、没有 listener 和 listener 失败时的 best-effort 最终 flush，以及单独鉴权的人类提示词投递与中断。
+- 相邻 Agent 测试覆盖直接 parent 权限、工具可见性、冷恢复与结算期间投递。
+- keyless 组装应用快照覆盖委派、相邻 Agent 消息、运行时结算通知与 child-first dispose。
 
 ### 已接受的代价
 
@@ -207,8 +209,8 @@ activation-owner 作用域之所以存在，是因为普通 Cordis owner effect 
 
 进程内 inbox 和所有权图无法协调两个 harness 进程。允许多个进程并发访问同一持久化存储的部署，仍需要持久化 lease 和邮箱协议。
 
-未安装可选 report 包时，完成 child 轮次既不会把内容发送给历史 parent，也不会唤醒它。安装后，只有显式调用 `report` 才会发送选中内容；静默投递不唤醒 parent，next-step 投递则会唤醒它并加入最近的 step 边界。无论如何，child 的详细输出都会保留在其持久化会话中。
+child 编写的 `send_message` 调用与管理器编写的结算通知在父级日志中保持区分。本地 child 的完整文本记录保留在其自身的持久化 Session 中。
 
-将每条继续执行消息排队，意味着 parent 无法立即纠正正在进行的 child 轮次；纠正操作会在下一个轮次执行。后续 UI steering 操作可以缩短该延迟，而不改变 follow-up 排序。
+Steer 投递抵达下一个可用 step 边界，不会抢占正在执行的工具。Queue 投递保留后续轮次顺序。
 
 best-effort 最终 flush 失败时会记录日志，同时运行时所有权图继续 drain；持久化 child 状态可能缺失或陈旧。重试与修复需要单独的恢复设计。

@@ -130,8 +130,9 @@ interface RequestViewBase {
   startedAt: number
   completedAt: number | null
   status: 'running' | 'complete' | 'error'
+  /** Failure detail; with assistant retry metadata, the last failed attempt even while running or after recovery. */
   error?: string
-  /** Stable provider code for localized presentation of known failures. */
+  /** Stable provider code for `error`, including retained attempt failures, for localized presentation. */
   errorCode?: string
   providerMetadata?: AssistantProviderMetadataView
   requestConfig?: AssistantRequestConfig

@@ -2,30 +2,27 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/subagent.md
-/subagent:
-  en: becdb30aeb411272
-  zh: 72724ec854ec4e84
-/subagent/two-kinds-of-capability-discovered-two-ways:
-  en: 7be7cbc224948ed1
-  zh: 6da4f61394ed900e
-/subagent/the-one-shot-start-request:
-  en: 37b7876d6f186642
-  zh: 196a9df4fca5a4fd
-/subagent/continuable-children-and-activations:
-  en: e4b88406f0c541dd
-  zh: 58fb89fa90721416
-/subagent/durable-enumeration-listchildren-listdescendants-and-their-entries:
-  en: 5ff018408210d739
-  zh: 909d4a1788d65629
-/subagent/the-terminal-result-subagentresult:
-  en: 6070effb5f84f701
-  zh: 2b8a6980ceb0b7b2
-/subagent/a-one-shot-run-subagentrun:
-  en: 39df94dd1343ffde
-  zh: 047605d7f5ba91ae
-/subagent/the-provider-contract-subagentprovider:
-  en: cb05cffdb837b7bc
-  zh: a53133845d673f0a
-/subagent/in-process-backends-permission-depth-and-seed:
-  en: 4f009d383e782b2d
-  zh: 0c11e25423968f24
+/subagents:
+  en: 9d48a27a49585a3d
+  zh: 89da32c8a16c290a
+/subagents/capabilities-and-activation-requests:
+  en: 8c92b131f67997f6
+  zh: c2dc606a0859420c
+/subagents/local-children-and-activations:
+  en: d926d4777ec0f11e
+  zh: 0ae6076e24b66401
+/subagents/messages-and-interruption:
+  en: 623b06b3c12540bc
+  zh: f56c6341e1c62768
+/subagents/durable-enumeration:
+  en: 30c3607a969696ce
+  zh: e6359cdf22b1e235
+/subagents/results-and-backend-handles:
+  en: 69ea5bed7d9fb64a
+  zh: b187a822b813e80a
+/subagents/the-provider-contract-subagentprovider:
+  en: 226ba8094a8cf96c
+  zh: 719678662905d1eb
+/subagents/durable-enumeration-listchildren-listdescendants-and-their-entries:
+  en: d8ce7969b65ad86e
+  zh: d39dac6592681bf2

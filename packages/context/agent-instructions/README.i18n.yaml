@@ -15,14 +15,14 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-agent-instructions/use-this-package:
-  en: d8c9258bcc5c9b32
-  zh: 1bbeb9c58828d83c
+  en: 76eedbd3c6ae5174
+  zh: ed3fdcd6f2b3f522
 /deepseek-ai-dsh-agent-instructions/use-this-package/what-the-agent-gets:
-  en: 68f776f145a0dec4
-  zh: e63e9140aa305936
+  en: 1435be3e04948c50
+  zh: a3946e05a9a221dd
 /deepseek-ai-dsh-agent-instructions/use-this-package/configuration:
-  en: a9408dc631588be3
-  zh: b43bd6000437379c
+  en: eb827036480985b8
+  zh: 2f237f46eb4b455d
 /deepseek-ai-dsh-agent-instructions/use-this-package/observing-the-budget:
   en: 9797082b1e69b72c
   zh: d26c00b1b90fe4ea
@@ -33,8 +33,8 @@
   en: 4708b51bf8fe86f7
   zh: 869fc4b1f78383ee
 /deepseek-ai-dsh-agent-instructions/understand-the-implementation/source-map:
-  en: bbb499f8498f454c
-  zh: b6517adffd0ccb80
+  en: cb4c1f929ef5a835
+  zh: 3f0fcb7f568a0a5c
 /deepseek-ai-dsh-agent-instructions/understand-the-implementation/main-flow:
   en: d881b9055f823929
   zh: 87b25f0bf8e204e9
@@ -66,8 +66,8 @@
   en: bbf8f11dbb279b78
   zh: eb537ade3fa1e573
 /deepseek-ai-dsh-agent-instructions/model-experience/newly-discovered-scope-context/what-the-model-sees:
-  en: 99226255009f8432
-  zh: 3b1661ca1a98ae4a
+  en: d806c4e1f67d7e94
+  zh: 46f1d1d149197f70
 /deepseek-ai-dsh-agent-instructions/model-experience/newly-discovered-scope-context/what-the-model-sees/additional-instruction-template:
   en: 50655306b787c8c6
   zh: bcdc631a35f9de91
@@ -93,8 +93,8 @@
   en: 2fbf2175168e8244
   zh: f681f89596f500f5
 /deepseek-ai-dsh-agent-instructions/known-limitations-and-deferred-work:
-  en: 28dd93fabf4afae6
-  zh: 63380bbc1e085aa2
+  en: 9b50e4414fac4a79
+  zh: 5957bfd23f79b336
 /deepseek-ai-dsh-agent-instructions/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

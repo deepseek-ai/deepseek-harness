@@ -20,12 +20,14 @@
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
     "./client": {
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     }
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
@@ -68,7 +70,7 @@
     "@types/react": "~18.3.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@testing-library/react": "^16.1.0",
+    "@testing-library/react": "^16.3.3",
     "@deepseek-ai/dsh-api-gateway": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*"

@@ -3,7 +3,7 @@
  * its child log and confines a real write under a wider deployment default.
  */
 
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readFile, readdir, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
@@ -111,8 +111,8 @@ describe('parent-only override inheritance snapshot', () => {
         DSH_SNAPSHOT_CHILD_FILES: childReplay,
       },
       prepare: async (runCwd) => {
-        cwd = runCwd
-        await seedReadOnlyParent(join(runCwd, '.sessions'), runCwd)
+        cwd = await realpath(runCwd)
+        await seedReadOnlyParent(join(cwd, '.sessions'), cwd)
       },
       inspect: async (runCwd) => {
         // THE physical fact: the child's write never reached the disk. Under
@@ -132,11 +132,12 @@ describe('parent-only override inheritance snapshot', () => {
         const childRecords = child.trimEnd().split('\n').map(
           line => JSON.parse(line) as Record<string, unknown>,
         )
-        expect(childRecords[1]).toMatchObject({
+        expect(childRecords.find(record => record.type === 'sandbox/mode')).toMatchObject({
           type: 'sandbox/mode',
-          seq: SessionSeq(0),
           data: { mode: 'read-only', source: 'delegation' },
         })
+        expect(childRecords.findIndex(record => record.type === 'sandbox/mode'))
+          .toBeLessThan(childRecords.findIndex(record => record.type === 'turn/start'))
 
         const runtimeContexts = (content: string): string[] => content.trimEnd().split('\n').flatMap((line) => {
           const record = JSON.parse(line) as {

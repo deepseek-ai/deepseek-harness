@@ -67,11 +67,11 @@ jobs:
     # and retry 2; 45m still bounds retry storms against a slow API.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5.0.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 24
           cache: pnpm
@@ -107,7 +107,7 @@ jobs:
       # the built artifact under plain Node, resolving plugins through real package
       # exports — the shape a real consumer runs. That requires a prior build.
       - name: Build (lib for the e2e example bins)
-        run: pnpm run build:official
+        run: ${{ github.event_name == 'pull_request' && 'pnpm run build --artifacts-only --profile official' || 'pnpm run build:official' }}
 
       - name: Prepare Office runtime
         run: pnpm run prepare:primary-runtime --target linux-x64 --output .cache/e2e-office

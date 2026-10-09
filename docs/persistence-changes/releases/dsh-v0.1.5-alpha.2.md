@@ -68,15 +68,15 @@ changes:
 
 <!-- persistence-release-changes:start -->
 
-Detected 4 changed roots and 5 structural differences. The minimum below is calculated using current rules for comparison only; it does not assert historical compliance, migration correctness, or runtime compatibility.
+Detected 4 changed roots and 5 structural differences. The review requirement below is calculated using current rules for comparison only; it does not assert historical compliance, migration correctness, or runtime compatibility.
 
-| Path | Change | Current minimum |
+| Path | Change | Review requirement |
 |---|---|---|
-| `event:deliverables/presented` | `root-added` | `same-version` |
-| `event:feedback/message-put.data.item.category` | `optional-property-added` | `same-version` |
-| `event:feedback/record.data.text` | `property-made-optional` | `same-version` |
-| `event:feedback/record.data.category` | `optional-property-added` | `same-version` |
-| `event:subagent/catalog` | `root-added` | `same-version` |
+| `event:deliverables/presented` | `root-added` | `not-required` |
+| `event:feedback/message-put.data.item.category` | `optional-property-added` | `not-required` |
+| `event:feedback/record.data.text` | `property-made-optional` | `not-required` |
+| `event:feedback/record.data.category` | `optional-property-added` | `not-required` |
+| `event:subagent/catalog` | `root-added` | `not-required` |
 
 <!-- persistence-release-changes:end -->
 

@@ -148,9 +148,9 @@ describe('tool-call-model', () => {
   })
 
   it('exposes filePath for path/file_path args and skips URL-only reads', () => {
-    expect(toolRowModel('read', running({ name: 'read', argsRaw: '{"path":"src/a.ts"}' })).filePath).toBe('src/a.ts')
-    expect(toolRowModel('write', running({ name: 'write', argsRaw: '{"file_path":"src/a.ts"}' })).filePath).toBe('src/a.ts')
-    expect(toolRowModel('edit', running({ name: 'edit', argsRaw: '{"file_path":"src/a.ts"}' })).filePath).toBe('src/a.ts')
+    expect(toolRowModel('read', result({ call: { name: 'read', argsRaw: '{"path":"src/a.ts"}' } })).filePath).toBe('src/a.ts')
+    expect(toolRowModel('write', result({ call: { name: 'write', argsRaw: '{"file_path":"src/a.ts"}' } })).filePath).toBe('src/a.ts')
+    expect(toolRowModel('edit', result({ call: { name: 'edit', argsRaw: '{"file_path":"src/a.ts"}' } })).filePath).toBe('src/a.ts')
     expect(toolRowModel('web_fetch', running({ name: 'web_fetch', argsRaw: '{"url":"https://example.com"}' })).filePath)
       .toBeUndefined()
     expect(toolRowModel('bash', running()).filePath).toBeUndefined()
@@ -164,6 +164,31 @@ describe('tool-call-model', () => {
     expect(toolRowModel('read', running({ name: 'read', argsRaw: '{"path":"/etc/hosts"}' }), cwd).summary).toBe('/etc/hosts')
     expect(toolRowModel('bash', running({ argsRaw: '{"command":"pwd"}' }), cwd).summary).toBe('pwd')
     expect(toolRowModel('read', running({ name: 'read', argsRaw: '{"path":"/Users/u/ws/a.md"}' }), '').summary).toBe('/Users/u/ws/a.md')
+  })
+
+  it.each(['read', 'write', 'edit', 'read_image'].flatMap(name => [false, true].map(nested => ({ name, nested }))))('opens $name nested=$nested at its recorded target after later directory changes without relabeling it', ({ name, nested }) => {
+    const block = result({ ...(nested ? { parentCallId: 'outer' } : {}), call: { name, argsRaw: '{"file_path":"note.txt"}' }, meta: { path: '/workspace/b/note.txt' } })
+    for (const cwd of ['/workspace/a', '/workspace/c']) {
+      const model = toolRowModel(name, block, cwd)
+      expect(model.filePath).toBe('/workspace/b/note.txt')
+      expect(model.summary).toBe('note.txt')
+      const openFile = vi.fn()
+      const view = render(<GenericToolCard useDisclosure={useDisclosure} phase="result" callId="c1" toolName={name} block={block} cwd={cwd} openFile={openFile} loadImage={vi.fn(async () => '')} t={t} />)
+      fireEvent.click(view.getByText('note.txt'))
+      expect(openFile).toHaveBeenCalledWith('/workspace/b/note.txt')
+      view.unmount()
+    }
+  })
+
+  it('keeps old root results usable and waits for recorded targets before opening relative pending or nested calls', () => {
+    const call = { name: 'read', argsRaw: '{"file_path":"note.txt"}' }
+    for (const meta of [undefined, null, [], { path: 7 }, { path: 'relative.txt' }]) {
+      expect(toolRowModel('read', result({ call, meta }), '/original').filePath).toBe('note.txt')
+    }
+    expect(toolRowModel('read', running(call), '/original').filePath).toBeUndefined()
+    expect(toolRowModel('read', result({ call, parentCallId: 'outer' }), '/original').filePath).toBeUndefined()
+    expect(toolRowModel('read', result({ call, isError: true }), '/original').filePath).toBeUndefined()
+    expect(toolRowModel('read', running({ name: 'read', argsRaw: '{"file_path":"/absolute/note.txt"}' })).filePath).toBe('/absolute/note.txt')
   })
 
   it('abbreviates leftover POSIX home paths after cwd relativization', () => {
@@ -602,7 +627,7 @@ describe('GenericToolCard', () => {
   })
 
   it('file-path summary click reaches openFile; bash summary does not', () => {
-    const file = props('read', running({ name: 'read', argsRaw: '{"path":"src/x.ts"}' }))
+    const file = props('read', result({ call: { name: 'read', argsRaw: '{"path":"src/x.ts"}' } }))
     const fileView = render(<GenericToolCard {...file} />)
     fireEvent.click(fileView.getByText('src/x.ts'))
     expect(file.openFile).toHaveBeenCalledWith('src/x.ts')

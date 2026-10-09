@@ -79,7 +79,6 @@ async function seedVisibleBaseline(
     content: file.content,
   })), { maxBytes: 65536 })
   const config = resolveConfig({
-    dshHome: join(cwd, '.dsh'),
     maxBytes: 65536,
     ...options.instructionFileCandidates === undefined
       ? {}

@@ -520,7 +520,10 @@ describe('JsonlSessionPersistence: default Zstandard encoding', () => {
     buffer[eventFrame.end - 1] = buffer[eventFrame.end - 1]! ^ 0xFF
     await writeFile(path, buffer)
 
-    expect((await ctx.sessionPersistence.list()).map(item => item.header.id)).toEqual([header.id])
+    const listed = await ctx.sessionPersistence.list()
+    expect(listed.map(item => item.header.id)).toEqual([header.id])
+    expect(listed[0]?.formatStatus).toBe('current')
+    expect((await ctx.sessionPersistence.stat(header.id))?.formatStatus).toBe('current')
     await expect(readAll(ctx.sessionPersistence, header.id)).rejects.toThrow(/frame at byte .* failed validation/)
   })
 

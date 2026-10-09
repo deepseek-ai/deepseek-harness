@@ -21,6 +21,7 @@ it.skipIf(process.platform !== 'win32')('queries and invokes a registered Window
   const executable = join(root, appName)
   const path = join(root, `${String.fromCharCode(0x6d4b, 0x8bd5)} ' audio${extension}`)
   const marker = join(root, 'opened.txt')
+  const pendingMarker = join(root, 'opened.pending')
   const lifetime = new AbortController()
   const signal = AbortSignal.any([testSignal, lifetime.signal])
   const active = new Set<Promise<Awaited<ReturnType<NativeCommandRunner>>>>()
@@ -59,7 +60,9 @@ using System.IO;
 using System.Diagnostics;
 public static class Handler {
   public static void Main(string[] args) {
-    File.WriteAllLines(${JSON.stringify(marker)}, new string[] { args.Length == 0 ? "(no file argument)" : args[0], Process.GetCurrentProcess().Id.ToString() });
+    // Readers can open the marker only after both lines have been written and the handle is closed.
+    File.WriteAllLines(${JSON.stringify(pendingMarker)}, new string[] { args.Length == 0 ? "(no file argument)" : args[0], Process.GetCurrentProcess().Id.ToString() });
+    File.Move(${JSON.stringify(pendingMarker)}, ${JSON.stringify(marker)});
   }
 }
 '@

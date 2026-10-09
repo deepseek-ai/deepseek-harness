@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用本包可浏览父会话下的每个 subagent 对话、打开任意后代，并查看其是否正在运行以及 token 用量和活跃轮次耗时。已完成的 one-shot 对话会作为只读执行记录打开。可继续对话在运行期间按提交顺序接收后续提示词，并独立提供 Stop。普通会话侧边栏会省略 subagent 对话，因此父会话页头目录是它们的导航入口。独立的 `@` source 会把运行中 child 的 label 插入用户消息，但不会把它解析成继续执行地址。
+从父会话页头浏览本地子代理对话与外部任务。本地对话展示活跃状态、token 用量和耗时；可继续子代理接受后续提示词并支持 Stop。外部任务显示为不可打开的叶子项，不展示执行状态。历史一次性对话以只读记录打开。普通侧边栏省略子代理对话；独立的 `@` 来源插入运行中子代理的标签，不授予继续执行权限。
 
 ## 目录
 
@@ -55,11 +55,11 @@ kind: "package-reference"
 
 ### 目录派生
 
-页头谱系 renderer 通过标准 `useSessions` 钩子读取 `projectionsBySession`。renderer 从每个 Session 的共享值中选择 `subagentCatalog`，用于成员关系、展开控件与数量；活动状态优先使用统一 UI status，缺少时使用 Session 摘要；摘要提供标题与用量。展开行会按需加载初始目录。实时 projection 帧更新所有已加载层级，无需菜单订阅或重复成员查询。行在目录缺席、加载中或失败时保持可展开，并在目录就绪且为空后成为已知叶子。
+页头谱系 renderer 通过标准 `useSessions` 钩子读取 `projectionsBySession`。renderer 从每个 Session 的共享值中选择 `subagentCatalog`，用于成员关系、展开控件与数量；活动状态优先使用统一 UI status，缺少时使用 Session 摘要；摘要提供标题与用量。展开行读取目标投影，包括普通冷历史。列表行的 `formatStatus` 为 `migration-required` 时，行在展开前即显示“需要迁移”，保留打开历史的操作，但不能展开下级，也不改变子会话的 mode；投影读取需要迁移且缺少目录时，也显示同一提示。打开会话后，历史与 control 投影提供其目录。其他情况下，已有目录仍可使用，包括显式空目录。实时 projection 帧更新所有已加载层级，无需菜单订阅或重复成员查询。其他行在目录缺席、加载中或失败时保持可展开，并在目录就绪且为空后成为已知叶子。外部行始终为叶子，不加载子 Session。
 
 打开目录下拉菜单不会请求其根目录。展开子节点目录或重试失败读取时调用 `refreshProjection`；共享投影值的变化会自动更新显示。
 
-面包屑地址从 Provider 所绑定的 Session 地址和已加载的 parent 目录推导，也包括从未选中过的祖先。
+面包屑地址从 Provider 所绑定的 Session 地址、已加载的 parent 目录或已列出的 subagent 谱系推导，也包括从未选中过的祖先。
 
 ### 耗时、完成状态与 token
 

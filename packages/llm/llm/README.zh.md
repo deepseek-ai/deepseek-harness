@@ -60,6 +60,25 @@ for await (const chunk of ctx.llm.stream({
 
 `GenerateOptions.messages` 接受持久 `Message` 值和仅供请求使用的 `RequestUserInput` 值。仅供请求使用的输入包含 user-role 内容，不含 `id` 或 `source`；Session 写入和 Agent 投递仍然要求持久消息。调用方必须在流结束前保持辅助输入不变。会记录完整请求的调用方（例如会话标题生成）必须使用持久消息。
 
+`prepareCall(config, signal, configure?)` 接受具体的 `LlmCallConfig` 值。可选的同步纯函数 `ConfigureCall` 接收已分离且深度冻结的 `LlmCallControls`，以及捕获的适配器代次所提供的模型元数据。调用方可组合普通函数来选择具体控制项；后执行的写入替换先前的值。准备操作保留捕获的路由，为省略的控制项应用默认值，校验结果，再返回用于记录与分发的冻结配置。回调失败或取消会在分发前拒绝。准备操作要求注册适配器。
+
+配置函数在适配器默认值物化之前选择控制项。例如，将最低强度选择与显式输出上限组合，再将 `configure(maxTokens)` 作为第三个参数传入：
+
+```ts
+import type { ConfigureCall } from '@deepseek-ai/dsh-llm'
+
+const leastReasoning: ConfigureCall = (controls, model) => {
+  const first = model.reasoning?.efforts[0]
+  return first === undefined ? controls : { ...controls, reasoningEffort: first.id }
+}
+
+const outputLimit = (maxTokens: number): ConfigureCall =>
+  controls => ({ ...controls, maxTokens })
+
+const configure = (maxTokens: number): ConfigureCall =>
+  (controls, model) => outputLimit(maxTokens)(leastReasoning(controls, model), model)
+```
+
 ### 你可以做什么
 
 - **流式发起一次模型调用**——`ctx.llm.stream(options)` 为任何已注册提供方与模型产出原始分片（token 级增量）；消费方用 `BlockAssembler` 组装。

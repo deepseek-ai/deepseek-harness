@@ -192,7 +192,7 @@ function scriptedFace(overrides: {
   const unset = overrides.unset ?? vi.fn(() => Promise.resolve(remoteOk(undefined)))
   const face = {
     llm: {
-      listProviders: vi.fn(() => Promise.resolve(remoteOk([
+      listProviders: vi.fn((): ReturnType<PageContext['remote']['llm']['listProviders']> => Promise.resolve(remoteOk([
         { id: 'deepseek-official', name: 'DeepSeek' },
         { id: 'openai', name: 'openai' },
       ]))),
@@ -331,6 +331,234 @@ async function mountDeepSeekCard(overrides: Parameters<typeof scriptedFace>[0] =
 }
 
 describe('ModelsSection', () => {
+  it('waits for the current snapshot when a setup surface remounts during refresh', async () => {
+    const { view, controller, face, mirror, mutate } = await mountFirstRun()
+    view.unmount()
+    const before = controller.store.getSnapshot().namespaces.get('llm-deepseek')!
+    mirror.acceptView({
+      ...before,
+      value: { apiKeyEnv: 'DEEPSEEK_API_KEY', baseURL: 'https://current.example', models: DEFAULT_DEEPSEEK_MODELS },
+      user: { baseURL: 'https://current.example' },
+      revision: 1,
+    })
+    const read = Promise.withResolvers<RemoteResult<Record<string, CredentialInfo>>>()
+    const started = Promise.withResolvers<undefined>()
+    face.credentials.describe.mockImplementationOnce(() => { started.resolve(undefined); return read.promise })
+    let refreshing: Promise<void> | undefined
+    try {
+      await act(async () => { refreshing = controller.load(); await started.promise })
+      expect(controller.store.getSnapshot().namespaces.get('llm-deepseek')?.revision).toBe(0)
+      render(<ModelsSection
+        controller={controller}
+        useSnapshot={bindSnapshotSelector(controller.store)}
+        operations={operationsWith(face)}
+        schema={settingsSchema}
+        t={t}
+        renderSlot={() => null}
+      />)
+      expect(screen.getByRole('heading', { name: en.title })).toBeTruthy()
+      expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+      expect(screen.queryByRole('button', { name: en.add })).toBeNull()
+    } finally {
+      await act(async () => { read.resolve(remoteOk({})); await refreshing })
+    }
+    await screen.findByLabelText(en.keyInput)
+    fireEvent.click(screen.getByText(en.customized))
+    const url = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
+    expect(url.value).toBe('https://current.example')
+    fireEvent.change(url, { target: { value: 'https://next.example' } })
+    fireEvent.click(screen.getByRole('button', { name: en.apply }))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledWith(
+      'llm-deepseek', [{ op: 'set', path: ['baseURL'], value: 'https://next.example' }], 1,
+    ) })
+    await screen.findByRole('status')
+  })
+
+  it('waits for the current snapshot before remounting setup after a failed page load', async () => {
+    const { controller, face, mirror, mutate } = await mountFirstRun()
+    const oldKey = screen.getByLabelText<HTMLInputElement>(en.keyInput)
+    fireEvent.change(oldKey, { target: { value: 'sk-discarded-on-error' } })
+    face.llm.listProviders.mockResolvedValueOnce(remoteFail('directory unavailable', 'gateway/internal'))
+    await act(async () => { await controller.load() })
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    expect(screen.getByText(`${en.loadFailed}: directory unavailable`)).toBeTruthy()
+    const before = controller.store.getSnapshot().namespaces.get('llm-deepseek')!
+    mirror.acceptView({
+      ...before,
+      value: { apiKeyEnv: 'DEEPSEEK_API_KEY', baseURL: 'https://recovered.example', models: DEFAULT_DEEPSEEK_MODELS },
+      user: { baseURL: 'https://recovered.example' },
+      revision: 2,
+    })
+    const read = Promise.withResolvers<RemoteResult<Record<string, CredentialInfo>>>()
+    const started = Promise.withResolvers<undefined>()
+    const describe = face.credentials.describe.getMockImplementation()!
+    face.credentials.describe.mockImplementation((refs) => {
+      if (refs.length > 1) { started.resolve(undefined); return read.promise }
+      return describe(refs)
+    })
+    const load = vi.spyOn(controller, 'load')
+    try {
+      fireEvent.click(screen.getByRole('button', { name: en.retry }))
+      await act(async () => { await started.promise })
+      expect(load).toHaveBeenCalledOnce()
+      expect(controller.store.getSnapshot()).toMatchObject({ status: 'loading' })
+      expect(controller.store.getSnapshot().namespaces.get('llm-deepseek')?.revision).toBe(0)
+      expect(screen.getByRole('heading', { name: en.title })).toBeTruthy()
+      expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    } finally {
+      await act(async () => { read.resolve(remoteOk({})); await load.mock.results[0]?.value })
+      load.mockRestore()
+    }
+    const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+    expect(key).not.toBe(oldKey)
+    expect(key.value).toBe('')
+    fireEvent.click(screen.getByText(en.customized))
+    const url = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
+    expect(url.value).toBe('https://recovered.example')
+    fireEvent.change(url, { target: { value: 'https://after-retry.example' } })
+    fireEvent.click(screen.getByRole('button', { name: en.apply }))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledWith(
+      'llm-deepseek', [{ op: 'set', path: ['baseURL'], value: 'https://after-retry.example' }], 2,
+    ) })
+    await screen.findByRole('status')
+  })
+
+  it('preserves a mounted setup draft while its current refresh is pending', async () => {
+    const { controller, face } = await mountFirstRun()
+    const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
+    fireEvent.change(key, { target: { value: 'sk-unsaved-setup-draft' } })
+    const read = Promise.withResolvers<RemoteResult<Record<string, CredentialInfo>>>()
+    face.credentials.describe.mockImplementationOnce(() => read.promise)
+    let refreshing: Promise<void> | undefined
+    try {
+      act(() => { refreshing = controller.load() })
+      expect(screen.getByLabelText(en.keyInput)).toBe(key)
+      expect(key.value).toBe('sk-unsaved-setup-draft')
+    } finally {
+      await act(async () => { read.resolve(remoteOk({})); await refreshing })
+    }
+    expect(screen.getByLabelText(en.keyInput)).toBe(key)
+    expect(key.value).toBe('sk-unsaved-setup-draft')
+  })
+
+  it('checks current readiness before opening an editor and preserves an open draft during refresh', async () => {
+    const { controller } = await mountSection()
+    const edit = screen.getByRole('button', { name: deepSeekCopy(en.editProvider) })
+    const ready = controller.store.getSnapshot()
+    const snapshot = vi.spyOn(controller.store, 'getSnapshot').mockReturnValue({ ...ready, status: 'loading' })
+    try {
+      fireEvent.click(edit)
+      expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    } finally {
+      snapshot.mockRestore()
+    }
+    fireEvent.click(edit)
+    const key = await screen.findByLabelText(en.keyInput)
+    fireEvent.change(key, { target: { value: 'sk-unsaved-draft' } })
+    act(() => { controller.store.update((state) => { state.status = 'loading' }) })
+    expect((key as HTMLInputElement).value).toBe('sk-unsaved-draft')
+    expect((edit as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(edit)
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    expect((edit as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('checks current readiness before adding or starting removal from rendered rows', async () => {
+    const { controller, mutate, unset } = await mountSection()
+    const add = screen.getByRole('button', { name: en.add })
+    const remove = screen.getByRole('button', { name: openaiCopy(en.removeProvider) })
+    const ready = controller.store.getSnapshot()
+    const snapshot = vi.spyOn(controller.store, 'getSnapshot').mockReturnValue({ ...ready, status: 'loading' })
+    try {
+      fireEvent.click(add)
+      fireEvent.click(remove)
+      expect(screen.queryByLabelText(en.provider)).toBeNull()
+      expect(screen.queryByRole('dialog', { name: openaiCopy(en.deleteTitle) })).toBeNull()
+      expect(mutate).not.toHaveBeenCalled()
+      expect(unset).not.toHaveBeenCalled()
+    } finally {
+      snapshot.mockRestore()
+    }
+    fireEvent.click(add)
+    expect(screen.getByLabelText(en.provider)).toBeTruthy()
+  })
+
+  it('blocks new Add and Remove actions while a joined refresh retains an open add draft', async () => {
+    const { controller, face } = await mountSection()
+    const add = screen.getByRole<HTMLButtonElement>('button', { name: en.add })
+    const remove = screen.getByRole<HTMLButtonElement>('button', { name: openaiCopy(en.removeProvider) })
+    const read = Promise.withResolvers<RemoteResult<Record<string, CredentialInfo>>>()
+    face.credentials.describe.mockImplementationOnce(() => read.promise)
+    let refreshing: Promise<void> | undefined
+    try {
+      act(() => { refreshing = controller.load() })
+      expect(add.disabled).toBe(true)
+      expect(remove.disabled).toBe(true)
+      expect(screen.getByText('openai')).toBeTruthy()
+      fireEvent.click(add)
+      fireEvent.click(remove)
+      expect(screen.queryByLabelText(en.provider)).toBeNull()
+      expect(screen.queryByRole('dialog', { name: openaiCopy(en.deleteTitle) })).toBeNull()
+    } finally {
+      await act(async () => {
+        read.resolve(remoteOk({ OPENAI_API_KEY: { configured: true, writable: true } }))
+        await refreshing
+      })
+    }
+    fireEvent.click(add)
+    const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+    fireEvent.change(key, { target: { value: 'sk-unsaved-add-draft' } })
+    act(() => { controller.store.update((state) => { state.status = 'loading' }) })
+    expect(key.value).toBe('sk-unsaved-add-draft')
+    fireEvent.click(screen.getByRole('button', { name: en.cancel }))
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: en.add }).disabled).toBe(true)
+  })
+
+  it('waits for saved credential confirmation before removing its managed key', async () => {
+    const configured = new Set(['DEEPSEEK_API_KEY'])
+    const set = vi.fn((ref: string) => { configured.add(ref); return Promise.resolve(remoteOk(undefined)) })
+    const scripted = scriptedFace({ set })
+    const read = Promise.withResolvers<RemoteResult<Record<string, CredentialInfo>>>()
+    const started = Promise.withResolvers<undefined>()
+    let holdJoin = false
+    const answer = (refs: string[]): RemoteResult<Record<string, CredentialInfo>> => remoteOk(
+      Object.fromEntries(refs.map(ref => [ref, { configured: configured.has(ref), writable: true }])),
+    )
+    scripted.face.credentials.describe.mockImplementation((refs: string[]) => {
+      if (holdJoin && refs.length > 1) { started.resolve(undefined); return read.promise }
+      return Promise.resolve(answer(refs))
+    })
+    const { controller, unset, mutate } = await mountFace(scripted)
+    fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
+    const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+    fireEvent.change(key, { target: { value: 'sk-new-managed-key' } })
+    holdJoin = true
+    try {
+      fireEvent.click(screen.getByRole('button', { name: en.apply }))
+      await act(async () => { await started.promise })
+      expect(configured.has('OPENAI_API_KEY')).toBe(true)
+      expect(controller.store.getSnapshot().rows.find(row => row.entry.provider === 'openai')?.credential?.configured).toBe(false)
+      const remove = screen.getByRole<HTMLButtonElement>('button', { name: openaiCopy(en.removeProvider) })
+      expect(remove.disabled).toBe(true)
+      fireEvent.click(remove)
+      expect(screen.queryByRole('dialog', { name: openaiCopy(en.deleteTitle) })).toBeNull()
+      holdJoin = false
+      await act(async () => { read.resolve(answer(['DEEPSEEK_API_KEY', 'OPENAI_API_KEY'])) })
+      await screen.findByText(openaiCopy(en.savedProvider))
+      fireEvent.click(remove)
+      const dialog = screen.getByRole('dialog', { name: openaiCopy(en.deleteTitle) })
+      expect(dialog.textContent).toContain(openaiCopy(en.deleteDescriptionWithCredential))
+      fireEvent.click(within(dialog).getByRole('button', { name: openaiCopy(en.deleteConfirm) }))
+      await waitFor(() => { expect(unset).toHaveBeenCalledWith('OPENAI_API_KEY') })
+      await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+      await waitFor(() => { expect(screen.queryByRole('dialog', { name: openaiCopy(en.deleteTitle) })).toBeNull() })
+    } finally {
+      holdJoin = false
+      await act(async () => { read.resolve(answer(['DEEPSEEK_API_KEY', 'OPENAI_API_KEY'])) })
+    }
+  })
+
   it('hides the add action when no settings namespace can open an editor', async () => {
     const scripted = scriptedFace()
     scripted.face.settings.describe.mockResolvedValue(remoteOk({ writable: true, hasDocument: false, namespaces: [] }))
@@ -1418,7 +1646,7 @@ describe('ModelsSection', () => {
 
   it('renders the load failure with a retry control', async () => {
     const face = scriptedFace()
-    face.face.llm.listProviders = vi.fn(() => Promise.resolve(remoteFail('directory down', 'gateway/internal'))) as never
+    face.face.llm.listProviders.mockResolvedValue(remoteFail('directory down', 'gateway/internal'))
     const controller = new ModelsSettingsStore(
       ctxWith(face.face), settingsSchema, new SettingsDescribeMirror(ctxWith(face.face)))
     await controller.load()

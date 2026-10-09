@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+此非实验性的独立插件面向自定义组合。Plugins 页面不将它作为可选 bundle 提供。
+
 当模型应通过熟悉的 `view`/`create`/`str_replace`/`insert` 命令词汇在绝对路径上编辑文件时，把工具与 `ctx.fs` 后端（以及需要防护变更时的策略插件）一起挂载。
 
 ### 最小组合

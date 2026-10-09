@@ -2,9 +2,10 @@
 // deliberately virtualizer-neutral: they assert semantic-row position,
 // bottom ownership, interaction state, and the real outer scroll host rather
 // than DOM cardinality or implementation-specific spacer markup.
-import { access, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -523,6 +524,116 @@ describe('web e2e: long Chat scroll contract', () => {
   afterAll(async () => {
     await browser?.close()
   })
+
+  it.skipIf(MODE === 'record')('merges a large process fold with new-input following without returning downward', async () => {
+    const fixture = createChatScrollFixture({ markerPrefix: 'FOLD', title: 'CHAT_FOLD_INPUT', turns: 8 })
+    const input = 'CHAT_FOLD_NEXT_INPUT'
+    const artifactRoot = fileURLToPath(new URL('../../../.artifacts/fold-input-e2e/', import.meta.url))
+    await mkdir(artifactRoot, { recursive: true })
+    const evidence = await mkdtemp(join(artifactRoot, 'run-'))
+    await withScrollWorld({
+      failureShot: 'web-e2e-fold-input-motion',
+      replay: [replayEntry(textStream('CHAT_FOLD_REPLY', 'CHAT_FOLD_DONE', 2))],
+      seeds: [{ fixture, id: 'chat-fold-input-e2e' }],
+    }, async (world) => {
+      const { page } = world
+      await page.setViewportSize({ width: 1280, height: 720 })
+      await page.emulateMedia({ reducedMotion: 'no-preference' })
+      await openSeed(page, fixture, fixture.markers.assistant(8))
+      await openSettings(page, 'en')
+      await page.getByRole('dialog', { name: 'Settings', exact: true })
+        .getByText('When to Collapse Work Details', { exact: true }).locator('../..')
+        .getByRole('button', { name: 'On completion', exact: true }).click()
+      await page.getByRole('menuitem', { name: 'On next message', exact: true }).click()
+      await page.keyboard.press('Escape')
+      for (const index of [1, 2]) {
+        const row = page.locator(`[data-chat-call-id="chat-scroll-008-${index}"] [data-sample="bash"]`)
+        await row.click()
+        await expect.poll(() => row.getAttribute('aria-expanded')).toBe('true')
+      }
+      await wheelTranscript(page, -600)
+      await page.getByRole('button', { name: 'Back to bottom', exact: true }).click()
+      await expectBottom(page)
+      const beforeHeight = await page.locator('[data-chat-flow]:has(> [data-slot="conversation.chat.flow"])')
+        .evaluate(element => element.getBoundingClientRect().height)
+      const release = holdTextAfter(world, 0)
+      const trace = page.evaluate(marker => new Promise<{
+        readonly t: number
+        readonly top: number
+        readonly messageY: number
+        readonly columnHeight: number
+        readonly spacer: number
+        readonly folding: boolean
+      }[]>((resolve) => {
+        const host = document.querySelector<HTMLElement>('[data-conversation-scroll]')!
+        const column = host.querySelector<HTMLElement>('[data-chat-flow]:has(> [data-slot="conversation.chat.flow"])')!
+        const samples: { t: number; top: number; messageY: number; columnHeight: number; spacer: number; folding: boolean }[] = []
+        let frame = 0
+        let timer = 0
+        const sample = (): void => {
+          const message = Array.from(column.querySelectorAll<HTMLElement>('*'))
+            .find(element => element.children.length === 0 && element.textContent === marker)
+          if (message === undefined) return
+          samples.push({ t: performance.now(), top: host.scrollTop, messageY: message.getBoundingClientRect().top,
+            columnHeight: column.getBoundingClientRect().height,
+            spacer: Number.parseFloat(host.querySelector<HTMLElement>('[data-chat-turn-spacer]')?.style.height ?? '') || 0,
+            folding: column.querySelector('[data-chat-motion="collapse"]') !== null })
+        }
+        const tick = (): void => {
+          timer = window.setTimeout(() => { sample(); frame = requestAnimationFrame(tick) }, 0)
+        }
+        host.addEventListener('dsh-test-fold-stop', () => {
+          cancelAnimationFrame(frame)
+          window.clearTimeout(timer)
+          sample()
+          host.removeAttribute('data-fold-probe-ready')
+          resolve(samples)
+        }, { once: true })
+        host.setAttribute('data-fold-probe-ready', '')
+        frame = requestAnimationFrame(tick)
+      }), input)
+      await page.locator('[data-fold-probe-ready]').waitFor()
+      let settled: ReturnType<WebScaffold['whenTurnSettled']> | undefined
+      try {
+        await page.locator('[data-composer-input][contenteditable="true"]').last().fill(input)
+        await page.getByRole('button', { name: 'Send message', exact: true }).click()
+        settled = world.scaffold.whenTurnSettled(30_000)
+        await page.getByText(input, { exact: true }).waitFor()
+        await expect.poll(() => page.locator('[data-chat-motion="collapse"]').count()).toBe(0)
+        await expectBottom(page)
+        await nextPaint(page)
+      } finally {
+        await page.locator('[data-conversation-scroll]').evaluate(host => host.dispatchEvent(new Event('dsh-test-fold-stop')))
+        release()
+        await settled
+      }
+      const samples = await trace
+      expect(samples.length).toBeGreaterThan(4)
+      const first = samples[0]!
+      let minimum = first.messageY
+      let reversal = 0
+      let maximumScroll = first.top
+      let viewportBacktrack = 0
+      for (const sample of samples) {
+        minimum = Math.min(minimum, sample.messageY)
+        if (first.messageY - minimum > 4) reversal = Math.max(reversal, sample.messageY - minimum)
+        maximumScroll = Math.max(maximumScroll, sample.top)
+        viewportBacktrack = Math.max(viewportBacktrack, maximumScroll - sample.top)
+      }
+      const last = samples.at(-1)!
+      const afterHeight = last.columnHeight
+      await writeFile(join(evidence, 'motion.json'), JSON.stringify({ beforeHeight, afterHeight, reversal, viewportBacktrack, samples }, null, 2))
+      await page.screenshot({ path: join(evidence, 'settled.png') })
+      console.log(`fold-input e2e: message reversal=${reversal}px, viewport backtrack=${viewportBacktrack}px, spacer=${last.spacer}px, evidence=${evidence}`)
+      expect(beforeHeight - afterHeight).toBeGreaterThan(250)
+      expect(first.messageY - minimum).toBeGreaterThan(40)
+      expect(reversal).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
+      expect(viewportBacktrack).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
+      expect(Math.abs(last.spacer - (beforeHeight - afterHeight))).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
+      await expectBottom(page)
+      assertClean(world)
+    })
+  }, 180_000)
 
   it.skipIf(MODE === 'record')('keeps floating controls anchored outside the clipped transcript', async () => {
     await withScrollWorld({

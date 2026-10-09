@@ -96,7 +96,7 @@ export interface ReplayModelConfig {
    * no image pricing.
    */
   imageRequestTokens?: number
-  /** Optional reasoning-effort ids the replay route accepts, in display order. */
+  /** Optional reasoning-effort ids from least to greatest selectable effort. */
   reasoningEfforts?: string[]
   /**
    * Optional effort materialized when callers omit one; must appear in

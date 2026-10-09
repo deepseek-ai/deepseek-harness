@@ -8,5 +8,4 @@
       config:
         provider: snapshot-diagnostic
         toolName: subagent_codex
-        backgroundMode: one-shot
         maxDepth: provider-managed

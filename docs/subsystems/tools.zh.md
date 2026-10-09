@@ -17,7 +17,7 @@ interface ToolOutputDefinition {
   readonly schema: JsonSchemaNode
   /** Pure projection from validated arguments and value to Native/model content. */
   render(args: unknown, value: JsonValue): ContentBlock[]
-  /** Pure replayable presentation projection, computed only for top-level calls. */
+  /** Pure replayable presentation projection for native and nested calls. */
   presentationMeta?(args: unknown, value: JsonValue): JsonValue
 }
 ```
@@ -389,9 +389,9 @@ interface ToolErrorInfo {
 }
 ```
 
-结果仅承载产出。调用身份保留在不可变的 `ToolExecution` 上，后者伴随结果经过每个钩子，并出现在持久化的 `tool/call` / `tool/result` 会话事件上，因此包装层无法创建第二个相互矛盾的身份。规范的 `value` 仅存在于执行期间：循环只持久化 `content`、`error` 和 `meta`，`tool/ptc-dispatch` 则存储子调用渲染后的 `content`、`isError` 与可选结构化 `error`。回放可以重现展示，却无法重建规范的中间值。可选的 `ToolErrorInfo.reason` 保留面向用户的原始详情，不将其加入模型可见内容。
+结果仅承载产出。调用身份保留在不可变的 `ToolExecution` 上，后者伴随结果经过每个钩子，并出现在持久化的 `tool/call` / `tool/result` 会话事件上，因此包装层无法创建第二个相互矛盾的身份。规范的 `value` 仅存在于执行期间：循环只持久化 `content`、`error` 和 `meta`，`tool/ptc-dispatch` 则存储子调用渲染后的 `content`、`isError`、可选结构化 `error` 和展示 `meta`。回放可以重现展示，却无法重建规范的中间值。可选的 `ToolErrorInfo.reason` 保留面向用户的原始详情，不将其加入模型可见内容。
 
-成功时，注册表会快照并校验函数体返回值，将其冻结，然后调用纯渲染器；对于直接的外层调用，还会调用可选的元数据投影器。注册表会在 `tools/result` 之前另行物化持久展示字段；无效值、渲染器/投影器失败或非 JSON 展示都会转为 JSON 安全的 `isError`。因此，最终实时观察者能看到精确的执行期值，以及可安全用于后续持久追加的字段。
+成功时，注册表会快照并校验函数体返回值，将其冻结，然后调用纯渲染器，并为原生与嵌套调用执行可选的展示元数据投影器。注册表会在 `tools/result` 之前另行物化持久展示字段；无效值、渲染器/投影器失败或非 JSON 展示都会转为 JSON 安全的 `isError`。因此，最终实时观察者能看到精确的执行期值，以及可安全用于后续持久追加的字段。
 
 在得到最终内容之前，注册表会物化候选结果；若内容、结构化错误、附加上下文或展示元数据无法物化，则会转为仍可到达 `finalizeContent` 的 JSON 安全 `isError` 结果。注册表恰好调用该回调一次，随后在 `tools/result` 之前立即物化并冻结已接受的结果，因此实时观察到的产出可安全用于后续持久化的 `tool/result` 追加。
 

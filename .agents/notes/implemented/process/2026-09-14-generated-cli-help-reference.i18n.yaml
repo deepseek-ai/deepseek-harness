@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-14-generated-cli-help-reference.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-14-generated-cli-help-reference.md
+/agent-note-generate-the-cli-reference-from-command-help:
+  en: 618bafe3fd2afdb9
+  zh: 433df2a8d0530c41
+/agent-note-generate-the-cli-reference-from-command-help/problem:
+  en: 2ad571458d5d8191
+  zh: 4db6bddbad65bf5c
+/agent-note-generate-the-cli-reference-from-command-help/decision:
+  en: d99a93133c460385
+  zh: 0f710ecf6e7137f2
+/agent-note-generate-the-cli-reference-from-command-help/alternatives-considered:
+  en: df2f7f07b3e84418
+  zh: 2dd87333d9d460c3
+/agent-note-generate-the-cli-reference-from-command-help/consequences:
+  en: aada6686406c892e
+  zh: 9a30b6b1c5ab6d55

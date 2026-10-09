@@ -160,6 +160,8 @@ describe('WorkspaceAnalyzer', { timeout: 60_000 }, () => {
       location: { file: 'packages/host/src/index.ts' },
     })
     expect(agent?.text).toContain('export class Agent<State extends object = {')
+    // A static initialization block, like a private member, has no type-level meaning.
+    expect(agent?.text).not.toMatch(/static\s*\{|secret|generation|hiddenStep/)
     expect(agent?.members.map(member => member.name)).toEqual(['id', 'state', 'label', 'label', 'run'])
     const service = host?.packages[0]?.services.find(candidate => candidate.key === 'demo')
     const members = new Map(host?.graph.declarations

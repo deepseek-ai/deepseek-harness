@@ -38,7 +38,6 @@ Choose this backend when the child must run with its own runtime, model, and too
 | `providerName` | `acp` | Registry name on `ctx.subagents` |
 | `command` | required | Executable spawned for each run (the child ACP agent) |
 | `args` | `[]` | Command arguments |
-| `cwd` | parent session cwd | Working-directory override for the child process and its ACP session |
 | `permission` | `reject` | Auto-answer permission requests by rejecting, or choosing the first `allow_once` or `allow_always` option (`allow`) |
 | `env` | `{}` | Explicit child environment layered over the credential-scrubbed parent environment |
 | `disposeEofGraceMs` | `6000` | Grace after stdin EOF before platform termination |
@@ -91,7 +90,7 @@ This section explains how the backend drives a child over ACP and where the obse
 
 ### Start and ownership flow
 
-A start resolves the child's working directory (the configured `cwd` override, else the parent session's cwd), spawns the command through the subprocess seam, performs the ACP `initialize` and `newSession` handshake, and only then publishes the run. Fulfillment means a remote session is ready and ownership has transferred to the caller. Disposal is idempotent: it closes stdin and waits a configured grace for cooperative quiescence, then escalates through SIGTERM to SIGKILL and awaits whole-range exit. Cleanup failures remain observable as ordered safe facts and never claim quiescence.
+Startup uses the manager-resolved child directory (the request override, else the parent's current effective directory), spawns the command through the subprocess seam, performs the ACP `initialize` and `newSession` handshake, and only then publishes the run. Fulfillment transfers the external run to the activation manager. The startup signal detaches after acceptance; the activation receipt cancels execution and awaits cleanup. Each activation runs one task and cannot receive follow-up input. Disposal is idempotent: it closes stdin and waits a configured grace for cooperative quiescence, then escalates through SIGTERM to SIGKILL and awaits whole-range exit. Cleanup failures remain observable as ordered safe facts and never claim quiescence.
 
 ### Stop-reason mapping
 
@@ -139,11 +138,11 @@ Independent of the parent request cache. Each ACP child can reuse only prefixes 
 
 #### What the model sees
 
-Through `dsh-tool-subagent`, the parent receives only the child's final streamed assistant text or that consumer's exact stop-reason error, not intermediate messages or tool traffic. Non-completed results present the safe diagnostic before separately preserved partial assistant output. A request already cancelled before publication becomes exactly `Error: subagent request was aborted before the ACP child started`; another start failure contains only the fixed `Subagent failure (...)` line.
+Through `dsh-tool-subagent`, the parent model first receives a child id, then a completion notice containing final or partial assistant text, the stop reason, and safe diagnostic. The parent Session independently retains the external task identity and complete terminal result. Intermediate messages and tool traffic do not enter the parent Session.
 
 #### Token effect
 
-Parent input grows only by the final result or error, which is data-dependent and retained until compaction. This provider adds no parent schema itself.
+Parent input grows by the start acknowledgement and completion notice, whose size depends on the result data and persists until compaction. This provider adds no parent schema by itself.
 
 #### KV Cache effect
 

@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-agent-tool-presentation",
-  "description": "Agent-plane presentation selector: composes one agent's tools as PTC mode, native, or both",
+  "description": "Agent-plane presentation selector: composes one agent's tools as PTC mode or native tool calls",
   "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"

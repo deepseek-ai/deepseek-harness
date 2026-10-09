@@ -5,10 +5,23 @@ import { Agent, createServer, type IncomingHttpHeaders } from 'node:http'
 import { once } from 'node:events'
 import { gunzipSync } from 'node:zlib'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { MeterProvider } from '@opentelemetry/api'
 import { CompressionAlgorithm } from '@opentelemetry/otlp-exporter-base'
 import { JsonLogsSerializer } from '@opentelemetry/otlp-transformer'
 import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
-import { SESSION_LOG_MAX_REQUEST_BYTES, type SessionLogRecord, type SessionLogOptions } from '../src/session-log.ts'
+import { SESSION_LOG_MAX_REQUEST_BYTES, type SessionLogProcessorOptions, type SessionLogRecord, type SessionLogOptions } from '../src/session-log.ts'
+import type { LogExporterOptions } from '../src/transport.ts'
+
+/** Type-only probe: accepted channel options exclude SDK self-observability metering. */
+function meteringOptionsAreExcluded(url: string, meterProvider: MeterProvider): void {
+  // @ts-expect-error -- exporter self-observability metering is not accepted.
+  const exporter: LogExporterOptions = { url, selfObsMeterProvider: meterProvider }
+  // @ts-expect-error -- this processor implements no self-observability metering.
+  const processor: SessionLogProcessorOptions = { selfObsMeterProvider: meterProvider }
+  void exporter
+  void processor
+}
+void meteringOptionsAreExcluded
 
 interface Capture {
   bytes: number

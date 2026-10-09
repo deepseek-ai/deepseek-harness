@@ -64,7 +64,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-package-manifest": "workspace:*",
-    "@testing-library/react": "^16.1.0",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.0",
     "clsx": "^2.1.1",

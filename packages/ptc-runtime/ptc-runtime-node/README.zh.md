@@ -52,8 +52,7 @@ kind: "package-reference"
 | `maxMessageBytes` | `134,217,728` | 控制帧、未完成参数字节和排队控制写入的上限 |
 | `maxPendingCalls` | `128` | 同时进行的 Host 绑定调用数量上限 |
 | `graceMs` | `3,000` | 受管终止与输出排空宽限时间 |
-| `nodeExecutable` | 当前 Node 可执行文件 | 在子进程执行世界中解析的可执行文件 |
-| `bootstrapPath` | 包内 bootstrap | 该执行世界中预先安装的构建后 bootstrap 的可选绝对路径 |
+| `launch` | 本地载体 | 子进程环境中显式的 `{ kind: "node-script", executable, bootstrapPath? }` 或 `{ kind: "embedded", executable }` |
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-ptc-runtime-node)定义可接受的配置字段。`resolve(request)` 补全 cwd、数值或 null 截止选择与执行策略；`run(spec)` 接受这些已解析输入，不补缺省值。
 
@@ -91,7 +90,7 @@ Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与
 
 ### 源代码与构建后 bootstrap
 
-源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出。构建后执行使用包内 `process.js` 入口。无法映射 Host bootstrap 的执行世界需要预先安装兼容的 `bootstrapPath`；不会假设 Host 路径对应同一个远程文件。
+源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出。构建后脚本使用 `process.js`，远端脚本部署提供 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
 
 ### 源码索引
 

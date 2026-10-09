@@ -6,6 +6,7 @@
     { "path": "../../../vendor/cosmokit" },
     { "path": "../../../vendor/cordis" },
     { "path": "../../../vendor/schemastery" },
+    { "path": "../../util/values" },
     { "path": "../../llm/llm" },
     { "path": "../session-title" },
     { "path": "../session-title-llm" }

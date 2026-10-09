@@ -32,7 +32,7 @@ const REQUIRED_V0_COVERAGE = new Set([
 const REQUIRED_ADJACENT_COVERAGE = new Set(['adjacent-migration'])
 
 /**
- * Require a baseline/current majority and direct coverage of each historical migration source.
+ * Count baseline/current generations per role, require their majority, and preserve direct historical migration coverage.
  *
  * @param scenarios - Every owning top-level recorded-session scenario.
  * @returns Accepted current, baseline, and explicitly retained role counts.
@@ -47,28 +47,29 @@ export function assertSnapshotCorpusPolicy(
   const coverageByVersion = new Map<number, Set<string>>()
 
   for (const scenario of scenarios) {
-    const selectedVersion = scenario.selectedVersions[0]
-    if (selectedVersion === undefined) {
+    if (scenario.selectedVersions.length === 0) {
       throw new Error(`${scenario.key}: scenario owns no selected Session role`)
     }
-    const expectedVersion = scenario.retained?.version ?? selectedVersion
+    if (scenario.retained === undefined) {
+      for (const version of scenario.selectedVersions) {
+        if (version === RETAINED_BASELINE_VERSION) {
+          baselineRoles += 1
+        } else if (version === SESSION_FORMAT_VERSION) {
+          currentRoles += 1
+        } else {
+          throw new Error(
+            `${scenario.key}: selected Session generation v${version} must be retained baseline v${RETAINED_BASELINE_VERSION} or current v${SESSION_FORMAT_VERSION}`,
+          )
+        }
+      }
+      continue
+    }
+    const expectedVersion = scenario.retained.version
     const mismatched = scenario.selectedVersions.find(version => version !== expectedVersion)
     if (mismatched !== undefined) {
       throw new Error(
         `${scenario.key}: selected Session generation v${mismatched} does not match expected v${expectedVersion}`,
       )
-    }
-    if (scenario.retained === undefined) {
-      if (selectedVersion === RETAINED_BASELINE_VERSION) {
-        baselineRoles += scenario.selectedVersions.length
-      } else if (selectedVersion === SESSION_FORMAT_VERSION) {
-        currentRoles += scenario.selectedVersions.length
-      } else {
-        throw new Error(
-          `${scenario.key}: selected Session generation v${selectedVersion} must be retained baseline v${RETAINED_BASELINE_VERSION} or current v${SESSION_FORMAT_VERSION}`,
-        )
-      }
-      continue
     }
     const retiredTools = scenario.retained.coverage.length === 1 && scenario.retained.coverage[0] === 'retired-tools'
     if (!Number.isSafeInteger(scenario.retained.version)

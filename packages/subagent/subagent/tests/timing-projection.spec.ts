@@ -1,10 +1,12 @@
+import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { SessionEvent, TurnEndReason } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '../src/index.ts'
-import { subagentTimingProjectionDefinition, type TimingState } from '../src/projection.ts'
+import { SUBAGENT_DESCRIPTOR_VERSION } from '../src/descriptor.ts'
+import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition, type TimingState } from '../src/projection.ts'
 
 function event(
   type: SessionEvent['type'],
@@ -27,10 +29,20 @@ function fold(events: SessionEvent[]) {
 }
 
 describe('subagent timing projection', () => {
+  it('preserves historical one-shot identity without inventing a label', () => {
+    const descriptor = {
+      ...event('subagent/descriptor', 1, 110),
+      data: { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'spawn' },
+    } as SessionEvent
+    const state = subagentIdentityProjectionDefinition.apply(subagentIdentityProjectionDefinition.init(), descriptor)
+    expect(subagentIdentityProjectionDefinition.wire.view(state)).toEqual({ mode: 'one-shot', seq: 1 })
+  })
+
   it('registers with the optional session projection registry', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await mountWorkingDirectoryFixture(ctx)
     const serviceFiber = await ctx.plugin(SubagentRuntime)
 
     const before = ctx.sessionProjections.snapshot(ctx.sessions.create()).values

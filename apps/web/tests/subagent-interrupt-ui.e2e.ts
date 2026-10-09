@@ -31,6 +31,8 @@ const BASE_FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interact
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/subagent-interrupt', import.meta.url))
 const OFFLINE_COMPOSER_EXPECTED = join(SNAPSHOT_DIR, 'offline-composer.expected.md')
+const IMAGE_QUEUE_EXPECTED = join(SNAPSHOT_DIR, 'image-queue.expected.md')
+const PNG = fileURLToPath(new URL('../../../snapshots/session/read-image/workspace/red.png', import.meta.url))
 const MODE = webSnapshotMode()
 const LABEL = 'event-sourcing researcher'
 const INITIAL = 'Explain event sourcing in one sentence.'
@@ -41,6 +43,7 @@ const EDITED_FOLLOWUP = 'Explain the same idea for a human reader.'
 const WAKING = 'And add one concrete example.'
 const REARMED_ANSWER = 're-armed setup answer'
 const PARKED_ANSWER = 'parked follow-up answer'
+const IMAGE_ANSWER = 'image follow-up answer'
 const WAKING_ANSWER = 'waking answer'
 
 /** Poll a synchronous condition (hook-safe; expect.poll is test-body only). */
@@ -105,6 +108,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       { kind: 'hang', readyFile: rearmedReadyFile },
       textCompletion(REARMED_ANSWER),
       textCompletion(PARKED_ANSWER),
+      textCompletion(IMAGE_ANSWER),
       textCompletion(WAKING_ANSWER),
     ]))
     await writeFile(
@@ -144,7 +148,8 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     if (root === undefined) throw new Error('fresh workspace did not publish its parent Agent')
     parent = root
     // The child's first model call claims the primary override and holds.
-    const started = await scaffold.ctx.subagents.startContinuable({
+    const started = await scaffold.ctx.subagents.startActivation({
+      delivery: 'parent',
       provider: 'spawn',
       label: LABEL,
       signal: new AbortController().signal,
@@ -310,6 +315,30 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     await page.getByText(EDITED_FOLLOWUP, { exact: true }).waitFor()
     expect(apiCalls.filter(path => path === '/api/subagents/updateQueue')).toEqual([])
 
+    // A separate image-only follow-up proves attachment admission without
+    // changing the existing text queue's edit coverage.
+    const imageBytes = [...await readFile(PNG)]
+    await input.evaluate((surface, data) => {
+      const transfer = new DataTransfer()
+      transfer.items.add(new File([new Uint8Array(data)], 'child-followup.png', { type: 'image/png' }))
+      surface.dispatchEvent(new ClipboardEvent('paste', {
+        clipboardData: transfer, bubbles: true, cancelable: true,
+      }))
+    }, imageBytes)
+    await page.getByRole('img', { name: 'child-followup.png', exact: true }).waitFor()
+    const imageResponse = page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/api/subagents/prompt')
+    await page.getByRole('button', { name: 'Queue message' }).click()
+    expect(((await (await imageResponse).json()) as { result: { ok: boolean } }).result).toMatchObject({ ok: true })
+    const thumbnail = page.locator('[data-queue-dock]').getByRole('img', { name: 'Queued message image' })
+    await thumbnail.waitFor()
+    await expect.poll(() => thumbnail.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
+    await compareOrRefreshGolden(
+      IMAGE_QUEUE_EXPECTED,
+      await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd),
+      MODE,
+    )
+
     const aborted = waitForAbortedTurn(scaffold, childId)
     const stop = page.getByRole('button', { name: 'Stop generating' })
     expect(await stop.count()).toBe(1)
@@ -328,7 +357,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     await expect.poll(() => scaffold.ctx.agents.get(childId)?.status, { timeout: 15_000 }).toBe('idle')
     const child = scaffold.ctx.agents.get(childId)
     expect(child).toBeDefined()
-    expect(child!.inbox.nextTurn).toHaveLength(2)
+    expect(child!.inbox.nextTurn).toHaveLength(3)
     expect(child!.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(2)
     await page.getByRole('button', { name: 'Send message' }).waitFor({ timeout: 15_000 })
 
@@ -337,6 +366,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     await input.press('Enter')
     await expect.poll(() => page.getByText(REARMED_ANSWER, { exact: true }).count(), { timeout: 30_000 }).toBe(1)
     await expect.poll(() => page.getByText(PARKED_ANSWER, { exact: true }).count(), { timeout: 30_000 }).toBe(1)
+    await expect.poll(() => page.getByText(IMAGE_ANSWER, { exact: true }).count(), { timeout: 30_000 }).toBe(1)
     await expect.poll(() => page.getByText(WAKING_ANSWER, { exact: true }).count(), { timeout: 30_000 }).toBe(1)
     await expect.poll(() => scaffold.ctx.agents.get(childId), { timeout: 60_000 }).toBeUndefined()
 
@@ -350,14 +380,23 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     expect(userTexts[0]).toBe(INITIAL)
     expect(userTexts[1]).toMatch(/^Your parent agent id is .+send_message\(\{ agent_id: /)
     expect(userTexts.slice(2)).toEqual([REARM, REARM_WAKE, EDITED_FOLLOWUP, WAKING])
+    const imageMessage = events.find(event => event.type === 'user/message'
+      && event.data.content.some(block => block.type === 'image'))
+    expect(imageMessage?.type === 'user/message' && imageMessage.data.content.map(block => block.type)).toEqual(['image'])
+    const image = imageMessage?.type === 'user/message'
+      ? imageMessage.data.content.find(block => block.type === 'image')
+      : undefined
+    expect(image?.type === 'image' && image.attachment.name).toBe('child-followup.png')
+    expect(JSON.stringify(events)).not.toContain('base64')
+    await page.locator('[class*="userRow"] img').first().waitFor()
     const turnEndKinds = events
       .filter(event => event.type === 'turn/end')
       .map(event => event.data.reason.kind)
-    expect(turnEndKinds).toEqual(['aborted', 'aborted', 'completed', 'completed', 'completed'])
+    expect(turnEndKinds).toEqual(['aborted', 'aborted', 'completed', 'completed', 'completed', 'completed'])
     expect(tripwire.pageErrors).toEqual([])
   }, 120_000)
 
   it('keeps its snapshot inventory closed', async () => {
-    await assertFixtureInventory(SNAPSHOT_DIR, ['offline-composer.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['offline-composer.expected.md', 'image-queue.expected.md'])
   })
 })

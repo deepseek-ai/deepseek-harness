@@ -7,6 +7,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { ToolCallId, createAssistantMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-tools'
+import type {} from '@deepseek-ai/dsh-fs'
 import type { WorkspaceChangesSummary } from '../src/types.ts'
 
 let callNumber = 0
@@ -51,15 +52,17 @@ export function toolCall(session: Session, turn: number, name: string, args: unk
 }
 
 /**
- * Apply a file-tool mutation the way the runtime does: announce it through
- * `tools/pre-execute` so the recorder captures the path, apply it, then log
- * the settled call.
+ * Apply a fixture mutation with an explicit filesystem intent target.
  */
 export async function mutate(
-  ctx: Context, session: Session, turn: number, name: string, args: unknown, apply: () => Promise<void>,
+  ctx: Context, session: Session, turn: number, name: string, args: unknown, path: string, apply: () => Promise<void>,
   result: { meta?: unknown; isError?: boolean } = {},
 ) {
-  await ctx.waterfall('tools/pre-execute', { agent: { session }, name, arguments: args } as never, () => Promise.resolve(undefined as never))
+  const actor = { agent: { session }, name, arguments: args }
+  await ctx.waterfall('tools/pre-execute', actor as never, () => Promise.resolve(undefined as never))
+  const target = await ctx.fs.resolve(path, session.header.cwd === undefined ? {} : { cwd: session.header.cwd })
+  const event = name === 'edit' ? 'fs/edit-intent' : 'fs/write-intent'
+  await ctx.waterfall(event, target, actor, () => undefined)
   await apply()
   return toolCall(session, turn, name, args, result)
 }

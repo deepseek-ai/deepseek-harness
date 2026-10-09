@@ -1,0 +1,11 @@
+version: 1
+scenario: working-directory-admission
+profile: headless
+composition: working-directory-admission
+recording: authored
+platform: posix
+header:
+  class: working-directory-admission
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

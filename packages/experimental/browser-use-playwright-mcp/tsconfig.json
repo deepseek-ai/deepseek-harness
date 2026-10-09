@@ -13,6 +13,9 @@
     },
     {
       "path": "../browser-use-runtime"
+    },
+    {
+      "path": "../../session/working-directory"
     }
   ]
 }

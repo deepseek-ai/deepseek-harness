@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Choose an installed shell from the right sidebar's Start page to run commands in the Session workspace. Rename terminals in their tabs and recover retained processes after reloading the page. Collapse the sidebar to keep commands running; close a terminal tab to request process termination. Tab completion follows the shell configuration. Commands use the execution environment’s system-user permissions independently of Agent permissions; see [user-terminal execution](../../api/terminal-controller/README.md#use-this-package).
+Choose an installed shell from the right sidebar's Start page to run commands in the Session's current working directory. Rename terminals in their tabs and recover retained processes after reloading the page. Collapse the sidebar to keep commands running; close a terminal tab to request process termination. Tab completion follows the shell configuration. Commands use the execution environment’s system-user permissions independently of Agent permissions; see [user-terminal execution](../../api/terminal-controller/README.md#use-this-package).
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ Closing or replacing a terminal tab removes it immediately and ends its process 
 
 After reload, the [sidebar restores its layout](../../client/ui-sidebar-right/README.md#state) and each terminal reconnects to its saved Host identity in the original tab. Collapsed and inactive tabs do not create recovery duplicates or change selection. Host terminals absent from the saved layout do not reopen automatically and have no UI recovery entry; they remain subject to the controller's unattended idle reclamation and Session/Host disposal. A missing saved process shows a localized unavailable panel with **New terminal**. Clicking it replaces the unavailable tab in place with a fresh terminal; recovery never creates that replacement automatically.
 
-The terminal background, default text, cursor, and selection follow the DSH theme, including system preference and theme-token overrides. Theme changes preserve the running shell, output, and application OSC color overrides. Reset commands restore colors to the current DSH defaults. xterm adjusts text toward 4.5:1 contrast; the cursor keeps at least 3:1 contrast against its cell background, including Vim colorschemes.
+The terminal background, default text, cursor, and selection follow the DSH theme, including system preference and theme-token overrides. Theme changes preserve the running shell, output, and application OSC color overrides. Reset commands restore colors to the current DSH defaults. The screen uses the Settings terminal font size and places the Settings terminal font ahead of its built-in monospace stack; changing either keeps the shell and output, and a visible writable screen refits the Host grid to the new cell size. xterm adjusts text toward 4.5:1 contrast; the cursor keeps at least 3:1 contrast against its cell background, including Vim colorschemes.
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation

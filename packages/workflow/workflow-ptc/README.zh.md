@@ -50,13 +50,13 @@ Node PTC 提供方的 `maxPendingCalls` 也限制工作流并发：子 agent 启
 
 ### 结果与失败
 
-脚本支持顶层 `await`；`meta` 和 `args` 作为 JSON 数据传入。每次 `agent()` 调用使用配置的 subagent 提供方及运行固定的父级。最终的无损 JSON 返回值成为运行结果；普通子 agent 失败使 `agent()` 以 `null` 兑现。
+脚本支持顶层 `await`；`meta` 和 `args` 作为 JSON 数据传入。每次 `agent()` 调用都会在本次运行的固定父 agent 下启动受管理的 subagent Activation，并等待其文本或结构化结果。工作流记录自己的成员并收集其结果，不向父级子代理目录添加条目，也不向父模型发送子 agent 结算通知。最终的无损 JSON 返回值成为运行结果；普通子 agent 失败使 `agent()` 以 `null` 兑现。
 
 无效元数据、无法解析的正文、不可用的提供方路由或高于上限的单次运行上限，在运行发布前被拒绝。执行期间，钩子误用与超出协作式上限会使工作流失败。进程失败、所需约束不可用，以及超出 PTC 输出或控制限制也会使运行失败。
 
 ### 文件策略与取消
 
-引擎为 PTC 执行解析调用 Session 的常设文件策略与 cwd。VM 保留文档说明的辅助 API，但它不是安全边界：触达 Node 的代码仍受所选 OS 文件策略约束。程序可见的环境为空。文件策略不限制网络访问。
+引擎分别捕获调用 Session 的有效工作目录与常设文件策略。父级之后切换目录时，PTC 进程及该工作流随后启动的每个子级都保留捕获的目录。VM 保留文档说明的辅助 API，但它不是安全边界：触达 Node 的代码仍受所选 OS 文件策略约束。程序可见的环境为空。文件策略不限制网络访问。
 
 工作流向 PTC 请求 `timeoutMs: null`。最初的 VM 片段仍受 `syncTimeoutMs` 限制，调用方的中止信号仍然生效，包括外层工具的截止。取消立即中止 PTC 进程及待启动或活跃的 subagent。调用方必须释放每次运行并等待子 agent 清理；不另设工作流清理定时器。
 
@@ -68,7 +68,7 @@ Node PTC 提供方的 `maxPendingCalls` 也限制工作流并发：子 agent 启
 <details>
 <summary>实现细节——点击展开</summary>
 
-工作流引擎负责编排；PTC 提供方负责进程启动、OS 约束、分帧传输与受管进程清理。
+工作流引擎负责编排；PTC 提供方负责进程启动、OS 约束、分帧传输与受管进程清理。本地子级在完成后仍保留于父级 subagent 目录中，与调用方负责的结果收集相互独立；工作流运行不添加父级完成通知。 本地工作流子级使用可续目录模式，驻留时可接收消息；冷续跑需要 Session 持久化与查询，因此临时子级在释放后返回 `NOT_RESUMABLE`。
 
 ### 设计理念
 
@@ -90,7 +90,7 @@ Node PTC 提供方的 `maxPendingCalls` 也限制工作流并发：子 agent 启
 
 guest 在 PTC 传输前将出站值物化为无损 JSON。特殊原型、函数、symbol、循环、稀疏数组、非有限数与嵌套 `undefined` 被拒绝。子 agent 结果以 JSON 返回；同进程观察事件保留自身的克隆和回调异常隔离规则。
 
-Host 分别跟踪待完成的提供方启动与已发布子 agent。共享中止信号关闭这两条路径；取消后才就绪的子 agent 会被释放。每个已发布子 agent 的资源释放由所有清理路径共享。PTC 停止程序后，进行中的 Host 绑定仍由工作流适配器负责。
+Host 分别跟踪待完成的启动与已接受的 Activation。取消会中止待完成的启动并释放已接受的 Activation；取消后才就绪的子 agent 也会被释放。每个 Activation 的资源释放针对该次执行，并由所有清理路径共享。PTC 停止程序后，进行中的 Host 绑定仍由工作流适配器负责。
 
 ### 取消与结果
 
@@ -109,7 +109,7 @@ Host 分别跟踪待完成的提供方启动与已发布子 agent。共享中止
 - [工作流服务](../workflow/README.zh.md)——调用方拥有的运行与清理。
 - [Node PTC 运行时](../../ptc-runtime/ptc-runtime-node/README.zh.md)——文件策略、进程限制与部署选择。
 - [workflow 工具](../tool-workflow/README.zh.md)——面向模型的脚本编排。
-- [Ralph 工具](../tool-ralph/README.zh.md)——需显式启用的固定全新 agent 迭代。
+- [Ralph 工具](../../experimental/tool-ralph/README.zh.md)——需显式启用的固定全新 agent 迭代。
 - [工作流沙箱复用](../../../.agents/notes/implemented/architecture/2026-09-13-workflow-ptc-sandbox-reuse.zh.md)——执行归属与取舍。
 
 -----

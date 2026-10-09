@@ -70,3 +70,5 @@ The shipped `sdk-minimal` profile is a standalone explicit tree rather than an o
 The selected home stores profiles, plugins, and every profile-owned durable resource. The full `sdk` profile uses its credentials, settings, and session stores; `sdk-minimal` uses only its JSONL session store. Use a fresh home when those resources must be isolated, and a fresh session id for independent work. Reusing both a harness and session id continues the durable conversation and session-owned resources.
 
 See the [Python tutorial](../../docs/user/guide/python-sdk.md), [runnable example](examples/README.md), and [runtime wheel reference](../sdk-runtime/README.md).
+
+`Session.get_working_directory()` reads the effective working directory; `set_working_directory(path)` changes it and returns the validated absolute path. Both create an unknown Session without running a model turn. Relative paths use that Session's current directory. Origin metadata, permissions, and existing processes remain unchanged. The low-level client provides the same methods with a leading `session_id` argument.

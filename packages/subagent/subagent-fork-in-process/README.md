@@ -55,7 +55,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What a fork delegation does
 
-One tool call starts one child seeded with the completed turns and waits for its result: the child sees the conversation up to the parent's last completed turn, works in its own session, and the parent receives only its final output — or an errored tool result for cancellation, refusal, token-limit truncation, or startup rejection. The seed is captured once at start; later parent turns never reach the child.
+One tool call creates a background child and returns its session id immediately. The child works in its own session; the parent receives its final answer in a completion notice. The child can also send messages through `send_message`. A rejected start leaves no published child. Programmatic callers such as workflows can await the activation result directly.
 
 -----
 
@@ -69,7 +69,7 @@ This section explains the design decisions behind the backend and where the beha
 
 ### Design concept
 
-One difference from spawn, expressed as data: the backend computes the balanced completed-turn prefix of the parent's log and hands it to the shared in-process driver as the child's session seed. Because live sequence numbers equal array indexes, the prefix stays a valid seed beginning at sequence zero, and the driver records its length so the result reader never mistakes a seeded parent message for child output.
+This backend supplies the balanced completed-turn prefix of the parent log as the child session seed. The subagent service records the inherited range so results contain only the child’s own output.
 
 ### Source map
 
@@ -79,11 +79,11 @@ One difference from spawn, expressed as data: the backend computes the balanced 
 
 ### Run flow
 
-On `start`, the prefix is sliced from the parent's event log up to and including the last `turn/end`; the shared driver then creates the child with that seed, applies the same persona, tool-filter, and structured-output setup, drives one task, reads the child's own final output, and disposes quiescently. The provider advertises `agentOptions` plus the same output, depth, filter, and persona capabilities as spawn. `prepareContinuable` captures the prefix once, at creation, because it becomes part of the child's own durable transcript.
+`prepareContinuable()` captures the parent’s completed-turn prefix once at creation. `startActivation()` creates the child with that seed, and the subagent service applies persona, tool filtering, and structured output for this activation. The provider advertises the same agent options, output, depth, filter, and persona capabilities as spawn.
 
 ### Lifecycle binding
 
-The base bundle and ACP/headless examples bind this provider to `backgroundMode: one-shot`, while the CLI presets select `continuable`. Both preserve the inherited request prefix: parent and child receive the same messaging tool definition and ordering, and the continuable child's parent id and return guidance live in its initial user task after inherited history ([cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md)).
+The delegation tool creates a background activation and returns a stable child session id. Parent and child share the same messaging tool definitions and ordering; the parent id and return guidance follow inherited history in the initial task. Workflows await results with caller delivery and send no completion notice to the parent.
 
 </details>
 
@@ -92,14 +92,13 @@ The base bundle and ACP/headless examples bind this provider to `backgroundMode:
 <a id="further-exploration"></a>
 ## Further Exploration
 
-Read these pages when the package-level contract is not enough; they move from the shared subagent model to the sibling backends and the design evidence for the one-shot binding.
+Read these pages when the package-level contract is not enough; they move from the shared subagent model to the sibling backends and the design evidence for preserving the inherited request prefix.
 
 - [Subagent subsystem](../../../docs/subsystems/subagent.md) — start requests, results, provider contract, and in-process depth and seed.
-- [dsh-subagent-in-process-driver](../subagent-in-process-driver/README.md) — the shared run driver this backend calls.
 - [dsh-subagent-spawn-in-process](../subagent-spawn-in-process/README.md) — the fresh-child sibling backend.
 - [dsh-tool-subagent](../tool-subagent/README.md) — the model-facing delegation tool that reaches this provider.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-subagent-fork-in-process) — every accepted config field and its source declaration.
-- [Fork children stay one-shot](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md) — why shipped compositions bind fork to one-shot.
+- [Forked children preserve the parent request prefix](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md) — why continuable fork preserves the inherited request prefix.
 
 -----
 
@@ -124,7 +123,7 @@ The child may reuse the inherited byte-identical prefix under the same provider 
 
 #### What the model sees
 
-The parent receives only the child's own final output through `dsh-tool-subagent`, not the inherited prefix or intermediate work.
+Through `dsh-tool-subagent`, the parent first receives the child session id, then a completion notice with its final answer. Child-authored messages arrive through `send_message`; the inherited prefix and internal work remain in the child session.
 
 #### Token effect
 
@@ -142,7 +141,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 These limits define when the backend is the wrong choice; they are current package constraints.
 
 - **The seed is a one-time snapshot** — the child sees the parent's completed turns as of the fork and nothing the parent logs afterwards; there is no live context sharing.
-- **Fork lifecycle policy differs by composition** — the base bundle and ACP/headless examples use one-shot fork, while the CLI presets use continuable fork. Both keep the inherited prefix eligible for reuse because parent and child messaging definitions match byte for byte; explicit persona, tool filtering, generated-SDK, or route changes can still break equality. Rationale: the [cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md).
+- **Prefix reuse depends on matching request inputs** — parent and child messaging definitions match byte for byte; explicit persona, tool filtering, generated-SDK, or route changes can still break equality. Rationale: the [cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md).
 - **Shipped fork tools do not expose child LLM route selection** — they inherit the parent's provider and model so the copied history remains eligible for KV Cache reuse. Route selection stays disabled until a change can preserve reuse or expose a bounded recomputation cost.
 
 <a id="dev-note"></a>

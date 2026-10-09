@@ -40,7 +40,7 @@ jobs:
       matrix:
         python: ['3.10', '3.14']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -48,7 +48,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.1
         with:
           pattern: deepseek_harness_*
           path: dist
@@ -83,7 +83,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -134,7 +134,7 @@ jobs:
             }
           fi
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.1
         with:
           pattern: deepseek_harness_*
           path: dist
@@ -175,7 +175,7 @@ jobs:
           sha256sum *.whl | sort -k2 > SHA256SUMS
           cat SHA256SUMS
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: python-release-${{ steps.version.outputs.version }}
           path: dist/*
@@ -193,7 +193,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: python-release-${{ needs.validate.outputs.version }}
           path: dist
@@ -228,7 +228,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: python-release-${{ needs.validate.outputs.version }}
           path: dist

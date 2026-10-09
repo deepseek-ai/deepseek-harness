@@ -105,6 +105,7 @@ export function installWorkspaceShortcuts(
     if (target === undefined) return { status: 'blocked', reason: t('shortcut.noSession') }
     if (target.blank) return { status: 'blocked', reason: t('shortcut.noCompletedTurn') }
     return { status: 'handled', run: () => {
+      // The main view owns history opening for this target.
       void navigation.forkSession(target.id).catch((error: unknown) => {
         // Client plugin bundles do not share error-class identity.
         const unavailable = error instanceof Error && error.name === 'SessionForkError'

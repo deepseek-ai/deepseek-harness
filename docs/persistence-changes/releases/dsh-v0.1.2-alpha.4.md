@@ -68,15 +68,15 @@ changes:
 
 <!-- persistence-release-changes:start -->
 
-Detected 4 changed roots and 5 structural differences. The minimum below is calculated using current rules for comparison only; it does not assert historical compliance, migration correctness, or runtime compatibility.
+Detected 4 changed roots and 5 structural differences. The review requirement below is calculated using current rules for comparison only; it does not assert historical compliance, migration correctness, or runtime compatibility.
 
-| Path | Change | Current minimum |
+| Path | Change | Review requirement |
 |---|---|---|
-| `SessionHeader.seedLength` | `property-removed` | `version-bump` |
-| `SessionHeader.isSeeded` | `required-property-added` | `version-bump` |
-| `event:agent/inbox/spliced.data.inserted[].source` | `union-variants-changed` | `version-bump` |
-| `event:session/title-llm-request.data.messages[].source` | `union-variants-changed` | `version-bump` |
-| `event:user/message.data.source` | `union-variants-changed` | `version-bump` |
+| `SessionHeader.seedLength` | `property-removed` | `review-required` |
+| `SessionHeader.isSeeded` | `required-property-added` | `review-required` |
+| `event:agent/inbox/spliced.data.inserted[].source` | `union-variants-changed` | `review-required` |
+| `event:session/title-llm-request.data.messages[].source` | `union-variants-changed` | `review-required` |
+| `event:user/message.data.source` | `union-variants-changed` | `review-required` |
 
 <!-- persistence-release-changes:end -->
 

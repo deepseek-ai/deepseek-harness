@@ -188,6 +188,24 @@ class HarnessClient:
         )
         return response.messageId
 
+    def get_working_directory(self, session_id: str) -> str:
+        """Read the effective directory, recovering a missing directory to the Session origin."""
+        response = self.request(
+            "session/working-directory/get",
+            {"sessionId": session_id},
+            response_model=_WorkingDirectoryResponse,
+        )
+        return response.cwd
+
+    def set_working_directory(self, session_id: str, path: str) -> str:
+        """Enter an absolute or Session-relative directory without changing origin or permissions."""
+        response = self.request(
+            "session/working-directory/set",
+            {"sessionId": session_id, "path": path},
+            response_model=_WorkingDirectoryResponse,
+        )
+        return response.cwd
+
     def request(
         self,
         method: str,
@@ -579,6 +597,10 @@ class NotificationSubscription:
 
 class _SessionPromptResponse(BaseModel):
     messageId: str
+
+
+class _WorkingDirectoryResponse(BaseModel):
+    cwd: str
 
 
 class _ShutdownResponse(BaseModel):

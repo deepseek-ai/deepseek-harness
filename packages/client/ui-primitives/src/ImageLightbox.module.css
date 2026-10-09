@@ -1,9 +1,17 @@
+/* Full-viewport layer that blocks background clicks, including on the Windows caption. */
 .backdrop {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  display: grid;
-  place-items: center;
+}
+
+/* Painted area below the Windows caption; like Modal, the caption stays unpainted. */
+.stage {
+  position: absolute;
+  inset: var(--dsh-frame-chrome-top, 0px) 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 40px;
 }
 
@@ -18,7 +26,7 @@
 .image {
   position: relative;
   max-width: min(100%, 1600px);
-  max-height: calc(100vh - 80px);
+  max-height: 100%;
   object-fit: contain;
   border-radius: var(--dsw-radius-lg);
   background: var(--dsw-specific-input-major);
@@ -27,7 +35,7 @@
 }
 
 .close {
-  position: fixed;
+  position: absolute;
   top: 20px;
   right: 20px;
   z-index: 1;

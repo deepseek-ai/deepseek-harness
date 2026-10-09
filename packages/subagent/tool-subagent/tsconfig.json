@@ -40,9 +40,6 @@
     },
     {
       "path": "../subagent"
-    },
-    {
-      "path": "../../jobs/jobs"
     }
   ]
 }

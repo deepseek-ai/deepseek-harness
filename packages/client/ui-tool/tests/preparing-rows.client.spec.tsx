@@ -28,7 +28,7 @@ function preparation(name: string, args = new PartialArguments()): Extract<Props
   return {
     phase: 'preparing', callId: 'call', toolName: name,
     block: { phase: 'preparing', args, callId: 'call', name, turn: 1, step: 1, time: 1, subCalls: [] },
-    t: makeTranslate(en, common), useDisclosure, openFile: vi.fn(), loadImage: vi.fn(),
+    cwd: '/workspace', t: makeTranslate(en, common), useDisclosure, openFile: vi.fn(), loadImage: vi.fn(),
     useTodoHistory: vi.fn(), useSession: vi.fn(() => false), renderSlot: vi.fn(() => null),
     useProjection: vi.fn(() => undefined), revealPanel: vi.fn(() => false), reviewPanel: vi.fn(() => false),
   } as Extract<Props, { phase: 'preparing' }>
@@ -90,7 +90,7 @@ describe('tool preparation', () => {
     view.rerender(<FileMutationRow {...props} block={{ ...props.block }} />)
     expect(view.getByText('1KB')).toBeTruthy()
     fireEvent.click(view.getByText('hello.txt'))
-    expect(props.openFile).toHaveBeenCalledWith('hello.txt')
+    expect(props.openFile).not.toHaveBeenCalled()
     const started: StartedToolCall = {
       phase: 'start', args: PartialArguments.fromText('{"file_path":"hello.txt","content":"hello"}'), callId: 'call', name: 'write', turn: 1, step: 1, time: 2, subCalls: [],
       argsRaw: '{"file_path":"hello.txt","content":"hello"}',
@@ -102,16 +102,21 @@ describe('tool preparation', () => {
     expect(view.container.querySelector('[data-state="running"]')).not.toBeNull()
     expect(view.getByText('1KB')).toBeTruthy()
     expect(row?.textContent).toMatch(/1KB.*\+1 -0/)
+    fireEvent.click(view.getByText('hello.txt'))
+    expect(props.openFile).not.toHaveBeenCalled()
     const result: ToolResultNode = {
       kind: 'tool-result', seq: 3, time: 3, callId: 'call', callTime: 2,
       name: 'write', args: PartialArguments.fromText(started.argsRaw),
       call: { name: 'write', argsRaw: started.argsRaw }, content: [], isError: false, subCalls: [],
+      meta: { operation: 'create', path: '/workspace/hello.txt' },
     }
     view.rerender(<FileMutationRow {...props} phase="result" block={result} />)
     expect(view.container.querySelector('[data-tool="write"]')).toBe(row)
     expect(view.container.querySelector('[data-state="ok"]')).not.toBeNull()
     expect(view.getByText('1KB')).toBeTruthy()
     expect(row?.textContent).toMatch(/1KB.*\+1 -0/)
+    fireEvent.click(view.getByRole('button', { name: 'hello.txt' }))
+    expect(props.openFile).toHaveBeenCalledWith('/workspace/hello.txt')
   })
 
   it('keeps the combined edit size before diff totals in every stage', () => {

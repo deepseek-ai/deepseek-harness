@@ -4,7 +4,7 @@
 
 ## 概述
 
-本教程介绍如何添加下一个结构性 Session 日志版本，同时不改写已发布数据。阅读[版本与发布状态真源](../session-format-status.zh.md)，确定工作区写入器与最新已发布格式。令 N 表示经核实的已发布格式，N+1 表示目标版本；名称与元数据中的这些占位符须替换为数字。开始前，请准备可用的贡献者工作区，并阅读[包检查清单](adding-a-package.zh.md)、[格式库](../../packages/session/session-format/README.zh.md)和[已发布格式决策](../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.zh.md)。
+本教程介绍如何添加下一个 Session 日志格式版本，同时不改写已发布数据。阅读[版本与发布状态真源](../session-format-status.zh.md)，确定工作区写入器与最新已发布格式。令 N 表示经核实的已发布格式，N+1 表示目标版本；名称与元数据中的这些占位符须替换为数字。开始前，请准备可用的贡献者工作区，并阅读[包检查清单](adding-a-package.zh.md)、[格式库](../../packages/session/session-format/README.zh.md)和[已发布格式决策](../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.zh.md)。
 
 ## 目录
 
@@ -20,15 +20,15 @@
 <a id="choose-the-version"></a>
 ## 1. 选择版本与发布基线
 
-当 header、事件信封、核心事件语义或表面重建发生结构性变更时，提升格式版本。向后兼容的变更可以通过新的确认记录保留当前版本；遵循[版本规则](../../.agents/notes/implemented/architecture/2026-08-10-session-log-version-mechanism.zh.md)与[类型变更规则](../persistence-changes/README.zh.md#compatibility-rules)。区分 Session 格式整数与包发布版本、SQLite schema 版本、投影单元版本及协议包装层版本。
+只有有效判别信息无法阻止不安全解释时，才提升格式版本。头、事件封装、事件语义或重建的结构变更需要按[读取器兼容性规则](../../.agents/notes/implemented/process/2026-10-08-session-reader-compatibility-review.zh.md)评估，不会自动升版本。通过[类型变更流程](reviewing-persistence-type-changes.zh.md)记录安全的同版本演进。区分 Session 格式整数与包发布版本、SQLite schema 版本、投影单元版本及协议包装层版本。
 
-规划下一次破坏性变更时，N 取[版本／状态](../session-format-status.zh.md)中的已接受或已发布版本。因此，即使尚未记录 V4 发布，已接受 V4 之后的破坏性变更也需要 V5；兼容新增不需要这一步。
+确定需要升版本时，N 取[版本／状态](../session-format-status.zh.md)中的已接受或已发布版本。已接受 V4 之后，即使尚未记录 V4 发布，此次升版本也需要 V5；经评审的同版本演进不需要这一步。
 
 为 N+1 使用共享的 `release/*` 集成基线。基线变更添加写入器、codec、catalog 接线、恒等迁移与验证。从该基线创建各个独立子分支，并将其 PR（Pull Request）的目标设为发布分支，而非另一个独立子分支。每个子分支在同一个相邻迁移包内添加自身的结构变换、校验器、消费方和测试。不要只为表示评审顺序而分配额外版本。通过 PR 将评审后的子分支合入发布分支，并在发布前验证组合结果。遵守发布分支的强制推送与删除保护；不要强制同步该分支。
 
-已发布 codec 和已接受的目标格式含义保持稳定。N+1 发布后，N→N+1 转换器仍可修复或增加历史场景支持；只要输出仍兼容 N+1，就不必提高版本。转换器修复只影响之后的转换，不会重新处理已有 N+1 后继文件。记录对原先已接纳映射的修改，以及已有输出如何继续得到支持。不兼容地改变既定目标表示或解释语义需要下一版本。
+已发布 codec 保留已接受的解释。当前版本 codec 可以接纳有明确判别信息的分支，同时保留历史可读性；不要为了接纳当前功能而放宽旧 codec。N+1 发布后，只要输出仍兼容 N+1，N→N+1 转换器就可以修复或增加历史场景支持。修复只影响之后的转换，不影响已有 N+1 后继文件。记录映射变化及已有输出如何继续得到支持；任何新的目标表示都须应用读取器兼容性规则。
 
-N+1 尚处于开放集成阶段时，应使用可丢弃、相互隔离的 Harness home。中间版本产生的 N+1 文件已标为目标写入器版本，因此后续对 N→N+1 的修改不会再次迁移该文件。请在全新测试 home 中从未变更的历史输入重新运行；绝不通过改写已提交代际或复用真实用户 home 来修复这个问题。
+同版本日志跳过相邻迁移，恢复后可以混合历史与较新的记录分支。因此，每个整数标识一组受支持表示，而非一个固定 schema。所属读取器必须保留并区分这些分支；下一条向外迁移必须处理它们。不要添加同版本迁移，也不要仅依赖 `restoreCurrent` 进行归一化：使用 transformed 校验的当前版本 JSONL 读取会跳过该 hook。中间集成格式使用可丢弃、相互隔离的 Harness home；相邻转换发生变化时，从未变更的历史输入重新运行，不得改写已提交代际或使用真实用户 home。
 
 变更写入器之前，使用[归档命令](../persistence-changes/historical-formats/README.zh.md#maintenance)保留其完整持久化 schema，再在 `docs/persistence-changes/historical-formats/vN.*` 下添加双语格式参考。保留所有更早的记录。格式覆盖检查要求低于新写入器的每个整数版本都有独立文档；当前生成的目录只覆盖新写入器。
 
@@ -57,6 +57,8 @@ pnpm run gen-session-format-catalog
 继承截点是逻辑事件数量，不是物理行数。只有在 EOF 前已知时才公开 `headerInheritedEventCount`；`finish` 返回精确的目标截点。前一条改变事件数量的迁移边可能使该数量在构造时不可知。必要时从已校验的种子标记推导它，并测试从每个受支持历史代际到 N+1 的有种子多跳恢复，而非仅测试直接 N 输入。绝不以零替代未知截点。
 
 显式定义新迁移边的事件准入与变换规则。[V2 到 V3 源审计](../../packages/session/session-format-v2-to-v3/README.zh.md#source-audit)和 [Alpha V0→V1 规则](../../.agents/notes/implemented/architecture/2026-08-31-alpha-historical-unknown-event-refusal.zh.md)分别负责对应已发布迁移边的策略，而非新迁移边的策略。不要将任一策略推广到所有迁移边。结构或事件位置变化时，必须分类源事件、载荷成员与引用，并显式判断不透明数据能否保持有效。[同版本保留](../../.agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.zh.md)本身不能证明结构变换安全。校验目标语义，并为每个新增可接受案例提供一个被拒绝的反例；绝不放宽旧迁移边来掩盖不受支持的转换。
+
+`appendPluginRecord()` 写入的插件记录是 `plugin:` 命名空间中的 ignorable 事件，实验性包按类型把它们读回。目标格式能够表示它们时，以原名称继续携带；否则在迁移边 README 中说明它丢弃哪些记录。[ignorable 事件决策](../../.agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.zh.md)以尽力而为的方式保留这些记录。即使已存记录在[实验性持久化目录](../experimental-persistence-catalog.zh.md)中没有声明，也适用这一策略。
 
 以原生 writer 输出作为转换对照：用相同录制的 LLM 消息、工具输出和其他输入回放旧 writer 与目标 writer。任何格式归一化 helper 运行前，比较迁移后的旧输出与目标原始输出，只屏蔽已说明的易变字段。V4 的普通工具结果变为包含普通内容块的平铺 tool-role 消息。旧类型理论上允许某种结构，本身不足以支持新增核心内容类型。
 

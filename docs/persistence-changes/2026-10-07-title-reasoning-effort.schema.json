@@ -1,0 +1,2990 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {
+      "key": "event:session/title-llm-request",
+      "kind": "event",
+      "event": "session/title-llm-request",
+      "surface": false,
+      "digest": "b33545b3244861bcbf73b407d24b53402710f5acacab7ae939537e5504a68dc6",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 29,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 210,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "maxTokens",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "messageSeqs",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "messages",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "reasoningEffort",
+                "type": 10,
+                "optional": true
+              },
+              {
+                "name": "route",
+                "type": 209,
+                "optional": false
+              },
+              {
+                "name": "system",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "titleProvider",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "array",
+            "element": 2
+          },
+          {
+            "kind": "array",
+            "element": 5
+          },
+          {
+            "kind": "union",
+            "types": [
+              6,
+              37,
+              204,
+              205,
+              207
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "content",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "isError",
+                "type": 34,
+                "optional": true
+              },
+              {
+                "name": "role",
+                "type": 35,
+                "optional": false
+              },
+              {
+                "name": "source",
+                "type": 36,
+                "optional": false
+              },
+              {
+                "name": "toolCallId",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "array",
+            "element": 8
+          },
+          {
+            "kind": "union",
+            "types": [
+              9,
+              12,
+              14,
+              17,
+              19,
+              21,
+              31
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "text",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 11,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "literal",
+            "value": "reasoning"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "text",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 13,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "text"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "tool",
+                "type": 15,
+                "optional": true
+              },
+              {
+                "name": "toolName",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 16,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "never"
+          },
+          {
+            "kind": "literal",
+            "value": "tool-addition"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "toolName",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 18,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "tool-removal"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "arguments",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "name",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 20,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "tool-call"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "attachment",
+                "type": 22,
+                "optional": false
+              },
+              {
+                "name": "offloaded",
+                "type": 29,
+                "optional": true
+              },
+              {
+                "name": "type",
+                "type": 30,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "attachmentId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "bytes",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "height",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "mediaType",
+                "type": 23,
+                "optional": false
+              },
+              {
+                "name": "name",
+                "type": 10,
+                "optional": true
+              },
+              {
+                "name": "originalDimensions",
+                "type": 28,
+                "optional": true
+              },
+              {
+                "name": "width",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              24,
+              25,
+              26,
+              27
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "image/gif"
+          },
+          {
+            "kind": "literal",
+            "value": "image/jpeg"
+          },
+          {
+            "kind": "literal",
+            "value": "image/png"
+          },
+          {
+            "kind": "literal",
+            "value": "image/webp"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "height",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "width",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "image"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "attachment",
+                "type": 32,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 33,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "attachmentId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "bytes",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "name",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "file"
+          },
+          {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
+            "kind": "literal",
+            "value": "tool"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "callId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 35,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "content",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "role",
+                "type": 38,
+                "optional": false
+              },
+              {
+                "name": "source",
+                "type": 39,
+                "optional": false,
+                "compatibility": {
+                  "version": 1,
+                  "policy": "session-source-attribution",
+                  "binding": "session.developer-message.source",
+                  "discriminator": "kind",
+                  "unknownKinds": "preserve",
+                  "attributionKinds": [
+                    "tmux-context",
+                    "user-question-reply",
+                    "working-directory"
+                  ]
+                }
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "developer"
+          },
+          {
+            "kind": "union",
+            "types": [
+              36,
+              40,
+              45,
+              47,
+              49,
+              51,
+              53,
+              55,
+              56,
+              58,
+              60,
+              62,
+              63,
+              65,
+              67,
+              69,
+              71,
+              72,
+              73,
+              76,
+              79,
+              81,
+              83,
+              92,
+              95,
+              97,
+              98,
+              100,
+              102,
+              104,
+              109,
+              111,
+              119,
+              120,
+              121,
+              123,
+              124,
+              125,
+              126,
+              127,
+              128,
+              129,
+              130,
+              131,
+              132,
+              133,
+              134,
+              135,
+              136,
+              137,
+              138,
+              139,
+              140,
+              141,
+              142,
+              143,
+              144,
+              145,
+              146,
+              147,
+              148,
+              149,
+              150,
+              151,
+              152,
+              153,
+              154,
+              155,
+              156,
+              157,
+              158,
+              159,
+              160,
+              161,
+              162,
+              163,
+              164,
+              165,
+              166,
+              167,
+              168,
+              169,
+              170,
+              171,
+              172,
+              173,
+              174,
+              175,
+              176,
+              177,
+              178,
+              179,
+              180,
+              181,
+              182,
+              183,
+              184,
+              185,
+              186,
+              187,
+              188,
+              189,
+              191,
+              192,
+              194,
+              197,
+              198,
+              199,
+              200,
+              201,
+              203
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 42,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "snapshot"
+          },
+          {
+            "kind": "literal",
+            "value": "tool-goal"
+          },
+          {
+            "kind": "array",
+            "element": 44
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "name",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "text",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 46,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "runtime-context"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 48,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "schedule"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 50,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "system-prompt"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 52,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "time-context"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 54,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "tmux-context"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 42,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 57,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "tool-jobs"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 59,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "tool-registry"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 61,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "user"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 57,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 64,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "user-approval"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 66,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "working-directory"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 68,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "cordis-host-runner"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 70,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "dsh-session-title-llm"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 64,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 70,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 75,
+                "optional": false
+              },
+              {
+                "name": "senderSessionId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "notice"
+          },
+          {
+            "kind": "literal",
+            "value": "subagent-settled"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 78,
+                "optional": false
+              },
+              {
+                "name": "senderSessionId",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "relay"
+          },
+          {
+            "kind": "literal",
+            "value": "agent-message"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 80,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "hooks-claude-code"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 82,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "hooks-codex"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "baseline",
+                "type": 29,
+                "optional": true
+              },
+              {
+                "name": "baselineIdentity",
+                "type": 10,
+                "optional": true
+              },
+              {
+                "name": "changes",
+                "type": 84,
+                "optional": false
+              },
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 91,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "array",
+            "element": 85
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "action",
+                "type": 86,
+                "optional": false
+              },
+              {
+                "name": "digest",
+                "type": 10,
+                "optional": true
+              },
+              {
+                "name": "path",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "scope",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              87,
+              88,
+              89
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "remove"
+          },
+          {
+            "kind": "literal",
+            "value": "replace"
+          },
+          {
+            "kind": "literal",
+            "value": "set"
+          },
+          {
+            "kind": "literal",
+            "value": "instructions"
+          },
+          {
+            "kind": "literal",
+            "value": "agent-instructions"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "callId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 93,
+                "optional": false
+              },
+              {
+                "name": "outcome",
+                "type": 94,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "user-question-reply"
+          },
+          {
+            "kind": "literal",
+            "value": "answered"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 96,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "model-selection"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "clientTimeZone",
+                "type": 10,
+                "optional": true
+              },
+              {
+                "name": "kind",
+                "type": 61,
+                "optional": false
+              },
+              {
+                "name": "rpcId",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "compactionId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 99,
+                "optional": false
+              },
+              {
+                "name": "sourceCommandId",
+                "type": 10,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "compact-checkpoint"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 101,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "plan-mode"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "deliveryId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 103,
+                "optional": false
+              },
+              {
+                "name": "provider",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "ruleId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "source",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "webhook"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "entries",
+                "type": 105,
+                "optional": false
+              },
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 108,
+                "optional": false
+              },
+              {
+                "name": "update",
+                "type": 29,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "array",
+            "element": 106
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "description",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "name",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "catalog"
+          },
+          {
+            "kind": "literal",
+            "value": "skill-catalog"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 110,
+                "optional": false
+              },
+              {
+                "name": "name",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "skill-invocation"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 113,
+                "optional": false
+              },
+              {
+                "name": "references",
+                "type": 114,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 118,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "recall"
+          },
+          {
+            "kind": "literal",
+            "value": "session-reference"
+          },
+          {
+            "kind": "array",
+            "element": 115
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "capturedFormatVersion",
+                "type": 2,
+                "optional": true
+              },
+              {
+                "name": "capturedThroughSeq",
+                "type": 116,
+                "optional": false
+              },
+              {
+                "name": "compacted",
+                "type": 34,
+                "optional": false
+              },
+              {
+                "name": "inputIndex",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "omittedBytes",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "omittedMessages",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "originalMessages",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "retainedMessages",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "sessionId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "truncated",
+                "type": 34,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              2,
+              117
+            ]
+          },
+          {
+            "kind": "primitive",
+            "type": "null"
+          },
+          {
+            "kind": "literal",
+            "value": 1
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 80,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 82,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 122,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "repeat-tool-reminder"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 96,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 46,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 48,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 52,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 54,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 42,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 57,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 64,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 74,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 70,
+                "optional": false
+              },
+              {
+                "name": "summary",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 80,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 82,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 96,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 101,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 122,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 46,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 48,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 52,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 101,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 54,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 42,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 57,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 64,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 90,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 70,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 80,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 82,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 96,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 101,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 122,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 122,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 46,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 48,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 52,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 54,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 42,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 57,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 64,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 112,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 70,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 46,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 80,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 82,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 96,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 101,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 122,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 46,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 48,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 52,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 54,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 48,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 42,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 57,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 64,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 77,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 70,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 80,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 82,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 96,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 101,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 122,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 46,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 52,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 48,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 52,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 54,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 42,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 57,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 64,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 107,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 70,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "goalId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 190,
+                "optional": false
+              },
+              {
+                "name": "revision",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "round",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "goal"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "form",
+                "type": 41,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 54,
+                "optional": false
+              },
+              {
+                "name": "sections",
+                "type": 43,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 193,
+                "optional": false
+              },
+              {
+                "name": "messageId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "senderId",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "senderName",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "teamId",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "team-message"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 195,
+                "optional": false
+              },
+              {
+                "name": "model",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "provider",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "replayState",
+                "type": 196,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "model"
+          },
+          {
+            "kind": "opaque",
+            "reason": "unknown"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 80,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 82,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 96,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 101,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 202,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "ptc-mode"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 122,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "content",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "role",
+                "type": 61,
+                "optional": false
+              },
+              {
+                "name": "source",
+                "type": 39,
+                "optional": false,
+                "compatibility": {
+                  "version": 1,
+                  "policy": "session-source-attribution",
+                  "binding": "session.user-message.source",
+                  "discriminator": "kind",
+                  "unknownKinds": "preserve",
+                  "attributionKinds": [
+                    "tmux-context",
+                    "user-question-reply",
+                    "working-directory"
+                  ]
+                }
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "content",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "role",
+                "type": 206,
+                "optional": false
+              },
+              {
+                "name": "source",
+                "type": 194,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "assistant"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "content",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "role",
+                "type": 208,
+                "optional": false
+              },
+              {
+                "name": "source",
+                "type": 49,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "system"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "model",
+                "type": 10,
+                "optional": false
+              },
+              {
+                "name": "provider",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "session/title-llm-request"
+          }
+        ]
+      }
+    }
+  ],
+  "types": []
+}

@@ -1,0 +1,10 @@
+version: 1
+scenario: optional-string-editor
+profile: web
+composition: web-ptc-string-editor
+recording: authored
+header:
+  class: web-ptc-string-editor
+  pin: true
+workspace:
+  final: true

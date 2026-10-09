@@ -43,9 +43,15 @@ export interface BundleRowInfo {
   entryId?: PluginEntryId
 }
 
-/** One installed or installation-provided bundle. */
+/** One shipped, profile-installed, or discoverable on-demand bundle. */
 export interface BundleInfo {
   name: string
+  /** Project-maintained shipped optional bundle or on-demand catalog entry, independent of installation and selection. */
+  official: boolean
+  /** Readable package location; on-demand catalog entries exclude undeclared transitive copies, and declared files may be missing. */
+  availability: 'installation' | 'profile' | 'missing'
+  /** Exact released Host version or same-checkout development link offered for an on-demand catalog entry. */
+  installTarget?: { spec: string; version: string }
   version?: string
   /** Local display text with available translations or literal fallbacks, or a metadata diagnostic. */
   meta?: PluginLocalizedMeta
@@ -53,7 +59,7 @@ export interface BundleInfo {
   description?: string
   /** Selected in the profile manifest; a load error means its layer was skipped. */
   enabled: boolean
-  /** Whether the profile's own dependencies hold the package; false for a bundle the dsh installation supplies. */
+  /** Whether the profile declares this dependency; availability separately reports whether its files can be read. */
   installed: boolean
   /**
    * Present for a profile dependency the installation does not also supply: the spec `pnpm add` accepts, with local
@@ -148,6 +154,8 @@ export type PluginInstallRequestId = Branded<'PluginInstallRequestId'>
 /** Bundle installation defaults to activation; callers that offer cancellation supply their request id. */
 export interface InstallBundleOptions {
   enabled?: boolean
+  /** Save the resolved dependency version without a range; applies to any bundle installation. */
+  saveExact?: boolean
   requestId?: PluginInstallRequestId
   /** Explicitly allow these pending packages' scripts for this profile, then install; a name no longer pending refuses the call. */
   approvedBuilds?: string[]

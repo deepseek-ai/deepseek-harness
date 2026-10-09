@@ -32,7 +32,7 @@ The [format references](persistence-changes/historical-formats/README.md) docume
 latestFinalizedVersion: 4
 ```
 
-V4 has an accepted compatibility baseline in the [checkpoint](persistence-changes/finalized/v4.json). Backward-compatible schema changes may remain V4 through new acknowledgement records. Breaking changes require a higher writer version and their own header transition; they cannot reuse the accepted 3→4 transition. Accepted machine records and after schemas remain immutable. [Checkpoint rules](persistence-changes/README.md#compatibility-rules) define the comparison.
+V4 has an accepted compatibility baseline in the [checkpoint](persistence-changes/finalized/v4.json). Schema changes may remain V4 when the [reader-compatibility rules](persistence-changes/README.md#compatibility-rules) are satisfied and the required review is recorded. A version-bump decision requires a higher writer version and its own header transition; it cannot reuse the accepted 3→4 transition. Accepted machine records and after schemas remain immutable.
 
 Finalization does not freeze every future V4 addition and does not assert publication. The release record below retains the independently verified published version. Ordinary comments, aliases, source locations, and implementation fixes preserving the accepted meaning do not change this baseline.
 
@@ -51,7 +51,7 @@ Evidence: published product tag `dsh-v0.2.0-rc.2`; tagged writer: `packages/core
 <a id="updating-the-record"></a>
 ## Updating the record
 
-When a structural writer change is implemented, update the code constant and adjacent catalog together; do not advance this release record before publication. When a product release first publishes a higher Session format, confirm publication and its tagged writer, then advance this record and the evidence tag and tagged writer path in the same bilingual update. Later product releases carrying the same format do not require changing the record. Never lower it on the development trunk.
+When a Session format bump is implemented, update the code constant and adjacent catalog together; do not advance this release record before publication. When a product release first publishes a higher Session format, confirm publication and its tagged writer, then advance this record and the evidence tag and tagged writer path in the same bilingual update. Later product releases carrying the same format do not require changing the record. Never lower it on the development trunk.
 
 The [documentation-standard test](../scripts/doc-standard.spec.ts) checks record structure, bilingual equality, evidence-tag and writer-path consistency, and that the documented release does not exceed the checkout writer. This keyless check does not query GitHub or prove that the record is up to date; publication verification remains part of the release update.
 

@@ -66,6 +66,7 @@ export interface CodingHarnessOptions {
 export async function codingHarness(workdir: string, options: CodingHarnessOptions = {}): Promise<Context> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx, {
+    workingDirectory: true,
     systemPrompt: { personaPrefix: options.personaPrefix ?? '' },
   })
   await ctx.plugin(AgentLoop, { agents: [] })

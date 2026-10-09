@@ -11,6 +11,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import z from '@deepseek-ai/schemastery'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
@@ -207,9 +208,8 @@ export class ClaudeCodeMods extends TypertRemoteService {
     bandRows: z.number().default(10),
   })
 
-  // Every harness service is read through `ctx.get` when a mod's call needs it,
-  // so a deployment composes only what its mods use.
-  static inject: string[] = []
+  // Session initialization requires its directory owner; other services are read on demand.
+  static inject = ['workingDirectory']
 
   private readonly engine: ModsEngine<AgentBinding>
   private readonly registrations = new Map<string, Set<() => void>>()
@@ -304,14 +304,14 @@ export class ClaudeCodeMods extends TypertRemoteService {
     ctx.on('agent/created', async ({ agent, signal }) => {
       if (!isRoot(agent)) return
       startedRoots.add(agent.session.id)
+      // Cancelling creation also cancels directory validation and a waiting hook.
+      /* v8 ignore next -- the loop always supplies an initialization signal; the payload type keeps it optional */
+      const abandon = signal === undefined ? detached.controller.signal : AbortSignal.any([signal, detached.controller.signal])
       const input: SessionStartInput = {
-        cwd: agent.session.header.cwd ?? process.cwd(),
+        cwd: await ctx.workingDirectory.ensure(agent, abandon),
         surface: null,
         isInteractive: ctx.get('userQuestions') !== undefined,
       }
-      // Cancelling the agent's creation abandons a hook still waiting, such as one inside `$.ui.ask`.
-      /* v8 ignore next -- the loop always supplies an initialization signal; the payload type keeps it optional */
-      const abandon = signal === undefined ? detached.controller.signal : AbortSignal.any([signal, detached.controller.signal])
       await engine.raise<SessionStartInput, SessionStartResult>(
         'session.start', input, e => ({ cwd: e.cwd }), { binding: { agent }, signal: abandon },
       )

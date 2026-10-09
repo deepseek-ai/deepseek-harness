@@ -15,6 +15,7 @@ description: Use when reviewing a pull request in the deepseek-harness repo — 
 - [dsh-prose-standard](../dsh-prose-standard/SKILL.md): required coverage and editorial judgment for comments, docs, prompts, and visible strings.
 - [dsh-ci-test-reliability](../dsh-ci-test-reliability/SKILL.md): isolation and regression-proof rules for resource-owning, asynchronous, or flaky tests and fixtures.
 - [dsh-client-ui-ux](../dsh-client-ui-ux/SKILL.md): feedback-surface choice, overlay safety, platform window adaptation, and visual token discipline for product-user-visible GUI changes.
+- [dsh-error-handling](../dsh-error-handling/SKILL.md): failure classification, handling ownership, containment, state guarantees, and actionable reports.
 - [docs/testing.md](../../../docs/testing.md) and the [quality-gates reference](../../../docs/testing.md): required test tiers and gates.
 - [Agent Notes](../../notes/README.md): design rationale. Treat disagreement with an Agent Note as a design discussion, not an automatic veto.
 - For bilingual changes, read [translation-rules.md](../../../docs/i18n/translation-rules.md) and [terminology.md](../../../docs/i18n/terminology.md); the extended translation skill is outside automatic review and runs only on explicit user invocation.
@@ -31,6 +32,7 @@ description: Use when reviewing a pull request in the deepseek-harness repo — 
 ## Manual checks
 
 - **Intent and interface contracts:** trace both sides of every changed interface. Confirm the implementation matches the PR and any Agent Note, including errors, cancellation, ownership, and disposal.
+- **Error handling:** apply [dsh-error-handling](../dsh-error-handling/SKILL.md) to changed failure paths, including their state guarantees and final user-visible reports. Reject catch-and-continue unless the state owner establishes that subsequent work's preconditions hold, including after recovery.
 - **Lifecycle and concurrency:** for async setup, callbacks, processes, or teardown, apply [defensive-patterns.md](../../../docs/defensive-patterns.md). Check races before publication, cancellation during awaits, independent error reporting, callback containment, ownership before reentry, complete detach cleanup, and quiescent disposal.
 - **Capability and consumer fit:** trace every current consumer, then flag consumer-specific behavior leaking into the interface under [the package rules](../../../packages/AGENTS.md). Flag the inverse too: a new public method on a generic service (registry, session, agent) whose only caller is one internal consumer is an unnecessary API expansion — require a private capability closure handed to that consumer at construction instead.
 - **Scope, ownership, and necessity:** map each abstraction, state machine, option, defensive copy, and compatibility path to its current contract, production consumer, and owning plugin or service. Challenge unrelated features and speculative generality, then test the PR against [the root rules](../../../AGENTS.md#conventions).

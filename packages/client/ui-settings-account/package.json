@@ -61,7 +61,7 @@
     "@deepseek-ai/dsh-client-ui-theme": "workspace:*",
     "@deepseek-ai/dsh-deepseek-account": "workspace:*",
     "@deepseek-ai/dsh-settings": "workspace:*",
-    "@testing-library/react": "^16.1.0",
+    "@testing-library/react": "^16.3.3",
     "@types/big.js": "^6.2.2",
     "@types/react": "~18.3.1",
     "react": "^18.2.0",

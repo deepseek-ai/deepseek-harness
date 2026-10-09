@@ -75,8 +75,8 @@ export function apply(ctx: Context): void {
     name: 'interrupt_agent',
     description:
       'Ask a subagent to stop its current work. This call returns without waiting for it to stop. '
-      + 'You can continue a direct child\'s conversation later with send_message. '
-      + 'Subagents it started will keep running.',
+      + 'You can continue a local direct child\'s conversation later with send_message. '
+      + 'External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.',
     parameters: {
       agent_id: {
         type: 'string',

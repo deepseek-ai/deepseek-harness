@@ -2,9 +2,9 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join, relative, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Context } from '@deepseek-ai/cordis'
+import { createRuntimeContext } from './setup.ts'
 import { PythonPtcRuntime, hostFrameParseCeiling, readProcessStart, resolvePythonBin } from '../src/index.ts'
 import { logTruncationMarker } from '../src/protocol.ts'
 import type { Config } from '../src/index.ts'
@@ -15,27 +15,8 @@ import type { Config } from '../src/index.ts'
 const PYABS = resolvePythonBin('python3') ?? 'python3'
 import type { PtcBindingFunction, PtcJsonValue, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 
-/**
- * Names one `py/` script whose `copyFileSync` must fail, for the partial-staging
- * case. A real disk-full or missing-asset failure mid-copy cannot be produced
- * from a test, and the leak only shows when `mkdtempSync` has already succeeded.
- *
- * `stagedDirs` records every staging directory THIS test file creates, so the
- * leak assertions check the exact paths instead of a global tmpdir diff: a
- * parallel vitest worker running the same prefix could create or remove
- * `dsh-ptc-runtime-python-*` directories inside the sampling window, which a
- * readdir diff would misattribute to this test. `boot-write-failure.spec.ts`
- * records the same race and solves it with argv-based identity; recording the
- * mkdtempSync results is the fs-mock equivalent.
- */
-const { failNextCopyOf, stagedDirs, tempDirs, tempFiles } = vi.hoisted(() => ({
-  failNextCopyOf: { value: undefined as string | undefined },
-  stagedDirs: [] as string[],
-  // Test-created temp dirs/files, registered by the helpers below and removed
-  // after each test: a suite run over real python3 subprocesses must not
-  // permanently accumulate `dsh-*` fixtures in the shared tmpdir (the runtime
-  // cleans its own per-run staging dir; these are the stubs and wrappers the
-  // tests themselves build).
+const { failNextReadOf, tempDirs, tempFiles } = vi.hoisted(() => ({
+  failNextReadOf: { value: undefined as string | undefined },
   tempDirs: [] as string[],
   tempFiles: [] as string[],
 }))
@@ -43,29 +24,19 @@ vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>()
   return {
     ...actual,
-    copyFileSync(source: string, destination: string): void {
-      if (failNextCopyOf.value !== undefined && basename(source) === failNextCopyOf.value) {
-        failNextCopyOf.value = undefined
-        throw Object.assign(new Error('simulated ENOSPC on copy'), { code: 'ENOSPC' })
+    readFileSync(...args: Parameters<typeof actual.readFileSync>) {
+      if (failNextReadOf.value !== undefined && String(args[0]).endsWith(`/${failNextReadOf.value}`)) {
+        failNextReadOf.value = undefined
+        throw Object.assign(new Error('simulated missing packaged script'), { code: 'ENOENT' })
       }
-      actual.copyFileSync(source, destination)
-    },
-    mkdtempSync(prefix: string): string {
-      const dir = actual.mkdtempSync(prefix)
-      if (basename(prefix).startsWith('dsh-ptc-runtime-python-')) stagedDirs.push(dir)
-      return dir
+      return actual.readFileSync(...args)
     },
   }
 })
 
-/**
- * Integration suite over REAL python3 subprocesses (no subprocess mocks — it is
- * cheap and local, per docs/testing.md's real-over-mock policy; the only mock is
- * `node:fs.copyFileSync` for the staging-failure cases). Each test builds a fresh
- * runtime so budgets can be tuned per case.
- */
+/** Real CPython processes; packaged-source read failures use the narrow fs mock above. */
 async function setup(config: Config = {}) {
-  const ctx = new Context()
+  const ctx = await createRuntimeContext()
   const fiber = await ctx.plugin(PythonPtcRuntime, config)
   const runtime = ctx.ptcRuntime as PythonPtcRuntime
   return { ctx, fiber, runtime }
@@ -102,14 +73,15 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     const { runtime } = await setup()
     expect(runtime.language).toBe('python')
     expect(runtime.isolation).toBe('process')
+    expect(runtime.executionInstructions).toBe('Each call runs in a fresh Python process. Relative paths use the supplied working directory; only TMPDIR is set in the environment. Direct filesystem access follows this execution\'s sandbox policy.')
   })
 
   it('resolves its configured deadline and cwd while refusing unsupported execution choices', async () => {
     const { runtime, fiber } = await setup({ maxWallMs: 30_000 })
     try {
       const request = { program: 'return 1', bindings: [] }
-      expect(runtime.sandboxMode).toBeUndefined()
-      expect(runtime.resolve(request)).toEqual({ ...request, cwd: process.cwd(), timeoutMs: 30_000 })
+      expect(runtime.sandboxMode).toBe('danger-full-access')
+      expect(runtime.resolve(request)).toEqual({ ...request, cwd: process.cwd(), timeoutMs: 30_000, sandboxPolicy: { mode: 'danger-full-access', workspaceRoot: process.cwd() } })
       const cwd = await makeTempDir('dsh-py-resolved-cwd-')
       const spec = runtime.resolve({ ...request, cwd })
       expect(spec.cwd).toBe(cwd)
@@ -117,10 +89,11 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
       expect(() => runtime.resolve({ ...request, timeoutMs: 1 })).toThrow('per-call timeout is unsupported')
       expect(() => runtime.resolve({ ...request, timeoutMs: null })).toThrow('per-call timeout is unsupported')
       const sandboxPolicy = { mode: 'danger-full-access' as const, workspaceRoot: cwd }
-      expect(() => runtime.resolve({ ...request, sandboxPolicy })).toThrow('sandbox policy is unsupported')
-      await expect(runtime.run({ ...spec, sandboxPolicy })).rejects.toThrow('unsupported execution policy or timeout')
-      await expect(runtime.run({ ...spec, timeoutMs: 1 })).rejects.toThrow('unsupported execution policy or timeout')
-      await expect(runtime.run({ ...spec, timeoutMs: null })).rejects.toThrow('unsupported execution policy or timeout')
+      expect(runtime.resolve({ ...request, sandboxPolicy }).sandboxPolicy).toBe(sandboxPolicy)
+      await expect(runtime.run({ ...request, cwd, timeoutMs: 30_000 })).rejects.toThrow('run requires a resolved sandbox policy')
+      await expect(runtime.run({ ...spec, cwd: 'relative' })).rejects.toThrow('cwd must be absolute')
+      await expect(runtime.run({ ...spec, timeoutMs: 1 })).rejects.toThrow('unsupported execution timeout')
+      await expect(runtime.run({ ...spec, timeoutMs: null })).rejects.toThrow('unsupported execution timeout')
       const result = await runtime.run(runtime.resolve({ ...request, cwd, program: 'import os\nreturn os.getcwd()' }))
       expect(result.error).toBeUndefined()
       expect(result.value).toBe(realpathSync(cwd))
@@ -128,7 +101,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
   })
 
   it('rejects non-positive config as seam misuse', async () => {
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     await expect(ctx.plugin(PythonPtcRuntime, { cpuSeconds: 0 }))
       .rejects.toThrow(/cpuSeconds must be a positive number/)
     await expect(ctx.plugin(PythonPtcRuntime, { maxWallMs: -1 }))
@@ -136,7 +109,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
   })
 
   it('rejects a non-integer cpuSeconds at load (setrlimit needs an int)', async () => {
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     await expect(ctx.plugin(PythonPtcRuntime, { cpuSeconds: 1.5 }))
       .rejects.toThrow(/cpuSeconds must be a positive integer, got 1.5/)
   })
@@ -145,10 +118,10 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     // maxLogBytes/maxValueBytes cross to the child, which reads them through
     // int(...): a float would floor there while the host meters the fraction, so
     // the two sides would enforce different public config. Reject at load.
-    const ctxLog = new Context()
+    const ctxLog = await createRuntimeContext()
     await expect(ctxLog.plugin(PythonPtcRuntime, { maxLogBytes: 3.5 }))
       .rejects.toThrow(/maxLogBytes must be a positive integer/)
-    const ctxValue = new Context()
+    const ctxValue = await createRuntimeContext()
     await expect(ctxValue.plugin(PythonPtcRuntime, { maxValueBytes: 1024.5 }))
       .rejects.toThrow(/maxValueBytes must be a positive integer/)
   })
@@ -161,7 +134,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     // far past the safe range, so `setrlimit` receives a different number than was
     // configured. Both used to end every run in a bootstrap exception instead of
     // failing at load, where a self-contained configuration error belongs.
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     await expect(ctx.plugin(PythonPtcRuntime, { addressSpaceMb: 1e308 }))
       .rejects.toThrow(/addressSpaceMb must be at most \d+ .*exact integer/)
     await expect(ctx.plugin(PythonPtcRuntime, { cpuSeconds: 1e100 }))
@@ -187,7 +160,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     // worker-exit), so a budget above it would admit a config whose honest
     // child frames the host then rejects.
     const admissible = 64 * 1024 * 1024 - 64
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     await expect(ctx.plugin(PythonPtcRuntime, { maxLogBytes: admissible + 1 }))
       .rejects.toThrow(/maxLogBytes must not exceed 67108800/)
     await expect(ctx.plugin(PythonPtcRuntime, { maxValueBytes: admissible + 1 }))
@@ -212,6 +185,9 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
       "import { Context } from '@deepseek-ai/cordis'",
       "import { PythonPtcRuntime } from './packages/experimental/ptc-runtime-python/src/index.ts'",
       'const ctx = new Context()',
+      "await ctx.plugin((await import('./packages/session/session-projection/src/index.ts')).default)",
+      "await ctx.plugin((await import('./packages/sandbox/sandbox-policy/src/index.ts')).default, { mode: 'danger-full-access' })",
+      "await ctx.plugin((await import('./packages/sandbox/sandbox-local/src/index.ts')).default, {})",
       'try {',
       '  await ctx.plugin(PythonPtcRuntime, { maxValueBytes: 50 * 1024 * 1024, addressSpaceMb: 1024 })',
       "  console.log('LOADED')",
@@ -267,7 +243,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     // path, ERR_INVALID_ARG_TYPE for the NUL — so run() would REJECT instead of
     // resolving the worker-exit the seam promises for a child that cannot
     // start. Both are self-contained configuration errors, so they fail here.
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     await expect(ctx.plugin(PythonPtcRuntime, { pythonBin: '' }))
       .rejects.toThrow(/pythonBin must be a non-empty path without NUL bytes/)
     await expect(ctx.plugin(PythonPtcRuntime, { pythonBin: 'py\u0000thon3' }))
@@ -289,19 +265,19 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     const directory = nodePath.join(dir, 'is-a-directory')
     mkdirSync(directory)
     try {
-      const missing = new Context()
+      const missing = await createRuntimeContext()
       await expect(missing.plugin(PythonPtcRuntime, { pythonBin: nodePath.join(dir, 'missing') }))
         .rejects.toThrow(/is not an executable regular file/)
-      const noX = new Context()
+      const noX = await createRuntimeContext()
       await expect(noX.plugin(PythonPtcRuntime, { pythonBin: notExecutable }))
         .rejects.toThrow(/is not an executable regular file/)
-      const isDir = new Context()
+      const isDir = await createRuntimeContext()
       await expect(isDir.plugin(PythonPtcRuntime, { pythonBin: directory }))
         .rejects.toThrow(/is not an executable regular file/)
       // A relative explicit path fails the same way, resolved against the host
       // CWD: `dir` is absolute, so a slash-containing relative form of it is
       // the dirname prefix plus the file, which does not exist as such.
-      const rel = new Context()
+      const rel = await createRuntimeContext()
       await expect(rel.plugin(PythonPtcRuntime, { pythonBin: './definitely-not-there-python' }))
         .rejects.toThrow(/is not an executable regular file/)
     } finally {
@@ -311,7 +287,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
   })
 
   it('rejects a non-CPython, outdated, or probe-failing interpreter at load', async () => {
-    const nonPython = new Context()
+    const nonPython = await createRuntimeContext()
     await expect(nonPython.plugin(PythonPtcRuntime, { pythonBin: '/bin/echo' }))
       .rejects.toThrow(/did not report a CPython version/)
 
@@ -328,19 +304,19 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     await writeFile(failed, '#!/bin/sh\nexit 7\n', { mode: 0o755 })
     try {
       expect(resolvePythonBin(relative(process.cwd(), old))).toBe(old)
-      const obsolete = new Context()
+      const obsolete = await createRuntimeContext()
       await expect(obsolete.plugin(PythonPtcRuntime, { pythonBin: oldMajor }))
         .rejects.toThrow(/must be CPython 3\.10 or newer, got cpython 2\.99\.0/)
-      const outdated = new Context()
+      const outdated = await createRuntimeContext()
       await expect(outdated.plugin(PythonPtcRuntime, { pythonBin: old }))
         .rejects.toThrow(/must be CPython 3\.10 or newer, got cpython 3\.9\.6/)
-      const forwardCompatible = new Context()
+      const forwardCompatible = await createRuntimeContext()
       const fiber = await forwardCompatible.plugin(PythonPtcRuntime, { pythonBin: future })
       await fiber.dispose()
-      const alternative = new Context()
+      const alternative = await createRuntimeContext()
       await expect(alternative.plugin(PythonPtcRuntime, { pythonBin: pypy }))
         .rejects.toThrow(/must be CPython, got pypy/)
-      const probeFailure = new Context()
+      const probeFailure = await createRuntimeContext()
       await expect(probeFailure.plugin(PythonPtcRuntime, { pythonBin: failed }))
         .rejects.toThrow(/failed the CPython version probe/)
     } finally {
@@ -519,7 +495,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     // 1 ms for anything larger, inverting the knob's meaning: a huge maxWallMs
     // would time every run out at once, and a huge graceMs would SIGKILL one
     // millisecond after SIGTERM. Both must fail at load instead.
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     await expect(ctx.plugin(PythonPtcRuntime, { maxWallMs: 2_147_483_648 }))
       .rejects.toThrow(/maxWallMs must not exceed 2147483647/)
     // graceMs is bounded by the close deadline's added margin, not by the raw
@@ -539,7 +515,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     const original = process.platform
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
     try {
-      const ctx = new Context()
+      const ctx = await createRuntimeContext()
       await expect(ctx.plugin(PythonPtcRuntime, {})).rejects.toThrow(/requires a Unix platform/)
     } finally {
       Object.defineProperty(process, 'platform', { value: original, configurable: true })
@@ -571,9 +547,10 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
 
   it('rejects run() after disposal, and unregisters ctx.ptcRuntime', async () => {
     const { ctx, fiber, runtime } = await setup()
+    const spec = runtime.resolve({ program: 'return 1', bindings: [] })
     await fiber.dispose()
-    await expect(runtime.run(runtime.resolve({ program: 'return 1', bindings: [] })))
-      .rejects.toThrow(/after disposal/)
+    await expect(runtime.run(spec)).rejects.toThrow(/after disposal/)
+    expect(() => runtime.resolve({ program: 'return 1', bindings: [] })).toThrow(/after disposal/)
     expect(ctx.get('ptcRuntime')).toBeUndefined()
   })
 
@@ -600,101 +577,62 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     expect(result.logs).toEqual([])
   })
 
-  it('runs the interpreter from materialized scripts outside the package, and removes them per run', async () => {
-    // The interpreter is an EXTERNAL process, so it can only open paths the OS
-    // resolves. Inside the single-file Python-SDK executable the packaged `py/`
-    // directory lives in pkg's virtual filesystem, which Node reads through its
-    // patched `fs` but `python3` cannot see, so spawning from that path fails
-    // with ENOENT. The scripts are therefore copied to a real directory first.
-    //
-    // The path is read from the child's own `__main__` module, so it proves
-    // where the interpreter actually loaded the entry script — asserting on a
-    // host-side constant would only restate the source. The program namespace
-    // seeds `__name__` but no `__file__`, hence the module lookup.
-    // `protocol.py` must land in the SAME directory, since `bootstrap.py` puts
-    // its own directory on `sys.path` to import it; the run completing at all
-    // already exercises that import.
+  it('delivers packaged Python modules without exposing a writable bootstrap file', async () => {
     const { runtime } = await setup()
-    const entryOf = async (): Promise<string> => {
-      const result = await runtime.run(runtime.resolve({ program: 'import sys\nreturn sys.modules["__main__"].__file__', bindings: [] }))
-      expect(result.error).toBeUndefined()
-      return result.value as string
-    }
-    const entry = await entryOf()
-    expect(entry.endsWith('/bootstrap.py')).toBe(true)
-    const dir = dirname(entry)
-    expect(realpathSync(dirname(dir))).toBe(realpathSync(tmpdir()))
-    expect(basename(dir)).toMatch(/^dsh-ptc-runtime-python-/)
-    expect(dir).not.toContain('/packages/')
-    // Staging is per RUN and removed at settlement, so by the time `run()`
-    // resolved the directory is already gone — nothing survives to be rewritten
-    // by a later run. `protocol.py` had to be beside the entry script for the run
-    // to complete at all, since `bootstrap.py` imports it off `sys.path`.
-    expect(existsSync(dir)).toBe(false)
-    // A second run stages its own copy rather than reusing the first.
-    expect(dirname(await entryOf())).not.toBe(dir)
+    const result = await runtime.run(runtime.resolve({
+      program: 'import sys, protocol\nreturn [hasattr(sys.modules["__main__"], "__file__"), protocol.__file__, sys.stdin.read()]',
+      bindings: [],
+    }))
+    expect(result.error).toBeUndefined()
+    expect(result.value).toEqual([false, '<dsh-ptc-protocol>', ''])
   })
 
-  it('contains a program that rewrites its own bootstrap to the run that did it', async () => {
-    // The child runs as the same UID as the host, so `0o700` does not stop model
-    // code from rewriting the scripts it was started from —
-    // `sys.modules['__main__'].__file__` names them. While all runs shared one
-    // staged copy, a program that overwrote `bootstrap.py` broke the NEXT run
-    // (measured: it settled as `worker-exit`), and substituted code would have
-    // run before the resource limits were applied.
-    const { runtime } = await setup({ maxWallMs: 10_000 })
-    const sabotage = await runtime.run(runtime.resolve({
+  it('starts a spawn-context ProcessPoolExecutor with an importable function', async () => {
+    const { runtime } = await setup({ maxWallMs: 30_000 })
+    const result = await runtime.run(runtime.resolve({
       program: [
-        'import sys',
-        'path = sys.modules["__main__"].__file__',
-        'open(path, "w").write("raise SystemExit(1)\\n")',
-        'return path',
+        'from concurrent.futures import ProcessPoolExecutor',
+        'from multiprocessing import get_context',
+        'with ProcessPoolExecutor(max_workers=1, mp_context=get_context("spawn")) as pool:',
+        '    return pool.submit(abs, -42).result()',
       ].join('\n'),
       bindings: [],
     }))
-    expect(sabotage.error).toBeUndefined()
-    // The damage stayed inside the run that caused it.
-    const after = await runtime.run(runtime.resolve({ program: 'return 1 + 1', bindings: [] }))
-    expect(after.error).toBeUndefined()
-    expect(after.value).toBe(2)
-  }, 20_000)
+    expect(result.error).toBeUndefined()
+    expect(result.value).toBe(42)
+  })
 
-  it('leaves no subprocess or scripts behind when disposal races the first run', async () => {
-    // Staging runs SYNCHRONOUSLY so no async boundary opens between `run()` and
-    // the point where `execute` registers the run in `live` and installs the
-    // abort listener. With an `await` there, a disposal landing in that window
-    // saw an empty `live`, returned, removed the script directory, and let the
-    // continuation spawn a subprocess after the fiber was gone.
-    //
-    // `dispose()` is called in the same synchronous turn as `run()`, with no
-    // `await` between them, so it lands exactly in that window.
-    //
-    // The leak assertion checks the EXACT paths this test file staged (recorded
-    // by the mocked mkdtempSync) rather than diffing a global tmpdir: a
-    // parallel vitest worker can create or remove same-prefix directories
-    // inside the sampling window, which a readdir diff would misattribute to
-    // this test (boot-write-failure.spec.ts records the same race).
-    const stagedBefore = stagedDirs.length
+  it('decodes packaged source as UTF-8 when the interpreter stdin uses ASCII', async () => {
+    const wrapper = join(await makeTempDir('dsh-python-ascii-'), 'python-ascii')
+    await writeFile(wrapper, `#!/bin/sh\nLC_ALL=C exec "${PYABS}" -X utf8=0 "$@"\n`, { mode: 0o755 })
+    const { runtime } = await setup({ pythonBin: wrapper })
+    const result = await runtime.run(runtime.resolve({ program: 'import sys\nreturn [sys.stdin.encoding, "你好"]', bindings: [] }))
+    expect(result.error).toBeUndefined()
+    expect(result.value).toEqual(['ascii', '你好'])
+  })
+
+  it('preserves the kernel CPU soft limit while Python is executing native C code', async () => {
+    const { runtime } = await setup({ cpuSeconds: 1, maxWallMs: 30_000 })
+    const result = await runtime.run(runtime.resolve({
+      program: 'import hashlib\nhashlib.pbkdf2_hmac("sha256", b"password", b"salt", 2147483647)\nreturn "escaped"',
+      bindings: [],
+    }))
+    expect(result.error?.kind).toBe('timeout')
+    expect(result.error?.message).toContain('CPU time exhausted')
+    expect(result.value).toBeUndefined()
+  })
+
+  it('disposes the first run before any program can outlive its provider', async () => {
     const { fiber, runtime } = await setup({ maxWallMs: 8_000 })
     const pending = runtime.run(runtime.resolve({ program: 'import time\nwhile True: time.sleep(0.1)', bindings: [] }))
     const disposed = fiber.dispose()
     const result = await pending
     await disposed
-    // Whatever the run reports, it must be terminal and must not be a success.
     expect(result.value).toBeUndefined()
-    expect(['abort', 'worker-exit', 'timeout']).toContain(result.error?.kind)
-    // Disposal is to quiescence, so every directory this run staged is gone.
-    const created = stagedDirs.slice(stagedBefore)
-    for (const dir of created) expect(existsSync(dir)).toBe(false)
-  }, 15_000)
+    expect(result.error?.kind).toBe('abort')
+  })
 
   it('settles as abort when the signal fires in the same turn as the first run', async () => {
-    // Same window, the other listener. `addEventListener('abort')` does not
-    // replay an event that already fired, so an abort landing before the
-    // listener was installed used to be missed entirely and the program ran to
-    // success or the wall ceiling instead of resolving as `abort`. Synchronous
-    // staging keeps the pre-flight check and the listener in one turn, leaving
-    // no gap for the signal to slip through.
     const { runtime } = await setup({ maxWallMs: 4_000, graceMs: 200 })
     const controller = new AbortController()
     const pending = runtime.run(runtime.resolve({
@@ -706,58 +644,37 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     const result = await pending
     expect(result.error?.kind).toBe('abort')
     expect(result.error?.message).toContain('same-turn-abort')
-  }, 15_000)
+  })
 
-  it('reports a staging failure as worker-exit instead of rejecting run()', async () => {
-    // Staging touches the filesystem, so it can fail for reasons that are not
-    // the caller's doing: a full or read-only temp filesystem, or a deployment
-    // that failed to ship the packaged scripts. Those are SUBSTRATE failures,
-    // the same class as a child that cannot start, and the seam reserves
-    // rejection for misuse — so `run()` must resolve, not throw.
-    //
-    // `TMPDIR` is the honest lever: `mkdtempSync` builds its path from
-    // `os.tmpdir()`, so pointing it at a path that is not a directory makes the
-    // real call fail without stubbing the module under test.
+  it('boots when the host temporary directory cannot hold files', async () => {
     const previous = process.env.TMPDIR
-    const notADirectory = join(await makeTempDir('dsh-staging-'), 'file')
+    const notADirectory = join(await makeTempDir('dsh-bootstrap-'), 'file')
     await writeFile(notADirectory, '')
     process.env.TMPDIR = notADirectory
     try {
       const { runtime } = await setup()
-      const result = await runtime.run(runtime.resolve({ program: 'return 1', bindings: [] }))
-      expect(result.error?.kind).toBe('worker-exit')
-      expect(result.error?.message).toContain('failed to stage the python bootstrap')
-      expect(result.logs).toEqual([])
+      const result = await runtime.run(runtime.resolve({ program: 'return 42', bindings: [] }))
+      expect(result.error).toBeUndefined()
+      expect(result.value).toBe(42)
     } finally {
       if (previous === undefined) delete process.env.TMPDIR
       else process.env.TMPDIR = previous
     }
   })
 
-  it('leaves no staging directory behind when a script copy fails', async () => {
-    // `mkdtempSync` succeeding and a later `copyFileSync` failing is its own
-    // case: the directory exists but is only partially populated. Recording it
-    // before the copies would leak it, because `run` retries staging on the next
-    // call and overwrites the single recorded path — teardown could then remove
-    // only the newest attempt. Staging must clean up its own partial directory.
-    //
-    // Only `copyFileSync` is stubbed, and only for the second script, so
-    // `mkdtempSync` really runs and the directory under assertion is real.
-    // The assertion checks the exact paths this test staged (see the sibling
-    // disposal-race test for why a global tmpdir diff races parallel workers).
-    const stagedBefore = stagedDirs.length
-    failNextCopyOf.value = 'protocol.py'
+  it.each(['protocol.py', 'bootstrap.py'])('reports missing packaged %s without launching a program', async (script) => {
+    failNextReadOf.value = script
     try {
       const { runtime } = await setup()
-      const result = await runtime.run(runtime.resolve({ program: 'return 1', bindings: [] }))
+      const result = await runtime.run(runtime.resolve({ program: 'return 42', bindings: [] }))
       expect(result.error?.kind).toBe('worker-exit')
-      expect(result.error?.message).toContain('failed to stage the python bootstrap')
-      // The partial directory is gone, so nothing accumulates across retries.
-      for (const dir of stagedDirs.slice(stagedBefore)) expect(existsSync(dir)).toBe(false)
+      expect(result.error?.message).toContain('failed to read the python bootstrap')
+      expect(result.logs).toEqual([])
+      expect(result.value).toBeUndefined()
     } finally {
-      failNextCopyOf.value = undefined
+      failNextReadOf.value = undefined
     }
-  }, 15_000)
+  })
 })
 
 describe('PythonPtcRuntime — process identity', () => {
@@ -1485,10 +1402,10 @@ describe('PythonPtcRuntime — programs and bindings', () => {
     // (~16 MiB admissible), so a 50 MB cap is far over; the default caps against
     // 512 MiB are not. Both budgets are gated symmetrically — the value case sets
     // a default-fitting maxLogBytes so the maxValueBytes check is what fires.
-    const ctxLog = new Context()
+    const ctxLog = await createRuntimeContext()
     await expect(ctxLog.plugin(PythonPtcRuntime, { maxLogBytes: 50_000_000, addressSpaceMb: 256 }))
       .rejects.toThrow(/maxLogBytes times the 12x worst-case Unicode expansion must fit/)
-    const ctxValue = new Context()
+    const ctxValue = await createRuntimeContext()
     await expect(ctxValue.plugin(PythonPtcRuntime, { maxValueBytes: 50_000_000, addressSpaceMb: 256 }))
       .rejects.toThrow(/maxValueBytes times the 12x worst-case Unicode expansion must fit/)
     // Discriminates 12 from 8: a 48 MiB maxLogBytes against a 512 MiB address
@@ -1498,21 +1415,21 @@ describe('PythonPtcRuntime — programs and bindings', () => {
     // string, the line slice, and the encode copy live at once. The settlement
     // flush is no longer the binding case: `flush_line` drops the pending chunks
     // before its push, so it holds two copies, not three.
-    const ctxTwelve = new Context()
+    const ctxTwelve = await createRuntimeContext()
     await expect(ctxTwelve.plugin(PythonPtcRuntime, { maxLogBytes: 48 * 1024 * 1024, addressSpaceMb: 512 }))
       .rejects.toThrow(/maxLogBytes times the 12x worst-case Unicode expansion must fit/)
     // An addressSpaceMb at or below the interpreter baseline leaves nothing
     // budgetable, so no budget value can pass. It is rejected on its own terms:
     // the budget loop would otherwise report "a limit of -1" (or -2796203 at
     // 32 MiB) while naming maxLogBytes, sending the operator to the wrong knob.
-    const ctxBaseline = new Context()
+    const ctxBaseline = await createRuntimeContext()
     await expect(ctxBaseline.plugin(PythonPtcRuntime, { addressSpaceMb: 64 }))
       .rejects.toThrow(/addressSpaceMb must exceed the 67108864-byte interpreter baseline/)
-    const ctxBelow = new Context()
+    const ctxBelow = await createRuntimeContext()
     await expect(ctxBelow.plugin(PythonPtcRuntime, { addressSpaceMb: 32 }))
       .rejects.toThrow(/addressSpaceMb must exceed the 67108864-byte interpreter baseline/)
     // The default caps against the default 512 MiB address space load.
-    const ok = new Context()
+    const ok = await createRuntimeContext()
     const fiber = await ok.plugin(PythonPtcRuntime, { maxLogBytes: 65536, maxValueBytes: 32768, addressSpaceMb: 512 })
     await fiber.dispose()
   })
@@ -2750,7 +2667,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
     // empty or NUL pythonBin) rather than silently falling to execvp's
     // platform default PATH and starting a system interpreter the caller never
     // asked for.
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     await expect(ctx.plugin(PythonPtcRuntime, { pythonBin: 'definitely-no-such-python-xyz' }))
       .rejects.toThrow(/does not resolve on PATH/)
   })

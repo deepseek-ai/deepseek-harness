@@ -6,6 +6,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
+import type { IPtyForkOptions, IWindowsPtyForkOptions } from 'node-pty'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import type { SubprocessSpawnSpec, SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { childEnv } from '../src/spawn.ts'
@@ -484,6 +485,66 @@ describe('LocalSubprocessRuntime', () => {
       unmockLazyRequireForIsolatedRuntime()
       vi.doUnmock('../src/process-inspector.ts')
       vi.doUnmock('../src/linux-scope.ts')
+      unmockWin32ForIsolatedRuntime()
+      vi.resetModules()
+    }
+  })
+
+  it('allocates Windows terminals through the console host node-pty ships', async () => {
+    const exitListeners: ((event: { exitCode: number; signal?: number }) => void)[] = []
+    const terminal = {
+      pid: 123,
+      onData: () => ({ dispose: () => {} }),
+      onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => {
+        exitListeners.push(listener)
+        return { dispose: () => {} }
+      },
+      write: () => {},
+      kill: () => {},
+    }
+    const nodePtySpawn = vi.fn((
+      _file: string, _args: string[], _options: IPtyForkOptions | IWindowsPtyForkOptions,
+    ) => terminal)
+    const inspector = {
+      foregroundPgid: () => undefined,
+      isStdinWaiting: () => false,
+      snapshot: () => ({ tree: () => [], session: () => [], alive: () => false }),
+      isAlive: () => false,
+      signalGroup: () => {},
+      signalProcess: () => {},
+    }
+    vi.resetModules()
+    mockWin32ForIsolatedRuntime()
+    mockNodePtyForIsolatedRuntime(nodePtySpawn)
+    vi.doMock('../src/process-inspector.ts', async importOriginal => ({
+      ...await importOriginal<typeof import('../src/process-inspector.ts')>(),
+      createProcessInspector: () => inspector,
+    }))
+    let fiber: { dispose(): Promise<void> } | undefined
+    try {
+      const { default: IsolatedLocalSubprocessRuntime } = await import('../src/index.ts')
+      const ctx = new Context()
+      fiber = await ctx.plugin(IsolatedLocalSubprocessRuntime)
+      const runtime = ctx.subprocess as InstanceType<typeof IsolatedLocalSubprocessRuntime>
+      runtime.terminalInspector = inspector
+      const spawn = async (platform: NodeJS.Platform): Promise<SubprocessTerminalHandle> => {
+        runtime.internals = { platform }
+        return runtime.spawnTerminal({
+          argv: ['shell'], cwd: process.cwd(), rows: 24, cols: 80, terminalType: 'dumb', graceMs: 1,
+        })
+      }
+
+      const windows = await spawn('win32')
+      expect(nodePtySpawn).toHaveBeenLastCalledWith('shell', [], expect.objectContaining({ useConptyDll: true }))
+      const posix = await spawn('darwin')
+      expect(nodePtySpawn.mock.calls.at(-1)?.[2]).not.toHaveProperty('useConptyDll')
+
+      for (const listener of exitListeners) listener({ exitCode: 0 })
+      await Promise.all([windows.done, posix.done])
+    } finally {
+      await fiber?.dispose()
+      unmockLazyRequireForIsolatedRuntime()
+      vi.doUnmock('../src/process-inspector.ts')
       unmockWin32ForIsolatedRuntime()
       vi.resetModules()
     }

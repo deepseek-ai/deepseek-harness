@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-tool-lsp",
-  "description": "Model-facing lsp tool over the DeepSeek Harness LSP capability seam (ctx.lsp) — one read-only tool with goToDefinition/findReferences/goToImplementation/hover operations, one-based UTF-16 cursor coordinates, bounded location rendering, and hover normalization",
+  "description": "Model-facing lsp tool over the DeepSeek Harness LSP capability seam (ctx.lsp) \u2014 one read-only tool with goToDefinition/findReferences/goToImplementation/hover operations, one-based UTF-16 cursor coordinates, bounded location rendering, and hover normalization",
   "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
@@ -32,7 +32,8 @@
     "@deepseek-ai/dsh-lsp": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-timeout": "workspace:*",
-    "@deepseek-ai/dsh-tools": "workspace:*"
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-working-directory": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/dsh-util-values": "workspace:*",
@@ -50,6 +51,8 @@
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-timeout": "workspace:*",
     "@deepseek-ai/dsh-tool-call-timeout-policy": "workspace:*",
-    "@deepseek-ai/dsh-tools": "workspace:*"
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-working-directory": "workspace:*",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*"
   }
 }

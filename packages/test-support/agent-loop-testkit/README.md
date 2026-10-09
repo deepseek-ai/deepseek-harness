@@ -25,6 +25,8 @@ Use `dsh-agent-loop-testkit` to give AgentLoop tests the standard prerequisites 
 <a id="use-this-package"></a>
 ## Use this package
 
+Consumer-only tests with structural Agent stubs can use `provideWorkingDirectoryFixture(ctx, defaultDirectory?)`. It supplies directory values without validating paths, changing directories, or recording events. Tests of directory behavior use `mountAgentLoopTestDependencies(ctx, { workingDirectory: true })` and real temporary directories.
+
 This package gives an AgentLoop test a working service topology and keeps the choice between production Inbox behavior and a structural stub explicit.
 
 ### Drive a production Agent

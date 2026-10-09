@@ -12,8 +12,8 @@
             <annotation encoding="application/x-tex">
               #text "\\href{javascript:alert(1)}{unsafe}"
       <span aria-hidden="true" class="katex-html">
-        <span class="base">
-          <span class="strut" style="height: 1em; vertical-align: -0.25em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 1em; vertical-align: -0.25em;">
           <span class="mord text" style="color: rgb(204, 0, 0);">
             <span class="mord" style="color: rgb(204, 0, 0);">
               #text "\\href"
@@ -43,8 +43,8 @@
                     <annotation encoding="application/x-tex">
                       #text "\\theta"
               <span aria-hidden="true" class="katex-html">
-                <span class="base">
-                  <span class="strut" style="height: 0.6944em;">
+                <span class="katex-base">
+                  <span class="katex-strut" style="height: 0.6944em;">
                   <span class="mord mathnormal" style="margin-right: 0.0278em;">
                     #text "θ"
           <td>
@@ -61,8 +61,8 @@
                     <annotation encoding="application/x-tex">
                       #text "\\frac{1}{5}"
               <span aria-hidden="true" class="katex-html">
-                <span class="base">
-                  <span class="strut" style="height: 1.1901em; vertical-align: -0.345em;">
+                <span class="katex-base">
+                  <span class="katex-strut" style="height: 1.1901em; vertical-align: -0.345em;">
                   <span class="mord">
                     <span class="mopen nulldelimiter">
                     <span class="mfrac">
@@ -71,7 +71,7 @@
                           <span class="vlist" style="height: 0.8451em;">
                             <span style="top: -2.655em;">
                               <span class="pstrut" style="height: 3em;">
-                              <span class="sizing reset-size6 size3 mtight">
+                              <span class="katex-sizing reset-size6 size3 mtight">
                                 <span class="mord mtight">
                                   <span class="mord mtight">
                                     #text "5"
@@ -80,7 +80,7 @@
                               <span class="frac-line" style="border-bottom-width: 0.04em;">
                             <span style="top: -3.394em;">
                               <span class="pstrut" style="height: 3em;">
-                              <span class="sizing reset-size6 size3 mtight">
+                              <span class="katex-sizing reset-size6 size3 mtight">
                                 <span class="mord mtight">
                                   <span class="mord mtight">
                                     #text "1"
@@ -102,8 +102,8 @@
             <annotation encoding="application/x-tex">
               #text "\\sqrt{2}\n"
       <span aria-hidden="true" class="katex-html">
-        <span class="base">
-          <span class="strut" style="height: 1.04em; vertical-align: -0.0839em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 1.04em; vertical-align: -0.0839em;">
           <span class="mord sqrt">
             <span class="vlist-t vlist-t2">
               <span class="vlist-r">

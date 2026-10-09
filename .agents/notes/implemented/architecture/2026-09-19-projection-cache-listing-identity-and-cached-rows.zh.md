@@ -97,7 +97,7 @@ seq 比较只在同一条 Host 连接内发生：`handleConnected` 先整表 `cl
 | `api-session/added` 摘要的 `projections` block（`manager.handleSessionAdded`） | 按 block 的 `kind`；该摘要来自活会话，实际为 `sequenced` |
 | history 首页 `projections`（`session.ts` 的 `projections.seed`） | sequenced |
 | control 基线，仅活会话（`manager.replaceControlBaseline`） | sequenced |
-| `refreshProjections` 的 `session.projections` 结果（正文观察） | sequenced |
+| `refreshProjections` 的 `session.projections` 结果 | 准确读取为 sequenced；仅[需要迁移](2026-09-29-explicit-session-history-preparation.zh.md)时为 cached |
 | 推送 frame（`manager` 处理 `projection` frame） | sequenced |
 | rename 成功后的 `title`（`session.ts`） | sequenced |
 

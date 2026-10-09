@@ -12,7 +12,7 @@
  * @module dsh-llm-pi-ai/catalog
  */
 
-import { builtinProviders, getBuiltinModels, getBuiltinProviders } from '@earendil-works/pi-ai/providers/all'
+import { builtinProviders, getAllBuiltinModels, getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import type { BuiltinProvider } from '@earendil-works/pi-ai/providers/all'
 import type {
   AnthropicMessagesCompat,
@@ -166,37 +166,53 @@ export const CHAT_TEMPLATE_VARS = Object.keys(CHAT_TEMPLATE_VAR_GATE) as readonl
 let providerIndex: Map<string, Provider> | undefined
 
 /**
- * Installed catalog providers by id, constructed once. Each entry owns the API
- * implementations for its own models, which is why a catalog route reuses this
- * provider instead of being rebuilt from parts.
- * @returns the catalog provider index.
+ * Whether this adapter serves one installed catalog provider. It dispatches
+ * chat requests only, so a provider whose catalog lists models but no chat
+ * model (image-generation or classifier models alone) is not a catalog route;
+ * a provider whose catalog lists no models at all stays one.
+ * @param provider - the installed provider.
+ * @returns whether the provider ships a chat model or lists no models.
+ */
+function servesChat(provider: Provider): boolean {
+  const id = provider.id as BuiltinProvider
+  return getBuiltinModels(id).length > 0 || getAllBuiltinModels(id).length === 0
+}
+
+/**
+ * Installed catalog providers this adapter serves, by id, constructed once.
+ * Each entry owns the API implementations for its own models, which is why a
+ * catalog route reuses this provider instead of being rebuilt from parts.
+ * @returns the catalog provider index, in catalog order.
  */
 function catalogProviders(): Map<string, Provider> {
-  providerIndex ??= new Map(builtinProviders().map(provider => [provider.id, provider]))
+  providerIndex ??= new Map(builtinProviders().filter(servesChat).map(provider => [provider.id, provider]))
   return providerIndex
 }
 
 /**
- * The installed catalog provider for one route, when pi-ai ships one.
+ * The installed catalog provider for one route, when pi-ai ships one this
+ * adapter serves.
  * @param provider - provider route key.
- * @returns the catalog provider, or `undefined` for a route pi-ai does not ship.
+ * @returns the catalog provider, or `undefined` for a route pi-ai does not ship
+ *   or ships without a chat model.
  */
 export function catalogProvider(provider: string): Provider | undefined {
   return catalogProviders().get(provider)
 }
 
 /**
- * Every provider route the installed pi-ai catalog ships.
- * @returns the catalog provider ids.
+ * Every provider route the installed pi-ai catalog ships and this adapter
+ * serves: a provider whose catalog lists models but no chat model is left out.
+ * @returns the catalog provider ids, in catalog order.
  */
 export function catalogProviderIds(): readonly string[] {
-  return getBuiltinProviders()
+  return [...catalogProviders().keys()]
 }
 
 /**
  * The installed catalog models for one route, indexed by model id.
  * @param provider - provider route key.
- * @returns catalog models by id; empty for a route pi-ai does not ship.
+ * @returns catalog models by id; empty for a route {@link catalogProvider} does not return.
  */
 export function catalogModels(provider: string): Map<string, Model<Api>> {
   if (!catalogProviders().has(provider)) return new Map()

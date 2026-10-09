@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+A new shell starts in the Session's current working directory. Once created, its directory and environment remain independent of later Session directory changes.
+
 Load this plugin in any composition where the agent should keep PowerShell state between commands — the persistent counterpart of `dsh-tool-pwsh` for work that needs cross-call state. It registers the `pwsh` tool and requires the `ctx.tools` and `ctx.terminals` services plus an owning agent session at execution time.
 
 ### When to choose it
@@ -74,6 +76,7 @@ This section explains the design decisions behind the tool and points at the cod
 
 - **A deliberate twin of `dsh-tool-bash-persistent`.** The session registry, polling loop, and reset contract mirror the persistent bash tool by design ([pwsh persistent PTY Agent Note](../../../.agents/notes/archived/architecture/2026-08-11-pwsh-persistent-pty.md)).
 - **Backend-owned prompt readiness.** The shell's `prompt` function belongs to the backend: it prints a BEL-terminated OSC marker plus the controlled printable prompt. The backend accepts recognized prompt text through its fast path and otherwise uses its own readiness checks or silence tier. The tool neither installs nor matches a prompt of its own.
+- **Readiness after scrolling and restart.** The [Loader composition test](tests/loader-composition.spec.ts) checks the complete send-settlement sequence, including a command on the same shell after large output and the first command after `exit`. Its failure timeline distinguishes the bundled OpenConsole used on Windows from the unused system conhost.
 - **PSReadLine echo stripped by anchoring.** PowerShell renders submitted input back into the stream; the marker-anchored extraction and a wrapper-source strip remove the echo, and a wrapper that wraps across the terminal width may leave a partial echo in partial-output results.
 - **Reset, never repair.** Any uncertain state — an explicit `exit`, a timeout, a send failure, an abort — closes the shell and starts the next call fresh.
 

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -15,7 +16,6 @@ import AgentRegistry, { agentEvents, type Agent, type PreStepDecision } from '@d
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import * as toolSkill from '@deepseek-ai/dsh-tool-skill'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -53,6 +53,7 @@ async function writeSkill(root: string, name: string, description: string, body:
 
 async function setup(home: string, config: toolSkill.Config = {}): Promise<Context> {
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx, home)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
@@ -188,6 +189,7 @@ async function mintAgentScope(ctx: Context, subject: string | Agent): Promise<{ 
 describe('dsh-tool-skill', () => {
   it('registers the skill tool schema and removes it on dispose', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
@@ -789,6 +791,7 @@ describe('dsh-tool-skill', () => {
   it('validates the catalog description cap', async () => {
     const home = await tempDir('tool-invalid-catalog-cap')
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx, home)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)

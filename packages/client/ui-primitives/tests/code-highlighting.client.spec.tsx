@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import { languageForPath as sharedLanguageForPath, readLangHintForPath } from '@deepseek-ai/dsh-util-code-language'
 import { CODE_HIGHLIGHT_EXTENSIONS, languageForPath, useCodeHighlighter } from '../src/code-highlighting.ts'
-import { grammarForHint, supportsHighlighting } from '../src/markdown/highlight.ts'
+import {
+  StreamingHighlightSession, grammarForHint, highlightLines, highlightToHtml, supportsHighlighting,
+} from '../src/markdown/highlight.ts'
 
 afterEach(cleanup)
 
@@ -101,5 +103,25 @@ describe('code highlighting', () => {
       await waitFor(() => { expect(hook.result.current).not.toBe(initial) })
     }
     expect(hook.result.current('sample')).not.toBeUndefined()
+  })
+
+  it('leaves a line of 1,000 or more units as one uncolored run while its neighbors still highlight', () => {
+    const literal = (length: number): string => `const t = "${'a'.repeat(length - 12)}"`
+    const plain = literal(1000)
+    const code = ['const before = 1', literal(999), plain, 'const after = 2'].join('\n')
+    const lines = highlightLines(code, 'javascript')
+    expect(lines?.map(line => line.length > 1)).toEqual([true, true, false, true])
+    expect(lines?.[2]).toEqual([{ text: plain, style: { color: '' } }])
+    expect(new StreamingHighlightSession().update(code, 'javascript')?.[2]).toEqual([{ text: plain, style: { color: '' } }])
+    expect(highlightToHtml(code, 'javascript')).toContain(`<span class="line"><span>${plain}</span></span>`)
+  })
+
+  it('colors lines after a skipped line identically when streamed and settled', () => {
+    const code = ['/*', `${'a'.repeat(1000)} */`, 'const after = 2'].join('\n')
+    const session = new StreamingHighlightSession()
+    session.update(code.slice(0, code.indexOf('const')), 'javascript')
+    const streamed = session.update(code, 'javascript')
+    expect(streamed?.map(line => line.map(span => span.style.color)))
+      .toEqual(highlightLines(code, 'javascript')?.map(line => line.map(span => span.style.color)))
   })
 })

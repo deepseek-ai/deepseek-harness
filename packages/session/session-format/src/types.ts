@@ -90,7 +90,7 @@ export interface SessionFormatChain {
 /** Physical-row failure policy selected once for one restore. */
 export type SessionFormatRecovery = 'strict' | 'recoverable'
 
-/** Pure physical JSON codec frozen with one released Session format. */
+/** Pure physical JSON codec for one Session version's supported representations; established meanings remain stable. */
 export interface SessionFormatCodec {
   readonly version: number
   /** Decode one physical header into body-independent logical metadata. */

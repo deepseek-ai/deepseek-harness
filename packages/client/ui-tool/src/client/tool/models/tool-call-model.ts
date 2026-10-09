@@ -1,13 +1,14 @@
 /**
  * Pure row-model derivation for tool summary rows: variant classification,
  * one-line summary, expansion-time body input, and flattened result output
- * from the frozen call slice. Input material comes from the call ARGUMENTS;
- * output and error material from the settled result node. A supported terminal
+ * from the frozen call slice. Labels keep the call arguments; navigation,
+ * output, and errors use the settled result. A supported terminal
  * call gets its expanded body from `terminalCardModel` instead.
  */
 import type { ToolArgs, ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { LocaleKeysOf } from '@deepseek-ai/dsh-client-ui-slots'
-import { abbreviateHomePath, relativizeToCwd } from '@deepseek-ai/dsh-util-workspace-path'
+import { abbreviateHomePath, isAbsoluteWorkspacePath, relativizeToCwd } from '@deepseek-ai/dsh-util-workspace-path'
+import { recordedAbsolutePath } from './recorded-path.ts'
 
 export type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
 
@@ -145,10 +146,9 @@ export interface ToolRowModel {
   /** Generic rows retain the wire tool name; available arguments append their summary. */
   summary: string
   /**
-   * Filesystem path from args (`path` / `file_path`) when the row is a file
-   * tool; absent for URL reads and non-file tools. A `file_path` argument
-   * supplies it at every stage once its string is complete. The chat view
-   * resolves relative values against the session cwd before opening.
+   * Operation-time absolute result path for file rows. Old results without
+   * location metadata retain their argument fallback; running relative paths
+   * stay unavailable until their result identifies the target.
    */
   filePath: string | undefined
   /** Original argument JSON retained for expansion-time body formatting. */
@@ -304,10 +304,16 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   const titleKey = toolTitleKey(toolName)
   const done = 'kind' in block
   const argsRaw = done ? block.call?.argsRaw ?? '' : block.phase === 'start' ? block.argsRaw : null
+  const primary = argumentSummary(variant, block.args, cwd, home)
+  const argumentPath = primary.filePath ?? (argsRaw === null ? undefined : deriveFilePath(variant, argsRaw))
+  const recordedPath = done ? recordedAbsolutePath(block.meta, 'path') : undefined
+  const canUseArgumentPath = argumentPath !== undefined
+    && (isAbsoluteWorkspacePath(argumentPath) || done && !block.isError && block.parentCallId === undefined)
+  const filePath = argumentPath === undefined ? undefined
+    : recordedPath ?? (canUseArgumentPath ? argumentPath : undefined)
   const state: ToolRowState = !done ? block.phase === 'preparing' ? 'preparing' : 'running'
     : block.error?.code === 'interrupted' ? 'stopped'
       : block.isError ? 'error' : 'ok'
-  const primary = argumentSummary(variant, block.args, cwd, home)
   // The argument view serves every stage; the raw text is the fallback when it carries nothing useful.
   const base = primary.summary !== '' || argsRaw === null ? primary.summary
     : argsRaw === '' ? block.callId
@@ -323,7 +329,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
     variant,
     titleKey,
     summary,
-    filePath: primary.filePath ?? (argsRaw === null ? undefined : deriveFilePath(variant, argsRaw)),
+    filePath,
     bodyRaw,
     output,
     errorSummary,

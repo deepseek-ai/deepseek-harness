@@ -82,31 +82,3 @@ export function sameCapture(a: Capture, b: Capture): boolean {
   if (a.kind === 'absent' || b.kind === 'absent') return a.kind === b.kind
   return a.kind === 'file' && b.kind === 'file' && a.file === b.file
 }
-
-/** A non-blank string, or undefined. */
-function text(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() !== '' ? value : undefined
-}
-
-/**
- * The path a first-party file-tool call is about to mutate: `write`, `edit`,
- * and the mutating `str_replace_editor` commands. Other tools, reads, and
- * incomplete arguments yield undefined.
- * @param name - wire tool name.
- * @param args - parsed call arguments.
- * @returns the model-facing path, or undefined.
- */
-export function mutationPath(name: string, args: unknown): string | undefined {
-  if (typeof args !== 'object' || args === null || Array.isArray(args)) return undefined
-  const record = args as Record<string, unknown>
-  switch (name) {
-    case 'write':
-      return typeof record.content === 'string' ? text(record.file_path) : undefined
-    case 'edit':
-      return typeof record.old_string === 'string' && typeof record.new_string === 'string' ? text(record.file_path) : undefined
-    case 'str_replace_editor':
-      return record.command === 'create' || record.command === 'str_replace' || record.command === 'insert' ? text(record.path) : undefined
-    default:
-      return undefined
-  }
-}

@@ -1,8 +1,8 @@
 version: 1
 scenario: both-mode-turn
 profile: headless
-composition: both
+composition: ptc-shell
 recording: live
 header:
-  class: both
+  class: ptc-shell
   pin: true

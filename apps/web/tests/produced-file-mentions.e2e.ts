@@ -1,4 +1,6 @@
 /** Web e2e coverage for unique, ambiguous, and unknown inline file references. */
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
@@ -20,7 +22,7 @@ function text(value: string): { type: 'text'; text: string }[] {
 }
 
 /** The files the built turn writes; `notes.md` is named in prose but never written. */
-const WRITES = ['site/report.html', 'a/style.css', 'b/style.css']
+const WRITES = ['site/report.html', 'a/style.css', 'b/style.css', 'report.txt']
 
 /** Build a settled write turn whose closing prose mentions files in inline code. */
 function mentionFixture(): string {
@@ -57,6 +59,7 @@ function mentionFixture(): string {
     }),
   }, { surfaceOp: 'append' })
   for (const call of calls) {
+    if (call.path === 'report.txt') session.append('working-directory/change', { cwd: '{{cwd}}/child' })
     const source = session.append('tool/call', {
       turn: 1,
       step: 1,
@@ -67,6 +70,7 @@ function mentionFixture(): string {
     session.append('tool/result', {
       turn: 1,
       step: 1,
+      ...call.path === 'report.txt' ? { meta: { path: '{{cwd}}/child/report.txt', diffs: [] } } : {},
       message: createToolResultMessage({
         callId: call.callId,
         content: text(`Created ${call.path}`),
@@ -74,6 +78,8 @@ function mentionFixture(): string {
       }),
     }, { surfaceOp: 'append', sourceEventSeqs: [source.seq] })
   }
+  session.append('working-directory/change', { cwd: '{{cwd}}' })
+  session.append('deliverables/presented', { turn: 1, callId: ToolCallId('present-child'), files: [{ path: '{{cwd}}/child/report.txt' }] })
   session.append('step/end', { turn: 1, step: 1 })
   session.append('step/start', { turn: 1, step: 2 })
   session.append('assistant/message', {
@@ -84,7 +90,7 @@ function mentionFixture(): string {
       content: [{
         type: 'text',
         text: [
-          'Wrote `report.html` plus two `style.css` copies; `notes.md` untouched.',
+          'Wrote `report.html` plus two `style.css` copies; `notes.md` untouched. Created `report.txt` in child, then returned to the original directory.',
           '',
           DONE,
         ].join('\n'),
@@ -121,6 +127,9 @@ describe('web e2e: inline-code mentions of produced files', () => {
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({})
+    await mkdir(join(scaffold.workspaceCwd, 'child'))
+    await writeFile(join(scaffold.workspaceCwd, 'report.txt'), 'ROOT FILE')
+    await writeFile(join(scaffold.workspaceCwd, 'child/report.txt'), 'CHILD FILE')
     await seedSession(scaffold, mentionFixture(), SEED_ID)
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
@@ -144,15 +153,21 @@ describe('web e2e: inline-code mentions of produced files', () => {
     await sessionRow.click()
     await expect.poll(() => page.getByText(DONE, { exact: true }).count(), { timeout: 15_000 }).toBe(1)
 
-    // Exactly one prose mention links: `report.html` resolves to the written
-    // path; the shared `style.css` basename and unwritten `notes.md` stay code.
+    // Canonical child metadata and the delivery name one target; neither
+    // same-basename CSS files nor the unproduced note become guessed links.
     const mentions = page.locator('[class*="markdown"] code button')
-    await expect.poll(() => mentions.count(), { timeout: 10_000 }).toBe(1)
+    await expect.poll(() => mentions.count(), { timeout: 10_000 }).toBe(2)
     expect(await mentions.first().innerText()).toBe('report.html')
     expect(await mentions.first().getAttribute('aria-label')).toBe('Open site/report.html in sidebar')
     expect(await mentions.first().getAttribute('title')).toBe('site/report.html')
-    // Mentions resolve from the mutation calls alone; without a recorded summary no card follows.
+    // Without a recorded git summary, no changed-files card follows.
     expect(await page.locator('[data-changed-files]').count()).toBe(0)
+    const moved = mentions.filter({ hasText: /^report\.txt$/ })
+    expect(await moved.getAttribute('title')).toBe(`${scaffold.workspaceCwd}/child/report.txt`)
+    await moved.click()
+    const preview = page.locator('[data-rightbar-col] [data-document-preview]')
+    await preview.getByText('CHILD FILE', { exact: true }).waitFor({ timeout: 10_000 })
+    expect(await preview.getByText('ROOT FILE', { exact: true }).count()).toBe(0)
 
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])

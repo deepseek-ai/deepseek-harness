@@ -6,6 +6,7 @@ import { useCopyFeedback } from './use-copy-feedback.ts'
 import { Pill } from './Pill.tsx'
 import { StateDot, type StateDotState } from './StateDot.tsx'
 import css from './TerminalBlock.module.css'
+import { CommandText } from './CommandText.tsx'
 
 /** Output lines shown before the height cap collapses the middle. */
 export const DEFAULT_TERMINAL_MAX_LINES = 16
@@ -15,6 +16,8 @@ export const DEFAULT_TERMINAL_MAX_LINES = 16
  * (this package is cordis-free, so copy arrives via props).
  */
 export interface TerminalBlockLabels {
+  /** Accessible name for an overflowing authored command line, numbered from one. */
+  commandLine: (line: number) => string
   /** Status pill text for a signal-terminated command. */
   signal: (signal: string) => string
   /** Status pill text for a non-zero exit code. */
@@ -44,7 +47,7 @@ export interface TerminalBlockLabels {
 }
 
 export interface TerminalBlockProps {
-  /** The command line, rendered verbatim after the prompt label. */
+  /** The command, rendered verbatim after the prompt label; long lines scroll horizontally unless the host enables wrapping. */
   command: string
   /** Working directory for the prompt label; absent renders a plain `$`. */
   cwd?: string | undefined
@@ -244,7 +247,7 @@ export function TerminalBlock({
               <span className={css.cwd}>
                 {index > 0 || cwd === undefined ? '$' : promptLabel(cwd, home)}
               </span>
-              <span className={css.command}>{line}</span>
+              <CommandText className={css.command} text={line} label={copy.commandLine(index + 1)} />
             </div>
           ))}
         </div>

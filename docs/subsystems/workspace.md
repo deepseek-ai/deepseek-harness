@@ -232,10 +232,10 @@ Typed Remote control of transient Session-owned terminal processes.
 
 ```ts cordis-catalog
 /**
- * Read the Session working directory and terminal limits without resolving a shell.
+ * Read the Session's current directory and terminal limits without filesystem validation or shell lookup.
  * @param agent - Session owner supplied by the Gateway.
  * @param signal - request cancellation.
- * @returns the Session workspace directory and terminal limits.
+ * @returns the logged current directory and terminal limits; retained terminals keep their own process directories.
  */
 @Remote environment(agent: Agent, signal: AbortSignal): TerminalEnvironment
 

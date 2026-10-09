@@ -8,6 +8,7 @@
  * @module @deepseek-ai/dsh-experimental-auto-review
  */
 
+import type {} from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-instructions'
@@ -123,7 +124,7 @@ interface ScopedPtcStart {
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'experimental-auto-review'
 /** Complete host services required before Auto may be advertised. */
-export const inject = ['approval', 'llm', 'permissionPresets', 'sessions', 'tools']
+export const inject = ['approval', 'llm', 'permissionPresets', 'sessions', 'tools', 'workingDirectory']
 
 /** Return JSON text for one immutable logged value. */
 function json(value: unknown): string {
@@ -358,7 +359,7 @@ function ptcAction(
  * @param exec - immutable pending execution.
  * @returns the exact route and four data sections paired with {@link REVIEW_POLICY}.
  */
-function snapshotAutoReview(agent: Agent, exec: ToolExecution): ReviewSnapshot {
+function snapshotAutoReview(agent: Agent, exec: ToolExecution, cwd: string): ReviewSnapshot {
   const { session } = agent
   // The reviewer's risk inputs are the whole action history: earlier native calls
   // and PTC starts carry the authorizations and duplicate identities this call is
@@ -370,10 +371,6 @@ function snapshotAutoReview(agent: Agent, exec: ToolExecution): ReviewSnapshot {
   const header = session.requestHeader()
   if (header === undefined || header.config.provider.length === 0 || header.config.model.length === 0) {
     throw new Error('auto-review: no complete request-header route is available')
-  }
-  const cwd = session.header.cwd
-  if (cwd === undefined || cwd.length === 0) {
-    throw new Error('auto-review: the session has no working directory')
   }
 
   const nativeCalls = events.filter((event): event is NativeCallEvent => event.type === 'tool/call')
@@ -621,7 +618,8 @@ async function classifyRisk(
   exec: ToolExecution,
   signal: AbortSignal,
 ): Promise<AutoReviewDecision> {
-  const snapshot = snapshotAutoReview(agent, exec)
+  const cwd = await ctx.workingDirectory.ensure(agent, signal)
+  const snapshot = snapshotAutoReview(agent, exec, cwd)
   // This review prompt is sent only through ctx.llm.stream and never enters a Session log.
   const options: GenerateOptions = deepFreeze({
     provider: snapshot.provider,

@@ -4,6 +4,7 @@ import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { discoverShells, resolveShell } from './shells.ts'
 import { BrowserTerminal } from './terminal.ts'
@@ -73,7 +74,7 @@ interface OwnedSession {
 
 /** Typed Remote control of transient Session-owned terminal processes. */
 export class TerminalController extends TypertRemoteService {
-  static inject = ['subprocess', 'sandboxPolicy', 'typert']
+  static inject = ['subprocess', 'sandboxPolicy', 'workingDirectory', 'typert']
   static Config: z<Config> = z.object({
     shell: z.union([z.object({
       path: z.string().required(), name: z.string().required(), args: z.array(z.string()).default([]),
@@ -109,16 +110,16 @@ export class TerminalController extends TypertRemoteService {
   }
 
   /**
-   * Read the Session working directory and terminal limits without resolving a shell.
+   * Read the Session's current directory and terminal limits without filesystem validation or shell lookup.
    * @param agent - Session owner supplied by the Gateway.
    * @param signal - request cancellation.
-   * @returns the Session workspace directory and terminal limits.
+   * @returns the logged current directory and terminal limits; retained terminals keep their own process directories.
    */
   @Remote
   environment(agent: Agent, signal: AbortSignal): TerminalEnvironment {
     signal.throwIfAborted()
-    const { sandboxPolicy } = this.execution(agent)
-    return { cwd: agent.session.header.cwd ?? sandboxPolicy.workspaceRoot,
+    const { workingDirectory } = this.execution(agent)
+    return { cwd: workingDirectory.get(agent.session),
       maxInputBytes: this.config.maxInputBytes, maxCols: this.config.maxCols,
       maxRows: this.config.maxRows, scrollback: this.config.scrollback }
   }
@@ -328,29 +329,31 @@ export class TerminalController extends TypertRemoteService {
       || !Number.isSafeInteger(rows) || rows < 1 || rows > this.config.maxRows) throw new Error('Terminal dimensions exceed the configured limits')
   }
 
-  private execution(agent: Agent): { subprocess: Context['subprocess']; sandboxPolicy: Context['sandboxPolicy'] } {
+  private execution(agent: Agent): { subprocess: Context['subprocess']; sandboxPolicy: Context['sandboxPolicy']; workingDirectory: Context['workingDirectory'] } {
     // The Agent context selects execution providers but does not inject consumer services.
     const subprocess = agent.ctx.get('subprocess')
     const sandboxPolicy = agent.ctx.get('sandboxPolicy')
     if (subprocess === undefined || sandboxPolicy === undefined) throw new Error('The Session execution environment requires subprocess and sandbox policy providers')
-    return { subprocess, sandboxPolicy }
+    const workingDirectory = agent.ctx.get('workingDirectory')
+    if (workingDirectory === undefined) throw new Error('The Session execution environment requires a working-directory provider')
+    return { subprocess, sandboxPolicy, workingDirectory }
   }
 
   private async spawn(agent: Agent, owner: OwnedSession, request: TerminalCreateRequest, signal: AbortSignal): Promise<BrowserTerminal> {
-    const environment = this.environment(agent, signal)
-    const { subprocess } = this.execution(agent)
+    const { subprocess, workingDirectory } = this.execution(agent)
+    const cwd = await workingDirectory.ensure(agent, signal)
     const shell = request.shellPath === undefined
       ? await resolveShell(subprocess, this.config.shell, signal)
       : (await this.shells(agent, signal)).find(candidate => candidate.path === request.shellPath)
     if (shell === undefined) throw new Error('Selected shell is not available in this execution environment')
     const handle = await subprocess.spawnTerminal({
-      argv: [shell.path, ...shell.args], cwd: environment.cwd, cols: request.cols, rows: request.rows,
+      argv: [shell.path, ...shell.args], cwd, cols: request.cols, rows: request.rows,
       terminalType: 'xterm-256color', env: { DSH_SESSION_ID: agent.id },
       shellActivity: true,
       graceMs: this.config.disposeGraceMs, signal,
     })
     const info: WebTerminalInfo = {
-      id: request.id, shell, title: shell.name, cwd: environment.cwd,
+      id: request.id, shell, title: shell.name, cwd,
       cols: request.cols, rows: request.rows, state: 'running', exitCode: null,
     }
     try {

@@ -1,11 +1,13 @@
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context } from '@deepseek-ai/cordis'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcBindingFunction, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
-import type { SubagentResult } from '@deepseek-ai/dsh-subagent'
+import type { SubagentActivation, SubagentResult } from '@deepseek-ai/dsh-subagent'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import PtcWorkflowEngine from '../src/index.ts'
 import { fakeParent } from './setup.ts'
@@ -29,8 +31,10 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
   await ctx.plugin(SessionStore)
+  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjections)
   await ctx.plugin(SandboxPolicy, { mode: 'read-only' })
+  provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   ctx.subagents.registerProvider({
     name: 'stub',
@@ -38,7 +42,6 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
     inheritsParentContext: false,
     start: async () => ({
       id: SessionId('host-child'),
-      localAgent: undefined,
       result: Promise.resolve({ output: [], stopReason: 'completed' }),
       dispose: () => Promise.resolve(),
     }),
@@ -48,7 +51,7 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
   runtime.language = language
   if (execute !== undefined) runtime.execute = spec => execute(spec.bindings[0]!.functions, spec)
   await ctx.plugin(PtcWorkflowEngine, { provider: 'stub' })
-  const parent = fakeParent(ctx)
+  const parent = await fakeParent(ctx)
   const start = () => ctx.workflowEngine.start({
     script: 'return null', meta: { name: 'host-test', description: 'workflow callbacks' }, parent,
   })
@@ -56,6 +59,38 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
 }
 
 describe('workflow host callback validation', () => {
+  it('retains its selected directory for the process and later children when the parent moves', async () => {
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    let launched: PtcRunSpec | undefined
+    const { ctx, start, parent } = await setup(async (bindings, spec) => {
+      launched = spec
+      entered.resolve(undefined)
+      await release.promise
+      await bindings.startChild!({ prompt: 'child' })
+      return completed
+    })
+    const initial = `${process.cwd()}/selected`
+    const ensureDirectory = vi.spyOn(ctx.workingDirectory, 'ensure').mockResolvedValue(initial)
+    const childStart = vi.spyOn(ctx.subagents, 'startActivation')
+    const run = start()
+    try {
+      await entered.promise
+      ensureDirectory.mockResolvedValue(`${process.cwd()}/later`)
+      release.resolve(undefined)
+      expect((await run.result).stopReason).toBe('completed')
+      expect(launched?.cwd).toBe(initial)
+      expect(launched?.sandboxPolicy?.workspaceRoot).toBe(parent.session.header.cwd)
+      expect(childStart).toHaveBeenCalledOnce()
+      const selected = childStart.mock.calls[0]![0]
+      expect(selected.provider).toBe('stub')
+      expect(selected.request.cwd).toBe(initial)
+      expect(ensureDirectory).toHaveBeenCalledOnce()
+    } finally {
+      release.resolve(undefined)
+      await run.dispose()
+    }
+  })
   it.each([
     ['startChild', null, 'requires an object'],
     ['startChild', [], 'requires an object'],
@@ -111,6 +146,48 @@ describe('workflow host callback validation', () => {
 })
 
 describe('workflow runtime outcomes', () => {
+  it('collects child results without parent delivery and waits for child cleanup before settling', async () => {
+    const disposing = Promise.withResolvers<undefined>()
+    const released = Promise.withResolvers<undefined>()
+    const schema = { type: 'object' as const, properties: { answer: { type: 'number' as const } } }
+    const { ctx, parent, start } = await setup(async (bindings) => {
+      const child = await bindings.startChild!({ prompt: 'answer', schema, model: 'selected' })
+      expect(child).toEqual({ callId: 1, childId: 'ready-child' })
+      expect(await bindings.childResult!(child)).toEqual({ output: [], structured: { answer: 42 }, stopReason: 'completed' })
+      await bindings.disposeChild!(child)
+      return completed
+    })
+    const activation = vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
+      childId: SessionId('ready-child'),
+      result: Promise.resolve({ output: [], structured: { answer: 42 }, stopReason: 'completed' }),
+      dispose: () => { disposing.resolve(undefined); return released.promise },
+    })
+    const run = start()
+    let settled = false
+    void run.result.then(() => { settled = true })
+    try {
+      await disposing.promise
+      expect(settled).toBe(false)
+      expect(activation).toHaveBeenCalledOnce()
+      const { signal, ...delegation } = activation.mock.calls[0]![0]
+      expect(signal).toBeInstanceOf(AbortSignal)
+      const { parent: delegatedParent, ...request } = delegation.request
+      expect(delegatedParent).toBe(parent)
+      expect({ ...delegation, request }).toEqual({
+        provider: 'stub', label: 'host-test child 1', delivery: 'caller',
+        request: {
+          cwd: ctx.workingDirectory.get(parent.session),
+          prompt: [{ type: 'text', text: 'answer' }], outputSchema: schema, agentOptions: { model: 'selected' },
+        },
+      })
+      released.resolve(undefined)
+      await expect(run.result).resolves.toMatchObject({ stopReason: 'completed' })
+    } finally {
+      released.resolve(undefined)
+      await run.dispose()
+    }
+  })
+
   it.each([
     [null, 'requires an object'],
     [{ value: null, stopReason: 'unknown', agentsStarted: 0 }, 'invalid workflow stop reason'],
@@ -149,6 +226,36 @@ describe('workflow runtime outcomes', () => {
     await expect(setup(undefined, 'python')).rejects.toThrow('requires the Node TypeScript PTC runtime')
   })
 
+  it('disposes a child published after workflow cancellation', async () => {
+    const entered = Promise.withResolvers<undefined>()
+    const publication = Promise.withResolvers<SubagentActivation>()
+    const disposed = vi.fn(() => Promise.resolve())
+    const { ctx, start } = await setup(async (bindings) => {
+      await expect(bindings.startChild!({ prompt: 'child' })).rejects.toThrow('workflow child started after cancellation')
+      return completed
+    })
+    vi.spyOn(ctx.subagents, 'startActivation').mockImplementation(() => {
+      entered.resolve(undefined)
+      return publication.promise
+    })
+    const child: SubagentActivation = {
+      childId: SessionId('late-child'),
+      result: Promise.resolve({ output: [], stopReason: 'aborted' }),
+      dispose: disposed,
+    }
+    const handle = start()
+    try {
+      await entered.promise
+      handle.cancel('stop during child startup')
+      publication.resolve(child)
+      expect((await handle.result).stopReason).toBe('cancelled')
+      expect(disposed).toHaveBeenCalledOnce()
+    } finally {
+      publication.resolve(child)
+      await handle.dispose()
+    }
+  })
+
   it('stops waiting for child output after disposal releases the child resources', async () => {
     const childResult = Promise.withResolvers<SubagentResult>()
     const disposed = vi.fn(() => Promise.resolve())
@@ -159,8 +266,8 @@ describe('workflow runtime outcomes', () => {
       void outputWait.catch(() => {})
       return completed
     })
-    vi.spyOn(ctx.subagents.getProvider('stub')!, 'start').mockResolvedValue({
-      id: SessionId('output-pending'), localAgent: undefined, result: childResult.promise, dispose: disposed,
+    vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
+      childId: SessionId('output-pending'), result: childResult.promise, dispose: disposed,
     })
     const handle = start()
     let settled = false

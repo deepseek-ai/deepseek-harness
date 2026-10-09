@@ -90,9 +90,9 @@ class LogMessage(_LogMessageRequired, total=False):
 
 class DoneErrorField(TypedDict):
     """Child → host: the failure carried on a ``done`` frame. ``kind`` is one of
-    the three the host validates; ``message`` is the traceback or diagnostic."""
+    the host-validated failure classes; ``message`` is the traceback or diagnostic."""
 
-    kind: Literal["exception", "invalid-output", "output-limit"]
+    kind: Literal["exception", "invalid-output", "output-limit", "timeout"]
     message: str
 
 

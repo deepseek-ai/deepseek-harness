@@ -12,7 +12,7 @@ import { sessionResolveOptions } from './session-cwd.ts'
 /**
  * Resolve a model-supplied path, observe absence, and require a regular file.
  * @param ctx - the plugin context providing filesystem resolution and observation events.
- * @param exec - the current tool execution, including session cwd and cancellation.
+ * @param exec - the current tool execution, including the owning Agent and cancellation.
  * @param requestedPath - the raw path supplied to the tool.
  * @returns the resolved target and its single stat result.
  */
@@ -21,7 +21,7 @@ export async function resolveRegularReadTarget(
   exec: ToolExecution,
   requestedPath: string,
 ): Promise<{ target: FsTarget; info: FsInfo }> {
-  const target = await ctx.fs.resolve(requestedPath, sessionResolveOptions(exec))
+  const target = await ctx.fs.resolve(requestedPath, await sessionResolveOptions(ctx, exec))
   const info = await ctx.fs.stat(target, exec.signal)
   if (info === undefined) {
     ctx.emit('fs/observed', target, { kind: 'absent' }, exec)

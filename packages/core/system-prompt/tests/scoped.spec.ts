@@ -205,6 +205,27 @@ describe('scoped tool providers and toolOrder × restriction', () => {
 })
 
 describe('scoped assemble dispatch', () => {
+  it('refreshes through the same scoped providers and suppression as assembly', async () => {
+    const ctx = await mount()
+    try {
+      const scope = await mintScope(ctx, 'refresh')
+      let current = 'before'
+      ctx.systemPrompt.context({ name: 'fact', order: 0, text: 'global' })
+      scope.ctx.systemPrompt.context({ name: 'fact', order: 0, required: true, text: () => current })
+      scope.ctx.systemPrompt.context({ name: 'optional', order: 10, text: 'optional' })
+      const context = { scope: scopeKeyOf(scope) }
+      const accepted = await ctx.systemPrompt.assemble(context)
+      current = 'after'
+      const restore = scope.ctx.systemPrompt.suppressRuntimeContext()
+      expect(ctx.systemPrompt.refreshContext(accepted, context).contexts).toEqual([{ name: 'fact', text: 'after' }])
+      restore()
+      expect(ctx.systemPrompt.refreshContext(await ctx.systemPrompt.assemble()).contexts).toEqual([{ name: 'fact', text: 'global' }])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+
   it('an agent.ctx assemble listener shapes only its own scope\'s assemblies', async () => {
     const ctx = await mount()
     const scope = await mintScope(ctx, 'child')

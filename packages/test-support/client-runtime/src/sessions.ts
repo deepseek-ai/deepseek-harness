@@ -631,7 +631,7 @@ export class TestSessions implements ISessions {
     if (retained !== undefined) return retained
     for (const [parentSessionId, projections] of Object.entries(this.list.getSnapshot().projectionsBySession)) {
       const child = projections.values.subagentCatalog?.find(entry => entry.id === id)
-      if (child !== undefined) {
+      if (child !== undefined && child.mode !== 'external') {
         return { parentSessionId: parentSessionId as SessionId, childSessionId: id, mode: child.mode }
       }
     }

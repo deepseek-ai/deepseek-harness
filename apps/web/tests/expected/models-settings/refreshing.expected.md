@@ -1,0 +1,22 @@
+- dialog "设置":
+  - navigation:
+    - text: 设置
+    - button "通用设置"
+    - button "模型"
+    - button "内置插件"
+    - button "Agent 预设"
+  - button "打开配置文件"
+  - button "关闭"
+  - heading "模型" [level=2]
+  - paragraph: 填入各提供商的 API 密钥即可使用其模型。
+  - list:
+    - listitem:
+      - text: minimax-cn
+      - img "API 密钥已配置"
+      - button "编辑 minimax-cn" [disabled]: 编辑
+      - button "删除 minimax-cn" [disabled]: 删除
+    - listitem:
+      - text: Acme 网关 自定义
+      - button "编辑 Acme 网关 (acme-gateway)" [disabled]: 编辑
+      - button "删除 Acme 网关 (acme-gateway)" [disabled]: 删除
+  - button "添加模型提供商" [disabled]

@@ -26,6 +26,7 @@ vi.mock('../src/client/readiness.ts', () => ({ observeReadiness: () => ({
 function assertVoiceActions(value: Record<string, unknown>): asserts value is Record<string, unknown> & VoiceInputInjected {
   assert(typeof value.openSettings === 'function')
   assert(typeof value.createRecording === 'function')
+  assert(typeof value.selectMicrophone === 'function')
   assert(typeof value.configure === 'function')
   assert(typeof value.prepare === 'function')
   assert(typeof value.cancelPreparation === 'function')
@@ -128,9 +129,12 @@ it('joins the same audio closure when cancellation overlaps Client plugin withdr
     const entry = b.ctx.slots.entries('conversation.input.activity').find(item => item.component === VoiceInput)!
     const actions = entry.inject!()
     assertVoiceActions(actions)
+    actions.selectMicrophone({ id: 'usb', label: 'USB microphone' })
+    expect(actions.hooks.microphoneDevice.getSnapshot()).toEqual({ id: 'usb', label: 'USB microphone' })
     const recording = actions.createRecording()
     assert(recording instanceof Recording)
     await recording.start()
+    expect(audio.getUserMedia.mock.calls.at(-1)?.[0].audio).toMatchObject({ deviceId: { exact: 'usb' } })
     cancelled = recording.dispose()
     const originalDispose = recording.dispose.bind(recording), joined = Promise.withResolvers<{ pending: Promise<void> }>()
     vi.spyOn(recording, 'dispose').mockImplementationOnce(() => {

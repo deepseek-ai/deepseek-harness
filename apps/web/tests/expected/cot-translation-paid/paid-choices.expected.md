@@ -1,0 +1,42 @@
+- button "返回 实验性插件": 实验性插件
+- button "卸载 思考过程机器翻译" [disabled]: 卸载
+- switch "启用 思考过程机器翻译" [checked]
+- heading "思考过程机器翻译" [level=3]
+- text: v0.2.1-alpha.1 实验性
+- paragraph:
+  - code: "@deepseek-ai/dsh-experimental-cot-translation-bundle"
+- paragraph: 机器翻译展开的思考内容；原文会发送给所选服务
+- paragraph: 展开的思考内容会发送给所选翻译服务，可能包含私有代码或对话细节。
+- paragraph: 每个未缓存片段都会通过所选账号或官方 API 凭据单独发送一次付费的 DeepSeek Flash 请求；重新展开会复用已保存的译文，更改服务、语言、原文或请求设置可能发送新的付费请求
+- text: 翻译服务 已覆盖
+- button "恢复默认"
+- combobox "翻译服务":
+  - option "Bing"
+  - option "Google"
+  - option "DeepSeek Flash · 账号（付费）" [selected]
+- text: 目标语言 已覆盖
+- button "恢复默认"
+- textbox "目标语言":
+  - /placeholder: ""
+  - text: auto
+- paragraph: auto 使用界面语言；也可填写语言代码，例如 zh、en、ja
+- button "保存" [disabled]
+- heading "包含的组件" [level=4]
+- text: 共 2 个 · 2 运行中
+- list:
+  - listitem:
+    - text: "@deepseek-ai/dsh-experimental-translator Machine translation with reusable Session results"
+    - code: translator
+    - text: 运行中
+    - switch "启用组件 @deepseek-ai/dsh-experimental-translator" [checked]
+  - listitem:
+    - text: 思考过程机器翻译 将展开的思考内容机器翻译为其他语言。
+    - code: cot-translation
+    - code: "@deepseek-ai/dsh-experimental-client-ui-cot-translation"
+    - text: 运行中
+    - switch "启用组件 思考过程机器翻译" [checked]
+- heading "来源信息" [level=4]
+- term: 代码来源
+- definition: 内置
+- term: 当前版本
+- definition: 0.2.1-alpha.1

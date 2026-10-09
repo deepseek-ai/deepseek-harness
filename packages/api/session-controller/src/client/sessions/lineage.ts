@@ -27,6 +27,8 @@ export interface SessionListEntry {
   parentSessionId?: SessionId
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
   origin?: 'subagent'
+  /** Format classification supplied by the Host list. */
+  formatStatus?: SessionSummary['formatStatus']
   cwd?: string
   /** Current host-computed projection values for list consumers. */
   projectionValues?: Readonly<Partial<SessionProjectionMap>>

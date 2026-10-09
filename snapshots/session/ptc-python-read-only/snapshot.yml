@@ -1,0 +1,14 @@
+version: 1
+scenario: ptc-python-read-only
+profile: headless
+composition: ptc-python
+recording: authored
+header:
+  class: ptc-python
+platform: posix
+permission: read-only
+environment:
+  DSH_PYTHON_PTC_HOST_SECRET: host-only-sentinel
+workspace:
+  final: true
+  parent: outside-temp

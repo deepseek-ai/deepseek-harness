@@ -32,7 +32,7 @@ import { Context } from '@deepseek-ai/cordis'
 import PtcWorkflowEngine from '@deepseek-ai/dsh-workflow-ptc'
 const ctx = new Context()
 try {
-  for (const name of ['session', 'session-projection', 'fs-local', 'subprocess-local', 'sandbox-local']) {
+  for (const name of ['session', 'session-projection', 'agent', 'system-prompt', 'fs-local', 'working-directory', 'subprocess-local', 'sandbox-local']) {
     await ctx.plugin((await import('@deepseek-ai/dsh-' + name)).default, {})
   }
   await ctx.plugin((await import('@deepseek-ai/dsh-sandbox-policy')).default, { mode: 'read-only', workspaceRoot: process.argv[2] })
@@ -46,7 +46,7 @@ try {
     async start() {
       selectedStarts += 1
       return {
-        id: 'built-child', localAgent: undefined,
+        id: 'built-child',
         result: Promise.resolve({ output: [], structured: { answer: 42 }, stopReason: 'completed' }),
         dispose: () => Promise.resolve(),
       }
@@ -54,12 +54,14 @@ try {
   })
   await ctx.plugin(PtcWorkflowEngine, { provider: 'must-not-be-used' })
   const session = ctx.sessions.create(undefined, { meta: { cwd: process.argv[2] } })
+  const parent = { id: session.id, ctx, session, options: {}, status: 'idle' }
+  ctx.agents.register(parent)
   const run = ctx.workflowEngine.start({
     script: "const proc = globalThis.constructor.constructor('return process')(); try { proc.getBuiltinModule('node:fs').writeFileSync(args.outside, 'changed') } catch {} const value = await agent('answer', { schema: { type: 'object', properties: { answer: { type: 'number' } }, required: ['answer'] } }); return value.answer",
     args: { outside: process.argv[3] },
     meta: { name: 'built-smoke', description: 'built workflow runtime' },
     subagentProvider: 'built-selected',
-    parent: { id: session.id, session, options: {} },
+    parent,
   })
   try {
     const result = await run.result

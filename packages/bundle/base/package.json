@@ -81,7 +81,6 @@
     "@deepseek-ai/dsh-session-title": "workspace:*",
     "@deepseek-ai/dsh-session-title-first-prompt-llm": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
-    "@deepseek-ai/dsh-skill-badge": "workspace:*",
     "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
     "@deepseek-ai/dsh-spill-local": "workspace:*",
     "@deepseek-ai/dsh-spill-policy": "workspace:*",
@@ -102,7 +101,6 @@
     "@deepseek-ai/dsh-tool-fs-search": "workspace:*",
     "@deepseek-ai/dsh-tool-goal": "workspace:*",
     "@deepseek-ai/dsh-tool-pwsh": "workspace:*",
-    "@deepseek-ai/dsh-tool-ralph": "workspace:*",
     "@deepseek-ai/dsh-tool-skill": "workspace:*",
     "@deepseek-ai/dsh-tool-subagent": "workspace:*",
     "@deepseek-ai/dsh-tool-subagent-control": "workspace:*",
@@ -126,7 +124,9 @@
     "@deepseek-ai/dsh-deepseek-account-platform": "workspace:*",
     "@deepseek-ai/dsh-config-editor": "workspace:*",
     "@deepseek-ai/dsh-settings": "workspace:*",
-    "@deepseek-ai/dsh-otel": "workspace:*"
+    "@deepseek-ai/dsh-otel": "workspace:*",
+    "@deepseek-ai/dsh-working-directory": "workspace:*",
+    "@deepseek-ai/dsh-tool-working-directory": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

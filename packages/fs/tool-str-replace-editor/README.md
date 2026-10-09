@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+This nonexperimental standalone plugin is intended for custom compositions. It is not offered as an optional bundle in the Plugins page.
+
 Mount the tool alongside a `ctx.fs` backend (and, for guarded mutations, the policy plugin) when the model should edit files through the familiar `view`/`create`/`str_replace`/`insert` command vocabulary on absolute paths.
 
 ### Minimal composition

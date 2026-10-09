@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-06-packed-install-private-npm-cache.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-06-packed-install-private-npm-cache.md
+/agent-note-packed-install-verification-owns-its-npm-cache:
+  en: 54d54ee850476cb9
+  zh: 8d666e40eb2372f0
+/agent-note-packed-install-verification-owns-its-npm-cache/problem:
+  en: 5cd500387242a7cc
+  zh: 75de2c0049631634
+/agent-note-packed-install-verification-owns-its-npm-cache/decision:
+  en: 8a9ead906e1148d6
+  zh: 6a5b911fc5849be2
+/agent-note-packed-install-verification-owns-its-npm-cache/alternatives-considered:
+  en: b2637475da22cec0
+  zh: 5c0e3979caf44461
+/agent-note-packed-install-verification-owns-its-npm-cache/consequences:
+  en: a123744738fac02f
+  zh: 54bda8e161cb6e85
+/agent-note-packed-install-verification-owns-its-npm-cache/verification:
+  en: e37107020148c23e
+  zh: 94227a591fad9f17

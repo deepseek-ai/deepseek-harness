@@ -37,7 +37,6 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-tool-subagent'
   config:
     provider: spawn
-    backgroundMode: continuable
 - name: '@deepseek-ai/dsh-tool-subagent-control'
 - name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
 ```
@@ -50,11 +49,11 @@ kind: "package-reference"
 
 ### interrupt_agent
 
-只停止目标当前轮次：已排队消息保持暂停，直到之后调用 `send_message`；后代继续运行，子级仍可接受后续消息。调用在停止请求被接受后立即返回，不等待目标完全停稳；中断已结束的 agent 会被接受并按空操作处理，而自身、同级、陈旧及非祖先调用方会收到出错结果。
+外部执行会永久停止，不能接收后续消息。本地目标只停止当前轮次：已排队消息保持暂停，直到之后调用 `send_message`；后代继续运行，子级仍可接受后续消息。调用在停止请求被接受后立即返回，不等待目标完全停稳；中断已结束的 agent 会被接受并按空操作处理，而自身、同级、陈旧及非祖先调用方会收到出错结果。
 
 ### list_agents
 
-列出调用方 agent 下方的可继续子级：`children`（默认）从父目录读取直接子级，不打开子日志；`descendants` 按稳定前序递归读取子级目录，并为每个条目标注其持久化直接父级会话 ID 与深度。状态来自在线 Agent 注册表——`running` 或 `inactive`。可读取的一次性子级不出现在输出中，但其目录仍是遍历节点。未知模式与无法读取的子级目录（包括一次性子级）仅在 `descendants` 作用域中以诊断信息呈现。普通 Session fork 不是目录条目，因此从源 Session 列表中既无法发现这些 fork，也无法发现其后代。
+列出调用方 agent 下方的可继续子级：`children`（默认）从父目录读取直接子级，不打开子日志；`descendants` 按稳定前序递归读取子级目录，并为每个条目标注其持久化直接父级会话 ID 与深度。状态来自在线 Agent 注册表——`running` 或 `inactive`。外部条目被省略，不读取子 Session。可读取的一次性子级不出现在输出中，但其目录仍是遍历节点。未知模式与无法读取的子级目录（包括一次性子级）仅在 `descendants` 作用域中以诊断信息呈现。普通 Session fork 不是目录条目，因此从源 Session 列表中既无法发现这些 fork，也无法发现其后代。
 
 -----
 
@@ -83,7 +82,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `send_message` 与 `interrupt_agent` 注册 |
-| [`src/list-agents.ts`](src/list-agents.ts) | `list_agents` 注册：作用域、状态细化、投影 |
+| [`src/list-agents.ts`](src/list-agents.ts) | `list_agents` 注册：直接子级发现与状态细化 |
 
 </details>
 
@@ -107,7 +106,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-已生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 接受 `agent_id` 与 `message`；`interrupt_agent` 接受 `agent_id`；`list_agents` 接受可选的 `scope` 枚举。
+已生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 接受 `agent_id` 与 `message`；`interrupt_agent` 接受 `agent_id`；`list_agents` 不接受参数。
 
 #### Token 影响
 

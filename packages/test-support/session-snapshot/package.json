@@ -32,8 +32,8 @@
     "@deepseek-ai/dsh-llm-replay": "workspace:*",
     "@deepseek-ai/dsh-loader-smoke": "workspace:*",
     "@deepseek-ai/dsh-session-format": "workspace:*",
-    "js-yaml": "^4.2.0",
-    "vitest": "^4.1.8"
+    "js-yaml": "^4.3.2",
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -45,6 +45,7 @@
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-loop": "workspace:*",
     "@deepseek-ai/dsh-compaction": "workspace:*",
+    "@deepseek-ai/dsh-fs": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",

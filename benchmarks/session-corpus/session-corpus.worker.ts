@@ -60,12 +60,20 @@ export interface SeedReport {
   readonly seedMs: number
 }
 
+/** Process CPU milliseconds, user plus system, over the same intervals as the wall-clock endpoints. */
+export interface PhaseCpu {
+  readonly bootMs: number
+  readonly firstMs: number
+  readonly repeatMs: number
+}
+
 /** List report: Host boot, then a cold and a repeated Session list. */
 export interface ListReport {
   readonly mode: 'list'
   readonly bootMs: number
   readonly firstMs: number
   readonly repeatMs: number
+  readonly cpu: PhaseCpu
   readonly items: number
   readonly itemsWithProjections: number
   readonly memory: CorpusMemory
@@ -77,6 +85,7 @@ export interface SearchReport {
   readonly bootMs: number
   readonly firstMs: number
   readonly repeatMs: number
+  readonly cpu: PhaseCpu
   readonly firstItems: number
   readonly repeatItems: number
   readonly memory: CorpusMemory
@@ -90,6 +99,7 @@ export interface ForkReport {
     readonly rank: number
     readonly sourceEvents: number
     readonly forkMs: number
+    readonly forkCpuMs: number
   }[]
   readonly memory: CorpusMemory
 }
@@ -251,16 +261,25 @@ async function seed(root: string, name: string, count: number): Promise<SeedRepo
   return { mode: 'seed', name, corpus: written.facts, seedMs: performance.now() - started }
 }
 
+function cpuMs(): number {
+  const usage = process.cpuUsage()
+  return (usage.user + usage.system) / 1_000
+}
+
 async function measureList(root: string, expected: number): Promise<ListReport> {
   const started = performance.now()
+  const cpuStarted = cpuMs()
   const { ctx, controller } = await mountHost(root)
   try {
     const booted = performance.now()
+    const cpuBooted = cpuMs()
     const signal = new AbortController().signal
     const first = await controller.list({}, signal)
     const firstDone = performance.now()
+    const cpuFirstDone = cpuMs()
     const repeated = await controller.list({}, signal)
     const done = performance.now()
+    const cpuDone = cpuMs()
     if (first.items.length !== expected || repeated.items.length !== expected) {
       throw new Error(`Session list returned ${String(first.items.length)} of ${String(expected)} Sessions`)
     }
@@ -269,6 +288,7 @@ async function measureList(root: string, expected: number): Promise<ListReport> 
       bootMs: booted - started,
       firstMs: firstDone - booted,
       repeatMs: done - firstDone,
+      cpu: { bootMs: cpuBooted - cpuStarted, firstMs: cpuFirstDone - cpuBooted, repeatMs: cpuDone - cpuFirstDone },
       items: first.items.length,
       itemsWithProjections: first.items.filter(item => item.projections !== undefined).length,
       memory: await memory(),
@@ -280,14 +300,18 @@ async function measureList(root: string, expected: number): Promise<ListReport> 
 
 async function measureSearch(root: string): Promise<SearchReport> {
   const started = performance.now()
+  const cpuStarted = cpuMs()
   const { ctx, controller } = await mountHost(root)
   try {
     const booted = performance.now()
+    const cpuBooted = cpuMs()
     const signal = new AbortController().signal
     const first = await controller.search({ query: SEARCH_QUERIES[0] }, signal)
     const firstDone = performance.now()
+    const cpuFirstDone = cpuMs()
     const repeated = await controller.search({ query: SEARCH_QUERIES[1] }, signal)
     const done = performance.now()
+    const cpuDone = cpuMs()
     if (first.items.length === 0 || repeated.items.length === 0) {
       throw new Error('Session search matched no synthetic Session')
     }
@@ -296,6 +320,7 @@ async function measureSearch(root: string): Promise<SearchReport> {
       bootMs: booted - started,
       firstMs: firstDone - booted,
       repeatMs: done - firstDone,
+      cpu: { bootMs: cpuBooted - cpuStarted, firstMs: cpuFirstDone - cpuBooted, repeatMs: cpuDone - cpuFirstDone },
       firstItems: first.items.length,
       repeatItems: repeated.items.length,
       memory: await memory(),
@@ -313,11 +338,13 @@ async function measureFork(root: string, ranks: readonly number[]): Promise<Fork
     const forks: ForkReport['forks'][number][] = []
     for (const rank of ranks) {
       const forkStarted = performance.now()
+      const forkCpuStarted = cpuMs()
       const { sessionId } = await controller.fork({ sessionId: corpusSessionId(rank) })
       const forkMs = performance.now() - forkStarted
+      const forkCpuMs = cpuMs() - forkCpuStarted
       const child = ctx.sessions.get(sessionId)
       if (child === undefined) throw new Error(`fork of rank ${String(rank)} did not publish its child`)
-      forks.push({ rank, sourceEvents: child.inheritedEventCount, forkMs })
+      forks.push({ rank, sourceEvents: child.inheritedEventCount, forkMs, forkCpuMs })
     }
     return { mode: 'fork', bootMs: booted - started, forks, memory: await memory() }
   } finally {

@@ -5,13 +5,31 @@
 - group "添加插件":
   - button "添加插件"
   - button "选择添加插件方式"
-- heading "官方" [level=3]
-- text: "8"
+- heading "内置插件配置" [level=3]
+- list:
+  - listitem:
+    - button "查看 子智能体": 子智能体
+    - text: 设置子智能体的递归层级、数量和模型。
+  - listitem:
+    - button "查看 网页搜索": 网页搜索
+    - text: 设置 DeepSeek 的搜索提供方。
+  - listitem:
+    - button "查看 Agent 循环": Agent 循环
+    - text: 控制 Agent 派发工具调用的方式。
+  - listitem:
+    - button "查看 终端": 终端
+    - text: 限制每条命令最多能跑多久、最多输出多少内容。
+- heading "实验性插件" [level=3]
+- button "更多"
 - list:
   - listitem:
     - button "查看 智能体团队": 智能体团队
     - text: 实验性 启用团队协作、团队工具、成员列表和共享任务看板。
     - switch "启用 智能体团队"
+  - listitem:
+    - button "查看 语音输入": 语音输入
+    - text: 实验性 在本机使用 SenseVoice 转写录音，首次使用需安装依赖。
+    - switch "启用 语音输入"
   - listitem:
     - button "查看 自动授权审查": 自动授权审查
     - text: 实验性 提供自动审查权限模式，由模型在每次工具调用前判断是否授权。
@@ -20,24 +38,7 @@
     - button "查看 开发者工具": 开发者工具
     - text: 实验性 查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端
     - switch "启用 开发者工具"
-  - listitem:
-    - button "查看 语音输入": 语音输入
-    - text: 实验性 在本机使用 SenseVoice 转写录音，首次使用需安装依赖。
-    - switch "启用 语音输入"
-  - listitem:
-    - button "查看 终端": 终端
-    - text: 限制每条命令最多能跑多久、最多输出多少内容。
-  - listitem:
-    - button "查看 Agent 循环": Agent 循环
-    - text: 控制 Agent 派发工具调用的方式。
-  - listitem:
-    - button "查看 子智能体": 子智能体
-    - text: 设置子智能体的递归层级、数量和模型。
-  - listitem:
-    - button "查看 网页搜索": 网页搜索
-    - text: 设置 DeepSeek 的搜索提供方。
-- heading "已安装" [level=3]
-- text: "2"
+- heading "已安装插件" [level=3]
 - list:
   - listitem:
     - button "查看 @fixture/live-client": "@fixture/live-client"

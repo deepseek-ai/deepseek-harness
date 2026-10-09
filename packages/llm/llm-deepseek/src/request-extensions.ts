@@ -1,18 +1,21 @@
 /** Prepare plugin-contributed request fields and commit their delivery after HTTP acceptance. */
 
-import { LlmError } from '@deepseek-ai/dsh-llm'
+import { errorChain, LlmError } from '@deepseek-ai/dsh-llm'
 import type { DeepSeekLlmApiExtensionRequest, PreparedDeepSeekLlmApiExtensions } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import type { DeepSeekAdapterOptions } from './types.ts'
 
 /**
- * Merge contributions without replacing Messages fields. Preparation and
- * acceptance failures report REQUEST_EXTENSION. When the merged request fails
- * to serialize, the payload is the base request alone and acceptance is a no-op,
- * so contributors resend their unaccepted state on a later request.
+ * Merge contributions without replacing Messages fields. A rejected preparation or
+ * a base-field collision reports REQUEST_EXTENSION with the cause chain appended to
+ * the message. When the merged request fails to serialize, the payload is the
+ * base request alone and acceptance is a no-op, so contributors resend their
+ * unaccepted state on a later request. An acceptance failure is reported and
+ * does not fail the request.
  * @param body - serialized Messages request before extension fields.
  * @param options - request identity, purpose, and cancellation.
  * @param prepare - contributor registry captured for this adapter.
  * @param onOmitted - receives the omitted field names and the serialization failure.
+ * @param onUnaccepted - receives an acceptance failure after HTTP 2xx.
  * @returns HTTP payload and a commit to invoke only after a successful HTTP response.
  */
 export async function prepareRequestExtensions(
@@ -20,12 +23,13 @@ export async function prepareRequestExtensions(
   options: Omit<DeepSeekLlmApiExtensionRequest, 'body'>,
   prepare: DeepSeekAdapterOptions['prepareExtensions'],
   onOmitted: (fields: readonly string[], error: unknown) => void,
+  onUnaccepted: (error: unknown) => void,
 ): Promise<{ payload: string; accept(): Promise<void> }> {
   let extensions: PreparedDeepSeekLlmApiExtensions
   try {
     extensions = await prepare({ body, ...options })
   } catch (error) {
-    throw new LlmError('DeepSeek request extension preparation failed', 'REQUEST_EXTENSION', { cause: error })
+    throw new LlmError(`DeepSeek request extension preparation failed: ${errorChain(error)}`, 'REQUEST_EXTENSION', { cause: error })
   }
   const fields = Object.keys(extensions.fields)
   for (const field of fields) {
@@ -48,7 +52,7 @@ export async function prepareRequestExtensions(
       try {
         await extensions.accept()
       } catch (error) {
-        throw new LlmError('DeepSeek request extension acceptance failed', 'REQUEST_EXTENSION', { cause: error })
+        onUnaccepted(error)
       }
     },
   }

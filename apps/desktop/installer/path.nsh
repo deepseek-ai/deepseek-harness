@@ -106,7 +106,8 @@ Function ${PREFIX}InstallerValidatePath
         ${GetParent} $2 $2
     ${Loop}
     System::Call 'kernel32::GetFullPathNameW(w "$InstallerPath", i ${NSIS_MAX_STRLEN}, w .r4, p 0) i.r0'
-    ${If} $0 == 0
+    ; Repeated trailing separators can normalize to a drive root.
+    ${If} $0 < 4
     ${OrIf} $0 >= ${NSIS_MAX_STRLEN}
         Return
     ${EndIf}

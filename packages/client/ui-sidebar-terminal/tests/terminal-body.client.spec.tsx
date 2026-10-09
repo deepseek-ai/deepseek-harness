@@ -17,7 +17,7 @@ const fake = vi.hoisted(() => ({
   dimensions: { cols: 120, rows: 40 } as { cols: number; rows: number } | undefined,
 }))
 class FakeTerminal {
-  options: { disableStdin?: boolean; theme?: ITheme }
+  options: { disableStdin?: boolean; theme?: ITheme; fontFamily?: string; fontSize?: number }
   textarea: HTMLTextAreaElement | undefined = document.createElement('textarea')
   input: ((data: string) => void) | undefined
   readonly disposeInput = vi.fn()
@@ -72,7 +72,10 @@ const titleSurfaces = [
 function mount(initial: TerminalViewState | undefined = idle, dictionary = en) {
   let state: TerminalViewState | undefined = initial
   let visible = true
-  let theme: ThemeSnapshot = { preference: 'light', fontSize: 14, active: { id: 'light', colorScheme: 'light', tokens: {} }, themes: [], revision: 0 }
+  let theme: ThemeSnapshot = {
+    preference: 'light', fontSizes: { text: 14, code: 11, terminal: 13 }, fontFamilies: { text: '', code: '', terminal: '' },
+    active: { id: 'light', colorScheme: 'light', tokens: {} }, themes: [], revision: 0,
+  }
   const detach = vi.fn()
   const model = {
     mount: vi.fn(() => detach), refresh: vi.fn(async () => {}),
@@ -90,7 +93,10 @@ function mount(initial: TerminalViewState | undefined = idle, dictionary = en) {
   const view = render(<TerminalBody {...props} />)
   return {
     view, props, model, detach, openTab,
-    changeTheme() { theme = { ...theme, revision: theme.revision + 1 }; view.rerender(<TerminalBody {...props} />) },
+    changeTheme(next: Partial<ThemeSnapshot> = {}) {
+      theme = { ...theme, ...next, revision: theme.revision + 1 }
+      view.rerender(<TerminalBody {...props} />)
+    },
     update(next: TerminalViewState | undefined, shown = visible) {
       state = next; visible = shown; view.rerender(<TerminalBody {...props} />)
     },
@@ -206,6 +212,34 @@ it('updates screen, cursor and selection colors without replacing the terminal o
   expect(terminal.dispose).not.toHaveBeenCalled()
   expect(h.model.mount).toHaveBeenCalledOnce()
   expect(h.detach).not.toHaveBeenCalled()
+})
+
+it('applies the terminal font list and size and refits without replacing the terminal', () => {
+  const state: TerminalViewState = { ...idle, info, phase: 'connected', writable: true }
+  const h = mount(state)
+  const terminal = fake.terminals[0]!
+  const stack = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+  expect(terminal.options.fontFamily).toBe(stack)
+  h.model.resize.mockClear()
+  h.changeTheme({ fontFamilies: { text: '"Inter"', code: '', terminal: '' } })
+  expect(h.model.resize).not.toHaveBeenCalled()
+  fake.dimensions = { cols: 100, rows: 30 }
+  h.changeTheme({ fontFamilies: { text: '', code: '', terminal: '"MesloLGS NF"' } })
+  expect(terminal.options.fontFamily).toBe(`"MesloLGS NF", ${stack}`)
+  expect(h.model.resize).toHaveBeenCalledWith(100, 30)
+  h.model.resize.mockClear()
+  h.update(state, false)
+  h.changeTheme({ fontFamilies: { text: '', code: '', terminal: '' } })
+  expect(terminal.options.fontFamily).toBe(stack)
+  expect(h.model.resize).not.toHaveBeenCalled()
+  h.update(state, true)
+  expect(terminal.options.fontSize).toBe(13)
+  fake.dimensions = { cols: 90, rows: 25 }
+  h.changeTheme({ fontSizes: { text: 14, code: 11, terminal: 16 } })
+  expect(terminal.options.fontSize).toBe(16)
+  expect(h.model.resize).toHaveBeenCalledWith(90, 25)
+  expect(fake.terminals).toEqual([terminal])
+  expect(terminal.dispose).not.toHaveBeenCalled()
 })
 
 it('reads the current theme on xterm render and releases the cursor listener on unmount', () => {

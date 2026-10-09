@@ -36,6 +36,8 @@ Status: implemented
 
 pi-ai 的通用流选项不支持停止序列。若 Harness `stop` 选项已定义，`dsh-llm-pi-ai` 会以 `UNSUPPORTED_OPTION` 拒绝请求，不会静默忽略，也不会增加第二套提供方专用 payload 实现。`dsh-llm-deepseek` 继续通过原生请求序列化器支持 `stop`。
 
+pi-ai 负责各协议的系统消息位置，以及不支持历史内系统消息的模型所需的拼接回退。Harness 按对话记录顺序保留后续系统消息，并向提示词准入和共享工具历史投影报告目录能力。重复实现 pi-ai 的回退，或将 Anthropic 的位置规则应用于所有协议，会形成第二套序列化策略，并可能随 pi-ai 的变化而偏离。能力报告仍由 Harness 负责，因为循环在序列化之前就需要这些信息。
+
 ### 已记录的助手路由与回放状态
 
 助手消息携带请求的 `provider` 和 `model`，以及可选的 JSON 可序列化适配器回放状态。成功的 `assistant/message` 会话事件记录这些字段，`deriveMessages()` 返回助手消息时也会包含它们。用户、系统、上下文与工具结果消息不携带助手路由字段。提供方/模型字段是 agent loop 的权威数据；适配器仅拥有其不透明回放状态 payload。

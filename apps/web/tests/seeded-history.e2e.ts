@@ -29,7 +29,7 @@ import {
   launchWebScaffold, parseSeedFixture, realizeSeedFixture, recordFixture, renderSeedFixture, seedSession, watchConsole,
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
+import { expandOwningTurnProcess, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -228,8 +228,12 @@ describe('web e2e: seeded history renders through cold resume', () => {
   let tripwire: ReturnType<typeof watchConsole>
   let seededThroughSeq = -1
   let openingWindow: unknown
+  let hostClock: ReturnType<typeof pinHostClock> | undefined
+  let unpinBrowserClock: (() => void) | undefined
 
   beforeAll(async () => {
+    // Seeded and later command timestamps share the renderer's fixture day across midnight.
+    if (MODE !== 'record') hostClock = pinHostClock()
     // The POSIX terminal fixture stays off Windows; the pinned desktop applies
     // everywhere. The Open In rows carry the document header's file controls,
     // and the SSH marker keeps the application catalog empty so the
@@ -262,10 +266,11 @@ describe('web e2e: seeded history renders through cold resume', () => {
       if (meter === undefined) throw new Error('seeded-history requires the host token meter')
       const realizedWithCompaction = withCompaction(realizeSeedFixture(scaffold, raw, SEED_ID), meter)
       seededThroughSeq = parseSeedFixture(realizedWithCompaction).events.at(-1)?.seq ?? -1
-      await seedSession(scaffold, realizedWithCompaction, SEED_ID)
+      await seedSession(scaffold, realizedWithCompaction, SEED_ID, undefined, { createdAt: WEB_FIXTURE_TIME })
     }
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    if (MODE !== 'record') unpinBrowserClock = await pinBrowserClock(page)
     tripwire = watchConsole(page)
     if (MODE !== 'record') {
       // A one-message tail makes this short recording exercise the real Load earlier path.
@@ -293,8 +298,13 @@ describe('web e2e: seeded history renders through cold resume', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await browser?.close()
-    await scaffold?.close()
+    try {
+      await browser?.close()
+      await scaffold?.close()
+    } finally {
+      unpinBrowserClock?.()
+      hostClock?.mockRestore()
+    }
   })
 
   it.skipIf(MODE !== 'record')('records the seed turn live through the composer', async () => {

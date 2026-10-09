@@ -15,13 +15,13 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import {
   DeepSeekHarness,
   type DeepSeekHarnessOptions,
-  type HarnessNotification,
   JsonRpcResponseError,
   SdkProtocolError,
   TransportClosedError,
+  validatedSessionEvent,
 } from '@deepseek-ai/dsh-sdk-client'
 import type { ContentBlock, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { SessionEvent, SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
+import type { SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
 import type { SubagentResult, SubagentRun, SubagentStartRequest, SubagentStopReason } from '@deepseek-ai/dsh-subagent'
 import { AssistantOutputFold, settleRunResult, subprocessRunHandle } from '@deepseek-ai/dsh-subagent'
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
@@ -36,12 +36,10 @@ export interface SdkRunSpec {
   patches: string[]
   /** Absolute isolated Harness home for the nested runtime. */
   dshHome: string
-  /**
-   * Absolute working directory for the child process AND the workspace cwd
-   * of its SDK session. The provider resolves it before this spec exists:
-   * config override, else the delegating parent session's workspace.
-   */
+  /** Absolute initial working directory selected by the delegating runtime. */
   cwd: string
+  /** Parent origin directory recorded independently of the child's effective directory. */
+  originCwd?: string | undefined
   /** Provider route the child runtime initializes with. */
   provider: string
   /** Model the child runtime initializes with. */
@@ -246,7 +244,7 @@ export async function startSdkRun(request: SubagentStartRequest, spec: SdkRunSpe
     shutdownTimeoutMs: spec.shutdownTimeoutMs,
     disposeEofGraceMs: spec.disposeEofGraceMs,
     disposeGraceMs: spec.disposeGraceMs,
-    cwd: spec.cwd,
+    cwd: spec.originCwd ?? spec.cwd,
     provider: spec.provider,
     model: spec.model,
     ...spec.reasoningEffort === undefined ? {} : { reasoningEffort: spec.reasoningEffort },
@@ -299,9 +297,16 @@ export async function startSdkRun(request: SubagentStartRequest, spec: SdkRunSpe
   // The child's final answer under the seam's canonical selection rule
   // (`AssistantOutputFold`); a partial answer survives cancel and error paths.
   const fold = new AssistantOutputFold()
-  const observe = (notification: HarnessNotification): void => {
-    if (notification.method !== 'session.event' || notification.params.sessionId !== childSessionId) return
-    fold.push(notification.params.event as SessionEvent)
+  const subscription = harness.client.subscribe(notification =>
+    notification.method === 'session.event' && notification.params.sessionId === childSessionId)
+  let lastEnd: TurnEndReason | undefined
+  const drainNotifications = (): void => {
+    let notification
+    while ((notification = subscription.tryNext()) !== undefined) {
+      const event = validatedSessionEvent(notification.params.event)
+      fold.push(event)
+      if (event.type === 'turn/end') lastEnd = event.data.reason
+    }
   }
   const collectOutput = (): readonly ContentBlock[] => fold.collect() ?? []
   const teardown = async (): Promise<void> => {
@@ -313,21 +318,31 @@ export async function startSdkRun(request: SubagentStartRequest, spec: SdkRunSpe
     }
   }
 
-  // Race the child turn against local cancellation; the shared settlement
+  // Race the child task against local cancellation; the shared settlement
   // flattens failures under the seam's never-reject contract.
   let diagnostic: string | undefined
+  let accepted = false
   const result: Promise<SubagentResult> = settleRunResult({
     attempt: async () => {
       try {
-        const turn = await Promise.race([
-          harness.session(childSessionId).run(request.prompt, { onNotification: observe }),
-          cancelSettled.then(() => 'cancelled' as const),
-        ])
-        if (turn === 'cancelled') return { output: collectOutput(), stopReason: 'aborted' }
-        const lastEnd = turn.events.findLast(
-          (event): event is Extract<SessionEvent, { type: 'turn/end' }> => event.type === 'turn/end',
-        )
-        const outcome = sdkChildOutcome(lastEnd?.data.reason)
+        try {
+          await Promise.race([
+            (async () => {
+              await harness.session(childSessionId).setWorkingDirectory(spec.cwd)
+              if (flags.cancelled) return
+              await harness.client.prompt(childSessionId, request.prompt)
+              accepted = true
+              await harness.client.request('session/wait', { sessionId: childSessionId })
+            })(),
+            cancelSettled,
+          ])
+        } finally {
+          // The wait response follows committed notifications on the same pipe.
+          // Cancellation and transport failure retain every event already received.
+          if (accepted) drainNotifications()
+        }
+        if (flags.cancelled) return { output: collectOutput(), stopReason: 'aborted' }
+        const outcome = sdkChildOutcome(lastEnd)
         diagnostic = outcome.diagnostic
         return {
           output: collectOutput(),
@@ -336,6 +351,8 @@ export async function startSdkRun(request: SubagentStartRequest, spec: SdkRunSpe
       } catch (error: unknown) {
         diagnostic = failureDiagnostic(sdkFailure(error, 'session-run').facts)
         throw error
+      } finally {
+        subscription.close()
       }
     },
     collectOutput,

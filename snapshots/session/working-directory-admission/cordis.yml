@@ -1,0 +1,3 @@
+- insert:
+    - id: working-directory-admission
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/working-directory-admission.ts'

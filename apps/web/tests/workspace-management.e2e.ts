@@ -743,11 +743,20 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     await page.getByRole('button', { name: 'View options', exact: true }).click()
     await page.getByRole('menuitem', { name: 'Workspace Tree', exact: true }).click()
     await section.getByText('project-two', { exact: true }).waitFor()
+    const previousParentSessionIds = [...parentWorkspace.sessionIds]
+    const newParentSession = page.waitForResponse('**/api/session/create')
     await clickHoverAction(parent, 'New session in folder-group')
+    const createdResponse = await newParentSession
+    const createdBody = await createdResponse.json() as { result: { ok: boolean; value: { sessionId: string } } }
+    expect(createdBody.result.ok).toBe(true)
+    const createdSessionId = createdBody.result.value.sessionId
+    expect(previousParentSessionIds).not.toContain(createdSessionId)
+    await page.locator(`[data-conversation-session="${createdSessionId}"]`).waitFor()
     await expect.poll(() => section.locator('[aria-selected="true"]').evaluate(row =>
       row.closest('[class*="groupSection"]')?.querySelector('[role="treeitem"]')?.textContent,
     ), { timeout: 10_000 }).toBe('folder-group')
-    expect(parentWorkspace.sessionIds).toHaveLength(1)
+    await expect.poll(() => parentWorkspace.sessionIds).toHaveLength(previousParentSessionIds.length + 1)
+    expect(parentWorkspace.sessionIds).toEqual(expect.arrayContaining([...previousParentSessionIds, createdSessionId]))
     expect([...childWorkspace.sessionIds]).toEqual(childSessionIds)
     expect(tripwire.pageErrors).toEqual([])
   })

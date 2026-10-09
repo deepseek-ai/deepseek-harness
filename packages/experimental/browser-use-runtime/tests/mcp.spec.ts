@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -18,7 +18,10 @@ import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Agents from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
+import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import Projections from '@deepseek-ai/dsh-session-projection'
+import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import { bindScopeParent } from '@deepseek-ai/dsh-scope'
 import { BrowserMcpConfig, mountSessionMcp, validateBrowserMcpConfig } from '../src/mcp.ts'
 
@@ -68,8 +71,9 @@ async function load(exclusive = false, mode?: string, toolCallTimeoutMs?: number
   const modules = new Map<string, unknown>([
     ['browserUse', BrowserUse], ['prompt', SystemPrompt], ['tools', Tools], ['llm', Llm],
     ['sessions', Sessions], ['agents', Agents], ['loop', AgentLoop], ['projections', Projections],
+    ['fs', LocalFileSystem], ['workingDirectory', WorkingDirectory],
     ['model', { inject: ['llm'], apply(ctx: Context) { ctx.effect(() => ctx.llm.registerAdapter(['fixture'], model)) } }],
-    ['browser', { inject: ['browserUse', 'agents', 'tools', 'systemPrompt'], apply(ctx: Context) {
+    ['browser', { inject: ['browserUse', 'agents', 'tools', 'systemPrompt', 'workingDirectory'], apply(ctx: Context) {
       mountSessionMcp(ctx, { name: 'browser-fixture', exclusive, command: process.execPath, args: [fixture, root, ...mode === undefined ? [] : [mode]], ...toolCallTimeoutMs === undefined ? {} : { toolCallTimeoutMs, env: {} } })
     } }],
   ])
@@ -125,7 +129,7 @@ function registerIndependentTool(ctx: Context) {
 }
 
 async function events(root: string) {
-  return (await readFile(join(root, 'events.ndjson'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { event: string; pid: number; name?: string })
+  return (await readFile(join(root, 'events.ndjson'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { event: string; pid: number; name?: string; cwd?: string })
 }
 
 it('requires a browser mode and validates launch and attachment settings', () => {
@@ -145,9 +149,10 @@ it('waits for SystemPrompt and ToolRuntime before reserving the provider', async
   contexts.push(ctx)
   await ctx.plugin(BrowserUse)
   await ctx.plugin(Agents)
+  provideWorkingDirectoryFixture(ctx)
   const tools = ctx.plugin(Tools)
   const browser = ctx.plugin({
-    inject: ['browserUse', 'agents', 'tools', 'systemPrompt'],
+    inject: ['browserUse', 'agents', 'tools', 'systemPrompt', 'workingDirectory'],
     apply(provider: Context) {
       mountSessionMcp(provider, { name: 'browser-fixture', exclusive: true, command: process.execPath, args: [fixture] })
     },
@@ -509,6 +514,38 @@ describe('Session MCP Loader composition', () => {
     await expect(readFile(join(root, 'events.ndjson'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
+  it('retains a live server directory and starts the resumed server in the current Session directory', async () => {
+    const { ctx, root } = await load()
+    await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions') })
+    await mkdir(join(root, 'original'))
+    await mkdir(join(root, 'selected'))
+    const original = await realpath(join(root, 'original'))
+    const selected = await realpath(join(root, 'selected'))
+    const sessionId = SessionId('browser-directory')
+    const first = await ctx.agents.create({ sessionId, meta: { cwd: original } })
+    expect((await execute(ctx, first.agent)).isError).toBe(false)
+    const initial = await events(root)
+    const firstCall = initial.findLast(event => event.event === 'call')
+    expect(firstCall).toMatchObject({ cwd: original })
+    const starts = initial.filter(event => event.event === 'start').length
+
+    await ctx.workingDirectory.set(first.agent, selected)
+    expect(first.agent.session.header.cwd).toBe(original)
+    expect((await execute(ctx, first.agent)).isError).toBe(false)
+    const changed = await events(root)
+    expect(changed.findLast(event => event.event === 'call')).toMatchObject({ cwd: original, pid: firstCall?.pid })
+    expect(changed.filter(event => event.event === 'start')).toHaveLength(starts)
+    await first.dispose()
+
+    const resumed = await ctx.agents.resume({ resumeSessionId: sessionId })
+    expect(resumed.agent.session.header.cwd).toBe(original)
+    expect((await execute(ctx, resumed.agent)).isError).toBe(false)
+    const reopened = await events(root)
+    expect(reopened.findLast(event => event.event === 'call')).toMatchObject({ cwd: selected })
+    expect(reopened.filter(event => event.event === 'start').length).toBeGreaterThan(starts)
+    await resumed.dispose()
+  })
+
   it('awaits discovery on persisted resume and releases a canceled resume before retry', async () => {
     const { ctx, root, model } = await load(true, 'gate')
     await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions') })
@@ -562,7 +599,7 @@ describe('Session MCP Loader composition', () => {
     await browser.dispose()
     const existing = await ctx.agents.create({ sessionId: SessionId('existing') })
     await ctx.plugin({
-      inject: ['browserUse', 'agents', 'tools', 'systemPrompt'],
+      inject: ['browserUse', 'agents', 'tools', 'systemPrompt', 'workingDirectory'],
       apply(inner: Context) {
         mountSessionMcp(inner, { name: 'browser-fixture', exclusive: false, command: process.execPath, args: [fixture, root] })
       },

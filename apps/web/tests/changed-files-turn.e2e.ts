@@ -72,12 +72,12 @@ describe('web e2e: a git workspace turn ends with its changed files', () => {
       replayOverride = join(replayRoot, 'replay.override.json')
       const script = deriveReplayScript(parseSessionLog(await readFile(FIXTURE, 'utf8')))
       // Recorded absolute paths must follow each isolated Session's working directory.
-      const cwdToken = '{{fromRequest:Your working directory is ([^\\n]+)\\.}}'
+      const cwdToken = '{{fromRequest:Current working directory: "([^"]+)"}}'
       await writeFile(replayOverride, JSON.stringify(script).replaceAll('{{cwd}}', JSON.stringify(cwdToken).slice(1, -1)))
     }
     scaffold = await launchWebScaffold({
       developerTools: false,
-      compareReplaySession: 'read-only',
+      compareReplaySession: MODE === 'refresh' ? true : 'read-only',
       extraOverlayPath: fileURLToPath(new URL('./changed-files-turn.overlay.yml', import.meta.url)),
       ...(replayOverride === undefined ? {} : { replayFixture: FIXTURE, replayOverride }),
     })
@@ -159,7 +159,10 @@ describe('web e2e: a git workspace turn ends with its changed files', () => {
       const row = page.locator(`[data-chat-call-id="${callId}"] [data-state="preparing"]`)
       await row.waitFor({ state: 'attached' })
       await expandOwningTurnProcess(page, row)
-      await row.getByRole('button').waitFor()
+      const argumentPath = preparation.args.text('file_path')
+      if (argumentPath === undefined) throw new Error('held preparation has no string file_path')
+      await row.getByText(argumentPath, { exact: true }).waitFor()
+      expect(await row.getByRole('button').count()).toBe(0)
       expect(await row.locator('[aria-expanded]').count()).toBe(0)
       expect(await row.locator('pre').count()).toBe(0)
       expect(await row.getByText(/^\d+KB$/).count()).toBe(0)

@@ -46,7 +46,7 @@
 - id: system-prompt
   name: '@deepseek-ai/dsh-system-prompt'
   config:
-    personaPrefix: You are a concise snapshot agent working in {{cwd}}.
+    personaPrefix: You are a concise snapshot agent.
 
 - id: goal
   name: '@deepseek-ai/dsh-goal'

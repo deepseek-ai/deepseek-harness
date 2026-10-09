@@ -18,8 +18,8 @@
   en: cc9eb8f214c57137
   zh: 76723633d0faee5d
 /deepseek-ai-dsh-session-query/use-this-package/what-you-can-do:
-  en: 742b1358d97e56cc
-  zh: 00d75ce6e5769559
+  en: 608cd6d4c5cf2c35
+  zh: 23d3c5a7374b5283
 /deepseek-ai-dsh-session-query/use-this-package/filters:
   en: 1b95403461947ca1
   zh: cffa21b03df9f0ad
@@ -48,8 +48,8 @@
   en: 48922e284adddd1b
   zh: 9956dcc57e027d77
 /deepseek-ai-dsh-session-query/further-exploration:
-  en: 40a0579a433d568e
-  zh: c34ff46da6cbd3e5
+  en: f88ce622ab36eb5b
+  zh: 413c57eed9e81422
 /deepseek-ai-dsh-session-query/model-experience:
   en: dff12da8d1e64e66
   zh: e054b0d54e29f899
@@ -63,5 +63,5 @@
   en: d2f0d68fe29fb750
   zh: 323d21ee73a9e3f6
 /deepseek-ai-dsh-session-query/known-limitations-and-deferred-work/dev-note/future-extractor-and-search-provider-registries:
-  en: 605a72e65297c6cf
-  zh: 87aa75ec62eccbde
+  en: a02f189af688d9ff
+  zh: 375df15a0652e872

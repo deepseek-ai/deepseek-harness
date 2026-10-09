@@ -11,6 +11,10 @@ import { pathToFileURL } from 'node:url'
 import { load as loadYaml } from 'js-yaml'
 import {
   isPublicExperimentalPackageDirectory,
+  isExperimentalPackageName,
+  hasExperimentalPackageReference,
+  EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS,
+  EXPERIMENTAL_PACKAGE_NAME_PREFIX,
   PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES,
 } from './experimental-package-policy.ts'
 import { hasTypertRemoteNavigation, isForbiddenPublicationFile } from './publication-payload.ts'
@@ -53,8 +57,6 @@ const publicationSourceAllowlist: Readonly<Record<string, readonly string[]>> = 
 const publishedRepositoryUrl = 'git+https://github.com/deepseek-ai/deepseek-harness.git'
 /** Packages that participate in the experimental policy. */
 const experimentalPackageDirectory = /^packages\/experimental\/[^/]+$/
-/** npm namespace reserved for experimental packages. */
-const experimentalPackageNamePrefix = '@deepseek-ai/dsh-experimental-'
 /** Ordinary directories whose packages this repository publishes: one release member each. */
 const standardReleaseMemberDirectory = /^(?:packages\/(?!experimental\/)[^/]+\/[^/]+|apps\/(?!desktop(?:-host)?$)[^/]+|vendor\/[^/]+)$/
 /** Installable application assembled by electron-builder rather than published to npm. */
@@ -168,6 +170,7 @@ export function readWorkspaceManifests(repositoryRoot: string): WorkspaceManifes
 }
 
 const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
+  '@deepseek-ai/dsh-webhook-github': ['examples/github-review/cordis.yml', 'examples/github-review/github-ready-review-rule.mjs'],
   // Owned Worker bundles import this public bootstrap before their business entry.
   '@deepseek-ai/dsh-app-boot': ['lib/worker/profile-resolution-bootstrap.js'],
   // Statically linked client libraries keep their stylesheets next to the emitted
@@ -342,8 +345,9 @@ export function checkExperimentalManifest(
   if (!experimentalPackageDirectory.test(dir)) return []
   const label = manifest.name ?? dir
   const errors: string[] = []
-  if (manifest.name?.startsWith(experimentalPackageNamePrefix) !== true) {
-    errors.push(`${label}: experimental package name must start with ${JSON.stringify(experimentalPackageNamePrefix)}`)
+  if (manifest.name === undefined || !manifest.name.startsWith(EXPERIMENTAL_PACKAGE_NAME_PREFIX)
+    && manifest.name !== EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS[dir]) {
+    errors.push(`${label}: experimental package name must start with ${JSON.stringify(EXPERIMENTAL_PACKAGE_NAME_PREFIX)} or match its declared directory exception`)
   }
   if (isPublicExperimentalPackageDirectory(dir, privateDirectories)) {
     if (manifest.private === true) errors.push(`${label}: public experimental package must not set "private": true`)
@@ -357,7 +361,25 @@ export function checkExperimentalManifest(
   return errors
 }
 
+/**
+ * Reject missing, renamed, moved, or duplicated retained-name exceptions.
+ * @param manifests - every workspace manifest, with repository-relative directories.
+ * @returns Violations of the exact directory/name ownership declarations.
+ */
+export function checkExperimentalNameExceptions(manifests: readonly WorkspaceManifest[]): string[] {
+  const errors: string[] = []
+  for (const [dir, name] of Object.entries(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS)) {
+    const owners = manifests.filter(entry => entry.manifest.name === name)
+    if (owners.length !== 1 || owners[0]?.dir !== dir) {
+      errors.push(`${dir}: retained experimental name ${name} must have exactly one workspace owner at this directory`)
+    }
+  }
+  return errors
+}
+
 function isReleaseMemberDirectory(dir: string): boolean {
+  // The SSH carrier is distributed as executable archives, never as an npm application.
+  if (dir === 'packages/ssh/ssh-helper-runtime') return false
   return standardReleaseMemberDirectory.test(dir) || isPublicExperimentalPackageDirectory(dir)
 }
 
@@ -559,8 +581,10 @@ export function checkExperimentalDependencyIsolation(
     if (!standardReleaseMemberDirectory.test(dir) && dir !== 'python/sdk-runtime') continue
     const offered = manifest.name === '@deepseek-ai/dsh' ? new Set(optionalBundles) : new Set<string>()
     for (const section of runtimeDependencySections) {
-      for (const name of Object.keys(manifest[section] ?? {})) {
-        if (!experimentalNames.has(name)) continue
+      for (const [name, range] of Object.entries(manifest[section] ?? {})) {
+        const experimental = experimentalNames.has(name) || isExperimentalPackageName(name)
+          || /^(?:npm:|workspace:)/.test(range) && hasExperimentalPackageReference(range)
+        if (!experimental) continue
         if (section === 'dependencies' && offered.has(name)) continue
         errors.push(`${manifest.name ?? dir}: ${section}.${name} must not reference an experimental package`)
       }
@@ -607,6 +631,7 @@ export function main(): void {
     ...checkRepositoryVersion(),
     ...workspaceManifests().flatMap(checkWorkspaceManifest),
     ...checkWorkspaceProtocol(manifests),
+    ...checkExperimentalNameExceptions(manifests),
     ...checkExperimentalDependencyIsolation(manifests),
     ...checkHierarchyShape(),
     ...collectProjectReferenceFaceViolations(root),

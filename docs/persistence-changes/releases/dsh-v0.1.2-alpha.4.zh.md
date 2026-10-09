@@ -68,15 +68,15 @@ changes:
 
 <!-- persistence-release-changes:start -->
 
-检测到 4 个根类型变化、5 项结构差异。下表的最低要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
+检测到 4 个根类型变化、5 项结构差异。下表的审查要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
 
-| 路径 | 变化 | 当前最低要求 |
+| 路径 | 变化 | 审查要求 |
 |---|---|---|
-| `SessionHeader.seedLength` | `property-removed` | `version-bump` |
-| `SessionHeader.isSeeded` | `required-property-added` | `version-bump` |
-| `event:agent/inbox/spliced.data.inserted[].source` | `union-variants-changed` | `version-bump` |
-| `event:session/title-llm-request.data.messages[].source` | `union-variants-changed` | `version-bump` |
-| `event:user/message.data.source` | `union-variants-changed` | `version-bump` |
+| `SessionHeader.seedLength` | `property-removed` | `review-required` |
+| `SessionHeader.isSeeded` | `required-property-added` | `review-required` |
+| `event:agent/inbox/spliced.data.inserted[].source` | `union-variants-changed` | `review-required` |
+| `event:session/title-llm-request.data.messages[].source` | `union-variants-changed` | `review-required` |
+| `event:user/message.data.source` | `union-variants-changed` | `review-required` |
 
 <!-- persistence-release-changes:end -->
 

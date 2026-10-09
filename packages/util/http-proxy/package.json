@@ -30,7 +30,7 @@
     "@deepseek-ai/cordis": "workspace:~"
   },
   "dependencies": {
-    "undici": "^8.10.0"
+    "undici": "^8.10.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

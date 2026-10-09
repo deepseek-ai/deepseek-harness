@@ -26,7 +26,7 @@ export interface Config {
   maxTokens: Volatile<number>
   /** Positive context capacity used when the selected model has no exact value (default 1,000,000). */
   defaultContextWindow: Volatile<number>
-  /** Advisory models shown by discovery consumers; defaults to V41 Flash and V4 Pro. */
+  /** Advisory models shown by discovery consumers; defaults to V4.1 Flash and V4 Pro. */
   models: Volatile<DeepSeekCatalogModel[]>
   /** Maximum provider idle time while one stream read is outstanding (default five minutes). */
   streamIdleTimeoutMs: Volatile<number>

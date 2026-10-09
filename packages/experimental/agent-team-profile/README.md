@@ -73,7 +73,7 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 ## Further Exploration
 
 - [Experimental packages](../README.md) — incubation status and publication policy.
-- [Agent Teams service](../agent-team/README.md) — durable roster, messaging, and task-board behavior.
+- [Agent Teams service](../agent-team/README.md) — durable roster and task board, plus direct messaging.
 - [Agent Teams tools](../tool-agent-team/README.md) — the Team-scoped model tool surface.
 - [Agent Teams browser UI](../client-ui-agent-team/README.md) — roster, task board, and teammate session navigation.
 - [Base bundle](../../bundle/base/README.md) — the profile layer this patch extends.

@@ -18,17 +18,17 @@
   en: d6eb16d8fc690671
   zh: 5865ee3bed0b36ca
 /deepseek-ai-dsh-subagent-dsh-sdk/use-this-package/when-to-choose-it:
-  en: 617cbcee49ca46d6
-  zh: fbe52df163a1e64f
+  en: 83a84f1d42a071da
+  zh: 0dce8e7ea861f8c2
 /deepseek-ai-dsh-subagent-dsh-sdk/use-this-package/configuration:
-  en: a242a1a4d16e5241
-  zh: 20a8e87d4fec4117
+  en: 67cf17bbc985cad7
+  zh: ea432ae524f4ade9
 /deepseek-ai-dsh-subagent-dsh-sdk/use-this-package/what-you-get:
   en: b9ccfa85b40b07eb
   zh: 4f84e7327b4ff188
 /deepseek-ai-dsh-subagent-dsh-sdk/use-this-package/failure-and-recovery:
-  en: 21eb548e92fe20ce
-  zh: d865a29acf60018e
+  en: 9e3838df9eba09bb
+  zh: fbd00b9d72e41adc
 /deepseek-ai-dsh-subagent-dsh-sdk/understand-the-implementation:
   en: 00d076edd7fee716
   zh: 7aea818c13fe3cc1
@@ -39,8 +39,8 @@
   en: 1bed6c1577997df6
   zh: 8c99f132377f6ca2
 /deepseek-ai-dsh-subagent-dsh-sdk/understand-the-implementation/run-flow:
-  en: f268db0520abf6f7
-  zh: 4517fc7ea6bd099c
+  en: 6c50e4e8dc5e0698
+  zh: 9d0011e28341bbde
 /deepseek-ai-dsh-subagent-dsh-sdk/understand-the-implementation/stop-reason-mapping:
   en: e040a57202916f91
   zh: 196bf38f0f0db310
@@ -69,17 +69,17 @@
   en: 75d061c2151624a7
   zh: 71e58e020b60ff90
 /deepseek-ai-dsh-subagent-dsh-sdk/model-experience/parent-tool-result-indirectly/what-the-model-sees:
-  en: e299c74b31e3ed7d
-  zh: 118adc28e0755bfb
+  en: 5e4e3efe7517f782
+  zh: 0465e164583f6bc3
 /deepseek-ai-dsh-subagent-dsh-sdk/model-experience/parent-tool-result-indirectly/token-effect:
-  en: 600ac97cdd163650
-  zh: d08f0a72321a9548
+  en: 4fae54e2ff0c4874
+  zh: 1574bfe874f66a1f
 /deepseek-ai-dsh-subagent-dsh-sdk/model-experience/parent-tool-result-indirectly/kv-cache-effect:
   en: f5d5f97a153f7c70
   zh: 3d6bc05b9eadfbc2
 /deepseek-ai-dsh-subagent-dsh-sdk/known-limitations-and-deferred-work:
-  en: 01cbee2a855b1d6a
-  zh: 701e7afc9a7fc862
+  en: 9158e90d1a521c05
+  zh: 246ed0c694ead7ac
 /deepseek-ai-dsh-subagent-dsh-sdk/known-limitations-and-deferred-work/dev-note:
   en: 04a404ccea615ef3
   zh: df2d9d901d75f024

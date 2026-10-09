@@ -319,8 +319,14 @@ function openSse(response: ServerResponse, contentType = 'text/event-stream; cha
   response.flushHeaders()
 }
 
-function writeSse(record: MockLlmRequestRecord, response: ServerResponse, payload: unknown): void {
-  response.write(`data: ${typeof payload === 'string' ? payload : JSON.stringify(payload)}\n\n`)
+interface MessageSseEvent {
+  type: string
+  [field: string]: unknown
+}
+
+function writeSse(record: MockLlmRequestRecord, response: ServerResponse, payload: string | MessageSseEvent): void {
+  const event = typeof payload === 'string' ? '' : `event: ${payload.type}\n`
+  response.write(`${event}data: ${typeof payload === 'string' ? payload : JSON.stringify(payload)}\n\n`)
   record.chunksSent += 1
 }
 
@@ -375,7 +381,7 @@ function startText(record: MockLlmRequestRecord, response: ServerResponse, index
   writeSse(record, response, { type: 'content_block_start', index, content_block: { type: 'text', text: '' } })
 }
 
-function terminalChunk(reason: string, outputTokens: number): unknown {
+function terminalChunk(reason: string, outputTokens: number): MessageSseEvent {
   return {
     type: 'message_delta',
     delta: { stop_reason: reason, stop_sequence: null },
@@ -447,7 +453,7 @@ async function disconnect(
   response.destroy()
 }
 
-function toolCallChunks(options: ResolvedOptions): readonly unknown[] {
+function toolCallChunks(options: ResolvedOptions): readonly MessageSseEvent[] {
   const midpoint = Math.max(1, Math.floor(options.toolArguments.length / 2))
   return [
     { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'mock-call-1', name: options.toolName, input: {} } },

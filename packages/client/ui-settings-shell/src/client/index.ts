@@ -48,6 +48,6 @@ export function apply(ctx: ClientContext): void {
   const pwsh = new ShellCardController(ctx.configForms.get(PWSH_NS))
   ctx.effect(() => () => { bash.dispose(); pwsh.dispose() }, 'ui-settings-shell: form subscriptions')
   ctx.effect(() => ctx.configForms.whileServed([BASH_NS, PWSH_NS], served => ctx.slots.inject('plugins.item', () => ctx.slots.register({
-    name: 'plugins.item', id: 'shell', order: 10, label: () => t('title'), locale: NS, inject: () => (served.has(PWSH_NS) ? pwsh : bash).inject(),
+    name: 'plugins.item', id: 'shell', order: 40, label: () => t('title'), locale: NS, inject: () => (served.has(PWSH_NS) ? pwsh : bash).inject(),
   }, ShellCard))), 'ui-settings-shell: page')
 }

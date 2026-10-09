@@ -17,7 +17,6 @@
       config:
         maxMembers: 8
         maxTasks: 256
-        maxPendingMessagesPerMember: 64
         maxMessageBytes: 65536
         disposalTimeoutMs: 5000
 

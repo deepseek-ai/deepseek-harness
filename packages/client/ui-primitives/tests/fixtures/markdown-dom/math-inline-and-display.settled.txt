@@ -20,16 +20,16 @@
             <annotation encoding="application/x-tex">
               #text "E = mc^2"
       <span aria-hidden="true" class="katex-html">
-        <span class="base">
-          <span class="strut" style="height: 0.6833em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 0.6833em;">
           <span class="mord mathnormal" style="margin-right: 0.0576em;">
             #text "E"
           <span class="mspace" style="margin-right: 0.2778em;">
           <span class="mrel">
             #text "="
           <span class="mspace" style="margin-right: 0.2778em;">
-        <span class="base">
-          <span class="strut" style="height: 0.8141em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 0.8141em;">
           <span class="mord mathnormal">
             #text "m"
           <span class="mord">
@@ -41,7 +41,7 @@
                   <span class="vlist" style="height: 0.8141em;">
                     <span style="top: -3.063em; margin-right: 0.05em;">
                       <span class="pstrut" style="height: 2.7em;">
-                      <span class="sizing reset-size6 size3 mtight">
+                      <span class="katex-sizing reset-size6 size3 mtight">
                         <span class="mord mtight">
                           #text "2"
     #text " inline."
@@ -92,8 +92,8 @@
             <annotation encoding="application/x-tex">
               #text "\\frac{\\partial \\mathbf{u}}{\\partial t} + (\\mathbf{u} \\cdot \\nabla)\\mathbf{u} = -\\frac{1}{\\rho}\\nabla p"
       <span aria-hidden="true" class="katex-html">
-        <span class="base">
-          <span class="strut" style="height: 2.0574em; vertical-align: -0.686em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 2.0574em; vertical-align: -0.686em;">
           <span class="mord">
             <span class="mopen nulldelimiter">
             <span class="mfrac">
@@ -127,8 +127,8 @@
           <span class="mbin">
             #text "+"
           <span class="mspace" style="margin-right: 0.2222em;">
-        <span class="base">
-          <span class="strut" style="height: 1em; vertical-align: -0.25em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 1em; vertical-align: -0.25em;">
           <span class="mopen">
             #text "("
           <span class="mord mathbf">
@@ -137,8 +137,8 @@
           <span class="mbin">
             #text "⋅"
           <span class="mspace" style="margin-right: 0.2222em;">
-        <span class="base">
-          <span class="strut" style="height: 1em; vertical-align: -0.25em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 1em; vertical-align: -0.25em;">
           <span class="mord">
             #text "∇"
           <span class="mclose">
@@ -149,8 +149,8 @@
           <span class="mrel">
             #text "="
           <span class="mspace" style="margin-right: 0.2778em;">
-        <span class="base">
-          <span class="strut" style="height: 2.2019em; vertical-align: -0.8804em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 2.2019em; vertical-align: -0.8804em;">
           <span class="mord">
             #text "−"
           <span class="mord">
@@ -197,8 +197,8 @@
             <annotation encoding="application/x-tex">
               #text "\\frac{1}{5}"
       <span aria-hidden="true" class="katex-html">
-        <span class="base">
-          <span class="strut" style="height: 1.1901em; vertical-align: -0.345em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 1.1901em; vertical-align: -0.345em;">
           <span class="mord">
             <span class="mopen nulldelimiter">
             <span class="mfrac">
@@ -207,7 +207,7 @@
                   <span class="vlist" style="height: 0.8451em;">
                     <span style="top: -2.655em;">
                       <span class="pstrut" style="height: 3em;">
-                      <span class="sizing reset-size6 size3 mtight">
+                      <span class="katex-sizing reset-size6 size3 mtight">
                         <span class="mord mtight">
                           <span class="mord mtight">
                             #text "5"
@@ -216,7 +216,7 @@
                       <span class="frac-line" style="border-bottom-width: 0.04em;">
                     <span style="top: -3.394em;">
                       <span class="pstrut" style="height: 3em;">
-                      <span class="sizing reset-size6 size3 mtight">
+                      <span class="katex-sizing reset-size6 size3 mtight">
                         <span class="mord mtight">
                           <span class="mord mtight">
                             #text "1"
@@ -252,8 +252,8 @@
             <annotation encoding="application/x-tex">
               #text "\\frac{\\pi}{4} < \\theta < \\frac{\\pi}{2}"
       <span aria-hidden="true" class="katex-html">
-        <span class="base">
-          <span class="strut" style="height: 1.7936em; vertical-align: -0.686em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 1.7936em; vertical-align: -0.686em;">
           <span class="mord">
             <span class="mopen nulldelimiter">
             <span class="mfrac">
@@ -283,16 +283,16 @@
           <span class="mrel">
             #text "<"
           <span class="mspace" style="margin-right: 0.2778em;">
-        <span class="base">
-          <span class="strut" style="height: 0.7335em; vertical-align: -0.0391em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 0.7335em; vertical-align: -0.0391em;">
           <span class="mord mathnormal" style="margin-right: 0.0278em;">
             #text "θ"
           <span class="mspace" style="margin-right: 0.2778em;">
           <span class="mrel">
             #text "<"
           <span class="mspace" style="margin-right: 0.2778em;">
-        <span class="base">
-          <span class="strut" style="height: 1.7936em; vertical-align: -0.686em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 1.7936em; vertical-align: -0.686em;">
           <span class="mord">
             <span class="mopen nulldelimiter">
             <span class="mfrac">

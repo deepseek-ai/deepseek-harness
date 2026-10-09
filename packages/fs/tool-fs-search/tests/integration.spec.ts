@@ -9,6 +9,7 @@
  * fake-service suite (tools.spec.ts) carries the coverage gate.
  */
 
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
@@ -61,6 +62,8 @@ describe('search tools over the real subprocess service + the packaged rg', () =
     await utimes(join(dir, 'src', 'beta.ts'), new Date(2020, 0, 1), new Date(2020, 0, 1))
 
     ctx = new Context()
+
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalSubprocessRuntime)

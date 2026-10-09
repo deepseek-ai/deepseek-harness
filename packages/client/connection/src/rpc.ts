@@ -199,6 +199,12 @@ export interface HostConnectionHandle {
   readonly operator: PeerScope
 
   /**
+   * Whether this deployment accepts authorities beyond loopback: true only
+   * when a validated `trustedHosts` entry names a non-loopback hostname.
+   */
+  readonly allowsRemoteAuthorities: boolean
+
+  /**
    * Compose exact Fetch routes and the shared-channel RPC interceptor.
    * @param channel - shared channel mounted by Connection.
    * @returns Fetch handler for trusted, authenticated requests.
@@ -223,6 +229,8 @@ export interface HostConnectionHandle {
 
   /**
    * Authenticate one frontend index request, owning a token redirect or 401.
+   * The cookie this mints is `Secure` when the mounted Web carrier serves TLS,
+   * which only that listener's protocol decides.
    * @param request - root or configured-index HTTP request.
    * @param response - response owned when the result is false.
    * @returns true only when the frontend may serve index.html.

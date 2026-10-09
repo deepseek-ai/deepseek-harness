@@ -24,26 +24,26 @@
   en: 3f53b0d5f4037171
   zh: e0f2ac931cfbef95
 /deepseek-ai-dsh-subagent-spawn-in-process/use-this-package/what-a-delegation-does:
-  en: 9f4e6f31ad4d86d1
-  zh: 4ad77e0b80c6efcc
+  en: eabf1d0e66fde8fa
+  zh: d6de66797060bac5
 /deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation:
-  en: 9e00b9dc2f9cf38c
-  zh: 60ce00ce6c3b5564
+  en: 7f34637751939818
+  zh: 2937553168e1aee5
 /deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation/design-concept:
-  en: 80716c24d7a0ee78
-  zh: 9bead3317f5a357e
+  en: 67b871bbb7dcc803
+  zh: 79a8fec9117ef52a
 /deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation/source-map:
-  en: f23771c3d213ffb1
-  zh: c0b16b102dc26345
+  en: b7c55a4bff3ae1f0
+  zh: 9d0f514f433250c6
 /deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation/run-flow:
-  en: 7b55a5649bc38155
-  zh: 51fe220c84ca759a
+  en: 5f07f1044bf7c370
+  zh: d31a485a3e333500
 /deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation/ownership-and-scope:
   en: 8af949dc29cb4a5c
   zh: f4e4f9f9f4a4b7c9
 /deepseek-ai-dsh-subagent-spawn-in-process/further-exploration:
-  en: 742e34ea6c31adf9
-  zh: 599d993ba5a3c8f1
+  en: c247efa590d8b78a
+  zh: 999f8281df521384
 /deepseek-ai-dsh-subagent-spawn-in-process/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -63,8 +63,8 @@
   en: 75d061c2151624a7
   zh: 71e58e020b60ff90
 /deepseek-ai-dsh-subagent-spawn-in-process/model-experience/parent-tool-result-indirectly/what-the-model-sees:
-  en: 93ae79a8f38c984b
-  zh: 6ede5c4312685ff0
+  en: caf11edef2516b8c
+  zh: 25bcb16cceaad06d
 /deepseek-ai-dsh-subagent-spawn-in-process/model-experience/parent-tool-result-indirectly/token-effect:
   en: ff8045aa0f466c2a
   zh: e38fc5c6af2ce076

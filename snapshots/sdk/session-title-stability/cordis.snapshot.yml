@@ -1,0 +1,62 @@
+# Main responses derive from the session fixture; auxiliary title responses use
+# the explicit replay script. The SDK waits for each accepted title before sending
+# the next human message.
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
+  disabled: true
+
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: deepseek-official
+    model: deepseek-v4-flash
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+- id: system-prompt
+  name: '@deepseek-ai/dsh-system-prompt'
+  config:
+    personaPrefix: |
+      You are a coding assistant powered by the {{model}} model. Your bash tool runs under a file sandbox — a `[sandbox: file access denied …]` result is policy, not a command bug.
+
+      Verify your work by running the code or tests. Keep answers brief and factual.
+
+- insert:
+    - id: llm-replay-main
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        overrideFile: ./.missing-main-replay-override.json
+        providers:
+          - id: deepseek-official
+            name: DeepSeek
+            models:
+              - id: deepseek-v4-flash
+    - id: llm-replay-title
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: title-replay
+            name: Title replay
+            models:
+              - id: title-model
+                reasoningEfforts: [low, high]
+                defaultReasoningEffort: high
+    - id: session-title-provider
+      name: '@deepseek-ai/dsh-session-title-all-prompts-llm'
+      config:
+        targetWords: 5
+        targetCjkCharacters: 10
+        maxInputBytes: 4096
+        maxOutputTokens: 32
+        timeoutMs: 5000
+        provider: title-replay
+        model: title-model

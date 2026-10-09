@@ -52,8 +52,7 @@ Configure the provider row after its required services are available:
 | `maxMessageBytes` | `134,217,728` | Limit for a control frame, outstanding argument bytes and queued control writes |
 | `maxPendingCalls` | `128` | Maximum simultaneous host binding calls |
 | `graceMs` | `3,000` | Managed termination and output-drain grace |
-| `nodeExecutable` | Current Node executable | Executable resolved in the subprocess execution world |
-| `bootstrapPath` | Package bootstrap | Optional absolute path to a preinstalled built bootstrap in that world |
+| `launch` | Local carrier | Explicit `{ kind: "node-script", executable, bootstrapPath? }` or `{ kind: "embedded", executable }` in the subprocess world |
 
 The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-ptc-runtime-node) defines accepted config fields. `resolve(request)` supplies cwd, the numeric or null deadline choice and the execution policy; `run(spec)` accepts those resolved inputs and does not fill missing values.
 
@@ -91,7 +90,7 @@ Length-framed JSON travels separately from stdout/stderr. The host bounds frames
 
 ### Source and built bootstraps
 
-Source execution loads an erasable-only bootstrap closure without relying on sibling built exports. Built execution uses the packaged `process.js` entry. An execution world that cannot map the host bootstrap requires a preinstalled compatible `bootstrapPath`; a host path is never assumed to name the same remote file.
+Source execution loads an erasable-only bootstrap closure without relying on sibling built exports. Built script execution uses `process.js`; a remote script deployment supplies `launch.bootstrapPath`. Embedded carriers launch their private worker through `launch.executable`. `resolveLaunch()` selects the local default during construction; an explicit remote invocation never depends on whether the client itself is packaged. A host path is never assumed to name the same remote file.
 
 ### Source map
 

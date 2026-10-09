@@ -14,13 +14,13 @@ Web Host 以当前操作系统用户的权限运行具有工具能力的 Session
 
 每个 Host 进程生成随机启动令牌，并由应用根 context 跨 Connection 热重载保留。`dsh-web-app` 每个进程只打印并打开一次 query 中带该令牌的普通根 URL。`frontend-static` 请求 Connection 授权 index 响应：只有 `GET /?token=...` 会把进程令牌交换为 cookie，再重定向到干净的 `./`；API 路径和 Authorization header 都不接受该令牌。过时令牌如果同时带有有效 cookie，会重定向到干净的 `./`。缺失与无效凭据得到同一份最小 401 响应。非 index 静态资产保持公开。
 
-cookie 是签名且绑定 authority 的 bearer。确定性名称与签名 payload 都包含规范化 hostname 和 port，因此同一 Harness home 可以在不同 Web port 运行而不发生 cookie 冲突。payload 在绝对有效期内携带安全整数形式的签发与过期时间；`cookieMaxAgeDays` 默认为 30。cookie 是 host-only、`Path=/`、`HttpOnly`、`SameSite=Strict`。随附服务器使用 loopback HTTP，因此不设置 `Secure`。这里没有 logout 操作。
+cookie 是签名且绑定 authority 的 bearer。确定性名称与签名 payload 都包含规范化 hostname 和 port，因此同一 Harness home 可以在不同 Web port 运行而不发生 cookie 冲突。payload 在绝对有效期内携带安全整数形式的签发与过期时间；`cookieMaxAgeDays` 默认为 30。cookie 是 host-only、`Path=/`、`HttpOnly`、`SameSite=Strict`。HTTP 监听器不设置 `Secure`。这里没有 logout 操作。
 
 HMAC 密钥是 `ctx.credentials` 中位于 `client-connection/browser-session` 的版本化 `grant` 记录；本地提供方将其存入 `$DSH_HOME/.credentials.yaml`。Connection 在激活期间加载或创建该记录，并保留密钥以同步校验请求。持久记录发生变化后，当前 Connection 继续使用已加载的密钥；下一次激活会加载替换记录或创建缺失记录，因此删除记录并重启进程会撤销全部既有 cookie。无效 owner payload 会明确失败，而不是被覆盖。启动令牌本身绝不持久化并在每次进程启动时变化；未过期 cookie 则能在相同 authority 上跨重启继续有效。
 
 页内 Web Worker preview 不暴露网络 socket。其由页面持有的 `postMessage` tunnel 先进入真实 route，收到 401 或 403 后再经 worker 本地 fetch handler 重试。这样既保留 Connection interceptor，又把认证绕过限制在创建 Host worker 的页面内。
 
-随附 CLI 继续拒绝 `--host 0.0.0.0`。认证不代表支持网络部署、TLS、转发 header 解释或代理配置。
+随附 CLI 接受本机具体绑定地址，但拒绝 `--host 0.0.0.0` 等通配地址。认证不会配置 TLS、转发 header 解释或代理。
 
 ## 验证
 
@@ -42,6 +42,8 @@ HMAC 密钥是 `ctx.credentials` 中位于 `client-connection/browser-session` �
 
 持有浏览器 cookie 就能调用完整的工具型 Host API，这与 Web 应用在创建 Session 后暴露的 authority 一致。`Host` 不授予更高的方法层级，方法在 API Proxy 与 Typert Remote 之间迁移也不会改变调用者集合。
 
-持久密钥使 cookie 跨重启生效，也让被盗 cookie 最多保有配置的绝对有效期。删除记录并重启进程是全局撤销机制；当前 Connection 刻意避免在每个请求上访问凭据提供方。不设置 `Secure` 保留 loopback HTTP，但如果操作者让同一 cookie authority 经未加密网络可达，cookie 会以明文传输。启动 URL 含进程凭据，必须视为敏感输出；运行时诊断不会重复它。
+持久密钥使 cookie 跨重启生效，也让被盗 cookie 最多保有配置的绝对有效期。删除记录并重启进程是全局撤销机制；当前 Connection 刻意避免在每个请求上访问凭据提供方。如果 HTTP listener 的 authority 经未加密网络可达，cookie 就可能以明文传输。启动 URL 含进程凭据，必须视为敏感输出；运行时诊断不会重复它。
 
 本决策部分取代[浏览器信任说明](2026-07-28-api-browser-trust-boundary.zh.md)中的认证延期与未认证非 loopback 后果。该说明仍是媒体类型、Host、Origin、Fetch-Metadata 和配置 authority 校验的有效权威。没有 active Agent Note 被归档：重叠只发生在局部，两条安全规则都保有未来决策价值。
+
+[原生 HTTPS 监听器决策](2026-09-23-native-https-web-listener.zh.md)取代本说明仅支持 HTTP 传输及不设置 `Secure` 的前提。`Secure` 由监听器协议决定；令牌交换、签名 cookie 的 authority 与凭据有效期仍由本说明定义。

@@ -1,9 +1,7 @@
 /**
  * Shared in-process child composition: the delegation-depth budget, the
  * durable session metadata, the resolved child `AgentOptions`, the delegated
- * policy seed, and the scoped setup a child agent needs. Both the one-shot
- * provider driver and the continuation manager compose children this way, so
- * depth accounting, lineage stamping, and delegation policy have one home.
+ * policy seed, and the scoped setup used by local activations.
  *
  * @module @deepseek-ai/dsh-subagent/child-agent
  */

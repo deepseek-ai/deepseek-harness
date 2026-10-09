@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt, {
-  AssembleContext, PromptAssembly, renderContextSnapshot, renderPrompt,
+  AssembleContext, PromptAssembly, renderContextSections, renderContextSnapshot, renderPrompt,
 } from '@deepseek-ai/dsh-system-prompt'
 import type { PromptContextOrderName, PromptSectionOrderName } from '@deepseek-ai/dsh-system-prompt'
 
@@ -24,6 +24,7 @@ const SECTION_ORDER_NAMES = [
   'HARNESS_SOURCE', 'WEB_SURFACE', 'DEPLOYMENT_PERSONA_SUFFIX',
 ] as const satisfies readonly PromptSectionOrderName[]
 const CONTEXT_ORDER_NAMES = [
+  'WORKING_DIRECTORY',
   'SANDBOX_POLICY', 'APPROVAL_POLICY', 'SUBAGENT_DELEGATION',
 ] as const satisfies readonly PromptContextOrderName[]
 function contributed(assembly: PromptAssembly): PromptAssembly['sections'] {
@@ -31,6 +32,121 @@ function contributed(assembly: PromptAssembly): PromptAssembly['sections'] {
 }
 
 describe('SystemPrompt', () => {
+  it('retains required user context when optional context is suppressed', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SystemPrompt, { includeRuntimeContext: false })
+      ctx.systemPrompt.context({ name: 'directory', order: 0, required: true, text: 'Directory: /project' })
+      ctx.systemPrompt.context({ name: 'optional', order: 1, text: () => { throw new Error('suppressed provider ran') } })
+      ctx.on('system-prompt/assemble', async (assembly, _context, next) => {
+        assembly.contexts.push({ name: 'unregistered', text: 'should stay suppressed' })
+        return next()
+      })
+      const assembly = await ctx.systemPrompt.assemble()
+      expect(renderContextSnapshot(assembly)).toContain('Directory: /project')
+      expect(assembly.contexts).toEqual([{ name: 'directory', text: 'Directory: /project' }])
+      expect(renderPrompt(assembly)).not.toContain('Directory: /project')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+  it('refreshes registered context without reassembling accepted sections, schemas, variables, or expert additions', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SystemPrompt)
+      let current = 'before'
+      let assemblies = 0
+      let tools = 0
+      let variables = 0
+      ctx.systemPrompt.context({ name: 'live', order: 0, text: () => current, interpolate: false })
+      ctx.systemPrompt.variable('fixed', () => { variables++; return current })
+      ctx.systemPrompt.tools(() => { tools++; return { schemas: [{ name: 'accepted_tool', description: current, parameters: {}, deferLoading: true }] } })
+      ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
+        assemblies++
+        const accepted = await next()
+        return { ...accepted, contexts: [...accepted.contexts, { name: 'expert', text: 'accepted only' }] }
+      })
+      const accepted = await ctx.systemPrompt.assemble()
+      current = 'after'
+      const refreshed = ctx.systemPrompt.refreshContext(accepted)
+      expect(refreshed.contexts).toEqual([
+        { name: 'live', text: 'after', interpolate: false }, { name: 'expert', text: 'accepted only' },
+      ])
+      expect(accepted.contexts[0]?.text).toBe('before')
+      expect(refreshed.sections).toBe(accepted.sections)
+      expect(refreshed.tools).toBe(accepted.tools)
+      expect(refreshed.tools[0]?.description).toBe('before')
+      expect(refreshed.variables).toBe(accepted.variables)
+      expect({ assemblies, tools, variables }).toEqual({ assemblies: 1, tools: 1, variables: 1 })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each([false, true])('restores missing required contexts before a later registered context=%s', async (later) => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SystemPrompt)
+      ctx.systemPrompt.context({ name: 'required', order: 0, text: 'fresh', required: true })
+      ctx.systemPrompt.context({ name: 'later', order: 10, text: 'last' })
+      const accepted = await ctx.systemPrompt.assemble()
+      accepted.contexts = later ? [{ name: 'expert', text: 'extra' }, accepted.contexts[1]!] : []
+      expect(ctx.systemPrompt.refreshContext(accepted).contexts).toEqual(later
+        ? [{ name: 'expert', text: 'extra' }, { name: 'required', text: 'fresh' }, { name: 'later', text: 'last' }]
+        : [{ name: 'required', text: 'fresh' }])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('applies current suppression without evaluating optional providers or keeping expert additions', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SystemPrompt)
+      let suppressed = false
+      ctx.systemPrompt.context({ name: 'required', order: 0, text: () => 'current', required: true })
+      ctx.systemPrompt.context({ name: 'optional', order: 10, text: () => {
+        if (suppressed) throw new Error('suppressed context was evaluated')
+        return 'optional'
+      } })
+      const accepted = await ctx.systemPrompt.assemble()
+      accepted.contexts.push({ name: 'expert', text: 'accepted optional' })
+      const restore = ctx.systemPrompt.suppressRuntimeContext()
+      suppressed = true
+      expect(ctx.systemPrompt.refreshContext(accepted).contexts).toEqual([{ name: 'required', text: 'current' }])
+      restore()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('preserves literal context in both the joined snapshot and attributed sections', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SystemPrompt)
+      ctx.systemPrompt.variable('project', () => 'expanded')
+      const literal = '/workspace/{{project}}/{{unregistered}}/{{malformed-name}}'
+      ctx.systemPrompt.context({ name: 'literal', order: 0, text: literal, interpolate: false })
+      ctx.systemPrompt.context({ name: 'template', order: 1, text: '{{project}}', interpolate: true })
+      ctx.systemPrompt.context({ name: 'default', order: 2, text: '{{project}}' })
+      const assembly = await ctx.systemPrompt.assemble()
+      expect(assembly.contexts).toEqual([
+        { name: 'literal', text: literal, interpolate: false },
+        { name: 'template', text: '{{project}}', interpolate: true },
+        { name: 'default', text: '{{project}}' },
+      ])
+      expect(renderContextSections(assembly)).toEqual([
+        { name: 'literal', text: literal },
+        { name: 'template', text: 'expanded' },
+        { name: 'default', text: 'expanded' },
+      ])
+      expect(renderContextSnapshot(assembly))
+        .toBe(`Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n${literal}\n\nexpanded\n\nexpanded`)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('keeps repository section placements unique, integral, and at least ten apart', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt, {})

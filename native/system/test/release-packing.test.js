@@ -15,7 +15,7 @@ function fixture(t) {
   t.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
   const dir = path.join(workspace, 'native/system');
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(workspace, 'package.json'), `${JSON.stringify({ private: true, packageManager: 'pnpm@11.7.0' })}\n`);
+  fs.writeFileSync(path.join(workspace, 'package.json'), `${JSON.stringify({ private: true, packageManager: 'pnpm@11.28.5' })}\n`);
   fs.writeFileSync(path.join(workspace, 'pnpm-workspace.yaml'), 'packages:\n  - native/system\n  - native/system/packages/*\n');
   fs.writeFileSync(path.join(workspace, 'LICENSE'), workspaceLicense);
   const scratch = path.join(workspace, 'scratch');
@@ -26,7 +26,7 @@ function fixture(t) {
     fs.writeFileSync(path.join(dir, file), `${JSON.stringify(value, null, 2)}\n`);
   };
   const repository = (name) => ({ type: 'git', url: publicRepository, directory: `native/system/packages/${name}` });
-  writeJson('package.json', { name: 'native-packing-fixture', private: true, version: '1.2.3', packageManager: 'pnpm@11.7.0' });
+  writeJson('package.json', { name: 'native-packing-fixture', private: true, version: '1.2.3', packageManager: 'pnpm@11.28.5' });
   writeJson('packages/linux-x64/package.json', {
     name: '@fixture/native-linux-x64', version: '1.2.3', repository: repository('linux-x64'),
     os: ['linux'], cpu: ['x64'], files: ['bin/', 'prebuilds.json'],

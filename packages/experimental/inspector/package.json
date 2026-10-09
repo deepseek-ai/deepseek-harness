@@ -50,9 +50,9 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-util-crypto": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "open": "^11.0.0",
+    "open": "^11.0.2",
     "serve-static": "^2.2.1",
-    "ws": "^8.21.0"
+    "ws": "^8.21.3"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -65,7 +65,7 @@
     "chrome-devtools-frontend": "1.0.1638082",
     "@types/serve-static": "^2.2.0",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
-    "@testing-library/react": "^16.1.0",
+    "@testing-library/react": "^16.3.3",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
     "@types/react": "~18.3.1",
     "@deepseek-ai/dsh-client-ui-layout": "workspace:*",
@@ -83,6 +83,6 @@
     "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@types/ws": "^8.18.1",
     "playwright": "^1.49.0",
-    "tsx": "^4.19.2"
+    "tsx": "^4.23.13"
   }
 }

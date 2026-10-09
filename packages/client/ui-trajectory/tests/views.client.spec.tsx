@@ -9,7 +9,7 @@
  */
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createElement, type ComponentProps, type FC, type ReactNode } from 'react'
 import { bindSnapshotSelector, SlotTestRuntime, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
@@ -595,6 +595,37 @@ describe('tab switching in ConversationRoot', () => {
     fireEvent.click(screen.getByRole('button', { name: '请求 #2 · 压缩' }))
     expect(screen.getByText('压缩 · 轮次之间')).toBeTruthy()
     expect(view.container.textContent).not.toContain('Turn null')
+  })
+
+  it('reports a streaming Assistant record and a running compaction as pending', async () => {
+    const nodes: LegacyConversationSlice['nodes'] = [
+      { kind: 'user', seq: 1, time: 1_000, content: [], source: null },
+    ]
+    const requests: RequestView[] = [
+      {
+        purpose: 'assistant', startSeq: 2, turn: 1, step: 1,
+        startedAt: 2_000, completedAt: null, status: 'running',
+      },
+      {
+        purpose: 'compaction', startSeq: 3, turn: 1, step: 0,
+        startedAt: 3_000, completedAt: null, status: 'running',
+      },
+    ]
+    const b = await bench(historySnapshot(nodes, {
+      requests,
+      partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: 'still streaming' }] },
+    }))
+    mount(b)
+    fireEvent.click(screen.getByRole('tab', { name: 'Trajectory' }))
+    const detail = () => screen.getByRole('complementary', { name: '事件详情' })
+
+    fireEvent.click(screen.getByRole('row', { name: /still streaming/ }))
+    expect(within(detail()).getByText('等待中')).toBeTruthy()
+    expect(within(detail()).queryByText('已完成')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '请求 #2 · 压缩' }))
+    expect(within(detail()).getByText('等待中')).toBeTruthy()
+    expect(within(detail()).queryByText('已压缩')).toBeNull()
   })
 
   it('activates only the selected standalone compaction section', async () => {
@@ -1293,6 +1324,28 @@ describe('timeline projection', () => {
 })
 
 describe('TrajectoryView state', () => {
+  it.each([
+    { interrupted: true, status: '失败' },
+    { interrupted: false, status: '已完成' },
+  ])('uses the settled response status when the Step start is unloaded: $status', ({ interrupted, status }) => {
+    const nodes: LegacyConversationSlice['nodes'] = [{
+      kind: 'assistant', seq: 10, time: 10_000, turn: 2, step: 3,
+      blocks: [{ kind: 'text', text: 'loaded response' }],
+      ...(interrupted ? { interrupted: true } : {}),
+    }]
+    render(<TrajectoryView
+      {...standaloneProps(nodes)}
+      {...standaloneHistory(historySnapshot(nodes))}
+      {...standaloneDuration()}
+    />)
+    fireEvent.click(screen.getByRole('row', { name: /loaded response/ }))
+    expect(within(screen.getByRole('tabpanel')).getByText(status)).toBeTruthy()
+    fireEvent.click(within(screen.getByRole('table')).getByRole('button', { name: '请求 #1' }))
+    expect(within(screen.getByRole('tabpanel')).getByText(status)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '助手消息' }))
+    expect(within(screen.getByRole('tabpanel')).getByText(status)).toBeTruthy()
+  })
+
   it('reveals resident history one bounded page at a time', async () => {
     const nodes: LegacyConversationSlice['nodes'] = Array.from({ length: 5_000 }, (_, index) => ({
       kind: 'user' as const,

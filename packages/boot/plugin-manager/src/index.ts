@@ -16,16 +16,18 @@ import {
   reconcileProfilePatches, readProfilePatches, OPTIONAL_BUNDLES, bundlePatchPaths,
   evaluatePluginCompatibility, readProfileCompatibility, readProfileVersionExemptions,
   setProfileVersionExemption, PROFILE_COMPATIBILITY_FILENAME,
+  OFFICIAL_ON_DEMAND_CATALOG, getDshRuntimeVersion,
 } from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-hmr'
 import type { ProfileContext, ProfileManifest } from '@deepseek-ai/dsh-app-boot'
 import { bundleManifest, readProfileRegistry, registryArguments, runProfilePnpm, saveManifest, viewProfilePackage } from './operations.ts'
 import { classifyInstallFailure } from './install-failure.ts'
+import { officialBundleInstallTarget } from './official-install-target.ts'
 import { dependencySpec, InvalidInstallSpecError, parseInstallSpec, type ParsedInstallSpec } from './install-spec.ts'
 import { attributeFailure, normalizeRegistry, NPMMIRROR_REGISTRY, registryPlan } from './registry.ts'
 import { writePluginEnabled } from './patch.ts'
 import { incompatiblePlugin, ManagementFailure } from './failure.ts'
-import { approveBuilds, readPendingBuilds } from './build-approval.ts'
+import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
 import { checkGithubConnection } from './github-connection.ts'
 import type {
   BundleInfo, BundleRowInfo, ChangeResult, InspectOptions, InstallBundleOptions, ManagementError, PackageResult, PluginChange,
@@ -271,7 +273,7 @@ export class PluginManager extends TypertRemoteService {
     })
   }
 
-  /** Read the profile's installed bundles, the bundles this dsh installation supplies, and the selected names that are not bundles.
+  /** Read installed, installation-provided, and offline Official catalog bundles, plus selected non-bundle names.
    * A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.
    * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
    * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
@@ -284,43 +286,65 @@ export class PluginManager extends TypertRemoteService {
     const recorded = manifest.dependencies ?? {}
     const dependencies = Object.keys(recorded)
     const installation = JSON.parse(readFileSync(this.profile.installAnchor, 'utf8')) as InstallationManifest
-    const names = [...new Set([...selected, ...dependencies, ...Object.keys(installation.dependencies ?? {})])]
+    const catalog = new Map(OFFICIAL_ON_DEMAND_CATALOG.map(entry => [entry.packageName, entry]))
+    const names = [...new Set([...selected, ...dependencies, ...Object.keys(installation.dependencies ?? {}), ...catalog.keys()])]
     const bundles: BundleInfo[] = []
+    const runtimeVersion = getDshRuntimeVersion()
     for (const name of names) {
       const installed = dependencies.includes(name)
       const optional = OPTIONAL_BUNDLES.includes(name)
       const enabled = selected.includes(name)
       const shipped = Object.hasOwn(installation.dependencies ?? {}, name)
-      // Bundle resolution reads the installation first, so a profile dependency the installation manifest also names,
-      // like one it forbids removing, is not the loaded copy.
+      const offered = catalog.get(name)
+      const official = optional || offered !== undefined
+      let target: Pick<BundleInfo, 'installTarget'> = {}
+      let targetError: ManagementError | undefined
+      if (offered !== undefined) {
+        try { target = { installTarget: officialBundleInstallTarget(name, this.profile.installAnchor, runtimeVersion) } }
+        catch (error) { targetError = managementError(error) }
+      }
+      const catalogMeta = offered === undefined ? {} : { meta: offered.meta }
+      if (offered !== undefined && !installed && !shipped) {
+        bundles.push({ name, official, availability: 'missing', ...catalogMeta, ...target, enabled, installed, optional,
+          removable: enabled, rows: [], overrides: [],
+          ...targetError !== undefined ? { error: targetError } : enabled ? { error: { code: 'not-bundle' } } : {} })
+        continue
+      }
+      // Installation-owned copies remain protected even if a profile also declares their names.
       const owned = installed && !shipped
-      // A selection neither the profile nor the installation holds, such as a retired bundle, is removed by deselecting it.
       const removable = owned || (enabled && !installed && !shipped)
       const sourceOf = (packageName?: string): { source?: string } =>
         owned ? { source: dependencySpec(name, recorded[name] as string, this.profile.dir, packageName) } : {}
       const readOnlyReason = this.protectsManager(name) ? 'management-required' as const : undefined
+      let availability: BundleInfo['availability'] = 'missing'
+      let version: string | undefined
       try {
         const info = bundleManifest(name, this.profile.dir, this.profile.installAnchor)
+        availability = shipped ? 'installation' : 'profile'
         if (info === undefined) {
-          if (enabled) bundles.push({ name, ...sourceOf(), enabled, installed, optional,
-            removable: removable && readOnlyReason === undefined,
-            ...(readOnlyReason === undefined ? {} : { readOnlyReason }), error: { code: 'not-bundle' }, rows: [], overrides: [] })
+          if (enabled || offered !== undefined) bundles.push({ name, official, availability, ...catalogMeta, ...target,
+            ...sourceOf(), enabled, installed, optional, removable: removable && readOnlyReason === undefined,
+            ...(readOnlyReason === undefined ? {} : { readOnlyReason }), error: targetError ?? { code: 'not-bundle' }, rows: [], overrides: [] })
           continue
         }
+        version = info.version
         const compatibility = evaluatePluginCompatibility(info, exemptions)
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
         const dir = resolveBundleDir('dsh', name, this.profile.installAnchor, this.profile.dir)
-        const meta = readPluginMeta(info.name ?? name, pathToFileURL(join(dir, 'package.json')).href)
-        bundles.push({ name, ...(info.version === undefined ? {} : { version: info.version }),
+        const meta = offered?.meta ?? readPluginMeta(info.name ?? name, pathToFileURL(join(dir, 'package.json')).href)
+        bundles.push({ name, official, availability, ...target, ...(version === undefined ? {} : { version }),
           ...(info.description === undefined || info.description === '' ? {} : { description: info.description }),
           ...meta === undefined ? {} : { meta },
           ...sourceOf(info.name), enabled, installed, optional, removable: removable && readOnlyReason === undefined,
           ...(readOnlyReason === undefined ? {} : { readOnlyReason }),
-          ...this.declaredRows(name, info) })
+          ...this.declaredRows(name, info),
+          ...targetError === undefined ? {} : { error: targetError } })
       } catch (error) {
-        if (enabled || installed) {
-          bundles.push({ name, ...sourceOf(), enabled, installed, optional, removable: removable && readOnlyReason === undefined,
-            ...(readOnlyReason === undefined ? {} : { readOnlyReason }), error: managementError(error), rows: [], overrides: [] })
+        if (enabled || installed || optional || offered !== undefined) {
+          bundles.push({ name, official, availability, ...catalogMeta, ...target, ...(version === undefined ? {} : { version }),
+            ...sourceOf(), enabled, installed, optional, removable: removable && readOnlyReason === undefined,
+            ...(readOnlyReason === undefined ? {} : { readOnlyReason }),
+            error: targetError ?? managementError(error), rows: [], overrides: [] })
         }
       }
     }
@@ -466,7 +490,7 @@ export class PluginManager extends TypertRemoteService {
    * `package.json` and `pnpm-lock.yaml` as they were; downloaded files can stay.
    * @param spec One package spec, including local paths relative to the invocation directory.
    * @param options Whether to activate the installed bundle (defaults to true), the request id a cancellation names,
-   * the pending build scripts to allow for this profile before pnpm runs, and the registry asked first.
+   * the pending build scripts to allow, whether to save an exact dependency, and the registry asked first.
    * @returns Package-manager diagnostics, the registries asked, and the observed activation outcome.
    */
   @Remote
@@ -515,7 +539,7 @@ export class PluginManager extends TypertRemoteService {
           if (stopped()) throw new InstallCancelledError()
           result.registries.push(registry)
           announce('installing', { registry, index: index + 1, total: plan.length })
-          run = await this.runPnpm(['add', spec, ...registryArguments(registry)], control.abort.signal, requestId)
+          run = await this.runPnpm(['add', spec, ...options?.saveExact === true ? ['--save-exact'] : [], ...registryArguments(registry)], control.abort.signal, requestId)
           result.packageResult = run
           if (stopped()) throw new InstallCancelledError()
           // A compatibility refusal is the package's own answer, so no other registry is asked.
@@ -538,8 +562,8 @@ export class PluginManager extends TypertRemoteService {
         const succeeded = run.exitCode === 0 && run.timedOut !== true
         if (succeeded) delete result.failedAt
         if (!succeeded) {
-          // pnpm-workspace.yaml is not restored, so the names pnpm left undecided there can be offered for approval.
-          try { result.pendingBuilds = await readPendingBuilds(this.profile.dir) }
+          // pnpm-workspace.yaml is not restored, so the names it left undecided, or reported as ignored, are offered for approval.
+          try { result.pendingBuilds = await recordPendingBuilds(this.profile.dir, run.output) }
           catch (error) {
             this.ownerContext.logger.warn('Could not read pending build approvals after pnpm failed', error)
           }
@@ -548,7 +572,11 @@ export class PluginManager extends TypertRemoteService {
         const after = readProfileManifest('dsh', this.profile.dir).dependencies ?? {}
         const installed = Object.keys(after).filter(name => before[name] !== after[name])
         // Registry retries can retain the saved range after a partial installation.
-        if (installed.length === 0) installed.push(...Object.keys(after).filter(name => spec === name || spec.startsWith(`${name}@`)))
+        if (installed.length === 0) {
+          const parsed = parsedForRegistry(spec)
+          const localName = parsed.kind === 'path' ? readProfileManifest('dsh', parsed.path).name : undefined
+          installed.push(...Object.keys(after).filter(name => name === localName || spec === name || spec.startsWith(`${name}@`)))
+        }
         const target = installed[0]
         if (installed.length !== 1 || target === undefined) throw new ManagementFailure('ambiguous-install')
         name = target
@@ -662,7 +690,8 @@ export class PluginManager extends TypertRemoteService {
     const rows: BundleRowInfo[] = []
     const packages = this.ctx.get('pluginPackages')
     for (const row of flatten(composeEntries([patches.filter(item => item.insert !== undefined)]))) {
-      if (typeof row.id !== 'string' || typeof row.name !== 'string') continue
+      // Group rows are containers without a plugin inventory entry; their children carry the switches.
+      if (typeof row.id !== 'string' || typeof row.name !== 'string' || row.group === true) continue
       const active = live.get(row.id)
       const entryId = active?.entryId
       const base = active?.baseUrl ?? pathToFileURL(join(dir, 'package.json')).href

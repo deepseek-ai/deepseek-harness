@@ -593,15 +593,26 @@ export class LocalCredentialProvider extends CredentialProvider {
       if (this.closed) return
       this.queueRefresh()
     })
-    watcher.on('error', (error) => {
+    const reportWatcherError = (error: unknown): void => {
+      // A watcher error after disposal is not actionable: the watched home is
+      // going away with this provider, and logging it would be noise.
+      if (this.closed) return
       this.ctx.logger.warn('credentials-local: watcher error on %s', this.spec.filename)
       this.ctx.logger.warn(error)
-    })
+    }
+    watcher.on('error', reportWatcherError)
     yield async () => {
       // Quiesce: stop accepting events, close the watcher, then wait out any
       // queued or in-flight operation so nothing publishes after disposal.
       this.closed = true
-      await watcher.close()
+      // `close()` drops every listener but leaves a scheduled write-settle
+      // poll; its straggler stats the document this teardown is deleting,
+      // which Windows reports as EPERM, and an 'error' emission with no
+      // listener is rethrown as an uncaught exception. Re-attach across the
+      // close so that straggler stays inside this provider.
+      const closing = watcher.close()
+      watcher.on('error', reportWatcherError)
+      await closing
       await this.operations
     }
   }

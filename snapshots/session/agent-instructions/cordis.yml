@@ -1,5 +1,6 @@
-# Workspace-context snapshot patch: keep project-root and user-global
-# discovery inside the scenario's temporary cwd.
+# Workspace-context snapshot patch: the harness exports DSH_HOME=<cwd>/.dsh and
+# DSH_AGENTS_HOME=<cwd>/.agents, so project-root and both user-global root
+# discoveries stay inside the scenario's temporary cwd.
 - id: agent-default-model
   name: '@deepseek-ai/dsh-agent-default-model'
   config:
@@ -16,7 +17,6 @@
   name: '@deepseek-ai/dsh-agent-instructions'
   config:
     maxBytes: 65536
-    dshHome: !!js process.cwd() + '/.dsh'
     projectRootMarkers:
       - .dsh-project
 
@@ -24,6 +24,6 @@
   name: '@deepseek-ai/dsh-system-prompt'
   config:
     personaPrefix: |
-      You are a coding assistant powered by the {{model}} model. Your working directory is {{cwd}}.
+      You are a coding assistant powered by the {{model}} model.
 
       Verify your work by running the code or tests. Keep answers brief and factual.

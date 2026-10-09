@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-自托管 lane 上的 Windows 会话在七次 send 中只有一到两次按受控提示符结算，其余都要支付静默层（2026-09-25/26，issue #2487）。精确的就绪证据是 OSC `133;D` 标记之后受控提示符的可打印尾部，而等待它的上界是 `idleSilenceMs + handoffGraceMs`。原生 Windows 探测表明该渲染以两个 pty 分块到达：先是标记本身，2–28 毫秒后是 5 字节的 `dsh> `（Windows PowerShell 5.1 下 56 次渲染，pwsh 7.6.6 下同样是两分块渲染），任何提示符之后都没有可打印文本，输出中也没有终端查询。标记由 shell 自己的 prompt 函数写出、尾部由同一次渲染写出，因此尾部晚于上界到达意味着宿主机拖慢了这次投递，而不是提示符缺失。会话此前仍会按 `inferred_idle` 结算，每次这样的 send 让工具调用多付约三秒。该 lane 自身的失败不是这种状态：首个带着该字段的 master run（run 36326153388，2026-09-27 14:30Z）与其前一个 run（36309006133）同样耗时 20.8 秒，因此其退化的 send 是在宽限不起作用的情况下按普通上界结算的；[Windows lane 观测笔记](../testing/2026-09-27-observation-waits-on-observed-state.zh.md)记录了这项仍未关闭的调查。
+自托管 lane 上的 Windows 会话在七次 send 中只有一到两次按受控提示符结算，其余都要支付静默层（2026-09-25/26，issue #2487）。精确的就绪证据是 OSC `133;D` 标记之后受控提示符的可打印尾部，而等待它的上界是 `idleSilenceMs + handoffGraceMs`。原生 Windows 探测表明该渲染以两个 pty 分块到达：先是标记本身，2–28 毫秒后是 5 字节的 `dsh> `（Windows PowerShell 5.1 下 56 次渲染，pwsh 7.6.6 下同样是两分块渲染），任何提示符之后都没有可打印文本，输出中也没有终端查询。标记由 shell 自己的 prompt 函数写出、尾部由同一次渲染写出，因此尾部晚于上界到达意味着宿主机拖慢了这次投递，而不是提示符缺失。会话此前仍会按 `inferred_idle` 结算，每次这样的 send 让工具调用多付约三秒。该 lane 自身的失败不是这种状态：首个带着该字段的 master run（run 36326153388，2026-09-27 14:30Z）与其前一个 run（36309006133）同样耗时 20.8 秒，因此其退化的 send 是在宽限不起作用的情况下按普通上界结算的；[Windows lane 观测笔记](../testing/2026-09-27-observation-waits-on-observed-state.zh.md)记录了该调查，而[自带控制台宿主说明](2026-09-28-pty-bundled-console-host.zh.md)实测该池的尾部以已经畸形的形态到达（`\ndsh>\x1b[1C`），任何针对良构尾部的上界都覆盖不了。本字段仍然负责真正迟到的尾部。
 
 ## Decision
 

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore, { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
@@ -61,14 +62,15 @@ class VisionAdapter extends LlmAdapter {
   stream(_options: GenerateOptions): AsyncIterable<StreamChunk> { throw new Error('fixture does not stream') }
 }
 
-async function setup(content: JsonValue[], maxInlineTokens: number) {
+async function setup(content: JsonValue[], maxInlineTokens: number, mode: 'native' | 'ptc' = 'native') {
   const root = await mkdtemp(join(tmpdir(), 'dsh-multimodal-spill-'))
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx, root)
   onTestFinished(async () => {
     try { await ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) }
   })
   await ctx.plugin(SystemPrompt)
-  await ctx.plugin(ToolRuntime, { mode: 'both' })
+  await ctx.plugin(ToolRuntime, { mode })
   const fsFiber = await ctx.plugin(FileSystem, { cwd: root })
   await ctx.plugin(TestAttachments, root)
   await ctx.plugin(LocalSpillStore, { root: join(root, 'spill'), cleanupPeriodDays: 0 })
@@ -178,7 +180,7 @@ describe('multimodal spill', () => {
 
   it.each([false, true])('forwards omitted-image recovery only for successful PTC results (failure: %s)', async (failure) => {
     const original = [text('A'.repeat(4000)), image(), text('C'.repeat(4000))]
-    const { ctx, execute, session } = await setup(original, 200)
+    const { ctx, execute, session } = await setup(original, 200, 'ptc')
     if (failure) {
       const attachment = await ctx.attachments.saveImage({ data: PNG, mediaType: 'image/png' })
       ctx.on('tools/execute', async (exec, next) => {

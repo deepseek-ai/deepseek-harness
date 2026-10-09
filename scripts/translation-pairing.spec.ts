@@ -133,6 +133,7 @@ describe('translation pairing manifest', () => {
 
 describe('translation pairing switchers', () => {
   it('exempts only paired generated English sources from reciprocal switchers', () => {
+    expect(requiresSourceLanguageSwitcher('docs/cli-help.md')).toBe(false)
     expect(requiresSourceLanguageSwitcher('docs/config-catalog.md')).toBe(false)
     expect(requiresSourceLanguageSwitcher('docs/cordis-api/context.md')).toBe(false)
     expect(requiresSourceLanguageSwitcher('docs/cordis-api/inherited.md')).toBe(false)
@@ -248,6 +249,31 @@ describe('translation pairing records', () => {
     expect([...computed.keys()]).toEqual(['/', '/guide', '/guide/events', '/guide/code', '/guide/events~2'])
     expect(record(`${en}\nSee [bar](bar.md).\n`, `${zh}\nSee [bar](bar.zh.md).\n`))
       .toEqual(record(`${en}\nSee [bar](bar.zh.md).\n`, `${zh}\nSee [bar](bar.md).\n`))
+  })
+
+  it('retains section hashes after normalized links move later heading offsets', () => {
+    const english = '# Guide\n\n[Reference](bar.md?x=1&amp;y=2#tail)\n\n## Tail\n\nTail body.\n'
+    const chinese = '# 指南\n\n[参考](bar.zh.md?x=1&amp;y=2#tail)\n\n## 尾部\n\n尾部正文。\n'
+    const trees = { en: parseTranslationMarkdown(english), zh: parseTranslationMarkdown(chinese) }
+    const originalTrees = structuredClone(trees)
+    const computed = computeTranslationPairingRecord(paths, english, chinese, context, trees)
+
+    expect([...computed]).toEqual([
+      ['/guide', { en: '3f43f06d1244d874', zh: '021cfe53b05ba084' }],
+      ['/guide/tail', { en: '945d8537bf1f2b5f', zh: '0a851cb395705d76' }],
+    ])
+    expect(computed).toEqual(record(english, chinese))
+    expect(trees).toEqual(originalTrees)
+  })
+
+  it('retains section hashes when the authored tree needs no link normalization', () => {
+    const english = '# Guide\n\nBody.\n'
+    const chinese = '# 指南\n\n正文。\n'
+    const trees = { en: parseTranslationMarkdown(english), zh: parseTranslationMarkdown(chinese) }
+
+    expect([...computeTranslationPairingRecord(paths, english, chinese, context, trees)]).toEqual([
+      ['/guide', { en: '5e1bfa97a822af7a', zh: '3409c92bef7306bb' }],
+    ])
   })
 
   it('refuses sides with different heading counts', () => {

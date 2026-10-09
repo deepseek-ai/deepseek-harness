@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write apps/cli/reference/README.md
 /dsh-cli-behavior-reference:
-  en: d25712a65d21ab45
-  zh: b1c57b706bc64085
+  en: 5a4f43756dae900e
+  zh: d58c479481cfa5fe
 /dsh-cli-behavior-reference/profile-boot:
   en: e3a159750f5f9ed3
   zh: e02d9004fcc239f9
 /dsh-cli-behavior-reference/profile-boot/app-arguments:
-  en: be06f11a3b585d0f
-  zh: 28c7ee6e0d86dc3b
+  en: 3d2f4cf6a0afc3cd
+  zh: 9fe7e8f6a4acb596
 /dsh-cli-behavior-reference/profile-boot/config-schema-dump:
   en: a356f8a68f3b3685
   zh: c718713b5d709295
@@ -18,11 +18,11 @@
   en: d6368bf97a02bd57
   zh: 2ab7888a108961ce
 /dsh-cli-behavior-reference/plugin-management:
-  en: 9980ff1600fa9460
-  zh: cc66ba45e27b5540
+  en: 8d2cfff9bab7327f
+  zh: 21515ab6e6798504
 /dsh-cli-behavior-reference/web-profile:
-  en: 42f0b9349cf1574b
-  zh: a3cc6e352e71badb
+  en: ee6c00e55a2f0a10
+  zh: 404942e397e213ab
 /dsh-cli-behavior-reference/shared-deployment-behavior:
   en: 6a7abc9339e8f37f
   zh: 133adb834c8e195d

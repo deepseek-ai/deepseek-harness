@@ -285,7 +285,7 @@ export function gatesForMode(selected: Mode): Gate[] {
     case 'ci-unit':
       return ciUnitGates()
     case 'ci-bench':
-      return [pnpmScript('bench', 'test:bench', { label: 'performance benchmarks' })]
+      return [pnpmExec('bench', ['tsx', 'scripts/run-ci-bench.ts'], { label: 'performance benchmarks' })]
     case 'ci-snapshot':
       return [ciBuildGate(), snapshotGate()]
     case 'ci-artifacts':
@@ -345,6 +345,8 @@ function ciSharedStaticGates(): Gate[] {
   return [
     pnpmScript('runtime-closure', 'verify-runtime-closure', { label: 'runtime closure' }),
     pnpmScript('default-product-isolation', 'verify-default-product-isolation', { label: 'default product isolation' }),
+    pnpmScript('product-use', 'verify-product-use', { label: 'product package classification' }),
+    pnpmScript('official-bundle-catalog', 'verify-official-bundle-catalog', { label: 'Official bundle catalog' }),
     pnpmScript('application-entrypoints', 'verify-application-entrypoints', { label: 'application entrypoints' }),
     pnpmScript('constraints', 'constraints'),
     pnpmScript('package-dependencies', 'verify-package-dependencies', { label: 'package dependencies' }),
@@ -366,6 +368,7 @@ function sharedHygieneGates(): Gate[] {
     pnpmScript('client-ui-i18n', 'verify-client-ui-i18n', { label: 'client UI i18n' }),
     pnpmScript('client-route-resolution', 'verify-client-route-resolution', { label: 'client route resolution' }),
     pnpmScript('no-bare-dispatcher', 'verify-no-bare-dispatcher', { label: 'proxy-aware dispatchers' }),
+    pnpmScript('plugin-record-callers', 'verify-plugin-record-callers', { label: 'plugin record callers' }),
     pnpmScript('no-unknown-casts', 'verify-no-unknown-casts', { label: 'no new unknown casts' }),
   ]
 }
@@ -408,11 +411,9 @@ function nodeCompatGates(): Gate[] {
   return [
     ...typecheck,
     pnpmScript('build', 'build', {
+      ...pnpmInvocation(['run', 'build', '--artifacts-only']),
+      displayCommand: 'pnpm run build --artifacts-only',
       ...typecheck.length === 0 ? {} : { needs: ['typecheck'] },
-    }),
-    pnpmScript('build:web', 'build:web', {
-      label: 'Web frontend build',
-      needs: ['build'],
     }),
     ...nodeCompatSmokeGates({ cliSmoke: true }),
   ]
@@ -420,33 +421,21 @@ function nodeCompatGates(): Gate[] {
 
 function nodeCompatSmokeGates(options: { cliSmoke?: boolean } = {}): Gate[] {
   const gates: Gate[] = [
-    pnpmExec('source-worker-smoke', [
+    // Serial files keep CLI and PTC children from overlapping. Vitest's
+    // environment worker override takes precedence over its CLI flags.
+    pnpmExec('source-compat-smokes', [
       'vitest',
       'run',
       'packages/workflow/workflow-ptc/tests/source-runtime.compat.spec.ts',
-    ], { label: 'source worker smoke' }),
-    pnpmExec('jsonl-zstd-smoke', [
-      'vitest',
-      'run',
       'packages/session/session-persistence-jsonl/tests/zstd.compat.spec.ts',
-    ], { label: 'JSONL Zstandard smoke' }),
-    pnpmExec('dsh-source-launch-smoke', [
-      'vitest',
-      'run',
       'apps/cli/tests/source-launch.compat.spec.ts',
-    ], { label: 'dsh source-launch smoke' }),
-    pnpmExec('vitest-jsdom-smoke', [
-      'vitest',
-      'run',
       'scripts/vitest-environment.compat.spec.ts',
-    ], { label: 'Vitest jsdom smoke' }),
-    pnpmExec('profile-resolution-smoke', [
-      'vitest',
-      'run',
       'packages/boot/app-boot/tests/profile-resolution.spec.ts',
       'packages/boot/app-boot/tests/profile-resolution-service.spec.ts',
       'packages/boot/app-boot/tests/profile-resolution-worker-bootstrap.spec.ts',
-    ], { label: 'profile resolution smoke' }),
+      '--no-file-parallelism',
+      '--maxWorkers=1',
+    ], { label: 'source compatibility smokes', env: { VITEST_MAX_WORKERS: '1' } }),
   ]
   if (options.cliSmoke) {
     gates.push(
@@ -457,7 +446,7 @@ function nodeCompatSmokeGates(options: { cliSmoke?: boolean } = {}): Gate[] {
       ], {
         label: 'CLI lazy-search startup smoke',
         env: { DSH_REQUIRE_BUILT_CLI_SMOKE: '1' },
-        needs: ['build:web'],
+        needs: ['build'],
       }),
     )
   }
@@ -771,6 +760,8 @@ function hygieneLeafGates(options: { artifactNeeds?: string[] } = {}): Gate[] {
     pnpmScript('publint', 'publint', artifactOptions),
     pnpmScript('constraints', 'constraints'),
     pnpmScript('default-product-isolation', 'verify-default-product-isolation', { label: 'default product isolation' }),
+    pnpmScript('product-use', 'verify-product-use', { label: 'product package classification' }),
+    pnpmScript('official-bundle-catalog', 'verify-official-bundle-catalog', { label: 'Official bundle catalog' }),
     pnpmScript('package-dependencies', 'verify-package-dependencies', { label: 'package dependencies' }),
     pnpmScript('application-entrypoints', 'verify-application-entrypoints', { label: 'application entrypoints' }),
     pnpmScript('dsh-package-licenses', 'verify-dsh-package-licenses', { label: 'DSH package licenses' }),
@@ -799,6 +790,7 @@ function docSyncLeafGates(options: {
       : [pnpmScript('doc-typecheck', options.docTypecheckScript ?? 'doc-typecheck', docTypecheckOptions)],
     pnpmScript('docs-site-build', options.docsBuildScript ?? 'docs:build', { label: 'documentation build' }),
     pnpmScript('doc-graphs', 'verify-doc-graphs', { label: 'doc graphs' }),
+    pnpmScript('cli-help', 'verify-cli-help', { label: 'CLI help reference' }),
     pnpmScript('markdown-links', 'verify-md-links', { label: 'markdown links', quick: true }),
     pnpmScript('type-equivalence', 'verify-type-equiv', { label: 'type equivalence', quick: true }),
     pnpmScript('cordis-catalog', 'verify-cordis-catalog', { label: 'cordis catalog' }),

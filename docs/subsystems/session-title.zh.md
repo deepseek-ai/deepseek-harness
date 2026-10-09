@@ -2,7 +2,7 @@
 
 [English](session-title.md) | 中文
 
-[`@deepseek-ai/dsh-session-title`](../../packages/session/session-title) 所拥有的持久、后写覆盖的标题状态与可选异步提供方词汇。共享 LLM（大语言模型）辅助组件负责精确的辅助请求记录。各包 README 负责时序、回退、失败与 fork 行为；生成的[持久化日志事件目录](../persistence-catalog.zh.md)负责完整的事件声明。
+[`@deepseek-ai/dsh-session-title`](../../packages/session/session-title) 所拥有的持久、后写覆盖的标题状态与可选异步提供方词汇。共享执行模块负责精确的辅助请求记录。各包 README 负责时序、回退、失败与 fork 行为；生成的[持久化日志事件目录](../persistence-catalog.zh.md)负责完整的事件声明。
 
 源码：[`packages/session/session-title/src/index.ts`](../../packages/session/session-title/src/index.ts)、[`packages/session/session-title-llm/src/index.ts`](../../packages/session/session-title-llm/src/index.ts)
 
@@ -64,7 +64,7 @@ interface SessionTitleSnapshot extends SessionTitleEventData {
 
 ## 辅助请求记录
 
-共享 LLM 辅助组件会在调用模型前，记录每一项已经过验证且可分发的标题请求。即使后续生成失败，载荷仍会复现模型可见的系统输入与消息输入、路由、输出上限、提供方归属和源消息归因。
+共享执行模块会在调用模型前，记录每一项已经过验证且可分发的标题请求。即使后续生成失败，载荷仍会复现模型可见的系统输入与消息输入、路由、输出上限、解析后的推理强度、提供方归属和源消息归因。
 
 ```ts type-equiv
 /** Exact model-visible request recorded before one auxiliary title dispatch. */
@@ -81,12 +81,14 @@ interface SessionTitleLlmRequestEventData {
   readonly messages: Message[]
   /** Exact auxiliary output-token cap. */
   readonly maxTokens: number
+  /** Resolved reasoning effort when recorded; older requests can omit it. */
+  readonly reasoningEffort?: ReasoningEffortId
 }
 ```
 
 ## 提供方输入与输出
 
-服务会对截至某一修订的合格消息创建快照。提供方返回的 seq 仅可来自该请求；由服务负责的接纳流程会验证顺序、规范化标题、强制执行字节上限，并追加标题及其来源消息 seq 和来源类型。
+服务会对截至某一修订的合格消息、以及在每次提供方调用前刚刚确保的回退和最新已接纳标题创建快照。提供方返回的 seq 仅可来自该请求；由服务负责的接纳流程会验证顺序、规范化标题、强制执行字节上限，并追加标题及其来源消息 seq 和来源类型。
 
 ```ts type-equiv
 /** One eligible human text message exposed to title providers. */
@@ -112,6 +114,12 @@ interface SessionTitleProviderRequest {
   readonly messages: readonly SessionTitleUserMessage[]
   /** Exact current logged main-request route, when one has been recorded. */
   readonly route?: SessionTitleModelIdentity
+  /**
+   * Latest accepted title captured at invocation, including an accepted
+   * fallback whose event may follow the last eligible message. Absent before
+   * any title is accepted. The provider decides whether and how to use it.
+   */
+  readonly currentTitle?: SessionTitleSnapshot
   /** Cancellation for supersession, disposal, timeout composition, or the explicit caller. */
   readonly signal: AbortSignal
 }
@@ -138,7 +146,7 @@ interface SessionTitleProvider {
   readonly automatic: SessionTitleAutomaticMode
   /**
    * Produce one title revision.
-   * @param request - message snapshot, current route, session, and cancellation.
+   * @param request - message snapshot, current title, current route, session, and cancellation.
    * @returns proposed title plus exact input seqs and the optional provider/model route used to generate it.
    */
   generate(request: SessionTitleProviderRequest): Promise<SessionTitleProviderResult>
@@ -191,7 +199,8 @@ async refresh(session: Session, signal?: AbortSignal): Promise<SessionTitleSnaps
 
 /**
  * Register the sole optional title provider. Disposal aborts its pending and
- * active work before another provider may register.
+ * active work; a replacement may register once disposal has started, and the
+ * closing provider's late results never commit.
  * @param provider - provider identity, cadence, and generation function.
  * @returns exact Cordis effect disposer, which settles after active calls quiesce.
  */

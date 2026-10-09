@@ -1,11 +1,11 @@
 /** Explicit deliveries commit only after a successful final tool result. */
-import { mkdtemp, rm, writeFile, symlink } from 'node:fs/promises'
+import { provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { mkdtemp, rm, writeFile, symlink, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -55,6 +55,7 @@ async function setup() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-present-minimal-'))
   cleanups.push(() => rm(root, { recursive: true, force: true }))
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx)
   cleanups.push(() => ctx.fiber.dispose())
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
@@ -85,7 +86,7 @@ describe('present', () => {
     const files = (result.value as unknown as { files: PresentedFile[] }).files
     expect(files).toHaveLength(1)
     expect(owner.session.snapshotEvents().find(event => event.type === 'deliverables/presented')?.data.files).toEqual(files)
-    expect(files).toEqual([{ path: '报告.docx', description: 'Report' }])
+    expect(files).toEqual([{ path: await realpath(join(root, '报告.docx')), description: 'Report' }])
     expect(read).not.toHaveBeenCalled()
     expect(ctx.get('attachments')).toBeUndefined()
     await fiber.dispose()
@@ -119,7 +120,7 @@ describe('present', () => {
     expect((await execute([{ path: 'a' }])).isError).toBe(false)
     const deliveries = owner.session.snapshotEvents().filter(event => event.type === 'deliverables/presented')
     expect(deliveries).toHaveLength(1)
-    expect(deliveries[0]?.data.files[0]?.path).toBe('a')
+    expect(deliveries[0]?.data.files[0]?.path).toBe(await realpath(join(root, 'a')))
   })
 
   it('does not publish deliveries after post-execute blocks a successful declaration', async () => {
@@ -175,7 +176,7 @@ it('declares readable files outside the Session directory using absolute and rel
   await writeFile(file, 'external report')
   const files = [{ path: file }, { path: relative(root, file) }]
   expect((await execute(files)).isError).toBe(false)
-  expect(owner.session.snapshotEvents().find(event => event.type === 'deliverables/presented')?.data.files).toEqual(files)
+  expect(owner.session.snapshotEvents().find(event => event.type === 'deliverables/presented')?.data.files).toEqual([{ path: await realpath(file) }, { path: await realpath(file) }])
 })
 
 it('refuses a final symlink to an ordinary file', async () => {

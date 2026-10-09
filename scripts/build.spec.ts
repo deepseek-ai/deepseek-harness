@@ -15,4 +15,14 @@ describe('repository build CLI', () => {
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('build: Node.js TypeScript type stripping is unavailable')
   })
+
+  it('rejects a value for the artifacts-only flag before any build step', () => {
+    const result = spawnSync(
+      process.execPath,
+      ['--import', 'tsx/esm', resolve(root, 'scripts/build.ts'), '--artifacts-only=yes'],
+      { cwd: root, encoding: 'utf8' },
+    )
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('does not take an argument')
+  })
 })

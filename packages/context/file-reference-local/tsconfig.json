@@ -25,6 +25,9 @@
     },
     {
       "path": "../file-reference"
+    },
+    {
+      "path": "../../session/working-directory"
     }
   ]
 }

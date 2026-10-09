@@ -14,4 +14,10 @@ export function apply(ctx) {
       },
     }
   })
+  // Each request uses one supported presentation: native first, then PTC.
+  ctx.on('tools/result', (exec, result) => {
+    if (exec.name !== 'bash' || exec.parent !== undefined
+      || result.error?.info?.code !== 'AUTO_REVIEW_DENIED' || exec.agent === undefined) return
+    exec.agent.ctx.tools.presentAs('ptc')
+  })
 }

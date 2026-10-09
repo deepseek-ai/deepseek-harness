@@ -632,6 +632,9 @@ class FaceAnalyzer {
   private readonly nodes = new Map<TypeNodeId, TypeNodeModel>()
   private readonly exportsByPackage = new Map<string, ExportRecord[]>()
   private readonly nodeOrdinals = new Map<string, number>()
+  /** Registration and package lookups per source path; the registration set is fixed per analyzer. */
+  private readonly registrationByFile = new Map<string, PackageRegistration | undefined>()
+  private readonly packageNameByFile = new Map<string, string>()
   private staticLookups: readonly StaticLookupDeclaration[] | undefined
   private staticContexts: ReadonlyMap<string, StaticContextDeclaration> | undefined
 
@@ -2659,14 +2662,22 @@ class FaceAnalyzer {
   }
 
   private registrationForFile(file: string): PackageRegistration | undefined {
+    if (this.registrationByFile.has(file)) return this.registrationByFile.get(file)
     const path = realPath(file)
-    return this.allRegistrations
+    const registration = this.allRegistrations
       .find(registration => registration.face === this.face && isWithin(path, registration.root))
+    this.registrationByFile.set(file, registration)
+    return registration
   }
 
   private packageNameForFile(file: string): string {
+    const cached = this.packageNameByFile.get(file)
+    if (cached !== undefined) return cached
     const path = realPath(file)
-    return this.allRegistrations.find(registration => isWithin(path, registration.root))?.name ?? '<external>'
+    const name = this.allRegistrations
+      .find(registration => isWithin(path, registration.root))?.name ?? '<external>'
+    this.packageNameByFile.set(file, name)
+    return name
   }
 
   private allocateNodeId(site: ts.Node): TypeNodeId {
@@ -2928,7 +2939,9 @@ function classShape(node: ts.ClassDeclaration): ts.ClassDeclaration {
     (ts.canHaveModifiers(member) ? ts.getModifiers(member) : undefined)?.some(modifier =>
       modifier.kind === ts.SyntaxKind.PrivateKeyword || modifier.kind === ts.SyntaxKind.ProtectedKeyword) ?? false
   const members = node.members.flatMap((member): ts.ClassElement[] => {
-    if (nonPublic(member) || (ts.isPropertyDeclaration(member) && ts.isPrivateIdentifier(member.name))) return []
+    const name = ts.getNameOfDeclaration(member)
+    if (ts.isClassStaticBlockDeclaration(member) || nonPublic(member)
+      || (name !== undefined && ts.isPrivateIdentifier(name))) return []
     if (ts.isMethodDeclaration(member)) {
       return [ts.factory.updateMethodDeclaration(
         member,
@@ -3245,9 +3258,15 @@ function formatProgramDiagnostic(root: string, face: TypertFace, diagnostic: ts.
 }
 
 const realPathCache = new Map<string, string>()
+/** Normalized form per requested path; `resolve` reads only the process working directory. */
+const absolutePathCache = new Map<string, string>()
 
 function realPath(path: string): string {
-  const absolute = resolve(path)
+  let absolute = absolutePathCache.get(path)
+  if (absolute === undefined) {
+    absolute = resolve(path)
+    absolutePathCache.set(path, absolute)
+  }
   const cached = realPathCache.get(absolute)
   if (cached !== undefined) return cached
   // Only existing paths are memoized: a path can come into existence later,

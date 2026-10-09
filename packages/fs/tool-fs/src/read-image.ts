@@ -83,6 +83,7 @@ const IMAGE_VALUE_SCHEMA = {
 
 /** The structured outcome declared by the `read_image` output schema. */
 export interface ImageReadValue {
+  /** Canonical absolute path in the filesystem provider's execution world. */
   path: string
   image: {
     attachmentId: string
@@ -218,7 +219,7 @@ export function applyReadImageTool(ctx: Context): void {
         type: 'object',
         additionalProperties: false,
         properties: {
-          path: { type: 'string', required: true },
+          path: { type: 'string', required: true, description: 'Canonical absolute path in the filesystem execution world.' },
           image: IMAGE_VALUE_SCHEMA,
         },
       },
@@ -320,7 +321,7 @@ export function applyReadImageTool(ctx: Context): void {
       }
       ctx.emit('fs/observed', target, { kind: 'present', version: info.version }, exec)
       const value: ImageReadValue = {
-        path: target.displayPath,
+        path: ctx.fs.processPath(target),
         image: {
           attachmentId: ref.attachmentId,
           mediaType: ref.mediaType,

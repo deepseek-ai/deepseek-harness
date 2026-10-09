@@ -7,7 +7,7 @@
  * executable exists (a CI accommodation for hosts without PowerShell).
  */
 
-import { readFile } from 'node:fs/promises'
+import { readFile, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -33,7 +33,11 @@ interface PwshLoaderReport {
   schemaHasRunInBackground: boolean
   promptHasMarkerSection: boolean
   foregroundText: string
+  foregroundCwd: string
+  foregroundMeta: { cwd: string }
   backgroundText: string
+  backgroundCwd: string
+  backgroundMeta: { cwd: string }
 }
 
 describe.skipIf(!hasPwsh)('tool-pwsh through a real Loader composition', () => {
@@ -54,6 +58,11 @@ describe.skipIf(!hasPwsh)('tool-pwsh through a real Loader composition', () => {
       processTimeoutMs,
       inspect: async (cwd) => {
         report = JSON.parse(await readFile(join(cwd, 'pwsh-loader-report.json'), 'utf8')) as PwshLoaderReport
+        const expectedCwd = await realpath(cwd)
+        expect(await realpath(report.foregroundCwd)).toBe(expectedCwd)
+        expect(report.foregroundMeta).toEqual({ cwd: report.foregroundCwd })
+        expect(await realpath(report.backgroundCwd)).toBe(expectedCwd)
+        expect(report.backgroundMeta).toEqual({ cwd: report.backgroundCwd })
       },
     })
     expect(stderr).not.toContain('UNHANDLED')

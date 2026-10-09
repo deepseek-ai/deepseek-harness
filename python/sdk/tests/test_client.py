@@ -105,6 +105,7 @@ for line in sys.stdin:
                         "arguments": {"command": "git push --force"},
                         "isError": True,
                         "content": [{"type": "text", "text": "Error: blocked by policy"}],
+                        "meta": {"cwd": "/selected", "path": "/selected/note.txt", "view": {"line": 3}},
                         "error": {
                             "name": "AutoReviewDeniedError",
                             "code": "AUTO_REVIEW_DENIED",
@@ -200,6 +201,7 @@ for line in sys.stdin:
     ]
     ptc_events = [event for event in result.events if event["type"].startswith("tool/ptc-dispatch")]
     assert [event["type"] for event in ptc_events] == ["tool/ptc-dispatch-start", "tool/ptc-dispatch"]
+    assert ptc_events[-1]["data"]["meta"] == {"cwd": "/selected", "path": "/selected/note.txt", "view": {"line": 3}}
     for event in ptc_events:
         assert not {"description", "parameters", "schema"}.intersection(event["data"])
     dumped_env = json.loads(env_dump.read_text())

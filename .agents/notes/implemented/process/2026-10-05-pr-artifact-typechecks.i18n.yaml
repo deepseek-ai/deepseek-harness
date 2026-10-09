@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-05-pr-artifact-typechecks.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-05-pr-artifact-typechecks.md
+/agent-note-pr-artifact-builds-and-aggregate-typescript-checks:
+  en: a25e7cdcad03934f
+  zh: 48e31429730e0885
+/agent-note-pr-artifact-builds-and-aggregate-typescript-checks/problem:
+  en: e5c984fa32cc5e69
+  zh: 25d5742b2106d830
+/agent-note-pr-artifact-builds-and-aggregate-typescript-checks/decision:
+  en: 6e84bceaba4573ca
+  zh: 25a37c147a675643
+/agent-note-pr-artifact-builds-and-aggregate-typescript-checks/alternatives-considered:
+  en: f61da066f9ddcd62
+  zh: 816fd6e0063017cd
+/agent-note-pr-artifact-builds-and-aggregate-typescript-checks/consequences:
+  en: 46c247ab91126d52
+  zh: f1be7561ff402bcc

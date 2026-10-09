@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Page } from 'playwright'
-import { expect, it } from 'vitest'
+import { expect, it, onTestFinished } from 'vitest'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { deriveReplayScript, parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
@@ -17,6 +17,7 @@ import { newEnglishPage } from './support.ts'
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.v3.jsonl', import.meta.url))
 const SESSION_ID = 'idle-submission-handoff'
 const TEXT = 'IDLE_SUBMISSION_HANDOFF Keep this message in the conversation.'
+const HANDOFF_TIMEOUT_MS = 30_000
 
 interface Delivery {
   readonly stream: string
@@ -89,6 +90,18 @@ class HistoryDeliveryGate {
   }
 }
 
+/** Match the scaffold's turn-completion budget for Host frames and browser rendering. */
+function poll<T>(read: () => T) {
+  return expect.poll(read, { timeout: HANDOFF_TIMEOUT_MS })
+}
+
+/** The caller's await reports Turn failure; an earlier assertion may bypass that await. */
+function whenTurnSettled(scaffold: Awaited<ReturnType<typeof launchWebScaffold>>) {
+  const settled = scaffold.whenTurnSettled(HANDOFF_TIMEOUT_MS)
+  void settled.catch(() => undefined)
+  return settled
+}
+
 async function placement(page: Page, input = TEXT) {
   return page.evaluate((text) => {
     const matching = (selector: string) => [...document.querySelectorAll<HTMLElement>(selector)]
@@ -109,13 +122,14 @@ async function placement(page: Page, input = TEXT) {
 it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first'] as const)(
   'keeps an idle submission in Chat under CPU throttling (%s)', async (order) => {
     const scaffold = await launchWebScaffold({ replayFixture: FIXTURE, compareReplaySession: false })
+    onTestFinished(() => scaffold.close())
     const releasePrompt = Promise.withResolvers<undefined>()
     const promptBlocked = Promise.withResolvers<undefined>()
     const gate = new HistoryDeliveryGate()
-    let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
     try {
       await seedSession(scaffold, await readFile(FIXTURE, 'utf8'), SESSION_ID)
-      browser = await chromium.launch()
+      const browser = await chromium.launch()
+      onTestFinished(() => browser.close())
       const page = await newEnglishPage(browser)
       const tripwire = watchConsole(page)
       await gate.install(page)
@@ -132,48 +146,48 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
         await route.continue()
       }, { times: 1 })
       const trace: Array<{ phase: string } & Awaited<ReturnType<typeof placement>>> = []
-      const settled = scaffold.whenTurnSettled()
       gate.holding = true
       const input = page.locator('[data-composer-input]').first()
       await input.fill(TEXT)
       await input.press('Enter')
       await promptBlocked.promise
-      await expect.poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
+      await poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
       trace.push({ phase: 'optimistic', ...await placement(page) })
+      const settled = whenTurnSettled(scaffold)
       releasePrompt.resolve(undefined)
 
       if (order === 'transcript-first') {
-        await expect.poll(() => gate.turnStartDelivery()).toBeDefined()
+        await poll(() => gate.turnStartDelivery()).toBeDefined()
         gate.releaseThrough(gate.turnStartDelivery()!)
         await page.locator('[data-chat-flow-kind="turn-process"]').last().waitFor({ state: 'attached' })
-        await expect.poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
+        await poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
         trace.push({ phase: 'turn-start', ...await placement(page) })
-        await expect.poll(() => gate.admissionDelivery()).toBeDefined()
+        await poll(() => gate.admissionDelivery()).toBeDefined()
         gate.releaseThrough(gate.admissionDelivery()!)
-        await expect.poll(() => placement(page)).toMatchObject({ echo: 0, dock: 0, durable: 1 })
+        await poll(() => placement(page)).toMatchObject({ echo: 0, dock: 0, durable: 1 })
         trace.push({ phase: 'durable-before-inbox', ...await placement(page) })
       }
 
-      await expect.poll(() => gate.inboxDelivery(true)).toBeDefined()
+      await poll(() => gate.inboxDelivery(true)).toBeDefined()
       gate.releaseThrough(gate.inboxDelivery(true)!)
-      await expect.poll(() => placement(page)).toMatchObject({ echo: order === 'inbox-first' ? 1 : 0, dock: 0, durable: order === 'transcript-first' ? 1 : 0 })
+      await poll(() => placement(page)).toMatchObject({ echo: order === 'inbox-first' ? 1 : 0, dock: 0, durable: order === 'transcript-first' ? 1 : 0 })
       trace.push({ phase: 'inbox', ...await placement(page) })
 
-      await expect.poll(() => gate.inboxDelivery(false)).toBeDefined()
+      await poll(() => gate.inboxDelivery(false)).toBeDefined()
       gate.releaseThrough(gate.inboxDelivery(false)!)
-      await expect.poll(() => placement(page)).toMatchObject({ echo: order === 'inbox-first' ? 1 : 0, dock: 0, durable: order === 'transcript-first' ? 1 : 0 })
+      await poll(() => placement(page)).toMatchObject({ echo: order === 'inbox-first' ? 1 : 0, dock: 0, durable: order === 'transcript-first' ? 1 : 0 })
       trace.push({ phase: 'claim-projection', ...await placement(page) })
 
       if (order === 'inbox-first') {
-        await expect.poll(() => gate.turnStartDelivery()).toBeDefined()
+        await poll(() => gate.turnStartDelivery()).toBeDefined()
         gate.releaseThrough(gate.turnStartDelivery()!)
         await page.locator('[data-chat-flow-kind="turn-process"]').last().waitFor({ state: 'attached' })
-        await expect.poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
+        await poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
         trace.push({ phase: 'turn-start', ...await placement(page) })
       }
 
       gate.releaseAll()
-      await expect.poll(() => placement(page)).toMatchObject({ echo: 0, dock: 0, durable: 1 })
+      await poll(() => placement(page)).toMatchObject({ echo: 0, dock: 0, durable: 1 })
       trace.push({ phase: 'durable', ...await placement(page) })
       for (const entry of trace) {
         expect(entry.messageTop, entry.phase).toBe(trace[0]?.messageTop)
@@ -186,7 +200,6 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
     } finally {
       releasePrompt.resolve(undefined)
       gate.releaseAll()
-      try { await browser?.close() } finally { await scaffold.close() }
     }
   },
 )
@@ -194,20 +207,21 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
 it.skipIf(webSnapshotMode() === 'record').each(['ABC', 'ACB', 'BAC', 'BCA', 'CAB', 'CBA'])(
   'hands off three rapid submissions through all Turns in Host order %s', async (hostOrder) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-input-handoff-'))
+    onTestFinished(() => rm(root, { recursive: true, force: true }))
     const releases = new Map(['A', 'B', 'C'].map(id => [id, Promise.withResolvers<undefined>()]))
     const blocked = new Set<string>()
     const gate = new HistoryDeliveryGate()
-    let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
-    let scaffold: Awaited<ReturnType<typeof launchWebScaffold>> | undefined
     try {
       const fixture = await readFile(FIXTURE, 'utf8')
       const recorded = deriveReplayScript(parseSessionLog(fixture))
       expect(recorded).toHaveLength(1)
       const override = join(root, 'replay.override.json')
       await writeFile(override, JSON.stringify([recorded[0], recorded[0], recorded[0]]))
-      scaffold = await launchWebScaffold({ replayFixture: FIXTURE, replayOverride: override, compareReplaySession: false })
+      const scaffold = await launchWebScaffold({ replayFixture: FIXTURE, replayOverride: override, compareReplaySession: false })
+      onTestFinished(() => scaffold.close())
       await seedSession(scaffold, fixture, SESSION_ID)
-      browser = await chromium.launch()
+      const browser = await chromium.launch()
+      onTestFinished(() => browser.close())
       const page = await newEnglishPage(browser)
       const tripwire = watchConsole(page)
       await gate.install(page)
@@ -230,30 +244,30 @@ it.skipIf(webSnapshotMode() === 'record').each(['ABC', 'ACB', 'BAC', 'BCA', 'CAB
       for (const id of releases.keys()) {
         await input.fill(text(id))
         await input.press('Enter')
-        await expect.poll(() => blocked.has(id)).toBe(true)
-        await expect.poll(() => placement(page, text(id))).toMatchObject({ echo: 1, dock: 0, durable: 0 })
+        await poll(() => blocked.has(id)).toBe(true)
+        await poll(() => placement(page, text(id))).toMatchObject({ echo: 1, dock: 0, durable: 0 })
       }
       const entered: string[] = []
       for (const id of hostOrder) {
-        const settled = scaffold.whenTurnSettled()
+        const settled = whenTurnSettled(scaffold)
         releases.get(id)!.resolve(undefined)
-        await expect.poll(() => gate.turnStartDelivery()).toBeDefined()
+        await poll(() => gate.turnStartDelivery()).toBeDefined()
         gate.releaseThrough(gate.turnStartDelivery()!)
-        await expect.poll(() => gate.admissionDelivery(text(id))).toBeDefined()
+        await poll(() => gate.admissionDelivery(text(id))).toBeDefined()
         gate.releaseThrough(gate.admissionDelivery(text(id))!)
         entered.push(id)
         for (const candidate of releases.keys()) {
           const admitted = entered.includes(candidate)
-          await expect.poll(() => placement(page, text(candidate))).toMatchObject({
+          await poll(() => placement(page, text(candidate))).toMatchObject({
             echo: admitted ? 0 : 1, dock: 0, durable: admitted ? 1 : 0,
           })
         }
-        await expect.poll(() => gate.inboxDelivery(true, text(id))).toBeDefined()
+        await poll(() => gate.inboxDelivery(true, text(id))).toBeDefined()
         gate.releaseThrough(gate.inboxDelivery(true, text(id))!)
-        await expect.poll(() => placement(page, text(id))).toMatchObject({ echo: 0, dock: 0, durable: 1 })
-        await expect.poll(() => gate.inboxDelivery(false, text(id))).toBeDefined()
+        await poll(() => placement(page, text(id))).toMatchObject({ echo: 0, dock: 0, durable: 1 })
+        await poll(() => gate.inboxDelivery(false, text(id))).toBeDefined()
         gate.releaseThrough(gate.inboxDelivery(false, text(id))!)
-        await expect.poll(() => gate.turnEndDelivery()).toBeDefined()
+        await poll(() => gate.turnEndDelivery()).toBeDefined()
         gate.releaseThrough(gate.turnEndDelivery()!)
         await settled
       }
@@ -267,9 +281,6 @@ it.skipIf(webSnapshotMode() === 'record').each(['ABC', 'ACB', 'BAC', 'BCA', 'CAB
     } finally {
       for (const release of releases.values()) release.resolve(undefined)
       gate.releaseAll()
-      try { await browser?.close() } finally {
-        try { await scaffold?.close() } finally { await rm(root, { recursive: true, force: true }) }
-      }
     }
   },
 )

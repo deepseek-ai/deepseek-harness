@@ -118,7 +118,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Session Query subsystem reference](../../../docs/subsystems/session-query.md) — the full type-level contract this backend implements.
 - [dsh-session-query](../session-query/README.md) — the service definition: exact reads, filters, and traces this backend inherits.
-- [dsh-tool-session-query](../tool-session-query/README.md) — the model-facing consumer that calls these search methods.
+- [dsh-tool-session-query](../../experimental/tool-session-query/README.md) — the model-facing consumer that calls these search methods.
 - [SQLite FTS5 session search](../../../.agents/notes/archived/feature/2026-07-10-sqlite-session-query-provider.md) — search semantics, reconciliation, and the tokenizer decision.
 - [JSONL session persistence](../../session/session-persistence-jsonl/README.md) — the authoritative Session store this disposable index observes; keep its root separate from this package's database path.
 

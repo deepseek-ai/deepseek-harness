@@ -6,7 +6,7 @@
 // record cannot hang on a live model answering differently); assertion steps
 // run in replay/refresh only. Streaming fidelity is asserted from the durable
 // embedded Assistant stream, not transient DOM.
-// Record: DSH_SNAPSHOT=record writes session.v3.jsonl, then a keyless
+// Record: DSH_SNAPSHOT=record writes the current Session generation, then a keyless
 // DSH_SNAPSHOT=refresh regenerates ui.expected.md.
 // Suite setup (beforeAll, not per step): one fixed page clock
 // (page.clock.setFixedTime) and one routed Remote mux socket
@@ -213,7 +213,7 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     }
   }, 200_000)
 
-  it('ends the system prompt with the source checkout, Web surface, and session cwd', async () => {
+  it('keeps source checkout and Web context in the system prompt and cwd in user context', async () => {
     if (settledSessionId === undefined) throw new Error('the drive turn did not publish a session id')
     const agent = scaffold.ctx.agents.get(settledSessionId)
     if (agent === undefined) throw new Error(`the settled Web agent ${settledSessionId} is no longer live`)
@@ -224,7 +224,13 @@ describe('web e2e: fresh round trip through the real assembly', () => {
       'You are an AI agent powered by DeepSeek Harness.',
       'You are a coding agent powered by the deepseek-v4-flash model.',
     ])
-    const suffix = paragraphs.slice(-3).join('\n\n')
+    const cwd = agent.session.header.cwd
+    if (cwd === undefined) throw new Error('the Web session has no working directory')
+    expect(system).not.toContain(cwd)
+    const userText = agent.session.deriveMessages().filter(message => message.role === 'user')
+      .flatMap(message => message.content.flatMap(block => block.type === 'text' ? [block.text] : []))
+    expect(userText.some(text => text.includes(`Current working directory: ${JSON.stringify(cwd)}.`))).toBe(true)
+    const suffix = paragraphs.slice(-2).join('\n\n')
       .split(REPO_ROOT).join('{{sourceRoot}}')
       .split(join(scaffold.workspaceCwd, 'workspace')).join('{{cwd}}')
       .split(scaffold.baseUrl).join('{{webUrl}}')

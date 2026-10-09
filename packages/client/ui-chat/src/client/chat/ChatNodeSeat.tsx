@@ -2,25 +2,28 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { JsonBlock } from '@deepseek-ai/dsh-client-ui-primitives'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ConversationLocationDataStore, ConversationTurnDataMap } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ChatNodeHookContext, ChatNodeOwnerProps, ChatViewSlotProps, UsePresentation } from '../contract/slots.ts'
+import type { ChatNodeHookContext, ChatNodeOwnerProps, ChatFlowSlotProps, UsePresentation } from '../contract/slots.ts'
 import type { ChatNode } from '../contract/chat-nodes.ts'
 import type { ChatNodeStore } from '../contract/snapshot.ts'
 import { TURN_PROCESS_INDEPENDENT_KINDS, turnProcessAlwaysOpen } from '../contract/turn-process.ts'
-import { storedTurnProcessEntry } from '../stores.ts'
-import { useSearchableHidden } from './searchable-hidden.ts'
+import { turnProcessOpen } from '../stores.ts'
+import { hiddenOrCollapsing } from './flow-motion.ts'
 import css from './ChatView.module.css'
 
 interface ChatNodeSeatProps extends ChatNodeOwnerProps {
   readonly nodeKey: string
   /** A replaced Builder must rebind keyed hooks even when references and keys survive. */
   readonly nodeStore: ChatNodeStore
-  readonly useChatNode: ChatViewSlotProps['useChatNode']
-  readonly useChatNodeProcess: ChatViewSlotProps['useChatNodeProcess']
+  readonly useChatNode: ChatFlowSlotProps['useChatNode']
+  readonly useChatNodeProcess: ChatFlowSlotProps['useChatNodeProcess']
   readonly usePresentation: UsePresentation
-  readonly useStore: ChatViewSlotProps['useStore']
-  readonly actions: ChatViewSlotProps['actions']
-  readonly renderSlot: ChatViewSlotProps['renderSlot']
-  readonly t: ChatViewSlotProps['t']
+  readonly useStore: ChatFlowSlotProps['useStore']
+  readonly actions: ChatFlowSlotProps['actions']
+  readonly renderSlot: ChatFlowSlotProps['renderSlot']
+  readonly t: ChatFlowSlotProps['t']
+  readonly useChatNodeBottom: ChatFlowSlotProps['useChatNodeBottom']
+  readonly deferCollapse: boolean
+  readonly useGroupAction: ChatFlowSlotProps['useGroupAction']
 }
 
 type RoutedChatNodeOwner = {
@@ -45,24 +48,20 @@ function turnOf(node: ChatNode | undefined): number | undefined {
 export const ChatNodeSeat = memo(function ChatNodeSeat({
   nodeKey, groupPart, useChatNode, useChatNodeProcess, usePresentation,
   cwd, openFile, openSkill, inspectCall, forkAt,
-  loadImage, renderMessageImages, fileMentions, useStore, actions, renderSlot, t,
+  loadImage, renderMessageImages, fileMentions, useStore, actions, renderSlot, t, useChatNodeBottom, deferCollapse, useGroupAction,
 }: ChatNodeSeatProps) {
+  const bottom = useChatNodeBottom(nodeKey)
   const node = useChatNode(nodeKey)
   const routedNode = node as ChatNode | undefined
   const turn = turnOf(routedNode)
   const processPresentation = useChatNodeProcess(nodeKey)
   const processSpec = processPresentation?.spec
-  const storedEntry = useStore(state => processSpec === undefined
-    ? undefined
-    : storedTurnProcessEntry(state, processSpec.turn))
-  const processEntry = processSpec !== undefined
-    && storedEntry?.answerStep === (processSpec.answerStep ?? 0)
-    ? storedEntry
-    : undefined
+  const storedOpen = useStore(state => processSpec !== undefined
+    && turnProcessOpen(state, processSpec, bottom === true && deferCollapse))
   const liveProcess = processPresentation !== undefined && !processPresentation.turnClosed
   const interleavedInput = processPresentation?.hasInterleavedInput === true
   const alwaysOpen = liveProcess || interleavedInput || turnProcessAlwaysOpen(routedNode)
-  const processOpen = alwaysOpen || processEntry !== undefined
+  const processOpen = alwaysOpen || storedOpen
   const setOpen = useCallback((open: boolean) => {
     if (processSpec !== undefined && !alwaysOpen) {
       actions.setTurnProcessOpen(processSpec.turn, processSpec.answerStep ?? 0, open)
@@ -111,12 +110,14 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   const revealProcess = useCallback(() => {
     if (processMember) setOpen(true)
   }, [processMember, setOpen])
-  const wrapperRef = useSearchableHidden(processHidden, revealProcess)
+  const wrapperRef = useGroupAction(processHidden, revealProcess)
   const [disclosureReset] = useState(() => createSnapshotStore(0))
   const turnData = turnDataOf(routedNode)
-  const hookContext = useMemo<ChatNodeHookContext>(() => ({ turnData, disclosureReset }), [turnData, disclosureReset])
+  const hookContext = useMemo<ChatNodeHookContext>(
+    () => ({ turnData, disclosureReset, useGroupAction }), [turnData, disclosureReset, useGroupAction],
+  )
   useEffect(() => {
-    if (processMember && processHidden && wrapperRef.current?.hasAttribute('hidden')) {
+    if (processMember && processHidden && wrapperRef.current !== null && hiddenOrCollapsing(wrapperRef.current)) {
       disclosureReset.set(disclosureReset.getSnapshot() + 1)
     }
   }, [processMember, processHidden, wrapperRef, disclosureReset])

@@ -14,7 +14,7 @@ Status: implemented
 
 ## 决策
 
-`@deepseek-ai/dsh-deepseek-llm-api-extensions` 注册 `ctx.deepseekLlmApiExtensions`，即 `deepseek-official` 请求正文顶层字段的增量注册表。贡献方通过 `register()` 认领一个经声明合并的字段。适配器在序列化确切协议消息后调用 `prepare()`、传入请求取消信号，在 HTTP 前拒绝准备失败或基础字段冲突，合并分离字段，并在 HTTP 2xx 后调用捕获的 `accept()` 事务。合并后的正文无法序列化时，按[有上限上传决策](2026-09-24-bounded-session-log-upload.zh.md)不带扩展字段发送，也不执行接受。即使贡献方忽略信号，注册表也会在取消后停止等待准备。接受失败仍以 `REQUEST_EXTENSION` 使请求失败；传输失败与非 2xx 失败绝不会接受贡献。未挂载注册表的组合会保留可复用基础适配器。随附组合会挂载注册表与两个贡献方：插件包元数据和会话日志上传均默认开启；按[默认上传决策](2026-09-14-session-log-upload-default.zh.md)，设置 `session-log-deepseek.enabled: false` 可关闭日志上传。无密钥 `deepseek-official` 回放会使用合成的空基础正文执行准备，并在第一个已记录分片前调用同一接受事务；它保持的是 2xx 后扩展副作用，而非字段字节。
+`@deepseek-ai/dsh-deepseek-llm-api-extensions` 注册 `ctx.deepseekLlmApiExtensions`，即 `deepseek-official` 请求正文顶层字段的增量注册表。贡献方通过 `register()` 认领一个经声明合并的字段。适配器在序列化确切协议消息后调用 `prepare()`、传入请求取消信号，在 HTTP 前拒绝基础字段冲突，合并分离字段，并在 HTTP 2xx 后调用捕获的 `accept()` 事务。合并后的正文无法序列化时，按[有上限上传决策](2026-09-24-bounded-session-log-upload.zh.md)不带扩展字段发送，也不执行接受。即使贡献方忽略信号，注册表也会在取消后停止等待准备。扩展字段是辅助信息，按尽力而为处理：贡献方准备时抛错，注册表会记录告警并省略该字段；接受失败时，适配器记录告警而不使模型请求失败；传输失败与非 2xx 失败绝不会接受贡献。未挂载注册表的组合会保留可复用基础适配器。随附组合会挂载注册表与两个贡献方：插件包元数据和会话日志上传均默认开启；按[默认上传决策](2026-09-14-session-log-upload-default.zh.md)，设置 `session-log-deepseek.enabled: false` 可关闭日志上传。无密钥 `deepseek-official` 回放会使用合成的空基础正文执行准备，并在第一个已记录分片前调用同一接受事务；它保持的是 2xx 后扩展副作用，而非字段字节。
 
 提供方无关的 `llm` 包与 `llm-pi-ai` 不包含任何扩展类型、服务查找、字段合并或接受调用。
 
@@ -85,7 +85,7 @@ Status: implemented
 
 ## 后果
 
-DeepSeek 官方请求会把存活包版本发送到解析后的 `baseURL`，包括已配置 gateway。除非关闭会话日志上传，否则符合条件的请求还会携带新的未接受会话事件，每次最多 `maxBytes`。这些字段对模型不可见，不增加提示词 token，也不改变 KV Cache，但可能显著增大 HTTP 正文。Manifest 解析、字段冲突、接受记录或提供方 schema 拒绝会使模型请求失败，而不会静默丢弃元数据。合并后的正文无法序列化是例外：请求不带扩展字段继续发送，并记录一条告警。
+DeepSeek 官方请求会把存活包版本发送到解析后的 `baseURL`，包括已配置 gateway。除非关闭会话日志上传，否则符合条件的请求还会携带新的未接受会话事件，每次最多 `maxBytes`。这些字段对模型不可见，不增加提示词 token，也不改变 KV Cache，但可能显著增大 HTTP 正文。字段冲突或提供方 schema 拒绝会使模型请求失败。贡献方准备失败、接受失败或合并后的正文无法序列化时，系统记录告警并让请求继续；没有可用版本的包只报告名称。
 
 `delivery-accepted` 事件会成为权威日志的一部分，并在后续请求中自行交付。崩溃恢复可能重复后缀，但不会根据 assistant 输出推断接受，也不会创建第二份本地游标存储。缺少存活会话的直接调用会省略会话字段；宿主包清单仍然可用。
 

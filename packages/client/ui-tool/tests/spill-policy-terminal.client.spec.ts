@@ -40,7 +40,8 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
   const ctx = new Context()
   try {
     await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ToolRuntime, { mode: 'both' })
+    await ctx.plugin(ToolRuntime, { mode: nested ? 'ptc' : 'native' })
+    ctx.provide('workingDirectory', { ensure: async () => process.cwd() })
     await ctx.plugin(MemorySpillStore)
     await ctx.plugin(SpillPolicy, { maxInlineTokens })
     if (nested) {

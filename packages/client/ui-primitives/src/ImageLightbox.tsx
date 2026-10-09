@@ -54,11 +54,13 @@ export function ImageLightbox({ src, alt, labels, onClose }: {
       aria-modal="true"
       aria-label={labels.dialog}
     >
-      <div className={css.mask} aria-hidden="true" onMouseDown={onClose} />
-      <img className={css.image} src={src} alt={alt} />
-      <button ref={closeRef} type="button" className={css.close} aria-label={labels.close} onClick={onClose}>
-        <IconCloseOutlineRegular size={16} />
-      </button>
+      <div className={css.stage}>
+        <div className={css.mask} aria-hidden="true" onMouseDown={onClose} />
+        <img className={css.image} src={src} alt={alt} />
+        <button ref={closeRef} type="button" className={css.close} aria-label={labels.close} onClick={onClose}>
+          <IconCloseOutlineRegular size={16} />
+        </button>
+      </div>
     </div>,
     document.body,
   )

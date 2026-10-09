@@ -42,6 +42,7 @@ export const searchBlockLabels: SearchBlockLabels = {
 }
 
 export const terminalBlockLabels: TerminalBlockLabels = {
+  commandLine: line => `命令第 ${line} 行`,
   signal: signal => `信号 ${signal}`,
   exitCode: code => `退出码 ${code}`,
   noExitCode: '未正常退出',

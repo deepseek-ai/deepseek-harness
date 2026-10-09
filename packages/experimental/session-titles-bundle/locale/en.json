@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Conversation-following titles",
+    "description": "Refresh session titles as new human prompts arrive."
+  }
+}

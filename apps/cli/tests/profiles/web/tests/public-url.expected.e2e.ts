@@ -1,7 +1,8 @@
-/** Built Web-profile acceptance for the advertised public root and browser authentication behind a prefix-stripping proxy. */
+/** Built Web-profile acceptance for concrete bind addresses, the advertised public root, and browser authentication. */
 
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { request as httpRequest, type IncomingMessage } from 'node:http'
+import { request as httpsRequest } from 'node:https'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -9,8 +10,10 @@ import { Readable } from 'node:stream'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execa } from 'execa'
 import { describe, expect, it } from 'vitest'
+import { probeNonLoopbackIpv4, probeZonedLoopback } from '../../../../../../scripts/test-non-loopback-address.ts'
 import { startPrefixProxy } from '../../../../../../apps/web/tests/prefix-proxy.ts'
 import { PROCESS_SHUTDOWN_TIMEOUT_MS } from '../../../../src/process-shutdown.ts'
+import { materializeTlsFixture } from '../../../../../../packages/host/webserver/tests/tls-fixture.ts'
 
 const repoRoot = fileURLToPath(new URL('../../../../../../', import.meta.url))
 const dshBin = join(repoRoot, 'apps/cli/lib/bin.js')
@@ -18,6 +21,18 @@ const builtArtifactsExist = existsSync(dshBin)
 
 /** Browser-facing mount the reference proxy serves and strips. */
 const MOUNT = '/tools/dsh/'
+
+const NON_LOOPBACK_IPV4 = builtArtifactsExist ? await probeNonLoopbackIpv4() : undefined
+
+const ZONED_LOOPBACK = builtArtifactsExist ? await probeZonedLoopback() : undefined
+
+/**
+ * Every spelling that binds IPv6 loopback. `::0.0.0.1` is the same address as
+ * `::1`, and the zoned rows reuse the probed scope on that same address.
+ */
+const IPV6_LOOPBACKS = ZONED_LOOPBACK === undefined
+  ? ['::1', '::0.0.0.1']
+  : ['::1', '::0.0.0.1', ZONED_LOOPBACK, ZONED_LOOPBACK.replace('::1%', '::0.0.0.1%')]
 
 /** One live Web child, as `execa` types it. */
 type WebChild = ReturnType<typeof spawnWeb>
@@ -155,16 +170,22 @@ function expectCleanExit(stopped: StoppedWeb): void {
 }
 
 /**
- * One HTTP request that connects to an explicit transport address while
- * presenting an explicit browser-facing authority, as a proxy would.
+ * One request to an explicit transport address with a browser-facing authority.
+ * HTTPS verifies the certificate and hostname against the supplied CA or system roots.
  */
 async function request(
-  dial: string, port: number, path: string, host: string, method: 'GET' | 'POST', cookie?: string,
+  protocol: 'http:' | 'https:',
+  dial: string, port: number, path: string, host: string, method: 'GET' | 'POST', cookie?: string, ca?: string,
 ): Promise<Response> {
   const { promise, resolve, reject } = Promise.withResolvers<IncomingMessage>()
-  const req = httpRequest({
+  const req = (protocol === 'http:' ? httpRequest : httpsRequest)({
     host: dial, port, path, method,
-    headers: { host, 'content-type': 'application/json', ...cookie === undefined ? {} : { cookie } },
+    ...ca === undefined ? {} : { ca },
+    headers: {
+      host, 'content-type': 'application/json',
+      ...protocol === 'http:' ? {} : { origin: `https://${host}` },
+      ...cookie === undefined ? {} : { cookie },
+    },
   }, resolve)
   req.once('error', reject)
   req.setTimeout(10_000, () => { req.destroy(new Error('HTTP request timed out')) })
@@ -181,16 +202,45 @@ async function request(
 
 /** Establish the browser session needed by the protected API, keeping the minted cookie's own attributes. */
 async function exchange(
-  dial: string, port: number, path: string, host: string,
+  protocol: 'http:' | 'https:',
+  dial: string, port: number, path: string, host: string, ca?: string,
 ): Promise<{ cookie: string; setCookie: string }> {
-  const response = await request(dial, port, path, host, 'GET')
+  const response = await request(protocol, dial, port, path, host, 'GET', undefined, ca)
   const setCookie = response.headers.get('set-cookie')
   await response.arrayBuffer()
   if (setCookie === null) throw new Error(`entry returned ${String(response.status)} without a browser cookie`)
   return { cookie: setCookie.split(';', 1)[0]!, setCookie }
 }
 
-describe.skipIf(!builtArtifactsExist)('dsh Web profile advertised public root', () => {
+describe.skipIf(!builtArtifactsExist)('dsh Web profile bind address and advertised root', () => {
+  it('serves the default advertised URL over verified TLS with Secure browser authentication', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-web-tls-'))
+    try {
+      const tls = await materializeTlsFixture(root)
+      await withWeb(['--tls-cert', tls.certFile, '--tls-key', tls.keyFile], async (web) => {
+        expect(web.startup.origin).toBe(`https://127.0.0.1:${String(web.port)}`)
+        await expect(request('https:', '127.0.0.1', web.port, '/', web.startup.host, 'GET'))
+          .rejects.toThrow(/self-signed certificate/i)
+        const { cookie, setCookie } = await exchange(
+          'https:', '127.0.0.1', web.port, `${web.startup.pathname}${web.startup.search}`, web.startup.host, tls.ca,
+        )
+        expect(setCookie).toContain('; Secure')
+        const index = await request('https:', '127.0.0.1', web.port, '/', web.startup.host, 'GET', cookie, tls.ca)
+        expect(index.status).toBe(200)
+        expect(await index.text()).toContain('<html')
+        const response = await request('https:', '127.0.0.1', web.port, '/api/session/create', web.startup.host, 'POST', cookie, tls.ca)
+        expect(response.status).toBe(200)
+        expect(await response.json()).toMatchObject({ result: { ok: true } })
+        const unauthenticated = await request('https:', '127.0.0.1', web.port, '/api/session/create', web.startup.host, 'POST', undefined, tls.ca)
+        expect(unauthenticated.status).toBe(401)
+        await unauthenticated.arrayBuffer()
+        expectCleanExit(await web.stop())
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('serves authenticated requests at the advertised mount and at loopback', async () => {
     await withWeb(['--public-url', `http://gateway.example${MOUNT.slice(0, -1)}`, '--trusted-host', 'gateway.example'], async (web) => {
       expect(web.startup.origin).toBe('http://gateway.example')
@@ -204,18 +254,103 @@ describe.skipIf(!builtArtifactsExist)('dsh Web profile advertised public root', 
           { dial: '127.0.0.1', port: web.port, prefix: '/', host: `127.0.0.1:${String(web.port)}` },
         ]
         for (const entry of entries) {
-          const { cookie } = await exchange(entry.dial, entry.port, `${entry.prefix}${web.startup.search}`, entry.host)
-          const response = await request(entry.dial, entry.port, `${entry.prefix}api/session/create`, entry.host, 'POST', cookie)
+          const { cookie } = await exchange('http:', entry.dial, entry.port, `${entry.prefix}${web.startup.search}`, entry.host)
+          const response = await request('http:', entry.dial, entry.port, `${entry.prefix}api/session/create`, entry.host, 'POST', cookie)
           expect(response.status).toBe(200)
           expect(await response.json()).toMatchObject({ result: { ok: true } })
         }
-        const foreign = await request('127.0.0.1', proxy.port, `${MOUNT}api/session/create`, 'evil.example', 'POST')
+        const foreign = await request('http:', '127.0.0.1', proxy.port, `${MOUNT}api/session/create`, 'evil.example', 'POST')
         expect(foreign.status).toBe(403)
         await foreign.arrayBuffer()
       } finally {
         await proxy.close()
       }
       expectCleanExit(await web.stop())
+    })
+  })
+
+  it.skipIf(NON_LOOPBACK_IPV4 === undefined)('serves the bound address and a declared authority, refusing any other name', async () => {
+    const trustedHost = 'dsh-direct.example'
+    await withWeb(['--host', NON_LOOPBACK_IPV4!, '--trusted-host', trustedHost], async (web) => {
+      expect(web.startup.origin).toBe(`http://${NON_LOOPBACK_IPV4!}:${String(web.port)}`)
+      expect(web.startup.pathname).toBe('/')
+      const token = web.startup.searchParams.get('token')
+      expect(token).not.toBeNull()
+      const authority = `${NON_LOOPBACK_IPV4!}:${String(web.port)}`
+      const { cookie, setCookie } = await exchange('http:', NON_LOOPBACK_IPV4!, web.port, `/${web.startup.search}`, authority)
+      // The carrier is plain HTTP, where a browser never returns a Secure cookie.
+      expect(setCookie).not.toContain('; Secure')
+      const authenticated = await request('http:', NON_LOOPBACK_IPV4!, web.port, '/api/session/create', authority, 'POST', cookie)
+      expect(authenticated.status).toBe(200)
+      expect(await authenticated.json()).toMatchObject({ result: { ok: true } })
+
+      // A declared authority is admitted without being advertised; any other
+      // name for the same socket is a rebound Host.
+      const declared = `${trustedHost}:${String(web.port)}`
+      const declaredSession = await exchange('http:', NON_LOOPBACK_IPV4!, web.port, `/${web.startup.search}`, declared)
+      const viaDeclared = await request('http:', NON_LOOPBACK_IPV4!, web.port, '/api/session/create', declared, 'POST', declaredSession.cookie)
+      expect(viaDeclared.status).toBe(200)
+      await viaDeclared.arrayBuffer()
+      const rebound = await request('http:', NON_LOOPBACK_IPV4!, web.port, '/api/session/create', `evil.example:${String(web.port)}`, 'POST', cookie)
+      expect(rebound.status).toBe(403)
+      await rebound.arrayBuffer()
+
+      const stopped = await web.stop()
+      expectCleanExit(stopped)
+      expect(stopped.stderr).toContain(`listening on ${NON_LOOPBACK_IPV4!} over plain HTTP`)
+      expect(stopped.stderr).not.toContain(token!)
+    })
+  })
+
+
+  it.skipIf(NON_LOOPBACK_IPV4 === undefined)('warns about the plain-HTTP bind even when an HTTPS root is advertised', async () => {
+    await withWeb(['--host', NON_LOOPBACK_IPV4!, '--public-url', 'https://app.example/', '--trusted-host', 'app.example'], async (web) => {
+      expect(web.startup.origin).toBe('https://app.example')
+      expect(web.startup.host).toBe('app.example')
+      const token = web.startup.searchParams.get('token')
+      expect(token).not.toBeNull()
+      const { cookie } = await exchange('http:', NON_LOOPBACK_IPV4!, web.port, `/${web.startup.search}`, 'app.example')
+      const authenticated = await request('http:', NON_LOOPBACK_IPV4!, web.port, '/api/session/create', 'app.example', 'POST', cookie)
+      expect(authenticated.status).toBe(200)
+      expect(await authenticated.json()).toMatchObject({ result: { ok: true } })
+
+      const stopped = await web.stop()
+      expectCleanExit(stopped)
+      expect(stopped.stderr).toContain(`listening on ${NON_LOOPBACK_IPV4!} over plain HTTP`)
+    })
+  })
+
+  it.each([
+    '::ffff:127.0.0.1',
+    '::ffff:7f00:1',
+  ])('prints an IPv4 root for mapped loopback %s and serves it', async (host) => {
+    await withWeb(['--host', host], async (web) => {
+      expect(web.startup.origin).toBe(`http://127.0.0.1:${String(web.port)}`)
+      const { cookie } = await exchange('http:', web.startup.hostname, web.port, `/${web.startup.search}`, web.startup.host)
+      const authenticated = await request(
+        'http:', web.startup.hostname, web.port, '/api/session/create', web.startup.host, 'POST', cookie,
+      )
+      expect(authenticated.status).toBe(200)
+      expect(await authenticated.json()).toMatchObject({ result: { ok: true } })
+
+      const stopped = await web.stop()
+      expectCleanExit(stopped)
+      expect(stopped.stderr).not.toContain('plain HTTP')
+    })
+  })
+
+  it.each(IPV6_LOOPBACKS)('prints the IPv6 loopback root for %s and serves it', async (host) => {
+    await withWeb(['--host', host], async (web) => {
+      expect(web.startup.origin).toBe(`http://[::1]:${String(web.port)}`)
+      const authority = `[::1]:${String(web.port)}`
+      const { cookie } = await exchange('http:', '::1', web.port, `/${web.startup.search}`, authority)
+      const authenticated = await request('http:', '::1', web.port, '/api/session/create', authority, 'POST', cookie)
+      expect(authenticated.status).toBe(200)
+      expect(await authenticated.json()).toMatchObject({ result: { ok: true } })
+
+      const stopped = await web.stop()
+      expectCleanExit(stopped)
+      expect(stopped.stderr).not.toContain('plain HTTP')
     })
   })
 })

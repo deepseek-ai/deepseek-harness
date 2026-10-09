@@ -1,0 +1,13 @@
+Port 22
+ListenAddress 0.0.0.0
+HostKey /etc/ssh/ssh_host_ed25519_key
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+UsePAM no
+AuthenticationMethods publickey
+AllowUsers dsh
+AllowTcpForwarding yes
+AllowStreamLocalForwarding yes
+PidFile /run/sshd.pid
+LogLevel VERBOSE

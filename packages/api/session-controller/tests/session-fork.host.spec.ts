@@ -11,6 +11,7 @@ import { ToolCallId, createMessage, createUserMessage, ReasoningEffortId } from 
 import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import SessionStore, { TOOL_OUTCOME_UNKNOWN, SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionPersistenceRevision, type SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
@@ -95,6 +96,151 @@ const remote = (ctx: Context) => createSessionTestRemote(ctx, {
 })
 
 describe('sessions.fork', () => {
+  it.each([
+    { allowMigration: undefined, status: 'current' },
+    { allowMigration: false, status: 'current' },
+    { allowMigration: false, status: undefined },
+    { allowMigration: undefined, status: 'migration-required' },
+    { allowMigration: true, status: 'migration-required' },
+  ] as const)('forks cold history with allowMigration=$allowMigration and format=$status', async ({ allowMigration, status }) => {
+    const ctx = await composed()
+    try {
+      const source = ctx.sessions.prepare(sid('current-cold'), { meta: { cwd: '/proj' } })
+      source.append('turn/start', { turn: 1 })
+      source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      const snapshot: SessionPersistenceSnapshot = {
+        header: source.header,
+        revision: SessionPersistenceRevision('test:cold-source'),
+        ...status === undefined ? {} : { formatStatus: status },
+      }
+      ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
+        list: () => Promise.resolve([source.header]),
+        stat: () => Promise.resolve(snapshot),
+        inspect: () => Promise.resolve({ meta: source.header, events: source.snapshotEvents() }),
+      }) as never)
+      const open = vi.spyOn(ctx.sessionPersistence, 'open')
+
+      const response = await remote(ctx).fork({
+        sessionId: source.id,
+        ...allowMigration === undefined ? {} : { allowMigration },
+      })
+
+      if (!response.ok) throw response.error
+      expect(open).toHaveBeenCalledWith(source.id, 'read', undefined)
+      expect(ctx.sessions.get(source.id)).toBeUndefined()
+      expect(ctx.sessions.get(response.value.sessionId)?.inheritedEventCount).toBe(2)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('reports required migration before creating a fork when the caller disallows it', async () => {
+    const ctx = await composed()
+    try {
+      const sourceId = sid('requires-migration')
+      const source = ctx.sessions.prepare(sourceId, { meta: { cwd: '/proj' } })
+      const snapshot: SessionPersistenceSnapshot = {
+        header: source.header,
+        revision: SessionPersistenceRevision('test:requires-migration'),
+        formatStatus: 'migration-required',
+      }
+      const stat = vi.fn(async () => snapshot)
+      ctx.provide('sessionPersistence', testSessionPersistence(ctx, { stat }) as never)
+      const open = vi.spyOn(ctx.sessionPersistence, 'open')
+      const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
+      const create = vi.spyOn(ctx.agents, 'create')
+
+      await expect(remote(ctx).fork({ sessionId: sourceId, allowMigration: false })).resolves.toMatchObject({
+        ok: false, error: { code: 'session/migration-required', details: { sessionId: sourceId } },
+      })
+      expect(stat).toHaveBeenCalledExactlyOnceWith(sourceId)
+      expect(open).not.toHaveBeenCalled()
+      expect(observe).not.toHaveBeenCalled()
+      expect(create).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('forks a resident Session without consulting disk metadata or requiring a live Agent', async () => {
+    const ctx = await composed()
+    try {
+      const source = ctx.sessions.create(sid('resident-source'), { meta: { cwd: '/proj' } })
+      source.append('turn/start', { turn: 1 })
+      source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      const stat = vi.fn(() => Promise.reject(new Error('unexpected metadata read')))
+      ctx.provide('sessionPersistence', testSessionPersistence(ctx, { stat }) as never)
+
+      const result = await remote(ctx).fork({ sessionId: source.id, allowMigration: false })
+
+      if (!result.ok) throw result.error
+      expect(stat).not.toHaveBeenCalled()
+      expect(ctx.agents.get(source.id)).toBeUndefined()
+      expect(ctx.sessions.get(result.value.sessionId)?.inheritedEventCount).toBe(2)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('forks a source attached while its historical format stat is pending', async () => {
+    const ctx = await composed()
+    try {
+      const sourceId = sid('attached-during-stat')
+      const source = ctx.sessions.prepare(sourceId, { meta: { cwd: '/proj' } })
+      const snapshot: SessionPersistenceSnapshot = {
+        header: source.header,
+        revision: SessionPersistenceRevision('test:attaching-source'),
+        formatStatus: 'migration-required',
+      }
+      const entered = Promise.withResolvers<undefined>()
+      const finish = Promise.withResolvers<SessionPersistenceSnapshot | undefined>()
+      const stat = vi.fn(() => {
+        entered.resolve(undefined)
+        return finish.promise
+      })
+      ctx.provide('sessionPersistence', testSessionPersistence(ctx, { stat }) as never)
+      const operation = remote(ctx).fork({ sessionId: sourceId, allowMigration: false })
+      try {
+        await entered.promise
+        const live = ctx.sessions.create(sourceId, { meta: source.header })
+        live.append('turn/start', { turn: 1 })
+        live.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+        finish.resolve(snapshot)
+
+        const result = await operation
+        if (!result.ok) throw result.error
+        expect(stat).toHaveBeenCalledExactlyOnceWith(sourceId)
+        expect(ctx.sessions.get(result.value.sessionId)?.inheritedEventCount).toBe(2)
+      } finally {
+        finish.resolve(undefined)
+        await Promise.allSettled([operation])
+      }
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('reports a stat failure without treating it as required migration or opening the source', async () => {
+    const ctx = await composed()
+    try {
+      const sourceId = sid('failed-source-stat')
+      const stat = vi.fn(() => Promise.reject(new Error('source metadata unavailable')))
+      ctx.provide('sessionPersistence', testSessionPersistence(ctx, { stat }) as never)
+      const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
+      const create = vi.spyOn(ctx.agents, 'create')
+
+      await expect(remote(ctx).fork({ sessionId: sourceId, allowMigration: false })).resolves.toMatchObject({
+        ok: false, error: { code: 'gateway/internal', message: 'source metadata unavailable' },
+      })
+
+      expect(stat).toHaveBeenCalledExactlyOnceWith(sourceId)
+      expect(observe).not.toHaveBeenCalled()
+      expect(create).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('keeps the completed manual compaction checkpoint when atSeq is omitted', async () => {
     const ctx = new Context()
     try {

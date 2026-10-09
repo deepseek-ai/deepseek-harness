@@ -77,7 +77,7 @@ runner 是核心 API 载体之上的直接驱动器：它确定 Agent 标识—�
 
 ### 运行流程
 
-runner 等待整个应用结算（`ctx.get('loader')?.await()`），确保已组合的工具与适配器不会半挂载，读取共享的 [`agentDefaultModel`](../../core/agent-default-model/README.zh.md) 选择，从配置或 stdin 解析任务，然后确定 Agent 标识：默认是全新的 `session-<uuid>`，或是 `--session-id` 指名的持久化 Session——通过 [`sessionQuery`](../../session-query/session-query/README.zh.md) 沿用，日志不存在时拒绝。它把任务作为普通用户消息提交。不带 `--json` 时，它把该 Agent 的非空推理增量流式写入 stderr；带 `--json` 时改为投影本次运行。它等待完全停稳，然后对会话执行 flush，并把所属区间（从 `firstSeq` 起）折叠为最后一条非空 `assistant/message` 文本与最终 `turn/end` 原因。最后，它把最终文本写入 stdout（或 `final` 事件）并请求退出。
+runner 等待整个应用结算（`ctx.get('loader')?.await()`），确保已组合的工具与适配器不会半挂载，读取共享的 [`agentDefaultModel`](../../core/agent-default-model/README.zh.md) 选择，从配置或 stdin 解析任务，然后确定 Agent 标识：默认是全新的 `session-<uuid>`，或是 `--session-id` 指名的持久化 Session——通过 [`sessionQuery`](../../session-query/session-query/README.zh.md) 沿用，日志不存在时拒绝。它把任务作为普通用户消息提交。不带 `--json` 时，它把该 Agent 的非空推理增量流式写入 stderr；带 `--json` 时改为投影本次运行。它等待子级工作，并在结束前复核父级仍空闲且 Session 序号未变，让结算通知可以驱动父级生成最终答案。收件箱消息处于停放状态的空闲子级不会延迟完成；进程关闭时丢弃这些未领取消息。随后它对会话执行 flush，并把所属区间（从 `firstSeq` 起）折叠为最后一条非空 `assistant/message` 文本与最终 `turn/end` 原因。最后，它把最终文本写入 stdout（或 `final` 事件）并请求退出。
 
 ### 基于 base 的 patch 内容
 
@@ -85,7 +85,7 @@ patch 叠加在 `dsh-base` 之上：继承投影缓存与共享 PTC 运行时，
 
 ### 退出映射
 
-最终 `turn/end` 完成时退出码为 0；任何其他结果——aborted、error，或所属区间内没有轮次——退出码为 1。结束原因为 `error` 时还会向 stderr 写入 `dsh: <code>: <message>`。直接驱动器失败（例如 Agent 创建失败或不可用的 `--session-id`）向 stderr 写入 `dsh: <message>` 并退出 1，且在 `--json` 模式下额外发出一个 `error` 事件。
+最终 `turn/end` 完成时退出码为 0；任何其他结果——aborted、error，或所属区间内没有轮次——退出码为 1。结束原因为 `error` 时还会向 stderr 写入 `dsh: <code>: <message>`。若实时 Agent 失败后没有提交更晚的 `turn/end`，则视为直接驱动器失败，包括汇总轮次的开始或结束无法持久化；更早的已完成轮次不能使该次运行成功。直接驱动器失败（例如 Agent 创建失败或不可用的 `--session-id`）向 stderr 写入 `dsh: <message>` 并退出 1，且在 `--json` 模式下额外发出一个 `error` 事件，不发出 `final` 事件。
 
 ### 源码地图
 

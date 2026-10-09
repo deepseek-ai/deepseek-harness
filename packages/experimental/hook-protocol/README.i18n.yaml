@@ -1,0 +1,61 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/hook-protocol/README.md
+/:
+  en: 7cfe3761eedff848
+  zh: 80b0bed5743d0924
+/deepseek-ai-dsh-hook-protocol:
+  en: 3092627c127b688d
+  zh: bbdb083e0a5dbc25
+/deepseek-ai-dsh-hook-protocol/summary:
+  en: e8ab847d0db16043
+  zh: 5c1e72f4b4a54fe1
+/deepseek-ai-dsh-hook-protocol/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-hook-protocol/use-this-package:
+  en: 4b29a18ac60be5bb
+  zh: 4a02b48f9e914101
+/deepseek-ai-dsh-hook-protocol/use-this-package/when-to-choose-it:
+  en: 435c1a335f8dfccf
+  zh: efe58c06dc40d4d9
+/deepseek-ai-dsh-hook-protocol/use-this-package/what-a-hook-can-do:
+  en: 043f54b3a5b518a7
+  zh: a4115083a9b1cef1
+/deepseek-ai-dsh-hook-protocol/use-this-package/what-you-see-when-hooks-run:
+  en: ba2d6ed1db063f53
+  zh: ab1b8d72dccd2ff1
+/deepseek-ai-dsh-hook-protocol/understand-the-implementation:
+  en: 08b3960150e9c5e2
+  zh: 6bb2f236d697de01
+/deepseek-ai-dsh-hook-protocol/understand-the-implementation/processing-pipeline:
+  en: f71878539d98392e
+  zh: 826a0dd95475fff3
+/deepseek-ai-dsh-hook-protocol/understand-the-implementation/hook-session-events:
+  en: f01ab4ab98f052b3
+  zh: 1da25fa50378bd19
+/deepseek-ai-dsh-hook-protocol/understand-the-implementation/design-philosophy:
+  en: 7f9239eaea5a945c
+  zh: 9ba6a2ea955d4934
+/deepseek-ai-dsh-hook-protocol/understand-the-implementation/source-map:
+  en: 0d8956a6d8608ee0
+  zh: 9f554284c4c0a36e
+/deepseek-ai-dsh-hook-protocol/further-exploration:
+  en: 8b585ce73c2be2cc
+  zh: c0270fd001e1352b
+/deepseek-ai-dsh-hook-protocol/model-experience:
+  en: 53d2f59435a4a88f
+  zh: 79c8fc2849b20718
+/deepseek-ai-dsh-hook-protocol/model-experience/kv-cache-effect:
+  en: e290ccc9b3c92c08
+  zh: cb3c8823f41e7afe
+/deepseek-ai-dsh-hook-protocol/known-limitations-and-deferred-work:
+  en: 1ca6146a077a7d2d
+  zh: 369741569178fc79
+/deepseek-ai-dsh-hook-protocol/known-limitations-and-deferred-work/dev-note:
+  en: ac1d08360a93382b
+  zh: 6c58749bae9a6e65
+/deepseek-ai-dsh-hook-protocol/known-limitations-and-deferred-work/dev-note/future-run-level-halt:
+  en: bfb3db50de22c1d0
+  zh: 2a979359b0edbbe7

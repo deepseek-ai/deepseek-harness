@@ -15,7 +15,7 @@ function property(nodes: readonly SchemaNode[], index: number, name: string): nu
   return field.type
 }
 
-it('requires a version bump before request headers can carry retired system text', { timeout: 60_000 }, () => {
+it('requires compatibility review before request headers can carry retired system text', { timeout: 60_000 }, () => {
   const inventory = extractPersistenceSchema(resolve(import.meta.dirname, '..'))
   const before = inventory.roots.find(root => root.key === 'event:request/header')
   if (before === undefined) throw new Error('generated schema omits request/header')
@@ -41,7 +41,7 @@ it('requires a version bump before request headers can carry retired system text
     path: 'event:request/header.data.header.system',
     kind: 'type-changed',
     description: 'type changed',
-    requiresVersionBump: true,
+    requiresCompatibilityReview: true,
   }])
   expect(() => { assertV4RowAdmission({ type: 'request/header', data: { header: { system: 'retired text' } } }) })
     .toThrow('format v4 request/header rejects retired header.system')

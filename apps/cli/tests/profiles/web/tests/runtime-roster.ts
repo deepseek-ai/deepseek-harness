@@ -75,21 +75,3 @@ export function runtimeRoster(ctx: Context): RuntimeRoster {
     client: ctx.clientModules.graph(),
   }
 }
-
-/**
- * Locate experimental package identities and experimental source/artifact paths in runtime evidence.
- * @param roster - independently collected Web runtime records.
- * @returns diagnostic evidence for every forbidden package reference.
- */
-export function experimentalRuntimeReferences(roster: RuntimeRoster): string[] {
-  const references = new Set([
-    ...roster.entries.map(entry => entry.name),
-    ...roster.plugins.flatMap(plugin => [plugin.owner ?? '', ...plugin.modules]),
-    ...roster.modules,
-    ...roster.client.entries.flatMap(entry => [entry.id, ...entry.inject ?? [], ...entry.external ?? []]),
-    ...roster.client.batches.flatMap(batch => batch.entries),
-  ])
-  return [...references].filter(reference => reference.includes('@deepseek-ai/dsh-experimental-')
-    || (reference.startsWith('file:') && (fileURLToPath(reference).replaceAll('\\', '/').includes('/packages/experimental/')
-      || modulePackage(reference)?.startsWith('@deepseek-ai/dsh-experimental-')))).sort()
-}

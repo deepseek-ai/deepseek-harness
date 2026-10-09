@@ -40,6 +40,9 @@
     },
     {
       "path": "../../util/lazy-require"
+    },
+    {
+      "path": "../../session/working-directory"
     }
   ]
 }

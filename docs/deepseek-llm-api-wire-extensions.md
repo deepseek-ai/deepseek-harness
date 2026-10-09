@@ -34,9 +34,9 @@ Credential failure happens before anonymous-user-id resolution, so an unauthoriz
 
 The adapter serializes the complete base body, including the exact `messages`, before it asks registered providers to prepare fields. A provider receives that immutable body, the request cancellation signal, and optional `sessionId` and auxiliary-call `purpose`. Returning `undefined` omits that provider's field for the request.
 
-Prepared JSON values are detached from provider-owned state, merged as top-level siblings of the base fields, and serialized in the same HTTP body. Preparation or collision failure prevents the request. If the merged body fails to serialize, the adapter sends the base body without any extension field, skips the acceptance transaction so contributors resend their state on a later request, and logs the omitted field names. A composition without the registry sends the unextended base body.
+Prepared JSON values are detached from provider-owned state, merged as top-level siblings of the base fields, and serialized in the same HTTP body. A contributor whose preparation fails is omitted from that request, with only its first failure logged, while the other fields are still sent; a field that collides with a base field prevents the request. If the merged body fails to serialize, the adapter sends the base body without any extension field, skips the acceptance transaction so contributors resend their state on a later request, and logs the omitted field names. A composition without the registry sends the unextended base body.
 
-After the configured endpoint returns HTTP 2xx, the adapter runs the prepared `accept()` transaction before reading the SSE response body. Transport failures and non-2xx responses do not accept any contribution. An acceptance failure fails the model request even though the endpoint returned 2xx. Acceptance records endpoint-level HTTP success; it does not assert that an SSE stream completed or that the endpoint persisted an extension.
+After the configured endpoint returns HTTP 2xx, the adapter runs the prepared `accept()` transaction before reading the SSE response body. Transport failures and non-2xx responses do not accept any contribution. An acceptance failure is logged and does not fail the model request; the contributor resends its unaccepted state on a later request. Acceptance records endpoint-level HTTP success; it does not assert that an SSE stream completed or that the endpoint persisted an extension.
 
 ## `dsh_plugin_packages`
 
@@ -61,11 +61,11 @@ After the configured endpoint returns HTTP 2xx, the adapter runs the prepared `a
 | `version` | `1` | Schema version for `dsh_plugin_packages` |
 | `packages` | array | Complete active set for this request |
 | `packages[].name` | string | Exact non-empty npm package name from the owning manifest |
-| `packages[].version` | string | Exact non-empty package version from the same manifest |
+| `packages[].version` | optional string | Exact non-blank package version from the same manifest; absent when unavailable |
 
-Every request re-reads active non-group Loader entries from the host tree and, when available for the request Session, its standing agent-preset tree. Relative and absolute modules use their nearest owning manifest; bare package entries follow the Loader resolution base that activated them. A named manifest without a non-empty version fails request preparation.
+Every request re-reads active non-group Loader entries from the host tree and, when available for the request Session, its standing agent-preset tree. Relative and absolute modules use their nearest owning manifest; bare package entries follow the Loader resolution base that activated them. A named manifest without a non-blank string version contributes `{ name }`, regardless of `private`. Missing names and unreadable manifests omit only the affected entries; package metadata does not block requests.
 
-The sender deduplicates exact `(name, version)` pairs and sorts first by `name`, then by `version`, with a locale-independent text comparison. Simultaneously active versions of one package remain separate entries. Receivers must not collapse the array by package name or infer package activation from array order.
+The sender deduplicates exact `(name, optional version)` pairs and sorts first by `name`, then by `version`, with a locale-independent text comparison and absent versions first. Simultaneously active versions of one package remain separate entries, including a name-only entry. Receivers must accept absent versions, must not collapse the array by package name, and must not infer package activation from array order.
 
 Disabled, pending, failed, unloading, disposed, and structural Loader entries are absent. Ordinary dependencies, loose modules without a named owning package, programmatically mounted child fibers, and in-memory dynamic plugins are also absent because they have no authoritative Loader-backed package identity.
 

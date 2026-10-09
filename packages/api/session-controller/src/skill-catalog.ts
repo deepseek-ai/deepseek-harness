@@ -4,6 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry/types'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import { isUserInvocable } from '@deepseek-ai/dsh-skill'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import type { ScopeKey } from '@deepseek-ai/dsh-scope'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { SkillListRequest, SkillListValue } from './types.ts'
@@ -17,7 +18,7 @@ declare module '@deepseek-ai/cordis' {
 
 /** Host service backing `ctx.remote.skills` without activating a cold Agent. */
 export class SessionSkillCatalog extends TypertRemoteService {
-  static inject = ['agents', 'sessionQuery', 'typert']
+  static inject = ['agents', 'sessionQuery', 'typert', 'workingDirectory']
 
   /** @param ctx - Host context carrying Session reads and optional skill/preset services. */
   constructor(ctx: Context) {
@@ -33,17 +34,20 @@ export class SessionSkillCatalog extends TypertRemoteService {
    */
   @Remote
   async list(request: SkillListRequest, signal: AbortSignal): Promise<SkillListValue> {
-    void signal
     const { sessionId } = request
-    let cwd: string | undefined
+    let cwd: string
     let agentPreset: string | undefined
     try {
       using observation = await this.ctx.sessionQuery.observeSession(sessionId)
       if (observation.projections === undefined) {
         throw new Error('skill catalog requires a projected Session observation')
       }
-      cwd = observation.header.cwd
+      cwd = observation.projections.values.workingDirectory
+        ?? observation.header.cwd
+        ?? this.ctx.workingDirectory.defaultDirectory
       agentPreset = observation.projections.values.agentPreset ?? undefined
+      const live = this.ctx.agents.get(sessionId)
+      if (live !== undefined) cwd = await this.ctx.workingDirectory.ensure(live, signal)
     } catch (error: unknown) {
       if (error instanceof SessionQueryError
         && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
@@ -54,9 +58,6 @@ export class SessionSkillCatalog extends TypertRemoteService {
         `session "${sessionId}" could not be inspected: ${String(error)}`,
         {},
       )
-    }
-    if (cwd === undefined) {
-      throw new RemoteError('gateway/internal', `session "${sessionId}" has no project cwd`, {})
     }
 
     const live = this.ctx.agents.get(sessionId)

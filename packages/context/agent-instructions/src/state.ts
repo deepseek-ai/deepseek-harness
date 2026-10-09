@@ -18,14 +18,17 @@ import {
   probeScopeInstruction,
   readScopeInstruction,
   relativeDisplay,
+  scopeInstructionFile,
   type LoadedInstructionFile,
 } from './files.ts'
 import {
   candidateScopeKey,
   decodeScopeKey,
+  instructionCandidateGroup,
   instructionScopeKey,
+  isUserGlobalDirectory,
   renderInstructionChanges,
-  USER_GLOBAL_DIRECTORY,
+  USER_GLOBAL_DIRECTORIES,
   USER_GLOBAL_FILE,
   type ChangeRenderItem,
   type AgentInstructionChange,
@@ -58,7 +61,7 @@ export interface InstructionVersionState {
   digest: string
   /**
    * Trimmed-content identity ({@link trimmedInstructionDigest}) used to suppress
-   * per-directory duplicates on the metadata fast path without re-reading a sibling.
+   * candidate-group duplicates on the metadata fast path without re-reading a sibling.
    */
   trimmedDigest: string
 }
@@ -69,6 +72,7 @@ export type InstructionVersionCache = WeakMap<Session, Map<string, InstructionVe
 /** A metadata-cache transition associated with one rendered instruction change. */
 export interface InstructionVersionUpdate {
   change: AgentInstructionChange
+  /** A duplicate-removal notice can retain metadata for its still-present file. */
   state?: InstructionVersionState
 }
 
@@ -250,6 +254,7 @@ export async function reconcileInstructionContext(
   versionCache: InstructionVersionCache,
   fileSystem: FileSystem,
   options: {
+    cwd: string
     authorityMessages: readonly UserMessage[]
     scopeMessages: readonly UserMessage[]
     touchedPaths: readonly string[]
@@ -261,8 +266,7 @@ export async function reconcileInstructionContext(
 ): Promise<ReconciledInstructionContext | undefined> {
   const session = agent.session
   const effective = visibleInstructionChanges(agent, options.authorityMessages)
-  /* v8 ignore next -- normal agents carry an absolute session cwd. */
-  const cwd = session.header.cwd ?? process.cwd()
+  const cwd = options.cwd
   // TODO(frozen-project-root): retain the baseline root for the loop instance;
   // recomputing it after marker edits reinterprets the existing relative scope keys.
   const projectRoot = options.projectRoot
@@ -276,7 +280,7 @@ export async function reconcileInstructionContext(
   const addProjectScopes = (target: Set<string>, dir: string): void => {
     addDirScopes(target, relativeScope(projectRoot, dir))
   }
-  baselineScopes.add(candidateScopeKey(USER_GLOBAL_DIRECTORY, USER_GLOBAL_FILE))
+  for (const directory of USER_GLOBAL_DIRECTORIES) baselineScopes.add(candidateScopeKey(directory, USER_GLOBAL_FILE))
   for (const dir of ancestorChain(projectRoot, cwd)) addProjectScopes(baselineScopes, dir)
   if (options.includeBaselineScopes) {
     for (const scope of baselineScopes) scopes.add(scope)
@@ -292,7 +296,7 @@ export async function reconcileInstructionContext(
   for (const scope of effective.keys()) {
     if (!options.includeBaselineScopes && baselineScopes.has(scope)) continue
     const { directory } = decodeScopeKey(scope)
-    if (directory === USER_GLOBAL_DIRECTORY) scopes.add(candidateScopeKey(USER_GLOBAL_DIRECTORY, USER_GLOBAL_FILE))
+    if (isUserGlobalDirectory(directory)) scopes.add(candidateScopeKey(directory, USER_GLOBAL_FILE))
     else addDirScopes(scopes, directory)
   }
   for (const touchedPath of options.touchedPaths) {
@@ -301,15 +305,17 @@ export async function reconcileInstructionContext(
 
   const versions = versionStatesFor(session, versionCache)
   const seenAbsolutePaths = new Set<string>()
-  // Per-directory trimmed-content identities kept so far this pass, iterated in
-  // candidate order (base before local); a later sibling matching an earlier one
-  // is a duplicate and is dropped or removed rather than rendered twice.
-  const keptTrimmedByDir = new Map<string, Set<string>>()
-  const registerKeptTrimmed = (directory: string, digest: string): boolean => {
-    let digests = keptTrimmedByDir.get(directory)
+  // Per-group trimmed-content identities kept so far this pass, iterated in
+  // candidate order (base before local, harness home before shared agents root);
+  // a later candidate matching an earlier one is a duplicate and is dropped or
+  // removed rather than rendered twice.
+  const keptTrimmedByGroup = new Map<string, Set<string>>()
+  const hasKeptTrimmed = (group: string, digest: string): boolean => keptTrimmedByGroup.get(group)?.has(digest) ?? false
+  const registerKeptTrimmed = (group: string, digest: string): boolean => {
+    let digests = keptTrimmedByGroup.get(group)
     if (digests === undefined) {
       digests = new Set()
-      keptTrimmedByDir.set(directory, digests)
+      keptTrimmedByGroup.set(group, digests)
     }
     if (digests.has(digest)) return true
     digests.add(digest)
@@ -317,21 +323,22 @@ export async function reconcileInstructionContext(
   }
   const items: ChangeRenderItem[] = []
   const versionUpdates: InstructionVersionUpdate[] = []
-  const pushRemoval = (scope: string, path: string): void => {
+  const pushRemoval = (scope: string, path: string, state?: InstructionVersionState): void => {
     const change: AgentInstructionChange = { action: 'remove', scope, path }
     items.push({ change, file: { absolutePath: `removed:${scope}`, displayPath: path, content: '' } })
-    versionUpdates.push({ change })
+    versionUpdates.push({ change, ...state === undefined ? {} : { state } })
   }
-  const scopesByDirectory = new Map<string, string[]>()
+  const scopesByGroup = new Map<string, string[]>()
   for (const scope of scopes) {
     const { directory } = decodeScopeKey(scope)
-    const directoryScopes = scopesByDirectory.get(directory)
-    if (directoryScopes === undefined) scopesByDirectory.set(directory, [scope])
-    else directoryScopes.push(scope)
+    const group = instructionCandidateGroup(directory)
+    const groupScopes = scopesByGroup.get(group)
+    if (groupScopes === undefined) scopesByGroup.set(group, [scope])
+    else groupScopes.push(scope)
   }
-  for (const [directory, directoryScopes] of scopesByDirectory) {
+  for (const [group, groupScopes] of scopesByGroup) {
     const probedScopes: string[] = []
-    for (const scope of directoryScopes) {
+    for (const scope of groupScopes) {
       if (options.excludedBaselineScopes !== undefined
         && baselineScopes.has(scope)
         && options.excludedBaselineScopes.has(scope)) {
@@ -344,24 +351,28 @@ export async function reconcileInstructionContext(
     }
     const itemStart = items.length
     const versionUpdateStart = versionUpdates.length
-    const addedAbsolutePaths: string[] = []
     const priorVersions = new Map(probedScopes.map(scope => [scope, versions.get(scope)]))
+    // Metadata and content availability apply to the whole deduplicated group,
+    // including hidden candidates that may become visible after a sibling edit.
+    const rollbackGroup = (): void => {
+      items.splice(itemStart)
+      versionUpdates.splice(versionUpdateStart)
+      for (const [candidateScope, prior] of priorVersions) {
+        if (prior === undefined) versions.delete(candidateScope)
+        else versions.set(candidateScope, prior)
+      }
+      // Project aliases must not publish content withheld by a failed group,
+      // including candidates whose paths were never reached before the failure.
+      for (const scope of probedScopes) {
+        seenAbsolutePaths.add(scopeInstructionFile(scope, projectRoot, resolved).absolutePath)
+      }
+      keptTrimmedByGroup.delete(group)
+    }
     for (const scope of probedScopes) {
       const previous = effective.get(scope)
       const probe = await probeScopeInstruction(scope, projectRoot, resolved, fileSystem, options.signal)
       if (probe.kind === 'unavailable') {
-        if (previous === undefined || previous.action === 'remove') continue
-        // Same-directory candidates form one deduplicated authority group. If an
-        // active member cannot be observed, preserve the entire last-good group;
-        // cache warmth must never decide whether a sibling transition is emitted.
-        items.splice(itemStart)
-        versionUpdates.splice(versionUpdateStart)
-        for (const [candidateScope, prior] of priorVersions) {
-          if (prior === undefined) versions.delete(candidateScope)
-          else versions.set(candidateScope, prior)
-        }
-        for (const absolutePath of addedAbsolutePaths) seenAbsolutePaths.delete(absolutePath)
-        keptTrimmedByDir.delete(directory)
+        rollbackGroup()
         break
       }
       if (probe.kind === 'absent') {
@@ -372,39 +383,50 @@ export async function reconcileInstructionContext(
       const { file: probedFile } = probe
       if (seenAbsolutePaths.has(probedFile.absolutePath)) continue
       seenAbsolutePaths.add(probedFile.absolutePath)
-      addedAbsolutePaths.push(probedFile.absolutePath)
       const cached = versions.get(scope)
-      if (
-        cached !== undefined
+      const metadataUnchanged = cached !== undefined
         && cached.path === probedFile.displayPath
         && cached.version === probedFile.version
-        && previous !== undefined
-        && previous.action !== 'remove'
-        && previous.path === cached.path
-        && previous.digest === cached.digest
-      ) {
-        // Unchanged and previously rendered: keep it, but an earlier sibling that
-        // now matches its trimmed content makes this the duplicate to remove.
-        if (registerKeptTrimmed(directory, cached.trimmedDigest)) pushRemoval(scope, previous.path)
-        continue
+      if (metadataUnchanged) {
+        const rendered = previous !== undefined
+          && previous.action !== 'remove'
+          && previous.path === cached.path
+          && previous.digest === cached.digest
+        if (rendered) {
+          // Unchanged and previously rendered: keep it, but an earlier group member
+          // that now matches its trimmed content makes this the duplicate to remove.
+          if (registerKeptTrimmed(group, cached.trimmedDigest)) pushRemoval(scope, previous.path, cached)
+          continue
+        }
+        // Hidden duplicates include files removed from visible state after
+        // becoming duplicates. Only promotion requires another content read.
+        if ((previous === undefined || previous.action === 'remove')
+          && hasKeptTrimmed(group, cached.trimmedDigest)) continue
       }
 
       const file = await readScopeInstruction(probedFile, resolved.maxSourceBytes, fileSystem, options.signal)
-      if (file === undefined) continue
+      if (file === undefined) {
+        rollbackGroup()
+        break
+      }
       const currentDigest = instructionContentSha1(file.content)
       const trimmedDigest = trimmedInstructionDigest(file.content)
-      if (registerKeptTrimmed(directory, trimmedDigest)) {
-        // A distinct file whose trimmed content already appeared earlier in this
-        // directory: drop it, removing any copy that was previously rendered.
-        if (previous !== undefined && previous.action !== 'remove') pushRemoval(scope, previous.path)
-        else versions.delete(scope)
-        continue
-      }
       const nextVersion: InstructionVersionState = {
         path: file.displayPath,
         version: probedFile.version,
         digest: currentDigest,
         trimmedDigest,
+      }
+      if (registerKeptTrimmed(group, trimmedDigest)) {
+        // A distinct file whose trimmed content already appeared earlier in this
+        // group: drop it, removing any copy that was previously rendered, and keep
+        // its metadata so the next pass decides without reading it again.
+        if (previous !== undefined && previous.action !== 'remove') {
+          pushRemoval(scope, previous.path, nextVersion)
+        } else {
+          versions.set(scope, nextVersion)
+        }
+        continue
       }
       if (previous !== undefined && previous.action !== 'remove' && previous.path === file.displayPath && previous.digest === currentDigest) {
         versions.set(scope, nextVersion)

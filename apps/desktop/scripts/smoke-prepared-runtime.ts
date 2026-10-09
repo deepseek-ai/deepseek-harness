@@ -31,7 +31,16 @@ export async function smokePreparedRuntime(
     const { stdout } = await promisify(execFile)(node, [
       '--expose-internals', resolve(import.meta.dirname, '../tests/fixtures/runtime-payload-smoke.mjs'), root, resourcesRuntime,
     ], { timeout: 120_000, windowsHide: true,
-      env: desktopNodeEnvironment(node, join(resourcesRuntime, 'bin'), environment) })
+      env: desktopNodeEnvironment(node, join(resourcesRuntime, 'bin'), environment) }).catch((error: unknown) => {
+      if (error instanceof Error) {
+        if ('stdout' in error && typeof error.stdout === 'string') process.stdout.write(error.stdout)
+        if ('stderr' in error && typeof error.stderr === 'string') process.stderr.write(error.stderr)
+        if ('killed' in error && 'signal' in error) {
+          process.stderr.write(`runtime payload: killed=${String(error.killed)}, signal=${String(error.signal)}\n`)
+        }
+      }
+      throw error
+    })
     process.stdout.write(stdout)
     await smokeDesktopRuntime(root, node, descriptor, environment, resourcesRuntime)
   } finally {

@@ -62,12 +62,12 @@ changes:
 
 <!-- persistence-release-changes:start -->
 
-检测到 2 个根类型变化、2 项结构差异。下表的最低要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
+检测到 2 个根类型变化、2 项结构差异。下表的审查要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
 
-| 路径 | 变化 | 当前最低要求 |
+| 路径 | 变化 | 审查要求 |
 |---|---|---|
-| `event:feedback/message-delete` | `root-added` | `same-version` |
-| `event:feedback/message-put` | `root-added` | `same-version` |
+| `event:feedback/message-delete` | `root-added` | `not-required` |
+| `event:feedback/message-put` | `root-added` | `not-required` |
 
 <!-- persistence-release-changes:end -->
 

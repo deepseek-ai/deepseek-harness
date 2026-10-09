@@ -2,6 +2,7 @@
 import type { DiffBlockProps, DiffHunk } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ToolCallBlock } from './tool-call-model.ts'
 import { parsedToolCall } from './raw-tool-call.ts'
+import { recordedAbsolutePath } from './recorded-path.ts'
 
 /** Room for a path, one removed/added pair, and three context lines on each side. */
 export const CHAT_DIFF_MAX_LINES = 9
@@ -107,5 +108,6 @@ export function diffCardModel(block: ToolCallBlock): DiffCardModel | null {
   if (applied === null || applied === 'empty') {
     return intended.tool === 'write' ? { card: { diffs: [intended.diff] } } : null
   }
-  return { card: { diffs: applied } }
+  const path = recordedAbsolutePath(block.meta, 'path')
+  return { card: { diffs: applied.map(diff => diff.path === path ? { ...diff, path: intended.diff.path } : diff) } }
 }

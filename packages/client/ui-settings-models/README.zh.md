@@ -35,6 +35,8 @@ kind: "package-reference"
 
 存在已存储目录错误的提供商仍显示诊断以及编辑、删除入口。添加操作只面向已注册的 settings 命名空间，因此不可用的命名空间不会留下无法打开编辑器的按钮。保存被拒绝时，编辑器保持打开并展示 Host 诊断。
 
+应用设置并关闭编辑器后，当前提供商、settings 与凭据快照就绪时才显示保存状态。打开任一行的编辑器、添加提供商和打开移除确认都会等待该刷新。新打开的 Models 区域或页面加载失败后的重试会等到 ready 快照后才挂载编辑器。后台刷新期间，只要编辑器仍挂载，已打开的草稿就会保留用户的修改；页面加载失败或提供商被移除可能关闭编辑器。
+
 Host 配置 `credentialOnboarding` 默认为 `true`。Electron preload 标记会抑制自动凭证引导和 Web 欢迎须知；模型设置页与显式 API Key 编辑仍然可用。[账号插件](../ui-settings-account/README.zh.md#desktop-onboarding)负责 Desktop 引导。其他原生壳可以通过 `credentialOnboarding: false` 仅禁用凭证步骤。Host 通过 `webserver/index-inject` 发布这个公开的布尔值，Client 在注册弹窗前校验它。它是页面初始化数据，不是持久化的完成标记。
 
 ### API 密钥
@@ -82,6 +84,8 @@ Models 页面包含 **DeepSeek 账号**（`deepseek-account`，英文为 **DeepS
 ### 并发与凭据
 
 每次 settings 写入都携带卡片当前的 `revision`，因此来自另一个标签页或外部 `cordis.patch.yml` 编辑的并发写入会以 `settings/conflict` 被拒绝。settings 提交后，卡片会在存储凭据前采纳返回的脱敏用户子树与 revision，因此失败的凭据阶段只重试该阶段。删除只会在 profile 指名本页派生的 `<ROUTE>_API_KEY` 目标时移除已配置且可写的凭据，然后 unset 该 profile；两个操作都幂等。加载完成后，页面订阅转发的 `settings/document-updated`、`credentials/reference-updated` 与 `llm/adapters-updated` 属主事件，以及本地 `connection/reset`，因此外部编辑无需轮询即可收敛。
+
+并发的 `ModelsSettingsStore.load()` 调用会在当前刷新发布 ready 或 error 快照后 resolve，包括读取已被后续刷新取代的调用。旧响应不能发布快照或完成等待中的调用；快照订阅者同步发起的刷新负责等待中的调用。预期的 Remote 失败仍作为快照诊断展示，当前读取的意外拒绝则会拒绝所有等待中的调用。
 
 ### 引导协调器
 

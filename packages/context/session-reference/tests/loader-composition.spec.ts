@@ -15,6 +15,8 @@ import * as toolsPlugin from '@deepseek-ai/dsh-tools'
 import * as fsPlugin from '@deepseek-ai/dsh-fs-local'
 import * as toolFsPlugin from '@deepseek-ai/dsh-tool-fs'
 import * as sessionPlugin from '@deepseek-ai/dsh-session'
+import * as sessionProjectionPlugin from '@deepseek-ai/dsh-session-projection'
+import * as workingDirectoryPlugin from '@deepseek-ai/dsh-working-directory'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import * as queryPlugin from '@deepseek-ai/dsh-session-query-sqlite'
 import * as referencePlugin from '@deepseek-ai/dsh-session-reference'
@@ -45,6 +47,8 @@ describe('session-reference real Loader composition', () => {
     ctx.loader.builtins.include = Include
     const modules = new Map<string, unknown>([
       ['@deepseek-ai/dsh-session', sessionPlugin],
+      ['@deepseek-ai/dsh-session-projection', sessionProjectionPlugin],
+      ['@deepseek-ai/dsh-working-directory', workingDirectoryPlugin],
       ['@deepseek-ai/dsh-system-prompt', systemPromptPlugin],
       ['@deepseek-ai/dsh-tools', toolsPlugin],
       ['@deepseek-ai/dsh-fs-local', fsPlugin],

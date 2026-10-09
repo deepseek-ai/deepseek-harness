@@ -1,11 +1,13 @@
 /** Source, installation, and composition regressions for default-product isolation. */
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import { EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS } from './experimental-package-policy.ts'
 import { verifyDefaultProductIsolation } from './verify-default-product-isolation.ts'
+import { writeFixtureFile as write } from './fixture-file.ts'
 
 const roots: string[] = []
 const experimental = '@deepseek-ai/dsh-experimental-prototype'
@@ -14,12 +16,6 @@ const base = '@deepseek-ai/dsh-base'
 const profile = 'packages/boot/app-boot/src/profile.ts'
 const preset = 'packages/bundle/web-app/presets/standard.patch.yml'
 const patch = 'packages/bundle/base/cordis.patch.yml'
-
-function write(root: string, path: string, value: unknown): void {
-  const target = join(root, path)
-  mkdirSync(dirname(target), { recursive: true })
-  writeFileSync(target, typeof value === 'string' ? value : `${JSON.stringify(value)}\n`)
-}
 
 function manifest(root: string, path: string, fields: Record<string, unknown>): void {
   const existing = JSON.parse(readFileSync(join(root, path), 'utf8')) as Record<string, unknown>
@@ -52,6 +48,32 @@ afterEach(() => {
 })
 
 describe('default product isolation', () => {
+  describe.each(Object.entries(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))('retained experimental identity %s', (directory, name) => {
+    it.each(['direct dependency', 'transitive dependency', 'npm alias', 'value import', 'subpath import', 'profile row', 'preset row'])(
+      'rejects default product use through a %s', (route) => {
+        const root = fixture()
+        write(root, `${directory}/package.json`, { name })
+        if (route === 'direct dependency') manifest(root, 'apps/cli/package.json', { dependencies: { [name]: 'workspace:*' } })
+        if (route === 'transitive dependency') manifest(root, 'packages/core/core/package.json', { dependencies: { [name]: 'workspace:*' } })
+        if (route === 'npm alias') manifest(root, 'packages/core/core/package.json', { dependencies: { alias: `npm:${name}@1.0.0` } })
+        if (route === 'value import') write(root, 'apps/cli/src/bin.ts', `import '${name}'\n`)
+        if (route === 'subpath import') write(root, 'apps/cli/src/bin.ts', `import '${name}/feature'\n`)
+        if (route === 'profile row') write(root, patch, [{ insert: [{ name }] }])
+        if (route === 'preset row') write(root, preset, [{ insert: [{ name: '@deepseek-ai/dsh-agent-preset', config: { id: 'standard', plugins: [{ name }] } }] }])
+        expect(verifyDefaultProductIsolation(root).failures).toEqual(expect.arrayContaining([
+          expect.stringMatching(new RegExp(`${name}.*default product must not include experimental packages`)),
+        ]))
+      },
+    )
+
+    it('allows a type-only reference without promoting it to runtime use', () => {
+      const root = fixture()
+      write(root, `${directory}/package.json`, { name })
+      write(root, 'apps/cli/src/bin.ts', `import type { Options } from '${name}'\nexport type { Options }\n`)
+      expect(verifyDefaultProductIsolation(root).failures).toEqual([])
+    })
+  })
+
   it.each(['@deepseek-ai/libreoffice-kit'])(
     'accepts independently published %s but rejects unknown workspace packages', (name) => {
       const root = fixture()
@@ -115,6 +137,31 @@ describe('default product isolation', () => {
       + `export const OPTIONAL_BUNDLES = ['${layer}']\n`)
     expect(verifyDefaultProductIsolation(root).failures.join('\n')).toContain(`optional bundle ${layer} must not be a default bundle`)
   })
+
+  it.each(['dependencies', 'source', 'patch'])(
+    'checks a nonexperimental optional bundle for experimental %s', (kind) => {
+      const root = fixture()
+      const layer = '@deepseek-ai/dsh-optional-layer'
+      write(root, 'packages/bundle/optional-layer/package.json', {
+        name: layer, icon: './icon.svg', exports: { './locale/*.json': './locale/*.json' },
+        dsh: { bundle: { patch: './cordis.patch.yml' } },
+      })
+      write(root, 'packages/bundle/optional-layer/src/index.ts', 'export {}')
+      write(root, 'packages/bundle/optional-layer/cordis.patch.yml', [])
+      manifest(root, 'apps/cli/package.json', { dependencies: { [core]: 'workspace:*', [layer]: 'workspace:*' } })
+      write(root, profile, `export const PROFILE_TEMPLATES = { web: { bundles: ['${base}'] } }\n`
+        + `export const DEFAULT_PROFILE_BUNDLES = ['${base}']\nexport const OPTIONAL_BUNDLES = ['${layer}']\n`)
+      expect(verifyDefaultProductIsolation(root).failures).toEqual([])
+      if (kind === 'dependencies') {
+        manifest(root, 'packages/bundle/optional-layer/package.json', { dependencies: { [experimental]: 'workspace:*' } })
+      } else if (kind === 'source') {
+        write(root, 'packages/bundle/optional-layer/src/index.ts', `import '${experimental}'`)
+      } else {
+        write(root, 'packages/bundle/optional-layer/cordis.patch.yml', [{ preset: 'preset-standard', insert: [{ name: experimental }] }])
+      }
+      expect(verifyDefaultProductIsolation(root).failures.join('\n')).toContain('must not include experimental packages')
+    },
+  )
 
   it('requires each optional bundle to be a runtime dependency that declares a bundle patch, an icon, and locale metadata', () => {
     const root = fixture()

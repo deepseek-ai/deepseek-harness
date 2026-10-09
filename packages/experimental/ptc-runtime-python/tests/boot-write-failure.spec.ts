@@ -1,9 +1,7 @@
 import { EventEmitter } from 'node:events'
-import { existsSync } from 'node:fs'
-import { dirname } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { Context } from '@deepseek-ai/cordis'
+import { createRuntimeContext } from './setup.ts'
 
 /**
  * Mocked subprocess pipes control synchronous write failures and backpressure
@@ -23,21 +21,20 @@ const { PythonPtcRuntime } = await import('../src/index.ts')
 function fakeChildWithThrowingFd3(): EventEmitter {
   const child = new EventEmitter() as EventEmitter & {
     pid?: number
+    stdin: PassThrough
     stdout: PassThrough
     stderr: PassThrough
     stdio: unknown[]
   }
-  // Leave `pid` absent: `finish()` still runs its `clearTimeout(wallTimer)` /
-  // `removeEventListener(onAbort)` prologue (the TDZ site) before short-
-  // circuiting on `child.pid === undefined` to `settle` instead of waiting on a
-  // `close` this fake never emits, so the run resolves promptly.
+  // An absent pid settles without waiting for a process-close event that this
+  // pipe fixture does not emit.
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
   // A duplex whose `write` throws synchronously, standing in for an fd-3 pipe
   // that fails the moment the boot frame is issued.
   const proto = new PassThrough()
   proto.write = () => { throw Object.assign(new Error('EPIPE: broken pipe, write'), { code: 'EPIPE' }) }
-  child.stdio = [new PassThrough(), child.stdout, child.stderr, proto]
+  child.stdio = [child.stdin = new PassThrough(), child.stdout, child.stderr, proto]
   return child
 }
 
@@ -50,6 +47,7 @@ afterEach(() => {
 function fakeChildWithAsyncSpawnError(): EventEmitter {
   const child = new EventEmitter() as EventEmitter & {
     pid?: number
+    stdin: PassThrough
     stdout: PassThrough
     stderr: PassThrough
     stdio: unknown[]
@@ -57,7 +55,7 @@ function fakeChildWithAsyncSpawnError(): EventEmitter {
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
   const proto = new PassThrough()
-  child.stdio = [new PassThrough(), child.stdout, child.stderr, proto]
+  child.stdio = [child.stdin = new PassThrough(), child.stdout, child.stderr, proto]
   // `spawn` reports an async failure via the child's `error` event; the run
   // settles on it as a worker-exit without waiting for `close`.
   setImmediate(() => {
@@ -70,6 +68,7 @@ function fakeChildWithAsyncSpawnError(): EventEmitter {
 function fakeChildWithAckThenThrowingFd3(): EventEmitter {
   const child = new EventEmitter() as EventEmitter & {
     pid?: number
+    stdin: PassThrough
     stdout: PassThrough
     stderr: PassThrough
     stdio: unknown[]
@@ -83,7 +82,7 @@ function fakeChildWithAckThenThrowingFd3(): EventEmitter {
     if (writes === 1) return true // The boot frame goes out.
     throw Object.assign(new Error('EPIPE: broken pipe, write'), { code: 'EPIPE' })
   }
-  child.stdio = [new PassThrough(), child.stdout, child.stderr, proto]
+  child.stdio = [child.stdin = new PassThrough(), child.stdout, child.stderr, proto]
   // Emit the boot-ack after the boot write, so the run-frame write fires and
   // hits the throwing pipe.
   setImmediate(() => proto.emit('data', Buffer.from('{"type":"boot-ack"}\n')))
@@ -100,6 +99,7 @@ function fakeChildWithAckThenThrowingFd3(): EventEmitter {
 function fakeChildBackpressuredThenDestroyed(): { child: EventEmitter; proto: PassThrough } {
   const child = new EventEmitter() as EventEmitter & {
     pid?: number
+    stdin: PassThrough
     stdout: PassThrough
     stderr: PassThrough
     stdio: unknown[]
@@ -110,7 +110,7 @@ function fakeChildBackpressuredThenDestroyed(): { child: EventEmitter; proto: Pa
   // Every write reports backpressure (never a `drain` event): the only way the
   // reply drain can proceed is the pipe being destroyed under it.
   proto.write = () => false
-  child.stdio = [new PassThrough(), child.stdout, child.stderr, proto]
+  child.stdio = [child.stdin = new PassThrough(), child.stdout, child.stderr, proto]
   // Boot-ack → run frame → two binding calls whose replies backpressure, then
   // destroy the pipe while the host still waits for `drain`: the drain loop
   // resumes with a queued reply left and must break on the destroyed pipe.
@@ -126,6 +126,91 @@ function fakeChildBackpressuredThenDestroyed(): { child: EventEmitter; proto: Pa
 }
 
 describe('PythonPtcRuntime — controlled subprocess pipes', () => {
+  it.each([
+    { asynchronous: false, runnerEvidence: false },
+    { asynchronous: false, runnerEvidence: true },
+    { asynchronous: true, runnerEvidence: false },
+    { asynchronous: true, runnerEvidence: true },
+  ])('attributes spawn failures only to an identified runner: $asynchronous / $runnerEvidence', async ({ asynchronous, runnerEvidence }) => {
+    const stdin = new PassThrough()
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const proto = new PassThrough()
+    const child = Object.assign(new EventEmitter(), { stdin, stdout, stderr, stdio: [stdin, stdout, stderr, proto] })
+    onTestFinished(() => { for (const stream of [stdin, stdout, stderr, proto]) stream.destroy() })
+    const ctx = await createRuntimeContext({ mode: 'read-only' })
+    vi.spyOn(ctx.sandbox, 'confine').mockImplementation(async argv => ({
+      argv: [...argv], enforcement: 'partial', denialSignatures: [], runnerFailureRules: [],
+    }))
+    spawnMock.mockImplementation((bin: string) => {
+      const error = Object.assign(new Error('executable disappeared'), {
+        code: 'ENOENT', path: runnerEvidence ? bin : '/another-program', syscall: 'spawn',
+      })
+      if (!asynchronous) throw error
+      setImmediate(() => child.emit('error', error))
+      return child
+    })
+    await ctx.plugin(PythonPtcRuntime)
+    const result = await ctx.ptcRuntime.run(ctx.ptcRuntime.resolve({ program: 'return 42', bindings: [] }))
+    expect(result.error?.kind).toBe(runnerEvidence ? 'sandbox-unavailable' : 'worker-exit')
+    expect(result.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'partial' })
+  })
+
+  it.each(['synchronous', 'asynchronous'] as const)('reports %s bootstrap source transport failure', async (failure) => {
+    const stdin = new PassThrough()
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const proto = new PassThrough()
+    const child = Object.assign(new EventEmitter(), { stdin, stdout, stderr, stdio: [stdin, stdout, stderr, proto] })
+    onTestFinished(() => { for (const stream of [stdin, stdout, stderr, proto]) stream.destroy() })
+    const error = Object.assign(new Error('EPIPE: bootstrap source pipe closed'), { code: 'EPIPE' })
+    if (failure === 'synchronous') stdin.end = () => { throw error }
+    spawnMock.mockImplementation(() => {
+      if (failure === 'asynchronous') setImmediate(() => stdin.emit('error', error))
+      return child
+    })
+    const ctx = await createRuntimeContext()
+    await ctx.plugin(PythonPtcRuntime)
+    const result = await ctx.ptcRuntime.run(ctx.ptcRuntime.resolve({ program: 'return 42', bindings: [] }))
+    expect(result.error?.kind).toBe('worker-exit')
+    expect(result.error?.message).toContain('failed to load python bootstrap')
+    expect(result.value).toBeUndefined()
+    stdin.emit('error', error)
+  })
+
+  it('preserves a runner refusal that arrives after the bootstrap source pipe closes', async () => {
+    const stdin = new PassThrough()
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const proto = new PassThrough()
+    const pid = 900001
+    const child = Object.assign(new EventEmitter(), { pid, stdin, stdout, stderr, stdio: [stdin, stdout, stderr, proto] })
+    const kill = process.kill.bind(process)
+    const killGroup = vi.spyOn(process, 'kill').mockImplementation((target, signal) => {
+      if (target !== -pid) return kill(target, signal)
+      throw Object.assign(new Error('fixture process group has exited'), { code: 'ESRCH' })
+    })
+    onTestFinished(() => { killGroup.mockRestore(); for (const stream of [stdin, stdout, stderr, proto]) stream.destroy() })
+    const ctx = await createRuntimeContext({ mode: 'read-only' })
+    vi.spyOn(ctx.sandbox, 'confine').mockImplementation(async argv => ({
+      argv: [...argv], enforcement: 'full', denialSignatures: ['permission denied'],
+      runnerFailureRules: [{ allowedExitCodes: [127], fatalSignatures: ['sandbox-fatal:'] }],
+    }))
+    spawnMock.mockImplementation(() => {
+      setImmediate(() => {
+        stdin.emit('error', Object.assign(new Error('source pipe closed'), { code: 'EPIPE' }))
+        stderr.emit('data', Buffer.from('sandbox-fatal: permission denied\n'))
+        child.emit('close', 127, null)
+      })
+      return child
+    })
+    await ctx.plugin(PythonPtcRuntime)
+    const result = await ctx.ptcRuntime.run(ctx.ptcRuntime.resolve({ program: 'return 42', bindings: [] }))
+    expect(result.error?.kind).toBe('sandbox-unavailable')
+    expect(result.error?.message).toContain('sandbox-fatal: permission denied')
+    expect(result.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full' })
+  })
+
   it('preserves pending replies across compaction while the pipe stays backpressured', async () => {
     const spawned = Promise.withResolvers<undefined>()
     let written = Promise.withResolvers<undefined>()
@@ -134,7 +219,7 @@ describe('PythonPtcRuntime — controlled subprocess pipes', () => {
     const stdout = new PassThrough()
     const stderr = new PassThrough()
     const stdin = new PassThrough()
-    const child = Object.assign(new EventEmitter(), { stdout, stderr, stdio: [stdin, stdout, stderr, proto] })
+    const child = Object.assign(new EventEmitter(), { stdin, stdout, stderr, stdio: [stdin, stdout, stderr, proto] })
     proto.write = (chunk: unknown) => {
       const frame = JSON.parse(String(chunk)) as { type: string }
       if (frame.type !== 'reply') return true
@@ -143,7 +228,7 @@ describe('PythonPtcRuntime — controlled subprocess pipes', () => {
       return false
     }
     spawnMock.mockImplementation(() => { spawned.resolve(undefined); return child })
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     const fiber = await ctx.plugin(PythonPtcRuntime)
     const runtime = ctx.ptcRuntime as InstanceType<typeof PythonPtcRuntime>
     const run = runtime.run(runtime.resolve({
@@ -187,7 +272,7 @@ describe('PythonPtcRuntime — controlled subprocess pipes', () => {
   })
 
   it('force-kills a version probe that exceeds its load-time deadline', async () => {
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     const fiber = await ctx.plugin(PythonPtcRuntime)
 
     expect(execFileSyncMock).toHaveBeenCalledWith(
@@ -206,7 +291,7 @@ describe('PythonPtcRuntime — controlled subprocess pipes', () => {
     // executor and REJECTED run() instead of resolving the worker-exit the catch
     // constructs. This test would see that rejection; the fix makes it resolve.
     spawnMock.mockImplementation(() => fakeChildWithThrowingFd3())
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     const fiber = await ctx.plugin(PythonPtcRuntime)
     const runtime = ctx.ptcRuntime as InstanceType<typeof PythonPtcRuntime>
 
@@ -217,35 +302,16 @@ describe('PythonPtcRuntime — controlled subprocess pipes', () => {
     await fiber.dispose()
   })
 
-  it('resolves a worker-exit and removes the staging dir when spawn throws synchronously', async () => {
-    // `spawn` can throw same-tick — EMFILE on a descriptor-exhausted host, or a
-    // libuv-level failure — before the Promise executor and its settlement path
-    // exist. Left uncaught it rejected run() (the seam permits rejection only for
-    // misuse) and stranded the staging directory materializePyScripts had just
-    // written, which only settle() removes. The fix catches it, unlinks the
-    // directory, and resolves the same `worker-exit` class as an async ENOENT.
-    //
-    // Capture THIS run's exact staging dir from the argv the mocked spawn
-    // received (`['-I', <dir>/bootstrap.py]`) and assert only that path is gone.
-    // A tmpdir scan — even a set difference against a pre-run snapshot — would
-    // flake under vitest's forks pool: a sibling worker creating its own
-    // `dsh-ptc-runtime-python-*` dir in the window reads as a leak here. Keying
-    // off our own argv is fully isolated from concurrent staging.
-    let stagedBootstrap: string | undefined
-    spawnMock.mockImplementation((_bin: string, args: string[]) => {
-      stagedBootstrap = args[args.length - 1]
+  it('resolves a worker-exit when spawn throws synchronously', async () => {
+    spawnMock.mockImplementation(() => {
       throw Object.assign(new Error('EMFILE: too many open files'), { code: 'EMFILE' })
     })
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     const fiber = await ctx.plugin(PythonPtcRuntime)
     const runtime = ctx.ptcRuntime as InstanceType<typeof PythonPtcRuntime>
-
     const result = await runtime.run(runtime.resolve({ program: 'return 1', bindings: [] }))
-
     expect(result.error?.kind).toBe('worker-exit')
     expect(result.error?.message).toContain('python spawn error')
-    expect(stagedBootstrap).toBeDefined()
-    expect(existsSync(dirname(stagedBootstrap as string))).toBe(false)
     await fiber.dispose()
   })
 
@@ -254,7 +320,7 @@ describe('PythonPtcRuntime — controlled subprocess pipes', () => {
     // the boot frame but rejects the run write must settle the run as a
     // worker-exit rather than reject run() or leave it hanging.
     spawnMock.mockImplementation(() => fakeChildWithAckThenThrowingFd3())
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     const fiber = await ctx.plugin(PythonPtcRuntime)
     const runtime = ctx.ptcRuntime as InstanceType<typeof PythonPtcRuntime>
 
@@ -271,7 +337,7 @@ describe('PythonPtcRuntime — controlled subprocess pipes', () => {
     // `error` event, not a synchronous throw. The run must settle as a
     // worker-exit from that event.
     spawnMock.mockImplementation(() => fakeChildWithAsyncSpawnError())
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     const fiber = await ctx.plugin(PythonPtcRuntime)
     const runtime = ctx.ptcRuntime as InstanceType<typeof PythonPtcRuntime>
 
@@ -298,7 +364,7 @@ describe('PythonPtcRuntime — controlled subprocess pipes', () => {
       proto = fake.proto
       return fake.child
     })
-    const ctx = new Context()
+    const ctx = await createRuntimeContext()
     const fiber = await ctx.plugin(PythonPtcRuntime, { maxWallMs: 3000 })
     const runtime = ctx.ptcRuntime as InstanceType<typeof PythonPtcRuntime>
 

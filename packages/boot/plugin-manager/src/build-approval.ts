@@ -5,6 +5,12 @@ import { isAlias, isMap, isNode, isScalar, parseDocument, visit } from 'yaml'
 import { ManagementFailure } from './failure.ts'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 
+/** Value pnpm leaves for a build script that still needs a decision. */
+const UNDECIDED_BUILD = 'set this to true or false'
+
+/** Where a non-interactive run names the build scripts it skipped. */
+const IGNORED_BUILDS = /\bIgnored build scripts: (.+)/
+
 async function readPolicy(dir: string) {
   let text: string
   try { text = await readFile(join(dir, 'pnpm-workspace.yaml'), 'utf8') }
@@ -22,18 +28,43 @@ async function readPolicy(dir: string) {
       throw new Error('allowBuilds must not contain YAML anchors or aliases')
     }
   })
+  const keys = isMap(builds) ? builds.items.flatMap(({ key }) =>
+    isScalar(key) && typeof key.value === 'string' ? [key.value] : []) : []
   const pending = isMap(builds) ? builds.items.flatMap(({ key, value }) =>
     isScalar(key) && typeof key.value === 'string' && !/[*?]/.test(key.value)
-      && isScalar(value) && value.value === 'set this to true or false' ? [key.value] : []) : []
-  return { document, pending }
+      && isScalar(value) && value.value === UNDECIDED_BUILD ? [key.value] : []) : []
+  return { document, pending, keys }
 }
 
-/** Read package names left undecided by pnpm 11, including after installation cleanup.
+/**
+ * Record the build scripts a failed run reported as ignored, then list every name awaiting a decision.
+ *
+ * pnpm writes those policy entries itself only when it can prompt, and the
+ * manager always runs it non-interactively, so the run's own report is the
+ * record that survives.
  * @param dir Current profile directory.
+ * @param output Captured output of the failed run.
  * @returns Exact package names awaiting a build decision; wildcard rules are excluded.
  */
-export async function readPendingBuilds(dir: string): Promise<string[]> {
-  return (await readPolicy(dir)).pending
+export async function recordPendingBuilds(dir: string, output: string): Promise<string[]> {
+  const { document, pending, keys } = await readPolicy(dir)
+  const known = new Set(keys)
+  const added = ignoredBuildNames(output).filter(name => !known.has(name))
+  if (added.length === 0) return pending
+  for (const name of added) document.setIn(['allowBuilds', name], UNDECIDED_BUILD)
+  await writeFileAtomic(join(dir, 'pnpm-workspace.yaml'), String(document), { mode: 0o600 })
+  return [...pending, ...added]
+}
+
+/**
+ * Read the package names a pnpm run reported as ignored build scripts.
+ * @param output Captured output of the run.
+ * @returns Exact names in report order; wildcard patterns are excluded.
+ */
+export function ignoredBuildNames(output: string): string[] {
+  const reported = IGNORED_BUILDS.exec(output)?.[1]
+  if (reported === undefined) return []
+  return reported.split(',').map(name => name.trim()).filter(name => name !== '' && !/[*?]/.test(name))
 }
 
 /** Persist approval without running scripts; the caller holds the profile manifest lock.

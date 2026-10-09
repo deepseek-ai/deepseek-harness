@@ -1,7 +1,11 @@
 version: 1
 scenario: advanced-toolchain
 profile: headless
-composition: advanced
+composition: advanced-toolchain
 recording: authored
 header:
-  class: advanced
+  class: native-ptc-native
+  pin: true
+  changes: 2
+  promptChanges: 2
+  childSystemPrompts: [1, 2]

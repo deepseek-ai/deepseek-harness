@@ -17,7 +17,7 @@ interface ToolOutputDefinition {
   readonly schema: JsonSchemaNode
   /** Pure projection from validated arguments and value to Native/model content. */
   render(args: unknown, value: JsonValue): ContentBlock[]
-  /** Pure replayable presentation projection, computed only for top-level calls. */
+  /** Pure replayable presentation projection for native and nested calls. */
   presentationMeta?(args: unknown, value: JsonValue): JsonValue
 }
 ```
@@ -389,9 +389,9 @@ interface ToolErrorInfo {
 }
 ```
 
-The result carries only the outcome. Call identity remains on the immutable `ToolExecution` that accompanies it through every hook and on the durable `tool/call` / `tool/result` session events, so wrappers cannot create a second, disagreeing identity. The canonical `value` is execution-local: the loop persists only `content`, `error`, and `meta`, while `tool/ptc-dispatch` stores the sub-call's rendered `content`, `isError`, and optional structured `error`. Replay reproduces presentation but cannot reconstruct canonical intermediate values. Optional `ToolErrorInfo.reason` retains raw user-facing detail without adding it to model-facing content.
+The result carries only the outcome. Call identity remains on the immutable `ToolExecution` that accompanies it through every hook and on the durable `tool/call` / `tool/result` session events, so wrappers cannot create a second, disagreeing identity. The canonical `value` is execution-local: the loop persists only `content`, `error`, and `meta`, while `tool/ptc-dispatch` stores the sub-call's rendered `content`, `isError`, optional structured `error`, and presentation `meta`. Replay reproduces presentation but cannot reconstruct canonical intermediate values. Optional `ToolErrorInfo.reason` retains raw user-facing detail without adding it to model-facing content.
 
-On success the registry snapshots and validates the body value, freezes it, and invokes the pure renderer plus the optional top-level-call metadata projector. It separately materializes the durable presentation fields immediately before `tools/result`; an invalid value, renderer/projector failure, or non-JSON presentation becomes a JSON-safe `isError`. The final live observer therefore sees the exact execution-local value beside fields safe for the later durable append.
+On success the registry snapshots and validates the body value, freezes it, and invokes the pure renderer plus the optional presentation metadata projector for native and nested calls. It separately materializes the durable presentation fields immediately before `tools/result`; an invalid value, renderer/projector failure, or non-JSON presentation becomes a JSON-safe `isError`. The final live observer therefore sees the exact execution-local value beside fields safe for the later durable append.
 
 Before final content, the registry materializes the candidate result; a failure in content, structured error, additional context, or presentation metadata becomes a JSON-safe `isError` result that still reaches `finalizeContent`. The registry invokes that callback exactly once, then materializes and freezes the accepted result immediately before `tools/result`, so the observed live outcome is safe for the later durable `tool/result` append.
 

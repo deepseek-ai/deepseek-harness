@@ -117,8 +117,8 @@ describe('Node runtime host failures', () => {
     [{ maxMessageBytes: 0x1_0000_0000 }, 'maxMessageBytes'],
     [{ maxPendingCalls: 1.5 }, 'maxPendingCalls'],
     [{ maxOldGenerationSizeMb: 1.5 }, 'maxOldGenerationSizeMb'],
-    [{ nodeExecutable: '' }, 'nodeExecutable'],
-    [{ bootstrapPath: 'relative-bootstrap.js' }, 'bootstrapPath'],
+    [{ launch: { kind: 'node-script', executable: '' } }, 'launch.executable'],
+    [{ launch: { kind: 'node-script', executable: process.execPath, bootstrapPath: 'relative-bootstrap.js' } }, 'bootstrapPath'],
   ])('rejects deployment configuration %j', async (config, field) => {
     await expect(mountRuntime(new Context(), config)).rejects.toThrow(field)
   })
@@ -496,22 +496,15 @@ describe('Node runtime host failures', () => {
     expect(env.DSH_TEST_RUNTIME_SECRET).toBeUndefined()
   })
 
-  it('selects the private packaged bootstrap without leaking ambient environment', async () => {
-    const h = await setup()
+  it('selects the remote embedded bootstrap without leaking ambient environment', async () => {
+    const h = await setup({ launch: { kind: 'embedded', executable: process.execPath } })
     h.onBoot(() => { h.emit({ type: 'done' }) })
-    const prior = Object.getOwnPropertyDescriptor(process, 'pkg')
-    try {
-      Object.defineProperty(process, 'pkg', { configurable: true, value: {} })
-      expect((await h.start()).error).toBeUndefined()
-      const spec = h.spawn.mock.calls[0]?.[0]
-      expect(spec?.env?.DSH_PTC_RUNTIME_NODE).toBe('1')
-      expect(Object.hasOwn(spec?.env ?? {}, 'PATH')).toBe(false)
-      expect(spec?.argv).toEqual([process.execPath, '134217728'])
-      expect(Object.fromEntries(Object.entries(spec?.env ?? {}).filter(([, value]) => value !== undefined)))
-        .toEqual({ DSH_PTC_RUNTIME_NODE: '1', NODE_OPTIONS: '--max-old-space-size=512' })
-    } finally {
-      if (prior === undefined) Reflect.deleteProperty(process, 'pkg')
-      else Object.defineProperty(process, 'pkg', prior)
-    }
+    expect((await h.start()).error).toBeUndefined()
+    const spec = h.spawn.mock.calls[0]?.[0]
+    expect(spec?.env?.DSH_PTC_RUNTIME_NODE).toBe('1')
+    expect(Object.hasOwn(spec?.env ?? {}, 'PATH')).toBe(false)
+    expect(spec?.argv).toEqual([process.execPath, '134217728'])
+    expect(Object.fromEntries(Object.entries(spec?.env ?? {}).filter(([, value]) => value !== undefined)))
+      .toEqual({ DSH_PTC_RUNTIME_NODE: '1', NODE_OPTIONS: '--max-old-space-size=512' })
   })
 })

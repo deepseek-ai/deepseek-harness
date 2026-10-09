@@ -128,7 +128,7 @@ describe('master-only platform scheduling', () => {
     expect(Object.values(master.jobs).flatMap(commands).filter(command => command.includes('wine-windows-gates.sh')))
       .toEqual(['bash scripts/wine-windows-gates.sh'])
     expect(wine.steps).toContainEqual(expect.objectContaining({
-      uses: 'actions/cache@v4', with: { path: '~/wine-debs', key: '${{ steps.wine-cache-key.outputs.key }}' },
+      uses: 'actions/cache@v6.1.0', with: { path: '~/wine-debs', key: '${{ steps.wine-cache-key.outputs.key }}' },
     }))
     expect(commands(wine).join('\n')).toContain('--download-only wine')
     expect(wine.steps).toContainEqual(expect.objectContaining({ name: 'Shut down wineserver', if: 'always()' }))

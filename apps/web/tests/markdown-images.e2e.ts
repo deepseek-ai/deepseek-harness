@@ -289,7 +289,18 @@ describe('web e2e: Markdown image rendering', () => {
     await page.getByRole('button', { name: `View full image: ${WORKSPACE_ALT}`, exact: true }).click()
     const lightbox = page.getByRole('dialog', { name: 'Image preview', exact: true })
     await lightbox.waitFor()
-    await lightbox.getByRole('button', { name: 'Close image preview' }).click()
+    const lightboxMask = lightbox.locator(':scope > div > [aria-hidden="true"]')
+    const lightboxClose = lightbox.getByRole('button', { name: 'Close image preview' })
+    for (const windows of [true, false]) {
+      await page.evaluate((value) => {
+        document.documentElement.toggleAttribute('data-windows-titlebar', value)
+        document.documentElement.style.setProperty('--dsh-windows-titlebar-height', value ? '40px' : '')
+      }, windows)
+      // The Windows caption stays unpainted and the close control sits below it.
+      expect((await lightboxMask.boundingBox())?.y).toBe(windows ? 40 : 0)
+      expect((await lightboxClose.boundingBox())?.y).toBe(windows ? 60 : 20)
+    }
+    await lightboxClose.click()
     await lightbox.waitFor({ state: 'detached' })
     const link = page.getByRole('button', { name: 'View comparison', exact: true })
     await link.hover()

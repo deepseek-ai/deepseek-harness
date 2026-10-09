@@ -12,9 +12,15 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { appendPluginRecord, pluginRecordOf, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '../src/index.ts'
+
+declare module '@deepseek-ai/dsh-session/types' {
+  interface PluginRecordMap {
+    'plugin:persistence-test/state': { count: number }
+  }
+}
 
 /** One mounted backend under a session store, plus same-storage remount support. */
 export interface LiveWriteBackend {
@@ -83,6 +89,29 @@ export function runLiveWritePathContract(
       await ctx.sessions.flush(session)
       await expect(ctx.sessionPersistence.stat(session.id)).resolves.toBeUndefined()
       await ctx.fiber.dispose()
+    })
+
+    it('persists a plugin record that a restarted process reads back', async () => {
+      const { ctx, remount } = await make()
+      const session = ctx.sessions.create(SessionId('plugin-record'))
+      const handle = await ctx.sessionPersistence.create(session.header)
+      session.append('turn/start', { turn: 1 })
+      appendPluginRecord(session, 'plugin:persistence-test/state', { count: 1 })
+      await expect(ctx.sessions.flush(session)).resolves.toBe(true)
+      await handle.close()
+      await ctx.fiber.dispose()
+
+      const restarted = await remount()
+      const events = await readAll(restarted.sessionPersistence, session.id)
+      expect(events.map(event => [event.type, event.ignorable])).toEqual([
+        ['turn/start', undefined],
+        ['plugin:persistence-test/state', true],
+      ])
+      expect(events.map(pluginRecordOf)).toEqual([
+        undefined,
+        { type: 'plugin:persistence-test/state', seq: 1, time: events[1]?.time, data: { count: 1 } },
+      ])
+      await restarted.fiber.dispose()
     })
 
     it('session/flush drains immediately and surfaces a retained background failure', async () => {

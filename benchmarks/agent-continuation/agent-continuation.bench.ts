@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runBuiltBenchmarkWorker } from '../support/built-worker.ts'
 import { ciTimeBudget, PERFORMANCE_BUDGET_HEADROOM } from '../support/calibration.ts'
+import { recordTimings, type BenchmarkCase } from '../support/scaling-report.ts'
 import type { ContinuationReport } from './agent-continuation.worker.ts'
 import type { CatalogReport } from './child-catalog.worker.ts'
 import type { ProfileReport } from './profile-continuation.worker.ts'
@@ -28,6 +29,30 @@ const CATALOG_BUDGET_MS = Math.ceil(EXPECTED_CATALOG_CI_MS * PERFORMANCE_BUDGET_
 const REQUEST_HISTORY_BUDGET_MS = 297
 const EXPECTED_RETAINED_HEAP_MB = 23
 const WORKERS = join(import.meta.dirname, '..', '.dsh-build', 'agent-continuation')
+/** Estimated storage wait of the SDK profile case, whose worker does not report CPU time: it reads files and appends synchronized log records. */
+const PROFILE_IO_SHARE = 0.15
+const CASES: Readonly<Record<Scenario, BenchmarkCase>> = {
+  'request-history': {
+    id: 'agent-continuation/request-history',
+    measures: 'Building 40 model requests over an 800-turn tool-heavy history, without provider or network work.',
+    affects: 'Every new turn in a long Session; the model request leaves later.',
+  },
+  'tool-continuation': {
+    id: 'agent-continuation/tool-continuation',
+    measures: 'Cold resume of the 800-turn Session, then 20 turns with 8 synthetic tool calls each through the real tool pipeline.',
+    affects: 'Continuing a long tool-heavy Session after restarting DSH.',
+  },
+  'catalog': {
+    id: 'agent-continuation/catalog',
+    measures: 'First and repeated discovery of 16 inactive fork children with 80-turn histories.',
+    affects: 'Listing forks and subagents of a Session that has many children.',
+  },
+  'profile-continuation': {
+    id: 'agent-continuation/profile-continuation',
+    measures: 'Boot plus 100 turns with 800 real file reads through the shipped sdk-minimal profile.',
+    affects: 'Headless SDK automation running a long agent task.',
+  },
+}
 
 type Scenario = 'request-history' | 'catalog' | 'tool-continuation' | keyof typeof EXPECTED_MS
 type Report = ContinuationReport | CatalogReport | ProfileReport
@@ -175,6 +200,11 @@ describe('continuing tool-heavy Sessions with large histories', () => {
         samples, totalMs: { min: Math.min(...totalMs), median: median(totalMs), max: Math.max(...totalMs) },
         budgetMs, ...(scenario === 'tool-continuation' ? { retainedHeapBudgetMb } : {}),
       }))
+      recordTimings(CASES[scenario], {
+        totalMs: scenario === 'profile-continuation'
+          ? { ms: median(totalMs), ioShare: PROFILE_IO_SHARE }
+          : { ms: median(totalMs), cpuMs: median((samples as (ContinuationReport | CatalogReport)[]).map(sample => sample.cpuUserMs + sample.cpuSystemMs)) },
+      }, { totalMs: budgetMs })
       if (scenario === 'request-history') assertRequestHistoryBudget(median(totalMs))
       else expectTotalWithinBudget(median(totalMs), budgetMs)
       if (scenario === 'tool-continuation') {

@@ -36,13 +36,18 @@ export function captureFixture(options: { empty?: boolean; recorderError?: boole
   const offline = vi.fn(function Offline(_channels: number, _frames: number, _rate: number) {
     return { destination: {}, createBufferSource: () => ({ buffer: null, connect() {}, start() {} }), startRendering: rendering }
   })
-  vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop: trackStop }] }) } })
+  const track = new EventTarget()
+  const audioTrack = Object.assign(track, { stop: trackStop, label: 'Fixture microphone',
+    getSettings: (): MediaTrackSettings => ({ groupId: 'fixture-input' }) })
+  const stream = { getTracks: () => [audioTrack], getAudioTracks: () => [audioTrack] }
+  const getUserMedia = vi.fn(async (_constraints: MediaStreamConstraints) => stream)
+  vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
   vi.stubGlobal('MediaRecorder', Recorder)
   vi.stubGlobal('AudioContext', function Audio() { return { state: 'running', close, decodeAudioData: decoding,
     createMediaStreamSource: () => ({ connect: vi.fn() }),
     createAnalyser: () => ({ fftSize: 256, getFloatTimeDomainData: (buffer: Float32Array) => { buffer.fill(0.25) } }),
   } })
   vi.stubGlobal('OfflineAudioContext', offline)
-  return { recording: new Recording(disposed), trackStop, close, disposed, decoding, rendering, offline,
+  return { recording: new Recording(disposed), getUserMedia, stream, track, trackStop, close, disposed, decoding, rendering, offline,
     failRecorder: () => { failRecorder() } }
 }

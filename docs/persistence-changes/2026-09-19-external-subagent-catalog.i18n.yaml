@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-09-19-external-subagent-catalog.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-09-19-external-subagent-catalog.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-09-19-external-subagent-catalog:
+  en: 81860767c8b7e373
+  zh: 4fcb6866cd8d8696
+/2026-09-19-external-subagent-catalog/summary:
+  en: 02848a04a27423e5
+  zh: 8fa393f6130f3212
+/2026-09-19-external-subagent-catalog/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-09-19-external-subagent-catalog/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-09-19-external-subagent-catalog/compatibility:
+  en: ae460855a021bf2b
+  zh: 3789da36fc4202fd
+/2026-09-19-external-subagent-catalog/verification:
+  en: f629646a19627773
+  zh: 7538959cb86407a1
+/2026-09-19-external-subagent-catalog/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

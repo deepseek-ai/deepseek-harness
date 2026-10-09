@@ -1,0 +1,6 @@
+# ACP transport tests use the shared model configuration without external hooks.
+- id: hooks-claude-code
+  disabled: true
+
+- id: hooks-codex
+  disabled: true

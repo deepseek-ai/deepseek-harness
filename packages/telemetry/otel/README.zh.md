@@ -34,7 +34,7 @@ Header 显式提供。服务不会附加 channel header，也不继承环境中�
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-`src/index.ts` 注册服务；`event-log.ts` 负责普通事件的 SDK 聚合；`session-log.ts` 负责字节和条数调度；`transport.ts` 提供 Session 的 SDK JSON HTTP delegate；`event-transport.ts` 使用 Got 实现可取消的普通事件 HTTP 请求和重试等待，序列化与导出计数仍由 SDK 负责。不安装全局 OTel provider。Session processor 对每条记录只计量一次，按保守大小组包，并在每次回调后等待 SDK 并发队列清理完成才发送下一请求。
+`src/index.ts` 注册服务；`event-log.ts` 负责普通事件的 SDK 聚合；`session-log.ts` 负责字节和条数调度；`transport.ts` 提供 Session 的 SDK JSON HTTP delegate，并持有共享的 exporter 指标记录器（不接收 meter provider，不记录任何指标）；`event-transport.ts` 使用 Got 实现可取消的普通事件 HTTP 请求和重试等待，序列化与导出计数仍由 SDK 负责。不安装全局 OTel provider；接受的 exporter 选项排除上游的 `selfObsMeterProvider`，Session processor 也只接受它实现的聚合字段，因此 exporter 和 Session processor 的自观测指标都不会被记录。Session processor 对每条记录只计量一次，按保守大小组包，并在每次回调后等待 SDK 并发队列清理完成才发送下一请求。
 
 组合测试覆盖独立通道和服务移除；适配器测试覆盖依赖 fiber 清理与反馈授权。
 

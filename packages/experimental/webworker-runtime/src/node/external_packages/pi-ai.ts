@@ -5,10 +5,11 @@
  * statically at module scope, so the row cannot mount without it.
  *
  * Every symbol `llm-pi-ai` imports by name is present: a missing CommonJS symbol
- * would surface as `undefined` at call time instead of a link error. The three catalog readers
- * return empty collections rather than throwing — the row reads them while it
- * activates, and "this deployment ships no pi-ai provider" is the truth here.
- * Everything on a request path is loud.
+ * would surface as `undefined` at call time instead of a link error. The row
+ * reads the catalog while it activates, so the provider reader returns
+ * providers without models and the two model readers return empty collections
+ * instead of throwing: this deployment serves no pi-ai model. Everything on a
+ * request path is loud.
  */
 import { notImplementedFail } from '../notImplementedFail.ts'
 
@@ -26,7 +27,14 @@ export const getSupportedThinkingLevels = notImplementedFail(MODULE, 'getSupport
 /** Context-overflow predicate (unavailable). */
 export const isContextOverflow = notImplementedFail(MODULE, 'isContextOverflow')
 
-/** Builtin provider ids of pi-ai 0.84.2, in catalog order. */
+/** Collection of every builtin provider (unavailable). */
+export const builtinModels = notImplementedFail(MODULE, 'builtinModels')
+
+/**
+ * Builtin provider ids as pi-ai 0.84.2 listed them, in catalog order. The list
+ * is a fixed copy that pi-ai upgrades do not regenerate, so it omits providers
+ * added since.
+ */
 const BUILTIN_PROVIDER_IDS: readonly string[] = [
   'amazon-bedrock', 'ant-ling', 'anthropic', 'azure-openai-responses', 'baseten', 'cerebras',
   'cloudflare-ai-gateway', 'cloudflare-workers-ai', 'deepseek', 'fireworks', 'github-copilot',
@@ -39,10 +47,11 @@ const BUILTIN_PROVIDER_IDS: readonly string[] = [
 ]
 
 /**
- * Installed catalog providers, read while `llm-pi-ai` activates. Each carries the
- * api-key auth marker the adapter filters on, and no models: the provider
- * directory therefore matches the served deployment while every request path
- * lands on a loud symbol above.
+ * Installed catalog providers, read while `llm-pi-ai` activates. `llm-pi-ai`
+ * registers the whole catalog as configurable the moment it mounts and rejects
+ * an empty registration, so these carry pi-ai's ids instead of being an empty
+ * list. Each has the api-key auth marker the adapter filters on, and no
+ * models, so every request path lands on a loud symbol above.
  * @returns one entry per builtin provider.
  */
 export function builtinProviders(): unknown[] {
@@ -55,20 +64,18 @@ export function builtinProviders(): unknown[] {
 }
 
 /**
- * Provider route ids of the installed catalog. `llm-pi-ai` registers the whole
- * catalog as configurable the moment it mounts and rejects an empty
- * registration, so these are pi-ai's real ids rather than an empty list.
- * @returns the builtin provider ids.
- */
-export function getBuiltinProviders(): string[] {
-  return [...BUILTIN_PROVIDER_IDS]
-}
-
-/**
  * Models of one installed catalog provider.
  * @returns no models.
  */
 export function getBuiltinModels(): unknown[] {
+  return []
+}
+
+/**
+ * Models of every type of one installed catalog provider.
+ * @returns no models.
+ */
+export function getAllBuiltinModels(): unknown[] {
   return []
 }
 
@@ -86,7 +93,6 @@ export const __esModule = true
 
 /** CommonJS default export: the members `require()` hands a caller of this module. */
 export default {
-  createProvider, createModels, getSupportedThinkingLevels, isContextOverflow, builtinProviders,
-  getBuiltinModels, getBuiltinProviders, anthropicMessagesApi, openAICompletionsApi,
-  openAIResponsesApi,
+  createProvider, createModels, getSupportedThinkingLevels, isContextOverflow, builtinModels, builtinProviders,
+  getBuiltinModels, getAllBuiltinModels, anthropicMessagesApi, openAICompletionsApi, openAIResponsesApi,
 }

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-用于 DeepSeek 官方 LLM API 请求的完整活跃 Loader 插件包清单。该函数插件注入 Loader、存活 Agent 注册表与 `ctx.deepseekLlmApiExtensions`，并拥有 `dsh_plugin_packages` 字段。当官方 API 需要活动包清单进行请求诊断时，请启用它。
+用于 DeepSeek 官方 LLM API 请求的尽力收集型活跃 Loader 插件包清单。该函数插件注入 Loader、存活 Agent 注册表与 `ctx.deepseekLlmApiExtensions`，并拥有 `dsh_plugin_packages` 字段。当官方 API 需要活动包清单进行请求诊断时，请启用它。
 
 ## 目录
 
@@ -37,9 +37,9 @@ kind: "package-reference"
 
 插件在激活时读取一次可选的 `ctx.pluginPackages` 服务。随附 app boot 会在 profile Loader 配置项之前挂载该服务，因此裸包和包子路径的身份使用与其 import 相同的权威 runtime resolution，包括它未命中的情况，并且无需包导出 `./package.json`。若该服务不存在，插件会在整个生命周期中保留 Node 原生包搜索，之后再挂载 resolver 也不会切换既有清单。因此，希望使用 runtime resolution 身份的底层嵌入方必须先挂载 `PluginPackages`，再挂载 Loader 配置项和本插件。
 
-每个普通配置项使用其所属 Loader 树的基址。standing preset 的根配置项使用宿主基址，与 preset Loader 对裸包的显式覆写保持一致；嵌套 include 仍使用自身基址。相对与绝对模块会向上查找最近的 manifest（元数据清单）；没有 `name` 的 manifest 只标记松散模块，不贡献包身份。具名包 manifest 还必须声明非空 `version`，格式错误的包元数据会使请求准备失败。系统使用与 locale 无关的比较按确切名称／版本对去重并排序，同时存活的不同版本仍会分开保留。
+每个普通配置项使用其所属 Loader 树的基址。standing preset 的根配置项使用宿主基址，与 preset Loader 对裸包的显式覆写保持一致；嵌套 include 仍使用自身基址。相对与绝对模块会向上查找最近的 manifest（元数据清单）；`name` 不是非空白字符串的 manifest 会被省略。`version` 缺失或无效时，只上报名称，不受 `private` 影响。拥有自身 manifest 的嵌套目录不会继承父包的身份。包解析、manifest 读取或 JSON 解析失败时，系统只省略对应配置项，并对每个模块只记录一次警告；清单元数据不会阻塞模型请求。系统按名称和可选版本去重，并使用与 locale 无关的比较排序；只有名称的配置项排在同名且有版本的配置项之前，不同版本仍分开保留。
 
-版本 1 的 `dsh_plugin_packages` 字段只包含 `{ name, version }` 对。系统会排除禁用、pending、failed、disposed、unloading 状态，结构性 `cordis:` 配置项，普通依赖，没有所属包身份的松散文件，以编程方式挂载的子 fiber，以及内存动态插件。
+版本 1 的 `dsh_plugin_packages` 字段包含 `{ name, version }` 或 `{ name }` 配置项；仅当 `version` 为非空白字符串时才包含该字段。系统会排除禁用、pending、failed、disposed、unloading 状态，结构性 `cordis:` 配置项，普通依赖，没有所属包身份的松散文件，以编程方式挂载的子 fiber，以及内存动态插件。
 
 <a id="model-experience"></a>
 ## 模型体验
@@ -63,7 +63,7 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - **仅含 Loader 包来源**——以编程方式创建的子 fiber 与内存动态插件没有权威 NPM 名称／版本来源，因此不在该清单内。
-- **省略松散模块**——没有具名且带版本所属 manifest 的相对文件是插件模块，不是插件包。
+- **省略不可用身份**——包元数据不可用时，清单可能不完整。
 - **原地替换包需要重启**——manifest 身份会在进程存活期内缓存。Loader 的启用、禁用、挂载、卸载与普通源码 HMR 仍会刷新存活配置项集合，但在同一进程中把已挂载包的 manifest 替换为另一版本并不是受支持的升级路径。
 
 

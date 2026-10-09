@@ -84,8 +84,7 @@ export function cpus(): CpuInfo[] {
 
 /**
  * Network interfaces.
- * @returns an empty record — the worker webserver binds the loopback literal, so
- * no LAN address is ever derived.
+ * @returns an empty record — a worker has no view of the host's network.
  */
 export function networkInterfaces(): NodeJS.Dict<NetworkInterfaceInfo[]> {
   return {}

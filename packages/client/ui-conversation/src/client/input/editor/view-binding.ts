@@ -91,7 +91,7 @@ export function installDraftFilePicker(
   fileInputRef: RefObject<HTMLInputElement>,
 ): () => void {
   return keyboard.bindFilePicker({
-    available: () => gate.current.canAcceptDrop && fileInputRef.current !== null,
+    available: () => gate.current.canAcceptDrop && fileInputRef.current !== null && !fileInputRef.current.disabled,
     open: () => { fileInputRef.current?.click() },
   })
 }

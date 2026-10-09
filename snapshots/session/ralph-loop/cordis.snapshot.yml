@@ -44,5 +44,9 @@
               - id: deepseek-v4-flash
               - id: deepseek-v4-pro
 
-- id: tool-ralph
-  disabled: false
+- insert:
+    - id: tool-ralph
+      name: '@deepseek-ai/dsh-tool-ralph'
+      config:
+        subagentProvider: spawn
+        maxRounds: 64

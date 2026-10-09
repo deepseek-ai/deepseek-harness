@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+新 shell 从 Session 的当前工作目录启动。创建后，shell 的目录与环境独立保留，不受后续 Session 目录切换影响。
+
 在 agent 需要在命令之间保持 shell 状态的任何组合中加载本插件——例如长时间构建会话、已激活的环境，或为后续步骤导出变量的脚本。它注册 `bash` 工具，需要 `ctx.tools` 与 `ctx.terminals` 服务，并在执行时需要拥有者 agent 会话。
 
 ### 何时选择
@@ -97,7 +99,7 @@ kind: "package-reference"
 - [terminal 包映射](../../terminal/README.zh.md)——持久 PTY 能力家族。
 - [terminal seam](../../terminal/terminal/README.zh.md)——工具背后的 `ctx.terminals` 服务。
 - [terminal-bash 后端](../../terminal/terminal-bash/README.zh.md)——默认的 `shell` 后端。
-- [tool-terminal](../../terminal/tool-terminal/README.zh.md)——面向交互工作的六个模型侧 terminal 工具。
+- [tool-terminal](../../experimental/tool-terminal/README.zh.md)——面向交互工作的六个模型侧 terminal 工具。
 - [持久 PTY 会话 Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-persistent-pty-sessions.zh.md)——按所有者会话的设计及其理由。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-bash-persistent)——`bash` 参数 schema 的确切内容。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-bash-persistent)——每个受支持配置字段及其源声明。

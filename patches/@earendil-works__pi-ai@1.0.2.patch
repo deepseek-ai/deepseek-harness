@@ -1,0 +1,73 @@
+diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
+index 38571b31e143e913c2bf59dad73382982e93664a..950e546197d8e84cb3edfca0012939f1db2488d8 100644
+--- a/dist/api/anthropic-messages.js
++++ b/dist/api/anthropic-messages.js
+@@ -553,7 +553,6 @@ export const stream = (model, context, options) => {
+                         const block = blocks[index];
+                         if (block && block.type === "toolCall") {
+                             block.partialJson += event.delta.partial_json;
+-                            block.arguments = parseStreamingJson(block.partialJson);
+                             stream.push({
+                                 type: "toolcall_delta",
+                                 contentIndex: index,
+diff --git a/dist/api/bedrock-converse-stream.js b/dist/api/bedrock-converse-stream.js
+index 428af807620993a4c90ceb1a1a120d553844be32..d81d290d8b8b97f8e2cdd97cff1ebaf019c5733e 100644
+--- a/dist/api/bedrock-converse-stream.js
++++ b/dist/api/bedrock-converse-stream.js
+@@ -461,7 +461,6 @@ function handleContentBlockDelta(event, blocks, output, stream) {
+     }
+     else if (delta?.toolUse && block?.type === "toolCall") {
+         block.partialJson = (block.partialJson || "") + (delta.toolUse.input || "");
+-        block.arguments = parseStreamingJson(block.partialJson);
+         stream.push({ type: "toolcall_delta", contentIndex: index, delta: delta.toolUse.input || "", partial: output });
+     }
+     else if (delta?.reasoningContent) {
+diff --git a/dist/api/mistral-conversations.js b/dist/api/mistral-conversations.js
+index fbcc5e25ee6752a9c5461b41fa8544a090a17b3f..f540825c4f934f342200db72190599fe95f01d0c 100644
+--- a/dist/api/mistral-conversations.js
++++ b/dist/api/mistral-conversations.js
+@@ -554,7 +554,6 @@ async function consumeChatStream(model, output, stream, mistralStream, onProvide
+                 ? toolCall.function.arguments
+                 : JSON.stringify(toolCall.function.arguments || {});
+             block.partialArgs = (block.partialArgs || "") + argsDelta;
+-            block.arguments = parseStreamingJson(block.partialArgs);
+             stream.push({
+                 type: "toolcall_delta",
+                 contentIndex: toolBlocksByKey.get(key),
+diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
+index a60f39352b776d71497e55b33b3334bacfbeb2f5..6c9b98e35606c52e4f0fb29d8fd0b5ba02d92e09 100644
+--- a/dist/api/openai-completions.js
++++ b/dist/api/openai-completions.js
+@@ -438,7 +438,6 @@ export const stream = (model, context, options) => {
+                             if (toolCall.function?.arguments) {
+                                 delta = toolCall.function.arguments;
+                                 block.partialArgs = (block.partialArgs ?? "") + toolCall.function.arguments;
+-                                block.arguments = parseStreamingJson(block.partialArgs);
+                             }
+                             else if (toolCall.custom?.input) {
+                                 const nextInput = getCustomToolCallInput(block) + toolCall.custom.input;
+diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
+index f413fe5f2a1abcac39c38bbd4a77b38c349a5918..108f599ae1d985d2f465e8cdf99ce0624acea6aa 100644
+--- a/dist/api/openai-responses-shared.js
++++ b/dist/api/openai-responses-shared.js
+@@ -548,7 +548,6 @@ export async function processResponsesStream(openaiStream, output, stream, model
+             if (!slot || slot.block.partialJson === undefined)
+                 continue;
+             slot.block.partialJson += event.delta;
+-            slot.block.arguments = parseStreamingJson(slot.block.partialJson);
+             pushToolCallDelta(slot, event.delta);
+         }
+         else if (event.type === "response.function_call_arguments.done") {
+diff --git a/dist/api/pi-messages.js b/dist/api/pi-messages.js
+index 7da1c45de8a106a68411cf79bec75f553534a1c7..296d131b59b1cf75f2516c39e85bba72972b2c17 100644
+--- a/dist/api/pi-messages.js
++++ b/dist/api/pi-messages.js
+@@ -155,8 +155,6 @@ function createEventConverter(model) {
+             case "toolcall_delta": {
+                 const json = `${toolJson.get(event.contentIndex) ?? ""}${event.delta}`;
+                 toolJson.set(event.contentIndex, json);
+-                partial.content[event.contentIndex].arguments =
+-                    parseStreamingJson(json);
+                 break;
+             }
+             case "toolcall_end":

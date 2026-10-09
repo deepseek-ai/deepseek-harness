@@ -1,5 +1,6 @@
 /** Shipped sidebar terminal over the real Loader, Remote mux, Chromium and local PTY. */
 import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterEach, beforeEach, describe, expect, it, onTestFailed, vi } from 'vitest'
@@ -243,6 +244,43 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     expect(alive(process)).toBe(true)
     await compareOrRefreshGolden(fileURLToPath(new URL('./expected/sidebar-terminal/theme.expected.md', import.meta.url)),
       JSON.stringify({ light, dark }, null, 2), webSnapshotMode())
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
+  it('starts in the current directory while earlier terminals and sandbox roots stay independent', async () => {
+    onTestFailed(() => saveFailureShot(page, 'sidebar-terminal-directory'))
+    const agent = scaffold.ctx.agents.list()[0]!
+    const directories = agent.ctx.get('workingDirectory')
+    if (directories === undefined) throw new Error('Session working-directory provider is missing')
+    const original = directories.get(agent.session)
+    const child = join(original, 'terminal-child')
+    await mkdir(child)
+    const sandboxPolicy = agent.ctx.get('sandboxPolicy')
+    if (sandboxPolicy === undefined) throw new Error('Session sandbox policy provider is missing')
+    const policy = sandboxPolicy.resolve({ session: agent.session })
+    const sandbox = agent.ctx.get('sandbox')
+    if (sandbox === undefined) throw new Error('Session sandbox provider is missing')
+    const confine = vi.spyOn(sandbox, 'confine')
+    const selected = await directories.set(agent, child)
+
+    await openTerminal(page)
+    const firstProcess = processIdentity(0)
+    const screen = page.locator('.xterm-rows:visible')
+    const checkDirectory = async (marker: string, directory: string): Promise<void> => {
+      const literal = `'${directory.replaceAll("'", "'\\''")}'`
+      await command(page, `[ "$PWD" = ${literal} ]; printf '${marker}:%s\\n' "$?"`)
+      await expect.poll(async () => await screen.innerText()).toContain(`${marker}:0`)
+    }
+    await checkDirectory('FIRST_DIRECTORY_STATUS', selected)
+    const returned = await directories.set(agent, original)
+    await checkDirectory('RETAINED_DIRECTORY_STATUS', selected)
+
+    await openTerminal(page)
+    await checkDirectory('SECOND_DIRECTORY_STATUS', returned)
+    expect(scaffold.ctx.terminalController.list(agent.id).map(terminal => terminal.cwd)).toEqual([selected, returned])
+    expect(alive(firstProcess)).toBe(true)
+    expect(sandboxPolicy.resolve({ session: agent.session })).toEqual(policy)
+    expect(confine).not.toHaveBeenCalled()
     expect(tripwire.pageErrors).toEqual([])
   })
 

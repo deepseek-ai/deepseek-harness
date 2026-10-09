@@ -1,21 +1,23 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
 import { prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
 import {
   SESSION_FORMAT_VERSION, SessionId as sessionId, SessionLogOffset, SessionSeq,
   type SessionEvent, type SessionHeader, type SessionId,
 } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent'
-import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
+import { snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION } from '@deepseek-ai/dsh-subagent'
+import { checkpointRecord, projectionCacheDomainSpec } from '@deepseek-ai/dsh-session-projection-cache'
 import {
   acknowledgeReloadConnectionLoss, captureExpandedTurnProcessAria, captureStableAria,
   compareOrRefreshGolden,
-  launchWebScaffold, readPersistedEvents, selectedSessionFixture, watchConsole,
+  launchWebScaffold, readPersistedEvents, realizeSeedFixture, seedSession, selectedSessionFixture, watchConsole,
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
@@ -32,6 +34,9 @@ const SIDEBAR_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/subagent-
 const SIDEBAR_CHAT_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/subagent-conversation/sidebar-chat.expected.md', import.meta.url))
 const UNAVAILABLE_GRANDCHILD_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/subagent-conversation/nested.expected.md', import.meta.url))
 const FORK_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/subagent-conversation/fork.expected.md', import.meta.url))
+const MIGRATING_CHILD_EXPECTED = fileURLToPath(new URL(
+  './expected/subagent-conversation/migration-required-child.expected.md', import.meta.url,
+))
 const MODE = webSnapshotMode()
 const LABEL = 'event-sourcing researcher'
 const ONE_SHOT_LABEL = 'event-sourcing reviewer'
@@ -120,6 +125,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       paceMs: 25,
     })
     browser = await chromium.launch()
+    await mkdir(fileURLToPath(new URL('../../../.artifacts/screenshots/non-migrating-session-reads', import.meta.url)), { recursive: true })
     page = await newEnglishPage(browser)
     page.on('request', (request) => {
       const path = new URL(request.url()).pathname
@@ -138,7 +144,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await parentInput.press('Enter')
     expect(await parentSettled).toBe(parent.id)
 
-    const started = await scaffold.ctx.subagents.startContinuable({
+    const started = await scaffold.ctx.subagents.startActivation({
+      delivery: 'parent',
       provider: 'spawn',
       label: LABEL,
       signal: new AbortController().signal,
@@ -193,9 +200,10 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
         type: 'subagent/descriptor',
         seq: 2,
         time: oneShotAt + 2,
-        data: snapshotSubagentDescriptor({
+        data: {
+          version: SUBAGENT_DESCRIPTOR_VERSION,
           mode: 'one-shot', provider: 'spawn', label: ONE_SHOT_LABEL,
-        }),
+        },
       },
       {
         type: 'turn/end',
@@ -318,6 +326,13 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
         },
       ])
     }
+    await waitForCacheRow(scaffold, childHeader)
+    const cache = scaffold.ctx.storageDomain.get(projectionCacheDomainSpec.name)
+    if (cache === undefined) throw new Error('projection cache is not open')
+    const table = cache.table('sessions')
+    const record = checkpointRecord.parse(table.get(childId))
+    const { subagentCatalog: _catalog, ...rows } = record.rows
+    await table.put(childId, { ...record, rows })
     // These two cold fixtures were authored after the page's initial
     // session.list and intentionally emitted no api-session/added event. Reload
     // to exercise the restart baseline that discovers their full lineage.
@@ -360,8 +375,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await writeComposerDraft(page, input, '')
   })
 
-  it('expands a persisted grandchild progressively without activating either level', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-tree'))
+  it('recovers a current-format cold child catalog cache miss without activating either level', async () => {
+    onTestFailed(() => saveFailureShot(page, 'screenshots/non-migrating-session-reads/web-e2e-subagent-tree'))
     await page.getByRole('button', { name: '2 subagents' }).hover()
     const catalogTree = page.getByRole('tree', { name: 'Subagent sessions' })
     expect(await catalogTree.evaluate((element) => {
@@ -377,12 +392,22 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     expect(await oneShotRow.locator('[data-state="done"]').count()).toBe(1)
     expect(await oneShotRow.getByText('~6mo 12d', { exact: true }).count()).toBe(1)
     expect(await oneShotRow.getAttribute('aria-label')).toContain('192d 00h 00m 00s')
-    await page.getByRole('button', { name: `Expand ${LABEL} descendants` }).click()
+    const observe = vi.spyOn(scaffold.ctx.sessionQuery, 'observeSession')
+    try {
+      const projections = page.waitForResponse(response => new URL(response.url()).pathname === '/api/session/projections')
+      await page.getByRole('button', { name: `Expand ${LABEL} descendants` }).click()
+      await projections
+      await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).waitFor({ timeout: 15_000 })
+      expect(observe.mock.calls.some(([id]) => id === childId)).toBe(true)
+      expect(observe.mock.calls.some(([id]) => id === grandchildId)).toBe(false)
+    } finally {
+      observe.mockRestore()
+    }
     const childRow = page.getByRole('treeitem', { name: new RegExp(LABEL) })
     const childLabel = await childRow.getAttribute('aria-label')
     await page.waitForTimeout(1_100)
     expect(await childRow.getAttribute('aria-label')).toBe(childLabel)
-    await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).waitFor({ timeout: 15_000 })
+    expect(await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).textContent()).toContain('continuable')
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
     expect(scaffold.ctx.agents.get(grandchildId)).toBeUndefined()
     const snapshot = await captureStableAria(
@@ -653,5 +678,145 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     }, { timeout: 30_000 }).toBe(true)
     expect(scaffold.ctx.agents.get(forkId)).not.toBeUndefined()
     await expect.poll(() => scaffold.ctx.agents.get(childId), { timeout: 10_000 }).toBeUndefined()
+  })
+})
+
+describe('web e2e: migration-required subagent catalog', () => {
+  const parentId = sessionId('migration-catalog-parent')
+  const childId = sessionId('migration-catalog-child')
+  const grandchildId = sessionId('migration-catalog-grandchild')
+  const childLabel = 'historical researcher'
+  const grandchildLabel = 'historical editor'
+  const predecessors: { id: SessionId; directory: string; path: string; source: Buffer }[] = []
+  let scaffold: WebScaffold
+  let browser: Browser
+  let page: Page
+  let tripwire: ReturnType<typeof watchConsole>
+
+  beforeAll(async () => {
+    if (MODE === 'record') throw new Error('migration-required subagent catalog is a keyless assembled snapshot')
+    scaffold = await launchWebScaffold()
+    const fixture = await readFile(BASE_FIXTURE, 'utf8')
+    const createdAt = 1784998084442
+    await seedSession(scaffold, fixture, parentId, undefined, { createdAt })
+    const parentHandle = await scaffold.ctx.sessionPersistence.open(parentId, 'write')
+    try {
+      const { events } = await parentHandle.read()
+      const last = events.at(-1)
+      if (last === undefined) throw new Error('parent seed has no events')
+      await parentHandle.append([{
+        type: 'subagent/catalog', seq: SessionSeq(last.seq + 1), time: last.time + 1,
+        data: { version: 1, childId, childCreatedAt: createdAt + 1, mode: 'continuable', label: childLabel },
+      }])
+    } finally {
+      await parentHandle.close()
+    }
+    const projects = (await readdir(scaffold.persistenceRoot, { withFileTypes: true })).filter(entry => entry.isDirectory())
+    expect(projects).toHaveLength(1)
+    const project = projects[0]
+    if (project === undefined) throw new Error('parent seed has no project directory')
+    // Keep historical bytes on disk; seeding through the writer would migrate them before the browser opens.
+    for (const [id, parentSession, label, depth] of [
+      [childId, parentId, childLabel, 1],
+      [grandchildId, childId, grandchildLabel, 2],
+    ] as const) {
+      const [header, ...events] = realizeSeedFixture(scaffold, fixture, id).trimEnd().split('\n')
+        .map((line): Record<string, unknown> => JSON.parse(line) as Record<string, unknown>)
+      expect(header?.version).toBe(3)
+      const body = [
+        ...events,
+        { type: 'subagent/descriptor', data: snapshotSubagentDescriptor({ mode: 'continuable', provider: 'spawn', label }) },
+        ...id === childId ? [{
+          type: 'subagent/catalog',
+          data: { version: 0, childId: grandchildId, childCreatedAt: createdAt + 2, mode: 'continuable', label: grandchildLabel },
+        }] : [],
+      ]
+      const rows = [
+        { ...header, id, createdAt: createdAt + depth, cwd: scaffold.workspaceCwd, parentSession, origin: 'subagent', delegationDepth: depth },
+        ...body.map((event, seq) => ({ ...event, seq, time: createdAt + depth + seq + 1 })),
+      ]
+      const directory = join(scaffold.persistenceRoot, project.name, id)
+      const path = join(directory, 'session.v3.jsonl.zstd')
+      const source = Buffer.concat(rows.map(row => zstdCompressSync(Buffer.from(`${JSON.stringify(row)}\n`))))
+      await mkdir(directory, { recursive: true })
+      await writeFile(path, source)
+      predecessors.push({ id, directory, path, source })
+    }
+    for (const { id } of predecessors) {
+      const stored = await scaffold.ctx.sessionPersistence.stat(id)
+      expect(stored?.formatStatus).toBe('migration-required')
+      if (stored === undefined) throw new Error(`historical fixture ${id} is missing`)
+      expect(scaffold.ctx.sessionProjectionCache.cachedSnapshot(stored.header)).toBeUndefined()
+    }
+    browser = await chromium.launch()
+    page = await newEnglishPage(browser)
+    tripwire = watchConsole(page)
+  })
+
+  afterAll(async () => {
+    const failures: unknown[] = []
+    await browser?.close().catch((error: unknown) => failures.push(error))
+    await scaffold?.close().catch((error: unknown) => failures.push(error))
+    if (failures.length === 1) throw failures[0]
+    if (failures.length > 1) throw new AggregateError(failures, 'migration-required subagent Web teardown failed')
+  })
+
+  it('stops at a migration-required child until its history opens', async () => {
+    onTestFailed(() => saveFailureShot(page, 'screenshots/non-migrating-session-reads/migration-required-subagent'))
+    const observe = vi.spyOn(scaffold.ctx.sessionQuery, 'observeSession')
+    const projections = vi.spyOn(scaffold.ctx.sessionController, 'projections')
+    const model = vi.spyOn(scaffold.ctx.llm, 'stream')
+    try {
+      await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      const workspaceRow = page.getByRole('tree', { name: 'Sessions' }).getByRole('treeitem').first()
+      await workspaceRow.click()
+      await page.locator(`[data-row-key="session:${parentId}"]`).click()
+      await page.getByRole('button', { name: '1 subagent', exact: true }).hover()
+      const tree = page.getByRole('tree', { name: 'Subagent sessions' })
+      const childRow = tree.getByRole('treeitem', { name: new RegExp(childLabel) })
+      await childRow.waitFor()
+      await expect.poll(() => childRow.textContent()).toContain('Migration required')
+      await expect.poll(() => childRow.getByRole('button', { name: `Expand ${childLabel} descendants`, exact: true }).count()).toBe(0)
+      expect(await childRow.getAttribute('aria-expanded')).toBeNull()
+      expect(await childRow.textContent()).toContain('Migration required')
+      expect(await childRow.textContent()).not.toContain('unknown mode')
+      expect(await childRow.getByRole('button', { name: `Open ${childLabel} in sidebar`, exact: true }).isEnabled()).toBe(true)
+      expect(await tree.getByRole('treeitem').count()).toBe(1)
+      for (const { id, directory, path, source } of predecessors) {
+        expect(scaffold.ctx.agents.get(id)).toBeUndefined()
+        expect(await readdir(directory)).toEqual(['session.v3.jsonl.zstd'])
+        expect(await readFile(path)).toEqual(source)
+      }
+      const before = await captureStableAria(page, '[role="tree"][aria-label="Subagent sessions"]', scaffold.workspaceCwd)
+      expect(observe.mock.calls.some(([id]) => id === childId || id === grandchildId)).toBe(false)
+      expect(projections).not.toHaveBeenCalled()
+
+      await childRow.click()
+      await page.getByRole('button', { name: `Switch subagent: ${childLabel}`, exact: true }).waitFor()
+      await page.getByRole('button', { name: '1 subagent', exact: true }).hover()
+      const grandchildRow = tree.getByRole('treeitem', { name: new RegExp(grandchildLabel) })
+      await grandchildRow.waitFor()
+      expect(await grandchildRow.textContent()).toContain('Migration required')
+      expect(await grandchildRow.getAttribute('aria-expanded')).toBeNull()
+      expect(await grandchildRow.getByRole('button', { name: `Expand ${grandchildLabel} descendants`, exact: true }).count()).toBe(0)
+      expect(projections).not.toHaveBeenCalled()
+      expect(observe.mock.calls.some(([id]) => id === childId)).toBe(true)
+      const after = await captureStableAria(page, '[role="tree"][aria-label="Subagent sessions"]', scaffold.workspaceCwd)
+      if (MODE === 'refresh') await mkdir(dirname(MIGRATING_CHILD_EXPECTED), { recursive: true })
+      await compareOrRefreshGolden(MIGRATING_CHILD_EXPECTED,
+        `# Before opening the child\n\n${before}\n\n# After opening the child\n\n${after}`, MODE)
+      for (const { id, path, source } of predecessors) {
+        expect(scaffold.ctx.agents.get(id)).toBeUndefined()
+        expect(await readFile(path)).toEqual(source)
+      }
+      expect(observe.mock.calls.some(([id]) => id === grandchildId)).toBe(false)
+      expect(model).not.toHaveBeenCalled()
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
+    } finally {
+      projections.mockRestore()
+      model.mockRestore()
+      observe.mockRestore()
+    }
   })
 })

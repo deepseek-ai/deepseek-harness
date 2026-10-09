@@ -21,19 +21,19 @@ describe('PR preview workflow', () => {
     expect(preview['runs-on']).toBe('ubuntu-24.04')
     expect(workflow.on).toEqual({ pull_request: { types: ['opened', 'synchronize', 'reopened'] } })
     expect(workflow.permissions).toEqual({ contents: 'read', 'pull-requests': 'write' })
-    expect(preview.steps.find(step => step.uses === 'actions/checkout@v6')?.with).toEqual({ 'persist-credentials': false })
+    expect(preview.steps.find(step => step.uses === 'actions/checkout@v7.0.1')?.with).toEqual({ 'persist-credentials': false })
   })
 
-  it('keeps the immutable full build and restore-only dependency cache', () => {
+  it('keeps the immutable complete artifact build and restore-only dependency cache', () => {
     expect(workflow.env.PRIMARY_NODE_VERSION).toBe('24')
     expect(workflow.env.DSH_TELEMETRY_DISABLED).toBe('1')
     const commands = preview.steps.map(step => step.run)
     expect(commands).toContain('pnpm install --frozen-lockfile')
-    expect(commands).toContain('pnpm run build')
+    expect(commands).toContain('pnpm run build --artifacts-only')
     expect(commands).toContain('pnpm --filter @deepseek-ai/dsh-web-frontend run build:preview')
-    expect(commands.indexOf('pnpm run build')).toBeLessThan(commands.indexOf('pnpm --filter @deepseek-ai/dsh-web-frontend run build:preview'))
+    expect(commands.indexOf('pnpm run build --artifacts-only')).toBeLessThan(commands.indexOf('pnpm --filter @deepseek-ai/dsh-web-frontend run build:preview'))
     expect(preview.steps.filter(step => step.uses?.startsWith('actions/cache'))).toHaveLength(1)
-    expect(preview.steps.find(step => step.uses === 'actions/cache/restore@v4')?.with).toMatchObject({
+    expect(preview.steps.find(step => step.uses === 'actions/cache/restore@v6.1.0')?.with).toMatchObject({
       key: "${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}",
     })
   })

@@ -2,7 +2,7 @@
 
 /** Capture failure whose message is localized by the caller. */
 export class RecordingError extends Error {
-  constructor(readonly kind: 'unavailable' | 'permission' | 'empty' | 'cancelled' | 'interrupted') { super(kind); this.name = 'RecordingError' }
+  constructor(readonly kind: 'unavailable' | 'permission' | 'empty' | 'cancelled' | 'interrupted' | 'deviceMissing') { super(kind); this.name = 'RecordingError' }
 }
 
 /**
@@ -48,21 +48,25 @@ export class Recording {
   private readonly lifetime = new AbortController()
   private disposal: Promise<void> | undefined
 
-  constructor(private readonly onDispose: () => void) {}
+  constructor(private readonly onDispose: () => void, private readonly deviceId = '') {}
 
   /**
-   * Acquire the microphone for this recording.
-   * @param onError - receives failures during capture, before asynchronous resource release finishes.
-   * @returns after capture starts; a cancelled permission grant immediately releases its tracks.
+   * Acquire the selected microphone without recording or playing audio.
+   * @param onError - receives device interruptions before resource release completes.
+   * @returns after the level analyser starts; cancelled grants release their tracks immediately.
    */
-  async start(onError?: (error: RecordingError) => void): Promise<void> {
+  async preview(onError?: (error: RecordingError) => void): Promise<void> {
     const devices = (navigator as Partial<Navigator>).mediaDevices
-    if (!devices || typeof MediaRecorder === 'undefined') throw new RecordingError('unavailable')
+    if (!devices) throw new RecordingError('unavailable')
     let stream: MediaStream
     try {
-      stream = await devices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false })
+      stream = await devices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true,
+        ...(this.deviceId === '' ? {} : { deviceId: { exact: this.deviceId } }) }, video: false })
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'NotAllowedError') throw new RecordingError('permission')
+      if (error instanceof DOMException) {
+        if (error.name === 'NotAllowedError') throw new RecordingError('permission')
+        if (error.name === 'NotFoundError' || error.name === 'OverconstrainedError') throw new RecordingError('deviceMissing')
+      }
       throw error
     }
     if (this.lifetime.signal.aborted) { stream.getTracks().forEach((track) => { track.stop() }); throw new RecordingError('cancelled') }
@@ -72,17 +76,35 @@ export class Recording {
       this.analyser = this.context.createAnalyser()
       this.analyser.fftSize = this.samples.length
       this.context.createMediaStreamSource(stream).connect(this.analyser)
-      this.recorder = new MediaRecorder(stream)
+      for (const track of stream.getTracks()) track.addEventListener('ended', () => {
+        this.interrupted(onError)
+      }, { signal: this.lifetime.signal })
+    } catch (error) { await this.dispose(); throw error }
+  }
+
+  /**
+   * Acquire the selected microphone and record audio for transcription.
+   * @param onError - receives failures during capture, before asynchronous resource release finishes.
+   * @returns after capture starts; a cancelled permission grant immediately releases its tracks.
+   */
+  async start(onError?: (error: RecordingError) => void): Promise<void> {
+    if (typeof MediaRecorder === 'undefined') throw new RecordingError('unavailable')
+    await this.preview(onError)
+    if (this.lifetime.signal.aborted) throw new RecordingError('cancelled')
+    try {
+      this.recorder = new MediaRecorder(this.stream as MediaStream)
       this.recorder.ondataavailable = (event) => { if (!this.lifetime.signal.aborted && event.data.size > 0) this.chunks.push(event.data) }
-      this.recorder.onerror = () => {
-        if (this.lifetime.signal.aborted) return
-        void this.dispose().catch(() => undefined)
-        try { onError?.(new RecordingError('interrupted')) } catch (error) {
-          console.error('Speech recording error handler failed', error)
-        }
-      }
+      this.recorder.onerror = () => { this.interrupted(onError) }
       this.recorder.start()
     } catch (error) { await this.dispose(); throw error }
+  }
+
+  private interrupted(onError: ((error: RecordingError) => void) | undefined): void {
+    if (this.lifetime.signal.aborted) return
+    void this.dispose().catch(() => undefined)
+    try { onError?.(new RecordingError('interrupted')) } catch (error) {
+      console.error('Speech recording error handler failed', error)
+    }
   }
 
   /**
@@ -95,6 +117,15 @@ export class Recording {
     let sum = 0
     for (const sample of this.samples) sum += sample * sample
     return Math.sqrt(sum / this.samples.length)
+  }
+
+  /**
+   * Identify the input actually acquired by this operation.
+   * @returns the audio track's name and device group, or undefined outside capture.
+   */
+  deviceInfo(): Pick<MediaDeviceInfo, 'label' | 'groupId'> | undefined {
+    const track = this.stream?.getAudioTracks()[0]
+    return track ? { label: track.label, groupId: track.getSettings().groupId ?? '' } : undefined
   }
 
   /**

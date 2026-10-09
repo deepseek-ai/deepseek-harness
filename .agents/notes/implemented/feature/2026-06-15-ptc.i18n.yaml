@@ -9,17 +9,17 @@
   en: 4b312be894531bee
   zh: d655648ea5843ef5
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision:
-  en: 371abc68ce278a5c
-  zh: 3fa8d28213794932
+  en: a1732e2b1b46cb39
+  zh: ddfc2bdcffa099a5
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/per-program-execution-controls:
   en: da694641e1d009de
   zh: 9d7492d39039af66
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-registry-owns-the-mode:
-  en: 55287fedeaaee6d8
-  zh: d2afe242e84acc43
+  en: 091b7bc49b027353
+  zh: 42dc77a810202694
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-run-code-tool-and-the-dispatch-bridge:
-  en: 20536a38b74f80c6
-  zh: fdf604958dc041f3
+  en: 6a0e2698b082978e
+  zh: fbb03503520b30e9
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/observability-tool-ptc-dispatch:
   en: b8e4cf9433c7ee18
   zh: e5f4e8d7d03d3a7b
@@ -33,8 +33,8 @@
   en: d62b41a6a5c58e5f
   zh: ef72c5a9b32b370e
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/what-the-model-sees:
-  en: 43653fd91ab9165b
-  zh: 6ddfa853e69b2d80
+  en: 81c12f19f7a967c1
+  zh: 29734ca964acdec2
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/consequences:
   en: 761eb6c1aeb7af18
   zh: 5434456a3d0a1b65
@@ -42,8 +42,8 @@
   en: f5d287f610962a48
   zh: 88368e1df517b087
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/alternatives-considered:
-  en: 90110f91f6f6130f
-  zh: 25d28433840f91a4
+  en: e78530994a88d14f
+  zh: 49f64c7f1421f507
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/risks:
-  en: 2d00dc8c05a7a436
-  zh: 09db2ffb60ef82c3
+  en: d58925bdb912de23
+  zh: d3a70237d656e5a4

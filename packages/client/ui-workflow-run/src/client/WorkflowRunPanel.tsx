@@ -180,20 +180,23 @@ function phaseStatusSummary(members: readonly WorkflowRunMemberData[], t: Workfl
   return visible.map(status => statusCount(status, count(status), t)).join(' · ')
 }
 
+type ChildMode = Exclude<SessionTarget, SessionId>['mode']
+
 function navigableMembers(
   sessions: SessionListState,
   phases: readonly WorkflowRunPhaseData[],
   parentId: SessionId,
   statuses: SessionStatusSnapshot,
-): readonly SessionId[] {
-  const catalog = sessions.projectionsBySession[parentId]
-  const result: SessionId[] = []
+): ReadonlyMap<SessionId, ChildMode> {
+  const result = new Map<SessionId, ChildMode>()
   for (const phase of phases) {
     for (const member of phase.members) {
-      const child = catalog?.values.subagentCatalog?.find(entry => entry.id === member.childId)
+      const child = sessions.byId[member.childId]
+      const identity = sessions.projectionsBySession[member.childId]?.values.subagent
       if (member.status === 'running'
-        && child !== undefined && (statuses.get(child.id)?.running ?? sessions.byId[child.id]?.running) === true) {
-        result.push(member.childId)
+        && child?.parentId === parentId && identity !== undefined && identity !== null
+        && (statuses.get(child.id)?.running ?? child.running)) {
+        result.set(member.childId, identity.mode)
       }
     }
   }
@@ -239,13 +242,14 @@ function RunHeader({ children, count, name, onToggle, open, status, t }: {
   )
 }
 
-function MemberRow({ member, navigable, openSession, parentSessionId, t }: {
+function MemberRow({ member, mode, openSession, parentSessionId, t }: {
   readonly member: WorkflowRunMemberData
-  readonly navigable: boolean
+  readonly mode: ChildMode | undefined
   readonly openSession: WorkflowRunInjected['openSession']
   readonly parentSessionId: SessionId
   readonly t: WorkflowRunPanelProps['t']
 }) {
+  const navigable = mode !== undefined
   const name = readableMember(member.label, t)
   const [focused, setFocused] = useState(false)
   const renderButton = navigable || focused
@@ -270,12 +274,12 @@ function MemberRow({ member, navigable, openSession, parentSessionId, t }: {
       tabIndex={navigable ? undefined : -1}
       onFocus={() => { setFocused(true) }}
       onBlur={() => { setFocused(false) }}
-      onClick={navigable
+      onClick={mode !== undefined
         ? () => {
           openSession({
             parentSessionId,
             childSessionId: member.childId,
-            mode: 'one-shot',
+            mode,
           })
         }
         : undefined}
@@ -295,7 +299,7 @@ function PhaseSection({
   readonly open: boolean
   readonly pendingCleanCollapse: boolean
   readonly phase: WorkflowRunPhaseData
-  readonly navigable: readonly SessionId[]
+  readonly navigable: ReadonlyMap<SessionId, ChildMode>
   readonly openSession: WorkflowRunInjected['openSession']
   readonly parentSessionId: SessionId
   readonly t: WorkflowRunPanelProps['t']
@@ -331,7 +335,7 @@ function PhaseSection({
             <MemberRow
               key={member.seq}
               member={member}
-              navigable={navigable.includes(member.childId)}
+              mode={navigable.get(member.childId)}
               openSession={openSession}
               parentSessionId={parentSessionId}
               t={t}

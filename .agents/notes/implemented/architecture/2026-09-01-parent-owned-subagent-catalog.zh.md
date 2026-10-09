@@ -12,15 +12,17 @@ child descriptor 对恢复与 composition 仍然必要，但它不能作为 disc
 
 ## 决策
 
-parent Session 的 required `subagent/catalog` 事件是直接 child discovery 的持久化权威。每个事件都是一条成功创建事实，包含 `childId`、`childCreatedAt`、mode 与按 mode 区分的 label。没有本地 Session 的远程 one-shot run 不进入该目录。无效的自身 fact（包括不支持的 payload 版本）会使 projection 恢复失败，因为静默丢弃 required fact 会返回不完整的目录。
+共享 activation 入口、外部执行所有权，以及调用方与父级之间的结果投递选择由[统一 subagent activation](../simplification/2026-09-17-unified-subagent-activations.zh.md) 决策拥有。本记录保留下述独立理由。
 
-创建只发布成功事实。one-shot run 在 provider 返回本地 child 后、run 到达调用方前追加目录事件。continuable run 先准入初始 prompt，再追加目录事件，最后返回 child id。准入或目录追加失败时，创建失败并释放 activation；不存在补偿目录事件或 rollback 协议。
+父级 Session 的必读 `subagent/catalog` 事件是发现直接子级的持久化权威。每个本地子级都会进入目录，与结果接收方无关；外部子级仅在 parent 投递时进入目录。工作流成员记录描述执行进度，不替代本地 Session 发现。每个事件包含 `childId`、`childCreatedAt`、mode 与按 mode 区分的 label。本地子级使用 `continuable`；外部执行使用 `external`，不能作为本地 Session 打开。历史 `one-shot` 与 `unknown` 条目仍可读取。无效的自身事实（包括不支持的载荷版本）会使投影恢复失败，因为静默丢弃必读事实将返回不完整的 catalog。
+
+创建只发布成功事实。本地 activation 先接纳初始提示词，再追加 catalog 事件。外部 activation 在提供方启动后、返回回执前追加事件。准入或发布失败会释放未发布的执行；不存在补偿 catalog 事件或回滚协议。
 
 child header 与 `subagent/descriptor` 继续拥有恢复与 composition 权威。Activation 与精确 parent 关系继续拥有授权与投递权威。mode 与 label 只快照一次，同一份分离值写入 parent catalog fact 与 child descriptor。
 
 注册的 `subagentCatalog` projection 物化 parent fact。它将存储、追加、迭代和检查点校验交给 [`dsh-chunked-list`](../../../../packages/util/chunked-list/README.zh.md)，后者以每块 64 项的持久 stack 保存事实，因此 append 最多复制 head chunk，以有界 O(1) 工作完成。materialization 从旧到新访问 chunk，对 D 条事实以 O(D) 时间保留父目录事件顺序。并发创建按目录成功追加的顺序排列，与 child 时间戳和 id 无关。projection checkpoint 以 O(D) 克隆 state；projection-cache 继续异步写入，并使用既有创建、turn-end 与 disposal 强制点。
 
-工具库拥有分块布局及其共享容量常量；目录拥有事件校验、fork 过滤和目录行转换。目录 projection state 版本 2 保存通用块值，因此 projection registry 从 Session 事件重建不兼容的缓存。Session 事件载荷和公开目录行保持各自格式。
+工具库拥有 chunk 布局与共享容量常量；catalog 拥有事件校验、fork 过滤和行转换。catalog 投影状态版本 6 接受外部成员，因此投影注册表会从 Session 事件重建不兼容缓存。载荷 v0 与 v1 保持不变；v2 记录外部执行。
 
 fork 隔离使用 projection 初始化时提供的精确 `Session.inheritedEventCount`。fold 忽略该 offset 之前的 `subagent/catalog` 事件。state 保存 inherited offset，但不保存每条 event seq，因为接受判定已在 fold 时完成。
 

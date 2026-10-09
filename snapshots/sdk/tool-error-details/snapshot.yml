@@ -1,7 +1,10 @@
 version: 1
 scenario: tool-error-details
 profile: sdk
-composition: both
+composition: default
 recording: authored
 header:
-  class: both
+  class: native-then-ptc
+  pin: true
+  changes: 1
+  promptChanges: 1

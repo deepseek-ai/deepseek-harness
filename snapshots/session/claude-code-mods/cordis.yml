@@ -7,6 +7,8 @@
 - insert:
     - id: claude-code-mods
       name: '@deepseek-ai/dsh-experimental-claude-code-mods'
+    - id: workspace-changes
+      name: '@deepseek-ai/dsh-workspace-changes'
     - id: claude-code-mod-snapshot-guard
       name: './demo-mod.ts'
     - id: claude-code-mod-replay-theater

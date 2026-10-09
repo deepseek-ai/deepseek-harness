@@ -48,7 +48,7 @@ Each started call appends `tool/call` immediately before its pre-execute gate. C
 
 An abort stops replenishment, waits for already-started calls, commits their results in order, drains accepted batch context after those results, and records synthetic aborted call/result pairs for undispatched calls. An unexpected scheduler failure stops new dispatches, waits for every already-started dispatch to settle, and rethrows the first failure. The driver records missing results before closing the failed step under the [failed-step recovery reference](../../../../packages/core/agent-loop/README.md).
 
-PTC mode remains outside this scheduler because the model emits one native `run_code` call. `run_code` and its internal dispatch queue remain serial; native sibling calls in `mode: 'both'` use the normal scheduler.
+The loop schedules native sibling calls and each outer `run_code` call. A `run_code` program has its own bounded dispatch pool, which uses the same parallel/exclusive classification; the [PTC execution reference](../../../../packages/core/tools/README.md#ptc-mode) owns that nested scheduling.
 
 ## Safety contract
 

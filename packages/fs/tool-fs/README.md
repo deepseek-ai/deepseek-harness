@@ -25,6 +25,8 @@ Use `dsh-tool-fs` to let a model read UTF-8 files with line numbers, read suppor
 <a id="use-this-package"></a>
 ## Use this package
 
+Relative paths use the Session's current working directory. A directory change affects subsequent reads and mutations without changing sandbox permission roots. Successful results return the canonical absolute path from `fs.processPath`, and root result metadata retains that operation-time path for replay and navigation.
+
 Mount the tools after a `ctx.fs` backend and, for read-before-write/edit behavior, the policy plugin. The model then gets line-numbered reads, atomic writes and edits, and — with an attachment store mounted — image reads; every result is capped, and failures carry stable codes with recovery instructions.
 
 ### Minimal composition
@@ -99,6 +101,7 @@ The tools are the executor; policy is an event gate. The tools inject no policy 
 | [`src/read-render.ts`](src/read-render.ts) | Cordis-free windowing and envelope formatting |
 | [`src/sandbox.ts`](src/sandbox.ts) | Escalation API shared by `write`/`edit`: policy resolution and denial-marker mapping |
 | [`src/error.ts`](src/error.ts) | Stable model-facing diagnostics for guarded-mutation failures |
+| [`src/mutation-result.ts`](src/mutation-result.ts) | Successful mutation observation and canonical result paths |
 
 ### Per-tool flow
 
@@ -179,7 +182,7 @@ Prefix-stable while the visible tool definitions and order are unchanged. Regist
 
 #### What the model sees
 
-A successful read is exactly `<path><displayPath></path>`, newline, `<type>file</type>`, newline, `<content>`, numbered lines as `<lineNumber>: <text>`, a blank line, one footer, and `</content>`. The footer is exactly `(Output capped. Showing lines <start>-<end>. Use offset=<next> to continue.)`, `(Showing lines <start>-<end> of <total>. Use offset=<next> to continue.)`, or `(End of file - total <total> lines)`. A long line ends exactly `... (line truncated to <max> chars)`. A missing read still returns `FS_NOT_FOUND`, but it records confirmed absence for the calling session; after an externally deleted file is re-read, a retried `write` can safely recreate it through the provider's no-replace guard.
+A successful read is exactly `<path><resolvedPath></path>`, newline, `<type>file</type>`, newline, `<content>`, numbered lines as `<lineNumber>: <text>`, a blank line, one footer, and `</content>`. The footer is exactly `(Output capped. Showing lines <start>-<end>. Use offset=<next> to continue.)`, `(Showing lines <start>-<end> of <total>. Use offset=<next> to continue.)`, or `(End of file - total <total> lines)`. A long line ends exactly `... (line truncated to <max> chars)`. A missing read still returns `FS_NOT_FOUND`, but it records confirmed absence for the calling session; after an externally deleted file is re-read, a retried `write` can safely recreate it through the provider's no-replace guard.
 
 #### Token effect
 
@@ -193,7 +196,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-A successful `read_image` returns `<path><displayPath></path>`, `<type>image</type>`, and a `<content>` envelope naming the media type, normalized dimensions, and byte size, followed by the image itself as a native image block. The result is logged with its durable reference before the next model request.
+A successful `read_image` returns `<path><resolvedPath></path>`, `<type>image</type>`, and a `<content>` envelope naming the media type, normalized dimensions, and byte size, followed by the image itself as a native image block. The result is logged with its durable reference before the next model request.
 
 #### Token effect
 
@@ -207,7 +210,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-Write returns the exact five-line envelope `<path><displayPath></path>`, `<type>file</type>`, `<content>`, `Created file` or `Updated file`, then `</content>`. Edit returns exactly `The file <displayPath> has been updated successfully.` or, for `replace_all`, `The file <displayPath> has been updated. All occurrences were successfully replaced.` The full write or replacement text remains in the assistant tool-call arguments.
+Write returns the exact five-line envelope `<path><resolvedPath></path>`, `<type>file</type>`, `<content>`, `Created file` or `Updated file`, then `</content>`. Edit returns exactly `The file <resolvedPath> has been updated successfully.` or, for `replace_all`, `The file <resolvedPath> has been updated. All occurrences were successfully replaced.` The full write or replacement text remains in the assistant tool-call arguments.
 
 #### Token effect
 

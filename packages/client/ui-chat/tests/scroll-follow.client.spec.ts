@@ -112,6 +112,44 @@ describe('ScrollFollow', () => {
     expect(follow.animating).toBe(false)
   })
 
+  it('retargets growth during native motion without jumping or restarting an unchanged target', () => {
+    const world = scrollport()
+    const follow = new ScrollFollow(true, 1)
+    follow.toBottom(world.element, world.metrics(), 'smooth')
+    world.element.scrollTop = 150
+    follow.sample(world.metrics())
+    world.grow(800)
+    expect(follow.toBottom(world.element, world.metrics(), 'instant').top).toBe(150)
+    expect(world.scrollTo).toHaveBeenLastCalledWith({ top: 600, behavior: 'smooth' })
+    expect(follow.animating).toBe(true)
+    follow.toBottom(world.element, world.metrics(), 'instant')
+    expect(world.scrollTo).toHaveBeenCalledTimes(2)
+    world.grow(1_000)
+    follow.toBottom(world.element, world.metrics(), 'instant')
+    expect(world.scrollTo).toHaveBeenLastCalledWith({ top: 800, behavior: 'smooth' })
+    expect(world.element.scrollTop).toBe(150)
+    world.element.scrollTop = 800
+    expect(follow.settle(world.metrics())).toBe(true)
+    expect(follow.animating).toBe(false)
+    expect(world.scrollTo).toHaveBeenCalledTimes(3)
+  })
+
+  it('cancels a retargeted animation before accepting subsequent reader movement', () => {
+    const world = scrollport()
+    const follow = new ScrollFollow(true, 1)
+    follow.toBottom(world.element, world.metrics(), 'smooth')
+    world.element.scrollTop = 150
+    world.grow(800)
+    follow.toBottom(world.element, world.metrics(), 'instant')
+    follow.interrupt(world.element, world.metrics())
+    expect(world.scrollTo).toHaveBeenLastCalledWith({ top: 150, behavior: 'instant' })
+    expect(follow.animating).toBe(false)
+    expect(follow.sample(world.metrics())).toBe(true)
+    world.element.scrollTop = 100
+    expect(follow.sample(world.metrics())).toBe(false)
+    expect(follow.settle(world.metrics())).toBe(false)
+  })
+
   it.each([150, 600])('releases following after a native stop at %i instead of its target', (top) => {
     const world = scrollport()
     const follow = new ScrollFollow(true, 1)
@@ -163,6 +201,18 @@ describe('ScrollFollow', () => {
     expect(follow.toBottom(world.element, world.metrics(), 'smooth').top).toBe(400)
     expect(follow.animating).toBe(false)
     expect(world.scrollTo).not.toHaveBeenCalled()
+  })
+
+  it('ends an outstanding smooth animation when reduced motion becomes active', () => {
+    const world = scrollport()
+    const follow = new ScrollFollow(false, 1)
+    follow.toBottom(world.element, world.metrics(), 'smooth')
+    world.element.scrollTop = 150
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    expect(follow.toBottom(world.element, world.metrics(), 'smooth').top).toBe(400)
+    expect(world.scrollTo).toHaveBeenLastCalledWith({ top: 400, behavior: 'instant' })
+    expect(follow.animating).toBe(false)
+    expect(follow.active).toBe(true)
   })
 
   it('stops a native animation when an explicit jump retains the current offset', () => {

@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+`HarnessSession.getWorkingDirectory()` reads the effective directory; `setWorkingDirectory(path)` changes it and returns the validated absolute path. Either method creates an unknown Session without starting a model turn. Relative paths use the Session's current directory. Origin metadata, permissions, and existing processes remain unchanged. `HarnessClient` exposes the same methods with a leading `sessionId` argument.
+
 Use this client when TypeScript code must drive a complete Harness runtime from another process and you can name the runtime executable explicitly. The common path is minimal: construct a `DeepSeekHarness` with a launch spec, run prompts, and close it so the child process is always reaped.
 
 ### Running agent turns with DeepSeekHarness
@@ -50,6 +52,8 @@ The subprocess starts lazily on first use and stays owned by the instance across
 ### Lower-level control with HarnessClient
 
 `HarnessClient` is the protocol client under the run API: explicit `start()`, `initialize()`, `prompt()`, `request()`, and `close()`, plus notification subscriptions. `prompt()` returns the queued message id as soon as the runtime accepts it and never waits for agent activity. `subscribe(filter?)` returns a `NotificationSubscription` (awaitable `next()`, non-blocking `tryNext()`, async iteration); `subscribeSessionTree(id)` scopes to one session and the descendants discovered from `subagent.started` lineage edges — the runtime notifies for every session in its context, and scoping is client-side, exactly like the Python SDK.
+
+Task-owning consumers can subscribe before `prompt()`, then call `request('session/wait', { sessionId })` and drain queued notifications with `tryNext()`. This waits for managed descendants and their root summary turns; `HarnessSession.run()` retains its next-idle interval. `validatedSessionEvent()` validates the event envelope and the assistant/turn fields consumed by SDK readers before they enter an output fold.
 
 The client exports typed errors for every failure mode: `JsonRpcResponseError` (a wire error response, code and data preserved), `RequestTimeoutError` (a configured bound elapsed), `SdkProtocolError` (a response outside the documented protocol), and `TransportClosedError` (the runtime is gone — the message carries the exit code and a bounded stderr tail). `close()` requests protocol `shutdown` (bounded by `shutdownTimeoutMs`, default 1000 ms), then walks a stdin-EOF → SIGTERM → SIGKILL ladder until the process has exited; it is idempotent, and a closed client refuses reuse. `HarnessClientOptions.env` replaces the child environment entirely when given (`undefined` inherits the parent's); callers own credential policy — `scrubbedParentEnv` from `dsh-subprocess` is the shared scrub base for isolation-minded launches.
 

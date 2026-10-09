@@ -44,7 +44,7 @@ kind: "package-reference"
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `includeHarnessIdentity` | `true` | 是否包含顺序为 −1000 的第一方固定开场白 `You are an AI agent powered by DeepSeek Harness.`。仅当兼容性部署拥有完整系统提示词时设为 false。 |
-| `includeRuntimeContext` | `true` | 是否在组装中包含有序动态 runtime 上下文 |
+| `includeRuntimeContext` | `true` | 是否在组装中包含可选的有序动态 runtime 上下文 |
 | `personaPrefix` | `''` | 全局 persona 前缀模板，顺序为 `0`，位于第一方指导之前 |
 | `personaSuffix` | `''` | 全局 `deployment:persona-suffix` 模板，顺序为 `10200`，位于第一方指导之后 |
 | `toolOrder` | — | 显式面向模型工具顺序，含一个 `'<unlisted-tools>'` 其余项标记 |
@@ -63,15 +63,19 @@ ctx.systemPrompt.section({
 })
 ```
 
-在段上设置 `interpolate: false` 可原样保留文本，包括生成的工具文档中的 `{{…}}` 组。其他段默认执行变量插值。
+在段或动态上下文上设置 `interpolate: false` 可原样保留文本，包括生成的工具文档或目录名中的 `{{…}}` 组。其他贡献默认执行变量插值。
+
+`refreshContext(assembly, context)` 在 pre-step 与路由准备之后刷新已注册的运行时事实。它保留已接纳的段、工具、变量及仅由组装 waterfall 添加的上下文，应用当前的可选上下文抑制，并恢复缺失的必需条目。将变化的事实放在上下文 provider 中；已注册上下文的文本会在准入前再次读取。
 
 ### 贡献提示词变量
 
-变量在段文本中以 `{{name}}` 引用，并在每次组装时解析；带作用域变量会为该 agent 遮蔽同名全局变量。循环提供 `model` 与 `cwd`；任何插件都可以注册自己拥有的事实。
+变量从段或上下文文本中以 `{{name}}` 引用，每次组装时解析；带作用域的变量会为该 agent 遮蔽同名全局变量。循环提供 `provider` 和 `model`；插件可注册自己拥有的事实。工作目录服务通过不执行插值的用户上下文提供目录文本。
 
 ```text
-ctx.systemPrompt.variable('cwd', ({ agent }) => agent?.session.header.cwd)
+ctx.systemPrompt.variable('response_language', () => 'English')
 ```
+
+自定义 persona 模板不得依赖内置 `{{cwd}}` 变量：循环不注册它，因此无法解析的引用会在任何模型请求之前使提示词组装失败。请从 home、profile 或单次调用的 `personaSuffix` 设置以及 preset 的 `suffix` 字段中移除 `Your working directory is {{cwd}}.` 语句，保留无关文本。后缀没有其他内容时，可省略或清空该字段。[工作目录服务](../../session/working-directory/README.zh.md) 提供必需的当前目录上下文。
 
 ### 贡献工具 schema
 
@@ -79,7 +83,7 @@ ctx.systemPrompt.variable('cwd', ({ agent }) => agent?.session.header.cwd)
 
 ### 抑制运行时上下文
 
-`suppressRuntimeContext()` 移除调用作用域的所有动态运行时上下文贡献，但不禁用拥有底层事实的服务；多个抑制器独立组合，当不再存在抑制器时该 effect 会恢复上下文。
+`suppressRuntimeContext()` 移除调用作用域的可选动态上下文，但不禁用拥有这些事实的服务。标记为 `required` 的贡献仍然可见。多个抑制器独立组合；不再存在抑制器时，可选上下文恢复。
 
 -----
 
@@ -133,7 +137,7 @@ ctx.systemPrompt.variable('cwd', ({ agent }) => agent?.session.header.cwd)
 
 #### 模型看到什么
 
-第一方段落依次渲染 harness 身份、部署 persona 前缀（含模型名称介绍）、可复用指令（包括生成的工具 SDK 和结构化输出指导），最后是携带环境信息的后缀：harness 源码（`10000`）、Web 表层（`10100`）和部署 persona 后缀（`10200`）。外部段落的顺序与组装监听器仍决定其最终结果。`includeHarnessIdentity: false` 仅省略这个固定开场白。空段会消失；带作用域的段与变量可以为一个 agent 遮蔽全局项。`system-prompt/assemble` waterfall 决定交付的提示词与工具 schema，除非一个有效段声明自身为 complete——此时该确切段会成为完整的系统提示词，而 waterfall 得到的上下文、工具与变量保持不变。渲染后的提示词作为派生历史中的 system 角色消息——surface 第 0 号节点，或历史内更新之后最新的系统节点——到达模型；循环请求与 `request/header` 均不含单独的 `system` 字段。完整渲染结果为空时，循环通过有日志记录的空内容替换清除所有生效的系统节点，模型历史不再保留任何旧提示词。有序动态上下文与段分离，只在存在时才会成为带来源的 user 角色快照；`includeRuntimeContext: false` 或带作用域的抑制器会移除全部这类上下文。
+第一方段落依次渲染 harness 身份、部署 persona 前缀（含模型名称介绍）、可复用指令（包括生成的工具 SDK 和结构化输出指导），最后是携带环境信息的后缀：harness 源码（`10000`）、Web 表层（`10100`）和部署 persona 后缀（`10200`）。外部段落的顺序与组装监听器仍决定其最终结果。`includeHarnessIdentity: false` 仅省略这个固定开场白。空段会消失；带作用域的段与变量可以为一个 agent 遮蔽全局项。`system-prompt/assemble` waterfall 决定交付的提示词与工具 schema，除非一个有效段声明自身为 complete——此时该确切段会成为完整的系统提示词，而 waterfall 得到的上下文、工具与变量保持不变。渲染后的提示词作为派生历史中的 system 角色消息——surface 第 0 号节点，或历史内更新之后最新的系统节点——到达模型；循环请求与 `request/header` 均不含单独的 `system` 字段。完整渲染结果为空时，循环通过有日志记录的空内容替换清除所有生效的系统节点，模型历史不再保留任何旧提示词。有序动态上下文与段分离，只在存在时才会成为带来源的 user 角色快照；`includeRuntimeContext: false` 或带作用域的抑制器会移除可选贡献；必需的操作上下文仍然保留。
 
 ##### harness 身份
 

@@ -93,7 +93,7 @@ changes:
 
 V3-to-V4 迁移将已发布的 user 角色工具结果提升为 tool 角色消息，包含必需的 toolCallId 和可选的 isError。工具结果包装不再属于内容块联合。迁移保留每个已接纳源事件和继承切分点，并根据同一持久化根目录中保留的直属子 Session 日志追加缺失的父级 subagent/catalog 记录。历史正文恢复要求显式提供子日志证据集合；没有可供补全的子日志时也须传入空集合。子日志的 descriptor 缺失、多条或版本未知时，跳过该子项的补全；身份、时间戳或模式冲突会拒绝迁移且不发布后继。已有 catalog 事实保持不变。历史读取打开在内存中准备结果。写入打开在重新校验子项成员与修订后，将当前后继发布到未修改的前代文件旁。Delivery generation 校验防止历史确认成为有效的 V4 水位。V3 读取方拒绝更新的 generation。已定稿迁移向 turn/end.reason 添加 forked。精确切点的 fork 在继承标记之后追加子会话自有的错误结果和结束事件。V4 接纳经过校验、使用确定性分支 ID 和文案的未启动 fork 结果；已发布的 V0–V3 校验器和已记录的前驱代际保持不变。
 
-`request/header` schema 还将退役的 `system` 键记录为禁止字段。这项声明记录已有的原生读取拒绝规则，不改变存储数据或提示词重建；以后允许该字段携带值时，必须提升格式版本，而不能归类为普通可选字段添加。
+`request/header` schema 还将退役的 `system` 键记录为禁止字段。这项声明记录已有的原生读取拒绝规则，不改变存储数据或提示词重建；以后允许该字段携带值时，同版本变更必须经过兼容性评审，或显式提升格式版本，而不能归类为普通可选字段添加。
 
 生产者拥有的 source 通过 [V3→V4 迁移](../../packages/session/session-format-v3-to-v4/README.zh.md#v3-to-v4-specification)替代已发布的 plugin wrapper。冻结的重命名表和冲突规则保留 source 字段与事件坐标；未知生产者归属保留每个自有 JSON 属性。原生读取和写入打开在公开 Session 之前校验 source 字段。已有 V4 文件不会重新运行迁入边。
 
@@ -108,7 +108,7 @@ PTC 生产者写入 `source.kind: 'ptc-mode'`。V3→V4 迁入边保留 `tools-c
 
 精确切点 fork 集成后，聚焦的 Session、agent-loop、Session Controller、V4、chat-view 和 compaction 测试共 63 个文件、1,523 个测试通过。V4 fork 测试确认编码、解码和恢复保留原始 ID 与文本，拒绝格式错误的结果，并验证嵌套继承切点。工具角色迁移测试和 SDK 快照刷新也在原始变更中通过；构建后的 Python runtime sdk-snapshot 场景通过，定向 pi-ai 与 auto-review 覆盖率检查通过 351 个测试，三个受影响模块覆盖率均为 100%。
 
-生成的请求头保留字段回归测试以及已有的退役语法和 Session surface 测试共通过三个文件中的 65 项测试。生成字段保留可选的 `never`；允许可选字符串会产生必须提升版本的诊断，而原生读取方仍拒绝该退役键。
+生成的请求头保留字段回归测试以及已有的退役语法和 Session surface 测试曾通过三个文件中的 65 项测试。生成字段保留可选的 `never`；当前分类器将允许可选字符串标记为需要兼容性评审，而原生读取方仍拒绝该退役键。
 
 Producer-source 与 request-input 检查共通过 12 个文件中的 447 项测试，覆盖 provider 等价性、仅供请求使用的输入的类型拒绝、user 归属保留、source 迁移及原生 source 准入。与 tool-role 父层的生成目录相比，有四个 root 发生变化，447 个类型指纹保持不变。
 

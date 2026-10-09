@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Git Worktrees",
+    "description": "Let the agent create a new Git branch and worktree, then continue there."
+  }
+}

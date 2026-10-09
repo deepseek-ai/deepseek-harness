@@ -2,12 +2,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {
   AssistantBlock, AssistantMessageNode, ConversationLocation,
   ConversationMatch, ConversationNodeContext, ConversationNodeDefinition,
-  PartialAssistant, RequestView,
+  RequestView,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { assistantStreamFirstTokenTime } from '@deepseek-ai/dsh-llm/assistant-stream'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { trajectoryNode } from './trajectory-definition-common.ts'
+import type { TrajectoryPartialAssistant } from './trajectory-contract.ts'
 import {
   displayFailure, emptyAssistantBlock, isTokenDelta, toAssistantBlock, toAssistantBlocks,
 } from './trajectory-event-projection.ts'
@@ -37,7 +38,6 @@ interface AssistantState {
   readonly startSeq: number
   readonly startTime: number
   readonly started: boolean
-  readonly sawChunk: boolean
   readonly blocks: readonly (AssistantBlock | undefined)[]
   readonly visibleBlocks: number
   readonly firstVisibleSeq: number | undefined
@@ -62,7 +62,6 @@ function initialState(
     startSeq,
     startTime,
     started,
-    sawChunk: false,
     blocks: [],
     visibleBlocks: 0,
     firstVisibleSeq: undefined,
@@ -121,7 +120,7 @@ function updateChunk(
   time: number,
 ): AssistantState {
   if (chunk.type === 'usage') {
-    return { ...state, sawChunk: true, usage: addUsage(state.usage, chunk.usage) }
+    return { ...state, usage: addUsage(state.usage, chunk.usage) }
   }
   const blocks = [...state.blocks]
   let changedIndex = -1
@@ -173,14 +172,13 @@ function updateChunk(
       blocks[chunk.index] = toAssistantBlock(chunk.block)
       break
     default:
-      return { ...state, sawChunk: true }
+      return state
   }
   const visibleBlocks = state.visibleBlocks
     - Number(previousVisible)
     + Number(blockIsVisible(blocks[changedIndex]))
   return {
     ...state,
-    sawChunk: true,
     blocks,
     visibleBlocks,
     ...(visibleBlocks > 0 && state.firstVisibleSeq === undefined
@@ -211,7 +209,6 @@ function settleMessage(
   const blocks = toAssistantBlocks(event.data.message.content)
   return {
     ...settleTiming(state, event),
-    sawChunk: false,
     blocks,
     visibleBlocks: countVisibleBlocks(blocks),
     final: match,
@@ -300,9 +297,9 @@ function assistantRequest(
   boundary: { seq: number; time: number } | undefined,
 ): Extract<RequestView, { purpose: 'assistant' }> | undefined {
   if (!state.started) return undefined
-  const status = node !== undefined && node.interrupted !== true
-    ? 'complete'
-    : state.retry !== undefined || boundary !== undefined ? 'error' : 'running'
+  const status = node !== undefined
+    ? node.interrupted === true ? 'error' : 'complete'
+    : boundary !== undefined ? 'error' : 'running'
   return {
     purpose: 'assistant',
     startSeq: state.startSeq,
@@ -399,8 +396,16 @@ const trajectoryAssistantDefinition: ConversationNodeDefinition<AssistantState> 
     if (state === undefined) return null
     const node = finalNode(state, context)
     const boundary = closedBoundary(context)
-    const partial: PartialAssistant | null = node === undefined && boundary === undefined && state.sawChunk
-      ? { turn: state.turn, step: state.step, blocks: compactBlocks(state.blocks) }
+    const partial: TrajectoryPartialAssistant | null = node === undefined && boundary === undefined && state.blocks.length > 0
+      ? {
+        turn: state.turn,
+        step: state.step,
+        blocks: compactBlocks(state.blocks),
+        timing: {
+          stepStartTime: state.started ? state.startTime : null,
+          firstTokenTime: state.firstTokenTime ?? null,
+        },
+      }
       : null
     const request = assistantRequest(state, node, boundary)
     if (node === undefined && partial === null && request === undefined) return null

@@ -6,4 +6,4 @@ recording: authored
 header:
   class: default
 session:
-  source: ../../session/fs-edit/session.v3.jsonl
+  source: ../../session/fs-edit/session.v4.jsonl

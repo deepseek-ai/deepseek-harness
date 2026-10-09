@@ -11,6 +11,8 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
+import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
+import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import LlmRuntime, { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -39,6 +41,8 @@ it('loads from cordis.yml, counts the model\'s tool calls, and answers /tally th
     ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
+    ['@deepseek-ai/dsh-fs-local', LocalFileSystem],
+    ['@deepseek-ai/dsh-working-directory', WorkingDirectory],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-agent-loop', AgentLoop],

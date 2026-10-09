@@ -1,3 +1,4 @@
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { installProxyFromEnvironment } from '@deepseek-ai/dsh-http-proxy'
@@ -9,6 +10,7 @@ describe('workflow program environment', () => {
   it('does not expose ambient credentials, proxy settings or host loader paths', async () => {
     const ctx = new Context()
     await mountPtcRuntime(ctx)
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'stub',
@@ -27,7 +29,7 @@ describe('workflow program environment', () => {
       const run = ctx.workflowEngine.start({
         script: "return { ...globalThis.constructor.constructor('return process')().env }",
         meta: { name: 'environment', description: 'program environment' },
-        parent: fakeParent(ctx),
+        parent: await fakeParent(ctx),
       })
       try {
         const result = await run.result

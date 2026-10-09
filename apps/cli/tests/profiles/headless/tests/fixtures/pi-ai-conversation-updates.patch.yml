@@ -1,0 +1,36 @@
+# pi-ai Kimi route with dynamic prompt and tool updates over the shipped headless profile.
+- id: headless-startup
+  disabled: true
+
+- id: headless-runner
+  disabled: true
+
+- id: llm-deepseek
+  disabled: true
+
+- id: llm-pi-ai
+  config:
+    providers:
+      moonshotai:
+        apiKeyEnv: MOONSHOT_API_KEY
+        baseURL: !!js process.env.DSH_SNAPSHOT_BASE_URL
+        streamIdleTimeoutMs: 1000
+
+- id: agent-loop
+  config:
+    agents:
+      - id: main
+        provider: moonshotai
+        model: kimi-k3
+        cwd: !!js process.cwd()
+
+- id: agent-instructions
+  disabled: true
+
+# The fixture counts every model request, so title generation stays off.
+- id: session-title-llm
+  disabled: true
+
+- insert:
+    - id: dynamic-tool-prompt-updates
+      name: '../../../../../../../packages/test-support/session-snapshot/tests/fixtures/dynamic-tool-prompt-updates.ts'

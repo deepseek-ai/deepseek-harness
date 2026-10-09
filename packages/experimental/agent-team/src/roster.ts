@@ -7,7 +7,6 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { foldSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
-import type { ContinuableStart } from '@deepseek-ai/dsh-subagent'
 import { errorMessage, TeamError } from './error.ts'
 import type { TeamJournal } from './journal.ts'
 import type { TeamRuntimeLifecycle } from './lifecycle.ts'
@@ -56,8 +55,6 @@ export function resolveActiveMember(
 
 /** Owns Team identities and the lifecycle of rostered continuable children. */
 export class TeamRoster {
-  private readonly inFlightCreations = new Set<Promise<unknown>>()
-
   /**
    * @param ctx - Team service context with Agent, Session, persistence, and subagent services.
    * @param journal - authoritative Lead-log transaction owner.
@@ -167,21 +164,7 @@ export class TeamRoster {
    */
   async spawn(caller: Agent, request: SpawnTeammateRequest): Promise<SpawnTeammateResult> {
     if (this.lifecycle.disposed) throw new TeamError('Agent Teams service is disposing', 'TEAM_DISPOSED')
-    const operation = this.spawnAdmitted(caller, request)
-    this.inFlightCreations.add(operation)
-    try {
-      return await operation
-    } finally {
-      this.inFlightCreations.delete(operation)
-    }
-  }
-
-  /**
-   * Return admitted creation operations captured for ordered disposal.
-   * @returns detached snapshot ordered only by Set insertion.
-   */
-  pendingCreations(): readonly Promise<unknown>[] {
-    return [...this.inFlightCreations]
+    return await this.lifecycle.track(this.spawnAdmitted(caller, request))
   }
 
   /**
@@ -239,7 +222,7 @@ export class TeamRoster {
    * @param childIds - selected roster child ids.
    */
   async stopTeammates(root: Agent, childIds: readonly SessionId[]): Promise<void> {
-    await this.lifecycle.withTimeout(this.ctx.subagents.drainContinuableChildren(root, childIds))
+    await this.lifecycle.withTimeout(this.ctx.subagents.drainChildren(root, childIds))
   }
 
   /** Perform one creation admitted before the Team runtime disposal cutoff. */
@@ -277,9 +260,9 @@ export class TeamRoster {
       await this.journal.appendAndFlush(root, 'team/member', { version: 2, teamId: TeamId(root.id), member })
     })
 
-    let started: ContinuableStart
     try {
-      started = await this.ctx.subagents.startContinuable({
+      const started = await this.ctx.subagents.startActivation({
+        delivery: 'parent',
         childId,
         provider: request.provider,
         label: description,

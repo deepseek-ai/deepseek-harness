@@ -1,9 +1,9 @@
 /** Wire types for the active DeepSeek plugin package inventory. */
 
-/** One exact active plugin package version. */
+/** One active plugin package, with its version when available. */
 export interface DeepSeekPluginPackageIdentity {
   readonly name: string
-  readonly version: string
+  readonly version?: string
 }
 
 /** Versioned full package inventory carried by each official DeepSeek request. */

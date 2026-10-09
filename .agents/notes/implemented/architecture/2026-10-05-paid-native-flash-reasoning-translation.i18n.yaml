@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-05-paid-native-flash-reasoning-translation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-05-paid-native-flash-reasoning-translation.md
+/agent-note-paid-native-flash-translation-uses-independent-queries:
+  en: 37a2416d68e5a73d
+  zh: ae439aa6ec6a2feb
+/agent-note-paid-native-flash-translation-uses-independent-queries/problem:
+  en: 1029e393c5794564
+  zh: 6044cd7da7fc0947
+/agent-note-paid-native-flash-translation-uses-independent-queries/decision:
+  en: be443b5b9ed2d0a4
+  zh: 399c3c196a3a5858
+/agent-note-paid-native-flash-translation-uses-independent-queries/alternatives-considered:
+  en: e5ec698f302c8ae8
+  zh: b3a7d4f037ca6bdb
+/agent-note-paid-native-flash-translation-uses-independent-queries/consequences:
+  en: 74d2e9a7f22b6555
+  zh: 249e56f0c7071fe3

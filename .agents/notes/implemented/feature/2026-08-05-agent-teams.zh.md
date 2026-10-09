@@ -30,7 +30,7 @@ Lead 必须等待所需工作后才能给出最终答案。进程 teardown 仍�
 
 ## Provisioning and recovery
 
-创建操作先在 Lead Session 中追加并 flush `team/member` provisioning 快照，再通过选定 fresh 或 fork provider 启动预留的 continuable child。初始 inbox 获准前的失败会追加 failed 快照；成功会先 flush child 中已接受的 inbox 条目，再追加 active。恢复会在初始消息仍处于 pending 或已进入用户消息历史时识别它。名字由第一条 provisioning 记录永久保留，包括失败后也不能复用。dispose 会关闭准入，中止并等待已获准的创建与 mailbox dispatch 事务，再停止 roster 记录的所有 live child；failed child 在 Activation 退出前仍由 cleanup 拥有，cleanup 拒绝会让 dispose 失败。
+创建操作先在 Lead Session 中追加并 flush `team/member` provisioning 快照，再通过选定 fresh 或 fork provider 启动预留的 continuable child。初始 inbox 获准前的失败会追加 failed 快照；成功会先 flush child 中已接受的 inbox 条目，再追加 active。恢复会在初始消息仍处于 pending 或已进入用户消息历史时识别它。名字由第一条 provisioning 记录永久保留，包括失败后也不能复用。dispose 会关闭准入，中止并等待已获准的创建与发送操作，再停止 roster 记录的所有 live child；failed child 在 Activation 退出前仍由 cleanup 拥有，cleanup 拒绝会让 dispose 失败。
 
 Root 恢复时会把未终结 provisioning 记录与独立持久 child Session 对账。直接 parent 与 continuable descriptor 匹配，并且已经记录初始用户消息，才能证明准入成功并转为 active；缺失、损坏、provider／lineage 不匹配或缺少已准入消息都会转为 failed。creator 会在同一 Lead 日志 serializer 内重读终态；如果 recovery 在创建成功时先标记 failed，creator 会 drain child 并报告 provisioning conflict，而不是遗留孤儿。这样既无需重建从未保存在 Team 日志中的初始 prompt，也能约束插件 reload 竞争。
 
@@ -38,11 +38,11 @@ fresh child 不继承对话。fork child 只捕获一次 Lead 已完成 turn 前
 
 ## Mailbox and task transactions
 
-Peer 通讯使用 Lead 日志 mailbox。投递前先追加并 flush `team/message/queued`。target message 会在持久 source metadata 与短模型可见前缀中同时携带稳定 message id 和 sender identity。只有 pending inbox 条目或已记录用户消息完成 flush，Lead 日志才写入 `team/message/delivered` acknowledgement。即时准入按 target 和 queued 日志顺序串行化，恢复按同一顺序重试 queued-minus-delivered，并在冷恢复前折叠 live 或 persisted target 的 inbox／历史状态。每个当前版本 Team payload 都会经过运行时验证后才进入 replay state。Team runtime 从同步准入到 settlement 全程跟踪 dispatch 与异步 acknowledgement 工作；dispose 会关闭准入，并在移除服务前等待两者。当前 waiter 只在所属 Team event flush 成功后被唤醒。
+历史 Lead-log mailbox 仍是可读格式：queued 与 delivered 记录保留稳定身份与发送者，Team payload 校验仍适用于它们。Team 不再投递或确认这些记录；新发送遵循[直接 inbox 决策](../simplification/2026-09-26-team-direct-inbox.zh.md)。
 
 事件投影和 checkpoint 准入期间，未知 mailbox 内容保持为已解码 JSON。校验只检查其 type，不重建字段，因为通用对象解析可能省略有效的自有 `__proto__` 键。本地声明的内容变体接受结构校验；不透明的插件字段不获得 Team 语义。缓存失效是必要的，因为只修正解析器无法恢复缓存状态中省略的键。[Team 文档](../../../../packages/experimental/agent-team/README.zh.md)拥有恢复行为的说明。
 
-`send_message` 始终尝试 Steer 投递。running target 在最近的步骤边界收到消息，inactive target 在已加载时启动一个轮次，否则冷恢复。即使临时投递失败让消息保持 queued，成功也表示消息已经持久化。该机制提供进程内重试与 target Session 去重，不宣称跨进程 exactly-once。[Team Steer 消息决策](../../archived/simplification/2026-08-30-team-send-message-steer.md)负责单工具调度的理由。
+`send_message` 对 running、idle 和 cold target 使用 Steer。新发送返回 inbox 接收结果。[Team Steer 消息决策](../../archived/simplification/2026-08-30-team-send-message-steer.md)记录单一工具调度的理由。
 
 共享 task 是带 Team-local id 与单调 revision 的完整快照。每次变更都携带 `expectedRevision`。任意 member 可以创建、读取或 claim ready 且无 owner 的任务；Owner 或 Lead 可以编辑和转换；只有 Lead 可以分配给另一个 member。数字 task id 保持在安全整数分配范围内；该范围耗尽时会失败，不会复用 id。依赖必须指向未删除任务，并形成完整 DAG。删除任务保留为 tombstone。`writeScopes` 是规范化路径前缀，只产生重叠诊断，绝不会阻止 claim 或授予写权限。
 
@@ -50,9 +50,9 @@ Peer 通讯使用 Lead 日志 mailbox。投递前先追加并 flush `team/messag
 
 ## Shared checkout boundary
 
-所有 member 使用相同 cwd，并立即观察写入。策略要求 member 切分任务、记录提示性 write scope、为有序工作添加依赖，并由 Lead 检查最终 diff 和运行测试。文件系统 stale-version 拒绝后必须重新读取并 rebase 修改意图。Bash、formatter、codegen 与直接外部写入不具备等价保证。
+所有 member 创建时使用 Lead 的当前目录，并立即观察共享文件系统写入。后续目录变更仅影响各自 Session。策略要求 member 切分任务、记录提示性 write scope、为有序工作添加依赖，并由 Lead 检查最终 diff 和运行测试。文件系统 stale-version 拒绝后必须重新读取并 rebase 修改意图。Bash、formatter、codegen 与直接外部写入不具备等价保证。
 
-Worktree isolation 不是 harness runtime 行为。deployment 或 prompt 可以安排独立 worktree，但 Team 领域不会推断 branch、merge 变更或静默改变 cwd。这样保留既有 same-world subagent 与 sandbox 契约。
+Team 领域不会推断 branch、创建 worktree、merge 变更或静默改变 cwd。deployment 或调用方可以另外使用[显式工作树创建](2026-09-13-explicit-worktree-creation.zh.md)。这样保留既有 same-world subagent 与 sandbox 契约。
 
 ## Web projection
 
@@ -74,20 +74,20 @@ Web panel 读取 Lead Session 的 `agentTeam` 传输投影，因为现有投影�
 
 **在默认工具目录中启用 Team。** 拒绝，因为 scoped Team control 会覆盖同名旧全局工具，主动 delegation 也会给简单任务增加延迟和 token 成本。opt-in profile bundle 会插入 Team 并禁用旧 control，同时不向随附依赖图添加 Team 包。
 
-**使用内存 task board 与 mailbox。** 拒绝，因为 child settlement、HMR 与进程中断会丢失已接受协调状态，并让重试变得含糊。
+**使用内存 board 与 mailbox。** roster 与任务状态必须经受 settlement、HMR 与中断。历史 mailbox 记录保持可读；消息归属目标 inbox。
 
 **让 Team 工具返回未类型化 JSON。** 拒绝，因为未声明的结果类型会让 `execute` 在没有编译错误的情况下偏离对模型的承诺，也会引入在每份 roster、task 与回执上都消耗 token 的缩进。因此每个 Team 工具都声明完整的结果 schema，并由一个共享 helper 紧凑渲染。
 
 ## Testing
 
-Package test 以逐文件 100% coverage 覆盖身份、名字与权限检查、provider 选择、预留 id 持久化冲突、child-before-Lead flush 顺序、持久 provisioning 失败与 pending-inbox JSONL 对账、target-local 并发顺序、pending／history 去重、mailbox 限额、flush 后 notification、取消在途创建与 dispatch 的有界 dispose、failed member cleanup、task CAS 与 DAG 校验、write-scope warning、wait cancel／timeout、保留 inbox 的 interrupt、普通 fork 隔离、旧 control shadowing、声明 schema 的紧凑结果渲染与 scoped registration HMR。一条 keyless 产品快照会通过 `dsh --profile headless` 加载 Agent Teams profile bundle，并为两个 teammate、依赖任务、peer 投递、等待、完成和汇总固定完整的面向模型工具列表、Team policy 与持久 workflow 投影。CLI e2e 会复用同一个确定性 adapter，并验证带持久 Team 与 child 日志的正常退出。
+包测试覆盖 Team 权限、provisioning 持久性、任务转换、直接 inbox 接收、发送者归属、生命周期取消和历史 mailbox 可读性。无密钥 Team profile 快照固定 policy、工具与工作流；CLI 组合测试检查持久 Team 和 child 日志。
 
 模型可见的成员身份与可用状态遵循[工具投影说明](../../../../packages/experimental/tool-agent-team/README.zh.md)；服务驻留状态和持久身份仍保持区分。
 
 ## Consequences
 
-Lead Session 会随着完整 task／member 快照与 mailbox acknowledgement 增长。该设计用可独立检查的恢复能力换取更紧凑的 delta；配置的 task 与 pending-mail 限额限制 active state，而 deleted 与 delivered 历史会保持 append-only，直到更广泛的 Session retention 生效。
+Lead Session 保留完整 task／member 快照和历史 mailbox 记录。这优先支持可检查的恢复，而不是紧凑增量；deleted 与 delivered 历史在更广泛的 Session 保留策略生效前仍只追加。
 
-active roster member 可以不驻留，因此 `inactive` 不表示失败，send 可能产生 cold-resume 延迟。临时 inspection、resume 或 inbox 准入失败可能留下持久 queued 消息等待恢复。failed member 会永久占用名字与 member slot，使 provisioning failure 保持可见而不是静默回收身份。
+active roster 成员可能不驻留，因此 `inactive` 不表示失败，发送可能产生冷恢复延迟。准入失败会拒绝新发送。历史 pending 邮件永远不会被投递。provisioning 失败永久占用其名称和成员槽位。
 
 协调可以降低 checkout 冲突概率，但无法消除文件系统 CAS 工具之外的写入。最终 diff 与测试仍是 Lead 的集成边界。

@@ -18,8 +18,12 @@
   - text: Font size Only affects conversation content 14
   - button "Increase font size"
   - button "Decrease font size"
-  - text: px Work details Choose how much detail to show for tool calls
+  - text: px
+  - button "More font settings"
+  - text: Work details Choose how much detail to show for tool calls
   - button "Detailed"
+  - text: When to Collapse Work Details Choose when to automatically collapse work details
+  - button "On completion"
   - text: Show coding view Shows trajectory, code diffs, and all Agent presets
   - switch "Show coding view"
   - text: Keyboard shortcuts

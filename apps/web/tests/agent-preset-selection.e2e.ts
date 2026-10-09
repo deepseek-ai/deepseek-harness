@@ -18,7 +18,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
   SESSION_FORMAT_VERSION, SessionId as sessionId, type SessionEvent, type SessionHeader, type SessionId,
 } from '@deepseek-ai/dsh-session'
-import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
+import { SUBAGENT_DESCRIPTOR_VERSION } from '@deepseek-ai/dsh-subagent'
 import { createSystemMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
   captureStableAria, compareOrRefreshGolden, launchWebScaffold, seedSession, watchConsole,
@@ -163,9 +163,10 @@ async function seedSubagent(scaffold: WebScaffold, parentId: SessionId): Promise
       type: 'subagent/descriptor',
       seq: 2,
       time: SEEDED_CHILD_CREATED_AT + 2,
-      data: snapshotSubagentDescriptor({
+      data: {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
         mode: 'one-shot', provider: 'spawn', label: 'header order probe',
-      }),
+      },
     },
     {
       type: 'turn/end',
@@ -183,9 +184,10 @@ async function seedSubagent(scaffold: WebScaffold, parentId: SessionId): Promise
  * seeded session records `minimal` too, so a substring match over the whole
  * list answers before the switch has landed.
  * @param scaffold - authenticated Web Host scaffold.
+ * @param targetId - exact Session to inspect after several Sessions have been created.
  * @returns the live session's preset, or undefined before it is listed.
  */
-async function livePreset(scaffold: WebScaffold): Promise<string | undefined> {
+async function livePreset(scaffold: WebScaffold, targetId?: SessionId): Promise<string | undefined> {
   const response = await scaffold.hostFetch('/api/session/list', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -204,7 +206,7 @@ async function livePreset(scaffold: WebScaffold): Promise<string | undefined> {
       }
     }
   }
-  const preset = body.result.value?.items.find(item => item.sessionId !== SEED_ID)
+  const preset = body.result.value?.items.find(item => targetId === undefined ? item.sessionId !== SEED_ID : item.sessionId === targetId)
     ?.projections?.values.agentPreset
   return typeof preset === 'string' ? preset : undefined
 }
@@ -355,7 +357,7 @@ describe('web e2e: agent-preset selection', () => {
     await writeComposerDraft(page, composer, '')
   }, 90_000)
 
-  it('resets the hidden default to Standard while preserving the blank session until the user switches it', async () => {
+  it('preserves the current mode while New Session uses the reset Standard default', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-preset-disabled'))
     await expect.poll(() => livePreset(scaffold), { timeout: 15_000 }).toBe('standard')
 
@@ -379,16 +381,18 @@ describe('web e2e: agent-preset selection', () => {
     await page.keyboard.press('Escape')
     await expect.poll(async () => (await scaffold.ctx.agentPresets.remoteExportList()).presets.find(preset => preset.isDefault)?.id).toBe('standard')
 
-    const reuse = page.waitForResponse('**/api/session/create')
+    const creation = page.waitForResponse('**/api/session/create')
     await page.getByRole('button', { name: 'New session', exact: true }).last().click()
-    const reused = await reuse
-    expect(reused.request().postDataJSON()).toHaveProperty('payload.args.request.sessionId')
-    expect(await reused.json()).toMatchObject({ result: { ok: true, value: { agentPreset: 'minimal' } } })
+    const created = await creation
+    expect(created.request().postDataJSON()).not.toHaveProperty('payload.args.request.sessionId')
+    const createdBody = await created.json() as { result: { value: { sessionId: SessionId; agentPreset: string } } }
+    expect(createdBody).toMatchObject({ result: { ok: true, value: { agentPreset: 'standard' } } })
+    const freshSessionId = createdBody.result.value.sessionId
+    const freshConversation = page.locator(`[data-conversation-session="${freshSessionId}"]`)
+    await freshConversation.waitFor()
     await page.reload()
-    await page.getByRole('button', { name: 'Minimal mode', exact: true }).click()
-    await expect.poll(() => livePreset(scaffold), { timeout: 15_000 }).toBe('minimal')
-    await page.getByRole('menuitem', { name: /^Standard mode/ }).click()
-    await expect.poll(() => livePreset(scaffold), { timeout: 15_000 }).toBe('standard')
+    await freshConversation.waitFor()
+    await page.getByRole('button', { name: 'Standard mode', exact: true }).waitFor()
 
     await openSettings(page, 'en')
     const reopened = page.getByRole('dialog', { name: 'Settings' })
@@ -401,7 +405,7 @@ describe('web e2e: agent-preset selection', () => {
     await reopened.getByRole('button', { name: 'New task default: Standard mode' }).waitFor({ timeout: 10_000 })
     await reopened.getByRole('button', { name: 'Set as new task default: Minimal mode' }).waitFor({ timeout: 10_000 })
     await reopened.getByRole('button', { name: 'Close' }).last().click()
-    await expect.poll(() => livePreset(scaffold), { timeout: 15_000 }).toBe('standard')
+    await expect.poll(() => livePreset(scaffold, freshSessionId), { timeout: 15_000 }).toBe('standard')
     await page.getByRole('button', { name: 'Standard mode' }).waitFor({ timeout: 10_000 })
   })
 

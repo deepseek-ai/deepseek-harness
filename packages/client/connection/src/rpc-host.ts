@@ -10,7 +10,7 @@ import {
 } from './rpc.ts'
 import { clientRequestSchema } from './rpc-schema.ts'
 import { bridge } from './http-bridge.ts'
-import { isTrustedApiRequest } from './api-request-trust.ts'
+import { isRemoteAuthority, isTrustedApiRequest } from './api-request-trust.ts'
 import { API_PATH } from './api-path.ts'
 import type { BrowserAuth } from './browser-auth.ts'
 import { OperatorPeer } from './operator-peer.ts'
@@ -66,6 +66,8 @@ export class HostConnectionService extends Service implements HostConnectionHand
   private readonly interceptors = new Map<string, ConnectionRpcInterceptor>()
   private readonly fetchRoutes = new Map<string, RegisteredFetchRoute>()
 
+  readonly allowsRemoteAuthorities: boolean
+
   /**
    * Provide the Host half over the active HTTP server.
    * @param ctx - owning Connection plugin context.
@@ -80,6 +82,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
     super(ctx, 'connection')
     this.operator = new OperatorPeer(ctx)
     ctx.effect(() => () => this.operator.dispose(), 'client-connection: operator Peer')
+    this.allowsRemoteAuthorities = trustedHosts.some(isRemoteAuthority)
   }
 
   /** Generic channel registry scoped to the Context reading this service. */
@@ -100,10 +103,11 @@ export class HostConnectionService extends Service implements HostConnectionHand
     }
   }
 
-  /** Apply the configured Host/Origin fence, then browser authentication. */
+  /** Apply the Host/Origin fence, then browser authentication. */
   requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection {
-    if (!isTrustedApiRequest(request, this.trustedHosts)) return 403
-    return this.browserAuth.isAuthenticated(request) ? undefined : 401
+    const carrier = this.ctx.get('webServer')
+    if (!isTrustedApiRequest(request, this.trustedHosts, carrier?.host, carrier?.protocol ?? 'http:')) return 403
+    return this.browserAuth.isAuthenticated(request, carrier?.protocol === 'https:') ? undefined : 401
   }
 
   /** A request that passes the fence and authentication speaks for the operator. */
@@ -112,9 +116,11 @@ export class HostConnectionService extends Service implements HostConnectionHand
     return rejection === undefined ? { peer: this.operator } : { rejection }
   }
 
-  /** Authenticate an index request through the process-token exchange or cookie. */
+  /**
+   * Authenticate an index request; native TLS listeners mint Secure cookies.
+   */
   authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean {
-    return this.browserAuth.authorizeIndex(request, response)
+    return this.browserAuth.authorizeIndex(request, response, this.ctx.get('webServer')?.protocol === 'https:')
   }
 
   /** Add this process's launch token to the clean application URL. */

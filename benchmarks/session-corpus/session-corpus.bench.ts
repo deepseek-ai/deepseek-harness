@@ -7,12 +7,14 @@ import { performance } from 'node:perf_hooks'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runBuiltBenchmarkWorker } from '../support/built-worker.ts'
 import { PERFORMANCE_BUDGET_HEADROOM } from '../support/calibration.ts'
+import { recordPeakMemory, recordTimings, type BenchmarkCase, type Timing } from '../support/scaling-report.ts'
 import { anchorShape, ANCHOR_COUNT, sessionShape } from './corpus-shape.ts'
 import { subagentRank } from './synthetic-corpus.ts'
 import type {
   AnchorsReport,
   ForkReport,
   ListReport,
+  PhaseCpu,
   SearchReport,
   SeedReport,
   SessionCorpusReport,
@@ -69,7 +71,39 @@ const EXPECTED_CI_PEAK_RSS_MB = {
   fork: 750,
 } as const satisfies Record<keyof typeof RECORDED_CI_PEAK_RSS_MB, number>
 
+const CASES: Readonly<Record<CorpusName, BenchmarkCase>> = {
+  list: {
+    id: `session-corpus/list-${String(CORPUS.list)}`,
+    measures: `Cold Web Host boot, then first and repeated session.list over ${CORPUS.list.toLocaleString('en-US')} Sessions of realistic length.`,
+    affects: 'Starting DSH and showing the Session list for a heavy user.',
+  },
+  search: {
+    id: 'session-corpus/search',
+    measures: `First session.search, which builds the content index over ${CORPUS.search.toLocaleString('en-US')} Sessions, then a second query.`,
+    affects: 'Searching Session content in deployments that enable search; shipped profiles disable it.',
+  },
+  fork: {
+    id: 'session-corpus/fork',
+    measures: `session.fork for ten length strata, the p99 Session, and the longest of ${CORPUS.fork.toLocaleString('en-US')} Sessions.`,
+    affects: 'Forking a conversation to try another direction.',
+  },
+}
+
 type CorpusName = keyof typeof CORPUS
+
+/**
+ * Pair the median wall time of each list phase with the median process CPU time of the same phase.
+ * @param samples - Wall-clock samples per phase.
+ * @param cpu - CPU time per sample.
+ * @returns Endpoints for the scaled report.
+ */
+function phaseTimings(
+  samples: Readonly<Record<keyof PhaseCpu, readonly number[]>>,
+  cpu: readonly PhaseCpu[],
+): Record<keyof PhaseCpu, Timing> {
+  const phase = (key: keyof PhaseCpu): Timing => ({ ms: median(samples[key]), cpuMs: median(cpu.map(entry => entry[key])) })
+  return { bootMs: phase('bootMs'), firstMs: phase('firstMs'), repeatMs: phase('repeatMs') }
+}
 
 function topLevelRank(rank: number): number {
   return subagentRank(rank) ? rank - 1 : rank
@@ -221,6 +255,9 @@ describe('Session corpus operations', () => {
       heapUsedMb: reports.map(report => report.memory.heapUsedMb),
     }
     console.log(JSON.stringify({ benchmark: `session-corpus/list-${String(CORPUS.list)}`, samples, budgets, environment: environment() }))
+    recordTimings(CASES.list, phaseTimings(samples, reports.map(report => report.cpu)),
+      { bootMs: budgets.bootMs, firstMs: budgets.firstMs, repeatMs: budgets.repeatMs })
+    recordPeakMemory(CASES.list, { peakRssMb: Math.max(...samples.peakRssMb) })
     for (const report of reports) expect(report.itemsWithProjections).toBe(CORPUS.list)
     expectWithinBudget(median(samples.bootMs), budgets.bootMs)
     expectWithinBudget(median(samples.firstMs), budgets.firstMs)
@@ -237,6 +274,11 @@ describe('Session corpus operations', () => {
     // One sample: the cold index build dominates this file's time.
     const report = await run<SearchReport>([root('search'), 'search'])
     console.log(JSON.stringify({ benchmark: 'session-corpus/search', report, budgets, environment: environment() }))
+    recordTimings(CASES.search, {
+      firstMs: { ms: report.firstMs, cpuMs: report.cpu.firstMs },
+      repeatMs: { ms: report.repeatMs, cpuMs: report.cpu.repeatMs },
+    }, { firstMs: budgets.firstMs, repeatMs: budgets.repeatMs })
+    recordPeakMemory(CASES.search, { peakRssMb: report.memory.peakRssMb })
     expectWithinBudget(report.firstMs, budgets.firstMs)
     expectWithinBudget(report.repeatMs, budgets.repeatMs)
     expectWithinBudget(report.memory.peakRssMb, budgets.peakRssMb)
@@ -254,11 +296,13 @@ describe('Session corpus operations', () => {
       reports.push(await run<ForkReport>([root('fork'), 'fork', ...[...FORK_STRATA, FORK_P99_RANK].map(String)]))
     }
     const longest = await run<ForkReport>([root('fork'), 'fork', String(FORK_LONGEST_RANK)])
-    const forkMs = (report: ForkReport, rank: number): number => {
+    const forkEntry = (report: ForkReport, rank: number): ForkReport['forks'][number] => {
       const fork = report.forks.find(entry => entry.rank === rank)
       if (fork === undefined) throw new Error(`fork report omits rank ${String(rank)}`)
-      return fork.forkMs
+      return fork
     }
+    const forkMs = (report: ForkReport, rank: number): number => forkEntry(report, rank).forkMs
+    const forkCpuMs = (report: ForkReport, rank: number): number => forkEntry(report, rank).forkCpuMs
     const samples = {
       stratumMedianMs: rounded(reports.map(report => median(FORK_STRATA.map(rank => forkMs(report, rank))))),
       p99Ms: rounded(reports.map(report => forkMs(report, FORK_P99_RANK))),
@@ -267,6 +311,16 @@ describe('Session corpus operations', () => {
       peakRssMb: [...reports, longest].map(report => report.memory.peakRssMb),
     }
     console.log(JSON.stringify({ benchmark: 'session-corpus/fork', samples, budgets, environment: environment() }))
+    recordTimings(CASES.fork, {
+      stratumMedianMs: {
+        ms: median(samples.stratumMedianMs),
+        cpuMs: median(reports.map(report => median(FORK_STRATA.map(rank => forkCpuMs(report, rank))))),
+      },
+      p99Ms: { ms: median(samples.p99Ms), cpuMs: median(reports.map(report => forkCpuMs(report, FORK_P99_RANK))) },
+      longestMs: { ms: samples.longestMs, cpuMs: forkCpuMs(longest, FORK_LONGEST_RANK) },
+    },
+      { stratumMedianMs: budgets.stratumMedianMs, p99Ms: budgets.p99Ms, longestMs: budgets.longestMs })
+    recordPeakMemory(CASES.fork, { peakRssMb: Math.max(...samples.peakRssMb) })
     expectWithinBudget(median(samples.stratumMedianMs), budgets.stratumMedianMs)
     expectWithinBudget(median(samples.p99Ms), budgets.p99Ms)
     expectWithinBudget(samples.longestMs, budgets.longestMs)

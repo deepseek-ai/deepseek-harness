@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+新命令从 Session 的当前工作目录启动。相对 `workdir` 从该目录解析；单次调用的覆盖值与后台任务不会改变该目录。
+
 在 agent 需要运行 PowerShell 命令的任何组合中加载本插件——通常是 `ctx.shell` 由 PowerShell 执行器支撑的 Windows 组合。一旦挂载执行器提供方与 `dsh-shell-env` 注册表，它就注册 `pwsh` 工具。
 
 ### 何时选择
@@ -73,6 +75,8 @@ kind: "package-reference"
 
 <details>
 <summary>实现细节——点击展开</summary>
+
+前台与后台的结构化结果均包含 `cwd`，即执行器解析后的启动目录。持久化展示元数据携带同一值，使已结束的调用卡片保留该次调用使用的目录。命令内部的 `cd` 不会改变这个启动值；原生结果文本仍由 stdout、stderr 与状态标记组成。
 
 本节解释工具背后的设计决策，并指出实现它们的代码位置；可观察行为已在[使用本包](#use-this-package)中完整说明。
 
@@ -204,7 +208,6 @@ Non-zero exits are reported as `[exit code: N]` markers; investigate failures be
 - **Windows 沙箱下的语言模式与命名管道捕获**——在 [Windows ACL 沙箱](../../sandbox/sandbox-windows-acl/README.zh.md)下，只读 pwsh 以 ConstrainedLanguage 启动，因为其临时目录写入被拒绝，导致 PowerShell 的 AppLocker 探测失败并按拒绝处理：`Add-Type`、非核心 .NET 静态调用（`[System.IO.*]::`、`[math]::`）、COM 对象与反射会以 "only core types" 错误失败，且该模式无法从内部解除。workspace-write 的私有临时目录让探测完成，因此除非宿主策略另有规定，它保持 FullLanguage。两种受限模式都拒绝命名管道打开，因此受限命令内部的管道 stdio spawn 会以 EPERM 失败。工具描述把两条约定都教给模型；完整限制以后端 README 为准。
 - **没有持久 shell**——每次调用都启动全新的 `pwsh -Command`；持久 shell 对应物是 [`@deepseek-ai/dsh-tool-pwsh-persistent`](../tool-pwsh-persistent/README.zh.md)，它跨调用保持一个按所有者隔离的 pwsh 存活。
 - **PowerShell 方言约定**——模型必须编写 PowerShell（原生路径、`$env:` 变量），而不是 bash；没有方言翻译。
-- **会话 cwd 身份未规范化**——workdir 基准就是会话头部 cwd 原样，不像 bash 工具那样以沙箱根规范化身份为准。在约束执行器下，策略的 workspace root 确实被规范化（由共享策略服务完成），因此当原始会话 cwd 与其规范形式不同时，workdir 与约束根可能分叉——这是推迟到共享 shell 工具基座抽取的对齐差距。
 
 <a id="dev-note"></a>
 ### 开发备注

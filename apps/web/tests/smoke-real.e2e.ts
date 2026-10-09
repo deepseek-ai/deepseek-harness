@@ -30,6 +30,8 @@ import WebSocket from 'ws'
 import { REPO_ROOT, connectFreshWorkspace, newEnglishPage, probeFreePort, requireDist, saveFailureShot } from './support.ts'
 
 const WEB_SURFACE_PROMPT = fileURLToPath(new URL('./expected/web-runtime-context/web-surface-prompt.expected.md', import.meta.url))
+/** Framed user text that marks the auxiliary title request's own messages. */
+const TITLE_PROMPT_MARKER = 'Generate the session title from this JSON array of human messages'
 const authenticatedCookies = new Map<string, Promise<{ origin: string; cookie: string }>>()
 
 /** Frame a complete text turn or an open block before a transport failure. */
@@ -519,8 +521,11 @@ describe('dsh web keyless CLI smoke', () => {
       request.setEncoding('utf8')
       request.on('data', (chunk: string) => { body += chunk })
       request.on('end', () => {
-        const parsed = JSON.parse(body) as { max_tokens?: number; messages?: unknown[] }
-        const titleRequest = parsed.max_tokens === 64
+        // The request body also carries the session log, whose recorded title
+        // request contains the marker, so only this request's own messages
+        // decide what the request is.
+        const parsed = JSON.parse(body) as { messages?: unknown[] }
+        const titleRequest = JSON.stringify(parsed.messages ?? null).includes(TITLE_PROMPT_MARKER)
         const mainRequest = !titleRequest && body.includes(promptMarker)
         response.writeHead(200, { 'content-type': 'text/event-stream' })
         if (!mainRequest) {

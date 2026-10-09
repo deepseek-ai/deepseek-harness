@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-10-07-memory-limited-benchmarks.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-10-07-memory-limited-benchmarks.md
+/agent-note-memory-limited-benchmark-reruns:
+  en: 08979e022b49c675
+  zh: b0c12b1f992ac681
+/agent-note-memory-limited-benchmark-reruns/problem:
+  en: b82519a7026a1a19
+  zh: a72c4417426ec95f
+/agent-note-memory-limited-benchmark-reruns/decision:
+  en: 3cf2db98939b3994
+  zh: f80a1d3d6049381a
+/agent-note-memory-limited-benchmark-reruns/decision/cases:
+  en: 9502c61025d27f23
+  zh: f743a56404327f92
+/agent-note-memory-limited-benchmark-reruns/decision/limit-and-endpoint:
+  en: a314408967c5a450
+  zh: 2b6ed3e1a96fe272
+/agent-note-memory-limited-benchmark-reruns/calibration-evidence:
+  en: ffe31b42aa199614
+  zh: 29e4a3297ab55853
+/agent-note-memory-limited-benchmark-reruns/alternatives-considered:
+  en: 436516beabc2394f
+  zh: 7cabbecb5a05f77c
+/agent-note-memory-limited-benchmark-reruns/consequences:
+  en: cb213ef0e7506c8f
+  zh: 3da65a3981c2518d

@@ -1,9 +1,9 @@
 /**
  * CPython subprocess PTC runtime: a fresh `python3` process runs each model program under an
  * asyncio event loop with top-level ``await``. Binding calls travel on fd 3 as JSON-lines,
- * leaving stdout/stderr free for the program's own output. This is containment, not a security
- * boundary: model code has bash-equivalent trust, contained by a tempdir-only environment,
- * RLIMIT_CPU + RLIMIT_AS, wall-clock timeout, and SIGTERM→grace→SIGKILL on the process group.
+ * leaving stdout/stderr free for the program's own output. Direct file effects follow the
+ * shared sandbox policy; CPU, address-space, output, and wall-clock budgets bound each run.
+ * Process-group teardown sends SIGTERM followed by SIGKILL after the configured grace.
  *
  * The package also owns the versionless fd-3 wire protocol itself; its host-side codec and
  * hostile-frame validators are re-exported so every consumer of the wire shares one vocabulary.
@@ -11,18 +11,21 @@
  */
 
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { accessSync, copyFileSync, constants as fsConstants, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { accessSync, constants as fsConstants, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { delimiter, isAbsolute, join, resolve } from 'node:path'
 import { getHeapStatistics } from 'node:v8'
 import type { Duplex } from 'node:stream'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { PtcRuntime, DUNDER_MEMBER, PORTABLE_RESERVED_WORDS, RESERVED_BINDING_GLOBALS, RESERVED_ERROR_MEMBERS } from '@deepseek-ai/dsh-ptc-runtime'
-import type { PtcBindingErrorClass, PtcBindingFunction, PtcJsonValue, PtcRunFailure, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcBindingErrorClass, PtcBindingFunction, PtcJsonValue, PtcRunFailure, PtcRunRequest, PtcRunResult, PtcRunSandbox, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { SandboxUnavailableError, classifyRunnerFailure, isRunnerSpawnFailure } from '@deepseek-ai/dsh-sandbox'
+import type { ConfinedArgv, SandboxMode } from '@deepseek-ai/dsh-sandbox'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import { bootstrapInput, PYTHON_BOOTSTRAP_LOADER } from './launch.ts'
 import type { BootMessage, ChildToHost, ReplyMessage } from './protocol.ts'
 import { checkDoneValue, encodeJsonPlain, hasUnsafeIntegerToken, logTruncationMarker, validateChildFrame } from './protocol.ts'
 
@@ -133,68 +136,6 @@ const RUNTIME_OWNED_GLOBALS = RESERVED_BINDING_GLOBALS
 const EXCEPTION_RESERVED_MEMBERS = RESERVED_ERROR_MEMBERS
 
 const DUNDER = DUNDER_MEMBER
-
-/**
- * The `py/` scripts the interpreter must be able to open: the entry script plus
- * every module it imports from its own directory. Kept beside the built JS so a
- * consumer package with `files: ['lib', 'py']` ships both.
- */
-const PY_SCRIPTS = ['bootstrap.py', 'protocol.py']
-
-/**
- * Copy the `py/` scripts to a real filesystem directory and return the entry
- * script's path there.
- *
- * The interpreter is an EXTERNAL process, so it can only open paths the OS
- * resolves. Inside the single-file Python-SDK executable, `import.meta.url`
- * resolves into pkg's virtual filesystem, which Node reads through its patched
- * `fs` but `python3` cannot see at all — the spawn fails with ENOENT on a path
- * that exists as far as the host is concerned. `bootstrap.py` additionally
- * inserts its own directory on `sys.path` to import the sibling `protocol.py`,
- * so both files must land in the SAME real directory.
- *
- * The copy is unconditional rather than gated on a bundled-runtime probe: the
- * read goes through Node's `fs` either way, and one code path means the
- * packaged deployment runs what the tests exercise. Placement is under
- * `os.tmpdir()` with `0o700` keeps the scripts off other users' reach, but NOT
- * the model's: the child runs as the same UID as the host, so a program can
- * rewrite the very files it was started from. Hence one copy per RUN, discarded
- * at settlement — a rewrite then damages only the run that performed it, which
- * is what fresh-subprocess-per-run already promises. Sharing one copy across
- * runs made an overwritten `bootstrap.py` break the next run.
- *
- * Deliberately SYNCHRONOUS. An `await` here would open an async boundary in
- * `execute` before the run is registered in `live` and before the abort
- * listener is installed, so a disposal or an abort landing in that window would
- * be missed: `teardown` would see no runs and return while the continuation
- * went on to spawn a subprocess, and an `addEventListener('abort')` installed
- * afterwards does not replay an event that already fired. Three small
- * filesystem operations per run are not worth that class of race, and `execute`
- * already runs synchronously up to `spawn`.
- *
- * A failed copy removes the directory here, so a partial attempt never outlives
- * the call that made it; a successful one is the caller's to remove, which it
- * derives from the returned path.
- *
- * @returns the absolute path of the materialized entry script.
- */
-function materializePyScripts(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-ptc-runtime-python-'))
-  const source = fileURLToPath(new URL('../py/', import.meta.url))
-  try {
-    for (const name of PY_SCRIPTS) copyFileSync(join(source, name), join(dir, name))
-  } catch (error: unknown) {
-    try {
-      rmSync(dir, { recursive: true, force: true })
-    } catch {
-      // Swallows only a failure to remove the partial staging directory. The
-      // caller reports the copy failure that got us here, which is the
-      // diagnosable one; nothing else can act on a temp dir we cannot unlink.
-    }
-    throw error
-  }
-  return join(dir, 'bootstrap.py')
-}
 
 /**
  * A frame's RAW length is capped before JSON.parse: the 64 MiB fd-3 frame
@@ -791,17 +732,17 @@ interface ValidatedNamespace {
  * fail every live run as `abort` and AWAIT each child's exit.
  */
 interface LiveRun {
-  kill(sig: NodeJS.Signals): void
-  settle(failure: PtcRunFailure): void
+  controller: AbortController
   finished: Promise<void>
 }
 
 /**
- * The experimental {@link PtcRuntime} backend (private, not released) registering as `ptcRuntime`. Every
+ * The experimental {@link PtcRuntime} backend registering as `ptcRuntime`. Every
  * cap is validated config; every long-running operation honors the request's
  * `AbortSignal`; every disposer awaits child-process exit.
  */
 export class PythonPtcRuntime extends PtcRuntime {
+  static inject = ['sandbox', 'sandboxPolicy']
   static Config: z<Config> = z.object({
     cpuSeconds: z.number().default(60),
     maxWallMs: z.number().default(600_000),
@@ -814,6 +755,12 @@ export class PythonPtcRuntime extends PtcRuntime {
 
   readonly language = 'python'
   readonly isolation = 'process'
+
+  override get sandboxMode(): SandboxMode { return this.ctx.sandboxPolicy.defaultMode }
+
+  override get executionInstructions(): string {
+    return 'Each call runs in a fresh Python process. Relative paths use the supplied working directory; only TMPDIR is set in the environment. Direct filesystem access follows this execution\'s sandbox policy.'
+  }
 
   private readonly config: ResolvedConfig
   private readonly pythonBin: string
@@ -1019,56 +966,93 @@ export class PythonPtcRuntime extends PtcRuntime {
   private async teardown(): Promise<void> {
     this.disposed = true
     const runs = [...this.live]
-    for (const run of runs) run.settle({ kind: 'abort', message: 'runtime disposed' })
-    // Awaiting `finished` is also what clears staging: that promise resolves
-    // inside the run's own `settle`, which removes its directory first. So there
-    // is deliberately no sweep here — a second pass could only ever find an
-    // empty set, and an unreachable cleanup path is worse than none, since it
-    // reads as the real guarantee while never running.
+    for (const run of runs) run.controller.abort({ kind: 'abort', message: 'runtime disposed' } satisfies PtcRunFailure)
     await Promise.all(runs.map(run => run.finished))
   }
 
   /**
-   * Resolve directory and the experimental provider's configured wall deadline.
-   * @param request - Program inputs; explicit sandbox or timeout overrides are unsupported.
+   * Resolve authority, directory, and the configured wall deadline.
+   * @param request - Program inputs and optional resolved sandbox authority; timeout overrides are unsupported.
    * @returns Complete inputs for the provider's run method.
-   * @throws When a requested override is unsupported or cwd is relative.
+   * @throws When a requested timeout is unsupported, cwd is relative, or the provider is disposed.
    */
   resolve(request: PtcRunRequest): PtcRunSpec {
-    if (request.sandboxPolicy !== undefined) throw new Error('dsh-ptc-runtime-python: sandbox policy is unsupported')
+    if (this.disposed) throw new Error('dsh-ptc-runtime-python: resolve() after disposal')
     if (request.timeoutMs !== undefined) throw new Error('dsh-ptc-runtime-python: per-call timeout is unsupported')
-    const cwd = request.cwd ?? process.cwd()
+    const sandboxPolicy = request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
+    const cwd = request.cwd ?? sandboxPolicy.workspaceRoot
     if (!isAbsolute(cwd)) throw new Error('dsh-ptc-runtime-python: cwd must be absolute')
-    return { ...request, cwd, timeoutMs: this.config.maxWallMs }
+    return { ...request, cwd, sandboxPolicy, timeoutMs: this.config.maxWallMs }
   }
 
   /**
-   * Execute a resolved Python program; this experimental provider has no file confinement.
-   * @param request - Resolved cwd, provider deadline, program and bindings.
-   * @returns Captured output and the program outcome.
+   * Execute a resolved Python program under its file policy and configured resource budgets.
+   * @param request - Resolved authority, cwd, provider deadline, program, and bindings.
+   * @returns Captured output, confinement facts, and the program outcome.
    */
   async run(request: PtcRunSpec): Promise<PtcRunResult> {
-    if (request.sandboxPolicy !== undefined || request.timeoutMs !== this.config.maxWallMs) throw new Error('dsh-ptc-runtime-python: unsupported execution policy or timeout')
+    if (request.sandboxPolicy === undefined) throw new Error('dsh-ptc-runtime-python: run requires a resolved sandbox policy')
+    if (request.timeoutMs !== this.config.maxWallMs) throw new Error('dsh-ptc-runtime-python: unsupported execution timeout')
+    if (!isAbsolute(request.cwd)) throw new Error('dsh-ptc-runtime-python: cwd must be absolute')
     if (this.disposed) throw new Error('dsh-ptc-runtime-python: run() after disposal')
     const bindings = this.validateBindings(request)
-    if (request.signal?.aborted) {
-      return { logs: [], error: { kind: 'abort', message: messageOf(request.signal.reason) } }
+    const policy = request.sandboxPolicy
+    const sandbox: PtcRunSandbox = { mode: policy.mode, denied: false }
+    const controller = new AbortController()
+    const completion = Promise.withResolvers<void>()
+    const live: LiveRun = { controller, finished: completion.promise }
+    const complete = (): void => {
+      this.live.delete(live)
+      completion.resolve()
     }
-    let bootstrapPath: string
+    this.live.add(live)
+    const onAbort = (): void => {
+      controller.abort({ kind: 'abort', message: messageOf(request.signal?.reason) } satisfies PtcRunFailure)
+    }
+    request.signal?.addEventListener('abort', onAbort, { once: true })
+    if (request.signal?.aborted) onAbort()
+    const wallTimer = setTimeout(() => {
+      controller.abort({ kind: 'timeout', message: `wall-clock ceiling reached (${this.config.maxWallMs}ms)` } satisfies PtcRunFailure)
+    }, this.config.maxWallMs)
+    let launched = false
     try {
-      // The interpreter is an external process, so the entry script has to sit
-      // on the real filesystem; see materializePyScripts. One copy PER RUN,
-      // synchronously, so no async boundary opens before `execute` registers the
-      // run and installs the abort listener.
-      bootstrapPath = materializePyScripts()
+      controller.signal.throwIfAborted()
+      let input: string
+      try {
+        input = bootstrapInput()
+      } catch (error: unknown) {
+        return { logs: [], sandbox, error: { kind: 'worker-exit', message: `failed to read the python bootstrap: ${messageOf(error)}` } }
+      }
+      let confined: ConfinedArgv | undefined
+      // Unbuffered native output stays observable before process-group teardown.
+      let argv: [string, ...string[]] = [this.pythonBin, '-u', '-I', '-c', PYTHON_BOOTSTRAP_LOADER]
+      if (policy.mode !== 'danger-full-access') {
+        confined = await this.ctx.sandbox.confine(argv, { ...policy, mode: policy.mode }, controller.signal)
+        controller.signal.throwIfAborted()
+        sandbox.enforcement = confined.enforcement
+        // The launcher uses the deployment PATH; model code still receives only TMPDIR.
+        const runner = confined.argv[0]
+        if (runner === undefined) throw new SandboxUnavailableError(policy.mode, 'sandbox runner argv is empty')
+        const executable = resolvePythonBin(runner)
+        if (executable === undefined) throw new SandboxUnavailableError(policy.mode, `sandbox runner is not executable: ${confined.argv[0]}`)
+        argv = [executable, ...confined.argv.slice(1)]
+        confined = { ...confined, argv }
+      }
+      controller.signal.throwIfAborted()
+      const pending = this.execute({ ...request, signal: controller.signal }, bindings, argv, input, sandbox, confined, complete)
+      launched = true
+      return await pending
     } catch (error: unknown) {
-      // A full or read-only temp filesystem, or a packaged asset the deployment
-      // failed to ship, is a SUBSTRATE failure — the same class as a child that
-      // cannot start. The seam permits rejection only for misuse, so this
-      // resolves as `worker-exit` rather than throwing out of `run()`.
-      return { logs: [], error: { kind: 'worker-exit', message: `failed to stage the python bootstrap: ${messageOf(error)}` } }
+      return {
+        logs: [], sandbox,
+        error: controller.signal.aborted ? controller.signal.reason as PtcRunFailure
+          : { kind: error instanceof SandboxUnavailableError ? 'sandbox-unavailable' : 'worker-exit', message: messageOf(error) },
+      }
+    } finally {
+      clearTimeout(wallTimer)
+      request.signal?.removeEventListener('abort', onAbort)
+      if (!launched) complete()
     }
-    return await this.execute(request, bindings, bootstrapPath)
   }
   /* jscpd:ignore-end */
 
@@ -1165,69 +1149,36 @@ export class PythonPtcRuntime extends PtcRuntime {
     return bindings
   }
 
-  /** Spawn the child for one validated run and drive it to settlement. */
+  /** Spawn one confined program and retain ownership until its process group settles. */
   private execute(
-    request: PtcRunSpec,
+    request: PtcRunSpec & { signal: AbortSignal },
     bindings: Map<string, ValidatedNamespace>,
-    bootstrapPath: string,
+    argv: [string, ...string[]],
+    input: string,
+    sandbox: PtcRunSandbox,
+    confined: ConfinedArgv | undefined,
+    complete: () => void,
   ): Promise<PtcRunResult> {
-    // This run's own staging directory, removed at settlement.
-    const bootstrapDir = dirname(bootstrapPath)
-    // Explicit pipe count of 4 puts the framed-JSON channel at fd 3 in the child.
-    // The constructor resolved and validated the interpreter once; runs keep that
-    // exact path even if the host later changes PATH.
-    // `spawn` can throw SYNCHRONOUSLY — a descriptor-exhausted host (EMFILE) or a
-    // libuv-level failure surfaces here, before the Promise executor and its
-    // settlement path exist. Left uncaught it would REJECT run() (the seam
-    // permits rejection only for misuse) and strand this run's staging directory,
-    // which only settle() removes. Catch it, unlink the directory, and resolve a
-    // `worker-exit` — the same class as the async ENOENT `error` event below.
     let child: ChildProcessWithoutNullStreams
     let proto: Duplex | null
     try {
-      // `-u` keeps the interpreter's own stdout/stderr UNBUFFERED: a program
-      // that writes through `sys.__stdout__`/`sys.__stderr__` (or C-stdio
-      // layered on the same fds) must have those bytes visible to the host's
-      // stray capture immediately — a block-buffered wrapper would otherwise
-      // hold them until an explicit flush, and the host SIGTERMs the child
-      // right after the done frame, before any finalization-time flush could
-      // run. The `_LogStream` replacement of `sys.stdout`/`sys.stderr` is
-      // unaffected (it is a Python object, not the C-level stdio buffer).
-      child = spawn(this.pythonBin, ['-u', '-I', bootstrapPath], {
+      child = spawn(argv[0], argv.slice(1), {
         cwd: request.cwd,
-        // Preserve only the platform temp directory. macOS system Python emits a
-        // startup warning when TMPDIR is absent; ambient credentials, PATH, HOME,
-        // and other host state remain unavailable to model code.
         env: pythonEnvironment(),
-        detached: true, // Own process group — kill(-pid, sig) reaches subprocesses the model program spawns.
+        detached: true, // Own the process group used by termination and exit observation.
         stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
       })
-      // Fd 3 is a duplex pipe carrying protocol frames. Node types extra stdio
-      // entries as `Stream | null`; the runtime shape with `'pipe'` is a duplex,
-      // so we narrow at the boundary rather than smearing casts below. Stdout
-      // and stderr are guaranteed non-null under `'pipe'` and typed as such.
       proto = child.stdio[3] as Duplex | null
-      /* v8 ignore next 3 -- `'pipe'` stdio always populates fd 3; guarding Node's `Stream | null` typing widening. */
+      /* v8 ignore next 3 -- Node's extra-stdio typing includes null; four pipe entries supply fd 3. */
       if (proto === null) {
         throw new Error('dsh-ptc-runtime-python: python subprocess spawned without a fd-3 pipe')
       }
-      // Close the host's stdin write handle immediately: the program is an
-      // async body that reads nothing from fd 0, and a live pipe here would
-      // hold a host-side handle open past the run — a setsid-escaped descendant
-      // inheriting fd 0 would keep the host process from exiting even after the
-      // closeDeadline forced settlement. The child (and any descendant) reads
-      // EOF on fd 0 instead, and no host handle survives.
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- the boot-write-failure fake child has no stdin.
-      child.stdin?.destroy()
     } catch (error: unknown) {
-      try {
-        rmSync(bootstrapDir, { recursive: true, force: true })
-      } catch {
-        // Same swallow as settle()'s removal: `force` already absorbs a missing
-        // directory, so only a filesystem-level refusal reaches here, and the
-        // staging copy holds nothing but two checked-in scripts.
-      }
-      return Promise.resolve({ logs: [], error: { kind: 'worker-exit' as const, message: `python spawn error: ${messageOf(error)}` } })
+      complete()
+      return Promise.resolve({ logs: [], sandbox, error: {
+        kind: confined !== undefined && isRunnerSpawnFailure(error, argv[0], request.cwd) ? 'sandbox-unavailable' : 'worker-exit',
+        message: `python spawn error: ${messageOf(error)}`,
+      } })
     }
 
     return new Promise<PtcRunResult>((resolve) => {
@@ -1506,7 +1457,13 @@ export class PythonPtcRuntime extends PtcRuntime {
         }
       }
       child.stdout.on('data', (chunk: Buffer) => { captureStray(strayOut, chunk) })
-      child.stderr.on('data', (chunk: Buffer) => { captureStray(strayErr, chunk) })
+      let runnerStderr = Buffer.alloc(0)
+      child.stderr.on('data', (chunk: Buffer) => {
+        if (confined !== undefined) {
+          runnerStderr = Buffer.concat([runnerStderr, chunk]).subarray(-this.config.maxLogBytes)
+        }
+        captureStray(strayErr, chunk)
+      })
       child.stdout.on('end', () => { flushStray(strayOut) })
       child.stderr.on('end', () => { flushStray(strayErr) })
 
@@ -1846,6 +1803,11 @@ export class PythonPtcRuntime extends PtcRuntime {
               return
             }
             if (message.error) {
+              if (confined !== undefined) {
+                const failure = message.error
+                sandbox.denied = confined.denialSignatures.some(signature =>
+                  failure.message.toLowerCase().includes(signature.toLowerCase()))
+              }
               finish({ error: { kind: message.error.kind, message: capMessage(message.error.message, this.config.maxValueBytes) } })
               return
             }
@@ -2181,8 +2143,6 @@ export class PythonPtcRuntime extends PtcRuntime {
         }
       }
 
-      let finishResolve!: () => void
-      const finished = new Promise<void>((done) => { finishResolve = done })
       let resolved = false
       // The decided terminal result for a live child, recorded by finish() and
       // read by the `close` handler that settles it once the pipes have drained.
@@ -2195,25 +2155,7 @@ export class PythonPtcRuntime extends PtcRuntime {
         if (resolved) return
         resolved = true
         if (closeDeadline !== undefined) clearTimeout(closeDeadline)
-        // The child has exited by now (settle runs on `close`, or on a spawn
-        // that produced no pid), so its staging directory is no longer read and
-        // this run's copy goes away with it. Removed SYNCHRONOUSLY, before
-        // `resolve` below: a fire-and-forget removal left the directory on disk
-        // when `run()` resolved, so a caller could not observe the "gone by
-        // settlement" contract at all. Two files cost nothing to unlink here.
-        try {
-          rmSync(bootstrapDir, { recursive: true, force: true })
-        } catch {
-          // Swallows only a failure to remove this run's staging directory —
-          // `force` already absorbs a missing one, so what remains is a
-          // filesystem-level refusal. The run's own outcome is already decided
-          // and must still be delivered; the directory holds no secret, only a
-          // copy of two checked-in scripts. teardown deliberately does not
-          // sweep staging (its staging is cleared inside each run's settle), so
-          // a removal failure here is the one case the "gone by settlement"
-          // contract degrades on.
-        }
-        resolve({ ...result, logs })
+        resolve({ ...result, logs, sandbox: { ...sandbox } })
         // Mark the fiber quiescent for THIS run: drop it from `live` and resolve
         // `finished` (what teardown awaits). Deferred until the process group is
         // actually empty — dropping from `live` before then would let a
@@ -2224,8 +2166,7 @@ export class PythonPtcRuntime extends PtcRuntime {
         // JSDoc). Keeping the run in `live` until the group is reaped is exactly
         // what makes a concurrent teardown await it.
         const finalize = (): void => {
-          this.live.delete(live)
-          finishResolve()
+          complete()
         }
         // `finished` is what teardown awaits to honor "no same-group subprocess
         // outlives the fiber". When no escalation ran (normal completion, no
@@ -2302,8 +2243,7 @@ export class PythonPtcRuntime extends PtcRuntime {
         if (settled) return
         settled = true
         decided = result
-        clearTimeout(wallTimer)
-        request.signal?.removeEventListener('abort', onAbort)
+        request.signal.removeEventListener('abort', onAbort)
         // A spawn failure (ENOENT, EACCES) never produced a pid, so there is no
         // process to kill: settle now. Its `close` still fires later and reaches
         // the idempotent settle() again as a no-op.
@@ -2339,6 +2279,7 @@ export class PythonPtcRuntime extends PtcRuntime {
         closeDeadline = setTimeout(() => {
           flushStray(strayOut)
           flushStray(strayErr)
+          child.stdin.destroy()
           proto.destroy()
           child.stdout.destroy()
           child.stderr.destroy()
@@ -2348,36 +2289,29 @@ export class PythonPtcRuntime extends PtcRuntime {
       }
 
       child.on('error', (error: Error) => {
-        finish({ error: { kind: 'worker-exit', message: `python spawn error: ${error.message}` } })
+        finish({ error: { kind: confined !== undefined && isRunnerSpawnFailure(error, argv[0], request.cwd) ? 'sandbox-unavailable' : 'worker-exit', message: `python spawn error: ${error.message}` } })
       })
+      let bootstrapWriteFailed = false
       // `close` (not `exit`) is the settlement trigger: it fires only after the
       // process exits AND every stdio stream — including the fd-3 protocol pipe —
       // has drained, so a `done` frame the child wrote just before exiting is
       // always handled before we settle. macOS can deliver `exit` before that
       // final fd-3 data; keying off `close` makes the ordering irrelevant.
       child.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
-        // If done/timeout/abort already decided the result, finish() is a no-op
-        // and `decided` holds it — a SIGXCPU that arrives after a decision does
-        // not override it. Otherwise the child closed before completing: a
-        // SIGXCPU close is the kernel's own CPU meter firing — the RLIMIT_CPU
-        // soft limit, or the bootstrap's post-settlement getrusage check
-        // re-delivering SIGXCPU when a program trapped the soft limit and
-        // returned inside the soft-to-hard gap. That kernel-authoritative
-        // signal is the ONLY basis for the timeout classification: wall time
-        // is not evidence of CPU burn (a sleeping child SIGKILLed by a cgroup
-        // OOM killer, an operator, or itself consumed none), so every other
-        // signal or code — including an unsolicited SIGKILL, even the
-        // hard-limit one — reports as an opaque worker exit.
-        //
-        // The message names `cpuSeconds` as the CONFIGURED ceiling, not "the
-        // budget that fired": the child clamps RLIMIT_CPU to the stricter of
-        // `cpuSeconds` and any inherited soft limit, so under a tighter inherited
-        // cap SIGXCPU arrives before `cpuSeconds` — the host cannot see the
-        // effective value, so it states the ceiling it set rather than a second
-        // count it cannot guarantee.
-        finish(signal === 'SIGXCPU'
-          ? { error: { kind: 'timeout', message: `CPU time exhausted (limit at most the configured ${this.config.cpuSeconds}s; a stricter inherited RLIMIT_CPU can fire sooner)` } }
-          : { error: { kind: 'worker-exit', message: `python exited (code=${String(code)}, signal=${String(signal)}) before completing` } })
+        // An existing done/timeout/abort decision wins. Without a CPU report
+        // frame, only SIGXCPU identifies CPU expiry: launchers can remap signals
+        // to exit codes that programs can also choose deliberately.
+        // The configured ceiling may exceed the inherited effective RLIMIT_CPU.
+        const runnerFailure = confined === undefined ? undefined : classifyRunnerFailure(code, runnerStderr.toString('utf8'), confined.runnerFailureRules)
+        // A launcher refusal can close stdin before its fatal stderr reaches the host.
+        if (bootstrapWriteFailed && runnerFailure !== undefined) {
+          decided = { error: { kind: 'sandbox-unavailable', message: runnerFailure.detail } }
+        }
+        finish(runnerFailure !== undefined
+          ? { error: { kind: 'sandbox-unavailable', message: runnerFailure.detail } }
+          : signal === 'SIGXCPU'
+            ? { error: { kind: 'timeout', message: `CPU time exhausted (limit at most the configured ${this.config.cpuSeconds}s; a stricter inherited RLIMIT_CPU can fire sooner)` } }
+            : { error: { kind: 'worker-exit', message: `python exited (code=${String(code)}, signal=${String(signal)}) before completing` } })
         settle(decided)
       })
 
@@ -2389,30 +2323,24 @@ export class PythonPtcRuntime extends PtcRuntime {
       child.stdout.on('error', silenceStreamError)
       child.stderr.on('error', silenceStreamError)
 
-      /* jscpd:ignore-start -- wall-timer/abort/live-run wiring deliberately parallels ptc-runtime-node; see the constructor note. */
-      const wallTimer = setTimeout(() => {
-        finish({ error: { kind: 'timeout', message: `wall-clock ceiling reached (${this.config.maxWallMs}ms)` } })
-      }, this.config.maxWallMs)
-
       const onAbort = (): void => {
-        finish({ error: { kind: 'abort', message: messageOf(request.signal?.reason) } })
+        finish({ error: request.signal.reason as PtcRunFailure })
       }
-      request.signal?.addEventListener('abort', onAbort, { once: true })
-
-      const live: LiveRun = {
-        kill,
-        finished,
-        settle: (failure: PtcRunFailure) => { finish({ error: failure }) },
+      request.signal.addEventListener('abort', onAbort, { once: true })
+      const failBootstrapWrite = (error: unknown): void => {
+        if (settled) return
+        bootstrapWriteFailed = true
+        finish({ error: { kind: 'worker-exit', message: `failed to load python bootstrap: ${messageOf(error)}` } })
       }
-      this.live.add(live)
-      /* jscpd:ignore-end */
+      child.stdin.on('error', failBootstrapWrite)
+      try {
+        child.stdin.end(input)
+      } catch (error: unknown) {
+        failBootstrapWrite(error)
+        return
+      }
 
-      // Send the boot frame once fd 3 is writable. This runs LAST in run()'s
-      // synchronous setup: its failure path calls finish(), which reads
-      // wallTimer/onAbort and (through settle) live, so those bindings must
-      // already be initialized — issuing the write earlier hit their
-      // temporal dead zone and threw a ReferenceError that rejected run()
-      // instead of resolving the worker-exit it constructs here.
+      // Protocol writes can fail synchronously; cancellation and settlement must already be installed.
       const boot: BootMessage = {
         type: 'boot',
         cpuSeconds: this.config.cpuSeconds,

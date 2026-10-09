@@ -1,4 +1,6 @@
+import { externalTestParent } from '../../../subagent/subagent/tests/external-activation-helpers.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-instructions'
@@ -27,9 +29,8 @@ import SessionStore, {
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime, {
   NO_START_CAPABILITIES,
-  resolveChildCwd,
-  snapshotSubagentDescriptor,
-  type ResolvedSubagentStartRequest,
+  SUBAGENT_DESCRIPTOR_VERSION,
+  type SubagentStartRequest,
 } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-shell'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -131,6 +132,7 @@ async function harness(
   permissionConfig: NonNullable<Parameters<typeof PermissionPresetService.Config>[0]> = { presets: PRESETS, defaultPreset: 'workspace-write' },
 ): Promise<{ ctx: Context; adapter: RecordingAdapter; auto: PluginFiber }> {
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx)
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
@@ -548,10 +550,11 @@ describe('native review request', () => {
     setApprovalPolicy(session, 'never')
     const agent = agentFor(session)
     appendHeader(session, [{ name: 'probe', description: 'probe', parameters: { type: 'object' } }])
-    session.append('subagent/descriptor', snapshotSubagentDescriptor({
+    session.append('subagent/descriptor', {
+      version: SUBAGENT_DESCRIPTOR_VERSION,
       mode: 'one-shot',
       provider: 'in-process',
-    }))
+    })
     appendUser(session, 'Delete target as the delegated child task.', { kind: 'user' })
     appendUser(session, 'A later unattributed user-role fact.', { kind: 'user' })
     appendUser(session, 'Do not delete target.', {
@@ -1209,7 +1212,7 @@ describe('out-of-process delegation boundary', () => {
       scriptedDecision('allow', 'allow'),
     ])
     await ctx.plugin(SubagentRuntime)
-    let providerRequest: ResolvedSubagentStartRequest | undefined
+    let providerRequest: SubagentStartRequest | undefined
     ctx.subagents.registerProvider({
       name: 'remote-boundary',
       capabilities: NO_START_CAPABILITIES,
@@ -1219,7 +1222,6 @@ describe('out-of-process delegation boundary', () => {
         providerRequest = request
         return {
           id: SessionId('remote-boundary-child'),
-          localAgent: undefined,
           result: Promise.resolve({
             output: [{ type: 'text', text: 'remote child completed' }],
             stopReason: 'completed',
@@ -1231,11 +1233,12 @@ describe('out-of-process delegation boundary', () => {
     await ctx.plugin(ToolSubagent, {
       provider: 'remote-boundary',
       toolName: 'delegate_remote',
-      enableRunInBackground: false,
       maxDepth: 'provider-managed',
     })
 
-    const { session, agent } = autoSession(ctx, 'remote-delegation', process.cwd())
+    const agent = await externalTestParent(ctx, process.cwd())
+    const session = agent.session
+    ctx.permissionPresets.set(session, AUTO_PRESET)
     setApprovalPolicy(session, 'never')
     const schema = ctx.tools.schemas(agent).find(item => item.name === 'delegate_remote')
     if (schema === undefined) throw new Error('remote delegation tool schema is missing')
@@ -1291,11 +1294,7 @@ describe('out-of-process delegation boundary', () => {
     expect(timeline).toEqual(['review:deny', 'review:allow', 'provider:start'])
     expect(adapter.requests).toHaveLength(2)
     expect(providerRequest?.parent).toBe(agent)
-    expect(resolveChildCwd(
-      'remote-boundary',
-      undefined,
-      providerRequest?.parent.session.header.cwd,
-    )).toBe(process.cwd())
+    expect(providerRequest?.cwd).toBe(process.cwd())
     expect(providerRequest?.agentOptions).toBeUndefined()
     expect(providerRequest?.maxDepth).toBeUndefined()
     expect(providerRequest?.persona).toBeUndefined()
@@ -1520,6 +1519,7 @@ describe('cancellation and integration teardown', () => {
 
   it('publishes Auto without validating the preset table at load', async () => {
     const invalid = new Context()
+    provideWorkingDirectoryFixture(invalid)
     contexts.push(invalid)
     await invalid.plugin(LlmRuntime)
     await invalid.plugin(SessionStore)
@@ -1693,22 +1693,30 @@ describe('logged-fact failures', () => {
       expectReviewFailure(result)
     }
 
-    const missingCwd = ctx.sessions.create(SessionId('missing-cwd'))
-    ctx.permissionPresets.set(missingCwd, AUTO_PRESET)
-    appendHeader(missingCwd, [{ name: 'probe', description: 'probe', parameters: { type: 'object' } }])
-    const missingCwdId = ToolCallId('missing-cwd-call')
-    appendAssistant(missingCwd, [{ type: 'tool-call', id: missingCwdId, name: 'probe', arguments: '{}' }])
-    appendNativeCall(missingCwd, missingCwdId, 'probe', '{}')
-    expectReviewFailure(await ctx.tools.execute({
-      signal: new AbortController().signal,
-      callId: missingCwdId,
-      name: 'probe',
-      arguments: {},
-      agent: agentFor(missingCwd),
-    }), 'auto-review: the session has no working directory')
-
     expect(probe.runs()).toBe(0)
     expect(adapter.requests).toHaveLength(0)
+  })
+
+  it('reviews a Session without a header directory using the deployment fallback', async () => {
+    const { ctx, adapter } = await harness([decisionChunks('{"risk":"low","decision":"allow"}')])
+    const probe = registerProbe(ctx)
+    const session = ctx.sessions.create(SessionId('missing-cwd'))
+    ctx.permissionPresets.set(session, AUTO_PRESET)
+    appendHeader(session, [{ name: 'probe', description: 'probe', parameters: { type: 'object' } }])
+    const callId = ToolCallId('missing-cwd-call')
+    appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
+    appendNativeCall(session, callId, 'probe', '{}')
+    const result = await ctx.tools.execute({
+      signal: new AbortController().signal,
+      callId,
+      name: 'probe',
+      arguments: {},
+      agent: agentFor(session),
+    })
+    expect(result.isError).toBe(false)
+    expect(probe.runs()).toBe(1)
+    expect(adapter.requests).toHaveLength(1)
+    expect(requestSections(adapter.requests[0]!).ENVIRONMENT).toEqual({ cwd: process.cwd() })
   })
 
   it('fails closed for missing, ambiguous, or conflicting PTC facts', async () => {

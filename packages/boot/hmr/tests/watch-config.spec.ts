@@ -321,6 +321,27 @@ describe('HMR exact config paths', () => {
     expect(warn).toHaveBeenCalledWith(failure)
   })
 
+  it('absorbs a watcher error emitted after close removed its listeners', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-patch-close-error-'))
+    hmrRoots.push(dir)
+    const filename = join(dir, 'plugins.yml')
+    const ctx = await bootHmr(dir)
+    onTestFinished(() => ctx.fiber.dispose())
+    const watcher = new FSWatcher()
+    const previousFactory = configWatch.create
+    onTestFinished(() => { configWatch.create = previousFactory })
+    configWatch.create = () => { queueMicrotask(() => { watcher.emit('ready') }); return watcher }
+    const dispose = await watchConfig(ctx, filename, {}, () => {})
+    await dispose()
+    expect(watcher.listenerCount('error')).toBe(1)
+
+    // Mirror the real close(): it drops every listener before a pending write-settle poll fires.
+    expect(() => watcher.emit('error', Object.assign(
+      new Error("EPERM: operation not permitted, stat 'C:\\Temp\\dsh\\.credentials.yaml'"),
+      { code: 'EPERM', syscall: 'stat' },
+    ))).not.toThrow()
+  })
+
   it('closes a ready watcher when its context has already been disposed', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-patch-disposed-'))
     hmrRoots.push(dir)

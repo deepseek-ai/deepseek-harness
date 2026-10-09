@@ -30,6 +30,8 @@ export interface Config {
   minSpeechSeconds: number
   /** Silence separating two speech segments. */
   minSilenceSeconds: number
+  /** Recording audio restored ahead of the first VAD segment, which cold start reports late; zero disables it. */
+  vadOnsetPaddingSeconds: number
   /** Maximum decoded WAV bytes accepted by the private worker. */
   maxAudioBytes: number
   /** Deadline for runtime preparation and cold model loading. */
@@ -66,6 +68,7 @@ export const Config: z<Partial<Config>, Config> = z.object({
   vadThreshold: z.number().min(0).max(1).default(0.5),
   minSpeechSeconds: z.number().min(0).default(0.25),
   minSilenceSeconds: z.number().min(0.01).default(0.5),
+  vadOnsetPaddingSeconds: z.number().min(0).max(1).default(0.3),
   maxAudioBytes: z.natural().min(46).default(4 * 1024 * 1024),
   prepareTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(3_600_000),
   inferenceTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(120_000),

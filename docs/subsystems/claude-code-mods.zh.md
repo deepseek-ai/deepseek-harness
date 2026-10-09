@@ -53,7 +53,7 @@
 | `$.command` | `register`、`run`、`list` | 相同；`run` 一个无人回答的命令时拒绝，并点名注册它的模组 |
 | `$.tool` | `register`、`call`、`list` | 相同；注册的工具为 `mcp__<plugin>__<tool>`；`call` 运行 harness 流水线，并把工具推迟的上下文注入会话 |
 | `$.prompt` | `submit`、`compose` | `submit`；消息为 `user` 来源，除非 `asUser` 否则套上 `Message from the "<plugin>" mod:` 框架，它触发的 `prompt.submit` 以该模组为来源 |
-| `$.session` | `id`、`cwd`、`root`、`repo`、`model`、`turns`、`messages`、`usage`、`version`、`send`、`append`、`authorize`、`compact`、`surfaces` | `id`、`cwd`、`root`、`model`、`turns`、`messages`、`usage`、`version`；`cwd` 与 `root` 都报告会话工作区；在 token 计量器得知路由窗口前 `usage.context.window` 为 `0` 且无 `percent`；`rateLimits` 为空；`version` 指明本桥接 |
+| `$.session` | `id`、`cwd`、`root`、`repo`、`model`、`turns`、`messages`、`usage`、`version`、`send`、`append`、`authorize`、`compact`、`surfaces` | `id`、`cwd`、`root`、`model`、`turns`、`messages`、`usage`、`version`；`cwd` 报告已提交的当前目录；`root` 保留原始项目；在 token 计量器得知路由窗口前 `usage.context.window` 为 `0` 且无 `percent`；`rateLimits` 为空；`version` 指明本桥接 |
 | `$.state` | 按会话，热重载后保留 | 按会话，内存中；`ui.render` 期间的读取让横幅订阅该槽位 |
 | `$.store` | 按插件，持久 | 相同，在 `claude_code_mods` 存储域中，每插件 4 MiB |
 | `$.clock` | `now`、`sleep`、`after`、`every`；定时器随插件消亡 | 相同；定时器还随安排它的事件所属会话消亡，事件取消时 `sleep` 拒绝 |

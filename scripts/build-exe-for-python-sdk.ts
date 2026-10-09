@@ -7,13 +7,15 @@
  */
 
 import { spawn } from 'node:child_process'
+import { pnpmInvocation, restoreLegacyHoists } from './executable-packaging.ts'
 import { existsSync, statSync } from 'node:fs'
-import { chmod, copyFile, cp, lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, dirname, extname, join, resolve, sep } from 'node:path'
+import { basename, dirname, join, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
-import { resolveLinuxNodePtyAddon, resolveWindowsNodePtyAddons } from './build-exe-for-python-sdk-native-pty.ts'
+import { resolveLinuxNodePtyAddon, resolveWindowsNodePtyAddons } from './executable-native-pty.ts'
 import { copyOfficeSidecar, OFFICE_ASSET_IGNORES } from './build-exe-for-python-sdk-office.ts'
+import { deduplicateStagedWorkspacePackages, materializeStagedLinks } from './build-exe-for-python-sdk-staging.ts'
 import { preparePrimaryRuntime, smokePrimaryRuntime, type PrimaryRuntimeTarget } from './primary-runtime/prepare.ts'
 
 const root = resolve(import.meta.dirname, '..')
@@ -48,7 +50,9 @@ const ASSET_GLOBS = [
   'node_modules/**/*.mjs',
   'node_modules/**/package.json',
   'node_modules/**/*.json',
-  // Package-owned Markdown includes runtime skill instructions and badge content.
+  // Plugin display metadata resolves these package-owned images at runtime.
+  'node_modules/@deepseek-ai/dsh-*/**/*.{svg,png,jpg,jpeg,webp}',
+  // Package-owned Markdown includes runtime skill instructions.
   'node_modules/**/*.md',
   'node_modules/**/*.dylib',
   'node_modules/**/*.dll',
@@ -60,8 +64,6 @@ const ASSET_GLOBS = [
   'node_modules/**/*.yml',
   // web-app builds this path dynamically, so pkg cannot discover the static frontend.
   'node_modules/@deepseek-ai/dsh-web-frontend/dist/**/*',
-  // skill-badge resolves both Markdown and image resources through import.meta.url.
-  'node_modules/@deepseek-ai/dsh-skill-badge/assets/**/*',
   // The diagnosis provider extracts its PowerShell script for an external interpreter.
   'node_modules/@deepseek-ai/dsh-sandbox-windows-acl/assets/**/*',
 ]
@@ -156,8 +158,10 @@ class BuildCli {
   private constructor(
     /** Build targets; defaults to the host platform only. */
     readonly targets: readonly Target[],
-    /** Skip step 1 (`pnpm run build`); lib/ artifacts must already exist. */
+    /** Skip the package build; lib/ artifacts must already exist. */
     readonly skipBuild: boolean,
+    /** Emit package and Web artifacts without repository test and script typechecks. */
+    readonly artifactsOnly: boolean,
     /** Print every command and config patch instead of executing. */
     readonly dryRun: boolean,
   ) {}
@@ -181,6 +185,9 @@ class BuildCli {
       console.log(BuildCli.usage())
       process.exit(0)
     }
+    if (values['skip-build'] && values['artifacts-only']) {
+      throw new Error('build-exe-for-python-sdk: --skip-build and --artifacts-only cannot be combined.')
+    }
     const targets = values.targets === undefined
       ? [Target.host()]
       : values.targets.split(',').map(part => part.trim()).filter(part => part !== '').map(spec => Target.parse(spec))
@@ -193,7 +200,7 @@ class BuildCli {
       }
       seen.add(key)
     }
-    return new BuildCli(targets, values['skip-build'], values['dry-run'])
+    return new BuildCli(targets, values['skip-build'], values['artifacts-only'], values['dry-run'])
   }
 
   private static parseRaw(argv: string[]) {
@@ -202,6 +209,7 @@ class BuildCli {
       options: {
         'targets': { type: 'string' },
         'skip-build': { type: 'boolean', default: false },
+        'artifacts-only': { type: 'boolean', default: false },
         'dry-run': { type: 'boolean', default: false },
         'help': { type: 'boolean', default: false },
       },
@@ -215,6 +223,7 @@ class BuildCli {
       '  --targets=<t1,t2,...>  pkg targets, e.g. node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-macos-x64,node24-win-x64.',
       '                         Default: the host platform only (on node24).',
       '  --skip-build           skip `pnpm run build` (lib/ artifacts must already exist).',
+      '  --artifacts-only       omit repository test and script typechecks from the artifact build.',
       '  --dry-run              print every command and config patch without executing.',
       '  --help                 print this help.',
       '',
@@ -222,29 +231,6 @@ class BuildCli {
       `Stages the node carrier in ${PYTHON_RUNTIME_DIR}/${PYTHON_NODE_SUBDIR} and writes executables to ${OUT_DIR}/.`,
     ].join('\n')
   }
-}
-
-function pnpmInvocation(args: string[]): [command: string, args: string[]] {
-  const entrypoint = process.env.npm_execpath?.trim()
-  if (entrypoint !== undefined && entrypoint !== '') {
-    const extension = extname(entrypoint).toLowerCase()
-    if (extension === '.js' || extension === '.cjs' || extension === '.mjs') {
-      return [process.execPath, [entrypoint, ...args]]
-    }
-    if (extension !== '.cmd') return [entrypoint, args]
-  }
-  const home = process.env.PNPM_HOME?.trim()
-  if (home !== undefined && home !== '') {
-    const packageBin = resolve(home, '..', 'pnpm', 'bin')
-    for (const filename of ['pnpm.mjs', 'pnpm.cjs']) {
-      const candidate = resolve(packageBin, filename)
-      if (existsSync(candidate)) return [process.execPath, [candidate, ...args]]
-    }
-  }
-  if (process.platform === 'win32') {
-    throw new Error('build-exe-for-python-sdk: pnpm must expose a JavaScript entrypoint through npm_execpath or PNPM_HOME on Windows.')
-  }
-  return ['pnpm', args]
 }
 
 /**
@@ -281,7 +267,8 @@ class SingleExeBuild {
       console.log('build-exe-for-python-sdk: skipping pnpm run build (--skip-build)')
       return
     }
-    await this.runPnpm('build', ['run', 'build'])
+    const args = this.cli.artifactsOnly ? ['run', 'build', '--artifacts-only'] : ['run', 'build']
+    await this.runPnpm('build', args)
   }
 
   /** Clear and deploy the runtime closure into the node carrier. */
@@ -291,7 +278,7 @@ class SingleExeBuild {
     }
     if (this.cli.dryRun) console.log(`build-exe-for-python-sdk: [dry-run] rm -rf ${this.staging}`)
     else await rm(this.staging, { recursive: true, force: true })
-    await this.runPnpm('deploy', [
+    try { await this.runPnpm('deploy', [
       '--filter',
       DEPLOY_ROOT_PACKAGE,
       'deploy',
@@ -302,8 +289,12 @@ class SingleExeBuild {
       '--config.node-linker=hoisted',
       '--config.auto-install-peers=false',
       '--config.link-workspace-packages=true',
+      '--config.hoist-workspace-packages=false',
       this.staging,
-    ])
+    ]) } finally {
+      // Legacy deploy records production-only workspace state; restore the development installation before exec.
+      await this.runPnpm('restore development dependencies', ['install', '--offline', '--frozen-lockfile', '--prod=false', '--ignore-scripts'])
+    }
     await this.restoreLegacyHoists()
     await this.materializeStagedLinks()
     if (this.cli.dryRun) {
@@ -324,38 +315,8 @@ class SingleExeBuild {
       console.log('build-exe-for-python-sdk: [dry-run] restore direct dependencies omitted by legacy deploy')
       return
     }
-    const manifestPath = join(this.staging, 'package.json')
-    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
-      dependencies?: Record<string, string>
-    }
-    const sourceNodeModules = resolve(root, DEPLOY_SOURCE_NODE_MODULES)
-    const restored: string[] = []
-    for (const dependency of Object.keys(manifest.dependencies ?? {}).sort()) {
-      const destination = join(this.staging, 'node_modules', dependency)
-      if (existsSync(destination)) continue
-      const source = join(sourceNodeModules, dependency)
-      if (!existsSync(source)) {
-        throw new Error(
-          `build-exe-for-python-sdk: deployed dependency ${dependency} is absent from both ${destination} and ${source}.`,
-        )
-      }
-      await mkdir(dirname(destination), { recursive: true })
-      const nestedNodeModules = join(source, 'node_modules')
-      await cp(source, destination, {
-        recursive: true,
-        dereference: true,
-        filter: path => path !== nestedNodeModules && !path.startsWith(nestedNodeModules + sep),
-      })
-      restored.push(dependency)
-    }
-    const stillMissing = Object.keys(manifest.dependencies ?? {})
-      .filter(dependency => !existsSync(join(this.staging, 'node_modules', dependency)))
-    if (stillMissing.length > 0) {
-      throw new Error(`build-exe-for-python-sdk: staged dependencies remain missing: ${stillMissing.join(', ')}.`)
-    }
-    if (restored.length > 0) {
-      console.log(`build-exe-for-python-sdk: restored legacy deploy hoists: ${restored.join(', ')}`)
-    }
+    const restored = await restoreLegacyHoists(this.staging, resolve(root, DEPLOY_SOURCE_NODE_MODULES))
+    if (restored.length > 0) console.log(`build-exe-for-python-sdk: restored legacy deploy hoists: ${restored.join(', ')}`)
   }
 
   /** Replace deploy-time package links with files and reject any remaining link. */
@@ -364,41 +325,8 @@ class SingleExeBuild {
       console.log('build-exe-for-python-sdk: [dry-run] materialize staged package links')
       return
     }
-    const nodeModules = join(this.staging, 'node_modules')
-    let remaining = await this.findSymlink(nodeModules)
-    while (remaining !== undefined) {
-      const segments = remaining.slice(nodeModules.length + 1).split(sep)
-      const binIndex = segments.lastIndexOf('.bin')
-      if (binIndex >= 0) {
-        await rm(join(nodeModules, ...segments.slice(0, binIndex + 1)), { recursive: true, force: true })
-        remaining = await this.findSymlink(nodeModules)
-        continue
-      }
-      const destination = remaining
-      const source = await realpath(destination)
-      const nestedNodeModules = join(source, 'node_modules')
-      await rm(destination, { recursive: true, force: true })
-      await cp(source, destination, {
-        recursive: true,
-        dereference: true,
-        filter: path => path !== nestedNodeModules && !path.startsWith(nestedNodeModules + sep),
-      })
-      remaining = await this.findSymlink(nodeModules)
-    }
-  }
-
-  /** Return the first symbolic link below a directory, if one exists. */
-  private async findSymlink(directory: string): Promise<string | undefined> {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const path = join(directory, entry.name)
-      const metadata = await lstat(path)
-      if (metadata.isSymbolicLink()) return path
-      if (metadata.isDirectory()) {
-        const nested = await this.findSymlink(path)
-        if (nested !== undefined) return nested
-      }
-    }
-    return undefined
+    await materializeStagedLinks(this.staging)
+    await deduplicateStagedWorkspacePackages(this.staging, root)
   }
 
   /** Add the executable entry and pkg assets to the staged manifest. */

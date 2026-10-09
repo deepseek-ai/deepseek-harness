@@ -1,3 +1,4 @@
+import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 /** Default-off settings and per-session model-selection decisions. */
 
 import { describe, expect, it, vi } from 'vitest'
@@ -44,6 +45,7 @@ async function boot(withPreset = true): Promise<Context> {
   selectionConfigs.set(ctx, await liveConfig(ctx, SubagentModelSelectionConfig))
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
+  await mountWorkingDirectoryFixture(ctx)
   subagentConfigs.set(ctx, await liveConfig(ctx, SubagentRuntime))
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   if (withPreset) {
@@ -51,7 +53,6 @@ async function boot(withPreset = true): Promise<Context> {
     await preset.ctx.plugin(tool, {
       provider: 'spawn',
       modelSelectionSettings: true,
-      backgroundMode: 'continuable',
     })
     modelSelectionPresets.set(ctx, preset)
   }
@@ -174,7 +175,6 @@ describe('SubagentModelSelectionConfig', () => {
           tool.apply(runtimeCtx, {
             provider: 'spawn',
             modelSelectionSettings: true,
-            backgroundMode: 'continuable',
           }, agent.session)
         })
         await fiber.await()
@@ -244,7 +244,6 @@ describe('SubagentModelSelectionConfig', () => {
     await preset.ctx.plugin(tool, {
       provider: 'spawn',
       modelSelectionSettings: true,
-      backgroundMode: 'continuable',
     })
 
     let enabledBinding: ReturnType<typeof bindScopeParent> | undefined
@@ -299,7 +298,6 @@ describe('SubagentModelSelectionConfig', () => {
     await preset.ctx.plugin(tool, {
       provider: 'spawn',
       modelSelectionSettings: true,
-      backgroundMode: 'continuable',
     })
     let binding: ReturnType<typeof bindScopeParent> | undefined
     const handle = await ctx.agents.create({
@@ -368,6 +366,7 @@ describe('SubagentModelSelectionConfig', () => {
   it('requires both the Host setting owner and a scoped standing preset', async () => {
     const withoutSettings = new Context()
     await mountAgentLoopTestDependencies(withoutSettings)
+    await mountWorkingDirectoryFixture(withoutSettings)
     await withoutSettings.plugin(SubagentRuntime)
     expect(() => {
       tool.apply(withoutSettings, {
@@ -383,7 +382,6 @@ describe('SubagentModelSelectionConfig', () => {
       tool.apply(withoutAgent, {
         provider: 'spawn',
         modelSelectionSettings: true,
-        backgroundMode: 'continuable',
       })
     }).toThrow('requires a scoped preset Context')
 
@@ -395,6 +393,7 @@ describe('SubagentModelSelectionConfig', () => {
     try {
       selectionConfigs.set(ctx, await liveConfig(ctx, SubagentModelSelectionConfig))
       await ctx.plugin(SessionProjectionRegistry)
+      await mountWorkingDirectoryFixture(ctx)
       subagentConfigs.set(ctx, await liveConfig(ctx, SubagentRuntime))
       const childId = SessionId('child-without-session-registry')
       const child = Session.create(childId, undefined, {
@@ -430,7 +429,7 @@ it('reads the saved default depth at each delegation without remounting the tool
       inheritsParentContext: false,
       start: async (request) => {
         depths.push(request.maxDepth)
-        return { id: SessionId(`depth-${depths.length}`), localAgent: undefined,
+        return { id: SessionId(`depth-${depths.length}`),
           result: Promise.resolve({ output: [], stopReason: 'completed' as const }), dispose: async () => {} }
       },
     })

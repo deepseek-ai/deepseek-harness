@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-tool-jobs` to inspect and control background commands, PTY work, and subagents through `job_output`, `job_list`, and `job_kill`. Reads can wait within a configured timeout, list results identify each job's kind and status, and cancellation settles only after the work stops. When owned work finishes, the agent receives an in-session notice: busy agents receive it in their next step, while idle agents are woken by a follow-up turn. Configuration controls wait limits, completion delivery, and an optional cap on consecutive wakeups. Stream output is consumed by one reader, and pending notices do not survive owner disposal.
+Use `dsh-tool-jobs` to inspect and control background commands and PTY work through `job_output`, `job_list`, and `job_kill`. Reads can wait within a configured timeout, list results identify each job's kind and status, and cancellation settles only after the work stops. When owned work finishes, the agent receives an in-session notice: busy agents receive it in their next step, while idle agents are woken by a follow-up turn. Configuration controls wait limits, completion delivery, and an optional cap on consecutive wakeups. Stream output is consumed by one reader, and pending notices do not survive owner disposal.
 
 ## Table of Contents
 
@@ -74,7 +74,7 @@ This section explains the design decisions behind the tools and points at the co
 
 ### Design philosophy
 
-- **Kind-independent controls.** The same three tools read, list, and cancel jobs of every producer kind — bash, subagent, PTY — because all of them register through the generic `ctx.jobs` runtime.
+- **Kind-independent controls.** The same three tools read, list, and cancel jobs of every producer kind — bash, PTY — because all of them register through the generic `ctx.jobs` runtime.
 - **Delivery is owned here; recipients are the registry's.** The plugin decides how an unreported completion reaches the owner — injected into a busy step, or a woken turn on an idle owner — while the registry routes each settlement to the listeners its owner's scope chain reaches, so a mount under one preset never sees another preset's agents, and an agent reads exactly one notice per completion however many presets are mounted.
 - **Producer-owned output bounds.** When a producer supplies `outputLimitBytes`, the complete model-facing result — output read, terminal kill snapshot, or completion notice — is capped after status and notice metadata are added; producers that omit it keep unbounded behavior.
 

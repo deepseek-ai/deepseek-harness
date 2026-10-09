@@ -1,3 +1,4 @@
+import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, {
@@ -105,6 +106,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(tool, { provider: 'unused' })
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
@@ -114,6 +116,7 @@ describe('list_subagent_models', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     registerListSubagentModels(ctx, { routes: [{ provider: 'alpha', model: 'fast' }] })
     const result = await call(ctx, {})

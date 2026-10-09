@@ -1,4 +1,4 @@
-import { Context } from '@deepseek-ai/cordis'
+import { createRuntimeContext } from './setup.ts'
 import { expect, it, vi } from 'vitest'
 import { logTruncationMarker } from '../src/protocol.ts'
 
@@ -28,7 +28,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 const { PythonPtcRuntime } = await import('../src/index.ts')
 
 it('seals stray fragments without recopying the sealed prefix', async () => {
-  const ctx = new Context()
+  const ctx = await createRuntimeContext()
   const fiber = await ctx.plugin(PythonPtcRuntime, { maxLogBytes: 200_000, maxWallMs: 30_000 })
   const realConcat = Buffer.concat.bind(Buffer)
   let copied = 0
@@ -60,7 +60,7 @@ it.each([
   { name: 'illegal UTF-8 bytes', payload: 'b"\\xff" * 3200' },
   { name: 'CESU-8 lone surrogates', payload: 'b"\\xed\\xa0\\x80" * 1100' },
 ])('bounds $name by their U+FFFD-decoded cost', async ({ payload }) => {
-  const ctx = new Context()
+  const ctx = await createRuntimeContext()
   const fiber = await ctx.plugin(PythonPtcRuntime, { maxLogBytes: 3072, maxWallMs: 30_000 })
   const realConcat = Buffer.concat.bind(Buffer)
   let maxConcat = 0

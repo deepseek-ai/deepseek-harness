@@ -21,6 +21,7 @@ import { SessionManager } from './manager.ts'
 import type { SessionRemotes } from './remotes.ts'
 import type { SessionListPhase, SessionSearchResultItem, SessionProjectionSnapshot } from './manager.ts'
 import type { Session } from './session.ts'
+import type { SessionListEntry } from './lineage.ts'
 
 /** Session list row projected from the host list RPC plus live stream increments. */
 export interface SessionSummary {
@@ -33,6 +34,8 @@ export interface SessionSummary {
   parentId?: SessionId
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
   origin?: 'subagent'
+  /** Format classification supplied by the Host list, when available. */
+  formatStatus?: SessionListEntry['formatStatus']
   /** Host running state for `ids` members; a display fallback for other rows. */
   running: boolean
   /** Local ownership counts; Host metadata refreshes cannot overwrite them. */
@@ -40,7 +43,7 @@ export interface SessionSummary {
   /**
    * New Session presentation and reuse eligibility, derived from the Host
    * summary, `sessionListMetadata`, and client acceptance/running observations.
-   * New Session reuses a blank one targeting the same workspace. Filtering
+   * Workspace reconnection may reuse a blank in the same workspace. Filtering
    * stays with the consumer: the store carries every row, while the Workspace
    * browser shows only the selected blank entry.
    */
@@ -332,14 +335,14 @@ export class ClientSessions implements ISessions {
    * Resolve an already discovered direct-parent address without opening it.
    * Feature plugins use this to avoid Agent-bound RPCs in persisted child views.
    * @param id - possible addressed child id.
-   * @returns A retained or loaded-catalog address, without retaining a new selection or scope.
+   * @returns A retained, catalog-derived, or unknown-mode listed address, without retaining a new selection or scope.
    */
   subagentAddress(id: SessionId): SubagentAddress | undefined {
     return this.manager.subagentAddress(id)
   }
 
   /**
-   * Load all Session projections once per connection; retry an unsuccessful initial read.
+   * Read projections without starting migration; retry failed or migration-deferred reads.
    * @param sessionId - Session to inspect without opening its conversation.
    */
   refreshProjections(sessionId: SessionId): Promise<void> {
@@ -443,7 +446,7 @@ export class ClientSessions implements ISessions {
    *   seq (a real event seq the caller already knows; a cut inside an open
    *   turn is balanced Host-side with synthetic closers, and omission selects
    *   the latest completed-turn prefix), and whether to increment an
-   *   inherited durable title before resolving.
+   *   inherited durable title before resolving, plus permission to start source migration.
    * @returns the child session id.
    * @throws {SessionForkError} with the source id.
    * @throws {Error} when a requested child-title rename fails after creation.
@@ -453,6 +456,7 @@ export class ClientSessions implements ISessions {
     atSeq?: number
     increaseTitle?: boolean
     onCreated?: (childId: SessionId) => void
+    allowMigration?: boolean
   }): Promise<SessionId> {
     const sourceTitle = opts.increaseTitle
       ? this.list.getSnapshot().byId[opts.sessionId]?.title
@@ -460,6 +464,7 @@ export class ClientSessions implements ISessions {
     const result = await this.manager.fork({
       sessionId: opts.sessionId,
       ...(opts.atSeq === undefined ? {} : { atSeq: SessionSeq(opts.atSeq) }),
+      ...(opts.allowMigration === undefined ? {} : { allowMigration: opts.allowMigration }),
     })
     if (!result.ok) throw new SessionForkError(result.error, opts.sessionId)
     this.projectList()
@@ -622,6 +627,7 @@ export class ClientSessions implements ISessions {
         retainedBy: this.retentionSnapshot(entry.sessionId).retainedBy,
         blank: entry.blank,
         updatedAt: entry.updatedAt,
+        formatStatus: entry.formatStatus,
         ...(entry.projectionValues === undefined
           ? {}
           : { projectionValues: entry.projectionValues }),
@@ -633,6 +639,7 @@ export class ClientSessions implements ISessions {
     }
     for (const [parentId, projection] of Object.entries(projectionsBySession)) {
       for (const child of projection.values.subagentCatalog ?? []) {
+        if (child.mode === 'external') continue
         const childId = child.id
         const summary = byId[childId]
         const projectionValues = summary?.projectionValues ?? this.manager.projectionValues(childId)

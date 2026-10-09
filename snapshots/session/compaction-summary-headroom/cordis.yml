@@ -1,10 +1,13 @@
 # Proactive compaction with a bounded message budget.
 
+- id: agent-instructions
+  disabled: true
+
 - id: llm-deepseek
   config:
     models:
       - id: deepseek-v4-flash
-        contextWindow: 8382
+        contextWindow: 8582
         maxTokens: 1000
 
 - id: compaction-basic
@@ -12,3 +15,7 @@
     thresholdRatio: 0.8
     headroomTokens: 1800
     retainTokens: 20
+
+- insert:
+    - id: compaction-working-directory
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/compaction-working-directory.ts'

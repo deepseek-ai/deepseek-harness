@@ -224,7 +224,7 @@ describe('accepted persistence baseline', () => {
     }
   })
 
-  it.each(['required field', 'changed type'] as const)('refuses a breaking V4 %s before rendering or writing', (kind) => {
+  it.each(['required field', 'changed type'] as const)('requires an explicit decision for V4 %s before rendering or writing', (kind) => {
     const root = fixture()
     finalize(root)
     const after = inventory(kind === 'required field' ? { value: 'number', label: 'string' } : { value: 'boolean' }, 4)
@@ -234,13 +234,13 @@ describe('accepted persistence baseline', () => {
       rendered = true
       return []
     })) as { ok: boolean; code: string; changes: PersistenceTypeChange[] }
-    expect(result).toMatchObject({ ok: false, code: 'finalized-format-changed' })
+    expect(result).toMatchObject({ ok: false, code: 'decision-required' })
     expect(result.changes.length).toBeGreaterThan(0)
-    expect(result.changes.some(change => change.requiresVersionBump)).toBe(true)
+    expect(result.changes.some(change => change.requiresCompatibilityReview)).toBe(true)
     expect(rendered).toBe(false)
     expect(contents(root)).toEqual(before)
     commitCurrent(root, after)
-    expect(() => verifyPersistenceChanges(root, after)).toThrow('Breaking changes relative to the accepted Session format 4 baseline')
+    expect(() => verifyPersistenceChanges(root, after)).toThrow('unacknowledged persistence type changes')
   })
 
   it('allows qualified V4 attribution additions through a new same-version acknowledgement', () => {
@@ -251,7 +251,7 @@ describe('accepted persistence baseline', () => {
     finalize(root, current)
     const added = attributedRoot([EXISTING_SOURCE, { kind: 'new-attribution' }], { policy: attributionPolicy(['new-attribution']) })
     const after = { ...current, roots: current.roots.map(root => root.key === source.key ? added : root) }
-    expect(classifyPersistenceChange(source, added)).toEqual([expect.objectContaining({ kind: 'attribution-kind-added', requiresVersionBump: false })])
+    expect(classifyPersistenceChange(source, added)).toEqual([expect.objectContaining({ kind: 'attribution-kind-added', requiresCompatibilityReview: false })])
     const before = contents(root)
     runPersistenceChanges(['--record', COMPATIBLE_ID, '--prose', proseFile(root)], root, () => after)
     expect(runPersistenceChanges(['--check'], root, () => after)).toContain('roots match')
@@ -262,7 +262,7 @@ describe('accepted persistence baseline', () => {
     }
   })
 
-  it('keeps later unaccepted compatible records editable and rejects a breaking successor without its own version transition', () => {
+  it('keeps later unaccepted records editable and requires an explicit decision for a changed optional field', () => {
     const root = fixture()
     finalize(root)
     const first = inventory({ value: 'number', 'label?': 'string' }, 4)
@@ -273,10 +273,10 @@ describe('accepted persistence baseline', () => {
     expect(loadPersistenceFinalization(root, loadPersistenceHistory(root))?.acceptedRecords.has(COMPATIBLE_ID)).toBe(false)
     const breaking = inventory({ value: 'number', 'label?': 'number', 'extra?': 'boolean' }, 4)
     const accepted = inventory({ value: 'number' }, 4).roots[2]!
-    expect(classifyPersistenceChange(accepted, breaking.roots[2]!).every(change => !change.requiresVersionBump)).toBe(true)
+    expect(classifyPersistenceChange(accepted, breaking.roots[2]!).every(change => !change.requiresCompatibilityReview)).toBe(true)
     const before = contents(root)
     expect(() => runPersistenceChanges(['--record', '2026-09-20-breaking-v4', '--prose', proseFile(root)], root, () => breaking))
-      .toThrow("this record's own increasing SessionHeader.version")
+      .toThrow('--decision')
     expect(contents(root)).toEqual(before)
   })
 
@@ -303,7 +303,7 @@ describe('accepted persistence baseline', () => {
     expect(() => runPersistenceChanges(['--update', FINALIZED_ID], root, () => after)).toThrow('cannot update finalized acknowledgement')
     const later = inventory({ value: 'string' }, 5)
     expect(() => runPersistenceChanges(['--record', '2026-09-20-without-version', '--prose', proseFile(root)], root, () => later))
-      .toThrow("this record's own increasing SessionHeader.version")
+      .toThrow('--decision')
   })
 
   it.each([4, 5])('detects a consistently rewritten accepted record while the writer is V%s', (version) => {
@@ -429,7 +429,7 @@ describe('persistence change classification', () => {
     finalize(root, before)
     const after = { ...before, roots: before.roots.map(root => root.kind === 'event' ? nextEvent : root) }
     expect(classifyPersistenceChange(oldEvent, nextEvent))
-      .toEqual([expect.objectContaining({ kind: 'payload-version-added', requiresVersionBump: false })])
+      .toEqual([expect.objectContaining({ kind: 'payload-version-added', requiresCompatibilityReview: false })])
     runPersistenceChanges(['--record', COMPATIBLE_ID, '--prose', proseFile(root)], root, () => after)
     verifyPersistenceChanges(root, after)
   })
@@ -443,29 +443,29 @@ describe('persistence change classification', () => {
       versionedEvent([...variants, { version: 0.5, mode: 'unknown' }]),
       versionedEvent([{ version: 0, mode: 'one-shot', extra: true }, variants[1]!, { version: 1, mode: 'unknown' }]),
       versionedEvent([{ version: 1, mode: 'unknown' }]),
-    ]) expect(classifyPersistenceChange(before, after).some(change => change.requiresVersionBump)).toBe(true)
+    ]) expect(classifyPersistenceChange(before, after).some(change => change.requiresCompatibilityReview)).toBe(true)
     const expanded = versionedEvent([...variants, { version: 1, mode: 'unknown' }])
-    expect(classifyPersistenceChange(expanded, before).some(change => change.requiresVersionBump)).toBe(true)
+    expect(classifyPersistenceChange(expanded, before).some(change => change.requiresCompatibilityReview)).toBe(true)
     expect(classifyPersistenceChange({ ...before, surface: true }, { ...expanded, surface: true })
-      .some(change => change.requiresVersionBump)).toBe(true)
+      .some(change => change.requiresCompatibilityReview)).toBe(true)
     expect(classifyPersistenceChange({ ...before, kind: 'header' }, { ...expanded, kind: 'header' })
-      .some(change => change.requiresVersionBump)).toBe(true)
+      .some(change => change.requiresCompatibilityReview)).toBe(true)
     const unversioned = unionBody([[{ name: 'mode', type: 2, optional: false }]])
-    expect(classifyPersistenceChange(unversioned, expanded).some(change => change.requiresVersionBump)).toBe(true)
+    expect(classifyPersistenceChange(unversioned, expanded).some(change => change.requiresCompatibilityReview)).toBe(true)
   })
 
   it('treats a new optional payload subtree as one additive change even with required descendants', () => {
     const before = typeRoot('event:example/value', { value: 'string' })
     const after = typeRoot('event:example/value', { value: 'string', 'details?': { name: 'string', count: 'number' } })
-    expect(classifyPersistenceChange(before, after)).toEqual([{ path: 'event:example/value.data.details', kind: 'optional-property-added', description: 'optional property added', requiresVersionBump: false }])
+    expect(classifyPersistenceChange(before, after)).toEqual([{ path: 'event:example/value.data.details', kind: 'optional-property-added', description: 'optional property added', requiresCompatibilityReview: false }])
   })
 
   it('permits required-to-optional payload properties while rejecting opposite changes, type changes, and removals', () => {
     const required = typeRoot('event:example/value', { value: 'string' })
     const optional = typeRoot('event:example/value', { 'value?': 'string' })
-    expect(classifyPersistenceChange(required, optional).every(change => !change.requiresVersionBump)).toBe(true)
+    expect(classifyPersistenceChange(required, optional).every(change => !change.requiresCompatibilityReview)).toBe(true)
     for (const after of [required, typeRoot('event:example/value', { 'value?': 'number' }), typeRoot('event:example/value', {})]) {
-      expect(classifyPersistenceChange(optional, after).some(change => change.requiresVersionBump)).toBe(true)
+      expect(classifyPersistenceChange(optional, after).some(change => change.requiresCompatibilityReview)).toBe(true)
     }
   })
 
@@ -485,7 +485,7 @@ describe('persistence change classification', () => {
     }
     const differences = classifyPersistenceChange(unionRoot(false), unionRoot(true))
     expect(differences.length).toBeGreaterThan(0)
-    expect(differences.every(change => !change.requiresVersionBump)).toBe(true)
+    expect(differences.every(change => !change.requiresCompatibilityReview)).toBe(true)
   })
 
   it('allows optional additions across undiscriminated union arms', () => {
@@ -493,7 +493,7 @@ describe('persistence change classification', () => {
     const second = [{ name: 'b', type: 3, optional: false }]
     const extra = { name: 'x', type: 4, optional: true }
     const differences = classifyPersistenceChange(unionBody([first, second]), unionBody([[...first, extra], [...second, extra]]))
-    expect(differences).toEqual([expect.objectContaining({ path: 'event:example/value.data.x', requiresVersionBump: false })])
+    expect(differences).toEqual([expect.objectContaining({ path: 'event:example/value.data.x', requiresCompatibilityReview: false })])
   })
 
   it('allows required-to-optional fields across undiscriminated union arms', () => {
@@ -501,7 +501,7 @@ describe('persistence change classification', () => {
     const after = unionBody([[{ name: 'a', type: 2, optional: true }], [{ name: 'b', type: 3, optional: true }]])
     const differences = classifyPersistenceChange(before, after)
     expect(differences.map(change => change.path).sort()).toEqual(['event:example/value.data.a', 'event:example/value.data.b'])
-    expect(differences.every(change => change.kind === 'property-made-optional' && !change.requiresVersionBump)).toBe(true)
+    expect(differences.every(change => change.kind === 'property-made-optional' && !change.requiresCompatibilityReview)).toBe(true)
   })
 
   it('finds a complete matching when one union arm has multiple additive successors', () => {
@@ -513,10 +513,10 @@ describe('persistence change classification', () => {
     for (const after of [unionBody([flexible, constrained]), unionBody([constrained, flexible])]) {
       const differences = classifyPersistenceChange(before, after)
       expect(differences.length).toBeGreaterThan(0)
-      expect(differences.every(change => !change.requiresVersionBump)).toBe(true)
+      expect(differences.every(change => !change.requiresCompatibilityReview)).toBe(true)
     }
     const noCompleteMatching = unionBody([flexible, [{ name: 'different', type: 4, optional: true }]])
-    expect(classifyPersistenceChange(before, noCompleteMatching).some(change => change.requiresVersionBump)).toBe(true)
+    expect(classifyPersistenceChange(before, noCompleteMatching).some(change => change.requiresCompatibilityReview)).toBe(true)
   })
 
   it('keeps union cardinality, property removal, new required fields, and value types strict', () => {
@@ -531,7 +531,9 @@ describe('persistence change classification', () => {
       unionBody([[...first, { name: 'x', type: 4, optional: false }], [...second, { name: 'x', type: 4, optional: true }]]),
       unionBody([[{ name: 'a', type: 3, optional: true }], [{ name: 'b', type: 3, optional: true }]]),
     ]
-    for (const after of variants) expect(classifyPersistenceChange(before, after).some(change => change.requiresVersionBump)).toBe(true)
+    for (const after of variants) {
+      expect(classifyPersistenceChange(before, after).some(change => change.requiresCompatibilityReview)).toBe(true)
+    }
   })
 
   it('checks all recursive union arms without retaining provisional successes between candidates', () => {
@@ -541,10 +543,10 @@ describe('persistence change classification', () => {
     const extra = { name: 'x', type: 4, optional: true }
     const before = unionBody([first, second])
     const additive = unionBody([[...first, extra], [...second, extra]])
-    expect(classifyPersistenceChange(before, additive).every(change => !change.requiresVersionBump)).toBe(true)
+    expect(classifyPersistenceChange(before, additive).every(change => !change.requiresCompatibilityReview)).toBe(true)
     const invalid = unionBody([[...first, extra], [{ name: 'b', type: 2, optional: false }, next, extra]])
-    expect(classifyPersistenceChange(before, invalid).some(change => change.requiresVersionBump)).toBe(true)
-    expect(classifyPersistenceChange(invalid, before).some(change => change.requiresVersionBump)).toBe(true)
+    expect(classifyPersistenceChange(before, invalid).some(change => change.requiresCompatibilityReview)).toBe(true)
+    expect(classifyPersistenceChange(invalid, before).some(change => change.requiresCompatibilityReview)).toBe(true)
   })
 
   it('preserves body scope through arrays and tuples and rejects a simultaneous value-type change', () => {
@@ -559,18 +561,18 @@ describe('persistence change classification', () => {
       const schema = canonicalizeSchema(nodes, 0)
       return { ...typeRoot('event:example/value', {}), schema, digest: schemaDigest(schema) }
     }
-    expect(classifyPersistenceChange(wrapped(false), wrapped(true)).every(change => !change.requiresVersionBump)).toBe(true)
-    expect(classifyPersistenceChange(wrapped(false), wrapped(true, 'number')).some(change => change.requiresVersionBump)).toBe(true)
+    expect(classifyPersistenceChange(wrapped(false), wrapped(true)).every(change => !change.requiresCompatibilityReview)).toBe(true)
+    expect(classifyPersistenceChange(wrapped(false), wrapped(true, 'number')).some(change => change.requiresCompatibilityReview)).toBe(true)
   })
 
   it('keeps optional header/envelope properties and surface event additions strict', () => {
     for (const key of ['SessionHeader', 'JsonlHeaderLine', 'SessionEventEnvelope']) {
-      expect(classifyPersistenceChange(typeRoot(key, {}), typeRoot(key, { 'metadata?': 'string' }))[0]?.requiresVersionBump).toBe(true)
+      expect(classifyPersistenceChange(typeRoot(key, {}), typeRoot(key, { 'metadata?': 'string' }))[0]?.requiresCompatibilityReview).toBe(true)
     }
     const added = typeRoot('event:example/added', { value: 'string' })
-    expect(classifyPersistenceChange(null, added)[0]?.requiresVersionBump).toBe(false)
-    expect(classifyPersistenceChange(null, { ...added, surface: true })[0]?.requiresVersionBump).toBe(true)
-    expect(classifyPersistenceChange(added, null)[0]?.requiresVersionBump).toBe(true)
+    expect(classifyPersistenceChange(null, added)[0]?.requiresCompatibilityReview).toBe(false)
+    expect(classifyPersistenceChange(null, { ...added, surface: true })[0]?.requiresCompatibilityReview).toBe(true)
+    expect(classifyPersistenceChange(added, null)[0]?.requiresCompatibilityReview).toBe(true)
   })
 })
 
@@ -594,10 +596,10 @@ describe('persistence history verification', () => {
     expect(() => validatePersistenceHistory([base, cycle])).toThrow('cycle')
   })
 
-  it('binds breaking decisions to the same record header version transition', () => {
+  it('binds version-bump decisions to the same record header version transition', () => {
     const base = entry(BASE_ID, inventory(), null, true)
     const breaking = inventory({ value: 'number' }, 4)
-    expect(() => validatePersistenceHistory([base, entry(NEXT_ID, onlyEvent(breaking), BASE_ID)])).toThrow('requires a format version bump')
+    expect(validatePersistenceHistory([base, entry(NEXT_ID, onlyEvent(breaking), BASE_ID)]).tips.get('event:example/value')?.id).toBe(NEXT_ID)
     expect(() => validatePersistenceHistory([base, entry(NEXT_ID, onlyEvent(breaking), BASE_ID, false, 'version-bump')])).toThrow("this record's own")
     const touched = { ...breaking, roots: breaking.roots.filter(root => root.key === 'SessionHeader' || root.kind === 'event') }
     expect(validatePersistenceHistory([base, entry(NEXT_ID, touched, BASE_ID, false, 'version-bump')]).tips.get('SessionHeader')?.id).toBe(NEXT_ID)
@@ -704,7 +706,7 @@ describe('persistence changes current-tree commands', () => {
     verifyPersistenceChanges(root, after)
   })
 
-  it('rejects inferred bumps without a header transition and explicit incorrect assertions before writing', () => {
+  it('requires an explicit decision for structural changes before writing', () => {
     const root = fixture()
     baseline(root)
     const prose = proseFile(root)
@@ -712,16 +714,14 @@ describe('persistence changes current-tree commands', () => {
     const files = readdirSync(directory).sort()
     const inventoryPath = join(root, 'docs/persistence-schema.json')
     const before = readFileSync(inventoryPath, 'utf8')
-    for (const [args, code] of [
-      [[], 'version-transition-required'],
-      [['--decision', 'same-version'], 'version-bump-required'],
-    ] as const) {
-      const result = jsonResult(runPersistenceChanges(['--record', NEXT_ID, '--prose', prose, '--json', ...args], root,
-        () => inventory({ value: 'number' })))
-      expect(result).toMatchObject({ ok: false, code, files: [], changes: [expect.objectContaining({ requiresVersionBump: true })] })
-      expect(readFileSync(inventoryPath, 'utf8')).toBe(before)
-      expect(readdirSync(directory).sort()).toEqual(files)
-    }
+    const result = jsonResult(runPersistenceChanges(['--record', NEXT_ID, '--prose', prose, '--json'], root,
+      () => inventory({ value: 'number' })))
+    expect(result).toMatchObject({ ok: false, code: 'decision-required', files: [],
+      changes: [expect.objectContaining({ requiresCompatibilityReview: true })] })
+    expect(readFileSync(inventoryPath, 'utf8')).toBe(before)
+    expect(readdirSync(directory).sort()).toEqual(files)
+    expect(jsonResult(runPersistenceChanges(['--record', NEXT_ID, '--decision', 'same-version', '--prose', prose, '--json'], root,
+      () => inventory({ value: 'number' }))).ok).toBe(true)
   })
 
   it('authors a complete pair from explicit prose and reports source changes even when generated artifacts are stale', () => {
@@ -731,7 +731,7 @@ describe('persistence changes current-tree commands', () => {
     const pending = jsonResult(runPersistenceChanges(['--check', '--json'], root, () => after))
     expect(pending).toMatchObject({ ok: false, operation: 'check', code: 'stale-artifacts',
       roots: [{ root: 'event:example/value', kind: 'event', before: inventory().roots[2]?.digest, after: after.roots[2]?.digest }], changes: [
-        { root: 'event:example/value', path: 'event:example/value.data.label', kind: 'optional-property-added', requiresVersionBump: false },
+        { root: 'event:example/value', path: 'event:example/value.data.label', kind: 'optional-property-added', requiresCompatibilityReview: false },
       ] })
     const written = jsonResult(runPersistenceChanges(['--record', NEXT_ID, '--decision', 'same-version', '--prose', proseFile(root), '--json'], root, () => after))
     expect(written).toMatchObject({ ok: true, operation: 'record', recordId: NEXT_ID })
@@ -769,8 +769,9 @@ describe('persistence changes current-tree commands', () => {
   it('completes a scaffold through update and rejects invalid prose or decisions before changing files', () => {
     const root = fixture()
     baseline(root)
-    const after = inventory({ value: 'string', 'label?': 'string' })
-    runPersistenceChanges(['--record', NEXT_ID, '--decision', 'same-version'], root, () => after)
+    const after = inventory({ value: 'number' })
+    const draft = runPersistenceChanges(['--record', NEXT_ID, '--decision', 'same-version'], root, () => after)
+    expect(draft).toContain(`--update ${NEXT_ID} --decision same-version --prose FILE`)
     const prose = proseFile(root)
     runPersistenceChanges(['--update', NEXT_ID, '--decision', 'same-version', '--prose', prose], root, () => after)
     expect(runPersistenceChanges(['--check'], root, () => after)).toContain('roots match')
@@ -781,9 +782,9 @@ describe('persistence changes current-tree commands', () => {
     expect(pairedPaths.map(path => readFileSync(path, 'utf8'))).toEqual(completed)
     const path = join(root, `docs/persistence-changes/${NEXT_ID}.md`)
     const before = readFileSync(path, 'utf8')
-    const invalid = inventory({ value: 'number' })
-    const result = jsonResult(runPersistenceChanges(['--update', NEXT_ID, '--decision', 'same-version', '--json'], root, () => invalid))
-    expect(result).toMatchObject({ ok: false, code: 'version-bump-required', changes: [expect.objectContaining({ kind: 'type-changed', requiresVersionBump: true })] })
+    const invalid = inventory({ value: 'boolean' })
+    const result = jsonResult(runPersistenceChanges(['--update', NEXT_ID, '--json'], root, () => invalid))
+    expect(result).toMatchObject({ ok: false, code: 'decision-required', changes: [expect.objectContaining({ kind: 'type-changed', requiresCompatibilityReview: true })] })
     expect(readFileSync(path, 'utf8')).toBe(before)
     for (const value of [
       { ...AUTHORED_PROSE, extra: 'unsupported' },
@@ -797,7 +798,7 @@ describe('persistence changes current-tree commands', () => {
     }
   })
 
-  // Six real CLI processes and TypeScript extraction share the Windows coverage test budget.
+  // Real CLI processes and TypeScript extraction share the Windows coverage test budget.
   it('executes the real CLI against a source-only temporary checkout without Git history', { timeout: 90_000 }, () => {
     const root = fixture()
     const physical = join(root, 'packages/session/session-persistence-jsonl/src')
@@ -811,6 +812,7 @@ describe('persistence changes current-tree commands', () => {
       paths: { '@deepseek-ai/dsh-session/types': ['./packages/core/session/src/types.ts'] },
     } }))
     const source = [
+      '/** Experimental plugin records. */', 'export interface PluginRecordMap {}',
       '/** Stored header. */', 'export interface SessionHeader { version: 3; id: string }',
       '/** Stored event payloads. */', 'export interface SessionEventMap {', '/** Saved value. */',
       "'example/value': { value: string }", '}', '/** Surface event names. */', "export type SurfaceEventType = 'example/value'",
@@ -860,15 +862,36 @@ describe('persistence changes current-tree commands', () => {
     expect(rejected.error).toBeUndefined()
     expect(rejected.signal).toBeNull()
     expect(rejected.status).toBe(1)
-    expect(String(rejected.stderr)).toContain('version-bump required')
+    expect(String(rejected.stderr)).toContain('compatibility review required')
     const structured = cli('--check', '--json')
     expect(structured.error).toBeUndefined()
     expect(structured.signal).toBeNull()
     expect(structured.status).toBe(1)
     const structuredResult: unknown = JSON.parse(String(structured.stdout))
     expect(structuredResult).toMatchObject({
-      ok: false, code: 'unacknowledged-changes', changes: [expect.objectContaining({ kind: 'type-changed', requiresVersionBump: true })],
+      ok: false, code: 'unacknowledged-changes', changes: [expect.objectContaining({ kind: 'type-changed', requiresCompatibilityReview: true })],
     })
+    const missingDecision = cli('--record', FUTURE_ID, '--prose', prose, '--json')
+    expect(missingDecision.error).toBeUndefined()
+    expect(missingDecision.signal).toBeNull()
+    expect(missingDecision.status).toBe(1)
+    expect(JSON.parse(String(missingDecision.stdout))).toMatchObject({ ok: false, code: 'decision-required', files: [] })
+    const chosen = cli('--record', FUTURE_ID, '--decision', 'same-version', '--prose', prose, '--json')
+    expect(chosen.error).toBeUndefined()
+    expect(chosen.signal).toBeNull()
+    expect(chosen.status, String(chosen.stderr)).toBe(0)
+    expect(JSON.parse(String(chosen.stdout))).toMatchObject({ ok: true, operation: 'record' })
+    const missingUpdateDecision = cli('--update', FUTURE_ID, '--json')
+    expect(missingUpdateDecision.error).toBeUndefined()
+    expect(missingUpdateDecision.signal).toBeNull()
+    expect(missingUpdateDecision.status).toBe(1)
+    expect(JSON.parse(String(missingUpdateDecision.stdout))).toMatchObject({ ok: false, code: 'decision-required', files: [] })
+    const chosenUpdate = cli('--update', FUTURE_ID, '--decision', 'same-version', '--json')
+    expect(chosenUpdate.error).toBeUndefined()
+    expect(chosenUpdate.signal).toBeNull()
+    expect(chosenUpdate.status, String(chosenUpdate.stderr)).toBe(0)
+    expect(JSON.parse(String(chosenUpdate.stdout))).toMatchObject({ ok: true, operation: 'update' })
+    verifyPersistenceChanges(root, extractPersistenceSchema(root))
   })
 })
 
@@ -926,7 +949,7 @@ describe('recorded source compatibility policy', () => {
     const before = attributedRoot([EXISTING_SOURCE], { role })
     const after = attributedRoot([EXISTING_SOURCE, NEW_SOURCE], { role, policy: attributionPolicy([NEW_SOURCE.kind], role) })
     expect(after.digest).not.toBe(before.digest)
-    expect(classifyPersistenceChange(before, after)).toEqual([expect.objectContaining({ kind: 'attribution-kind-added', requiresVersionBump: false })])
+    expect(classifyPersistenceChange(before, after)).toEqual([expect.objectContaining({ kind: 'attribution-kind-added', requiresCompatibilityReview: false })])
     const snapshot: PersistenceSchemaInventory = { formatVersion: 2, roots: [after], types: [] }
     expect(parsePersistenceSnapshot(JSON.parse(JSON.stringify(snapshot)))).toEqual(snapshot)
   })
@@ -936,7 +959,7 @@ describe('recorded source compatibility policy', () => {
     const after = attributedRoot([{ ...EXISTING_SOURCE, extra: 'optional' }, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) })
     const changes = classifyPersistenceChange(before, after)
     expect(changes.map(change => change.kind).sort()).toEqual(['attribution-kind-added', 'optional-property-added'])
-    expect(changes.every(change => !change.requiresVersionBump)).toBe(true)
+    expect(changes.every(change => !change.requiresCompatibilityReview)).toBe(true)
   })
 
   it.each([
@@ -947,35 +970,38 @@ describe('recorded source compatibility policy', () => {
     ['renamed existing kind', [{ ...EXISTING_SOURCE, kind: 'renamed' }, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) }],
     ['unrelated required payload', [EXISTING_SOURCE, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]), extra: true }],
     ['removed promise', [EXISTING_SOURCE, NEW_SOURCE], { policy: null }],
-  ] as const)('keeps %s breaking despite qualified additions', (_name, sources, options) => {
+  ] as const)('requires review for %s despite qualified additions', (_name, sources, options) => {
     const changes = classifyPersistenceChange(attributedRoot([EXISTING_SOURCE]), attributedRoot(sources, options))
-    expect(changes.some(change => change.requiresVersionBump)).toBe(true)
+    expect(changes.some(change => change.requiresCompatibilityReview)).toBe(true)
   })
 
   it('keeps variants within an existing wire-kind group strict', () => {
     const before = attributedRoot([EXISTING_SOURCE])
     const after = attributedRoot([EXISTING_SOURCE, { ...EXISTING_SOURCE, value: 'number' }, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) })
     expect(classifyPersistenceChange(before, after)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'union-variants-changed', requiresVersionBump: true }),
-      expect.objectContaining({ kind: 'attribution-kind-added', requiresVersionBump: false }),
+      expect.objectContaining({ kind: 'union-variants-changed', requiresCompatibilityReview: true }),
+      expect.objectContaining({ kind: 'attribution-kind-added', requiresCompatibilityReview: false }),
     ]))
   })
 
   it('treats qualification changes for an existing kind as policy changes', () => {
     const before = attributedRoot([EXISTING_SOURCE])
     const after = attributedRoot([EXISTING_SOURCE], { policy: attributionPolicy([EXISTING_SOURCE.kind]) })
-    expect(classifyPersistenceChange(before, after)).toEqual([expect.objectContaining({ kind: 'source-policy-changed', requiresVersionBump: true })])
+    expect(classifyPersistenceChange(before, after)).toEqual([expect.objectContaining({ kind: 'source-policy-changed', requiresCompatibilityReview: true })])
   })
 
-  it('keeps legacy source transitions strict and never infers promises from the successor', () => {
+  it('flags legacy source transitions while accepting explicit same-version history', () => {
     const before = attributedRoot([EXISTING_SOURCE], { policy: null })
     const after = attributedRoot([EXISTING_SOURCE, NEW_SOURCE], { policy: attributionPolicy([NEW_SOURCE.kind]) })
-    expect(classifyPersistenceChange(before, after).some(change => change.requiresVersionBump)).toBe(true)
+    expect(classifyPersistenceChange(before, after).some(change => change.requiresCompatibilityReview)).toBe(true)
     const legacyAfter = attributedRoot([EXISTING_SOURCE, NEW_SOURCE], { policy: null })
-    const snapshots = [before, legacyAfter].map(root => ({ formatVersion: 1 as const, roots: [root], types: [] }))
-    expect(() => validatePersistenceHistory([
+    const snapshots: PersistenceSchemaInventory[] = [
+      { formatVersion: 1, roots: [...inventory().roots.filter(root => root.kind !== 'event'), before], types: [] },
+      { formatVersion: 1, roots: [legacyAfter], types: [] },
+    ]
+    expect(validatePersistenceHistory([
       entry(BASE_ID, snapshots[0]!, null, true), entry(NEXT_ID, snapshots[1]!, BASE_ID),
-    ])).toThrow('requires a format version bump')
+    ]).tips.get('event:example/source')?.id).toBe(NEXT_ID)
   })
 
   it('validates policy-bearing history without source names or type records', () => {
@@ -1010,5 +1036,75 @@ describe('recorded source compatibility policy', () => {
     expect(() => parsePersistenceSnapshot({ ...snapshot, roots: [{ ...changedQualification, digest: root.digest }] })).toThrow('digest mismatch')
     const unknownKind = attributedRoot([EXISTING_SOURCE], { policy: attributionPolicy(['absent']) })
     expect(() => parsePersistenceSnapshot({ ...snapshot, roots: [unknownKind] })).toThrow('invalid source compatibility')
+  })
+})
+
+describe('explicit same-version decisions', () => {
+  it.each(['optional header', 'removed field', 'changed field'] as const)('admits an explicitly acknowledged %s after finalization', (kind) => {
+    const root = fixture()
+    finalize(root)
+    const previous = contents(root)
+    let after: PersistenceSchemaInventory
+    if (kind === 'optional header') {
+      const current = inventory({ value: 'number' }, 4)
+      after = { ...current, roots: current.roots.map((root) => {
+        if (root.key === 'SessionHeader') return typeRoot('SessionHeader', { id: 'string', 'env?': 'string' }, 4)
+        return root
+      }) }
+    } else if (kind === 'removed field') {
+      after = inventory({}, 4)
+    } else {
+      after = inventory({ value: 'boolean' }, 4)
+    }
+    const prose = proseFile(root)
+    expect(jsonResult(runPersistenceChanges(['--record', NEXT_ID, '--decision', 'same-version', '--prose', prose, '--json'], root, () => after)).ok).toBe(true)
+    const saved = loadPersistenceHistory(root).entries.find(entry => entry.record.id === NEXT_ID)!
+    expect(saved.record.changes.every(change => change.decision === 'same-version')).toBe(true)
+    expect(runPersistenceChanges(['--check'], root, () => after)).toContain('roots match')
+    for (const [path, content] of Object.entries(previous).filter(([path]) => path.startsWith('docs/persistence-changes/'))) {
+      expect(readFileSync(join(root, path), 'utf8')).toBe(content)
+    }
+  })
+
+  it('cannot waive an actual version transition with a same-version decision', () => {
+    const root = fixture()
+    baseline(root)
+    const before = contents(root)
+    for (const version of [2, 4]) {
+      expect(jsonResult(runPersistenceChanges(['--record', NEXT_ID, '--decision', 'same-version', '--json'], root, () => inventory({ value: 'string' }, version))))
+        .toMatchObject({ ok: false, code: 'version-transition-required' })
+    }
+    expect(jsonResult(runPersistenceChanges(['--record', NEXT_ID, '--decision', 'version-bump', '--json'], root, () => inventory({ value: 'string' }, 2))))
+      .toMatchObject({ ok: false, code: 'version-transition-required' })
+    expect(contents(root)).toEqual(before)
+  })
+
+  it.each(['unchanged', 'changed'] as const)('requires an explicit decision when updating %s flagged schemas', (kind) => {
+    const root = fixture()
+    baseline(root)
+    const after = inventory({ value: 'number' })
+    runPersistenceChanges(['--record', NEXT_ID, '--decision', 'same-version', '--prose', proseFile(root)], root, () => after)
+    const current = kind === 'changed' ? inventory({ value: 'boolean' }) : after
+    const before = contents(root)
+    expect(jsonResult(runPersistenceChanges(['--update', NEXT_ID, '--json'], root, () => current)))
+      .toMatchObject({ ok: false, code: 'decision-required', files: [] })
+    expect(contents(root)).toEqual(before)
+    runPersistenceChanges(['--update', NEXT_ID, '--decision', 'same-version'], root, () => current)
+    expect(runPersistenceChanges(['--check'], root, () => current)).toContain('roots match')
+  })
+
+  it('binds same-version decisions to exact history snapshots and leaves uncovered roots rejected', () => {
+    const root = fixture()
+    baseline(root)
+    const after = inventory({ value: 'number' })
+    runPersistenceChanges(['--record', NEXT_ID, '--decision', 'same-version', '--prose', proseFile(root)], root, () => after)
+    const uncovered = { ...after, roots: after.roots.map(root => root.key === 'SessionHeader'
+      ? typeRoot('SessionHeader', { id: 'string', 'env?': 'string' }) : root) }
+    commitCurrent(root, uncovered)
+    expect(() => verifyPersistenceChanges(root, uncovered)).toThrow('unacknowledged persistence type changes')
+    const history = loadPersistenceHistory(root)
+    const recorded = history.entries.find(entry => entry.record.id === NEXT_ID)!
+    const invalid = { ...recorded, snapshot: onlyEvent(inventory({ value: 'boolean' })) }
+    expect(() => validatePersistenceHistory([...history.entries.filter(entry => entry !== recorded), invalid])).toThrow('after digest mismatch')
   })
 })

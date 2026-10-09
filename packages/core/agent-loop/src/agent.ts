@@ -271,14 +271,16 @@ export class ReactLoopAgent implements Agent {
     const claimed = this.inbox.claim(target, position.turn)
     const assembly = await this.loopCtx.systemPrompt.assemble(assembleContextFor(this, signal))
     signal.throwIfAborted()
-    const sections = renderContextSections(assembly)
-    const context = this.runtimeContext.project(joinContextSections(sections), sections)
     const decision = await this.dispatch.waterfall(
       'agent/pre-step', { messages: claimed, ...position, signal },
-      (): Promise<PreStepDecision> => Promise.resolve<PreStepDecision>({
-        kind: 'enter',
-        messages: context === undefined ? claimed : [...claimed, context],
-      }),
+      (): Promise<PreStepDecision> => {
+        const sections = renderContextSections(assembly)
+        const context = this.runtimeContext.project(joinContextSections(sections), sections)
+        return Promise.resolve<PreStepDecision>({
+          kind: 'enter',
+          messages: context === undefined ? claimed : [...claimed, context],
+        })
+      },
     )
     signal.throwIfAborted()
     if (decision.kind === 'reject') return decision
@@ -406,6 +408,10 @@ export class ReactLoopAgent implements Agent {
     let firstAttempt = true
     while (true) {
       const { config, preparedCall } = await this.prepareRequest(turn, step, signal)
+      const currentContext = this.loopCtx.systemPrompt.refreshContext(assembly, assembleContextFor(this, signal))
+      const sections = renderContextSections(currentContext)
+      const context = this.runtimeContext.project(joinContextSections(sections), sections)
+      signal.throwIfAborted()
       const startsRequestSeries = firstAttempt && decision.startsRequestSeries === true
       const commits = this.systemPrompt.project(renderedPrompt, {
         inHistory: preparedCall?.systemPromptUpdate === 'in-history',
@@ -416,10 +422,21 @@ export class ReactLoopAgent implements Agent {
       for (const { message, intent } of commits) {
         this.session.append('system/message', { turn, step, message }, intent)
       }
+      let contextAdmitted = false
       if (firstAttempt) {
         for (const message of decision.messages) {
-          this.session.append('user/message', message, { surfaceOp: 'append' })
+          if (message.source.kind === 'runtime-context') {
+            if (context !== undefined && !contextAdmitted) {
+              this.session.append('user/message', context, { surfaceOp: 'append' })
+              contextAdmitted = true
+            }
+          } else {
+            this.session.append('user/message', message, { surfaceOp: 'append' })
+          }
         }
+      }
+      if (context !== undefined && !contextAdmitted) {
+        this.session.append('user/message', context, { surfaceOp: 'append' })
       }
       firstAttempt = false
       const request = this.buildRequest(config, preparedCall, assembly.tools, { turn, step }, startsRequestSeries, signal)

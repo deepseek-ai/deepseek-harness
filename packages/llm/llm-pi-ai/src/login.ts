@@ -17,18 +17,29 @@ import type { PiAiAuthInjection } from './adapter.ts'
 import { createModels } from './models.ts'
 
 /**
+ * Catalog providers whose OAuth login this adapter does not offer. pi-ai's Sign
+ * in with ChatGPT (`openai`) identifies the installation to OpenAI with a
+ * stable UUID that the app supplies through `LoginOptions.getDeviceId`, and it
+ * refuses to start without one. The harness keeps no installation ID meant for
+ * a third-party account sign-in, so the route signs in with an API key.
+ */
+const UNSERVED_OAUTH: ReadonlySet<string> = new Set(['openai'])
+
+/**
  * The login methods one catalog provider offers.
  *
- * A method appears only when pi-ai can actually run it: `oauth` always carries
- * a `login`, while an api-key method has one only when the provider collects
- * its key interactively — which every installed one currently does, so a key is
- * typed into pi-ai's own prompt rather than into the settings form.
+ * A method appears only when pi-ai can actually run it: `oauth` carries a
+ * `login` that runs without app-supplied login options except for the
+ * providers in {@link UNSERVED_OAUTH}, while an api-key method has one only
+ * when the provider collects its key interactively — which every installed one
+ * currently does, so a key is typed into pi-ai's own prompt rather than into
+ * the settings form.
  * @param provider - the installed catalog provider, if pi-ai ships one.
  * @returns its methods, most preferred first; empty when it offers no login.
  */
 function loginMethods(provider: Provider | undefined): AuthorizationMethod[] {
   const methods: AuthorizationMethod[] = []
-  const oauth = provider?.auth.oauth
+  const oauth = provider === undefined || UNSERVED_OAUTH.has(provider.id) ? undefined : provider.auth.oauth
   if (oauth !== undefined) methods.push({ id: 'oauth', label: oauth.loginLabel ?? oauth.name })
   const apiKey = provider?.auth.apiKey
   if (apiKey?.login !== undefined) methods.push({ id: 'api-key', label: apiKey.name })

@@ -1,0 +1,10 @@
+version: 1
+scenario: working-directory-consumers
+profile: headless
+composition: claude-code-mods
+recording: authored
+header:
+  class: claude-code-mods
+platform: posix
+workspace:
+  final: true

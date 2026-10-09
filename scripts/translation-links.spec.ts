@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { parseMarkdown } from './markdown.ts'
 import {
   normalizeTranslationMarkdownLinks,
   rewriteTranslationLinkLocales,
@@ -183,6 +184,33 @@ describe('translation link locale validation', () => {
 })
 
 describe('translation link rewriting and normalization', () => {
+  it('reuses an authored tree without changing its offsets, switcher exemption, or reference resolution', () => {
+    const root = fixture()
+    const input = '# 指南\n\n[English](guide.md) | 中文\n\n[行内](reference.md?view=full&amp;x=1#overview "标题")\n\n[引用][ref]\n\n[ref]: <reference.md#tail> "标注"\n[ref]: unpaired.md\n'
+    const context = linkContext(root, 'docs/guide.zh.md')
+    const tree = parseMarkdown(input)
+    const originalTree = structuredClone(tree)
+
+    expect(normalizeTranslationMarkdownLinks(input, context, ['guide.md'], tree)).toBe(
+      '# 指南\n\n[English](guide.md) | 中文\n\n[行内](dsh-translation-target:docs/reference.md?view=full&amp;x=1#overview "标题")\n\n[引用][ref]\n\n[ref]: <dsh-translation-target:docs/reference.md#tail> "标注"\n[ref]: unpaired.md\n',
+    )
+    expect(translationLinkLocaleViolations(input, context, ['guide.md'], tree)).toEqual([
+      {
+        sourcePath: 'docs/guide.zh.md',
+        line: 5,
+        url: 'reference.md?view=full&amp;x=1#overview',
+        expectedUrl: 'reference.zh.md?view=full&amp;x=1#overview',
+      },
+      {
+        sourcePath: 'docs/guide.zh.md',
+        line: 9,
+        url: 'reference.md#tail',
+        expectedUrl: 'reference.zh.md#tail',
+      },
+    ])
+    expect(tree).toEqual(originalTree)
+  })
+
   it('rewrites only the destination while preserving the suffix and title', () => {
     const root = fixture()
     const input = '[概览](reference.md?view=full&amp;mode=all#overview "reference.md title")\n'

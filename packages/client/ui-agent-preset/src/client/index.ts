@@ -201,7 +201,7 @@ export function apply(ctx: ClientContext): void {
     const startCreatorDraft = () => {
       const seat = mainBlankSeat() ?? unboundSeat
       seat.stage('cordis', true)
-      scope.uiWorkspace.startSession()
+      scope.uiWorkspace.startSession(undefined, { clearPreviousDraft: false })
       void seat.apply()
     }
 

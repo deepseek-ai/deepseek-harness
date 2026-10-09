@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+搜索使用 Session 的当前工作目录，包括通过 `working_directory` 切换后的目录。
+
 在 `ctx.subprocess` 后端之后挂载工具；无需宿主 `rg` 安装，也无需文件系统提供方。模型随后获得按修改时间排序的文件发现与按行组织的内容搜索，两者都有界并受超时防护。
 
 ### 最小组合

@@ -388,7 +388,7 @@ export interface LaunchOptions {
    * yml default. The PTC runtime row is always in the tree, so no extra
    * insertion is needed.
    */
-  toolsMode?: 'native' | 'ptc' | 'both'
+  toolsMode?: 'native' | 'ptc'
   /**
    * Keep the shipped DeepSeek adapter mounted while masking the process
    * environment's DEEPSEEK_API_KEY for this scaffold lifetime. This is the

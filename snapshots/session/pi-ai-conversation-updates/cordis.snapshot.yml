@@ -1,0 +1,16 @@
+- id: llm-deepseek
+  disabled: true
+
+- id: llm-pi-ai
+  config:
+    providers:
+      moonshotai:
+        apiKeyEnv: MOONSHOT_API_KEY
+
+- insert:
+    # Keep pi-ai model preparation; only the recorded response stream is substituted.
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+
+    - id: dynamic-tool-prompt-updates
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/dynamic-tool-prompt-updates.ts'

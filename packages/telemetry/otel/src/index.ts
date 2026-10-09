@@ -31,4 +31,5 @@ export default class OTel extends Service {
 }
 
 export type { EventLogOptions, OTelEventRecord, OTelEventScalar, EventLogReporter } from './event-log.ts'
-export type { SessionLogRecord, SessionLogOptions, SessionLogReporter } from './session-log.ts'
+export type { SessionLogProcessorOptions, SessionLogRecord, SessionLogOptions, SessionLogReporter } from './session-log.ts'
+export type { LogExporterOptions } from './transport.ts'

@@ -12,6 +12,7 @@ import './control-row-dom.ts'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { $getRoot, $isElementNode, $isTextNode } from 'lexical'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { InputTriggerService } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
@@ -342,6 +343,31 @@ describe('scenario H: backspace breaks the token', () => {
     expect(b.view.container.querySelector('[data-lexical-text][style*="business-primary"]')?.textContent).toBe(`/${name} `)
     b.type(`/${name}x`)
     expect(b.shell.snapshot.phase).toBe('plain')
+  })
+
+  it('keeps text typed at the end of the claimed token when the browser inserts it natively', async () => {
+    const b = await bench()
+    b.type('/goal')
+    await vi.waitFor(() => { expect(b.controller.menu.getSnapshot().open).toBe(true) })
+    fireEvent.keyDown(b.textarea, { key: ' ', keyCode: 32 })
+    expect(b.shell.snapshot.phase).toBe('claimed')
+    b.type('/goal 发布')
+    // A caret at the token/argument boundary sits at the end of the styled
+    // token node; native insertion writes there and Lexical syncs the DOM
+    // text with setTextContent plus a caret select.
+    act(() => {
+      b.shell.editor.update(() => {
+        const paragraph = $getRoot().getFirstChild()
+        const token = $isElementNode(paragraph) ? paragraph.getFirstChild() : null
+        if (!$isTextNode(token)) throw new Error('missing token node')
+        token.setTextContent('/goal 立即')
+        token.select(8, 8)
+      }, { discrete: true })
+    })
+    expect(b.shell.snapshot.draft).toBe('/goal 立即发布')
+    expect(b.shell.snapshot.phase).toBe('claimed')
+    act(() => { b.shell.editor.update(() => {}, { discrete: true }) })
+    expect(b.view.container.querySelector('[data-lexical-text][style*="business-primary"]')?.textContent).toBe('/goal ')
   })
 
   it('claim releases automatically; the enter after that goes through adjudication again', async () => {

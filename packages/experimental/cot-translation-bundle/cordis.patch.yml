@@ -1,0 +1,8 @@
+- insert:
+    - id: translator
+      name: '@deepseek-ai/dsh-experimental-translator'
+    - id: cot-translation
+      name: '@deepseek-ai/dsh-experimental-client-ui-cot-translation'
+      config:
+        provider: bing
+        targetLanguage: auto

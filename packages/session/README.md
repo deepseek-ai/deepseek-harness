@@ -44,6 +44,8 @@ The group splits into four families: durable storage (persistence seam, backends
 | Package | Role | ctx key |
 |---|---|---|
 | [`session-projection/`](session-projection/README.md) | Defines and drives projection units that fold committed events into whole current values | `ctx.sessionProjections` |
+| [`working-directory/`](working-directory/README.md) | Owns each Session's effective execution directory and user-context changes | `ctx.workingDirectory` |
+| [`tool-working-directory/`](tool-working-directory/README.md) | Reads or changes the active directory through one tool | `working_directory` |
 | [`session-projection-cache/`](session-projection-cache/README.md) | Persists projection checkpoints so cold reads skip full log loads | `ctx.sessionProjectionCache` |
 | [`session-stats/`](session-stats/README.md) | Serves whole-log conversation counts and wall times through the `sessionStats` unit | registers on `ctx.sessionProjections` |
 | [`session-turn-outline/`](session-turn-outline/README.md) | Serves the whole-log turn outline (turn, `turn/start` seq, prompt preview) through the `turnOutline` unit | registers on `ctx.sessionProjections` |
@@ -53,9 +55,8 @@ The group splits into four families: durable storage (persistence seam, backends
 | Package | Role | ctx key |
 |---|---|---|
 | [`session-title/`](session-title/README.md) | Log-backed session titles with a deterministic fallback and one optional provider | `ctx.sessionTitle` |
-| [`session-title-llm/`](session-title-llm/README.md) | Shared model-backed title-generation policy for the provider packages | library — no ctx key |
+| [`session-title-llm/`](session-title-llm/README.md) | Shared bounded execution for provider-owned title strategies | library — no ctx key |
 | [`session-title-first-prompt-llm/`](session-title-first-prompt-llm/README.md) | Titles a session from its first eligible human message | registers on `ctx.sessionTitle` |
-| [`session-title-all-prompts-llm/`](session-title-all-prompts-llm/README.md) | Titles a session from all eligible human messages | registers on `ctx.sessionTitle` |
 
 ### Telemetry
 
@@ -72,10 +73,13 @@ Only one title provider may register at a time; without one, the title service k
 ## Related documentation
 
 - [Session persistence subsystem](../../docs/subsystems/persistence.md) — backend-neutral service semantics, the flush checkpoint, and crash recovery.
+- [Working directory subsystem](../../docs/subsystems/working-directory.md) — effective directory and recovery.
 - [Session projections subsystem](../../docs/subsystems/session-projection.md) — the projection unit contract and drive semantics.
 - [Session titles subsystem](../../docs/subsystems/session-title.md) — title eligibility, fallback, and provider flow.
 - [Session telemetry subsystem](../../docs/subsystems/session-telemetry.md) — capture, redaction, and delivery modes.
 - [Session subsystem](../../docs/subsystems/session.md) — the live event log every package in this group persists or derives from.
+
+See [`session-title-all-prompts-llm`](../experimental/session-title-all-prompts-llm/README.md) for the experimental optional capability.
 
 <a id="dev-note"></a>
 ## Dev Note

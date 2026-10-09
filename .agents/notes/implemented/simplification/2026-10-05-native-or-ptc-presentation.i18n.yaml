@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-05-native-or-ptc-presentation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-10-05-native-or-ptc-presentation.md
+/agent-note-one-tool-invocation-form-per-agent:
+  en: d45e87191f6e7667
+  zh: 4350b7a9ff83b310
+/agent-note-one-tool-invocation-form-per-agent/problem:
+  en: 55d25e331b37b260
+  zh: d1b091a38d1b106d
+/agent-note-one-tool-invocation-form-per-agent/decision:
+  en: 42e5b09fbab63e84
+  zh: 883ab2072a60a138
+/agent-note-one-tool-invocation-form-per-agent/alternatives-considered:
+  en: 62b0c9c4470b241d
+  zh: 4cf40e5dc6eebd63
+/agent-note-one-tool-invocation-form-per-agent/consequences:
+  en: a08a45bec640e3f6
+  zh: 9f61a47d8133f3ee

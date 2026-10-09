@@ -1,0 +1,7 @@
+/* Font-family rows reuse the font-size row cell (FontSizeRow.module.css);
+ * the fields share one basis so the three rows align, and shrink with the row. */
+
+.field {
+  flex: 0 1 240px;
+  min-width: 0;
+}

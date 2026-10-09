@@ -230,6 +230,158 @@ describe('ModelsSettingsStore', () => {
     await Promise.all([first, second])
     expect(store.store.getSnapshot().status).toBe('ready')
   })
+
+  it('keeps superseded callers pending until the latest joined snapshot is published', async () => {
+    const firstRead = Promise.withResolvers<RemoteAnswer<Record<string, unknown>>>()
+    const latestRead = Promise.withResolvers<RemoteAnswer<Record<string, unknown>>>()
+    const firstStarted = Promise.withResolvers<undefined>()
+    const latestStarted = Promise.withResolvers<undefined>()
+    let calls = 0
+    const { ctx, mirror } = api({ describeCredentials: () => {
+      calls += 1
+      if (calls === 1) { firstStarted.resolve(undefined); return firstRead.promise }
+      latestStarted.resolve(undefined)
+      return latestRead.promise
+    } })
+    const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
+    let firstSettled = false
+    const first = store.load().then(() => { firstSettled = true })
+    await firstStarted.promise
+    const latest = store.load()
+    await latestStarted.promise
+    try {
+      firstRead.resolve(remoteOk({}))
+      await firstRead.promise
+      await new Promise<void>((resolve) => { setImmediate(resolve) })
+      expect(firstSettled).toBe(false)
+      expect(store.store.getSnapshot().status).toBe('loading')
+      latestRead.resolve(remoteOk({}))
+      await Promise.all([first, latest])
+      expect(firstSettled).toBe(true)
+      expect(store.store.getSnapshot().status).toBe('ready')
+    } finally {
+      firstRead.resolve(remoteOk({}))
+      latestRead.resolve(remoteOk({}))
+      await Promise.all([first, latest])
+    }
+  })
+
+  it('settles callers after the latest credential refusal without waiting for an obsolete read', async () => {
+    const obsoleteRead = Promise.withResolvers<RemoteAnswer<Record<string, unknown>>>()
+    const latestRead = Promise.withResolvers<RemoteAnswer<Record<string, unknown>>>()
+    const obsoleteStarted = Promise.withResolvers<undefined>()
+    const latestStarted = Promise.withResolvers<undefined>()
+    let calls = 0
+    const { ctx, mirror } = api({ describeCredentials: () => {
+      calls += 1
+      if (calls === 1) { obsoleteStarted.resolve(undefined); return obsoleteRead.promise }
+      latestStarted.resolve(undefined)
+      return latestRead.promise
+    } })
+    const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
+    let obsoleteSettled = false
+    const obsolete = store.load().then(() => { obsoleteSettled = true })
+    await obsoleteStarted.promise
+    const latest = store.load()
+    await latestStarted.promise
+    try {
+      latestRead.resolve(remoteFail('latest credentials unavailable'))
+      await latest
+      await new Promise<void>((resolve) => { setImmediate(resolve) })
+      expect(obsoleteSettled).toBe(true)
+      expect(store.store.getSnapshot()).toMatchObject({ status: 'ready', credentialError: 'latest credentials unavailable' })
+      obsoleteRead.reject(new Error('obsolete transport unavailable'))
+      await Promise.allSettled([obsoleteRead.promise])
+      await new Promise<void>((resolve) => { setImmediate(resolve) })
+      expect(store.store.getSnapshot()).toMatchObject({ status: 'ready', credentialError: 'latest credentials unavailable' })
+    } finally {
+      obsoleteRead.resolve(remoteOk({}))
+      latestRead.resolve(remoteOk({}))
+      await Promise.all([obsolete, latest])
+    }
+  })
+
+  it('propagates the latest unexpected rejection to every waiting caller', async () => {
+    const obsoleteRead = Promise.withResolvers<RemoteAnswer<Record<string, unknown>>>()
+    const latestRead = Promise.withResolvers<RemoteAnswer<Record<string, unknown>>>()
+    const obsoleteStarted = Promise.withResolvers<undefined>()
+    const latestStarted = Promise.withResolvers<undefined>()
+    let calls = 0
+    const { ctx, mirror } = api({ describeCredentials: () => {
+      calls += 1
+      if (calls === 1) { obsoleteStarted.resolve(undefined); return obsoleteRead.promise }
+      latestStarted.resolve(undefined)
+      return latestRead.promise
+    } })
+    const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
+    let firstSettlement: PromiseSettledResult<void> | undefined
+    const first = store.load()
+    const firstObserved = Promise.allSettled([first]).then(([settlement]) => { firstSettlement = settlement })
+    await obsoleteStarted.promise
+    const second = store.load()
+    await latestStarted.promise
+    const latestSettlement = Promise.allSettled([second])
+    const rejection = new Error('latest transport unavailable')
+    try {
+      latestRead.reject(rejection)
+      expect(await latestSettlement).toEqual([{ status: 'rejected', reason: rejection }])
+      await new Promise<void>((resolve) => { setImmediate(resolve) })
+      expect(firstSettlement).toEqual({ status: 'rejected', reason: rejection })
+      obsoleteRead.reject(new Error('obsolete transport unavailable'))
+      await Promise.allSettled([obsoleteRead.promise])
+      await new Promise<void>((resolve) => { setImmediate(resolve) })
+      expect(store.store.getSnapshot().status).toBe('loading')
+    } finally {
+      obsoleteRead.resolve(remoteOk({}))
+      latestRead.resolve(remoteOk({}))
+      await firstObserved
+      await latestSettlement
+    }
+  })
+
+  it.each(['loading', 'ready', 'error'] as const)('waits for a refresh started by a %s subscriber', async (phase) => {
+    const heldRead = Promise.withResolvers<RemoteAnswer<Record<string, unknown>>>()
+    const heldStarted = Promise.withResolvers<undefined>()
+    let calls = 0
+    let providerReads = 0
+    const { ctx, mirror } = api({ providers: () => {
+      providerReads += 1
+      return Promise.resolve(phase === 'error' && providerReads === 1 ? fail('first directory refused') : ok({ providers: DIRECTORY }))
+    }, describeCredentials: () => {
+      calls += 1
+      if ((phase !== 'ready' && calls === 1) || (phase === 'ready' && calls === 2)) {
+        heldStarted.resolve(undefined)
+        return heldRead.promise
+      }
+      return Promise.resolve(remoteOk({}))
+    } })
+    const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
+    let followup: Promise<void> | undefined
+    let triggered = false
+    const off = store.store.subscribe(() => {
+      if (!triggered && store.store.getSnapshot().status === phase) {
+        triggered = true
+        followup = store.load()
+      }
+    })
+    let settled = false
+    const first = store.load().then(() => { settled = true })
+    try {
+      await heldStarted.promise
+      await new Promise<void>((resolve) => { setImmediate(resolve) })
+      expect(settled).toBe(false)
+      expect(store.store.getSnapshot().status).toBe('loading')
+      heldRead.resolve(remoteOk({}))
+      await first
+      await followup
+      expect(store.store.getSnapshot().status).toBe('ready')
+    } finally {
+      off()
+      heldRead.resolve(remoteOk({}))
+      await first
+      await followup
+    }
+  })
 })
 
 describe('edge joins', () => {

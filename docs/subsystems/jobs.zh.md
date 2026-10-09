@@ -15,7 +15,6 @@
  */
 interface JobKindMap {
   bash: 'bash'
-  subagent: 'subagent'
 }
 ```
 
@@ -33,7 +32,7 @@ interface JobKindMap {
  * the output ring.
  */
 interface JobSpec {
-  /** Producer kind — also the id prefix (`bash`, `subagent`, …). */
+  /** Producer kind — also the id prefix (`bash`, …). */
   kind: JobKind
   /** One-line model-facing label (the command; the delegation description). */
   label: string
@@ -95,7 +94,7 @@ interface JobHandle {
 }
 ```
 
-`JobHooks.done` 会在生产方释放其资源后 resolve，而不是仅在工作完成时 resolve。结果是一个值而非流的 job——subagent 的报告、workflow 渲染出的结果——把它作为 `JobOutcome.result` 返回；模型在结算后的第一次读取携带它一次。
+`JobHooks.done` 会在生产方释放其资源后 resolve，而不是仅在工作完成时 resolve。结果是一个值而非流的 job——workflow 渲染出的结果——把它作为 `JobOutcome.result` 返回；模型在结算后的第一次读取携带它一次。
 
 ```ts type-equiv
 /** Hooks through which the runtime controls and observes producer work. */

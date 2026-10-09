@@ -1,10 +1,8 @@
 /**
  * Model-facing delegation through one configured `ctx.subagents` provider.
  * Provider lifecycle controls tool registration and context-sensitive schema
- * wording. Foreground calls always dispose the run after collection.
- * Background policy is selected by this plugin's configuration: one-shot
- * calls own a plain Task, while continuable calls use
- * `ctx.subagents.startContinuable()`.
+ * wording. Every delegation starts a managed activation and returns its child
+ * id; the subagent runtime owns result delivery and resource cleanup.
  * @module @deepseek-ai/dsh-tool-subagent
  */
 
@@ -12,19 +10,17 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import {
   assertSubagentMaxDepth,
   parentAgentOptionsForDelegation,
-  settleRun,
 } from '@deepseek-ai/dsh-subagent'
-import type { SubagentProvider, SubagentResult, SubagentRun } from '@deepseek-ai/dsh-subagent'
-import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
+import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import {
   assertAllowedModelSelection,
   hasConfiguredLlmSelection,
@@ -44,6 +40,10 @@ import {
 export const name = 'tool-subagent'
 export const inject = ['tools', 'subagents', 'systemPrompt', 'sessionProjections']
 
+// Definition identity keeps shared guidance scoped to the actual visible tools,
+// including scoped overrides and independently loaded tool registries.
+const delegationTools = new Set<ToolDefinition>()
+
 /** Config: which registered provider this tool delegates to, plus child defaults. */
 export interface Config {
   /** The `ctx.subagents` provider name to start runs on (e.g. `spawn`, `acp`). */
@@ -58,18 +58,6 @@ export interface Config {
    * Session and inherit that decision in its child Sessions.
    */
   modelSelectionSettings?: boolean
-  /**
-   * Expose `run_in_background` (default true). Disabled instances omit the
-   * parameter and reject forced background calls.
-   */
-  enableRunInBackground?: boolean
-  /**
-   * Background execution policy (default `one-shot`). `one-shot` defaults calls
-   * to foreground; `continuable` defaults them to background, requires a provider
-   * with the `prepareContinuable` capability, and returns the durable child id.
-   * Follow-up adapters remain independently optional.
-   */
-  backgroundMode?: 'one-shot' | 'continuable'
   /**
    * Agent options applied to every child; omitted fields use child-loop defaults.
    */
@@ -107,8 +95,6 @@ export const Config: z<Config> = z.object({
   provider: z.string().required(),
   toolName: z.string().default('subagent'),
   modelSelectionSettings: z.boolean().default(false),
-  enableRunInBackground: z.boolean().default(true),
-  backgroundMode: z.union(['one-shot', 'continuable'] as const).default('one-shot'),
   // Prevent Schemastery from materializing omitted agentOptions as `{}`.
   agentOptions: z.object({
     provider: z.string(),
@@ -129,113 +115,6 @@ export const Config: z<Config> = z.object({
   }).default(undefined as unknown as { allow: string[]; deny: string[] }),
   maxDepth: z.union([z.natural().max(Number.MAX_SAFE_INTEGER), z.const('provider-managed' as const)]),
 })
-
-/** Render text blocks from the canonical JSON block array without trusting arbitrary values. */
-function outputValueText(values: JsonValue[]): string {
-  return values
-    .filter((value): value is { type: 'text'; text: string } =>
-      typeof value === 'object' && value !== null && !Array.isArray(value)
-      && value.type === 'text' && typeof value.text === 'string')
-    .map(value => value.text)
-    .join('')
-}
-
-/** Settle pending startup without rejecting the task producer contract. */
-async function settleStart(start: Promise<SubagentRun>, signal: AbortSignal): Promise<JobOutcome> {
-  try {
-    return await settleRun(await start)
-  } catch (error: unknown) {
-    // Product providers aggregate startup and rollback failures. Cancellation
-    // must not turn a failed cleanup into a cleanly killed Job.
-    return signal.aborted && !(error instanceof AggregateError)
-      ? { status: 'killed' }
-      : { status: 'failed', detail: String(error) }
-  }
-}
-
-/** A non-`completed` stop reason means the child did not finish cleanly. */
-function stopReasonError(result: SubagentResult): string | undefined {
-  switch (result.stopReason) {
-    case 'completed':
-      return undefined
-    case 'aborted':
-      return 'subagent run was cancelled'
-    case 'error':
-      return 'subagent run failed'
-    case 'max-tokens':
-      return 'subagent run hit its token limit before finishing'
-    case 'refusal':
-      return 'subagent declined the task'
-    // Merge-extensible union: a backend may add stop reasons. Treat an unknown
-    // terminal reason as a failure rather than reporting partial output as success.
-    default:
-      return `subagent run ended abnormally (${String(result.stopReason)})`
-  }
-}
-
-/**
- * Append provider-authored failure detail and the child's preserved partial
- * answer to a stop-reason error, keeping diagnostic text separate from the
- * child's assistant output.
- * @param error - the stop-reason headline.
- * @param result - the child's terminal result.
- * @returns the headline, diagnostic, and partial text that are present.
- */
-function withDiagnosticAndPartialText(error: string, result: SubagentResult): string {
-  const diagnostic = result.diagnostic === undefined
-    ? ''
-    : `\nDiagnostic: ${result.diagnostic}`
-  const text = result.output
-    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
-    .map(block => block.text)
-    .join('')
-  const partial = text.length === 0
-    ? ''
-    : `\nPartial output before the run ended:\n${text}`
-  return `${error}${diagnostic}${partial}`
-}
-
-type ForegroundToolResult = {
-  readonly kind: 'foreground'
-  readonly runId: SubagentRun['id']
-  readonly output: JsonValue[]
-}
-
-/**
- * Collect and release one foreground run without letting disposal replace an
- * independent result failure.
- */
-async function settleForegroundRun(run: SubagentRun): Promise<ForegroundToolResult> {
-  const [execution] = await Promise.allSettled([
-    run.result.then((result): ForegroundToolResult => {
-      const error = stopReasonError(result)
-      if (error !== undefined) {
-        // The registry converts this throw to isError; partial output is not
-        // success, but the preserved partial answer still reaches the parent.
-        throw new Error(withDiagnosticAndPartialText(error, result))
-      }
-      return {
-        kind: 'foreground',
-        runId: run.id,
-        // Content blocks already cross durable JSON boundaries elsewhere;
-        // the registry performs the authoritative lossless snapshot here.
-        output: result.output as unknown as JsonValue[],
-      }
-    }),
-  ])
-  const [disposal] = await Promise.allSettled([Promise.resolve().then(() => run.dispose())])
-  if (execution.status === 'rejected') {
-    if (disposal.status === 'rejected') {
-      throw new AggregateError(
-        [execution.reason, disposal.reason],
-        `subagent run failed: ${String(execution.reason)}; dispose failed: ${String(disposal.reason)}`,
-      )
-    }
-    throw execution.reason
-  }
-  if (disposal.status === 'rejected') throw disposal.reason
-  return execution.value
-}
 
 /**
  * Model-facing wording from the provider's conversation-history descriptor
@@ -275,35 +154,6 @@ function providerWording(inheritsConversation: boolean): { description: string; 
   }
 }
 
-interface DelegationRunRequest {
-  readonly run_in_background?: boolean
-}
-
-interface DelegationRunSpec {
-  readonly runInBackground: boolean
-}
-
-/** Resolve the model's optional scheduling request into one execution route. */
-function resolveDelegationRun(
-  request: DelegationRunRequest,
-  options: { readonly backgroundEnabled: boolean; readonly continuable: boolean },
-): DelegationRunSpec {
-  if (!options.backgroundEnabled) {
-    // The validator permits undeclared keys, so schema omission also needs
-    // execution-time enforcement.
-    if (request.run_in_background === true) {
-      throw new Error('run_in_background is disabled for this tool instance (enableRunInBackground: false)')
-    }
-    return { runInBackground: false }
-  }
-  return {
-    // Continuable work is independently scheduled unless the caller explicitly
-    // needs the result before its next action. One-shot policy keeps its existing
-    // foreground default because its background result requires Task collection.
-    runInBackground: request.run_in_background ?? options.continuable,
-  }
-}
-
 /**
  * Install one delegation-tool composition.
  * @param ctx - Context that owns the registrations.
@@ -318,8 +168,6 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
   if (config.toolFilter !== undefined && config.toolFilter.allow === undefined && config.toolFilter.deny === undefined) {
     throw new Error('tool-subagent: `toolFilter` is configured but names neither `allow` nor `deny` — remove the key or fill the filter')
   }
-  const backgroundEnabled = config.enableRunInBackground !== false
-  const continuable = (config.backgroundMode ?? 'one-shot') === 'continuable'
   const toolName = config.toolName ?? 'subagent'
 
   const modelSelectionCapable = config.modelSelectionSettings === true
@@ -342,11 +190,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
         `tool-subagent: provider "${subagentProvider.name}" does not support child model selection`,
       )
     }
-    if (continuable && subagentProvider.prepareContinuable === undefined) {
-      throw new Error(
-        `tool-subagent: provider "${subagentProvider.name}" does not support \`backgroundMode: continuable\``,
-      )
-    }
+
   }
 
   // Validate provider-owned config outside the optional LLM binding so an
@@ -376,17 +220,19 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
           + (subagentProvider.inheritsParentContext
             ? ' Changing the route can prevent provider-side reuse of the inherited conversation prefix.'
             : '')
-      const disposeTool = runtimeCtx.tools.register(defineTool({
+      const definition = defineTool({
         name: toolName,
-        description: wording.description + (backgroundEnabled
-          // The completion notice is the continuation service's own behavior, not
-          // a separately installed capability, so this promise holds whenever the
-          // continuable background path is reachable at all.
-          ? continuable
-            ? ' It runs in the background by default and returns a subagent id you can continue with `send_message`; you are notified when the run settles.'
-            : ' This call waits for the result by default.'
-          : ' This call waits for the subagent and returns its result.') + choiceDescription,
+        description: wording.description
+          + ' This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes.'
+          + (subagentProvider.prepareContinuable !== undefined
+            ? ' The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.'
+            : ' The completion notice includes its final answer. This backend does not accept follow-up messages.')
+          + choiceDescription,
         parameters: {
+          cwd: {
+            type: 'string',
+            description: 'Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.',
+          },
           description: {
             type: 'string',
             required: true,
@@ -417,56 +263,19 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
                 : 'Adapter-owned reasoning effort for the effective child route. Omit to inherit a compatible configured/parent effort or use a newly selected model\'s default.',
             },
           } : {},
-          ...backgroundEnabled ? {
-            run_in_background: {
-              type: 'boolean' as const,
-              description: continuable
-                ? 'Defaults to true. Set false only when your next action depends on the result.'
-                : 'Run as a background job and return its id (collect with job_output, stop with job_kill). Defaults to false.',
-            },
-          } : {},
+
         },
         output: {
           schema: {
-            oneOf: [
-              {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                  kind: { type: 'string', required: true, const: 'background' },
-                  jobId: { type: 'string', required: true },
-                },
-              },
-              {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                  kind: { type: 'string', required: true, const: 'continuable' },
-                  subagentId: { type: 'string', required: true },
-                },
-              },
-              {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                  kind: { type: 'string', required: true, const: 'foreground' },
-                  runId: { type: 'string', required: true },
-                  output: { type: 'array', required: true, items: { type: 'json' } },
-                },
-              },
-            ],
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              kind: { type: 'string', required: true, const: 'activation' },
+              subagentId: { type: 'string', required: true },
+            },
           },
-          render: (_args, value) => [{
-            type: 'text',
-            text: value.kind === 'background'
-              ? `started background subagent job ${value.jobId}`
-              : value.kind === 'continuable'
-                ? `started subagent ${value.subagentId}`
-                : outputValueText(value.output),
-          }],
+          render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}` }],
         },
-        // Children never mutate the parent session; the one parent-owned write
-        // (tasks.start) is a synchronous commutative insertion.
         isConcurrencySafe: () => true,
         async execute(args, exec) {
           const parent = exec.agent
@@ -513,7 +322,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
           exec.signal.throwIfAborted()
           const maxDepth = runtimeCtx.subagents.resolveMaxDepth(config.maxDepth)
           const request = {
-            label: args.description,
+            ...args.cwd === undefined ? {} : { cwd: args.cwd },
             prompt: [{ type: 'text', text: args.prompt }] as ContentBlock[],
             parent,
             ...requestedChildAgentOptions !== undefined ? { agentOptions: requestedChildAgentOptions } : {},
@@ -522,60 +331,29 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             ...maxDepth !== undefined ? { maxDepth } : {},
           }
 
-          const runSpec = resolveDelegationRun(args, { backgroundEnabled, continuable })
-          if (runSpec.runInBackground) {
-            if (continuable) {
-              // Resolves at inbox acceptance: the child owns its own turns from
-              // there, so this call neither waits for nor collects a result.
-              const started = await runtimeCtx.subagents.startContinuable({
-                provider: config.provider,
-                label: args.description,
-                request,
-                signal: exec.signal,
-              })
-              return { kind: 'continuable' as const, subagentId: started.childId }
-            }
-            const jobs = runtimeCtx.get('jobs')
-            if (jobs === undefined) {
-              throw new Error('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
-            }
-            // One-shot background child: job preflight finishes before the
-            // starter can spawn, and the task-owned signal covers startup.
-            const id = jobs.start({
-              kind: 'subagent',
-              label: args.description,
-              owner: parent.id,
-              run: () => {
-                const controller = new AbortController()
-                const start = runtimeCtx.subagents.start(config.provider, { ...request, signal: controller.signal })
-                return {
-                  cancel: (reason?: string) => {
-                    controller.abort(reason ?? 'background subagent task killed')
-                  },
-                  done: settleStart(start, controller.signal),
-                  // No output sources: the child session owns intermediate detail.
-                }
-              },
-            })
-            return { kind: 'background' as const, jobId: id }
-          }
-
-          const run: SubagentRun = await runtimeCtx.subagents.start(config.provider, {
-            ...request,
+          const started = await runtimeCtx.subagents.startActivation({
+            provider: config.provider,
+            label: args.description,
+            request,
             signal: exec.signal,
+            delivery: 'parent',
           })
-          return settleForegroundRun(run)
+          return { kind: 'activation' as const, subagentId: started.childId }
         },
-      }))
+      })
+      const disposeTool = runtimeCtx.effect(() => {
+        const unregister = runtimeCtx.tools.register(definition)
+        delegationTools.add(definition)
+        return () => {
+          delegationTools.delete(definition)
+          unregister()
+        }
+      })
+      // oxlint-disable-next-line typescript/no-misused-promises -- Tool and guidance disposal are synchronous.
       mounted = { subagentProvider, disposeTool }
     }
 
     // Register listeners before checking presence so no synchronous change is missed.
-    // TODO(subagent-dup-toolname): two waiting one-shot fibers configured with the
-    // same toolName collide when their provider appears, and the duplicate-name
-    // throw rolls back the provider registration. Continuable instances reserve
-    // their prompt-section name during apply() and fail earlier. Add an intent
-    // registry if the late one-shot collision occurs in a shipped composition.
     runtimeCtx.on('subagent/provider-added', (subagentProvider) => {
       if (subagentProvider.name === config.provider && mounted === undefined) mount(subagentProvider)
     })
@@ -591,18 +369,20 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
       // A backend fiber may activate later; a misspelled provider remains visible in this log.
       runtimeCtx.logger.info(`subagent provider "${config.provider}" not registered yet; the "${config.toolName ?? 'subagent'}" tool will register when it appears`)
     }
-    if (backgroundEnabled && continuable) {
-      // The section follows provider availability without its own manual
-      // lifecycle: empty text is omitted from rendered prompts while the tool is
-      // absent, and the registration itself stays owned by this plugin fiber.
-      runtimeCtx.systemPrompt.section({
-        name: `tool:${toolName}`,
-        order: runtimeCtx.systemPrompt.getSectionOrder('TOOL_SUBAGENT'),
-        text: context => mounted === undefined || runtimeCtx.tools.get(toolName, context.scope) === undefined
-          ? ''
-          : `Start independent ${toolName} delegations together in one assistant message and continue useful work while they run.`,
-      })
-    }
+    runtimeCtx.systemPrompt.section({
+      name: `tool:${toolName}`,
+      order: runtimeCtx.systemPrompt.getSectionOrder('TOOL_SUBAGENT'),
+      text: (context) => {
+        if (mounted === undefined) return ''
+        const visible = [...delegationTools]
+          .filter(tool => runtimeCtx.tools.get(tool.name, context.scope) === tool)
+          .map(tool => tool.name)
+          .sort()
+        if (visible[0] !== toolName) return ''
+        const names = visible.map(name => `\`${name}\``).join(' or ')
+        return `Start independent delegations with ${names} together in one assistant message and continue useful work while they run.`
+      },
+    })
   }
 
   if (config.modelSelectionSettings !== true) {

@@ -1,5 +1,5 @@
 ---
-description: "Theme and content-font-size settings for the dsh web client: --dsw-* token stylesheets, ThemeRuntime state, General settings rows, and the pre-plugin bootstrap."
+description: "Theme, font-size, and font-family settings for the dsh web client: --dsw-* token stylesheets, ThemeRuntime state, General settings rows, and the pre-plugin bootstrap."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-theme` lets Web GUI users choose `light`, `dark`, or `system` and set conversation content text from 10 to 22 px in Settings. A loopback client stores both values in the `ui-theme` settings namespace, which the local provider persists in `$DSH_HOME/cordis.patch.yml` by default. The plugin resolves `system` through `prefers-color-scheme` and publishes immutable `ThemeSnapshot`s; ui-layout applies each snapshot to the document. The package also ships the `--dsw-*` token stylesheets and injects a synchronous bootstrap so the selected palette and font size apply before the shell loads. Third-party themes can register alias-token overrides through `ctx.theme`.
+`dsh-client-ui-theme` lets Web GUI users choose `light`, `dark`, or `system`, and set the font and font size of text, code, and the terminal separately in Settings. A loopback client stores these values in the `ui-theme` settings namespace, which the local provider persists in `$DSH_HOME/cordis.patch.yml` by default. The plugin resolves `system` through `prefers-color-scheme` and publishes immutable `ThemeSnapshot`s; ui-layout applies each snapshot to the document. The package also ships the `--dsw-*` token stylesheets and injects a synchronous bootstrap so the selected palette, font size, and fonts apply before the shell loads. Third-party themes can register alias-token overrides through `ctx.theme`.
 
 ## Table of Contents
 
@@ -25,11 +25,15 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Users switch the color scheme and content font size from two rows in Settings (General section); both choices persist across restarts on a loopback browser. Feature plugins consume the current snapshot through `ctx.theme` and read the `--dsw-*` tokens in CSS; they do not manage theme state themselves.
+Users switch the color scheme, font sizes, and fonts from rows in Settings (General section); the choices persist across restarts on a loopback browser. Feature plugins consume the current snapshot through `ctx.theme` and read the `--dsw-*` tokens in CSS; they do not manage theme state themselves.
 
 ### Appearance and font size
 
-The plugin registers Appearance preference cubes and a font-size stepper in the General section. The stepper accepts integer values from 10 to 22 px and defaults to 14 px. It changes conversation headings and base text by the same increment, including the user bubble and composer draft; flow-row titles, summaries, and tables follow one step under the body size, while small text and code keep fixed sizes. Each accepted change writes through the Host settings API. Rapid changes serialize in gesture order with namespace revisions, and a rejected latest write reloads the durable values. Non-loopback pages keep both choices process-local.
+The plugin registers Appearance preference cubes and the text font-size stepper in the General section. A More font settings button after the stepper expands a region below it, collapsed on every settings open, with a font row for each of text, code, and the terminal, plus the code and terminal font-size steppers. The text stepper accepts integer values from 10 through 22 px and defaults to 14 px. It changes conversation headings and base text by the same increment, including the user bubble and composer draft; flow-row titles, summaries, and tables follow one step under the body size, while small text keeps a fixed size. The code stepper (10–16 px, default 11) sets the code-block size; inline code stays 1 px larger, and the small tool-output variant uses the same size. The terminal stepper (10–20 px, default 13) sets the sidebar terminal cell font size; changing it keeps the shell and output and refits the grid. Each accepted change writes through the Host settings API. Rapid changes serialize in gesture order with namespace revisions, and a rejected latest write reloads the durable values. Non-loopback pages keep these choices process-local.
+
+### Fonts
+
+Three rows set the text font (interface and conversation text), the code font (code blocks, inline code, and other `--ds-font-family-code` text), and the sidebar terminal font independently. Each field takes comma-separated family names and commits on blur or Enter; an empty field restores the built-in stack. The service normalizes each list by dropping quotes, backslashes, angle brackets, and control characters and double-quoting every name except CSS generic families, then stores it in `textFontFamily`, `codeFontFamily`, or `terminalFontFamily`. The user list precedes the role's built-in stack, so a font missing on the machine falls back to the default. The field accepts any installed font name; it does not enumerate local fonts.
 
 ### Registering a theme
 
@@ -37,7 +41,7 @@ A composition can register a third-party theme id with alias-token overrides thr
 
 ### Pre-plugin palette
 
-When the host composition includes an HTTP server, the host half embeds the registered `ui-theme` settings, or schema defaults, into each index response. Head CSS selects the document canvas color scheme before any script runs, including a `prefers-color-scheme` query for the `system` preference. A body script then sets `body[data-ds-dark-theme]` and `--dsh-content-font-size` before the loading page and application scripts, so the first paint uses the selected palette and text size.
+When the host composition includes an HTTP server, the host half embeds the registered `ui-theme` settings, or schema defaults, into each index response. Head CSS selects the document canvas color scheme before any script runs, including a `prefers-color-scheme` query for the `system` preference. A body script then sets `body[data-ds-dark-theme]`, `--dsh-content-font-size`, `--dsh-code-font-size`, `--dsh-terminal-font-size`, and each non-empty `--dsh-font-family-<role>` list before the loading page and application scripts, so the first paint uses the selected palette and text and code sizes, and `ThemeRuntime` starts from the saved sizes and fonts instead of rendering the defaults first.
 
 -----
 
@@ -49,11 +53,11 @@ Shared menus use `--dsw-menu-surface-fill` and blur through `MenuSurface`; platf
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The service owns theme and font-size state and publishes snapshots. The ui-layout presenter applies those snapshots, and the token sheets own the color and conversation text scales.
+The service owns theme, font-size, and font-family state and publishes snapshots. The ui-layout presenter applies those snapshots, and the token sheets own the color and conversation text scales.
 
 ### Stylesheets
 
-`base.css` owns the shared radius scale and settings-card material aliases. The material aliases resolve on `body`, alongside the active palette. Follow [Web styling](../../../docs/web-styling.md#corner-radii-and-settings-cards) when choosing component radii.
+`base.css` owns the shared radius scale, the font tokens, and settings-card material aliases. `--dsh-font-family-text-default` and `--dsh-font-family-code-default` hold the built-in stacks on `:root`; on `body`, `--dsw-font-family` and `--ds-font-family-code` place `--dsh-font-family-text` and `--dsh-font-family-code` ahead of those stacks, and an unset list resolves to the built-in stack (repeated once, which font matching ignores). The material aliases resolve on `body`, alongside the active palette. Follow [Web styling](../../../docs/web-styling.md#corner-radii-and-settings-cards) when choosing component radii.
 
 `src/styles/` holds eight sheets imported in order by ui-theme's dynamic client entry: `base.css`, `corner-shape.css`, `design-platform.css`, `focus.css`, `onboarding.css`, `scrollbar.css`, `gradient-shadow-text.css`, and `shiki.css`. The client bundle compiles and injects them as plugin-owned global styles, so unload and HMR remove them with ui-theme. `scrollbar.css` consumes the `--dsw-alias-scrollbar-*` tokens and must follow `design-platform.css`, which declares them. Status marks use their own semantic state tokens. `--dsw-alias-bg-document-selection` uses blue-500 at 40% opacity in both themes for selections over original document colors. `design-platform.css` also owns the code-diff fill aliases and their static alpha palette entries, plus the `--dsw-alias-file-diff-*` code, gutter, and marker palette for file comparisons; `shiki.css` owns syntax colors.
 
@@ -75,7 +79,7 @@ The `--dsw-alias-turn-trigger-*` tokens provide separate resting and hover backg
 
 `corner-shape.css` smooths every rounded corner: inside `@supports (corner-shape: superellipse(1.5))` it defines `--dsw-corner-shape` and applies it to all elements and their `::before`/`::after` through the universal selector, so engines without `corner-shape` keep circular corners. Full-round shapes — `border-radius: 50%` circles and pill radii — pair `corner-shape: round` with their radius in the owning component sheet because a superellipse deforms them; the corner-shape stylesheet spec enforces that pairing across every package stylesheet.
 
-`gradient-shadow-text.css` derives `--dsh-content-font-delta` from `--dsh-content-font-size` and shifts the Markdown heading and base-text ladder by that increment. It also derives the secondary tier `--dsh-content-font-size-secondary` (setting −1 at ≤14, setting −2 above; 13px at the default) with its own `--dsh-content-font-delta-secondary` for the table variants and the flow rows one step under the body. Dense small and code variants stay fixed. Outside the ladder, the user bubble and composer draft read the body pair directly, and flow-row titles and summaries read the secondary pair. The sheet also owns the shadow scale (`--dsw-shadow-lv*`), the translucent-menu `--dsw-menu-backdrop-filter`, and the elevation tokens: `--dsw-elevation-stroke` draws a 0.5px hairline through the rebindable `--dsw-elevation-stroke-color`, and `--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft` (the composer's larger-blur, lower-alpha tier) layer two faint soft shadows over that stroke, so elevated surfaces set `border: 0` and carry no layout-consuming outline; the derived tokens are re-declared per element so a surface's stroke-color rebind takes effect. An elevated surface that paints `--dsw-specific-menu` also applies `backdrop-filter: var(--dsw-menu-backdrop-filter)` ([styling reference](../../../docs/web-styling.md#component-rules)). Dark menus use a 45%-opaque gray fill and the `border-l3` stroke; light menus retain their `border-l1` stroke.
+`gradient-shadow-text.css` derives `--dsh-content-font-delta` from `--dsh-content-font-size` and shifts the Markdown heading and base-text ladder by that increment. It also derives the secondary tier `--dsh-content-font-size-secondary` (setting −1 at ≤14, setting −2 above; 13px at the default) with its own `--dsh-content-font-delta-secondary` for the table variants and the flow rows one step under the body. Dense small variants stay fixed. The code variants (`--dsw-font-markdown-code`, `-code-block`, `-code-block-small`) shift size and line height by `--dsh-code-font-delta`, the difference between `--dsh-code-font-size` and 11 px. Outside the ladder, the user bubble and composer draft read the body pair directly, and flow-row titles and summaries read the secondary pair. The sheet also owns the shadow scale (`--dsw-shadow-lv*`), the translucent-menu `--dsw-menu-backdrop-filter`, and the elevation tokens: `--dsw-elevation-stroke` draws a 0.5px hairline through the rebindable `--dsw-elevation-stroke-color`, and `--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft` (the composer's larger-blur, lower-alpha tier) layer two faint soft shadows over that stroke, so elevated surfaces set `border: 0` and carry no layout-consuming outline; the derived tokens are re-declared per element so a surface's stroke-color rebind takes effect. An elevated surface that paints `--dsw-specific-menu` also applies `backdrop-filter: var(--dsw-menu-backdrop-filter)` ([styling reference](../../../docs/web-styling.md#component-rules)). Dark menus use a 45%-opaque gray fill and the `border-l3` stroke; light menus retain their `border-l1` stroke.
 
 `brand-font.css` references the bundled `montserrat-regular.woff2` / `montserrat-light.woff2` / `montserrat-medium.woff2`, Montserrat Regular, Light, and Medium under the SIL Open Font License shipped with the stylesheet and WOFF2 under `lib/styles/`. `--dsw-font-family-brand` selects this face for brand text; ordinary UI keeps the system font stack. The source is Google Fonts' Montserrat distribution. The Web entry imports the package's `./brand-font.css` export so Vite emits and resolves the font asset; the Web build also includes its license. The Web application, including Desktop onboarding, loads the font offline. The native credential welcome retains its system font.
 
@@ -87,7 +91,7 @@ The `--dsw-alias-turn-trigger-*` tokens provide separate resting and hover backg
 
 ### Preference persistence
 
-The service provides itself immediately with the schema defaults on a loopback browser, then loads the `ui-theme` namespace and writes each accepted theme or font-size change through the Host settings API. Pushed settings changes and reconnects refetch the namespace. Non-loopback pages do not create that Host-backed scope. The persistence boundary is owned by the [Host-backed preferences reference](../ui-settings/README.md).
+The service provides itself immediately with the schema defaults on a loopback browser, then loads the `ui-theme` namespace and writes each accepted theme, font-size, or font-family change through the Host settings API. Pushed settings changes and reconnects refetch the namespace. While its own writes are pending, the service ignores refetched sections, so an echo of an earlier write cannot revert a later change; it adopts the durable section once the writes settle. Non-loopback pages do not create that Host-backed scope. The persistence boundary is owned by the [Host-backed preferences reference](../ui-settings/README.md).
 
 </details>
 

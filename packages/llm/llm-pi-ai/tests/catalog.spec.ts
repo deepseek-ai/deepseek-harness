@@ -7,10 +7,11 @@ const configurations = new WeakMap<Context, Awaited<ReturnType<typeof liveConfig
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
-import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
+import { getAllBuiltinModels, getBuiltinModels, getBuiltinProviders } from '@earendil-works/pi-ai/providers/all'
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream'
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript'
 import type { Api, Model, OpenAICompletionsCompat, Provider } from '@earendil-works/pi-ai'
+import { catalogModels, catalogProvider } from '../src/catalog.ts'
 import { resolveProfiles } from '../src/config.ts'
 import { createModels, createProvider, getSupportedThinkingLevels } from '../src/models.ts'
 import { buildProvider, supportedProtocols } from '../src/provider.ts'
@@ -1236,6 +1237,21 @@ describe('configurable-provider directory', () => {
     expect(offered).toContain('openai-codex')
     expect(offered).toContain('anthropic')
     expect(offered).toContain('openai')
+  })
+
+  it('leaves out an installed catalog route that ships no chat model', async () => {
+    const ctx = await harness({})
+    const offered = ctx.llm.listConfigurableProviders().map(entry => entry.provider)
+
+    // The installed catalog ships `typesafe` with classifier models only; with
+    // nothing to dispatch a chat request to, the route is not offered and is
+    // not a catalog route anywhere else either.
+    expect(getBuiltinProviders()).toContain('typesafe')
+    expect(getAllBuiltinModels('typesafe').length).toBeGreaterThan(0)
+    expect(getBuiltinModels('typesafe')).toEqual([])
+    expect(offered).not.toContain('typesafe')
+    expect(catalogProvider('typesafe')).toBeUndefined()
+    expect(catalogModels('typesafe').size).toBe(0)
   })
 
   it('lists a route a stored profile names as a catalog route, not a declared one', async () => {

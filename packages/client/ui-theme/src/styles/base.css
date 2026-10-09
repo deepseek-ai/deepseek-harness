@@ -4,11 +4,13 @@
  * font stack deliberately omits a bare `monospace` tail (Windows CJK falls
  * back to SimSun otherwise). */
 :root {
-  --dsw-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+  --dsh-font-family-text-default: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --dsw-font-family-brand: 'Montserrat', var(--dsw-font-family);
-  --ds-font-family-code: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas,
+  --dsw-font-family: var(--dsh-font-family-text-default);
+  --dsw-font-family-brand: 'Montserrat', var(--dsh-font-family-text-default);
+  --dsh-font-family-code-default: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas,
     'Liberation Mono', Menlo, Courier, 'PingFang SC', 'Microsoft YaHei';
+  --ds-font-family-code: var(--dsh-font-family-code-default);
   --ds-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --ds-transition-duration: 0.2s;
   --ds-transition-duration-fast: 0.1s;
@@ -21,7 +23,12 @@
   --dsw-radius-panel: 28px;
 }
 
+/* User font lists (--dsh-font-family-text/-code, written on body by the theme
+ * boot script and ThemePresenter) lead the built-in stacks. An unset list
+ * falls back to the built-in stack itself; the repeated families are inert. */
 body {
+  --dsw-font-family: var(--dsh-font-family-text, var(--dsh-font-family-text-default)), var(--dsh-font-family-text-default);
+  --ds-font-family-code: var(--dsh-font-family-code, var(--dsh-font-family-code-default)), var(--dsh-font-family-code-default);
   --dsw-alias-settings-card-fill: var(--dsw-alias-bg-layer-2);
   --dsw-alias-settings-card-stroke: var(--dsw-alias-border-l4);
 }

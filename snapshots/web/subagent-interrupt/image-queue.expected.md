@@ -1,0 +1,52 @@
+- banner:
+  - navigation "Session hierarchy":
+    - button "Ask a research subagent to"
+    - text: /
+    - 'button "Switch subagent: event-sourcing researcher"': event-sourcing researcher
+  - text: Standard mode
+  - button "More actions"
+  - button "Open right sidebar"
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+- navigation "Turn navigation":
+  - button "Jump to turn 1"
+  - button "Jump to turn 2"
+- text: "Explain event sourcing in one sentence.Your parent agent id is \"session-{{uuid}}\". Before you finish, send your result to that agent with send_message({ agent_id: \"session-{{uuid}}\", message: \"<self-contained result>\" }). The parent shares your workspace but does not automatically receive your transcript, tool output, or reasoning. Send earlier messages as well when a finding changes what the parent should do next; sending a message does not end your turn. {{clock}}"
+- button "Copy"
+- status: Stopped
+- button "Stopped" [disabled]
+- paragraph: partial
+- text: Stopped
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
+- text: {{clock}} Keep working until I stop you again. {{clock}}
+- button "Copy"
+- paragraph: partial
+- status: Deep diving
+- text: Deep diving for {{duration}} ···
+- button "3 queued messages" [expanded]
+- list:
+  - listitem:
+    - text: Start that queued work now.
+    - button "Edit queued message"
+    - button "Remove queued message"
+    - button "Steer queued message"
+  - listitem:
+    - text: Explain the same idea for a human reader.
+    - button "Edit queued message"
+    - button "Remove queued message"
+    - button "Steer queued message"
+  - listitem:
+    - img "Queued message image"
+    - button "Edit queued message" [disabled]
+    - button "Remove queued message"
+    - button "Steer queued message"
+- textbox "Cmd/Ctrl+Enter steers all queued messages"
+- button "Add files or run commands"
+- 'button "Access mode, current: Custom"': Custom
+- button "Stop generating"
+- button "Send message" [disabled]
+- button "1 turns 1 steps"

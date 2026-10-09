@@ -11,7 +11,6 @@ const paths = resolveDesktopTargetBuildPaths()
 const { values } = parseArgs({ options: { unsigned: { type: 'boolean', default: false } }, allowPositionals: false })
 const target = resolveDesktopBuildTarget()
 const windows = target === 'win-x64'
-if (values.unsigned && !windows) throw new Error('desktop smoke: unsigned artifacts require Windows')
 const artifacts = values.unsigned ? paths.unsignedArtifacts : paths.artifacts
 const application = windows ? join(artifacts, 'win-unpacked')
   : join(artifacts, target === 'mac-arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app', 'Contents')

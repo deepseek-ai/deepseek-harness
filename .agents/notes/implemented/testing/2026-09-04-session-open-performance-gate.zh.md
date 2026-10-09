@@ -12,7 +12,7 @@ Session format v2 的推出改变了两条成本随模型输出增长的路径�
 
 ## 决定
 
-Linux pull request 运行必需的 `node 24 / benchmarks` job，执行 `pnpm run check:ci:bench` → `pnpm run test:bench`。私有 `@deepseek-ai/dsh-benchmarks` workspace 拥有 benchmark 专属依赖。该命令先构建 workspace library 和 `benchmarks/.dsh-build/` 下的专用 worker，再调用 `vitest.bench.config.ts`。[标准托管运行器说明](../../../../.github/workflows/ci.yml)拥有运行器选择及外层 job 超时。该 job 单独运行 benchmark lane；Vitest 逐文件运行，只负责准备输入、启动测量子进程、汇总结果和执行预算断言。每条被计时的 Node CPU 路径都以纯 Node 执行编译后的 JavaScript，并移除 `NODE_OPTIONS` 且不加载 TypeScript runtime；workspace 裸导入因此从 `benchmarks/node_modules` 通过 package exports 解析到构建后的 `lib/` 入口。
+Linux pull request 运行必需的 `node 24 / benchmarks` job，执行 `pnpm run check:ci:bench` → `scripts/run-ci-bench.ts`。其临时 library 构建按 [PR 产物构建政策](../process/2026-10-05-pr-artifact-typechecks.zh.md)省略重复的 TypeScript 诊断；必需的完整构建保留这些诊断。私有 `@deepseek-ai/dsh-benchmarks` workspace 拥有 benchmark 专属依赖。该命令先构建 workspace library 和 `benchmarks/.dsh-build/` 下的专用 worker，再调用 `vitest.bench.config.ts`。[标准托管运行器说明](../../../../.github/workflows/ci.yml)拥有运行器选择及外层 job 超时。该 job 单独运行 benchmark lane；Vitest 逐文件运行，只负责准备输入、启动测量子进程、汇总结果和执行预算断言。每条被计时的 Node CPU 路径都以纯 Node 执行编译后的 JavaScript，并移除 `NODE_OPTIONS` 且不加载 TypeScript runtime；workspace 裸导入因此从 `benchmarks/node_modules` 通过 package exports 解析到构建后的 `lib/` 入口。
 
 必需性能 gate 位于顶层 `benchmarks/`，按被测用户路径而非 package 归属组织。Host 文件使用 `*.bench.ts`，Client 面文件使用 `*.bench.client.ts`，场景专属 worker 与 fixture 留在对应 benchmark 旁且不带 benchmark 后缀。包内 `.perf.ts` 文件仍是非门禁诊断；`scripts/` 负责编排而不承载 benchmark case。
 

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { runBuiltBenchmarkWorker } from '../support/built-worker.ts'
 import { ciTimeBudget, PERFORMANCE_BUDGET_HEADROOM } from '../support/calibration.ts'
+import { recordTimings } from '../support/scaling-report.ts'
 import type { ProjectionListReport } from './projection-list.worker.ts'
 
 const WORKER = join(import.meta.dirname, '..', '.dsh-build', 'session-corpus', 'projection-list.worker.js')
@@ -17,6 +18,10 @@ const LIST_REFERENCE_MS = { modest: 50, tail: 500, cheap: 150 } as const
 const CALLBACK_REFERENCE_MS = 30
 /** Reference retained-heap allowance; memory receives variance headroom but no CPU scaling. */
 const RETAINED_HEAP_REFERENCE_BYTES = 240 * 1024 * 1024
+/** Queue delay is time other callbacks wait behind list work on the Host thread, which is CPU work. */
+const CALLBACK_IO_SHARE = 0
+/** Sessions per workload. */
+const SESSIONS = { modest: 50, tail: 300, cheap: 3_000 } as const
 
 function median(values: readonly number[]): number {
   return [...values].sort((left, right) => left - right)[Math.floor(values.length / 2)] as number
@@ -68,9 +73,18 @@ it.each(['modest', 'tail', 'cheap'] as const)('serves the %s projection list wit
   console.log(JSON.stringify({ benchmark: `session-corpus/projection-list-${workload}`,
     reports, medians, budgets, environment: { node: process.version, platform: process.platform, arch: process.arch, cpu: cpus()[0]?.model } }))
 
+  recordTimings({
+    id: `session-corpus/projection-list-${workload}`,
+    measures: `Host Session-list projection and JSON for ${SESSIONS[workload].toLocaleString('en-US')} Sessions, and the longest Host queue delay meanwhile.`,
+    affects: 'Showing the Session sidebar; a long queue delay stalls other Web GUI requests.',
+  }, {
+    firstListAndJsonMs: { ms: medians.firstListAndJsonMs, cpuMs: medians.firstListAndJsonCpuMs },
+    repeatListAndJsonMs: { ms: medians.repeatListAndJsonMs, cpuMs: medians.repeatListAndJsonCpuMs },
+    worstCallbackDelayMs: { ms: medians.worstCallbackDelayMs, ioShare: CALLBACK_IO_SHARE },
+  }, { firstListAndJsonMs: budgets.listAndJsonMs, repeatListAndJsonMs: budgets.listAndJsonMs, worstCallbackDelayMs: budgets.callbackDelayMs })
   for (const report of reports) {
     expect(report.workload).toBe(workload)
-    expect(report.fixture.sessions).toBe({ modest: 50, tail: 300, cheap: 3_000 }[workload])
+    expect(report.fixture.sessions).toBe(SESSIONS[workload])
     expect(report.fixture.baseRows).toBe({ modest: 100, tail: 1_000, cheap: 0 }[workload])
     expect(report.samples).toHaveLength(4)
     for (const sample of [...report.samples, report.responsiveness]) {

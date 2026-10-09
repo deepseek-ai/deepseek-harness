@@ -938,13 +938,13 @@ describe('automation-only ACP bridge', () => {
   })
 
   it('renders the deployment persona for an ACP-created agent', async () => {
-    harness = await makeBridgeHarness({ persona: 'Automation persona for {{model}} in {{cwd}}.', script: [textResponse('ok')] })
+    harness = await makeBridgeHarness({ persona: 'Automation persona for {{model}}.', script: [textResponse('ok')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     await harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
     const head = harness.adapter.requests[0]?.messages[0]
     expect(head?.role).toBe('system')
-    expect(head?.content).toContainEqual({ type: 'text', text: expect.stringContaining(`Automation persona for mock in ${process.cwd()}.`) as unknown })
+    expect(head?.content.some(part => part.type === 'text' && part.text.includes('Automation persona for mock.'))).toBe(true)
   })
 
   it('requires one absolute primary workspace', async () => {

@@ -142,11 +142,13 @@ try {
     Click-Control $process $copy.INSTALLER_BROWSE
     Dismiss $process $copy.INSTALLER_CHOOSE_PATH
     [void][InstallerCapture]::SendMessage($window, 0x28, $edit, [IntPtr]1)
-    foreach ($invalidPath in @('C:\Windows\Harness Installer Test', [IO.Path]::GetPathRoot($installPath), ([IO.Path]::GetPathRoot($installPath) + '\'))) {
+    $driveRoot = [IO.Path]::GetPathRoot($installPath)
+    foreach ($invalidPath in @('C:\Windows\Harness Installer Test', $driveRoot, ($driveRoot + '\'), ($driveRoot + '\\'))) {
         [void][InstallerCapture]::SendMessage($edit, 0xC, [IntPtr]::Zero, $invalidPath)
         [void][InstallerCapture]::PostMessage($edit, 0x100, [IntPtr]13, [IntPtr]::Zero)
         Dismiss $process $copy.INSTALLER_PATH_INVALID
     }
+    $results.Add('canonical-drive-roots-rejected-before-ownership-check')
     [void][InstallerCapture]::SendMessage($edit, 0xC, [IntPtr]::Zero, $installPath)
     [InstallerCapture]::MoveBy($window, 73, -41)
     $bounds = [InstallerCapture]::Bounds($window)

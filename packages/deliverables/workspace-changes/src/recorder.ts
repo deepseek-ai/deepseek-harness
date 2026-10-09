@@ -3,7 +3,7 @@ import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
-import { captureFile, mutationPath, sameCapture, type Capture } from './capture.ts'
+import { captureFile, sameCapture, type Capture } from './capture.ts'
 import { compareText } from './compare.ts'
 import {
   blobText, diffTrees, gitlinkPaths, ignoredPaths, locateGitWorkspace, snapshotTree, treeBlob, type GitRunner, type GitWorkspace,
@@ -29,7 +29,7 @@ export interface RecorderEnvironment {
 
 /** Canonical paths every comparison and display uses, resolved once per Session. */
 interface Paths {
-  /** Canonical working directory; git reports symlink-resolved paths, so every comparison uses that form. */
+  /** Canonical original project directory for repository discovery and display paths. */
   cwd: string
   /** Canonical home directory abbreviated as `~` in display paths. */
   home: string
@@ -150,17 +150,14 @@ export class TurnRecorder {
    * Queue the capture of the path a file tool is about to mutate, before the
    * tool runs; only the turn's first mutation of a path captures it. Await
    * {@link settled} afterwards so the tool cannot overtake the capture.
-   * @param name - wire tool name.
-   * @param args - parsed call arguments.
+   * @param path - absolute process path of the filesystem provider's resolved mutation target.
    */
-  capture(name: string, args: unknown): void {
-    const path = mutationPath(name, args)
-    if (path === undefined) return
+  capture(path: string): void {
     const state = this.state
     void this.enqueue(async () => {
       const paths = this.paths
       if (paths === undefined) return
-      const absolute = await canonicalPath(resolve(paths.cwd, path))
+      const absolute = await canonicalPath(path)
       if (state.captures.has(absolute)) return
       const capture = await captureFile(absolute, join(await this.scratchDir(), 'captures'), this.env.maxFileBytes)
       if (capture !== undefined) state.captures.set(absolute, capture)

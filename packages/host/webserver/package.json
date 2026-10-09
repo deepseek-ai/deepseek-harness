@@ -32,11 +32,13 @@
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
     "compression": "^1.8.1",
-    "negotiator": "^1.0.0"
+    "ipaddr.js": "^2.5.0",
+    "negotiator": "^1.1.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@types/compression": "^1.8.1",
-    "@types/negotiator": "^0.6.5"
+    "@types/negotiator": "^0.6.5",
+    "selfsigned": "^4.0.1"
   }
 }

@@ -17,6 +17,7 @@
  */
 
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type { BundleInfo } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 
 /** The view the page asks a configuration entry for. */
@@ -43,8 +44,12 @@ export interface PluginPackageRef {
   readonly name: string
   /** The installed version, when the Host reports one. */
   readonly version?: string
-  /** Whether the profile's own dependencies hold the package; false for a bundle the installation supplies. */
+  /** Whether the profile declares the package dependency. */
   readonly installed: boolean
+  /** Readable package location; missing entries can retain a dependency declaration. */
+  readonly availability: BundleInfo['availability']
+  /** Whether the installation offers this package in Official. */
+  readonly official: boolean
   /** Whether the bundle is switched on. */
   readonly enabled: boolean
   /** The rows the bundle declares. */

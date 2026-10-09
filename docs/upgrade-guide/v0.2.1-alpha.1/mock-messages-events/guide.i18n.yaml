@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.1/mock-messages-events/guide.md
+/:
+  en: 50f48b2d699ff15d
+  zh: 3767619b47fd76fb
+/read-named-events-from-the-messages-mock-server:
+  en: d97603a00507734c
+  zh: 6cfec46c21e97b70
+/read-named-events-from-the-messages-mock-server/change:
+  en: f03d6e1d637f6397
+  zh: cabeac0144d33ac4
+/read-named-events-from-the-messages-mock-server/migration:
+  en: 7528082a3376359e
+  zh: 0e8eaad875394baa

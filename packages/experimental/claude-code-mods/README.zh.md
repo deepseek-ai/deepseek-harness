@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-在智能体运行中执行 [Claude Code 模组](https://code.claude.com/docs/en/plugins/mods/overview)：用 `defineMod` 包装模组的 `register(on, options)`，在本桥接之后作为插件挂载，其钩子即可通过同一套 `$`、`e`、`next` 链守卫工具调用、改写提示词、添加命令与工具、读取会话事实，并在提示框上方绘制一条横幅。挂载本身没有开销，直到模组行动；每次 `$` 调用都落在一个已组合的 harness 服务上。它是 alpha 阶段的接口兼容性演示：未服务的事件在加载时报告，未服务的 `$` 成员以指明缺口的消息失败，[兼容性页面](../../../docs/subsystems/claude-code-mods.zh.md) 列出了全部差异。
+在智能体运行中执行 [Claude Code 模组](https://code.claude.com/docs/en/plugins/mods/overview)：用 `defineMod` 包装模组的 `register(on, options)`，在本桥接之后作为插件挂载，其钩子即可通过同一套 `$`、`e`、`next` 链守卫工具调用、改写提示词、添加命令与工具、读取会话事实，并在提示框上方绘制一条横幅。桥接需要 `dsh-working-directory`，每次 `$` 调用都落在一个已组合的 harness 服务上。它是 alpha 阶段的接口兼容性演示：未服务的事件在加载时报告，未服务的 `$` 成员以指明缺口的消息失败，[兼容性页面](../../../docs/subsystems/claude-code-mods.zh.md) 列出了全部差异。
 
 ## 目录
 
@@ -55,11 +55,13 @@ export default defineMod({ name: 'token-weather', version: '0.1.0', root: import
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-claude-code-mods)是所有可接受字段的完整来源。[examples](examples/) 目录以插件目录的形式收录了 Anthropic [Getting started with Claude Code mods](https://claude.dev/blog/getting-started-with-claude-code-mods/) 一文中的三个模组，它们同样可在 `claude --plugin-dir` 下运行：Token Weather 的已发布模块、类型与测试原样保留，Blast Radius 与 Replay Theater 则由已发布片段补全。[可选叠加层](cordis.source.patch.yml)把桥接、三个模组与 [Web 横幅](../client-ui-claude-code-mods/README.zh.md)组合起来用于源码启动。
 
+Blast Radius 的 DSH 包装使用当前运行的可执行文件提供 Node 计时子进程，因此 Proceed/Cancel 等待在 Windows 上不依赖 POSIX `sleep`。等待仍通过 `$.process.run` 执行，暂停钩子自身的运行时间预算，并随事件取消子进程。独立的 Claude Code hooks 模块默认使用 `sleep 0.25`；其预演命令也需要宿主机提供相应工具。
+
 ### 你的模组会收到哪些事件
 
 | 事件 | 触发自 | 钩子可以 |
 |---|---|---|
-| `session.start` | 根智能体的 `agent/created`，在其首轮之前等待完成；取消创建会放弃等待中的钩子 | 观察；注册命令与工具 |
+| `session.start` | 根智能体的 `agent/created`，在其首轮之前等待完成；`cwd` 使用已验证的目录，包括从持久化恢复的目录；取消创建会放弃验证和等待中的钩子 | 观察；注册命令与工具 |
 | `prompt.submit` | 带有已认领消息的 `agent/pre-step`；`e.text` 拼接人类自己（`user` 来源）消息的文本块，改写也只触及这些块 | 改写 `text`、在输入的提示词之后追加 `context` 块，或 `{ drop }` 掉提示词 |
 | `turn.start` | 一轮中的首个 `agent/pre-step` | 观察 |
 | `tool.call` | `tools/execute` 瀑布流，在 harness 权限决定之后；模组用 `$.tool.call` 发起的调用只到达在它之前加载的模组，并归属于调用方 | 前后观察、`{ deny }`、以 `{ result }` 作答，或在 `next` 之后改写结果或其 `isError` |
@@ -85,12 +87,12 @@ export default defineMod({ name: 'token-weather', version: '0.1.0', root: import
 | `$.command` | `register`、`run`、`list` | `ctx.commands`，限定在事件所属的智能体 |
 | `$.tool` | `register`、`call`、`list` | `ctx.tools`；注册的工具名为 `mcp__<plugin>__<tool>`；工具推迟到下一请求的上下文会注入会话 |
 | `$.prompt` | `submit` | `agent.followup()`，作为 `user` 来源的消息，除非 `asUser` 否则套上"来自模组"的框架；它触发的 `prompt.submit` 带 `origin: { kind: 'plugin', name }` |
-| `$.session` | `id`、`cwd`、`root`、`model`、`turns`、`messages`、`usage`、`version` | 智能体的 Session 及 `turnBoundary`、`contextPressure` 投影；`cwd` 与 `root` 都报告会话工作区，即 harness 每会话一个目录 |
+| `$.session` | `id`、`cwd`、`root`、`model`、`turns`、`messages`、`usage`、`version` | 智能体的 Session 及 `turnBoundary`、`contextPressure` 投影；`cwd` 通过 `ctx.workingDirectory` 报告已提交的当前目录；`root` 保留原始项目 |
 | `$.state` | `get`、`set` | 为会话持有的内存，以模组命名的 `{ plugin, key }` 寻址；`ui.render` 期间的读取会让横幅订阅 |
 | `$.store` | `get`、`set`、`delete`、`keys` | `claude_code_mods` 存储域，每插件一个 JSON 对象，4 MiB |
 | `$.clock` | `now`、`sleep`、`after`、`every` | 由安排它们的事件所属会话拥有的定时器；事件取消时 `sleep` 拒绝 |
-| `$.fs` | `read`、`write`、`list`、`exists`、`stat` | `ctx.fs`，相对于会话工作区，每文件 4 MiB |
-| `$.process` | `run` | `ctx.subprocess`，不经 shell 的 argv |
+| `$.fs` | `read`、`write`、`list`、`exists`、`stat` | `ctx.fs`，相对于已验证的 Session 当前目录，每文件 4 MiB |
+| `$.process` | `run` | `ctx.subprocess`，不经 shell 的 argv；未提供 `init.cwd` 时，新进程默认使用已验证的 Session 当前目录 |
 | `$.http` | `fetch` | 进程的 `fetch`，正文最多 4 MiB |
 | `$.env` | `get`、`set` | 本进程的环境变量，所有会话与插件共享 |
 
@@ -119,7 +121,7 @@ export default defineMod({ name: 'token-weather', version: '0.1.0', root: import
 
 ### 映射到 harness
 
-[`index.ts`](src/index.ts) 注册监听器。`tool.call` 包裹 `tools/execute`，因此 harness 的权限决定先于链；`{ deny }` 成为带原因的错误结果，`{ result }` 在工具为模组注册或值满足工具输出 schema 时成为成功结果，否则为错误形态的结果。钩子在 `next` 之后改写的结果经 `tools/post-execute` 作为替换内容安装。向 `next` 传入改写参数的钩子会被跳过并报告，因为调用参数已经写入日志。[`host-ops.ts`](src/host-ops.ts) 持有每个 `$` 调用基于 `ctx.get(...)` 服务的引擎行为，部署只需组合其模组用到的服务。[`surfaces.ts`](src/surfaces.ts) 为每个会话保留一条横幅：触发 `ui.render`，用 [`elements.ts`](src/elements.ts) 校验并序列化树，把每个 `Button` 的 `onPress` 保存在按绘制分配的动作 id 之后，让横幅订阅该次绘制读取的 `$.state` 槽位，并通过 `claudeCodeMods` Remote（`watchBand`、`pressBand`）把各代推流给 Client。
+[`index.ts`](src/index.ts) 注册监听器。`tool.call` 包裹 `tools/execute`，因此 harness 的权限决定先于链；`{ deny }` 成为带原因的错误结果，`{ result }` 在工具为模组注册或值满足工具输出 schema 时成为成功结果，否则为错误形态的结果。钩子在 `next` 之后改写的结果经 `tools/post-execute` 作为替换内容安装。向 `next` 传入改写参数的钩子会被跳过并报告，因为调用参数已经写入日志。[`host-ops.ts`](src/host-ops.ts) 持有每个 `$` 调用基于 `ctx.get(...)` 服务的引擎行为；目录所有者为必需服务，其他服务按需读取。[`surfaces.ts`](src/surfaces.ts) 为每个会话保留一条横幅：触发 `ui.render`，用 [`elements.ts`](src/elements.ts) 校验并序列化树，把每个 `Button` 的 `onPress` 保存在按绘制分配的动作 id 之后，让横幅订阅该次绘制读取的 `$.state` 槽位，并通过 `claudeCodeMods` Remote（`watchBand`、`pressBand`）把各代推流给 Client。
 
 ### 源码地图
 
@@ -146,7 +148,7 @@ export default defineMod({ name: 'token-weather', version: '0.1.0', root: import
 - [Claude Code 模组参考](https://code.claude.com/docs/en/plugins/mods/reference) — 本桥接镜像的事件、方法与限制。
 - [Web 横幅](../client-ui-claude-code-mods/README.zh.md) — 在输入停靠区绘制 `ui.render` 树的 Client 包。
 - [实验性包](../README.zh.md) — 发布策略与依赖隔离。
-- [Hooks 组](../../hooks/README.zh.md) — 设置钩子桥接；插件 `hooks.json` 中的设置钩子需要 `dsh-hooks-claude-code`。
+- [Claude Code 钩子桥接](../hooks-claude-code/README.zh.md) — 设置钩子桥接；插件 `hooks.json` 中的设置钩子需要 `dsh-hooks-claude-code`。
 - [工具执行流水线](../../../docs/tool-execution-pipeline.zh.md) — `tool.call` 所包裹的瀑布流。
 - [人类命令](../../interaction/commands/README.zh.md) — `$.command.register` 落到的注册表。
 

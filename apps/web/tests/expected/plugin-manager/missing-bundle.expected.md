@@ -1,10 +1,11 @@
-- button "返回插件列表": 插件列表
+- button "返回插件": 插件
 - button "卸载 @fixture/missing-bundle": 卸载
 - switch "启用 @fixture/missing-bundle" [checked]
 - heading "@fixture/missing-bundle" [level=3]
-- text: 异常
+- text: 异常 未安装
 - paragraph:
   - code: "@fixture/missing-bundle"
 - status: "原因: dsh: cannot resolve profile bundle \"@fixture/missing-bundle\" from the dsh installation or {{home}}/profiles/scaffold; run 'dsh plugin --profile scaffold install' if its dependency is not installed"
-- heading "包含的组件" [level=4]
-- paragraph: 这个插件包不包含任何组件。
+- heading "来源信息" [level=4]
+- term: 代码来源
+- definition: 未安装

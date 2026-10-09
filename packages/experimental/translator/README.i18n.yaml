@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/translator/README.md
+/:
+  en: f55d62d235c3a1f3
+  zh: 62063508c0ba87ad
+/deepseek-ai-dsh-experimental-translator:
+  en: de5ee8ccf9094431
+  zh: ca8ed948d6fb6553
+/deepseek-ai-dsh-experimental-translator/summary:
+  en: dbfd4283d49cc598
+  zh: 1717743620294ec6
+/deepseek-ai-dsh-experimental-translator/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 91dd6a6ee0635d20
+/deepseek-ai-dsh-experimental-translator/use-this-package:
+  en: a8a0b2481c0966c3
+  zh: aedb4a655c2c96c2
+/deepseek-ai-dsh-experimental-translator/understand-the-implementation:
+  en: 8fa99924e5a2993e
+  zh: 269b0e9546109251
+/deepseek-ai-dsh-experimental-translator/further-exploration:
+  en: 17792a9fe5429633
+  zh: b51e5e3c30b0e14d
+/deepseek-ai-dsh-experimental-translator/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-translator/model-experience/auxiliary-flash-translation-system-prompt:
+  en: 75b37930051f9b46
+  zh: e79f28804416b939
+/deepseek-ai-dsh-experimental-translator/model-experience/auxiliary-flash-translation-system-prompt/what-the-model-sees:
+  en: 8e7fa23dc157c1ea
+  zh: 3d483952fed2b2cd
+/deepseek-ai-dsh-experimental-translator/model-experience/auxiliary-flash-translation-system-prompt/what-the-model-sees/fixed-translation-instruction:
+  en: cd064594a1c325af
+  zh: 736f9213f65c0b78
+/deepseek-ai-dsh-experimental-translator/model-experience/auxiliary-flash-translation-system-prompt/token-effect:
+  en: 5d7b4e99ba5c776e
+  zh: 7e14e2679ec6aff3
+/deepseek-ai-dsh-experimental-translator/model-experience/auxiliary-flash-translation-system-prompt/kv-cache-effect:
+  en: e6120b67c2543395
+  zh: af321d4edf9212fe
+/deepseek-ai-dsh-experimental-translator/known-limitations-and-deferred-work:
+  en: 2c00a5295af60b8f
+  zh: b235aa5343c72a71
+/deepseek-ai-dsh-experimental-translator/known-limitations-and-deferred-work/dev-note:
+  en: 96686375e99911bc
+  zh: b2514a4d8fd2bdeb

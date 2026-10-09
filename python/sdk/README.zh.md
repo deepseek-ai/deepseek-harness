@@ -70,3 +70,5 @@ with DeepSeekHarness(
 所选 home 保存 profile、插件与每个 profile 自有的持久资源。完整 `sdk` profile 使用其中的凭据、设置与会话存储；`sdk-minimal` 只使用自己的 JSONL 会话存储。需要隔离这些资源时应使用新的 home；独立工作应使用新的会话 ID。同时复用 harness 与会话 ID 会延续持久对话和会话资源。
 
 另见 [Python 教程](../../docs/user/guide/python-sdk.zh.md)、[可运行示例](examples/README.zh.md) 和 [运行时 wheel 包参考](../sdk-runtime/README.zh.md)。
+
+`Session.get_working_directory()` 读取有效工作目录；`set_working_directory(path)` 修改目录并返回校验后的绝对路径。两者都可创建未知 Session，而不运行模型轮次。相对路径以该 Session 当前目录解析。起始目录元数据、权限与已有进程保持不变。底层客户端提供同名方法，并以 `session_id` 作为首个参数。

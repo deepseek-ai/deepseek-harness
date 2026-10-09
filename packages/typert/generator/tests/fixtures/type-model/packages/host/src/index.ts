@@ -36,6 +36,10 @@ export class Agent<State extends object = { ready: boolean }> implements Entity 
   run<Value>(input: Box<Value>): Promise<Present<Value>> {
     return Promise.resolve(input.value as Present<Value>)
   }
+
+  #hiddenStep(): string {
+    return this.secret
+  }
 }
 
 export { Agent as HostAgent }

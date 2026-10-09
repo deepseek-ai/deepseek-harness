@@ -1,0 +1,4 @@
+# Order delegation settlement before the subsequent workflow call.
+- insert:
+    - id: await-subagents
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/subagent-settlement-barrier.ts'

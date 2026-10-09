@@ -39,7 +39,7 @@ kind: "package-reference"
 
 Host 在相对于应用根目录的 `inspector/devtools/devtools_app.html` 路径提供镜像后的 DevTools 前端，沿用现有 Web 登录鉴权。`inspector/devtools` 前缀重定向到该入口；GET 和 HEAD 提供文件，缺失资源返回 404，其他方法返回 405。其 `cdp` WebSocket 路由鉴权同一浏览器会话，只转发到当前 Inspector 的 Worker page target。底部面板将已声明的页面 `clientSourceId` 传给入口及自动 WebSocket 端点，重连时继续选择同一逻辑 Client。没有选择参数时包含全部 Client；指定 Client 不在线时保留 Host；空值或重复参数以 400 拒绝升级。显式 `ws` 或 `wss` query 参数覆盖自动端点及其选择范围。
 
-构建使用官方 `chrome-devtools-frontend@1.0.1638082` TypeScript 源码及根 workspace 的 Vite `8.0.16`。该 npm 快照是 Chromium 150 发布分支的祖先，不是其后续稳定版的逐字节副本。[源码配置](scripts/devtools/source.ts)与包清单共同固定版本。普通 npm 安装提供源码和工具链；构建不需要 appspot、下载或启动浏览器，也不需要提取 PAK。workspace 安装和发布包安装都不运行 DevTools 下载 hook。
+构建使用官方 `chrome-devtools-frontend@1.0.1638082` TypeScript 源码及根 workspace 固定的 [Vite 依赖](../../../package.json)。该 npm 快照是 Chromium 150 发布分支的祖先，不是其后续稳定版的逐字节副本。[源码配置](scripts/devtools/source.ts)与包清单共同固定版本。普通 npm 安装提供源码和工具链；构建不需要 appspot、下载或启动浏览器，也不需要提取 PAK。workspace 安装和发布包安装都不运行 DevTools 下载 hook。
 
 [分发构建](scripts/build-devtools.ts)将 ESM 入口、共享 chunk、显式 Worker、注入脚本与运行时资源输出到 `lib/devtools`，保留原始模块相对资源 URL，包括部署子路径。CSS 文本模块、图片变量和最小英文 locale 常量替代 GN 生成输入，不修改 npm 源码。前端直接使用上游模块内的英文 UIStrings，不包含翻译文件或词条生成器，其他语言偏好回退英文。所有上游面板均保留，包括 Lighthouse。Memory 带有解析 Worker，Performance 记录 Host CPU。发布包包含构建资源、完整性清单和 Chromium license，不包含构建用 npm 源码或 Vite 依赖。
 

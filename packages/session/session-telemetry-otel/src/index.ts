@@ -24,9 +24,7 @@ import {
 } from '@deepseek-ai/dsh-session-telemetry'
 import { APP_IDENTITY } from '@deepseek-ai/dsh-llm'
 import { getOrCreateAnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
-import type { SessionLogReporter } from '@deepseek-ai/dsh-otel'
-import type { BatchLogRecordProcessorOptions } from '@opentelemetry/sdk-logs'
-import type { OTLPExporterNodeConfigBase } from '@opentelemetry/otlp-exporter-base'
+import type { LogExporterOptions, SessionLogProcessorOptions, SessionLogReporter } from '@deepseek-ai/dsh-otel'
 import { SeverityNumber } from '@opentelemetry/api-logs'
 
 /** Session-sharing policy selected by {@link Config.mode}. */
@@ -90,16 +88,18 @@ export interface Config {
   /**
    * Explicit SDK HTTP transport settings, including optional routing headers.
    * Ambient credentials are not inherited. URL is required while uploading.
+   * Exporter self-observability metering is not supported.
    */
-  exporter?: OTLPExporterNodeConfigBase & {
+  exporter?: Omit<LogExporterOptions, 'url'> & {
     /** Full logs endpoint (e.g. `https://collector.example.com/v1/logs`). Required outside `DISABLED`; validated at load. */
     url?: string
   }
   /**
    * Count, queue, cadence, and per-request watchdog settings for the byte-bounded
    * processor. A watchdog warning never releases an unsettled transport slot.
+   * SDK processor self-observability metering is not supported.
    */
-  processor?: Omit<BatchLogRecordProcessorOptions, 'exporter'>
+  processor?: SessionLogProcessorOptions
   /** Maximum time spent awaiting the SDK provider's complete shutdown path. */
   shutdownTimeoutMillis?: number
   /** Uncompressed OTLP request byte limit, at most 4,000,000. */
@@ -110,7 +110,8 @@ export interface Config {
  * Schemastery validator for {@link Config}; cordis runs it before the plugin
  * starts. The constructor validates endpoint and shutdown requirements; the
  * reporter validates Session byte and queue limits. SDK transport and
- * processor settings retain their upstream types.
+ * processor settings use the reporter's accepted option types, which exclude
+ * self-observability metering.
  */
 export const Config: z<Config> = z.object({
   mode: z.union(Object.values(SessionTelemetryMode)).default(DEFAULT_TELEMETRY_MODE),

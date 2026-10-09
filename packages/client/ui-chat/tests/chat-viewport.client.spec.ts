@@ -48,10 +48,19 @@ function fixture() {
   return { column, viewport, group, row, prepend: (height: number) => { prependedHeight += height } }
 }
 
-it.each([64, 4096])('locates the reading Turn with logarithmic outer-row measurements (%s rows)', (count) => {
+it.each([
+  { count: 64, slot: false }, { count: 4096, slot: false },
+  { count: 64, slot: true }, { count: 4096, slot: true },
+])('locates the reading Turn with logarithmic outer-row measurements ($count rows, slot=$slot)', ({ count, slot }) => {
   const h = fixture()
+  const parent = slot ? document.createElement('div') : h.column
+  if (slot) {
+    parent.dataset.slot = 'conversation.chat.flow'
+    parent.style.display = 'contents'
+    h.column.append(parent)
+  }
   const rows = Array.from({ length: count }, (_, index) => {
-    const row = h.row(h.column, `turn-${index + 1}`, index * 100)
+    const row = h.row(parent, `turn-${index + 1}`, index * 100)
     row.dataset.chatTurn = String(index + 1)
     return row
   })

@@ -28,7 +28,6 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/dsh-subagent": "workspace:*",
-    "@deepseek-ai/dsh-subagent-in-process-driver": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
   },
   "dependencies": {
@@ -46,10 +45,10 @@
     "@deepseek-ai/dsh-llm-deepseek-api-key": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-subagent": "workspace:*",
-    "@deepseek-ai/dsh-subagent-in-process-driver": "workspace:*",
     "@deepseek-ai/dsh-tool-bash": "workspace:*",
     "@deepseek-ai/dsh-tool-subagent": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-session-projection": "workspace:*"
+    "@deepseek-ai/dsh-session-projection": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*"
   }
 }

@@ -1,0 +1,10 @@
+# Bilingual-pair consistency record for experimental-persistence-catalog.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/experimental-persistence-catalog.md
+/:
+  en: a11f106978c9dce7
+  zh: a11f106978c9dce7
+/experimental-plugin-record-catalog:
+  en: 84dbc9c06ab92877
+  zh: b82ef2a46292ab0e

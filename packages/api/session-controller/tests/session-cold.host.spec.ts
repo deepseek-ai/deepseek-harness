@@ -77,6 +77,53 @@ function conversationEvents(): SessionEvent[] {
 }
 
 describe('sessions.list cold merge', () => {
+  it('preserves listed format status and prefers live readiness without extra persistence reads', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(AgentRegistry)
+      const historical = header('format-historical', 100)
+      const current = header('format-current', 200)
+      const unknown = header('format-unknown', 300)
+      const shared = ctx.sessions.create(sid('format-shared'), { meta: { createdAt: 400, cwd: '/proj' } }).header
+      const liveOnly = ctx.sessions.create(sid('format-live'), { meta: { cwd: '/proj' } })
+      const snapshots: SessionPersistenceSnapshot[] = [
+        { ...statSnapshot(historical), formatStatus: 'migration-required' },
+        { ...statSnapshot(current), formatStatus: 'current' },
+        statSnapshot(unknown),
+        { ...statSnapshot(shared), formatStatus: 'migration-required' },
+      ]
+      const list = vi.fn(async () => snapshots)
+      const stat = vi.fn()
+      const open = vi.fn()
+      ctx.provide('sessionPersistence', { list, stat, open } as never)
+      const remote = createSessionTestRemote(ctx, {
+        defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
+        cwd: '/tmp',
+      })
+      const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
+      try {
+        const response = await remote.list(request({}))
+        if (!response.ok) throw new Error('list failed')
+        const byId = new Map(response.value.items.map(item => [item.sessionId, item]))
+        expect(byId.get(historical.id)).toMatchObject({ formatStatus: 'migration-required' })
+        expect(byId.get(current.id)).toMatchObject({ formatStatus: 'current' })
+        expect(byId.get(unknown.id)).toMatchObject({ sessionId: unknown.id })
+        expect(byId.get(unknown.id)).not.toHaveProperty('formatStatus')
+        expect(byId.get(shared.id)).toMatchObject({ formatStatus: 'current' })
+        expect(byId.get(liveOnly.id)).toMatchObject({ formatStatus: 'current' })
+        expect(list).toHaveBeenCalledTimes(1)
+        expect(stat).not.toHaveBeenCalled()
+        expect(open).not.toHaveBeenCalled()
+        expect(observe).not.toHaveBeenCalled()
+      } finally {
+        observe.mockRestore()
+      }
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('uses a predecessor title hint with zero cold stat or body reads', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)

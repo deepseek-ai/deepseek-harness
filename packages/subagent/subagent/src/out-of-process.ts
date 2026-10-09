@@ -2,8 +2,7 @@
  * Provider-side vocabulary for OUT-OF-PROCESS subagent backends — the pieces
  * that enforce this seam's own contracts around a child in another process:
  * the no-capabilities advertisement, timing-bound validation, child
- * working-directory resolution (config override, else the delegating parent
- * session's workspace), the never-reject result settlement, and the standard
+ * working-directory validation, the never-reject result settlement, and the standard
  * run-handle publication. Backends compose these with their own wire drivers;
  * the process machinery itself (spawn, env scrub, managed-range teardown)
  * belongs to the `dsh-subprocess` seam.
@@ -12,7 +11,7 @@
  */
 
 import { accessSync, constants, statSync } from 'node:fs'
-import { isAbsolute, resolve } from 'node:path'
+import { isAbsolute } from 'node:path'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SubagentCapabilities, SubagentResult, SubagentRun, SubagentStopReason } from './types.ts'
 
@@ -113,45 +112,6 @@ export function assertUsableCwd(prefix: string, label: string, cwd: string): str
   return cwd
 }
 
-/**
- * Validate a configured `cwd` override ONCE, at plugin load: reject the empty
- * string (`path.resolve('')` is the process cwd — it would silently
- * reintroduce the launch-directory fallback this resolution removes),
- * interpret a relative path against the harness launch directory, and require
- * an enterable directory.
- * @param prefix - the consuming plugin's diagnostic prefix.
- * @param cwd - the configured override, or `undefined` when the config omits it.
- * @returns the validated absolute override, or `undefined` when omitted.
- */
-export function validateConfiguredCwd(prefix: string, cwd: string | undefined): string | undefined {
-  if (cwd === undefined) return undefined
-  if (cwd === '') {
-    throw new Error(`${prefix}: config cwd must not be empty — omit the key to inherit the parent session cwd`)
-  }
-  return assertUsableCwd(prefix, 'config cwd', resolve(cwd))
-}
-
-/**
- * Resolve the child's working directory at start: the deployment override
- * when configured (already validated at load), else the parent session's
- * workspace cwd (validated here, its earliest resolvable point). Fails loud
- * when neither exists — falling back to the harness process cwd would
- * silently bind the child to the server's launch directory instead of the
- * delegating session's workspace (one server process serves many sessions,
- * each with its own cwd).
- * @param prefix - the consuming plugin's diagnostic prefix.
- * @param configured - the load-validated override, or `undefined`.
- * @param parentCwd - the delegating parent session's workspace cwd, if any.
- * @returns the absolute child working directory.
- */
-export function resolveChildCwd(prefix: string, configured: string | undefined, parentCwd: string | undefined): string {
-  if (configured !== undefined) return configured
-  if (parentCwd === undefined) {
-    throw new Error(`${prefix}: no working directory for the child — configure \`cwd\` or delegate from a parent session that has one`)
-  }
-  return assertUsableCwd(prefix, 'parent session cwd', parentCwd)
-}
-
 /** Normalize an unknown thrown value to an Error (the catch binding is `unknown`). */
 function toError(value: unknown): Error {
   // The rejecting surfaces (wire clients, spawn failures) only throw
@@ -240,13 +200,12 @@ export interface SubprocessRunHandleParts {
  * local cancellation — there is no assumption the child cooperates — and then
  * awaits the backend's teardown to actual exit.
  * @param parts - the run identity, result, cancellation wiring, and teardown.
- * @returns the seam run handle (`localAgent` is `undefined` for remote runs).
+ * @returns the external run handle.
  */
 export function subprocessRunHandle(parts: SubprocessRunHandleParts): SubagentRun {
   let disposal: Promise<void> | undefined
   return {
     id: parts.id,
-    localAgent: undefined,
     result: parts.result,
     dispose(): Promise<void> {
       if (disposal !== undefined) return disposal

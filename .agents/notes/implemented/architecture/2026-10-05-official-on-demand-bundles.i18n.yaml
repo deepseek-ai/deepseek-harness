@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-05-official-on-demand-bundles.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-05-official-on-demand-bundles.md
+/agent-note-discover-official-bundles-without-installing-their-runtimes:
+  en: 1f2387f10628638b
+  zh: c835a8ee615e9da6
+/agent-note-discover-official-bundles-without-installing-their-runtimes/problem:
+  en: a590bcef6c9760c0
+  zh: 19e6f61c2c7d8d3b
+/agent-note-discover-official-bundles-without-installing-their-runtimes/decision:
+  en: f0fabc0d4fbd1178
+  zh: cf19938a7a7dea93
+/agent-note-discover-official-bundles-without-installing-their-runtimes/alternatives-considered:
+  en: 42cb0f808a145871
+  zh: 225012615d1ecdf5
+/agent-note-discover-official-bundles-without-installing-their-runtimes/consequences:
+  en: 293286dcd7e3325e
+  zh: c6c15212e85d050b

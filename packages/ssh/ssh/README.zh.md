@@ -31,20 +31,21 @@ kind: "package-reference"
 
 两端均需运行 Linux 或 macOS。本地 `ssh` 命令必须支持连接复用与 Unix 套接字转发，服务器也必须允许该转发。启动前配置主机别名、凭据与已知主机记录：本服务启用 `BatchMode`、要求严格检查主机密钥、禁用认证代理转发，且不提供交互认证流程。
 
-在远端主机安装已构建的辅助程序及其匹配的运行依赖。Node、辅助程序、引导程序及其依赖必须位于工作区和可写临时目录之外，也必须位于后端会替换的临时目录树之外，例如 bwrap 的私有 `/tmp`；工作区仍可位于 `/tmp` 下。摘要校验在辅助程序启动后发现非预期的已安装产物；它不能保证可写部署文件的执行安全，也不能认证恶意 SSH 主机。
+安装 [SSH helper 可执行文件发行包](../ssh-helper-runtime/README.zh.md)，或已构建的 helper 脚本及其匹配的 Node 依赖。运行时必须位于工作区和可写临时目录之外，也必须位于后端会替换的临时目录树之外，例如 bwrap 的私有 `/tmp`；工作区仍可位于 `/tmp` 下。摘要校验在辅助程序启动后发现非预期的已安装产物；它不能保证可写部署文件的执行安全，也不能认证恶意 SSH 主机。
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `host` | 必填 | 已有的 OpenSSH 主机别名 |
-| `node`、`helper`、`workspace` | 必填 | 远端 Node 可执行文件、辅助程序打包入口和默认工作区的绝对路径 |
+| `launch` | 必填 | `{ kind: "executable" }`，或 `{ kind: "node-script", node: "/absolute/node" }` |
+| `helper`、`workspace` | 必填 | 远端 helper 入口和默认工作区的绝对路径 |
 | `helperHash` | 必填 | 已安装辅助程序入口的小写 SHA-256 |
-| `bootstrapPath`、`bootstrapHash` | 省略 | 成对提供的远端 PTC 入口及其小写 SHA-256 |
+| `launch.bootstrapPath`、`launch.bootstrapHash` | 省略 | 成对提供的远端 PTC 脚本及摘要；仅用于 `node-script` |
 | `requestTimeoutMs` | `30000` | 连接与管理请求的截止时限，范围为 1 至 2,147,483,647 毫秒 |
 | `maxFrameBytes` | `67108864` | 每条 JSON 消息的负载上限，最大为 64 MiB |
 | `maxPending` | `128` | 普通未完成请求的数量上限；心跳与有界清理请求使用预留容量 |
 | `leaseMs` | `30000` | 辅助进程心跳租期，范围为 3000 至 600000 毫秒 |
 
-使用 PTC 时，配置两个引导字段，并将验证后的 `ctx.ssh.nodeExecutable` 与 `ctx.ssh.bootstrapPath` 传给 [`NodePtcRuntime`](../../ptc-runtime/ptc-runtime-node/README.zh.md)。仅使用文件系统和 Bash 时可以省略这对字段。未配置 PTC 部署时，`bootstrapPath` getter 会拒绝访问。
+将验证后的 `ctx.ssh.ptcLaunch` 作为 [`NodePtcRuntime`](../../ptc-runtime/ptc-runtime-node/README.zh.md) 的 `launch` 配置。可执行文件部署包含 worker；脚本部署使用 PTC 时需要两个引导字段，仅使用文件系统和 Bash 时可以省略。脚本引导未配置时，getter 会拒绝访问。客户端在就绪前拒绝不匹配的协议版本、运行形式和 helper 摘要。
 
 -----
 
@@ -64,7 +65,7 @@ OpenSSH 主连接承载私有管理 RPC。每条程序流使用独立转发的 U
 
 终端启用 shell 活动观察时，根进程退出会保留 reservation 及其剩余工作。活动 RPC 继续访问 provider；明确终止时先等待进程范围完全停稳，再释放端点并记录完成结果。helper 连接卸载和租约到期仍保留原有的终止权限。
 
-辅助程序以 `--disable-sigusr1` 启动，因此同用户进程发送的信号无法开启其 Node 调试器。
+连接会禁用 helper 的 SIGUSR1 调试器激活：脚本调用使用 `--disable-sigusr1`，可执行文件调用通过 `NODE_OPTIONS` 提供该标志。
 
 </details>
 

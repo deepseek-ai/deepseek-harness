@@ -195,9 +195,9 @@ function fullyRendered(content: readonly unknown[]): boolean {
  *
  * The card is result-side only: a call carries no content until `execute`
  * returns, so a running `read_image` has none and this returns null for it.
- * Both root and nested calls settle as ToolResultNode; the nested one (a
- * read_image dispatched from inside run_code) persists no presentationMeta, so
- * its label falls back to the call's own `file_path` argument.
+ * Both root and nested calls settle as ToolResultNode. Historical nested
+ * records without presentation metadata fall back to the call's own
+ * `file_path` argument for the label.
  * @param block - running or settled Tool block.
  * @param sessionCwd - the session workspace root; a workspace-rooted absolute
  *   path label displays relative to it. Absent leaves the path as authored.
@@ -216,9 +216,8 @@ export function imageCardModel(
   if (call?.name !== 'read_image') return null
   const { file_path: filePath } = call.args
   if (typeof filePath !== 'string' || filePath.trim() === '') return null
-  // The label path: root calls persist it in presentationMeta; a nested call
-  // (dispatched from inside run_code) persists none, so its own file_path
-  // argument fills the label. A root call with missing or malformed meta
+  // Historical nested records without metadata use the authored file_path
+  // for the label. A root call with missing or malformed meta
   // declines — malformed tool data falls back to the generic card, which shows
   // the flattened content rather than an author-typed path.
   const metaPath = imageMeta(block.meta)?.path

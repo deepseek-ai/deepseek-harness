@@ -133,21 +133,42 @@
 
 .groupHead {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
 }
 
 .groupTitle {
+  flex: 1;
   margin: 0;
   font-size: 14px;
   line-height: 22px;
   font-weight: 500;
 }
 
-.count {
+.groupMore {
+  flex: none;
+  gap: 4px;
+  padding-inline-end: 0;
   font-size: 14px;
-  color: var(--dsw-alias-label-caption);
-  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--dsw-alias-label-secondary) 60%, var(--dsw-alias-label-tertiary));
+}
+
+.groupMore:hover,
+.groupMore:focus-visible {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.moreHead {
+  align-items: center;
+  gap: 8px;
+}
+
+.moreBack {
+  width: 28px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
 }
 
 /* The group's explanation, folded behind a hover/focus tooltip. */
@@ -1171,15 +1192,20 @@ label.registryOption {
    same drag ownership: it marks itself `data-window-drag`, so this row's own box
    is the window's draggable geometry. The detail container below stays
    content: marking it would drag the window over its text and form labels. */
-.detailTop {
+.detailTop,
+.moreHead {
   display: flex;
-  flex-direction: column;
   /* The same 28px top inset `.pageHead` carries, so the row starts at the window's
      top edge and the strip above the detail content drags the window. */
   padding-top: 28px;
 }
 
-:global([data-platform='darwin']) .detailTop {
+.detailTop {
+  flex-direction: column;
+}
+
+:global([data-platform='darwin']) .detailTop,
+:global([data-platform='darwin']) .moreHead {
   padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
 }
 

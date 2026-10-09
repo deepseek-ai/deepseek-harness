@@ -35,15 +35,15 @@ jobs:
     runs-on: ubuntu-24.04
     name: cloudflare pages preview
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5.0.0
         with:
           dest: ${{ runner.temp }}/setup-pnpm
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
 
@@ -57,7 +57,7 @@ jobs:
 
       # Read-only: the preview lane consumes the default-branch cache without
       # putting cache upload on its own path.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6.1.0
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
           key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -69,9 +69,9 @@ jobs:
 
       # apps/web consumes workspace packages as built lib products, and
       # build:preview packs the image through the packer's installed bin
-      # (lib/bin.js), so neither half exists before the full build runs.
+      # (lib/bin.js), so neither half exists before the artifact build runs.
       - name: Build workspace
-        run: pnpm run build
+        run: pnpm run build --artifacts-only
 
       - name: Build the preview page and pack the VFS image
         env:

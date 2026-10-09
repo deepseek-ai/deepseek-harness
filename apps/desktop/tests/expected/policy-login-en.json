@@ -1,4 +1,8 @@
 {
+  "disabled": [
+    "Checking for updates…",
+    "You’re up to date!"
+  ],
   "returned": [
     "Checking for updates…",
     "You’re up to date!",

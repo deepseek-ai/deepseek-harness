@@ -1,0 +1,14 @@
+- insert:
+    - id: optional-session-search
+      name: cordis:group
+      group: true
+      isolate:
+        sessionQuery: true
+      config:
+        - id: optional-session-query-sqlite
+          name: '@deepseek-ai/dsh-session-query-sqlite'
+          config:
+            path: ':memory:'
+            openAt: first-search
+        - id: optional-tool-session-query
+          name: '@deepseek-ai/dsh-tool-session-query'

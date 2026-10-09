@@ -136,6 +136,16 @@ class Session:
         self.harness = harness
         self.id = session_id
 
+    def get_working_directory(self) -> str:
+        """Read the effective directory, recovering a missing directory to the Session origin."""
+        self.harness.start()
+        return self.harness.client.get_working_directory(self.id)
+
+    def set_working_directory(self, path: str) -> str:
+        """Change the effective directory while existing processes retain their own directories."""
+        self.harness.start()
+        return self.harness.client.set_working_directory(self.id, path)
+
     def run(
         self,
         input: str | list[JsonObject],

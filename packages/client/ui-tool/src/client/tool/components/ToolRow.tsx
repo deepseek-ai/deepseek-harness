@@ -78,8 +78,8 @@ export interface ToolRowProps {
   details?: ToolDetailsModel | null | undefined
   state: ToolRowState
   /**
-   * Filesystem path from tool args; when set with onOpenFile, the summary
-   * renders as a hover-underline link that opens the host default app.
+   * Recorded file target or a supported argument fallback. With onOpenFile,
+   * the summary opens that path through the owner's file-preview callback.
    */
   filePath?: string | undefined
   /** 1-based line the call was about; absent = open the file at its beginning. */

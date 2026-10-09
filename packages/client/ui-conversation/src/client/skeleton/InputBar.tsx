@@ -36,6 +36,7 @@ import {
 } from '../input/editor/view-binding.ts'
 import { resolveSubmitMode } from '../input/submission-policy.ts'
 import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
+import { isImageMediaType } from '../service.ts'
 import { ContextMeter } from './ContextMeter.tsx'
 import { observeControlRow } from './control-row-layout.ts'
 import css from './InputBar.module.css'
@@ -209,8 +210,13 @@ export const InputBar = memo(function InputBar({
   // The host enforces the same image limits at submit for callers that bypass
   // this composer.
   const intakeFiles = useCallback((files: readonly File[], directories?: ReadonlySet<File>): void => {
-    if (subagent !== null || addFiles === undefined || files.length === 0) return
+    if (locked || machineBusy || (subagent !== null && !continuable) || addFiles === undefined || files.length === 0) return
     const rejected = ((): string | null => {
+      // Child prompts support images, but not generic file receipts or the
+      // Desktop path-reference fallback. Refuse mixed batches before intake.
+      if (continuable && files.some(file => directories?.has(file) || !isImageMediaType(file.type))) {
+        return t('image.unsupportedType')
+      }
       if (imageLimits !== undefined) {
         const mediaTypes = imageLimits.mediaTypes as readonly string[]
         const images = files.filter(file => mediaTypes.includes(file.type))
@@ -230,9 +236,9 @@ export const InputBar = memo(function InputBar({
       return addFiles(files, directories)
     })()
     if (rejected !== null) showToast(rejected)
-  }, [subagent, addFiles, attachments, imageLimits, showToast, t])
+  }, [locked, machineBusy, subagent, continuable, addFiles, attachments, imageLimits, showToast, t])
 
-  const canAcceptDrop = subagent === null && !locked && !machineBusy && addFiles !== undefined
+  const canAcceptDrop = (subagent === null || continuable) && !locked && !machineBusy && addFiles !== undefined
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const onPickFiles = (e: ChangeEvent<HTMLInputElement>): void => {

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import FsLocal from '@deepseek-ai/dsh-fs-local'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
@@ -34,6 +38,23 @@ describe('dsh-agent-loop-testkit', () => {
     await expect(mountAgentLoopTestHarness(ctx)).resolves.toBeDefined()
 
     await ctx.fiber.dispose()
+  })
+
+  it('keeps an existing filesystem when enabling working directories', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'testkit-filesystem-'))
+    const ctx = new Context()
+    try {
+      await ctx.plugin(FsLocal, { cwd: root })
+      await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
+      const harness = await mountAgentLoopTestHarness(ctx)
+      const agent = await harness.create(SessionId('existing-filesystem'), {}, { cwd: root })
+
+      expect(ctx.fs.processPath(await ctx.fs.resolve('.'))).toBe(await realpath(root))
+      await expect(ctx.workingDirectory.ensure(agent)).resolves.toBe(root)
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('provides a mutable in-memory Inbox stub for structural Agent tests', () => {

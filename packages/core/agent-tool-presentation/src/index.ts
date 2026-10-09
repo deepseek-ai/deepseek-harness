@@ -38,7 +38,7 @@ export const inject = ['tools']
 export interface Config {
   /**
    * The form this agent's model sees. `native` sends every visible schema,
-   * `ptc` sends only `run_code` plus a generated SDK, `both` sends both.
+   * `ptc` sends only `run_code` plus a generated SDK.
    * Required rather than defaulted: the deployment default is what a preset
    * without this row already gets, so an omitted value would mean the row was
    * composed for nothing.
@@ -48,7 +48,7 @@ export interface Config {
 
 /** Runtime schema. */
 export const Config: z<Config> = z.object({
-  mode: z.union(['native', 'ptc', 'both'] as const).required(),
+  mode: z.union(['native', 'ptc'] as const).required(),
 })
 
 /**

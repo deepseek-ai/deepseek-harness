@@ -30,7 +30,7 @@ const LISTING_DEADLINE_MS = 8_000
 /** Objects one listing page may return. */
 const LISTING_PAGE_SIZE = 1000
 
-/** Artifact name electron-builder writes for one build, on either platform; unsigned Windows builds add a suffix. */
+/** Artifact name electron-builder writes for one build, on either platform; unsigned builds add a suffix. */
 const ARTIFACT = /(?:^|\/)deepseek-harness-(?<version>.+)-(?:mac|win)-(?:arm64|x64)(?:-unsigned)?\.(?:exe|dmg|zip)$/u
 
 /** Inputs that decide which versions are already taken. */

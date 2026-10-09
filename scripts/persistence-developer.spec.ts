@@ -23,7 +23,7 @@ function toolAdditionSchema() {
 }
 
 describe('developer field compatibility', () => {
-  it('requires a version bump before a future declaration can use the rejected inline tool field', () => {
+  it('requires compatibility review before a future declaration can use the rejected inline tool field', () => {
     const { before, nodes, blockIndex, block, stringIndex } = toolAdditionSchema()
     nodes[blockIndex] = { ...block, properties: [
       ...block.properties.filter(property => property.name !== 'tool'),
@@ -31,7 +31,7 @@ describe('developer field compatibility', () => {
     ] }
     const schema = canonicalizeSchema(nodes, 0)
     expect(classifyPersistenceChange(before, { ...before, schema, digest: schemaDigest(schema) }))
-      .toContainEqual(expect.objectContaining({ requiresVersionBump: true }))
+      .toContainEqual(expect.objectContaining({ requiresCompatibilityReview: true }))
     const reserved = block.properties.find(property => property.name === 'tool')
     expect(reserved).toMatchObject({ optional: true })
     expect(before.schema.nodes[reserved!.type]).toEqual({ kind: 'primitive', type: 'never' })
@@ -47,7 +47,7 @@ describe('developer field compatibility', () => {
     const { before, nodes, blockIndex, block, stringIndex } = toolAdditionSchema()
     nodes[blockIndex] = { ...block, properties: [...block.properties, { name: 'traceId', type: stringIndex, optional: true }] }
     const schema = canonicalizeSchema(nodes, 0)
-    expect(classifyPersistenceChange(before, { ...before, schema, digest: schemaDigest(schema) })).toMatchObject([{ kind: 'optional-property-added', requiresVersionBump: false }])
+    expect(classifyPersistenceChange(before, { ...before, schema, digest: schemaDigest(schema) })).toMatchObject([{ kind: 'optional-property-added', requiresCompatibilityReview: false }])
     const header = { version: 4, id: 'optional-developer-field', createdAt: 1, isSeeded: false, delegationDepth: 0 }
     const message = { id: 'developer', role: 'developer', source: { kind: 'tool-registry', extra: true },
       content: [{ type: 'tool-addition', toolName: 'search', traceId: 'retained' }], extra: true }

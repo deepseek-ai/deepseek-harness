@@ -105,6 +105,8 @@ class FixtureNodeStore implements ChatNodeStore {
   private readonly turnProcesses = new ChatTurnProcessProjector()
   private readonly sources = new Map<string, FixtureSource<ChatConversationViewNode | undefined>>()
   private readonly processSources = new Map<string, FixtureSource<ChatTurnProcessPresentation | undefined>>()
+  private readonly bottomSources = new Map<string, FixtureSource<boolean>>()
+  bottomTurn: number | undefined
   private readonly dirtyKeys = new Set<string>()
   private readonly dirtyProcessKeys = new Set<string>()
   private list: readonly ChatConversationViewNode[] = EMPTY
@@ -115,6 +117,14 @@ class FixtureNodeStore implements ChatNodeStore {
 
   source(key: string): ChatNodeSource {
     return cachedSource(this.sources, key, () => new FixtureSource(() => this.get(key)))
+  }
+
+  bottomSource(key: string): ReturnType<ChatNodeStore['bottomSource']> {
+    return cachedSource(this.bottomSources, key, () => new FixtureSource(() => {
+      const location = this.get(key)?.location
+      return this.bottomTurn !== undefined && (location?.kind === 'turn' || location?.kind === 'step')
+        && location.turn.turn === this.bottomTurn
+    }))
   }
 
   turnDataSource(): never {
@@ -174,6 +184,7 @@ class FixtureNodeStore implements ChatNodeStore {
     this.dirtyProcessKeys.clear()
     for (const key of dirty) this.sources.get(key)?.publish()
     for (const key of dirtyProcesses) this.processSources.get(key)?.publish()
+    for (const source of this.bottomSources.values()) source.publish()
   }
 }
 
@@ -516,6 +527,7 @@ export function chatSnapshotFixture(input: {
     && previous.legacy.turnEnds === legacy.turnEnds
     ? previous.timeline
     : { turnOrder: [...turns.keys()], turns }
+  store.bottomTurn = timeline.turnOrder.at(-1)
   const derived = timeline.turnOrder
     .map(turn => turnNavigationItem(turn, locations, store))
     .filter((item): item is TurnNavigationItem => item !== undefined)

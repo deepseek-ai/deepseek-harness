@@ -5,11 +5,16 @@
  * messages.
  */
 
+import { mountAgentLoopTestDependencies, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { FsVersion } from '@deepseek-ai/dsh-fs'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -23,8 +28,8 @@ const testToolSignal = new AbortController().signal
 let dir: string
 let ctx: Context
 let fiber: Awaited<ReturnType<Context['plugin']>>
-// No header cwd: sessionCwd returns undefined and the provider's configured test dir applies.
-const session = { header: {} }
+// The consumer fixture supplies the configured temporary workspace.
+const session = { header: { get cwd() { return dir } } }
 
 let callCounter = 0
 function call(name: string, args: unknown) {
@@ -57,6 +62,7 @@ describe('default deployment (with dsh-fs-observation-policy)', () => {
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-'))
     ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalFileSystem, { cwd: dir })
@@ -315,6 +321,7 @@ describe('bare provider (no dsh-fs-observation-policy)', () => {
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-bare-'))
     ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalFileSystem, { cwd: dir })
@@ -383,6 +390,7 @@ describe('per-session cwd', () => {
     dir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-cfg-'))
     sessionDir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-session-'))
     ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalFileSystem, { cwd: dir }) // config.cwd = dir, NOT sessionDir
@@ -428,6 +436,7 @@ describe('signal, concurrency, and the fs/observed contract', () => {
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-'))
     ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalFileSystem, { cwd: dir })
@@ -435,7 +444,7 @@ describe('signal, concurrency, and the fs/observed contract', () => {
     fiber = await ctx.plugin(ToolFs)
   })
 
-  const session = { header: {} }
+  const session = { header: { get cwd() { return dir } } }
   const callSig = (signal: AbortSignal, name: string, args: unknown) =>
     ctx.tools.execute({ callId: ToolCallId(`c-${++callCounter}`), name, arguments: args, agent: { session } as never, signal })
   const callOwned = (name: string, args: unknown) =>
@@ -531,5 +540,84 @@ describe('signal, concurrency, and the fs/observed contract', () => {
     const result = await callOwned('write', { file_path: 'w.txt', content: 'durable' })
     expect(result.isError).toBe(true)
     expect(await readFile(join(dir, 'w.txt'), 'utf8')).toBe('durable')
+  })
+})
+
+
+describe('current working directory', () => {
+  it('routes subsequent files to the new directory while keeping the original permission root', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-current-'))
+    const next = join(dir, 'next')
+    await mkdir(next)
+    await writeFile(join(dir, 'note.txt'), 'original')
+    await writeFile(join(next, 'note.txt'), 'current')
+    ctx = new Context()
+    try {
+      await ctx.plugin(LocalFileSystem, { cwd: dir })
+      await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
+      await ctx.plugin(AgentLoop, { agents: [] })
+      await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: dir })
+      fiber = await ctx.plugin(ToolFs)
+      const handle = await ctx.agents.create({
+        sessionId: SessionId('current-directory-files'), meta: { cwd: dir },
+        agentOptions: { provider: 'mock', model: 'mock' },
+      })
+      const agent = handle.agent
+      const session = agent.session
+      const policy = ctx.sandboxPolicy.resolve({ session })
+      await ctx.workingDirectory.set(agent, next)
+      const current = ctx.workingDirectory.get(session)
+      const read = await ctx.tools.execute({
+        signal: testToolSignal, callId: ToolCallId('read-current'), name: 'read',
+        arguments: { file_path: 'note.txt' }, agent,
+      })
+      expect(read.isError).toBe(false)
+      expect(text(read)).toContain('current')
+      expect(read.meta).toMatchObject({ path: join(current, 'note.txt') })
+      const write = await ctx.tools.execute({
+        signal: testToolSignal, callId: ToolCallId('write-current'), name: 'write',
+        arguments: { file_path: 'created.txt', content: 'new' }, agent,
+      })
+      expect(write.isError).toBe(false)
+      expect(write.meta).toEqual({ operation: 'create', path: join(current, 'created.txt'), diffs: [] })
+      const edit = await ctx.tools.execute({
+        signal: testToolSignal, callId: ToolCallId('edit-current'), name: 'edit',
+        arguments: { file_path: 'created.txt', old_string: 'new', new_string: 'edited' }, agent,
+      })
+      expect(edit.isError).toBe(false)
+      expect(edit.meta).toMatchObject({ path: join(current, 'created.txt'), diffs: [{ path: join(current, 'created.txt') }] })
+      class ReadBindingRuntime extends PtcRuntime {
+        readonly language = 'typescript'
+        readonly isolation = 'fixture'
+        resolve(request: PtcRunRequest): PtcRunSpec {
+          return { ...request, cwd: current, timeoutMs: 120_000 }
+        }
+        async run(spec: PtcRunSpec): Promise<PtcRunResult> {
+          const read = spec.bindings.find(binding => binding.global === 'tools')?.functions.read
+          if (read === undefined) throw new Error('missing read binding')
+          const value = await read({ file_path: 'note.txt' })
+          expect(JSON.stringify(value)).toContain('current')
+          return { logs: [], value }
+        }
+      }
+      await ctx.plugin(ReadBindingRuntime)
+      agent.ctx.tools.presentAs('ptc')
+      const nested = await ctx.tools.execute({
+        signal: testToolSignal, callId: ToolCallId('ptc-read-current'), name: 'run_code',
+        arguments: { code: 'return await tools.read({file_path: "note.txt"})', description: 'Read the current note' }, agent,
+      })
+      expect(nested.isError).toBe(false)
+      const dispatch = session.snapshotEvents().find(event => event.type === 'tool/ptc-dispatch')
+      expect(dispatch?.data.meta).toMatchObject({ path: join(current, 'note.txt') })
+      await ctx.workingDirectory.set(agent, dir)
+      expect(dispatch?.data.meta).toMatchObject({ path: join(current, 'note.txt') })
+      expect(write.meta).toMatchObject({ path: join(current, 'created.txt') })
+      expect(await readFile(join(next, 'created.txt'), 'utf8')).toBe('edited')
+      await expect(readFile(join(dir, 'created.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+      expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(policy.workspaceRoot)
+      expect(session.header.cwd).toBe(dir)
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 })

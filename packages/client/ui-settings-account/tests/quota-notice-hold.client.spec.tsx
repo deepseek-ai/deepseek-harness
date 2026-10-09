@@ -52,7 +52,7 @@ const storedView: AccountView = {
   links: { usageUrl: 'http://localhost:8081/usage', topUpUrl: 'http://localhost:8081/top_up' },
 }
 const theme: ThemeSnapshot = {
-  preference: 'light', fontSize: 14, active: { id: 'light', colorScheme: 'light', tokens: {} }, themes: [], revision: 0,
+  preference: 'light', fontSizes: { text: 14, code: 11, terminal: 13 }, fontFamilies: { text: '', code: '', terminal: '' }, active: { id: 'light', colorScheme: 'light', tokens: {} }, themes: [], revision: 0,
 }
 
 /** The account settings commands, trimmed to what this composition renders. */

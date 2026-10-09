@@ -31,13 +31,15 @@ pnpm --silent run verify-persistence-changes --json
 
 Use `--silent` when consuming JSON: pnpm otherwise appends lifecycle failure text to stdout. Failed commands still exit with code 1.
 
-Read the reported root, path, change kind, and version requirement. A referenced type can affect several event digests; inspect every affected root. Until the history covers the new schemas, verification fails. A stale generated inventory also fails verification; the recording command refreshes it. If `changes` is empty after reordering fields or union alternatives, run `pnpm run gen-persistence-catalog` and repeat the check. An unchanged digest needs no new acknowledgement even when copied declarations or source locations produce a catalog diff.
+Read the reported root, path, change kind, and compatibility-review requirement. A referenced type can affect several event digests; inspect every affected root. Until the history covers the new schemas, verification fails. A stale generated inventory also fails verification; the recording command refreshes it. If `changes` is empty after reordering fields or union alternatives, run `pnpm run gen-persistence-catalog` and repeat the check. An unchanged digest needs no new acknowledgement even when copied declarations or source locations produce a catalog diff.
 
 To review a PR independently of its acknowledgement history, save the base and head inventories as local JSON files and run:
 
 ```sh
 pnpm --silent run persistence-review --before .artifacts/base.schema.json --after docs/persistence-schema.json
 ```
+
+A recorded decision does not hide the transition from this comparison. `--check` only compares current source with acknowledged history; after recording, it cannot replace a base/head review or establish that a human reviewed the change.
 
 Record the commits supplying those files with the report. Add `--json` for structured output. This read-only comparison groups shared changes with their affected roots and uses actual literal `kind`/`form` values instead of union positions. Ambiguous alternatives remain separate additions and removals. Its compatibility section copies every root's authoritative classifier result; the structural explanation does not replace acknowledgement checks. Current catalog labels and declaration names are descriptive metadata; structural anchors and fingerprints identify types.
 
@@ -46,7 +48,7 @@ The current machine inventory stores complete graphs in `roots`. A `types` entry
 <a id="acknowledge"></a>
 ## 1. Record the change
 
-Check the [accepted baseline](../session-format-status.md#finalization-record) first. Preserve its locked records. Record backward-compatible evolution in a new same-version acknowledgement; implement a higher writer version before recording a breaking change.
+Check the [accepted baseline](../session-format-status.md#finalization-record) first and preserve its locked records. Assess both reader directions under the [compatibility rules](../persistence-changes/README.md#compatibility-rules). A structural difference can remain same-version with evidence of safe interpretation or refusal; it does not automatically require a higher writer version.
 
 Write a local JSON file containing `en` and `zh`, each with `summary`, `compatibility`, and `verification` strings. The following input describes an exercised required-to-optional hook audit field change. Replace the explanation and test evidence with facts about your change; the CLI does not establish these claims.
 
@@ -57,12 +59,12 @@ Save the input as `.artifacts/persistence-change.prose.json`, creating the ignor
   "en": {
     "summary": "Makes the persisted hook audit decision optional.",
     "compatibility": "Existing records remain valid. Hook execution consumes HookOutput instead of replaying this audit field. Producers still write decisions, and absence does not imply pass.",
-    "verification": "pnpm exec vitest run packages/hooks/hook-protocol/tests/events.spec.ts: 10 tests passed."
+    "verification": "pnpm exec vitest run packages/experimental/hook-protocol/tests/events.spec.ts: 10 tests passed."
   },
   "zh": {
     "summary": "将持久化的钩子审计决策改为可选。",
     "compatibility": "已有记录仍然有效。钩子执行消费 HookOutput，不回放此审计字段。写入方仍然记录决策，缺失不代表 pass。",
-    "verification": "pnpm exec vitest run packages/hooks/hook-protocol/tests/events.spec.ts：10 个测试通过。"
+    "verification": "pnpm exec vitest run packages/experimental/hook-protocol/tests/events.spec.ts：10 个测试通过。"
   }
 }
 ```
@@ -73,9 +75,9 @@ Use a date and descriptive slug in place of this example id:
 pnpm --silent run persistence-changes --record 2026-09-11-poc-optional --prose .artifacts/persistence-change.prose.json --json
 ```
 
-The command validates the history and paired prose, infers the minimum version decision, and checks any required header increase before writing. It generates the record pair, complete after schemas, both catalogs, the machine inventory, and pairing records. Review the explanations and returned `changes`, `roots`, and `files` before committing. Omitting `--prose` creates unfinished drafts that verification rejects until their explanations are completed.
+The command validates the history and paired prose, infers established same-version decisions, and checks explicit compatibility decisions before writing. It generates the record pair, complete after schemas, both catalogs, the machine inventory, and pairing records. Review the explanations and returned `changes`, `roots`, and `files` before committing. Omitting `--prose` creates unfinished drafts that verification rejects until their explanations are completed.
 
-Inference follows the [fixed compatibility rules](../persistence-changes/README.md#compatibility-rules); it never changes source or relaxes them. If a bump is required, first follow [adding a Session format version](adding-a-session-format-version.md). The record must include its own increasing `SessionHeader.version` transition; an unrelated historical bump cannot authorize it. Routine changes never create another baseline.
+For a change marked `requiresCompatibilityReview`, explain both reader directions in the acknowledgement’s Compatibility section and record executed checks in Verification. Supply `--decision same-version` when that evidence supports keeping the version; recording or updating a flagged change with an unchanged header version and no explicit decision fails with `decision-required`. Structural differences alone do not infer a bump. An actual header version increase can infer `version-bump`. If an effective discriminator cannot prevent unsafe interpretation, follow [adding a Session format version](adding-a-session-format-version.md) and select `--decision version-bump`. That record must include its own increasing `SessionHeader.version` transition; an unrelated historical bump cannot authorize it. Routine changes never create another baseline.
 
 <a id="verify"></a>
 ## 2. Check, commit, and push
@@ -99,14 +101,14 @@ If source changes after recording, review the compatibility explanation and refr
 pnpm --silent run persistence-changes --update 2026-09-11-poc-optional --prose .artifacts/persistence-change.prose.json --json
 ```
 
-The command refreshes the machine declaration, schemas, catalogs, and pairing. Without `--prose`, it preserves the existing explanation. Update refuses the initial baseline, records that another record depends on, and finalized checkpoint records. Outside finalized checkpoints, the tree does not infer review acceptance: preserve accepted history and create a successor instead.
+The command refreshes the machine declaration, schemas, catalogs, and pairing. Without `--prose`, it preserves the existing explanation. Reassess that explanation against the complete transition and supply `--decision same-version` for any flagged same-version update. Update refuses the initial baseline, records that another record depends on, and finalized checkpoint records. Outside finalized checkpoints, the tree does not infer review acceptance: preserve accepted history and create a successor instead.
 
 When integration creates competing terminal records, update the unaccepted record against the remaining history, then reassess the resulting diff. An unrelated root's acknowledgement does not need refreshing. The [mechanism decision](../../.agents/notes/implemented/process/2026-09-11-persistence-type-history.md) explains why complete snapshots and per-root predecessors are retained.
 
-An explicit `--decision` remains a checked assertion. For an existing property's value-type change, the following deliberately wrong assertion fails before writing:
+For an existing property value-type change requiring review, first revise the prose file’s Compatibility and Verification sections to explain the actual new transition and its executed checks. Do not reuse the earlier required-to-optional explanation for a different change. Then update the record with that prose and the explicit same-version choice:
 
 ```sh
-pnpm --silent run persistence-changes --update 2026-09-11-poc-optional --decision same-version --json
+pnpm --silent run persistence-changes --update 2026-09-11-poc-optional --decision same-version --prose .artifacts/persistence-change.prose.json --json
 ```
 
 <a id="dev-note"></a>

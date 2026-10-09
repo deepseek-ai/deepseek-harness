@@ -20,7 +20,7 @@ import {
   collectRuntimeSourceSpecifiers,
 } from './verify-client-packages.ts'
 
-const EXPERIMENTAL_PREFIX = '@deepseek-ai/dsh-experimental-'
+import { isExperimentalPackageName } from './experimental-package-policy.ts'
 // The independently published entry package owns platform-engine dependencies.
 const EXTERNAL_KIT_PACKAGES = new Set(['@deepseek-ai/libreoffice-kit'])
 const PROFILE_SOURCE = 'packages/boot/app-boot/src/profile.ts'
@@ -107,7 +107,7 @@ export function verifyDefaultProductIsolation(root: string): ProductIsolationRes
   const sources = new Set<string>()
   const configs = new Set<string>()
   let webPluginCount = 0
-  const isExperimental = (pkg: Package): boolean => pkg.manifest.name.startsWith(EXPERIMENTAL_PREFIX)
+  const isExperimental = (pkg: Package): boolean => isExperimentalPackageName(pkg.manifest.name)
     || display(pkg.directory).startsWith('packages/experimental/')
   const add = (pkg: Package, origin: string): void => {
     if (isExperimental(pkg)) {
@@ -136,7 +136,7 @@ export function verifyDefaultProductIsolation(root: string): ProductIsolationRes
       return
     }
     const packageName = barePackageName(name)
-    if (packageName.startsWith(EXPERIMENTAL_PREFIX)) {
+    if (isExperimentalPackageName(packageName)) {
       failures.push(`${origin} -> ${name}: default product must not include experimental packages`)
       return
     }
@@ -293,7 +293,8 @@ export function verifyDefaultProductIsolation(root: string): ProductIsolationRes
     const { manifest } = pkg
     for (const section of RUNTIME_SECTIONS) {
       for (const [name, range] of Object.entries(manifest[section] ?? {})) {
-        if (pkg === cli && section === 'dependencies' && optionalBundles.has(name)) continue
+        const target = packages.get(name)
+        if (pkg === cli && section === 'dependencies' && optionalBundles.has(name) && target !== undefined && isExperimental(target)) continue
         dependency(name, range, pkg, `${manifest.name} ${section}`)
       }
     }

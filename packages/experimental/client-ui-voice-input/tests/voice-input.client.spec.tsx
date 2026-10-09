@@ -32,6 +32,7 @@ function fixture(recording?: Recording) {
     async () => ({ ok: true, value: transcript }))
   const props: VoiceInputProps = { sessionId: 'one' as SessionId, inputActions, transcribe, locked: false, onActiveChange: vi.fn(),
     openSettings: vi.fn(), prepare: vi.fn(async () => {}), cancelPreparation: vi.fn(async () => {}), configure: vi.fn(async () => {}),
+    selectMicrophone: vi.fn(), useMicrophoneDevice: bindSnapshotSelector(createSnapshotStore({ id: '', label: '' })),
     useSpeechReadiness: bindSnapshotSelector(readiness), createRecording: () => recording ?? capture,
     t: makeTranslate(zh, commonZh) }
   const view = render(<VoiceInput {...props} />)

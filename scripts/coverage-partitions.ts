@@ -27,6 +27,7 @@ export const COVERAGE_TEST_TIMEOUT_ENV = 'DSH_COVERAGE_TEST_TIMEOUT_MS'
  * working directory on every platform.
  */
 const CANONICAL_LOCATIONS_REPORTER = './scripts/coverage-canonical-locations.ts'
+const FILE_TIMES_REPORTER = './scripts/coverage-file-times.ts'
 
 /** One child command owned by the coverage coordinator. */
 export interface CoverageCommand {
@@ -299,23 +300,23 @@ export function writeFileDurations(
 }
 
 /**
- * Extract per-file durations from Vitest JSON reporter outputs (one per
- * partition). Each `testResults` entry names an absolute spec path and carries
- * `startTime`/`endTime`; the difference is the file's recorded duration.
+ * Extract per-file durations from compact timing reports, one per partition.
+ * @param reportFiles - reports mapping repository-relative file paths to milliseconds.
+ * @returns finite, non-negative file costs from readable reports.
  */
-export function collectPartitionDurations(reportFiles: readonly string[], root: string): Map<string, number> {
+export function collectPartitionDurations(reportFiles: readonly string[]): Map<string, number> {
   const durations = new Map<string, number>()
   for (const file of reportFiles) {
-    let report: { testResults?: Array<{ name?: unknown; startTime?: number; endTime?: number }> }
+    let report: unknown
     try {
-      report = JSON.parse(readFileSync(file, 'utf8')) as { testResults?: Array<{ name?: unknown; startTime?: number; endTime?: number }> }
+      report = JSON.parse(readFileSync(file, 'utf8'))
     } catch {
       continue
     }
-    for (const result of report.testResults ?? []) {
-      if (typeof result.name !== 'string' || typeof result.startTime !== 'number' || typeof result.endTime !== 'number') continue
-      const relativePath = relative(root, result.name).split(sep).join('/')
-      durations.set(relativePath, Math.max(0, result.endTime - result.startTime))
+    if (report === null || typeof report !== 'object' || Array.isArray(report)) continue
+    for (const [path, duration] of Object.entries(report)) {
+      if (typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0) continue
+      durations.set(path, duration)
     }
   }
   return durations
@@ -428,6 +429,7 @@ function partitionConfigSource(
   const processBound = JSON.stringify(files.filter(file => projectOf.get(file) === 'process-bound').map(file => file.split('\\').join('/')))
   return [
     "import base from '../../vitest.config.ts'",
+    "import { coverageForkPool } from '../../scripts/coverage-fork-diagnostics.ts'",
     'export default {',
     '  ...base,',
     '  test: {',
@@ -436,6 +438,7 @@ function partitionConfigSource(
     '      ...project,',
     '      test: {',
     '        ...project.test,',
+    '        pool: coverageForkPool,',
     '        include: project.test.name === \'process-bound\' ? ' + processBound + ' : ' + threadSafe + ',',
     '      },',
     '    })),',
@@ -532,10 +535,10 @@ export class CoveragePartitionCoordinator {
   private persistDurations(partitionCount: number): void {
     const reportFiles = Array.from(
       { length: partitionCount },
-      (_, index) => join(this.temporaryRoot, `partition-${index + 1}.report.json`),
+      (_, index) => join(this.temporaryRoot, `partition-${index + 1}.times.json`),
     )
     const currentFiles = this.projectOf.size > 0 ? [...this.projectOf.keys()] : undefined
-    writeFileDurations(this.root, collectPartitionDurations(reportFiles, this.root), currentFiles)
+    writeFileDurations(this.root, collectPartitionDurations(reportFiles), currentFiles)
   }
 
   /**
@@ -584,7 +587,7 @@ export class CoveragePartitionCoordinator {
   private partitionCommand(index: number, configPath: string): CoverageCommand {
     const blobPath = join(this.blobsRoot, `partition-${index}.json`)
     const reportsDirectory = join(this.temporaryRoot, `coverage-${index}`)
-    const jsonReportPath = join(this.temporaryRoot, `partition-${index}.report.json`)
+    const timingReportPath = join(this.temporaryRoot, `partition-${index}.times.json`)
     const invocation = pnpmInvocation([
       'exec',
       'vitest',
@@ -595,10 +598,10 @@ export class CoveragePartitionCoordinator {
       `--config=${this.relativePath(configPath)}`,
       '--reporter=default',
       '--reporter=blob',
-      '--reporter=json',
+      `--reporter=${FILE_TIMES_REPORTER}`,
       `--reporter=${CANONICAL_LOCATIONS_REPORTER}`,
       `--outputFile.blob=${this.relativePath(blobPath)}`,
-      `--outputFile.json=${this.relativePath(jsonReportPath)}`,
+      `--outputFile.fileTimes=${this.relativePath(timingReportPath)}`,
       `--coverage.reportsDirectory=${this.relativePath(reportsDirectory)}`,
       ...this.vitestArgs,
     ], { npm_execpath: this.pnpmEntrypoint })

@@ -34,7 +34,7 @@ Headers are explicit. The service does not add a channel header or inherit ambie
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-`src/index.ts` registers the service; `event-log.ts` owns ordinary SDK batching; `session-log.ts` owns byte/count scheduling; `transport.ts` supplies the Session SDK JSON HTTP delegate; `event-transport.ts` uses Got for cancellable ordinary-event HTTP requests and retry waits with SDK serialization and export accounting. No global OTel provider is installed. The Session processor measures each record once, groups conservative sizes, and waits for the SDK concurrency queue to clear after every callback before sending another request.
+`src/index.ts` registers the service; `event-log.ts` owns ordinary SDK batching; `session-log.ts` owns byte/count scheduling; `transport.ts` supplies the Session SDK JSON HTTP delegate and owns the shared exporter metrics recorder, which receives no meter provider and records nothing; `event-transport.ts` uses Got for cancellable ordinary-event HTTP requests and retry waits with SDK serialization and export accounting. No global OTel provider is installed; the accepted exporter options exclude the upstream `selfObsMeterProvider`, and the Session processor accepts only the batching fields it implements, so exporter and Session-processor self-observability metrics stay unrecorded. The Session processor measures each record once, groups conservative sizes, and waits for the SDK concurrency queue to clear after every callback before sending another request.
 
 Composition tests exercise independent channels and service removal; adapter tests cover dependent-fiber cleanup and feedback authorization.
 

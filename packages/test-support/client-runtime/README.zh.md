@@ -46,7 +46,7 @@ await runtime.dispose()
 
 可选渲染参数通过 `entryKey` 选择 keyed 条目，或通过 `only` 选择 list 条目；`view.update(owner)` 保留该选择。`runtime.panelInfo` 提供默认的 `usePanelInfo` 数据源，初始不选中全局面板。挂载生产 Layout 所有者之前，先调用 `releasePanelInfoSource()` 释放该数据源。`dispose()` 同时释放默认的工作区与面板信息根数据源；提前释放是幂等的，不会移除替代它们的所有者。
 
-Session fixture 从显式提供的地址或已加载的父级投影解析子代理地址，不会保留 Session generation。
+Session fixture 从显式提供的地址或已加载的父级投影解析子代理地址，不会保留 Session generation。外部目录项没有本地浏览地址。
 
 ### 局部 DOM 快照
 

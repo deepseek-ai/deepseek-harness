@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+New commands start in the Session's current working directory. Relative `workdir` values resolve from that directory; per-call overrides and background jobs do not change it.
+
 Load this plugin in any composition where the agent should run PowerShell commands — typically a Windows composition whose `ctx.shell` is backed by a PowerShell executor. It registers the `pwsh` tool once the executor provider and the `dsh-shell-env` registry are mounted.
 
 ### When to choose it
@@ -73,6 +75,8 @@ A composition with no PowerShell executor never activates the tool, and the inje
 
 <details>
 <summary>Implementation internals — click to expand</summary>
+
+Structured foreground and background results expose `cwd`, the executor-resolved launch directory. Persisted presentation metadata carries the same value so settled cards retain the directory used by that call. A command’s own `cd` does not change this launch value; native result text remains stdout, stderr, and status markers.
 
 This section explains the design decisions behind the tool and points at the code that realizes them; the observable behavior is fully covered in [Use this package](#use-this-package).
 
@@ -204,7 +208,6 @@ These limits define when the tool is a poor fit or needs special care. They are 
 - **Language mode and named-pipe capture under the Windows sandbox** — under the [Windows ACL sandbox](../../sandbox/sandbox-windows-acl/README.md), read-only pwsh starts in ConstrainedLanguage because its temp write denial makes PowerShell's AppLocker probe fail closed: `Add-Type`, non-core .NET statics (`[System.IO.*]::`, `[math]::`), COM objects, and reflection fail with "only core types" errors, and the mode cannot be lifted from inside. Workspace-write's private temp lets the probe complete, so it stays in FullLanguage unless host policy says otherwise. Both confined modes deny named-pipe opens, so a piped-stdio spawn inside a confined command fails with EPERM. The tool description teaches both contracts to the model; the backend README owns the full limitations.
 - **No persistent shell** — every call starts a fresh `pwsh -Command`; the persistent-shell counterpart is [`@deepseek-ai/dsh-tool-pwsh-persistent`](../tool-pwsh-persistent/README.md), which keeps one owner-scoped pwsh alive across calls.
 - **PowerShell-dialect contract** — the model must write PowerShell (native paths, `$env:` variables), not bash; there is no dialect translation.
-- **Session-cwd identity is not canonicalized** — the workdir base is the session header cwd as-is, unlike the bash tool's sandbox-root-canonicalized identity. Under a confining executor the policy's workspace root IS canonicalized (by the shared policy service), so the workdir and the confinement root can diverge when the raw session cwd differs from its canonical form — a parity gap deferred to the shared shell-tool base extraction.
 
 <a id="dev-note"></a>
 ### Dev Note

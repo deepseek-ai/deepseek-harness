@@ -51,12 +51,16 @@ body[data-ds-dark-theme] {
 /* Bootstrap and ThemePresenter set the integer content size on body (10–22px,
    default 14px). Headings and body variants share its pixel delta. Secondary
    text uses size − 1 through 14px, then size − 2: 10→9, 14→13, 15→13, 22→20.
-   max(13px, ...) selects the delta, not a font-size floor. Small and code
-   typography keep their fixed sizes. */
+   max(13px, ...) selects the delta, not a font-size floor. Small typography keeps a
+   fixed size; code typography follows the separate code size setting. */
 body {
   --dsh-content-font-delta: calc(var(--dsh-content-font-size, 14px) - 14px);
   --dsh-content-font-size-secondary: min(calc(var(--dsh-content-font-size, 14px) - 1px), max(13px, calc(var(--dsh-content-font-size, 14px) - 2px)));
   --dsh-content-font-delta-secondary: calc(var(--dsh-content-font-size-secondary) - 13px);
+  /* Code size setting (--dsh-code-font-size, integer px 10–16, default 11)
+     is the code-block size; inline code and the small tool variant move by
+     the same increment. */
+  --dsh-code-font-delta: calc(var(--dsh-code-font-size, 11px) - 11px);
 
   --dsw-font-markdown-h1: 700 calc(21px + var(--dsh-content-font-delta)) / calc(30px + var(--dsh-content-font-delta)) var(--dsw-font-family);
   --dsw-font-markdown-h1-font-family: var(--dsw-font-family);
@@ -156,26 +160,26 @@ body {
   --dsw-font-markdown-small-strong-italic-font-size: 12px;
   --dsw-font-markdown-small-strong-italic-font-style: italic;
 
-  --dsw-font-markdown-code: 12px/19px var(--ds-font-family-code);
+  --dsw-font-markdown-code: calc(12px + var(--dsh-code-font-delta)) / calc(19px + var(--dsh-code-font-delta)) var(--ds-font-family-code);
   --dsw-font-markdown-code-font-family: var(--ds-font-family-code);
   --dsw-font-markdown-code-font-weight: 400;
-  --dsw-font-markdown-code-line-height: 19px;
-  --dsw-font-markdown-code-font-size: 12px;
+  --dsw-font-markdown-code-line-height: calc(19px + var(--dsh-code-font-delta));
+  --dsw-font-markdown-code-font-size: calc(12px + var(--dsh-code-font-delta));
   --dsw-font-markdown-code-font-style: normal;
 
-  --dsw-font-markdown-code-block: 11px/19px var(--ds-font-family-code);
+  --dsw-font-markdown-code-block: var(--dsh-code-font-size, 11px) / calc(19px + var(--dsh-code-font-delta)) var(--ds-font-family-code);
   --dsw-font-markdown-code-block-font-family: var(--ds-font-family-code);
   --dsw-font-markdown-code-block-font-weight: 400;
-  --dsw-font-markdown-code-block-line-height: 19px;
-  --dsw-font-markdown-code-block-font-size: 11px;
+  --dsw-font-markdown-code-block-line-height: calc(19px + var(--dsh-code-font-delta));
+  --dsw-font-markdown-code-block-font-size: var(--dsh-code-font-size, 11px);
   --dsw-font-markdown-code-block-font-style: normal;
 
   /* 手工补充（非插件导出）：tool row 展开卡片内的小号 code 字体。 */
-  --dsw-font-markdown-code-block-small: 11px/16px var(--ds-font-family-code);
+  --dsw-font-markdown-code-block-small: var(--dsh-code-font-size, 11px) / calc(16px + var(--dsh-code-font-delta)) var(--ds-font-family-code);
   --dsw-font-markdown-code-block-small-font-family: var(--ds-font-family-code);
   --dsw-font-markdown-code-block-small-font-weight: 400;
-  --dsw-font-markdown-code-block-small-line-height: 16px;
-  --dsw-font-markdown-code-block-small-font-size: 11px;
+  --dsw-font-markdown-code-block-small-line-height: calc(16px + var(--dsh-code-font-delta));
+  --dsw-font-markdown-code-block-small-font-size: var(--dsh-code-font-size, 11px);
   --dsw-font-markdown-code-block-small-font-style: normal;
 
   --dsw-font-xl-24: 600 24px/32px var(--dsw-font-family);

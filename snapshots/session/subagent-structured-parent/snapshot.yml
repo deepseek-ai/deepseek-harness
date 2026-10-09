@@ -1,0 +1,11 @@
+version: 1
+scenario: subagent-structured-parent
+profile: headless
+composition: subagent-structured-parent
+recording: authored
+header:
+  class: subagent-structured-parent
+  pin: true
+  systemPromptSource: text-turn
+  childSystemPrompts: [1]
+  childToolSchemas: [1]

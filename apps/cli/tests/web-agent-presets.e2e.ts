@@ -18,10 +18,9 @@ import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { dump, load } from 'js-yaml'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { bundlePatchPaths, composeEntries } from '@deepseek-ai/dsh-app-boot'
+import { createPluginProfile } from '../../desktop/src/project-manager.ts'
 /** Profile entry ids whose volatile fields these scenarios edit through Settings. */
 const SETTINGS_NAMESPACE = 'agent-preset-registry'
 const SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE = 'subagent-model-selection-settings'
@@ -64,6 +63,7 @@ async function bootWeb(
   extra: PatchOptions[] = [],
   profilePackages: readonly string[] = [],
   profileBundles?: readonly string[],
+  surface: 'web' | 'desktop' | 'spec' = 'spec',
 ): Promise<Context> {
   const storageRoot = join(profileHome, 'storages')
   const overrides: PatchOptions[] = [
@@ -90,10 +90,12 @@ async function bootWeb(
     // agent's capabilities, which is all this file asserts.
     { id: 'web-runtime', disabled: true },
     { id: 'session-telemetry-otel', disabled: true },
+    { id: 'desktop-product-telemetry', disabled: true },
+    { id: 'product-analytics', disabled: true },
     // A deployment-level skill on the host registry's GLOBAL layer — the same
     // registration shape a repository plugin's skill root uses. The layered
     // skills test below proves it reaches preset-composed agents.
-    { id: 'skill-badge', disabled: false },
+    { insert: [{ id: 'skill-badge', name: import.meta.resolve('@deepseek-ai/dsh-skill-badge') }] },
     { id: 'modules', disabled: true },
     // The physical Connection row owns the disabled HTTP server. bootWeb
     // supplies only its in-process registries so Host services still prove
@@ -120,9 +122,10 @@ async function bootWeb(
     ...extra,
   ]
   const home = profileHome
-  const profileDir = join(home, 'profiles', 'spec')
+  const profileDir = join(home, 'profiles', surface)
   await mkdir(profileDir, { recursive: true })
-  if (profileBundles === undefined) initProfile(profileDir, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
+  if (surface === 'desktop') createPluginProfile(profileDir)
+  else if (profileBundles === undefined) initProfile(profileDir, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
   // Product Bundles are installed into the Profile, not the dsh app. Model
   // pnpm's package link for only the selected products; their own production
   // dependencies resolve from the linked workspace packages, while shared
@@ -134,7 +137,7 @@ async function bootWeb(
     await symlink(packageDir, link, 'junction')
   }
   let profile: Profile = { skippedBundles: [],
-    name: 'spec',
+    name: surface,
     dir: profileDir,
     layers: [],
     patchPath: join(profileDir, 'cordis.patch.yml'),
@@ -150,7 +153,7 @@ async function bootWeb(
       dependencies: Object.fromEntries(profileBundles.map(name => [name, 'workspace:*'])),
       dsh: { profile: { bundles: profileBundles } },
     }, null, 2) + '\n')
-    profile = loadProfile('dsh-test', 'spec', INSTALL_ANCHOR, home, { userLayer: false })
+    profile = loadProfile('dsh-test', surface, INSTALL_ANCHOR, home, { userLayer: false })
     bundlePatches = profile.layers.flatMap(layer => layer.patches)
   }
   // Deployment defaults live in a bundle beneath the profile patch, so Settings writes are not shadowed by overlays.
@@ -166,7 +169,7 @@ async function bootWeb(
   const rootConfig = join(profileDir, 'cordis.yml')
   await writeFile(rootConfig, '[]\n')
   return await boot('dsh-test', rootConfig, [...bundlePatches, ...overrides], async (bootCtx) => {
-    bootCtx.provide('profileContext', { name: 'spec', dir: profileDir, patchPath: profile.patchPath,
+    bootCtx.provide('profileContext', { name: surface, dir: profileDir, patchPath: profile.patchPath,
       installAnchor: INSTALL_ANCHOR, home, cwd: home,
       startedBundles: profileBundles ?? ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
       overlays: [], telemetryDisabledEnv: '1' })
@@ -192,27 +195,15 @@ function toolParameterNames(ctx: Context, agent: Agent, toolName: string): strin
   return Object.keys(properties).sort()
 }
 
-function enablePresetTool(composition: string, id: string): string {
-  const rows = load(composition, { schema: entryListSchema }) as import('@deepseek-ai/cordis-plugin-loader').EntryOptions[]
-  const visit = (entries: typeof rows): boolean => entries.some((row) => {
-    if (row.id === id) { row.disabled = false; return true }
-    return row.group === true && visit(row.config as typeof rows)
-  })
-  if (!visit(rows)) throw new Error(`missing preset row ${id}`)
-  return dump(rows, { schema: entryListSchema })
-}
-
 let ctx: Context
 beforeAll(async () => {
   ctx = await bootWeb(await mkdtemp(join(tmpdir(), 'dsh-web-presets-')))
 }, 120_000)
 
 describe('the shipped Web composition', () => {
-  it('leaves the global tool layer empty', () => {
-    // Every model-facing tool belongs to a preset, `ask_user_question`
-    // included: a tool in the global layer reaches EVERY agent regardless of
-    // which preset composed it, expanding that preset's tool list.
-    expect(toolNames(ctx)).toEqual([])
+  it('exposes only the directory tool in the global layer', () => {
+    // Directory selection is global; action tools belong to their Agent presets.
+    expect(toolNames(ctx)).toEqual(['working_directory'])
   })
 
   it('keeps the token meter and its context-meter projections on the host plane', async () => {
@@ -267,7 +258,7 @@ describe('the shipped Web composition', () => {
         'schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update',
         'send_message', 'skill',
         'subagent', 'subagent_fork', 'todo_write', 'update_goal', 'web_fetch', 'web_search',
-        'workflow', 'write',
+        'workflow', 'working_directory', 'write',
       ])
       expect(ctx.commands.find(handle.agent, 'goal')).toBeDefined()
     } finally {
@@ -319,7 +310,7 @@ describe('the shipped Web composition', () => {
       expect(assembly.sections).toEqual([
         { name: 'deployment:persona-prefix', text: MINIMAL_PROMPT },
       ])
-      expect(assembly.tools.map(tool => tool.name)).toEqual(['bash'])
+      expect(assembly.tools.map(tool => tool.name)).toEqual(['bash', 'working_directory'])
       expect(assembly.tools.find(tool => tool.name === 'bash')?.description).toBe(MINIMAL_BASH_DESCRIPTION)
       expect(ctx.commands.find(handle.agent, 'goal')).toBeUndefined()
       // serviceFor reports preset-owned providers; unisolated consumers inherit the host fs.
@@ -343,14 +334,14 @@ describe('the shipped Web composition', () => {
       setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
     })
     try {
-      expect(toolNames(ctx, minimal.agent)).toEqual(['bash'])
+      expect(toolNames(ctx, minimal.agent)).toEqual(['bash', 'working_directory'])
       expect(toolNames(ctx, full.agent).length).toBeGreaterThan(10)
 
       await minimal.dispose()
 
       // Tearing the minimal session down leaves the full one whole.
       expect(toolNames(ctx, full.agent).length).toBeGreaterThan(10)
-      expect(toolNames(ctx)).toEqual([])
+      expect(toolNames(ctx)).toEqual(['working_directory'])
     } finally {
       await full.dispose()
     }
@@ -509,7 +500,7 @@ describe('the shipped Web composition', () => {
       // stays the preset's choice — minimal mounts no `tool-skill`, so its
       // tool table has no loader even though the global layer is readable.
       expect((await ctx.skills.list({ scope: handle.agent })).map(skill => skill.name)).toContain('dsh-badge')
-      expect(toolNames(ctx, handle.agent)).toEqual(['bash'])
+      expect(toolNames(ctx, handle.agent)).toEqual(['bash', 'working_directory'])
     } finally {
       await handle.dispose()
     }
@@ -538,92 +529,75 @@ describe('the shipped Web composition', () => {
   })
 })
 
-describe('product Bundle and user-preset intersection', () => {
-  const presetIds = ['products-none', 'products-codex', 'products-claude', 'products-both'] as const
-  type Product = 'codex' | 'claude-code'
-  type PresetId = typeof presetIds[number]
+describe.each(['web', 'desktop'] as const)('%s native subagent bundles', (surface) => {
+  const products = ['codex', 'claude-code'] as const
+  type Product = typeof products[number]
+  const packageDir = (product: Product): string => (product === 'codex' ? CODEX_PACKAGE_DIR : CLAUDE_CODE_PACKAGE_DIR)
+  const toolName = (product: Product): string => `subagent_${product.replaceAll('-', '_')}`
 
-  async function bootProducts(installed: readonly Product[]): Promise<Context> {
-    const root = await mkdtemp(join(tmpdir(), 'dsh-product-presets-'))
-    const definitions: import('@deepseek-ai/cordis-plugin-loader').EntryOptions[] = []
-    const standardConfig = composeEntries([webPatches('test')]).find(row => row.id === 'preset-standard')!.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition
-    const standard = dump(standardConfig.plugins, { schema: entryListSchema })
-    for (const id of presetIds) {
-      let composition = standard
-      if (id === 'products-codex' || id === 'products-both') {
-        composition = enablePresetTool(composition, 'tool-subagent-codex')
-      }
-      if (id === 'products-claude' || id === 'products-both') {
-        composition = enablePresetTool(composition, 'tool-subagent-claude-code')
-      }
-      definitions.push({ id: `preset-${id}`, name: '@deepseek-ai/dsh-agent-preset', config: { id, plugins: load(composition, { schema: entryListSchema }) } })
-    }
-    const packageDir = (product: Product): string => (
-      product === 'codex' ? CODEX_PACKAGE_DIR : CLAUDE_CODE_PACKAGE_DIR
-    )
-    const packageName = (product: Product): string => (
-      product === 'codex'
-        ? '@deepseek-ai/dsh-subagent-codex'
-        : '@deepseek-ai/dsh-subagent-claude-code'
-    )
-    return await bootWeb(root, [{ insert: definitions }], installed.map(packageDir), [
-      '@deepseek-ai/dsh-base',
-      '@deepseek-ai/dsh-web-app',
-      ...installed.map(packageName),
-    ])
+  async function bootSelected(installed: readonly Product[], extra: PatchOptions[] = []): Promise<Context> {
+    const root = await mkdtemp(join(tmpdir(), `dsh-${surface}-native-bundles-`))
+    onTestFinished(async () => { await rm(root, { recursive: true, force: true }) })
+    return await bootWeb(root, extra, installed.map(packageDir), [
+      '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', ...installed.map(product => `@deepseek-ai/dsh-subagent-${product}`),
+    ], surface)
   }
 
-  it('composes the intersection of installed Bundles and enabled preset rows', async () => {
-    const enabledByPreset: Record<PresetId, Product[]> = {
-      'products-none': [],
-      'products-codex': ['codex'],
-      'products-claude': ['claude-code'],
-      'products-both': ['codex', 'claude-code'],
-    }
-    const scenarios: Array<{ installed: Product[]; presets: readonly PresetId[] }> = [
-      { installed: [], presets: ['products-both'] },
-      { installed: ['codex'], presets: ['products-both'] },
-      { installed: ['claude-code'], presets: ['products-both'] },
-      { installed: ['codex', 'claude-code'], presets: presetIds },
-    ]
+  async function presetTools(productCtx: Context, preset: string): Promise<string[]> {
+    const handle = await productCtx.agents.create({
+      sessionId: SessionId(`native-${surface}-${preset}-${randomUUID()}`),
+      setup: owner => productCtx.agentPresets.mount(owner, preset).then(() => undefined),
+    })
+    try {
+      return toolNames(productCtx, handle.agent).filter(name => /(?:subagent|custom)_(?:codex|claude_code)$/.test(name))
+    } finally { await handle.dispose() }
+  }
 
-    for (const { installed, presets } of scenarios) {
-      const productCtx = await bootProducts(installed)
+  it.each([[[]], [['codex']], [['claude-code']], [['codex', 'claude-code']]] as Array<[Product[]]>)(
+    'adds the selected %j delegation tools to every preset as global tools', async (installed) => {
+      const productCtx = await bootSelected(installed)
       const spawn = vi.spyOn(productCtx.subprocess, 'spawn')
       try {
-        expect(productCtx.subagents.list()
-          .filter(name => name === 'codex' || name === 'claude-code')
-          .sort())
+        expect(productCtx.subagents.list().filter(name => (products as readonly string[]).includes(name)).sort())
           .toEqual([...installed].sort())
-        for (const id of presets) {
-          const handle = await productCtx.agents.create({
-            sessionId: SessionId(`preset-${id}-${installed.join('-') || 'none'}-${randomUUID()}`),
-            setup: agentCtx => productCtx.agentPresets.mount(agentCtx, id).then(() => undefined),
-          })
-          try {
-            const productTools = enabledByPreset[id]
-              .filter(product => installed.includes(product))
-              .map(product => product === 'codex' ? 'subagent_codex' : 'subagent_claude_code')
-              .sort()
-            const tools = toolNames(productCtx, handle.agent)
-            expect(tools.filter(name => name === 'subagent_codex' || name === 'subagent_claude_code'))
-              .toEqual(productTools)
-            expect(tools).toEqual(expect.arrayContaining(['job_kill', 'job_list', 'job_output']))
-            for (const productTool of productTools) {
-              expect(toolParameterNames(productCtx, handle.agent, productTool)).toEqual([
-                'description', 'prompt', 'run_in_background',
-              ])
-            }
-          } finally {
-            await handle.dispose()
-          }
+        const expected = installed.map(toolName).sort()
+        for (const preset of ['standard', 'cordis', 'ptc', 'minimal']) {
+          expect(await presetTools(productCtx, preset)).toEqual(expected)
         }
+        const handle = await productCtx.agents.create({
+          sessionId: SessionId(`native-${surface}-params-${randomUUID()}`),
+          setup: owner => productCtx.agentPresets.mount(owner, 'standard').then(() => undefined),
+        })
+        try {
+          for (const product of installed) {
+            expect(toolParameterNames(productCtx, handle.agent, toolName(product))).toEqual(['cwd', 'description', 'prompt'])
+          }
+        } finally { await handle.dispose() }
         expect(spawn).not.toHaveBeenCalled()
       } finally {
         spawn.mockRestore()
         await productCtx.fiber.dispose()
       }
-    }
+    }, 120_000)
+
+  it('keeps provider identities and applies later Host row overrides', async () => {
+    const providerConfig = { model: 'adoption-model', env: { DSH_NATIVE_ADOPTION: 'preserved' } }
+    const productCtx = await bootSelected(products, [
+      ...products.map(product => ({ id: `subagent-${product}`, config: providerConfig })),
+      { id: 'tool-subagent-codex', disabled: true },
+      { id: 'tool-subagent-claude-code', config: {
+        provider: 'claude-code', toolName: 'custom_claude_code', maxDepth: 'provider-managed',
+      } },
+    ])
+    try {
+      for (const product of products) {
+        expect([...productCtx.loader.entries()].find(entry => entry.options.id === `subagent-${product}`)?.options.config)
+          .toMatchObject(providerConfig)
+      }
+      for (const preset of ['standard', 'ptc', 'minimal']) {
+        expect(await presetTools(productCtx, preset)).toEqual(['custom_claude_code'])
+      }
+    } finally { await productCtx.fiber.dispose() }
   }, 120_000)
 })
 
@@ -862,9 +836,8 @@ describe('the default preset as a user setting', () => {
         setup: agentCtx => ctx.agentPresets.mount(agentCtx).then(() => undefined),
       })
       try {
-        // `mount()` with no id resolves the effective default. One tool, not
-        // `standard`'s catalog: the setting decided the composition.
-        expect(toolNames(ctx, handle.agent)).toEqual(['bash'])
+        // An omitted preset id resolves the stored default instead of the composed default.
+        expect(toolNames(ctx, handle.agent)).toEqual(['bash', 'working_directory'])
       } finally {
         await handle.dispose()
       }
@@ -910,7 +883,7 @@ describe('a profile patch stored before Developer tools owned preset selection',
       setup: agentCtx => legacy.agentPresets.mount(agentCtx).then(() => undefined),
     })
     try {
-      expect(toolNames(legacy, handle.agent)).toEqual(['bash'])
+      expect(toolNames(legacy, handle.agent)).toEqual(['bash', 'working_directory'])
     } finally {
       await handle.dispose()
     }
@@ -927,7 +900,7 @@ describe('a session keeps the preset it was created with', () => {
     try {
       // The api-proxy guard reads exactly this: the header records what the
       // session runs, so naming anything else is a caller error rather than a
-      // switch. Its history was produced under `minimal`'s single tool.
+      // switch.
       expect(handle.agent.session.header.agentPreset).toBe('minimal')
     } finally {
       await handle.dispose()

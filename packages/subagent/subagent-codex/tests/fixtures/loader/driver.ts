@@ -7,9 +7,8 @@ import type {} from '@deepseek-ai/dsh-tools'
 import { bootProductionProfile } from '../../../../../test-support/loader-smoke/tests/fixtures/production-profile.ts'
 
 const configPath = process.argv[2]
-const bundlePatchPath = process.argv[3]
-if (configPath === undefined || bundlePatchPath === undefined) {
-  throw new Error('subagent-codex Loader composition driver requires config and Bundle patch paths')
+if (configPath === undefined) {
+  throw new Error('subagent-codex Loader composition driver requires a config path')
 }
 
 let starts = 0
@@ -17,7 +16,6 @@ const ctx = await bootProductionProfile({
   binName: 'subagent-codex-loader-composition',
   profile: 'headless',
   overlayPaths: [
-    resolveConfigPath(bundlePatchPath, undefined),
     resolveConfigPath(configPath, undefined),
   ],
   prepare: (hostCtx) => {

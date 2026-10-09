@@ -37,6 +37,9 @@
     },
     {
       "path": "../../fs/fs"
+    },
+    {
+      "path": "../../subagent/subagent"
     }
   ]
 }

@@ -112,6 +112,20 @@ def test_live_smoke_requires_fresh_external_content(live_smoke: SimpleNamespace)
 
 
 @pytest.mark.parametrize("label", ["create", "verify"])
+def test_live_smoke_accepts_file_details_after_acknowledgement(
+    live_smoke: SimpleNamespace, label: str,
+) -> None:
+    setattr(live_smoke, f"{label}_result", live_result(final_response=(
+        "PYTHON_SDK_LIVE_OK\n\n"
+        "File created at `live-api-marker.txt` — 18 bytes, no BOM, no trailing newline."
+    )))
+    SMOKE["smoke_sdk_live"]()
+    assert len(live_smoke.prompts) == 2
+    assert len(live_smoke.checked_logs) == 1
+    assert live_smoke.closed and not live_smoke.root.exists()
+
+
+@pytest.mark.parametrize("label", ["create", "verify"])
 @pytest.mark.parametrize(("overrides", "message"), [
     ({"finish_reason": "error"}, "turn ended with 'error'"),
     ({"finish_reason": "error", "events": [{
@@ -243,6 +257,22 @@ def test_mock_model_serves_native_messages_events() -> None:
         assert events[0]["type"] == "message_start"
         assert events[-1] == {"type": "message_stop"}
         assert next(event["delta"]["text"] for event in events if event["type"] == "content_block_delta") == SMOKE["EXPECTED_TEXT"]
+
+
+@pytest.mark.parametrize("directory", ["/fixture/workspace", r"C:\fixture\workspace"])
+def test_minimal_snapshot_pins_quoted_working_directory(directory: str) -> None:
+    context = f"Current working directory: {json.dumps(directory)}."
+    other = json.dumps(r"C:\another\directory")
+    files = SMOKE["build_minimal_snapshot_files"]([{
+        "system": [],
+        "tools": [],
+        "messages": [{"role": "user", "content": [{"type": "text", "text": context + "\n" + other}]}],
+    }], Path(directory))
+    message = json.loads(files["model-visible.json"])[0]["messages"][0]
+    assert message == {
+        "role": "user",
+        "content": [{"type": "text", "text": 'Current working directory: "{{cwd}}".\n' + other}],
+    }
 
 
 def test_advanced_snapshot_normalizes_catalog_child_creation_time() -> None:
@@ -728,11 +758,11 @@ def test_profile_plugin_failure_reports_native_exit_status(monkeypatch: pytest.M
 
 
 @pytest.mark.parametrize("prefix", ["", "File created with exactly 18 bytes.\n\n"])
-def test_live_turn_accepts_explanation_before_final_sentinel(prefix: str) -> None:
+def test_live_turn_accepts_explanation_before_acknowledgement(prefix: str) -> None:
     SMOKE["assert_live_turn"]("create", live_result(final_response=prefix + SMOKE["LIVE_API_SENTINEL"]))
 
 
-@pytest.mark.parametrize("answer", ["", "PYTHON_SDK_LIVE_OK but the operation failed", "PYTHON_SDK_LIVE_OK\nFailure"])
-def test_live_turn_rejects_missing_final_sentinel(answer: str) -> None:
+@pytest.mark.parametrize("answer", ["", "File created.", "PYTHON_SDK_LIVE_OK but the operation failed"])
+def test_live_turn_rejects_missing_standalone_acknowledgement(answer: str) -> None:
     with pytest.raises(AssertionError, match="turn returned"):
         SMOKE["assert_live_turn"]("create", live_result(final_response=answer))

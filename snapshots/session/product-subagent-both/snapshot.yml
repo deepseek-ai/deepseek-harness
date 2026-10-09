@@ -6,4 +6,3 @@ recording: authored
 header:
   class: product-subagent-both
   pin: true
-  systemPromptSource: product-subagent-codex

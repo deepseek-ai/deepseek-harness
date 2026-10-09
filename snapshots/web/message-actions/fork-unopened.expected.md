@@ -1,0 +1,3 @@
+- alert:
+  - text: Open the original session to complete migration before creating a branch.
+  - button "Open original session"

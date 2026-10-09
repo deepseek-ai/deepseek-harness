@@ -1,6 +1,7 @@
 /**
- * Pack one release family's whole publish set into a single directory, in
- * publish order, and record that order for the publish step.
+ * Pack one release family's whole publish set into a single directory and
+ * record its publish order for the publish step. Default serial packs execute
+ * in that order; explicitly parallel packs use pnpm's bounded scheduler.
  *
  * The pack step is the release boundary: it runs without credentials, produces
  * every tarball from one commit, and hands the publish step exactly those bytes
@@ -13,27 +14,57 @@ import { parseArgs } from 'node:util'
 import { pnpmInvocation } from '../pnpm-invocation.ts'
 import { releaseFamily, tarballName, type ReleaseFamily, type ReleaseMember } from './families.ts'
 import { isEntry, runConcurrent } from './process.ts'
-import { PUBLISH_ORDER_FILE, tarballFiles } from './tarball.ts'
+import { PUBLISH_ORDER_FILE, packedManifest, tarballFiles } from './tarball.ts'
 
 /** Where pack output lands when `--out` is omitted. */
 const DEFAULT_OUTPUT = 'dist/npm'
 
 /**
- * Pack one member and check what its tarball carries.
+ * Check one member's expected tarball and its published files.
  * @param family - the release family being packed.
  * @param member - the member to pack.
  * @param destination - absolute output directory.
  * @returns The tarball filename.
  */
-async function packMember(family: ReleaseFamily, member: ReleaseMember, destination: string): Promise<string> {
-  const invocation = pnpmInvocation(['--dir', member.directory, 'pack', '--pack-destination', destination])
-  await runConcurrent(invocation.command, invocation.args)
-
+function validatePackedMember(family: ReleaseFamily, member: ReleaseMember, destination: string): string {
   const filename = tarballName(member)
   const tarball = join(destination, filename)
   if (!existsSync(tarball)) throw new Error(`${member.name} produced no tarball at ${tarball}`)
   family.validatePayload(member, tarballFiles(tarball))
+  family.validatePackedManifest(member, packedManifest(tarball))
   return filename
+}
+
+/**
+ * Pack serial members in publish order, or batch an explicitly parallel family.
+ * @param family - Release family whose payload checks apply to every tarball.
+ * @param members - Exact public members in the recorded publish order.
+ * @param destination - Absolute output directory.
+ * @param concurrency - Maximum active package packs; one preserves serial publication order.
+ * @returns Validated tarball filenames in publish order.
+ */
+async function packMembers(
+  family: ReleaseFamily, members: readonly ReleaseMember[], destination: string, concurrency: number,
+): Promise<string[]> {
+  if (concurrency === 1) {
+    const order: string[] = []
+    for (const member of members) {
+      const invocation = pnpmInvocation(['--dir', member.directory, 'pack', '--pack-destination', destination])
+      await runConcurrent(invocation.command, invocation.args)
+      order.push(validatePackedMember(family, member, destination))
+    }
+    return order
+  }
+  if (members.length === 0) return []
+  const invocation = pnpmInvocation([
+    'pack',
+    '--recursive',
+    `--workspace-concurrency=${String(concurrency)}`,
+    ...members.map(member => `--filter=${member.name}`),
+    '--pack-destination', destination,
+  ])
+  await runConcurrent(invocation.command, invocation.args)
+  return members.map(member => validatePackedMember(family, member, destination))
 }
 
 /**
@@ -68,20 +99,7 @@ async function main(): Promise<void> {
   rmSync(destination, { recursive: true, force: true })
   mkdirSync(destination, { recursive: true })
 
-  // Members pack in a bounded pool; the recorded publish order stays the
-  // members' order regardless of completion order, because each worker writes
-  // its result at the member's own position.
-  const order = new Array<string>(members.length)
-  let cursor = 0
-  await Promise.all(Array.from({ length: Math.min(concurrency, members.length) }, async () => {
-    while (cursor < members.length) {
-      const index = cursor
-      cursor += 1
-      const member = members[index]
-      if (member === undefined) break
-      order[index] = await packMember(family, member, destination)
-    }
-  }))
+  const order = await packMembers(family, members, destination, concurrency)
   writeFileSync(join(destination, PUBLISH_ORDER_FILE), `${order.join('\n')}\n`)
 
   console.log(`release pack: family ${family.id}, ${String(order.length)} tarball(s) in ${values.out ?? DEFAULT_OUTPUT}`)

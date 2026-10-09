@@ -62,11 +62,13 @@
   flex-direction: column;
 }
 
-/* `hidden="until-found"` retains a zero-height box so browser find can reveal
-   its subtree. Direct Chat Node Seats and auxiliary rows share one flow;
-   hidden and empty Seats do not contribute spacing. */
-.column > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))
-  ~ :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) {
+/* The flow slot's display:contents anchor preserves layout but not selector ancestry.
+   `hidden="until-found"` retains a searchable zero-height box; hidden and empty
+   Seats do not contribute spacing. */
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))
+  ~ :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))),
+.column:has(> .older) > :global([data-slot="conversation.chat.flow"])
+  > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) {
   margin-top: var(--dsh-chat-flow-gap, 6px);
 }
 
@@ -76,7 +78,7 @@
   --dsh-chat-flow-gap: 12px;
 }
 
-.column > [data-chat-group-part="response"]:not([hidden]):not(:empty)
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-group-part="response"]:not([hidden]):not(:empty)
   + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running) {
   --dsh-chat-flow-gap: 12px;
 }
@@ -87,10 +89,29 @@
   min-width: 0;
 }
 
+/* Bottom room: sized by the viewport owner while rows above the reader close,
+   given back only as later content grows into it. */
+.turnSpacer {
+  height: 0;
+}
+
+/* While a Turn folds, spacing changes share the closing rows' timing. */
+.column[data-chat-motion] > :not([data-chat-motion]),
+.column[data-chat-motion] > :global([data-slot="conversation.chat.flow"]) > :not([data-chat-motion]) {
+  transition: margin-top 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .column[data-chat-motion] > :not([data-chat-motion]),
+  .column[data-chat-motion] > :global([data-slot="conversation.chat.flow"]) > :not([data-chat-motion]) {
+    transition: none;
+  }
+}
+
 /* The Turn header has 16px clearance from its input and following content. */
 .flowItem[data-chat-flow-kind="turn-process"],
 .flowItem[data-turn-process-answer],
-.column > [data-chat-flow-kind="turn-process"] + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running) {
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="turn-process"] + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running) {
   --dsh-chat-flow-gap: 16px;
 }
 
@@ -126,7 +147,7 @@
 
 /* The last visible row before the status must contain output, not an input.
    Hidden and empty seats do not separate a user message from the status. */
-.column > :nth-last-child(2 of :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :nth-last-child(2 of :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
   .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
   [data-chat-group-key]
 ) ~ .running > .runningDivider {

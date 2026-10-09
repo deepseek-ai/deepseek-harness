@@ -217,7 +217,7 @@ function uiWorkspaceDouble() {
   const starts: unknown[] = []
   return {
     starts,
-    startSession: (workspaceId?: unknown) => { starts.push(workspaceId ?? null) },
+    startSession: (workspaceId?: unknown, options?: unknown) => { starts.push({ workspaceId, options }) },
   }
 }
 
@@ -1136,7 +1136,7 @@ describe('ui-agent-preset apply', () => {
 
     await vi.waitFor(() => { expect(calls).toContain('select:cordis') })
     expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('cordis')
-    expect(uiWorkspace.starts).toHaveLength(1)
+    expect(uiWorkspace.starts).toEqual([{ workspaceId: undefined, options: { clearPreviousDraft: false } }])
     conversation()
   })
 

@@ -1,5 +1,5 @@
 ---
-description: "Run a small team of named agents in one session: durable messages between members and a shared task board, for deployments composing the experimental Team plugins."
+description: "Run named teammates with direct inbox messages and a durable shared task board in experimental Team compositions."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-agent-team` turns one coding session into a small working team: the session's agent becomes the Lead, creates named teammates for delegated work, exchanges durable messages with them, and tracks shared tasks on a common board. Messages and task state survive crashes, reloads, and interruptions, so a teammate that was offline receives its queued messages when it resumes. It provides no tools of its own — mount the sibling `dsh-experimental-tool-agent-team` so the model can create teammates, message them, and use the task board. It is published under its experimental name, carries no stability promise, and needs durable session storage to activate.
+`dsh-experimental-agent-team` gives one session a Lead, named teammates, direct messages, and a durable shared task board. Sends use each target Agent’s inbox and can cold-resume stored teammates. Team retains roster and task state; message persistence follows the target Agent’s normal policy. Mount `dsh-experimental-tool-agent-team` for model tools. The package is experimental and requires durable session storage.
 
 ## Table of Contents
 
@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Add this package to a composition when one agent should run a small team of named helpers in its own working directory, with messages and task state that survive crashes and restarts. It ships no tools of its own: mount it together with `@deepseek-ai/dsh-experimental-tool-agent-team` so the model can create teammates, message them, and use the task board.
+Add this package when one agent needs named helpers in a shared working directory, direct peer messages, and durable roster and task state. Mount it with `@deepseek-ai/dsh-experimental-tool-agent-team` to expose the model tools.
 
 ### When to choose it
 
-Choose it when several agents must cooperate on one shared workspace and their roster, messages, and task state must survive crashes and restarts. Avoid it when teammates need separate working directories, when several processes must coordinate over one team, or when a task owner should be released automatically — none of those are supported. The team features need durable session storage to activate.
+Choose it for cooperation in one shared workspace with durable roster and task state. Separate working directories, coordination across processes, and automatic task-owner release are unsupported. Durable session storage is required.
 
 ### Smallest working setup
 
@@ -50,7 +50,6 @@ With the tools installed, the model does the rest on request — for example, "c
 |---|---|---|
 | `maxMembers` | `16` | Maximum teammates a team may ever create, including failed ones |
 | `maxTasks` | `256` | Maximum active tasks on the board |
-| `maxPendingMessagesPerMember` | `64` | Maximum queued messages for one member |
 | `maxMessageBytes` | `65,536` | Maximum size of one sent message |
 | `disposalTimeoutMs` | `5,000` | Time allowed for shutdown cleanup |
 
@@ -66,9 +65,9 @@ Only the Lead can create teammates or interrupt them.
 
 ### Messages between teammates
 
-Any member can send a message to any other member or to the Lead. A live member receives it immediately; an offline member's messages queue and arrive when it resumes. Messages are never lost and never delivered twice.
+Any member can send to another member or the Lead. Each attempt either returns the target inbox `MessageId` or throws. Team does not retain unaccepted send intent, retry new messages after restart, or deduplicate explicit resends.
 
-Every message uses Steer: a running target receives it at the nearest step boundary; an inactive target starts a turn if loaded or cold-resumes otherwise. The sender always sees the outcome — accepted by the target inbox, or retained as queued when delivery is temporarily unavailable. A queued message is already safely stored, so it must not be resent.
+Steer gives a running target the message at its nearest step boundary and starts or cold-resumes an inactive target. Success means inbox acceptance, not model processing or a separate synchronous storage flush. Accepted messages follow ordinary Agent persistence and inbox recovery.
 
 ### Shared task board
 
@@ -86,7 +85,7 @@ The Lead can stop a teammate's current turn without deleting its queued messages
 
 ### What success and failure look like
 
-Success looks like a teammate appearing in the roster, a message reporting `accepted` or `queued`, and task revisions advancing with each change. Likely failures are reported as specific errors instead of silently corrupting state: sending to a name that is not a member, claiming a task that is not ready, editing with an outdated revision, or creating a teammate beyond the member limit.
+Success returns a teammate roster row, an accepted inbox message id, or an updated task revision. Invalid member names, unready tasks, stale revisions, exhausted limits, and failed message admission report errors.
 
 -----
 
@@ -102,8 +101,8 @@ This section explains the design decisions behind the service and points at the 
 
 The service is built on one separation and three commitments:
 
-- **Durable log, derived state.** The Lead Session log is the single source of truth; roster, mailbox, and task state are replayed from it on every read.
-- **Process-local ownership.** All coordination lives in one process; the guarantee is retry plus de-duplication, never cross-process consensus.
+- **Durable log, derived state.** The Lead log owns roster and tasks; each target Agent owns its accepted messages.
+- **Process-local ownership.** Continuation delivery owns target locking, cold recovery, and lifecycle authorization.
 - **Explicit authority.** Every service method takes the exact live calling `Agent`; only the Lead spawns, reassigns, or interrupts.
 - **Bounds that fail loud.** Every limit is a validated deployment value, and exhaustion reports a typed error instead of reusing an id or name.
 
@@ -115,7 +114,6 @@ The [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, service registration, recovery scheduling |
 | [`src/roster.ts`](src/roster.ts) | Team identity, membership resolution, provisioning, and roster teardown |
-| [`src/mailbox.ts`](src/mailbox.ts) | Durable queue, target-local dispatch, acknowledgement, and recovery |
 | [`src/task-board.ts`](src/task-board.ts) | Task CAS commands, DAG validation, and derived views |
 | [`src/journal.ts`](src/journal.ts) | Serialized Lead-log transactions and commit notification |
 | [`src/projection.ts`](src/projection.ts) | Strict replay projection that decodes and validates Team events and publishes the `agentTeam` client view |
@@ -125,11 +123,11 @@ The [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-
 
 ### Team identity and roster
 
-Every ordinary runtime root is the implicit Lead of a Team whose `TeamId` equals its `SessionId`; there is no creation event, and durable state begins with the first member, message, or task record. `spawnTeammate()` first appends and flushes a `provisioning` member record, then asks the configured provider to create the reserved child; a provider failure appends a durable `failed` member. A fresh child starts with no Lead history; a fork child captures the Lead's completed-turn prefix once. Recovery reconciles an unterminated provisioning record against the child's independently persisted Session: a matching direct-parent and continuable descriptor plus a recorded initial user message produces `active`, and anything else produces `failed`. If recovery wins a same-process race, the creator accepts the terminal state or reports `TEAM_PROVISIONING_CONFLICT` and drains the child. Names are reserved by the first provisioning record and never reused.
+Every ordinary runtime root is the implicit Lead of a Team whose `TeamId` equals its `SessionId`; there is no creation event, and durable Team state begins with the first member or task record. `spawnTeammate()` first appends and flushes a `provisioning` member record, then asks the configured provider to create the reserved child; a provider failure appends a durable `failed` member. A fresh child starts with no Lead history; a fork child captures the Lead's completed-turn prefix once. Recovery reconciles an unterminated provisioning record against the child's independently persisted Session: a matching direct-parent and continuable descriptor plus a recorded initial user message produces `active`, and anything else produces `failed`. If recovery wins a same-process race, the creator accepts the terminal state or reports `TEAM_PROVISIONING_CONFLICT` and drains the child. Names are reserved by the first provisioning record and never reused.
 
-### Durable mailbox
+### Direct messages and historical compatibility
 
-`sendMessage()` validates peer membership, appends `team/message/queued`, and flushes before attempting delivery. The target message begins with `Team message <id> from <name>:` and keeps the same id and sender in `TeamMessageSource`. A target receipt is acknowledged with `team/message/delivered` only after the target Session durably holds the message identity in its pending inbox or recorded history. Immediate admissions are serialized per target in durable queue order; recovery dispatches queued-minus-delivered records in the same order. Delivery folds both live and persisted target inbox/history state before retrying, so a crash between inbox acceptance and model claim does not duplicate the message. The guarantee is process-local retry plus target-Session de-duplication, not cross-process exactly-once delivery.
+`sendMessage()` checks exact caller membership, rejects self-messaging, and bounds the complete sender-framed UTF-8 content. It returns the existing inbox identity and emits Team activity only after acceptance. The target stores `agent-message` source with the actual `senderSessionId`; the first content block is `Team message from <name>:`. No new `team/message/queued` or `team/message/delivered` records are written for these sends. Team adds no per-target send ordering; delivery order belongs to the target inbox. The client presents these messages with the ordinary Agent title and icon; the message body retains the sender name.
 
 Lead delivery calls `Agent.steer()` directly. Teammate delivery uses the continuation owner's host-only Steer path, which preserves the Team sender source while authorizing the Lead-to-child edge and cold-resuming inactive targets. Sibling messages never impersonate the Lead through the public adjacent-Agent messaging operation.
 
@@ -139,19 +137,19 @@ Tasks are complete versioned snapshots; every mutation carries `expectedRevision
 
 ### Waiting and interruption
 
-`waitForChange()` waits for one roster, task, mailbox, or live-status edge that occurs after registration, from ten seconds through one hour, and reports only whether it timed out; runtime disposal releases current waits. Cancellation preserves an Error reason or reports a non-Error reason through `TEAM_WAIT_ABORTED`. `interrupt()` is Lead-only and delegates to the continuable-subagent interrupt path, which cancels only a live teammate's current turn with `keepInbox`; it neither releases task ownership nor deletes durable mail.
+`waitForChange()` waits for one roster, task, message-acceptance, or live-status edge that occurs after registration, from ten seconds through one hour, and reports only whether it timed out; runtime disposal releases current waits. Cancellation preserves an Error reason or reports a non-Error reason through `TEAM_WAIT_ABORTED`. `interrupt()` is Lead-only and delegates to the continuable-subagent interrupt path, which cancels only a live teammate's current turn with `keepInbox`; it neither releases task ownership nor deletes durable mail.
 
 ### Durability model
 
-Team events are appended to the exact live Lead Session and flushed before the operation reports success or wakes waiters. `team/member`, `team/task`, `team/message/queued`, and `team/message/delivered` are log-only: they never enter the conversation surface, so derived model history is untouched by coordination records. Session event `seq` and `time` own ordering and timing; snapshots do not duplicate them.
+Roster and task mutations append `team/member` and `team/task` to the exact live Lead Session and flush before reporting success or waking waiters. Historical `team/message/queued` and `team/message/delivered` records remain readable; Team writes neither. All four event types are log-only: they never enter the conversation surface, so derived model history is untouched by coordination records. Session event `seq` and `time` own ordering and timing; snapshots do not duplicate them.
 
-Native V4 Team event and checkpoint admission reject retired `tool-result` content before it can enter mailbox state. Historical conversion belongs to the Session-format migration; the Team projection does not convert old wrappers.
+Historical mailbox events and `team-message` sources remain readable, and the projection still reports queued-minus-delivered records. Team never delivers or acknowledges them: a historical message that its target had not recorded stays undelivered.
 
 Mailbox projection and checkpoint admission preserve every decoded JSON field of accepted content outside the locally declared validators, including an own `__proto__` key. Local field checks cover `text`, `reasoning`, `image`, and `tool-call`; accepted unknown tags remain opaque. Team projection cache version 4 rebuilds checkpoints from earlier cache versions from the Session log; the Session format version is unchanged.
 
 ### Disposal
 
-Disposal closes admission, aborts and awaits admitted creation and mailbox-dispatch transactions, then asks the continuation owner to release the roster's exact live direct children and their descendants; non-Team continuable children of the Lead remain untouched. Cleanup failures make disposal fail visibly, bounded by `disposalTimeoutMs`.
+The runtime lifecycle tracks sends and complete creation transactions in one operation set. Disposal closes admission, aborts and awaits those operations, then releases the roster’s live children and descendants. Non-Team children remain untouched. Admitted operations share one `disposalTimeoutMs` settlement deadline; each subsequent Team child drain has its own deadline. This value is not a whole-service shutdown bound. Cleanup failures are reported.
 
 </details>
 
@@ -183,7 +181,7 @@ The [Web UI](../client-ui-agent-team/README.md) reads the shared Session project
 
 #### What the model sees
 
-Each delivered peer message is a user-role message. A short first text block names its stable message id and sender; the sender's original content blocks follow unchanged. Roster, task, and mailbox records are log-only and never enter derived model history.
+Each peer message is a user-role message prefixed with its sender name, followed by the original content blocks. Roster, task, and historical mailbox records remain log-only.
 
 #### Token effect
 
@@ -191,7 +189,7 @@ Each peer delivery adds the sender prefix plus message content to the target his
 
 #### KV Cache effect
 
-Peer messages append after the target's reusable history prefix. Cold resume reuses the persisted conversation before appending a previously undelivered item.
+Peer messages append after the target's reusable history prefix. Cold resume reuses the persisted conversation before appending the new message.
 
 ## Known Limitations and Deferred Work
 
@@ -206,7 +204,7 @@ These limits describe what a team cannot do yet or what needs special operationa
 - **Advisory write scopes** — Bash, formatters, code generators, and direct external writers can bypass filesystem version checks; Leads must coordinate ownership and review the final diff.
 - **Flat immutable roster** — only the Lead creates direct teammates; there is no nested Team, rename, deletion, or name reuse.
 - **No automatic ownership release** — inactivity, interruption, process exit, and failed work do not release a task owner.
-- **Mailbox is not cross-process exactly-once** — concurrent harness processes over one Team are unsupported.
+- **No send retry guarantee** — Team does not retain or deduplicate new attempts; concurrent processes over one Team are unsupported. Historical queued messages that never reached their target are not delivered.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -4,14 +4,33 @@
     "rootDir": "src",
     "outDir": "lib/types"
   },
-  "include": ["src"],
+  "include": [
+    "src"
+  ],
   "references": [
-    { "path": "../../../vendor/cordis" },
-    { "path": "../../../vendor/schemastery" },
-    { "path": "../../util/output-retention" },
-    { "path": "../../core/agent" },
-    { "path": "../../core/tools" },
-    { "path": "../../terminal/terminal" },
-    { "path": "../../util/timeout" }
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../util/output-retention"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../terminal/terminal"
+    },
+    {
+      "path": "../../util/timeout"
+    },
+    {
+      "path": "../../session/working-directory"
+    }
   ]
 }

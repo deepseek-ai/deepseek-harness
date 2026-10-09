@@ -7,6 +7,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import SessionStore, { SessionId, type Session } from '@deepseek-ai/dsh-session'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
+import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import * as WorkspaceChanges from '../src/index.ts'
 import { changes, endTurn, git, mutate, scratchDir, settle, startTurn, toolCall } from './support.ts'
 
@@ -24,6 +25,7 @@ async function boot(config: Partial<WorkspaceChanges.Config> = {}) {
   cleanups.push(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   await ctx.plugin(LocalSubprocessRuntime)
+  await ctx.plugin(LocalFileSystem)
   const fiber = await ctx.plugin(WorkspaceChanges, config as WorkspaceChanges.Config)
   return { ctx, fiber }
 }
@@ -64,20 +66,20 @@ describe('workspace-changes in a repository', () => {
     await settle(ctx, session)
 
     await mutate(ctx, session, 1, 'edit', { file_path: 'a.txt', old_string: 'l2', new_string: 'l2 model' },
-      () => writeFile(join(cwd, 'a.txt'), 'l1\nl2 model\nl3\nl4\n'), { meta: { diffs: [{ path: 'a.txt', oldText: 'l2', newText: 'l2 model' }] } })
+      'a.txt', () => writeFile(join(cwd, 'a.txt'), 'l1\nl2 model\nl3\nl4\n'), { meta: { diffs: [{ path: 'a.txt', oldText: 'l2', newText: 'l2 model' }] } })
     await mkdir(join(cwd, 'sub', 'dir'), { recursive: true })
     await writeFile(join(cwd, 'sub', 'dir', 'c.txt'), 'c\n')
     await writeFile(join(cwd, 'new.txt'), 'n1\nn2\n')
     await writeFile(join(cwd, 'bin.dat'), Uint8Array.of(0, 1, 2, 255))
     toolCall(session, 1, 'bash', { command: 'printf > files' })
     // An ignored file is captured before its first edit and read again at turn end; repeated edits count once.
-    await mutate(ctx, session, 1, 'write', { file_path: '.env', content: 'A=1\n' }, () => writeFile(join(cwd, '.env'), 'A=1\n'))
-    await mutate(ctx, session, 1, 'edit', { file_path: '.env', old_string: 'A=1', new_string: 'A=1\nB=2' }, () => writeFile(join(cwd, '.env'), 'A=1\nB=2\n'))
-    await mutate(ctx, session, 1, 'write', { file_path: join(tmpdir(), 'scratch.txt'), content: 'scratch\n' }, () => Promise.resolve())
-    await mutate(ctx, session, 1, 'write', { file_path: 'failed.txt', content: 'x' }, () => Promise.resolve(), { isError: true })
+    await mutate(ctx, session, 1, 'write', { file_path: '.env', content: 'A=1\n' }, '.env', () => writeFile(join(cwd, '.env'), 'A=1\n'))
+    await mutate(ctx, session, 1, 'edit', { file_path: '.env', old_string: 'A=1', new_string: 'A=1\nB=2' }, '.env', () => writeFile(join(cwd, '.env'), 'A=1\nB=2\n'))
+    await mutate(ctx, session, 1, 'write', { file_path: join(tmpdir(), 'scratch.txt'), content: 'scratch\n' }, join(tmpdir(), 'scratch.txt'), () => Promise.resolve())
+    await mutate(ctx, session, 1, 'write', { file_path: 'failed.txt', content: 'x' }, 'failed.txt', () => Promise.resolve(), { isError: true })
     // A created ignored file that is gone again by turn end is not a change.
-    await mutate(ctx, session, 1, 'str_replace_editor', { command: 'create', path: '.env.gone', file_text: 'x' }, () => Promise.resolve())
-    await mutate(ctx, session, 1, 'edit', { file_path: 'same.txt', old_string: 'same', new_string: 'same' }, () => Promise.resolve())
+    await mutate(ctx, session, 1, 'str_replace_editor', { command: 'create', path: '.env.gone', file_text: 'x' }, '.env.gone', () => Promise.resolve())
+    await mutate(ctx, session, 1, 'edit', { file_path: 'same.txt', old_string: 'same', new_string: 'same' }, 'same.txt', () => Promise.resolve())
     toolCall(session, 2, 'write', { file_path: 'other-turn' }, { meta: { diffs: [{ path: 'other.txt', oldText: null, newText: 'x' }] } })
     endTurn(session, 1)
     await settle(ctx, session)
@@ -125,7 +127,7 @@ describe('workspace-changes in a repository', () => {
     await writeFile(join(cwd, 'long.txt'), `${'0123456789'.repeat(10)}\nmore\n`)
     await writeFile(join(cwd, 'bin.dat'), Uint8Array.of(0, 1, 2, 255))
     toolCall(session, 1, 'bash', { command: 'x' })
-    await mutate(ctx, session, 1, 'write', { file_path: '.env', content: 'A=1\nB=2\n' }, () => writeFile(join(cwd, '.env'), 'A=1\nB=2\n'))
+    await mutate(ctx, session, 1, 'write', { file_path: '.env', content: 'A=1\nB=2\n' }, '.env', () => writeFile(join(cwd, '.env'), 'A=1\nB=2\n'))
     endTurn(session, 1)
     await settle(ctx, session)
     const seq = announcedSeq(session)
@@ -169,7 +171,7 @@ describe('workspace-changes in a repository', () => {
     const session = ctx.sessions.create(SessionId('gone'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
-    await mutate(ctx, session, 1, 'write', { file_path: 'w.txt', content: 'w\n' }, () => Promise.resolve())
+    await mutate(ctx, session, 1, 'write', { file_path: 'w.txt', content: 'w\n' }, 'w.txt', () => Promise.resolve())
     endTurn(session, 1)
     await settle(ctx, session)
     expect(changes(ctx, session)).toEqual([])
@@ -189,7 +191,7 @@ describe('workspace-changes in a repository', () => {
     await writeFile(join(root, 'a.txt'), 'changed\n')
     await writeFile(join(cwd, 'inner.txt'), 'inner\n')
     await mutate(ctx, session, 1, 'str_replace_editor', { command: 'insert', path: join(outside, 'note.txt'), insert_line: 0, new_str: 'one\ntwo\nthree\n' },
-      () => writeFile(join(outside, 'note.txt'), 'one\ntwo\nthree\n'))
+      join(outside, 'note.txt'), () => writeFile(join(outside, 'note.txt'), 'one\ntwo\nthree\n'))
     endTurn(session, 1, 'blocked')
     await settle(ctx, session)
     const [recorded] = changes(ctx, session)
@@ -267,7 +269,7 @@ describe('workspace-changes in a repository', () => {
     await settle(ctx, session)
     for (const name of ['c.txt', 'd.txt', 'e.txt']) await writeFile(join(cwd, name), `${name}\n`)
     toolCall(session, 1, 'bash', { command: 'x' })
-    await mutate(ctx, session, 1, 'edit', { file_path: 'a.txt', old_string: 'l1', new_string: 'l1' }, () => Promise.resolve())
+    await mutate(ctx, session, 1, 'edit', { file_path: 'a.txt', old_string: 'l1', new_string: 'l1' }, 'a.txt', () => Promise.resolve())
     endTurn(session, 1)
     await settle(ctx, session)
     const [recorded] = changes(ctx, session)
@@ -287,7 +289,7 @@ describe('workspace-changes in a repository', () => {
     await writeFile(join(cwd, 'x.txt'), 'x\n')
     toolCall(session, 1, 'bash', { command: 'x' })
     // A repository whose snapshot failed is not summarized from captures as if it had no repository.
-    await mutate(ctx, session, 1, 'write', { file_path: 'y.txt', content: 'y\n' }, () => writeFile(join(cwd, 'y.txt'), 'y\n'))
+    await mutate(ctx, session, 1, 'write', { file_path: 'y.txt', content: 'y\n' }, 'y.txt', () => writeFile(join(cwd, 'y.txt'), 'y\n'))
     endTurn(session, 1)
     await settle(ctx, session)
     expect(changes(ctx, session)).toEqual([])
@@ -309,9 +311,9 @@ describe('workspace-changes in a repository', () => {
     startTurn(session, 1)
     await settle(ctx, session)
     await mutate(ctx, session, 1, 'edit', { file_path: 'sub/inner.txt', old_string: 'inner', new_string: 'inner\nedited' },
-      () => writeFile(join(sub, 'inner.txt'), 'inner\nedited\n'))
-    await mutate(ctx, session, 1, 'write', { file_path: 'top.txt', content: 'top\n' }, () => writeFile(join(cwd, 'top.txt'), 'top\n'))
-    await mutate(ctx, session, 1, 'write', { file_path: 'same.txt', content: 'same\n' }, () => writeFile(join(cwd, 'same.txt'), 'same\n'))
+      'sub/inner.txt', () => writeFile(join(sub, 'inner.txt'), 'inner\nedited\n'))
+    await mutate(ctx, session, 1, 'write', { file_path: 'top.txt', content: 'top\n' }, 'top.txt', () => writeFile(join(cwd, 'top.txt'), 'top\n'))
+    await mutate(ctx, session, 1, 'write', { file_path: 'same.txt', content: 'same\n' }, 'same.txt', () => writeFile(join(cwd, 'same.txt'), 'same\n'))
     endTurn(session, 1)
     await settle(ctx, session)
     expect(changes(ctx, session).map(summary => summary.files.map(file => file.display))).toEqual([['top.txt']])
@@ -322,6 +324,7 @@ describe('workspace-changes in a repository', () => {
     cleanups.push(() => ctx.fiber.dispose())
     await ctx.plugin(SessionStore)
     await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(LocalFileSystem)
     await expect(ctx.plugin(WorkspaceChanges, { maxFiles: 0 } as WorkspaceChanges.Config)).rejects.toThrow('positive integer maxFiles')
     await expect(ctx.plugin(WorkspaceChanges, { diffTimeoutMs: 1.5 } as WorkspaceChanges.Config)).rejects.toThrow('positive integer diffTimeoutMs')
   })
@@ -339,16 +342,16 @@ describe('workspace-changes without a repository', () => {
     const session = ctx.sessions.create(SessionId('plain'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
-    await mutate(ctx, session, 1, 'write', { file_path: 'existing.txt', content: 'after\nmore\n' }, () => writeFile(join(cwd, 'existing.txt'), 'after\nmore\n'))
-    await mutate(ctx, session, 1, 'edit', { file_path: 'existing.txt', old_string: 'more', new_string: 'more\nagain' }, () => writeFile(join(cwd, 'existing.txt'), 'after\nmore\nagain\n'))
+    await mutate(ctx, session, 1, 'write', { file_path: 'existing.txt', content: 'after\nmore\n' }, 'existing.txt', () => writeFile(join(cwd, 'existing.txt'), 'after\nmore\n'))
+    await mutate(ctx, session, 1, 'edit', { file_path: 'existing.txt', old_string: 'more', new_string: 'more\nagain' }, 'existing.txt', () => writeFile(join(cwd, 'existing.txt'), 'after\nmore\nagain\n'))
     // Shell edits and scratch files under a temporary root stay out; a file elsewhere outside the workspace counts.
     await writeFile(join(cwd, 'shell.txt'), 'shell\nedited\n')
     toolCall(session, 1, 'bash', { command: 'x' })
-    await mutate(ctx, session, 1, 'write', { file_path: join(tmpdir(), 'scratch.txt'), content: 'scratch\n' }, () => Promise.resolve())
+    await mutate(ctx, session, 1, 'write', { file_path: join(tmpdir(), 'scratch.txt'), content: 'scratch\n' }, join(tmpdir(), 'scratch.txt'), () => Promise.resolve())
     await mutate(ctx, session, 1, 'str_replace_editor', { command: 'create', path: join(outside, 'note.txt'), file_text: 'one\ntwo\n' },
-      () => writeFile(join(outside, 'note.txt'), 'one\ntwo\n'))
+      join(outside, 'note.txt'), () => writeFile(join(outside, 'note.txt'), 'one\ntwo\n'))
     // A file the shell edits after a file tool touched it is compared by its final content.
-    await mutate(ctx, session, 1, 'write', { file_path: 'mixed.txt', content: 'tool\n' }, () => writeFile(join(cwd, 'mixed.txt'), 'tool\n'))
+    await mutate(ctx, session, 1, 'write', { file_path: 'mixed.txt', content: 'tool\n' }, 'mixed.txt', () => writeFile(join(cwd, 'mixed.txt'), 'tool\n'))
     await writeFile(join(cwd, 'mixed.txt'), 'tool\nshell\n')
     toolCall(session, 1, 'bash', { command: 'x' })
     endTurn(session, 1)
@@ -392,16 +395,16 @@ describe('workspace-changes without a repository', () => {
     const session = ctx.sessions.create(SessionId('bounds'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
-    await mutate(ctx, session, 1, 'write', { file_path: 'grows.txt', content: 'x' }, () => writeFile(join(cwd, 'grows.txt'), 'x'.repeat(17)))
+    await mutate(ctx, session, 1, 'write', { file_path: 'grows.txt', content: 'x' }, 'grows.txt', () => writeFile(join(cwd, 'grows.txt'), 'x'.repeat(17)))
     // Both sides beyond the cap are never known to match, so the file is listed rather than dropped.
-    await mutate(ctx, session, 1, 'write', { file_path: 'huge.txt', content: 'b' }, () => writeFile(join(cwd, 'huge.txt'), 'b'.repeat(20)))
+    await mutate(ctx, session, 1, 'write', { file_path: 'huge.txt', content: 'b' }, 'huge.txt', () => writeFile(join(cwd, 'huge.txt'), 'b'.repeat(20)))
     // An oversized side outranks a binary one in the card and the tab alike.
-    await mutate(ctx, session, 1, 'write', { file_path: 'mixed.dat', content: 'x' }, () => writeFile(join(cwd, 'mixed.dat'), 'x'.repeat(17)))
-    await mutate(ctx, session, 1, 'write', { file_path: 'shrinks.txt', content: 'x' }, () => writeFile(join(cwd, 'shrinks.txt'), 'x'))
-    await mutate(ctx, session, 1, 'write', { file_path: 'bin.dat', content: 'x' }, () => writeFile(join(cwd, 'bin.dat'), Uint8Array.of(65, 0, 66)))
+    await mutate(ctx, session, 1, 'write', { file_path: 'mixed.dat', content: 'x' }, 'mixed.dat', () => writeFile(join(cwd, 'mixed.dat'), 'x'.repeat(17)))
+    await mutate(ctx, session, 1, 'write', { file_path: 'shrinks.txt', content: 'x' }, 'shrinks.txt', () => writeFile(join(cwd, 'shrinks.txt'), 'x'))
+    await mutate(ctx, session, 1, 'write', { file_path: 'bin.dat', content: 'x' }, 'bin.dat', () => writeFile(join(cwd, 'bin.dat'), Uint8Array.of(65, 0, 66)))
     // A directory at the path, before or after the call, is neither absent nor a file, so the path is not tracked.
-    await mutate(ctx, session, 1, 'write', { file_path: 'dir', content: 'x' }, () => mkdir(join(cwd, 'dir')))
-    await mutate(ctx, session, 1, 'write', { file_path: 'already-dir', content: 'x' }, () => Promise.resolve())
+    await mutate(ctx, session, 1, 'write', { file_path: 'dir', content: 'x' }, 'dir', () => mkdir(join(cwd, 'dir')))
+    await mutate(ctx, session, 1, 'write', { file_path: 'already-dir', content: 'x' }, 'already-dir', () => Promise.resolve())
     endTurn(session, 1)
     await settle(ctx, session)
     const [recorded] = changes(ctx, session)
@@ -468,7 +471,7 @@ describe('workspace-changes without a repository', () => {
     for (const session of sessions) {
       startTurn(session, 1)
       await settle(ctx, session)
-      await mutate(ctx, session, 1, 'write', { file_path: 'w.txt', content: 'w\n' }, () => writeFile(join(cwd, 'w.txt'), 'w\n'))
+      await mutate(ctx, session, 1, 'write', { file_path: 'w.txt', content: 'w\n' }, 'w.txt', () => writeFile(join(cwd, 'w.txt'), 'w\n'))
       endTurn(session, 1)
       await settle(ctx, session)
       expect(changes(ctx, session)).toEqual([])
@@ -490,7 +493,7 @@ describe('workspace-changes without git', () => {
       await settle(ctx, session)
       await writeFile(join(cwd, `${turn}.txt`), 'x\n')
       toolCall(session, turn, 'bash', { command: 'x' })
-      if (turn === 2) await mutate(ctx, session, turn, 'write', { file_path: 'w.txt', content: 'w\n' }, () => writeFile(join(cwd, 'w.txt'), 'w\n'))
+      if (turn === 2) await mutate(ctx, session, turn, 'write', { file_path: 'w.txt', content: 'w\n' }, 'w.txt', () => writeFile(join(cwd, 'w.txt'), 'w\n'))
       endTurn(session, turn)
       await settle(ctx, session)
     }

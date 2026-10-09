@@ -11,9 +11,16 @@ const overlayPath = process.argv[2]
 if (overlayPath === undefined) throw new Error('dsh-badge snapshot requires an overlay path')
 const rootConfigPath = fileURLToPath(new URL('../../../../../packages/bundle/base/tests/fixtures/root.cordis.yml', import.meta.url))
 const basePatchPath = fileURLToPath(new URL('../../../../../packages/bundle/base/cordis.patch.yml', import.meta.url))
+// The fixture owns the optional provider; the base bundle has no dependency on it.
+const overlays = loadOverlayPatches('dsh-badge-snapshot', overlayPath).map(patch => patch.insert === undefined ? patch : {
+  ...patch,
+  insert: patch.insert.map(row => row.name === '@deepseek-ai/dsh-skill-badge'
+    ? { ...row, name: import.meta.resolve('@deepseek-ai/dsh-skill-badge') }
+    : row),
+})
 const ctx = await boot('dsh-badge-snapshot', rootConfigPath, [
   ...loadOverlayPatches('dsh-badge-snapshot', basePatchPath),
-  ...loadOverlayPatches('dsh-badge-snapshot', overlayPath),
+  ...overlays,
 ])
 
 try {

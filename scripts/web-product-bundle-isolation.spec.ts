@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { browserDependencyAnalysis, productWebBundleIsolation } from '../apps/web/product-isolation.ts'
 import { WebProductBundleIsolation } from './web-product-bundle-isolation.ts'
+import { EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS } from './experimental-package-policy.ts'
 import { BundleInputIsolation } from './bundle-input-isolation.ts'
 
 const filesystem = vi.hoisted(() => ({ missingRoot: false }))
@@ -120,11 +121,11 @@ describe('default Web bundle input isolation', () => {
       .rejects.toThrow(/Web product isolation: experimental input/)
   })
 
-  it('checks npm alias package identity independently of its directory name', async () => {
+  it.each(['@deepseek-ai/dsh-experimental-aliased', ...Object.values(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS)])('checks npm alias package identity %s independently of its directory name', async (name) => {
     const test = fixture()
     test.write('apps/web/src/main.js', 'import "ordinary-name"')
     test.write('apps/web/node_modules/ordinary-name/package.json',
-      '{"name":"@deepseek-ai/dsh-experimental-aliased","type":"module","main":"index.js"}')
+      JSON.stringify({ name, type: 'module', main: 'index.js' }))
     test.write('apps/web/node_modules/ordinary-name/index.js', 'globalThis.aliased = true')
     await expect(test.run()).rejects.toThrow(/belongs to experimental package/)
   })
@@ -221,6 +222,19 @@ describe('default Web bundle input isolation', () => {
 })
 
 describe('bundler input ownership', () => {
+  it.each(Object.values(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))('rejects retained identity %s in unresolved inputs and source-map ownership', (name) => {
+    const test = fixture()
+    const ownership = new BundleInputIsolation(test.root, 'fixture')
+    for (const reference of [name, `${name}/client`, `\u0000virtual:${name}/client?raw`]) {
+      expect(() => { ownership.assertInput(reference) }).toThrow(/experimental input/)
+    }
+    const absentWindowsSource = `C:\\omitted\\node_modules\\${name.replaceAll('/', '\\')}\\src\\index.ts`
+    expect(() => { ownership.assertSourceMapInput(absentWindowsSource) }).toThrow(/experimental input/)
+    test.write('apps/web/node_modules/upstream/package.json', JSON.stringify({ name }))
+    expect(() => { ownership.assertSourceMapInput(join(test.web, 'node_modules/upstream/src/omitted.js')) })
+      .toThrow(/belongs to experimental package/)
+  })
+
   it('refuses source-map paths whose filesystem root is unavailable', () => {
     const test = fixture()
     const ownership = new BundleInputIsolation(test.root, 'fixture')

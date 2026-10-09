@@ -33,8 +33,8 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "text" },
-      { "type": "text-delta", "index": 0, "text": "PARENT_RECEIVED_CHILD_RESULT" },
-      { "type": "block-end", "index": 0, "block": { "type": "text", "text": "PARENT_RECEIVED_CHILD_RESULT" } },
+      { "type": "text-delta", "index": 0, "text": "PARENT_RECEIVED_SETTLEMENT_NOTICE" },
+      { "type": "block-end", "index": 0, "block": { "type": "text", "text": "PARENT_RECEIVED_SETTLEMENT_NOTICE" } },
       { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
       { "type": "finish", "reason": { "kind": "stop" } }
     ]

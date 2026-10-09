@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-在 [agent preset](../../preset/agent-preset-registry/README.zh.md) 中使用 `dsh-agent-tool-presentation`，可固定模型看到全部原生工具 schema、只有带生成 SDK 的 `run_code`，还是同时看到两种形态。每个 preset 可独立选择，因此 native 与 PTC agent 可以共享同一进程，而不共享工具目录。选择 `ptc` 或 `both` 需要兼容的 PTC 运行时；没有该运行时的部署会在挂载时拒绝 preset，不会等到收到第一条提示词。使用本包时 `mode` 字段为必填；省略本包则沿用部署默认值。
+在 [agent preset](../../preset/agent-preset-registry/README.zh.md) 中使用 `dsh-agent-tool-presentation`，可固定模型看到全部原生工具 schema，还是只有带生成 SDK 的 `run_code`。每个 preset 可独立选择，因此 native 与 PTC agent 可以共享同一进程，而不共享工具目录。选择 `ptc` 需要兼容的 PTC 运行时；没有该运行时的部署会在挂载时拒绝 preset，不会等到收到第一条提示词。使用本包时 `mode` 字段为必填；省略本包则沿用部署默认值。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-把这一行加入 agent preset，以固定每个加入该 preset 的 agent 看到其工具的方式。`native` 以函数定义的形式呈现每个可见工具 schema；`ptc` 只呈现 `run_code` 传输、一份生成的 SDK 以及「只有 `run_code` 可被直接调用」这条规则；`both` 同时呈现两种形态。未作声明的 agent 会拿到 [`dsh-tools`](../tools/README.zh.md) 那一行上的部署级 `mode`。
+把这一行加入 agent preset，以固定每个加入该 preset 的 agent 看到其工具的方式。`native` 以函数定义的形式呈现每个可见工具 schema；`ptc` 只呈现 `run_code` 传输、一份生成的 SDK 以及「只有 `run_code` 可被直接调用」这条规则。未作声明的 agent 会拿到 [`dsh-tools`](../tools/README.zh.md) 那一行上的部署级 `mode`。
 
 ### 把这一行加入 preset
 
@@ -37,13 +37,13 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `mode` | 必填 | `native`——每个 schema；`ptc`——`run_code` 加生成 SDK；`both`——两种形态 |
+| `mode` | 必填 | `native`——每个 schema；`ptc`——`run_code` 加生成 SDK |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-tool-presentation)是每个受支持字段的穷尽式真源。`mode` 是必填而非有默认值，因为不带这一行的 preset 会继承部署默认值。
 
 ### PTC 模式需要什么
 
-选择 `ptc` 或 `both` 需要已组合的 PTC 运行时（`ctx.ptcRuntime`），且其语言有已注册的 SDK 渲染器——TypeScript 运行时经 [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.zh.md) 交付，TypeScript 与 Python 的 SDK 渲染器都内置在 `dsh-tools` 中。针对未组装此类运行时的部署选择 PTC 模式的 preset 会拒绝挂载并点名这一行，使失败落在操作者可以行动的地方，而不是落在会话的第一次请求上。
+选择 `ptc` 需要已组合的 PTC 运行时（`ctx.ptcRuntime`），且其语言有已注册的 SDK 渲染器——TypeScript 运行时经 [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.zh.md) 交付，TypeScript 与 Python 的 SDK 渲染器都内置在 `dsh-tools` 中。针对未组装此类运行时的部署选择 PTC 模式的 preset 会拒绝挂载并点名这一行，使失败落在操作者可以行动的地方，而不是落在会话的第一次请求上。
 
 ### 每个 agent 只声明一次呈现方式
 

@@ -77,6 +77,10 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
+.commandInput {
+  color: var(--dsw-alias-label-secondary);
+}
+
 /* ToolRow's unified expand interaction, replicated per the registrant
    posture: pointer on the expandable row (the icon→chevron hover preview is
    the affordance, no row fill). */

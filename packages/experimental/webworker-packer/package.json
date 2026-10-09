@@ -39,13 +39,13 @@
     "@deepseek-ai/dsh-session-format": "workspace:*",
     "@deepseek-ai/dsh-session-format-catalog": "workspace:*",
     "@deepseek-ai/dsh-session-format-v3-to-v4": "workspace:*",
-    "js-yaml": "^4.2.0",
-    "picomatch": "^4.0.4"
+    "js-yaml": "^4.3.2",
+    "picomatch": "^4.0.7"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@types/js-yaml": "^4.0.9",
-    "@types/picomatch": "^3.0.2"
+    "@types/picomatch": "^4.0.3"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

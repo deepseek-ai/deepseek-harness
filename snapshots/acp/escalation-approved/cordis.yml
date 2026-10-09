@@ -40,7 +40,7 @@
   name: '@deepseek-ai/dsh-system-prompt'
   config:
     personaPrefix: |
-      You are a coding assistant powered by the {{model}} model. Your working directory is {{cwd}}. Your bash tool runs under a file sandbox — a `[sandbox: file access denied …]` result is policy, not a command bug.
+      You are a coding assistant powered by the {{model}} model. Your bash tool runs under a file sandbox — a `[sandbox: file access denied …]` result is policy, not a command bug.
 
       Verify your work by running the code or tests. Keep answers brief and factual.
 
@@ -54,23 +54,14 @@
   config:
     provider: spawn
     toolName: subagent
-    backgroundMode: continuable
     maxDepth: 1
 
-# Fork omits model selection so provider/model stay equal to the parent and the
-# inherited history remains eligible for KV Cache reuse. It stays one-shot because
-# a continuable child's `report` tool and prompt section precede that history and
-# invalidate the same prefix. `run_in_background` is off as an explicit foreground-only
-# choice even though the shipped ACP profile mounts the generic Job runtime.
-# See .agents/notes/implemented/feature/2026-08-18-model-selected-subagent-routes.md
-# and .agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md.
+# Fork preserves the parent model route and inherited conversation.
 - id: tool-subagent-fork
   name: '@deepseek-ai/dsh-tool-subagent'
   config:
     provider: fork
     toolName: subagent_fork
-    backgroundMode: one-shot
-    enableRunInBackground: false
     maxDepth: 1
 
 - id: fs-sandbox

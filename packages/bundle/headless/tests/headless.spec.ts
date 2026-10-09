@@ -13,13 +13,14 @@ import type {
   ResumeAgentOptions,
 } from '@deepseek-ai/dsh-agent'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
-import { LlmAttemptId, ToolCallId, createAssistantMessage, createToolResultMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { LlmAttemptId, ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Session, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
-import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { createInboxStub, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { apply, Config } from '../src/index.ts'
+import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { internals } from '../src/runner-internals.ts'
 
 const originalInternals = { ...internals }
@@ -57,6 +58,8 @@ interface BenchOptions {
   preliveMeta?: { cwd?: string; origin?: 'subagent'; agentPreset?: string }
   /** Run when the runner awaits idle, e.g. to append to the attached log. */
   onWhenIdle?: (agent: Agent) => void
+  /** Release child cleanup after the observed parent activity ends. */
+  afterIdle?: () => void
 }
 
 const frameStates = new WeakMap<Agent, { attemptId: ReturnType<typeof LlmAttemptId>; revision: number; index: number }>()
@@ -125,6 +128,7 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
   run(): Promise<{ code: number; out: string; err: string; order: string[] }>
 }> {
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx)
   if (options.filesystemCwd !== undefined) {
     const cwd = options.filesystemCwd
     ctx.provide('fs', {
@@ -143,25 +147,29 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
   ): Promise<Agent> => {
     const inbox = createInboxStub()
     let idle = Promise.resolve()
+    let running = false
     const agent: Agent = {
       id: session.id,
       options: createOptions.agentOptions ?? {},
       session,
       inbox,
-      status: 'idle',
+      get status() { return running ? 'running' : 'idle' },
       ctx: ownerCtx,
       cancel: () => {},
       runMaintenance: () => Promise.reject(new Error('not used')),
       send: () => {},
       followup: (message: UserMessage) => {
         agent.inbox.append('next-turn', message)
-        idle = Promise.resolve().then(() => script.afterPrompt(session, message, agent))
+        running = true
+        idle = Promise.resolve().then(() => script.afterPrompt(session, message, agent)).finally(() => { running = false })
       },
       steer: () => {},
       inject: () => {},
-      whenIdle: () => {
+      whenIdle: async () => {
         options.onWhenIdle?.(agent)
-        return idle
+        let activity: Promise<void>
+        do { await (activity = idle) } while (activity !== idle)
+        options.afterIdle?.()
       },
     }
     await createOptions.setup?.(ownerCtx, agent)
@@ -224,6 +232,120 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
 }
 
 describe('headless runner', () => {
+  it('waits for parent awakened between idle and child observation', async () => {
+    const cleanup = Promise.withResolvers<undefined>()
+    const cleaning = Promise.withResolvers<undefined>()
+    const finalTurn = Promise.withResolvers<undefined>()
+    const parentWait = Promise.withResolvers<undefined>()
+    let turns = 0
+    const test = await bench({
+      async afterPrompt(session, message, parent) {
+        turns += 1
+        if (turns === 1) {
+          await test.ctx.subagents.startActivation({
+            provider: 'external', label: 'work', delivery: 'parent', signal: new AbortController().signal,
+            request: { parent, prompt: [] },
+          })
+          await cleaning.promise
+          appendTurn(session, 1, message, 'waiting for child', true)
+        } else {
+          await finalTurn.promise
+          appendTurn(session, 2, message, 'child result incorporated', true)
+        }
+      },
+    }, {
+      afterIdle: () => { if (turns === 1) cleanup.resolve(undefined) },
+      onWhenIdle: () => { if (turns === 2) parentWait.resolve(undefined) },
+    })
+    await test.ctx.plugin(SubagentRuntime)
+    test.ctx.subagents.registerProvider({
+      name: 'external', inheritsParentContext: false,
+      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      start: async () => ({
+        id: brandString<SessionId>('settlement-child'),
+        result: Promise.resolve({ output: [{ type: 'text' as const, text: 'child answer' }], stopReason: 'completed' as const }),
+        dispose: () => { cleaning.resolve(undefined); return cleanup.promise },
+      }),
+    })
+    try {
+      const run = test.run()
+      expect(await Promise.race([run.then(() => 'exited'), parentWait.promise.then(() => 'waiting')])).toBe('waiting')
+      expect(test.output().out).toBe('')
+      finalTurn.resolve(undefined)
+      await expect(run).resolves.toMatchObject({ code: 0, out: 'child result incorporated\n' })
+    } finally {
+      cleanup.resolve(undefined)
+      finalTurn.resolve(undefined)
+      await test.ctx.fiber.dispose()
+    }
+  })
+
+  it('waits for later child batches started after settlement wakes the parent', async () => {
+    const waiting = [Promise.withResolvers<undefined>(), Promise.withResolvers<undefined>()]
+    const released = [Promise.withResolvers<undefined>(), Promise.withResolvers<undefined>()]
+    let turns = 0
+    let checks = 0
+    const test = await bench({
+      afterPrompt(session, message) {
+        turns += 1
+        appendTurn(session, turns, message, turns === 3 ? 'all children complete' : 'waiting for children', true)
+      },
+    })
+    test.ctx.provide('subagents', {
+      async waitForChildren(parent: Agent) {
+        expect(test.ctx.agents.get(parent.id)).toBe(parent)
+        const batch = checks++
+        if (batch === 2) return false
+        waiting[batch]!.resolve(undefined)
+        await released[batch]!.promise
+        parent.followup(createUserMessage({ content: [{ type: 'text', text: `child batch ${batch + 1} complete` }], source: { kind: 'user' } }))
+        return true
+      },
+    } as never)
+    const run = test.run()
+    try {
+      await waiting[0]!.promise
+      expect(test.output().out).toBe('')
+      released[0]!.resolve(undefined)
+      await waiting[1]!.promise
+      expect(turns).toBe(2)
+      expect(test.output().order).not.toContain('exit')
+      released[1]!.resolve(undefined)
+      await expect(run).resolves.toMatchObject({ code: 0, out: 'all children complete\n' })
+      expect(checks).toBe(3)
+    } finally {
+      for (const release of released) release.resolve(undefined)
+      await run
+      await test.ctx.fiber.dispose()
+    }
+  })
+
+  it('rechecks children after a parent turn completes during the child wait', async () => {
+    let turns = 0
+    let checks = 0
+    const test = await bench({
+      afterPrompt(session, message) {
+        turns += 1
+        appendTurn(session, turns, message, turns === 3 ? 'all batches complete' : 'waiting for batch', true)
+      },
+    })
+    test.ctx.provide('subagents', {
+      async waitForChildren(parent: Agent) {
+        const check = checks++
+        if (check === 2) return false
+        parent.followup(createUserMessage({ content: [{ type: 'text', text: 'batch complete' }], source: { kind: 'user' } }))
+        await parent.whenIdle()
+        // The first observation missed a released child; its parent started another batch.
+        return check !== 0
+      },
+    } as never)
+    try {
+      await expect(test.run()).resolves.toMatchObject({ code: 0, out: 'all batches complete\n' })
+    } finally {
+      await test.ctx.fiber.dispose()
+    }
+  })
+
   it('records a fresh Session in the filesystem provider working directory', async () => {
     const cwd = '/remote/workspace'
     const test = await bench({

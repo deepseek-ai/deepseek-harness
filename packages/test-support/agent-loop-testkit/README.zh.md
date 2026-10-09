@@ -25,6 +25,8 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
+仅测试消费方且使用结构化 Agent 桩的测试可调用 `provideWorkingDirectoryFixture(ctx, defaultDirectory?)`。它只提供目录值，不校验路径、不切换目录，也不记录事件。目录行为测试使用 `mountAgentLoopTestDependencies(ctx, { workingDirectory: true })` 与真实临时目录。
+
 本包为 AgentLoop 测试提供可用的服务拓扑，并要求测试明确选择生产 Inbox 行为或结构化桩。
 
 ### 驱动生产 Agent

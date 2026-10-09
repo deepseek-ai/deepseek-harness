@@ -1,0 +1,19 @@
+- insert:
+    - id: optional-persistent-terminals
+      name: cordis:group
+      group: true
+      isolate:
+        terminals: true
+      config:
+        - id: optional-terminal-registry
+          name: '@deepseek-ai/dsh-terminal'
+        - id: optional-terminal-bash
+          name: '@deepseek-ai/dsh-terminal-bash'
+          disabled: !!js process.platform === 'win32'
+        - id: optional-terminal-pwsh
+          name: '@deepseek-ai/dsh-terminal-bash'
+          disabled: !!js process.platform !== 'win32'
+          config:
+            shellDialect: pwsh
+        - id: optional-tool-terminal
+          name: '@deepseek-ai/dsh-tool-terminal'

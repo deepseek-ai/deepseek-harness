@@ -1,0 +1,100 @@
+name: Windows installer (unsigned)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_version:
+        description: 'Build version: auto generates a version; otherwise enter a full version'
+        type: string
+        default: auto
+        required: true
+      deployment:
+        description: Update policy deployment
+        type: choice
+        options: [test, production]
+        default: test
+        required: true
+      policy_origin:
+        description: 'Required update policy HTTPS origin (no path)'
+        type: string
+        required: true
+      login_origins:
+        description: 'Required for test: comma-separated allowed login HTTPS origins'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-desktop-package
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: dsh-win-package-trial
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        id: checkout
+        with:
+          persist-credentials: false
+          clean: true
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - name: Install locked dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          exit $LASTEXITCODE
+      - name: Validate inputs and prepare public package settings
+        id: settings
+        env:
+          PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
+          PACKAGE_DEPLOYMENT: ${{ inputs.deployment }}
+          PACKAGE_POLICY_ORIGIN: ${{ inputs.policy_origin }}
+          PACKAGE_LOGIN_ORIGINS: ${{ inputs.login_origins }}
+        run: node apps/desktop/scripts/prepare-windows-ci.mjs
+      - name: Check packaging configuration and toolchain
+        env:
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: |
+          pnpm run package:desktop:win:x64:unsigned --check --build-version "$env:PACKAGE_VERSION"
+          exit $LASTEXITCODE
+      - name: Build installer and verify packaged runtime
+        env:
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: |
+          pnpm run package:desktop:win:x64:unsigned --build-version "$env:PACKAGE_VERSION"
+          exit $LASTEXITCODE
+      - name: Retain packaging diagnostics
+        if: always() && steps.checkout.outcome == 'success'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: windows-package-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: apps/desktop/.desktop-build/packaging-runs/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain verified installer
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: windows-x64-unsigned-${{ steps.settings.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove generated package settings
+        if: always() && steps.checkout.outcome == 'success'
+        run: |
+          if (Test-Path -LiteralPath apps/desktop/.env.windows) {
+            Remove-Item -LiteralPath apps/desktop/.env.windows
+          }

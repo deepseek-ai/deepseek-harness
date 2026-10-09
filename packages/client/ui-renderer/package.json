@@ -48,7 +48,7 @@
     "@types/use-sync-external-store": "^1.5.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "use-sync-external-store": "1.2.0"
+    "use-sync-external-store": "1.6.0"
   },
   "files": [
     "lib/index.js",

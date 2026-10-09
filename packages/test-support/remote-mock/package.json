@@ -23,7 +23,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@vitest/spy": "^4.1.8"
+    "@vitest/spy": "^4.1.11"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

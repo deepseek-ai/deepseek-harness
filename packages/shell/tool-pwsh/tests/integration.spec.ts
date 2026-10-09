@@ -9,6 +9,7 @@
  * gate.
  */
 
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -58,6 +59,8 @@ describe.skipIf(!hasPwsh)('pwsh tool over the real pwsh executor', () => {
     await writeFile(join(dir, 'greeting.txt'), 'hello pwsh\n')
 
     ctx = new Context()
+
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalJobRegistry)

@@ -20,6 +20,7 @@ import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import type { Session } from '@deepseek-ai/dsh-session'
+import type { WorkingDirectoryService } from '@deepseek-ai/dsh-working-directory'
 // Type-only: merges the token-meter projection states into SessionProjectionStateMap.
 import type {} from '@deepseek-ai/dsh-token-meter'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
@@ -179,8 +180,18 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
   }
 
   async function target(path: string, agent: Agent | undefined, signal: AbortSignal): Promise<FsTarget> {
-    const cwd = agent?.session.header.cwd
+    const cwd = await currentDirectory(agent, signal)
     return fs().resolve(path, { ...cwd === undefined ? {} : { cwd }, signal })
+  }
+
+  function directories(): WorkingDirectoryService {
+    const service = ctx.get('workingDirectory')
+    if (service === undefined) throw new Error('$.session.cwd and session-owned operations need dsh-working-directory, which this deployment did not compose')
+    return service
+  }
+
+  function currentDirectory(agent: Agent | undefined, signal: AbortSignal): Promise<string | undefined> {
+    return agent === undefined ? Promise.resolve(undefined) : directories().ensure(agent, signal)
   }
 
   function fs(): FileSystem {
@@ -389,8 +400,10 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
 
     // ---- session facts ----
     'session.id': (_input, context) => requireAgent(context, 'session.id').session.id,
-    // The harness keeps one directory per session, so the running directory and the project root coincide.
-    'session.cwd': (_input, context) => requireAgent(context, 'session.cwd').session.header.cwd ?? process.cwd(),
+    'session.cwd': (_input, context) => {
+      const agent = requireAgent(context, 'session.cwd')
+      return directories().get(agent.session)
+    },
     'session.root': (_input, context) => requireAgent(context, 'session.root').session.header.cwd ?? process.cwd(),
     'session.model': (_input, context) => {
       const agent = requireAgent(context, 'session.model')
@@ -473,12 +486,13 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
     },
     'fs.stat': async (input, context) => {
       const path = requireString(record(input).path, '$.fs.stat path')
-      const cwd = context.binding.agent?.session.header.cwd
+      const cwd = await currentDirectory(context.binding.agent, context.signal)
       const info = await fs().lstat(path, cwd === undefined ? {} : { cwd }, context.signal)
       if (info === undefined) throw new Error(`$.fs.stat: ${path} does not exist`)
       if (info.type !== 'symlink') return { kind: kindOf(info.type), size: sizeOf(info), mtimeMs: 0, isLink: false } satisfies FsStat
       // A link reports what it points at, as Claude Code's `resolve: true` does; a dangling one is `other`.
-      const followed = await fs().stat(await target(path, context.binding.agent, context.signal), context.signal)
+      const resolved = await fs().resolve(path, { ...cwd === undefined ? {} : { cwd }, signal: context.signal })
+      const followed = await fs().stat(resolved, context.signal)
       return { kind: kindOf(followed?.type ?? 'other'), size: sizeOf(followed), mtimeMs: 0, isLink: true } satisfies FsStat
     },
 
@@ -492,7 +506,7 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
       }
       const settings = record(init)
       const timeoutMs = typeof settings.timeoutMs === 'number' ? settings.timeoutMs : options.processTimeoutMs
-      const cwd = typeof settings.cwd === 'string' ? settings.cwd : context.binding.agent?.session.header.cwd ?? process.cwd()
+      const cwd = typeof settings.cwd === 'string' ? settings.cwd : await currentDirectory(context.binding.agent, context.signal) ?? process.cwd()
       const env = typeof settings.env === 'object' && settings.env !== null ? settings.env as Record<string, string> : undefined
       const deadline = AbortSignal.any([context.signal, AbortSignal.timeout(timeoutMs)])
       const handle = subprocess.spawn({

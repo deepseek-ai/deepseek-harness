@@ -50,6 +50,6 @@ Python bootstrap 从相邻目录解析 Office kit，让原生辅助程序与 URL
 
 生产部署允许工作区中不属于运行时闭包的补丁保持未使用；闭包内包的补丁仍必须成功应用。此例外仅用于部署命令，仓库安装仍拒绝未使用的补丁。
 
-在仓库根目录运行 `pnpm exec tsx scripts/build-exe-for-python-sdk.ts`，会校验闭包、构建包、部署无符号链接的文件树、打包所选目标，并把可执行程序及伴随文件同步到本模块。`scripts/build-python-release.py` 按仓库根版本暂存发布形态的 wheel 包，并将 `deepseek-harness-sdk` 固定到完全相同的运行时版本。
+在仓库根目录运行 `pnpm exec tsx scripts/build-exe-for-python-sdk.ts`，会校验闭包、构建包、部署无符号链接的文件树、打包所选目标，并把可执行程序及伴随文件同步到本模块。部署会关闭工作区提升，避免无关源码包进入载荷。暂存步骤让使用相同 pnpm 依赖标识的嵌套消费者共享根目录的工作区包，保留服务单例，同时保留不同的对等依赖解析。`scripts/build-python-release.py` 按仓库根版本暂存发布形态的 wheel 包，并将 `deepseek-harness-sdk` 固定到完全相同的运行时版本。
 
 已安装 wheel 包冒烟测试会在检出目录外创建干净的虚拟环境，验证分发物与可执行程序的来源，然后覆盖默认及自定义 SDK profile、外部插件、MCP、原生工具、直接 JSON-RPC、检入快照，以及可信运行中的真实提供方。Office 场景会迁移完整的目标载荷目录，并使用所需的平台引擎转换 DOCX：使用目标已声明的原生引擎，未声明原生引擎时使用 WASM。另见 [Python 贡献者工作流](../development.zh.md) 与 [installed-wheel 测试决策](../../.agents/notes/implemented/testing/2026-08-23-installed-python-wheel-black-box-ci.zh.md)。

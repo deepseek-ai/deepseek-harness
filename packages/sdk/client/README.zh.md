@@ -25,6 +25,8 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
+`HarnessSession.getWorkingDirectory()` 读取有效目录；`setWorkingDirectory(path)` 修改目录并返回校验后的绝对路径。两个方法都可创建未知 Session，而不启动模型轮次。相对路径以 Session 当前目录解析。起始目录元数据、权限与已有进程保持不变。`HarnessClient` 提供同名方法，并以 `sessionId` 作为首个参数。
+
 当 TypeScript 代码需要从另一进程驱动完整 Harness 运行时、且你能显式指名运行时可执行文件时，使用本客户端。常用路径极简：用启动规格构造 `DeepSeekHarness`，运行提示词，然后关闭它，使子进程总能被回收。
 
 ### 用 DeepSeekHarness 运行 agent 轮次
@@ -50,6 +52,8 @@ console.log(result.finalResponse)
 ### 用 HarnessClient 做低层控制
 
 `HarnessClient` 是运行 API 之下的协议客户端：显式 `start()`、`initialize()`、`prompt()`、`request()` 与 `close()`，外加通知订阅。`prompt()` 在运行时接受排队消息后立即返回该消息的 id，绝不等待 agent 活动。`subscribe(filter?)` 返回 `NotificationSubscription`（可等待的 `next()`、非阻塞 `tryNext()`、异步迭代）；`subscribeSessionTree(id)` 把范围限定到一个会话及从 `subagent.started` 血缘边发现的后代——运行时对上下文内每个会话都发通知，范围限定在客户端完成，与 Python SDK 完全一致。
+
+拥有完整任务的消费者可以先订阅，再调用 `prompt()`，随后调用 `request('session/wait', { sessionId })`，并通过 `tryNext()` 取完已排队的通知。这会等待受管理后代及其触发的根 Agent 摘要轮次；`HarnessSession.run()` 仍以首次空闲作为活动区间终点。`validatedSessionEvent()` 在事件进入输出折叠前，校验事件封装及 SDK 读取方使用的 assistant／turn 字段。
 
 本客户端为每种失败模式导出类型化错误：`JsonRpcResponseError`（协议错误响应，保留 code 与 data）、`RequestTimeoutError`（配置的时限已到）、`SdkProtocolError`（响应超出文档化协议）、`TransportClosedError`（运行时已消失——消息携带退出码与有界 stderr 尾部）。`close()` 先请求协议 `shutdown`（受 `shutdownTimeoutMs` 约束，默认 1000 毫秒），然后走 stdin-EOF → SIGTERM → SIGKILL 阶梯直到进程退出；幂等，已关闭的客户端拒绝复用。`HarnessClientOptions.env` 给定时整体替换子进程环境（`undefined` 原样继承父进程环境）；凭据策略归调用方——`dsh-subprocess` 的 `scrubbedParentEnv` 是面向隔离启动的共享擦除基底。
 

@@ -18,7 +18,7 @@ The assembled system prompt had four defects, all of one family: facts the harne
 
 ## Decision
 
-**One principle: every fact in the prompt has exactly one owner.** The model name and workspace are config/session facts → the harness exposes them as variables and the persona references them. Per-tool semantics and when-to-use → the tool's `description`. Cross-call habits a description cannot carry → the tool package's prompt section. The product name and SDK identity line → the static `harness:identity` section. Deployment role and behavior → the deployment's persona.
+**One principle: every prompt fact has exactly one owner.** The loop exposes route facts as variables referenced by the persona. The working-directory service supplies the current directory as user context. Per-tool semantics and when-to-use belong to the tool description; cross-call habits belong to its package prompt section. The product name and SDK identity line belong to the static `harness:identity` section. Deployment role and behavior belong to the deployment persona.
 
 ### Assemble context
 
@@ -28,7 +28,7 @@ The assembled system prompt had four defects, all of one family: facts the harne
 
 Plugins register `{{name}}` values through `ctx.systemPrompt.variable(name, provider)`. Assembly resolves them into the waterfall-visible variable map. Rendering rejects unknown own-property references, registered providers that return `undefined`, malformed complete references, and unbalanced references that still contain a closing `}}`; a lone unmatched `{{` remains prose, and substituted values are not rescanned. Registration rejects invalid or duplicate variable names, and section names are unique. Sections may set `interpolate: false` to preserve generated documents literally; `tools:sdk` does so because tool descriptions and schemas may document their own `{{…}}` syntax.
 
-`dsh-agent-loop` registers the two built-ins, both pure projections of the context agent: `model` (= `options.model`) and `cwd` (= `session.header.cwd`). The example personas write `powered by the {{model}} model` — the model name is stated once, in the `model:` config key. `{{cwd}}` is demonstrated in the ACP example only: every ACP session carries the client's cwd, while config-pre-created stdio agents have none (a persona claiming `{{cwd}}` there fails the turn — by design). The variables stay on the loop plugin (unlike the sections below): they are runtime facts of the agents THIS loop drives, and a replacement loop supplies its own.
+`dsh-agent-loop` registers `provider` (= `options.provider`) and `model` (= `options.model`) as pure projections of the context agent. Example personas reference `{{model}}` so the route owns the model name. These variables remain on the loop plugin because they describe the agents it drives; a replacement loop supplies its own. The [Session working-directory decision](2026-09-13-session-working-directory.md) owns directory state and its literal user-context placement; the loop does not register `cwd`.
 
 ### Persona as the order-0 section
 
@@ -54,7 +54,6 @@ Per-tool semantics and selection guidance live in tool descriptions. Prompt sect
 ## Out of scope
 
 - Further variables (`date`, platform, git state) — the registry makes each a one-line contribution by whichever plugin owns the fact; none is claimed here.
-- A config `cwd` for pre-created stdio agents (would let the stdio persona use `{{cwd}}` and partition persistence by real path) — deferred until the session-cwd story is revisited.
 
 ## Shipped invariants
 
@@ -68,5 +67,5 @@ Per-tool semantics and selection guidance live in tool descriptions. Prompt sect
 - Every fact in the assembled prompt now has exactly one owner, and the hand-maintained tool prose in leaf YAML is gone: loading or dropping a tool plugin no longer means editing any deployment's persona.
 - `{{model}}` reflects `AgentOptions.model` at assembly time. A plugin that switches models in the `agent/request` waterfall makes the prompt's claim stale for that step, and one that SUPPLIES the model there (options.model unset — the loop's documented fallback) leaves the variable valueless at render, failing a `{{model}}` persona before the waterfall runs. Both have the same remedy, and it is the ownership rule itself: the plugin that owns the late-bound model fact states it early on the `system-prompt/assemble` waterfall (`assembly.variables['model'] = …`) — one owner, both statements; a loop test pins the supply path end-to-end. Accepted.
 - While a bound provider is absent (not yet activated, unloaded, mid-HMR-reload), the subagent tool does not exist and a model request in that window simply lacks it. That is the honest state — the alternative was a registered tool whose description or execution could not be trusted.
-- Strictness means a persona can fail a turn at render (e.g. `{{cwd}}` on a cwd-less session). The failure is contained — the turn ends `error`, the loop survives — and it is an authoring error we WANT loud.
+- Strict interpolation rejects missing or valueless variables before a model request. The turn ends with `error` while the loop remains available for later turns; a persona referencing `{{model}}` requires its composing runtime to supply that value.
 - Inline escapes remain unsupported in interpolated text; literal sections need no escaping. PTC unit tests cover both modes and runtime languages, and the recorded `ptc-turn` scenario preserves tool-template examples in the model-visible prompt.

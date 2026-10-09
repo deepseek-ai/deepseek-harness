@@ -4,7 +4,9 @@
     "rootDir": "src",
     "outDir": "lib/types"
   },
-  "include": ["src"],
+  "include": [
+    "src"
+  ],
   "references": [
     {
       "path": "../../../vendor/cosmokit"
@@ -38,6 +40,9 @@
     },
     {
       "path": "../../util/timeout"
+    },
+    {
+      "path": "../../session/working-directory"
     }
   ]
 }

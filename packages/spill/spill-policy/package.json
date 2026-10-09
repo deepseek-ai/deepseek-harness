@@ -68,6 +68,7 @@
     "@deepseek-ai/dsh-ptc-runtime": "workspace:*",
     "@deepseek-ai/dsh-attachment-local": "workspace:*",
     "@deepseek-ai/dsh-tool-fs": "workspace:*",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.5",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*"
   }
 }

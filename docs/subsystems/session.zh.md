@@ -756,6 +756,49 @@ interface TurnEndReasonMap {
 
 钩子桥接层的 `hook/invoked` / `hook/result` 对（来自 `@deepseek-ai/dsh-hook-protocol`）通过 `handlerId` 关联。`UserPromptSubmit`、`PreToolUse`、`PostToolUse` 与 `Stop` 在 loop 已打开的轮次内触发，因此其 `hook/*` 记录天然位于轮次之内。`SessionStart` 不生成 `hook/*` 记录，因为它在轮次 1 之前运行；其上下文会在 inbox 中保持待处理，直到唤醒交付打开一个轮次。
 
+### 插件记录
+
+实验性包在 `PluginRecordMap` 中声明插件自有的状态：`appendPluginRecord()` 根据每项声明约束名称与 payload 类型，并在 `plugin:` 命名空间中追加一条带 `ignorable: true` 标记的事件。`pluginRecordOf()` 读取已存记录，其 payload 为未知类型，不受当前声明约束。[实验性持久化目录](../experimental-persistence-catalog.zh.md)列出当前声明。调用方限制、保留方式与读取路径见[包 README](../../packages/core/session/README.zh.md#write-experimental-plugin-records)。
+
+```ts type-equiv
+/**
+ * Event type of an experimental plugin record: `plugin:` followed by
+ * slash-separated segments of lowercase letters, digits, `.`, `_`, and `-`,
+ * each starting with a letter or digit. A record type is never a
+ * {@link SessionEventMap} member.
+ */
+type PluginRecordType = `plugin:${string}`
+```
+
+```ts type-equiv
+/**
+ * Payloads written by experimental packages, keyed by their `plugin:` record
+ * names. Packages augment this map to type writes and enter the current plugin
+ * record catalog; these declarations do not enter {@link SessionEventMap} or
+ * released persistence schemas. Stored records still require owner validation.
+ */
+interface PluginRecordMap {}
+```
+
+```ts type-equiv
+/**
+ * One committed experimental plugin record, read from the log by
+ * `pluginRecordOf`. The record's owner validates `data` before use, because a
+ * restored record carries whatever JSON an earlier build of its owner wrote,
+ * or a V3 event that a format migration renamed into the `plugin:` namespace held.
+ */
+interface PluginRecord {
+  /** The record type, chosen by the owning plugin. */
+  readonly type: PluginRecordType
+  /** The record's position in the Session log. */
+  readonly seq: SessionSeq
+  /** Unix epoch milliseconds at append. */
+  readonly time: number
+  /** The JSON payload as committed. */
+  readonly data: unknown
+}
+```
+
 ## 持久性约定
 
 持久化后端依赖的约定如下：持久日志无损保存每个事件，每个 Assistant attempt 都是一个 `assistant/message` 或 `assistant/attempt`，其嵌入式紧凑 stream 会保留原始带时间 chunk。`seq` 在这些 settlement 与所有交错事件之间保持连续。后端可以为事件批次选择自己的存储 framing，只要句柄的 `read()` 返回与追加时完全一致的事件即可；当前 JSONL 每个事件写一行（见 [persistence.md](persistence.zh.md)）。所有 `event.data` 都必须可序列化为 JSON；`Session.append` 会从源头强制这一要求（遇到不可序列化数据时抛出），因此错误事件绝不会进入日志，`session.snapshotEvents()` 始终与后端可持久化的内容一致。新增会携带不可序列化数据、破坏核心执行嵌套或违反事件所有方声明关系的事件类型，都会构成磁盘格式的破坏性变更。
@@ -883,10 +926,10 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * Fork one cold-readable exact event prefix into a new Session. An omitted
  * boundary selects the latest completed-turn prefix; an open cut receives
  * synthetic fork closers.
- * @param request - source Session and optional exact inclusive event boundary.
+ * @param request - source Session, optional exact inclusive event boundary, and migration preflight choice.
  * @returns the new Session identity.
  */
-@Remote('fork') fork(request: SessionForkRequest): Promise<SessionForkValue>
+@Remote('fork') async fork(request: SessionForkRequest): Promise<SessionForkValue>
 
 /**
  * Admit one prompt after explicitly resuming its Session.
@@ -935,10 +978,10 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
 @Remote({ mode: 'stream' }) follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame>
 
 /**
- * Read all registered projections without activating an Agent.
+ * Read exact projections, returning cached hints only when migration is required.
  * @param request - Session whose current values are required.
- * @param signal - cancellation for the Session observation.
- * @returns complete baseline, or null when the Session does not exist.
+ * @param signal - cancellation for the Session read.
+ * @returns a sequenced baseline, cached hints when migration is deferred, or null when absent.
  */
 @Remote('projections') async projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue>
 

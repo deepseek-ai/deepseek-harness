@@ -52,6 +52,7 @@ import type { SessionActivity, WorkspaceId, WorkspaceView } from '@deepseek-ai/d
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { WorkspaceShortcutState } from '../shortcuts.ts'
+import type { StartSessionOptions } from '../navigation.ts'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
 /**
@@ -235,11 +236,11 @@ export type WorkspaceBrowserInjected = {
   /** Dismiss the shortcut's fork-failure notification. */
   dismissForkError: () => void
   /**
-   * Start a New Session in a Workspace: reuse-or-create its blank session and
-   * open it; without an explicit workspace, inherit the current Session
-   * Workspace, then the recent Workspace, or clear into the New Session view.
+   * Create a fresh Session, or preserve a reusable blank with explicit draft options.
+   * Without an explicit Workspace, inherit the current Session Workspace,
+   * then the recent Workspace, or clear into the New Session view.
    */
-  startSession: (workspaceId?: WorkspaceId) => void
+  startSession: (workspaceId?: WorkspaceId, options?: StartSessionOptions) => void
   /** Open a real Session. */
   open: (sessionId: SessionId) => void
   /**
@@ -294,6 +295,7 @@ export type RowToast =
   | { kind: 'unpinFailed' }
   | { kind: 'archivedNotOpenable' }
   | { kind: 'defaultWorkspaceFailed' }
+  | { kind: 'forkRequiresOpen'; sessionId: SessionId }
   /**
    * An explicit New Session request that failed. `message` is untranslated:
    * a Host refusal as `code: message` — the stable code stays in the copy so
@@ -410,7 +412,7 @@ export interface SessionRenameDialogInjected {
   renameSession: (sessionId: SessionId, title: string) => Promise<void>
 }
 
-/** Row toast share: the notice on display, its dismissal, and the two actions the archived notice offers. */
+/** Row toast share: the notice, dismissal, archive recovery, and explicit source-history opening. */
 export interface RowToastInjected {
   hooks: {
     /** The notice on display, or none. */
@@ -422,6 +424,8 @@ export interface RowToastInjected {
   undoArchive: (sessionId: SessionId) => void
   /** Switch the archived filter to "show" so the archived row is back in view. */
   showArchived: () => void
+  /** Open the fork source without retrying the fork. */
+  openForkSource: (sessionId: SessionId) => void
 }
 
 /** Props of the rename dialog entry in `shell.overlay`. */

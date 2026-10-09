@@ -1,0 +1,127 @@
+name: Build SSH helper
+
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: Comma-separated native Node 24 targets; empty builds all four.
+        type: string
+        default: ''
+      release:
+        description: Retain a complete release build when another run starts.
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: Linux/macOS x64/arm64 pkg targets; empty builds all four.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ssh-helper-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !inputs.release }}
+
+env:
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - name: Validate native targets
+        id: targets
+        env:
+          REQUESTED_TARGETS: ${{ inputs.targets }}
+        run: |
+          node --input-type=module <<'JS'
+          import { appendFileSync } from 'node:fs';
+          const runners = {
+            'node24-linux-x64': 'ubuntu-24.04',
+            'node24-linux-arm64': 'ubuntu-24.04-arm',
+            'node24-macos-arm64': 'macos-latest',
+            'node24-macos-x64': 'macos-15-intel',
+          };
+          const raw = process.env.REQUESTED_TARGETS;
+          const targets = raw ? raw.split(',').map(value => value.trim()) : Object.keys(runners);
+          if (new Set(targets).size !== targets.length || targets.some(target => !Object.hasOwn(runners, target))) throw new Error('Invalid or duplicate SSH helper target');
+          appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify(targets.map(target => ({target, runner: runners[target]})))}\n`);
+          JS
+
+  build:
+    needs: plan
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pkg-cache
+          key: ssh-pkg-${{ matrix.target }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ssh-pkg-${{ matrix.target }}-
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Prepare Linux compiler and sandbox
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq musl-tools bubblewrap
+          if sysctl kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent -- true
+      - name: Build compatible Linux PTY addon
+        if: runner.os == 'Linux'
+        run: bash scripts/prepare-linux-node-pty.sh
+      - name: Build native release archive
+        env:
+          HELPER_TARGET: ${{ matrix.target }}
+        run: pnpm exec tsx scripts/build-exe-for-ssh-helper.ts --target="$HELPER_TARGET"
+      - name: Verify relocated executable and confinement
+        env:
+          HELPER_TARGET: ${{ matrix.target }}
+        run: |
+          archives=(dist-exe/ssh-helper/*.tar.gz)
+          test "${#archives[@]}" -eq 1
+          pnpm exec tsx scripts/verify-ssh-helper-artifact.ts --archive="${archives[0]}" --sandbox=required --report="dist-exe/ssh-helper/$HELPER_TARGET.json"
+      - name: Verify the packaged Landlock backend
+        if: runner.os == 'Linux'
+        env:
+          HELPER_TARGET: ${{ matrix.target }}
+        run: |
+          archives=(dist-exe/ssh-helper/*.tar.gz)
+          pnpm exec tsx scripts/verify-ssh-helper-artifact.ts --archive="${archives[0]}" --sandbox=required --backend=landlock-run --report="dist-exe/ssh-helper/$HELPER_TARGET.landlock.json"
+      - name: Verify OpenSSH on glibc 2.28 without Node
+        if: runner.os == 'Linux'
+        env:
+          HELPER_TARGET: ${{ matrix.target }}
+        run: |
+          archives=(dist-exe/ssh-helper/*.tar.gz)
+          test "${#archives[@]}" -eq 1
+          pnpm exec tsx scripts/verify-ssh-helper-ssh.ts --archive="${archives[0]}" --report="dist-exe/ssh-helper/$HELPER_TARGET.ssh.json"
+      - name: Upload verified archive and evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: ssh-helper-${{ matrix.target }}
+          path: dist-exe/ssh-helper/*
+          if-no-files-found: error

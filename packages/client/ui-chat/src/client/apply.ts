@@ -22,12 +22,14 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {
-  ChatNodeInjected, ChatScrollPosition, ChatViewInjected, QuotaNoticeInjected, QuotaNoticeState, TurnTailOwnerProps,
+  ChatFlowDataInjected, ChatFlowInjected, ChatNodeInjected, ChatScrollPosition, ChatViewInjected,
+  QuotaNoticeInjected, QuotaNoticeState, TurnTailOwnerProps,
 } from './contract/slots.ts'
 import type { ChatSnapshot } from './contract/snapshot.ts'
 import { EMPTY_CHAT_SNAPSHOT } from './contract/snapshot.ts'
 import { ApprovalCommand } from './chat/ApprovalCommand.tsx'
 import { ChatView } from './chat/ChatView.tsx'
+import { ChatFlow } from './chat/ChatFlow.tsx'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
 import { ActivityPill, UsagePill } from './chat/StatsPills.tsx'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
@@ -43,13 +45,28 @@ import { PerformanceUsageRow, type PerformanceUsageRowInjected } from './setting
 import { PerformanceUsagePolicy } from './performance-usage.ts'
 import { useTurnDataValue } from './chat/use-turn-data.ts'
 import { bindDisclosure } from './chat/use-disclosure.ts'
+import { useFlowHidden, useMotionHidden } from './chat/flow-motion.ts'
 
-const CHAT_NODE_INJECT: ChatNodeInjected = {
+/** Bind group and header visibility to the viewport of one flow render. */
+export const CHAT_FLOW_INJECT: ChatFlowInjected = {
+  hooks: {
+    groupAction: (_standard, { motion }) => function useGroupAction(hidden, reveal) {
+      return useFlowHidden(hidden, reveal, motion)
+    },
+    groupHeaderAction: (_standard, { motion }) => function useGroupHeaderAction(ref, hidden) {
+      useMotionHidden(ref, hidden, motion)
+    },
+  },
+}
+
+/** Bind node-local sources and forward the flow's existing visibility hook. */
+export const CHAT_NODE_INJECT: ChatNodeInjected = {
   hooks: {
     turnData: (_standard, { turnData }) => function useTurnData(key) {
       return useTurnDataValue(turnData, key)
     },
     disclosure: (_standard, { disclosureReset }) => bindDisclosure(disclosureReset),
+    groupAction: (_standard, { useGroupAction }) => useGroupAction,
   },
 }
 
@@ -147,7 +164,7 @@ export function apply(ctx: Context): void {
     }, LinkOpeningRow))
   })
   const transcriptView = new TranscriptViewPolicy(chatSettings, 'dshDesktop' in globalThis ? 'standard' : DEFAULT_TRANSCRIPT_VIEW_MODE)
-  const presentation = derivePresentationPolicy(transcriptView.mode)
+  const presentation = derivePresentationPolicy(transcriptView.mode, transcriptView.collapseTiming)
   const performancePolicy = new PerformanceUsagePolicy(chatSettings)
   ctx.effect(() => () => { transcriptView.dispose(); performancePolicy.dispose() })
   const performanceUsage = performancePolicy.mode
@@ -170,10 +187,38 @@ export function apply(ctx: Context): void {
     order: 12,
     locale: NS,
     inject: (): TranscriptViewRowInjected => ({
-      hooks: { transcriptView: transcriptView.mode },
+      hooks: { transcriptView: transcriptView.mode, collapseTiming: transcriptView.collapseTiming },
       setTranscriptView: (mode) => { transcriptView.setMode(mode) },
+      setCollapseTiming: (timing) => { transcriptView.setCollapseTiming(timing) },
     }),
   }, TranscriptViewRow))
+
+  const nodeSources = (binding: SessionBinding): ChatFlowDataInjected => {
+    const chat = chatSource(binding)
+    const conversation = ctx.uiConversation.binding(binding)
+    return {
+      hooks: { presentation },
+      keyedHooks: {
+        chatNode: key => chat.getSnapshot().nodes.source(key),
+        chatNodeBottom: key => chat.getSnapshot().nodes.bottomSource(key),
+        chatNodeProcess: key => chat.getSnapshot().nodes.processSource(key),
+        chatGroup: key => conversation.snapshot.getSnapshot().views.grouped('chat')?.groupSource(key as GroupKey),
+      },
+    }
+  }
+
+  ctx.slots.inject('conversation.chat.flow', () => ctx.slots.register({
+    name: 'conversation.chat.flow', locale: NS, store: chatStore,
+    children: {
+      'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: CHAT_NODE_INJECT },
+      'conversation.message.images': { kind: 'single', scope: 'session' },
+    },
+    inject: (sessionId: SessionId): ChatFlowDataInjected => {
+      const binding = ctx.sessions.binding(sessionId)
+      if (binding === undefined) throw new Error(`ui-chat: unknown session "${sessionId}"`)
+      return nodeSources(binding)
+    },
+  }, ChatFlow))
 
   ctx.slots.inject('conversation.view', () => {
     const disposeView = ctx.slots.register({
@@ -183,8 +228,7 @@ export function apply(ctx: Context): void {
       label: () => t('view.chat'),
       locale: NS,
       children: {
-        'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: CHAT_NODE_INJECT },
-        'conversation.message.images': { kind: 'single', scope: 'session' },
+        'conversation.chat.flow': { kind: 'single', scope: 'session', inject: CHAT_FLOW_INJECT },
       },
       store: chatStore,
       inject: (sessionId: SessionId): ChatViewInjected => {
@@ -192,14 +236,8 @@ export function apply(ctx: Context): void {
         if (binding === undefined) throw new Error(`ui-chat: unknown session "${sessionId}"`)
         const session = binding.session
         const chat = chatSource(binding)
-        const conversation = ctx.uiConversation.binding(binding)
         return {
-          hooks: { presentation },
-          keyedHooks: {
-            chatNode: key => chat.getSnapshot().nodes.source(key),
-            chatNodeProcess: key => chat.getSnapshot().nodes.processSource(key),
-            chatGroup: key => conversation.snapshot.getSnapshot().views.grouped('chat')?.groupSource(key as GroupKey),
-          },
+          ...nodeSources(binding),
           fileMentions: (owner: TurnTailOwnerProps) => ctx.get('chatFileMentions')?.forClosing(owner, sessionId),
           // Files open in the right Sidebar, not in a desktop application: the
           // content stays in the product, beside the conversation that produced

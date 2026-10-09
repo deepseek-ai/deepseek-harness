@@ -22,20 +22,17 @@ export DSH_GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 printf '%s\n' "$DSH_GITHUB_WEBHOOK_SECRET"
 ```
 
-在开发 checkout 中运行：
+先把两个实验包安装到 Web profile。Profile 不会自动安装 peer；GitHub 适配器需要显式安装 webhook 运行时：
 
 ```sh
+dsh plugin --profile web add @deepseek-ai/dsh-webhook @deepseek-ai/dsh-webhook-github
 export DSH_GITHUB_REVIEW_WORKSPACE=/path/to/deepseek-harness
-pnpm dsh web --patch apps/cli/config/examples/github-review/cordis.yml
+dsh web --patch "${DSH_HOME:-$HOME/.dsh}/profiles/web/node_modules/@deepseek-ai/dsh-webhook-github/examples/github-review/cordis.yml"
 ```
 
-安装版 DSH 通过绝对路径使用同一 overlay：
+示例随 GitHub 适配器发布，并从 profile 的安装目录加载，因此规则模块能解析该 profile 安装的 peer。不要把规则单独放到 profile 之外的任意目录运行。需要定制时，将示例的两个文件复制到 `$DSH_HOME/profiles/web/github-review/`，修改其配置并把 `--patch` 指向复制后的 `cordis.yml`；未设置 `DSH_HOME` 时使用 `~/.dsh`。
 
-```sh
-dsh web --patch /absolute/path/to/github-review/cordis.yml
-```
-
-对于永久 profile，把 `github-ready-review-rule.mjs` 放在 `$DSH_HOME/profiles/web/cordis.patch.yml` 旁边，把 `cordis.yml` 中的行追加到该 patch，然后运行 `dsh web`。随附 CLI 已经包含两个 webhook 包；只需 overlay 即可激活它们。
+仓库中的示例位于 `packages/experimental/webhook-github/examples/github-review/`。Webhook 包不随 CLI 安装，也不出现在官方插件列表中；安装包与提供 overlay 是两个独立步骤。
 
 ## 暴露专用端点
 
@@ -65,7 +62,7 @@ Active:       yes
 
 ## 规则行为
 
-规则只接受来源 `primary-github`、仓库 `deepseek-harness/deepseek-harness`、事件 `pull_request` 与动作 `ready_for_review`。它会把精确 head SHA 和选定 PR 字段传给评审提示词，把 JSON 标为不受信任的元数据，并禁止修改文件、分支、PR 或 GitHub 状态。
+规则只接受来源 `primary-github`、仓库 `deepseek-ai/deepseek-harness`、事件 `pull_request` 与动作 `ready_for_review`。它会把精确 head SHA 和选定 PR 字段传给评审提示词，把 JSON 标为不受信任的元数据，并禁止修改文件、分支、PR 或 GitHub 状态。
 
 Session 请求选择 `standard` agent preset 与 `read-only` permission preset。`workspacePath` 通过 `WorkspaceRegistry.create()` 规范化，因此第一次匹配交付会在 Workspace 不存在时创建它，后续交付会复用它。
 
@@ -89,7 +86,7 @@ if (!response.ok || (await response.json()).automaticReview !== true) return nul
 
 ```js
 const workspacePath = {
-  'deepseek-harness/deepseek-harness': '/path/to/deepseek-harness',
+  'deepseek-ai/deepseek-harness': '/path/to/deepseek-harness',
   'deepseek-harness/dsh-sdk': '/path/to/dsh-sdk',
 }[payload.repository.full_name]
 if (workspacePath === undefined) return null

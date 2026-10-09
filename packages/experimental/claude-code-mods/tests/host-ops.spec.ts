@@ -1,11 +1,13 @@
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Message } from '@deepseek-ai/dsh-llm'
-import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
@@ -139,6 +141,7 @@ describe('session facts from the agent', () => {
     expect(await call('session.model', {}, fakeAgent(ctx, { requestModel: 'logged', model: 'opt' }))).toBe('logged')
     expect(await call('session.model', {}, fakeAgent(ctx, { model: 'opt' }))).toBe('opt')
     expect(await call('session.model', {}, fakeAgent(ctx))).toBe('')
+    provideWorkingDirectoryFixture(ctx)
     expect(await call('session.cwd', {}, fakeAgent(ctx))).toBe(process.cwd())
     expect(await call('session.cwd', {}, fakeAgent(ctx, { cwd: '/work' }))).toBe('/work')
     expect(await call('session.root', {}, fakeAgent(ctx))).toBe(process.cwd())
@@ -155,6 +158,7 @@ describe('files through the filesystem seam', () => {
     const ctx = new Context()
     await ctx.plugin(LocalFileSystem, { cwd: root })
     const { call } = setup(ctx)
+    provideWorkingDirectoryFixture(ctx)
     writeFileSync(join(root, 'small.txt'), 'small')
     writeFileSync(join(root, 'big.txt'), Buffer.alloc(FS_MAX_BYTES + 1, 97))
     symlinkSync(join(root, 'small.txt'), join(root, 'link.txt'))
@@ -187,6 +191,7 @@ describe('processes through the subprocess seam', () => {
     }) as { exitCode: number; stdout: string }
     expect(run.exitCode).toBe(0)
     expect(run.stdout.endsWith('|set')).toBe(true)
+    provideWorkingDirectoryFixture(ctx)
     const viaAgent = await call('process.run', { argv: ['node', '-e', 'process.stdout.write(process.cwd())'] }, fakeAgent(ctx, { cwd })) as { stdout: string }
     expect(viaAgent.stdout.length).toBeGreaterThan(0)
     const bare = await call('process.run', { argv: ['node', '-e', 'process.stdout.write(process.cwd())'] }) as { exitCode: number; stdout: string }
@@ -268,5 +273,61 @@ describe('ui.log sinks', () => {
     await call('ui.log', { text: 'hidden', to: 'debug' })
     expect(info).toHaveBeenCalledWith('unit-mod: seen')
     expect(debug).toHaveBeenCalledWith('unit-mod: hidden')
+  })
+})
+
+
+describe('the committed directory owner', () => {
+  it('moves session cwd, relative files and new processes while retaining the project root', async () => {
+    const allocated = mkdtempSync(join(tmpdir(), 'dsh-mods-directory-'))
+    dirs.push(allocated)
+    // Native realpath expands Windows short-name temp paths before exact cwd comparisons.
+    const origin = await realpath(allocated)
+    const selected = join(origin, 'current')
+    mkdirSync(selected)
+    const current = await realpath(selected)
+    writeFileSync(join(origin, 'witness.txt'), 'origin')
+    writeFileSync(join(current, 'witness.txt'), 'current')
+    writeFileSync(join(current, 'only-current.txt'), 'selected')
+    const ctx = new Context()
+    await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
+    const harness = await mountAgentLoopTestHarness(ctx)
+    await ctx.plugin(LocalSubprocessRuntime)
+    const { call } = setup(ctx)
+    const agent = await harness.create(SessionId('directory-owner'), {}, { cwd: origin })
+    await ctx.workingDirectory.set(agent, current)
+
+    expect(await call('session.cwd', {}, agent)).toBe(current)
+    expect(await call('session.root', {}, agent)).toBe(origin)
+    expect(await call('fs.read', { path: 'witness.txt' }, agent)).toBe('current')
+    expect(await call('fs.exists', { path: 'only-current.txt' }, agent)).toBe(true)
+    expect(await call('fs.stat', { path: 'witness.txt' }, agent)).toMatchObject({ kind: 'file', size: 7 })
+    expect(await call('fs.list', { path: '.' }, agent)).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'only-current.txt' })]))
+    await call('fs.write', { path: 'created.txt', text: 'selected output' }, agent)
+    expect(await call('fs.exists', { path: join(origin, 'created.txt') }, agent)).toBe(false)
+    expect(await call('fs.read', { path: join(current, 'created.txt') }, agent)).toBe('selected output')
+    symlinkSync(join(current, 'witness.txt'), join(current, 'link.txt'))
+    const lstat = ctx.fs.lstat.bind(ctx.fs)
+    vi.spyOn(ctx.fs, 'lstat').mockImplementationOnce(async (path, options, signal) => {
+      const info = await lstat(path, options, signal)
+      await ctx.workingDirectory.set(agent, origin)
+      return info
+    })
+    expect(await call('fs.stat', { path: 'link.txt' }, agent)).toMatchObject({ kind: 'file', size: 7, isLink: true })
+    await ctx.workingDirectory.set(agent, current)
+    expect(await call('process.run', { argv: [process.execPath, '-e', 'process.stdout.write(process.cwd())'] }, agent)).toEqual({ exitCode: 0, stdout: current, stderr: '' })
+    expect(await call('process.run', { argv: [process.execPath, '-e', 'process.stdout.write(process.cwd())'], init: { cwd: origin } }, agent)).toEqual({ exitCode: 0, stdout: origin, stderr: '' })
+    expect(ctx.workingDirectory.get(agent.session)).toBe(current)
+    expect(agent.session.header.cwd).toBe(origin)
+  })
+
+  it('fails explicitly when a session-bound operation has no directory owner', async () => {
+    const { ctx, call } = setup()
+    await ctx.plugin(LocalFileSystem)
+    await ctx.plugin(LocalSubprocessRuntime)
+    const agent = fakeAgent(ctx)
+    for (const [op, input] of [['session.cwd', {}], ['fs.read', { path: 'x' }], ['fs.stat', { path: 'x' }], ['process.run', { argv: [process.execPath] }]] as const) {
+      await expect(call(op, input, agent)).rejects.toThrow(/dsh-working-directory/)
+    }
   })
 })

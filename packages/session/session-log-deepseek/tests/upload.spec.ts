@@ -691,7 +691,7 @@ describe('byte-bounded DeepSeek session-log upload', () => {
     expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(-1)
     const warning = `session-log-deepseek: event 0 of session "bounded-oversized" needs a ${String(limit + 1)}-byte dsh_session_log field,`
       + ` above maxBytes ${String(limit)}; this session's upload stays at event 0 until maxBytes admits it`
-    expect(warnings).toEqual([[warning], [warning]])
+    expect(warnings).toEqual([[warning]])
   })
 
   it('omits the field without failing the request when the next pending event exceeds the string limit', async () => {
@@ -724,6 +724,6 @@ describe('byte-bounded DeepSeek session-log upload', () => {
     expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(-1)
     const warning = 'session-log-deepseek: event 0 of session "bounded-string-limit" is too large to serialize into a dsh_session_log field;'
       + " this session's upload stays at event 0"
-    expect(warnings).toEqual([[warning], [warning]])
+    expect(warnings).toEqual([[warning]])
   })
 })

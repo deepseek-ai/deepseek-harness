@@ -29,11 +29,11 @@ A top-level workflow run through `dsh-tool-workflow` appears in the conversation
 
 ### Navigating the node
 
-Run and phase headers keep 6px gaps between their title, count, and status fields, with the status aligned to the right. The run uses a 32-pixel row with persistent chevrons, an inline state dot, and status text; phases use disclosure rows with title and member count in the main area and a fixed aggregate-status tail; members use a 16-pixel dot slot, a truncating name area, and a fixed status column. Opening a member's child Session requires both member and child to be running, and the child must belong to the current Session's direct-child catalog. Child activity uses the unified UI status, falling back to the Session summary when unknown. Session summaries do not establish membership; absent, wrong-parent, or terminal catalog entries remain non-interactive.
+Run and phase headers keep 6px gaps between their title, count, and status fields, with the status aligned to the right. The run uses a 32-pixel row with persistent chevrons, an inline state dot, and status text; phases use disclosure rows with title and member count in the main area and a fixed aggregate-status tail; members use a 16-pixel dot slot, a truncating name area, and a fixed status column. Opening a member's child Session requires both member and child to be running, with the current Session recorded as its parent and an available child identity projection. Navigation uses the child's own mode for both continuable and historical one-shot children; external executions have no local Session to open. Child activity uses the unified UI status, falling back to the Session summary when unknown. Workflow events establish membership; missing child identity, a different parent, or a terminal member keeps the row non-interactive.
 
 ### State and completion
 
-Completion updates the visible status immediately but delays its automatic close while focus remains inside the content. A closed Turn or Step with missing terminal events presents the affected run or members as interrupted without changing the tool result.
+Completion updates the visible status immediately but delays its automatic close while focus remains inside the content. A run or member without terminal events stays running after its Turn or Step ends normally, because a background run outlives its Tool Step. It is presented as interrupted, without changing the tool result, once its Turn is closed after a crash or at a fork boundary.
 
 -----
 
@@ -86,6 +86,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define which runs produce records and what the node exposes; they are current package constraints.
 
 - **Only top-level calls through `dsh-tool-workflow` produce these records** — nested PTC mode calls and direct `WorkflowEngine` consumers do not.
+- **A run lost without terminal events in a normally ended Turn stays running** — for example a background run whose process crashed during a later Turn, or a run whose recording stopped after a failed append; the session log carries no fact that marks it stopped.
 - **Navigation is intentionally live-only** — terminal members remain visible for review but never expose a cold-session opener from this node.
 - **The node shows run, phase, member identity, and status only** — scripts, outputs, errors, logs, usage, static topology, and controls remain outside this surface.
 

@@ -34,13 +34,18 @@ async function jsonlFiles(dir: string): Promise<string[]> {
   return paths.flat()
 }
 
-function toolResultText(events: SessionEvent[]): string {
+function settlementText(events: SessionEvent[]): string[] {
   const results = events.filter(event => event.type === 'tool/result')
   expect(results).toHaveLength(1)
-  return results[0]!.data.message.content
-    .filter(block => block.type === 'text')
-    .map(block => block.text)
-    .join('')
+  const notices = events.filter(event => event.type === 'user/message'
+    && event.data.source.kind === 'subagent-settled')
+  expect(notices).toHaveLength(1)
+  const notice = notices[0]!
+  if (notice.type !== 'user/message' || notice.data.source.kind !== 'subagent-settled') throw new Error('missing completion notice')
+  expect(results[0]!.data.message.content).toEqual([
+    { type: 'text', text: `started subagent ${notice.data.source.senderSessionId}` },
+  ])
+  return notice.data.content.slice(1).filter(block => block.type === 'text').map(block => block.text)
 }
 
 describe('ACP subagent cwd inheritance through the production profile', () => {
@@ -66,10 +71,7 @@ describe('ACP subagent cwd inheritance through the production profile', () => {
     })
     expect(stderr).not.toContain('UNHANDLED')
 
-    // The tool result carries the child's two-line echo: its real process.cwd()
-    // and the cwd the backend announced in `session/new` — both the parent
-    // session's workspace, never the harness process's launch directory.
-    expect(toolResultText(events)).toBe(`${workspace}\n${workspace}`)
+    expect(settlementText(events)).toEqual(['Its closing message:', `${workspace}\n${workspace}`])
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
   it('presents the ACP remote-limit diagnostic separately from partial output', async () => {
@@ -93,10 +95,10 @@ describe('ACP subagent cwd inheritance through the production profile', () => {
       },
     })
     expect(stderr).not.toContain('UNHANDLED')
-    expect(toolResultText(events)).toBe(
-      'Error: subagent run failed\n'
-      + 'Diagnostic: Subagent failure (provider: ACP; stage: prompt; category: remote-limit; stop reason: max_turn_requests)\n'
-      + 'Partial output before the run ended:\npartial loader answer',
-    )
+    expect(settlementText(events)).toEqual([
+      'Its closing message:',
+      'partial loader answer',
+      'Subagent failure (provider: ACP; stage: prompt; category: remote-limit; stop reason: max_turn_requests)',
+    ])
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 })

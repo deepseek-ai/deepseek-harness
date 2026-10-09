@@ -34,7 +34,7 @@ The Team Lead and all teammates share the same working directory and filesystem.
 
 Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
 
-Use the target returned by spawn_teammate or list_agents for send_message and interrupt_agent, or as owner when assigning or filtering shared tasks. send_message steers a running target at its nearest step boundary and starts or resumes an inactive target. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. provisioning means member creation is in progress; failed means member creation failed. A delivered peer item starts with its stable message id and sender name. A successful send is already durable even when its result says queued; do not resend it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, use list_agents and make sure another required member is running or provisioning; use send_message first when the required member is inactive. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member can produce a change. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
+Use the target returned by spawn_teammate or list_agents for send_message and interrupt_agent, or as owner when assigning or filtering shared tasks. send_message steers a running target at its nearest step boundary and starts or resumes an inactive target. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. provisioning means member creation is in progress; failed means member creation failed. A peer message starts with its sender name. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, use list_agents and make sure another required member is running or provisioning; use send_message first when the required member is inactive. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member can produce a change. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
 
 const ACTIVE_WAIT_STATUSES: ReadonlySet<TeamMemberView['status']> = new Set(['running', 'provisioning'])
 const NO_ACTIVE_PEER_MESSAGE = 'No other Team member is running or provisioning. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake each required inactive teammate before waiting again.'
@@ -97,8 +97,7 @@ const SEND_VALUE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    messageId: { type: 'string', required: true },
-    status: { type: 'string', required: true, enum: ['accepted', 'queued'] },
+    sent: { type: 'boolean', required: true, const: true },
   },
 } as const
 
@@ -214,18 +213,19 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
 
     register(scoped.tools.register(defineTool({
       name: 'send_message',
-      description: 'Send one durable message to another Team member. A running target receives it at the nearest step boundary; an inactive target starts or resumes a turn.',
+      description: 'Send one message to another Team member. A running target receives it at the nearest step boundary; an inactive target starts or resumes a turn.',
       parameters: {
         target: { type: 'string', required: true, description: 'Member target returned by spawn_teammate or list_agents, including lead.' },
         message: { type: 'string', required: true, description: 'Self-contained message for the target.' },
       },
       output: jsonOutput(SEND_VALUE_SCHEMA),
-      execute(args, exec) {
-        return ctx.agentTeams.sendMessage(callingAgent(exec.agent, 'send_message'), {
+      async execute(args, exec) {
+        await ctx.agentTeams.sendMessage(callingAgent(exec.agent, 'send_message'), {
           target: args.target,
           content: [{ type: 'text', text: args.message }],
           signal: exec.signal,
         })
+        return { sent: true }
       },
     })))
 
@@ -241,7 +241,7 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
 
     register(scoped.tools.register(defineTool({
       name: 'wait_agent',
-      description: 'Wait for the next teammate status, mailbox, or shared-task change after this call starts. This never wakes inactive members and returns noProgress immediately when no other member is running or provisioning. Re-list after wakeup or timeout instead of polling.',
+      description: 'Wait for the next teammate status, message, or shared-task change after this call starts. This never wakes inactive members and returns noProgress immediately when no other member is running or provisioning. Re-list after wakeup or timeout instead of polling.',
       parameters: {
         timeout_ms: {
           type: 'integer',

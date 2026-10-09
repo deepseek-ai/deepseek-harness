@@ -39,6 +39,18 @@ describe('recorded-session corpus policy', () => {
       .toEqual({ currentRoles: 8, baselineRoles: 8, retainedRoles: 3, retainedScenarios: 3 })
   })
 
+  it.each([
+    [SESSION_FORMAT_VERSION, 3],
+    [3, SESSION_FORMAT_VERSION],
+  ])('counts baseline and current roles independently for parent v%i and child v%i', (parent, child) => {
+    expect(assertSnapshotCorpusPolicy([
+      current,
+      { key: 'sdk/mixed', selectedVersions: [parent, child] },
+      completeV0,
+      ...adjacent,
+    ])).toEqual({ currentRoles: 9, baselineRoles: 1, retainedRoles: 3, retainedScenarios: 3 })
+  })
+
   it('rejects refreshing away every direct V3 migration input', () => {
     expect(() => assertSnapshotCorpusPolicy([current, completeV0, ...adjacent]))
       .toThrow('Session corpus lacks v3 coverage: adjacent-migration')
@@ -85,15 +97,18 @@ describe('recorded-session corpus policy', () => {
     ])).toThrow('session/v0: v0 retained coverage must be multi-hop, packed-row, retry-failure, shipped-profile')
   })
 
-  it('rejects absent roles, undeclared history, and mixed selected generations', () => {
+  it('rejects absent roles, undeclared history, and mixed explicitly retained generations', () => {
     expect(() => assertSnapshotCorpusPolicy([{ key: 'session/empty', selectedVersions: [] }]))
       .toThrow('session/empty: scenario owns no selected Session role')
     expect(() => assertSnapshotCorpusPolicy([{ key: 'session/old', selectedVersions: [1] }]))
       .toThrow(`session/old: selected Session generation v1 must be retained baseline v3 or current v${SESSION_FORMAT_VERSION}`)
     expect(() => assertSnapshotCorpusPolicy([{ ...completeV0, selectedVersions: [0, SESSION_FORMAT_VERSION] }]))
       .toThrow(`session/v0: selected Session generation v${SESSION_FORMAT_VERSION} does not match expected v0`)
-    expect(() => assertSnapshotCorpusPolicy([{ ...baseline, selectedVersions: [3, SESSION_FORMAT_VERSION] }]))
-      .toThrow(`session/v3: selected Session generation v${SESSION_FORMAT_VERSION} does not match expected v3`)
+  })
+
+  it.each([2, SESSION_FORMAT_VERSION + 1])('rejects unsupported child generation %s', (version) => {
+    expect(() => assertSnapshotCorpusPolicy([{ key: 'sdk/invalid-child', selectedVersions: [3, version] }]))
+      .toThrow(`sdk/invalid-child: selected Session generation v${version} must be retained baseline v3 or current v${SESSION_FORMAT_VERSION}`)
   })
 
   it('rejects future unpinned generations', () => {

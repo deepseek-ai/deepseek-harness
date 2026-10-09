@@ -17,7 +17,7 @@ import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import { DEFAULT_MAX_REQUEST_IMAGE_BYTES, resolveProfiles } from '../src/config.ts'
 import { memoryAuth } from './auth-double.ts'
 import { assemble } from './assemble.ts'
-import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
+import { anthropicTextEvents, closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
 afterEach(async () => {
   vi.useRealTimers()
@@ -786,6 +786,58 @@ describe('provider profile lifecycle', () => {
       messages: [],
     })
     expect(server.requests[0]).not.toHaveProperty('reasoning_effort')
+  })
+
+  it('reports efforts in ascending order and dispatches the level a caller selects', async () => {
+    vi.stubEnv('PI_TEST_KEY', 'test-key')
+    const server = await mockServer([
+      { events: anthropicTextEvents },
+      { events: anthropicTextEvents },
+      { events: anthropicTextEvents },
+    ])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'adaptive-gateway': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'anthropic-messages',
+          baseURL: server.url,
+          reasoning: 'max',
+          compat: { forceAdaptiveThinking: true },
+          models: [
+            // Declaring no `off` level means the model cannot stop reasoning.
+            { id: 'always-thinks', reasoningEfforts: { low: 'low', high: 'high', max: 'max' } },
+            { id: 'may-think', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
+          ],
+        },
+      },
+    })
+    const request = (model: string, effort: string): Promise<unknown> => assemble(ctx, {
+      provider: 'adaptive-gateway',
+      model,
+      reasoningEffort: ReasoningEffortId(effort),
+      maxTokens: 64,
+      messages: [],
+    })
+
+    await expect(ctx.llm.resolveModelInfo('adaptive-gateway', 'always-thinks'))
+      .resolves.toMatchObject({ reasoning: { efforts: [{ id: 'low' }, { id: 'high' }, { id: 'max' }] } })
+    await expect(ctx.llm.resolveModelInfo('adaptive-gateway', 'may-think'))
+      .resolves.toMatchObject({ reasoning: { efforts: [{ id: 'off' }, { id: 'low' }, { id: 'high' }, { id: 'max' }] } })
+
+    await request('always-thinks', 'max')
+    await request('always-thinks', 'low')
+    await request('may-think', 'off')
+
+    expect(server.requests[0]).toMatchObject({ thinking: { type: 'adaptive' }, output_config: { effort: 'max' } })
+    expect(server.requests[1]).toMatchObject({
+      max_tokens: 64,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'low' },
+    })
+    expect(server.requests[2]).toMatchObject({ max_tokens: 64, thinking: { type: 'disabled' } })
+    expect(server.requests[2]).not.toHaveProperty('output_config')
   })
 
   it('accepts absent credentials for pi-ai ambient authentication', async () => {

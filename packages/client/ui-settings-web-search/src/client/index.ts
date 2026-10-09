@@ -55,6 +55,6 @@ export function apply(ctx: ClientContext): void {
     'ui-settings-web-search: credential invalidations',
   )
   ctx.effect(() => ctx.configForms.whileServed([WEB_SEARCH_NS], () => ctx.slots.inject('plugins.item', () => ctx.slots.register({
-    name: 'plugins.item', id: 'web-search', order: 40, label: () => t('title'), locale: NS, inject: () => card.inject(),
+    name: 'plugins.item', id: 'web-search', order: 20, label: () => t('title'), locale: NS, inject: () => card.inject(),
   }, WebSearchCard))), 'ui-settings-web-search: page')
 }

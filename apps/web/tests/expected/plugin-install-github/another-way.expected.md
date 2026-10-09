@@ -10,5 +10,5 @@
       - text: 填入插件 npm 包名 插件包名即 npm 包名（如 dsh-xxx 或 @作者/插件名），社区插件的 README 安装命令中 dsh plugin add 或 pnpm add 之后的部分。 示例：
       - code: dsh-plugin-whale-pet
       - button "填入示例 dsh-plugin-whale-pet": 填入示例
-  - note: 请确认插件来源可信。插件在本机以你的权限运行，来源不明的插件可能损坏 DeepSeek Harness，或读取和泄露你的数据。 插件安装后，暂不支持自动更新。若需升级，请先卸载再安装新版，后续版本会持续改善升级体验。
+  - note: 请确认插件来源可信。插件在本机以你的权限运行，来源不明的插件可能损坏 DeepSeek Harness，或读取和泄露你的数据。 按需安装的官方插件会在版本与 DSH 不同时提供“更新”。其他插件请先卸载再安装新版。
   - button "安装" [disabled]

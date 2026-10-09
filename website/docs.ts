@@ -409,6 +409,7 @@ const reference = [
     ['docs/config-catalog.md', 'reference/config-catalog.md', '插件配置', 'Plugin configuration'],
     ['docs/tool-catalog.md', 'reference/tool-catalog.md', 'Tool Schema', 'Tool schemas'],
     ['docs/persistence-catalog.md', 'reference/persistence-catalog.md', '持久化事件', 'Persistence events', 'deep'],
+    ['docs/experimental-persistence-catalog.md', 'reference/experimental-persistence-catalog.md', '实验性持久化记录', 'Experimental persistence'],
   ] as const).map(([source, route, rootLabel, enLabel, outline], order): PairedPage => ({
     source,
     route,

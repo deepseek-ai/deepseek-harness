@@ -1,6 +1,6 @@
 // Blast Radius, from "Getting started with Claude Code mods"
 // (https://claude.dev/blog/getting-started-with-claude-code-mods/, Anthropic, 2026-10-01).
-// The post publishes the tool.call hook below unchanged; the rest of the module
+// The tool.call hook adds a waitArgv option for DSH's portable timer; the rest of the module
 // (classify, measure, the pane and band trees) is completed to the post's
 // description of the mod, which is marked where it starts.
 
@@ -19,7 +19,7 @@ const RISKS = [
 // What the hook is holding: one command at a time, until a button decides.
 let held = null;
 
-export function register(on) {
+export function register(on, { waitArgv = ["sleep", "0.25"] } = {}) {
   on("tool.call", { tool: "Bash" }, async ($, e, next) => {
     const risk = classify(String(e.command ?? ""));
     if (risk === null) return next(e);                 // everything else runs as normal
@@ -30,7 +30,7 @@ export function register(on) {
     if (!opened.isPlaced) held.where = "band";         // too narrow for a pane: draw above the prompt
 
     while (held.decision === null && !next.signal.aborted) {
-      await $.process.run(["sleep", "0.25"]);          // time inside $ calls doesn't count against the hook's time limit
+      await $.process.run(waitArgv);                   // time inside $ calls doesn't count against the hook's time limit
     }
     if (held.decision === "proceed") return next(e);   // let it run
     return { deny: `Blast Radius held this command: the user pressed Cancel. It would have: ${report.summary}.` };

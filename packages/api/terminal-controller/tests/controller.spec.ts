@@ -30,7 +30,12 @@ function fixture(overrides: Partial<Config> = {}) {
   roots.push(ctx)
   const effects = vi.spyOn(ctx.fiber, 'effect')
   const sandboxPolicy = { defaultMode: 'danger-full-access', workspaceRoot: '/workspace', resolve: vi.fn((): SandboxExecutionPolicy => ({ mode: 'danger-full-access', workspaceRoot: '/workspace' })) }
+  const workingDirectory = {
+    get: vi.fn<(session: Agent['session']) => string>(session => session.header.cwd ?? '/workspace'),
+    ensure: vi.fn<(agent: Agent, signal?: AbortSignal) => Promise<string>>(async agent => agent.session.header.cwd ?? '/workspace'),
+  }
   ctx.provide('sandboxPolicy', sandboxPolicy as never)
+  ctx.provide('workingDirectory', workingDirectory as never)
   const output = new PassThrough()
   const done = Promise.withResolvers<{ exitCode: number; signal: null }>()
   const handle = {
@@ -48,7 +53,7 @@ function fixture(overrides: Partial<Config> = {}) {
     if (result?.type !== 'return' || typeof result.value !== 'function') throw new Error(`Missing effect: ${label}`)
     return result.value()
   }
-  return { ctx, agent: owner(ctx), controller, subprocess, handle, sandboxPolicy, disposeEffect }
+  return { ctx, agent: owner(ctx), controller, subprocess, handle, sandboxPolicy, workingDirectory, disposeEffect }
 }
 
 describe('TerminalController', () => {
@@ -98,6 +103,75 @@ describe('TerminalController', () => {
     expect(() => controller.environment(agent, abort.signal)).toThrow('request cancelled')
     expect(subprocess.terminalEnvironment).not.toHaveBeenCalled()
     expect(sandboxPolicy.resolve).not.toHaveBeenCalled()
+  })
+
+  it('uses the current directory for new user terminals while retaining earlier directories and permissions', async () => {
+    const { ctx, controller, agent, subprocess, sandboxPolicy, workingDirectory } = fixture()
+    const policy: SandboxExecutionPolicy = { mode: 'workspace-write', workspaceRoot: '/workspace', sessionId: agent.id }
+    sandboxPolicy.resolve.mockReturnValue(policy)
+    const confine = vi.fn(async (argv: readonly string[], _policy: SandboxExecutionPolicy) => ({ argv: [...argv] }))
+    ctx.provide('sandbox', { confine } as never)
+    const first = await controller.create(agent, request, signal())
+    workingDirectory.get.mockReturnValue('/workspace/selected')
+    workingDirectory.ensure.mockResolvedValue('/workspace/selected')
+
+    expect(controller.environment(agent, signal()).cwd).toBe('/workspace/selected')
+    expect(workingDirectory.ensure).toHaveBeenCalledOnce()
+    expect(await controller.create(agent, request, signal())).toBe(first)
+    expect(first.cwd).toBe('/workspace')
+    const second = await controller.create(agent, { ...request, id: 'second' as WebTerminalId }, signal())
+
+    expect(second.cwd).toBe('/workspace/selected')
+    expect(subprocess.spawnTerminal).toHaveBeenNthCalledWith(1, expect.objectContaining({ cwd: '/workspace' }))
+    expect(subprocess.spawnTerminal).toHaveBeenNthCalledWith(2, expect.objectContaining({ cwd: '/workspace/selected' }))
+    expect(confine).not.toHaveBeenCalled()
+    expect(sandboxPolicy.resolve).not.toHaveBeenCalled()
+    expect(controller.list(agent.id).map(terminal => terminal.cwd)).toEqual(['/workspace', '/workspace/selected'])
+  })
+
+  it('captures the validated directory before a delayed shell lookup', async () => {
+    const { controller, agent, subprocess, workingDirectory } = fixture()
+    workingDirectory.ensure.mockResolvedValue('/workspace/starting')
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    subprocess.resolveExecutable.mockImplementationOnce(async (path) => {
+      entered.resolve(undefined)
+      await release.promise
+      return path
+    })
+    const creating = controller.create(agent, request, signal())
+    try {
+      await entered.promise
+      workingDirectory.get.mockReturnValue('/workspace/later')
+      workingDirectory.ensure.mockResolvedValue('/workspace/later')
+      release.resolve(undefined)
+      expect((await creating).cwd).toBe('/workspace/starting')
+      expect(subprocess.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/workspace/starting' }))
+      expect(workingDirectory.ensure).toHaveBeenCalledOnce()
+    } finally {
+      release.resolve(undefined)
+      await creating
+    }
+  })
+
+  it('uses recovered directory values for new creation and leaves environment reads unvalidated', async () => {
+    const { controller, agent, subprocess, workingDirectory } = fixture()
+    workingDirectory.get.mockReturnValue('/missing')
+    workingDirectory.ensure.mockResolvedValue('/workspace/recovered')
+    expect(controller.environment(agent, signal()).cwd).toBe('/missing')
+    expect(workingDirectory.ensure).not.toHaveBeenCalled()
+
+    const created = await controller.create(agent, request, signal())
+
+    expect(created.cwd).toBe('/workspace/recovered')
+    expect(workingDirectory.ensure).toHaveBeenCalledWith(agent, expect.any(AbortSignal))
+    expect(subprocess.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/workspace/recovered' }))
+    workingDirectory.ensure.mockRejectedValue(new Error('original directory is unavailable'))
+    expect(controller.environment(agent, signal()).cwd).toBe('/missing')
+    expect(await controller.create(agent, request, signal())).toBe(created)
+    await expect(controller.create(agent, { ...request, id: 'unavailable' as WebTerminalId }, signal()))
+      .rejects.toThrow('original directory is unavailable')
+    expect(subprocess.spawnTerminal).toHaveBeenCalledOnce()
   })
 
   it('deduplicates concurrent creates, scopes access by Session, and preserves terminals when a stream aborts', async () => {
@@ -299,13 +373,15 @@ describe('TerminalController', () => {
     expect(subprocess.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/another-workspace' }))
   })
 
-  it.each(['subprocess', 'sandboxPolicy'] as const)('fails clearly when the Session lacks %s', (missing) => {
-    const { controller, subprocess, sandboxPolicy } = fixture()
+  it.each(['subprocess', 'sandboxPolicy', 'workingDirectory'] as const)('fails clearly when the Session lacks %s', (missing) => {
+    const { controller, subprocess, sandboxPolicy, workingDirectory } = fixture()
     const isolated = new Context()
     roots.push(isolated)
     if (missing !== 'subprocess') isolated.provide('subprocess', subprocess as never)
     if (missing !== 'sandboxPolicy') isolated.provide('sandboxPolicy', sandboxPolicy as never)
-    expect(() => controller.environment(owner(isolated), signal())).toThrow('requires subprocess and sandbox policy providers')
+    if (missing !== 'workingDirectory') isolated.provide('workingDirectory', workingDirectory as never)
+    expect(() => controller.environment(owner(isolated), signal())).toThrow(missing === 'workingDirectory'
+      ? 'requires a working-directory provider' : 'requires subprocess and sandbox policy providers')
   })
 
   it('allows Agent sandbox-mode changes while retaining the same user terminal', async () => {

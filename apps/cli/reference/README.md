@@ -4,6 +4,8 @@ English | [中文](README.zh.md)
 
 This reference defines the profile, plugin-management, and config-dump command modes. Argv is parsed once through [`src/args.ts`](../src/args.ts), and [`src/bin.ts`](../src/bin.ts) dynamically imports only the selected runner.
 
+The [generated command help](../../../docs/cli-help.md) contains complete launcher, plugin-management, and shipped-profile help. Run `pnpm run gen-cli-help` to refresh it; `pnpm run verify-cli-help` checks it against the current CLI.
+
 ## Profile boot
 
 `dsh <name>` abbreviates `dsh --profile <name>` and boots the profile at `$DSH_HOME/profiles/<name>`. The shorthand name must immediately follow `dsh`; `plugin` remains the plugin-management command, so boot a profile with that name using `dsh --profile plugin`. The effective tree is composed over an empty root by applying, in order: each bundle patch named in the profile manifest's `dsh.profile.bundles` list, the profile's own `cordis.patch.yml`, the home-level `$DSH_HOME/cordis.patch.yml` (machine-local preferences shared by every profile, so it outranks the per-profile layer), and each `--patch <path>` overlay in argv order. Later layers win per row; a patch replaces the targeted row's complete `config` value rather than deep-merging keys, and may insert new rows. The final YAML composition controls whether `dsh-hmr` watches configuration; without HMR, changes require restart. A parse, schema, resolution, or plugin boot failure is reported and exits nonzero. SIGINT and SIGTERM dispose the mounted root before exit.
@@ -33,7 +35,7 @@ The shipped apps own these command lines:
 
 | Profile | Arguments |
 |---|---|
-| `web` | `--host`, `--port`, `--public-url`, repeatable `--trusted-host`, `--no-open` |
+| `web` | `--host`, `--port`, `--tls-cert`, `--tls-key`, `--public-url`, repeatable `--trusted-host`, `--no-open` |
 | `headless` | the task text, as the positional argument |
 | `sdk` | no options; stdio carries the JSON-RPC protocol |
 | `sdk-minimal` | no options; stdio carries the same JSON-RPC protocol |
@@ -80,6 +82,8 @@ New directories and files request modes `0700` and `0600` on POSIX. The CLI prin
 
 `dsh plugin --profile <name> <args...>` initializes the profile when missing (shipped template, or `@deepseek-ai/dsh-base` alone for other names), then forwards `<args...>` to `pnpm` with the profile directory as working directory — `add`, `remove`, `why`, `update`, and every other pnpm verb work unchanged; pnpm must be on PATH. Relative path specs (`.`, `../plugin`, and their `file:`/`link:` forms) are anchored to the invoking directory first, so `add .` from a plugin checkout installs that checkout, not the profile. After every successful run, `dsh.profile.bundles` is reconciled against the installed state: each dependency resolving to a package whose manifest declares `"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }` joins the layer stack (so an `update` that gains the declaration activates it), a bundle-less dependency stays plain with a one-time warning, and a removed dependency leaves the stack.
 
+`dsh plugin` reads `--profile` only before the forwarded arguments, which start at the first token it does not recognize, so `--profile <name>` comes first. When the forwarded arguments begin with the pnpm command, everything after that command reaches pnpm verbatim, including `-h` and `--help`. When they begin with a pnpm option such as `--filter <selector>` or `-r`, a later `-h` or `--help` still prints the forwarder's help instead of pnpm's, so put the pnpm command before them to reach pnpm's help. `-h` or `--help` before any forwarded argument prints the forwarder's own help and exits 0.
+
 The Codex and Claude Code subagent providers are separate optional Bundles. Add either package, both in one command, or remove either package independently:
 
 ```sh
@@ -102,19 +106,23 @@ Git-hosted plugins that ship sources build during install through their `prepare
 
 ## Web profile
 
-`dsh web` uses the profile shorthand. Launcher flags are parsed first; the remaining flags belong to the web app, whose ordinary bundle provider parses them. `--host` and `--port` override the composed values of the rows that carry them, repeatable `--trusted-host` contributes invocation authorities through `ctx.webRuntime.trustedHosts` (a deployment expression concatenates its own authorities), and `--no-open` disables the default-browser handoff for this invocation. The client-plugin HMR receiver is always mounted and stays idle until `pnpm run dev:web` rebuilds client bundles; that command builds once, starts this same launcher, and keeps client bundles rebuilt, or with `--no-serve` runs only the watchers beside a `dsh web` started elsewhere.
+`dsh web` uses the profile shorthand. Launcher flags are parsed first; the remaining flags belong to the web app, whose ordinary bundle provider parses them. `--host` and `--port` override the composed listener values, and `--tls-cert`/`--tls-key` set the listener's `tls` pair. The host must name one concrete local address, not a wildcard (`--host 0.0.0.0` exits with a usage error); `hostname -i` may list several, so pass one. Repeatable `--trusted-host` values are collected in `ctx.webStartup.trustedHosts`; a deployment expression may add its own authorities. `--no-open` disables the default-browser handoff for this invocation. The client-plugin HMR receiver is always mounted and stays idle until `pnpm run dev:web` rebuilds client bundles; that command builds once, starts this same launcher, and keeps client bundles rebuilt, or with `--no-serve` runs only the watchers beside a `dsh web` started elsewhere.
 
-`--public-url <url>` advertises one HTTP(S) application root — with an optional forwarding prefix — in place of the listener's loopback URL. It grants no trust, so the browser-visible authority still has to be named with `--trusted-host`; [Publish the Web UI behind a reverse proxy](../../../docs/user/guide/public-deployments.md) lists what the proxy in front must provide.
+`--public-url <url>` advertises one HTTP(S) application root — with an optional forwarding prefix — in place of the listener's bind-address URL (loopback for a loopback bind). It grants no trust, so the browser-visible authority still has to be named with `--trusted-host`; [Publish the Web UI behind a reverse proxy](../../../docs/user/guide/public-deployments.md) lists what the proxy in front must provide.
+
+`--tls-cert <file>` and `--tls-key <file>` make the listener serve HTTPS in place of plain HTTP. They are one setting: both or neither, and each names a file resolved against the process working directory. The certificate file holds the full chain, including intermediates; the key file holds an unencrypted PEM private key. A missing, unreadable, empty, or invalid pair fails startup, which never falls back to HTTP, and a replacement pair takes effect only after a listener reload or a process restart because the carrier reads the files once and nothing obtains, renews, or watches certificates. HTTPS also grants no trust: the browser must trust the certificate and open an authority its names cover, Connection still authenticates each request and checks Host/Origin, and the session cookie is `Secure` because the receiving listener serves HTTPS. The default port stays 3080, and `--public-url` remains an independent advertisement.
 
 ```sh
 dsh web
+dsh web --host "$(hostname -i | awk '{print $1}')" --public-url https://app.example/ --trusted-host app.example
+dsh web --tls-cert ./server-chain.pem --tls-key ./server-key.pem
 dsh web --no-open
 dsh web --patch ./extra.cordis.yml
 dsh web --dump-config
 dsh web --help
 ```
 
-The production Web runner needs built package and frontend artifacts (`pnpm run build`). It serves `http://127.0.0.1:3080` by default and, for a local launch, opens that canonical host URL — the advertised root when `--public-url` names one — only after the complete Loader tree settles. A non-empty inherited `SSH_CONNECTION` or `SSH_TTY` suppresses the browser handoff because the SSH client or editor owns the local forwarded address; the host URL is still printed. The CLI intentionally does not support `--host 0.0.0.0` and exits with a usage error. Immediately before a local handoff it prints `dsh web: opening the default browser; pass --no-open to disable`; if the operating-system handoff fails, a diagnostic on stderr states the reason, leaves the server running, and names the URL for manual use. `--trusted-host` adds named authorities accepted by the `/api` browser-trust fence.
+The production Web runner needs built package and frontend artifacts (`pnpm run build`). It prints the advertised `--public-url` when configured, otherwise the listener's bind-address URL with the listener's scheme (default `http://127.0.0.1:3080`, or `https://` when TLS is configured). The Host/Origin fence accepts the bind IP directly; a proxy or DNS authority still needs `--trusted-host`. The startup line and default-browser handoff wait for the complete Loader tree. A non-empty inherited `SSH_CONNECTION` or `SSH_TTY` suppresses browser opening, not the startup line. Immediately before a browser handoff it prints `dsh web: opening the default browser; pass --no-open to disable`; if the operating-system handoff fails, stderr names the reason and points to the startup URL while the server keeps running.
 
 Process shutdown gives the plugin tree up to five seconds to dispose. The first `SIGINT`/`SIGTERM` starts that graceful drain — `SIGTERM` is a supervisor's ordinary stop request and exits 0 on every surface, `SIGINT` reports 130; a second signal forces immediate exit. If one-shot normal completion is already stuck in disposal, the first `Ctrl+C` is the escalation and exits immediately instead of being swallowed.
 
@@ -122,7 +130,7 @@ The base-backed modes treat the invoking directory as the default workspace root
 
 New sessions in base-backed profiles default to the `workspace-write` permission preset. Bash and filesystem mutations are restricted to the session workspace and platform temporary roots; reads and network access are not confined, while process visibility depends on the selected sandbox backend — bwrap runs commands in a private PID namespace that hides host processes, and Landlock and Seatbelt leave host process visibility unchanged. `DSH_PERMISSION_MODE` changes the process fallback. Stored General-settings permissions affect later Web sessions, not an already-open one. The standalone `sdk-minimal` tree instead pins `danger-full-access` and mounts no approval or permission-settings service.
 
-`DSH_TOOLS_MODE` selects `native`, `ptc`, or `both` for the process; another value fails at boot. The shipped `minimal` agent preset keeps that deployment presentation, fixes the complete system prompt to `You are a helpful software engineer assistant.`, and composes only the platform-selected persistent shell. Select 极简模式 when creating a Web session; every other prompt section and model-facing plugin remains absent from that agent while the shared browser, workspace, persistence, sandbox, and permission host stays in place.
+`DSH_TOOLS_MODE` selects `native` or `ptc` for the process; another value fails at boot. The shipped `minimal` agent preset keeps that deployment presentation, fixes the complete system prompt to `You are a helpful software engineer assistant.`, and composes only the platform-selected persistent shell. Select 极简模式 when creating a Web session; every other prompt section and model-facing plugin remains absent from that agent while the shared browser, workspace, persistence, sandbox, and permission host stays in place.
 
 ## Shared deployment behavior
 

@@ -46,7 +46,7 @@ await runtime.dispose()
 
 The optional render options select a keyed entry with `entryKey` or a list item with `only`; `view.update(owner)` retains that selection. `runtime.panelInfo` supplies the default `usePanelInfo` source with no global panel selected. Release it with `releasePanelInfoSource()` before mounting the production Layout owner. `dispose()` releases both default Workspace and panel-info root sources; early release is idempotent and does not remove replacement owners.
 
-The Session fixture resolves subagent addresses from explicitly supplied addresses or loaded parent projections without retaining a Session generation.
+The Session fixture resolves subagent addresses from explicitly supplied addresses or loaded parent projections without retaining a Session generation. External catalog entries have no local browsing address.
 
 ### Local DOM snapshots
 

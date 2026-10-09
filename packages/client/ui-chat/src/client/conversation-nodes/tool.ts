@@ -125,6 +125,7 @@ interface DispatchData {
   readonly isError?: boolean
   readonly error?: { name: string; code: string; reason?: string }
   readonly content?: ToolResultNode['content']
+  readonly meta?: ToolResultNode['meta']
 }
 
 function childCall(match: ConversationMatch, data: DispatchData): StartedToolCall {
@@ -154,6 +155,7 @@ function childResult(match: ConversationMatch, data: DispatchData, previous?: To
     call: { name: data.name, argsRaw: jsonArguments(data.arguments) },
     callTime: previous?.time ?? null,
     content: data.content ?? [],
+    meta: data.meta,
     isError: data.isError === true,
     ...data.error === undefined ? {} : { error: data.error },
     subCalls: [],

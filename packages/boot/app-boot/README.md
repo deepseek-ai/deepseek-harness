@@ -40,7 +40,7 @@ installFailLoud('dsh')
 const ctx = await boot('dsh', resolveConfigPath(argv[2], process.env.DSH_SNAPSHOT))
 ```
 
-`installFailLoud` writes one labelled `util.inspect` diagnostic to stderr for an unhandled rejection or an uncaught exception, awaits the surface's release hook under a fixed timeout, and exits 1; control never returns to the failed operation, because only the throw site knows which state is intact, and the event loop runs only until the release settles or times out. With that entry point, startup keeps every plugin that can activate. An enabled failed plugin produces a labelled warning. A failed required entry makes startup dispose the whole app and exit nonzero; required ids absent from a profile and disabled required entries do not affect startup. The global required list covers shared Agent execution, application endpoints, and Web bootstrap/transport: `agent-loop`, `webserver`, `modules`, `connection`, `headless-runner`, `acp`, and `sdk-jsonrpc-server`.
+`installFailLoud` writes one labelled `util.inspect` diagnostic to stderr for an unhandled rejection or an uncaught exception, awaits the surface's release hook under a fixed timeout, and exits 1; control never returns to the failed operation, because only the throw site knows which state is intact, and the event loop runs only until the release settles or times out. With that entry point, startup keeps every plugin that can activate. An enabled failed plugin produces a labelled warning. A failed required entry makes startup dispose the whole app and exit nonzero; required ids absent from a profile and disabled required entries do not affect startup. The global required list covers shared Agent execution, application endpoints, and Web bootstrap/transport: `agent-loop`, `webserver`, `web-runtime`, `modules`, `connection`, `headless-runner`, `acp`, and `sdk-jsonrpc-server`.
 
 <a id="profiles"></a>
 ### Profiles
@@ -82,7 +82,11 @@ The projector preserves native omission behavior by checking literal defaults ag
 
 ### Reading plugin display metadata
 
+`resolvePluginResource(specifier, parentURL)` resolves a plugin module or exported resource to its local filesystem path through the active Node ESM resolver without evaluating it. It throws when the resolver is unavailable or the resource cannot resolve to a local file.
+
 Use `readPluginMeta(specifier, parentURL)` or `ctx.pluginPackages.metaOf(specifier, parentURL)` to read installed package display text without importing or activating the plugin. Lookup uses the complete package specifier and the caller's resolution base, respecting Node exports. File paths and file URLs return no metadata without resolving resources. For a package-root specifier, missing locale fields fall back to the accessible `package.json`; a subpath specifier never reads a `package.json`. Malformed metadata returns an `error` diagnostic. Results retain translations for Client-side language selection. The reader also loads an image data URL, even when locale text is complete: a package root uses its manifest `icon`, or `<package>/icon` when that field is omitted; a subpath uses `<specifier>/icon`. An icon error preserves valid text alongside the diagnostic. See [Plugin display metadata](../../../docs/cookbook/adding-a-package.md#plugin-display-metadata) for the author format.
+
+`ON_DEMAND_BUNDLES` names the public Official packages installed only on request. `OFFICIAL_ON_DEMAND_CATALOG` embeds their package-owned localized metadata and icons for offline discovery; `pnpm gen-official-bundle-catalog` explicitly updates generated content, and `verify-official-bundle-catalog` checks resource completeness and freshness; builds consume the committed catalog without importing provider code. The catalog contains no install target: [Plugin Manager](../plugin-manager/README.md#use-this-package) derives it from the running version and installation and uses the ordinary bundle installer. The [product-use check](../../../scripts/verify-product-use.ts) composes shipped and on-demand selections against Web without executing providers.
 
 <a id="startup-and-reload-failures"></a>
 ### Startup and reload failures

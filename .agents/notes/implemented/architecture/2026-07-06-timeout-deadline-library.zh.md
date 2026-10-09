@@ -101,7 +101,7 @@ export function timeoutOf(x: AbortSignal | { reason?: unknown }, code?: string):
 - `SpawnSpec.timeoutMs` 和 `SpawnOutcome.timedOut`/`aborted` 被移除，而非作为始终为零/始终为 false 的残余保留：由于 `runBash` 不再拥有定时器且执行器负责分类，这些字段无处被读取。一个始终为 0 且无处读取的字段在逐文件覆盖率门禁下属于死代码。
 - web_fetch 去除了其定制的 controller/timer/listener/reason-recovery；分类器现在基于 deadline 信号（`timeoutOf` + `aborted`）而非抛出错误的形状来判断，这在请求阶段的 reject-with-reason 和读取阶段的裸 `AbortError` 两种情况下都是健壮的。
 - `AbortSignal.any` 和 `using`/`Symbol.dispose` 在此首次进入本仓库（Node ≥ 24 基线，已满足）。
-- 模型流现在共享一个可重启的定时器约定，不会把滑动的空闲间隔变成总调用截止时间，也不会计入消费方思考时间。能够观察到带外传输活动的适配器可以对尚未结算的 demand 调用 `pulse()`；被屏蔽的活动对 watchdog 仍不可见。该原语仍然只做通知；适配器测试证明其传输观察到稳定信号并终止。
+- 模型流现在共享一个可重启的定时器约定，不会把滑动的空闲间隔变成总调用截止时间，也不会计入消费方思考时间。能够观察到带外传输活动的适配器可以对尚未结算的 demand 调用 `pulse()`；被屏蔽的活动对 watchdog 仍不可见。一次性的 `deadline()` 仍然只做通知；适配器测试证明其传输观察到可重启 watchdog 的稳定信号并终止。此外，watchdog 会在空闲间隔走完时结算它所驱动的那个 demand：否则丢弃已中止读取错误的传输层会让调用方一直等到间隔之外。
 
 以下内容不在本次范围内，列出以标明边界：`web_search` 可以在其工具 schema 和快照覆盖规划完成后获得可选的面向模型的 `timeout_ms`；基于 ripgrep 的文件系统发现工具（[打包的 ripgrep 搜索](../../archived/architecture/2026-08-01-packaged-ripgrep-search.md)）通过 `dsh-tool-call-timeout-policy` 和 `exec.signal` 消费同样的提供方自有 deadline 形状；`tools/execute` waterfall（瀑布式事件）中间件可以通过驱动 `exec.signal` 为每次工具调用设置默认 deadline——那将是一个*消费*本库的插件，仍然只做通知，硬终止仍是各能力自己的事。
 
@@ -111,6 +111,6 @@ export function timeoutOf(x: AbortSignal | { reason?: unknown }, code?: string):
 
 **每个工具各自实现超时，不共享代码（先前的现状，也是 Claude Code 的选择）。** 否决，因为它已经在产生分化和重复的正确性负担：web_fetch 手写了与未来网络/进程类工具各自需要重新推导的完全相同的 controller/reason 逻辑，而融合 + `signal.reason` 恢复正是容易出错的部分。Claude Code 容忍完全重复；本仓库有一个统一的共享 abort 通道（每次 `execute` 上的 `exec.signal`），使得采用一个小型共享原语明显更简洁，因此成本/收益不同。
 
-**用 `withTimeout(promise, ms)` 包装器代替信号工厂。** 否决，因为让 promise 与定时器竞争只是在截止时间到达时 resolve *工具调用*的 promise，而不会停止底层工作——子进程或 fetch socket 会泄漏。分发信号并要求能力监听，才能强制一条真实的终止路径存在。这与「dispose 必须达到完全停稳，而非仅仅请求它」的防御性规则一致。
+**用 `withTimeout(promise, ms)` 包装器代替信号工厂。** 否决，因为让 promise 与定时器竞争只是在截止时间到达时 resolve *工具调用*的 promise，而不会停止底层工作——子进程或 fetch socket 会泄漏。分发信号并要求能力监听，才能强制一条真实的终止路径存在。这与「dispose 必须达到完全停稳，而非仅仅请求它」的防御性规则一致。`idleWatchdog` 是有意保留的例外，且仅针对它所驱动的单个迭代器 demand：交给传输层的信号仍负责释放该读取（中止会销毁 socket），而当传输层永不结算时由截止时间结束该 demand。
 
 **保留 bash 独立的超时和取消触发器。** 否决，因为一个 deadline 信号移除了定制定时器并标准化了分类。发生竞争时，报告先到达的那个 abort 作为原因，由提供方管理的终止路径不受哪个原因先胜出的影响。

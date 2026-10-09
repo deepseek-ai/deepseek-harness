@@ -19,7 +19,7 @@ afterEach(async () => {
 
 async function harness(): Promise<Context> {
   const built = new Context()
-  await mountAgentLoopTestDependencies(built)
+  await mountAgentLoopTestDependencies(built, { workingDirectory: true })
   await mountPtcRuntime(built)
   await built.plugin(AgentLoop, { agents: [] })
   await built.plugin(LlmDeepSeek)

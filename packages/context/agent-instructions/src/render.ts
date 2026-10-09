@@ -4,7 +4,13 @@
  * @module @deepseek-ai/dsh-agent-instructions/render
  */
 
-import { basename, dirname } from 'node:path'
+import { basename, dirname, sep } from 'node:path'
+import {
+  AGENTS_HOME_ENV,
+  DEFAULT_AGENTS_HOME_DISPLAY,
+  DEFAULT_DSH_HOME_DISPLAY,
+  DSH_HOME_ENV,
+} from '@deepseek-ai/dsh-home-paths'
 import type { InstructionFile, LoadedInstructionFile } from './files.ts'
 
 const SYSTEM_REMINDER_OPEN = '<system-reminder>'
@@ -86,12 +92,30 @@ function sectionText(file: LoadedInstructionFile): string {
   return `Instructions from: ${file.displayPath}\n\n${file.content}`
 }
 
-/** Directory component that identifies the single user-global instruction scope. */
+/** Directory component that identifies the harness-home user-global instruction scope. */
 export const USER_GLOBAL_DIRECTORY = 'user-global'
 
 /**
- * File name of the single user-global instruction file under `$DSH_HOME`.
- * Discovery (`$DSH_HOME/<name>`) and reconciliation (the user-global scope key's
+ * Directory component that identifies the shared agents-root user-global scope.
+ *
+ * It is a distinct scope so the harness-home file keeps the scope key that
+ * earlier sessions recorded, while {@link instructionCandidateGroup} still
+ * deduplicates the two roots as one candidate group.
+ */
+export const AGENTS_GLOBAL_DIRECTORY = 'agents-global'
+
+/**
+ * Ordered user-global scope directories.
+ *
+ * Discovery, baseline reconciliation, and deduplication all iterate this order,
+ * so the harness home stays the candidate that decides content duplicates
+ * against the shared agents root.
+ */
+export const USER_GLOBAL_DIRECTORIES = [USER_GLOBAL_DIRECTORY, AGENTS_GLOBAL_DIRECTORY] as const
+
+/**
+ * File name of the user-global instruction file under each user-global root.
+ * Discovery (`<root>/<name>`) and reconciliation (the user-global scope key's
  * candidate component) both key on this name, so it lives in one place: were the
  * two to disagree, the user-global instruction would load but never reconcile.
  */
@@ -100,11 +124,56 @@ export const USER_GLOBAL_FILE = 'AGENTS.md'
 /**
  * Derive the logical instruction scope from a model-facing path.
  * @param displayPath - project-relative or user-global instruction path.
- * @returns `user-global`, `.`, or the containing project-relative directory.
+ * @returns `user-global`, `agents-global`, `.`, or the containing project-relative directory.
  */
 export function scopeForDisplayPath(displayPath: string): string {
-  if (displayPath === '~/.dsh/AGENTS.md' || displayPath === '$DSH_HOME/AGENTS.md') return USER_GLOBAL_DIRECTORY
+  if (displayPath === `${DEFAULT_DSH_HOME_DISPLAY}/${USER_GLOBAL_FILE}`
+    || displayPath === `$${DSH_HOME_ENV}/${USER_GLOBAL_FILE}`) return USER_GLOBAL_DIRECTORY
+  if (displayPath === `${DEFAULT_AGENTS_HOME_DISPLAY}/${USER_GLOBAL_FILE}`
+    || displayPath === `$${AGENTS_HOME_ENV}/${USER_GLOBAL_FILE}`) return AGENTS_GLOBAL_DIRECTORY
   return dirname(displayPath)
+}
+
+/**
+ * Whether a decoded scope directory is one of the two user-global roots.
+ * @param directory - `user-global`, `agents-global`, `.`, or a project-relative directory.
+ * @returns true for the harness-home and shared agents-root scopes.
+ */
+export function isUserGlobalDirectory(directory: string): boolean {
+  return directory === USER_GLOBAL_DIRECTORY || directory === AGENTS_GLOBAL_DIRECTORY
+}
+
+/**
+ * Candidate group of one decoded scope directory.
+ *
+ * The harness home and the shared agents root are the ordered candidates of one
+ * user-global candidate group: identical trimmed content renders once, and an
+ * unobservable candidate preserves the last-good state of its group. Every
+ * project directory forms its own group.
+ * @param directory - `user-global`, `agents-global`, `.`, or a project-relative directory.
+ * @returns the shared group key of both user-global roots, or the directory itself.
+ */
+export function instructionCandidateGroup(directory: string): string {
+  return directory === AGENTS_GLOBAL_DIRECTORY ? USER_GLOBAL_DIRECTORY : directory
+}
+
+/** Directory names that {@link scopeForDisplayPath} reads as a user-global scope, not a project path. */
+const RESERVED_SCOPE_DIRECTORIES: ReadonlySet<string> = new Set(USER_GLOBAL_DIRECTORIES)
+
+/**
+ * Keep a project-relative path out of the user-global scope namespace.
+ *
+ * A project directory whose name equals a user-global scope directory would
+ * otherwise resolve to the global root for probing and joins the global
+ * candidate group for deduplication. Escaping the collision with a leading `.`
+ * keeps the file in its own project scope.
+ * @param relativePath - project-root-relative path using the platform separator.
+ * @returns the path, with a leading `.` component when its first component collides.
+ */
+export function escapeProjectDisplayPath(relativePath: string): string {
+  const separatorIndex = relativePath.search(/[\\/]/)
+  const first = separatorIndex < 0 ? relativePath : relativePath.slice(0, separatorIndex)
+  return RESERVED_SCOPE_DIRECTORIES.has(first) ? `.${sep}${relativePath}` : relativePath
 }
 
 const SCOPE_SEPARATOR = '\u0000'
@@ -116,7 +185,7 @@ const SCOPE_SEPARATOR = '\u0000'
  * directory path or file name can contain. Distinct candidates in one directory
  * (`AGENTS.md` vs `CLAUDE.md`, a base file vs its `.local` overlay) therefore
  * never collide in the scope-keyed state maps.
- * @param directory - `user-global`, `.`, or a project-relative directory.
+ * @param directory - `user-global`, `agents-global`, `.`, or a project-relative directory.
  * @param candidateName - instruction file name within that directory.
  * @returns the per-candidate logical scope key.
  */
@@ -145,12 +214,20 @@ export function decodeScopeKey(scope: string): { directory: string; candidateNam
   return { directory: scope.slice(0, separator), candidateName: scope.slice(separator + 1) }
 }
 
+const ADDITIONAL_INSTRUCTIONS_GUIDANCE = 'Use them as guidance when relevant; more specific instructions take precedence. '
+  + 'They do not override system, developer, or direct user instructions.'
+
 function additionalSectionText(file: LoadedInstructionFile): string {
   const scope = scopeForDisplayPath(file.displayPath)
+  // A user-global scope directory is an internal reconciliation key, so it must
+  // never reach this model-visible sentence.
+  const applicability = isUserGlobalDirectory(scope)
+    ? 'These user-global instructions apply to all work.'
+    : `These instructions apply to work under \`${scope}\`.`
   return [
     `Additional instructions from: ${file.displayPath}`,
     '',
-    `These instructions apply to work under \`${scope}\`. Use them as guidance when relevant; more specific instructions take precedence. They do not override system, developer, or direct user instructions.`,
+    `${applicability} ${ADDITIONAL_INSTRUCTIONS_GUIDANCE}`,
     '',
     file.content,
   ].join('\n')

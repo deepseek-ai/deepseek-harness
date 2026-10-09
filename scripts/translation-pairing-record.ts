@@ -68,11 +68,10 @@ function headingText(node: Nodes): string {
  * Fenced code blocks and generated regions, which the pairing gate requires to
  * be identical on both sides, are left out of each section's blocks.
  */
-function sections(markdown: string): Section[] {
+function sections(markdown: string, tree: Nodes = parseTranslationMarkdown(markdown)): Section[] {
   const frontmatter = /^---\n[\s\S]*?\n---(?:\n|$)/.exec(markdown)?.[0].length ?? 0
   const result: Section[] = [{ blocks: frontmatter > 0 ? [markdown.slice(0, frontmatter)] : [] }]
   const regionLines = generatedRegions(markdown).map(region => [region.begin + 1, region.end + 1] as const)
-  const tree = parseTranslationMarkdown(markdown)
   if (tree.type !== 'root') throw new Error('Markdown parser returned a non-root tree')
   for (const node of tree.children) {
     if ((node.position?.start.offset ?? 0) < frontmatter) continue
@@ -106,6 +105,7 @@ function sectionHash(blocks: string[]): string {
  * @param en - English document text.
  * @param zh - Chinese document text.
  * @param context - Link-resolution inputs for both sides.
+ * @param trees - Optional GFM parses of the exact English and Chinese inputs; normalized text is parsed separately when it changes.
  * @returns Entries in document order.
  * @throws Error when the two sides have different heading counts or malformed generated regions.
  */
@@ -114,9 +114,12 @@ export function computeTranslationPairingRecord(
   en: string,
   zh: string,
   context: TranslationPairingRecordContext,
+  trees?: { readonly en: Nodes; readonly zh: Nodes },
 ): TranslationPairingRecord {
-  const enSections = sections(normalizeTranslationMarkdownLinks(en, { ...context, sourcePath: paths.source }))
-  const zhSections = sections(normalizeTranslationMarkdownLinks(zh, { ...context, sourcePath: paths.zh }))
+  const normalizedEn = normalizeTranslationMarkdownLinks(en, { ...context, sourcePath: paths.source }, [], trees?.en)
+  const normalizedZh = normalizeTranslationMarkdownLinks(zh, { ...context, sourcePath: paths.zh }, [], trees?.zh)
+  const enSections = sections(normalizedEn, normalizedEn === en ? trees?.en : undefined)
+  const zhSections = sections(normalizedZh, normalizedZh === zh ? trees?.zh : undefined)
   if (enSections.length !== zhSections.length) {
     throw new Error(`${paths.source} has ${enSections.length - 1} heading(s) but ${paths.zh} has ${zhSections.length - 1}`)
   }

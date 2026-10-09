@@ -238,7 +238,10 @@ describe('DeepSeekAdapter against a mock server', () => {
       prepareExtensions: () => Promise.reject(new Error('metadata unavailable')),
     })
     await expect(drain(failed.stream({ provider: 'deepseek-official', model: 'm', messages: [] })))
-      .rejects.toMatchObject({ code: 'REQUEST_EXTENSION' })
+      .rejects.toMatchObject({
+        code: 'REQUEST_EXTENSION',
+        message: 'DeepSeek request extension preparation failed: metadata unavailable',
+      })
 
     const collision = new DeepSeekAdapter({
       ...base,
@@ -333,10 +336,11 @@ describe('DeepSeekAdapter against a mock server', () => {
     expect(accept).toHaveBeenCalledOnce()
   })
 
-  it('reports a post-2xx extension acceptance failure without relabelling it as transport', async () => {
-    const server = await mockServer([{ kind: 'sse', events: textEvents }])
+  it('reports a post-2xx extension acceptance failure and continues the stream', async () => {
+    const server = await mockServer([{ kind: 'sse', events: textEvents }, { kind: 'sse', events: textEvents }])
     const failure = new Error('watermark append failed')
-    const adapter = new DeepSeekAdapter({
+    const unaccepted = vi.fn()
+    const base = {
       options: () => resolveAdapterOptions({ baseURL: server.url }),
       resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'k' } }),
       resolveUserId: () => TEST_USER_ID,
@@ -344,11 +348,13 @@ describe('DeepSeekAdapter against a mock server', () => {
         fields: { dsh_test: 1 },
         accept: () => Promise.reject(failure),
       }) as never,
-    })
+    }
+    const request = { provider: 'deepseek-official', model: 'm', messages: [] }
 
-    await expect(drain(adapter.stream({ provider: 'deepseek-official', model: 'm', messages: [] })))
-      .rejects.toMatchObject({ code: 'REQUEST_EXTENSION', cause: failure })
-    expect(server.requests).toHaveLength(1)
+    await expect(drain(new DeepSeekAdapter({ ...base, onExtensionsUnaccepted: unaccepted }).stream(request))).resolves.toBeUndefined()
+    expect(unaccepted).toHaveBeenCalledWith({ provider: 'deepseek-official', model: 'm', error: failure })
+    await expect(drain(new DeepSeekAdapter(base).stream(request))).resolves.toBeUndefined()
+    expect(server.requests).toHaveLength(2)
   })
 
   it('streams a text generation end to end through the assembler', async () => {
@@ -1788,7 +1794,7 @@ describe('plugin registration and config', () => {
     await ctx.plugin(LlmDeepSeek, { baseURL: 'http://127.0.0.1:1' })
     expect(ctx.llm.listProviders()).toEqual([{ id: 'deepseek-official', name: 'DeepSeek' }])
     await expect(ctx.llm.listModels('deepseek-official')).resolves.toEqual([
-      { provider: 'deepseek-official', id: 'deepseek-flash', name: 'DeepSeek-V41-Flash', inputModalities: ['text', 'image'] },
+      { provider: 'deepseek-official', id: 'deepseek-flash', name: 'DeepSeek-V4.1-Flash', inputModalities: ['text', 'image'] },
       {
         provider: 'deepseek-official',
         id: 'deepseek-v4-pro',
@@ -1801,7 +1807,7 @@ describe('plugin registration and config', () => {
       .resolves.toMatchObject({
         provider: 'deepseek-official',
         id: 'deepseek-flash',
-        name: 'DeepSeek-V41-Flash',
+        name: 'DeepSeek-V4.1-Flash',
         inputModalities: ['text', 'image'],
         systemPromptUpdate: 'in-history',
         context: { contextWindow: 1_000_000 },
@@ -1916,7 +1922,7 @@ describe('plugin registration and config', () => {
     await ctx.plugin(LlmRuntime)
     LlmDeepSeek.apply(ctx, LlmDeepSeek.Config({ baseURL: 'http://127.0.0.1:1' }))
     await expect(ctx.llm.listModels('deepseek-official')).resolves.toEqual([
-      { provider: 'deepseek-official', id: 'deepseek-flash', name: 'DeepSeek-V41-Flash', inputModalities: ['text', 'image'] },
+      { provider: 'deepseek-official', id: 'deepseek-flash', name: 'DeepSeek-V4.1-Flash', inputModalities: ['text', 'image'] },
       {
         provider: 'deepseek-official',
         id: 'deepseek-v4-pro',
@@ -2308,7 +2314,7 @@ describe('plugin registration and config', () => {
     const adapter = adapterOf()
     expect(adapter).toBeInstanceOf(DeepSeekAdapter)
     await expect(adapter.listModels('deepseek-official')).resolves.toEqual([])
-    await expect(adapter.resolveModel('deepseek-official', 'deepseek-flash')).resolves.toMatchObject({ name: 'DeepSeek-V41-Flash' })
+    await expect(adapter.resolveModel('deepseek-official', 'deepseek-flash')).resolves.toMatchObject({ name: 'DeepSeek-V4.1-Flash' })
   })
 
   it('resolves connection facts and the credential exactly once per stream call', async () => {

@@ -7,7 +7,7 @@ const [root, mode] = process.argv.slice(2)
 const record = (event, values = {}) => appendFileSync(join(root, 'events.ndjson'), JSON.stringify({ event, pid: process.pid, ...values }) + '\n')
 const reply = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n')
 let counter = 0
-record('start')
+record('start', { cwd: process.cwd() })
 process.once('exit', () => record('exit'))
 const lines = createInterface({ input: process.stdin })
 lines.once('close', () => process.exit(0))
@@ -47,7 +47,7 @@ lines.on('line', line => {
       ] })
       break
     case 'tools/call':
-      record('call', { name: request.params.name })
+      record('call', { name: request.params.name, cwd: process.cwd() })
       if (request.params.name === 'disconnect') process.exit(0)
       counter += 1
       reply(request.id, { content: [{ type: 'text', text: `Visit ${counter}: ${request.params.arguments.label}` }], structuredContent: { counter, pid: process.pid } })

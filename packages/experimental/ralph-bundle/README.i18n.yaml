@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/ralph-bundle/README.md
+/:
+  en: 471abb0843949bd8
+  zh: 57662fb79022166e
+/deepseek-ai-dsh-experimental-ralph-bundle:
+  en: d1c47cc0dd1ea81c
+  zh: a0ff6438eb9ccbf4
+/deepseek-ai-dsh-experimental-ralph-bundle/summary:
+  en: 2d0d6090157ea5ec
+  zh: 55c9669c4bf44cb9
+/deepseek-ai-dsh-experimental-ralph-bundle/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 988e839059414d27
+/deepseek-ai-dsh-experimental-ralph-bundle/use-this-package:
+  en: bb91c59b7a474054
+  zh: 2ae97c4106a71c74
+/deepseek-ai-dsh-experimental-ralph-bundle/understand-the-implementation:
+  en: c796a041544eabd2
+  zh: 25e5d4f4965e3f30
+/deepseek-ai-dsh-experimental-ralph-bundle/further-exploration:
+  en: 38086d7ddaa3088a
+  zh: e23269ca4c88c496
+/deepseek-ai-dsh-experimental-ralph-bundle/model-experience:
+  en: bad19e0e842cc0f2
+  zh: 0b14cdf238f6777e
+/deepseek-ai-dsh-experimental-ralph-bundle/model-experience/kv-cache-effect:
+  en: 25f20eda0e696067
+  zh: 378c4a15a5704ba0
+/deepseek-ai-dsh-experimental-ralph-bundle/known-limitations-and-deferred-work:
+  en: 39918e19422a80c1
+  zh: 71346d112bdea43f
+/deepseek-ai-dsh-experimental-ralph-bundle/known-limitations-and-deferred-work/dev-note:
+  en: 279d01435256cd2a
+  zh: 83780964e5de2f54

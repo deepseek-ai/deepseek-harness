@@ -14,7 +14,7 @@ function field(source: Record<string, unknown>, key: string): string {
 }
 
 /**
- * Describe a waking message using its source and recognized producer framing.
+ * Describe a waking message using its recorded source.
  * @param node - durable context, including the original notification body.
  * @returns localized title key and source-family icon.
  */

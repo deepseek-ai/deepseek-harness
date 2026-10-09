@@ -67,8 +67,6 @@ function request(messages: GenerateOptions['messages']): GenerateOptions {
   return {
     provider: 'openai',
     model: 'gpt-4.1',
-    system: 'system prompt',
-    tools: [{ name: 'lookup', description: 'look up', parameters: { type: 'object' } }],
     messages,
   }
 }
@@ -91,11 +89,6 @@ describe('pi-ai request context conversion', () => {
     }
   })
 
-  it('rejects deferred tool definitions until provider loading is implemented', () => {
-    expect(() => toPiContext({ ...request([]), tools: [{ name: 'search', description: '', parameters: {}, deferLoading: true }] }))
-      .toThrow(expect.objectContaining({ code: 'UNSUPPORTED_CONTENT' }))
-  })
-
   it('preserves the exact context for request-only input after durable tool history', async () => {
     const prefix = [
       history('assistant', [{ type: 'tool-call', id: ToolCallId('lookup'), name: 'lookup', arguments: '{}' }]),
@@ -114,15 +107,6 @@ describe('pi-ai request context conversion', () => {
     expect(withImage).not.toHaveProperty('source')
   })
 
-  it('rejects developer history before reading image attachments', async () => {
-    const read = vi.fn((value: ImageAttachmentRef) => Promise.resolve(requestImage(value, Uint8Array.of(1))))
-    const message = createDeveloperMessage({ content: [{ type: 'tool-addition', toolName: 'search' }], source: { kind: 'test' } })
-    const failure = { code: 'UNSUPPORTED_CONTENT', message: 'Developer messages are not supported yet' }
-    expect(() => toPiContext(request([message]))).toThrow(expect.objectContaining(failure))
-    await expect(toPiContext(request([message]), imageContext(projectionStore(read)))).rejects.toMatchObject(failure)
-    expect(read).not.toHaveBeenCalled()
-  })
-
   it('omits absent and empty request-level optional fields', () => {
     const base = { provider: 'openai', model: 'gpt-4.1', messages: [] }
     expect(toPiContext(base)).toEqual({ messages: [] })
@@ -137,10 +121,8 @@ describe('pi-ai request context conversion', () => {
       user([{ type: 'text', text: 'after tool' }]),
       createToolResultMessage({ callId, content: [{ type: 'text', text: '' }], isError: false }),
     ]))).toMatchObject({
-      systemPrompt: 'system prompt',
-      tools: [{ name: 'lookup' }],
+      systemPrompt: 'history system',
       messages: [
-        { role: 'user', content: 'history system' },
         { role: 'assistant' },
         { role: 'user', content: 'after tool' },
         {
@@ -487,8 +469,8 @@ describe('pi-ai request context conversion', () => {
       history('assistant', [{ type: 'text', text: 'answer' }]),
       user([{ type: 'text', text: 'plain' }]),
     ]), imageContext(attachments))).resolves.toMatchObject({
+      systemPrompt: 'history system',
       messages: [
-        { role: 'user', content: 'history system' },
         { role: 'assistant' },
         { role: 'user', content: 'plain' },
       ],
@@ -526,47 +508,145 @@ describe('pi-ai system prompt source', () => {
 
   it('maps a leading system message to systemPrompt on both conversion paths', async () => {
     const options: GenerateOptions = { ...base, messages: [leading, question] }
-    const expected = {
-      systemPrompt: 'lead rule',
-      messages: [{ role: 'user', content: 'hi', timestamp: 0 }],
-    }
+    const expected = { systemPrompt: 'lead rule', messages: [
+      { role: 'user', content: 'hi', timestamp: 0 },
+    ] }
     expect(toPiContext(options)).toEqual(expected)
     await expect(toPiContext(options, imageContext(attachments))).resolves.toEqual(expected)
-    const fromOption: GenerateOptions = { ...base, system: 'lead rule', messages: [question] }
-    expect(toPiContext(options)).toEqual(toPiContext(fromOption))
-    expect(await toPiContext(options, imageContext(attachments)))
-      .toEqual(await toPiContext(fromOption, imageContext(attachments)))
+    expect(toPiContext(options)).toEqual(toPiContext({ ...base, system: 'lead rule', messages: [question] }))
   })
 
-  it('sends no systemPrompt for an empty leading system message on both conversion paths', async () => {
+  it('omits an empty initial prompt on both conversion paths', async () => {
     const options: GenerateOptions = { ...base, messages: [history('system', []), question] }
     const expected = { messages: [{ role: 'user', content: 'hi', timestamp: 0 }] }
     expect(toPiContext(options)).toEqual(expected)
     await expect(toPiContext(options, imageContext(attachments))).resolves.toEqual(expected)
   })
 
-  it('folds a non-leading system message into a user message on both conversion paths', async () => {
-    const options: GenerateOptions = { ...base, messages: [question, leading] }
-    const expected = {
-      messages: [
-        { role: 'user', content: 'hi', timestamp: 0 },
-        { role: 'user', content: 'lead rule', timestamp: 0 },
-      ],
-    }
+  it('preserves later system messages for pi-ai to resolve model support', async () => {
+    const options: GenerateOptions = { ...base, system: 'direct', messages: [leading, question,
+      history('system', [{ type: 'text', text: 'additional rule' }]),
+      leading, history('system', []),
+    ] }
+    const expected = { systemPrompt: 'direct\n\nlead rule', messages: [
+      { role: 'user', content: 'hi', timestamp: 0 },
+      { role: 'system', content: 'additional rule', timestamp: 0 },
+      { role: 'system', content: 'lead rule', timestamp: 0 },
+    ] }
     expect(toPiContext(options)).toEqual(expected)
     await expect(toPiContext(options, imageContext(attachments))).resolves.toEqual(expected)
   })
 
-  it('lets options.system win over a leading system message, which then folds, on both conversion paths', async () => {
-    const options: GenerateOptions = { ...base, system: 'direct', messages: [leading, question] }
-    const expected = {
-      systemPrompt: 'direct',
-      messages: [
-        { role: 'user', content: 'lead rule', timestamp: 0 },
-        { role: 'user', content: 'hi', timestamp: 0 },
-      ],
-    }
+  it('preserves repeated system updates in history order on both paths', async () => {
+    const callId = ToolCallId('lookup')
+    const snapshot = history('system', [{ type: 'text', text: 'lead rule\nnew rule' }])
+    const options: GenerateOptions = { ...base, system: 'direct', messages: [leading,
+      snapshot, question,
+      history('assistant', [{ type: 'tool-call', id: callId, name: 'lookup', arguments: '{}' }]),
+      snapshot,
+      createToolResultMessage({ callId, content: [{ type: 'text', text: 'found' }], isError: false }),
+      snapshot,
+    ] }
+    const expected = { systemPrompt: 'direct\n\nlead rule\n\nlead rule\nnew rule', messages: [
+      { role: 'user', content: 'hi', timestamp: 0 },
+      expect.objectContaining({ role: 'assistant' }),
+      { role: 'system', content: 'lead rule\nnew rule', timestamp: 0 },
+      expect.objectContaining({ role: 'toolResult', content: [{ type: 'text', text: 'found' }] }),
+      { role: 'system', content: 'lead rule\nnew rule', timestamp: 0 },
+    ] }
     expect(toPiContext(options)).toEqual(expected)
     await expect(toPiContext(options, imageContext(attachments))).resolves.toEqual(expected)
+  })
+
+  it('preserves prompt updates before the following user message', async () => {
+    const options: GenerateOptions = { ...base, messages: [leading, question,
+      history('assistant', [{ type: 'text', text: 'first answer' }]),
+      history('system', [{ type: 'text', text: 'replacement' }]),
+      user([{ type: 'text', text: 'next question' }]),
+      history('assistant', [{ type: 'text', text: 'second answer' }]),
+    ] }
+    const expected = { systemPrompt: 'lead rule', messages: [
+      { role: 'user', content: 'hi', timestamp: 0 },
+      expect.objectContaining({ role: 'assistant', content: [{ type: 'text', text: 'first answer' }] }),
+      { role: 'system', content: 'replacement', timestamp: 0 },
+      { role: 'user', content: 'next question', timestamp: 0 },
+      expect.objectContaining({ role: 'assistant', content: [{ type: 'text', text: 'second answer' }] }),
+    ] }
+    expect(toPiContext(options)).toEqual(expected)
+    await expect(toPiContext(options, imageContext(attachments))).resolves.toEqual(expected)
+  })
+
+  it('skips empty system messages on both paths', async () => {
+    const options: GenerateOptions = { ...base, messages: [
+      history('system', []), leading, question,
+      history('system', [{ type: 'text', text: '' }]),
+      history('assistant', [{ type: 'text', text: 'answer' }]),
+      history('system', []),
+    ] }
+    const expected = { systemPrompt: 'lead rule', messages: [
+      { role: 'user', content: 'hi', timestamp: 0 },
+      expect.objectContaining({ role: 'assistant' }),
+    ] }
+    expect(toPiContext(options)).toEqual(expected)
+    await expect(toPiContext(options, imageContext(attachments))).resolves.toEqual(expected)
+  })
+
+  it('keeps a later update distinct from an absent initial prompt', async () => {
+    const options: GenerateOptions = { ...base, messages: [question, leading] }
+    const expected = { messages: [
+      { role: 'user', content: 'hi', timestamp: 0 },
+      { role: 'system', content: 'lead rule', timestamp: 0 },
+    ] }
+    expect(toPiContext(options)).toEqual(expected)
+    await expect(toPiContext(options, imageContext(attachments))).resolves.toEqual(expected)
+  })
+
+  it('rejects non-text system content on both conversion paths', async () => {
+    const options: GenerateOptions = { ...base, messages: [history('system', [{ type: 'reasoning', text: 'hidden' }])] }
+    expect(() => toPiContext(options)).toThrow('non-text system messages')
+    await expect(toPiContext(options, imageContext(attachments))).rejects.toThrow('non-text system messages')
+  })
+
+  it('keeps developer text and tool changes together at their recorded position', async () => {
+    const lookup = { name: 'lookup', description: 'initial', parameters: { type: 'object' } }
+    const search = { name: 'search', description: 'later', parameters: { type: 'object' }, deferLoading: true }
+    const update = createDeveloperMessage({ source: { kind: 'test' }, content: [
+      { type: 'text', text: 'first' }, { type: 'text', text: '' },
+      { type: 'tool-removal', toolName: 'lookup' },
+      { type: 'text', text: 'second' }, { type: 'tool-addition', toolName: 'search' },
+    ] })
+    const options: GenerateOptions = { ...base, tools: [lookup, search], messages: [leading, update, question] }
+    const expected = { systemPrompt: 'lead rule', tools: [lookup], messages: [
+      { role: 'system', content: [{ type: 'text', text: 'first' }, { type: 'text', text: 'second' }], timestamp: 0,
+        toolsAdded: [{ name: 'search', description: 'later', parameters: { type: 'object' } }], toolsRemoved: [{ name: 'lookup' }] },
+      { role: 'user', content: 'hi', timestamp: 0 },
+    ] }
+    expect(toPiContext(options)).toEqual(expected)
+    await expect(toPiContext(options, imageContext(attachments))).resolves.toEqual(expected)
+  })
+
+  it('accepts text-only developer updates and ignores empty developer events', async () => {
+    const options: GenerateOptions = { ...base, messages: [question,
+      createDeveloperMessage({ source: { kind: 'test' }, content: [{ type: 'text', text: '' }] }),
+      createDeveloperMessage({ source: { kind: 'test' }, content: [{ type: 'text', text: 'one' }, { type: 'text', text: 'two' }] }),
+    ] }
+    const expected = { messages: [
+      { role: 'user', content: 'hi', timestamp: 0 },
+      { role: 'system', content: [{ type: 'text', text: 'one' }, { type: 'text', text: 'two' }], timestamp: 0 },
+    ] }
+    expect(toPiContext(options)).toEqual(expected)
+    await expect(toPiContext(options, imageContext(attachments))).resolves.toEqual(expected)
+  })
+
+  it.each<{ content: ContentBlock[]; error: string }>([
+    { content: [{ type: 'tool-addition', toolName: 'missing' }], error: 'undeclared tool "missing"' },
+    { content: [{ type: 'reasoning', text: 'hidden' }], error: 'developer content reasoning' },
+    { content: [{ type: 'image', attachment: ref }], error: 'image in an in-history developer message' },
+  ])('rejects unsupported developer content on both paths: $error', async ({ content, error }) => {
+    const options: GenerateOptions = { ...base, messages: [question, createDeveloperMessage({ source: { kind: 'test' }, content })] }
+    expect(() => toPiContext(options)).toThrow(error)
+    const read = vi.fn()
+    await expect(toPiContext(options, imageContext(projectionStore(read)))).rejects.toThrow(error)
+    expect(read).not.toHaveBeenCalled()
   })
 })

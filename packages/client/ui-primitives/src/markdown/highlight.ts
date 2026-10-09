@@ -275,6 +275,16 @@ const regexEngine = createJavaScriptRegexEngine({
   }),
 })
 
+/**
+ * Lines at least this many UTF-16 units long render as one uncolored token.
+ * With the JavaScript regex engine, scanning one JavaScript string-literal
+ * line costs about 70 ms at 1,000 units, 300 ms at 2,000, 600 ms at 5,000 and
+ * 2.5 s at 10,000, so this cap keeps one line within a few frames. A skipped
+ * line leaves the grammar state unchanged: a multi-line construct that opens
+ * or closes on it colors the following lines as if the line were absent.
+ */
+const TOKENIZE_MAX_LINE_LENGTH = 1000
+
 let singleton: HighlighterCore | undefined
 
 /** Representative paths through every boot grammar, compiled before user content is timed. */
@@ -386,7 +396,9 @@ export function highlightToHtml(code: string, lang: string | undefined): string 
   const resolved = grammarForHint(lang)
   if (resolved === undefined) return undefined
   if (!ensureGrammar(resolved)) return undefined
-  return highlighter().codeToHtml(code, { lang: resolved, theme: 'css-variables' })
+  return highlighter().codeToHtml(code, {
+    lang: resolved, theme: 'css-variables', tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
+  })
 }
 
 /**
@@ -492,6 +504,7 @@ export class StreamingHighlightSession {
     return highlighter().codeToTokensBase(text, {
       lang: resolved,
       theme: 'css-variables',
+      tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
       ...(this.state === undefined ? {} : { grammarState: this.state }),
     })
   }
@@ -586,7 +599,9 @@ export function highlightLines(code: string, lang: string | undefined): Highligh
   const resolved = grammarForHint(lang)
   if (resolved === undefined) return undefined
   if (!ensureGrammar(resolved)) return undefined
-  const { tokens } = highlighter().codeToTokens(code, { lang: resolved, theme: 'css-variables' })
+  const { tokens } = highlighter().codeToTokens(code, {
+    lang: resolved, theme: 'css-variables', tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
+  })
   // shiki tokenizes `a\nb` into two lines; a trailing newline (`a\n`) adds a
   // third, empty line the caller's own line array does not carry. Drop that
   // one terminator line so the two structures stay in step. The explicit

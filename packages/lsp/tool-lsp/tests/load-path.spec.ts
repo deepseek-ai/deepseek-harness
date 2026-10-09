@@ -17,7 +17,7 @@ describe('dsh-tool-lsp Loader export-shape guard', () => {
     const unwrapped = loader.unwrapExports(toolLsp) as Record<string, unknown>
     expect(unwrapped).toBe(toolLsp)
     expect(unwrapped.name).toBe('tool-lsp')
-    expect(unwrapped.inject).toEqual(['tools', 'lsp', 'systemPrompt'])
+    expect(unwrapped.inject).toEqual(['tools', 'lsp', 'systemPrompt', 'workingDirectory'])
     expect(typeof unwrapped.apply).toBe('function')
     expect(unwrapped.Config).toBeDefined()
   })

@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+新 shell 从 Session 的当前工作目录启动。创建后，shell 的目录与环境独立保留，不受后续 Session 目录切换影响。
+
 在 agent 需要在命令之间保持 PowerShell 状态的任何组合中加载本插件——它是 `dsh-tool-pwsh` 的持久对应物，用于依赖跨调用状态的工作。它注册 `pwsh` 工具，需要 `ctx.tools` 与 `ctx.terminals` 服务，并在执行时需要拥有者 agent 会话。
 
 ### 何时选择
@@ -74,6 +76,7 @@ kind: "package-reference"
 
 - **`dsh-tool-bash-persistent` 的刻意孪生。** 会话注册表、轮询循环与重置约定按设计镜像持久 bash 工具（[pwsh 持久 PTY Agent Note](../../../.agents/notes/archived/architecture/2026-08-11-pwsh-persistent-pty.md)）。
 - **后端拥有提示符就绪。** shell 的 `prompt` 函数属于后端：它打印 BEL 结尾的 OSC 标记加受控的可打印提示符。后端通过快路径接受已识别的提示符文本，否则使用其自身的就绪检查或静默层级。工具既不安装也不匹配自己的提示符。
+- **滚屏与重启后的就绪。** [Loader 组合测试](tests/loader-composition.spec.ts)检查完整的 send 结算序列，包括大量输出后在同一 shell 上执行的命令，以及 `exit` 后的首条命令。失败时间线会区分 Windows 实际使用的自带 OpenConsole 与未使用的系统 conhost。
 - **PSReadLine 回显靠锚定剥离。** PowerShell 会把提交的输入渲染回流中；标记锚定提取与包装源码剥离移除回显，而跨终端宽度换行的包装可能在部分输出结果中留下部分回显。
 - **重置，而非修复。** 任何不确定状态——显式 `exit`、超时、发送失败、中止——都会关闭 shell 并让下一次调用从全新状态开始。
 

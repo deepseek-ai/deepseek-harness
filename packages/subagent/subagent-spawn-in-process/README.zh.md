@@ -51,7 +51,7 @@ kind: "package-reference"
 
 ### 一次委派会做什么
 
-一次工具调用启动一个子 agent 并等待其结果：子 agent 在自有会话中工作，父级只接收其最终输出；若运行被取消、拒绝、被 token 上限截断或在启动时被拒，则收到出错的工具结果。被拒绝的启动不会留下已发布的子 agent；完成的运行在结果收集后即被 dispose（资源释放）。
+一次工具调用创建后台子 agent 并立即返回子会话 ID。子级在自己的会话中工作，父级通过完成通知收到其最终答案。子级也可以通过 `send_message` 发送消息。被拒绝的启动不会留下已发布的子 agent；工作流等程序调用方可以直接等待 activation 的结果。
 
 -----
 
@@ -61,21 +61,21 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-本节解释后端的构建方式以及[使用本包](#use-this-package)中行为的来源；共享机制属于进程内驱动器。
+本节说明提供方准备工作，以及由 subagent 服务拥有的 activation 生命周期。
 
 ### 设计理念
 
-职责划分如下：本后端只贡献提供方注册与「全新开始」的决定，其余全部运行机制——深度检查、子 agent 创建、按子 agent 定制、结构化输出、取消、结果读取与 dispose——都在 `dsh-subagent-in-process-driver` 中。agent 工厂的创建事务拥有未发布设置窗口及其回滚；发布之后，调用方拥有该运行。
+本后端注册提供方并准备全新子会话。`dsh-subagent` 拥有 activation 的深度检查、子 agent 创建、工具和 persona 设置、结构化输出、结果收集及资源释放；发布前的调用方信号取消创建，发布后的句柄通过 `dispose()` 取消并等待完全停稳。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 提供方注册：`Config` schema、能力声明、`start()` |
+| [`src/index.ts`](src/index.ts) | 提供方注册：`Config` schema、能力声明、`prepareContinuable()` |
 
 ### 运行流程
 
-启动请求先由 subagent 服务解析，然后共享驱动器校验深度、生成子会话 id、通过宿主 agent 工厂以调用方信号创建子 agent、在创建窗口内应用 persona、工具过滤器与结构化输出、发布子 agent、驱动一项任务、读取子 agent 自身的最终输出，最后完全停稳地 dispose 句柄。
+`startActivation()` 解析提供方并调用 `prepareContinuable()`，随后创建并发布子 agent。每次 activation 单独安装结构化输出。调用方可以等待 `result`，并通过 `dispose()` 等待整个子树完全停稳。
 
 ### 所有权与作用域
 
@@ -91,7 +91,6 @@ kind: "package-reference"
 当包级约定不够用时阅读以下页面；它们从共享 subagent 模型进入兄弟后端与穷尽式配置。
 
 - [Subagent 子系统](../../../docs/subsystems/subagent.zh.md)——启动请求、结果、实时运行与提供方约定。
-- [dsh-subagent-in-process-driver](../subagent-in-process-driver/README.zh.md)——本后端调用的共享运行驱动器。
 - [dsh-subagent-fork-in-process](../subagent-fork-in-process/README.zh.md)——以已完成父级轮次作初始内容的兄弟后端。
 - [dsh-tool-subagent](../tool-subagent/README.zh.md)——指向该提供方的面向模型委派工具。
 - [生成配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-subagent-spawn-in-process)——每个受支持配置字段及其源声明。
@@ -119,7 +118,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-通过 `dsh-tool-subagent`，父级只接收子 agent 的最终输出，或非完成终止原因对应的出错结果；子 agent 的中间工作绝不会到达父级。
+通过 `dsh-tool-subagent`，父级先收到子会话 ID，随后收到包含最终答案的完成通知。子级自行编写的消息通过 `send_message` 到达。子级内部工具调用保留在子会话中。
 
 #### Token 影响
 

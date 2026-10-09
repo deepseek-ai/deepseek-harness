@@ -42,18 +42,20 @@ export interface RuntimeClosureResult {
  * Check that the runtime manifest contains every shipped-preset plugin and workspace peer.
  * @param root repository root containing the runtime manifest and shipped presets.
  * @param manifestPath runtime manifest path relative to {@link root}.
+ * @param includePresets whether this carrier includes the shipped application presets.
  * @returns the discovered preset count, reachable workspace package count, and violations.
  */
 export async function verifyRuntimeClosure(
   root: string,
   manifestPath = 'python/sdk-runtime/package.json',
+  includePresets = true,
 ): Promise<RuntimeClosureResult> {
   const runtimeManifest = await loadManifest(resolve(root, manifestPath))
   const runtimeName = runtimeManifest.name ?? manifestPath
   const workspace = await loadWorkspacePackages(root)
   const runtimeDependencies = runtimeManifest.dependencies ?? {}
-  const platforms = await loadJson<RuntimePlatformManifest>(resolve(root, 'python/sdk-runtime/platforms.json'))
-  const presetPaths = globSync(AGENT_PRESET_GLOB, { cwd: root }).sort()
+  const platforms = includePresets ? await loadJson<RuntimePlatformManifest>(resolve(root, 'python/sdk-runtime/platforms.json')) : {}
+  const presetPaths = includePresets ? globSync(AGENT_PRESET_GLOB, { cwd: root }).sort() : []
   const targets = Object.keys(platforms).sort()
   const parents = new Map<string, string | undefined>()
   const queue: string[] = []
@@ -65,8 +67,8 @@ export async function verifyRuntimeClosure(
   }
 
   const failures: string[] = []
-  if (presetPaths.length === 0) failures.push(`no agent presets matched ${AGENT_PRESET_GLOB}`)
-  if (targets.length === 0) failures.push('python/sdk-runtime/platforms.json defines no runtime targets')
+  if (includePresets && presetPaths.length === 0) failures.push(`no agent presets matched ${AGENT_PRESET_GLOB}`)
+  if (includePresets && targets.length === 0) failures.push('python/sdk-runtime/platforms.json defines no runtime targets')
   failures.push(...await missingPresetPlugins(root, runtimeDependencies, presetPaths, targets))
   for (let index = 0; index < queue.length; index += 1) {
     const packageName = queue[index]

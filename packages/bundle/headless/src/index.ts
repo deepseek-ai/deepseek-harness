@@ -29,6 +29,7 @@ import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-cmdline'
 import type {} from '@deepseek-ai/dsh-session-query'
+import type {} from '@deepseek-ai/dsh-subagent'
 import { internals } from './runner-internals.ts'
 import { projectJsonRun, boundJsonLine } from './json-stream.ts'
 
@@ -302,6 +303,7 @@ function fail(io: HeadlessIo, error: unknown, json: boolean): void {
 
 /**
  * Run one task through one Agent and request process exit.
+ * Live Agent failures require a later durable terminal before a recovered run can succeed.
  * @param ctx - plugin context carrying the Agent, default model, Session, and launcher IO services.
  * @param config - task, optional exact Session identity, and output mode.
  * @param io - process-facing effects.
@@ -360,17 +362,33 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   const firstSeq = agent.session.seq
   const projection = config.json === true ? projectJsonRun(ctx, agent, io.stdout, { cwd }) : undefined
   const stopReasoning = projection === undefined ? streamReasoning(ctx, agent, io.stderr) : undefined
+  let failure: { error: unknown; atOffset: SessionLogOffset } | undefined
+  const stopErrors = ctx.on('agent/error', ({ agent: subject, error }) => {
+    if (subject === agent) failure = { error, atOffset: agent.session.seq }
+  })
+  const stopTerminals = ctx.on('session/event', (session, event) => {
+    if (session === agent.session && event.type === 'turn/end'
+      && failure !== undefined && event.seq >= failure.atOffset) failure = undefined
+  })
   try {
     try {
       agent.followup(createUserMessage({
         content: [{ type: 'text', text: task }],
         source: { kind: 'user' },
       }))
-      await agent.whenIdle()
+      const subagents = ctx.get('subagents')
+      while (true) {
+        await agent.whenIdle()
+        const idleSeq = agent.session.seq
+        // Child settlement can wake the parent before the child wait observes it.
+        if (!await subagents?.waitForChildren(agent)
+          && agent.status === 'idle' && agent.session.seq === idleSeq) break
+      }
     } finally {
       stopReasoning?.()
     }
     await sessions.flush(agent.session)
+    if (failure !== undefined) throw failure.error
     const outcome = summarize(agent.session, firstSeq)
     if (projection === undefined) io.stdout.write(outcome.text + '\n')
     else projection.finish(outcome.text)
@@ -379,6 +397,8 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
     }
     io.exit(outcome.reason?.kind === 'completed' ? 0 : 1)
   } finally {
+    stopErrors()
+    stopTerminals()
     projection?.dispose()
   }
 }

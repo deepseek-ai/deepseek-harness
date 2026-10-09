@@ -3,6 +3,7 @@ scenario: compaction-output-reserve
 profile: headless
 composition: compaction-output-reserve
 recording: authored
+platform: posix
 header:
   class: compaction-output-reserve
   pin: true

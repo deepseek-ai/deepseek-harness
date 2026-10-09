@@ -187,6 +187,10 @@ export function parseDshArgs(argv: readonly string[], version: string, manageDes
   if (first === 'plugin') {
     const plugin = program.command('plugin').description('manage a profile\'s plugins by forwarding the remaining arguments to pnpm in the profile directory')
     plugin
+      // Commander copies the launcher's disabled help option into subcommands. The
+      // forwarder restores its own help and stops reading options at forwarded pnpm input.
+      .helpOption('-h, --help', 'show this help')
+      .passThroughOptions()
       .requiredOption('--profile <name>', 'the profile whose plugins to manage (initialized on first use)', selectProfile)
       .allowUnknownOption()
       .argument('[args...]', 'pnpm arguments, forwarded verbatim (add <pkg>, remove <pkg>, why <pkg>, ...)')

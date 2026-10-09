@@ -10,7 +10,7 @@ An Agent's Cordis Context owns registrations and their cleanup. Agent identity i
 
 The reverse association also required compensating mechanisms after type erasure. Host Remote forwarding inspected a routed subject for its Context, creation inferred runtime parentage from the caller Context, and adapters maintained reverse identity scans. These mechanisms duplicated identity already present in typed requests and obscured which caller owned an Agent at runtime.
 
-Without an explicit owner, `SubagentContinuationManager` creates and resumes children through its private plugin Context, so Context-based inference classifies every continuable child as a runtime root even though the manager holds its exact parent. Root-only consumers could then attach scheduling tools, grant direct-human goal authority, or route user questions as if the child were top-level.
+Without an explicit owner, `SubagentManager` creates and resumes children through its private plugin Context, so Context-based inference classifies every continuable child as a runtime root even though the manager holds its exact parent. Root-only consumers could then attach scheduling tools, grant direct-human goal authority, or route user questions as if the child were top-level.
 
 ## Decision
 
@@ -18,7 +18,7 @@ Runtime interfaces carry Agent identity at the point that owns it. `AgentSetup` 
 
 Scope-aware registries continue to use the opaque scope key only for registration membership. Tool-subagent does not classify that key or resolve an Agent from Context. A direct `AgentSetup` passes the unpublished Session explicitly and installs through the supplied Context before publication. For a settings-backed standing preset, the event payload supplies the Agent, its Session supplies the policy target, and its Context owns the registrations.
 
-`SubagentContinuationManager` puts the exact parent in both fresh-creation and cold-resume options. A live continuable child is therefore excluded from `AgentRegistry.roots()` and satisfies `isOwnedBy(child.id, parent)`. Durable `parentSession` metadata does not substitute for this relation: a fork or resumed Session may be a runtime root when no live Agent owns it.
+`SubagentManager` puts the exact parent in both fresh-creation and cold-resume options. A live continuable child is therefore excluded from `AgentRegistry.roots()` and satisfies `isOwnedBy(child.id, parent)`. Durable `parentSession` metadata does not substitute for this relation: a fork or resumed Session may be a runtime root when no live Agent owns it.
 
 The [scope reference](../../../../packages/core/scope/README.md) and [Agent loop reference](../../../../packages/core/agent-loop/README.md) document registration and lifecycle behavior. The [initiator-scope decision](2026-07-15-agent-initiator-scope.md) owns private-chain rationale; explicit runtime ownership does not change causal initiation or registration lifetime.
 

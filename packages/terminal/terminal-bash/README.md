@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+A terminal without an explicit initial directory starts in the owner's current Session directory. Its sandbox permission root remains governed by Session policy.
+
 Mount this backend when a composition needs persistent shell sessions — state such as cwd, exported variables, functions, or running interactive children must survive across tool calls. It is the default `shell` type: a composition that mounts `@deepseek-ai/dsh-terminal` without it has no sessions to open.
 
 ### When to choose it
@@ -119,7 +121,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Terminal subsystem reference](../../../docs/subsystems/terminal.md) — the service contract this backend implements and the generated `ctx.terminals` surface.
 - [terminal service](../terminal/README.md) — backend registration, owner fencing, and cleanup semantics.
-- [tool-terminal tools](../tool-terminal/README.md) — the model-facing tools that operate sessions.
+- [tool-terminal tools](../../experimental/tool-terminal/README.md) — the model-facing tools that operate sessions.
 - [Subprocess seam](../../../docs/subsystems/subprocess.md) — the terminal primitive that owns PTY allocation and process-tree cleanup.
 - [Persistent PTY Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-persistent-pty-sessions.md) — the capability design and deferred boundaries.
 - [Persistent pwsh Agent Note](../../../.agents/notes/archived/architecture/2026-08-11-pwsh-persistent-pty.md) — the Windows substrate and the pwsh dialect.

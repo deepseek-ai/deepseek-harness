@@ -82,7 +82,7 @@ describe('Node compatibility self-hosted routing', () => {
   })
 
   it('isolates version installs and enables hosted package caching only on hosted runners', () => {
-    const setup = job.steps.find(step => step.uses === 'actions/setup-node@v6')!
+    const setup = job.steps.find(step => step.uses === 'actions/setup-node@v7.0.0')!
     expect(setup.env).toEqual({
       NODE_OPTIONS: "${{ runner.environment == 'self-hosted' && '--import=./scripts/ci-compatible-toolcache.mjs' || '' }}",
     })
@@ -100,7 +100,7 @@ describe('Node compatibility self-hosted routing', () => {
   })
 
   it('overrides runner exports inside setup-node without affecting later Node processes', () => {
-    const setup = job.steps.find(step => step.uses === 'actions/setup-node@v6')!
+    const setup = job.steps.find(step => step.uses === 'actions/setup-node@v7.0.0')!
     const nodeOptions = evaluate(setup.env!.NODE_OPTIONS!, { runner: { environment: 'self-hosted' } }) as string
     const root = mkdtempSync(join(tmpdir(), 'ci-compatible preload-'))
     try {
@@ -150,7 +150,7 @@ describe('Node compatibility self-hosted routing', () => {
     const index = job.steps.findIndex(step => step.name === 'Isolate compatibility caches')
     const step = job.steps[index]!
     expect(index).toBeGreaterThan(0)
-    expect(index).toBeLessThan(job.steps.findIndex(candidate => candidate.uses === 'pnpm/action-setup@v4'))
+    expect(index).toBeLessThan(job.steps.findIndex(candidate => candidate.uses === 'pnpm/action-setup@v5.0.0'))
     expect(step.if).toBe("runner.environment == 'self-hosted'")
     const root = mkdtempSync(join(tmpdir(), 'ci-compatible-selfhosted-'))
     try {

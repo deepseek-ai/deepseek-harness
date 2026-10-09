@@ -63,7 +63,7 @@ function call(ctx: Context, name: string, args: unknown, agent?: Agent) {
 }
 
 describe('MCP resource tools', () => {
-  it.each(['native', 'ptc', 'both'] as const)('omits every MCP contribution with no servers in %s mode', async (mode) => {
+  it.each(['native', 'ptc'] as const)('omits every MCP contribution with no servers in %s mode', async (mode) => {
     const ctx = await setup(mode)
     expect(visibleResourceTools(ctx)).toEqual([])
     const assembly = await ctx.systemPrompt.assemble()

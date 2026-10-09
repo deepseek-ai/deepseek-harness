@@ -7,6 +7,7 @@ import { describe, expect, it, onTestFinished } from 'vitest'
 import {
   isPublicExperimentalPackageDirectory,
   PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES,
+  EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS,
 } from './experimental-package-policy.ts'
 import {
   checkDshFamilyVersion,
@@ -14,6 +15,7 @@ import {
   checkWorkspaceProtocol,
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
+  checkExperimentalNameExceptions,
   expectedDshPackageFiles,
   readWorkspaceManifests,
   type WorkspaceManifest,
@@ -120,8 +122,39 @@ describe('experimental workspace constraints', () => {
       ...experimental,
       manifest: { ...experimental.manifest, name: '@deepseek-ai/dsh-prototype' },
     })).toEqual([
-      '@deepseek-ai/dsh-prototype: experimental package name must start with "@deepseek-ai/dsh-experimental-"',
+      '@deepseek-ai/dsh-prototype: experimental package name must start with "@deepseek-ai/dsh-experimental-" or match its declared directory exception',
     ])
+  })
+
+  it.each(Object.entries(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))('retains %s only at its declared directory', (dir, name) => {
+    expect(checkExperimentalManifest({ dir, manifest: { name, publishConfig: { access: 'public' } } })).toEqual([])
+    expect(checkExperimentalManifest({ ...experimental, manifest: { ...experimental.manifest, name } }))
+      .toEqual([expect.stringContaining('declared directory exception')])
+  })
+
+  it('rejects a missing manifest name even when the directory has no exception', () => {
+    expect(checkExperimentalManifest({ ...experimental, manifest: { publishConfig: { access: 'public' } } }))
+      .toEqual([expect.stringContaining('experimental package name must start')])
+  })
+
+  it('rejects stale, moved and duplicated retained-name declarations', () => {
+    const manifests = Object.entries(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS).map(([dir, name]) => ({ dir, manifest: { name } }))
+    expect(checkExperimentalNameExceptions(manifests)).toEqual([])
+    const [first, ...rest] = manifests
+    for (const invalid of [
+      rest,
+      [{ ...first!, manifest: { name: '@deepseek-ai/dsh-experimental-replacement' } }, ...rest],
+      [{ ...first!, dir: 'packages/core/replacement' }, ...rest],
+      [...manifests, { ...first!, dir: 'packages/experimental/duplicate' }],
+    ]) expect(checkExperimentalNameExceptions(invalid)).toEqual([expect.stringContaining(first!.manifest.name)])
+  })
+
+  it.each(Object.values(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))('rejects retained runtime names and aliases: %s', (name) => {
+    for (const dependencies of [{ [name]: 'workspace:*' }, { alias: `npm:${name}@1.0.0` }, { alias: `workspace:${name}@*` }]) {
+      expect(checkExperimentalDependencyIsolation([{
+        dir: 'apps/cli', manifest: { name: '@deepseek-ai/dsh', dependencies },
+      }], [])).toEqual([expect.stringContaining('must not reference an experimental package')])
+    }
   })
 
   it('requires public metadata for unlisted experimental packages', () => {

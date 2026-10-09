@@ -150,7 +150,7 @@ V3 未知内容标签变为 `plugin:<original-type>`，其他字段原样保留�
 | 缺少自身父目录项，且受支持证据完整 | 追加带 child id、创建时间、mode 和可选 label 的 version-0 目录事实。 |
 | 缺少自身父目录项，且证据不完整 | 追加 version-1 `subagent/catalog`，记录 header 身份和未知模式，不编造标签。 |
 
-Catalog version 0 和 1 要求字符串 `childId`、非负安全整数 `childCreatedAt`、`continuable` 或 `one-shot` mode（version 1 还接受 `unknown`），以及 continuable mode 下的字符串 label；任何 mode 下存在的 label 都必须是字符串。重复的自身 child id 被拒绝。没有对应保留子日志的已有条目仍保留在父日志中。Descriptor 收集不恢复子级的旧 continuation composition，也不从工具参数恢复已删除子级。未知模式条目保留 header 身份信息，不声明子 descriptor 受支持。
+Catalog version 0 和 1 要求字符串 `childId`、非负安全整数 `childCreatedAt`、`continuable` 或 `one-shot` mode（version 1 还接受 `unknown`），以及 continuable mode 下的字符串 label；任何 mode 下存在的 label 都必须是字符串。Version 2 只接受 `external` mode，label 为可选字符串。重复的自身 child id 被拒绝。没有对应保留子日志的已有条目仍保留在父日志中。Descriptor 收集不恢复子级的旧 continuation composition，也不从工具参数恢复已删除子级。未知模式条目保留 header 身份信息，不声明子 descriptor 受支持。
 
 Stage 只把最终继承截点之后的父目录记录作为候选。每个 inherited marker 都会丢弃更早的目录候选，不解释其载荷。缺失项追加在所有源事件之后，按创建时间、child id 排序，并使用连续的新序号。时间取最后一个源事件的 time；空日志则取 header 创建时间。这些记录既不进入模型表面，也不改变继承计数。
 
@@ -245,7 +245,7 @@ System image 接纳要求非空 attachment id、PNG／JPEG／WebP／GIF MIME 类
 | `compaction/start`、`compaction/summary`、`compaction/end` | 匹配 compaction id、源 command 和活动 turn 上下文。Summary 区间引用精确的当前表面节点且排除 protected head；成功完成需要一个 summary。继承的未完成 compaction 在 end-seed marker 处过期。 |
 | `compaction/prune` | 其区间引用精确的当前表面节点且排除 protected head；它不要求存在 compaction 事务或其所有者字段。 |
 | Compact checkpoint 替换 | 其 `compact-checkpoint` 来源标识活动 compaction。 |
-| 原生 `subagent/catalog` | 检查继承截点之后的自身 version-0/version-1 载荷字段与 child id 唯一性。原生读取既不收集子日志，也不比较其物理事实；继承项不建立自身成员关系。 |
+| 原生 `subagent/catalog` | 校验继承截点之后的自身 version-0/version-1/version-2 载荷。每个子 id 必须唯一。原生读取不收集子日志，也不比较其物理事实；继承条目不建立自身成员关系。 |
 | 继承截点与 delivery | 应用上文的 marker、坐标及代际归属规则。 |
 
 这些检查由 [relationships.ts](src/relationships.ts) 按代际拥有。完整的通用消息／信封接纳与插件拥有的消息投影还使用已安装 Session；单独的导出 V4 恢复器不能替代完整 catalog 恢复。

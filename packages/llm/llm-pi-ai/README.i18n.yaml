@@ -30,8 +30,8 @@
   en: 376f83206858b601
   zh: 38bb6993609c96a6
 /deepseek-ai-dsh-llm-pi-ai/use-this-package/run-with-reasoning-and-wire-compatibility:
-  en: 86b456496b54854e
-  zh: ff77ca11d39ba8d2
+  en: b58b917e7f250aee
+  zh: aff599081bac08c3
 /deepseek-ai-dsh-llm-pi-ai/use-this-package/change-configuration-at-runtime:
   en: 92f554e1718614ca
   zh: f17ed3ad3e5d28e2
@@ -45,14 +45,14 @@
   en: 1598ac8a8bb9b6bf
   zh: fdd089c5ae7722cd
 /deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/design-philosophy:
-  en: 280416de410744bb
-  zh: 64cbfc0902e3f436
+  en: 8aba1113937b368a
+  zh: 804a4ca672a776df
 /deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/source-map:
   en: 20afee7bbfb332ca
   zh: b080cf4e97094366
 /deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/registration-and-directory:
-  en: 4da379c9be65c18a
-  zh: fd305d4bd3dfa452
+  en: 3e12da237dea76da
+  zh: f4d917343e822d2d
 /deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/replay-and-vocabulary:
   en: 36e0c59a0f9f5980
   zh: 90a62c4a9cd23429
@@ -66,8 +66,8 @@
   en: e7348db3f7115960
   zh: 5fd5fb09d7d09982
 /deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai/what-the-model-sees:
-  en: 34e63beee750a3a9
-  zh: a869322d161d922f
+  en: 203535e4c439eb08
+  zh: d51d696f122691cb
 /deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai/token-effect:
   en: 820221e8ae37aa61
   zh: 7e6ff4db10067fc0
@@ -87,8 +87,8 @@
   en: b6bd570c0159ba08
   zh: 7d2d91eea6a8d830
 /deepseek-ai-dsh-llm-pi-ai/known-limitations-and-deferred-work:
-  en: bb240ee5dd3f81c7
-  zh: 884506a36f4aac62
+  en: 552281e47ba3980f
+  zh: 4af4dff3d9fa52d5
 /deepseek-ai-dsh-llm-pi-ai/known-limitations-and-deferred-work/dev-note:
   en: 3678dd0f6642c2a5
   zh: 75cbdd064cc64282

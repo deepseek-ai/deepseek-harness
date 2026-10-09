@@ -1,5 +1,5 @@
 ---
-description: "DeepSeek Harness 主目录与用户数据路径的共享解析，供需要统一根目录、波浪号展开与稳定监听路径的包使用。"
+description: "DeepSeek Harness 主目录与共享 agent 配置根目录的共享解析，以及用户数据路径、波浪号展开与稳定监听路径。"
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`@deepseek-ai/dsh-home-paths` 让包作者能够解析统一的 DeepSeek Harness 数据根目录，并由它派生子路径。显式路径优先于 `$DSH_HOME`，后者优先于 `~/.dsh`；空白环境变量会被忽略。其公开辅助函数可以在不暴露机器绝对路径的情况下显示根目录，仅展开单独或当前用户的波浪号形式，并规范化最终路径段尚不存在的监听目标。请把它作为库依赖直接使用，不要通过 `cordis.yml` 加载。
+`@deepseek-ai/dsh-home-paths` 让包作者能够解析 DeepSeek Harness 数据根目录，以及其消费方读取的共享 agent 配置根目录。显式路径优先于环境变量，后者优先于操作系统主目录下的默认值；空白环境变量会被忽略。其公开辅助函数可以在不暴露机器绝对路径的情况下显示根目录，仅展开单独或当前用户的波浪号形式，并规范化最终路径段尚不存在的监听目标。请把它作为库依赖直接使用，不要通过 `cordis.yml` 加载。
 
 ## 目录
 
@@ -40,9 +40,20 @@ const cache = dshCachePath('models')         // $DSH_HOME/cache/models, default 
 
 `dshCachePath(...segments)` 从解析出的主目录下的 `cache` 目录派生路径。不传路径段时返回缓存目录本身。传入首个选项对象 `dshCachePath({ dshHome: home }, ...segments)` 可使用显式配置的主目录，遵循相同的优先级与波浪号展开规则。它返回绝对路径，不会创建目录。
 
+### 解析共享 agents 根目录
+
+```ts
+import { resolveAgentsHome, agentsHomeDisplay } from '@deepseek-ai/dsh-home-paths'
+
+const agents = resolveAgentsHome()   // configured path, else $DSH_AGENTS_HOME, else ~/.agents
+agentsHomeDisplay(agents)            // ~/.agents, or $DSH_AGENTS_HOME for any configured root
+```
+
+`resolveAgentsHome` 采用与 `resolveDshHome` 相同的优先级、空白值处理与波浪号展开。该根目录刻意位于 `$DSH_HOME` 之外，因为其他 agent 工具也会共享它：`dsh-agent-instructions` 读取其中的用户全局 `AGENTS.md`，`dsh-skill-filesystem` 扫描其中的 `skills/` 目录。
+
 ### 展示主目录
 
-面向用户的路径请以符号形式渲染根目录，而不是机器路径：默认主目录显示为 `~/.dsh`，任何已配置的主目录显示为 `$DSH_HOME`。展示形式绝不会泄露机器的绝对路径。
+面向用户的路径请以符号形式渲染根目录，而不是机器路径：默认主目录显示为 `~/.dsh`，任何已配置的主目录显示为 `$DSH_HOME`，默认共享 agents 根目录显示为 `~/.agents`，任何已配置的共享 agents 根目录显示为 `$DSH_AGENTS_HOME`。两种展示形式都不会泄露机器的绝对路径。
 
 ### 展开用户路径
 
@@ -60,7 +71,7 @@ const cache = dshCachePath('models')         // $DSH_HOME/cache/models, default 
 <details>
 <summary>实现细节——点击展开</summary>
 
-本包建立在一个原则上：harness 的所有用户数据都位于同一个根目录下，其他每个辅助函数都由该决策派生。
+本包建立在一个原则上：harness 的用户数据位于同一个根目录下，而共享 agent 配置根目录保持独立，因为其他 agent 工具也会读取它。`resolveRoot` 与 `rootDisplay` 负责两个根目录的优先级与展示规则，因此两者不会彼此漂移。
 
 ### 源码地图
 
@@ -70,7 +81,7 @@ const cache = dshCachePath('models')         // $DSH_HOME/cache/models, default 
 
 ### 解析规则
 
-`resolveDshHome` 先读显式覆盖值，然后读 `$DSH_HOME`，最后回退到操作系统主目录拼接 `.dsh`。选中的值经过波浪号展开并规范化为绝对路径；`dshHomePath` 用 Node 的平台路径规则拼接子路径段。`dshHomeDisplay` 把解析出的路径与默认根目录比较并返回符号标签，因此已配置的主目录绝不泄露其绝对路径。
+`resolveDshHome` 先读显式覆盖值，然后读 `$DSH_HOME`，最后回退到操作系统主目录拼接 `.dsh`。`resolveAgentsHome` 对 `$DSH_AGENTS_HOME` 与 `~/.agents` 读取同样的三层值。选中的值经过波浪号展开并规范化为绝对路径；`dshHomePath` 用 Node 的平台路径规则拼接子路径段。`dshHomeDisplay` 与 `agentsHomeDisplay` 把解析出的路径与默认根目录比较并返回符号标签，因此已配置的根目录绝不泄露其绝对路径。
 
 ### 规范化机制
 

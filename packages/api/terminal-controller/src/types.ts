@@ -30,8 +30,9 @@ export interface TerminalShell {
   readonly name: string
 }
 
-/** Working directory and limits shared by new and restored terminals. */
+/** Current Session directory and terminal limits; retained terminals keep their own process directories. */
 export interface TerminalEnvironment {
+  /** Logged current directory, read without filesystem validation. */
   readonly cwd: string
   readonly maxInputBytes: number
   readonly maxCols: number

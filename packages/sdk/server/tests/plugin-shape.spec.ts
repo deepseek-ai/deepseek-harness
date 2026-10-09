@@ -15,7 +15,7 @@ describe('dsh-sdk-jsonrpc-server plugin export shape', () => {
     const unwrapped = loader.unwrapExports(jsonrpc) as Record<string, unknown>
     expect(unwrapped).toBe(jsonrpc)
     expect(unwrapped.name).toBe('sdk-jsonrpc-server')
-    expect(unwrapped.inject).toEqual(['agents'])
+    expect(unwrapped.inject).toEqual(['agents', 'workingDirectory'])
     expect(unwrapped.Config).toBeDefined()
     expect(typeof unwrapped.apply).toBe('function')
   })

@@ -202,7 +202,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'refreshProjections(sessionId: SessionId): Promise<void>',
-        description: 'Load all Session projections once per connection; retry an unsuccessful initial read.',
+        description: 'Read projections without starting migration; retry failed or migration-deferred reads.',
         parameters: [{ name: 'sessionId', description: 'Session to inspect without opening its conversation.' }],
         returns: 'completion of the current or newly started refresh.',
       },
@@ -213,7 +213,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'bounded results, or a business/transport error.',
       },
       {
-        signature: 'fork(opts: { sessionId: SessionId atSeq?: number increaseTitle?: boolean onCreated?: (childId: SessionId) => void }): Promise<SessionId>',
+        signature: 'fork(opts: { sessionId: SessionId atSeq?: number increaseTitle?: boolean onCreated?: (childId: SessionId) => void /** False refuses source migration; omission preserves the Host default. */ allowMigration?: boolean }): Promise<SessionId>',
         description: 'Fork a session from an exact inclusive prefix of the source; on resolution the child is catalogued and can be explicitly retained.',
         parameters: [{ name: 'opts', description: 'source session id, the optional exact inclusive boundary seq (a real event seq the caller already knows; a cut inside an open turn is balanced Host-side with synthetic closers, and omission selects the latest completed-turn prefix), and whether to increment an inherited durable title before resolving. `onCreated` observes the catalogued child before that optional rename.' }],
         returns: 'the child session id.',
@@ -275,9 +275,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'id', description: 'a registered theme id or `system`; unknown ids throw.' }],
       },
       {
-        signature: 'setFontSize(px: number): void',
-        description: 'Change the conversation content font size — the only font-size write entry. Accepted values are written through the settings scope and emit `theme/change`.',
-        parameters: [{ name: 'px', description: 'integer px within FONT_SIZE_MIN..FONT_SIZE_MAX; out-of-range or fractional values throw.' }],
+        signature: 'setFontSize(role: FontRole, px: number): void',
+        description: 'Change one role\'s font size — the only font-size write entry. Accepted values are written through the settings scope and emit `theme/change`.',
+        parameters: [{ name: 'role', description: 'font role.' }, { name: 'px', description: 'integer px within the role\'s `FONT_SIZE_SPECS` range; out-of-range or fractional values throw.' }],
       },
       {
         signature: 'register(definition: ThemeDefinition): () => void',
@@ -348,9 +348,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['on failure; a refused creation is also shown through the Workspace notice unless a later navigation or disposal superseded the request.'],
       },
       {
-        signature: 'forkSession(sessionId: SessionId, onCreated?: (childId: SessionId) => void): Promise<SessionId>',
+        signature: 'forkSession( sessionId: SessionId, onCreated?: (childId: SessionId) => void, options?: Pick<Parameters<ISessions[\'fork\']>[0], \'allowMigration\'>, ): Promise<SessionId>',
         description: 'Fork a Session without changing the current selection.',
-        parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer before the optional child-title update.' }],
+        parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer before the optional child-title update.' }, { name: 'options', description: 'optional permission to start source migration; omission preserves the Host default.' }],
         returns: 'the child SessionId after creation and inherited-title increment.',
       },
       {
@@ -361,7 +361,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void',
-        description: 'Start a New Session flow and navigate to its Session; a creation the Host refuses is shown through the Workspace notice and leaves the selection as it was.',
+        description: 'Create a fresh Session, or reuse a blank when preparing an explicit draft. A creation the Host refuses is shown through the Workspace notice and leaves the selection as it was.',
         parameters: [{ name: 'workspaceId', description: 'explicit target; absent inherits the current or most recent Workspace.' }, { name: 'options', description: 'initial content; existing text or attachments are preserved unless clearPreviousDraft is true.' }],
       },
       {
@@ -608,6 +608,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type FactoryRegistrationPropsOf<F extends keyof SlotFactoryMap & string> = FactoryRenderPropsOf<F> & PropsStore<FactoryStoreOf<F>> & InjectFace<FactoryInjectOf<F>> & PropsLocale<FactoryLocaleOf<F>> & PropsRenderFactories;',
   },
   {
+    name: 'FontFamilies',
+    declaration: 'export type FontFamilies = Readonly<Record<FontRole, string>>;',
+  },
+  {
+    name: 'FontRole',
+    declaration: 'export type FontRole = typeof FONT_ROLES[number];',
+  },
+  {
+    name: 'FontSizes',
+    declaration: 'export type FontSizes = Readonly<Record<FontRole, number>>;',
+  },
+  {
     name: 'GlobalStandardProps',
     declaration: 'export interface GlobalStandardProps {\n}',
   },
@@ -634,6 +646,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ISession',
     declaration: 'export interface ISession {\n    readonly sessionId: SessionId;\n    readonly projections: ProjectionsFace;\n    beginSubmission(input: BeginSubmissionInput): SubmissionHandle;\n    prompt(content: PromptContentPart[], mode: \'queue\' | \'steer\', signal?: AbortSignal, requestId?: SessionRequestId): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    readAttachment(attachmentId: AttachmentIdType): Promise<RemoteResult<{\n        attachment: ImageAttachmentRef;\n        data: Uint8Array;\n    }>>;\n    updateQueue(itemId: MessageId, action: QueueAction): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    cancel(): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    rename(title: string): Promise<RemoteResult<{\n        title: string;\n        seq: SessionSeq;\n    }>>;\n    loadOlder(): Promise<void>;\n    loadThrough(seq: SessionSeq): Promise<void>;\n    command(line: string): Promise<RemoteResult<{\n        matched: boolean;\n    }>>;\n}',
+  },
+  {
+    name: 'ISessions',
+    declaration: 'export interface ISessions {\n    readonly list: ObservableSnapshot<SessionListState>;\n    retain(target: SessionTarget, options: SessionRetainOptions): SessionReference;\n    using<T>(target: SessionTarget, options: SessionRetainOptions, operation: (reference: SessionReference) => T | Promise<T>): Promise<T>;\n    retainInfo(id: SessionId): ObservableSnapshot<SessionRetainInfo>;\n    readonly searchResultLimit: number;\n    create(opts?: {\n        workspaceId?: WorkspaceId;\n        cwd?: string;\n        sessionId?: SessionId;\n    }): Promise<SessionId>;\n    subagentAddress(id: SessionId): SubagentAddress | undefined;\n    refreshProjections(sessionId: SessionId): Promise<void>;\n    refresh(): Promise<void>;\n    search(query: string, signal: AbortSignal): Promise<RemoteResult<{\n        items: SessionSearchResultItem[];\n        hasMore: boolean;\n    }>>;\n    fork(opts: {\n        sessionId: SessionId;\n        atSeq?: number;\n        increaseTitle?: boolean;\n        onCreated?: (childId: SessionId) => void;\n        allowMigration?: boolean;\n    }): Promise<SessionId>;\n    scope(id: SessionId): AgentContext | undefined;\n    scopeOf(ctx: Context): SessionId | undefined;\n    sessionOf(ctx: Context): SessionFace | undefined;\n    binding(id: SessionId): SessionBinding | undefined;\n}',
   },
   {
     name: 'KeyedHooksSources',
@@ -872,8 +888,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SessionIdOf = SessionStandardProps extends {\n    sessionId: infer S;\n} ? S : string;',
   },
   {
+    name: 'SessionListPhase',
+    declaration: 'export type SessionListPhase = \'pending\' | \'ready\';',
+  },
+  {
+    name: 'SessionListState',
+    declaration: 'export interface SessionListState {\n    ids: SessionId[];\n    byId: Record<SessionId, SessionSummary>;\n    phase: SessionListPhase;\n    projectionsBySession: Readonly<Record<SessionId, SessionProjectionSnapshot>>;\n}',
+  },
+  {
     name: 'SessionMaybeStandardProps',
     declaration: 'export interface SessionMaybeStandardProps {\n}',
+  },
+  {
+    name: 'SessionProjectionSnapshot',
+    declaration: 'export interface SessionProjectionSnapshot {\n    readonly values: Readonly<Partial<SessionProjectionMap>>;\n    readonly state: \'idle\' | \'loading\' | \'ready\' | \'migration-required\' | \'error\';\n    readonly error: RemoteFailure | null;\n}',
   },
   {
     name: 'SessionProviderComponent',
@@ -1017,7 +1045,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ThemeSnapshot',
-    declaration: 'export interface ThemeSnapshot {\n    preference: ThemePreference;\n    fontSize: number;\n    active: ThemeDefinition;\n    themes: readonly ThemeDefinition[];\n    revision: number;\n}',
+    declaration: 'export interface ThemeSnapshot {\n    preference: ThemePreference;\n    fontSizes: FontSizes;\n    fontFamilies: FontFamilies;\n    active: ThemeDefinition;\n    themes: readonly ThemeDefinition[];\n    revision: number;\n}',
   },
   {
     name: 'ThemeTokenModes',

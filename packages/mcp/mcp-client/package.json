@@ -45,7 +45,7 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
-    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/client": "2.2.0",
     "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "devDependencies": {
@@ -56,11 +56,11 @@
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-timeout": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
-    "@modelcontextprotocol/server-everything": "^2026.7.4",
-    "@modelcontextprotocol/server-filesystem": "^2026.7.4",
+    "@modelcontextprotocol/server-everything": "^2026.8.31",
+    "@modelcontextprotocol/server-filesystem": "^2026.8.31",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-http-proxy": "workspace:*",
-    "@modelcontextprotocol/server": "2.0.0",
+    "@modelcontextprotocol/server": "2.2.0",
     "@modelcontextprotocol/node": "2.0.0",
     "zod": "^4.4.3",
     "@deepseek-ai/dsh-mcp-resources": "workspace:*",

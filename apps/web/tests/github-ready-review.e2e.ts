@@ -22,7 +22,7 @@ import {
 import { saveFailureShot } from './support.ts'
 
 const MODE = webSnapshotMode()
-const OVERLAY = fileURLToPath(new URL('../../cli/config/examples/github-review/cordis.yml', import.meta.url))
+const OVERLAY = fileURLToPath(new URL('../../../packages/experimental/webhook-github/examples/github-review/cordis.yml', import.meta.url))
 const EXPECTED = fileURLToPath(new URL('./expected/github-ready-review/conversation.expected.md', import.meta.url))
 const EXPANDED_EXPECTED = fileURLToPath(
   new URL('./expected/github-ready-review/conversation-expanded.expected.md', import.meta.url),
@@ -92,7 +92,13 @@ describe.skipIf(MODE === 'record')('web e2e: GitHub ready-for-review', () => {
     process.env.DSH_GITHUB_WEBHOOK_PORT = String(port)
     process.env.DSH_GITHUB_WEBHOOK_SECRET = SECRET
     webhookOrigin = `http://127.0.0.1:${String(port)}`
-    scaffold = await launchWebScaffold({ extraOverlayPath: OVERLAY })
+    scaffold = await launchWebScaffold({
+      extraOverlayPath: OVERLAY,
+      profile: { packages: [
+        { dir: fileURLToPath(new URL('../../../packages/experimental/webhook', import.meta.url)) },
+        { dir: fileURLToPath(new URL('../../../packages/experimental/webhook-github', import.meta.url)) },
+      ] },
+    })
     scaffold.ctx.effect(
       () => scaffold.ctx.llm.registerAdapter([PROVIDER], adapter),
       'GitHub webhook review adapter',

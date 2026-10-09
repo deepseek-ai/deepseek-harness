@@ -109,3 +109,30 @@
   color: var(--dsw-alias-label-caption);
   cursor: default;
 }
+
+/* Disclosure for the per-role font settings; rotates while open. */
+.expander {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.expander:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.expander svg {
+  transition: transform var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.expander[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}

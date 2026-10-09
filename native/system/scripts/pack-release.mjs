@@ -95,12 +95,8 @@ try {
   const publishOrder = [];
   for (const dir of dirs) {
     const manifest = readJson(path.join(root, dir, 'package.json'));
-    // Platform packages are packed with npm: pnpm pack (observed on 11.7.0)
-    // normalizes file modes and STRIPS the executable bit, which ships a
-    // launcher no consumer can spawn; npm pack preserves it. Platform packages
-    // have no dependencies by construction, so they need none of pnpm's
-    // workspace-protocol conversion — the entry packages do, and carry no
-    // executables, so they keep pnpm pack.
+    // Platform packages have no workspace dependencies; npm preserves their
+    // executable modes. Entry packages need pnpm's workspace version conversion.
     if (platformSet.has(dir)) {
       run('npm', ['pack', `./${dir}`, '--pack-destination', destination], packRoot);
     } else {

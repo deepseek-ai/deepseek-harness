@@ -25,6 +25,8 @@ Add Auto review to the current-session permission pickers in a Web profile. Befo
 <a id="use-this-package"></a>
 ## Use this package
 
+The review environment records the Session's current working directory for the pending action.
+
 ### Install into a profile
 
 From this source checkout, install the package into the Web profile through the existing CLI:

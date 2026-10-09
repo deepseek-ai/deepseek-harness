@@ -22,11 +22,19 @@ Each stream receives a fresh 256-bit TLS pre-shared key through private administ
 
 Collected stdout and stderr carry bounded tail snapshots through handlers that only update output observations. Capture continues while a snapshot is waiting for transport. Final snapshots preserve raw-byte offsets, and completed spill files use the local provider’s retained-output storage after connection disposal.
 
-Readiness verifies the installed helper digest and, when PTC is configured, the installed Node bootstrap digest. These checks pin expected deployment artifacts; they do not authenticate a malicious remote operating system. The helper disables Node debugger activation through `SIGUSR1`: file-effect confinement can still permit same-user signals, which must not expose the helper's unrestricted filesystem and process services. File-effect confinement delegates to the remote local sandbox provider and retains its full/partial disclosure and platform limitations.
+Readiness verifies the installed helper script or executable digest and, when a script deployment supplies a PTC bootstrap, that bootstrap's digest. Executable deployments embed the PTC worker and require no separate bootstrap. These checks pin expected deployment artifacts; they do not authenticate a malicious remote operating system. The helper disables Node debugger activation through `SIGUSR1`: file-effect confinement can still permit same-user signals, which must not expose the helper's unrestricted filesystem and process services. File-effect confinement delegates to the remote local sandbox provider and retains its full/partial disclosure and platform limitations.
 
-Path canonicalization belongs where the files exist. The shared policy resolver preserves absolute execution-world spelling; enforcing providers resolve symlinks and `..` on their own filesystem. Headless records and validates cwd through `ctx.fs`. Host-path projection remains unavailable for SSH, so Node execution requires an explicitly installed remote bootstrap.
+Path canonicalization belongs where the files exist. The shared policy resolver preserves absolute execution-world spelling; enforcing providers resolve symlinks and `..` on their own filesystem. Headless records and validates cwd through `ctx.fs`. Host-path projection remains unavailable for SSH; PTC uses an explicitly installed remote bootstrap for script deployments or the helper executable's embedded worker.
 
 A lost connection invalidates pending operations without reconnect or replay. Helper EOF, signals and a heartbeat lease initiate remote native cleanup. The client cannot turn lease expiry into an observed successful termination: an interrupted mutation or launch can have an unknown outcome. Administrative request deadlines, consumer execution deadlines and cleanup remain separate owners.
+
+### Helper deployment
+
+The explicit `launch.kind` selects remote `node-script` or `executable` invocation independently of the local Harness carrier. A local `process.pkg` flag cannot describe the remote installation. Protocol 2 includes the remote runtime kind in its readiness response and rejects protocol or launch-kind mismatches, so a client cannot apply script bootstrap rules to an embedded worker. Client and helper protocol upgrades must be deployed together.
+
+The executable embeds Node, the helper, managed subprocess runners and the PTC worker. It reuses the [SDK executable packaging decision](2026-07-10-single-file-executable-sdk-runtime-distribution.md): `pkg --sea` preserves a package tree and dynamic module resolution instead of maintaining a separate static plugin registry. That record owns the comparison with bare Node SEA. The embedded runtime serves these private entry points; project commands still depend on the remote machine's development tools.
+
+The four release targets cover Linux and macOS on x64 and arm64, matching the POSIX providers and their supported native resources. Packaging does not add Windows or musl support. Landlock and macOS PTY launchers remain real files beside the executable because the operating system cannot execute paths inside pkg's virtual filesystem. The installation unit is therefore the complete archive directory, with native resources and integrity metadata, rather than the executable alone. The [helper runtime reference](../../../../packages/ssh/ssh-helper-runtime/README.md) owns the build matrix, deployment baselines and archive verification commands.
 
 ## Alternatives considered
 
@@ -48,7 +56,7 @@ The portable-consumer decision remains active; this note supplies its SSH realiz
 
 ## Verification
 
-Required protocol and lifecycle evidence covers malformed frames, bounds, reservation cancellation, authenticated stream publication and disconnect errors. Native SSH acceptance must exercise remote file guards and symlink identity, Bash confinement, fd 7 binary traffic, control progress under paused output, terminal operations, LSP and Node execution. Live checks require an explicitly configured disposable remote workspace; keyless tests do not provision one.
+Required protocol and lifecycle evidence covers malformed frames, bounds, reservation cancellation, authenticated stream publication and disconnect errors. Native SSH acceptance must exercise remote file guards and symlink identity, Bash confinement, fd 7 binary traffic, control progress under paused output, terminal operations, LSP and Node execution. External-host checks require an explicitly configured disposable remote workspace. Packaged Linux acceptance provisions a disposable OpenSSH container without Node; native-host checks own confinement evidence.
 
 Security evidence requires both a same-user connector and a replaced socket listener that cannot claim a reserved stream, learn its key, alter another run or receive its plaintext output. Process-lifecycle evidence distinguishes direct exit from managed-range quiescence and tests cancellation both before launch publication and after the payload starts. Source and built profile checks verify the installed helper/bootstrap arrangement without transferring host credentials to program environments.
 

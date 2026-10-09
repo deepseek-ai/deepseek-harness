@@ -160,6 +160,8 @@ export class ModelsSettingsStore {
 
   /** Latest load wins; an older response never overwrites a newer one. */
   private generation = 0
+  /** Callers follow the current refresh's outcome, including callers whose read was superseded. */
+  private readonly pendingLoads = new Set<PromiseWithResolvers<void>>()
 
   /**
    * @param ctx - the page plugin's context, whose `remote.llm` and
@@ -178,22 +180,36 @@ export class ModelsSettingsStore {
    * settings answer in parallel, then one batched credential describe over
    * every referenced ref. Provider failure or absence of an initial settings
    * answer keeps the last good rows and surfaces an error; a failed settings
-   * refresh reuses the mirror's held view.
-   * @returns nothing; the snapshot carries the outcome.
+   * refresh reuses the mirror's held view. Concurrent callers resolve only
+   * after the current refresh publishes its ready or error snapshot.
+   * @returns resolution after the current snapshot is published.
+   * @throws the current read's unexpected rejection; superseded rejections are ignored.
    */
-  async load(): Promise<void> {
+  load(): Promise<void> {
+    const pending = Promise.withResolvers<void>()
+    this.pendingLoads.add(pending)
     const generation = ++this.generation
+    void this.read(generation).then(
+      () => { this.settleLoads(generation, (load) => { load.resolve() }) },
+      (error: unknown) => { this.settleLoads(generation, (load) => { load.reject(error) }) },
+    )
+    return pending.promise
+  }
+
+  /** Publish one joined answer; stale answers leave the current refresh in charge. */
+  private async read(generation: number): Promise<void> {
     this.store.update((s) => { s.status = 'loading'; s.error = null })
     const [registered, declared] = await Promise.all([
       this.ctx.remote.llm.listProviders(),
       this.ctx.remote.llm.listConfigurableProviders(),
       this.describeFace.ensure(),
     ])
-    if (!registered.ok) { this.failLoad(generation, registered.error.message); return }
-    if (!declared.ok) { this.failLoad(generation, declared.error.message); return }
+    if (generation !== this.generation) return
+    if (!registered.ok) { this.failLoad(registered.error.message); return }
+    if (!declared.ok) { this.failLoad(declared.error.message); return }
     const mirrored = this.describeFace.getSnapshot()
     if (mirrored.view === undefined) {
-      this.failLoad(generation, mirrored.error ?? 'settings are unavailable in this browser')
+      this.failLoad(mirrored.error ?? 'settings are unavailable in this browser')
       return
     }
     const providers = joinProviderDirectory(registered.value, declared.value)
@@ -254,9 +270,16 @@ export class ModelsSettingsStore {
     })
   }
 
-  /** Publish one load's failure text, unless a newer load already took over. */
-  private failLoad(generation: number, message: string): void {
+  /** Settle callers only while this read still owns the current refresh. */
+  private settleLoads(generation: number, settle: (load: PromiseWithResolvers<void>) => void): void {
     if (generation !== this.generation) return
+    const pending = [...this.pendingLoads]
+    this.pendingLoads.clear()
+    for (const load of pending) settle(load)
+  }
+
+  /** Publish the current joined read's failure text. */
+  private failLoad(message: string): void {
     this.store.update((s) => {
       s.status = 'error'
       s.error = message

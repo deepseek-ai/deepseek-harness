@@ -162,6 +162,12 @@ describe('gen-persistence-catalog collectLogEvents', () => {
     }))).toThrow(/non-literal name/)
   })
 
+  it('hard-errors on an event type in the plugin record namespace', () => {
+    expect(() => collectLogEvents(make({
+      'packages/group/fix/src/types.ts': merge('    /** A record type. */\n    \'plugin:fix/state\': { turn: number }'),
+    }))).toThrow(/log event 'plugin:fix\/state' .* uses the plugin: namespace/)
+  })
+
   it('hard-errors when the same event is declared twice', () => {
     expect(() => collectLogEvents(make({
       'packages/group/fix/src/a.ts': merge('    /** First. */\n    \'fix/dup\': { turn: number }'),

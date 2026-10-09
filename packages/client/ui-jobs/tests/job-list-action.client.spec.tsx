@@ -282,41 +282,19 @@ describe('JobListAction observation', () => {
     expect(writeText).toHaveBeenCalledWith('pnpm run build')
   })
 
-  it('shifts an overflowing popover back inside the viewport and follows resizes', () => {
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(440)
-    vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 344 } as DOMRect)
-    const originalWidth = window.innerWidth
-    Object.defineProperty(window, 'innerWidth', { value: 700, configurable: true, writable: true })
-    try {
-      render(<JobListAction {...props([outputJob()])} />)
-      openList()
-      const menu = screen.getByRole('list', { name: zh['list.aria'] })
-      // 700 - 12 - 440 - 344 = -96: the popover moves left to keep the margin.
-      expect(menu.style.left).toBe('-96px')
-
-      window.innerWidth = 900
-      fireEvent(window, new Event('resize'))
-      // 900 - 12 - 440 - 344 = 104 > 0: the anchored position fits again.
-      expect(menu.style.left).toBe('0px')
-    } finally {
-      Object.defineProperty(window, 'innerWidth', { value: originalWidth, configurable: true, writable: true })
-    }
-  })
-
-  it('never crosses the left viewport margin for an oversized popover', () => {
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(800)
-    vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 4 } as DOMRect)
-    const originalWidth = window.innerWidth
-    Object.defineProperty(window, 'innerWidth', { value: 700, configurable: true, writable: true })
-    try {
-      render(<JobListAction {...props([outputJob()])} />)
-      openList()
-      const menu = screen.getByRole('list', { name: zh['list.aria'] })
-      // max(12 - 4, min(0, 700 - 12 - 800 - 4)) = 8: clamped at the left margin.
-      expect(menu.style.left).toBe('8px')
-    } finally {
-      Object.defineProperty(window, 'innerWidth', { value: originalWidth, configurable: true, writable: true })
-    }
+  it('portals the open list below its trigger and keeps it open on pointer presses inside', () => {
+    vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 344, bottom: 40 } as DOMRect)
+    const { container } = render(<JobListAction {...props([outputJob()])} />)
+    openList()
+    const menu = screen.getByRole('list', { name: zh['list.aria'] })
+    // Outside the header's clipping column, so the right sidebar cannot cover it.
+    expect(container.contains(menu)).toBe(false)
+    expect(menu.style.left).toBe('344px')
+    expect(menu.style.top).toBe('45px')
+    fireEvent.pointerDown(menu)
+    expect(screen.getByRole('list', { name: zh['list.aria'] })).toBeDefined()
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('list', { name: zh['list.aria'] })).toBeNull()
   })
 
   it('ignores other keys while open and closes once the roster empties', () => {
@@ -361,10 +339,10 @@ describe('JobListAction observation', () => {
       gapBefore: false,
       streaming: true,
     }
-    const { container } = render(<JobListAction {...props([job()], undefined, { 'bash-1': view })} />)
+    render(<JobListAction {...props([job()], undefined, { 'bash-1': view })} />)
     openList()
     fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'pnpm run build') }))
-    expect(container.querySelector('[data-running]')).not.toBeNull()
+    expect(document.body.querySelector('[data-running]')).not.toBeNull()
     expect(screen.queryByText(zh['terminal.noOutput'])).toBeNull()
   })
 
@@ -381,6 +359,34 @@ describe('JobListAction observation', () => {
     fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'pnpm run build') }))
     expect(screen.getByText(zh['output.gap'])).toBeDefined()
     expect(screen.getByText('实时输出流中断：connection lost')).toBeDefined()
+  })
+
+  it('bridges Tab between the trigger and the portaled list and closes on Escape', () => {
+    render(<JobListAction {...props([job()])} />)
+    const trigger = screen.getAllByRole('button')[0]!
+    fireEvent.keyDown(trigger, { key: 'Tab' })
+    openList()
+    const [first, last] = within(screen.getByRole('list', { name: zh['list.aria'] })).getAllByRole('button')
+    trigger.focus()
+    // Shift+Tab from the trigger leaves toward the controls before it.
+    expect(fireEvent.keyDown(trigger, { key: 'Tab', shiftKey: true })).toBe(true)
+    expect(document.activeElement).toBe(trigger)
+    // Tab from the trigger enters the list.
+    expect(fireEvent.keyDown(trigger, { key: 'Tab' })).toBe(false)
+    expect(document.activeElement).toBe(first)
+    // Inside the list Tab stays the browser's until an end is reached.
+    expect(fireEvent.keyDown(first!, { key: 'Tab' })).toBe(true)
+    // Tab off the last control resumes from the trigger's place in the page.
+    expect(fireEvent.keyDown(last!, { key: 'Tab' })).toBe(true)
+    expect(document.activeElement).toBe(trigger)
+    // Shift+Tab off the first control returns to the trigger itself.
+    first!.focus()
+    expect(fireEvent.keyDown(first!, { key: 'Tab', shiftKey: true })).toBe(false)
+    expect(document.activeElement).toBe(trigger)
+    first!.focus()
+    fireEvent.keyDown(first!, { key: 'Escape' })
+    expect(screen.queryByRole('list', { name: zh['list.aria'] })).toBeNull()
+    expect(document.activeElement).toBe(trigger)
   })
 
   it('stops observation when the popover closes via Escape', () => {

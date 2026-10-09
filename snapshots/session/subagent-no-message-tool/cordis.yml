@@ -1,0 +1,9 @@
+# Restrict inherited capabilities before the child assembles its first request.
+- id: tool-subagent
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent
+    maxDepth: 1
+    toolFilter:
+      deny: [send_message, write, edit, glob, grep, web_search, web_fetch]

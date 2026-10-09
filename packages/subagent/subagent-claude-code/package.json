@@ -19,9 +19,13 @@
       "default": "./lib/index.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
   },
   "files": [
+    "icon.svg",
+    "locale/*.json",
     "lib/index.js",
     "cordis.patch.yml",
     "lib/types/**/*.d.ts"
@@ -45,8 +49,9 @@
     "@anthropic-ai/sdk": "0.93.0",
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^4.4.3"
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "zod": "^4.4.3",
+    "@deepseek-ai/dsh-tool-subagent": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -64,7 +69,8 @@
     "@deepseek-ai/dsh-subprocess-local": "workspace:*",
     "@deepseek-ai/dsh-timeout": "workspace:*",
     "@deepseek-ai/dsh-tool-jobs": "workspace:*",
-    "@deepseek-ai/dsh-tool-subagent": "workspace:*",
-    "@deepseek-ai/dsh-tools": "workspace:*"
-  }
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*"
+  },
+  "icon": "./icon.svg"
 }

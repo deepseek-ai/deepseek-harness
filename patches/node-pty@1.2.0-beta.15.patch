@@ -1,5 +1,5 @@
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 6966d24..18f1d25 100644
+index af2d24c39deb60e77ad16e6b864f37a7ef58881c..2ece2590445dc1ecce167b8ba4710c3176d32a21 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,10 +28,23 @@ var terminal_1 = require("./terminal");
@@ -30,3 +30,16 @@ index 6966d24..18f1d25 100644
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
+diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
+index 90ffd8fb69764052b0714cfb2b1213c073603c28..399861d7bbd0fb733fa032e923efa8b6aab8e62b 100644
+--- a/lib/windowsPtyAgent.js
++++ b/lib/windowsPtyAgent.js
+@@ -207,6 +207,8 @@ var WindowsPtyAgent = /** @class */ (function () {
+             // Close the input write handle to signal the end of session.
+             this._inSocket.destroy();
+             this._ptyNative.kill(this._pty, this._useConptyDll);
++            // Start draining even when the exited process has no more output.
++            this._conoutSocketWorker.dispose();
+             this._outSocket.on('data', function () {
+                 _this._conoutSocketWorker.dispose();
+             });

@@ -32,7 +32,7 @@ jobs:
     outputs:
       prebuilds: ${{ steps.matrix.outputs.prebuilds }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - id: matrix
         run: echo "prebuilds=$(node ./scripts/github-matrix.mjs release-prebuild)" >> "$GITHUB_OUTPUT"
@@ -45,13 +45,13 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.matrix.outputs.prebuilds) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5.0.0
         with:
           package_json_file: package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 24
           cache: pnpm
@@ -80,7 +80,7 @@ jobs:
           pnpm test:packaging
 
       - name: Upload prebuild artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ matrix.artifact }}
           path: native/system/${{ matrix.dir }}/bin/**
@@ -92,13 +92,13 @@ jobs:
     needs: build-prebuilds
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5.0.0
         with:
           package_json_file: package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 24
           cache: pnpm
@@ -116,7 +116,7 @@ jobs:
           RELEASE_PUBLISH: ${{ inputs.publish }}
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           pattern: prebuild-*
           path: native/system/.release/prebuild-artifacts
@@ -138,7 +138,7 @@ jobs:
           NALR_REQUIRE_LANDLOCK: 1
 
       - name: Upload npm tarballs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: npm-tarballs
           path: native/system/dist/npm/*
@@ -157,17 +157,17 @@ jobs:
     steps:
       # The publish script is the only repository file this job needs, and it
       # imports nothing outside Node's builtins, so there is no install step.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
       - name: Download npm tarballs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           name: npm-tarballs
           path: native/system/dist/npm

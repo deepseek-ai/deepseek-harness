@@ -8,24 +8,34 @@ import type { RowToastProps, RowToastState } from '../contract/slots.ts'
 
 /**
  * Hold for the notices that take longer to read than a one-line warning: the
- * actionable archived notice (two buttons to react to) and a refused Session
- * creation, which quotes the Host's reason.
+ * archive and fork recovery actions, and a refused Session creation quoting the Host's reason.
  */
 const LONG_TOAST_HOLD_MS = 6000
 
 /**
- * Render the current notice: the archived and stopped-and-archived notices
- * with their undo action — plus the show-archived action while archived rows
- * are hidden — on a 6 s hold, a refused Session creation with the Host's
- * reason on the same hold, or a plain warning for a failed pin, an archived
- * row that was clicked, or default Workspace creation.
- * @param props - the notice hook, the shared viewing store, the notice dismissal, the two archived-notice actions, and the locale seat.
+ * Render an operation notice, retaining recovery actions for six seconds.
+ * @param props - notice and viewing sources, dismissal and recovery callbacks, and localized copy.
  * @returns the notice on display, or null.
  */
-export function RowActionToast({ useToast, useStore, dismissToast, undoArchive, showArchived, t }: RowToastProps) {
+export function RowActionToast({ useToast, useStore, dismissToast, undoArchive, showArchived, openForkSource, t }: RowToastProps) {
   const toast = useToast(current => current)
   const archivedRowsVisible = useStore(state => (state.archivedFilter ?? 'default') !== 'default')
   if (toast === null) return null
+  if (toast.kind === 'forkRequiresOpen') {
+    return (
+      <Toast
+        key={`toast-${String(toast.seq)}`}
+        text={t('toast.forkRequiresOpen')}
+        icon={<IconWarningOutlineRegular />}
+        holdMs={LONG_TOAST_HOLD_MS}
+        actions={[{
+          label: t('toast.openForkSource'),
+          onClick: () => { dismissToast(); openForkSource(toast.sessionId) },
+        }]}
+        onDone={dismissToast}
+      />
+    )
+  }
   if (toast.kind === 'archived' || toast.kind === 'stoppedAndArchived') {
     const { sessionId } = toast
     return (
@@ -67,7 +77,7 @@ export function RowActionToast({ useToast, useStore, dismissToast, undoArchive, 
 
 /** The copy of one plain warning, keyed by the notice kind the union closes over. */
 function plainNoticeText(
-  toast: Exclude<RowToastState, { kind: 'archived' | 'stoppedAndArchived' | 'createFailed' }>,
+  toast: Exclude<RowToastState, { kind: 'archived' | 'stoppedAndArchived' | 'createFailed' | 'forkRequiresOpen' }>,
   t: RowToastProps['t'],
 ): string {
   switch (toast.kind) {

@@ -139,7 +139,8 @@ it('pins Messages Files offload and inline fallback in assembled requests', asyn
     const fileImage = { type: 'image', source: { type: 'file', file_id: 'file-api-snapshot-1' } }
     const offloadedImage = `[image omitted to fit request image limits; ${attachmentId}.${normalizedAccess}]`
     const imageHandle = `Image ${attachmentId}; request preview 1x1px.${normalizedAccess}`
-    const runtimeContext = 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
+    const runtimeContext = (cwd: string): string => 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
+      + `Current working directory: ${JSON.stringify(cwd)}.\n\n`
       + 'Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\n'
       + 'Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).'
     const messages = requests[0]?.messages as { content?: unknown }[] | undefined
@@ -151,7 +152,7 @@ it('pins Messages Files offload and inline fallback in assembled requests', asyn
       { type: 'text', text: imageHandle },
       fileImage,
       { type: 'text', text: ', then use read_image on red.png and reply with DONE.' },
-      { type: 'text', text: runtimeContext },
+      { type: 'text', text: runtimeContext(result.cwd) },
     ])
 
     const followup = requests[1]?.messages as Array<{ role: string; content: Array<Record<string, unknown>> }>
@@ -202,7 +203,7 @@ it('pins Messages Files offload and inline fallback in assembled requests', asyn
       { type: 'text', text: `Image ${attachmentId}; request preview 1x1px.${fallbackAccess}` },
       { type: 'image', source: { type: 'base64', media_type: 'image/png', data: image } },
       { type: 'text', text: ', then use read_image on red.png and reply with DONE.' },
-      { type: 'text', text: runtimeContext },
+      { type: 'text', text: runtimeContext(fallback.cwd) },
     ])
   } finally {
     await new Promise<void>(resolve => server.close(() => { resolve() }))

@@ -1,0 +1,10 @@
+version: 1
+scenario: working-directory
+profile: headless
+composition: default
+recording: authored
+header:
+  class: default
+platform: posix
+workspace:
+  final: true

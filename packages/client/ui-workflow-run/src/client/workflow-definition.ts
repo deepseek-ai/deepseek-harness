@@ -80,11 +80,16 @@ function statusFromOutcome(outcome: WorkflowAgentOutcome): WorkflowRunStatus {
   }
 }
 
-function locationClosed(location: ConversationLocation): boolean {
-  if (location.kind === 'step') {
-    return location.step.status === 'closed' || location.turn.status === 'closed'
-  }
-  return location.kind === 'turn' && location.turn.status === 'closed'
+/**
+ * A foreground run writes its run-end before its Tool Step ends, and a
+ * background run outlives that Step, so an ordinary Step or Turn closure says
+ * nothing about liveness. Only a Turn closed after a crash or at a fork
+ * boundary proves that a run without run-end stopped.
+ */
+function turnAbandoned(location: ConversationLocation): boolean {
+  if (location.kind !== 'step' && location.kind !== 'turn') return false
+  const reason = location.turn.end?.data.reason.kind
+  return reason === 'interrupted' || reason === 'forked'
 }
 
 function projectWorkflow(
@@ -93,7 +98,7 @@ function projectWorkflow(
 ): WorkflowRunChatData {
   const state = context.state as WorkflowState
   const interrupted = state.stopReason === undefined
-    && locationClosed(location)
+    && turnAbandoned(location)
   const phases = new Map<string, { phase: string | null; members: WorkflowRunMemberData[] }>()
   for (const member of state.members) {
     const phase = member.phase === undefined ? null : member.phase

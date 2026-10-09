@@ -51,7 +51,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What a delegation does
 
-One tool call starts one child and waits for its result: the child works in its own session and the parent receives only its final output, or an errored tool result when the run is cancelled, refused, truncated by its token limit, or rejected at startup. A rejected start leaves no published child; a completed run is disposed after its result is collected.
+One tool call creates a background child and returns its session id immediately. The child works in its own session; the parent receives its final answer in a completion notice. The child can also send messages through `send_message`. A rejected start leaves no published child. Programmatic callers such as workflows can await the activation result directly.
 
 -----
 
@@ -61,21 +61,21 @@ One tool call starts one child and waits for its result: the child works in its 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-This section explains how the backend is built and where the behavior in [Use this package](#use-this-package) comes from; the shared mechanics belong to the in-process driver.
+This section explains provider preparation and the activation lifecycle owned by the subagent service.
 
 ### Design concept
 
-One separation: this backend contributes only the provider registration and the decision to start fresh, while every run mechanic — depth checking, child creation, per-child customization, structured output, cancellation, result reading, and disposal — lives in `dsh-subagent-in-process-driver`. The agent factory's creation transaction owns the unpublished setup window and its rollback; after publication the caller owns the run.
+This backend registers the provider and prepares a fresh child session. `dsh-subagent` owns activation depth checks, child creation, tool and persona setup, structured output, result collection, and disposal. The caller signal cancels unpublished creation; the published handle cancels and reaches quiescence through `dispose()`.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Provider registration: `Config` schema, capability declaration, `start()` |
+| [`src/index.ts`](src/index.ts) | Provider registration: `Config` schema, capability declaration, `prepareContinuable()` |
 
 ### Run flow
 
-A start request resolves through the subagent service, then the shared driver validates depth, mints a child session id, creates the child through the host agent factory with the caller's signal, applies persona, tool filter, and structured output inside the creation window, publishes the child, drives one task, reads the child's own final output, and disposes the handle quiescently.
+`startActivation()` resolves the provider and calls `prepareContinuable()`, then creates and publishes the child. Structured output is attached separately for each activation. Callers can await `result` and use `dispose()` to wait for the entire child subtree to reach quiescence.
 
 ### Ownership and scope
 
@@ -91,7 +91,6 @@ The child gets a fresh flat registration scope: parent tool restrictions and aut
 Read these pages when the package-level contract is not enough; they move from the shared subagent model to the sibling backends and exhaustive configuration.
 
 - [Subagent subsystem](../../../docs/subsystems/subagent.md) — start requests, results, live runs, and the provider contract.
-- [dsh-subagent-in-process-driver](../subagent-in-process-driver/README.md) — the shared run driver this backend calls.
 - [dsh-subagent-fork-in-process](../subagent-fork-in-process/README.md) — the sibling backend that seeds completed parent turns.
 - [dsh-tool-subagent](../tool-subagent/README.md) — the model-facing delegation tool that reaches this provider.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-subagent-spawn-in-process) — every accepted config field and its source declaration.
@@ -119,7 +118,7 @@ The child's request cache is independent of the parent's. Child history grows ap
 
 #### What the model sees
 
-Through `dsh-tool-subagent`, the parent receives only the child's final output or an errored result for a non-completed stop reason; intermediate child work never reaches it.
+Through `dsh-tool-subagent`, the parent first receives the child session id, then a completion notice with its final answer. Child-authored messages arrive through `send_message`. Internal child tool calls remain in the child session.
 
 #### Token effect
 

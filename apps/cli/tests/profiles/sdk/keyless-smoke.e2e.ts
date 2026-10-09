@@ -303,6 +303,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
       expect(tools.map(tool => tool.name)).toEqual([
         process.platform === 'win32' ? 'pwsh' : 'bash',
         ...(editorEnabled ? ['str_replace_editor'] : []),
+        'working_directory',
       ])
       expect(modelRequests).toHaveLength(editorEnabled ? 3 : 1)
       if (editorEnabled) {

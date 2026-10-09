@@ -15,7 +15,7 @@
 - paragraph:
   - text: 已创建
   - code:
-    - button "在侧边栏打开 von-neumann.svg": von-neumann.svg
+    - button "在侧边栏打开 {{cwd}}/workspace/von-neumann.svg": von-neumann.svg
   - text: ，一个简洁的冯诺依曼架构示意图，包含：
 - list:
   - listitem:
@@ -33,7 +33,7 @@
 - paragraph: 下方附一行核心思想说明：指令与数据以二进制统一存储在存储器中。用浏览器打开该 SVG 文件即可查看。
 - button "查看 von-neumann.svg 的改动": 已编辑 von-neumann.svg +83 -0
 - text: 此主机没有可用的桌面，无法使用外部程序打开文件或文件夹；文件仍可在侧边栏预览
-- button "在侧边栏预览 von-neumann.svg"
+- button "在侧边栏预览 {{cwd}}/workspace/von-neumann.svg"
 - text: von-neumann.svg 冯诺依曼架构示意图 SVG
 - button "复制"
 - button "好的回答"

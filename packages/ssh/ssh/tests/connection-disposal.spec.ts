@@ -68,7 +68,7 @@ async function setup(phase: 'connect' | 'authenticate', pauseControl?: 'forward'
     if (method === 'heartbeat') { heartbeatCalls++; return holdHeartbeat ? heartbeat.promise : null }
     if (method === 'ordinary') { ordinaryEntered.resolve(undefined); return ordinary.promise }
     if (method !== 'hello') throw new Error(`unexpected helper operation: ${method}`)
-    return { protocol: 1, hash: 'a'.repeat(64), platform: 'linux', nodeVersion: 'v24.19.0', node: '/usr/bin/node', root: '/tmp/remote-helper', workspace: '/workspace' }
+    return { protocol: 2, hash: 'a'.repeat(64), platform: 'linux', nodeVersion: 'v24.19.0', kind: 'node-script', executable: '/usr/bin/node', root: '/tmp/remote-helper', workspace: '/workspace' }
   })
   const rawSocket = new PendingSocket()
   const secureSocket = new PendingSocket()
@@ -110,7 +110,7 @@ async function setup(phase: 'connect' | 'authenticate', pauseControl?: 'forward'
   const socket = phase === 'connect' ? rawSocket : secureSocket
   const ctx = new Context()
   const fiber = ctx.plugin(SshConnection, {
-    host: 'hermetic-test', node: '/usr/bin/node', helper: '/opt/dsh/helper.js', helperHash: 'a'.repeat(64), workspace: '/workspace',
+    host: 'hermetic-test', launch: { kind: 'node-script', node: '/usr/bin/node' }, helper: '/opt/dsh/helper.js', helperHash: 'a'.repeat(64), workspace: '/workspace',
     requestTimeoutMs: 10_000, maxFrameBytes: 4096, maxPending: holdHeartbeat ? 1 : 8, leaseMs: 30_000,
   })
   onTestFinished(async () => {

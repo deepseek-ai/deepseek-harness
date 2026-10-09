@@ -1,21 +1,25 @@
 import { MESSAGES_RESPONSE } from './messages-response.ts'
+import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 import { createUserMessage, LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import { scopeTarget } from '@deepseek-ai/dsh-scope'
+import { randomUUID } from 'node:crypto'
 import AgentRegistry, { type Agent, type AgentHandle } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
-import SubagentRuntime, { type SubagentResult, type SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, { SubagentRunId, type SubagentStartRequest, type SubagentRun, type SubagentResult, type SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import type { JsonRpcTransportPeer } from '@deepseek-ai/dsh-sdk-protocol'
 import { HarnessSdkJsonRpcServer } from '../src/index.ts'
 
@@ -58,21 +62,39 @@ async function mockCompletionServer(): Promise<{ url: string; requests: unknown[
   return { url: `http://127.0.0.1:${address.port}`, requests, headers }
 }
 
-async function makeHarness(storageDir: string) {
+async function makeHarness(storageDir: string, workingDirectory = false) {
   const ctx = new Context()
-  await mountAgentLoopTestDependencies(ctx)
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory })
   await ctx.plugin(AgentLoop, { agents: [] })
+  await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(JsonlSessionPersistence, { root: storageDir })
   await new Promise(resolve => setTimeout(resolve, 50))
   return ctx
 }
 
-/** Drive the owning service so test lifecycle events carry the real parent scope. */
+/** Feed SDK lifecycle inputs without coupling protocol projection tests to activation admission. */
+async function startLifecycleFixture(
+  ctx: Context, providerName: string, request: SubagentStartRequest, local = false,
+): Promise<SubagentRun> {
+  const provider = ctx.subagents.getProvider(providerName)
+  if (provider?.start === undefined) throw new Error('missing lifecycle fixture provider')
+  const run = await provider.start({ ...request, cwd: request.cwd ?? process.cwd() })
+  const identity = { runId: SubagentRunId(randomUUID()), provider: providerName, id: run.id, local }
+  const carrier = scopeTarget(ctx.subagents, request.parent)
+  ctx.emit(carrier, 'subagent/start', identity)
+  void run.result.then(
+    (result) => { ctx.emit(carrier, 'subagent/end', { ...identity, stopReason: result.stopReason, ...result.output.length > 0 ? { lastAssistantMessage: result.output } : {} }) },
+    () => { ctx.emit(carrier, 'subagent/end', { ...identity, stopReason: 'error' }) },
+  )
+  return run
+}
+
+/** Settle a scoped lifecycle fixture after the requested registry change. */
 async function settleSubagent(
   ctx: Context,
   parent: Agent,
-  info: Omit<SubagentRunEndInfo, 'runId' | 'local'> & { localAgent: Agent | undefined },
+  info: Omit<SubagentRunEndInfo, 'runId' | 'local'> & { localAgent?: Agent },
   beforeSettle?: () => Promise<void>,
 ): Promise<void> {
   const result = Promise.withResolvers<SubagentResult>()
@@ -83,18 +105,17 @@ async function settleSubagent(
     async start() {
       return {
         id: info.id,
-        localAgent: info.localAgent,
         result: result.promise,
         dispose: () => Promise.resolve(),
       }
     },
   })
   try {
-    const run = await ctx.subagents.start(info.provider, {
+    const run = await startLifecycleFixture(ctx, info.provider, {
       parent,
       prompt: [],
       signal: new AbortController().signal,
-    })
+    }, info.localAgent !== undefined)
     await beforeSettle?.()
     if (info.lastAssistantMessage === undefined) {
       result.reject(new Error('synthetic infrastructure failure'))
@@ -109,6 +130,89 @@ async function settleSubagent(
 }
 
 describe('HarnessSdkJsonRpcServer', () => {
+  it('waits only for an existing SDK-owned session and includes a child-triggered root turn', async () => {
+    const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-wait-'))
+    const ctx = await makeHarness(storageDir)
+    const transport = new FakeTransport()
+    const server = new HarnessSdkJsonRpcServer(ctx, transport)
+    class Adapter extends LlmAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({ provider, id: model, name: model })
+      }
+      async * stream(): AsyncIterable<StreamChunk> {
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text: 'answer' }
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: 'answer' } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }
+    ctx.llm.registerAdapter(['mock'], new Adapter())
+    try {
+      await expect(server.handleRequest('session/wait', { sessionId: 'missing' })).rejects.toThrow('not initialized')
+      await server.initialize({ cwd: storageDir, provider: 'mock', model: 'mock' })
+      await expect(server.handleRequest('session/wait', {})).rejects.toThrow('sessionId string')
+      await expect(server.handleRequest('session/wait', { sessionId: 'missing' })).rejects.toThrow('unknown SDK session')
+      expect(ctx.agents.get(SessionId('missing'))).toBeUndefined()
+      await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'delegate' }] })
+      const parent = ctx.agents.get(SessionId('main'))!
+      const observed = Promise.withResolvers<undefined>()
+      const children = Promise.withResolvers<boolean>()
+      vi.spyOn(ctx.subagents, 'waitForChildren')
+        .mockImplementationOnce(() => { observed.resolve(undefined); return children.promise })
+        .mockResolvedValue(false)
+      let settled = false
+      const waiting = server.handleRequest('session/wait', { sessionId: 'main' }).then((result) => { settled = true; return result })
+      await observed.promise
+      expect(settled).toBe(false)
+      parent.followup(createUserMessage({ content: [{ type: 'text', text: 'child result' }], source: { kind: 'user' } }))
+      children.resolve(true)
+      await expect(waiting).resolves.toEqual({})
+      expect(transport.notifications.filter(notification => notification.method === 'session.event'
+        && notification.params?.sessionId === 'main'
+        && (notification.params.event as SessionEvent).type === 'turn/end')).toHaveLength(2)
+      await server.shutdown()
+      await expect(server.handleRequest('session/wait', { sessionId: 'main' })).rejects.toThrow('unknown SDK session')
+    } finally {
+      await server.shutdown()
+      await ctx.fiber.dispose()
+      await rm(storageDir, { recursive: true, force: true })
+    }
+  })
+
+  it('changes effective directories through RPC while preserving Session origins and replayable context', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-sdk-directory-'))
+    const child = join(root, 'child')
+    await mkdir(child)
+    const ctx = await makeHarness(join(root, 'sessions'), true)
+    ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('directory observed')]))
+    const transport = new FakeTransport()
+    const server = new HarnessSdkJsonRpcServer(ctx, transport)
+    try {
+      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'a' }))
+        .rejects.toThrow('SDK server is not initialized')
+      await expect(server.handleRequest('session/working-directory/set', { sessionId: 'a', path: child }))
+        .rejects.toThrow('SDK server is not initialized')
+      expect(ctx.agents.list()).toEqual([])
+      await server.initialize({ cwd: root, provider: 'mock', model: 'mock' })
+      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'a' })).resolves.toEqual({ cwd: root })
+      const selected = await realpath(child)
+      await expect(server.handleRequest('session/working-directory/set', { sessionId: 'a', path: 'child' })).resolves.toEqual({ cwd: selected })
+      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'b' })).resolves.toEqual({ cwd: root })
+      const agent = ctx.agents.get(SessionId('a'))!
+      expect(agent.session.header.cwd).toBe(root)
+      await server.prompt({ sessionId: 'a', contentBlocks: [{ type: 'text', text: 'where' }] })
+      await agent.whenIdle()
+      expect(agent.session.snapshotEvents().some(event => event.type === 'user/message'
+        && event.data.content.some(block => block.type === 'text'
+          && block.text.includes(JSON.stringify(selected))))).toBe(true)
+      await expect(server.handleRequest('session/working-directory/get', {})).rejects.toThrow('sessionId')
+      await expect(server.handleRequest('session/working-directory/set', { sessionId: 'a', path: 3 })).rejects.toThrow('path string')
+    } finally {
+      await server.shutdown()
+      await ctx.fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
   it('creates a harness agent and calls the configured OpenAI-compatible endpoint', { timeout: 15_000 }, async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-'))
     const llmServer = await mockCompletionServer()
@@ -518,7 +622,6 @@ describe('HarnessSdkJsonRpcServer', () => {
       await settleSubagent(ctx, parentHandle.agent, {
         provider: 'remote',
         id: SessionId('remote-run-id'),
-        localAgent: undefined,
         stopReason: 'completed',
         lastAssistantMessage: [],
       })
@@ -605,7 +708,6 @@ describe('HarnessSdkJsonRpcServer', () => {
       const replacement = Promise.withResolvers<SubagentResult>()
       const results = [first.promise, sameLifetime.promise, replacement.promise]
       let starts = 0
-      let currentLocalAgent = oldChild.agent
       const disposeProvider = ctx.subagents.registerProvider({
         name: 'reused',
         capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
@@ -614,20 +716,20 @@ describe('HarnessSdkJsonRpcServer', () => {
           const result = results[starts]
           starts += 1
           if (result === undefined) throw new Error('unexpected fourth reused-id run')
-          return Promise.resolve({ id: SessionId('reused-child'), localAgent: currentLocalAgent, result, dispose: () => Promise.resolve() })
+          return Promise.resolve({ id: SessionId('reused-child'), result, dispose: () => Promise.resolve() })
         },
       })
 
-      const firstRun = await ctx.subagents.start('reused', {
+      const firstRun = await startLifecycleFixture(ctx, 'reused', {
         parent: oldParent.agent,
         prompt: [],
         signal: new AbortController().signal,
-      })
-      const sameLifetimeRun = await ctx.subagents.start('reused', {
+      }, true)
+      const sameLifetimeRun = await startLifecycleFixture(ctx, 'reused', {
         parent: oldParent.agent,
         prompt: [],
         signal: new AbortController().signal,
-      })
+      }, true)
       sameLifetime.resolve({ output: [{ type: 'text', text: 'same lifetime' }], stopReason: 'completed' })
       await sameLifetimeRun.result
       await oldChild.dispose()
@@ -642,12 +744,11 @@ describe('HarnessSdkJsonRpcServer', () => {
         agentOptions: { model: 'deepseek-official' },
         parentAgent: newParent.agent,
       })
-      currentLocalAgent = newChild.agent
-      const secondRun = await ctx.subagents.start('reused', {
+      const secondRun = await startLifecycleFixture(ctx, 'reused', {
         parent: newParent.agent,
         prompt: [],
         signal: new AbortController().signal,
-      })
+      }, true)
 
       replacement.resolve({ output: [{ type: 'text', text: 'new lifetime' }], stopReason: 'completed' })
       await secondRun.result
@@ -709,16 +810,15 @@ describe('HarnessSdkJsonRpcServer', () => {
         inheritsParentContext: false,
         start: () => Promise.resolve({
           id: SessionId('provider-reuse-child'),
-          localAgent: child.agent,
           result: localResult.promise,
           dispose: () => Promise.resolve(),
         }),
       })
-      const localRun = await ctx.subagents.start('reused-provider', {
+      const localRun = await startLifecycleFixture(ctx, 'reused-provider', {
         parent: parent.agent,
         prompt: [],
         signal: new AbortController().signal,
-      })
+      }, true)
       unregisterLocal()
 
       const unregisterRemote = ctx.subagents.registerProvider({
@@ -727,12 +827,11 @@ describe('HarnessSdkJsonRpcServer', () => {
         inheritsParentContext: false,
         start: () => Promise.resolve({
           id: SessionId('provider-reuse-child'),
-          localAgent: undefined,
           result: remoteResult.promise,
           dispose: () => Promise.resolve(),
         }),
       })
-      const remoteRun = await ctx.subagents.start('reused-provider', {
+      const remoteRun = await startLifecycleFixture(ctx, 'reused-provider', {
         parent: parent.agent,
         prompt: [],
         signal: new AbortController().signal,
@@ -809,18 +908,17 @@ describe('HarnessSdkJsonRpcServer', () => {
         inheritsParentContext: true,
         start: () => Promise.resolve({
           id: SessionId('fallback-child-session'),
-          localAgent: fallbackChild,
           result: missedStartResult.promise,
           dispose: () => Promise.resolve(),
         }),
       })
       // Start before the server subscribes. The terminal payload still carries
       // this run's exact local child without reconstructing it from ids.
-      const missedStartRun = await ctx.subagents.start('fork', {
+      const missedStartRun = await startLifecycleFixture(ctx, 'fork', {
         parent: parentHandle.agent,
         prompt: [],
         signal: new AbortController().signal,
-      })
+      }, true)
       const transport = new FakeTransport()
       const server = new HarnessSdkJsonRpcServer(ctx, transport, { maxTokensAsSuccess: true })
 
@@ -847,7 +945,6 @@ describe('HarnessSdkJsonRpcServer', () => {
       await settleSubagent(ctx, parentHandle.agent, {
         provider: 'fork',
         id: SessionId('missing-child-agent'),
-        localAgent: undefined,
         stopReason: 'error',
       })
 
@@ -1129,39 +1226,39 @@ describe('HarnessSdkJsonRpcServer', () => {
   })
 
   it('resolves a relative cwd before creating the session', async () => {
-    const create = vi.fn<(options: unknown) => Promise<AgentHandle>>()
-      .mockResolvedValue({ agent: {} as Agent, dispose: () => Promise.resolve() })
-    const resolveCallConfig = vi.fn(async (config: unknown) => config)
-    const ctx = {
-      on: vi.fn(() => () => undefined),
-      agents: { create, get: () => undefined },
-      get: () => ({ listProviders: () => [{ id: 'mock', name: 'Mock' }], resolveCallConfig }),
-    } as unknown as Context
-    const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport()) as unknown as {
-      initialize(params: { cwd: string; provider: string; model: string; reasoningEffort?: string; maxTokens?: number }): Promise<unknown>
-      getOrCreateSession(sessionId: string): Promise<unknown>
-      shutdown(): Promise<Record<string, never>>
-    }
+    const ctx = new Context()
+    await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('answer')], {
+      efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
+    }))
+    const create = vi.spyOn(ctx.agents, 'create')
+    const resolveCallConfig = vi.spyOn(ctx.llm, 'resolveCallConfig')
+    const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
+    try {
+      await server.initialize({ cwd: '.', provider: 'mock', model: 'model', reasoningEffort: ReasoningEffortId('high'), maxTokens: 123 })
+      await server.prompt({ sessionId: 'relative', contentBlocks: [{ type: 'text', text: 'test relative cwd' }] })
+      await server.wait({ sessionId: 'relative' })
 
-    await server.initialize({ cwd: '.', provider: 'mock', model: 'model', reasoningEffort: 'high', maxTokens: 123 })
-    await server.getOrCreateSession('relative')
-
-    expect(resolveCallConfig).toHaveBeenCalledWith({
-      provider: 'mock',
-      model: 'model',
-      reasoningEffort: ReasoningEffortId('high'),
-      maxTokens: 123,
-    })
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({
-      meta: { cwd: process.cwd() },
-      agentOptions: {
+      expect(resolveCallConfig).toHaveBeenCalledWith({
         provider: 'mock',
         model: 'model',
         reasoningEffort: ReasoningEffortId('high'),
         maxTokens: 123,
-      },
-    }))
-    await server.shutdown()
+      })
+      expect(create).toHaveBeenCalledWith(expect.objectContaining({
+        meta: { cwd: process.cwd() },
+        agentOptions: {
+          provider: 'mock',
+          model: 'model',
+          reasoningEffort: ReasoningEffortId('high'),
+          maxTokens: 123,
+        },
+      }))
+    } finally {
+      await server.shutdown()
+      await ctx.fiber.dispose()
+    }
   })
 
   it('settles every teardown and aggregates multiple failures', async () => {
@@ -1186,10 +1283,14 @@ describe('HarnessSdkJsonRpcServer', () => {
 
   it('continues teardown after a subscription disposer fails', async () => {
     let subscription = 0
+    const disposed: number[] = []
     const listenerFailure = new Error('listener teardown failed')
     const on = vi.fn(() => {
-      subscription += 1
-      return subscription === 1 ? () => { throw listenerFailure } : () => undefined
+      const id = ++subscription
+      return () => {
+        disposed.push(id)
+        if (id === subscription) throw listenerFailure
+      }
     })
     const ctx = {
       on,
@@ -1199,6 +1300,6 @@ describe('HarnessSdkJsonRpcServer', () => {
     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
 
     await expect(server.shutdown()).rejects.toBe(listenerFailure)
-    expect(on).toHaveBeenCalledTimes(4)
+    expect(disposed.toSorted()).toEqual(Array.from({ length: subscription }, (_, index) => index + 1))
   })
 })

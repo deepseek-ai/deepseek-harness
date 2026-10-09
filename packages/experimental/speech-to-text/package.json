@@ -20,6 +20,7 @@
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
     "./types": {
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
@@ -30,6 +31,7 @@
     }
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"

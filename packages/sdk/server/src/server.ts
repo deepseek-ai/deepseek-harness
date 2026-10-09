@@ -12,7 +12,8 @@ import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
 import { carrierKeyOf, type Scoped } from '@deepseek-ai/dsh-scope'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import type SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
@@ -23,6 +24,10 @@ import type {
   SessionEventNotification,
   SessionPromptParams,
   SessionPromptResult,
+  SessionWaitParams,
+  SessionWorkingDirectoryParams,
+  SessionWorkingDirectorySetParams,
+  SessionWorkingDirectoryResult,
   SdkEncodedImageBlock,
   SubagentFinishedNotification,
   SubagentStartedNotification,
@@ -30,6 +35,8 @@ import type {
 
 interface SessionRecord {
   handle: AgentHandle
+  /** Latest live failure not superseded by a subsequently committed terminal. */
+  failure: { readonly error: unknown; readonly atOffset: SessionLogOffset } | undefined
 }
 
 function encodedImage(block: SessionPromptParams['contentBlocks'][number]): block is SdkEncodedImageBlock {
@@ -93,8 +100,18 @@ export class HarnessSdkJsonRpcServer {
   ) {
     const serverOptions = this.options
     this.disposers.push(ctx.on('session/event', (session, event) => {
+      const record = this.sessions.get(session.id)
+      if (event.type === 'turn/end' && record?.handle.agent.session === session
+        && record.failure !== undefined && event.seq >= record.failure.atOffset) {
+        record.failure = undefined
+      }
       const payload: SessionEventNotification = { sessionId: String(session.id), event }
       this.transport.notify('session.event', payload)
+    }))
+    this.disposers.push(ctx.on('agent/error', ({ agent, error }) => {
+      const record = this.sessions.get(agent.session.id)
+      if (record?.handle.agent !== agent) return
+      record.failure = { error, atOffset: agent.session.seq }
     }))
     this.disposers.push(ctx.on('agent/status', ({ agent, status }) => {
       this.transport.notify('session.status', { sessionId: String(agent.session.id), status })
@@ -194,6 +211,32 @@ export class HarnessSdkJsonRpcServer {
     return { messageId: message.id }
   }
 
+  /**
+   * Wait for an existing owned Agent and its managed descendants to finish.
+   * The response follows all Session notifications emitted during the wait.
+   * Rejects a live Agent failure that has no subsequent durable terminal.
+   * @param params - the SDK-owned session to observe without creating one.
+   * @returns an empty result after the root stays idle across the descendant check.
+   */
+  async wait(params: SessionWaitParams): Promise<Record<string, never>> {
+    if (!this.initialized) throw new Error('SDK server is not initialized')
+    const rec = this.sessions.get(params.sessionId)
+    if (rec === undefined) throw new Error(`unknown SDK session: ${params.sessionId}`)
+    const agent = rec.handle.agent
+    const subagents = this.ctx.get('subagents')
+    while (true) {
+      this.assertLiveAgent(rec, params.sessionId)
+      await agent.whenIdle()
+      const idleSeq = agent.session.seq
+      const children = await subagents?.waitForChildren(agent)
+      this.assertLiveAgent(rec, params.sessionId)
+      if (!children && agent.status === 'idle' && agent.session.seq === idleSeq) {
+        if (rec.failure !== undefined) throw rec.failure.error
+        return {}
+      }
+    }
+  }
+
   private assertLiveAgent(rec: SessionRecord, sessionId: string): void {
     if (this.ctx.agents.get(rec.handle.agent.id) !== rec.handle.agent) {
       throw new Error(`session agent was disposed outside the server: ${sessionId}`)
@@ -201,7 +244,35 @@ export class HarnessSdkJsonRpcServer {
   }
 
   /**
+   * Read a Session's effective directory, recovering a missing directory to its origin.
+   * @param params - target Session; an unknown id creates it.
+   * @returns the absolute effective directory.
+   */
+  async getWorkingDirectory(params: SessionWorkingDirectoryParams): Promise<SessionWorkingDirectoryResult> {
+    const agent = await this.workingDirectoryAgent(params.sessionId)
+    return { cwd: await this.ctx.workingDirectory.ensure(agent) }
+  }
+
+  /**
+   * Change a Session's directory and queue its model-visible transition.
+   * @param params - target Session and absolute or current-directory-relative path.
+   * @returns the validated absolute directory; origin and permissions are unchanged.
+   */
+  async setWorkingDirectory(params: SessionWorkingDirectorySetParams): Promise<SessionWorkingDirectoryResult> {
+    const agent = await this.workingDirectoryAgent(params.sessionId)
+    return { cwd: await this.ctx.workingDirectory.set(agent, params.path) }
+  }
+
+  private async workingDirectoryAgent(sessionId: string): Promise<Agent> {
+    if (!this.initialized) throw new Error('SDK server is not initialized')
+    const rec = await this.getOrCreateSession(sessionId)
+    this.assertLiveAgent(rec, sessionId)
+    return rec.handle.agent
+  }
+
+  /**
    * Dispose server-owned agents, adapter, and subscriptions to quiescence.
+   * Managed descendants drain before the root Agent handles and adapter are released.
    * The surrounding context remains running.
    * @returns empty JSON-RPC result.
    */
@@ -224,6 +295,11 @@ export class HarnessSdkJsonRpcServer {
       } catch (error) {
         failures.push(error)
       }
+    }
+    try {
+      await this.ctx.get('subagents')?.drainDescendants(records.map(rec => rec.handle.agent))
+    } catch (error: unknown) {
+      failures.push(error)
     }
     const teardownResults = await Promise.allSettled([
       ...records.map(rec => Promise.resolve().then(() => rec.handle.dispose())),
@@ -251,6 +327,22 @@ export class HarnessSdkJsonRpcServer {
         return this.initialize(params as unknown as InitializeParams)
       case 'session/prompt':
         return this.prompt(params as unknown as SessionPromptParams)
+      case 'session/wait': {
+        const sessionId = params?.sessionId
+        if (typeof sessionId !== 'string') throw new TypeError('session/wait requires a sessionId string')
+        return this.wait({ sessionId })
+      }
+      case 'session/working-directory/get':
+      case 'session/working-directory/set': {
+        if (typeof params?.sessionId !== 'string' || params.sessionId.length === 0) {
+          throw new TypeError('working-directory requests require a non-empty sessionId')
+        }
+        if (method === 'session/working-directory/get') {
+          return this.getWorkingDirectory({ sessionId: params.sessionId })
+        }
+        if (typeof params.path !== 'string') throw new TypeError('working-directory set requires a path string')
+        return this.setWorkingDirectory({ sessionId: params.sessionId, path: params.path })
+      }
       case 'shutdown':
         return this.shutdown()
       default:
@@ -288,7 +380,7 @@ export class HarnessSdkJsonRpcServer {
         ...this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens },
       },
     })
-    const rec: SessionRecord = { handle }
+    const rec: SessionRecord = { handle, failure: undefined }
     this.sessions.set(sessionId, rec)
     return rec
   }

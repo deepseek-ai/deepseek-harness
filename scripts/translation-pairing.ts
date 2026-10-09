@@ -311,6 +311,7 @@ export function requiresSourceLanguageSwitcher(source: string): boolean {
   return ![
     'docs/agent-lifecycle.md',
     'docs/capability-seams.md',
+    'docs/cli-help.md',
     'docs/config-catalog.md',
     'docs/cordis-api/context.md',
     'docs/cordis-api/events.md',

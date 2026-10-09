@@ -493,7 +493,7 @@ export interface DefineToolOptions<S extends ParameterSchemaSpec, O extends Valu
     readonly schema: O
     /** Pure Native/model rendering of one validated canonical value. */
     render(args: InferArgs<S>, value: InferValue<NoInfer<O>>): ContentBlock[]
-    /** Pure replayable presentation metadata for direct top-level calls. */
+    /** Pure replayable presentation metadata for native and nested calls. */
     presentationMeta?(args: InferArgs<S>, value: InferValue<NoInfer<O>>): JsonValue
   }
   /** Requests deferred loading of the tool definition; see {@link @deepseek-ai/dsh-llm#ToolSchema.deferLoading}. */

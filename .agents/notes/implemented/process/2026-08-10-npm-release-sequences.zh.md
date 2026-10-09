@@ -113,7 +113,7 @@ registry 的两个行为决定了「怎么尝试一次发布」。写入之间�
 | `publishOrder` | 按 npm 会安装的依赖段加 peer 声明做拓扑序，同层按包名排；安装依赖成环是报错而不是随意定序，任何排不进去的 peer 边被丢弃并点名 |
 | `pack` | 把整族打进一个目录并记录上传顺序 |
 | `verify` | 族的版本基线、完整打印出来的发布顺序；发布时还要求本次运行来自该族的 tag、且成员可发布 |
-| `verify-packed-install` | 把一个或多个 pack 目录的 tarball 装进一次性 consumer，并驱动已安装的可执行入口 |
+| `verify-packed-install` | 把一个或多个 pack 目录的 tarball 装进带[独立 npm 缓存](../bug-fix/2026-09-06-packed-install-private-npm-cache.zh.md)的一次性 consumer，并驱动已安装的可执行入口 |
 | `publish` | 上面那三态 |
 | `process` / `tarball` | 启动命令、读取打包 tarball 的唯一正家，其中的入口守卫让每个脚本都可被 import |
 

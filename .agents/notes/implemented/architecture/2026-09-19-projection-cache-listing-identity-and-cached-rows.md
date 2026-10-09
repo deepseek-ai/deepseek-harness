@@ -97,7 +97,7 @@ Writer classification:
 | the `projections` block of an `api-session/added` summary (`manager.handleSessionAdded`) | by the block's `kind`; the summary comes from a live session, so in practice `sequenced` |
 | the history first page's `projections` (`projections.seed` in `session.ts`) | sequenced |
 | the control baseline, live sessions only (`manager.replaceControlBaseline`) | sequenced |
-| the `session.projections` result of `refreshProjections` (a body observation) | sequenced |
+| the `session.projections` result of `refreshProjections` | sequenced for an exact read; cached only when [migration is required](2026-09-29-explicit-session-history-preparation.md) |
 | push frames (the `projection` frame handled by `manager`) | sequenced |
 | the `title` after a successful rename (`session.ts`) | sequenced |
 

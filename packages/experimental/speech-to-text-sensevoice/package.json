@@ -20,12 +20,14 @@
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
     "./worker": {
       "types": "./lib/types/worker.d.ts",
       "default": "./lib/worker.js"
     }
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/worker.js",
     "runtime/assets.json",
@@ -48,6 +50,6 @@
     "@deepseek-ai/dsh-experimental-speech-to-text": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-subprocess-local": "workspace:*",
-    "tsx": "^4.22.4"
+    "tsx": "^4.23.13"
   }
 }

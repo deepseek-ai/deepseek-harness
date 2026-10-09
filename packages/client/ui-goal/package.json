@@ -60,7 +60,7 @@
     "@deepseek-ai/dsh-client-ui-session": "workspace:*",
     "@deepseek-ai/dsh-commands": "workspace:*",
     "@deepseek-ai/dsh-goal": "workspace:*",
-    "@testing-library/react": "^16.1.0",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "~18.3.1",
     "@deepseek-ai/cordis": "workspace:~",
     "react": "^18.2.0",

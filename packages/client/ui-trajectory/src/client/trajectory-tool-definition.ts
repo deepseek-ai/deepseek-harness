@@ -29,6 +29,7 @@ interface DispatchData {
   readonly isError?: boolean
   readonly error?: ToolResultNode['error']
   readonly content?: ToolResultNode['content']
+  readonly meta?: ToolResultNode['meta']
 }
 
 function rootCall(match: ConversationMatch): StartedToolCall {
@@ -112,6 +113,7 @@ function childResult(
     call: { name: data.name, argsRaw: JSON.stringify(data.arguments) },
     callTime: previous === undefined || 'kind' in previous ? null : previous.time,
     content: data.content ?? [],
+    meta: data.meta,
     isError: data.isError === true,
     ...(data.error === undefined ? {} : { error: data.error }),
     subCalls: [],

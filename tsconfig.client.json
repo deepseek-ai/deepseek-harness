@@ -39,6 +39,7 @@
     "packages/client/tsdown.client.ts",
     "scripts/client-build-environment.ts",
     "scripts/bundle-input-isolation.ts",
+    "scripts/experimental-package-policy.ts",
     "scripts/*.client.spec.ts",
     "scripts/client-bundle-css.spec.ts",
     "scripts/client-bundle-purity.spec.ts"
@@ -50,6 +51,7 @@
     "packages/client/*/tests/**/*.host.spec.ts"
   ],
   "references": [
+    { "path": "./packages/experimental/client-ui-cot-translation/tsconfig.client.json" },
     { "path": "./packages/client/product-analytics/tsconfig.client.json" },
     { "path": "./apps/desktop/tsconfig.client.json" },
     { "path": "./packages/util/atomic-write" },

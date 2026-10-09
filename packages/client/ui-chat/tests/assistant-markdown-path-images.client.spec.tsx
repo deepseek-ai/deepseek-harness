@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AssistantMarkdown, localPathMediaUrl } from '../src/client/chat/AssistantMarkdown.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
 import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
+import { useSearchableHidden } from '../src/client/chat/searchable-hidden.ts'
 import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../src/client/contract/slots.ts'
 import type { AssistantBlock } from '../src/client/contract/snapshot.ts'
 
@@ -58,7 +59,7 @@ describe('AssistantMarkdown local-path images', () => {
   it.each([BASE, 'dsh-app://app/'])('renders a local image in closing prose through %s', (base) => {
     vi.spyOn(document, 'baseURI', 'get').mockReturnValue(base)
     const { container } = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown renderSlot={() => null} useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}
         usePresentation={useDetailedPresentation}
         blocks={[textBlock('See ![diagram](/tmp/graph.png) for the layout.')]}
         streaming={false}
@@ -76,7 +77,7 @@ describe('AssistantMarkdown local-path images', () => {
 
   it('keeps non-absolute destinations inert', () => {
     const { container } = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown renderSlot={() => null} useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}
         usePresentation={useDetailedPresentation}
         blocks={[textBlock('See ![diagram](relative.png).')]}
         streaming={false}

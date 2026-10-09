@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AssistantMessageEvent, Model } from '@earendil-works/pi-ai'
+import { stream as streamAnthropic } from '@earendil-works/pi-ai/api/anthropic-messages'
 import { stream as streamCompletions } from '@earendil-works/pi-ai/api/openai-completions'
 import { stream as streamResponses } from '@earendil-works/pi-ai/api/openai-responses'
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript'
-import { closeMockServers, mockServer } from './mock-server.ts'
+import { anthropicFrame as frame, anthropicMessageStart, closeMockServers, mockServer } from './mock-server.ts'
 
 afterEach(closeMockServers)
 
@@ -12,7 +13,7 @@ const args = { file_path: 'notes.md', content: 'x'.repeat(2048) }
 const argsJson = JSON.stringify(args)
 const fragments = argsJson.match(/.{1,7}/gs) ?? []
 
-function model<A extends 'openai-completions' | 'openai-responses'>(api: A, baseUrl: string): Model<A> {
+function model<A extends 'anthropic-messages' | 'openai-completions' | 'openai-responses'>(api: A, baseUrl: string): Model<A> {
   return {
     id: 'm', name: 'm', api, provider: 'test', baseUrl, reasoning: false, input: ['text'],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 8192, maxTokens: 1024,
@@ -55,6 +56,24 @@ describe('streamed tool-call arguments (patched pi-ai)', () => {
       '[DONE]',
     ] }])
     const events = streamCompletions(model('openai-completions', server.url), context, { apiKey: 'test-key' })
+    const { partials, final } = await collect(events)
+    expect(partials).toHaveLength(fragments.length)
+    expect(partials.every(partial => JSON.stringify(partial) === '{}')).toBe(true)
+    expect(final).toEqual(args)
+  })
+
+  it('anthropic-messages parses arguments once, at the end of the call', async () => {
+    const server = await mockServer([{ events: [
+      anthropicMessageStart,
+      frame({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_1', name: 'write', input: {} } }),
+      ...fragments.map(fragment => frame({
+        type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: fragment },
+      })),
+      frame({ type: 'content_block_stop', index: 0 }),
+      frame({ type: 'message_delta', delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 5 } }),
+      frame({ type: 'message_stop' }),
+    ] }])
+    const events = streamAnthropic(model('anthropic-messages', server.url), context, { apiKey: 'test-key' })
     const { partials, final } = await collect(events)
     expect(partials).toHaveLength(fragments.length)
     expect(partials.every(partial => JSON.stringify(partial) === '{}')).toBe(true)

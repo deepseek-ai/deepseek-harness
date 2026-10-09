@@ -29,7 +29,7 @@ This public experimental library is a dependency of the browser providers. It ha
 
 Native providers construct `SessionResources` from the package root, supplying resource acquisition and cleanup callbacks. Calls pass the exact live Agent to `run()`; stale owners and a second owner of an exclusive attachment fail before acquisition. Canceling an acquisition wait leaves initialization available to other callers in the same Session; Session disposal aborts and awaits that initialization. Providers keep their registration until `dispose()` finishes.
 
-MCP providers use `mountSessionMcp` from `@deepseek-ai/dsh-experimental-browser-use-runtime/mcp`, supplying their fixed server name, executable, arguments, and ownership policy. The helper awaits one scoped client startup and discovery attempt within each future Agent's `agent/created` event. Agent creation or resume completes after discovery, before queued input runs; a successful client remains owned by that Session across turns.
+MCP providers use `mountSessionMcp` from `@deepseek-ai/dsh-experimental-browser-use-runtime/mcp`, supplying their fixed server name, executable, arguments, and ownership policy. The mounting context must provide `workingDirectory`. Acquisition uses the [working-directory service](../../session/working-directory/README.md) to validate or recover the current directory and set the MCP server process's initial directory. Retained servers keep that directory when the Session later selects another. The helper awaits one scoped client startup and discovery attempt within each future Agent's `agent/created` event. Agent creation or resume completes after discovery, before queued input runs; a successful client remains owned by that Session across turns.
 
 A busy attachment skips startup permanently for that live activation while its other work continues. Releasing the attachment does not retry skipped activations; a newly created or resumed Agent can acquire it. Startup failure or cancellation rejects Agent creation or resume and triggers creation rollback, including client cleanup. Reconnection is disabled. Loading or reloading a provider applies only to future Agent activations.
 
@@ -67,11 +67,11 @@ The [MCP helper](src/mcp.ts) connects within serial `agent/created`; [AgentLoop]
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through provider-owned browser tools, whose catalogs the MCP helper discovers before model request assembly; providers and the MCP client own descriptions, schemas, results, and image behavior.
+Indirectly, through provider-owned browser tools discovered before model request assembly and through [working-directory recovery](../../session/working-directory/README.md); providers and the MCP client own tool descriptions, schemas, results, and image behavior, while the directory service owns directory context.
 
 #### KV Cache effect
 
-The library adds no prompt text. Discovered tool schemas and provider guidance determine request-prefix changes; ordinary browser resource reuse does not alter those schemas.
+Discovered tool schemas and provider guidance determine request-prefix changes; ordinary browser resource reuse does not alter those schemas. Directory recovery appends user context without replacing the system-prompt prefix.
 
 ## Known Limitations and Deferred Work
 

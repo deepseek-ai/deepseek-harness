@@ -67,9 +67,9 @@ async function commandHarness(
       mode: 'continuable', provider: 'test', label: 'child',
     }))
   } else if (childMode === 'one-shot') {
-    session.append('subagent/descriptor', snapshotSubagentDescriptor({
-      mode: 'one-shot', provider: 'test', label: 'child',
-    }))
+    session.append('subagent/descriptor', {
+      version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'test', label: 'child',
+    })
   } else if (childMode === 'corrupt') {
     session.append('subagent/descriptor', {
       version: SUBAGENT_DESCRIPTOR_VERSION,

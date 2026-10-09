@@ -66,5 +66,5 @@ register<K extends string>(rule: WebhookRule<K>): () => Promise<void>
 dispatch<K extends string>(delivery: VerifiedWebhookDelivery<K>): void
 ```
 
-Source: [`packages/webhook/webhook/src/index.ts`](../../packages/webhook/webhook/src/index.ts)
+Source: [`packages/experimental/webhook/src/index.ts`](../../packages/experimental/webhook/src/index.ts)
 <!-- END GENERATED cordis-surface -->

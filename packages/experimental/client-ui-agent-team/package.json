@@ -69,7 +69,7 @@
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:*",
     "@deepseek-ai/dsh-experimental-agent-team": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
-    "@testing-library/react": "^16.1.0",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.0",
     "@deepseek-ai/cordis": "workspace:~",

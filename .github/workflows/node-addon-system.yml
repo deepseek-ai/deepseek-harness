@@ -48,7 +48,7 @@ jobs:
     outputs:
       ci: ${{ steps.matrix.outputs.ci }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - id: matrix
         run: echo "ci=$(node ./scripts/github-matrix.mjs ci)" >> "$GITHUB_OUTPUT"
@@ -61,13 +61,15 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.matrix.outputs.ci) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
-      - uses: pnpm/action-setup@v4
+      # pnpm v11 ships no darwin-x64 standalone binary, and the pnpm/action-setup
+      # v6 self-update path needs one; this job stays on the v5 npm-install line.
+      - uses: pnpm/action-setup@v5.0.0
         with:
           package_json_file: package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 24
           cache: pnpm
@@ -125,7 +127,7 @@ jobs:
           node:24-alpine
           node --test ./test/flock.test.js ./test/package-matrix.test.js
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 20
 
@@ -139,7 +141,7 @@ jobs:
           node:20-alpine
           node --test ./test/flock.test.js ./test/package-matrix.test.js
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 22
 
@@ -153,7 +155,7 @@ jobs:
           node:22-alpine
           node --test ./test/flock.test.js ./test/package-matrix.test.js
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 26
 

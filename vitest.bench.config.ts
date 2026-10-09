@@ -14,6 +14,8 @@ export default defineConfig({
   test: {
     execArgv: vitestExecArgv,
     setupFiles: ['./scripts/test-proxy-environment.ts'],
+    // Clears recorded timings before the run and renders benchmarks/.dsh-report/report.html after it.
+    globalSetup: ['./benchmarks/support/scaling-report.ts'],
     include: [
       'benchmarks/**/*.bench.ts',
       'benchmarks/**/*.bench.client.ts',

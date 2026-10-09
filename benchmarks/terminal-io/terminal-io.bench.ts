@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { runBuiltBenchmarkWorker } from '../support/built-worker.ts'
 import { ciTimeBudget } from '../support/calibration.ts'
+import { recordTimings, type BenchmarkCase, type Timing } from '../support/scaling-report.ts'
 import type { TerminalIoReport } from './terminal-io.worker.ts'
 
 const MIB = 1024 * 1024
@@ -11,6 +12,18 @@ const WORKER = join(import.meta.dirname, '..', '.dsh-build', 'terminal-io', 'ter
 /** M5 Pro / Node 26.5 reference expectations, before shared CI scaling and headroom. */
 const EXPECTED_MS = { steadyIngest: 20, steadyComplete: 50, fullComplete: 120 }
 const MAX_CAPACITY_RATIO = 4
+/** Terminal output is buffered in memory; no storage access is timed. */
+const IO_SHARE = 0
+const STEADY_CASE: BenchmarkCase = {
+  id: 'terminal-io/steady',
+  measures: 'Terminal ingest and completion of 1 MiB of output into 128 KiB and 4 MiB retained windows.',
+  affects: 'Commands that keep printing output in the terminal tool.',
+}
+const FIVE_MIB_CASE: BenchmarkCase = {
+  id: 'terminal-io/five-mib',
+  measures: 'Complete terminal send of 5 MiB of output with a 4 MiB retained window.',
+  affects: 'Commands that print large logs.',
+}
 const MAX_RETAINED_HEAP_BYTES = 16 * MIB
 
 function median(values: readonly number[]): number {
@@ -38,6 +51,11 @@ it('bounds steady overflow cost as retained terminal capacity grows 32 times', a
   const ingestBudgetMs = ciTimeBudget(EXPECTED_MS.steadyIngest)
   const completeBudgetMs = ciTimeBudget(EXPECTED_MS.steadyComplete)
   console.log(JSON.stringify({ scenario: 'terminal-steady', small, large, capacityRatio, ingestBudgetMs, completeBudgetMs }))
+  const declared = (ms: number): Timing => ({ ms, ioShare: IO_SHARE })
+  recordTimings(STEADY_CASE, {
+    smallIngestMs: declared(median(small.map(row => row.ingestMs))), largeIngestMs: declared(median(large.map(row => row.ingestMs))),
+    smallCompleteMs: declared(median(small.map(row => row.completeMs))), largeCompleteMs: declared(median(large.map(row => row.completeMs))),
+  }, { smallIngestMs: ingestBudgetMs, largeIngestMs: ingestBudgetMs, smallCompleteMs: completeBudgetMs, largeCompleteMs: completeBudgetMs })
   expect(capacityRatio).toBeLessThanOrEqual(MAX_CAPACITY_RATIO)
   for (const rows of [small, large]) {
     expect(median(rows.map(row => row.ingestMs))).toBeLessThanOrEqual(ingestBudgetMs)
@@ -64,6 +82,7 @@ it('completes a five MiB terminal send with bounded retained output', async () =
   const completeMedianMs = median(samples.map(row => row.completeMs))
   const completeBudgetMs = ciTimeBudget(EXPECTED_MS.fullComplete)
   console.log(JSON.stringify({ scenario: 'terminal-five-mib', samples, completeMedianMs, completeBudgetMs }))
+  recordTimings(FIVE_MIB_CASE, { completeMs: { ms: completeMedianMs, ioShare: IO_SHARE } }, { completeMs: completeBudgetMs })
   expect(completeMedianMs).toBeLessThanOrEqual(completeBudgetMs)
   expect(Math.max(...samples.map(row => row.retainedHeapBytes))).toBeLessThanOrEqual(MAX_RETAINED_HEAP_BYTES)
 })

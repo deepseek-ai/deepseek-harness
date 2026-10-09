@@ -96,7 +96,8 @@ describe('web e2e: sidebar subagent activity', () => {
       source: { kind: 'user' },
     }))
     await parentHandle.agent.whenIdle()
-    const started = await scaffold.ctx.subagents.startContinuable({
+    const started = await scaffold.ctx.subagents.startActivation({
+      delivery: 'parent',
       provider: 'spawn',
       label: 'sidebar activity child',
       signal: new AbortController().signal,

@@ -12,7 +12,7 @@
         "index": 0,
         "id": "call_first",
         "name": "subagent",
-        "argumentsDelta": "{\"description\": \"Reply CHILD_OK\", \"prompt\": \"Reply with exactly CHILD_OK.\", \"run_in_background\": true}"
+        "argumentsDelta": "{\"description\":\"Reply CHILD_OK\",\"prompt\":\"Reply with exactly CHILD_OK.\"}"
       },
       {
         "type": "block-end",
@@ -21,7 +21,7 @@
           "type": "tool-call",
           "id": "call_first",
           "name": "subagent",
-          "arguments": "{\"description\": \"Reply CHILD_OK\", \"prompt\": \"Reply with exactly CHILD_OK.\", \"run_in_background\": true}"
+          "arguments": "{\"description\":\"Reply CHILD_OK\",\"prompt\":\"Reply with exactly CHILD_OK.\"}"
         }
       },
       {
@@ -52,7 +52,7 @@
         "index": 0,
         "id": "call_over_capacity",
         "name": "subagent",
-        "argumentsDelta": "{\"description\": \"Reply CHILD_OK\", \"prompt\": \"Reply with exactly CHILD_OK.\", \"run_in_background\": true}"
+        "argumentsDelta": "{\"description\":\"Reply CHILD_OK\",\"prompt\":\"Reply with exactly CHILD_OK.\"}"
       },
       {
         "type": "block-end",
@@ -61,7 +61,7 @@
           "type": "tool-call",
           "id": "call_over_capacity",
           "name": "subagent",
-          "arguments": "{\"description\": \"Reply CHILD_OK\", \"prompt\": \"Reply with exactly CHILD_OK.\", \"run_in_background\": true}"
+          "arguments": "{\"description\":\"Reply CHILD_OK\",\"prompt\":\"Reply with exactly CHILD_OK.\"}"
         }
       },
       {

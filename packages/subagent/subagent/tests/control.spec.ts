@@ -1,3 +1,4 @@
+import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 // The browser-facing prompt and interrupt controls and their stable failure
 // codes. Session Controller owns catalog observation and transport.
 
@@ -23,6 +24,7 @@ const IMAGE_REF = { attachmentId: 'att', mediaType: 'image/png', bytes: 2, width
 /** The runtime plus a programmable live-Agent registry, omitted to compose none. */
 async function bench(live?: Record<string, { status: 'running' | 'idle' }>) {
   const ctx = new Context()
+  await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   if (live !== undefined) {
     ctx.provide('agents', {

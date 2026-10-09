@@ -43,7 +43,13 @@ kind: "package-reference"
 
 `listBundles` 为各组合包及其声明的插件行提供可选的展示 `meta`，包括已禁用的组合包。Client 从这些值中选择语言。单独的 `description` 字段是该组合包原始的 `package.json.description`；元信息诊断不会阻止管理操作。`source` 以 `pnpm add` 接受的 spec 给出 profile 依赖：git 地址或 URL 按记录给出，但去掉 http(s) URL 的 user information（查询字符串保持原样）；`file:` 或 `link:` 路径按 profile 目录解析为绝对路径，`~` 展开为主目录；注册表版本范围、标签或别名接在包名的 `@` 之后，以别名安装的包的 spec 也是如此。安装提供的组合包没有该字段，即使 profile 也依赖它，因为实际加载的是安装中的副本。`plugin_manager` 工具的列表结果不包含 UI 展示元信息。
 
+`listBundles` 将随附可选组合包和按需目录项标为 `official`，与包的安装状态独立。`availability` 表示可读取的安装随附包、profile 包，或 `missing`；按需目录项不计入未声明的传递依赖副本。`installed` 仅表示 profile 是否声明该依赖。尚未安装的按需条目携带内嵌的本地化元信息，以及 Host 生成、包含当前 DSH 版本与安装 spec 的 `installTarget`，无需访问注册表。profile 已声明但文件不可读的包保留依赖声明，并展示原有错误。
+
 `inspect(spec, options)` 在任何东西安装之前读出 spec 指向什么：注册表包名通过 `pnpm view` 询问注册表，在 profile 目录中运行，因而与安装使用同样的代理与认证设置；绝对路径读取其 `package.json`；git 地址或 tarball 只答复自己的形式和它被拉取的 `host`。答复携带名称、版本、描述、该包是否声明组合包，以及作答的 `registry`，否则给出 `problem`：`invalid-spec`、`already-installed`、`not-found`、`not-a-package`、`not-a-bundle`、`network` 或 `unknown`，并附上问过的 `registries`。调用方的 `signal` 或 `inspectTimeoutMs` 会结束查询。
+
+已发布的安装提供 `package@<当前 DSH 版本>`。源码 Web 与开发 Desktop 提供 `link:<工作区包的绝对目录>`，目录来自当前 CLI 的安装位置，包括其开发符号链接。包名通过工作区清单解析；当前工作目录和预发布版本后缀不用于选择 checkout。包、bundle patch 或已构建入口缺失时报告诊断，不回退到注册表。使用 `pnpm install` 和 `pnpm run build` 准备 checkout。链接包使用该 checkout 的依赖与 peer；代码改变后仍需重新构建并重启。即使版本相同，注册表副本或其他 checkout 的链接也可能需要替换。
+
+官方按需安装与显式更新调用和其他组合包相同的 `installBundle` 操作。注册表目标使用 `saveExact: true`；开发目标保留普通 `link:` 依赖。更新传入当前 `enabled` 选择状态；替换已有依赖会报告 `restart-required`。关闭仅取消选择配置层，移除使用原有移除检查。安装失败恢复 profile 清单和锁文件；安装成功后激活失败可能保留已保存的依赖和选择。原有 peer 兼容性检查继续生效，不增加仅针对官方条目的版本准入规则。
 
 `installBundle` 在启动 pnpm 前通过 `git ls-remote` 检查 GitHub 仓库，使用 profile 目录及安装器的 Git 与代理配置。`githubConnectionTimeoutMs` 默认为 5000 毫秒，只限制这次检查，不限制包下载或构建。检查禁用凭据助手和认证提示；只有网络失败与超时会停止安装，通过现有失败类型与诊断日志返回，并标记 `failedAt: 'spec-host'`。认证、仓库查找及其他失败继续交给 pnpm，包括其 HTTPS 到 SSH 的回退。取消安装或销毁管理器会停止检查及其子进程。注册表包、本地路径、压缩包和其他 Git 主机跳过此检查。仓库可达后，下载或组合包验证仍可能失败。
 
@@ -55,7 +61,7 @@ kind: "package-reference"
 
 `waitForInstall(requestId)` 让客户端在响应丢失后等待活动安装的结果，包括不可取消的应用阶段。它返回与原调用相同的结果，请求不在活动中时返回 `null`。已完成的结果不保留；`null` 不表示成功或已取消。
 
-pnpm 11 拦下依赖脚本时，失败的安装在 `pendingBuilds` 里报告 profile 中所有待决定的包名，包括先前尝试留下的；失败的运行会恢复 `package.json` 与 `pnpm-lock.yaml`，但有意不恢复 pnpm 记录这些名字的 `pnpm-workspace.yaml`。Web 插件页提供**允许这些脚本并重试**；工具可以在用户于对话中批准这些脚本后，通过 `install_bundle` 的 `approvedBuilds` 代为授权。服务只校验待决定的名字，不核实对话中的批准。授权按包名保存在当前 profile，允许以宿主用户的权限执行命令，并在再次安装失败后保留。只能批准当前未决定的名字；已有的拒绝与通配规则不能通过此操作覆盖。`allowBuilds` 里出现 YAML 锚点或别名时拒绝授权。重试保留原来的启用选择。
+pnpm 11 拦下依赖脚本时，失败的安装在 `pendingBuilds` 里报告 profile 中所有待决定的包名，包括先前尝试留下的，以及本次运行报告为已忽略的。pnpm 只在能够交互提示时才把这些条目写入 `pnpm-workspace.yaml`，因此由管理器自行记录本次运行报告的包名；失败的运行会恢复 `package.json` 与 `pnpm-lock.yaml`，但有意不恢复 `pnpm-workspace.yaml`。Web 插件页提供**允许这些脚本并重试**；工具可以在用户于对话中批准这些脚本后，通过 `install_bundle` 的 `approvedBuilds` 代为授权。服务只校验待决定的名字，不核实对话中的批准。授权按包名保存在当前 profile，允许以宿主用户的权限执行命令，并在再次安装失败后保留。只能批准当前未决定的名字；已有的拒绝与通配规则不能通过此操作覆盖。`allowBuilds` 里出现 YAML 锚点或别名时拒绝授权。重试保留原来的启用选择。
 
 <a id="version-compatibility-and-exemptions"></a>
 ### 版本兼容性与豁免

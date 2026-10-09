@@ -111,9 +111,9 @@ interface LogMessage {
   open?: boolean
 }
 
-/** The failure carried on a {@link DoneMessage}: one of three kinds plus text. */
+/** The failure carried on a {@link DoneMessage}, including child-observed CPU expiry. */
 interface DoneErrorField {
-  kind: 'exception' | 'invalid-output' | 'output-limit'
+  kind: 'exception' | 'invalid-output' | 'output-limit' | 'timeout'
   message: string
 }
 
@@ -121,7 +121,7 @@ interface DoneErrorField {
  * Python → host: the program settled. `error` carries a program exception
  * (traceback text), an `invalid-output` (completion value was not lossless
  * JSON), or an `output-limit` (serialized completion exceeded the configured
- * cap); wall/CPU budgets, aborts, and substrate death are observed host-side.
+ * cap), or a CPU `timeout`; wall budgets, aborts, and substrate death are observed host-side.
  * From the honest child `value` is present only on a clean completion that
  * produced one, and crosses as exact lossless JSON — never substituted or
  * truncated. A forged frame CAN carry both `value` and `error`;
@@ -707,7 +707,7 @@ export function validateChildFrame(raw: unknown): ChildToHost | undefined {
       if (typeof err !== 'object' || err === null) return undefined
       const { kind, message } = err as Record<string, unknown>
       if (typeof message !== 'string') return undefined
-      if (kind !== 'exception' && kind !== 'invalid-output' && kind !== 'output-limit') return undefined
+      if (kind !== 'exception' && kind !== 'invalid-output' && kind !== 'output-limit' && kind !== 'timeout') return undefined
       return m.value === undefined
         ? { type: 'done', error: { kind, message } }
         : { type: 'done', value: m.value, error: { kind, message } }

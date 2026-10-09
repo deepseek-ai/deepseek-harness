@@ -98,8 +98,7 @@ export interface WorkerHostOptions {
   readonly configPath?: string
   /**
    * Inner arguments the tree parses. The default binds the web server to the
-   * loopback authority the tunnel synthesizes, which also keeps
-   * `networkInterfaces()` out of the trust snapshot.
+   * loopback authority the tunnel synthesizes.
    */
   readonly cmdlineArgs?: readonly string[]
   /** Port named on the default command line; defaults to {@link DEFAULT_PORT}. */

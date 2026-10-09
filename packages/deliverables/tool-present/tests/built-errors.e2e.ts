@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 const root = await mkdtemp(join(tmpdir(), 'present-built-'))
 const ctx = new Context()
+ctx.provide('workingDirectory', { ensure: () => Promise.resolve(root) })
 try {
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)

@@ -72,7 +72,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       repository-version: ${{ steps.version.outputs.repository-version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - name: Resolve repository version
         id: version
@@ -130,7 +130,7 @@ jobs:
           && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - uses: actions/setup-python@v6.3.0
         with:
@@ -145,7 +145,7 @@ jobs:
           --package sdk
           --output-dir dist-python
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: deepseek_harness_sdk-${{ needs.plan.outputs.version }}-py3-none-any.whl
           path: dist-python/deepseek_harness_sdk-${{ needs.plan.outputs.version }}-py3-none-any.whl
@@ -168,11 +168,11 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5.0.0
         with:
           dest: ${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
 
@@ -185,7 +185,7 @@ jobs:
 
       # setup-node's built-in pnpm store cache keys on platform AND arch, so
       # the Linux architectures sharing runner.os stay on separate caches.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 24
           cache: pnpm
@@ -199,7 +199,7 @@ jobs:
 
       # Cache pkg's target Node binary; lockfile changes roll the
       # exact key while the restore prefix can seed its replacement.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6.1.0
         with:
           path: ~/.pkg-cache
           key: pkg-fetch-${{ matrix.target }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -232,7 +232,8 @@ jobs:
           esac
           addon_dir="$(realpath packages/subprocess/subprocess-local/node_modules/node-pty)"
           pnpm_setup_root="$(realpath "$(dirname "$(dirname "$PNPM_HOME")")")"
-          (cd "$addon_dir" && npm_config_build_from_source=true pnpm run install)
+          # Verification installs would install node-gyp inside the package and package it into the exe.
+          (cd "$addon_dir" && npm_config_build_from_source=true pnpm --config.verifyDepsBeforeRun=false run install)
           addon="$addon_dir/build/Release/pty.node"
           [ -f "$addon_dir/build/Makefile" ] || {
             echo "::error::node-pty install did not generate $addon_dir/build/Makefile"
@@ -259,7 +260,9 @@ jobs:
       - name: Build single-exe
         env:
           DSH_BUILD_CLIENT_PROFILE: official
-        run: pnpm exec tsx scripts/build-exe-for-python-sdk.ts --targets=${{ matrix.target }}
+        run: >-
+          pnpm exec tsx scripts/build-exe-for-python-sdk.ts --targets=${{ matrix.target }}
+          ${{ inputs.ci && github.event_name == 'pull_request' && '--artifacts-only' || '' }}
 
       - name: Resolve platform outputs (POSIX)
         id: runtime-posix
@@ -308,7 +311,7 @@ jobs:
           --runtime-exe "${{ steps.runtime-posix.outputs.exe || steps.runtime-windows.outputs.exe }}"
           --output-dir dist-python
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: deepseek_harness_sdk-${{ needs.plan.outputs.version }}-py3-none-any.whl
           path: dist-python
@@ -497,7 +500,7 @@ jobs:
             env -u PYTHONPATH -u DSH_RUNTIME_MODE /tmp/dsh-sdk/bin/python /work/scripts/smoke-python-runtime.py --scenario sdk-mcp --installed-wheel
           '
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ steps.runtime-posix.outputs.wheel || steps.runtime-windows.outputs.wheel }}
           path: dist-python/${{ steps.runtime-posix.outputs.wheel || steps.runtime-windows.outputs.wheel }}

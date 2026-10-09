@@ -29,7 +29,7 @@ kind: "package-reference"
 
 关闭通用设置中的代码工作工具后，新会话选择器和设置页列表提供标准、创造和自定义预设；开启后还提供 PTC 和极简模式。两种状态下均保留默认值选择和创造入口。选择健康定义作为默认值也会同步当前新任务页面的空白会话。Creator 入口开启一个使用 `cordis` preset 的新任务。
 
-关闭代码工作工具时，沿用现有 Developer tools 订阅清空所有尚未应用的选择。关闭状态被接受后，使用 Host 持久化设置的连接会将已保存的内置 PTC 或极简默认值回退为标准模式。已保存的标准、创造和自定义默认值（包括有名称的 PTC 或极简覆盖项）保持不变。关闭后用户仍可重新选择可用预设。已有会话（包括点击新建会话时复用的空白会话）保留所选模式；即使该模式不在菜单中，其标签仍会显示。重新开启代码工作工具不会恢复原默认值或已清除的选择。使用内存设置的远程连接不会改写 Host 的默认值。标准模式缺失或损坏时，默认值保持不变，并显示错误。
+关闭代码工作工具时，沿用现有 Developer tools 订阅清空所有尚未应用的选择。关闭状态被接受后，使用 Host 持久化设置的连接会将已保存的内置 PTC 或极简默认值回退为标准模式。已保存的标准、创造和自定义默认值（包括有名称的 PTC 或极简覆盖项）保持不变。关闭后用户仍可重新选择可用预设。已有会话保留所选模式；新会话使用当前默认值。即使已有会话的模式不在菜单中，其标签仍会显示。重新开启代码工作工具不会恢复原默认值或已清除的选择。使用内存设置的远程连接不会改写 Host 的默认值。标准模式缺失或损坏时，默认值保持不变，并显示错误。
 
 已知的内置预设提供只读的模式说明与使用示例对话框。各页签保留各自的滚动位置；关闭后焦点回到打开它的操作。帮助不会改变新任务默认值。默认徽标取代卡片的分组徽标，预设 id 显示在标题旁。指南文案与示例归本包所有。
 
@@ -45,7 +45,7 @@ kind: "package-reference"
 
 `agentPresets/list` 提供列表并标记当前默认值，`agentPresets/read` 为查看器提供一条声明的 YAML；默认值的修改写入 `agent-preset-registry` settings 命名空间。选择器、空白会话同步和只读会话标签使用记录的 preset 标识。连接重置和设置更新会刷新列表。
 
-`CreatePluginMenuItem` 使用共享的预设列表 store，向 `plugins.add.actions` 贡献菜单项。选择时先调用页面传入的 `onDismiss()`，再调用与设置页 `creatorDraft` 相同的 `startCreatorDraft` 回调。该回调通过 `AgentPresetSeatController` 暂存 `cordis`，再通过 `uiWorkspace.startSession` 打开任务；它可以复用空白 Session，并在 Session 绑定可用时应用暂存选择。暂存选择应用后即清除。代码工作工具开启或关闭时均使用同一个选择器和选择 store，`AgentPresetSeat` 通过共享的 `Toast` 组件显示拒绝原因。
+`CreatePluginMenuItem` 使用共享的预设列表 store，向 `plugins.add.actions` 贡献菜单项。选择时先调用页面传入的 `onDismiss()`，再调用与设置页 `creatorDraft` 相同的 `startCreatorDraft` 回调。该回调通过 `AgentPresetSeatController` 暂存 `cordis`，再通过显式保留草稿的 `uiWorkspace.startSession` 调用打开任务；它可以复用空白 Session，并在 Session 绑定可用时应用暂存选择。暂存选择应用后即清除。代码工作工具开启或关闭时均使用同一个选择器和选择 store，`AgentPresetSeat` 通过共享的 `Toast` 组件显示拒绝原因。
 
 </details>
 

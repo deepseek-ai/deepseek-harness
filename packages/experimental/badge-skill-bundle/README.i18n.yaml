@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/badge-skill-bundle/README.md
+/:
+  en: d4789188cbe49f34
+  zh: 2ff516d81a08f4e4
+/deepseek-ai-dsh-experimental-badge-skill-bundle:
+  en: e9f3f3f4aea1c588
+  zh: 706c6a9f82b3358a
+/deepseek-ai-dsh-experimental-badge-skill-bundle/summary:
+  en: 15e22b36e1581507
+  zh: e53678cae329b498
+/deepseek-ai-dsh-experimental-badge-skill-bundle/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 988e839059414d27
+/deepseek-ai-dsh-experimental-badge-skill-bundle/use-this-package:
+  en: 21fc43b87f896a26
+  zh: 84c71fa133f0d9a0
+/deepseek-ai-dsh-experimental-badge-skill-bundle/understand-the-implementation:
+  en: e1ce6533996f4fe6
+  zh: 5bf2931419881347
+/deepseek-ai-dsh-experimental-badge-skill-bundle/further-exploration:
+  en: 20bf055137af811e
+  zh: c1d8ca9c25928650
+/deepseek-ai-dsh-experimental-badge-skill-bundle/model-experience:
+  en: 456435472409223d
+  zh: c76499dcbad46745
+/deepseek-ai-dsh-experimental-badge-skill-bundle/model-experience/kv-cache-effect:
+  en: 1b2209bbbf869b1a
+  zh: 5b9de62271343e4e
+/deepseek-ai-dsh-experimental-badge-skill-bundle/known-limitations-and-deferred-work:
+  en: 6c6e181ad900ece5
+  zh: 4d6063075f1ee8a6
+/deepseek-ai-dsh-experimental-badge-skill-bundle/known-limitations-and-deferred-work/dev-note:
+  en: 279d01435256cd2a
+  zh: 83780964e5de2f54

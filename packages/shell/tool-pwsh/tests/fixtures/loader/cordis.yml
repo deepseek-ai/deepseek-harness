@@ -3,6 +3,15 @@
 - id: system-prompt
   name: '@deepseek-ai/dsh-system-prompt'
 
+- id: fs
+  name: '@deepseek-ai/dsh-fs-local'
+
+- id: session-projections
+  name: '@deepseek-ai/dsh-session-projection'
+
+- id: working-directory
+  name: '@deepseek-ai/dsh-working-directory'
+
 - id: tools
   name: '@deepseek-ai/dsh-tools'
 

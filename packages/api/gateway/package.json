@@ -58,7 +58,7 @@
     "@deepseek-ai/dsh-deque": "workspace:*",
     "@deepseek-ai/dsh-timeout": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "ws": "^8.21.0",
+    "ws": "^8.21.3",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   },
   "peerDependencies": {

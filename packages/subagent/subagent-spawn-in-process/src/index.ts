@@ -10,11 +10,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {
   ContinuableCreateSpec,
-  ResolvedSubagentStartRequest,
   SubagentCapabilities,
   SubagentProvider,
 } from '@deepseek-ai/dsh-subagent'
-import { startInProcessRun } from '@deepseek-ai/dsh-subagent-in-process-driver'
 
 export const name = 'subagent-spawn-in-process'
 // `tools` is deliberately not injected: the child factory already provides it during setup,
@@ -50,13 +48,6 @@ class SpawnInProcessProvider implements SubagentProvider {
   readonly inheritsParentContext = false
 
   constructor(readonly name: string) {}
-
-  start(request: ResolvedSubagentStartRequest) {
-    // Fresh child: no seed. The shared driver mints ids, stamps cwd/lineage/
-    // depth, drives the one-shot (including the structured capture when the
-    // request carries an outputSchema), and maps the result.
-    return startInProcessRun(request, {})
-  }
 
   prepareContinuable(): Promise<ContinuableCreateSpec> {
     // A spawned child starts fresh, so it contributes no seed; the continuation

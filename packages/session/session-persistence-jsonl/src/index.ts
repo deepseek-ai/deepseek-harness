@@ -100,6 +100,12 @@ export interface Config {
   compression?: JsonlCompression
 }
 
+/** Logical header paired with the catalog's selected physical-generation classification. */
+interface GenerationHeader {
+  readonly header: SessionHeader
+  readonly formatStatus: NonNullable<SessionPersistenceSnapshot['formatStatus']>
+}
+
 /** One stored event graph whose producer has established immutable sharing. */
 interface FrozenStoredEvents extends SessionHandleReadResult {
   readonly eventState: 'shared-frozen'
@@ -447,13 +453,13 @@ class JsonlSessionPersistence extends SessionPersistence {
     }
     const selected = await this.findLog(id, options?.signal)
     if (selected === undefined) return undefined
-    const header = await this.readGenerationHeader(selected, id, options?.signal)
-    if (header === undefined) return undefined
+    const metadata = await this.readGenerationHeader(selected, id, options?.signal)
+    if (metadata === undefined) return undefined
     try {
       const identity = await stat(selected.sourcePath, { bigint: true })
       options?.signal?.throwIfAborted()
       return {
-        header,
+        ...metadata,
         revision: selected.sourceVersion < SESSION_FORMAT_VERSION
           ? SessionPersistenceRevision(`${fileRevision(identity)}:${await this.historicalCorpusRevision(options?.signal)}`)
           : fileRevision(identity),
@@ -491,6 +497,7 @@ class JsonlSessionPersistence extends SessionPersistence {
         listed.add(artifact.header.id)
         snapshots.push({
           header: artifact.header,
+          formatStatus: artifact.formatStatus,
           revision: artifact.sourceVersion < SESSION_FORMAT_VERSION
             ? SessionPersistenceRevision(`${fileRevision(identity)}:${corpusRevision}`)
             : fileRevision(identity),
@@ -1055,29 +1062,29 @@ class JsonlSessionPersistence extends SessionPersistence {
 
   private async listArtifacts(
     signal?: AbortSignal,
-  ): Promise<Array<{ header: SessionHeader; path: string; sourceVersion: number }>> {
+  ): Promise<Array<GenerationHeader & { path: string; sourceVersion: number }>> {
     signal?.throwIfAborted()
     await this.ensureRootEncoding()
     signal?.throwIfAborted()
-    const artifacts: Array<{ header: SessionHeader; path: string; sourceVersion: number }> = []
+    const artifacts: Array<GenerationHeader & { path: string; sourceVersion: number }> = []
     const ids = new Set<SessionId>()
     for (const selected of await this.listGenerations(signal)) {
       signal?.throwIfAborted()
-      let header: SessionHeader | undefined
+      let metadata: GenerationHeader | undefined
       try {
-        header = await this.readGenerationHeader(selected, undefined, signal)
+        metadata = await this.readGenerationHeader(selected, undefined, signal)
       } catch (error: unknown) {
         if (error instanceof SessionFormatUnsupportedError || error instanceof SessionPersistenceCorruptionError) continue
         throw error
       }
-      if (header === undefined) {
+      if (metadata === undefined) {
         continue
       }
-      if (ids.has(header.id)) {
-        throw new Error(`duplicate JSONL session id "${header.id}" appears in multiple project directories`)
+      if (ids.has(metadata.header.id)) {
+        throw new Error(`duplicate JSONL session id "${metadata.header.id}" appears in multiple project directories`)
       }
-      ids.add(header.id)
-      artifacts.push({ header, path: selected.sourcePath, sourceVersion: selected.sourceVersion })
+      ids.add(metadata.header.id)
+      artifacts.push({ ...metadata, path: selected.sourcePath, sourceVersion: selected.sourceVersion })
     }
     signal?.throwIfAborted()
     return artifacts
@@ -1088,7 +1095,7 @@ class JsonlSessionPersistence extends SessionPersistence {
     selected: ResolvedJsonlGeneration,
     expectedId?: SessionId,
     signal?: AbortSignal,
-  ): Promise<SessionHeader | undefined> {
+  ): Promise<GenerationHeader | undefined> {
     let first: string | undefined
     try {
       first = this.compression === 'zstd'
@@ -1136,7 +1143,10 @@ class JsonlSessionPersistence extends SessionPersistence {
       expectedId,
       signal,
     )
-    return header
+    return {
+      header,
+      formatStatus: result.status,
+    }
   }
 
   /** Convert format-catalog string identities to current branded Session metadata. */

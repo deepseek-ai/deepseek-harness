@@ -34,6 +34,12 @@
     },
     {
       "path": "../../session/session-projection"
+    },
+    {
+      "path": "../../session/working-directory"
+    },
+    {
+      "path": "../../fs/fs-local"
     }
   ]
 }

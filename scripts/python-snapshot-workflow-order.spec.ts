@@ -1,7 +1,7 @@
 import { getEventListeners } from 'node:events'
 import { Context } from '@deepseek-ai/cordis'
 import { agentEvents, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import { WorkflowRunId } from '@deepseek-ai/dsh-workflow'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -10,6 +10,7 @@ import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import * as spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../packages/core/agent-loop/tests/mock-adapter.ts'
 import type {} from '@deepseek-ai/dsh-tool-workflow/types'
+import type {} from '@deepseek-ai/dsh-session-log-deepseek'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 // @ts-expect-error Scenario plugins are runtime JavaScript without declaration artifacts.
 import * as fixtureModule from './fixtures/python-snapshot-workflow-order.mjs'
@@ -17,17 +18,17 @@ import * as fixtureModule from './fixtures/python-snapshot-workflow-order.mjs'
 const config = { parentSessionId: 'advanced-parent', prompt: 'workflow child prompt' }
 const fixture = fixtureModule as unknown as {
   name: string
-  apply(ctx: Context, config: { parentSessionId: string; prompt: string }): void
+  apply(ctx: Context, config: { parentSessionId: string; prompt: string; direct?: { prompt: string; callId: string } }): void
 }
 const cleanups: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup() })
 
-async function harness() {
+async function harness(direct = false) {
   const ctx = new Context()
   const store = ctx.plugin(SessionStore)
   await store
   cleanups.push(() => store.dispose())
-  const fiber = ctx.plugin(fixture, config)
+  const fiber = ctx.plugin(fixture, { ...config, ...direct ? { direct: { prompt: config.prompt, callId: 'direct-child' } } : {} })
   await fiber
   cleanups.push(() => fiber.dispose())
   const parent = ctx.sessions.create(SessionId(config.parentSessionId))
@@ -49,7 +50,7 @@ async function harness() {
 }
 
 describe('advanced Python snapshot workflow ordering', () => {
-  it('blocks a real spawned child before its descriptor and first model request', async () => {
+  it('blocks a real activated child before its first model request', async () => {
     const ctx = new Context()
     const entered = Promise.withResolvers<Agent>()
     const order: string[] = []
@@ -57,7 +58,7 @@ describe('advanced Python snapshot workflow ordering', () => {
     const assembly = ctx.plugin({
       name: 'workflow-order-driver-test',
       async apply(inner: Context) {
-        await mountAgentLoopTestDependencies(inner)
+        await mountAgentLoopTestDependencies(inner, { workingDirectory: true })
         await inner.plugin(AgentLoop, { agents: [] })
         await inner.plugin(SubagentRuntime)
         await inner.plugin(spawn, { providerName: 'spawn' })
@@ -66,7 +67,7 @@ describe('advanced Python snapshot workflow ordering', () => {
           return next()
         })
         inner.on('session/event', (_session, event) => {
-          if (event.type === 'tool-workflow/agent-start' || event.type === 'subagent/descriptor') order.push(event.type)
+          if (event.type === 'subagent/catalog' || event.type === 'tool-workflow/agent-start') order.push(event.type)
         })
         await inner.plugin(fixture, config)
       },
@@ -75,20 +76,21 @@ describe('advanced Python snapshot workflow ordering', () => {
     await assembly
     ctx.llm.registerAdapter(['mock'], adapter)
     const parent = await ctx.agentLoop.create(SessionId(config.parentSessionId), { provider: 'mock', model: 'mock' })
-    const run = await ctx.subagents.start('spawn', {
-      parent, prompt: [{ type: 'text', text: config.prompt }], signal: new AbortController().signal,
+    const run = await ctx.subagents.startActivation({
+      provider: 'spawn', label: 'workflow-child', delivery: 'caller',
+      request: { parent, prompt: [{ type: 'text', text: config.prompt }] }, signal: new AbortController().signal,
     })
     cleanups.push(() => run.dispose())
     const child = await entered.promise
-    expect(child.id).toBe(run.id)
+    expect(child.id).toBe(run.childId)
     expect(adapter.requests).toHaveLength(0)
-    expect(child.session.snapshotEvents().some(event => event.type === 'subagent/descriptor')).toBe(false)
+    expect(child.session.snapshotEvents().some(event => event.type === 'subagent/descriptor')).toBe(true)
     parent.session.append('tool-workflow/agent-start', {
       runId: WorkflowRunId('run'), seq: 1, label: 'workflow-child', childId: child.id,
     })
     expect((await run.result).output).toEqual([{ type: 'text', text: 'child complete' }])
     expect(adapter.requests).toHaveLength(1)
-    expect(order).toEqual(['tool-workflow/agent-start', 'subagent/descriptor'])
+    expect(order).toEqual(['subagent/catalog', 'tool-workflow/agent-start'])
   })
 
   it('holds the child until the exact parent records the exact member', async () => {
@@ -105,6 +107,27 @@ describe('advanced Python snapshot workflow ordering', () => {
     expect(await pending).toBe(h.decision)
     expect(h.next).toHaveBeenCalledOnce()
     expect(getEventListeners(h.controller.signal, 'abort')).toHaveLength(0)
+  })
+
+  it('waits for the parent to consume the direct start and acknowledge its request log', async () => {
+    const h = await harness(true)
+    const pending = h.step()
+    h.parent.append('turn/start', { turn: 1 })
+    h.parent.append('step/start', { turn: 1, step: 1 })
+    const callId = ToolCallId('direct-child')
+    h.parent.append('tool/call', { turn: 1, step: 1, callId, name: 'subagent', arguments: '{}' })
+    const result = h.parent.append('tool/result', {
+      turn: 1, step: 1,
+      message: createToolResultMessage({ callId, content: [{ type: 'text', text: 'started subagent child' }], isError: false }),
+    }, { surfaceOp: 'append' })
+    h.parent.append('step/start', { turn: 1, step: 2 })
+    await Promise.resolve()
+    expect(h.next).not.toHaveBeenCalled()
+    h.parent.append('session-log-deepseek/delivery-accepted', {
+      sessionId: h.parent.id, sessionFormatVersion: h.parent.header.version, throughSeq: result.seq,
+    })
+    expect(await pending).toBe(h.decision)
+    expect(h.next).toHaveBeenCalledOnce()
   })
 
   it('retains a start recorded before the child reaches its first step', async () => {

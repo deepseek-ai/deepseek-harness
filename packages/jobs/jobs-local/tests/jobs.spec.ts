@@ -14,6 +14,7 @@ import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
+    'test-task': 'test-task'
     workflow: 'workflow'
   }
 }
@@ -314,7 +315,7 @@ describe('LocalJobRegistry.start', () => {
     const ctx = await harness()
     expect(ctx.jobs.start(producer().spec)).toBe('bash-1')
     expect(ctx.jobs.start(producer().spec)).toBe('bash-2')
-    expect(ctx.jobs.start(producer({ kind: 'subagent' }).spec)).toBe('subagent-1')
+    expect(ctx.jobs.start(producer({ kind: 'test-task' }).spec)).toBe('test-task-1')
     expect(ctx.jobs.start(producer({ kind: 'workflow' }).spec)).toBe('workflow-1')
   })
 })
@@ -343,7 +344,7 @@ describe('LocalJobRegistry reads and settlement', () => {
 
   it('hands the producer result out once, on the first read after settlement', async () => {
     const ctx = await harness()
-    const p = producer({ kind: 'subagent', label: 'research job' })
+    const p = producer({ kind: 'test-task', label: 'research job' })
     const id = ctx.jobs.start(p.spec)
     const jobs = ctx.jobs
     expect(jobs.read(id)).toMatchObject({ chunks: [], job: { status: 'running' } })
@@ -359,7 +360,7 @@ describe('LocalJobRegistry reads and settlement', () => {
 
   it('a settled job without a result reads as empty', async () => {
     const ctx = await harness()
-    const p = producer({ kind: 'subagent' })
+    const p = producer({ kind: 'test-task' })
     const id = ctx.jobs.start(p.spec)
     p.settle({ status: 'failed', detail: 'max-tokens' })
     await tick()
@@ -709,7 +710,7 @@ describe('LocalJobRegistry owner isolation', () => {
 
     const aliceTask = ctx.jobs.start(producer({ owner: alice }).spec)
     const bobTask = ctx.jobs.start(producer({ owner: bob }).spec)
-    const openTask = ctx.jobs.start(producer({ kind: 'subagent' }).spec)
+    const openTask = ctx.jobs.start(producer({ kind: 'test-task' }).spec)
 
     expect(ctx.jobs.list(alice.id).map(t => t.id)).toEqual([aliceTask, openTask])
     expect(ctx.jobs.list(bob.id).map(t => t.id)).toEqual([bobTask, openTask])
@@ -788,7 +789,7 @@ describe('LocalJobRegistry owner cleanup', () => {
     let settle!: (outcome: JobOutcome) => void
     const cancels: (string | undefined)[] = []
     ctx.jobs.start({
-      kind: 'subagent',
+      kind: 'test-task',
       label: 'long research',
       owner: owner.id,
       run: () => ({
@@ -804,7 +805,7 @@ describe('LocalJobRegistry owner cleanup', () => {
     await disposeAgentScope(owner)
     expect(cancels).toEqual(['owner disposed'])
     expect(ctx.jobs.list(owner.id)).toEqual([])
-    expect(seen.map(event => event.type === 'removed' ? event.job.id : undefined)).toEqual(['subagent-1', 'bash-1'])
+    expect(seen.map(event => event.type === 'removed' ? event.job.id : undefined)).toEqual(['test-task-1', 'bash-1'])
   })
 
   it('announces teardown settlements with cause teardown', async () => {
@@ -814,7 +815,7 @@ describe('LocalJobRegistry owner cleanup', () => {
 
     let settle!: (outcome: JobOutcome) => void
     ctx.jobs.start({
-      kind: 'subagent',
+      kind: 'test-task',
       label: 'long research',
       owner: owner.id,
       run: () => ({

@@ -31,6 +31,9 @@
     },
     {
       "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../session/working-directory"
     }
   ]
 }

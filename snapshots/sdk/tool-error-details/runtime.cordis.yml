@@ -1,3 +1,7 @@
+- id: tools
+  config:
+    mode: native
+
 - insert:
     - id: ptc-runtime
       name: '@deepseek-ai/dsh-ptc-runtime-node'

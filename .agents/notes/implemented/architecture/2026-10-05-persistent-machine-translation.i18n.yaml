@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-05-persistent-machine-translation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-05-persistent-machine-translation.md
+/agent-note-machine-translation-results-use-shared-session-records:
+  en: 0587db1f8b7b3c6d
+  zh: 63af01050024d4d1
+/agent-note-machine-translation-results-use-shared-session-records/problem:
+  en: 4194ba9786778876
+  zh: 6b99613a4d0dd5d2
+/agent-note-machine-translation-results-use-shared-session-records/decision:
+  en: fb8800dede33177b
+  zh: b3f5098e54d5d982
+/agent-note-machine-translation-results-use-shared-session-records/alternatives-considered:
+  en: 3f251877332d74cc
+  zh: 61991d5fd4704a99
+/agent-note-machine-translation-results-use-shared-session-records/consequences:
+  en: c51bbb4ec6b7f20b
+  zh: 856dbfdf47509d90

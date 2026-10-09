@@ -19,9 +19,6 @@
     },
     {
       "path": "../subagent"
-    },
-    {
-      "path": "../subagent-in-process-driver"
     }
   ]
 }

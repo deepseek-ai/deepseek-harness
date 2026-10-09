@@ -285,8 +285,9 @@ describe('Messages request conversion', () => {
     expect(request.output_config).toEqual(effort === 'off' ? undefined : { effort })
   })
 
-  it('disables thinking for titles, passes temperature with thinking and refuses unsupported effort', () => {
-    expect(body([user()], { purpose: 'session-title', temperature: 0 })).toMatchObject({ thinking: { type: 'disabled' }, temperature: 0 })
+  it('disables thinking for the off effort, passes temperature with thinking and refuses unsupported effort', () => {
+    expect(body([user()], { reasoningEffort: ReasoningEffortId('off'), temperature: 0 }))
+      .toMatchObject({ thinking: { type: 'disabled' }, temperature: 0 })
     expect(body([user()], { temperature: 0 })).toMatchObject({ thinking: { type: 'enabled' }, temperature: 0 })
     expect(() => body([user()], { reasoningEffort: ReasoningEffortId('medium') })).toThrow(/effort/)
     const disabled = resolveAdapterOptions({ thinking: 'disabled' })
@@ -396,7 +397,7 @@ describe('Messages request conversion', () => {
 
 describe('validated configuration', () => {
   it('advertises exact model metadata and allows unlisted text models', () => {
-    expect(modelInfo(connection, 'deepseek-official', MODEL)).toMatchObject({ context: { contextWindow: 1_000_000 }, defaultMaxTokens: 256_000, reasoning: { defaultEffort: 'high' } })
+    expect(modelInfo(connection, 'deepseek-official', MODEL)).toMatchObject({ context: { contextWindow: 1_000_000 }, defaultMaxTokens: 256_000, reasoning: { efforts: [{ id: 'off' }, { id: 'low' }, { id: 'high' }, { id: 'max' }], defaultEffort: 'high' } })
     expect(modelInfo(connection, 'deepseek-official', 'custom').inputModalities).toEqual(['text'])
     expect(modelInfo(connection, 'deepseek-official', MODEL).systemPromptUpdate).toBeUndefined()
     expect(modelInfo(connection, 'deepseek-official', 'custom').systemPromptUpdate).toBeUndefined()

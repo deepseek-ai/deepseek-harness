@@ -1,0 +1,10 @@
+version: 1
+scenario: official-subagent-bundle
+profile: web
+composition: web-ptc-official-subagent
+recording: authored
+header:
+  class: web-ptc-official-subagent
+  pin: true
+workspace:
+  final: true

@@ -79,3 +79,14 @@ export function diffsFromMeta(meta: unknown): FileDiff[] | undefined {
   if (!Array.isArray(diffs) || diffs.length === 0 || !diffs.every(isFileDiff)) return undefined
   return diffs
 }
+
+/**
+ * Read the operation's file path even when the applied diff is empty.
+ * @param meta - opaque persisted result metadata.
+ * @returns the recorded path, or undefined for old or malformed metadata.
+ */
+export function pathFromMeta(meta: unknown): string | undefined {
+  if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return undefined
+  const path = (meta as Record<string, unknown>).path
+  return typeof path === 'string' && path.length > 0 ? path : undefined
+}

@@ -85,7 +85,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.configForms.whileServed([SUBAGENT_NS, SUBAGENT_MODEL_SELECTION_NS], () => ctx.slots.inject('plugins.item', () => ctx.slots.register({
     name: 'plugins.item',
     id: 'subagent',
-    order: 30,
+    order: 10,
     label: () => t('subagentTitle'),
     locale: NS,
     inject: () => subagentCardFace(limitsFace, modelsFace),

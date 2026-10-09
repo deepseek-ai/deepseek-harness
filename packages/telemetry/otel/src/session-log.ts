@@ -3,11 +3,10 @@ import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { Attributes } from '@opentelemetry/api'
 import { SeverityNumber } from '@opentelemetry/api-logs'
 import { ExportResultCode } from '@opentelemetry/core'
-import type { OTLPExporterNodeConfigBase } from '@opentelemetry/otlp-exporter-base'
 import { JsonLogsSerializer } from '@opentelemetry/otlp-transformer'
 import { resourceFromAttributes } from '@opentelemetry/resources'
 import { LoggerProvider, type BatchLogRecordProcessorOptions, type LogRecordExporter, type ReadableLogRecord, type LogRecordProcessor } from '@opentelemetry/sdk-logs'
-import { createLogExporter } from './transport.ts'
+import { createLogExporter, type LogExporterOptions } from './transport.ts'
 
 /** Collector request ceiling in uncompressed UTF-8 bytes, including the OTLP envelope. */
 export const SESSION_LOG_MAX_REQUEST_BYTES = 4_000_000
@@ -23,15 +22,20 @@ export interface SessionLogRecord {
   severityNumber?: SeverityNumber
 }
 
+/**
+ * Byte and count batching fields implemented by {@link SessionLogProcessor}.
+ *
+ * `exporter` belongs to the owning channel, and `selfObsMeterProvider` is
+ * excluded because this processor implements no self-observability metering.
+ */
+export type SessionLogProcessorOptions = Omit<BatchLogRecordProcessorOptions, 'exporter' | 'selfObsMeterProvider'>
+
 /** Session-log transport and byte/count queue settings. */
 export interface SessionLogOptions {
-  /** Explicit destination and SDK transport options. */
-  exporter: OTLPExporterNodeConfigBase & {
-    /** Full HTTP(S) logs destination. */
-    url: string
-  }
+  /** Explicit destination and SDK transport settings; exporter self-observability metering is not supported. */
+  exporter: LogExporterOptions
   /** Session-only queue settings, independent of product-event aggregation. */
-  processor?: Omit<BatchLogRecordProcessorOptions, 'exporter'>
+  processor?: SessionLogProcessorOptions
   /** May lower, but never exceed, the collector's 4,000,000-byte limit. */
   maxRequestBytes?: number
   /** Instrumentation scope supplied by the business owner. */
@@ -76,7 +80,7 @@ class SessionLogProcessor implements LogRecordProcessor {
   constructor(
     private readonly exporter: LogRecordExporter,
     private readonly limit: number,
-    private readonly config: Required<Pick<BatchLogRecordProcessorOptions, 'maxQueueSize' | 'maxExportBatchSize' | 'scheduledDelayMillis' | 'exportTimeoutMillis'>>,
+    private readonly config: Required<Pick<SessionLogProcessorOptions, 'maxQueueSize' | 'maxExportBatchSize' | 'scheduledDelayMillis' | 'exportTimeoutMillis'>>,
     private readonly warn: SessionLogOptions['onFailure'],
   ) {}
 

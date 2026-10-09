@@ -16,7 +16,7 @@ import type { Api, AssistantMessage, ToolCall, Usage as PiUsage } from '@earendi
 export type PiAiReplayBlock =
   | { type: 'text'; textSignature?: string }
   | { type: 'reasoning'; thinkingSignature?: string; redacted?: boolean }
-  | { type: 'tool-call'; thoughtSignature?: string }
+  | { type: 'tool-call'; thoughtSignature?: string; namespace?: string }
 
 /** Versioned response-level half of the pi-ai replay envelope. */
 export interface PiAiReplayResponse {
@@ -102,6 +102,7 @@ export function toPiReplayState(message: AssistantMessage, requestedModel = mess
         case 'toolCall': return {
           type: 'tool-call',
           ...block.thoughtSignature === undefined ? {} : { thoughtSignature: block.thoughtSignature },
+          ...block.namespace === undefined ? {} : { namespace: block.namespace },
         }
       }
     }),
@@ -136,7 +137,7 @@ function readReplayState(value: unknown): PiAiReplayState {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return invalidReplay(`block ${index} must be an object`)
     const block = value as Record<string, unknown>
     if (!['text', 'reasoning', 'tool-call'].includes(String(block['type']))) return invalidReplay(`block ${index} has an unknown type`)
-    for (const signature of ['textSignature', 'thinkingSignature', 'thoughtSignature'] as const) {
+    for (const signature of ['textSignature', 'thinkingSignature', 'thoughtSignature', 'namespace'] as const) {
       if (block[signature] !== undefined && typeof block[signature] !== 'string') return invalidReplay(`block ${index} ${signature} must be a string`)
     }
     if (block['redacted'] !== undefined && typeof block['redacted'] !== 'boolean') return invalidReplay(`block ${index} redacted must be boolean`)
@@ -209,6 +210,7 @@ function replayedAssistant(message: HarnessAssistantMessage, source: ModelMessag
         name: block.name,
         arguments: parseArguments(block.arguments),
         ...replay.type === 'tool-call' && replay.thoughtSignature !== undefined ? { thoughtSignature: replay.thoughtSignature } : {},
+        ...replay.type === 'tool-call' && replay.namespace !== undefined ? { namespace: replay.namespace } : {},
       }
       /* v8 ignore next -- readReplayState rejects unknown replay tags, so an equal plugin-added Harness tag cannot reach this switch */
       default: return invalidReplay(`block ${index} has an unsupported Harness type`)

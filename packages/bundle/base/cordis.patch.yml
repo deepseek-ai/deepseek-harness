@@ -65,7 +65,10 @@
         targetWords: 5
         targetCjkCharacters: 10
         maxInputBytes: 4096
-        maxOutputTokens: 64
+        # A ceiling against runaway output, not a length target: the prompt
+        # keeps titles short, while reasoning a model cannot switch off also
+        # counts as output. Stays within common model output limits.
+        maxOutputTokens: 4096
         timeoutMs: 60000
 
     - id: user-questions
@@ -155,6 +158,12 @@
     # Shared projection registry: subagent catalog identity (mode/label) folds
     # through its registered units, so the `list_agents` surface below fails
     # loud without it; web layers reuse this same mount for list rows.
+    - id: working-directory
+      name: '@deepseek-ai/dsh-working-directory'
+
+    - id: tool-working-directory
+      name: '@deepseek-ai/dsh-tool-working-directory'
+
     - id: session-projection
       name: '@deepseek-ai/dsh-session-projection'
 
@@ -297,10 +306,6 @@
     - id: skill-filesystem
       name: '@deepseek-ai/dsh-skill-filesystem'
 
-    - id: skill-badge
-      name: '@deepseek-ai/dsh-skill-badge'
-      disabled: true
-
     - id: tool-skill
       name: '@deepseek-ai/dsh-tool-skill'
 
@@ -323,7 +328,7 @@
       name: '@deepseek-ai/dsh-plan-mode'
       config:
         section: |
-              You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+              You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
 
               Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
 
@@ -372,12 +377,10 @@
       config:
         provider: spawn
         toolName: subagent
-        backgroundMode: continuable
 
     # Fork omits model selection so provider/model stay equal to the parent and
-    # the inherited history remains eligible for KV Cache reuse. This base row
-    # stays one-shot; preset layers may select continuable mode without adding a
-    # child-only system-prompt section or tool schema ahead of that history.
+    # the inherited history remains eligible for KV Cache reuse. Parent and child
+    # share the messaging tools; return guidance follows the inherited history.
     # See .agents/notes/implemented/feature/2026-08-18-model-selected-subagent-routes.md
     # and .agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md.
     - id: tool-subagent-fork
@@ -385,7 +388,6 @@
       config:
         provider: fork
         toolName: subagent_fork
-        backgroundMode: one-shot
 
     - id: ptc-runtime
       name: '@deepseek-ai/dsh-ptc-runtime-node'
@@ -436,20 +438,6 @@
     # domain, driver, and `/goal` command are above.
     - id: tool-goal
       name: '@deepseek-ai/dsh-tool-goal'
-
-    # Fresh-agent Ralph iteration over a build-time-fixed script. Off by
-    # default: the tool description restricts `ralph` to runs the human
-    # explicitly asked for, and completion is a worker self-report, not an
-    # independent evaluation. An overlay row restores it for a base-backed
-    # profile (`$DSH_HOME/cordis.patch.yml`, or a `--patch <file>`):
-    #   - id: tool-ralph
-    #     disabled: false
-    - id: tool-ralph
-      name: '@deepseek-ai/dsh-tool-ralph'
-      disabled: true
-      config:
-        subagentProvider: spawn
-        maxRounds: 64
 
     # Consecutive-repeat reminders on the tool chain.
     - id: repeat-tool-reminder

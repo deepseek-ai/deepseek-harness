@@ -2,8 +2,9 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type {
-  SessionListState, SessionReference, SessionSummary,
+  ISessions, SessionListState, SessionReference, SessionSnapshot, SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
+import { SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceId, WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -68,10 +69,23 @@ async function bench() {
     value: { items: [{ sessionId: 'session' as never, snippet: 'match' }], hasMore: false },
   }))
   const renameSession = vi.fn(async (title: string) => ({ ok: true, value: { title, seq: 1 } }))
-  const binding = vi.fn((_id: string) => ({ session: { rename: renameSession } }))
+  const history = createSnapshotStore<Pick<SessionSnapshot, 'openState' | 'subagent'>>({ openState: 'open', subagent: null })
+  const session = { rename: renameSession, getSnapshot: () => history.getSnapshot() }
+  const binding = vi.fn((_id: string) => ({ session }))
+  const retainedIds = new Map<string, number>()
+  const scope = vi.fn((id: string) => retainedIds.has(id) ? ctx : undefined)
+  const sessionOf = vi.fn((owner: Context) => owner === ctx ? session : undefined)
   const retain = vi.fn((target: string) => {
     const resolved = binding(target)
-    const release = vi.fn()
+    retainedIds.set(target, (retainedIds.get(target) ?? 0) + 1)
+    let active = true
+    const release = vi.fn(() => {
+      if (!active) return
+      active = false
+      const count = retainedIds.get(target)! - 1
+      if (count === 0) retainedIds.delete(target)
+      else retainedIds.set(target, count)
+    })
     return {
       sessionId: target,
       binding: resolved,
@@ -85,7 +99,7 @@ async function bench() {
     _options: unknown,
     operation: (reference: SessionReference) => unknown,
   ) => await operation(retain(target)))
-  const fork = vi.fn(async () => 'forked' as never)
+  const fork = vi.fn<ISessions['fork']>(async () => sid('forked'))
   const pinSession = vi.fn(async () => undefined)
   const unpinSession = vi.fn(async () => undefined)
   // The Host snapshots the injected hooks derive from and a pin's order write
@@ -117,6 +131,8 @@ async function bench() {
     search,
     searchResultLimit: 20,
     binding,
+    scope,
+    sessionOf,
     subagentAddress: vi.fn(() => undefined),
     refreshProjections: vi.fn(() => Promise.resolve()),
     fork,
@@ -134,7 +150,7 @@ async function bench() {
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename,
     retain, using, selectPanel, search, renameSession, binding, fork, pickDirectory, pinSession, unpinSession,
-    workspacesSubscribe, initializeDefault,
+    workspacesSubscribe, initializeDefault, history, scope, sessionOf,
     setWorkspaces: (snapshot: WorkspaceSnapshot): void => { workspaceSnapshot = snapshot },
     setSessions: (snapshot: SessionListState): void => { sessionSnapshot = snapshot },
   }
@@ -482,11 +498,17 @@ describe('ui-workspace apply', () => {
     // Fork goes through the navigation service, which leaves the child unselected.
     const forkSession = vi.spyOn(b.ctx.uiWorkspace, 'forkSession')
     const fork = faceOf(entry(b.slots, MENU_ITEM, 'fork')) as ForkSessionInjected
+    using source = b.ctx.sessions.retain(sid('session'), { source: 'controllerOperation' })
+    await source.ready
     b.retain.mockClear()
     fork.forkSession('session' as never)
     await forkSession.mock.results[0]!.value
-    expect(b.fork).toHaveBeenCalledWith({ sessionId: 'session', increaseTitle: true, onCreated: expect.any(Function) as (childId: SessionId) => void })
+    const [request] = b.fork.mock.calls[0]!
+    const { onCreated, ...payload } = request
+    expect(payload).toEqual({ sessionId: 'session', increaseTitle: true, allowMigration: false })
+    expect(onCreated).toBeTypeOf('function')
     expect(b.retain).not.toHaveBeenCalled()
+    expect(b.selectPanel).not.toHaveBeenCalled()
 
     // The rename row raises the request the dialog entry reads; settling clears it.
     const rename = faceOf(entry(b.slots, MENU_ITEM, 'rename')) as RenameSessionInjected
@@ -521,6 +543,150 @@ describe('ui-workspace apply', () => {
     expect(unarchiveSession).toHaveBeenCalledWith('session')
   })
 
+  it.each(['absent', 'cold', 'loading', 'error', 'closed'] as const)(
+    'forks a %s source without opening it locally', async (state) => {
+      const b = await bench()
+      onTestFinished(() => b.ctx.fiber.dispose())
+      declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
+      await b.ctx.plugin({ inject: [...inject], apply }).await()
+      if (state !== 'absent') {
+        const source = b.ctx.sessions.retain(sid('source'), { source: 'controllerOperation' })
+        onTestFinished(() => { source.release() })
+        await source.ready
+        b.history.set({ openState: state === 'closed' ? 'open' : state, subagent: null })
+        if (state === 'closed') source.release()
+      }
+      b.retain.mockClear()
+      const fork = faceOf(entry(b.slots, MENU_ITEM, 'fork')) as ForkSessionInjected
+      const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+
+      expect(() => { fork.forkSession(sid('source')) }).not.toThrow()
+      await vi.waitFor(() => { expect(b.fork).toHaveBeenCalledOnce() })
+
+      const [request] = b.fork.mock.calls[0]!
+      const { onCreated, ...payload } = request
+      expect(payload).toEqual({ sessionId: 'source', increaseTitle: true, allowMigration: false })
+      expect(onCreated).toBeTypeOf('function')
+      expect(toast.hooks.toast.getSnapshot()).toBeNull()
+      expect(b.retain).not.toHaveBeenCalled()
+      expect(b.selectPanel).not.toHaveBeenCalled()
+    },
+  )
+
+  it('offers to open a source only after the Host refuses migration and never retries the fork', async () => {
+    const b = await bench()
+    onTestFinished(() => b.ctx.fiber.dispose())
+    declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    b.fork.mockRejectedValueOnce(new SessionForkError(
+      new RemoteError('session/migration-required', 'migration required', { sessionId: sid('source') }),
+      sid('source'),
+    ))
+    const fork = faceOf(entry(b.slots, MENU_ITEM, 'fork')) as ForkSessionInjected
+    const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+
+    fork.forkSession(sid('source'))
+    await vi.waitFor(() => {
+      expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'forkRequiresOpen', sessionId: 'source', seq: 1 })
+    })
+
+    expect(b.fork).toHaveBeenCalledOnce()
+    expect(b.retain).not.toHaveBeenCalled()
+    expect(b.selectPanel).not.toHaveBeenCalled()
+    toast.dismissToast()
+    toast.openForkSource(sid('source'))
+    expect(b.retain).toHaveBeenCalledExactlyOnceWith('source', { source: 'mainView' })
+    expect(b.selectPanel).toHaveBeenCalledExactlyOnceWith(null)
+    expect(b.fork).toHaveBeenCalledOnce()
+  })
+
+  it.each(['before the notice', 'after the notice'] as const)(
+    'keeps a fork source archived %s closed when its Toast action requests opening', async (timing) => {
+      const b = await bench()
+      onTestFinished(() => b.ctx.fiber.dispose())
+      b.setSessions(sessionState([summary('source', 1)]))
+      if (timing === 'before the notice') b.setWorkspaces(workspaceState([], [sid('source')]))
+      declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
+      await b.ctx.plugin({ inject: [...inject], apply }).await()
+      b.fork.mockRejectedValueOnce(new SessionForkError(
+        new RemoteError('session/migration-required', 'migration required', { sessionId: sid('source') }),
+        sid('source'),
+      ))
+      const fork = faceOf(entry(b.slots, MENU_ITEM, 'fork')) as ForkSessionInjected
+      const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+      fork.forkSession(sid('source'))
+      await vi.waitFor(() => {
+        expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'forkRequiresOpen', sessionId: 'source', seq: 1 })
+      })
+      if (timing === 'after the notice') b.setWorkspaces(workspaceState([], [sid('source')]))
+
+      toast.dismissToast()
+      toast.openForkSource(sid('source'))
+
+      expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'archivedNotOpenable', seq: 2 })
+      expect(b.retain).not.toHaveBeenCalled()
+      expect(b.fork).toHaveBeenCalledOnce()
+      expect(b.selectPanel).not.toHaveBeenCalled()
+    },
+  )
+
+  it('forks opened read-only subagent history without selecting its child', async () => {
+    const b = await bench()
+    onTestFinished(() => b.ctx.fiber.dispose())
+    declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    using source = b.ctx.sessions.retain(sid('source'), { source: 'controllerOperation' })
+    await source.ready
+    b.history.set({ openState: 'open', subagent: {
+      address: { parentSessionId: sid('parent'), childSessionId: sid('source'), mode: 'one-shot' },
+    } })
+    b.retain.mockClear()
+    const fork = faceOf(entry(b.slots, MENU_ITEM, 'fork')) as ForkSessionInjected
+    const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+
+    fork.forkSession(sid('source'))
+    await vi.waitFor(() => { expect(b.fork).toHaveBeenCalledOnce() })
+
+    const [request] = b.fork.mock.calls[0]!
+    const { onCreated, ...payload } = request
+    expect(payload).toEqual({ sessionId: 'source', increaseTitle: true, allowMigration: false })
+    expect(onCreated).toBeTypeOf('function')
+    expect(toast.hooks.toast.getSnapshot()).toBeNull()
+    expect(b.retain).not.toHaveBeenCalled()
+    expect(b.selectPanel).not.toHaveBeenCalled()
+  })
+
+  it.each(['ordinary', 'other-remote', 'unwrapped-migration'] as const)('keeps a fork failure silent after rejection (%s)', async (kind) => {
+    const b = await bench()
+    onTestFinished(() => b.ctx.fiber.dispose())
+    declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    using source = b.ctx.sessions.retain(sid('source'), { source: 'controllerOperation' })
+    await source.ready
+    b.retain.mockClear()
+    const error = kind === 'ordinary'
+      ? new Error('fork failed')
+      : kind === 'other-remote'
+        ? new SessionForkError(
+          new RemoteError('session/fork-unavailable', 'no completed turn', { sessionId: sid('source') }),
+          sid('source'),
+        )
+        : new RemoteError('session/migration-required', 'migration required', { sessionId: sid('source') })
+    b.fork.mockRejectedValueOnce(error)
+    const forkSession = vi.spyOn(b.ctx.uiWorkspace, 'forkSession')
+    const fork = faceOf(entry(b.slots, MENU_ITEM, 'fork')) as ForkSessionInjected
+    const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+
+    fork.forkSession(sid('source'))
+    expect(forkSession).toHaveBeenCalledOnce()
+    await expect(forkSession.mock.results[0]!.value).rejects.toBe(error)
+
+    expect(toast.hooks.toast.getSnapshot()).toBeNull()
+    expect(b.fork).toHaveBeenCalledOnce()
+    expect(b.retain).not.toHaveBeenCalled()
+    expect(b.selectPanel).not.toHaveBeenCalled()
+  })
+
   it('routes browser actions and picker creation to the services', async () => {
     const b = await bench()
     declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace')
@@ -530,9 +696,11 @@ describe('ui-workspace apply', () => {
     const browser = faceOf(b.slots.entries('sidebar.workspaces')[0]!) as WorkspaceBrowserInjected
     // The browser share delegates to the shared Session navigation action.
     browser.startSession('ws' as never)
-    expect(startSession).toHaveBeenLastCalledWith('ws')
+    expect(startSession).toHaveBeenLastCalledWith('ws', undefined)
     browser.startSession()
-    expect(startSession).toHaveBeenLastCalledWith(undefined)
+    expect(startSession).toHaveBeenLastCalledWith(undefined, undefined)
+    browser.startSession(undefined, { clearPreviousDraft: false })
+    expect(startSession).toHaveBeenLastCalledWith(undefined, { clearPreviousDraft: false })
     browser.open('session' as never)
     expect(b.retain).toHaveBeenCalledWith('session', { source: 'mainView' })
     const signal = new AbortController().signal

@@ -25,12 +25,58 @@ describe('isTrustedApiRequest', () => {
     }
   })
 
+  it('accepts the listener\'s own bind address port-lessly, and nothing that merely resembles it', () => {
+    // A browser dialing the bind address sends that IP literal as Host; the
+    // port is not part of the grant.
+    for (const host of ['10.1.2.3', '10.1.2.3:3080', '10.1.2.3:9999']) {
+      expect(isTrustedApiRequest(request({ host }), [], '10.1.2.3')).toBe(true)
+    }
+    expect(isTrustedApiRequest(request({ host: '10.1.2.4:3080' }), [], '10.1.2.3')).toBe(false)
+    expect(isTrustedApiRequest(request({ host: 'dsh-direct.lan:3080' }), [], '10.1.2.3')).toBe(false)
+    expect(isTrustedApiRequest(request({ host: '10.1.2.3:3080' }), [])).toBe(false)
+    // IPv6 spellings compare through the same normalization as Host, mapped
+    // forms included; a zone id selects the local interface, not the address.
+    for (const host of ['[fd00::1]', '[fd00::1]:3080', '[::ffff:a01:203]:3080', '[::ffff:10.1.2.3]:3080']) {
+      const bindHost = host.startsWith('[::ffff') ? '::ffff:10.1.2.3' : 'fd00::1'
+      expect(isTrustedApiRequest(request({ host }), [], bindHost)).toBe(true)
+    }
+    expect(isTrustedApiRequest(request({ host: '[fd00::2]:3080' }), [], 'fd00::1')).toBe(false)
+    expect(isTrustedApiRequest(request({ host: '[fd00::1]:3080' }), [], 'fe80::1%lo')).toBe(false)
+    expect(isTrustedApiRequest(request({ host: '[fe80::1]:3080' }), [], 'fe80::1%lo')).toBe(true)
+  })
+
   it('refuses a rebound Host: the attacker domain names the socket it did not expect', () => {
     expect(isTrustedApiRequest(request({
       host: 'evil.example:3080',
       origin: 'http://evil.example:3080',
       'sec-fetch-site': 'same-origin',
     }), [])).toBe(false)
+  })
+
+  it('compares Origin and Host under the Origin scheme, so HTTPS default ports normalize like HTTP ones', () => {
+    // A browser omits the default port it dialed, while a proxy or a direct
+    // client may still write it in Host: both spellings name one authority.
+    expect(isTrustedApiRequest(request({ host: 'harness.internal:443', origin: 'https://harness.internal' }), ['harness.internal'])).toBe(true)
+    expect(isTrustedApiRequest(request({ host: 'harness.internal:443', origin: 'https://harness.internal:443' }), ['harness.internal'])).toBe(true)
+    expect(isTrustedApiRequest(request({ host: 'harness.internal', origin: 'https://harness.internal:443' }), ['harness.internal'])).toBe(true)
+    expect(isTrustedApiRequest(request({ host: 'harness.internal:80', origin: 'http://harness.internal' }), ['harness.internal'])).toBe(true)
+    // A TLS-terminating proxy forwards the browser's https Origin to a plain-HTTP upstream.
+    expect(isTrustedApiRequest(request({ host: 'harness.internal', origin: 'https://harness.internal' }), ['harness.internal'])).toBe(true)
+    // A real hostname or port difference still decides, in both directions.
+    expect(isTrustedApiRequest(request({ host: 'harness.internal:443', origin: 'https://harness.internal:444' }), ['harness.internal'])).toBe(false)
+    expect(isTrustedApiRequest(request({ host: 'harness.internal:80', origin: 'https://harness.internal' }), ['harness.internal'])).toBe(false)
+    expect(isTrustedApiRequest(request({ host: 'harness.internal:443', origin: 'http://harness.internal' }), ['harness.internal'])).toBe(false)
+    expect(isTrustedApiRequest(request({ host: 'harness.internal:443', origin: 'https://evil.example' }), ['harness.internal'])).toBe(false)
+    // Cross-site labelling outranks a purely spelling-level match.
+    expect(isTrustedApiRequest(request({
+      host: 'harness.internal:443',
+      origin: 'https://harness.internal',
+      'sec-fetch-site': 'cross-site',
+    }), ['harness.internal'])).toBe(false)
+    // Only http(s) names this listener; opaque and other schemes never compare as an authority.
+    for (const origin of ['ftp://harness.internal', 'file://harness.internal', 'ws://harness.internal', 'null']) {
+      expect(isTrustedApiRequest(request({ host: 'harness.internal', origin }), ['harness.internal']), origin).toBe(false)
+    }
   })
 
   it('accepts a declared public authority: exact on host:port entries, any port on port-less entries', () => {

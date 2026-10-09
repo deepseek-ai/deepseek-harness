@@ -107,7 +107,10 @@ class MutableChatNodeStore implements ChatNodeStore {
   private readonly turnProcesses = new ChatTurnProcessProjector()
   private readonly sources = new Map<string, MutableChatSource<ChatConversationViewNode | undefined>>()
   private readonly processSources = new Map<string, MutableChatSource<ChatTurnProcessPresentation | undefined>>()
+  private readonly bottomSources = new Map<string, MutableChatSource<boolean>>()
+  private bottomTurn: number | undefined
   private readonly dirtyKeys = new Set<string>()
+  private readonly dirtyBottomKeys = new Set<string>()
   private readonly dirtyProcessKeys = new Set<string>()
   private readonly turnKinds = new Map<number, Map<string, TurnKindNodes>>()
   private readonly dirtyTurnKinds = new Set<TurnKindNodes>()
@@ -123,6 +126,24 @@ class MutableChatNodeStore implements ChatNodeStore {
       () => this.get(key),
       `[ui-chat] node source ${key}`,
     ))
+  }
+
+  bottomSource(key: string): ObservableSnapshot<boolean> {
+    return cachedSource(this.bottomSources, key, () => new MutableChatSource(() => {
+      const node = this.get(key) as ChatNode | undefined
+      return this.bottomTurn !== undefined && node !== undefined && isVisibleChatNode(node)
+        && locationCoordinates(node.location).turn === this.bottomTurn
+    }, `[ui-chat] node bottom source ${key}`))
+  }
+
+  setBottomTurn(turn: number | undefined, locations: ChatLocationNodeIndex): void {
+    if (turn === this.bottomTurn) return
+    for (const changed of [this.bottomTurn, turn]) {
+      if (changed !== undefined) {
+        for (const key of locations.getTurn(changed)) this.dirtyBottomKeys.add(key)
+      }
+    }
+    this.bottomTurn = turn
   }
 
   turnDataSource<Kind extends ChatNodeKind>(turn: number, kind: Kind): ObservableSnapshot<readonly ChatNodeDataMap[Kind][]> {
@@ -218,12 +239,15 @@ class MutableChatNodeStore implements ChatNodeStore {
 
   publish(): void {
     const dirty = [...this.dirtyKeys]
+    const dirtyBottom = new Set([...this.dirtyBottomKeys, ...dirty])
     const dirtyProcesses = [...this.dirtyProcessKeys]
     const dirtyTurnKinds = [...this.dirtyTurnKinds]
     this.dirtyKeys.clear()
+    this.dirtyBottomKeys.clear()
     this.dirtyProcessKeys.clear()
     this.dirtyTurnKinds.clear()
     for (const key of dirty) this.sources.get(key)?.publish()
+    for (const key of dirtyBottom) this.bottomSources.get(key)?.publish()
     for (const key of dirtyProcesses) this.processSources.get(key)?.publish()
     for (const collection of dirtyTurnKinds) collection.publish()
   }
@@ -1090,6 +1114,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     this.order = orderedVisibleChatNodes(nodes).map(node => node.key)
     this.locations.rebuild(this.order, this.store)
     this.store.replaceProcesses(this.order, this.locations)
+    this.store.setBottomTurn(input.timeline.turnOrder.at(-1), this.locations)
     this.navigation.rebuild(input.timeline, this.locations, this.store)
     this.timeline = input.timeline
     this.latestGroupInput = {
@@ -1140,6 +1165,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     }
     this.locations.touch(contentOnly)
     this.store.updateProcesses(processTurns, this.locations)
+    this.store.setBottomTurn(input.timeline.turnOrder.at(-1), this.locations)
     if (structural || input.timeline !== this.timeline) {
       this.navigation.rebuild(input.timeline, this.locations, this.store)
     } else {

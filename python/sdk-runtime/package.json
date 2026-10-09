@@ -57,9 +57,6 @@
     "@deepseek-ai/dsh-goal": "workspace:*",
     "@deepseek-ai/dsh-goal-round-driver": "workspace:*",
     "@deepseek-ai/dsh-home-paths": "workspace:*",
-    "@deepseek-ai/dsh-hook-protocol": "workspace:*",
-    "@deepseek-ai/dsh-hooks-claude-code": "workspace:*",
-    "@deepseek-ai/dsh-hooks-codex": "workspace:*",
     "@deepseek-ai/dsh-host-plugin-inventory": "workspace:*",
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
     "@deepseek-ai/dsh-http-proxy": "workspace:*",
@@ -79,8 +76,6 @@
     "@deepseek-ai/dsh-plan-mode": "workspace:*",
     "@deepseek-ai/dsh-plugin-manager": "workspace:*",
     "@deepseek-ai/dsh-plugin-package-inventory-deepseek": "workspace:*",
-    "@deepseek-ai/dsh-ptc-runtime": "workspace:*",
-    "@deepseek-ai/dsh-ptc-runtime-node": "workspace:*",
     "@deepseek-ai/dsh-pwsh-local": "workspace:*",
     "@deepseek-ai/dsh-repeat-tool-reminder": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
@@ -116,7 +111,6 @@
     "@deepseek-ai/dsh-subagent": "workspace:*",
     "@deepseek-ai/dsh-subagent-acp": "workspace:*",
     "@deepseek-ai/dsh-subagent-fork-in-process": "workspace:*",
-    "@deepseek-ai/dsh-subagent-in-process-driver": "workspace:*",
     "@deepseek-ai/dsh-subagent-spawn-in-process": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-subprocess-local": "workspace:*",
@@ -138,7 +132,6 @@
     "@deepseek-ai/dsh-tool-present": "workspace:*",
     "@deepseek-ai/dsh-tool-pwsh": "workspace:*",
     "@deepseek-ai/dsh-tool-pwsh-persistent": "workspace:*",
-    "@deepseek-ai/dsh-tool-ralph": "workspace:*",
     "@deepseek-ai/dsh-tool-skill": "workspace:*",
     "@deepseek-ai/dsh-tool-str-replace-editor": "workspace:*",
     "@deepseek-ai/dsh-tool-subagent": "workspace:*",
@@ -163,6 +156,8 @@
     "@deepseek-ai/dsh-workflow-ptc": "workspace:*",
     "@deepseek-ai/dsh-otel": "workspace:*",
     "@deepseek-ai/dsh-workspace": "workspace:*",
-    "@deepseek-ai/schemastery": "workspace:~"
+    "@deepseek-ai/schemastery": "workspace:~",
+    "@deepseek-ai/dsh-tool-working-directory": "workspace:*",
+    "@deepseek-ai/dsh-working-directory": "workspace:*"
   }
 }

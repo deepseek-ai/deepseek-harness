@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-09-17-unified-subagent-activations.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-17-unified-subagent-activations.md
+/agent-note-unified-subagent-activations:
+  en: bf9959f51e79029c
+  zh: 9526781af4b72f6a
+/agent-note-unified-subagent-activations/problem:
+  en: c97919745873e705
+  zh: b531e60b626c4304
+/agent-note-unified-subagent-activations/decision:
+  en: 86c924e5eedb919d
+  zh: 36dd301bdba6325d
+/agent-note-unified-subagent-activations/decision/retained-decisions:
+  en: 670043a18f9cd32c
+  zh: d925485386bab362
+/agent-note-unified-subagent-activations/alternatives-considered:
+  en: f1fe44375cd78882
+  zh: 9abe43a7aa63c1b0
+/agent-note-unified-subagent-activations/consequences:
+  en: d9f618345ec98d3b
+  zh: 7aceba46b132414e
+/agent-note-unified-subagent-activations/verification:
+  en: ee6acf6a9ae509db
+  zh: e239187d787f24fd

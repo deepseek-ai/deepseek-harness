@@ -3,20 +3,20 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/ptc-runtime-python/README.md
 /:
-  en: 21d67ee6d4caef1e
-  zh: 815c36a37b8a2c3e
+  en: d9caf4b17c0e6fe4
+  zh: 7233b09cfb890559
 /deepseek-ai-dsh-experimental-ptc-runtime-python:
   en: 98894607ad9de9bf
   zh: 068899d3766c2628
 /deepseek-ai-dsh-experimental-ptc-runtime-python/summary:
-  en: a7dc02100b3d90ba
-  zh: 5f80610b0bf84d84
+  en: bdcd4f38f97a3bab
+  zh: d93074f86ac2b9f5
 /deepseek-ai-dsh-experimental-ptc-runtime-python/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-experimental-ptc-runtime-python/use-this-package:
-  en: d8db36ca3f32afeb
-  zh: fec311dea315aac4
+  en: 4695160db934a010
+  zh: 90dcd69e2aab43b3
 /deepseek-ai-dsh-experimental-ptc-runtime-python/use-this-package/what-you-get:
   en: ca7b9cc958069c7f
   zh: 8a4ac72d02ad76eb
@@ -24,17 +24,17 @@
   en: e690628dc6197c3b
   zh: 2b9cdad8b41dcde5
 /deepseek-ai-dsh-experimental-ptc-runtime-python/use-this-package/what-can-go-wrong:
-  en: d43927c607a9855f
-  zh: e1dd1643bebfd647
+  en: 9a0c3294b510cd22
+  zh: 5635886060044ae3
 /deepseek-ai-dsh-experimental-ptc-runtime-python/understand-the-implementation:
   en: 7824816505e2b844
   zh: 3603d1c332c2ed5d
 /deepseek-ai-dsh-experimental-ptc-runtime-python/understand-the-implementation/design-concept:
-  en: 9339b0800d70be48
-  zh: 71a9a3d3eea86050
+  en: 706fb5750d6e766f
+  zh: b8f054bffb4c1ff2
 /deepseek-ai-dsh-experimental-ptc-runtime-python/understand-the-implementation/wire-contract:
-  en: 586d320cd7ef9974
-  zh: ccf4e4f9fb230eb8
+  en: 56cb353442d0aa01
+  zh: bcb13e5dc761af4a
 /deepseek-ai-dsh-experimental-ptc-runtime-python/understand-the-implementation/lossless-json-crossing:
   en: 6252e86fa10e9dd0
   zh: 9b95b033ea0b5463
@@ -54,8 +54,8 @@
   en: 40294c1c31b74824
   zh: d805c6bd7270505e
 /deepseek-ai-dsh-experimental-ptc-runtime-python/known-limitations-and-deferred-work:
-  en: 9177182ef230c99e
-  zh: 2a15994203ad325c
+  en: 5d62ed07fefbefc4
+  zh: 2a03d9bc9265a200
 /deepseek-ai-dsh-experimental-ptc-runtime-python/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

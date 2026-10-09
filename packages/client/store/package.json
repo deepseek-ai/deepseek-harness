@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "zustand": "~4.4.7",
+    "zustand": "~4.5.7",
     "immer": "^10.1.1"
   },
   "files": [

@@ -10,7 +10,7 @@ Agent 的 Cordis Context 拥有注册及其清理。Agent 身份则为某项操�
 
 类型信息被擦除后，这项反向关联还需要补偿机制。Host Remote 转发会从已路由主体检查其 Context，创建流程会从调用方 Context 推断运行时父级，适配器则维护反向身份扫描。这些机制重复类型化请求中已有的身份，也掩盖了哪个调用方在运行时拥有 Agent。
 
-若没有显式所属方，`SubagentContinuationManager` 会通过私有插件 Context 创建和恢复子级，因此基于 Context 的推断会把每个可续跑子级归类为 runtime root，尽管管理器持有其确切父级。仅限根级的消费方随后可能附加调度工具、授予直接人类输入对应的 Goal 权限，或像处理顶层 Agent 一样路由用户问题。
+若没有显式所属方，`SubagentManager` 会通过私有插件 Context 创建和恢复子级，因此基于 Context 的推断会把每个可续跑子级归类为 runtime root，尽管管理器持有其确切父级。仅限根级的消费方随后可能附加调度工具、授予直接人类输入对应的 Goal 权限，或像处理顶层 Agent 一样路由用户问题。
 
 ## 决策
 
@@ -18,7 +18,7 @@ Agent 的 Cordis Context 拥有注册及其清理。Agent 身份则为某项操�
 
 感知作用域的注册表继续仅使用不透明作用域键判断注册成员关系。tool-subagent 不会分类该键，也不会从 Context 解析 Agent。直接 `AgentSetup` 显式传入尚未发布的 Session，并在发布前通过所给 Context 完成安装。对于由设置控制的常驻 preset，事件 payload 提供 Agent，其 Session 提供策略目标，其 Context 拥有注册项。
 
-`SubagentContinuationManager` 会把确切父级放进全新创建与冷恢复的 options。因此，存活的可续跑子级不会出现在 `AgentRegistry.roots()` 中，并且满足 `isOwnedBy(child.id, parent)`。持久化 `parentSession` 元数据不能代替这项关系：没有存活 Agent 拥有 fork 或已恢复会话时，它仍可成为 runtime root。
+`SubagentManager` 会把确切父级放进全新创建与冷恢复的 options。因此，存活的可续跑子级不会出现在 `AgentRegistry.roots()` 中，并且满足 `isOwnedBy(child.id, parent)`。持久化 `parentSession` 元数据不能代替这项关系：没有存活 Agent 拥有 fork 或已恢复会话时，它仍可成为 runtime root。
 
 [作用域参考](../../../../packages/core/scope/README.zh.md)与 [Agent loop 参考](../../../../packages/core/agent-loop/README.zh.md)说明注册和生命周期行为。[发起方作用域决策](2026-07-15-agent-initiator-scope.zh.md)负责私有调用链理由；显式运行时归属不改变因果发起关系或注册生命周期。
 

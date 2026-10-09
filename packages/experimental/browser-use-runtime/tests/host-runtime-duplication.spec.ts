@@ -45,7 +45,7 @@ async function load(): Promise<{ ctx: Context; root: string }> {
   roots.push(root)
   const ctx = new Context()
   contexts.push(ctx)
-  await mountAgentLoopTestDependencies(ctx)
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
   await mountAgentLoopTestHarness(ctx)
   await ctx.plugin(BrowserUse)
   return { ctx, root }
@@ -53,6 +53,15 @@ async function load(): Promise<{ ctx: Context; root: string }> {
 
 const toolNames = (ctx: Context, agent?: Agent): string[] =>
   ctx.tools.schemas(agent).map(schema => schema.name)
+
+it('rejects a missing working-directory provider before mounting browser resources', () => {
+  const ctx = new Context()
+  contexts.push(ctx)
+  expect(() => { mountSessionMcp(ctx, {
+    name: 'browser-fixture', exclusive: false, command: process.execPath, args: [FIXTURE],
+  }) }).toThrow('browser-fixture: browser MCP requires a working-directory provider')
+  expect(ctx.get('browserUse')).toBeUndefined()
+})
 
 it('reproduces the second-Agent failure a profile install causes', async () => {
   const { ctx, root } = await load()

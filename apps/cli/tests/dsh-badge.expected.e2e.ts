@@ -5,7 +5,7 @@ const binScript = fileURLToPath(new URL('./fixtures/dsh-badge/snapshot.ts', impo
 const configPath = fileURLToPath(new URL('./fixtures/dsh-badge/cordis.yml', import.meta.url))
 const defaultConfigPath = fileURLToPath(new URL('./fixtures/dsh-badge/default.cordis.yml', import.meta.url))
 const tsconfigPath = fileURLToPath(new URL('../../../tsconfig.json', import.meta.url))
-const badgeAssetsPath = fileURLToPath(new URL('../../../packages/skill/skill-badge/assets/', import.meta.url))
+const badgeAssetsPath = fileURLToPath(new URL('../../../packages/experimental/skill-badge/assets/', import.meta.url))
 
 describe('dsh badge assembled snapshot', () => {
   it('advertises and loads the opt-in bundled skill through the shipped app', async () => {

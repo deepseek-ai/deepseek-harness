@@ -1,0 +1,5 @@
+- button "Bash Start the diagnostic worker" [expanded]
+- text: IN
+- group "Command arguments": "{ \"command\": \"node ./scripts/start-worker.mjs --workspace=/tmp/diagnostics/long-workspace-name-for-background-command-details --log-level=debug --trace-tag=background-shell-full-command-selection --include=worker,lifecycle,transport,subscriptions --output=/tmp/diagnostics/background-worker.log\", \"description\": \"Start the diagnostic worker\", \"run_in_background\": true }"
+- text: OUT started background job bash-1
+- button "Inspect"

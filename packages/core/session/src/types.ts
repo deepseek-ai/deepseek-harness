@@ -71,20 +71,20 @@ export type OptionalSessionSeq = SessionSeq | null
  * event-body read composes the build-static adjacent chain and publishes only
  * this final generation before constructing a Session.
  *
- * The version is a single monotonic integer with no major/minor split. Whether
- * a bump is needed is decided by what the WRITER emits, never by what a newer
- * reader can accept: bump exactly when an older runtime could no longer handle
- * a new log with full semantic correctness ("parses without error" is not
- * correctness — silently skipping content that shapes reconstruction is a
- * wrong read). Only structural changes reach that bar: the header shape, the
- * {@link SessionEvent} envelope, core event semantics, or the surface
- * mechanism (the {@link SurfaceEventType} set and {@link SurfaceOp} variants).
- * Adding an ordinary event type does not bump — the per-event
- * {@link SessionEvent.ignorable} guard covers vocabulary growth instead. When
- * in doubt, bump: a near-identity upgrade step is almost free, a missed bump
- * makes older runtimes read new logs wrong silently. The released migration,
- * immutable prior-generation, and current fast-path rules are recorded in
- * `.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md`.
+ * The version is a single monotonic integer with no major/minor split. Retain
+ * it when older readers resume correctly, preserve safely ignorable records,
+ * or refuse required features before execution, mutation, or tail repair.
+ * New readers must preserve historical meanings, including logs mixing old
+ * and new record representations. Bump when an existing discriminator cannot
+ * prevent unsafe interpretation; a structural difference alone is insufficient.
+ * Unknown fields and values require evidence of the released reader's actual
+ * admission behavior. The per-event {@link SessionEvent.ignorable} marker
+ * governs unknown event types, not arbitrary nested payload changes.
+ * Same-version readers retain earlier representations: the adjacent migration
+ * chain does not run when stored and current versions match. A subsequent
+ * migration must account for all supported representations of its source.
+ * Compatibility review and the retained migration obligations are recorded in
+ * `.agents/notes/implemented/process/2026-10-08-session-reader-compatibility-review.md`.
  */
 export const SESSION_FORMAT_VERSION = 4
 
@@ -514,6 +514,39 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
     sourceEventSeqs?: never
   })
 }[T]
+
+/**
+ * Event type of an experimental plugin record: `plugin:` followed by
+ * slash-separated segments of lowercase letters, digits, `.`, `_`, and `-`,
+ * each starting with a letter or digit. A record type is never a
+ * {@link SessionEventMap} member.
+ */
+export type PluginRecordType = `plugin:${string}`
+
+/**
+ * Payloads written by experimental packages, keyed by their `plugin:` record
+ * names. Packages augment this map to type writes and enter the current plugin
+ * record catalog; these declarations do not enter {@link SessionEventMap} or
+ * released persistence schemas. Stored records still require owner validation.
+ */
+export interface PluginRecordMap {}
+
+/**
+ * One committed experimental plugin record, read from the log by
+ * `pluginRecordOf`. The record's owner validates `data` before use, because a
+ * restored record carries whatever JSON an earlier build of its owner wrote,
+ * or a V3 event that a format migration renamed into the `plugin:` namespace held.
+ */
+export interface PluginRecord {
+  /** The record type, chosen by the owning plugin. */
+  readonly type: PluginRecordType
+  /** The record's position in the Session log. */
+  readonly seq: SessionSeq
+  /** Unix epoch milliseconds at append. */
+  readonly time: number
+  /** The JSON payload as committed. */
+  readonly data: unknown
+}
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {

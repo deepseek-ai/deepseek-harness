@@ -10,6 +10,7 @@
  * is pinned separately in integration.spec.ts.
  */
 
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -141,6 +142,7 @@ function killableProcess(): ShellProcess {
 
 async function setup(toolConfig: Partial<ToolPwsh.Config> = {}, dshHome?: string) {
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
@@ -154,6 +156,7 @@ async function setup(toolConfig: Partial<ToolPwsh.Config> = {}, dshHome?: string
 /** Full harness: the generic job runtime + its controller, then the pwsh tool. */
 async function setupWithJobs(toolConfig: Partial<ToolPwsh.Config> = {}, dshHome?: string) {
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
@@ -214,6 +217,7 @@ class ConfiningFakeBash extends ShellExecutor {
 /** Sandboxed composition: the shared policy service + a confining executor + the pwsh tool (+ optional approval). */
 async function setupSandboxed(withApproval = false) {
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
@@ -388,6 +392,7 @@ describe('registration', () => {
 
   it('stays pending until ctx.shell exists (inject)', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(ToolPwsh)
@@ -396,6 +401,7 @@ describe('registration', () => {
 
   it('unregisters everything on fiber disposal (HMR safety)', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(BashEnvPlugin)
@@ -491,6 +497,7 @@ describe('execution through the bash seam', () => {
     if (result.isError) throw new Error('expected pwsh success')
     expect(result.value).toEqual({
       kind: 'foreground',
+      cwd: process.cwd(),
       exitCode: 2,
       signal: null,
       timedOut: false,
@@ -601,6 +608,7 @@ describe('per-call sandbox policy resolution', () => {
 
   it('fails load when a confining executor has no shared sandbox-policy resolver', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
@@ -795,7 +803,7 @@ describe('background execution through the job runtime', () => {
     const started = await call(ctx, 'pwsh', { command: 'Write-Output bg-ok', description: 'test command', run_in_background: true })
     expect(started.isError).toBe(false)
     if (started.isError) throw new Error('expected background pwsh success')
-    expect(started.value).toEqual({ kind: 'background', jobId: 'pwsh-1' })
+    expect(started.value).toEqual({ kind: 'background', jobId: 'pwsh-1', cwd: process.cwd() })
     expect(text(started)).toBe('started background job pwsh-1')
 
     const read = await callUntilText(ctx, 'job_output', { job_id: 'pwsh-1' }, 'bg-ok')
@@ -861,6 +869,7 @@ describe('background execution through the job runtime', () => {
   it('never spawns the process when tasks.start preflight throws (no orphan, by construction)', async () => {
     // With no job controller, preflight fails before the executor can spawn.
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalJobRegistry)
@@ -895,6 +904,7 @@ describe('background execution through the job runtime', () => {
     // Bypasses the schemastery defaults on purpose: apply() must stand on its
     // own `?? true` fallback when embedded programmatically without the schema.
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
@@ -913,6 +923,7 @@ describe('background execution through the job runtime', () => {
 describe('the background surface follows the job registry', () => {
   async function bare() {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
@@ -1203,5 +1214,47 @@ describe('processOutcome', () => {
     const runnerFailed = processOutcome(settled({ exitCode: 1, sandbox: { mode: 'read-only', denied: false, runnerFailed: true } }))
     expect(runnerFailed.detail).toContain('the sandbox runner itself failed under read-only mode')
     expect(processOutcome(settled({ sandbox: { mode: 'read-only', denied: false } })).detail).toBe('exit code: 0')
+  })
+})
+
+
+describe('resolved launch directory metadata', () => {
+  it.each([
+    { background: false, workdir: undefined },
+    { background: false, workdir: 'relative' },
+    { background: true, workdir: undefined },
+    { background: true, workdir: 'relative' },
+  ])('records the executor directory for background=$background and workdir=$workdir', async ({ background, workdir }) => {
+    const { ctx, bash } = await setupWithJobs()
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-pwsh-cwd-meta-'))
+    bash.handler = () => runResult('metadata-ok')
+    bash.backgroundHandler = () => fakeProcess('metadata-ok')
+    const current = join(directory, 'current')
+    const ensure = vi.spyOn(ctx.workingDirectory, 'ensure').mockResolvedValue(current)
+    const resolve = ctx.shell.resolve.bind(ctx.shell)
+    const resolving = vi.spyOn(ctx.shell, 'resolve').mockImplementation(request => ({ ...resolve(request), workdir: directory }))
+    const launch = vi.spyOn(ctx.shell, 'execute')
+    try {
+      const owner = await registerFakeAgent(ctx, 'directory-metadata')
+      const result = await call(ctx, 'pwsh', {
+        command: "[Console]::Out.Write('metadata-ok')", description: 'Read launch metadata', run_in_background: background,
+        ...workdir === undefined ? {} : { workdir },
+      }, owner)
+      expect(result.isError).toBe(false)
+      if (result.isError) throw new Error('expected shell success')
+      expect(result.value).toMatchObject({ cwd: directory })
+      expect(result.meta).toEqual({ cwd: directory })
+      expect(resolving).toHaveBeenCalledOnce()
+      expect(resolving).toHaveBeenCalledWith(expect.objectContaining({ workdir: workdir === undefined ? current : join(current, workdir) }))
+      expect(launch).toHaveBeenCalledWith(expect.objectContaining({ workdir: directory }))
+      expect(text(result)).toBe(background ? 'started background job pwsh-1' : 'metadata-ok')
+      if (background) await call(ctx, 'job_output', { job_id: 'pwsh-1', wait: true }, owner)
+    } finally {
+      ensure.mockRestore()
+      resolving.mockRestore()
+      launch.mockRestore()
+      await ctx.fiber.dispose()
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })

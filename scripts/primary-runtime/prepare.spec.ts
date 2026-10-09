@@ -86,7 +86,8 @@ it('fully extracts a large deflate-compressed wheel entry', async () => {
     const archive = join(root, 'large.whl')
     await writeFile(archive, zipSync({ 'large.bin': expected }, { level: 6 }))
     await unpackPrimaryRuntimeWheel(archive, root)
-    expect(await readFile(join(root, 'large.bin'))).toEqual(expected)
+    // Native byte equality avoids a per-byte matcher traversal for this 1 MiB expected output.
+    expect((await readFile(join(root, 'large.bin'))).equals(expected)).toBe(true)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

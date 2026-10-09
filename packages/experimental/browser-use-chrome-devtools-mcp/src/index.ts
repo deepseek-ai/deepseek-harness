@@ -3,12 +3,13 @@
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import { BrowserMcpConfig, mountSessionMcp, validateBrowserMcpConfig } from '@deepseek-ai/dsh-experimental-browser-use-runtime/mcp'
+import type {} from '@deepseek-ai/dsh-working-directory'
 
 /** Cordis identity for the Chrome DevTools MCP browser provider. */
 export const name = 'experimental-browser-use-chrome-devtools-mcp'
 
 /** Services required for scoped MCP startup and prompt readiness checks. */
-export const inject = ['browserUse', 'agents', 'tools', 'systemPrompt']
+export const inject = ['browserUse', 'agents', 'tools', 'systemPrompt', 'workingDirectory']
 
 /** Fixed Chromium launch or existing-browser attachment settings. */
 export type Config = BrowserMcpConfig

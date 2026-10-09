@@ -82,8 +82,26 @@ interface PromptContext {
   readonly name: string
   /** Contexts are joined in ascending order. */
   readonly order: number
-  /** Static text or a provider evaluated for each assembly. Empty text contributes nothing. */
+  /** Static text or a provider evaluated at assembly and admission refresh. Empty text contributes nothing. */
   readonly text: string | ((context: AssembleContext) => string)
+  /** Whether to interpolate prompt variables. Defaults to true; false preserves literal text. */
+  readonly interpolate?: boolean
+  /** Keep this operational context when optional runtime context is disabled. */
+  readonly required?: boolean
+}
+```
+
+`required: true` 在可选运行时上下文被抑制时保留操作所需的贡献。`interpolate: false` 原样保留文本，包括看起来像变量的目录名。`AssembledContext` 将已求值文本及其插值选择传给渲染过程。
+
+```ts type-equiv
+/** One resolved dynamic context contribution. */
+interface AssembledContext {
+  /** The contributing context's unique name. */
+  name: string
+  /** The resolved text before variable interpolation. */
+  text: string
+  /** Whether to interpolate prompt variables. Defaults to true; false preserves literal text. */
+  interpolate?: boolean
 }
 ```
 
@@ -135,7 +153,7 @@ getContextOrder(name: PromptContextOrderName): number
 context(context: PromptContext): () => void
 
 /**
- * Suppress every dynamic runtime-context contribution in the calling
+ * Suppress optional dynamic runtime-context contributions in the calling
  * context's scope without changing the services that own or enforce those
  * facts. Multiple suppressors remain independently disposable.
  * @returns the exact Cordis effect disposer.
@@ -160,6 +178,18 @@ tools(provider: (context: AssembleContext) => ToolProviderResult): () => void
  * @returns the exact Cordis effect disposer.
  */
 variable(name: string, provider: (context: AssembleContext) => string | undefined): () => void
+
+/**
+ * Refresh accepted registered runtime facts for request admission. Contexts
+ * added only by the assembly waterfall retain their accepted values. Current
+ * suppression removes optional contexts, and missing required registrations
+ * are restored in registry order. Sections, tools, and interpolation variables
+ * retain the accepted assembly; their providers and waterfall do not rerun.
+ * @param assembly - accepted assembly for this scope and step.
+ * @param context - the same scope and current plugin-defined assembly fields.
+ * @returns the accepted assembly with current runtime-context provider text.
+ */
+refreshContext(assembly: PromptAssembly, context: AssembleContext = {}): PromptAssembly
 
 /**
  * Assemble global and scoped providers, detach tool parameters, apply
