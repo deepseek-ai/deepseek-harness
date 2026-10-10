@@ -38,7 +38,7 @@ async function fixture(servers: Record<string, unknown> = {}) {
   }
   const authorize = async () => {
     await world.ctx.mcpServers.startAuthorization('notion')
-    expect(await callback(await phase(() => view()?.authorization, 'waiting-browser'))).toBe(204)
+    expect(await callback(await phase(() => view()?.authorization, 'waiting-browser'))).toBe(200)
     await state('connected')
   }
   return { ...world, view, state, mount, prompt, ping, grant, agent, authorize }
