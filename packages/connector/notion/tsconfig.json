@@ -1,24 +1,11 @@
 {
-  "extends": "../../../tsconfig.base.json",
-  "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "lib/types"
-  },
-  "include": [
-    "src"
-  ],
+  "files": [],
   "references": [
     {
-      "path": "../../../vendor/cordis"
+      "path": "./tsconfig.host.json"
     },
     {
-      "path": "../../../vendor/schemastery"
-    },
-    {
-      "path": "../../mcp/mcp-manager"
-    },
-    {
-      "path": "../../core/system-prompt"
+      "path": "./tsconfig.client.json"
     }
   ]
 }

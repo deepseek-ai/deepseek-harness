@@ -14,6 +14,7 @@ import { managerProfile } from '../../../mcp/mcp-manager/tests/profile-fixture.t
 import * as Notion from '../src/index.ts'
 
 const GUIDANCE = 'Tools named `mcp__notion__*` come from the Notion plugin. In user-facing replies, call it the Notion plugin (Notion 插件 in Chinese), not MCP.'
+  + ' If no `mcp__notion__*` tool appears in your tool list, Notion is not connected yet; ask the user to connect it on the Notion plugin page in Plugins.'
 
 async function fixture(servers: Record<string, unknown> = {}) {
   const world = await oauthWorld()

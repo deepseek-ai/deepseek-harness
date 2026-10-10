@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The Notion plugin registers Notion's hosted MCP server, `https://mcp.notion.com/mcp`, with the Host's shared [MCP manager](../../mcp/mcp-manager/README.md) for as long as the plugin is loaded. After the user authorizes a Notion account, every conversation on that Host can use the server's tools, and the model is told to call the integration the Notion plugin. The manager owns the connection, OAuth authorization, the saved grant, and sign-out; this package adds no account interface of its own. It runs in the Web and Desktop compositions.
+The Notion plugin registers Notion's hosted MCP server, `https://mcp.notion.com/mcp`, with the Host's shared [MCP manager](../../mcp/mcp-manager/README.md) for as long as the plugin is loaded. The user connects a Notion account from the plugin's page on the Web sidebar's **Plugins** page; afterwards every conversation on that Host can use the server's tools, and the model is told to call the integration the Notion plugin. The manager owns the connection, OAuth authorization, the saved grant, and sign-out; the page reads and drives them through the manager's Remote and adds no account interface of its own. It runs in the Web and Desktop compositions.
 
 ## Table of Contents
 
@@ -39,7 +39,18 @@ The bundle patch inserts the `notion` row after the profile's other layers. The 
 
 The plugin registers the server `notion` with the fixed OAuth credential key `mcp-client/notion`. Without a saved grant the server waits for authorization and exposes no Notion tools. With a saved grant the manager connects at startup and refreshes tokens as needed. Notion's tools load [on demand](../../mcp/mcp-client/README.md#on-demand-tool-loading) by default: the system prompt lists them, and each agent loads the ones it needs with `mcp__notion__load_tools`.
 
-Authorization uses the manager's [OAuth operations](../../mcp/mcp-manager/README.md#oauth-authorization) through Remote; there is no sign-in page yet. A Remote client calls `ctx.remote.mcpServers.startAuthorization('notion')`, opens the returned `authorizationUrl` in a browser on the Host machine, and the user approves access in Notion. `list()` and `watch` report progress, and `cancelAuthorization('notion', id)` cancels one attempt. `signOut('notion')` deletes the local grant and keeps the client registration; it does not revoke the connection on Notion's side.
+While the plugin is on, its page on the **Plugins** page shows a **Notion account** section, and a tag beside the title reads Not connected, Connecting, Connected, Reconnect, or Unavailable. Switching the plugin on from the list while no account is connected offers **Connect Notion**, which opens the plugin's page and starts authorization.
+
+| Section state | Action |
+|---|---|
+| Not connected, or the grant expired, no longer matches the settings, was rejected, or lacks permissions | **Connect Notion** or **Connect again** starts an authorization attempt |
+| Waiting for you to confirm in the browser | The browser that started the attempt opens Notion's authorization page once; **Open authorization page** opens it again, and **Cancel** ends the attempt |
+| Connected | **Sign out** asks for confirmation, then deletes the local grant |
+| Cannot connect right now | **Retry** restarts the server and keeps the existing grant |
+
+Authorization must be completed in a browser on the Host machine. After the user approves access in Notion, the callback page says DSH received the authorization; the section then shows the result. Leaving the page does not cancel an attempt, which the Host owns. A failed attempt shows **Authorization was not completed. Try again.**; a failed page action shows a toast. Sign-out keeps the client registration and does not revoke the connection on Notion's side.
+
+The page calls the manager's [OAuth operations](../../mcp/mcp-manager/README.md#oauth-authorization) through Remote: `watch` reports the entry, `startAuthorization('notion')` returns an attempt whose `authorizationUrl` the stream reports, `cancelAuthorization('notion', id)` cancels it, `signOut('notion')` deletes the grant, and `restart('notion')` retries. Other Remote clients can use the same operations.
 
 ### Turn off and uninstall
 
@@ -62,7 +73,9 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-no
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) makes two registrations, both effects of the plugin's fiber: `ctx.mcpServers.register('notion', …)` adds a Streamable HTTP entry with the configured `url` and OAuth credential key, and `ctx.systemPrompt.section()` adds the naming guidance at the `MCP_SERVERS` order. The server name fixes the `mcp__notion__` tool namespace, and the credential key fixes the grant address, so a reloaded or reinstalled plugin reaches the same tools and grant. The manager validates the entry when it is registered; a configured or registered server that already uses the name or key makes the plugin fail to load before the guidance is added.
+The Host half, [`src/index.ts`](src/index.ts), makes two registrations, both effects of the plugin's fiber: `ctx.mcpServers.register('notion', …)` adds a Streamable HTTP entry with the configured `url` and OAuth credential key, and `ctx.systemPrompt.section()` adds the naming guidance at the `MCP_SERVERS` order. The server name fixes the `mcp__notion__` tool namespace, and the credential key fixes the grant address, so a reloaded or reinstalled plugin reaches the same tools and grant. The manager validates the entry when it is registered; a configured or registered server that already uses the name or key makes the plugin fail to load before the guidance is added.
+
+The browser half, [`src/client/index.ts`](src/client/index.ts), attaches to the `notion` row, so its registrations exist while that row is on. One `NotionConnection` per browser plugin mirrors the manager's `watch` stream and derives the page state from the `notion` entry alone; it keeps only whether the stream is delivering, whether a page action is pending, and the latest notice. It registers `plugins.bundle.config` keyed by the package name for the section, `plugins.bundle.activation` for the guidance, `plugins.detail.badge` for the tag, and a `shell.overlay` toast. It opens an authorization URL only for the attempt this browser started, and only when the URL uses HTTPS or loopback HTTP.
 
 </details>
 
@@ -76,13 +89,14 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-no
 - [MCP client](../../mcp/mcp-client/README.md) — connection, tool naming, OAuth grant refresh, and redaction.
 - [MCP subsystem](../../../docs/subsystems/mcp.md) — how the MCP packages fit together.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation and enablement.
+- [Plugins page](../../client/ui-plugin-manager/README.md#use-this-package) — the bundle page slots the browser half registers into.
 
 -----
 
 <a id="model-experience"></a>
 ## Model Experience
 
-### Naming guidance
+### Naming and connection guidance
 
 #### What the model sees
 
@@ -91,12 +105,12 @@ While the plugin is loaded, the system prompt contains the text below after the 
 ##### Guidance text
 
 ```markdown
-Tools named `mcp__notion__*` come from the Notion plugin. In user-facing replies, call it the Notion plugin (Notion 插件 in Chinese), not MCP.
+Tools named `mcp__notion__*` come from the Notion plugin. In user-facing replies, call it the Notion plugin (Notion 插件 in Chinese), not MCP. If no `mcp__notion__*` tool appears in your tool list, Notion is not connected yet; ask the user to connect it on the Notion plugin page in Plugins.
 ```
 
 #### Token effect
 
-The fixed sentence adds a few dozen tokens to every request while the plugin is loaded.
+The two fixed sentences add about 70 tokens to every request while the plugin is loaded.
 
 #### KV Cache effect
 
@@ -120,7 +134,7 @@ Notion's instructions (or, with `eager`, its tools) appear when the connection s
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- There is no sign-in page. Until a Remote client presents the manager's authorization URL, a user cannot authorize Notion from the product.
+- The Notion account section exists only while the plugin is on. To sign out after turning the plugin off, turn it on again or delete the grant record.
 - Only the Web and Desktop compositions mount the MCP manager; other profiles leave the plugin inactive.
 - The authorization callback is `http://127.0.0.1:<port>` on the Host, so the browser that completes authorization must run on the Host machine. A Web Host reached from another machine cannot finish authorization.
 - Desktop listens on an OS-assigned port for each launch. Authorizing again after a restart registers a new OAuth client and keeps the earlier registration record; saved grants refresh normally across restarts.
@@ -133,6 +147,6 @@ Notion's instructions (or, with `eager`, its tools) appear when the connection s
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-Specs run the plugin against the MCP manager and the mcp-client loopback OAuth server fixture. The `notion-plugin` session snapshot replays the Notion row without a saved grant, so it pins the naming guidance and verifies that no request reaches the server.
+Host specs run the plugin against the MCP manager and the mcp-client loopback OAuth server fixture; client specs drive the browser half with a fake manager stream. The `notion-plugin` session snapshot replays the Notion row without a saved grant, so it pins the naming guidance and verifies that no request reaches the server.
 
 </details>

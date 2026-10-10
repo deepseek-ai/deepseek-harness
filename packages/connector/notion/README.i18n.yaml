@@ -9,8 +9,8 @@
   en: ebcdb43f309b330c
   zh: 364385eb8bbf6171
 /deepseek-ai-dsh-notion/summary:
-  en: d987f216f9bebd1f
-  zh: 0348b39e08b0d903
+  en: ce335815b5b7cb53
+  zh: a26d3e61baf53eb9
 /deepseek-ai-dsh-notion/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -21,8 +21,8 @@
   en: 9643befdbb99d390
   zh: b7d6cf34bd69993e
 /deepseek-ai-dsh-notion/use-this-package/authorize-and-sign-out:
-  en: bac2be240e693f4a
-  zh: 10af6da37fd11807
+  en: d1709f5f06abcda7
+  zh: aa1522f7f858f822
 /deepseek-ai-dsh-notion/use-this-package/turn-off-and-uninstall:
   en: 8fb8e3a36288a635
   zh: 3ba01fe30e802d1f
@@ -30,27 +30,27 @@
   en: fbba2c704dab668a
   zh: 7fd7ece85739c6e3
 /deepseek-ai-dsh-notion/understand-the-implementation:
-  en: 8e9f6ed96ee55201
-  zh: 10e8d2071d85069d
+  en: 5fdb86f56d07b8e1
+  zh: 3fee4ea1c0689d1f
 /deepseek-ai-dsh-notion/further-exploration:
-  en: 9de5e710b4dd7ba9
-  zh: d895238cbd9e08f7
+  en: b1a8832ec6aaa59a
+  zh: 69eb8266916d008a
 /deepseek-ai-dsh-notion/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-notion/model-experience/naming-guidance:
-  en: c5d4839916cd6dc2
-  zh: cb6d9b8c4182929c
-/deepseek-ai-dsh-notion/model-experience/naming-guidance/what-the-model-sees:
+/deepseek-ai-dsh-notion/model-experience/naming-and-connection-guidance:
+  en: 01b6ec6d681e457b
+  zh: 7fe0d1c9d1037bd4
+/deepseek-ai-dsh-notion/model-experience/naming-and-connection-guidance/what-the-model-sees:
   en: a62a8dbe1f7b7944
   zh: 32a94fa68d8b30c2
-/deepseek-ai-dsh-notion/model-experience/naming-guidance/what-the-model-sees/guidance-text:
+/deepseek-ai-dsh-notion/model-experience/naming-and-connection-guidance/what-the-model-sees/guidance-text:
   en: 8f57292f6821da96
   zh: b2d3bc7e5c9cbc05
-/deepseek-ai-dsh-notion/model-experience/naming-guidance/token-effect:
-  en: 570e40dca65df1ef
-  zh: 4f71ad76a17a2c54
-/deepseek-ai-dsh-notion/model-experience/naming-guidance/kv-cache-effect:
+/deepseek-ai-dsh-notion/model-experience/naming-and-connection-guidance/token-effect:
+  en: 263969c79903e387
+  zh: d45f9e49d9a252c3
+/deepseek-ai-dsh-notion/model-experience/naming-and-connection-guidance/kv-cache-effect:
   en: e9668826c9355444
   zh: 66f609e3779fd510
 /deepseek-ai-dsh-notion/model-experience/notion-server-tools-and-instructions:
@@ -66,8 +66,8 @@
   en: c9327a5b0f494922
   zh: e36a635527a79dee
 /deepseek-ai-dsh-notion/known-limitations-and-deferred-work:
-  en: ea61eb47ae041420
-  zh: 65eed6f181f9b392
+  en: 7a6944464f5f1f93
+  zh: 8230c8d06b7d577b
 /deepseek-ai-dsh-notion/known-limitations-and-deferred-work/dev-note:
-  en: ad49c4ecc94eebdf
-  zh: 965abefc874d8e55
+  en: fc88fd2563d58b64
+  zh: ac8c6b5db2138e28

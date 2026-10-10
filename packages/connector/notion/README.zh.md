@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-Notion 插件在加载期间把 Notion 托管的 MCP 服务器 `https://mcp.notion.com/mcp` 注册到 Host 共用的 [MCP 管理器](../../mcp/mcp-manager/README.zh.md)。用户授权一个 Notion 账号后，该 Host 上的所有对话都能使用这个服务器的工具，模型也会被告知把这项集成称为 Notion 插件。连接、OAuth 授权、已保存的 grant 和退出登录都由管理器负责，本包不另设账号接口。插件运行在 Web 与 Desktop 组合中。
+Notion 插件在加载期间把 Notion 托管的 MCP 服务器 `https://mcp.notion.com/mcp` 注册到 Host 共用的 [MCP 管理器](../../mcp/mcp-manager/README.zh.md)。用户在 Web 侧栏**插件**页面的插件详情页中连接 Notion 账号，之后该 Host 上的所有对话都能使用这个服务器的工具，模型也会被告知把这项集成称为 Notion 插件。连接、OAuth 授权、已保存的 grant 和退出登录都由管理器负责；页面通过管理器的 Remote 读取和操作它们，不另设账号接口。插件运行在 Web 与 Desktop 组合中。
 
 ## 目录
 
@@ -39,7 +39,18 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 
 插件以固定的 OAuth 凭据 key `mcp-client/notion` 注册服务器 `notion`。没有已保存的 grant 时，服务器等待授权，不提供 Notion 工具。有已保存的 grant 时，管理器在启动时连接，并按需刷新 token。Notion 的工具默认[按需加载](../../mcp/mcp-client/README.zh.md#on-demand-tool-loading)：系统提示词列出这些工具，每个 agent 用 `mcp__notion__load_tools` 加载需要的工具。
 
-授权通过 Remote 使用管理器的 [OAuth 操作](../../mcp/mcp-manager/README.zh.md#oauth-authorization)；目前还没有登录页面。Remote 客户端调用 `ctx.remote.mcpServers.startAuthorization('notion')`，在 Host 所在机器的浏览器中打开返回的 `authorizationUrl`，用户在 Notion 中同意授权。`list()` 与 `watch` 报告进度，`cancelAuthorization('notion', id)` 取消一次授权尝试。`signOut('notion')` 删除本地 grant 并保留客户端注册；它不会在 Notion 一侧撤销连接。
+插件开启期间，它在**插件**页面的详情页显示 **Notion 账号**区块，标题旁的标签显示未连接、连接中、已连接、需要重新连接或暂时无法连接。在列表中开启插件而尚未连接账号时，页面提示**连接 Notion**，点击后打开插件详情页并发起授权。
+
+| 区块状态 | 操作 |
+|---|---|
+| 未连接，或授权已过期、与当前设置不再匹配、被拒绝、缺少权限 | **连接 Notion** 或**重新连接**发起一次授权尝试 |
+| 等待你在浏览器中确认 | 发起尝试的浏览器打开一次 Notion 授权页面；**打开授权页面**再次打开，**取消**结束这次尝试 |
+| 已连接 | **退出登录**确认后删除本地 grant |
+| 暂时无法连接 | **重试**重启服务器并保留现有授权 |
+
+授权必须在 Host 所在机器的浏览器中完成。用户在 Notion 中同意授权后，回调页面说明 DSH 已收到授权，区块随后显示结果。离开页面不会取消授权尝试，尝试由 Host 持有。授权失败时显示**授权未完成，请重试**；页面操作失败时显示 toast。退出登录保留客户端注册，不会在 Notion 一侧撤销连接。
+
+页面通过 Remote 调用管理器的 [OAuth 操作](../../mcp/mcp-manager/README.zh.md#oauth-authorization)：`watch` 报告条目，`startAuthorization('notion')` 返回一次授权尝试，其 `authorizationUrl` 由流报告，`cancelAuthorization('notion', id)` 取消它，`signOut('notion')` 删除 grant，`restart('notion')` 重试。其他 Remote 客户端可以使用同样的操作。
 
 ### 停用与卸载
 
@@ -62,7 +73,9 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 进行两项注册，二者都是插件 fiber 的 effect：`ctx.mcpServers.register('notion', …)` 以配置的 `url` 和 OAuth 凭据 key 添加一个 Streamable HTTP 条目，`ctx.systemPrompt.section()` 在 `MCP_SERVERS` 排序位置添加称呼指引。服务器名固定了 `mcp__notion__` 工具命名空间，凭据 key 固定了 grant 地址，因此重新加载或重新安装的插件会得到同样的工具和 grant。管理器在注册时校验条目；如果已配置或已注册的服务器占用了该名称或 key，插件会在添加指引之前加载失败。
+Host 侧的 [`src/index.ts`](src/index.ts) 进行两项注册，二者都是插件 fiber 的 effect：`ctx.mcpServers.register('notion', …)` 以配置的 `url` 和 OAuth 凭据 key 添加一个 Streamable HTTP 条目，`ctx.systemPrompt.section()` 在 `MCP_SERVERS` 排序位置添加称呼指引。服务器名固定了 `mcp__notion__` 工具命名空间，凭据 key 固定了 grant 地址，因此重新加载或重新安装的插件会得到同样的工具和 grant。管理器在注册时校验条目；如果已配置或已注册的服务器占用了该名称或 key，插件会在添加指引之前加载失败。
+
+浏览器侧的 [`src/client/index.ts`](src/client/index.ts) 挂在 `notion` 行上，因此其注册只在该行开启时存在。每个浏览器插件有一个 `NotionConnection`，镜像管理器的 `watch` 流，只根据 `notion` 条目推导页面状态；它只保存流是否在送达、页面操作是否进行中以及最近一条提示。它注册以包名为 key 的 `plugins.bundle.config` 作为区块、`plugins.bundle.activation` 作为引导、`plugins.detail.badge` 作为标签，以及一个 `shell.overlay` toast。它只为本浏览器发起的尝试打开授权链接，且只打开使用 HTTPS 或回环 HTTP 的链接。
 
 </details>
 
@@ -76,13 +89,14 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 - [MCP 客户端](../../mcp/mcp-client/README.zh.md)——连接、工具命名、OAuth grant 刷新与脱敏。
 - [MCP 子系统](../../../docs/subsystems/mcp.zh.md)——各 MCP 包如何协同。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md)——安装与启用。
+- [插件页面](../../client/ui-plugin-manager/README.zh.md#use-this-package)——浏览器侧注册所用的 bundle 详情页 slot。
 
 -----
 
 <a id="model-experience"></a>
 ## 模型体验
 
-### 称呼指引
+### 称呼与连接指引
 
 #### 模型看到什么
 
@@ -91,12 +105,12 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 ##### 指引文本
 
 ```markdown
-Tools named `mcp__notion__*` come from the Notion plugin. In user-facing replies, call it the Notion plugin (Notion 插件 in Chinese), not MCP.
+Tools named `mcp__notion__*` come from the Notion plugin. In user-facing replies, call it the Notion plugin (Notion 插件 in Chinese), not MCP. If no `mcp__notion__*` tool appears in your tool list, Notion is not connected yet; ask the user to connect it on the Notion plugin page in Plugins.
 ```
 
 #### Token 影响
 
-插件加载期间，这句固定文字为每次请求增加几十个 token。
+插件加载期间，这两句固定文字为每次请求增加约 70 个 token。
 
 #### KV Cache 影响
 
@@ -120,7 +134,7 @@ Notion 的服务器说明（设为 `eager` 时则是其工具）在连接成功�
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 没有登录页面。在 Remote 客户端展示管理器的授权链接之前，用户无法在产品中授权 Notion。
+- Notion 账号区块只在插件开启时存在。关闭插件后如需退出登录，请先重新开启插件，或删除 grant 记录。
 - 只有 Web 与 Desktop 组合挂载 MCP 管理器；在其他 profile 中插件保持未激活。
 - 授权回调地址是 Host 上的 `http://127.0.0.1:<port>`，因此完成授权的浏览器必须运行在 Host 所在机器上。从另一台机器访问的 Web Host 无法完成授权。
 - Desktop 每次启动都监听操作系统分配的端口。重启后再次授权会注册一个新的 OAuth 客户端，并保留之前的注册记录；已保存的 grant 在重启前后正常刷新。
@@ -133,6 +147,6 @@ Notion 的服务器说明（设为 `eager` 时则是其工具）在连接成功�
 <details>
 <summary>维护者工作上下文——点击展开</summary>
 
-单测让插件运行在 MCP 管理器和 mcp-client 的回环 OAuth 服务器夹具之上。`notion-plugin` 会话快照在没有已保存 grant 的情况下回放 Notion 行，因此它固定称呼指引，并验证没有请求到达服务器。
+Host 侧单测让插件运行在 MCP 管理器和 mcp-client 的回环 OAuth 服务器夹具之上；客户端单测用模拟的管理器流驱动浏览器侧。`notion-plugin` 会话快照在没有已保存 grant 的情况下回放 Notion 行，因此它固定称呼指引，并验证没有请求到达服务器。
 
 </details>

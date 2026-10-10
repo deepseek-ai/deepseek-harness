@@ -2562,7 +2562,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-notion`
 
 - `inject`: `mcpServers` · `systemPrompt`
-- `source`: [`packages/connector/notion/src/index.ts:26`](../packages/connector/notion/src/index.ts)
+- `source`: [`packages/connector/notion/src/index.ts:27`](../packages/connector/notion/src/index.ts)
 
 ```ts config-catalog
 /** Notion MCP endpoint and tool loading for the managed server entry. */
