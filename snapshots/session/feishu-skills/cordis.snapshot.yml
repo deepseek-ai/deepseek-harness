@@ -46,6 +46,6 @@
 
 - insert:
     - id: feishu
-      name: '@deepseek-ai/dsh-feishu'
+      name: '@deepseek-ai/dsh-feishu-cli'
       config:
         binDir: !!js process.cwd() + '/feishu-bin'

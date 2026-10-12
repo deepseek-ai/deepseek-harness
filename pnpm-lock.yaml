@@ -93,6 +93,9 @@ importers:
       '@deepseek-ai/dsh-feishu':
         specifier: workspace:*
         version: link:packages/connector/feishu
+      '@deepseek-ai/dsh-feishu-cli':
+        specifier: workspace:*
+        version: link:packages/connector/feishu-cli
       '@deepseek-ai/dsh-hooks-claude-code':
         specifier: workspace:*
         version: link:packages/experimental/hooks-claude-code
@@ -7287,6 +7290,22 @@ importers:
 
   packages/connector/feishu:
     dependencies:
+      '@deepseek-ai/dsh-client-ui-feishu':
+        specifier: workspace:*
+        version: link:../../client/ui-feishu
+      '@deepseek-ai/dsh-feishu-cli':
+        specifier: workspace:*
+        version: link:../feishu-cli
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+
+  packages/connector/feishu-cli:
+    dependencies:
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:*
+        version: link:../../util/brand
       '@deepseek-ai/dsh-timeout':
         specifier: workspace:*
         version: link:../../util/timeout
@@ -7312,6 +7331,9 @@ importers:
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:*
         version: link:../../subprocess/subprocess
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:*
+        version: link:../../typert/protocol
 
   packages/context/agent-instructions:
     dependencies:

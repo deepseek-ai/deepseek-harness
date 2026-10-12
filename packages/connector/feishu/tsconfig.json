@@ -10,21 +10,6 @@
   "references": [
     {
       "path": "../../../vendor/cordis"
-    },
-    {
-      "path": "../../../vendor/schemastery"
-    },
-    {
-      "path": "../../util/timeout"
-    },
-    {
-      "path": "../../shell/shell-env"
-    },
-    {
-      "path": "../../skill/skill"
-    },
-    {
-      "path": "../../subprocess/subprocess"
     }
   ]
 }

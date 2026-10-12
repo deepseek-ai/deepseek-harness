@@ -241,6 +241,7 @@
     "@deepseek-ai/dsh-cua": "workspace:*",
     "@deepseek-ai/dsh-experimental-claude-code-mods": "workspace:*",
     "@deepseek-ai/dsh-feishu": "workspace:*",
+    "@deepseek-ai/dsh-feishu-cli": "workspace:*",
     "@deepseek-ai/dsh-llm-replay": "workspace:*",
     "@deepseek-ai/dsh-subagent-dsh-sdk": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",

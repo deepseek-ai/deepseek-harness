@@ -31,7 +31,7 @@ describe('FeishuCli', () => {
   const cli = (limits = LIMITS) => new FeishuCli(ctx.subprocess, ctx.shellEnv, limits)
 
   it('finds lark-cli on the prepared private PATH, spawns it with that environment, and parses stdout', async () => {
-    subprocess.respond = (process) => { process.reply({ stdout: '{"ok":true}' }) }
+    subprocess.respond = (process) => { process.reply({ stdout: '{"ok":\ntrue}\n' }) }
 
     await expect(cli().json(['skills', 'list', '--json'], AbortSignal.timeout(5_000))).resolves.toEqual({ ok: true })
 
@@ -42,7 +42,7 @@ describe('FeishuCli', () => {
     expect(process?.spec).toMatchObject({
       argv: ['/fixture/bin/lark-cli', 'skills', 'list', '--json'],
       cwd: homedir(),
-      stdio: { stdin: 'ignore', stdout: { maxBytes: 1024 } },
+      stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' },
     })
     expect(process?.spec.env).toBe(lookup?.env)
     expect(process?.terminated).toBe(true)
@@ -52,12 +52,44 @@ describe('FeishuCli', () => {
     [{ exitCode: 2, stderr: ' {"ok":false} \n' }, 'lark-cli skills list exited with 2: {"ok":false}'],
     [{ exitCode: 1 }, /^lark-cli skills list exited with 1$/u],
     [{ exitCode: null, signal: 'SIGKILL' as const }, 'lark-cli skills list exited with SIGKILL'],
-    [{ stdout: '{"ok":', lossy: true }, 'lark-cli skills list output exceeded 1024 bytes'],
+    [{ stdout: 'x'.repeat(1025) }, 'lark-cli skills list output exceeded 1024 bytes'],
     [{ stdout: 'not json' }, 'lark-cli skills list returned invalid JSON'],
   ])('rejects a failed command %#', async (reply, message) => {
     subprocess.respond = (process) => { process.reply(reply) }
 
     await expect(cli().json(['skills', 'list'], AbortSignal.timeout(5_000))).rejects.toThrow(message)
+  })
+
+  it('keeps draining stdout after it exceeds the limit', async () => {
+    subprocess.respond = async (process) => {
+      process.write('stdout', 'x'.repeat(1025))
+      await vi.waitFor(() => { expect(process.stdout.readableLength).toBe(0) })
+      process.reply({ stdout: 'y' })
+    }
+
+    await expect(cli().json(['skills', 'list'], AbortSignal.timeout(5_000))).rejects.toThrow('lark-cli skills list output exceeded 1024 bytes')
+  })
+
+  it('reports output lines while the command runs and returns a nonzero exit to the caller', async () => {
+    const lines: string[] = []
+    subprocess.respond = (process) => {
+      process.write('stderr', 'Open this link:\r\n  https://open.feishu.cn/page/cli?code=1\npart')
+      process.write('stdout', '{"event":"one"}\n')
+      process.reply({ stdout: '{"event":"two"}', stderr: 'ial\n' + 'e'.repeat(5000), exitCode: 3 })
+    }
+
+    const result = await cli().run(['auth', 'login', '--json'], AbortSignal.timeout(5_000), {
+      timeoutMs: 5_000, onLine: (stream, line) => { lines.push(`${stream}:${line.slice(0, 40)}`) },
+    })
+
+    expect(result.exitCode).toBe(3)
+    expect(result.stdout).toBe('{"event":"one"}\n{"event":"two"}')
+    expect(result.stderr).toHaveLength(4096)
+    // Each stream keeps its own order; the two pipes interleave in any order.
+    expect(lines.filter(line => line.startsWith('stdout:'))).toEqual(['stdout:{"event":"one"}', 'stdout:{"event":"two"}'])
+    expect(lines.filter(line => line.startsWith('stderr:'))).toEqual([
+      'stderr:Open this link:', 'stderr:  https://open.feishu.cn/page/cli?code=1', 'stderr:partial', `stderr:${'e'.repeat(40)}`,
+    ])
   })
 
   it.each(['lookup', 'process'] as const)('applies the command deadline during %s', async (phase) => {

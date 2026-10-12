@@ -3,10 +3,10 @@ import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as Feishu from '../src/index.ts'
+import Feishu from '../src/index.ts'
 import { byArguments, CATALOG, createBinDir, DOC_SKILL, ScriptedSubprocess } from './harness.ts'
 
-const CONFIG = { commandTimeoutMs: 5_000, maxOutputBytes: 1_048_576 }
+const CONFIG = { commandTimeoutMs: 5_000, authorizationTimeoutMs: 5_000, maxOutputBytes: 1_048_576 }
 const LIST = 'skills list --json'
 const READ = 'skills read lark-doc --json'
 
@@ -73,7 +73,7 @@ describe('Feishu plugin', () => {
   it('refuses to load without a Host subprocess runtime', () => {
     subprocess.host = false
 
-    expect(() => { Feishu.apply(ctx, { ...CONFIG, binDir }) }).toThrow('feishu: lark-cli and its default account are local to this Host')
+    expect(() => new Feishu(ctx, { ...CONFIG, binDir })).toThrow('feishu: lark-cli and its default account are local to this Host')
     expect(ctx.shellEnv.getPathPrefix(ctx.subprocess)).toBeUndefined()
   })
 

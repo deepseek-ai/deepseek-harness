@@ -1,0 +1,36 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../util/timeout"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../shell/shell-env"
+    },
+    {
+      "path": "../../skill/skill"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    }
+  ]
+}

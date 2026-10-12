@@ -16,7 +16,7 @@ const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u
 const GUIDANCE = [
   '# Feishu in DSH',
   'Call this integration the Feishu plugin (飞书插件 in Chinese) in user-facing replies. Run `lark-cli` by name in the Host Shell; DSH installs and updates it. It uses the default lark-cli configuration and sign-in shared with the user\'s own terminal, so do not remove, switch, or sign out of apps or profiles unless the user asks.',
-  'When a command reports a missing app configuration or sign-in, load the lark-shared skill and follow its setup and auth flow. Never ask for or print app secrets or tokens.',
+  'When a command reports a missing app configuration or sign-in, first ask the user to connect Feishu on the Feishu plugin page in Plugins. Load the lark-shared skill and run its setup and auth flow yourself only when the user asks to finish it in this conversation. Never ask for or print app secrets or tokens.',
   'Commands that save sign-in state, such as `auth login --device-code` and `config init`, write outside the workspace and use up their one-time authorization even when the save is denied: run them with the Shell tool\'s single-command approval from the start. Run other commands in the existing sandbox and request that approval only when a credential, lock, log, or cache write is denied.',
   'Do not install another lark-cli or run `lark-cli update`.',
 ].join('\n\n')

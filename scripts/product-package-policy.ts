@@ -38,6 +38,8 @@ export const PRODUCT_PACKAGE_POLICY: Readonly<Record<string, ProductPackagePolic
   'packages/context/tmux-context': { category: 'optional', reason: 'Context contribution requiring a tmux pane.' },
   'packages/fs/tool-str-replace-editor': { category: 'optional', reason: 'Explicit alternative to the default filesystem editing tools.' },
   'packages/connector/feishu': { category: 'optional', reason: 'Separately installed app plugin that requires the Feishu CLI and a user-authorized Feishu account.' },
+  'packages/connector/feishu-cli': { category: 'optional', reason: 'Feishu CLI, skills, and account operations mounted by the separately installed Feishu bundle.' },
+  'packages/client/ui-feishu': { category: 'optional', reason: 'Plugins page connection mounted by the separately installed Feishu bundle.' },
   'packages/sdk/client': { category: 'sdk', reason: 'Published TypeScript embedding client runs in the consumer process.' },
   'packages/typert/generator': { category: 'build', reason: 'Build-time generation of type metadata.' },
   'packages/test-support/agent-loop-testkit': { category: 'test', reason: 'Published agent-loop test harness.' },

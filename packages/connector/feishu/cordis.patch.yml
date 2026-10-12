@@ -1,3 +1,5 @@
 - insert:
     - id: feishu
-      name: '@deepseek-ai/dsh-feishu'
+      name: '@deepseek-ai/dsh-feishu-cli'
+    - id: ui-feishu
+      name: '@deepseek-ai/dsh-client-ui-feishu'

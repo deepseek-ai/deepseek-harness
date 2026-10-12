@@ -1158,6 +1158,39 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'feishu',
+    summary: 'Registers the CLI and skills, and owns the account operations the Plugins page drives.',
+    description: 'Registers the CLI and skills, and owns the account operations the Plugins page drives.',
+    methods: [
+      {
+        signature: '@Remote connect(): FeishuOperationId',
+        description: 'Check the account, set up an app if none is configured, then sign in.',
+        parameters: [],
+        returns: 'the operation identity.',
+        throws: ['while another account operation runs.'],
+      },
+      {
+        signature: '@Remote signOut(): FeishuOperationId',
+        description: 'Sign the default account out, which also signs out the user\'s own terminal.',
+        parameters: [],
+        returns: 'the operation identity.',
+        throws: ['while another account operation runs.'],
+      },
+      {
+        signature: '@Remote cancel(id: FeishuOperationId): Promise<void>',
+        description: 'Cancel one operation and wait for its command to exit.',
+        parameters: [{ name: 'id', description: 'the operation to cancel; a finished one is ignored.' }],
+        returns: 'after the operation settles.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<FeishuState>',
+        description: 'Follow the account and its operations independently of any page; each new subscriber starts a check when none runs.',
+        parameters: [{ name: 'signal', description: 'the Client\'s observation lifetime.' }],
+        returns: 'the current view, then each changed view.',
+      },
+    ],
+  },
+  {
     key: 'fileReferences',
     summary: 'Host capability for cancellable file-reference discovery.',
     description: 'Host capability for cancellable file-reference discovery.',
@@ -6135,6 +6168,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'FeedbackCategory',
     declaration: 'export type FeedbackCategory = \'task-result\' | \'instruction-following\' | \'product-interaction\' | \'service-stability\' | \'resource-cost\' | \'security-privacy-permission\' | \'other\';',
+  },
+  {
+    name: 'FeishuAccountState',
+    declaration: 'export type FeishuAccountState = {\n    readonly state: \'unchecked\' | \'unconfigured\' | \'signed-out\' | \'unverified\';\n} | {\n    readonly state: \'connected\';\n    readonly userName?: string;\n};',
+  },
+  {
+    name: 'FeishuOperationId',
+    declaration: 'export type FeishuOperationId = Branded<\'FeishuOperationId\'>;',
+  },
+  {
+    name: 'FeishuOperationResult',
+    declaration: 'export interface FeishuOperationResult {\n    readonly id: FeishuOperationId;\n    readonly kind: FeishuOperationState[\'kind\'];\n    readonly outcome: \'succeeded\' | \'cancelled\' | \'failed\';\n}',
+  },
+  {
+    name: 'FeishuOperationState',
+    declaration: 'export interface FeishuOperationState {\n    readonly id: FeishuOperationId;\n    readonly kind: \'check\' | \'connect\' | \'sign-out\';\n    readonly phase: \'checking\' | \'configuring\' | \'authorizing\' | \'verifying\' | \'signing-out\' | \'cancelling\';\n    readonly authorizationUrl?: string;\n}',
+  },
+  {
+    name: 'FeishuState',
+    declaration: 'export interface FeishuState {\n    readonly account: FeishuAccountState;\n    readonly operation?: FeishuOperationState;\n    readonly result?: FeishuOperationResult;\n}',
   },
   {
     name: 'FiberState',

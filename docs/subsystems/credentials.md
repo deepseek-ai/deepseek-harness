@@ -367,6 +367,44 @@ abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserI
 
 Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)
 
+<a id="ctxfeishu--feishu"></a>
+
+### `ctx.feishu` — `Feishu`
+
+Registers the CLI and skills, and owns the account operations the Plugins page drives.
+
+```ts cordis-catalog
+/**
+ * Check the account, set up an app if none is configured, then sign in.
+ * @returns the operation identity.
+ * @throws while another account operation runs.
+ */
+@Remote connect(): FeishuOperationId
+
+/**
+ * Sign the default account out, which also signs out the user's own terminal.
+ * @returns the operation identity.
+ * @throws while another account operation runs.
+ */
+@Remote signOut(): FeishuOperationId
+
+/**
+ * Cancel one operation and wait for its command to exit.
+ * @param id - the operation to cancel; a finished one is ignored.
+ * @returns after the operation settles.
+ */
+@Remote cancel(id: FeishuOperationId): Promise<void>
+
+/**
+ * Follow the account and its operations independently of any page; each new subscriber starts a check when none runs.
+ * @param signal - the Client's observation lifetime.
+ * @returns the current view, then each changed view.
+ */
+@Remote({ mode: 'stream' }) async *follow(signal: AbortSignal): AsyncIterable<FeishuState>
+```
+
+Source: [`packages/connector/feishu-cli/src/index.ts`](../../packages/connector/feishu-cli/src/index.ts)
+
 <a id="authorization-events"></a>
 
 ### `authorization/*` events

@@ -1537,19 +1537,21 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-worktree -->
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-feishu -->
-<a id="deepseek-aidsh-feishu"></a>
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-feishu-cli -->
+<a id="deepseek-aidsh-feishu-cli"></a>
 
-## `@deepseek-ai/dsh-feishu`
+## `@deepseek-ai/dsh-feishu-cli`
 
 - `inject`: `skills` · `subprocess` · `shellEnv`
-- `source`: [`packages/connector/feishu/src/index.ts:21`](../packages/connector/feishu/src/index.ts)
+- `source`: [`packages/connector/feishu-cli/src/index.ts:30`](../packages/connector/feishu-cli/src/index.ts)
 
 ```ts config-catalog
-/** CLI location and limits for backend skill commands. */
+/** CLI location and command limits. */
 export interface Config extends FeishuCliLimits {
   /** Absolute directory containing `lark-cli`; defaults to the installed `@larksuite/cli` package. */
   binDir?: string
+  /** Deadline for app setup or sign-in, which wait for the user in the browser. */
+  authorizationTimeoutMs: number
 }
 
 /** Deployment limits for one native command. */
@@ -1560,7 +1562,7 @@ export interface FeishuCliLimits {
   maxOutputBytes: number
 }
 ```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-feishu -->
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-feishu-cli -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-file-reference-local -->
 <a id="deepseek-aidsh-file-reference-local"></a>
@@ -5022,6 +5024,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-experimental-voice-input-bundle` | — | [`packages/experimental/voice-input-bundle/src/index.ts`](../packages/experimental/voice-input-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-webworker-packer` | — | [`packages/experimental/webworker-packer/src/index.ts`](../packages/experimental/webworker-packer/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-webworker-runtime` | — | [`packages/experimental/webworker-runtime/src/index.ts`](../packages/experimental/webworker-runtime/src/index.ts) |
+| `@deepseek-ai/dsh-feishu` | — | [`packages/connector/feishu/src/index.ts`](../packages/connector/feishu/src/index.ts) |
 | `@deepseek-ai/dsh-home-paths` | — | [`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts) |
 | `@deepseek-ai/dsh-hook-protocol` | — | [`packages/experimental/hook-protocol/src/index.ts`](../packages/experimental/hook-protocol/src/index.ts) |
 | `@deepseek-ai/dsh-http-proxy` | — | [`packages/util/http-proxy/src/index.ts`](../packages/util/http-proxy/src/index.ts) |

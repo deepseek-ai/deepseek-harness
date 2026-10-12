@@ -233,6 +233,7 @@ flowchart TD
   subgraph group_connector["packages/connector"]
     pkg_cli_account["cli-account"]
     pkg_feishu["feishu"]
+    pkg_feishu_cli["feishu-cli"]
   end
   subgraph group_context["packages/context"]
     pkg_agent_instructions["agent-instructions"]
@@ -1605,6 +1606,7 @@ flowchart TD
 | [`client-ui-workflow-run`](../packages/client/ui-workflow-run) | `client` | — |
 | [`client-ui-workspace`](../packages/client/ui-workspace) | `client` | — |
 | [`client-web`](../packages/client/web) | `client` | — |
+| [`feishu`](../packages/connector/feishu) | `connector` | — |
 | [`credentials`](../packages/credentials/credentials) | `credentials` | — |
 | [`office-to-pdf`](../packages/document/office-to-pdf) | `document` | — |
 | [`client-ui-action-cards`](../packages/experimental/client-ui-action-cards) | `experimental` | — |
