@@ -13,6 +13,7 @@ import { callback, oauthWorld, phase } from '../../../mcp/mcp-client/tests/oauth
 import { managerProfile } from '../../../mcp/mcp-manager/tests/profile-fixture.ts'
 import * as Notion from '../src/index.ts'
 
+// Verbatim pin of the model-visible guidance in src/index.ts.
 const GUIDANCE = 'Tools named `mcp__notion__*` come from the Notion plugin. In user-facing replies, call it the Notion plugin (Notion 插件 in Chinese), not MCP.'
   + ' If no `mcp__notion__*` tool appears in your tool list, Notion is not connected yet; ask the user to connect it on the Notion plugin page in Plugins.'
 

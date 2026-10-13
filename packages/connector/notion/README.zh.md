@@ -63,7 +63,7 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 | `url` | `https://mcp.notion.com/mcp` | Notion 服务器的 Streamable HTTP MCP 端点 |
 | `toolLoading` | `on-demand` | `on-demand` 让 Notion 的工具在 agent 加载前对其隐藏；`eager` 在每次请求中发送全部工具定义 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-notion)是受支持字段的完整来源。连接与授权的预算使用管理器和 mcp-client 的默认值。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-notion)是受支持字段的完整来源。连接与授权的预算使用管理器和 mcp-client 的默认值。已保存的 grant 与 `url` 绑定，修改后需要重新连接账号。
 
 -----
 
@@ -73,7 +73,7 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-Host 侧的 [`src/index.ts`](src/index.ts) 进行两项注册，二者都是插件 fiber 的 effect：`ctx.mcpServers.register('notion', …)` 以配置的 `url` 和 OAuth 凭据 key 添加一个 Streamable HTTP 条目，`ctx.systemPrompt.section()` 在 `MCP_SERVERS` 排序位置添加称呼指引。服务器名固定了 `mcp__notion__` 工具命名空间，凭据 key 固定了 grant 地址，因此重新加载或重新安装的插件会得到同样的工具和 grant。管理器在注册时校验条目；如果已配置或已注册的服务器占用了该名称或 key，插件会在添加指引之前加载失败。
+[`cordis.patch.yml`](cordis.patch.yml) 插入一行 id 为 `notion` 的条目，指向本包，因此本包既是 bundle，也是其唯一的一行；`config` 覆盖以该 id 为目标。Host 侧的 [`src/index.ts`](src/index.ts) 进行两项注册，二者都是插件 fiber 的 effect：`ctx.mcpServers.register('notion', …)` 以配置的 `url` 和 OAuth 凭据 key 添加一个 Streamable HTTP 条目，`ctx.systemPrompt.section()` 在 `MCP_SERVERS` 排序位置添加称呼指引。服务器名固定了 `mcp__notion__` 工具命名空间，凭据 key 固定了 grant 地址，因此重新加载或重新安装的插件会得到同样的工具和 grant。管理器在注册时校验条目；如果已配置或已注册的服务器占用了该名称或 key，插件会在添加指引之前加载失败。
 
 浏览器侧的 [`src/client/index.ts`](src/client/index.ts) 挂在 `notion` 行上，因此其注册只在该行开启时存在。每个浏览器插件有一个 `NotionConnection`，镜像管理器的 `watch` 流，只根据 `notion` 条目推导页面状态；它只保存流是否在送达、页面操作是否进行中以及最近一条提示。它注册以包名为 key 的 `plugins.bundle.config` 作为区块、`plugins.bundle.activation` 作为引导、`plugins.detail.badge` 作为标签，以及一个 `shell.overlay` toast。它只为本浏览器发起的尝试打开授权链接，且只打开使用 HTTPS 或回环 HTTP 的链接。
 
@@ -138,6 +138,7 @@ Notion 的服务器说明（设为 `eager` 时则是其工具）在连接成功�
 - 只有 Web 与 Desktop 组合挂载 MCP 管理器；在其他 profile 中插件保持未激活。
 - 授权回调地址是 Host 上的 `http://127.0.0.1:<port>`，因此完成授权的浏览器必须运行在 Host 所在机器上。从另一台机器访问的 Web Host 无法完成授权。
 - Desktop 每次启动都监听操作系统分配的端口。重启后再次授权会注册一个新的 OAuth 客户端，并保留之前的注册记录；已保存的 grant 在重启前后正常刷新。
+- 账号连接之前，共享资源的提示词仍把 `notion` 列为服务器名，对它的资源调用会失败，直到用户完成连接。
 - 一次 Notion 授权供整个 Host 使用；没有账号或工作区选择器。
 - 停用或卸载插件会保留本地 grant。退出登录会删除本地 grant，但在用户于 Notion 一侧移除之前，该连接在 Notion 中仍处于已授权状态。
 

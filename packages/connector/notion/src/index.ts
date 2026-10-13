@@ -50,6 +50,7 @@ export function apply(ctx: Context, config: Config): void {
     oauth: { credentialKey: CREDENTIAL_KEY },
     toolLoading: config.toolLoading,
   })
+  // Sections at one order sort by name, so `notion` follows every `mcp…` server section.
   ctx.systemPrompt.section({
     name: SERVER_NAME,
     order: ctx.systemPrompt.getSectionOrder('MCP_SERVERS'),

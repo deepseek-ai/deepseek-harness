@@ -63,7 +63,7 @@ Turning the row off in Plugin Manager, or uninstalling the package, ends the reg
 | `url` | `https://mcp.notion.com/mcp` | Streamable HTTP MCP endpoint of the Notion server |
 | `toolLoading` | `on-demand` | `on-demand` keeps Notion's tools hidden from each agent until it loads them; `eager` sends every tool definition with every request |
 
-The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-notion) is the exhaustive source of supported fields. Connection and authorization budgets use the manager and mcp-client defaults.
+The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-notion) is the exhaustive source of supported fields. Connection and authorization budgets use the manager and mcp-client defaults. The saved grant is bound to `url`; changing it requires connecting the account again.
 
 -----
 
@@ -73,7 +73,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-no
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Host half, [`src/index.ts`](src/index.ts), makes two registrations, both effects of the plugin's fiber: `ctx.mcpServers.register('notion', …)` adds a Streamable HTTP entry with the configured `url` and OAuth credential key, and `ctx.systemPrompt.section()` adds the naming guidance at the `MCP_SERVERS` order. The server name fixes the `mcp__notion__` tool namespace, and the credential key fixes the grant address, so a reloaded or reinstalled plugin reaches the same tools and grant. The manager validates the entry when it is registered; a configured or registered server that already uses the name or key makes the plugin fail to load before the guidance is added.
+[`cordis.patch.yml`](cordis.patch.yml) inserts one row with id `notion` naming this package, so the package is both the bundle and its only row; `config` overrides target that id. The Host half, [`src/index.ts`](src/index.ts), makes two registrations, both effects of the plugin's fiber: `ctx.mcpServers.register('notion', …)` adds a Streamable HTTP entry with the configured `url` and OAuth credential key, and `ctx.systemPrompt.section()` adds the naming guidance at the `MCP_SERVERS` order. The server name fixes the `mcp__notion__` tool namespace, and the credential key fixes the grant address, so a reloaded or reinstalled plugin reaches the same tools and grant. The manager validates the entry when it is registered; a configured or registered server that already uses the name or key makes the plugin fail to load before the guidance is added.
 
 The browser half, [`src/client/index.ts`](src/client/index.ts), attaches to the `notion` row, so its registrations exist while that row is on. One `NotionConnection` per browser plugin mirrors the manager's `watch` stream and derives the page state from the `notion` entry alone; it keeps only whether the stream is delivering, whether a page action is pending, and the latest notice. It registers `plugins.bundle.config` keyed by the package name for the section, `plugins.bundle.activation` for the guidance, `plugins.detail.badge` for the tag, and a `shell.overlay` toast. It opens an authorization URL only for the attempt this browser started, and only when the URL uses HTTPS or loopback HTTP.
 
@@ -138,6 +138,7 @@ Notion's instructions (or, with `eager`, its tools) appear when the connection s
 - Only the Web and Desktop compositions mount the MCP manager; other profiles leave the plugin inactive.
 - The authorization callback is `http://127.0.0.1:<port>` on the Host, so the browser that completes authorization must run on the Host machine. A Web Host reached from another machine cannot finish authorization.
 - Desktop listens on an OS-assigned port for each launch. Authorizing again after a restart registers a new OAuth client and keeps the earlier registration record; saved grants refresh normally across restarts.
+- Before the account is connected, the shared resource prompt still lists `notion` as a server name, and resource calls to it fail until the user connects.
 - One Notion authorization serves the whole Host; there is no account or workspace picker.
 - Turning the plugin off or uninstalling it keeps the local grant. Signing out deletes the local grant but leaves the connection authorized on Notion's side until the user removes it there.
 

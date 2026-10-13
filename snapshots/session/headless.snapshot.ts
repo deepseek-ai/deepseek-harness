@@ -1432,6 +1432,12 @@ describe('headless recorded-session snapshots', () => {
               expect(headers.at(-1)?.tools?.some(tool => tool.name === 'mcp__demo__ping')).toBe(true)
               expect(mcpDemo.calls).toEqual(['ping'])
             }
+            if (scenario.name === 'notion-plugin' && mcpDemo !== undefined) {
+              // Without a saved grant the Notion server is never contacted. The committed tool-schemas sidecar pins
+              // the absent tools; the transcript check below only guards the recorded text.
+              expect(mcpDemo.authorization).toEqual([])
+              expect(actualLogs[0]!.content).not.toContain('mcp__notion__ping')
+            }
             if (scenario.name === 'toolcall-unused-args') {
               const events = parseSessionLog(actualLogs[0]!.content)
               const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
@@ -1459,11 +1465,6 @@ describe('headless recorded-session snapshots', () => {
               expect(log).toContain('# Office task routing')
             }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
-            if (scenario.name === 'notion-plugin' && mcpDemo !== undefined) {
-              // Without a saved grant the Notion server is never contacted and exposes no tools.
-              expect(mcpDemo.authorization).toEqual([])
-              expect(actualLogs[0]!.content).not.toContain('mcp__notion__ping')
-            }
             if (scenario.name === 'session-query-spill') {
               await verifySessionQuerySpill(actualLogs[0]!.content, spillRoot, locatorRoot)
             }
