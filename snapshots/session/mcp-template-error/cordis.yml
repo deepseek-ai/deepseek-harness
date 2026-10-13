@@ -5,6 +5,10 @@
     models:
       - id: deepseek-flash
 
+# The template resolves through the credential store, which the headless profile disables.
+- id: credentials
+  disabled: false
+
 - insert:
     - id: mcp-template-error
       name: '@deepseek-ai/dsh-mcp-client'
