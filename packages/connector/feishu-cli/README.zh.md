@@ -38,12 +38,14 @@ kind: "package-reference"
 <a id="account-operations"></a>
 ### 账号操作
 
-`feishu` Remote 为插件页服务。它同一时间最多运行一个由 Host 持有的账号操作，因此离开页面不会取消操作。
+`feishu` Remote 为插件页服务。它同一时间最多运行一个由 Host 持有的账号操作，因此离开页面不会取消操作。关联应用和登录是两个独立操作，页面分别由各自的一次点击发起。
 
 | 方法 | 作用 |
 |---|---|
 | `follow(signal)` | 推送账号、进行中的操作和最近一次结果；没有操作运行时，每个新订阅者会触发一次检查 |
-| `connect()` | 检查账号；未配置应用时运行 `config init --new`，然后运行 `auth login --json`，并确认登录的是同一个用户；返回操作 id |
+| `check()` | 重新检查账号；返回操作 id |
+| `linkApp()` | 未配置应用时运行 `config init --new`，已有应用则保留；不会登录 |
+| `signIn()` | 为已关联的应用运行 `auth login --json`，并确认登录的是同一个用户 |
 | `signOut()` | 运行 `auth logout --json`，同时退出用户自己终端里的登录，然后重新检查 |
 | `cancel(id)` | 取消该操作并等待其命令退出；已结束的 id 会被忽略 |
 

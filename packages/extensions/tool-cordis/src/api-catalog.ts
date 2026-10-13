@@ -1163,8 +1163,22 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Registers the CLI and skills, and owns the account operations the Plugins page drives.',
     methods: [
       {
-        signature: '@Remote connect(): FeishuOperationId',
-        description: 'Check the account, set up an app if none is configured, then sign in.',
+        signature: '@Remote check(): FeishuOperationId',
+        description: 'Check the account again without changing it.',
+        parameters: [],
+        returns: 'the operation identity.',
+        throws: ['while another account operation runs.'],
+      },
+      {
+        signature: '@Remote linkApp(): FeishuOperationId',
+        description: 'Link an app through the CLI\'s setup page when none is configured; an existing app is kept.',
+        parameters: [],
+        returns: 'the operation identity.',
+        throws: ['while another account operation runs.'],
+      },
+      {
+        signature: '@Remote signIn(): FeishuOperationId',
+        description: 'Sign the linked app\'s user in through the CLI\'s authorization page.',
         parameters: [],
         returns: 'the operation identity.',
         throws: ['while another account operation runs.'],
@@ -6183,7 +6197,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'FeishuOperationState',
-    declaration: 'export interface FeishuOperationState {\n    readonly id: FeishuOperationId;\n    readonly kind: \'check\' | \'connect\' | \'sign-out\';\n    readonly phase: \'checking\' | \'configuring\' | \'authorizing\' | \'verifying\' | \'signing-out\' | \'cancelling\';\n    readonly authorizationUrl?: string;\n}',
+    declaration: 'export interface FeishuOperationState {\n    readonly id: FeishuOperationId;\n    readonly kind: \'check\' | \'link-app\' | \'sign-in\' | \'sign-out\';\n    readonly phase: \'checking\' | \'configuring\' | \'authorizing\' | \'verifying\' | \'signing-out\' | \'cancelling\';\n    readonly authorizationUrl?: string;\n}',
   },
   {
     name: 'FeishuState',

@@ -29,7 +29,7 @@ const BADGE: Record<Phase, readonly [FeishuKey, TagTone] | undefined> = {
  * @returns the status line, its actions, and the sign-out confirmation.
  */
 export function FeishuConnectionSection(props: FaceProps): ReactNode {
-  const { useFeishuConnection, connect, cancel, signOut, openAuthorization, retry, t } = props
+  const { useFeishuConnection, check, linkApp, signIn, cancel, signOut, openAuthorization, retry, t } = props
   const snapshot = useFeishuConnection(value => value)
   const [confirming, setConfirming] = useState(false)
   const shown = presentConnection(snapshot)
@@ -41,8 +41,11 @@ export function FeishuConnectionSection(props: FaceProps): ReactNode {
   let status = t(`status.${shown.phase === 'connecting' ? 'checking' : shown.phase}`)
   let detail: string | undefined
   switch (shown.phase) {
-    case 'disconnected': actions.push(action('action.connect', connect, 'primary')); detail = t('detail.disconnected'); break
-    case 'unavailable': actions.push(action('action.retry', connect)); detail = t('detail.unavailable'); break
+    case 'disconnected':
+      actions.push(shown.next === 'link-app' ? action('action.linkApp', linkApp, 'primary') : action('action.signIn', signIn, 'primary'))
+      detail = t(shown.next === 'link-app' ? 'detail.no-app' : 'detail.signed-out')
+      break
+    case 'unavailable': actions.push(action('action.retry', check)); detail = t('detail.unavailable'); break
     case 'stopped': actions.push(action('action.retry', retry)); detail = t('detail.stopped'); break
     case 'connected':
       actions.push(action('action.signOut', () => { setConfirming(true) }))
@@ -98,8 +101,12 @@ export function FeishuConnectionBadge({ subject, useFeishuConnection, t }: FaceP
  * @returns a dismissible prompt that starts the connection from the bundle's page.
  */
 export function FeishuConnectionActivation(props: FaceProps & PropsRuntime<'plugins.bundle.activation'>): ReactNode {
-  const { useFeishuConnection, connect, onDismiss, onOpenDetails, t } = props
+  const { useFeishuConnection, linkApp, signIn, onDismiss, onOpenDetails, t } = props
   const phase = useFeishuConnection(value => presentConnection(value).phase)
+  const next = useFeishuConnection((value) => {
+    const shown = presentConnection(value)
+    return shown.phase === 'disconnected' ? shown.next : undefined
+  })
   const needed = phase === 'disconnected'
   useEffect(() => {
     if (phase !== 'checking' && !needed) onDismiss()
@@ -108,7 +115,11 @@ export function FeishuConnectionActivation(props: FaceProps & PropsRuntime<'plug
     <Modal open={needed} title={t('activation.title')} closeLabel={t('close')} onClose={onDismiss}
       footer={<>
         <Button variant="ghost" onClick={onDismiss}>{t('activation.later')}</Button>
-        <Button variant="primary" data-modal-autofocus onClick={() => { onOpenDetails(); connect() }}>{t('action.connect')}</Button>
+        <Button variant="primary" data-modal-autofocus onClick={() => {
+          onOpenDetails()
+          if (next === 'sign-in') signIn()
+          else linkApp()
+        }}>{t('action.connect')}</Button>
       </>}>
       <p>{t('activation.body')}</p>
     </Modal>

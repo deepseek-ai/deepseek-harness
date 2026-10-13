@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import z from 'zod'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { parseJson, type FeishuCli } from './cli.ts'
 import type { FeishuAccountState, FeishuOperationId, FeishuOperationResult, FeishuOperationState, FeishuState } from './types.ts'
 
@@ -138,30 +139,42 @@ export class FeishuAccount {
   }
 
   private async perform(operation: Operation, signal: AbortSignal): Promise<void> {
-    if (operation.kind === 'sign-out') {
-      this.stage(operation, 'signing-out')
-      const result = await this.cli.run(['auth', 'logout', '--json'], signal, { timeoutMs: this.limits.commandTimeoutMs })
-      if (result.exitCode !== 0) throw new Error('feishu: auth logout failed')
-      await this.check(signal)
-      return
+    switch (operation.kind) {
+      case 'check':
+        await this.check(signal)
+        return
+      case 'link-app': return this.linkApp(operation, signal)
+      case 'sign-in': return this.signIn(operation, signal)
+      case 'sign-out': {
+        this.stage(operation, 'signing-out')
+        const result = await this.cli.run(['auth', 'logout', '--json'], signal, { timeoutMs: this.limits.commandTimeoutMs })
+        if (result.exitCode !== 0) throw new Error('feishu: auth logout failed')
+        await this.check(signal)
+        return
+      }
+      /* v8 ignore next -- closed operation kind union */
+      default: return assertNever(operation.kind)
     }
-    let found = await this.check(signal)
-    if (operation.kind === 'check' || found.account.state === 'connected') return
-    if (found.account.state === 'unconfigured') {
-      this.stage(operation, 'configuring')
-      const setup = await this.cli.run(['config', 'init', '--new'], signal, {
-        timeoutMs: this.limits.authorizationTimeoutMs,
-        onLine: (stream, line) => {
-          const link = stream === 'stderr' && operation.authorizationUrl === undefined ? CONFIG_LINK.exec(line) : null
-          if (link !== null) this.offer(operation, link[1] as string)
-        },
-      })
-      if (setup.exitCode !== 0) throw new Error('feishu: config init failed')
-      this.stage(operation, 'checking')
-      found = await this.check(signal)
-      if (found.account.state === 'unconfigured') throw new Error('feishu: config init left no app')
-      if (found.account.state === 'connected') return
-    }
+  }
+
+  /** Link an app through the CLI's setup page when none is configured; sign-in is a separate operation. */
+  private async linkApp(operation: Operation, signal: AbortSignal): Promise<void> {
+    if ((await this.check(signal)).account.state !== 'unconfigured') return
+    this.stage(operation, 'configuring')
+    const setup = await this.cli.run(['config', 'init', '--new'], signal, {
+      timeoutMs: this.limits.authorizationTimeoutMs,
+      onLine: (stream, line) => {
+        const link = stream === 'stderr' && operation.authorizationUrl === undefined ? CONFIG_LINK.exec(line) : null
+        if (link !== null) this.offer(operation, link[1] as string)
+      },
+    })
+    if (setup.exitCode !== 0) throw new Error('feishu: config init failed')
+    this.stage(operation, 'checking')
+    if ((await this.check(signal)).account.state === 'unconfigured') throw new Error('feishu: config init left no app')
+  }
+
+  /** Sign the configured app's user in, then confirm the CLI's default account is that user. */
+  private async signIn(operation: Operation, signal: AbortSignal): Promise<void> {
     this.stage(operation, 'authorizing')
     let complete: z.infer<typeof LoginComplete> | undefined
     const login = await this.cli.run(['auth', 'login', '--json'], signal, {
@@ -180,7 +193,7 @@ export class FeishuAccount {
       throw new Error('feishu: auth login did not complete')
     }
     this.stage(operation, 'verifying')
-    found = await this.check(signal)
+    const found = await this.check(signal)
     if (found.account.state !== 'connected' || found.openId !== complete.user_open_id) throw new Error('feishu: sign-in did not verify')
   }
 

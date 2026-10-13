@@ -22,15 +22,16 @@ it.each<[string, FeishuState | undefined, ReturnType<typeof presentConnection>]>
   ['no view yet', undefined, { phase: 'checking' }],
   ['an unchecked account', { account: { state: 'unchecked' } }, { phase: 'checking' }],
   ['a check', { ...SIGNED_OUT, operation: operation('check', 'checking') }, { phase: 'checking' }],
-  ['no app', { account: { state: 'unconfigured' } }, { phase: 'disconnected', failed: false }],
-  ['a failed connection', { ...SIGNED_OUT, result: { id: OP, kind: 'connect', outcome: 'failed' } }, { phase: 'disconnected', failed: true }],
+  ['no app', { account: { state: 'unconfigured' } }, { phase: 'disconnected', next: 'link-app', failed: false }],
+  ['a linked app', SIGNED_OUT, { phase: 'disconnected', next: 'sign-in', failed: false }],
+  ['a failed sign-in', { ...SIGNED_OUT, result: { id: OP, kind: 'sign-in', outcome: 'failed' } }, { phase: 'disconnected', next: 'sign-in', failed: true }],
   ['an unconfirmed sign-in', { account: { state: 'unverified' } }, { phase: 'unavailable', failed: false }],
   ['a connection', { account: { state: 'connected', userName: '张三' } }, { phase: 'connected', userName: '张三', failed: false }],
-  ['app setup', { ...SIGNED_OUT, operation: operation('connect', 'configuring', 'https://open.feishu.cn/x') }, connecting('configuring', 'https://open.feishu.cn/x', true)],
-  ['sign-in', { ...SIGNED_OUT, operation: operation('connect', 'authorizing') }, connecting('authorizing', undefined, true)],
-  ['a connection check', { ...SIGNED_OUT, operation: operation('connect', 'checking') }, connecting('connecting', undefined, true)],
-  ['verification', { ...SIGNED_OUT, operation: operation('connect', 'verifying') }, connecting('connecting', undefined, true)],
-  ['cancellation', { ...SIGNED_OUT, operation: operation('connect', 'cancelling') }, connecting('connecting', undefined, false)],
+  ['app setup', { ...SIGNED_OUT, operation: operation('link-app', 'configuring', 'https://open.feishu.cn/x') }, connecting('configuring', 'https://open.feishu.cn/x', true)],
+  ['sign-in', { ...SIGNED_OUT, operation: operation('sign-in', 'authorizing') }, connecting('authorizing', undefined, true)],
+  ['an app link check', { ...SIGNED_OUT, operation: operation('link-app', 'checking') }, connecting('connecting', undefined, true)],
+  ['verification', { ...SIGNED_OUT, operation: operation('sign-in', 'verifying') }, connecting('connecting', undefined, true)],
+  ['cancellation', { ...SIGNED_OUT, operation: operation('sign-in', 'cancelling') }, connecting('connecting', undefined, false)],
   ['sign-out', { ...SIGNED_OUT, operation: operation('sign-out', 'signing-out') }, connecting('signing-out', undefined, false)],
   ['a sign-out check', { ...SIGNED_OUT, operation: operation('sign-out', 'checking') }, connecting('signing-out', undefined, false)],
 ])('presents %s', (name, state, expected) => {
@@ -57,7 +58,9 @@ function fixture() {
   const ok = <T>(value: T) => ({ ok: true as const, value })
   const remote = {
     follow: vi.fn(),
-    connect: vi.fn(async () => ok(OP)),
+    check: vi.fn(async () => ok(OP)),
+    linkApp: vi.fn(async () => ok(OP)),
+    signIn: vi.fn(async () => ok(OP)),
     signOut: vi.fn(async () => ok(OP)),
     cancel: vi.fn(async () => ok(undefined)),
   }
@@ -104,45 +107,65 @@ it('mirrors the Host view and opens the Host stream', async () => {
   expect(b.snapshot().linked).toBe(false)
 })
 
-it('opens each new link of the connection this browser started once, then reports the connection', async () => {
+it('opens each new link of an operation this browser started once, then reports each finished step', async () => {
   const b = fixture()
-  await b.publish(SIGNED_OUT)
-  b.face.connect()
+  const NO_APP: FeishuState = { account: { state: 'unconfigured' } }
+  await b.publish(NO_APP)
+  b.face.linkApp()
   await settle(b)
-  await b.publish({ ...SIGNED_OUT, operation: operation('connect', 'configuring', 'https://open.feishu.cn/app') })
-  await b.publish({ ...SIGNED_OUT, operation: operation('connect', 'configuring', 'https://open.feishu.cn/app') })
-  await b.publish({ ...SIGNED_OUT, operation: operation('connect', 'authorizing', 'https://accounts.feishu.cn/device') })
+  expect(b.remote.linkApp).toHaveBeenCalledOnce()
+  await b.publish({ ...NO_APP, operation: operation('link-app', 'configuring', 'https://open.feishu.cn/app') })
+  await b.publish({ ...NO_APP, operation: operation('link-app', 'configuring', 'https://open.feishu.cn/app') })
+  expect(b.open.mock.calls.map(call => call[0])).toEqual(['https://open.feishu.cn/app'])
+  await b.publish({ ...SIGNED_OUT, result: { id: OP, kind: 'link-app', outcome: 'succeeded' } })
+  expect(b.snapshot().notice).toEqual({ seq: 1, kind: 'app-linked' })
+
+  const SIGN_IN = 'op-2' as FeishuOperationId
+  b.remote.signIn.mockResolvedValueOnce({ ok: true, value: SIGN_IN })
+  b.face.signIn()
+  await settle(b)
+  await b.publish({ ...SIGNED_OUT, operation: operation('sign-in', 'authorizing', 'https://accounts.feishu.cn/device', SIGN_IN) })
   expect(b.open.mock.calls.map(call => call[0])).toEqual(['https://open.feishu.cn/app', 'https://accounts.feishu.cn/device'])
   b.face.openAuthorization()
   expect(b.open).toHaveBeenCalledTimes(3)
-  await b.publish({ account: { state: 'connected' }, result: { id: OP, kind: 'connect', outcome: 'succeeded' } })
-  expect(b.snapshot().notice).toEqual({ seq: 1, kind: 'connected' })
-  await b.publish({ account: { state: 'connected' }, result: { id: OP, kind: 'connect', outcome: 'succeeded' } })
-  expect(b.snapshot().notice?.seq).toBe(1)
+  await b.publish({ account: { state: 'connected' }, result: { id: SIGN_IN, kind: 'sign-in', outcome: 'succeeded' } })
+  expect(b.snapshot().notice).toEqual({ seq: 2, kind: 'connected' })
+  await b.publish({ account: { state: 'connected' }, result: { id: SIGN_IN, kind: 'sign-in', outcome: 'succeeded' } })
+  expect(b.snapshot().notice?.seq).toBe(2)
   b.face.dismissNotice()
+  expect(b.snapshot().notice).toBeUndefined()
+})
+
+it('checks again without a notice', async () => {
+  const b = fixture()
+  await b.publish({ account: { state: 'unverified' } })
+  b.face.check()
+  await settle(b)
+  expect(b.remote.check).toHaveBeenCalledOnce()
+  await b.publish({ ...SIGNED_OUT, result: { id: OP, kind: 'check', outcome: 'succeeded' } })
   expect(b.snapshot().notice).toBeUndefined()
 })
 
 it('opens a link the stream reported before the start answered, never a foreign operation, and only over HTTPS', async () => {
   const b = fixture()
   const answer = Promise.withResolvers<{ ok: true; value: FeishuOperationId }>()
-  b.remote.connect.mockReturnValueOnce(answer.promise)
-  await b.publish({ ...SIGNED_OUT, operation: operation('connect', 'authorizing', 'https://accounts.feishu.cn/other', 'other' as FeishuOperationId) })
-  b.face.connect()
-  await b.publish({ ...SIGNED_OUT, operation: operation('connect', 'authorizing', 'https://accounts.feishu.cn/device') })
+  b.remote.signIn.mockReturnValueOnce(answer.promise)
+  await b.publish({ ...SIGNED_OUT, operation: operation('sign-in', 'authorizing', 'https://accounts.feishu.cn/other', 'other' as FeishuOperationId) })
+  b.face.signIn()
+  await b.publish({ ...SIGNED_OUT, operation: operation('sign-in', 'authorizing', 'https://accounts.feishu.cn/device') })
   expect(b.open).not.toHaveBeenCalled()
   answer.resolve({ ok: true, value: OP })
   await vi.waitFor(() => { expect(b.open).toHaveBeenCalledWith('https://accounts.feishu.cn/device', '_blank', 'noopener,noreferrer') })
-  await b.publish({ ...SIGNED_OUT, operation: operation('connect', 'authorizing', 'http://accounts.feishu.cn/device') })
+  await b.publish({ ...SIGNED_OUT, operation: operation('sign-in', 'authorizing', 'http://accounts.feishu.cn/device') })
   b.face.openAuthorization()
   expect(b.open).toHaveBeenCalledOnce()
 })
 
-it('starts before the first view and reports no notice for a failed connection', async () => {
+it('starts before the first view and reports no notice for a failed sign-in', async () => {
   const b = fixture()
-  b.face.connect()
+  b.face.signIn()
   await settle(b)
-  await b.publish({ ...SIGNED_OUT, result: { id: OP, kind: 'connect', outcome: 'failed' } })
+  await b.publish({ ...SIGNED_OUT, result: { id: OP, kind: 'sign-in', outcome: 'failed' } })
   expect(b.snapshot().notice).toBeUndefined()
 })
 
@@ -158,7 +181,7 @@ it('cancels only a cancellable operation and reports a finished sign-out', async
   expect(b.remote.cancel).not.toHaveBeenCalled()
   await b.publish({ account: { state: 'signed-out' }, result: { id: OP, kind: 'sign-out', outcome: 'succeeded' } })
   expect(b.snapshot().notice?.kind).toBe('signed-out')
-  await b.publish({ ...SIGNED_OUT, operation: operation('connect', 'authorizing') })
+  await b.publish({ ...SIGNED_OUT, operation: operation('sign-in', 'authorizing') })
   b.face.cancel()
   await settle(b)
   expect(b.remote.cancel).toHaveBeenCalledWith(OP)
@@ -167,8 +190,8 @@ it('cancels only a cancellable operation and reports a finished sign-out', async
 it('reports a failed action once and ignores overlapping clicks', async () => {
   const b = fixture()
   await b.publish(SIGNED_OUT)
-  b.remote.connect.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) } as never)
-  b.face.connect()
+  b.remote.signIn.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) } as never)
+  b.face.signIn()
   b.face.signOut()
   await vi.waitFor(() => { expect(b.snapshot().notice?.kind).toBe('action-failed') })
   expect(b.remote.signOut).not.toHaveBeenCalled()

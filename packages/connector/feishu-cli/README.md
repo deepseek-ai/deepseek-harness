@@ -38,12 +38,14 @@ Turning the row off in Plugin Manager withdraws the skills and the private PATH 
 <a id="account-operations"></a>
 ### Account operations
 
-The `feishu` Remote serves the Plugins page. It runs at most one account operation at a time, owned by the Host, so leaving the page does not cancel it.
+The `feishu` Remote serves the Plugins page. It runs at most one account operation at a time, owned by the Host, so leaving the page does not cancel it. Linking an app and signing in are separate operations, so the page starts each one from its own click.
 
 | Method | Effect |
 |---|---|
 | `follow(signal)` | Streams the account, the operation in progress, and the last result; each new follower starts a check when no operation runs |
-| `connect()` | Checks the account, runs `config init --new` when no app is configured, then `auth login --json`, and checks that the same user is signed in; returns the operation id |
+| `check()` | Checks the account again; returns the operation id |
+| `linkApp()` | Runs `config init --new` when no app is configured and keeps an existing app; it does not sign in |
+| `signIn()` | Runs `auth login --json` for the linked app and checks that the same user is signed in |
 | `signOut()` | Runs `auth logout --json`, which also signs out the user's own terminal, then checks again |
 | `cancel(id)` | Cancels that operation and waits for its command to exit; a finished id is ignored |
 

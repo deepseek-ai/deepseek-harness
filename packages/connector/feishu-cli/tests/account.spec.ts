@@ -1,4 +1,4 @@
-/** Account operations over a scripted lark-cli: checks, connection, sign-out, cancellation, and the Remote wiring. */
+/** Account operations over a scripted lark-cli: checks, app linking, sign-in, sign-out, cancellation, and the Remote wiring. */
 import { rm } from 'node:fs/promises'
 import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
@@ -86,58 +86,63 @@ describe('FeishuAccount', () => {
     expect(await settled(account.start('check'))).toMatchObject({ account: { state: 'unchecked' }, result: { outcome: 'failed' } })
   })
 
-  it('links an app, signs in, and offers each trusted link', async () => {
-    script[STATUS] = [NOT_CONFIGURED, SIGNED_OUT, CONNECTED]
+  it('links an app through its setup page, offers only a trusted link, and stops before sign-in', async () => {
+    script[STATUS] = [NOT_CONFIGURED, SIGNED_OUT]
     const setup = Promise.withResolvers<ScriptedProcess>()
-    const signIn = Promise.withResolvers<ScriptedProcess>()
     script['config init --new'] = (process) => { setup.resolve(process) }
-    script['auth login --json'] = (process) => { signIn.resolve(process) }
 
-    const id = account.start('connect')
+    const id = account.start('link-app')
     const configuring = await setup.promise
     configuring.write('stderr', 'Open this link:\n  http://open.feishu.cn/page/cli?x=1\n  https://evil.example/page\n')
     configuring.write('stderr', '  https://open.feishu.cn/page/cli?x=2\n  https://open.feishu.cn/page/cli?x=3\n')
     await vi.waitFor(() => { expect(account.snapshot().operation).toMatchObject({ phase: 'configuring', authorizationUrl: 'https://open.feishu.cn/page/cli?x=2' }) })
     configuring.reply({})
 
+    expect(await settled(id)).toEqual({ account: { state: 'signed-out' }, result: { id, kind: 'link-app', outcome: 'succeeded' } })
+    expect(commands()).toEqual([STATUS, 'config init --new', STATUS])
+  })
+
+  it('keeps an app that is already linked', async () => {
+    script[STATUS] = [SIGNED_OUT]
+    expect((await settled(account.start('link-app'))).result?.outcome).toBe('succeeded')
+    expect(commands()).toEqual([STATUS])
+  })
+
+  it('signs in through the authorization page and accepts a sign-in that leaves permissions ungranted', async () => {
+    script[STATUS] = [CONNECTED]
+    const signIn = Promise.withResolvers<ScriptedProcess>()
+    script['auth login --json'] = (process) => { signIn.resolve(process) }
+
+    const id = account.start('sign-in')
+    expect(account.snapshot().operation).toEqual({ id, kind: 'sign-in', phase: 'authorizing' })
     const authorizing = await signIn.promise
     const invalid = JSON.stringify({ event: 'device_authorization', verification_uri_complete: 'not a url' })
     authorizing.write('stdout', `progress\n{"event":"other"}\n${invalid}\n${LOGIN_LINK}\n`)
     await vi.waitFor(() => { expect(account.snapshot().operation).toMatchObject({ phase: 'authorizing', authorizationUrl: 'https://accounts.feishu.cn/oauth/device?code=1' }) })
     authorizing.reply({ stdout: login(['im:message']) + '\n', exitCode: 3 })
 
-    expect(await settled(id)).toEqual({ account: { state: 'connected', userName: '张三' }, result: { id, kind: 'connect', outcome: 'succeeded' } })
-    expect(commands()).toEqual([STATUS, 'config init --new', STATUS, 'auth login --json', STATUS])
+    expect(await settled(id)).toEqual({ account: { state: 'connected', userName: '张三' }, result: { id, kind: 'sign-in', outcome: 'succeeded' } })
+    expect(commands()).toEqual(['auth login --json', STATUS])
   })
 
-  it.each<[string, CliReply[], string[]]>([
-    ['an already connected account', [CONNECTED], [STATUS]],
-    ['an app setup that also signed in', [NOT_CONFIGURED, CONNECTED], [STATUS, 'config init --new', STATUS]],
-  ])('stops early for %s', async (_name, replies, expected) => {
-    script[STATUS] = replies
-    script['config init --new'] = [{}]
-    expect((await settled(account.start('connect'))).result?.outcome).toBe('succeeded')
-    expect(commands()).toEqual(expected)
-  })
-
-  it.each<[string, Record<string, CliReply[]>]>([
-    ['a failed app setup', { [STATUS]: [NOT_CONFIGURED], 'config init --new': [{ exitCode: 1 }] }],
-    ['an app setup that left no app', { [STATUS]: [NOT_CONFIGURED, NOT_CONFIGURED], 'config init --new': [{}] }],
-    ['a sign-in without completion', { [STATUS]: [SIGNED_OUT], 'auth login --json': [{ stdout: LOGIN_LINK + '\n' }] }],
-    ['a failed sign-in', { [STATUS]: [SIGNED_OUT], 'auth login --json': [{ stdout: login() + '\n', exitCode: 1 }] }],
-    ['a partial sign-in that reports no missing permission', { [STATUS]: [SIGNED_OUT], 'auth login --json': [{ stdout: login() + '\n', exitCode: 3 }] }],
-    ['a different signed-in user', { [STATUS]: [SIGNED_OUT, CONNECTED], 'auth login --json': [{ stdout: login([], 'ou_2') + '\n' }] }],
-    ['an unverified sign-in', { [STATUS]: [SIGNED_OUT, SIGNED_OUT], 'auth login --json': [{ stdout: login() + '\n' }] }],
-  ])('fails the connection on %s', async (_name, replies) => {
+  it.each<[string, 'link-app' | 'sign-in', Record<string, CliReply[]>]>([
+    ['a failed app setup', 'link-app', { [STATUS]: [NOT_CONFIGURED], 'config init --new': [{ exitCode: 1 }] }],
+    ['an app setup that left no app', 'link-app', { [STATUS]: [NOT_CONFIGURED, NOT_CONFIGURED], 'config init --new': [{}] }],
+    ['a sign-in without completion', 'sign-in', { 'auth login --json': [{ stdout: LOGIN_LINK + '\n' }] }],
+    ['a failed sign-in', 'sign-in', { 'auth login --json': [{ stdout: login() + '\n', exitCode: 1 }] }],
+    ['a partial sign-in that reports no missing permission', 'sign-in', { 'auth login --json': [{ stdout: login() + '\n', exitCode: 3 }] }],
+    ['a different signed-in user', 'sign-in', { [STATUS]: [CONNECTED], 'auth login --json': [{ stdout: login([], 'ou_2') + '\n' }] }],
+    ['an unverified sign-in', 'sign-in', { [STATUS]: [SIGNED_OUT], 'auth login --json': [{ stdout: login() + '\n' }] }],
+  ])('fails on %s', async (_name, kind, replies) => {
     Object.assign(script, replies)
-    expect((await settled(account.start('connect'))).result).toMatchObject({ kind: 'connect', outcome: 'failed' })
+    expect((await settled(account.start(kind))).result).toMatchObject({ kind, outcome: 'failed' })
   })
 
   it('cancels only the named operation, withdraws its link, and ignores later output', async () => {
     script[STATUS] = [SIGNED_OUT]
     const signIn = Promise.withResolvers<ScriptedProcess>()
     script['auth login --json'] = (process) => { process.write('stdout', LOGIN_LINK + '\n'); signIn.resolve(process) }
-    const id = account.start('connect')
+    const id = account.start('sign-in')
     await vi.waitFor(() => { expect(account.snapshot().operation?.authorizationUrl).toBeDefined() })
     await account.cancel('other' as FeishuOperationId)
     expect(account.snapshot().operation?.phase).toBe('authorizing')
@@ -145,18 +150,18 @@ describe('FeishuAccount', () => {
     const process = await signIn.promise
     process.holdExit = true
     const cancelling = account.cancel(id)
-    expect(account.snapshot().operation).toEqual({ id, kind: 'connect', phase: 'cancelling' })
+    expect(account.snapshot().operation).toEqual({ id, kind: 'sign-in', phase: 'cancelling' })
     process.write('stdout', LOGIN_LINK + '\n')
     process.release()
     await cancelling
-    expect(account.snapshot()).toEqual({ account: { state: 'signed-out' }, result: { id, kind: 'connect', outcome: 'cancelled' } })
+    expect(account.snapshot()).toEqual({ account: { state: 'unchecked' }, result: { id, kind: 'sign-in', outcome: 'cancelled' } })
   })
 
   it('runs one operation at a time and refreshes only when idle', async () => {
     const gate = Promise.withResolvers<ScriptedProcess>()
     script[STATUS] = (process) => { gate.resolve(process) }
     const id = account.start('check')
-    expect(() => account.start('connect')).toThrow('another account operation is in progress')
+    expect(() => account.start('sign-in')).toThrow('another account operation is in progress')
     account.refresh()
     expect(subprocess.processes).toHaveLength(0)
     ;(await gate.promise).reply(CONNECTED)
@@ -181,7 +186,7 @@ describe('FeishuAccount', () => {
     await vi.waitFor(() => { expect(subprocess.processes).toHaveLength(1) })
     await account.dispose()
     expect(subprocess.processes[0]?.terminated).toBe(true)
-    expect(() => account.start('connect')).toThrow('plugin disposed')
+    expect(() => account.start('link-app')).toThrow('plugin disposed')
     account.refresh()
     await account.dispose()
     expect(subprocess.processes).toHaveLength(1)
@@ -193,7 +198,7 @@ describe('Feishu Remote', () => {
     await ctx.plugin(Feishu, { ...LIMITS, binDir })
   })
 
-  it('checks for each new follower, streams each change, and starts connections and sign-outs', async () => {
+  it('checks for each new follower, streams each change, and starts checks, app links, sign-ins, and sign-outs', async () => {
     script[STATUS] = [SIGNED_OUT]
     const leave = new AbortController()
     const seen: FeishuState[] = []
@@ -209,12 +214,15 @@ describe('Feishu Remote', () => {
 
     script['auth logout --json'] = [{ stdout: '{"ok":true}' }]
     const signingOut = ctx.feishu.signOut()
-    expect(() => ctx.feishu.connect()).toThrow('another account operation is in progress')
+    expect(() => ctx.feishu.signIn()).toThrow('another account operation is in progress')
     await ctx.feishu.cancel(signingOut)
+    script[STATUS] = [SIGNED_OUT]
+    await ctx.feishu.cancel(ctx.feishu.check())
+    await ctx.feishu.cancel(ctx.feishu.linkApp())
     script['auth login --json'] = () => {}
-    const connecting = ctx.feishu.connect()
+    const signingIn = ctx.feishu.signIn()
     await vi.waitFor(() => { expect(commands().at(-1)).toBe('auth login --json') })
-    await ctx.feishu.cancel(connecting)
+    await ctx.feishu.cancel(signingIn)
     expect(subprocess.processes.at(-1)?.terminated).toBe(true)
   })
 

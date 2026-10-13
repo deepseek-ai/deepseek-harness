@@ -1,8 +1,8 @@
 // Web e2e scenario: connecting the Feishu plugin from its page on the Plugins
-// page. A stand-in lark-cli plays the CLI's app setup and device sign-in; the
-// browser opens each Feishu page the Host offers, the stand-in finishes once
-// its page is visited, the section reaches connected, and sign-out returns it
-// to disconnected. Zero model calls.
+// page. A stand-in lark-cli plays the CLI's app setup and device sign-in; each
+// step starts from its own click, the browser opens that step's Feishu page,
+// the stand-in finishes once its page is visited, the section reaches
+// connected, and sign-out returns it to disconnected. Zero model calls.
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -97,7 +97,7 @@ describe.skipIf(process.platform === 'win32')('web e2e: Feishu plugin connection
     if (binDir !== undefined) await rm(binDir, { recursive: true, force: true })
   })
 
-  it('links an app, signs in from the plugin page, and signs out after confirmation', async () => {
+  it('links an app, then signs in from a second click, and signs out after confirmation', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-feishu-connection'))
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
     const panel = page.locator('[data-plugin-panel]')
@@ -108,7 +108,10 @@ describe.skipIf(process.platform === 'win32')('web e2e: Feishu plugin connection
 
     const opened: Page[] = []
     context.on('page', (popup) => { opened.push(popup) })
-    await section.getByRole('button', { name: '连接飞书', exact: true }).click()
+    await section.getByRole('button', { name: '关联飞书应用', exact: true }).click()
+    await page.getByText('飞书应用已关联，下一步登录飞书账号', { exact: true }).waitFor({ timeout: 20_000 })
+    expect(opened.map(popup => popup.url())).toEqual([SETUP_URL])
+    await section.getByRole('button', { name: '登录飞书账号', exact: true }).click()
     await expect.poll(() => section.getAttribute('data-feishu-connection'), { timeout: 20_000 }).toBe('connected')
     expect(opened.map(popup => popup.url())).toEqual([SETUP_URL, SIGN_IN_URL])
     await section.getByText('已登录为 测试用户。可以在对话中直接请 Agent 使用飞书。', { exact: true }).waitFor({ timeout: 10_000 })

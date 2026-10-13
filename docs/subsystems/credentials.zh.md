@@ -375,11 +375,25 @@ Registers the CLI and skills, and owns the account operations the Plugins page d
 
 ```ts cordis-catalog
 /**
- * Check the account, set up an app if none is configured, then sign in.
+ * Check the account again without changing it.
  * @returns the operation identity.
  * @throws while another account operation runs.
  */
-@Remote connect(): FeishuOperationId
+@Remote check(): FeishuOperationId
+
+/**
+ * Link an app through the CLI's setup page when none is configured; an existing app is kept.
+ * @returns the operation identity.
+ * @throws while another account operation runs.
+ */
+@Remote linkApp(): FeishuOperationId
+
+/**
+ * Sign the linked app's user in through the CLI's authorization page.
+ * @returns the operation identity.
+ * @throws while another account operation runs.
+ */
+@Remote signIn(): FeishuOperationId
 
 /**
  * Sign the default account out, which also signs out the user's own terminal.

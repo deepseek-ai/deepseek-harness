@@ -74,13 +74,33 @@ export default class Feishu extends TypertRemoteService {
   }
 
   /**
-   * Check the account, set up an app if none is configured, then sign in.
+   * Check the account again without changing it.
    * @returns the operation identity.
    * @throws while another account operation runs.
    */
   @Remote
-  connect(): FeishuOperationId {
-    return this.account.start('connect')
+  check(): FeishuOperationId {
+    return this.account.start('check')
+  }
+
+  /**
+   * Link an app through the CLI's setup page when none is configured; an existing app is kept.
+   * @returns the operation identity.
+   * @throws while another account operation runs.
+   */
+  @Remote
+  linkApp(): FeishuOperationId {
+    return this.account.start('link-app')
+  }
+
+  /**
+   * Sign the linked app's user in through the CLI's authorization page.
+   * @returns the operation identity.
+   * @throws while another account operation runs.
+   */
+  @Remote
+  signIn(): FeishuOperationId {
+    return this.account.start('sign-in')
   }
 
   /**

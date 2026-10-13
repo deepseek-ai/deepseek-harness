@@ -13,7 +13,7 @@ export type FeishuAccountState =
 /** The account operation in progress; links are restricted to HTTPS Feishu and Lark hosts. */
 export interface FeishuOperationState {
   readonly id: FeishuOperationId
-  readonly kind: 'check' | 'connect' | 'sign-out'
+  readonly kind: 'check' | 'link-app' | 'sign-in' | 'sign-out'
   readonly phase: 'checking' | 'configuring' | 'authorizing' | 'verifying' | 'signing-out' | 'cancelling'
   readonly authorizationUrl?: string
 }
