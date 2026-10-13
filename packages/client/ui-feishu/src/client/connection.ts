@@ -22,6 +22,8 @@ export interface ConnectionSnapshot {
   readonly feishu: FeishuState | undefined
   /** Whether the Host stream is delivering. */
   readonly linked: boolean
+  /** Whether the Host stream failed for good, as when the Host's Feishu component is not running; `retry` reopens it. */
+  readonly stopped: boolean
   /** Whether an action this page started has not answered. */
   readonly busy: boolean
   readonly notice: ConnectionNotice | undefined
@@ -32,7 +34,7 @@ export type ConnectionStep = 'configuring' | 'authorizing' | 'connecting' | 'sig
 
 /** What the user sees about the connection, derived from the Host's view alone. */
 export type ConnectionPresentation =
-  | { readonly phase: 'checking' }
+  | { readonly phase: 'checking' | 'stopped' }
   | { readonly phase: 'disconnected' | 'unavailable'; readonly failed: boolean }
   | { readonly phase: 'connected'; readonly userName: string | undefined; readonly failed: boolean }
   | {
@@ -50,6 +52,8 @@ export interface ConnectionFace {
   cancel(): void
   signOut(): void
   openAuthorization(): void
+  /** Reopen the Host stream after it stopped. */
+  retry(): void
   dismissNotice(): void
 }
 
@@ -67,10 +71,12 @@ function step(phase: Exclude<NonNullable<FeishuState['operation']>['phase'], 'ch
 
 /**
  * Derive the connection the page shows from the Host's view.
- * @param state - the view as the Host last reported it.
+ * @param snapshot - the view as the Host last reported it, and whether the Host stream stopped.
  * @returns the phase, with the operation in progress or the account the last check found.
  */
-export function presentConnection(state: FeishuState | undefined): ConnectionPresentation {
+export function presentConnection(snapshot: Pick<ConnectionSnapshot, 'feishu' | 'stopped'>): ConnectionPresentation {
+  if (snapshot.stopped) return { phase: 'stopped' }
+  const state = snapshot.feishu
   const operation = state?.operation
   if (state === undefined || operation?.kind === 'check') return { phase: 'checking' }
   if (operation !== undefined) {
@@ -109,7 +115,7 @@ async function settle<T>(call: Promise<RemoteResult<T>>): Promise<T> {
 export class FeishuConnection {
   /** The page's whole view, published after each stream item or page action settles. */
   readonly state: SnapshotStore<ConnectionSnapshot> = createSnapshotStore<ConnectionSnapshot>({
-    feishu: undefined, linked: false, busy: false, notice: undefined,
+    feishu: undefined, linked: false, stopped: false, busy: false, notice: undefined,
   })
 
   /** The connection or sign-out this browser started; only its links open a window here. */
@@ -117,16 +123,11 @@ export class FeishuConnection {
   private readonly opened = new Set<string>()
   private seq = 0
   private disposed = false
-  private readonly stream: RemoteStream<FeishuState>
-  private readonly observing: Promise<void>
+  private stream!: RemoteStream<FeishuState>
+  private observing!: Promise<void>
 
   constructor(private readonly ctx: Context) {
-    this.stream = ctx.remote.$stream<FeishuState>({
-      name: 'Feishu connection', open: signal => ctx.remote.feishu.follow(signal),
-      ended: () => new Error('Feishu connection stream ended'),
-      carrierFailed: () => { this.patch({ linked: false }) },
-    })
-    this.observing = this.observe()
+    this.subscribe()
   }
 
   /**
@@ -140,9 +141,10 @@ export class FeishuConnection {
       signOut: () => { void this.start(() => this.ctx.remote.feishu.signOut()) },
       cancel: () => { void this.cancel() },
       openAuthorization: () => {
-        const shown = presentConnection(this.state.getSnapshot().feishu)
+        const shown = presentConnection(this.state.getSnapshot())
         if (shown.phase === 'connecting') openAuthorizationPage(shown.url)
       },
+      retry: () => { void this.retry() },
       dismissNotice: () => { this.patch({ notice: undefined }) },
     }
   }
@@ -154,17 +156,34 @@ export class FeishuConnection {
     await this.observing
   }
 
-  private async observe(): Promise<void> {
+  private subscribe(): void {
+    this.stream = this.ctx.remote.$stream<FeishuState>({
+      name: 'Feishu connection', open: signal => this.ctx.remote.feishu.follow(signal),
+      ended: () => new Error('Feishu connection stream ended'),
+      carrierFailed: () => { this.patch({ linked: false }) },
+    })
+    this.observing = this.observe(this.stream)
+  }
+
+  private async observe(stream: RemoteStream<FeishuState>): Promise<void> {
     try {
-      for await (const item of this.stream) {
+      for await (const item of stream) {
         this.patch({ feishu: item.value, linked: true })
         this.follow(item.value)
         item.accept()
       }
     } catch {
-      // The carrier already reported the failure; a disposed page has nothing left to show.
-      if (!this.disposed) this.patch({ linked: false })
+      // A terminal failure, such as a Host without the Feishu service, ends the stream; a disposed page shows nothing.
+      if (!this.disposed) this.patch({ linked: false, stopped: true })
     }
+  }
+
+  private async retry(): Promise<void> {
+    if (this.disposed || !this.state.getSnapshot().stopped) return
+    await this.stream.dispose()
+    await this.observing
+    this.patch({ feishu: undefined, stopped: false })
+    this.subscribe()
   }
 
   /** Open each new link of this browser's operation once, and report how the operation ended. */
@@ -191,7 +210,7 @@ export class FeishuConnection {
   }
 
   private async cancel(): Promise<void> {
-    const shown = presentConnection(this.state.getSnapshot().feishu)
+    const shown = presentConnection(this.state.getSnapshot())
     if (shown.phase !== 'connecting' || !shown.cancellable) return
     await this.run(async () => { await settle(this.ctx.remote.feishu.cancel(shown.operation)) })
   }

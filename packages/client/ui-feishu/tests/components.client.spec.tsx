@@ -18,10 +18,10 @@ afterEach(cleanup)
 const OP = 'op' as FeishuOperationId
 
 function fixture(feishu?: FeishuState) {
-  const state = createSnapshotStore<ConnectionSnapshot>({ feishu, linked: true, busy: false, notice: undefined })
+  const state = createSnapshotStore<ConnectionSnapshot>({ feishu, linked: true, stopped: false, busy: false, notice: undefined })
   const face = {
     useFeishuConnection: bindSnapshotSelector(state),
-    connect: vi.fn(), cancel: vi.fn(), signOut: vi.fn(), openAuthorization: vi.fn(), dismissNotice: vi.fn(),
+    connect: vi.fn(), cancel: vi.fn(), signOut: vi.fn(), openAuthorization: vi.fn(), retry: vi.fn(), dismissNotice: vi.fn(),
     t: makeTranslate(zh),
   }
   return { face, set: (change: Partial<ConnectionSnapshot>) => { act(() => { state.set({ ...state.getSnapshot(), ...change }) }) } }
@@ -65,6 +65,18 @@ it('offers the next step for each state', () => {
   b.set({ feishu: undefined })
   expect(screen.getByText(zh['status.checking'])).toBeTruthy()
   expect(screen.queryAllByRole('button')).toHaveLength(0)
+})
+
+it('explains a stopped Host component and retries even while the stream is offline', () => {
+  const b = fixture(undefined)
+  render(<FeishuConnectionSection {...b.face} />)
+  b.set({ linked: false, stopped: true })
+  expect(screen.getByText(zh['status.stopped'])).toBeTruthy()
+  expect(screen.getByText(zh['detail.stopped'])).toBeTruthy()
+  fireEvent.click(button(zh['action.retry']))
+  expect(b.face.retry).toHaveBeenCalledOnce()
+  b.set({ busy: true })
+  expect((button(zh['action.retry']) as HTMLButtonElement).disabled).toBe(true)
 })
 
 it('shows who is signed in and signs out only after confirmation', () => {

@@ -18,6 +18,7 @@ const connecting = (step: ConnectionStep, url: string | undefined, cancellable: 
   ({ phase: 'connecting', step, operation: OP, url, cancellable })
 
 it.each<[string, FeishuState | undefined, ReturnType<typeof presentConnection>]>([
+  ['a stopped stream', SIGNED_OUT, { phase: 'stopped' }],
   ['no view yet', undefined, { phase: 'checking' }],
   ['an unchecked account', { account: { state: 'unchecked' } }, { phase: 'checking' }],
   ['a check', { ...SIGNED_OUT, operation: operation('check', 'checking') }, { phase: 'checking' }],
@@ -32,15 +33,15 @@ it.each<[string, FeishuState | undefined, ReturnType<typeof presentConnection>]>
   ['cancellation', { ...SIGNED_OUT, operation: operation('connect', 'cancelling') }, connecting('connecting', undefined, false)],
   ['sign-out', { ...SIGNED_OUT, operation: operation('sign-out', 'signing-out') }, connecting('signing-out', undefined, false)],
   ['a sign-out check', { ...SIGNED_OUT, operation: operation('sign-out', 'checking') }, connecting('signing-out', undefined, false)],
-])('presents %s', (_name, state, expected) => {
-  expect(presentConnection(state)).toEqual(expected)
+])('presents %s', (name, state, expected) => {
+  expect(presentConnection({ feishu: state, stopped: name === 'a stopped stream' })).toEqual(expected)
 })
 
 function fixture() {
   const queue: FeishuState[] = []
   let wake: (() => void) | undefined, closed = false, failure: Error | undefined, accepted = 0
   let options!: RemoteStreamOptions<FeishuState>
-  const stream = {
+  const open = () => ({
     async *[Symbol.asyncIterator]() {
       for (;;) {
         if (failure !== undefined) throw failure
@@ -51,7 +52,8 @@ function fixture() {
       }
     },
     dispose: vi.fn(async () => { closed = true; wake?.() }),
-  }
+  })
+  const streams: Array<ReturnType<typeof open>> = []
   const ok = <T>(value: T) => ({ ok: true as const, value })
   const remote = {
     follow: vi.fn(),
@@ -60,13 +62,23 @@ function fixture() {
     cancel: vi.fn(async () => ok(undefined)),
   }
   const ctx = new Context()
-  ctx.provide('remote', { feishu: remote, $stream: (value: typeof options) => { options = value; return stream } })
-  const open = vi.spyOn(window, 'open').mockReturnValue(null)
+  ctx.provide('remote', {
+    feishu: remote,
+    $stream: (value: typeof options) => {
+      options = value
+      closed = false
+      failure = undefined
+      streams.push(open())
+      return streams.at(-1)
+    },
+  })
+  const windowOpen = vi.spyOn(window, 'open').mockReturnValue(null)
   const connection = new FeishuConnection(ctx)
-  onTestFinished(async () => { await connection.dispose(); open.mockRestore(); await ctx.fiber.dispose() })
+  onTestFinished(async () => { await connection.dispose(); windowOpen.mockRestore(); await ctx.fiber.dispose() })
   const snapshot = () => connection.state.getSnapshot()
   return {
-    connection, face: connection.face(), remote, open, stream, snapshot, options: () => options,
+    connection, face: connection.face(), remote, open: windowOpen, streams, snapshot, options: () => options,
+    get stream() { return streams.at(-1)! },
     async publish(state: FeishuState) {
       const target = accepted + 1
       queue.push(state)
@@ -178,5 +190,21 @@ it('reports nothing after disposal and marks the page offline when the stream fa
   const c = fixture()
   await c.publish(SIGNED_OUT)
   c.fail(new Error('invalid frame'))
-  await vi.waitFor(() => { expect(c.snapshot().linked).toBe(false) })
+  await vi.waitFor(() => { expect(c.snapshot()).toMatchObject({ linked: false, stopped: true }) })
+})
+
+it('reopens a stopped Host stream on retry and ignores retry while the stream runs', async () => {
+  const b = fixture()
+  b.face.retry()
+  await b.publish(SIGNED_OUT)
+  expect(b.streams).toHaveLength(1)
+  b.fail(new Error('gateway/invocation-unavailable'))
+  await vi.waitFor(() => { expect(b.snapshot().stopped).toBe(true) })
+  expect(presentConnection(b.snapshot())).toEqual({ phase: 'stopped' })
+  b.face.retry()
+  await vi.waitFor(() => { expect(b.streams).toHaveLength(2) })
+  expect(b.streams[0]?.dispose).toHaveBeenCalled()
+  expect(b.snapshot()).toMatchObject({ feishu: undefined, stopped: false })
+  await b.publish({ account: { state: 'connected' } })
+  expect(b.snapshot()).toMatchObject({ linked: true, stopped: false, feishu: { account: { state: 'connected' } } })
 })

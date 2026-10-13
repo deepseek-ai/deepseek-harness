@@ -25,7 +25,7 @@ This package is the browser row of the [Feishu plugin](../../connector/feishu/RE
 <a id="use-this-package"></a>
 ## Use this package
 
-Install the [Feishu plugin bundle](../../connector/feishu/README.md), which inserts this package as the `ui-feishu` row. Opening the plugin's page checks the account, and a tag beside the title reads Not connected, Connecting, Connected, or Unconfirmed. Switching the plugin on from the list while no account is connected offers **Connect Feishu**, which opens the plugin's page and starts the connection.
+Install the [Feishu plugin bundle](../../connector/feishu/README.md), which inserts this package as the `ui-feishu` row. Opening the plugin's page checks the account, and a tag beside the title reads Not connected, Connecting, Connected, Unconfirmed, or Not running. Switching the plugin on from the list while no account is connected offers **Connect Feishu**, which opens the plugin's page and starts the connection.
 
 | Section state | Action |
 |---|---|
@@ -34,6 +34,7 @@ Install the [Feishu plugin bundle](../../connector/feishu/README.md), which inse
 | Step 1: Link a Feishu app, or Step 2: Sign in to Feishu | The browser that started the connection opens each Feishu page once; **Open authorization page** opens it again, and **Cancel** ends the connection |
 | Connected | **Sign out** asks for confirmation, then signs out the CLI's default account |
 | Cannot confirm sign-in right now | **Retry** runs the connection again and keeps the existing setup and sign-in |
+| Feishu component not running | The Host's `feishu` row did not load; the section points to the component list for the reason, and **Retry** subscribes to the Host again |
 
 Leaving the page does not cancel a connection, which the Host owns. A failed connection or sign-out shows **The action did not finish. Try again.** in the section; a failed page action shows a toast, and so does a finished connection or sign-out. The section notes that the account is shared with the Feishu CLI in the computer's terminal.
 

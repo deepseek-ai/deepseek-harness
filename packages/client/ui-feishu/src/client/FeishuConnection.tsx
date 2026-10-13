@@ -11,7 +11,7 @@ type Phase = ConnectionPresentation['phase']
 type FaceProps = InjectFace<ConnectionFace> & PropsLocale<typeof NS>
 
 const TONE: Record<Phase, StateDotState> = {
-  checking: 'ongoing', connecting: 'ongoing', connected: 'done', disconnected: 'idle', unavailable: 'warning',
+  checking: 'ongoing', connecting: 'ongoing', connected: 'done', disconnected: 'idle', unavailable: 'warning', stopped: 'warning',
 }
 
 const BADGE: Record<Phase, readonly [FeishuKey, TagTone] | undefined> = {
@@ -20,6 +20,7 @@ const BADGE: Record<Phase, readonly [FeishuKey, TagTone] | undefined> = {
   connected: ['badge.connected', 'success'],
   disconnected: ['badge.disconnected', 'outline'],
   unavailable: ['badge.unavailable', 'warning'],
+  stopped: ['badge.stopped', 'warning'],
 }
 
 /**
@@ -28,11 +29,12 @@ const BADGE: Record<Phase, readonly [FeishuKey, TagTone] | undefined> = {
  * @returns the status line, its actions, and the sign-out confirmation.
  */
 export function FeishuConnectionSection(props: FaceProps): ReactNode {
-  const { useFeishuConnection, connect, cancel, signOut, openAuthorization, t } = props
+  const { useFeishuConnection, connect, cancel, signOut, openAuthorization, retry, t } = props
   const snapshot = useFeishuConnection(value => value)
   const [confirming, setConfirming] = useState(false)
-  const shown = presentConnection(snapshot.feishu)
-  const disabled = snapshot.busy || !snapshot.linked
+  const shown = presentConnection(snapshot)
+  // Reopening a stopped stream is the one action that does not need the Host stream.
+  const disabled = snapshot.busy || (!snapshot.linked && shown.phase !== 'stopped')
   const action = (label: FeishuKey, onClick: () => void, variant: 'primary' | 'outline' | 'ghost' = 'outline'): ReactNode =>
     <Button key={label} variant={variant} size="sm" disabled={disabled} onClick={onClick}>{t(label)}</Button>
   const actions: ReactNode[] = []
@@ -41,6 +43,7 @@ export function FeishuConnectionSection(props: FaceProps): ReactNode {
   switch (shown.phase) {
     case 'disconnected': actions.push(action('action.connect', connect, 'primary')); detail = t('detail.disconnected'); break
     case 'unavailable': actions.push(action('action.retry', connect)); detail = t('detail.unavailable'); break
+    case 'stopped': actions.push(action('action.retry', retry)); detail = t('detail.stopped'); break
     case 'connected':
       actions.push(action('action.signOut', () => { setConfirming(true) }))
       detail = shown.userName === undefined ? t('detail.connected') : t('detail.connectedAs', { name: shown.userName })
@@ -83,7 +86,7 @@ export function FeishuConnectionSection(props: FaceProps): ReactNode {
  * @returns the tag for the Feishu bundle, or null on any other page.
  */
 export function FeishuConnectionBadge({ subject, useFeishuConnection, t }: FaceProps & PropsRuntime<'plugins.detail.badge'>): ReactNode {
-  const phase = useFeishuConnection(value => presentConnection(value.feishu).phase)
+  const phase = useFeishuConnection(value => presentConnection(value).phase)
   if (subject.kind === 'item' || subject.pkg.name !== FEISHU_PACKAGE || !subject.pkg.enabled) return null
   const badge = BADGE[phase]
   return badge === undefined ? null : <Tag tone={badge[1]}>{t(badge[0])}</Tag>
@@ -96,7 +99,7 @@ export function FeishuConnectionBadge({ subject, useFeishuConnection, t }: FaceP
  */
 export function FeishuConnectionActivation(props: FaceProps & PropsRuntime<'plugins.bundle.activation'>): ReactNode {
   const { useFeishuConnection, connect, onDismiss, onOpenDetails, t } = props
-  const phase = useFeishuConnection(value => presentConnection(value.feishu).phase)
+  const phase = useFeishuConnection(value => presentConnection(value).phase)
   const needed = phase === 'disconnected'
   useEffect(() => {
     if (phase !== 'checking' && !needed) onDismiss()
