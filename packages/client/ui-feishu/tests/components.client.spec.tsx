@@ -120,16 +120,6 @@ it('shows the linked app and changes it only after confirmation', () => {
   expect(b.face.linkApp).toHaveBeenCalledOnce()
 })
 
-it('explains ungranted permissions and grants more through another sign-in', () => {
-  const b = fixture({ account: { state: 'connected', appId: APP, userName: '张三', ungrantedPermissions: 4 } })
-  render(<FeishuConnectionSection {...b.face} />)
-  expect(screen.getByText(text('detail.ungranted', { count: '4' }))).toBeTruthy()
-  fireEvent.click(button(zh['action.grantMore']))
-  expect(b.face.signIn).toHaveBeenCalledOnce()
-  b.set({ feishu: { account: { state: 'connected', appId: APP, userName: '张三' } } })
-  expect(screen.queryByRole('button', { name: zh['action.grantMore'] })).toBeNull()
-})
-
 it('disables actions while one is pending or the Host stream is offline', () => {
   const b = fixture({ account: { state: 'unconfigured' } })
   render(<FeishuConnectionSection {...b.face} />)
@@ -185,6 +175,4 @@ it('reports the latest notice', () => {
   expect(screen.getByText(zh['notice.signed-out'])).toBeTruthy()
   b.set({ notice: { seq: 2, kind: 'action-failed' } })
   expect(screen.getByText(zh['notice.action-failed'])).toBeTruthy()
-  b.set({ notice: { seq: 3, kind: 'connected-partially' } })
-  expect(screen.getByText(zh['notice.connected-partially'])).toBeTruthy()
 })

@@ -6185,7 +6185,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'FeishuAccountState',
-    declaration: 'export type FeishuAccountState = {\n    readonly state: \'unchecked\' | \'unconfigured\';\n} | {\n    readonly state: \'signed-out\' | \'unverified\';\n    readonly appId: FeishuAppId;\n} | {\n    readonly state: \'connected\';\n    readonly appId: FeishuAppId;\n    readonly userName?: string;\n    readonly ungrantedPermissions?: number;\n};',
+    declaration: 'export type FeishuAccountState = {\n    readonly state: \'unchecked\' | \'unconfigured\';\n} | {\n    readonly state: \'signed-out\' | \'unverified\';\n    readonly appId: FeishuAppId;\n} | {\n    readonly state: \'connected\';\n    readonly appId: FeishuAppId;\n    readonly userName?: string;\n};',
   },
   {
     name: 'FeishuAppId',

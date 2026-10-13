@@ -12,16 +12,7 @@ export type FeishuAppId = Branded<'FeishuAppId'>
 export type FeishuAccountState =
   | { readonly state: 'unchecked' | 'unconfigured' }
   | { readonly state: 'signed-out' | 'unverified'; readonly appId: FeishuAppId }
-  | {
-    readonly state: 'connected'
-    readonly appId: FeishuAppId
-    readonly userName?: string
-    /**
-     * Requested permissions the last sign-in on this Host did not grant, which may await an administrator's
-     * approval; absent when every permission was granted or no sign-in ran since the Host started.
-     */
-    readonly ungrantedPermissions?: number
-  }
+  | { readonly state: 'connected'; readonly appId: FeishuAppId; readonly userName?: string }
 
 /** The account operation in progress; links are restricted to HTTPS Feishu and Lark hosts. */
 export interface FeishuOperationState {

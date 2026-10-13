@@ -49,8 +49,6 @@ class Operation {
 /** Runs at most one account operation at a time; subscribers observe it without owning it. */
 export class FeishuAccount {
   private account: FeishuAccountState = { state: 'unchecked' }
-  /** The user the last completed sign-in left without some requested permissions, and how many. */
-  private ungranted: { readonly openId: string; readonly count: number } | undefined
   private active: Operation | undefined
   private result: FeishuOperationResult | undefined
   private readonly lifetime = new AbortController()
@@ -196,7 +194,6 @@ export class FeishuAccount {
     if (complete === undefined || (login.exitCode !== 0 && !(login.exitCode === 3 && complete.missing.length > 0))) {
       throw new Error('feishu: auth login did not complete')
     }
-    this.ungranted = complete.missing.length === 0 ? undefined : { openId: complete.user_open_id, count: complete.missing.length }
     this.stage(operation, 'verifying')
     const found = await this.check(signal)
     if (found.account.state !== 'connected' || found.openId !== complete.user_open_id) throw new Error('feishu: sign-in did not verify')
@@ -208,24 +205,14 @@ export class FeishuAccount {
     const result = await this.cli.run(args, signal, { timeoutMs: this.limits.commandTimeoutMs })
     if (result.exitCode !== 0) {
       if (!NotConfigured.safeParse(parseJson(args, result.stderr)).success) throw new Error('feishu: auth status failed')
-      this.ungranted = undefined
       return { account: this.publish({ state: 'unconfigured' }) }
     }
     const status = Status.parse(parseJson(args, result.stdout))
     const appId = brandString<FeishuAppId>(status.appId)
     const user = status.identities.user
-    if (!user.available || user.verified !== true) {
-      const signedOut = SIGNED_OUT.has(user.status)
-      if (signedOut) this.ungranted = undefined
-      return { account: this.publish({ state: signedOut ? 'signed-out' : 'unverified', appId }), openId: user.openId }
-    }
-    const ungranted = this.ungranted !== undefined && this.ungranted.openId === user.openId ? this.ungranted.count : undefined
-    const account: FeishuAccountState = {
-      state: 'connected',
-      appId,
-      ...user.userName === undefined ? {} : { userName: user.userName },
-      ...ungranted === undefined ? {} : { ungrantedPermissions: ungranted },
-    }
+    const account: FeishuAccountState = user.available && user.verified === true
+      ? { state: 'connected', appId, ...user.userName === undefined ? {} : { userName: user.userName } }
+      : { state: SIGNED_OUT.has(user.status) ? 'signed-out' : 'unverified', appId }
     return { account: this.publish(account), openId: user.openId }
   }
 

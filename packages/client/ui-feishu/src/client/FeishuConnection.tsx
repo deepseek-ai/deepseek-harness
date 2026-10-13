@@ -48,7 +48,6 @@ export function FeishuConnectionSection(props: FaceProps): ReactNode {
     case 'unavailable': actions.push(action('action.retry', check)); detail = t('detail.unavailable'); break
     case 'stopped': actions.push(action('action.retry', retry)); detail = t('detail.stopped'); break
     case 'connected':
-      if (shown.ungranted !== undefined) actions.push(action('action.grantMore', signIn))
       actions.push(action('action.signOut', () => { setConfirming('sign-out') }))
       detail = shown.userName === undefined ? t('detail.connected') : t('detail.connectedAs', { name: shown.userName })
       break
@@ -71,9 +70,6 @@ export function FeishuConnectionSection(props: FaceProps): ReactNode {
         <div className={css.actions}>{actions}</div>
       </div>
       {detail === undefined ? null : <p className={css.detail}>{detail}</p>}
-      {shown.phase === 'connected' && shown.ungranted !== undefined
-        ? <p className={css.detail}>{t('detail.ungranted', { count: shown.ungranted })}</p>
-        : null}
       {'appId' in shown
         ? <div className={css.status}>
           <span className={css.detail}>{t('app.linked', { id: shown.appId })}</span>
@@ -151,7 +147,7 @@ export function FeishuConnectionActivation(props: FaceProps & PropsRuntime<'plug
 export function FeishuConnectionToast({ useFeishuConnection, dismissNotice, t }: FaceProps): ReactNode {
   const notice = useFeishuConnection(value => value.notice)
   if (notice === undefined) return null
-  const failed = notice.kind === 'action-failed' || notice.kind === 'connected-partially'
+  const failed = notice.kind === 'action-failed'
   return (
     <Toast key={notice.seq} text={t(`notice.${notice.kind}`)} onDone={dismissNotice}
       {...failed ? { icon: <IconWarningOutlineRegular /> } : { tone: 'success' as const }} />
