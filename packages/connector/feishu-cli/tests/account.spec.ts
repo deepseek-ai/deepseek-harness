@@ -6,13 +6,14 @@ import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FeishuAccount } from '../src/account.ts'
 import { FeishuCli } from '../src/cli.ts'
-import Feishu, { type FeishuOperationId, type FeishuState } from '../src/index.ts'
+import Feishu, { type FeishuAppId, type FeishuOperationId, type FeishuState } from '../src/index.ts'
 import { createBinDir, ScriptedSubprocess, type CliReply, type ScriptedProcess } from './harness.ts'
 
 const LIMITS = { commandTimeoutMs: 5_000, authorizationTimeoutMs: 5_000, maxOutputBytes: 1_048_576 }
+const APP = 'cli_a' as FeishuAppId
 const STATUS = 'auth status --verify --json'
 const NOT_CONFIGURED: CliReply = { exitCode: 3, stderr: JSON.stringify({ ok: false, error: { type: 'config', subtype: 'not_configured', message: 'not configured' } }) }
-const status = (user: Record<string, unknown>): CliReply => ({ stdout: JSON.stringify({ appId: 'cli_a', identities: { user } }) })
+const status = (user: Record<string, unknown>): CliReply => ({ stdout: JSON.stringify({ appId: APP, identities: { user } }) })
 const CONNECTED = status({ status: 'ready', available: true, verified: true, userName: '张三', openId: 'ou_1' })
 const SIGNED_OUT = status({ status: 'missing', available: false })
 const LOGIN_LINK = JSON.stringify({ event: 'device_authorization', verification_uri_complete: 'https://accounts.feishu.cn/oauth/device?code=1' })
@@ -66,11 +67,11 @@ describe('FeishuAccount', () => {
 
   it.each<[string, CliReply, FeishuState['account']]>([
     ['no app', NOT_CONFIGURED, { state: 'unconfigured' }],
-    ['a verified user', CONNECTED, { state: 'connected', userName: '张三' }],
-    ['a verified user without a name', status({ status: 'ready', available: true, verified: true }), { state: 'connected' }],
-    ['a missing user', SIGNED_OUT, { state: 'signed-out' }],
-    ['an expired user', status({ status: 'needs_refresh', available: true, verified: false }), { state: 'signed-out' }],
-    ['a failed verification', status({ status: 'verify_failed', available: true, verified: false }), { state: 'unverified' }],
+    ['a verified user', CONNECTED, { state: 'connected', appId: APP, userName: '张三' }],
+    ['a verified user without a name', status({ status: 'ready', available: true, verified: true }), { state: 'connected', appId: APP }],
+    ['a missing user', SIGNED_OUT, { state: 'signed-out', appId: APP }],
+    ['an expired user', status({ status: 'needs_refresh', available: true, verified: false }), { state: 'signed-out', appId: APP }],
+    ['a failed verification', status({ status: 'verify_failed', available: true, verified: false }), { state: 'unverified', appId: APP }],
   ])('checks %s', async (_name, reply, expected) => {
     script[STATUS] = [reply]
     const id = account.start('check')
@@ -88,7 +89,7 @@ describe('FeishuAccount', () => {
   })
 
   it('links an app through its setup page, offers only a trusted link, and stops before sign-in', async () => {
-    script[STATUS] = [NOT_CONFIGURED, SIGNED_OUT]
+    script[STATUS] = [SIGNED_OUT]
     const setup = Promise.withResolvers<ScriptedProcess>()
     script['config init --new'] = (process) => { setup.resolve(process) }
 
@@ -99,14 +100,8 @@ describe('FeishuAccount', () => {
     await vi.waitFor(() => { expect(account.snapshot().operation).toMatchObject({ phase: 'configuring', authorizationUrl: 'https://open.feishu.cn/page/cli?x=2' }) })
     configuring.reply({})
 
-    expect(await settled(id)).toEqual({ account: { state: 'signed-out' }, result: { id, kind: 'link-app', outcome: 'succeeded' } })
-    expect(commands()).toEqual([STATUS, 'config init --new', STATUS])
-  })
-
-  it('keeps an app that is already linked', async () => {
-    script[STATUS] = [SIGNED_OUT]
-    expect((await settled(account.start('link-app'))).result?.outcome).toBe('succeeded')
-    expect(commands()).toEqual([STATUS])
+    expect(await settled(id)).toEqual({ account: { state: 'signed-out', appId: APP }, result: { id, kind: 'link-app', outcome: 'succeeded' } })
+    expect(commands()).toEqual(['config init --new', STATUS])
   })
 
   it('signs in through the authorization page and accepts a sign-in that leaves permissions ungranted', async () => {
@@ -123,7 +118,7 @@ describe('FeishuAccount', () => {
     authorizing.reply({ stdout: login(['im:message']) + '\n', exitCode: 3 })
 
     expect(await settled(id)).toEqual({
-      account: { state: 'connected', userName: '张三', ungrantedPermissions: 1 },
+      account: { state: 'connected', appId: APP, userName: '张三', ungrantedPermissions: 1 },
       result: { id, kind: 'sign-in', outcome: 'succeeded' },
     })
     expect(commands()).toEqual(['auth login --json', STATUS])
@@ -136,14 +131,14 @@ describe('FeishuAccount', () => {
     script['auth logout --json'] = [{ stdout: '{"ok":true}' }]
     const account = async (kind: 'check' | 'sign-in' | 'sign-out') => (await settled(start(kind))).account
 
-    expect(await account('sign-in')).toEqual({ state: 'connected', userName: '张三', ungrantedPermissions: 2 })
-    expect(await account('check')).toEqual({ state: 'connected', userName: '张三', ungrantedPermissions: 2 })
-    expect(await account('check')).toEqual({ state: 'connected' })
-    expect(await account('check')).toEqual({ state: 'connected', userName: '张三', ungrantedPermissions: 2 })
+    expect(await account('sign-in')).toEqual({ state: 'connected', appId: APP, userName: '张三', ungrantedPermissions: 2 })
+    expect(await account('check')).toEqual({ state: 'connected', appId: APP, userName: '张三', ungrantedPermissions: 2 })
+    expect(await account('check')).toEqual({ state: 'connected', appId: APP })
+    expect(await account('check')).toEqual({ state: 'connected', appId: APP, userName: '张三', ungrantedPermissions: 2 })
     script['auth login --json'] = [{ stdout: login(['im:message']) + '\n', exitCode: 3 }]
-    expect(await account('sign-in')).toEqual({ state: 'connected', userName: '张三', ungrantedPermissions: 1 })
-    expect(await account('sign-out')).toEqual({ state: 'signed-out' })
-    expect(await account('check')).toEqual({ state: 'connected', userName: '张三' })
+    expect(await account('sign-in')).toEqual({ state: 'connected', appId: APP, userName: '张三', ungrantedPermissions: 1 })
+    expect(await account('sign-out')).toEqual({ state: 'signed-out', appId: APP })
+    expect(await account('check')).toEqual({ state: 'connected', appId: APP, userName: '张三' })
   })
 
   it('drops the ungranted count when the CLI has no app', async () => {
@@ -151,12 +146,12 @@ describe('FeishuAccount', () => {
     script['auth login --json'] = [{ stdout: login(['im:message']) + '\n', exitCode: 3 }]
     expect((await settled(start('sign-in'))).account).toMatchObject({ ungrantedPermissions: 1 })
     expect((await settled(start('check'))).account).toEqual({ state: 'unconfigured' })
-    expect((await settled(start('check'))).account).toEqual({ state: 'connected', userName: '张三' })
+    expect((await settled(start('check'))).account).toEqual({ state: 'connected', appId: APP, userName: '张三' })
   })
 
   it.each<[string, 'link-app' | 'sign-in', Record<string, CliReply[]>]>([
-    ['a failed app setup', 'link-app', { [STATUS]: [NOT_CONFIGURED], 'config init --new': [{ exitCode: 1 }] }],
-    ['an app setup that left no app', 'link-app', { [STATUS]: [NOT_CONFIGURED, NOT_CONFIGURED], 'config init --new': [{}] }],
+    ['a failed app setup', 'link-app', { 'config init --new': [{ exitCode: 1 }] }],
+    ['an app setup that left no app', 'link-app', { [STATUS]: [NOT_CONFIGURED], 'config init --new': [{}] }],
     ['a sign-in without completion', 'sign-in', { 'auth login --json': [{ stdout: LOGIN_LINK + '\n' }] }],
     ['a failed sign-in', 'sign-in', { 'auth login --json': [{ stdout: login() + '\n', exitCode: 1 }] }],
     ['a partial sign-in that reports no missing permission', 'sign-in', { 'auth login --json': [{ stdout: login() + '\n', exitCode: 3 }] }],
@@ -205,7 +200,7 @@ describe('FeishuAccount', () => {
     script['auth logout --json'] = [{ stdout: '{"ok":true}' }, { exitCode: 1 }]
     const id = account.start('sign-out')
     expect(account.snapshot().operation?.phase).toBe('signing-out')
-    expect(await settled(id)).toEqual({ account: { state: 'signed-out' }, result: { id, kind: 'sign-out', outcome: 'succeeded' } })
+    expect(await settled(id)).toEqual({ account: { state: 'signed-out', appId: APP }, result: { id, kind: 'sign-out', outcome: 'succeeded' } })
     expect((await settled(account.start('sign-out'))).result).toMatchObject({ kind: 'sign-out', outcome: 'failed' })
   })
 

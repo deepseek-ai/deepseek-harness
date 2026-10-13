@@ -32,6 +32,7 @@ Install the [Feishu plugin bundle](../../connector/feishu/README.md), which inse
 | Checking connection | None |
 | Not connected, no app | **Link Feishu app** opens the Feishu page where the user creates or chooses an app, then stops |
 | Not connected, app linked | **Sign in to Feishu** opens the Feishu authorization page |
+| Any state with a linked app | The section shows the app id; **Change app** asks for confirmation, then links an app again, which replaces the CLI's configuration for the terminal too and requires another sign-in |
 | Step 1: Link a Feishu app, or Step 2: Sign in to Feishu | The browser that clicked opens the step's Feishu page once; **Open Feishu page** opens it again, and **Cancel** ends the step |
 | Connected | **Sign out** asks for confirmation, then signs out the CLI's default account. When the last sign-in left permissions ungranted, the section says how many and offers **Grant more**, which signs in again |
 | Cannot confirm sign-in right now | **Retry** runs the connection again and keeps the existing setup and sign-in |

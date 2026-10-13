@@ -382,7 +382,7 @@ Registers the CLI and skills, and owns the account operations the Plugins page d
 @Remote check(): FeishuOperationId
 
 /**
- * Link an app through the CLI's setup page when none is configured; an existing app is kept.
+ * Link an app through the CLI's setup page, replacing a configured app and its sign-ins.
  * @returns the operation identity.
  * @throws while another account operation runs.
  */

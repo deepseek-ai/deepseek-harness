@@ -5,11 +5,16 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 /** Identifies one Host-owned account operation across subscribers. */
 export type FeishuOperationId = Branded<'FeishuOperationId'>
 
+/** The Feishu app the CLI's default configuration uses, as `auth status` reports it. */
+export type FeishuAppId = Branded<'FeishuAppId'>
+
 /** The CLI's default account as the latest check observed it. */
 export type FeishuAccountState =
-  | { readonly state: 'unchecked' | 'unconfigured' | 'signed-out' | 'unverified' }
+  | { readonly state: 'unchecked' | 'unconfigured' }
+  | { readonly state: 'signed-out' | 'unverified'; readonly appId: FeishuAppId }
   | {
     readonly state: 'connected'
+    readonly appId: FeishuAppId
     readonly userName?: string
     /**
      * Requested permissions the last sign-in on this Host did not grant, which may await an administrator's

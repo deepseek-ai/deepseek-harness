@@ -44,12 +44,12 @@ The `feishu` Remote serves the Plugins page. It runs at most one account operati
 |---|---|
 | `follow(signal)` | Streams the account, the operation in progress, and the last result; each new follower starts a check when no operation runs |
 | `check()` | Checks the account again; returns the operation id |
-| `linkApp()` | Runs `config init --new` when no app is configured and keeps an existing app; it does not sign in |
+| `linkApp()` | Runs `config init --new`, which replaces the CLI's default configuration, including its sign-ins and any other app, with the app the user creates or chooses; it does not sign in |
 | `signIn()` | Runs `auth login --json` for the linked app and checks that the same user is signed in |
 | `signOut()` | Runs `auth logout --json`, which also signs out the user's own terminal, then checks again |
 | `cancel(id)` | Cancels that operation and waits for its command to exit; a finished id is ignored |
 
-A check runs `auth status --verify --json`. The account reads `connected` only when the CLI reports an available user that its server verified, `signed-out` when the user is missing, not configured, or needs a refresh, `unconfigured` when no app exists, and `unverified` otherwise, for example when verification cannot reach the server. Each link that `config init` prints and each device-authorization link that `auth login` reports is offered only when it is an HTTPS address on `feishu.cn` or `larksuite.com`. A sign-in that leaves requested permissions ungranted (`auth login` exits with code 3 and lists them as missing) still succeeds; the connected account then carries `ungrantedPermissions` for that user until a sign-in grants every permission, another user is signed in, or the user signs out. Results report succeeded, cancelled, or failed; native diagnostics stay on the Host.
+A check runs `auth status --verify --json`. The account reads `connected` only when the CLI reports an available user that its server verified, `signed-out` when the user is missing, not configured, or needs a refresh, `unconfigured` when no app exists, and `unverified` otherwise, for example when verification cannot reach the server. Every state except `unconfigured` carries the configured `appId`. Each link that `config init` prints and each device-authorization link that `auth login` reports is offered only when it is an HTTPS address on `feishu.cn` or `larksuite.com`. A sign-in that leaves requested permissions ungranted (`auth login` exits with code 3 and lists them as missing) still succeeds; the connected account then carries `ungrantedPermissions` for that user until a sign-in grants every permission, another user is signed in, or the user signs out. Results report succeeded, cancelled, or failed; native diagnostics stay on the Host.
 
 ### Configure
 

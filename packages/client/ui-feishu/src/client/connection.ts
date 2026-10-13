@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteStream } from '@deepseek-ai/dsh-api-gateway/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
-import type { FeishuOperationId, FeishuState } from '@deepseek-ai/dsh-feishu-cli/types'
+import type { FeishuAppId, FeishuOperationId, FeishuState } from '@deepseek-ai/dsh-feishu-cli/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 
@@ -36,10 +36,12 @@ export type ConnectionStep = 'configuring' | 'authorizing' | 'connecting' | 'sig
 /** What the user sees about the connection, derived from the Host's view alone. */
 export type ConnectionPresentation =
   | { readonly phase: 'checking' | 'stopped' }
-  | { readonly phase: 'disconnected'; readonly next: 'link-app' | 'sign-in'; readonly failed: boolean }
-  | { readonly phase: 'unavailable'; readonly failed: boolean }
+  | { readonly phase: 'disconnected'; readonly next: 'link-app'; readonly failed: boolean }
+  | { readonly phase: 'disconnected'; readonly next: 'sign-in'; readonly appId: FeishuAppId; readonly failed: boolean }
+  | { readonly phase: 'unavailable'; readonly appId: FeishuAppId; readonly failed: boolean }
   | {
     readonly phase: 'connected'
+    readonly appId: FeishuAppId
     readonly userName: string | undefined
     /** Requested permissions the last sign-in did not grant. */
     readonly ungranted: number | undefined
@@ -58,7 +60,7 @@ export interface ConnectionFace {
   hooks: { feishuConnection: HostObservable<ConnectionSnapshot> }
   /** Check the account again. */
   check(): void
-  /** Link an app when none is configured. */
+  /** Link an app, replacing a configured one after the page confirms it. */
   linkApp(): void
   /** Sign the linked app's user in. */
   signIn(): void
@@ -105,10 +107,11 @@ export function presentConnection(snapshot: Pick<ConnectionSnapshot, 'feishu' | 
   const account = state.account
   switch (account.state) {
     case 'unchecked': return { phase: 'checking' }
-    case 'connected': return { phase: 'connected', userName: account.userName, ungranted: account.ungrantedPermissions, failed }
+    case 'connected':
+      return { phase: 'connected', appId: account.appId, userName: account.userName, ungranted: account.ungrantedPermissions, failed }
     case 'unconfigured': return { phase: 'disconnected', next: 'link-app', failed }
-    case 'signed-out': return { phase: 'disconnected', next: 'sign-in', failed }
-    case 'unverified': return { phase: 'unavailable', failed }
+    case 'signed-out': return { phase: 'disconnected', next: 'sign-in', appId: account.appId, failed }
+    case 'unverified': return { phase: 'unavailable', appId: account.appId, failed }
     /* v8 ignore next -- closed account state union */
     default: return assertNever(account)
   }

@@ -1171,7 +1171,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote linkApp(): FeishuOperationId',
-        description: 'Link an app through the CLI\'s setup page when none is configured; an existing app is kept.',
+        description: 'Link an app through the CLI\'s setup page, replacing a configured app and its sign-ins.',
         parameters: [],
         returns: 'the operation identity.',
         throws: ['while another account operation runs.'],
@@ -6185,7 +6185,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'FeishuAccountState',
-    declaration: 'export type FeishuAccountState = {\n    readonly state: \'unchecked\' | \'unconfigured\' | \'signed-out\' | \'unverified\';\n} | {\n    readonly state: \'connected\';\n    readonly userName?: string;\n    readonly ungrantedPermissions?: number;\n};',
+    declaration: 'export type FeishuAccountState = {\n    readonly state: \'unchecked\' | \'unconfigured\';\n} | {\n    readonly state: \'signed-out\' | \'unverified\';\n    readonly appId: FeishuAppId;\n} | {\n    readonly state: \'connected\';\n    readonly appId: FeishuAppId;\n    readonly userName?: string;\n    readonly ungrantedPermissions?: number;\n};',
+  },
+  {
+    name: 'FeishuAppId',
+    declaration: 'export type FeishuAppId = Branded<\'FeishuAppId\'>;',
   },
   {
     name: 'FeishuOperationId',

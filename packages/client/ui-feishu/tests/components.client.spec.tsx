@@ -11,11 +11,12 @@ import { zh } from '../src/client/locales.ts'
 import {
   FeishuConnectionActivation, FeishuConnectionBadge, FeishuConnectionSection, FeishuConnectionToast,
 } from '../src/client/FeishuConnection.tsx'
-import type { FeishuOperationId, FeishuState } from '@deepseek-ai/dsh-feishu-cli/types'
+import type { FeishuAppId, FeishuOperationId, FeishuState } from '@deepseek-ai/dsh-feishu-cli/types'
 
 afterEach(cleanup)
 
 const OP = 'op' as FeishuOperationId
+const APP = 'cli_a' as FeishuAppId
 
 function fixture(feishu?: FeishuState) {
   const state = createSnapshotStore<ConnectionSnapshot>({ feishu, linked: true, stopped: false, busy: false, notice: undefined })
@@ -43,27 +44,27 @@ it('offers the next step for each state', () => {
   b.set({ feishu: { account: { state: 'unconfigured' }, operation: { id: OP, kind: 'link-app', phase: 'configuring' } } })
   expect(screen.getByText(zh['step.configuring'])).toBeTruthy()
   expect(screen.queryByRole('button', { name: zh['action.open'] })).toBeNull()
-  b.set({ feishu: { account: { state: 'signed-out' } } })
+  b.set({ feishu: { account: { state: 'signed-out', appId: APP } } })
   expect(screen.getByText(zh['detail.signed-out'])).toBeTruthy()
   fireEvent.click(button(zh['action.signIn']))
   expect(b.face.signIn).toHaveBeenCalledOnce()
 
-  b.set({ feishu: { account: { state: 'signed-out' }, operation: { id: OP, kind: 'sign-in', phase: 'authorizing', authorizationUrl: 'https://x.feishu.cn' } } })
+  b.set({ feishu: { account: { state: 'signed-out', appId: APP }, operation: { id: OP, kind: 'sign-in', phase: 'authorizing', authorizationUrl: 'https://x.feishu.cn' } } })
   expect(screen.getByText(zh['detail.authorizing'])).toBeTruthy()
   fireEvent.click(button(zh['action.open']))
   fireEvent.click(button(zh['action.cancel']))
   expect(b.face.openAuthorization).toHaveBeenCalledOnce()
   expect(b.face.cancel).toHaveBeenCalledOnce()
 
-  b.set({ feishu: { account: { state: 'signed-out' }, operation: { id: OP, kind: 'sign-out', phase: 'signing-out', authorizationUrl: 'https://x.feishu.cn' } } })
+  b.set({ feishu: { account: { state: 'signed-out', appId: APP }, operation: { id: OP, kind: 'sign-out', phase: 'signing-out', authorizationUrl: 'https://x.feishu.cn' } } })
   expect(screen.getByText(zh['step.signing-out'])).toBeTruthy()
   expect(screen.queryByRole('button', { name: zh['action.cancel'] })).toBeNull()
   expect(document.querySelector('[data-feishu-connection="connecting"] p')?.textContent).toBe(zh.hint)
 
-  b.set({ feishu: { account: { state: 'signed-out' }, result: { id: OP, kind: 'sign-in', outcome: 'failed' } } })
+  b.set({ feishu: { account: { state: 'signed-out', appId: APP }, result: { id: OP, kind: 'sign-in', outcome: 'failed' } } })
   expect(screen.getByRole('alert').textContent).toBe(zh.failed)
 
-  b.set({ feishu: { account: { state: 'unverified' } } })
+  b.set({ feishu: { account: { state: 'unverified', appId: APP } } })
   expect(screen.getByText(zh['detail.unavailable'])).toBeTruthy()
   fireEvent.click(button(zh['action.retry']))
   expect(b.face.check).toHaveBeenCalledOnce()
@@ -86,10 +87,10 @@ it('explains a stopped Host component and retries even while the stream is offli
 })
 
 it('shows who is signed in and signs out only after confirmation', () => {
-  const b = fixture({ account: { state: 'connected', userName: '张三' } })
+  const b = fixture({ account: { state: 'connected', appId: APP, userName: '张三' } })
   render(<FeishuConnectionSection {...b.face} />)
   expect(screen.getByText(text('detail.connectedAs', { name: '张三' }))).toBeTruthy()
-  b.set({ feishu: { account: { state: 'connected' } } })
+  b.set({ feishu: { account: { state: 'connected', appId: APP } } })
   expect(screen.getByText(zh['detail.connected'])).toBeTruthy()
   fireEvent.click(button(zh['action.signOut']))
   expect(screen.getByText(zh['signOut.body'])).toBeTruthy()
@@ -102,13 +103,30 @@ it('shows who is signed in and signs out only after confirmation', () => {
   expect(b.face.signOut).toHaveBeenCalledOnce()
 })
 
+it('shows the linked app and changes it only after confirmation', () => {
+  const b = fixture({ account: { state: 'unconfigured' } })
+  render(<FeishuConnectionSection {...b.face} />)
+  expect(screen.queryByRole('button', { name: zh['action.replaceApp'] })).toBeNull()
+  b.set({ feishu: { account: { state: 'signed-out', appId: APP } } })
+  expect(screen.getByText(text('app.linked', { id: 'cli_a' }))).toBeTruthy()
+  fireEvent.click(button(zh['action.replaceApp']))
+  expect(screen.getByText(zh['replaceApp.body'])).toBeTruthy()
+  fireEvent.click(button(zh['action.cancel']))
+  fireEvent.click(button(zh['action.replaceApp']))
+  fireEvent.click(button(zh.close))
+  expect(b.face.linkApp).not.toHaveBeenCalled()
+  fireEvent.click(button(zh['action.replaceApp']))
+  fireEvent.click(screen.getAllByRole('button', { name: zh['action.replaceApp'] }).at(-1)!)
+  expect(b.face.linkApp).toHaveBeenCalledOnce()
+})
+
 it('explains ungranted permissions and grants more through another sign-in', () => {
-  const b = fixture({ account: { state: 'connected', userName: '张三', ungrantedPermissions: 4 } })
+  const b = fixture({ account: { state: 'connected', appId: APP, userName: '张三', ungrantedPermissions: 4 } })
   render(<FeishuConnectionSection {...b.face} />)
   expect(screen.getByText(text('detail.ungranted', { count: '4' }))).toBeTruthy()
   fireEvent.click(button(zh['action.grantMore']))
   expect(b.face.signIn).toHaveBeenCalledOnce()
-  b.set({ feishu: { account: { state: 'connected', userName: '张三' } } })
+  b.set({ feishu: { account: { state: 'connected', appId: APP, userName: '张三' } } })
   expect(screen.queryByRole('button', { name: zh['action.grantMore'] })).toBeNull()
 })
 
@@ -122,17 +140,17 @@ it('disables actions while one is pending or the Host stream is offline', () => 
 })
 
 it('tags only the enabled Feishu bundle', () => {
-  const b = fixture({ account: { state: 'connected' } })
+  const b = fixture({ account: { state: 'connected', appId: APP } })
   const pkg = (name: string, enabled = true): PluginPackageRef => ({ name, installed: true, availability: 'profile', official: false, enabled, rows: [] })
   const badge = (subject: PluginsSubject) =>
     <FeishuConnectionBadge {...{ ...b.face, subject } as ComponentProps<typeof FeishuConnectionBadge>} />
   const { rerender } = render(badge({ kind: 'bundle', pkg: pkg('@deepseek-ai/dsh-feishu') }))
   expect(screen.getByText(zh['badge.connected'])).toBeTruthy()
-  b.set({ feishu: { account: { state: 'unverified' } } })
+  b.set({ feishu: { account: { state: 'unverified', appId: APP } } })
   expect(screen.getByText(zh['badge.unavailable'])).toBeTruthy()
   b.set({ feishu: undefined })
   expect(document.body.textContent).toBe('')
-  b.set({ feishu: { account: { state: 'signed-out' } } })
+  b.set({ feishu: { account: { state: 'signed-out', appId: APP } } })
   rerender(badge({ kind: 'bundle', pkg: pkg('@deepseek-ai/dsh-feishu', false) }))
   expect(document.body.textContent).toBe('')
   rerender(badge({ kind: 'bundle', pkg: pkg('@acme/other') }))
@@ -143,7 +161,7 @@ it('tags only the enabled Feishu bundle', () => {
 
 it.each<[string, FeishuState, 'linkApp' | 'signIn']>([
   ['links an app first', { account: { state: 'unconfigured' } }, 'linkApp'],
-  ['signs in to a linked app', { account: { state: 'signed-out' } }, 'signIn'],
+  ['signs in to a linked app', { account: { state: 'signed-out', appId: APP } }, 'signIn'],
 ])('guides a newly enabled bundle to its next step: %s, and steps aside once connected', (_name, state, step) => {
   const b = fixture()
   const onDismiss = vi.fn(), onOpenDetails = vi.fn()
@@ -155,7 +173,7 @@ it.each<[string, FeishuState, 'linkApp' | 'signIn']>([
   expect(onOpenDetails).toHaveBeenCalledOnce()
   expect(b.face[step]).toHaveBeenCalledOnce()
   expect(onDismiss).not.toHaveBeenCalled()
-  b.set({ feishu: { account: { state: 'connected' } } })
+  b.set({ feishu: { account: { state: 'connected', appId: APP } } })
   expect(onDismiss).toHaveBeenCalledOnce()
 })
 

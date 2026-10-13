@@ -31,7 +31,7 @@ const BADGE: Record<Phase, readonly [FeishuKey, TagTone] | undefined> = {
 export function FeishuConnectionSection(props: FaceProps): ReactNode {
   const { useFeishuConnection, check, linkApp, signIn, cancel, signOut, openAuthorization, retry, t } = props
   const snapshot = useFeishuConnection(value => value)
-  const [confirming, setConfirming] = useState(false)
+  const [confirming, setConfirming] = useState<'sign-out' | 'replace-app' | undefined>(undefined)
   const shown = presentConnection(snapshot)
   // Reopening a stopped stream is the one action that does not need the Host stream.
   const disabled = snapshot.busy || (!snapshot.linked && shown.phase !== 'stopped')
@@ -49,7 +49,7 @@ export function FeishuConnectionSection(props: FaceProps): ReactNode {
     case 'stopped': actions.push(action('action.retry', retry)); detail = t('detail.stopped'); break
     case 'connected':
       if (shown.ungranted !== undefined) actions.push(action('action.grantMore', signIn))
-      actions.push(action('action.signOut', () => { setConfirming(true) }))
+      actions.push(action('action.signOut', () => { setConfirming('sign-out') }))
       detail = shown.userName === undefined ? t('detail.connected') : t('detail.connectedAs', { name: shown.userName })
       break
     case 'connecting':
@@ -74,14 +74,27 @@ export function FeishuConnectionSection(props: FaceProps): ReactNode {
       {shown.phase === 'connected' && shown.ungranted !== undefined
         ? <p className={css.detail}>{t('detail.ungranted', { count: shown.ungranted })}</p>
         : null}
+      {'appId' in shown
+        ? <div className={css.status}>
+          <span className={css.detail}>{t('app.linked', { id: shown.appId })}</span>
+          <div className={css.actions}>{action('action.replaceApp', () => { setConfirming('replace-app') }, 'ghost')}</div>
+        </div>
+        : null}
       {'failed' in shown && shown.failed ? <p className={css.failure} role="alert">{t('failed')}</p> : null}
       <p className={css.hint}>{t('hint')}</p>
-      <Modal open={confirming} title={t('signOut.title')} closeLabel={t('close')} onClose={() => { setConfirming(false) }}
+      <Modal open={confirming === 'sign-out'} title={t('signOut.title')} closeLabel={t('close')} onClose={() => { setConfirming(undefined) }}
         footer={<>
-          <Button variant="ghost" onClick={() => { setConfirming(false) }}>{t('action.cancel')}</Button>
-          <Button variant="primary" data-modal-autofocus onClick={() => { setConfirming(false); signOut() }}>{t('action.signOut')}</Button>
+          <Button variant="ghost" onClick={() => { setConfirming(undefined) }}>{t('action.cancel')}</Button>
+          <Button variant="primary" data-modal-autofocus onClick={() => { setConfirming(undefined); signOut() }}>{t('action.signOut')}</Button>
         </>}>
         <p>{t('signOut.body')}</p>
+      </Modal>
+      <Modal open={confirming === 'replace-app'} title={t('replaceApp.title')} closeLabel={t('close')} onClose={() => { setConfirming(undefined) }}
+        footer={<>
+          <Button variant="ghost" onClick={() => { setConfirming(undefined) }}>{t('action.cancel')}</Button>
+          <Button variant="primary" data-modal-autofocus onClick={() => { setConfirming(undefined); linkApp() }}>{t('action.replaceApp')}</Button>
+        </>}>
+        <p>{t('replaceApp.body')}</p>
       </Modal>
     </div>
   )

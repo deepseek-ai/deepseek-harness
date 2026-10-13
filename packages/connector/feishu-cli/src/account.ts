@@ -5,7 +5,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import z from 'zod'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { parseJson, type FeishuCli } from './cli.ts'
-import type { FeishuAccountState, FeishuOperationId, FeishuOperationResult, FeishuOperationState, FeishuState } from './types.ts'
+import type { FeishuAccountState, FeishuAppId, FeishuOperationId, FeishuOperationResult, FeishuOperationState, FeishuState } from './types.ts'
 
 const NotConfigured = z.object({ ok: z.literal(false), error: z.object({ subtype: z.literal('not_configured') }) })
 const User = z.object({
@@ -15,7 +15,7 @@ const User = z.object({
   userName: z.string().optional(),
   openId: z.string().optional(),
 })
-const Status = z.object({ identities: z.object({ user: User }) })
+const Status = z.object({ appId: z.string().min(1), identities: z.object({ user: User }) })
 const LoginLink = z.object({ event: z.literal('device_authorization'), verification_uri_complete: z.string() })
 const LoginComplete = z.object({ event: z.literal('authorization_complete'), user_open_id: z.string().min(1), missing: z.array(z.string()) })
 const CONFIG_LINK = /^\s*(https:\/\/\S+)\s*$/u
@@ -159,9 +159,11 @@ export class FeishuAccount {
     }
   }
 
-  /** Link an app through the CLI's setup page when none is configured; sign-in is a separate operation. */
+  /**
+   * Link an app through the CLI's setup page; sign-in is a separate operation. An existing configuration,
+   * including its sign-ins and any other app, is replaced by the app the user creates or chooses.
+   */
   private async linkApp(operation: Operation, signal: AbortSignal): Promise<void> {
-    if ((await this.check(signal)).account.state !== 'unconfigured') return
     this.stage(operation, 'configuring')
     const setup = await this.cli.run(['config', 'init', '--new'], signal, {
       timeoutMs: this.limits.authorizationTimeoutMs,
@@ -209,15 +211,18 @@ export class FeishuAccount {
       this.ungranted = undefined
       return { account: this.publish({ state: 'unconfigured' }) }
     }
-    const user = Status.parse(parseJson(args, result.stdout)).identities.user
+    const status = Status.parse(parseJson(args, result.stdout))
+    const appId = brandString<FeishuAppId>(status.appId)
+    const user = status.identities.user
     if (!user.available || user.verified !== true) {
       const signedOut = SIGNED_OUT.has(user.status)
       if (signedOut) this.ungranted = undefined
-      return { account: this.publish({ state: signedOut ? 'signed-out' : 'unverified' }), openId: user.openId }
+      return { account: this.publish({ state: signedOut ? 'signed-out' : 'unverified', appId }), openId: user.openId }
     }
     const ungranted = this.ungranted !== undefined && this.ungranted.openId === user.openId ? this.ungranted.count : undefined
     const account: FeishuAccountState = {
       state: 'connected',
+      appId,
       ...user.userName === undefined ? {} : { userName: user.userName },
       ...ungranted === undefined ? {} : { ungrantedPermissions: ungranted },
     }
