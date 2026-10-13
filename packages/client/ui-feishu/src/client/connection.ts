@@ -13,7 +13,7 @@ export const FEISHU_PACKAGE = '@deepseek-ai/dsh-feishu'
 /** A transient outcome the page reports outside its own lifetime. */
 export interface ConnectionNotice {
   readonly seq: number
-  readonly kind: 'app-linked' | 'connected' | 'signed-out' | 'action-failed'
+  readonly kind: 'app-linked' | 'connected' | 'connected-partially' | 'signed-out' | 'action-failed'
 }
 
 /** The page's whole view: the Host's account view plus this browser's pending action and notice. */
@@ -29,7 +29,6 @@ export interface ConnectionSnapshot {
   readonly notice: ConnectionNotice | undefined
 }
 
-const NOTICE = { 'link-app': 'app-linked', 'sign-in': 'connected', 'sign-out': 'signed-out' } as const
 
 /** The step a connection or sign-out in progress shows. */
 export type ConnectionStep = 'configuring' | 'authorizing' | 'connecting' | 'signing-out'
@@ -39,7 +38,13 @@ export type ConnectionPresentation =
   | { readonly phase: 'checking' | 'stopped' }
   | { readonly phase: 'disconnected'; readonly next: 'link-app' | 'sign-in'; readonly failed: boolean }
   | { readonly phase: 'unavailable'; readonly failed: boolean }
-  | { readonly phase: 'connected'; readonly userName: string | undefined; readonly failed: boolean }
+  | {
+    readonly phase: 'connected'
+    readonly userName: string | undefined
+    /** Requested permissions the last sign-in did not grant. */
+    readonly ungranted: number | undefined
+    readonly failed: boolean
+  }
   | {
     readonly phase: 'connecting'
     readonly step: ConnectionStep
@@ -100,12 +105,23 @@ export function presentConnection(snapshot: Pick<ConnectionSnapshot, 'feishu' | 
   const account = state.account
   switch (account.state) {
     case 'unchecked': return { phase: 'checking' }
-    case 'connected': return { phase: 'connected', userName: account.userName, failed }
+    case 'connected': return { phase: 'connected', userName: account.userName, ungranted: account.ungrantedPermissions, failed }
     case 'unconfigured': return { phase: 'disconnected', next: 'link-app', failed }
     case 'signed-out': return { phase: 'disconnected', next: 'sign-in', failed }
     case 'unverified': return { phase: 'unavailable', failed }
     /* v8 ignore next -- closed account state union */
     default: return assertNever(account)
+  }
+}
+
+function noticeOf(kind: NonNullable<FeishuState['result']>['kind'], state: FeishuState): ConnectionNotice['kind'] | undefined {
+  switch (kind) {
+    case 'check': return undefined
+    case 'link-app': return 'app-linked'
+    case 'sign-in': return state.account.state === 'connected' && state.account.ungrantedPermissions !== undefined ? 'connected-partially' : 'connected'
+    case 'sign-out': return 'signed-out'
+    /* v8 ignore next -- closed operation kind union */
+    default: return assertNever(kind)
   }
 }
 
@@ -207,7 +223,8 @@ export class FeishuConnection {
     const result = state.result
     if (result === undefined || result.id !== this.started) return
     this.started = undefined
-    if (result.outcome === 'succeeded' && result.kind !== 'check') this.notify(NOTICE[result.kind])
+    const notice = result.outcome === 'succeeded' ? noticeOf(result.kind, state) : undefined
+    if (notice !== undefined) this.notify(notice)
   }
 
   private async start(call: () => Promise<RemoteResult<FeishuOperationId>>): Promise<void> {

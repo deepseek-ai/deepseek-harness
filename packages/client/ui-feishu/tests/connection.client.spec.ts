@@ -26,7 +26,8 @@ it.each<[string, FeishuState | undefined, ReturnType<typeof presentConnection>]>
   ['a linked app', SIGNED_OUT, { phase: 'disconnected', next: 'sign-in', failed: false }],
   ['a failed sign-in', { ...SIGNED_OUT, result: { id: OP, kind: 'sign-in', outcome: 'failed' } }, { phase: 'disconnected', next: 'sign-in', failed: true }],
   ['an unconfirmed sign-in', { account: { state: 'unverified' } }, { phase: 'unavailable', failed: false }],
-  ['a connection', { account: { state: 'connected', userName: '张三' } }, { phase: 'connected', userName: '张三', failed: false }],
+  ['a connection', { account: { state: 'connected', userName: '张三' } }, { phase: 'connected', userName: '张三', ungranted: undefined, failed: false }],
+  ['a partial connection', { account: { state: 'connected', ungrantedPermissions: 3 } }, { phase: 'connected', userName: undefined, ungranted: 3, failed: false }],
   ['app setup', { ...SIGNED_OUT, operation: operation('link-app', 'configuring', 'https://open.feishu.cn/x') }, connecting('configuring', 'https://open.feishu.cn/x', true)],
   ['sign-in', { ...SIGNED_OUT, operation: operation('sign-in', 'authorizing') }, connecting('authorizing', undefined, true)],
   ['an app link check', { ...SIGNED_OUT, operation: operation('link-app', 'checking') }, connecting('connecting', undefined, true)],
@@ -134,6 +135,15 @@ it('opens each new link of an operation this browser started once, then reports 
   expect(b.snapshot().notice?.seq).toBe(2)
   b.face.dismissNotice()
   expect(b.snapshot().notice).toBeUndefined()
+})
+
+it('reports a sign-in that left permissions ungranted', async () => {
+  const b = fixture()
+  await b.publish(SIGNED_OUT)
+  b.face.signIn()
+  await settle(b)
+  await b.publish({ account: { state: 'connected', ungrantedPermissions: 2 }, result: { id: OP, kind: 'sign-in', outcome: 'succeeded' } })
+  expect(b.snapshot().notice).toEqual({ seq: 1, kind: 'connected-partially' })
 })
 
 it('checks again without a notice', async () => {

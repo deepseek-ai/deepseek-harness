@@ -58,6 +58,7 @@ describe('FeishuAccount', () => {
     account = new FeishuAccount(new FeishuCli(ctx.subprocess, ctx.shellEnv, LIMITS), LIMITS, () => { changes++ })
   })
 
+  const start = (kind: Parameters<FeishuAccount['start']>[0]) => account.start(kind)
   const settled = async (id: FeishuOperationId): Promise<FeishuState> => {
     await vi.waitFor(() => { expect(account.snapshot().result?.id).toBe(id) })
     return account.snapshot()
@@ -121,8 +122,36 @@ describe('FeishuAccount', () => {
     await vi.waitFor(() => { expect(account.snapshot().operation).toMatchObject({ phase: 'authorizing', authorizationUrl: 'https://accounts.feishu.cn/oauth/device?code=1' }) })
     authorizing.reply({ stdout: login(['im:message']) + '\n', exitCode: 3 })
 
-    expect(await settled(id)).toEqual({ account: { state: 'connected', userName: '张三' }, result: { id, kind: 'sign-in', outcome: 'succeeded' } })
+    expect(await settled(id)).toEqual({
+      account: { state: 'connected', userName: '张三', ungrantedPermissions: 1 },
+      result: { id, kind: 'sign-in', outcome: 'succeeded' },
+    })
     expect(commands()).toEqual(['auth login --json', STATUS])
+  })
+
+  it('keeps the ungranted count for the signed-in user until a full sign-in, another user, or a sign-out', async () => {
+    const OTHER = status({ status: 'ready', available: true, verified: true, openId: 'ou_2' })
+    script[STATUS] = [CONNECTED, CONNECTED, OTHER, CONNECTED, CONNECTED, SIGNED_OUT, CONNECTED]
+    script['auth login --json'] = [{ stdout: login(['im:message', 'drive:file']) + '\n', exitCode: 3 }, { stdout: login() + '\n' }]
+    script['auth logout --json'] = [{ stdout: '{"ok":true}' }]
+    const account = async (kind: 'check' | 'sign-in' | 'sign-out') => (await settled(start(kind))).account
+
+    expect(await account('sign-in')).toEqual({ state: 'connected', userName: '张三', ungrantedPermissions: 2 })
+    expect(await account('check')).toEqual({ state: 'connected', userName: '张三', ungrantedPermissions: 2 })
+    expect(await account('check')).toEqual({ state: 'connected' })
+    expect(await account('check')).toEqual({ state: 'connected', userName: '张三', ungrantedPermissions: 2 })
+    script['auth login --json'] = [{ stdout: login(['im:message']) + '\n', exitCode: 3 }]
+    expect(await account('sign-in')).toEqual({ state: 'connected', userName: '张三', ungrantedPermissions: 1 })
+    expect(await account('sign-out')).toEqual({ state: 'signed-out' })
+    expect(await account('check')).toEqual({ state: 'connected', userName: '张三' })
+  })
+
+  it('drops the ungranted count when the CLI has no app', async () => {
+    script[STATUS] = [CONNECTED, NOT_CONFIGURED, CONNECTED]
+    script['auth login --json'] = [{ stdout: login(['im:message']) + '\n', exitCode: 3 }]
+    expect((await settled(start('sign-in'))).account).toMatchObject({ ungrantedPermissions: 1 })
+    expect((await settled(start('check'))).account).toEqual({ state: 'unconfigured' })
+    expect((await settled(start('check'))).account).toEqual({ state: 'connected', userName: '张三' })
   })
 
   it.each<[string, 'link-app' | 'sign-in', Record<string, CliReply[]>]>([

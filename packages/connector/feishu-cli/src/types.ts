@@ -8,7 +8,15 @@ export type FeishuOperationId = Branded<'FeishuOperationId'>
 /** The CLI's default account as the latest check observed it. */
 export type FeishuAccountState =
   | { readonly state: 'unchecked' | 'unconfigured' | 'signed-out' | 'unverified' }
-  | { readonly state: 'connected'; readonly userName?: string }
+  | {
+    readonly state: 'connected'
+    readonly userName?: string
+    /**
+     * Requested permissions the last sign-in on this Host did not grant, which may await an administrator's
+     * approval; absent when every permission was granted or no sign-in ran since the Host started.
+     */
+    readonly ungrantedPermissions?: number
+  }
 
 /** The account operation in progress; links are restricted to HTTPS Feishu and Lark hosts. */
 export interface FeishuOperationState {

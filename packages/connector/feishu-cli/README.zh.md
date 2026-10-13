@@ -49,7 +49,7 @@ kind: "package-reference"
 | `signOut()` | 运行 `auth logout --json`，同时退出用户自己终端里的登录，然后重新检查 |
 | `cancel(id)` | 取消该操作并等待其命令退出；已结束的 id 会被忽略 |
 
-检查运行 `auth status --verify --json`。只有 CLI 报告用户可用且已被服务端核实时，账号才是 `connected`；用户缺失、未配置或需要刷新时为 `signed-out`；没有应用时为 `unconfigured`；其他情况为 `unverified`，例如核实时无法连到服务端。`config init` 打印的链接和 `auth login` 报告的设备授权链接，只有是 `feishu.cn` 或 `larksuite.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败；原生诊断信息保留在 Host 上。
+检查运行 `auth status --verify --json`。只有 CLI 报告用户可用且已被服务端核实时，账号才是 `connected`；用户缺失、未配置或需要刷新时为 `signed-out`；没有应用时为 `unconfigured`；其他情况为 `unverified`，例如核实时无法连到服务端。`config init` 打印的链接和 `auth login` 报告的设备授权链接，只有是 `feishu.cn` 或 `larksuite.com` 上的 HTTPS 地址时才会提供。登录后仍有申请的权限未被授予时（`auth login` 以退出码 3 结束并把它们列为缺失），登录仍算成功；此后已连接的账号会带上该用户的 `ungrantedPermissions`，直到某次登录授予了全部权限、换成其他用户登录或用户退出登录。结果分为成功、已取消和失败；原生诊断信息保留在 Host 上。
 
 ### 配置
 
@@ -145,6 +145,7 @@ Do not install another lark-cli or run `lark-cli update`.
 - 登录从 `lark-cli auth login --json` 的事件中读取设备授权链接和完成结果；CLI 版本改变这些事件时，连接以可重试的结果失败。
 - 在文件沙箱下，普通命令中的 token 刷新可能被拒绝，此时需要单条命令审批。
 - skill 目录读取失败后，在插件重新加载前保持为空。
+- 未生效权限的数量保存在 Host 内存中，Host 重启后丢失。CLI 不区分等待管理员审批的权限和已被拒绝的权限。
 
 <a id="dev-note"></a>
 ### 开发备注
