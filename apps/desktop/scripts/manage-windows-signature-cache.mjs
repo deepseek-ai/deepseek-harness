@@ -11,7 +11,7 @@ const { values } = parseArgs({ options: {
 if ([values.from !== undefined, values.usage === true, values.clear === true].filter(Boolean).length !== 1) {
   throw new Error('Specify exactly one of --from <old-cache>, --usage or --clear')
 }
-const environment = values.directory === undefined ? loadDesktopPackageEnvironment('win32')
+const environment = values.directory === undefined ? loadDesktopPackageEnvironment('win32', process.env, undefined, { unsigned: true })
   : { DSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_DIR: values.directory }
 const root = resolveWindowsSignatureCacheDirectory(environment)
 const record = event => process.stdout.write(`${JSON.stringify(event)}\n`)

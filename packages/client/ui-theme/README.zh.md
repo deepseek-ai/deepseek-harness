@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-ui-theme` 让 Web GUI 用户在设置中选择 `light`、`dark` 或 `system`，并分别设置正文、代码与终端的字体和字号。回环客户端把这些值存入 `ui-theme` 设置命名空间，本地提供方默认将其持久化到 `$DSH_HOME/cordis.patch.yml`。插件通过 `prefers-color-scheme` 解析 `system` 并发布不可变的 `ThemeSnapshot`；ui-layout 把每份快照应用到文档。本包还提供 `--dsw-*` token 样式表，并注入同步引导，使所选调色板、字号与字体在外壳加载前生效。第三方主题可通过 `ctx.theme` 注册别名 token 覆盖。
+`dsh-client-ui-theme` 让 Web GUI 用户在设置中选择 `light`、`dark` 或 `system`，并分别设置正文、代码与终端的字体和字号。每个已认证浏览器都把这些值存入 `ui-theme` 设置命名空间，本地提供方默认将其持久化到 `$DSH_HOME/cordis.patch.yml`。插件通过 `prefers-color-scheme` 解析 `system` 并发布不可变的 `ThemeSnapshot`；ui-layout 把每份快照应用到文档。本包还提供 `--dsw-*` token 样式表，并注入同步引导，使所选调色板、字号与字体在外壳加载前生效。第三方主题可通过 `ctx.theme` 注册别名 token 覆盖。
 
 ## 目录
 
@@ -25,11 +25,13 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-用户从设置（「通用」分区）的各行中切换配色方案、字号与字体；在回环浏览器上，这些选择都会跨重启持久化。功能插件通过 `ctx.theme` 消费当前快照，并在 CSS 中读取 `--dsw-*` token；它们不自行管理主题状态。
+用户从设置（「通用」分区）的各行中切换配色方案、字号与字体；在每个已认证浏览器中，这些选择都会跨重启持久化。功能插件通过 `ctx.theme` 消费当前快照，并在 CSS 中读取 `--dsw-*` token；它们不自行管理主题状态。
 
 ### 外观与字号
 
-插件在「通用」分区注册外观偏好方块与正文字号步进器。步进器后的「更多字体设置」按钮在其下方展开一个区域，每次打开设置时均为折叠状态，其中包含正文、代码与终端各自的字体行，以及代码与终端的字号步进器。正文步进器接受 10 至 22 px 的整数，默认值为 14 px。它以相同增量调整会话标题与基础文本，包括用户气泡与 composer 草稿；流内行的标题、摘要与表格跟随比正文低一档的字号，小号文本保持固定字号。代码步进器（10–16 px，默认 11）设置代码块字号；行内代码保持大 1 px，工具输出的小号变体使用相同字号。终端步进器（10–20 px，默认 13）设置侧栏终端的单元格字号；修改后保留 shell 与输出，并重新适配网格。每次通过的变更都经 Host settings API 写入。连续快速变更按操作顺序携带命名空间 revision 串行写入，最新写入被拒时重新加载持久值。非 loopback 页面把这些选择都保留在进程内。
+插件在「通用」分区注册外观偏好方块与正文字号步进器。步进器后的「更多字体设置」按钮在其下方展开一个区域，每次打开设置时均为折叠状态，其中包含正文、代码与终端各自的字体行，以及代码与终端的字号步进器。正文步进器接受 10 至 22 px 的整数，默认值为 14 px。它以相同增量调整会话标题与基础文本，包括用户气泡与 composer 草稿；流内行的标题、摘要与表格跟随比正文低一档的字号，小号文本保持固定字号。代码步进器（10–16 px，默认 11）设置代码块字号；行内代码保持大 1 px，工具输出的小号变体使用相同字号。终端步进器（10–20 px，默认 13）设置侧栏终端的单元格字号；修改后保留 shell 与输出，并重新适配网格。每次通过的变更都经 Host settings API 写入。连续快速变更按操作顺序携带命名空间 revision 串行写入，最新写入被拒时重新加载持久值。
+
+Desktop 的固定快捷键 `Cmd`/`Ctrl` + `+`（或 `=`）和 `Cmd`/`Ctrl` + `-` 同时将正文、代码与终端字号增减 1 px，各自沿用其取值范围。每次实际按下按键，通过一次设置操作保存变化字段；长按不会连续调整字号。这些操作显示在快捷键参考中，可在主文档的对话框和文本输入框内使用，但会让已消费输入的本地控件先处理；终端输入保留自身的按键处理。Web 保留浏览器的缩放快捷键。
 
 ### 字体
 
@@ -91,7 +93,7 @@ kind: "package-reference"
 
 ### 偏好持久化
 
-在 loopback 浏览器上，服务先以 schema 默认值立即提供自身，随后加载 `ui-theme` 命名空间，并把每次通过的主题、字号或字体变更经 Host settings API 写入。收到推送的设置变更时或重连后都会重新拉取该命名空间。自身写入尚未完成时，服务忽略重新拉取的配置段，避免较早写入的回显覆盖之后的修改；写入全部完成后再采用持久配置段。非 loopback 页面不会创建该 Host-backed scope。该持久化边界由 [Host 支撑的偏好参考](../ui-settings/README.zh.md) 拥有。
+服务先以 schema 默认值立即提供自身，随后加载 `ui-theme` 命名空间，并把每次通过的主题、字号或字体变更经 Host settings API 写入。收到推送的设置变更时或重连后都会重新拉取该命名空间。自身写入尚未完成时，服务忽略重新拉取的配置段，避免较早写入的回显覆盖之后的修改；写入全部完成后再采用持久配置段。该持久化边界由 [Host 支撑的偏好参考](../ui-settings/README.zh.md) 拥有。
 
 </details>
 
@@ -106,7 +108,7 @@ kind: "package-reference"
 - [ui-sidebar](../ui-sidebar/README.zh.md)——滚动条重新绑定约定的消费方。
 - [ui-conversation](../ui-conversation/README.zh.md)——为 composer 席位消费 `--dsh-scrollbar-width` 的消费方。
 - [Web 样式](../../../docs/web-styling.zh.md)——Web 客户端组件的权威样式规则。
-- [历史Host 支撑的偏好](../../../.agents/notes/archived/bug-fix/2026-08-06-host-backed-web-preferences.md)——持久化边界决策。
+- [已认证浏览器 Host 偏好](../../../.agents/notes/implemented/bug-fix/2026-09-15-authenticated-browser-host-preferences.zh.md)——持久化策略决策。
 
 -----
 

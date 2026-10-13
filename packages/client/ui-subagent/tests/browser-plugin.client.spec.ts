@@ -134,10 +134,11 @@ describe('apply', () => {
     ])
 
     // The root-session catalog seat registers in the actions band with the
-    // same business face, leading the band directly after the title crumbs.
+    // same business face, between the preset label (-10) and background
+    // tasks (20).
     const actionEntry = ctx.slots.entries('conversation.session.header.actions')
       .find(entry => entry.options.id === 'subagent-catalog')!
-    expect(actionEntry.options.order).toBe(-30)
+    expect(actionEntry.options.order).toBe(10)
     expect(actionEntry.inject).toBe(catalogEntry.inject)
 
     const composerEntry = ctx.slots.entries('conversation.composer')

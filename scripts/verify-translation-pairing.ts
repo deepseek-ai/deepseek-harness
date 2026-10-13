@@ -115,11 +115,10 @@ if (request.scope === 'pairs') {
     if (!indexMode && !repositoryFileExists(anchor)) files.add(anchor)
   }
 } else {
-  for (const pattern of SCOPE_PATTERNS) {
-    for (const match of globSync(pattern, { cwd: root, exclude: TRANSLATION_SCOPE_GLOB_EXCLUDES })) {
-      const normalized = match.split(sep).join('/')
-      if (isTranslationScopeFile(normalized)) files.add(normalized)
-    }
+  // One call shares a single directory walk across every pattern.
+  for (const match of globSync(SCOPE_PATTERNS, { cwd: root, exclude: TRANSLATION_SCOPE_GLOB_EXCLUDES })) {
+    const normalized = match.split(sep).join('/')
+    if (isTranslationScopeFile(normalized)) files.add(normalized)
   }
 }
 const translations = [...files].filter(f => f.endsWith('.zh.md')).sort()

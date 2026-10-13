@@ -43,10 +43,9 @@ interface ControlledRun {
 class StubProvider implements SubagentProvider {
   readonly capabilities: SubagentCapabilities = {
     agentOptions: true,
+    agentPreset: false,
     outputSchema: true,
     depthLimit: true,
-    toolFilter: true,
-    persona: false,
   }
   readonly inheritsParentContext = false
   readonly runs: ControlledRun[] = []
@@ -123,6 +122,7 @@ function text(reply: string): SubagentResult {
 }
 
 interface SetupOptions {
+  persistent?: boolean
   config?: Config
   reply?: (request: SubagentStartRequest, index: number) => SubagentResult
   manual?: boolean
@@ -135,7 +135,7 @@ interface SetupOptions {
 async function setup(options?: SetupOptions) {
   const ctx = new Context()
   await ctx.plugin(SessionProjectionRegistry)
-  await mountPtcRuntime(ctx)
+  await mountPtcRuntime(ctx, 'danger-full-access', options?.persistent ? 'persistent-in-memory' : 'per-call')
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   const provider = new StubProvider(
@@ -173,6 +173,16 @@ async function run(ctx: Context, parent: Agent, source: { script: string; meta: 
 // post-event assertions; explicit narrower timeouts inside stay authoritative.
 describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
   describe('script execution through the Node PTC runtime', () => {
+    it('awaits an async workflow in a temporary persistent-provider environment', async () => {
+      const { ctx, parent } = await setup({ persistent: true })
+      const execute = vi.spyOn(ctx.ptcRuntime, 'run')
+      const result = await run(ctx, parent, scripted('return await agent("hello")'))
+      expect(result.stopReason).toBe('completed')
+      expect(result.value).toBe('stub reply')
+      expect(execute.mock.calls[0]?.[0].stateOwner).toBeUndefined()
+      expect(execute.mock.calls[0]?.[0].sandboxPolicy?.mode).toBe('danger-full-access')
+    })
+
     it('captures args at start and isolates subsequent caller and script mutations', async () => {
       const { ctx, parent } = await setup()
       const args = { values: [1] }
@@ -466,7 +476,7 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       await ctx.plugin(SubagentRuntime)
       const provider: SubagentProvider = {
         name: 'rejecting',
-        capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
+        capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true },
         inheritsParentContext: false,
         start: async () => ({
           id: SessionId('reject-child'),
@@ -526,7 +536,7 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       await ctx.plugin(SubagentRuntime)
       const provider: SubagentProvider = {
         name: 'bad-dispose',
-        capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
+        capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true },
         inheritsParentContext: false,
         start: async () => ({
           id: SessionId('bad-dispose-child'),
@@ -550,7 +560,7 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       await ctx.plugin(SubagentRuntime)
       const provider: SubagentProvider = {
         name: 'coercion-trap-dispose',
-        capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
+        capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true },
         inheritsParentContext: false,
         start: async () => ({
           id: SessionId('trap-child'),
@@ -768,7 +778,7 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       let aborted = false
       const provider: SubagentProvider = {
         name: 'signal-only',
-        capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
+        capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true },
         inheritsParentContext: false,
         start: async (request) => {
           let settle!: (result: SubagentResult) => void
@@ -886,7 +896,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       let disposals = 0
       ctx.subagents.registerProvider({
         name: 'late-publication',
-        capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+        capabilities: {
+          agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false,
+        },
         inheritsParentContext: false,
         start: async (request) => {
           requested.resolve(request)

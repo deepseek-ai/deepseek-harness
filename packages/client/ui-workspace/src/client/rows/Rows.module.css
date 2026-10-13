@@ -252,14 +252,12 @@
   flex: none;
 }
 
-/* Trailing action buttons surface on hover only (figma 27:4668 / 27:4656):
-   bare 16px glyphs, tertiary grey; the figma gap 12 reads too airy beside
-   the 16px glyphs, so the buttons sit at 10. */
+/* Trailing action buttons surface on hover with bare 16px glyphs. */
 .rowActions {
   flex: none;
   display: none;
   align-items: center;
-  gap: 10px;
+  gap: 15px;
 }
 
 .projectRow:hover .rowActions,

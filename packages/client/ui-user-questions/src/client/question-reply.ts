@@ -142,13 +142,16 @@ function replySource(
     : null
 }
 
-/** Late-reply projection owned by the questions UI. */
+/**
+ * Late-reply projection owned by the questions UI. It claims the reply message
+ * on the Chat target, so the generic message Definition never presents it.
+ */
 export const questionReplyDefinition: ConversationNodeDefinition<QuestionReplyState> = {
   kind: 'user-question-reply',
   target: 'chat',
   match: (event) => {
     if (event.type !== 'user/message' || !isAppendSurfaceEvent(event)) return null
-    return replySource(event) === null ? null : { id: String(event.data.id), role: 'start' }
+    return replySource(event) === null ? null : { id: String(event.data.id), role: 'start', exclusive: true }
   },
   start: (_context, match) => {
     if (match.event.type !== 'user/message') throw new Error('user-question-reply start requires user/message')

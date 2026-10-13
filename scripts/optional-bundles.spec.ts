@@ -227,13 +227,9 @@ describe('optional bundles', () => {
         expect(matches[0]?.disabled).not.toBe(true)
       }
     }
-    // A delegated child cannot arm reminders: both delegation rows deny the four
-    // tools, so a child's prompt never lists them.
     for (const id of ['preset-standard', 'preset-cordis', 'preset-ptc']) {
       for (const rowId of ['tool-subagent', 'tool-subagent-fork']) {
-        expect(presetPlugins(id).find(plugin => plugin.id === rowId)?.config).toMatchObject({
-          toolFilter: { deny: ['schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update'] },
-        })
+        expect(presetPlugins(id).find(plugin => plugin.id === rowId)?.config).not.toHaveProperty('toolFilter')
       }
     }
     // `minimal` declares neither, so it composes no clock reading and no reminder tool.

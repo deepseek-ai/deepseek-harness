@@ -7,7 +7,7 @@ import { TranscriptViewPolicy } from '../src/client/transcript-view.ts'
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('TranscriptViewPolicy', () => {
-  it('defaults to completion and changes timing without reading or writing browser storage', () => {
+  it('defaults to completion and persists explicit timing without reading or writing browser storage', () => {
     const storageReads = vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('"next-input"')
     const storageWrites = vi.spyOn(Storage.prototype, 'setItem')
     const storageRemovals = vi.spyOn(Storage.prototype, 'removeItem')
@@ -32,7 +32,9 @@ describe('TranscriptViewPolicy', () => {
       expect(timingChanged).toHaveBeenCalledTimes(2)
       expect(policy.mode.getSnapshot()).toBe('detailed')
       expect(modeChanged).not.toHaveBeenCalled()
-      expect(host.set).not.toHaveBeenCalled()
+      expect(host.set).toHaveBeenCalledTimes(2)
+      expect(host.set).toHaveBeenNthCalledWith(1, 'collapseTiming', 'next-input')
+      expect(host.set).toHaveBeenNthCalledWith(2, 'collapseTiming', 'completion')
       expect(storageReads).not.toHaveBeenCalled()
       expect(storageWrites).not.toHaveBeenCalled()
       expect(storageRemovals).not.toHaveBeenCalled()
@@ -44,18 +46,19 @@ describe('TranscriptViewPolicy', () => {
     }
   })
 
-  it('starts each instance with completion timing while adopting the accepted Host mode', () => {
+  it('restores both saved preferences in each new instance', () => {
     const host = stubConfigForm<ChatSettings>()
     host.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed' }, revision: 1, writable: true })
     const first = new TranscriptViewPolicy(host.scope)
     try {
       first.setCollapseTiming('next-input')
+      host.publish({ value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed', collapseTiming: 'next-input' }, revision: 2 })
       const second = new TranscriptViewPolicy(host.scope)
       try {
         expect(first.collapseTiming.getSnapshot()).toBe('next-input')
-        expect(second.collapseTiming.getSnapshot()).toBe('completion')
+        expect(second.collapseTiming.getSnapshot()).toBe('next-input')
         expect(second.mode.getSnapshot()).toBe('standard')
-        expect(host.set).not.toHaveBeenCalled()
+        expect(host.set).toHaveBeenCalledExactlyOnceWith('collapseTiming', 'next-input')
       } finally {
         second.dispose()
       }
@@ -65,21 +68,21 @@ describe('TranscriptViewPolicy', () => {
     expect(host.listenerCount()).toBe(0)
   })
 
-  it('adopts Host mode updates without overriding the local timing choice', () => {
+  it('adopts independent Host mode and timing updates without writing them back', () => {
     const host = stubConfigForm<ChatSettings>()
     const policy = new TranscriptViewPolicy(host.scope)
     try {
       policy.setCollapseTiming('next-input')
-      host.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'compact', performanceUsage: 'detailed' }, revision: 1, writable: true })
+      host.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'compact', performanceUsage: 'detailed', collapseTiming: 'next-input' }, revision: 1, writable: true })
       expect(policy.mode.getSnapshot()).toBe('compact')
       expect(policy.collapseTiming.getSnapshot()).toBe('next-input')
       policy.setMode('verbose')
       expect(policy.collapseTiming.getSnapshot()).toBe('next-input')
-      expect(host.set).toHaveBeenCalledExactlyOnceWith('transcriptView', 'verbose')
+      expect(host.set).toHaveBeenNthCalledWith(2, 'transcriptView', 'verbose')
       host.publish({ value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed' }, revision: 2 })
       expect(policy.mode.getSnapshot()).toBe('standard')
-      expect(policy.collapseTiming.getSnapshot()).toBe('next-input')
-      expect(host.set).toHaveBeenCalledTimes(1)
+      expect(policy.collapseTiming.getSnapshot()).toBe('completion')
+      expect(host.set).toHaveBeenCalledTimes(2)
     } finally {
       policy.dispose()
     }

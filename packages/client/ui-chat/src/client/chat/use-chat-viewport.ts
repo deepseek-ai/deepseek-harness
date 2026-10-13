@@ -161,6 +161,113 @@ export class ChatViewport {
   }
 
   /**
+   * Join an input-caused fold and its tail movement on the fold's frame clock.
+   * @param follow - the existing reader's follow controller.
+   * @param settled - commits follow ownership after the final geometry is installed.
+   * @returns whether a closing batch owns this input.
+   */
+  followInputFold(follow: ScrollFollow, settled: (landing: ViewportLanding) => void): boolean {
+    const elements = this.elements
+    if (elements === null) return false
+    this.interruptFollow(follow)
+    let start = 0
+    let target = 0
+    let removed = 0
+    let initialHeight = 0
+    let originalRoom = 0
+    let finalRoom = 0
+    let growth = 0
+    let base = 0
+    let previousColumnHeight = 0
+    let previousProgress = 0
+    let segmentProgress = 0
+    let segmentTop = 0
+    return this.motion.followInput({
+      begin: (boxes) => {
+        const viewport = elements.scroller.getBoundingClientRect()
+        const metrics = scrollMetrics(elements.scroller)
+        start = metrics.top
+        originalRoom = this.spacerHeight()
+        initialHeight = Math.max(elements.column.offsetHeight, elements.scroller.scrollHeight - originalRoom)
+        let above = 0
+        for (const box of boxes) {
+          const amount = box.height + box.marginTop
+          if (box.closing) {
+            removed += amount
+            const top = box.element.getBoundingClientRect().top - box.marginTop
+            above += Math.max(0, Math.min(amount, viewport.top - top))
+          } else growth += amount
+        }
+        const finalHeight = initialHeight - removed + growth
+        base = Math.max(0, start - above)
+        segmentTop = start
+        previousColumnHeight = elements.column.offsetHeight
+        target = Math.max(base, Math.max(0, finalHeight - metrics.height))
+        finalRoom = target === 0 ? 0 : Math.max(0, target + metrics.height - finalHeight)
+        elements.column.dataset.inputFold = ''
+        // This reserve only prevents an intermediate clamp; the final frame installs the exact deficit.
+        this.setSpacer(Math.max(originalRoom, finalRoom, removed))
+        follow.setFollowing(true)
+      },
+      prepare: (progress, cancelled) => {
+        if (this.elements !== elements) return
+        const added = elements.column.offsetHeight - previousColumnHeight
+        if (added !== 0) {
+          initialHeight += added
+          const finalHeight = initialHeight - removed + growth
+          target = Math.max(base, finalHeight - elements.scroller.clientHeight, 0)
+          finalRoom = target === 0 ? 0 : Math.max(0, target + elements.scroller.clientHeight - finalHeight)
+          segmentTop = elements.scroller.scrollTop
+          segmentProgress = previousProgress
+        }
+        const remaining = segmentProgress === 1 ? 1 : (progress - segmentProgress) / (1 - segmentProgress)
+        const top = cancelled ? elements.scroller.scrollTop : segmentTop + (target - segmentTop) * remaining
+        const currentHeight = initialHeight + (growth - removed) * progress
+        const room = Math.max(cancelled ? 0 : finalRoom, top + elements.scroller.clientHeight - currentHeight)
+        // Growing the room before shrinking boxes avoids a native clamp between writes.
+        this.setSpacer(Math.max(this.spacerHeight(), room))
+      },
+      frame: (progress, cancelled) => {
+        if (this.elements !== elements) return 0
+        const remaining = segmentProgress === 1 ? 1 : (progress - segmentProgress) / (1 - segmentProgress)
+        const top = cancelled ? elements.scroller.scrollTop : segmentTop + (target - segmentTop) * remaining
+        const currentHeight = initialHeight + (growth - removed) * progress
+        const room = Math.max(cancelled ? 0 : finalRoom, top + elements.scroller.clientHeight - currentHeight)
+        elements.scroller.scrollTop = top
+        this.setSpacer(room)
+        if (!cancelled) this.observation = { top: elements.scroller.scrollTop, landing: null }
+        previousColumnHeight = elements.column.offsetHeight
+        previousProgress = progress
+        return elements.scroller.scrollTop - start
+      },
+      finish: (cancelled) => {
+        if (this.elements !== elements) return
+        // Commit the final sibling margins while their input-fold transition override still applies.
+        void elements.column.offsetHeight
+        delete elements.column.dataset.inputFold
+        if (cancelled) {
+          const metrics = scrollMetrics(elements.scroller)
+          const height = elements.scroller.scrollHeight - this.spacerHeight()
+          this.setSpacer(metrics.top === 0 ? 0 : Math.max(0, metrics.top + metrics.height - height))
+          this.invalidate()
+          return
+        }
+        this.setSpacer(finalRoom)
+        const metrics = scrollMetrics(elements.scroller)
+        const landing = { metrics, position: null, turn: this.latestTurn }
+        this.observation = { top: metrics.top, landing }
+        settled(landing)
+      },
+    })
+  }
+
+  /** Clear fold reservations after a display-mode change, allowing the scroll range to shrink. */
+  resetBelow(): void {
+    this.setSpacer(0)
+    this.invalidate()
+  }
+
+  /**
    * Give reserved room back after acknowledged scrolling or content growth without clamping the reader.
    * Holds still during folds and unsampled movement; following includes the room that remains.
    */

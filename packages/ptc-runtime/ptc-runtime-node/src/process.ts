@@ -2,7 +2,7 @@
 import type { Duplex } from 'node:stream'
 import { JsonChannel } from './channel.ts'
 import { runProgram } from './bootstrap.ts'
-import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
+import { clearProgramEnvironment } from './environment.ts'
 import type { PatchableStream } from './bootstrap.ts'
 import type { ReplyMessage, ProgramBootData, ProgramToHost } from './protocol.ts'
 
@@ -23,11 +23,7 @@ export interface ProgramProcess {
  */
 export async function runNodeMain(stream: Duplex, maxMessageBytes: number, processState: ProgramProcess): Promise<void> {
   if (!Number.isSafeInteger(maxMessageBytes) || maxMessageBytes <= 0 || maxMessageBytes > 0xffff_ffff) throw new Error('invalid control message limit')
-  for (const key of Object.keys(processState.env)) {
-    if (!STARTUP_ENVIRONMENT_NAMES.has(key.toUpperCase())) Reflect.deleteProperty(processState.env, key)
-  }
-  // Windows native process creation still needs SystemRoot in the OS environment.
-  processState.env = Object.create(null) as NodeJS.ProcessEnv
+  clearProgramEnvironment(processState)
   const boot = Promise.withResolvers<ProgramBootData>()
   const listeners: Array<(message: ReplyMessage) => void> = []
   let started = false

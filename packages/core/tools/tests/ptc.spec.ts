@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, ToolCallId  } from '@deepseek-ai/dsh-llm'
@@ -12,7 +13,7 @@ import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import ToolRuntime, { CodeRunFailedError, RUN_CODE_NAME, TOOL_ABORTED_BEFORE_DISPATCH, defineContentToolFixture, defineTool } from '@deepseek-ai/dsh-tools'
 import type { Config, JsonSchemaNode, PostToolDecision, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import ApprovalService, { type ApprovalOutcome, type ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
 import type { SessionEventMap } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -78,7 +79,7 @@ async function setup(options: SetupOptions = {}) {
 
 /** Mint an agent scope configured like production that can register scoped tool policy. */
 async function mintAgentScope(ctx: Context, name = 'scoped'): Promise<{ scope: Scope; agent: Agent }> {
-  const agent = { id: SessionId(name), session: { header: {}, append: () => {} } } as unknown as Agent
+  const agent = { ctx, id: SessionId(name), session: Session.create(SessionId(name)) } as Agent
   let scope!: Scope
   await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, agent) },
     { inject: ['tools', 'systemPrompt'] }))
@@ -107,12 +108,15 @@ function registerEcho(ctx: Context, name = 'echo'): unknown[] {
 /** A structural fake of the owning agent: captures session appends. */
 function fakeAgent(): { agent: Agent; events: { type: string; data: unknown }[] } {
   const events: { type: string; data: unknown }[] = []
+  const ctx = new Context()
+  onTestFinished(async () => { await ctx.fiber.dispose() })
   const agent = {
+    ctx,
     session: {
       header: { cwd: '/workspace' },
       append: (type: string, data: unknown) => { events.push({ type, data }) },
     },
-  } as unknown as Agent
+  } as Agent
   return { agent, events }
 }
 
@@ -145,7 +149,7 @@ it('logs detached frozen nested metadata without changing the binding value or l
     }))
     ctx.on('tools/ptc-dispatch-log', async () => [{ type: 'text', text: 'redacted durable preview' }])
     const session = Session.create(SessionId('ptc-location'))
-    const agent = { session } as Agent
+    const agent = { ctx, session } as Agent
     runtime.behavior = async (request) => {
       const value = await request.bindings[0]!.functions.location!({})
       expect(value).toBe('original contents')
@@ -453,7 +457,7 @@ describe('mode-aware wire contribution', () => {
     const sdk = assembly.sections.find(section => section.name === 'tools:sdk')
     expect(sdk?.text).toContain('class Tools(Protocol):')
     expect(sdk?.text).toContain('async def echo(self, args:')
-    expect(sdk?.text).toContain('top-level `await`')
+    expect(sdk?.text).toContain('and `code`, the program to execute')
     expect(assembly.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
     expect(assembly.tools[0]?.description).toContain('Execute a Python program')
   })
@@ -489,13 +493,13 @@ describe('mode-aware wire contribution', () => {
     const assembly = await systemPrompt.assemble()
     const runCodeSchema = assembly.tools.find(tool => tool.name === RUN_CODE_NAME)
     expect(runCodeSchema?.description).toContain('Execute a TypeScript program')
-    expect(runCodeSchema?.description).toContain('BODY of an')
+    expect(runCodeSchema?.description).toContain('`code`, the program to execute')
     // Both required arguments are named here, not only in the parameter
     // schema: prose that describes the call as "pass the program" is what
     // leads a model to emit `{code}` alone and fail INVALID_ARGS.
     expect(runCodeSchema?.description).toContain('`description`')
     const codeParam = (runCodeSchema?.parameters as { properties: { code: { description: string } } }).properties.code
-    expect(codeParam.description).toBe('The program: the body of an async TypeScript function.')
+    expect(codeParam.description).toBe("The TypeScript program to execute, following this tool's execution instructions.")
   })
 
   it('emits a Python-flavored run_code schema under a python runtime (matches the SDK language)', async () => {
@@ -504,11 +508,11 @@ describe('mode-aware wire contribution', () => {
     const assembly = await systemPrompt.assemble()
     const runCodeSchema = assembly.tools.find(tool => tool.name === RUN_CODE_NAME)
     expect(runCodeSchema?.description).toContain('Execute a Python program')
-    expect(runCodeSchema?.description).toContain('`return <value>`')
+    expect(runCodeSchema?.description).toContain('`code`')
     expect(runCodeSchema?.description).toContain('`description`')
     expect(runCodeSchema?.description).not.toContain('TypeScript')
     const codeParam = (runCodeSchema?.parameters as { properties: { code: { description: string } } }).properties.code
-    expect(codeParam.description).toBe('The program: the body of an async Python function.')
+    expect(codeParam.description).toBe("The Python program to execute, following this tool's execution instructions.")
   })
 
   it('resolves the run_code schema flavor lazily and fails loud on a language absent from the flavor table', async () => {
@@ -539,7 +543,7 @@ describe('mode-aware wire contribution', () => {
     const definition = ctx.tools.get(RUN_CODE_NAME)
     expect(definition?.description).toContain('Execute a TypeScript program')
     const params = definition?.parameters as { properties: { code: { description: string } } }
-    expect(params.properties.code.description).toBe('The program: the body of an async TypeScript function.')
+    expect(params.properties.code.description).toBe("The TypeScript program to execute, following this tool's execution instructions.")
   })
 
   it("rejects the assembly when toolOrder names a native tool that mode 'ptc' no longer contributes", async () => {
@@ -1788,7 +1792,7 @@ describe('the run_code dispatch bridge', () => {
       },
     }))
     const session = Session.create(SessionId('deep-code-arguments'))
-    const agent = { session } as Agent
+    const agent = { ctx, session } as Agent
     runtime.behavior = async (request) => {
       let nested: JsonValue = 'leaf'
       for (let index = 0; index < depth; index++) nested = [nested]
@@ -2258,6 +2262,7 @@ describe('PTC standing file policy and sandbox outcomes', () => {
 describe('per-program execution controls', () => {
   async function controlledSetup(approval = true) {
     const state = await setup()
+    await state.ctx.plugin(SessionStore)
     await state.ctx.plugin(SessionProjections)
     await state.ctx.plugin(SandboxPolicy, { mode: 'read-only', workspaceRoot: process.cwd() })
     if (approval) await state.ctx.plugin(ApprovalService, { policy: 'ask' })
@@ -2266,15 +2271,35 @@ describe('per-program execution controls', () => {
       executionInstructions: { get: () => 'Programs start with an empty environment.' },
       timeout: { get: () => ({ defaultMs: 120_000, maxMs: 600_000 }) },
     })
-    const session = Session.create(SessionId('program-controls'))
+    const session = state.ctx.sessions.create(SessionId('program-controls'))
     session.append('turn/start', { turn: 1 })
-    const agent = { session } as unknown as Agent
+    const agent = { ctx: state.ctx, session } as Agent
     const execute = (args: Record<string, unknown>, signal = testToolSignal) => state.tools.execute({
       callId: ToolCallId('program-controls'), name: RUN_CODE_NAME,
       arguments: { code: 'program', description: 'Test execution controls', ...args }, agent, signal,
     })
     return { ...state, agent, session, execute }
   }
+
+  it('executes an agentless confined program without a Session execution scope', async () => {
+    const { ctx, runtime } = await controlledSetup()
+    try {
+      expect((await runCode(ctx, 'program')).isError).toBe(false)
+      expect(runtime.lastRequest?.stateOwner).toBeUndefined()
+      expect(runtime.lastRequest?.sandboxPolicy?.sessionId).toBeUndefined()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('rejects Agent-owned confined execution when its policy service is absent', async () => {
+    const { ctx, runtime } = await setup()
+    const mode = vi.spyOn(runtime, 'sandboxMode', 'get').mockReturnValue('read-only')
+    const { agent } = fakeAgent()
+    try {
+      const result = await runCode(ctx, 'program', { agent })
+      expect(result.isError).toBe(true)
+      expect(JSON.stringify(result.content)).toContain('confined PTC runtime requires sandboxPolicy')
+    } finally { mode.mockRestore(); await ctx.fiber.dispose() }
+  })
 
   it('advertises configured timeout values and one-execution scope only when supported', async () => {
     const { ctx, tools } = await controlledSetup()
@@ -2358,6 +2383,18 @@ describe('per-program execution controls', () => {
     } finally { await ctx.fiber.dispose() }
   })
 
+  it('reuses the standing owner when sandbox_permissions repeats the current mode', async () => {
+    const { ctx, runtime, session, agent, execute } = await controlledSetup()
+    const ask = vi.fn(() => Promise.resolve<ApprovalOutcome>('allowed-once'))
+    ctx.on('approval/request', ask)
+    try {
+      setSandboxMode(session, 'workspace-write')
+      expect((await execute({ sandbox_permissions: 'workspace-write', justification: 'Use current file permissions' })).isError).toBe(false)
+      expect(runtime.lastRequest?.stateOwner).toBe(agent)
+      expect(ask).not.toHaveBeenCalled()
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('fails closed when no approval service is mounted', async () => {
     const { ctx, runtime, execute } = await controlledSetup(false)
     try {
@@ -2367,8 +2404,8 @@ describe('per-program execution controls', () => {
     } finally { await ctx.fiber.dispose() }
   })
 
-  it('cancels an outstanding approval without launching the program', async () => {
-    const { ctx, runtime, execute } = await controlledSetup()
+  it.each(['caller', 'policy'] as const)('cancels an outstanding approval after %s cancellation without launching the program', async (source) => {
+    const { ctx, runtime, session, execute } = await controlledSetup()
     const asked = Promise.withResolvers<undefined>()
     const answer = Promise.withResolvers<ApprovalOutcome>()
     const controller = new AbortController()
@@ -2376,7 +2413,8 @@ describe('per-program execution controls', () => {
     const result = execute({ sandbox_permissions: 'workspace-write', justification: 'Write generated source' }, controller.signal)
     try {
       await asked.promise
-      controller.abort('cancel outer approval')
+      if (source === 'caller') controller.abort('cancel outer approval')
+      else setSandboxMode(session, 'workspace-write')
       expect((await result).isError).toBe(true)
       expect(runtime.lastRequest).toBeUndefined()
     } finally { answer.resolve('cancelled'); await result; await ctx.fiber.dispose() }
@@ -2434,7 +2472,41 @@ describe('per-program execution controls', () => {
       expect(completed.isError).toBe(false)
       expect(requests.map(req => req.toolName)).toEqual([RUN_CODE_NAME, 'echo'])
       expect(runtime.lastRequest?.timeoutMs).toBe(1234)
+      expect(runtime.lastRequest?.stateOwner).toBeUndefined()
       expect(ctx.sandboxPolicy.resolve({ session: agent.session }).mode).toBe('read-only')
     } finally { answer.resolve('cancelled'); await result; await ctx.fiber.dispose() }
+  })
+})
+
+describe('PTC state ownership', () => {
+  it.each(['function-body', 'repl'] as const)('uses one Agent owner and releases %s provider state on disposal', async (programFormat) => {
+    const { ctx, runtime } = await setup()
+    const agentContext = new Context()
+    const { agent } = fakeAgent()
+    Object.defineProperty(agent, 'ctx', { value: agentContext })
+    const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue(programFormat)
+    const release = vi.spyOn(runtime, 'release')
+    try {
+      expect(ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description).not.toContain('persistent-in-memory')
+      expect((await runCode(ctx, 'let value = 1', { agent })).isError).toBe(false)
+      expect((await runCode(ctx, 'value', { agent })).isError).toBe(false)
+      expect(runtime.lastRequest?.stateOwner).toBe(agent)
+      await agentContext.fiber.dispose()
+      expect(release).toHaveBeenCalledExactlyOnceWith(agent)
+      expect((await runCode(ctx, '1')).isError).toBe(false)
+      expect(runtime.lastRequest?.stateOwner).toBeUndefined()
+    } finally { format.mockRestore(); release.mockRestore(); await agentContext.fiber.dispose(); await ctx.fiber.dispose() }
+  })
+
+  it('keeps provider evaluation instructions independent of language and program format', async () => {
+    const { ctx, runtime } = await setup({ runtime: { language: 'python' } })
+    const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue('repl')
+    const instructions = vi.spyOn(runtime, 'executionInstructions', 'get').mockReturnValue('Each call evaluates Python expressions in a fresh environment.')
+    try {
+      const description = ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description
+      expect(description).toContain('Each call evaluates Python expressions in a fresh environment.')
+      expect(description).not.toContain('persistent-in-memory')
+      expect(description).not.toContain('TypeScript')
+    } finally { format.mockRestore(); instructions.mockRestore(); await ctx.fiber.dispose() }
   })
 })

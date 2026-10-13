@@ -1,6 +1,5 @@
-/* Icon pills under the composer, each one composer-dock entry laid out by the
-   dock's flex row; 12/20 tertiary text tier with a hover-pill affordance; each
-   pill's click-open panel wears the shared stat-dialog.module.css skin. */
+/* Composer statistics use compact controls; their click-open panels share
+   stat-dialog.module.css. */
 
 /* Entry root and dialog anchor: shrink-wraps its pill so the panel clamp
    measures the pill. */
@@ -19,8 +18,7 @@
   max-width: 100%;
   padding: 1px 8px;
   border: none;
-  border-radius: 999px;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   font: inherit;

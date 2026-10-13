@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-15-authenticated-browser-host-preferences.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-15-authenticated-browser-host-preferences.md
+/agent-note-share-host-preferences-with-every-authenticated-browser:
+  en: f4b8b4500f8dca9c
+  zh: bf27ded54fba703b
+/agent-note-share-host-preferences-with-every-authenticated-browser/problem:
+  en: 22bf57b616581253
+  zh: d1108a4042646e21
+/agent-note-share-host-preferences-with-every-authenticated-browser/decision:
+  en: 2d54784b8b3558cf
+  zh: 31190a9b284867b7
+/agent-note-share-host-preferences-with-every-authenticated-browser/alternatives-considered:
+  en: 299105745b084fc0
+  zh: 8c2d82de44ac2aad
+/agent-note-share-host-preferences-with-every-authenticated-browser/consequences:
+  en: 520028b8c4031009
+  zh: 8c130624261538cc
+/agent-note-share-host-preferences-with-every-authenticated-browser/testing:
+  en: e433f139fe72e69f
+  zh: 279cc8b1cd3d5377

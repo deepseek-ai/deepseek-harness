@@ -29,9 +29,12 @@
 /deepseek-ai-dsh-jobs-local/use-this-package/lifecycle:
   en: 91dd372f742dcdb8
   zh: 58eeee0254d33cd1
+/deepseek-ai-dsh-jobs-local/use-this-package/session-timing-records:
+  en: ae926795d8aaa88f
+  zh: 0e6ec0265eefccf7
 /deepseek-ai-dsh-jobs-local/use-this-package/what-can-go-wrong:
-  en: dcf5bc26dbc018e5
-  zh: 3dbe65c2df463ec0
+  en: e1f4511c458dff3b
+  zh: bea247c2a365a646
 /deepseek-ai-dsh-jobs-local/understand-the-implementation:
   en: f782557ca8da3138
   zh: e8f0082b9692cacc
@@ -51,8 +54,8 @@
   en: 49e8bd5e2c1f6ffd
   zh: ad3e1aa712fd59b3
 /deepseek-ai-dsh-jobs-local/further-exploration:
-  en: 987d5d15aae77dda
-  zh: 5b0fa8cfc71a44ad
+  en: bb0334d20bfb0b5f
+  zh: 1b02ec08f9618bef
 /deepseek-ai-dsh-jobs-local/model-experience:
   en: 873ef364fc8d6f2f
   zh: 4d0bb38a9c9639c0
@@ -60,8 +63,8 @@
   en: e290ccc9b3c92c08
   zh: d75d48f485447a74
 /deepseek-ai-dsh-jobs-local/known-limitations-and-deferred-work:
-  en: 5284107cbd22e3dd
-  zh: 9aa0048908c94e25
+  en: 8b3e2d5505caf2cd
+  zh: 46435d6a6b3c9aff
 /deepseek-ai-dsh-jobs-local/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

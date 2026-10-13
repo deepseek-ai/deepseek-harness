@@ -100,6 +100,16 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
 
   async function snapshot(name: string): Promise<void> {
     await expect.poll(() => page.locator('[data-desktop-onboarding]').getAttribute('aria-busy')).toBe('false')
+    const hasIllustration = name.startsWith('welcome') || name.startsWith('credit')
+    if (hasIllustration) {
+      const decoded = await page.locator('[class*="illustration"] > img').evaluateAll(async elements =>
+        Promise.all(elements.map(async (element) => {
+          const image = element as HTMLImageElement
+          await image.decode()
+          return image.naturalWidth > 0 && image.naturalHeight > 0
+        })))
+      expect(decoded).toEqual([true, true])
+    }
     const aria = await captureStableAria(page, '[data-desktop-onboarding]', scaffold.workspaceCwd)
     await mkdir(EXPECTED, { recursive: true })
     await compareOrRefreshGolden(join(EXPECTED, `${name}.expected.md`), aria, MODE)
@@ -171,7 +181,7 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
         expect(action?.width).toBeCloseTo(240, 0)
         expect(action!.y - (card!.y + card!.height)).toBeCloseTo(40, 0)
       }
-      if (name === 'welcome' || name === 'credit') {
+      if (hasIllustration) {
         const illustrations = await page.locator('[class*="illustration"] > img:visible').evaluateAll(elements => elements.map((element) => {
           const image = element as HTMLImageElement
           const box = image.getBoundingClientRect()

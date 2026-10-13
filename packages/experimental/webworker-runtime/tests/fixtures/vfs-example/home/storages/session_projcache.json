@@ -8,7 +8,7 @@
     "sessions": {
       "preview-showcase": {
         "identity": {
-          "formatVersion": 3,
+          "formatVersion": 4,
           "createdAt": 1787472000000,
           "cwd": "/dsh/workspace",
           "isSeeded": false,
@@ -17,7 +17,7 @@
         "rows": {
           "title": {
             "ver": 1,
-            "seq": 198,
+            "seq": 202,
             "val": "WebWorker Preview Showcase"
           }
         }

@@ -44,7 +44,9 @@ kind: "package-reference"
 
 ### 注册什么
 
-每个符合条件的 Loader 配置项都会把其生成的宿主侧反射与 schema factory 贡献给运行时注册表。注册跟随配置项生命周期：配置项或本插件卸载时撤销；在配置项或本插件任一方卸载后才结束的导入操作会被丢弃。
+每个符合条件的 Loader 配置项都会把其生成的宿主侧反射、schema factory 和 `TYPERT.invocations` 贡献给运行时注册表。普通产物的 getter 暴露来自私有 Remote info 实例的描述符；生成的直接方法描述符还提供具名输入与调用辅助能力。注册跟随配置项生命周期：配置项或本插件卸载时撤销；在配置项或本插件任一方卸载后才结束的导入操作会被丢弃。
+
+要求严格 Remote 校验的源码组合预先构建并加载普通 `./typert` 产物。loader 将其调用定义注册到 `ctx.typert.local`；它不会从运行中的 Service 恢复已擦除的约束、文档或 schema。受限的无描述符源码回退仍由 Gateway 负责，`local.hasSeen()` 会阻止已注册定义撤销后降级到该回退。
 
 ### 可观察行为与失败
 
@@ -66,7 +68,7 @@ kind: "package-reference"
 
 ### Manifest 校验
 
-`validateTypertManifest()` 是模块／文件边界：manifest 从构建产物进入类型化注册表，因此每个字段都会被检查。manifest 必须指名导出它的包、携带 `host` face、持有 schema factory，并保持服务、事件、对象、成员、类型与文档记录格式正确；调用描述符必须使用带 factory 的严格编解码器。每次失败都会指名包与缺陷。
+`validateTypertManifest()` 在产物进入类型化注册表前执行检查。manifest 必须指名导出它的包、携带 `host` face、持有 schema factory，并包含格式正确的反射记录；调用描述符要求带 factory 的严格 codec。校验检查参数 `codec` 及提供的 `strictCodec` spec，并要求生成直接方法的 `input` 和 `invoke` 可调用；`result` 仍是唯一输出 codec。文档和 JSON Schema 可选。注册绝不调用输入选择器、解析器 factory 或投影 getter；校验只检查已提供的静态投影数据。每次失败都会指名包与缺陷。
 
 ### 缓存与归属
 
@@ -113,6 +115,7 @@ kind: "package-reference"
 - **仅宿主侧**——发现机制只会导入宿主侧 `./typert` 产物；在为客户端运行时添加等价的发现机制之前，需要先有独立的组合所有者。
 - **嵌套插件需要显式条目**——Loader 配置项会被自动发现，但嵌套在另一配置项之下、或完全不经 Loader 加载的插件，需要显式加入 `packages`，或由其所有者直接调用 `ctx.typert.register()`。
 - **缓存结论永不过期**——进程中途新增 `./typert` 导出的包需要重启后 loader 才会注册它。
+- **Host 就绪仍由组合负责**——要求严格元数据的消费方必须等待注册完成后再接受调用。惰性 info factory 不会让异步 Loader 注册自动就绪；`local.hasSeen()` 只保护已经观察到的定义。
 
 <a id="dev-note"></a>
 ### 开发备注

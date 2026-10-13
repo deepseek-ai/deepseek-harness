@@ -1,0 +1,198 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_retain",
+        "name": "run_code",
+        "argumentsDelta": "{\"code\":\"let counter = { value: 1 }; const alias = counter; function increment() { return ++counter.value }; const fs = await import(\\\"node:fs/promises\\\"); const report = tools.bash;\",\"description\":\"Retain counter module and tool method\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_retain",
+          "name": "run_code",
+          "arguments": "{\"code\":\"let counter = { value: 1 }; const alias = counter; function increment() { return ++counter.value }; const fs = await import(\\\"node:fs/promises\\\"); const report = tools.bash;\",\"description\":\"Retain counter module and tool method\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 10,
+          "outputTokens": 5
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_reuse",
+        "name": "run_code",
+        "argumentsDelta": "{\"code\":\"const childProcess = await import(\\\"node:child_process\\\"); childProcess.execFileSync(process.execPath, [\\\"-e\\\", \\\"process.stdout.write(\\\\\\\"raw child output\\\\\\\")\\\"], { stdio: \\\"inherit\\\" }); await fs.writeFile(\\\"persistent-count.txt\\\", String(increment()) + \\\"\\\\n\\\"); const result = await report({command:\\\"pwd\\\",description:\\\"Read current working directory\\\"}); ({ value: counter.value, same: alias === counter, sameDirectory: process.cwd() === result.stdout.text.trim() })\",\"description\":\"Reuse retained objects and current tool bindings\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_reuse",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const childProcess = await import(\\\"node:child_process\\\"); childProcess.execFileSync(process.execPath, [\\\"-e\\\", \\\"process.stdout.write(\\\\\\\"raw child output\\\\\\\")\\\"], { stdio: \\\"inherit\\\" }); await fs.writeFile(\\\"persistent-count.txt\\\", String(increment()) + \\\"\\\\n\\\"); const result = await report({command:\\\"pwd\\\",description:\\\"Read current working directory\\\"}); ({ value: counter.value, same: alias === counter, sameDirectory: process.cwd() === result.stdout.text.trim() })\",\"description\":\"Reuse retained objects and current tool bindings\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 10,
+          "outputTokens": 5
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_exit",
+        "name": "run_code",
+        "argumentsDelta": "{\"code\":\"process.exit(7)\",\"description\":\"End execution process to verify state loss\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_exit",
+          "name": "run_code",
+          "arguments": "{\"code\":\"process.exit(7)\",\"description\":\"End execution process to verify state loss\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 10,
+          "outputTokens": 5
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_recover",
+        "name": "run_code",
+        "argumentsDelta": "{\"code\":\"let missing; try { counter.value } catch (error) { missing = error.name === \\\"ReferenceError\\\" }; const fs2 = await import(\\\"node:fs/promises\\\"); let recovered = { value: 0 }; await fs2.appendFile(\\\"persistent-count.txt\\\", \\\"recreated\\\\n\\\"); ({ missing, recreated: recovered.value })\",\"description\":\"Recreate variables after execution process exits\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_recover",
+          "name": "run_code",
+          "arguments": "{\"code\":\"let missing; try { counter.value } catch (error) { missing = error.name === \\\"ReferenceError\\\" }; const fs2 = await import(\\\"node:fs/promises\\\"); let recovered = { value: 0 }; await fs2.appendFile(\\\"persistent-count.txt\\\", \\\"recreated\\\\n\\\"); ({ missing, recreated: recovered.value })\",\"description\":\"Recreate variables after execution process exits\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 10,
+          "outputTokens": 5
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "text-delta",
+        "index": 0,
+        "text": "The counter and tool reference survived between calls. After the process exited, I recreated the variables and recorded recovery."
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "The counter and tool reference survived between calls. After the process exited, I recreated the variables and recorded recovery."
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 10,
+          "outputTokens": 2
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  }
+]

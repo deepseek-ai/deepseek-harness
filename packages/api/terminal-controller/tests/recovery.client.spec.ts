@@ -16,7 +16,9 @@ import * as TerminalClient from '../src/client/index.ts'
 
 const sessionId = 'session' as SessionId
 const info: WebTerminalInfo = { id: 'terminal' as WebTerminalId, shell: { name: 'zsh', path: '/bin/zsh', args: ['-i'] }, title: 'zsh', cwd: '/workspace', rows: 24, cols: 80, state: 'running', exitCode: null }
-const environment: TerminalEnvironment = { cwd: info.cwd, maxInputBytes: 1000, maxCols: 200, maxRows: 100, scrollback: 100 }
+const environment: TerminalEnvironment = {
+  cwd: info.cwd, maxInputBytes: 1000, maxBufferedBytes: 100_000, maxCols: 200, maxRows: 100, scrollback: 100,
+}
 const success = <T>(value: T): RemoteResult<T> => ({ ok: true, value })
 const failure = (message: string): RemoteResult<never> => ({ ok: false, error: new RemoteError('gateway/bad-request', message, {}) })
 const cleanups: (() => void | Promise<void>)[] = []
@@ -41,9 +43,8 @@ function fixture() {
     environment: vi.fn<TerminalRemote['environment']>(async () => success(environment)), list: vi.fn<TerminalRemote['list']>(async () => success([])),
     create: vi.fn<TerminalRemote['create']>(async (_session, request) => success({ ...info, id: request.id })),
     close: vi.fn<TerminalRemote['close']>(async () => success(undefined)), rename: vi.fn<TerminalRemote['rename']>(async () => success(undefined)),
-    write: vi.fn<TerminalRemote['write']>(async () => success(undefined)), resize: vi.fn<TerminalRemote['resize']>(async () => success(undefined)),
-    follow: vi.fn<TerminalRemote['follow']>(streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
-      yield { type: 'snapshot', sequence: 0, screen: 'retained', info: { ...info, id, controllerId } }
+    attach: vi.fn<TerminalRemote['attach']>(streamMethod<TerminalRemote['attach']>(async function* (_session, id, signal) {
+      yield { type: 'snapshot', writable: true, sequence: 0, screen: 'retained', info: { ...info, id } }
       await new Promise<void>((resolve) => {
         if (signal?.aborted) resolve()
         else signal?.addEventListener('abort', () => { resolve() }, { once: true })
@@ -93,8 +94,8 @@ it('recovers a listed process without creating another, including its title and 
   model.mount()
   await model.refresh()
   expect(h.remote.create).not.toHaveBeenCalled()
-  await expect.poll(() => model.state.getSnapshot().render?.frame).toMatchObject({ type: 'snapshot', screen: 'retained' })
-  expect(h.remote.follow).toHaveBeenCalledWith(sessionId, info.id, expect.any(String), expect.any(AbortSignal))
+  await expect.poll(() => model.state.getSnapshot().render?.frame).toMatchObject({ type: 'snapshot', writable: true, screen: 'retained' })
+  expect(h.remote.attach).toHaveBeenCalledWith(sessionId, info.id, expect.any(AbortSignal))
 })
 
 it('does not recreate a recovered terminal that disappeared after the recovery list was shown', async () => {
@@ -140,7 +141,7 @@ it('waits for an in-flight creation while close detaches immediately and prevent
   await starting
   await closing
   expect(h.remote.close).toHaveBeenCalledWith(sessionId, info.id)
-  expect(h.remote.follow).not.toHaveBeenCalled()
+  expect(h.remote.attach).not.toHaveBeenCalled()
 })
 
 it('does not allocate after close or disposal overtakes discovery', async () => {
@@ -361,7 +362,7 @@ it('restores the same terminal in the same occurrence after reload without openi
   await restored.refresh()
   expect(restored.id).toBe(original.id)
   expect(h.remote.create).toHaveBeenCalledOnce()
-  await expect.poll(() => restored.state.getSnapshot().render?.frame).toMatchObject({ type: 'snapshot', screen: 'retained' })
+  await expect.poll(() => restored.state.getSnapshot().render?.frame).toMatchObject({ type: 'snapshot', writable: true, screen: 'retained' })
 })
 
 it('offers retained processes when their saved occurrence is absent from the restored layout', async () => {
@@ -490,10 +491,10 @@ it('waits for both active and detached stream finalizers during plugin disposal 
   const finished = [Promise.withResolvers<undefined>(), Promise.withResolvers<undefined>()]
   cleanups.push(() => { for (const barrier of release) barrier.resolve(undefined) })
   let index = 0
-  vi.mocked(h.remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
+  vi.mocked(h.remote.attach).mockImplementation(streamMethod<TerminalRemote['attach']>(async function* (_session, id, signal) {
     const current = index++
     try {
-      yield { type: 'snapshot', sequence: 0, screen: 'screen', info: { ...info, id, controllerId } }
+      yield { type: 'snapshot', writable: true, sequence: 0, screen: 'screen', info: { ...info, id } }
       await new Promise<void>((resolve) => {
         if (signal?.aborted) resolve()
         else signal?.addEventListener('abort', () => { resolve() }, { once: true })
@@ -611,7 +612,7 @@ it('retains only open saved occurrences across inactive Sessions and deduplicate
   expect(h.remote.environment).not.toHaveBeenCalled()
   expect(h.remote.create).not.toHaveBeenCalled()
   expect(h.remote.list).not.toHaveBeenCalled()
-  expect(h.remote.follow).not.toHaveBeenCalled()
+  expect(h.remote.attach).not.toHaveBeenCalled()
   const calls = vi.mocked(h.remote.retain).mock.calls
   service.retainTabs([{ sessionId: otherSession, tabId: 'b', contentId: 'b' }])
   await expect.poll(() => calls.find(call => call[0] === sessionId)?.[2]?.aborted).toBe(true)
@@ -639,7 +640,7 @@ it('waits for the window hold acknowledgement before restoring an output attachm
   const model = service.view(sessionId, 'restored', 'restored')
   model.mount()
   await model.refresh()
-  expect(h.remote.follow).not.toHaveBeenCalled()
+  expect(h.remote.attach).not.toHaveBeenCalled()
   acknowledge.resolve(undefined)
   await expect.poll(() => model.state.getSnapshot().writable).toBe(true)
   expect(h.remote.retain).toHaveBeenCalledOnce()
@@ -657,7 +658,7 @@ it('shows a missing terminal when retention loses the race to Host cleanup, with
   const model = service.view(sessionId, 'restored', 'restored')
   model.mount()
   await expect.poll(() => model.state.getSnapshot().issue).toBe('missingTerminal')
-  expect(h.remote.follow).not.toHaveBeenCalled()
+  expect(h.remote.attach).not.toHaveBeenCalled()
   expect(h.remote.create).not.toHaveBeenCalled()
 })
 

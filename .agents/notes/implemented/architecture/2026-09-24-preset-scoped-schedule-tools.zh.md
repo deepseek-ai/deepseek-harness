@@ -26,9 +26,9 @@ Status: implemented
 - 挂载该行的每个 preset 承担四个 schema 的固定 token 成本，工具可用性取自组合，而不是由宿主服务是否存在推断。
 - 部署可以只为存储与投递挂载 `dsh-schedule`，而不授予其 Agent 由模型驱动的提醒管理能力。
 - `dsh-schedule` 不注入 `ctx.tools`，也不注册任何面向模型的工具。
-- 被委派的子 agent 无法通过两道中的任何一道使用这四个工具：`standard`、`cordis` 与 `ptc` 中的 `tool-subagent` 与 `tool-subagent-fork` 两行通过 `toolFilter` 拒绝全部四个名称，provider 会在子作用域内通过 `ctx.tools.restrict()` 应用该过滤，因此这些工具会从子 agent 的 prompt 中消失；`dsh-tool-schedule` 中的 `subagentCallerRefusal` 会在调用方委派深度大于零时，从四个工具中的每一个独立返回 `{ code: 'subagent_session', message: 'A delegated subagent cannot use reminders.' }`，因此即使某个调用仍能到达工具，也会被拒绝。
+- 被委派的子 agent 继承 preset 的四个提醒 schema。调用方委派深度大于零时，`dsh-tool-schedule` 中的 `subagentCallerRefusal` 从每个工具返回 `{ code: 'subagent_session', message: 'A delegated subagent cannot use reminders.' }`。[preset 组装决策](../simplification/2026-10-09-preset-owned-subagent-composition.zh.md)移除了重复的子级过滤；可见性不授予执行权限。
 - 被委派子 agent 拥有的 Session 永远收不到投递的提醒，因此 `ScheduleService.create` 与 `ScheduleService.update` 会以 `subagent_session` 拒绝它。该拒绝读取委派深度——委派封顶本身执行的记账，由持久化 session header 承载并跨冷恢复保留。这条规则在服务层，因此其它消费方（包括自动化任务页面）也会命中。
 
 ## Testing
 
-`packages/schedule/tool-schedule/tests/tool-schedule.spec.ts` 固定这四个定义及其错误映射，包括 `refuses every tool for a delegated child caller`。`apps/cli/tests/web-agent-presets.e2e.ts` 断言 `minimal` preset 的工具列表，`snapshots/web/minimal-preset/tool-schemas.expected.json` 记录其只含 `bash` 的工具表。`packages/schedule/schedule/tests/subagent-ownership.spec.ts` 固定委派深度拒绝，`scripts/optional-bundles.spec.ts` 断言三个 preset 的两行委派行都拒绝全部四个工具名。
+`packages/schedule/tool-schedule/tests/tool-schedule.spec.ts` 固定这四个定义及其错误映射，包括 `refuses every tool for a delegated child caller`。`apps/cli/tests/web-agent-presets.e2e.ts` 断言 `minimal` preset 的工具列表，`snapshots/web/minimal-preset/tool-schemas.expected.json` 记录其不含提醒工具 schema 的工具表。`packages/schedule/schedule/tests/subagent-ownership.spec.ts` 固定委派深度拒绝，`scripts/optional-bundles.spec.ts` 断言三个 preset 的两行委派行都不含 `toolFilter`。Web preset e2e 还检查父子工具 schema 相等，且四个提醒执行器对新建和带种子的子级均拒绝执行。`snapshots/web/subagent-fork-schedule` 通过出货 Web 组合记录带种子 fork 中的四次拒绝，并共享 standard preset 的提示和 schema 预期。

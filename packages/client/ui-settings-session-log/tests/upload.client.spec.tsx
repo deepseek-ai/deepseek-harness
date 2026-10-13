@@ -14,7 +14,7 @@ afterEach(cleanup)
 
 function fixture(writable = true) {
   const formState = createSnapshotStore<ConfigFormSnapshot<UploadSettings>>({
-    status: 'ready', value: { enabled: true }, base: {}, user: {}, revision: 0, writable, mode: 'host',
+    status: 'ready', value: { enabled: true }, base: {}, user: {}, revision: 0, writable,
   })
   const set = vi.fn(async (_field: string, enabled: unknown) => {
     formState.update((state) => { state.value = { enabled: enabled === true } })

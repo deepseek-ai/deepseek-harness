@@ -8,7 +8,7 @@ import { scheduler } from 'node:timers/promises'
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import {
   assertNoRetiredHeaderFields, encodeSegment, eventLines, generationLogFilename, generationLogPath,
   logPath, parseGenerationLogFilename, projectDir, projectKey, scanLog, sessionDir, SessionLogScanner,
@@ -18,7 +18,7 @@ import {
   runPersistenceContract, meta, oneTurnLog, releasedV1OneTurnLog,
 } from '../../session-persistence/tests/contract.ts'
 import { runLiveWritePathContract } from '../../session-persistence/tests/live-write-contract.ts'
-import { LIVE_WRITE_BATCH_MAX_DELAY_MS, type JsonlSessionHandle } from '../src/storage.ts'
+import { LIVE_WRITE_BATCH_MAX_DELAY_MS, type JsonlSessionHandle, type JsonlHandleStorage } from '../src/storage.ts'
 import { JsonlGenerationSourceChangedError } from '../src/generation.ts'
 import SessionStore from '@deepseek-ai/dsh-session'
 
@@ -795,7 +795,7 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
   })
 
   it('resolves absent, current, and historical current-generation paths', async () => {
-    const persistence = ctx.sessionPersistence as JsonlSessionPersistence
+    const persistence = ctx.sessionPersistence as SessionPersistence & JsonlHandleStorage
     expect(await persistence.resolveCurrentLog(SessionId('missing-generation'))).toBeUndefined()
 
     const current = meta('resolved-current', '/work')
@@ -1059,7 +1059,7 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
     const currentPath = rawLogPath(root, header.cwd, header.id)
     await mkdir(dirname(sourcePath), { recursive: true })
     await writeFile(sourcePath, `${JSON.stringify(releasedV0Header(header))}\n`)
-    const persistence = ctx.sessionPersistence as JsonlSessionPersistence
+    const persistence = ctx.sessionPersistence as SessionPersistence & JsonlHandleStorage
 
     await expect(persistence.resolveCurrentLog(header.id, new AbortController().signal)).resolves.toBeUndefined()
     expect(await readFile(sourcePath, 'utf8')).toBe(`${JSON.stringify(releasedV0Header(header))}\n`)
@@ -1885,7 +1885,7 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
   it('stat handles artifact removal and non-ENOENT failures after log discovery', async () => {
     const m = meta('stored-revision-race')
     await writeLog(ctx.sessionPersistence, m, oneTurnLog())
-    const persistence = ctx.sessionPersistence as JsonlSessionPersistence
+    const persistence = ctx.sessionPersistence
     const internals = persistence as unknown as {
       findLog(id: SessionId, signal?: AbortSignal): Promise<{
         sourcePath: string

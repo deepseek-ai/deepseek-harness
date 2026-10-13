@@ -9,8 +9,8 @@
   en: 2c6b665adc256b4e
   zh: 2240e4c1573ebe9c
 /configure-models/add-a-third-party-provider:
-  en: 0fe5f88e692f618c
-  zh: 4f2e493818d8934f
+  en: 4b99a9b34d117eea
+  zh: dddeb5a08c0d3cc6
 /configure-models/add-a-custom-model-api:
   en: 17867305a3e1b52a
   zh: 876fedf1f6f563e4
@@ -26,6 +26,9 @@
 /configure-models/advanced-configuration/image-input:
   en: 75350cb615da03a4
   zh: 6f8b3510085e4ac4
+/configure-models/advanced-configuration/deepseek-account-models:
+  en: fc09d02a89b211a7
+  zh: e0f23a8912a24178
 /configure-models/advanced-configuration/reasoning-effort:
   en: f7581a0760fdfd2c
   zh: dc6eaa16f74a0e9f

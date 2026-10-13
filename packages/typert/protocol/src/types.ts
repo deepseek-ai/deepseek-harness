@@ -6,6 +6,7 @@
 
 import type { Context, Events } from '@deepseek-ai/cordis'
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ZodType } from 'zod'
 import type { TypertOwnedValue } from './owned-value.ts'
 
 declare const LOOKUP_HOST: unique symbol
@@ -266,26 +267,29 @@ export interface TypertSchema<Output = unknown> {
   parse(value: unknown): Output
 }
 
+/** Native byte views reconstructed by a Remote carrier have ordinary ArrayBuffer backing. */
+export type RemoteDecoded<Value> = Value extends Uint8Array ? Uint8Array<ArrayBuffer>
+  : Value extends string | number | boolean | bigint | symbol ? Value
+    : Value extends object ? { [Key in keyof Value]: RemoteDecoded<Value[Key]> } : Value
+
 /** Codec attached to one invocation parameter or result. */
-export type TypertCodec =
-  | {
+export type TypertCodec<Value = unknown> =
+  | TypertRemoteValue<Value> & {
     readonly mode: 'strict'
     readonly typeSymbol: string
-    /** Materialize and return the process-realm schema on first boundary use. */
-    readonly create: () => TypertSchema
     /**
      * Decode a unary result whose fields require type-specific handling.
      * @param value - result reconstructed by the RPC carrier.
      * @returns the validated result, retaining native byte views.
      */
-    readonly decode?: (value: unknown) => unknown
+    readonly decode?: ((value: unknown) => unknown) | undefined
     /**
      * Project typed binary fields into RPC result attachments.
      * @param value - native unary result.
      * @param writeBytes - records a byte view at its result-relative path and returns its JSON placeholder.
      * @returns JSON metadata with untouched JSON subtrees retained.
      */
-    readonly encode?: (value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown
+    readonly encode?: ((value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown) | undefined
   }
   | {
     readonly mode: 'src-json'
@@ -295,6 +299,8 @@ export type TypertCodec =
 export interface InvocationParameterDescriptor {
   /** Source-level parameter name. */
   readonly name: string
+  /** Source parameter documentation, independent of JSON Schema support. */
+  readonly description?: string
   /** Required key in the wire `args` object. */
   readonly wire: string
   /** Whether the value is JSON or requires a registered Host lookup. */
@@ -363,6 +369,8 @@ export interface InvocationDescriptor {
   }
   /** Codec for the unary result or each yielded stream item. */
   readonly result: TypertCodec
+  /** Source-owned method documentation; ordinary methods need not have JSDoc. */
+  readonly description?: string
   /** Source declaration used only for diagnostics. */
   readonly sourceLocation?: InvocationSourceLocation
 }
@@ -389,6 +397,14 @@ export interface PeerScope {
   dispose(): Promise<void>
 }
 
+/** Carrier capacity for buffered uplink frames of one logical stream. */
+export interface RemoteUplinkWindow {
+  /** Maximum complete encoded frame bytes waiting for the Host consumer. */
+  readonly maxBytes: number
+  /** UTF-8 envelope bytes added to a compact JSON item with a present value field. */
+  readonly frameOverheadBytes: number
+}
+
 /**
  * The context of one Remote call, reachable inside the receiving method as
  * `this.ctx.invocation`. The Gateway derives the receiver from a Context that
@@ -406,6 +422,8 @@ export interface RemoteInvocation {
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket close, or an uplink failure. */
   readonly signal: AbortSignal
+  /** Carrier frame capacity; absent when the carrier imposes no encoded-frame inbox limit. */
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /**
    * The Client's uplink items for this call. Available once; a second call
    * throws. With an uplink codec on the descriptor every item is decoded to
@@ -426,6 +444,91 @@ export interface TypertRemoteContribution {
   readonly package: string
   /** Consumer-side invocation descriptors generated from that package. */
   readonly descriptors: readonly InvocationDescriptor[]
+}
+
+/** Generated parser and optional lossless tool-schema projection of one Remote value. */
+export interface TypertRemoteValue<Value = unknown> {
+  /** Materialize the generated parser without loading the owning Service. */
+  readonly create: () => TypertSchema<Value>
+  /** Source-owned value documentation, independent of tool projection support. */
+  readonly description?: string | undefined
+  /** Present when the value is representable in the tool-schema subset without losing constraints; may be derived lazily. */
+  readonly jsonSchema?: Readonly<Record<string, unknown>> | undefined
+  /** Projection failure for consumers that require JSON Schema; parsing remains available. */
+  readonly jsonSchemaError?: string | undefined
+}
+
+/** Consumer-owned input validation; never changes Host dispatch or the business method declaration. */
+export interface TypertRemoteInputOptions {
+  /** Reject undeclared fields in input objects; explicit dictionaries and JSON values remain open. */
+  readonly strict?: boolean
+}
+
+/** A direct descriptor; DecodedOutput differs from its parser output only for carrier-reconstructed unary bytes. */
+export type TypertRemoteMethod<Input extends object, Output, Mode extends 'unary' | 'stream' = 'unary', Uplink = never, DecodedOutput = Output> =
+  Omit<InvocationDescriptor, 'mode' | 'invocation' | 'result'>
+  & (Mode extends 'stream' ? { readonly mode: 'stream' } : { readonly mode?: never }) & {
+    /** Named invocation selects a direct Service method, not a Context receiver. */
+    readonly invocation: { readonly kind: 'direct' }
+    /**
+     * Select matching named-input parsing and tool-schema projection without changing dispatch.
+     * @param options - consumer-owned strictness; omission preserves ordinary Remote object handling.
+     * @returns the cached view for this policy; its parser and projection remain lazy.
+     */
+    input(options?: TypertRemoteInputOptions): TypertRemoteValue<Input>
+    /** The descriptor's result or stream-item parser; parsing alone does not normalize native byte backing. */
+    readonly result: Extract<TypertCodec<Output>, { readonly mode: 'strict' }>
+    /**
+     * Invoke the mounted namespace method with named wire arguments.
+     * @param remote - caller-owned, unscoped Client Remote service; its mount owns availability.
+     * @param input - decoded named wire arguments.
+     * @param signal - caller-owned invocation lifetime.
+     * @returns the carrier-decoded unary result or complete stream handle, including uplink and disposal.
+     */
+    invoke(remote: TypertClientRemote, input: Input, signal?: AbortSignal): Mode extends 'stream'
+      ? RemoteStreamHandle<Output, Uplink>
+      : Promise<RemoteResult<DecodedOutput>>
+  }
+
+/** Ordinary contribution whose method index references its direct invocation descriptors. */
+export interface TypertRemoteInfo<Methods extends Readonly<Record<string,
+  TypertRemoteMethod<object, unknown> | TypertRemoteMethod<object, unknown, 'stream', unknown>
+>> = Readonly<Record<string, TypertRemoteMethod<object, unknown> | TypertRemoteMethod<object, unknown, 'stream', unknown>>>>
+  extends TypertRemoteContribution {
+  /** Exact generated keys and types; Context-only receivers are available only through descriptors. */
+  readonly methods: Methods
+}
+
+/** Generated Zod factory and optional tool projection for one invocation value. */
+export interface TypertRemoteCodecSpec extends Omit<Extract<TypertCodec, { readonly mode: 'strict' }>, 'create'> {
+  /** Materialize the generated Zod schema only when a parser is requested. */
+  readonly create: () => ZodType
+}
+
+/** One ordered parameter; omitted wire names resolve to the source parameter name. */
+export interface TypertRemoteParameterSpec extends Omit<InvocationParameterDescriptor, 'wire' | 'codec'> {
+  /** Explicit wire alias, notably for a Host lookup identity. */
+  readonly wire?: string
+  /** Ordinary Remote parser and projection for this parameter. */
+  readonly codec: TypertRemoteCodecSpec
+  /** Consumer-selected counterpart rejecting undeclared fields in explicit input objects. */
+  readonly strictCodec: TypertRemoteCodecSpec
+}
+
+/** Static method facts; endpoint identity and named-call helpers are derived by the runtime factory. */
+export interface TypertRemoteMethodSpec extends Omit<InvocationDescriptor, 'id' | 'namespace' | 'method' | 'parameters' | 'result'> {
+  /** Ordered Host parameters, including their wire representations. */
+  readonly parameters: readonly TypertRemoteParameterSpec[]
+  /** Successful unary result or stream item, with optional native-byte handling. */
+  readonly result: TypertRemoteCodecSpec
+}
+
+/** Compiler-produced method definitions, independent of services, registration, and transport. */
+export interface TypertRemoteSpec {
+  /** Package owning these methods. */
+  readonly package: string
+  /** Public endpoints; each method's invocation facts occur only once. */
+  readonly methods: Readonly<Record<`${string}/${string}`, TypertRemoteMethodSpec>>
 }
 
 /** Client Remote capability implemented by the Gateway and consumed by Remote assemblies. */

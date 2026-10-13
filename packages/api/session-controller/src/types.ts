@@ -219,7 +219,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'agent-preset/conflict': {
       readonly sessionId: SessionId
       readonly requestedPreset: string
-      readonly existingPreset?: string
     }
     'session/attachment-invalid': { readonly reason: string }
     'session/queue-item-not-found': { readonly itemId: MessageId }
@@ -284,17 +283,23 @@ export interface SessionSearchValue {
   readonly hasMore: boolean
 }
 
-/** Session creation or explicit-id adoption request. */
+/** Request for a Session for a new conversation. */
 export interface SessionCreateRequest {
+  /** Workspace the Session joins; exclusive with `cwd`. */
   readonly workspaceId?: WorkspaceId
+  /** Directory the Session owns when no Workspace is named. */
   readonly cwd?: string
+  /** Blank Session to reuse while it is reusable, or the identity of a new Session when none is stored under it. */
   readonly sessionId?: SessionId
+  /** Preset the Session runs, replacing a reused Session's recorded preset; the configured default when omitted. */
   readonly agentPreset?: string
 }
 
 /** Session creation response value. */
 export interface SessionCreateValue {
+  /** The created or reused Session, which may differ from the requested `sessionId`. */
   readonly sessionId: SessionId
+  /** Preset the Session runs, when the deployment composes a preset roster. */
   readonly agentPreset?: string
 }
 

@@ -29,7 +29,7 @@ Status: implemented
 | `UserQuestionService` | 前台等待与 Client 接手、无人接手时的 deadline、迟到回答校验与 steering（中途引导），以及持久问题投影。 |
 | Gateway 与 Remote 运行时 | 现有请求投递、结算、取消及 Remote stream 传输；不包含问题专属计时器或按事件名分支。 |
 | `ui-user-questions` | 每个 Session 和调用的一张卡片、回答通道选择、本地倒计时与草稿，以及回复 Definition 和渲染器。 |
-| `ui-chat` | 基于消息 id 的呈现聚合，以及普通过程／轮次折叠。 |
+| `ui-chat` | 普通过程／轮次折叠。 |
 | 问题专用工具行 | pending／已回答呈现与面板操作，在 `QuestionToolRow` 中组合，不向通用 `ToolRow` 添加 `rowAction`。 |
 
 [问题服务](../../../../packages/interaction/user-questions/README.zh.md)、[工具](../../../../packages/interaction/tool-ask-user/README.zh.md)和[问题 UI](../../../../packages/client/ui-user-questions/README.zh.md)分别拥有各包的约定。
@@ -72,11 +72,11 @@ Client 计算 `Date.now() + remainingMs`。手动聚焦未编辑的回答区会�
 
 问题 UI 通过 `source.kind` 识别迟到回复，再解析已记录的 JSON 来呈现问答。普通用户消息粘贴相同 JSON 不会被识别为回复。无法读取的已记录载荷保留原始文本呈现。
 
-普通消息 Definition 和问答回复 Definition 都匹配追加的消息，在 Node Store 中保留消息 id 相同的独立投影。存在同 id 的 `question-reply` 时，Chat 业务分组省略 `turn-trigger` 呈现。重复触发节点既不渲染，也不切开分组，回复只显示一次。相同聚合也适用于无轮次归属的历史输入。
+问答回复 Definition 通过[独占匹配](2026-10-12-exclusive-conversation-matches.zh.md)在 Chat target 上认领追加的回复消息，普通消息 Definition 因此不再为它建立 `turn-trigger` 或 context 投影，回复只显示一次；无轮次归属的历史输入同样如此。
 
 回复参与普通过程分组和整轮折叠，不保证独立可见：阅读时可能需要展开所属轮次与过程分组。轮次折叠控件始终在所控制的分组之前，包括由回复开启轮次的情况。
 
-本决策不添加 process-role 字段、独立布局标记、用户消息结构变更或目标内 fallback 派发。独立 kind 规则保留在 Chat 现有分组逻辑中。由节点 data 声明分组与重叠语义的机制是留待拆分的基础设施，不属于问题功能。
+本决策不添加独立布局标记或用户消息结构变更。回复不声明分组树位置，因此按过程内容的默认位置放置。
 
 ## Alternatives considered
 
@@ -90,7 +90,7 @@ Client 计算 `Date.now() + remainingMs`。手动聚焦未编辑的回答区会�
 
 **在通用 `MessageItem` 内重新分类 JSON、借用 relay form，或使用默认 context 行。** 解析文本来识别业务消息混淆了来源与内容；relay form 表示其他 agent 的消息，通用 context 行则会暴露 JSON。专用来源、Definition 和渲染器拥有问题呈现。
 
-**通过通用节点元数据让回复独立布局。** 这会把问题功能扩大为对话基础设施变更。普通折叠与 Chat 内聚合足以满足本决策；由节点 data 独立声明分组语义仍是单独的设计任务。
+**通过通用节点元数据让回复独立布局。** 这会把问题功能扩大为对话基础设施变更。普通折叠足以满足本决策；通过分组树位置把回复放置为用户输入是单独的工作。
 
 **面板关闭时写仅入日志的关闭事件，或伪造放弃消息。** 仅入日志会让模型看不到用户决定，还增加另一套持久机制。伪造回复则把隐藏面板当成回答。因此关闭面板仍让计时问题保持可回答。
 
@@ -101,7 +101,7 @@ Client 计算 `Date.now() + remainingMs`。手动聚焦未编辑的回答区会�
 - [服务测试](../../../../packages/interaction/user-questions/tests/user-questions.spec.ts)与[等待测试](../../../../packages/interaction/user-questions/tests/timed-wait.spec.ts)覆盖有人与无人接手、最后接手方断开、取消、超时错误映射、仅接受已继续问题的回答，以及答案 id 的精确校验。
 - [投影测试](../../../../packages/interaction/user-questions/tests/projection.spec.ts)区分 legacy 与 timed schema，并覆盖原生及 PTC pending 调用、其他失败、恢复修复、排队回复取消和准入后结算。
 - [Client 监听器测试](../../../../packages/client/ui-user-questions/tests/browser-plugin.client.spec.ts)与[composer 测试](../../../../packages/client/ui-user-questions/tests/user-questions-composer.client.spec.tsx)覆盖接手保留到 Host 接受结果、握手前聚焦、无限期等待、草稿保留、RPC 重提及面板操作。
-- [分组测试](../../../../packages/client/ui-chat/tests/process-groups.client.spec.ts)与[浏览器回放](../../../../apps/web/tests/question-composer.e2e.ts)覆盖保留两个投影但只渲染一次回复、普通折叠位置、折叠控件顺序，以及原工具行的迟到答案只读面板。
+- [分组测试](../../../../packages/client/ui-chat/tests/process-groups.client.spec.ts)与[浏览器回放](../../../../apps/web/tests/question-composer.e2e.ts)覆盖普通折叠位置、折叠控件顺序，以及原工具行的迟到答案只读面板。
 - legacy 问答往返、取消、计划评审意图及 Session 重新挂载的回归仍由各自测试覆盖。真实多 Client 投递竞争与真实 Host 重启仍是独立生命周期和投影测试之外的集成覆盖缺口。
 
 ## Consequences
@@ -111,7 +111,6 @@ Client 计算 `Date.now() + remainingMs`。手动聚焦未编辑的回答区会�
 - 「慢慢回答」只影响一个 Client。其他 Client 可以回答或让共享 waterfall 到期，本地聚焦不构成全局暂停。
 - 接手 stream 的终止性失败可能让前台问题失败，而不是产生 pending。不为该失败提供无人接手等待的 fallback。
 - Host 与 Client 时钟不必对齐，但 Client 系统时钟变化可能移动到期时间，传输延迟可能推迟本地倒计时的开始。
-- 重复投影仍保留在存储中。聚合在结构性分组重建时增加线性扫描；普通纯文本 stream 更新保留增量路径。这是算法复杂度界限，不是实测延迟结论。
 - 无人回答的已继续问题可以在重新打开 Session 后继续存在。关闭面板不写记录，可见性遵循普通折叠，而不是保证回复始终可见。
 - 排队的迟到回复可能在 agent 准入前被取消。只有已准入的 `user/message` 记录答案，问题在此之前保持可回答。
 - PTC 子调用若在记录 `tool/ptc-dispatch` 结果前中断，无法从父 `run_code` 的失败中重建，因此恢复后不能接受迟到回答。

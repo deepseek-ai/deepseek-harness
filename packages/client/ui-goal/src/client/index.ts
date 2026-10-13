@@ -31,7 +31,10 @@ import type { GoalActionResult, GoalBarInjected } from './slots.ts'
 import { createGoalActivationSource } from './activation-source.ts'
 import { GoalDock } from './GoalBar.tsx'
 import { GoalCommandInputView } from './GoalCommandInputView.tsx'
+import { GoalCommandReference } from './GoalCommandReference.tsx'
 import { goalCommandInputDefinition } from './goal-command-input.ts'
+import { goalCommandReferenceRule } from './user-text-rules.ts'
+export type {} from './user-text-rules.ts'
 import { en, zh, type GoalKey } from './locales.ts'
 
 export { GoalBar, GoalDock } from './GoalBar.tsx'
@@ -66,7 +69,14 @@ export const inject = ['slots', 'sessions', 'remote', 'remote.goals', 'locale', 
  */
 export function apply(ctx: ClientContext): void {
   ctx.uiConversation.events.register(goalCommandInputDefinition)
+  ctx.uiConversation.userText.register(goalCommandReferenceRule)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-goal: dictionaries')
+
+  ctx.slots.inject('conversation.user.text.node', () => ctx.slots.register({
+    name: 'conversation.user.text.node',
+    key: 'command',
+    priority: 100,
+  }, GoalCommandReference))
 
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node',

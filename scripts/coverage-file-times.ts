@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
 import type { Reporter, ResolvedConfig, TestModule } from 'vitest/node'
 
-/** Vitest reporter that writes repository-relative file durations to `outputFile.fileTimes`. */
+/** Vitest reporter that writes repository-relative file and duration records to `outputFile.fileTimes`. */
 export default class CoverageFileTimesReporter implements Reporter {
   private root = ''
   private outputFile = ''
@@ -28,16 +28,16 @@ export default class CoverageFileTimesReporter implements Reporter {
    * @returns after the compact timing report has been written.
    */
   public async onTestRunEnd(testModules: readonly Pick<TestModule, 'moduleId' | 'diagnostic'>[]): Promise<void> {
-    const durations: Record<string, number> = {}
-    for (const module of testModules) {
+    const records = testModules.map((module) => {
       const diagnostic = module.diagnostic()
       const file = relative(this.root, module.moduleId).split(sep).join('/')
-      durations[file] = diagnostic.environmentSetupDuration
+      const duration = diagnostic.environmentSetupDuration
         + diagnostic.prepareDuration
         + diagnostic.setupDuration
         + diagnostic.collectDuration
         + diagnostic.duration
-    }
-    await writeFile(this.outputFile, `${JSON.stringify(durations)}\n`, 'utf8')
+      return { file, duration }
+    })
+    await writeFile(this.outputFile, `${JSON.stringify(records)}\n`, 'utf8')
   }
 }

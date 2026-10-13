@@ -47,12 +47,26 @@ export function adapter(config: Config = {}, dependencies: Partial<DeepSeekAdapt
   const files = new DeepSeekFileStore()
   return new DeepSeekAdapter({ options: () => resolveAdapterOptions(config), resolveAuth: () => Promise.resolve({ headers: { 'x-api-key': 'test-key' } }), resolveUserId: () => 'test-user' as AnonymousUserId, resolveAttachments: () => undefined, resolveImageAccess: () => undefined, resolveFiles: () => files, prepareExtensions, ...dependencies })
 }
-export async function server(reply: (response: ServerResponse, count: number) => void = response => response.end(sse(textEvents))) {
+/**
+ * Loopback Messages endpoint recording each model request.
+ * @param reply - answers each Messages request.
+ * @param listing - JSON body served for `GET /models`; omission leaves that request unanswered like any other.
+ * @returns the endpoint base URL, recorded requests, and teardown.
+ */
+export async function server(
+  reply: (response: ServerResponse, count: number) => void = response => response.end(sse(textEvents)),
+  listing?: unknown,
+) {
   const requests: { path: string; headers: IncomingHttpHeaders; body: Record<string, unknown> }[] = []
   const http = createServer((request, response) => {
     void handle(request, response).catch((error: unknown) => response.destroy(error as Error))
   })
   async function handle(request: import('node:http').IncomingMessage, response: ServerResponse) {
+    if (listing !== undefined && request.method === 'GET' && request.url === '/models') {
+      response.setHeader('content-type', 'application/json')
+      response.end(JSON.stringify(listing))
+      return
+    }
     const parts: Buffer[] = []
     for await (const part of request as AsyncIterable<Buffer>) parts.push(part)
     requests.push({ path: request.url!, headers: request.headers, body: object(JSON.parse(Buffer.concat(parts).toString())) })

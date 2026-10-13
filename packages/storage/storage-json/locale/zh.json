@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "JSON 文件存储",
+    "description": "将键值数据保存为本地 JSON 文件。"
+  }
+}

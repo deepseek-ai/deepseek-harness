@@ -43,7 +43,7 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 
 ### 共享模块
 
-外壳初始化一张冻结的模块表（`PLATFORM_MODULES`：React、Cordis 与静态 UI 库）；每个动态 bundle 都精确针对该基座解析其 external。`dsh.client.external` 只添加基座之外的精确请求；系统会将每个请求解析到其指定的动态包 row 或完全匹配的静态表键。纯类型 import 会被擦除，不产生请求。组合阶段会拒绝畸形请求、缺失提供方、自请求与同步请求环。
+外壳初始化一张冻结的模块表（[`PLATFORM_MODULES`](../web/README.zh.md#the-shared-module-table)）；每个动态 bundle 都精确针对该基座解析其 external。`dsh.client.external` 只添加基座之外的精确请求；系统会将每个请求解析到其指定的动态包 row 或完全匹配的静态表键。纯类型 import 会被擦除，不产生请求。组合阶段会拒绝畸形请求、缺失提供方、自请求与同步请求环。
 
 ### 构建要求
 

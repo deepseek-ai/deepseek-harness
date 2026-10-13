@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-Web bundle 将此包与 subprocess provider、working-directory 服务、sandbox policy 和 Typert Gateway 一起挂载。`remote.terminal` 提供 `environment`、`shells`、`list`、`create`、`retain`、`follow`、`write`、`resize`、`rename` 和 `close`；每个操作均按 Session 标识限定范围。列表直接读取 Host 保留的终端，因此查看离线 Session 不会激活 Agent，也不会产生恢复错误。
+Web bundle 将此包与 subprocess provider、working-directory 服务、sandbox policy 和 Typert Gateway 一起挂载。`remote.terminal` 提供 `environment`、`shells`、`list`、`create`、`retain`、`attach`、`rename` 和 `close`；每个操作均按 Session 标识限定范围。列表直接读取 Host 保留的终端，因此查看离线 Session 不会激活 Agent，也不会产生恢复错误。
 
 Shell 探测结果首先列出执行环境声明的默认 shell。仅当 provider 未声明默认值时，才在 POSIX 使用 `/bin/sh`，在 Windows 使用 `cmd.exe`。可选的 `shell` profile 通过可执行路径 `path`、显示名称 `name` 和参数 `args`（默认 `[]`）覆盖这一选择。选择器还会通过执行 provider 探测 `shellCandidates`，并省略确定未找到的候选。同一可执行文件名（不区分大小写，忽略 `.exe`）只列出最早的一项，因为 PATH 查找可能经由其他目录找到默认 shell，例如 merged-`/usr` 系统上 `/bin/bash` 对应的 `/usr/bin/bash`。创建请求接受探测返回的 `shellPath` 并再次验证；解析或传输失败会直接报告，不启动其他 shell。环境查询读取当前目录和限制，不校验文件系统或解析 shell，因此目录或默认 shell 不可用时仍可重新连接已有进程。POSIX 自动 profile 以交互模式启动，PowerShell 使用 `-NoLogo`，补全和启动配置仍由 shell 提供。新终端启动前通过[工作目录服务](../../session/working-directory/README.zh.md)校验当前目录，并采用该服务的恢复行为。已有终端保留其进程目录。用户终端使用执行环境中系统用户的权限，独立于 Agent 的沙箱模式和审批策略。操作系统和容器的限制仍然生效；DSH 不提升用户权限。Subprocess provider 继续清除环境中的凭据变量。
 
@@ -36,8 +36,8 @@ Shell 探测结果首先列出执行环境声明的默认 shell。仅当 provide
 | `maxTerminals` | `8` | 每个 Session 保留的终端和创建请求上限 |
 | `maxCols`、`maxRows` | `500`、`200` | PTY 最大尺寸 |
 | `scrollback` | `1000` | 屏幕历史行数 |
-| `maxBufferedBytes` | `2097152` | 单个订阅者的输出排队上限 |
-| `maxInputBytes` | `65536` | 单次输入请求的字节上限 |
+| `maxBufferedBytes` | `2097152` | 单个订阅者输出及 Client 输入帧的缓存上限 |
+| `maxInputBytes` | `65536` | 每条输入命令及 Client 未确认输入总量的原始 UTF-8 字节上限 |
 | `disposeGraceMs` | `1000` | provider 终止宽限期，单位毫秒 |
 | `unattendedTimeoutMs` | `7200000` | 无窗口持有且持续确认空闲后开始清理的时长；`0` 禁用自动回收 |
 | `activityPollIntervalMs` | `30000` | 无窗口持有时的活动观察间隔 |
@@ -51,11 +51,13 @@ Shell 探测结果首先列出执行环境声明的默认 shell。仅当 provide
 <details>
 <summary>实现细节</summary>
 
-Host 通过 `ctx.subprocess.spawnTerminal` 创建 `TERM=xterm-256color` 的终端，不启动桌面终端应用。流式 UTF-8 解码保留跨块字符和开头的 BOM，并在 EOF 将不完整的尾部字节替换为替代字符。控制请求走 Gateway，`follow` 使用其复用的 Remote stream。Headless xterm 和序列化 addon 在此前输出写入后生成初始屏幕，后续增量携带单调序号。过慢的订阅者明确失败；重新连接恢复当前屏幕。
+Host 通过 `ctx.subprocess.spawnTerminal` 创建 `TERM=xterm-256color` 的终端，不启动桌面终端应用。流式 UTF-8 解码保留跨块字符和开头的 BOM，并在 EOF 将不完整的尾部字节替换为替代字符。双工 `attach` Remote 流通过 Gateway mux 传输输出和有序的 `write`/`resize` 命令。每条命令使用附件内连续递增的序号；`ack` 确认提供者已接受操作，或报告控制权拒绝。快照和状态帧携带接收附件的 `writable` 标记。Headless xterm 和序列化 addon 在此前输出写入后生成初始屏幕，后续增量携带单调序号。过慢的订阅者明确失败；重新连接恢复当前屏幕。
 
-最新连接持有输入和尺寸控制权。断开连接只释放输入权，不结束进程。显式关闭等待进程清理和最后输出；清理失败时保留资源以便重试。Session 记住已关闭的标识并拒绝迟到或重复的创建请求，包括关闭到达时仍在进行的创建。新终端使用新标识。取消创建且清理失败时，已分配的进程仍有所有者。Session owner 和 controller 卸载也会终止所拥有的进程。改变 Session 的沙箱模式时，用户终端继续以原有权限运行。控制权转移或进程退出后被拒绝的输入和尺寸请求保留输出连接并禁用输入，不重发被拒绝的输入。
+最新连接持有输入和尺寸控制权。断开连接只释放输入权，不结束进程。显式关闭等待进程清理和最后输出；清理失败时保留资源以便重试。Session 记住已关闭的标识并拒绝迟到或重复的创建请求，包括关闭到达时仍在进行的创建。新终端使用新标识。取消创建且清理失败时，已分配的进程仍有所有者。Session owner 和 controller 卸载也会终止所拥有的进程。改变 Session 的沙箱模式时，用户终端继续以原有权限运行。控制权转移或进程退出后被拒绝的输入和尺寸请求保留输出连接并禁用输入，不重发被拒绝的输入。提供者完成时即禁用输入，无须等待输出排空；迟到的输入失败不能丢弃已正常结束的订阅者所保留的尾部帧。
 
-Client 在分配前将每条 Session/内容与终端身份的关联保存到独立的 localStorage key `dsh.terminal.binding.v1.*`。内容身份全局唯一；布局内的 tab id 只标识活动视图 occurrence。逐条记录的写入和删除会保留其他窗口的关联。恢复视图复用该身份；侧栏 terminal provider 先恢复自己的视图，再查询尚无视图的 Host 终端。新视图可以创建进程，恢复视图在目标缺失时显示错误，不创建替代进程。显式关闭先保存清理请求，再删除关联。当前进程元数据和屏幕内容由 Host 提供，不保存在浏览器中。Client 模型在浏览器完成屏幕解析后确认帧，按序发送输入，并忽略旧连接迟到的响应。Client 自产错误携带本地化键。插件卸载等待活跃及先前断开的输出流结束，不关闭 Host 进程。
+初始快照公布载体的完整帧 `inputWindow`；没有 inbox 限额的进程内载体省略该字段。Client 对输入和尺寸调整都计入 JSON 转义、命令字段及载体封装的开销。未确认帧占满窗口时，命令在本地等待；提供者确认后释放额度。`maxInputBytes` 限制原始 UTF-8 输入，`maxBufferedBytes` 限制全部排队及未确认的编码输入帧。单帧无法容纳于载体窗口或 Client 缓存耗尽时，报告 `inputFull` 并取消附件，不重放排队命令。
+
+Client 在分配前将每条 Session/内容与终端身份的关联保存到独立的 localStorage key `dsh.terminal.binding.v1.*`。内容身份全局唯一；布局内的 tab id 只标识活动视图 occurrence。逐条记录的写入和删除会保留其他窗口的关联。恢复视图复用该身份；侧栏 terminal provider 先恢复自己的视图，再查询尚无视图的 Host 终端。新视图可以创建进程，恢复视图在目标缺失时显示错误，不创建替代进程。显式关闭先保存清理请求，再删除关联。当前进程元数据和屏幕内容由 Host 提供，不保存在浏览器中。Client 模型在浏览器完成屏幕解析后确认帧，在未确认 UTF-8 字节预算内连续发送输入，并忽略旧连接迟到的响应。重连建立新的命令序列，绝不重放未确认输入。提供者输入失败会结束附件；进程和恢复屏幕仍可供显式重连使用。Client 自产错误携带本地化键。插件卸载等待活跃及先前断开的输出流结束，不关闭 Host 进程。
 
 独立的 `retain(sessionId, id, signal)` Remote 流确认窗口持有关系，不激活 Agent、发送屏幕输出、转移输入权或创建进程。终端 provider 提供侧栏的完整打开标签清单，Client 将其与自己保存的身份取交集。同一窗口中的重复 occurrence 共用一个持有流；孤立的旧关联不会保活任何终端。恢复输出连接前必须等待当前持有关系确认。传输取消只释放对应的物理流代次；插件卸载等待全部持有流结束。清理失败时保留所有权并重试，不重新接受连接，也不重新计算空闲宽限期。
 

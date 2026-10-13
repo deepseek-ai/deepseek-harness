@@ -7,7 +7,7 @@
 
 import { existsSync, globSync, readFileSync } from 'node:fs'
 import { relative, resolve, sep } from 'node:path'
-import { markdownHeadingLines, markdownProseLines, type MarkdownProseLine } from './markdown.ts'
+import { markdownHeadingLines, markdownProseLines, parseMarkdown, type MarkdownProseLine } from './markdown.ts'
 
 const root = resolve(import.meta.dirname, '..')
 const HEADING = '## Model Experience'
@@ -177,6 +177,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/host/plugin-inventory': { kind: 'none', reason: 'Host-side read-only Loader projection; registers nothing model-facing.' },
   'packages/host/open-in-app': { kind: 'none', reason: 'Host routes opening desktop applications for a human; registers nothing model-facing.' },
   'packages/client/ui-open-in-app': { kind: 'none', reason: 'Browser-side split button opening the workspace directory for a human; registers nothing model-facing.' },
+  'packages/client/ui-secret-mask': { kind: 'none', reason: 'Browser-side display masking of sent user text; registers nothing model-facing.' },
   'packages/experimental/session-search': { kind: 'indirect', reason: 'The profile layer delegates model-visible behavior to its selected capability.' },
   'packages/experimental/ralph-bundle': { kind: 'indirect', reason: 'The profile layer delegates model-visible behavior to its selected capability.' },
   'packages/experimental/terminal-bundle': { kind: 'indirect', reason: 'The profile layer delegates model-visible behavior to its selected capability.' },
@@ -369,8 +370,9 @@ for (const packageJson of packageJsons) {
 
   const text = readFileSync(abs, 'utf8')
   const rawLines = text.split('\n')
-  const lines = markdownProseLines(text)
-  const headings = markdownHeadingLines(text)
+  const tree = parseMarkdown(text)
+  const lines = markdownProseLines(text, tree)
+  const headings = markdownHeadingLines(text, tree)
   const h2Headings = headings.filter(heading => heading.depth === 2)
   const modelExperienceHeadings = headings.filter(heading => heading.text
     .trim().replaceAll(/\s+/g, ' ').toLowerCase() === 'model experience')

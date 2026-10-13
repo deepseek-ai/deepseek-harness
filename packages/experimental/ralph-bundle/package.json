@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-ralph-bundle",
   "description": "Run explicitly requested repeated work with fresh agents.",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

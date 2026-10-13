@@ -197,3 +197,27 @@ it('does not write a release completion record when Apple proxy cleanup fails', 
     .rejects.toThrow('proxy restoration failed')
   expect(writeFileSync).not.toHaveBeenCalled()
 })
+
+it.each([false, true])('keeps signing and runtime verification when notarization is skipped (directory=%s)', async (directory) => {
+  const { run, stages } = supervisor()
+  await packageTarget(parseDesktopPackageInvocation(['mac-arm64', '--skip-notarization', ...(directory ? ['--dir'] : [])], 'darwin', 'arm64'), {
+    ...environment, CSC_LINK: 'signing.p12', CSC_KEY_PASSWORD: 'fixture-password',
+  }, run)
+  expect(stages.at(-2)).toBe(`exec electron-builder --config electron-builder.config.mjs --mac --arm64 --publish never${directory ? ' --dir' : ''}`)
+  expect(stages.at(-1)).toBe('exec tsx scripts/smoke-packaged-runtime.ts --skip-notarization')
+  expect(run.run.mock.calls.at(-2)![3].env).toMatchObject({
+    DSH_DESKTOP_UNSIGNED: '0', DSH_DESKTOP_MACOS_SKIP_NOTARIZATION: '1', CSC_LINK: 'signing.p12',
+  })
+  expect(withMacOSNotarizationProxy).not.toHaveBeenCalled()
+  expect(packageMacOSArtifacts).not.toHaveBeenCalled()
+  expect(writeFileSync).not.toHaveBeenCalled()
+})
+
+it('fails debugging packages when runtime verification fails', async () => {
+  const failure = 'exec tsx scripts/smoke-packaged-runtime.ts --skip-notarization'
+  const { run, stages } = supervisor(failure)
+  await expect(packageTarget(parseDesktopPackageInvocation(['mac-arm64', '--skip-notarization'], 'darwin', 'arm64'), environment, run))
+    .rejects.toThrow('stage refused')
+  expect(stages.at(-1)).toBe(failure)
+  expect(writeFileSync).not.toHaveBeenCalled()
+})

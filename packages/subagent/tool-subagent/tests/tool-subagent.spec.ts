@@ -11,7 +11,7 @@ import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -227,7 +227,7 @@ describe('dsh-tool-subagent', () => {
     await disposeSetupProvider(ctx)
     ctx.subagents.registerProvider({
       name: 'mock',
-      capabilities: { agentOptions: true, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: true, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       agentRouteDefaults: { provider: 'beta', model: 'replacement-model' },
       start: replacementStart,
@@ -313,7 +313,7 @@ describe('dsh-tool-subagent', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'bare',
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async (request) => {
         seen = request
@@ -325,7 +325,7 @@ describe('dsh-tool-subagent', () => {
       },
     })
     // Direct apply with only `provider` — no toolName, no agentOptions.
-    tool.apply(ctx, { maxDepth: 'provider-managed', provider: 'bare' })
+    await tool.apply(ctx, { maxDepth: 'provider-managed', provider: 'bare' })
     await new Promise(r => setTimeout(r, 10))
 
     expect(ctx.tools.schemas().some(s => s.name === 'subagent')).toBe(true)
@@ -347,7 +347,7 @@ describe('dsh-tool-subagent', () => {
     // Tool first: no provider yet — the tool must be absent, not broken.
     // Direct apply (schema bypass): also covers the waiting-note's default
     // toolName fallback, which validated config pre-fills.
-    tool.apply(ctx, { provider: 'mock' })
+    await tool.apply(ctx, { provider: 'mock' })
     expect(ctx.tools.schemas().some(s => s.name === 'subagent')).toBe(false)
     // Backend arrives (as a delayed sibling fiber would): the tool appears.
     await mock.mountScriptedProvider(ctx, { name: 'mock', reply: 'late but fine' })
@@ -360,7 +360,7 @@ describe('dsh-tool-subagent', () => {
     const ctx = await projectedContext()
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    tool.apply(ctx, {
+    await tool.apply(ctx, {
       provider: 'later-continuable',
       maxDepth: 'provider-managed',
     })
@@ -380,21 +380,21 @@ describe('dsh-tool-subagent', () => {
 
     const forkProvider = await mock.mountScriptedProvider(ctx, { name: 'fork', inheritsParentContext: true })
     expect(await delegationGuidance(ctx)).toEqual([
-      'Start independent delegations with `subagent_fork` together in one assistant message and continue useful work while they run.',
+      'Start independent delegations with `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.',
     ])
     await mock.mountScriptedProvider(ctx, { name: 'spawn' })
     expect(await delegationGuidance(ctx)).toEqual([
-      'Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run.',
+      'Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.',
     ])
 
     await forkProvider.dispose()
     expect(await delegationGuidance(ctx)).toEqual([
-      'Start independent delegations with `subagent` together in one assistant message and continue useful work while they run.',
+      'Start independent delegations with `subagent` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.',
     ])
     await mock.mountScriptedProvider(ctx, { name: 'fork', inheritsParentContext: true })
     await spawnTool.dispose()
     expect(await delegationGuidance(ctx)).toEqual([
-      'Start independent delegations with `subagent_fork` together in one assistant message and continue useful work while they run.',
+      'Start independent delegations with `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.',
     ])
     await forkTool.dispose()
     expect(await delegationGuidance(ctx)).toEqual([])
@@ -408,19 +408,19 @@ describe('dsh-tool-subagent', () => {
     const peer = (await ctx.agents.create({ sessionId: SessionId('guidance-peer') })).agent
     const showSpawn = parent.ctx.tools.restrict({ deny: ['subagent'] })
     expect(await delegationGuidance(ctx, parent)).toEqual([
-      'Start independent delegations with `subagent_fork` together in one assistant message and continue useful work while they run.',
+      'Start independent delegations with `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.',
     ])
     expect(await delegationGuidance(ctx, peer)).toEqual([
-      'Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run.',
+      'Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.',
     ])
     expect(await delegationGuidance(unrelated)).toEqual([
-      'Start independent delegations with `other_delegate` together in one assistant message and continue useful work while they run.',
+      'Start independent delegations with `other_delegate` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.',
     ])
     showSpawn()
 
     const scoped = await parent.ctx.plugin(tool, { provider: 'mock', toolName: 'subagent' })
     expect(await delegationGuidance(ctx, parent)).toEqual([
-      'Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run.',
+      'Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.',
     ])
     await scoped.dispose()
     parent.ctx.tools.restrict({ deny: ['subagent', 'subagent_fork'] })
@@ -454,7 +454,7 @@ describe('dsh-tool-subagent', () => {
     // the provider survives.
     ctx.subagents.registerProvider({
       name: 'continuable',
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async () => { throw new Error('lifecycle test does not start a child') },
       prepareContinuable: async () => ({}),
@@ -522,7 +522,7 @@ describe('dsh-tool-subagent', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'spy',
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async (request) => {
         if (request.signal.aborted) sawAborted()
@@ -576,14 +576,14 @@ describe('dsh-tool-subagent', () => {
     expect(unwrapped.Config).toBeDefined()
   })
 
-  it('passes persona/toolFilter/maxDepth config through to the start request', async () => {
-    let seen: { persona?: string; toolFilter?: unknown; maxDepth?: number } | undefined
+  it('passes maxDepth config through to the start request', async () => {
+    let seen: { maxDepth?: number } | undefined
     const ctx = await projectedContext()
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'capture2',
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: true, toolFilter: true, persona: true },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: true },
       inheritsParentContext: false,
       start: async (request) => {
         seen = request
@@ -596,14 +596,10 @@ describe('dsh-tool-subagent', () => {
     })
     await ctx.plugin(tool, {
       provider: 'capture2',
-      persona: 'You are the child.',
-      toolFilter: { deny: ['subagent'] },
       maxDepth: 2,
     })
 
     await callSubagent(ctx, { description: 'd', prompt: 'p' })
-    expect(seen?.persona).toBe('You are the child.')
-    expect(seen?.toolFilter).toMatchObject({ deny: ['subagent'] })
     expect(seen?.maxDepth).toBe(2)
   })
 
@@ -623,41 +619,24 @@ describe('dsh-tool-subagent', () => {
 
   it('validates maxDepth when apply() is invoked directly without Schemastery', async () => {
     const ctx = await projectedContext()
-    expect(() => {
-      tool.apply(ctx, {
-        provider: 'unused',
-        maxDepth: Number.NaN,
-      })
-    }).toThrow('subagent maxDepth must be a non-negative safe integer')
+    await expect(tool.apply(ctx, {
+      provider: 'unused',
+      maxDepth: Number.NaN,
+    })).rejects.toThrow('subagent maxDepth must be a non-negative safe integer')
   })
 
-  it('a partial toolFilter (deny only) does not materialize an empty allow-list (deny-all trap)', async () => {
-    let seen: { toolFilter?: { readonly allow?: readonly string[]; readonly deny?: readonly string[] } } | undefined
-    const ctx = await projectedContext()
-    await mountWorkingDirectoryFixture(ctx)
-    await ctx.plugin(SubagentRuntime)
-    ctx.subagents.registerProvider({
-      name: 'capture3',
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: true, persona: false },
-      inheritsParentContext: false,
-      start: async (request) => {
-        seen = request
-        return {
-          id: SessionId('capture3-child'),
-          result: Promise.resolve({ output: [{ type: 'text', text: 'ok' }], stopReason: 'completed' as const }),
-          dispose: async () => {},
-        }
-      },
-    })
-    await ctx.plugin(tool, { provider: 'capture3', toolFilter: { deny: ['subagent'] }, maxDepth: 'provider-managed' })
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
-    expect(seen?.toolFilter).toEqual({ deny: ['subagent'] })
-    expect(seen?.toolFilter).not.toHaveProperty('allow')
+  it.each([
+    { persona: 'Child persona' },
+    { toolFilter: { deny: ['subagent'] } },
+    { toolFilter: {} },
+    { persona: undefined },
+  ])('rejects removed composition configuration at plugin load: %j', async (removed) => {
+    await expect(setup({ provider: 'mock', ...removed }))
+      .rejects.toThrow(/no longer supported; configure persona and tool plugins in an Agent Preset/)
   })
 
   it('an omitted agentOptions does not materialize an empty object onto the request', async () => {
-    // Same schemastery trap as toolFilter, adjacent field: an omitted
-    // `agentOptions` config key materializes `{}` without the forced default,
+    // An omitted `agentOptions` materializes `{}` without the forced default,
     // which reads as present and puts a dishonest `agentOptions: {}` on every
     // start request.
     let seen: { agentOptions?: unknown } | undefined
@@ -666,7 +645,7 @@ describe('dsh-tool-subagent', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'capture4',
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async (request) => {
         seen = request
@@ -683,19 +662,6 @@ describe('dsh-tool-subagent', () => {
     expect(seen).not.toHaveProperty('agentOptions')
   })
 
-  it('an explicit empty toolFilter fails at plugin load, not at first delegation', async () => {
-    const ctx = await projectedContext()
-    await mountWorkingDirectoryFixture(ctx)
-    await ctx.plugin(SubagentRuntime)
-    ctx.subagents.registerProvider({
-      name: 'p',
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: true, persona: false },
-      inheritsParentContext: false,
-      start: () => { throw new Error('unreachable') },
-    })
-    const fiber = ctx.plugin(tool, { provider: 'p', toolFilter: {} })
-    await expect(fiber).rejects.toThrow(/names neither `allow` nor `deny`/)
-  })
 })
 
 describe('dsh-tool-subagent local activation', () => {
@@ -753,7 +719,7 @@ describe('dsh-tool-subagent local activation', () => {
     expect(properties.run_in_background).toBeUndefined()
     const assembly = await ctx.systemPrompt.assemble(assembleContextFor(parent))
     const guidance = assembly.sections.find(section => section.name === 'tool:subagent')
-    expect(guidance?.text).toBe('Start independent delegations with `subagent` together in one assistant message and continue useful work while they run.')
+    expect(guidance?.text).toBe('Start independent delegations with `subagent` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.')
 
     const started = await callSubagent(
       ctx,
@@ -794,7 +760,7 @@ describe('dsh-tool-subagent local activation', () => {
     let survivingChildId: ReturnType<typeof SessionId> | undefined
     ctx.subagents.registerProvider({
       name: 'gated',
-      capabilities: { agentOptions: false, outputSchema: true, depthLimit: true, toolFilter: true, persona: true },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: true, depthLimit: true },
       inheritsParentContext: false,
       start: async () => { throw new Error('continuable policy must not start a one-shot child') },
       prepareContinuable: async (request) => {
@@ -806,7 +772,7 @@ describe('dsh-tool-subagent local activation', () => {
         return {}
       },
     })
-    tool.apply(ctx, {
+    await tool.apply(ctx, {
       provider: 'gated',
       toolName: 'subagent_gated',
       maxDepth: 3,
@@ -857,7 +823,7 @@ describe('depth budget configuration', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'capture',
-      capabilities: { agentOptions: false, outputSchema: true, depthLimit: true, toolFilter: true, persona: true },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: true, depthLimit: true },
       inheritsParentContext: false,
       start: async (request) => {
         requests.push(request)
@@ -877,14 +843,6 @@ describe('depth budget configuration', () => {
     await callSubagent(ctx, { description: 'd', prompt: 'p' })
     expect(requests[0]?.label).toBe('d')
     expect(requests[0]?.maxDepth).toBe(1)
-    expect(requests[0]?.toolFilter).toBeUndefined()
-  })
-
-  it('forwards an explicit tool filter unchanged instead of encoding the depth policy into it', async () => {
-    const { ctx, requests } = await captureSetup({ toolFilter: { deny: ['dangerous'] }, maxDepth: 0 })
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
-    expect(requests[0]?.maxDepth).toBe(0)
-    expect(requests[0]?.toolFilter).toEqual({ deny: ['dangerous'] })
   })
 
   it('rejects a numeric maxDepth on a provider without the depthLimit capability at mount', async () => {
@@ -893,7 +851,7 @@ describe('depth budget configuration', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'no-depth',
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async () => { throw new Error('unreachable') },
     })
@@ -908,7 +866,7 @@ describe('depth budget configuration', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'external',
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async (request) => {
         requests.push(request)
@@ -922,6 +880,5 @@ describe('depth budget configuration', () => {
     await ctx.plugin(tool, { provider: 'external', maxDepth: 'provider-managed' })
     await callSubagent(ctx, { description: 'd', prompt: 'p' })
     expect(requests[0]?.maxDepth).toBeUndefined()
-    expect(requests[0]?.toolFilter).toBeUndefined()
   })
 })

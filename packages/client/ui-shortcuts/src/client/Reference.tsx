@@ -33,6 +33,8 @@ const coreActionOrder = new Map<string, number>([
   'session.fork',
   'session.archive',
   'settings.open',
+  'fontSize.increase',
+  'fontSize.decrease',
   'workspace.openLocal',
   'sidebar.right.toggle',
   'workspace.files',

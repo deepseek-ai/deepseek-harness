@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-working-directory",
   "description": "Session working directories with durable changes and model context",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },

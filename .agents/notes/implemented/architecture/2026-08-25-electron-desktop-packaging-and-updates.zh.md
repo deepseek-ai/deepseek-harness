@@ -75,13 +75,13 @@ Electron 更新只使用一个 `electron-updater` 发布流和签名 `electron-b
 
 `DSH_DESKTOP_AUTO_UPDATE_ENV` 默认为测试部署，也可以选择生产部署，并同时决定目标专用的 generic-provider URL 与 COS 目标。发布自动化通过 `DOWNLOAD_TEST_ORIGIN` 提供测试 HTTPS origin，并通过 `DOWNLOAD_TEST_COS_BUCKET` 或 `DOWNLOAD_PROD_COS_BUCKET` 提供各部署的 bucket；可变的测试路由与 COS 存储身份不写入源码，部署基础设施变更时无需发布新代码，而公开的生产 origin 仍固定。打包只解析公开更新 URL、禁止 electron-builder 发布、从子进程环境中删除每个 COS 凭据字段，并且只有在 electron-builder 以及每个签名或公证 hook 成功后才写入完成记录。目标上传还必须提供所选 bucket，随后会先要求完成记录、根 dsh 版本、Desktop 版本、根据版本得出的频道元数据、产物名称、大小与 SHA-512 全部一致，再读取所选凭据或发送数据。它先上传不可变且带版本的更新载荷与所有独立 blockmap，最后替换 electron-builder 生成的频道元数据，并且不会删除历史对象。稳定版本使用 `latest` 元数据名称，预发布版本则使用语义化版本的第一个预发布标识符。NSIS 把 blockmap 嵌入已签名的可执行文件，macOS ZIP 则使用独立 blockmap；两者都让 electron-updater 在平台支持时只下载变化的数据块，而应用替换与本地 pnpm 包操作仍是两个独立操作。
 
-测试发布必须从平台 dotenv 文件提供 `DOWNLOAD_TEST_RELEASE_ID`。清单和安装包共用 `dsh-desk/<release-id>/`，生产环境保留固定目录。ID 是打包更新 URL 的一部分，因此上传会拒绝不同的 ID。轮换后可通过内部分发提供新安装包，已安装客户端保留原清单地址。随机目录降低被猜中的概率，但不对持有链接者进行鉴权。[发布配置](../../../../apps/desktop/README.zh.md#upload-updates)定义生成与复用方式。
+测试发布必须从平台 dotenv 文件提供 `DOWNLOAD_TEST_RELEASE_ID`。清单和安装包共用 `dsh-desk/<release-id>/`，生产环境保留固定目录。ID 是打包更新 URL 的一部分，因此上传会拒绝不同的 ID。轮换后可通过内部分发提供新安装包，已安装客户端保留原清单地址。随机目录降低被猜中的概率，但不对持有链接者进行鉴权。[发布配置](../../../../apps/desktop/publishing/README.zh.md#upload-updates)定义生成与复用方式。
 
 ## 安全与发布策略
 
 核心 dsh 和私有 Desktop Host 只来自签名应用的资源树。插件安装把包规格交给 pnpm，包括本地和远程来源，但不接受原始 pnpm 命令。pnpm 负责依赖解析和 profile 的 `allowBuilds` 策略；Host 加载已启用的 bundle。
 
-Electron 发布产物必须签名；macOS 产物必须公证。发布打包与上传命令从 Git 忽略的目标 `.env.windows` 或 `.env.macos` 读取发布配置，子进程通过编排器选择的环境字段接收配置。目标文件是发布字段的唯一来源，避免旧的 shell 或系统凭据覆盖本地选择；配置加载不修改父进程环境。打包在构建、下载或清理发布记录前校验该模式必需的应用 ID、更新地址、签名身份及本地文件，macOS 还要求一套完整公证凭据。单独的 `check:package` 执行同一校验而不访问 Token 或 Apple；凭据真实性仍由实际签名与公证验证。配置加载会拒绝缺失或格式错误的标识符和不完整的公证凭据，macOS 发布打包还会强制签名，避免证书发现过程静默选择其他已安装身份或生成未签名发布。运行时准备会验证每个内嵌 Mach-O 文件的精确 Authority 与 Team ID，以及时间戳和 hardened-runtime 标记。签名后钩子会执行 Apple 的深度严格应用验证，并要求同一叶证书 Authority 与 Team ID 完全匹配，验证通过后才继续生成产物。固定目标安装包命令使用[隔离的 App 副本并行公证](../process/2026-09-09-parallel-macos-notarization.zh.md)：ZIP 包含已钉票的 App，签名 DMG 则携带覆盖其中未钉票 App 的票据。DMG 的 artifact-completion hook 要求其使用配置的身份、具备有效票据并通过 Gatekeeper。只有两条产物流都成功，命令才会移入其输出并写入发布完成记录；仅生成目录的命令仍会公证 App 并钉票。macOS 更新使用签名 ZIP，因此 DMG 不生成 blockmap；否则钉票会让已经生成的 DMG blockmap 失效。
+Electron 发布产物必须签名；macOS 产物必须公证。发布打包与上传命令从 Git 忽略的目标 `.env.windows` 或 `.env.macos` 读取发布配置，子进程通过编排器选择的环境字段接收配置。Windows 打包也可选择机器管理的公开 `presets/<preset>.env`，签名构建另读 `secrets/windows-signing.env`；未签名和仅准备模式不读取签名文件。所选文件是发布字段的唯一来源，避免旧的 shell 或系统凭据覆盖本地选择；配置加载不修改父进程环境。打包在构建、下载或清理发布记录前校验该模式必需的应用 ID、更新地址、签名身份及本地文件，macOS 还要求一套完整公证凭据。单独的 `check:package` 执行同一校验而不访问 Token 或 Apple；凭据真实性仍由实际签名与公证验证。配置加载会拒绝缺失或格式错误的标识符和不完整的公证凭据，macOS 发布打包还会强制签名，避免证书发现过程静默选择其他已安装身份或生成未签名发布。运行时准备会验证每个内嵌 Mach-O 文件的精确 Authority 与 Team ID，以及时间戳和 hardened-runtime 标记。签名后钩子会执行 Apple 的深度严格应用验证，并要求同一叶证书 Authority 与 Team ID 完全匹配，验证通过后才继续生成产物。固定目标安装包命令使用[隔离的 App 副本并行公证](../process/2026-09-09-parallel-macos-notarization.zh.md)：ZIP 包含已钉票的 App，签名 DMG 则携带覆盖其中未钉票 App 的票据。DMG 的 artifact-completion hook 要求其使用配置的身份、具备有效票据并通过 Gatekeeper。只有两条产物流都成功，命令才会移入其输出并写入发布完成记录；仅生成目录的命令仍会公证 App 并钉票。macOS 更新使用签名 ZIP，因此 DMG 不生成 blockmap；否则钉票会让已经生成的 DMG blockmap 失效。
 
 [固定版本的 osx-sign 补丁](../../../../patches/@electron__osx-sign@1.3.3.patch)在两种已发布模块构建中使用 `lstat`，因此 Framework 的文件和目录别名不会触发重复签名。选定的上游版本能够跳过这些别名前，仍需保留该补丁。PAK 文件由外层 bundle 签名记录完整性；逐个签名会增加串行时间戳请求，但不会增加资源完整性保护。Desktop 保留全部语言文件，只跳过其单独签名。可执行代码仍使用 Developer ID 签名、安全时间戳和 hardened runtime。[签名器遍历回归测试](../../../../apps/desktop/tests/macos-signing-walk.spec.ts)使用真实 Framework 别名执行已安装依赖；发布验收仍要求严格应用验证、公证和启动。
 
@@ -91,7 +91,7 @@ Windows 打包调用强制设置 `ELECTRON_BUILDER_7Z_FILTER=BCJ`。内置的 7-
 
 本地 Windows 和 macOS 安装测试使用显式的 `--unsigned` 打包调用，并执行相同的构建和运行时准备。它清除证书输入，将产物隔离到 `unsigned-artifacts`，并省略更新器配置和发布完成记录。macOS 本地构建忽略 dotenv 文件和继承的发布配置，使用标准应用 ID，并省略强制更新策略，使本地测试无需部署配置。其 App 使用无需证书的 ad-hoc 签名，DMG 不签名也不公证。Windows 本地构建保留平台配置要求。即使父进程环境请求未签名模式，常规打包命令也会显式选择签名模式。这样既能在没有发布凭据时诊断安装问题，也能防止本地测试产物通过发布上传校验。
 
-Windows 应用替换遵循[目录安装参考](../../../../apps/desktop/README.zh.md)：使用能返回失败状态的命令行工具解压到目标旁边，再在同卷内改名替换完整目录。安装器在暂存期间保留旧目录，正式替换失败时恢复旧目录。注册信息、快捷方式和签名卸载器仍由 electron-builder 持有。
+Windows 应用替换遵循[目录安装参考](../../../../apps/desktop/packaging/README.zh.md#runtime-file-selection)：使用能返回失败状态的命令行工具解压到目标旁边，再在同卷内改名替换完整目录。安装器在暂存期间保留旧目录，正式替换失败时恢复旧目录。注册信息、快捷方式和签名卸载器仍由 electron-builder 持有。
 
 打包应用会忽略开发资源和项目环境变量覆盖。只有未打包的 Electron 进程可以替换 pnpm 入口、dsh 资源 或活跃项目。
 

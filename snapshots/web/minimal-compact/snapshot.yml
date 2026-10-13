@@ -1,0 +1,9 @@
+version: 1
+scenario: minimal-compact
+profile: web
+composition: web-minimal-compact
+recording: authored
+header:
+  class: web-minimal-compact
+  pin: true
+  changes: 1

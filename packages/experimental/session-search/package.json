@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-session-search",
   "description": "Give Agents tools to search and read earlier sessions from the current workspace.",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

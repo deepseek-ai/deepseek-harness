@@ -36,9 +36,6 @@
       "path": "../../util/launch-environment"
     },
     {
-      "path": "../../core/system-prompt"
-    },
-    {
       "path": "../../shell/shell-env"
     },
     {

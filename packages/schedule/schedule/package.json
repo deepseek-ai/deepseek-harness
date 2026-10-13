@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-schedule",
   "description": "Host-wide durable reminders with shared management and original-Session delivery",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -63,7 +63,7 @@
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
     "@js-temporal/polyfill": "0.5.1",
-    "zod": "^4.4.3"
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",

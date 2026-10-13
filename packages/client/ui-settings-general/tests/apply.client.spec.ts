@@ -188,19 +188,57 @@ describe('ui-settings-general apply', () => {
     await vi.waitFor(() => { expect(c.mock.log.calls('settings/describe')).toHaveLength(3) })
   })
 
-  it('withholds the Host document action off-loopback', async ({ mock, start }) => {
+  it('keeps Host preferences off-loopback and withholds only the native document action', async ({ mock, start }) => {
     const loopbackUrl = location.href
     setPageUrl('http://198.51.100.7:3000/')
     onTestFinished(() => { setPageUrl(loopbackUrl) })
-    const { c } = await client(mock, start)
+    const { c, settings } = await client(mock, start)
     expect(c.connection.isLoopback).toBe(false)
+    // The stored Host locale applies off-loopback; only the native document
+    // action stays loopback-only.
+    expect(c.ctx.locale.getSnapshot().active).toBe('zh')
     expect(ownEntries(c, 'settings.action')).toEqual([])
-    // Off-loopback settings stay process-local: no describe read, so the browser language stands.
-    expect(c.mock.log.calls('settings/describe')).toEqual([])
-    expect(c.ctx.locale.getSnapshot().active).toBe('en')
+    const english = localeView('en', 1)
+    settings.mutate.mockResolvedValueOnce(ok(english))
+    c.ctx.locale.setLocale('en')
+    await vi.waitFor(() => {
+      expect(settings.mutate.mock.calls).toEqual([
+        [LOCALE_SETTINGS_NAMESPACE, [{ op: 'set', path: ['preference'], value: 'en' }], 0],
+      ])
+    })
     await c.unload(SELF)
     await c.flush()
     for (const [name] of SEATS) expect(ownEntries(c, name)).toEqual([])
+  })
+
+  it('updates remote locale consumers after Host commits and reconnects', async ({ mock, start }) => {
+    const originalUrl = location.href
+    setPageUrl('http://198.51.100.7:3000/')
+    onTestFinished(() => { setPageUrl(originalUrl) })
+    const { c, settings } = await client(mock, start)
+    expect(c.connection.isLoopback).toBe(false)
+    expect(c.ctx.locale.getSnapshot().active).toBe('zh')
+    settings.describe.mockResolvedValue(ok({
+      writable: true, hasDocument: false, namespaces: [localeView('en', 1)],
+    }))
+    await c.mock.streams.opened('$events', 1)
+    c.mock.streams.push('$events', {
+      type: 'emit', event: 'settings/document-updated', args: [LOCALE_SETTINGS_NAMESPACE, 1],
+    })
+    await vi.waitFor(() => {
+      expect(c.ctx.locale.getSnapshot().active).toBe('en')
+      expect(generalLabel(c)).toBe('General')
+    })
+    settings.describe.mockResolvedValue(ok({
+      writable: true, hasDocument: false, namespaces: [localeView('zh', 2)],
+    }))
+    c.connection.reconnect()
+    await c.mock.streams.opened('$events', 2)
+    await vi.waitFor(() => {
+      expect(c.ctx.locale.getSnapshot().active).toBe('zh')
+      expect(generalLabel(c)).toBe('通用设置')
+    })
+    expect(settings.mutate).not.toHaveBeenCalled()
   })
 
   it('re-registers after a Loader rebuild of the declaring chain (stale disposers must not block)', async ({ mock, start }) => {

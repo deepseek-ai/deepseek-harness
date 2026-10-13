@@ -10340,6 +10340,297 @@
       }
     },
     {
+      "key": "event:job/registered",
+      "kind": "event",
+      "event": "job/registered",
+      "surface": false,
+      "digest": "f5520c1d261ca86ea03735799c311a0a9ede8babb588cf0a65422576d2ee0ad1",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 5,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 6,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "jobId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "owner",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "startedAt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "toolCall",
+                "type": 4,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "callId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "rootCallId",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "job/registered"
+          }
+        ]
+      }
+    },
+    {
+      "key": "event:job/settled",
+      "kind": "event",
+      "event": "job/settled",
+      "surface": false,
+      "digest": "edd37b1e4974af648633014435572089b1e8fb71910468a0767a7e28fdd22abf",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 15,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "cause",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "detail",
+                "type": 6,
+                "optional": true
+              },
+              {
+                "name": "finishedAt",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "jobId",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "owner",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "producerReported",
+                "type": 8,
+                "optional": false
+              },
+              {
+                "name": "startedAt",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "status",
+                "type": 9,
+                "optional": false
+              },
+              {
+                "name": "toolCall",
+                "type": 13,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "producer"
+          },
+          {
+            "kind": "literal",
+            "value": "teardown"
+          },
+          {
+            "kind": "literal",
+            "value": "kill"
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
+            "kind": "union",
+            "types": [
+              10,
+              11,
+              12
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "completed"
+          },
+          {
+            "kind": "literal",
+            "value": "failed"
+          },
+          {
+            "kind": "literal",
+            "value": "killed"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "callId",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "rootCallId",
+                "type": 6,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "job/settled"
+          }
+        ]
+      }
+    },
+    {
       "key": "event:llm/retry",
       "kind": "event",
       "event": "llm/retry",
@@ -22131,7 +22422,7 @@
         "packages/llm/llm/src/types.ts#ReplayEnvelope"
       ],
       "sources": [
-        "packages/llm/llm/src/types.ts:430"
+        "packages/llm/llm/src/types.ts:446"
       ]
     },
     {
@@ -22568,6 +22859,11 @@
       "sources": []
     },
     {
+      "digest": "24a8188c4d61b70a01af8cc576748765d36f132632ec55c0064f6fba482369fc",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "24b10f7cdae64928f89c49afc2eca0af9eb4a2f135e16f3416e6b8461fef1748",
       "names": [],
       "sources": []
@@ -22652,7 +22948,7 @@
       "digest": "2abb711460e6238d851c30f3e4bdd87a2aa1887ee70575b3d3b7b25610673095",
       "names": [],
       "sources": [
-        "packages/llm/llm/src/types.ts:455"
+        "packages/llm/llm/src/types.ts:471"
       ]
     },
     {
@@ -22794,6 +23090,11 @@
       ]
     },
     {
+      "digest": "347de3380f2da308d0c74e08821f9e85559f55af4c5010795b110d00f7fc9dbd",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "34d1ab5c5df378186d6054b1a1beea9a41e41965d6f336f0bc0025c441a82e66",
       "names": [],
       "sources": []
@@ -22852,6 +23153,15 @@
       ]
     },
     {
+      "digest": "39cf2d3ff8bac81c62d49ac2ba38a095b18e80f3ad700819fa1f650a4e60197f",
+      "names": [
+        "packages/jobs/jobs/src/types.ts#JobToolCall"
+      ],
+      "sources": [
+        "packages/jobs/jobs/src/types.ts:16"
+      ]
+    },
+    {
       "digest": "3b04790e08b35241ffa0d38f6d7e4f8788aa921341f6c0d7574a329397c59408",
       "names": [],
       "sources": []
@@ -22889,7 +23199,7 @@
       "digest": "3bec87f9e6ab3da03346f49923d3c51621debc0159df68605e543c3b2a026f90",
       "names": [],
       "sources": [
-        "packages/llm/llm/src/types.ts:453"
+        "packages/llm/llm/src/types.ts:469"
       ]
     },
     {
@@ -23025,7 +23335,7 @@
         "packages/llm/llm/src/types.ts#StreamChunk"
       ],
       "sources": [
-        "packages/llm/llm/src/types.ts:452"
+        "packages/llm/llm/src/types.ts:468"
       ]
     },
     {
@@ -23126,6 +23436,7 @@
         "packages/goal/goal/src/types.ts#GoalId",
         "packages/interaction/commands/src/brand.ts#CommandId",
         "packages/interaction/user-approval/src/types.ts#ApprovalRequestId",
+        "packages/jobs/jobs/src/brand.ts#JobId",
         "packages/llm/llm-retry/src/brand.ts#RetryId",
         "packages/llm/llm/src/brand.ts#MessageId",
         "packages/llm/llm/src/brand.ts#ProviderRequestId",
@@ -23137,7 +23448,7 @@
         "packages/workflow/workflow/src/types.ts#WorkflowRunId"
       ],
       "sources": [
-        "packages/api/session-controller/src/types.ts:403",
+        "packages/api/session-controller/src/types.ts:408",
         "packages/attachment/attachment/src/brand.ts:6",
         "packages/compaction/compaction/src/brand.ts:4",
         "packages/core/session/src/types.ts:20",
@@ -23151,6 +23462,7 @@
         "packages/goal/goal/src/types.ts:17",
         "packages/interaction/commands/src/brand.ts:31",
         "packages/interaction/user-approval/src/types.ts:17",
+        "packages/jobs/jobs/src/brand.ts:19",
         "packages/llm/llm-retry/src/brand.ts:4",
         "packages/llm/llm/src/brand.ts:16",
         "packages/llm/llm/src/brand.ts:31",
@@ -23398,6 +23710,11 @@
       "sources": []
     },
     {
+      "digest": "5cb63db9fe57dc09c3a1c2b84c3edf73ff5b62960155d8436a2377a5c43ce32c",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "5cdbf342b7748d152bc987b68f58e565e5bba4b227e076e2d2120d87662e45cd",
       "names": [],
       "sources": []
@@ -23473,6 +23790,15 @@
       "sources": []
     },
     {
+      "digest": "611d82d2dc50df706cf08a0fc04bc8eaf78083391fe6f10313de943e615dd2da",
+      "names": [
+        "packages/jobs/jobs/src/types.ts#JobSettledData"
+      ],
+      "sources": [
+        "packages/jobs/jobs/src/types.ts:40"
+      ]
+    },
+    {
       "digest": "616f93a5047de668e1c30d57b1786abd76beeb4123599637ec1dc5290320ede5",
       "names": [],
       "sources": []
@@ -23525,7 +23851,7 @@
         "packages/llm/llm/src/types.ts#ToolSchema"
       ],
       "sources": [
-        "packages/llm/llm/src/types.ts:473"
+        "packages/llm/llm/src/types.ts:489"
       ]
     },
     {
@@ -23582,7 +23908,7 @@
       "digest": "6a4f72e2e179e17b922f2a9392c0e1c8f8c707f32494372454850a3eb184a6e7",
       "names": [],
       "sources": [
-        "packages/api/session-controller/src/types.ts:408"
+        "packages/api/session-controller/src/types.ts:413"
       ]
     },
     {
@@ -23641,10 +23967,15 @@
       "sources": []
     },
     {
+      "digest": "6cf082d0fb6034dea61636787ff0ddf43b6e59aad71e644435a479bc9b83ad65",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "6e52dd55a1d48954ed5464ec46fe34d9eb65f709baabc9561e7a279910b0c406",
       "names": [],
       "sources": [
-        "packages/preset/agent-preset-registry/src/session.ts:28"
+        "packages/preset/agent-preset-registry/src/session.ts:31"
       ]
     },
     {
@@ -23730,6 +24061,15 @@
       "digest": "7382c4fc95fe8c5db65ca4d9da572b115d0dbb818b7f32c22ab040318ffbb4bc",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "750a2b129d67704df675c06823c20c80b65cbae89d5aaa914fd5a72e3df395b5",
+      "names": [
+        "packages/jobs/jobs/src/types.ts#JobSettleCause"
+      ],
+      "sources": [
+        "packages/jobs/jobs/src/types.ts:247"
+      ]
     },
     {
       "digest": "7554565be416b0342053ee6a46256c9dab07c487349b4a5f10bab1edc151c619",
@@ -24035,7 +24375,7 @@
       "digest": "88a610b831be6d92612a464be5c7d0b88ec24d97bd299837bf74bf7672183c9a",
       "names": [],
       "sources": [
-        "packages/llm/llm/src/types.ts:456"
+        "packages/llm/llm/src/types.ts:472"
       ]
     },
     {
@@ -24202,7 +24542,7 @@
       "digest": "95080295115fbd83544520ba247b68a03790131f6a2eac323d388758cb542f65",
       "names": [],
       "sources": [
-        "packages/llm/llm/src/types.ts:454"
+        "packages/llm/llm/src/types.ts:470"
       ]
     },
     {
@@ -24390,7 +24730,7 @@
       "digest": "a2b49331716ba0a7078b026d145306a70eae64b7313c3e6204bd931e75ec3bb1",
       "names": [],
       "sources": [
-        "packages/llm/llm/src/types.ts:459"
+        "packages/llm/llm/src/types.ts:475"
       ]
     },
     {
@@ -24852,6 +25192,11 @@
       "sources": []
     },
     {
+      "digest": "bab68657940075483f086fffb711682a45bcc99c43d659fbe1c36af21ac05dd7",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "babf9ee4d1af62bf6c3a8103737f7a5e4e78ce179be835ce05a38803e15884b7",
       "names": [],
       "sources": []
@@ -24938,6 +25283,11 @@
       "sources": [
         "packages/workflow/workflow/src/types.ts:110"
       ]
+    },
+    {
+      "digest": "c2f49004d9ae38a964e80850c87bc6849d6a872091a1d43e99eedf00c641e2a3",
+      "names": [],
+      "sources": []
     },
     {
       "digest": "c43b119ce579b3e9983a0d3adc4ba402ebb9ba773d89738a2dab01ecf5813943",
@@ -25076,7 +25426,7 @@
       "digest": "d4b739491689cc6bb13d07ffac1a32239875abda364c0d5edd8f74faf5e9c00d",
       "names": [],
       "sources": [
-        "packages/llm/llm/src/types.ts:457"
+        "packages/llm/llm/src/types.ts:473"
       ]
     },
     {
@@ -25173,7 +25523,7 @@
       "digest": "dba54c09c6e7aafc9acbed7792ecc920d99f92d0784aeeed10af55f7fe0bc8cd",
       "names": [],
       "sources": [
-        "packages/core/tools/src/ptc.ts:14"
+        "packages/core/tools/src/ptc.ts:15"
       ]
     },
     {
@@ -25249,6 +25599,15 @@
       "digest": "e2f9a41e0989f54ed8cee80f8db2bcf9d60a5c810dc9d45b83fa050b9dce7602",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "e3056e0dda3a379e895386e368c3ce42131460ea65e410e1d091cca98a347305",
+      "names": [
+        "packages/jobs/jobs/src/types.ts#JobRegisteredData"
+      ],
+      "sources": [
+        "packages/jobs/jobs/src/types.ts:24"
+      ]
     },
     {
       "digest": "e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72",
@@ -25392,6 +25751,11 @@
       "sources": []
     },
     {
+      "digest": "edd37b1e4974af648633014435572089b1e8fb71910468a0767a7e28fdd22abf",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "ee577a0cc18664c9daee50e9455153321155604f8f1817362f8f4a4b6fb9e1ad",
       "names": [],
       "sources": []
@@ -25417,6 +25781,11 @@
         "packages/core/session/src/types.ts:299",
         "packages/core/session/src/types.ts:301"
       ]
+    },
+    {
+      "digest": "ef226a90ddac6cd8e631a3a337a3a3e27f9494be92befb7c718b404681d75e21",
+      "names": [],
+      "sources": []
     },
     {
       "digest": "ef4f00923b9edbae15c7ef05320280bf61147ca17146cf59690359bfd5e5da45",
@@ -25464,7 +25833,7 @@
       "digest": "f1a96afe7503ac1817de769cd0ba13d9b80111c7034c50106b3344ecc14cc515",
       "names": [],
       "sources": [
-        "packages/llm/llm/src/types.ts:458"
+        "packages/llm/llm/src/types.ts:474"
       ]
     },
     {
@@ -25492,11 +25861,16 @@
         "packages/llm/llm/src/types.ts#SystemPromptUpdate"
       ],
       "sources": [
-        "packages/llm/llm/src/types.ts:396"
+        "packages/llm/llm/src/types.ts:412"
       ]
     },
     {
       "digest": "f4a66f654996c093aae700ea4c434ff2ee3569fea9c0e5813ccf6afdccabd163",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "f5520c1d261ca86ea03735799c311a0a9ede8babb588cf0a65422576d2ee0ad1",
       "names": [],
       "sources": []
     },

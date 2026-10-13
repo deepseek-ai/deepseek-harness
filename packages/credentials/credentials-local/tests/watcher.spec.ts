@@ -237,6 +237,34 @@ describe('watcher pipeline', () => {
     expect(seen).toEqual([KEY])
   })
 
+  it('warns about an unknown top-level key a live reload brings in, once per change', async () => {
+    const dir = await tempDir()
+    const path = join(dir, '.credentials.yaml')
+    await writeCredentials(path, 'version: 1\nrefs:\n  DSH_CRED_PIPE: a\n')
+    const ctx = new Context()
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+    const fiber = ctx.plugin(LocalCredentialProvider, { path, debounceMs: 5 })
+    cleanups.push(async () => {
+      await fiber.dispose()
+    })
+    await fiber
+    expect(warn).not.toHaveBeenCalled()
+
+    await writeCredentials(path, 'version: 1\nFOREIGN: x\nrefs:\n  DSH_CRED_PIPE: b\n')
+    const [instance] = await fakeInstances()
+    instance!.watcher.emit('all', 'change', path)
+    await vi.waitFor(async () => {
+      expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'b', source: 'file' })
+    })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('ignoring unknown top-level'), '"FOREIGN"', path)
+
+    // An event that finds the same text publishes and reports nothing again.
+    instance!.watcher.emit('all', 'change', path)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+
   it('treats an event for a still-absent file as a no-op', async () => {
     const dir = await tempDir()
     const path = join(dir, '.credentials.yaml')

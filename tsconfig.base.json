@@ -125,6 +125,7 @@
       "@deepseek-ai/dsh-api-workspace-controller/types": ["./packages/api/workspace-controller/src/types.ts"],
       "@deepseek-ai/dsh-typert-protocol": ["./packages/typert/protocol/src/index.ts"],
       "@deepseek-ai/dsh-typert-protocol/types": ["./packages/typert/protocol/src/types.ts"],
+      "@deepseek-ai/dsh-typert-protocol/remote-info": ["./packages/typert/protocol/src/remote-info.ts"],
       "@deepseek-ai/dsh-typert-loader": ["./packages/typert/loader/src/index.ts"],
       "@deepseek-ai/dsh-typert-registry/types": ["./packages/typert/registry/src/types.ts"],
       "@deepseek-ai/dsh-typert-generator": ["./packages/typert/generator/src/index.ts"],
@@ -248,6 +249,7 @@
       "@deepseek-ai/dsh-client-connection": ["./packages/client/connection/src"],
       "@deepseek-ai/dsh-client-file-upload": ["./packages/client/file-upload/src"],
       "@deepseek-ai/dsh-client-file-upload/client": ["./packages/client/file-upload/src/client/index.ts"],
+      "@deepseek-ai/dsh-client-file-upload/types": ["./packages/client/file-upload/src/types.ts"],
       "@deepseek-ai/dsh-api-remotes": ["./packages/api/remotes/src"],
       "@deepseek-ai/dsh-api-remotes/client": ["./packages/api/remotes/src/client/index.ts"],
       "@deepseek-ai/dsh-client-hmr": ["./packages/client/hmr/src"],
@@ -315,6 +317,7 @@
       "@deepseek-ai/dsh-client-ui-directory-picker-browse": ["./packages/client/ui-directory-picker-browse/src"],
       "@deepseek-ai/dsh-client-ui-directory-picker-native": ["./packages/client/ui-directory-picker-native/src"],
       "@deepseek-ai/dsh-client-ui-open-in-app": ["./packages/client/ui-open-in-app/src"],
+      "@deepseek-ai/dsh-client-ui-secret-mask": ["./packages/client/ui-secret-mask/src"],
       // sdk/ folders are role-named without their npm-side sdk/jsonrpc prefixes,
       // so their names do not match their directories and the generated aliases
       // below cannot map them; these three stay hand-written.
@@ -393,6 +396,7 @@
       "@deepseek-ai/dsh-fs-ssh": ["./packages/ssh/fs-ssh/src"],
       "@deepseek-ai/dsh-goal": ["./packages/goal/goal/src"],
       "@deepseek-ai/dsh-goal-round-driver": ["./packages/goal/goal-round-driver/src"],
+      "@deepseek-ai/dsh-harness-dev-context": ["./packages/context/harness-dev-context/src"],
       "@deepseek-ai/dsh-headless": ["./packages/bundle/headless/src"],
       "@deepseek-ai/dsh-home-paths": ["./packages/util/home-paths/src"],
       "@deepseek-ai/dsh-hook-protocol": ["./packages/experimental/hook-protocol/src"],

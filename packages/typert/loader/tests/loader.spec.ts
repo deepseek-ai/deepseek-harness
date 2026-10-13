@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,6 +10,9 @@ import { PluginPackages } from '@deepseek-ai/dsh-app-boot'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import * as typertLoader from '@deepseek-ai/dsh-typert-loader'
 import { validateTypertManifest } from '@deepseek-ai/dsh-typert-loader'
+import { isTypertRemoteMethod } from '@deepseek-ai/dsh-typert-protocol/remote-info'
+import type { TypertRemoteInfo } from '@deepseek-ai/dsh-typert-protocol'
+import ts from 'typescript'
 import { z } from 'zod'
 
 let root: string | undefined
@@ -70,27 +73,50 @@ function typertSource(pkgName: string, entryName: string): string {
   ].join('\n')
 }
 
-function invocationTypertSource(pkgName: string): string {
+/** Native fixture imports use current factory source, never a previously built protocol artifact. */
+async function writeRemoteInfoRuntime(base: string): Promise<string> {
+  const source = await readFile(new URL('../../protocol/src/remote-info.ts', import.meta.url), 'utf8')
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ESNext },
+  })
+  const module = ts.createSourceFile('remote-info.js', outputText, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS)
+  expect(module.statements.filter(ts.isImportDeclaration)).toEqual([])
+  const path = join(base, 'remote-info.mjs')
+  await writeFile(path, outputText, { flag: 'wx', mode: 0o600 })
+  return pathToFileURL(path).href
+}
+
+function invocationTypertSource(pkgName: string, factoryUrl: string): string {
   return [
     'import { z } from \'zod\'',
+    `import { createTypertRemoteInfo } from ${JSON.stringify(factoryUrl)}`,
     'const Text = () => z.string()',
-    'export const TYPERT = {',
+    'export const REMOTE_INFO = createTypertRemoteInfo({',
     `  package: '${pkgName}',`,
+    '  methods: {',
+    "    'goals/create': {",
+    "      service: 'goals', invocation: { kind: 'direct' },",
+    "      description: 'Create a goal.',",
+    '      parameters: [{',
+    "        name: 'request', source: 'json', description: 'Goal title.',",
+    `        codec: { mode: 'strict', typeSymbol: '${pkgName}/types#Request', create: Text, jsonSchema: { type: 'string' } },`,
+    `        strictCodec: { mode: 'strict', typeSymbol: '${pkgName}/types#Request', create: Text, jsonSchema: { type: 'string' } },`,
+    '      }],',
+    "      cancellation: { parameter: 'signal' },",
+    '      result: {',
+    `        mode: 'strict', typeSymbol: '${pkgName}/types#Result', create: Text,`,
+    "        description: 'Created goal.', jsonSchema: { type: 'string' },",
+    '      },',
+    "      sourceLocation: { file: 'src/index.ts', line: 8, column: 3 },",
+    '    },',
+    '  },',
+    '}, z)',
+    'export const TYPERT = {',
+    '  package: REMOTE_INFO.package,',
     '  face: \'host\',',
     '  schemas: [],',
     '  model: { services: [], events: [], objects: [] },',
-    '  invocations: [{',
-    `    id: '${pkgName}#goals/create',`,
-    '    service: \'goals\', namespace: \'goals\', method: \'create\',',
-    '    invocation: { kind: \'direct\' },',
-    '    parameters: [{',
-    '      name: \'request\', wire: \'request\', source: \'json\',',
-    `      codec: { mode: 'strict', typeSymbol: '${pkgName}/types#Request', create: Text },`,
-    '    }],',
-    "    cancellation: { parameter: 'signal' },",
-    `    result: { mode: 'strict', typeSymbol: '${pkgName}/types#Result', create: Text },`,
-    '    sourceLocation: { file: \'src/index.ts\', line: 8, column: 3 },',
-    '  }],',
+    '  invocations: REMOTE_INFO.descriptors,',
     '}',
     '',
   ].join('\n')
@@ -147,11 +173,12 @@ describe('typert loader', () => {
     expect(ctx.typert.getPackage('@fixture/nested')).toBeUndefined()
   })
 
-  it('registers a strict invocation into the local registry and withdraws it with the loader', LOADER_TEST_TIMEOUT, async () => {
+  it('retains generated flat MethodInfo through native artifact import and loader disposal', LOADER_TEST_TIMEOUT, async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-typert-loader-'))
     await linkZod(root)
+    const factoryUrl = await writeRemoteInfoRuntime(root)
     await writePackage(root, '@fixture/invocation', {
-      typertSource: invocationTypertSource('@fixture/invocation'),
+      typertSource: invocationTypertSource('@fixture/invocation', factoryUrl),
     })
     const ctx = await boot()
 
@@ -166,8 +193,19 @@ describe('typert loader', () => {
       cancellation: { parameter: 'signal' },
       sourceLocation: { file: 'src/index.ts', line: 8, column: 3 },
     })
-    expect(descriptor?.parameters[0]?.codec.mode).toBe('strict')
-    if (descriptor?.parameters[0]?.codec.mode === 'strict') {
+    expect(ctx.typert.local.list()[0]).toBe(descriptor)
+    if (descriptor === undefined || !isTypertRemoteMethod(descriptor)) throw new Error('Generated direct method is missing')
+    const artifact = await import(pathToFileURL(join(root, 'node_modules/@fixture/invocation/typert.host.js')).href) as { REMOTE_INFO: TypertRemoteInfo }
+    expect(artifact.REMOTE_INFO.methods['goals/create']).toBe(descriptor)
+    expect(descriptor).not.toHaveProperty('metadata')
+    expect(descriptor.description).toBe('Create a goal.')
+    expect(descriptor.parameters[0]?.description).toBe('Goal title.')
+    expect(descriptor.input().create().parse({ request: 'ready' })).toEqual({ request: 'ready' })
+    expect(() => descriptor.input().create().parse({ request: 1 })).toThrow()
+    expect(descriptor.result.create().parse('created')).toBe('created')
+    expect(descriptor.result.jsonSchema).toEqual({ type: 'string', description: 'Created goal.' })
+    expect(descriptor.parameters[0]?.codec.mode).toBe('strict')
+    if (descriptor.parameters[0]?.codec.mode === 'strict') {
       expect(descriptor.parameters[0].codec.create().parse('request')).toBe('request')
     }
 
@@ -527,6 +565,48 @@ describe('validateTypertManifest', () => {
       ...complete,
       model: { ...complete.model, objects: [{ ...complete.model.objects[0], exportName: '' }] },
     })).toThrow('object has a missing or empty exportName')
+  })
+
+  it('validates flat method capabilities and eager projections without requiring tool schemas', () => {
+    const input = vi.fn(() => ({ create: () => z.object({ request: z.string() }) }))
+    const method = {
+      ...strictInvocation(), invoke: () => undefined, input,
+      result: { ...strictCodec('pkg#Result'), jsonSchemaError: 'Not projectable.' },
+    }
+    const manifest = { ...completeManifest(zodish), invocations: [method] }
+    expect(validateTypertManifest('pkg', manifest)).toBe(manifest)
+    expect(input).not.toHaveBeenCalled()
+    const withDocs = {
+      ...method, description: '',
+      parameters: method.parameters.map(parameter => ({ ...parameter, description: 'Goal title.', strictCodec: parameter.codec })),
+      result: { ...method.result, description: '' },
+    }
+    expect(validateTypertManifest('pkg', { ...manifest, invocations: [withDocs] }).invocations[0]).toBe(withDocs)
+    const stream = { ...method, mode: 'stream' }
+    expect(validateTypertManifest('pkg', { ...manifest, invocations: [stream] }).invocations[0]).toBe(stream)
+    for (const invalid of [
+      { ...method, mode: 'unary' }, { ...method, mode: 'future' },
+      { ...method, invoke: false }, { ...method, description: 1 },
+      { ...method, parameters: method.parameters.map(parameter => ({ ...parameter, description: false })) },
+      { ...method, input: null }, { ...method, input: { create: false } },
+      { ...method, parameters: method.parameters.map(parameter => ({ ...parameter, strictCodec: { ...parameter.codec, create: false } })) },
+      { ...method, parameters: method.parameters.map(parameter => ({
+        ...parameter, strictCodec: { ...parameter.codec, jsonSchema: [] },
+      })) },
+      { ...method, parameters: method.parameters.map(parameter => ({
+        ...parameter, strictCodec: { ...parameter.codec, jsonSchemaError: false },
+      })) },
+      { ...method, result: { ...method.result, jsonSchemaError: false } },
+      { ...method, result: { ...method.result, description: 1 } },
+      { ...method, invocation: { kind: 'context', context: 'agent', wire: 'agentId', codec: strictCodec('pkg#Agent') } },
+    ]) {
+      expect(() => validateTypertManifest('pkg', { ...manifest, invocations: [invalid] })).toThrow('typert-loader')
+    }
+    const { input: _input, ...withoutInput } = method
+    const { invoke: _invoke, ...withoutInvoke } = method
+    for (const invalid of [withoutInput, withoutInvoke]) {
+      expect(() => validateTypertManifest('pkg', { ...manifest, invocations: [invalid] })).toThrow('typert-loader')
+    }
   })
 
   it('requires and validates strict invocation descriptors', () => {

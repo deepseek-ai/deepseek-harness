@@ -193,6 +193,8 @@ describe('PluginInventorySettingsTab', () => {
     const { locale, pageProps } = localizedProps(list)
     const view = render(<PluginInventorySettingsTab {...pageProps} />)
     await screen.findByRole('searchbox', { name: en.search })
+    expect(screen.getByText(en.presetSubtitle).textContent).toBe(en.presetSubtitle)
+    expect(screen.getByText(en.globalSubtitle).textContent).toBe(en.globalSubtitle)
     fireEvent.click(globalToggle())
     const global = screen.getByRole('button', { name: 'Navigation, include:global-navigation, Enabled' })
     const preset = screen.getByRole('button', { name: 'Session runner, include:preset-runner, Enabled' })
@@ -209,6 +211,8 @@ describe('PluginInventorySettingsTab', () => {
 
     locale.setLocale('zh')
     view.rerender(<PluginInventorySettingsTab {...pageProps} />)
+    expect(screen.getByText(zh.presetSubtitle).textContent).toBe(zh.presetSubtitle)
+    expect(screen.getByText(zh.globalSubtitle).textContent).toBe(zh.globalSubtitle)
     expect(screen.getByRole('button', { name: '导航, include:global-navigation, 已启用' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '会话执行器, include:preset-runner, 已启用' })).toBeTruthy()
     expect(screen.getByText('全局导航控件')).toBeTruthy()
@@ -321,8 +325,7 @@ describe('PluginInventorySettingsTab', () => {
     ])
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryAllByRole('menuitem')).toHaveLength(0)
-    expect(screen.getByText(en.presetSubtitle)).toBeTruthy()
-    expect(view.container.querySelector('[data-preset-plugin-count]')?.getAttribute('data-preset-plugin-count')).toBe('6')
+    expect(screen.getByText(en.presetSubtitle).textContent).toBe(en.presetSubtitle)
 
     // The preset group starts open with its rows while the larger global plane stays folded.
     expect(presetToggle().getAttribute('aria-expanded')).toBe('true')
@@ -338,8 +341,7 @@ describe('PluginInventorySettingsTab', () => {
     expect(screen.queryByRole('img', { name: en.unobserved })).toBeNull()
 
     expect(globalToggle().getAttribute('aria-expanded')).toBe('false')
-    expect(view.container.querySelector('[data-plugin-count]')?.getAttribute('data-plugin-count')).toBe('7')
-    expect(screen.getByText(`1 ${en.failedCountLabel}`)).toBeTruthy()
+    expect(screen.getByText(en.globalSubtitle).textContent).toBe(en.globalSubtitle)
 
     // A preset row expands into its source facts.
     fireEvent.click(screen.getByRole('button', { name: 'pwsh, Conditional' }))
@@ -484,14 +486,14 @@ describe('PluginInventorySettingsTab', () => {
     }
 
     pickPreset('ptc')
-    expect(view.container.querySelector('[data-preset-plugin-count]')?.getAttribute('data-preset-plugin-count')).toBe('3')
+    expect(view.container.querySelectorAll('[data-plugin-scope="preset"] li')).toHaveLength(3)
     fireEvent.click(screen.getByRole('button', { name: 'tool-bash, bash, Enabled' }))
     // An unnamed preset labels its source by id.
     expect(screen.getByText(en.fromPreset).nextElementSibling?.textContent).toBe('ptc')
 
     pickPreset('坏预设 (failed to load)')
     expect(screen.getByRole('alert').textContent).toBe('the composition file is missing')
-    expect(view.container.querySelector('[data-preset-plugin-count]')?.getAttribute('data-preset-plugin-count')).toBe('0')
+    expect(view.container.querySelectorAll('[data-plugin-scope="preset"] li')).toHaveLength(0)
   })
 
   it('folds the preset group on demand and reopens it for a search', async () => {
@@ -500,10 +502,10 @@ describe('PluginInventorySettingsTab', () => {
 
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect(view.container.querySelectorAll('[data-plugin-scope="preset"] li')).toHaveLength(6)
-    // The header keeps its count while the rows are folded away.
+    // The explanatory subtitle remains visible while the rows are folded away.
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(view.container.querySelector('[data-preset-plugin-count]')?.getAttribute('data-preset-plugin-count')).toBe('6')
+    expect(screen.getByText(en.presetSubtitle).textContent).toBe(en.presetSubtitle)
     expect(view.container.querySelectorAll('[data-plugin-scope="preset"] li')).toHaveLength(0)
 
     fireEvent.change(screen.getByRole('searchbox', { name: en.search }), { target: { value: 'pwsh' } })
@@ -542,28 +544,15 @@ describe('PluginInventorySettingsTab', () => {
     expect(screen.getByText('Localized standard · Localized ptc')).toBeTruthy()
   })
 
-  it('jumps from a preset-provided row to the preset that enables it', async () => {
-    await renderReady()
-    fireEvent.click(screen.getByRole('button', { name: en.switcherLabel }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'ptc' }))
-
-    fireEvent.click(globalToggle())
-    fireEvent.click(screen.getByRole('button', { name: 'tool-bash, bash-host, Via presets' }))
-    fireEvent.click(screen.getByRole('button', { name: en.viewInPreset }))
-    expect(screen.getByRole('button', { name: en.switcherLabel }).textContent)
-      .toBe('标准模式 (default)')
-  })
-
   it('searches across scopes and points at matches in other presets', async () => {
     const view = await renderReady()
     const search = screen.getByRole('searchbox', { name: en.search })
 
     fireEvent.change(search, { target: { value: 'tool-bash' } })
     // Searching forces the collapsed global plane and drawer open.
-    expect(view.container.querySelector('[data-preset-plugin-count]')?.getAttribute('data-preset-plugin-count')).toBe('1')
-    expect(view.container.querySelector('[data-plugin-count]')?.getAttribute('data-plugin-count')).toBe('1')
+    expect(view.container.querySelectorAll('[data-plugin-scope="preset"] li')).toHaveLength(1)
+    expect(view.container.querySelectorAll('[data-plugin-scope="global"] li')).toHaveLength(1)
     expect(screen.getByText(en.presetEnabledTag)).toBeTruthy()
-    expect(screen.queryByText(`1 ${en.failedCountLabel}`)).toBeNull()
     const hint = screen.getByText((text: string) => text.startsWith('2 more matches'))
     expect(hint).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'ptc' }))
@@ -571,13 +560,13 @@ describe('PluginInventorySettingsTab', () => {
 
     // A match visible only in another preset keeps the pointer without rows.
     fireEvent.change(search, { target: { value: 'crashy' } })
-    expect(view.container.querySelector('[data-preset-plugin-count]')?.getAttribute('data-preset-plugin-count')).toBe('0')
+    expect(view.container.querySelectorAll('[data-plugin-scope="preset"] li')).toHaveLength(0)
     expect(screen.getByText((text: string) => text.startsWith('1 more matches'))).toBeTruthy()
     expect(screen.queryByText(en.emptySearch)).toBeNull()
 
     // A match on a Loader entry id only reaches the global plane.
     fireEvent.change(search, { target: { value: '8a1b2c3d' } })
-    expect(view.container.querySelector('[data-plugin-count]')?.getAttribute('data-plugin-count')).toBe('1')
+    expect(view.container.querySelectorAll('[data-plugin-scope="global"] li')).toHaveLength(1)
     expect(screen.queryByText((text: string) => text.includes('more matches'))).toBeNull()
 
     fireEvent.change(search, { target: { value: 'not-a-plugin' } })

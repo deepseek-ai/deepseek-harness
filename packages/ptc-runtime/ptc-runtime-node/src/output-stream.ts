@@ -1,5 +1,6 @@
 /** Bounded drainage for raw process output after managed execution ends. */
 import type { Readable } from 'node:stream'
+import type { SubprocessHandle } from '@deepseek-ai/dsh-subprocess'
 
 /**
  * Wait for queued bytes without letting an inherited descriptor retain a run forever.
@@ -26,4 +27,24 @@ export function drainOutput(stream: Readable | undefined, graceMs: number): Prom
     stream.once('close', onClose)
     stream.once('error', onError)
   })
+}
+
+/**
+ * Terminate a managed process and drain its pipes, including failures before output listeners attach.
+ * @param handle - Process and streams owned by the runtime.
+ * @param graceMs - Maximum pipe-drain wait after managed exit.
+ * @returns Whether both output streams ended cleanly.
+ */
+export async function terminateProcess(handle: SubprocessHandle, graceMs: number): Promise<boolean> {
+  try {
+    handle.terminate()
+    handle.stdout?.resume()
+    handle.stderr?.resume()
+    await Promise.all([handle.done.catch(() => {}), handle.waitForExit()])
+    const drained = await Promise.all([drainOutput(handle.stdout, graceMs), drainOutput(handle.stderr, graceMs)])
+    return !drained.includes(false)
+  } finally {
+    handle.stdout?.destroy()
+    handle.stderr?.destroy()
+  }
 }

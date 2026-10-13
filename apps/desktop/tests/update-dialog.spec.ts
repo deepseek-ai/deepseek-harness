@@ -19,6 +19,7 @@ const fixture = await vi.hoisted(async () => {
     })
     readonly focus = vi.fn()
     readonly show = vi.fn()
+    readonly hide = vi.fn()
     readonly setBounds = vi.fn()
     readonly loadURL = vi.fn(async () => {})
     constructor(readonly options: unknown) { super(); windows.push(this) }
@@ -77,6 +78,23 @@ it('accepts only a displayed choice from its own main frame and retains cancella
   const next = f.show()
   f.invoke(UPDATE_DIALOG_IPC.respond, 0)
   expect((await next).response).toBe(0)
+})
+
+it('releases visible Windows modality before destroying a dismissed dialog', async () => {
+  vi.useFakeTimers()
+  const f = setup()
+  const pending = f.show()
+  const window = fixture.windows.at(-1)!
+  const destroy = vi.spyOn(window, 'destroy').mockImplementation(() => {
+    expect(window.hide).toHaveBeenCalledTimes(process.platform === 'win32' ? 1 : 0)
+    window.destroyed = true
+    window.emit('closed')
+  })
+  f.invoke(UPDATE_DIALOG_IPC.respond, 0)
+  await pending
+  expect(destroy).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(150)
+  expect(destroy).toHaveBeenCalledOnce()
 })
 
 it('follows the parent geometry and removes listeners when closed or replaced', async () => {

@@ -33,11 +33,19 @@ kind: "package-reference"
 <a id="reference-previews"></a>
 ## 引用预览
 
-Chat 在节点列表外通过一个 `MarkdownDelegateProvider` 提供文件及 HTTP(S) 导航。Assistant Markdown 文件链接在消息落定后可于右侧栏打开，包括未修改文件的引用。相对路径基于当前查看的 Session 工作区解析；绝对路径仍使用同一 Session 的文件系统访问。`#L24` 和 `#L24-L30` 定位到指定起始行，并复用现有文件标签。文件缺失时显示预览错误状态。
+已发送的普通文件附件保留草稿中的[文件卡片圆角](../../../docs/ui-radius.zh.md#radius-scale)。
+
+`ChatView` 通过节点列表外围既有的 `MarkdownDelegateProvider` 提供文件及 HTTP(S) 导航，直接传入 `requestOpenFile`、`openExternalLink` 和 `fileImages`。文件打开动作保留 Chat 的失败反馈与重试处理。Assistant Markdown 文件链接在消息落定后可于右侧栏打开，包括未修改文件的引用。相对路径基于当前查看的 Session 工作区解析；绝对路径仍使用同一 Session 的文件系统访问。`#L24` 和 `#L24-L30` 定位到指定起始行，并复用现有文件标签。文件缺失时显示预览错误状态。
+
+原生消息图片使用独立的用户与输出位置。`conversation.chat.user.content` Factory 声明 `conversation.chat.user.images`，由 `UserContent` 渲染；Assistant 节点注册声明 `conversation.chat.message.images`，由 `AssistantMarkdown` 渲染。两者通过显式 props 接收图片来源、授权 `loadImage` 和布局参数。官方 `MessageImages` 条目调用共享的 root 作用域 `conversation.images.content` Factory。每个位置均可独立替换，无需复制画廊实现。
+
+Session 作用域的 `conversation.chat.user.content` Factory 只渲染用户内容区域：文本、额外内容块、按输入顺序排列的图片／文件附件及引用摘要。[`UserContentInput`](src/client/contract/slots.ts) 携带预处理的 `content`、变换 `facts`、显示 props 和显式 `loadImage`；引用动作由节点自己的 Injection 提供。正文调用共享 `conversation.user.text` Factory，图片调用自身拥有的图片 Slot。直接调用需要 Session 绑定，行包装层由调用方提供。
+
+`UserStyleBubble` 和[各来源包装层](<src/client/chat/MessageItem.tsx#L157-L309>) 保留用户行、key、pending／echo 标记、时间、复制控件及其他消息操作。内容 Factory 不读取来源专属模型或私有 Context，也不是全局用户内容替换入口。
 
 独立的 Markdown 图片以内嵌预览显示，点击打开共享图片浮层；本地路径在消息落定后基于当前查看的工作区解析。图片文件链接保持点击打开侧栏，鼠标停留或键盘聚焦时显示缩略图，Esc 关闭缩略图。图片加载失败时保留本地化状态与图片说明；不执行重复图片过滤。
 
-设置 → 通用设置 → 网页链接默认打开方式控制普通点击 Chat HTTP(S) 链接时的目标：「应用内侧边栏」（默认）打开新的右侧 Sidebar Browser tab，「默认浏览器」打开外部标签页。该设置项位于快捷键之后，仅在 Sidebar Browser 可用时显示。若 Sidebar Browser 未注册，两种选择均使用外部浏览器；带修饰键的点击保留原生行为。`ui-chat.linkOpening` 偏好在回环地址浏览器中持久化，设置无法持久化写入时仅在当前进程内生效。已发送的文件引用及消息日志确认调用的 skill 也可在右侧栏打开预览。文件路径使用当前查看的 Session；skill 名称由该 Session 当前的输入触发源解析。两者悬停或聚焦时均使用正文文件链接的虚线下划线。会话、目录和命令标签仍只作为引用展示。
+设置 → 通用设置 → 网页链接默认打开方式控制普通点击 Chat HTTP(S) 链接时的目标：「应用内侧边栏」（默认）打开新的右侧 Sidebar Browser tab，「默认浏览器」打开外部标签页。该设置项位于快捷键之后，仅在 Sidebar Browser 可用时显示。若 Sidebar Browser 未注册，两种选择均使用外部浏览器；带修饰键的点击保留原生行为。已认证浏览器的 `ui-chat.linkOpening` 偏好在 Host 上持久化，设置无法持久化写入时仅在当前进程内生效。已发送的文件引用及消息日志确认调用的 skill 也可在右侧栏打开预览。文件路径使用当前查看的 Session；skill 名称由该 Session 当前的输入触发源解析。两者悬停或聚焦时均使用正文文件链接的虚线下划线。会话、目录和命令标签仍只作为引用展示。
 
 <a id="system-prompt-row"></a>
 ## Chat 隐藏的行
@@ -60,9 +68,9 @@ Assistant 尝试结束且没有可见消息时，Chat 隐藏已发布的 Node，
 
 设置 → 通用设置 → 性能与用量位于繁忙时的发送行为之后、Session Log 上传之前，将 `ui-chat.performanceUsage` 保存为 `detailed`（默认）或 `compact`。简洁模式仅在输入框下方显示可用的输出速度和缓存命中率，不显示统计交互卡片或每轮用量。详细模式提供会话统计和每轮 token 用量。两种模式的已完成轮次页脚均不显示耗时。该偏好仅影响展示，记账和 Session 事件保持完整。
 
-输入框统计信息由两个 `conversation.composer.dock` 列表条目组成：`activity`（order 0，轮次数、步骤数与输出速度，以及 LLM 耗时、工具耗时与 TTFT）和 `usage`（order 1，token 总量与缓存命中）。其他插件以相同的 id 和相同的 `order` 注册即可替换某个胶囊；dock 按 `order` 排列各行，更低的 `priority` 决定由替换者渲染：动态插件会自动获得，静态组合的插件需显式传入。以新 id 注册则新增胶囊。每个胶囊在 `data-composer-stat` 中携带其 id。按下 Escape，或在已打开的对话框之外发生 pointerdown 或点击时，该对话框会关闭，因此用指针或键盘激活另一个胶囊会切换对话框，而不会叠加两个。
+输入框统计信息由两个 `conversation.composer.dock` 列表条目组成：`activity`（order 0，轮次数、步骤数与输出速度，以及 LLM 耗时、工具耗时与 TTFT）和 `usage`（order 1，token 总量与缓存命中）。这些控件遵循公共的[统计控件圆角规则](../../../docs/ui-radius.zh.md#radius-scale)。其他插件以相同的 id 和相同的 `order` 注册即可替换某个控件；dock 按 `order` 排列各行，更低的 `priority` 决定由替换者渲染：动态插件会自动获得，静态组合的插件需显式传入。以新 id 注册则新增控件。每个控件在 `data-composer-stat` 中携带其 id。按下 Escape，或在已打开的对话框之外发生 pointerdown 或点击时，该对话框会关闭，因此用指针或键盘激活另一个控件会切换对话框，而不会叠加两个。
 
-在非回环地址浏览器中，设置作用域无法持久化写入，因此该偏好仅在当前进程内生效。明确选择会立即更新所有使用方；回环地址浏览器收到 Host 已接受的设置后会同步当前值。
+明确选择会立即更新所有使用方；Host 接受的设置会校正实时值，因此写入被拒绝或尚未应答时保持所选模式，直到 Host 应答。
 
 偏好菜单在发布新选择之前，先将焦点还给触发按钮，且不引起滚动。
 
@@ -84,7 +92,7 @@ Chat 末尾为进行中的 Turn 控制行，且该轮尚无可见输入时，第
 
 工作步骤展示模式控制过程组显示与推理预览。简洁、标准、详细模式收起符合条件的已完成轮次，不隐藏最终答案；完全展开模式保留时长或状态抬头，但不支持收起，历史过程行直接显示。[业务规则明细](src/client/conversation-nodes/README.zh.md#display-modes) 统一说明模式表、组头行为、整轮折叠资格、时钟与开合重置。
 
-工作步骤展示下方的设置行提供[独立的收起时机设置](src/client/conversation-nodes/README.zh.md#collapse-timing)。
+工作步骤展示下方的设置行提供[独立的收起时机设置](src/client/conversation-nodes/README.zh.md#collapse-timing)，通过相同的 Host profile 配置保存。
 
 -----
 
@@ -95,7 +103,7 @@ Chat 通过 `uiConversation.groups` 注册过程 Group Definition。React 通过
 
 `groupPart` 在 Assistant 渲染器中选择推理或回复，不复制 Node 载荷。同一个 callId 的准备、派发与结果阶段由 Tool 节点自己拥有。每个部分有独立的 DOM 锚点用于恢复阅读位置；轮次导航使用原 Node key，落到它的第一个可见部分。展示模式切换以及为完整旧组补入更早成员时，保留组来源、成员父级及 key。原 Node Store 仍是唯一节点数据所有者，替换 Builder 时重新绑定按键订阅，不重挂载容器。模式变化保留尺寸观察器，并复用整轮状态选择器。
 
-Chat Builder 按节点发布 `bottomSource`：节点可见且属于已加载时间线的最后一轮时为 true，而不只是列表最后一行。底部轮次推进时，只有旧、新底部轮次的节点收到位置变化通知。Group 读取其首个成员的位置。待发送消息去重与收起判断仍由 Chat 视图处理，不进入 Builder。
+Chat Builder 按节点发布 `bottomSource`：节点可见且属于已加载的最新交互段时为 true，而不只是列表最后一行。节点通过 `groupTree` 声明自己在分组树中的位置；含 `exchange` 节点的轮次开启一个交互段，交互段持续到下一个开启轮次。这些位置由外到内依次为 `exchange`、`input`、`turn`、`process`，定义在 [group-tree.ts](src/client/contract/group-tree.ts)；过程分组、整轮折叠和轮次输入判断都读取它们，外部 Definition 声明位置即可放置自己的 Chat 行。交互段起点移动时，只有进入或离开该交互段的轮次中的节点收到通知。Group 读取其首个成员的位置。待发送消息去重与收起判断仍由 Chat 视图处理，不进入 Builder。
 
 实时工具 delta 与推理共用按帧合并的发布节奏；持久调用和结果立即发布。原生与嵌套结果保留事件中的展示元数据，使历史文件与命令标签使用执行时的位置。当已读取参数的答案、锚点、位置及可见性均未变化时，重复 delta 保持 Tool 节点不变。Definition 向工具行和分组详情提供同一个懒计算参数读器，无需按工具注册。
 
@@ -109,7 +117,7 @@ Chat Builder 按节点发布 `bottomSource`：节点可见且属于已加载时�
 
 每个组拥有本地 `useDisclosure` 状态，组件保持挂载时，模式切换保留该状态。
 
-Session 作用域的 `conversation.chat.reasoning.body` single Slot 仅在思考正文展开时提供原始思考文本和流式状态。官方条目以优先级 100 注册，并调用 `conversation.chat.reasoning.content` Factory。替换项使用更小的优先级数值，可向同一个 Factory 传入原文或派生显示文本。root 作用域的 Factory 不要求 Session，并固定使用紧凑排版。其可选 `labels` 原样接受完整的 `MarkdownLabels`，省略时使用 Chat 的默认本地化文案。宿主不提供内联 fallback 或插件操作状态。显示扩展必须保留查看原文的能力，并在自己的 Body 包装内维护控件。扩展不替换思考预览或展开策略。
+Session 作用域的 `conversation.chat.reasoning.body` single Slot 仅在思考正文展开时提供原始思考文本和流式状态。官方条目以优先级 100 注册，并调用 `conversation.chat.reasoning.content` Factory。替换项使用更小的优先级数值，可向同一个 Factory 传入原文或派生显示文本。root 作用域的 Factory 不要求 Session，并固定使用紧凑排版。其可选 `labels` 原样接受完整的 `MarkdownLabels`，省略时使用 Chat 的默认本地化文案。宿主不提供内联 fallback 或插件操作状态。显示扩展必须保留查看原文的能力，并在自己的 Body 包装内维护控件。扩展不替换思考预览或展开策略。哪些块生成思考行由[思考展示规则](src/client/conversation-nodes/README.zh.md#display-modes)定义。
 
 Chat 节点 slot 为推理与工具注入绑定重置来源的 `useDisclosure` 钩子。中间 renderer 只透传、不订阅，每次调用拥有独立展开状态。来源回调保留接收对象及稳定引用。外层轮次实际隐藏过程成员时，所在节点重置这些开合状态，不替换组件 key，也不改变钩子引用。展示模式切换保留展开状态。
 
@@ -119,6 +127,8 @@ Chat 节点 slot 为推理与工具注入绑定重置来源的 `useDisclosure` �
 
 <a id="scroll-ownership"></a>
 ## 滚动归属
+
+Chat 等待初始历史就绪后，才允许自动内容、滚动或尺寸更新初始化阅读状态。进行中的 Session 先恢复初始显隐和位置，再允许折叠动画。
 
 Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点，并且只在跟随底部时禁用自己滚动区域的浏览器自动锚定。没有读者移动的贴底滚动事件，以及到达底部（容许小于 1px 的取整误差）的读者输入，会立即更新跟随归属，避免后续布局变化使其底部位置失效。其他读者移动即使位于跟随阈值内，也保持待处理直到采样周期或 `scrollend`，防止布局增长抵消小幅滚动操作。采用完成时收起时，提交正文输入或 steering 会立即恢复跟随底部，并清除先前待处理的读者滚动采样。读者跟随底部时，`ResizeObserver` 追随新的底部，并且无需读取行几何就选中最后一个已加载轮次；读者离开底部后，高度变化会保持顶部位置，再由阅读线几何选择活跃轮次。轮次导航预览位于 Markdown 代码块粘性头栏上方，而导航外框始终处于 composer 上方的 transcript 区域内。
 
@@ -130,7 +140,9 @@ Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点，并且�
 
 下次消息触发的折叠与跟尾属于同一个可取消任务，折叠期间禁用浏览器滚动锚定。如果移除的高度大于新增内容的高度，差值保留为底部空间，不通过减小滚动偏移追到未含预留空间的内容底部；对话总高度已经超过视口时也遵循此规则。后续新增内容先填充保留区域，填满后才继续跟尾；折叠高度较小时，仅滚动剩余的向前距离。读者手势取消该任务及进行中的原生跟随；同一次折叠中的尺寸变化不能恢复已取消的任务，但新提交的输入可以。离底读者保留位置，已确认的滚动只释放不会造成位置钳制的多余空间。卸载 Chat 时取消等待回调和行过渡。启用减少动态效果偏好时，可见性和定位立即变化。
 
-折叠协调状态由各自的 viewport 持有，空间预留和空闲回调不会广播到其他 Chat 视图。ChatView 通过本次渲染的 `hookContext`，向 `conversation.chat.flow` 交接一次动画能力。Flow 绑定组内容与组头的行为 hook，负责节点和图片渲染，并共享既有 Chat store 与 Session 节点来源。布局节点和行内思考接收绑定后的 hook，不接收动画控制器，也不改变内容的父级。通用的可搜索隐藏在绘制前生效，并负责焦点保护及 beforematch；pending 输入对账仍留在 ChatView。
+切换工作步骤展示档位时，当前折叠结束后清空底部预留空间，并按所选档位调整滚动范围。原本跟随底部的读者保持在新的底部；其他读者不会被强制拉回底部。
+
+折叠协调状态由各自的 viewport 持有，空间预留和空闲回调不会广播到其他 Chat 视图。ChatView 通过本次渲染的 `hookContext`，向 `conversation.chat.flow` 交接一次动画能力。Flow 绑定组内容与组头的行为 hook，负责节点分发，为本地回显提供 Factory renderer，并共享既有 Chat store 与 Session 节点来源。图片入口 Factory 拥有可替换的图片 Slot。布局节点和行内思考接收绑定后的 hook，不接收动画控制器，也不改变内容的父级。通用的可搜索隐藏在绘制前生效，并负责焦点保护及 beforematch；pending 输入对账仍留在 ChatView。
 
 | 外层跟随 | 已展开小组跟随 | 回到底部按钮 | 新增内容 |
 |---|---|---|---|

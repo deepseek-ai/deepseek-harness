@@ -71,7 +71,7 @@ jobs:
       # build:preview packs the image through the packer's installed bin
       # (lib/bin.js), so neither half exists before the artifact build runs.
       - name: Build workspace
-        run: pnpm run build --artifacts-only
+        run: pnpm run build:artifacts
 
       - name: Build the preview page and pack the VFS image
         env:

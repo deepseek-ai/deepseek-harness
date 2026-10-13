@@ -18,8 +18,8 @@
   en: c479b5b665822198
   zh: 1ffb789c18043baf
 /deepseek-ai-dsh-typert-protocol/use-this-package/exposing-a-host-method:
-  en: fae902875c18ef33
-  zh: ed4332cabe0e3a45
+  en: 82a3db72a51105ff
+  zh: 46848784380732be
 /deepseek-ai-dsh-typert-protocol/use-this-package/associating-host-objects-and-contexts-with-wire-identities:
   en: 3db384ae6f215632
   zh: 56207184b09d4018
@@ -39,14 +39,14 @@
   en: 93b83a9441a5a3c2
   zh: c4eb143ddd167a27
 /deepseek-ai-dsh-typert-protocol/understand-the-implementation/protocol-maps-and-descriptors:
-  en: 164b30b3fa543936
-  zh: 0831edd3e04a3d3a
+  en: c202904201402211
+  zh: 3db1d83683b4fd2a
 /deepseek-ai-dsh-typert-protocol/understand-the-implementation/wire-identity-grammar:
   en: aac79a7b4682371e
   zh: bc9cc513c1ced3e6
 /deepseek-ai-dsh-typert-protocol/understand-the-implementation/source-map:
-  en: 62da405f16379f39
-  zh: fcbd0f10dd198018
+  en: 8b878e0e003b86ec
+  zh: 5d92998ad2964d7c
 /deepseek-ai-dsh-typert-protocol/further-exploration:
   en: 84191d1b07fb8bb6
   zh: 9a5212732ed38ab6
@@ -57,8 +57,8 @@
   en: b1c49d5e440d9d41
   zh: 87ead78472415189
 /deepseek-ai-dsh-typert-protocol/known-limitations-and-deferred-work:
-  en: 0be59e6d97923487
-  zh: 70523fb0dc567ed6
+  en: 6079caacbcd01f08
+  zh: 70295e443f35afe8
 /deepseek-ai-dsh-typert-protocol/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

@@ -260,7 +260,7 @@ describe('headless runner', () => {
     await test.ctx.plugin(SubagentRuntime)
     test.ctx.subagents.registerProvider({
       name: 'external', inheritsParentContext: false,
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       start: async () => ({
         id: brandString<SessionId>('settlement-child'),
         result: Promise.resolve({ output: [{ type: 'text' as const, text: 'child answer' }], stopReason: 'completed' as const }),

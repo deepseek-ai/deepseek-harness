@@ -1484,7 +1484,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
       {showsMainList
         ? (
           <header className={css.pageHead} data-window-drag>
-            <div>
+            <div className={css.pageHeading}>
               <h1 className={css.pageTitle}>{t('title')}</h1>
               <div className={css.pageIntro}>
                 <span>{t('intro')}</span>

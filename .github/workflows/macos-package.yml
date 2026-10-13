@@ -1,0 +1,93 @@
+name: Package Desktop · macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: 'Machine preset (configured on the packaging runner)'
+        type: choice
+        options: [test, production]
+        default: test
+        required: true
+      skip_notarization:
+        description: 'Skip notarization/stapling: internal debugging only, not for distribution or updates'
+        type: boolean
+        default: false
+        required: true
+      build_version:
+        description: 'Version: auto recommended; explicit version must match the checkout product prefix'
+        type: string
+        default: auto
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-desktop-package
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: [self-hosted, macOS, ARM64, dsh-mac-package-trial]
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      PACKAGE_SKIP_NOTARIZATION: ${{ inputs.skip_notarization }}
+      DSH_TELEMETRY_DISABLED: '1'
+      DSH_PACKAGING_PRESET: ${{ inputs.preset }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        id: checkout
+        with:
+          persist-credentials: false
+          clean: true
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate preset and resolve build version
+        id: settings
+        env:
+          PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
+        run: node apps/desktop/scripts/prepare-macos-ci.mjs
+      - name: Check packaging configuration and toolchain
+        env:
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: |
+          args=()
+          if [[ "$PACKAGE_SKIP_NOTARIZATION" = true ]]; then args+=(--skip-notarization); fi
+          pnpm run package:desktop:mac:arm64 --check --build-version "$PACKAGE_VERSION" "${args[@]}"
+      - name: Build signed installers
+        env:
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: |
+          args=()
+          if [[ "$PACKAGE_SKIP_NOTARIZATION" = true ]]; then args+=(--skip-notarization); fi
+          pnpm run package:desktop:mac:arm64 --build-version "$PACKAGE_VERSION" "${args[@]}"
+      - name: Retain packaging diagnostics
+        if: always() && steps.checkout.outcome == 'success'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: macos-package-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: apps/desktop/.desktop-build/packaging-runs/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain installers for the selected mode
+        if: success()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: macos-arm64-${{ steps.settings.outputs.mode }}-${{ steps.settings.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: |
+            apps/desktop/.desktop-build/targets/mac-arm64/${{ steps.settings.outputs.artifacts }}/*.dmg
+            apps/desktop/.desktop-build/targets/mac-arm64/${{ steps.settings.outputs.artifacts }}/*.zip
+          if-no-files-found: error
+          retention-days: 14

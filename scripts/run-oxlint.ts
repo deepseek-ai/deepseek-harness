@@ -1,6 +1,8 @@
 import { spawnSync } from 'node:child_process'
+import { availableParallelism } from 'node:os'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { defaultParallelism } from './parallelism.ts'
 
 const oxlintCli = fileURLToPath(new URL('../node_modules/oxlint/bin/oxlint', import.meta.url))
 const MAX_CAPTURED_OUTPUT_BYTES = 64 * 1024 * 1024
@@ -26,25 +28,37 @@ export interface OxlintInvocation {
 
 /**
  * Apply the repository worker bound to both Oxlint backends.
+ * `DSH_OXLINT_THREADS` selects the bound; without it, CI keeps Oxlint's own default and other runs use the
+ * [local worker budget](./parallelism.ts). A caller's own `--threads` without `DSH_OXLINT_THREADS` passes through.
  * @param args - Oxlint CLI arguments requested by the caller.
  * @param env - Environment inherited by the Oxlint process.
+ * @param cpus - CPU count Node reports for this process.
  * @returns the complete CLI arguments and child environment.
  */
-export function resolveOxlintInvocation(args: readonly string[], env: NodeJS.ProcessEnv): OxlintInvocation {
+export function resolveOxlintInvocation(
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+  cpus: number = availableParallelism(),
+): OxlintInvocation {
   const resolvedArgs = [...args]
   if (env.CI === 'true' && !hasOutputFormat(args)) resolvedArgs.push('--format=default')
   const raw = env.DSH_OXLINT_THREADS
-  if (raw === undefined || raw === '') return { args: resolvedArgs, env: { ...env } }
-  const parsed = Number.parseInt(raw, 10)
-  if (!Number.isSafeInteger(parsed) || parsed < 1 || String(parsed) !== raw) {
-    throw new Error(`run-oxlint: DSH_OXLINT_THREADS must be a positive integer, got ${JSON.stringify(raw)}.`)
+  const explicit = raw !== undefined && raw !== ''
+  if (explicit) {
+    const parsed = Number.parseInt(raw, 10)
+    if (!Number.isSafeInteger(parsed) || parsed < 1 || String(parsed) !== raw) {
+      throw new Error(`run-oxlint: DSH_OXLINT_THREADS must be a positive integer, got ${JSON.stringify(raw)}.`)
+    }
   }
   if (args.some(arg => arg === '--threads' || arg.startsWith('--threads='))) {
-    throw new Error('run-oxlint: use DSH_OXLINT_THREADS instead of passing --threads directly.')
+    if (explicit) throw new Error('run-oxlint: use DSH_OXLINT_THREADS instead of passing --threads directly.')
+    return { args: resolvedArgs, env: { ...env } }
   }
+  if (!explicit && env.CI === 'true') return { args: resolvedArgs, env: { ...env } }
+  const threads = explicit ? raw : String(defaultParallelism(env, cpus))
   return {
-    args: [...resolvedArgs, `--threads=${raw}`],
-    env: { ...env, GOMAXPROCS: raw },
+    args: [...resolvedArgs, `--threads=${threads}`],
+    env: { ...env, GOMAXPROCS: threads },
   }
 }
 

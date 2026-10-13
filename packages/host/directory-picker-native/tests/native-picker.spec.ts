@@ -1,7 +1,7 @@
 /**
- * Native picker tier selection and the execFile adapter: the Win32 dialog
- * primary (failures surface as-is, no fallback tier), the abort rule, and
- * the POSIX command tiers (osascript, Zenity → KDialog).
+ * Native picker tier selection and the execFile adapter: the macOS Edit-menu
+ * panel, the Win32 dialog primary (failures surface as-is, no fallback tier),
+ * the abort rule, and the POSIX command tiers (Zenity → KDialog).
  */
 
 type ExecFileCallback = (
@@ -33,26 +33,36 @@ const signal = () => new AbortController().signal
 const noDialog = async (): Promise<string | null> => { throw new Error('dialog unavailable') }
 
 describe('native directory picker', () => {
-  it('uses the macOS folder chooser and maps user cancellation to null', async () => {
+  it('opens the macOS Edit-menu panel and maps an unanswered panel to null', async () => {
     const run = vi.fn<DirectoryPickerRunner>(async () => ({ stdout: '/Users/test/project/\n', stderr: '' }))
     await expect(pickNativeDirectory(signal(), { platform: 'darwin', run })).resolves.toBe('/Users/test/project/')
-    expect(run).toHaveBeenCalledWith('osascript', expect.arrayContaining(['POSIX path of selectedFolder']), expect.any(AbortSignal), 'hidden')
 
-    run.mockRejectedValueOnce(failure(1, 'execution error: User canceled. (-128)'))
+    const call = run.mock.calls[0]!
+    expect(call[0]).toBe('osascript')
+    expect(call[1].slice(0, 3)).toEqual(['-l', 'JavaScript', '-e'])
+    // The panel's own Edit menu is what makes ⌘V reach the field editor: the
+    // macOS key equivalents resolve against the menu, never the focused field.
+    expect(call[1][3] ?? '').toContain("addItemWithTitleActionKeyEquivalent('Paste', 'paste:', 'v')")
+    expect(call[1][3] ?? '').toContain('canChooseDirectories = true')
+    expect(call[1][4]).toBe('Select Workspace Directory')
+    expect(call[2]).toBeInstanceOf(AbortSignal)
+    expect(call[3]).toBe('hidden')
+
+    run.mockResolvedValueOnce({ stdout: '\n', stderr: '' })
     await expect(pickNativeDirectory(signal(), { platform: 'darwin', run })).resolves.toBeNull()
+  })
 
-    run.mockRejectedValueOnce(failure(2, 'permission denied'))
+  it('surfaces a macOS panel failure instead of reading it as a cancel', async () => {
+    const run = vi.fn<DirectoryPickerRunner>(async () => { throw failure(1, 'execution error: User canceled. (-128)') })
     await expect(pickNativeDirectory(signal(), { platform: 'darwin', run })).rejects.toThrow('command failed')
   })
 
   it.each([
     ['a primitive error', 'failed'],
     ['an invalid code type', { code: true }],
-    ['a missing stderr property', { code: 1 }],
-    ['a non-string stderr property', { code: 1, stderr: 42 }],
-  ])('does not mistake %s for macOS cancellation', async (_label, reason) => {
+  ])('does not mistake %s for a user cancel', async (_label, reason) => {
     const run = vi.fn<DirectoryPickerRunner>(async () => { throw reason })
-    await expect(pickNativeDirectory(signal(), { platform: 'darwin', run })).rejects.toBe(reason)
+    await expect(pickNativeDirectory(signal(), { platform: 'linux', run })).rejects.toBe(reason)
   })
 
   it('uses the Win32 dialog and never spawns a command when it answers', async () => {

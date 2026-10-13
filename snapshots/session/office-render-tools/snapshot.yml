@@ -1,0 +1,12 @@
+version: 1
+scenario: office-render-tools
+profile: headless
+composition: office-render-tools
+recording: authored
+sessionFormat:
+  version: 4
+  coverage: [retired-tools]
+header:
+  class: office-render-tools
+workspace:
+  setup: office-skills

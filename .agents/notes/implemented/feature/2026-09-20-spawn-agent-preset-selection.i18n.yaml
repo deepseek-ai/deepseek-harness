@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-20-spawn-agent-preset-selection.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-20-spawn-agent-preset-selection.md
+/agent-note-independent-spawn-preset-selection-and-restoration:
+  en: 2c57fd9b420af1cc
+  zh: 8d0d7a53fc85f746
+/agent-note-independent-spawn-preset-selection-and-restoration/problem:
+  en: 62fa53e4befdf947
+  zh: 99956ba40cbda1ab
+/agent-note-independent-spawn-preset-selection-and-restoration/decision:
+  en: a321ee6871ef14c0
+  zh: 599093af0657a675
+/agent-note-independent-spawn-preset-selection-and-restoration/alternatives-considered:
+  en: 82fa00b86c8d375b
+  zh: eb00a537a854dfe4
+/agent-note-independent-spawn-preset-selection-and-restoration/consequences:
+  en: 57531f2f2eb7da5b
+  zh: 206564a73e8d7193

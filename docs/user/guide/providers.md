@@ -16,7 +16,9 @@ Keys are write-only. The page receives a redacted descriptor after saving, never
 
 Choose **Add model provider**. The card opens on **Third-party model provider**: pick a provider dsh ships with — the list shows provider ids such as `anthropic`, `openai`, `moonshotai` for Kimi, or `zai` for GLM — enter its API key, and save. The installed catalog supplies the endpoint, protocol, and model list.
 
-Providers that sign in with OAuth, such as Codex, are not supported here yet.
+The authentication **?** explains saved-credential priority and the environment fallbacks displayed for a key field. Leaving the key blank preserves existing authentication. Providers without native key authentication, such as `openai-codex`, show no key field unless the profile explicitly names a credential reference.
+
+For an existing profile that names a credential reference, **API key source** shows the layer currently supplying that reference: saved credentials, launch environment, `$cwd/.env`, or `$DSH_HOME/.env`. Native authentication without a named reference has no source label.
 
 ## Add a custom model API
 
@@ -107,6 +109,21 @@ If every model you entered by hand takes images, set the fallback once on the ro
 In pi-ai configuration, every list must name at least one modality except a model's own `input`, where an empty list means the same as omitting it. An unknown modality is refused wherever it is written.
 
 Both fields state a claim about your endpoint rather than checking it. A model that declares images its endpoint does not serve is not caught here; the provider rejects the request instead.
+
+### DeepSeek account models
+
+A signed-in DeepSeek account lists its models from the account service, so the Models page offers no model editor for it. Adjust a single model with `modelOverrides` in `$DSH_HOME/profiles/<profile>/cordis.patch.yml`; the fields match a DeepSeek `models` entry, and unset fields keep the listed values:
+
+```yaml
+- id: llm-deepseek-account
+  config:
+    modelOverrides:
+      deepseek-flash:
+        contextWindow: 524288
+        maxTokens: 131072
+```
+
+A model that needs a newer DeepSeek Harness fails with `CLIENT_UPGRADE_REQUIRED`, which names the version to install. The [account provider reference](../../../packages/llm/llm-deepseek-account/README.md) owns the listing, fallback, and gating rules.
 
 ### Reasoning effort
 

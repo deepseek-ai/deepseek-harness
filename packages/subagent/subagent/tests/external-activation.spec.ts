@@ -12,7 +12,7 @@ import { externalTestParent } from './external-activation-helpers.ts'
 import { subagentManager } from './manager-internals.ts'
 
 const capabilities: SubagentCapabilities = {
-  agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false,
+  agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false,
 }
 
 async function setup(start: (request: SubagentStartRequest) => Promise<SubagentRun>) {
@@ -338,7 +338,6 @@ describe('external subagent activations', () => {
   })
 })
 
-
 it('records external membership at creation without publishing settlement updates', async () => {
   const backend = execution()
   const fixture = await setup(async () => backend.run)
@@ -362,7 +361,6 @@ it('records external membership at creation without publishing settlement update
     unsubscribe()
   }
 })
-
 
 it('refuses a reserved Session id for an external provider before dispatch', async () => {
   const start = vi.fn()

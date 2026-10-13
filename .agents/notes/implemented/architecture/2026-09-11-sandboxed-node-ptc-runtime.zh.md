@@ -12,7 +12,7 @@ Node worker 隔离 JavaScript 状态，但不应用调用 Session 的 OS 沙箱�
 
 ## 决策
 
-`dsh-ptc-runtime-node` 在一个全新 Node 进程中运行每个程序。Host 解析执行选择，通过与 Bash 相同的 `ctx.sandbox` 提供方约束启动，并将进程生命周期交给 `ctx.subprocess`。子进程以直接 Node API、空模型环境和 Host 提供的异步绑定求值可擦除 TypeScript。本提供方不保留 worker 或持久内核。
+`dsh-ptc-runtime-node` 的默认 `per-call` 模式在一个全新 Node 进程中运行每个程序。Host 解析执行选择，通过与 Bash 相同的 `ctx.sandbox` 提供方约束启动，并将进程生命周期交给 `ctx.subprocess`。子进程以直接 Node API、空模型环境和 Host 提供的异步绑定求值可擦除 TypeScript。逐次执行结束后不保留 worker 或持久内核。
 
 Host 在子进程启动时保留 `ELECTRON_RUN_AS_NODE`；bootstrap 在求值前将其从原生环境中删除，模型可见的 `process.env` 仍为空。嵌套启动 Electron 需要自行显式选择 Node 模式。桌面端使用 Electron 作为 Node 可执行文件；删除此选择变量会启动 Electron 应用路径，而不是 PTC bootstrap。更改沙箱权限无法修复这一启动模式不匹配。macOS 桌面端回归测试使用真实 Electron 验证绑定写入、直接工作区写入以及受限策略对工作区外写入的拒绝。该测试需要已安装的 Electron 二进制文件；普通运行时测试无需此依赖即可覆盖环境过滤。
 
@@ -33,6 +33,8 @@ Host 在子进程启动时保留 `ELECTRON_RUN_AS_NODE`；bootstrap 在求值前
 ### 资源限制
 
 默认经过时间截止为 120 秒，默认上限为 600 秒。可信服务消费方可以请求 `timeoutMs: null` 来禁用该定时器；[工作流沙箱复用](2026-09-13-workflow-ptc-sandbox-reuse.zh.md)负责这种由调用方控制的生命周期。省略 timeout 或使用数值的请求（包括面向模型的 `run_code`）保留数值默认值与上限。启用的截止包括运行时准备以及嵌套工具或审批等待。V8 老生代内存、序列化外层输出与控制通信具有独立配置的上限。堆限制不包含原生分配和后代内存，经过时间也不是进程树 CPU 预算。
+
+显式启用的[内存保留执行模式](2026-09-23-best-effort-persistent-ptc.zh.md)在相同文件策略下保留可丢弃内存；[常驻进程权限](2026-10-08-persistent-ptc-sandbox.zh.md)负责策略切换和临时提权。
 
 ## 考虑过的替代方案
 

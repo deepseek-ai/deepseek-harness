@@ -146,10 +146,9 @@ it('loads the browser entry through its generated optional Remote contribution',
 })
 
 
-it.each(['loading', 'memory'] as const)('uses Host Google preferences while the settings form is %s', async (mode) => {
+it('uses Host Google preferences while the settings form is loading', async () => {
   const preferences: CotTranslationPreferences = { provider: 'google', targetLanguage: 'ja' }
   const b = await fixture(false, preferences)
-  if (mode === 'memory') b.scope.publish({ status: 'unavailable', mode: 'memory', value: undefined })
   try {
     const fiber = b.ctx.plugin({ inject: [...inject], apply: ctx => mountTranslation(ctx, contribution) })
     await fiber

@@ -108,92 +108,84 @@ The owner of a slot may put an `inject` face in the child declaration when every
 
 Use owner props for values already known at one render occurrence, registration `inject` for one entry's callbacks and private observables, slot-level `inject` for a capability controlled by the slot owner, and a declared store for mutable view state shared across entries or preserved across remounts. React nodes compose through child slots, not through injected values.
 
-## Current hierarchy
+<a id="current-hierarchy"></a>
 
-The hierarchy below is the shipped declaration tree. A child exists only while the named parent entry is mounted; optional feature entries can therefore make a subtree appear or disappear as one lifecycle unit.
+## Conversation hierarchy
+
+The following Conversation paths distinguish declaration owners from reusable Factory roots; unrelated shell positions are omitted. An entry owns its declared children, while a Factory owns its child declarations for the lifetime of its registered definition. Bracketed names identify the default React components; a plain React descendant can render its owner's Slot. Factory calls are references to independent reusable definitions, not new Slot declarations.
 
 ```text
-root
-├─ sidebar
-│  ├─ sidebar.brand.mark
-│  ├─ sidebar.brand.name
-│  ├─ sidebar.panellist
-│  ├─ sidebar.footer.action
-│  ├─ sidebar.workspaces
-│  │  ├─ sidebar.workspaces.directoryFlow
-│  │  ├─ sidebar.workspaces.session.menu.item
-│  │  └─ sidebar.workspaces.session.row.action
-│  └─ sidebar.settings
-│     ├─ settings.trigger
-│     ├─ settings.header
-│     ├─ settings.action
-│     ├─ settings.close
-│     ├─ settings.onboarding
-│     └─ settings.section
-│        ├─ settings.general.item
-│        ├─ settings.models.provider-card
-│        ├─ settings.models.footer
-│        └─ settings.plugins.tab
-├─ main
-│  ├─ plugins.add.actions
-│  ├─ plugins.item
-│  ├─ plugins.bundle.config
-│  ├─ plugins.row.config
-│  ├─ plugins.detail.actions
-│  ├─ plugins.detail.badge
-│  ├─ plugins.detail.section
-│  └─ main.conversation
-│     ├─ conversation.session
-│     │  └─ conversation.view
-│     │     ├─ conversation.chat.flow
-│     │     │  ├─ conversation.chat.node
-│     │     │  │  ├─ conversation.chat.assistant-actions
-│     │     │  │  ├─ conversation.chat.reasoning.body
-│     │     │  │  ├─ conversation.chat.commandview
-│     │     │  │  ├─ conversation.chat.turnTail
-│     │     │  │  └─ tool.call.toolview
-│     │     │  │     ├─ tool.call.images
-│     │     │  │     └─ tool.view.cordis
-│     │     │  └─ conversation.message.images
-│     │     └─ conversation.trajectory.images
-│     ├─ conversation.header
-│     │  ├─ conversation.header.leading
-│     │  └─ conversation.session.header
-│     │     ├─ conversation.session.header.lineage
-│     │     ├─ conversation.session.header.actions
-│     │     ├─ conversation.session.header.utilities
-│     │     └─ conversation.session.header.corner
-│     ├─ conversation.composer
-│     │  ├─ conversation.approval.detail
-│     │  └─ conversation.plan-review.actions
-│     ├─ conversation.composer.bar
-│     │  ├─ conversation.input.attachments
-│     │  ├─ conversation.input.permission
-│     │  ├─ conversation.input.plan
-│     │  └─ conversation.input.model
-│     ├─ conversation.input.overlay
-│     ├─ conversation.input.dock
-│     ├─ conversation.composer.dock
-│     ├─ conversation.input.left
-│     ├─ conversation.input.right
-│     ├─ conversation.hero.brand.mark
-│     ├─ conversation.hero.workspace
-│     │  └─ conversation.hero.workspace.directoryFlow
-│     └─ conversation.hero.agentPreset
-├─ rightbar
-│  └─ rightbar.session
-│     ├─ sidebar.right.pane.tab
-│     │  ├─ sidebar.right.tab.guide
-│     │  └─ sidebar.right.tab.guide.entry
-│     ├─ sidebar.right.pane.tab.title
-│     └─ sidebar.right.tab.menu.item
-├─ shell.bottom
-├─ shell.leading
-└─ shell.overlay
-   └─ shell.quota-notice
+root [AppFrame]
+└─ main[key=conversation] [ConversationPanel]
+   └─ main.conversation [ConversationRoot / ConversationMainPanel]
+      ├─ conversation.header [ConversationHeader]
+      │  ├─ conversation.header.leading
+      │  └─ conversation.session.header [ConversationSessionHeader]
+      │     ├─ conversation.session.header.lineage
+      │     ├─ conversation.session.header.actions
+      │     ├─ conversation.session.header.utilities
+      │     └─ conversation.session.header.corner
+      └─ calls Factory: conversation.content
+
+Factory: conversation.content [ConversationContent]
+├─ conversation.session [ConversationSession / DefaultConversationViews]
+│  └─ conversation.view
+│     ├─ id=chat [ChatView]
+│     │  └─ conversation.chat.flow [ChatFlow]
+│     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
+│     │        ├─ key=user,steering [UserMessageNodeView]
+│     │        │  └─ calls Factory: conversation.chat.user.content
+│     │        ├─ key=assistant-step [AssistantNodeView / AssistantMarkdown]
+│     │        │  ├─ conversation.chat.message.images [MessageImages]
+│     │        │  └─ conversation.chat.reasoning.body [DefaultReasoningBody]
+│     │        │     └─ calls Factory: conversation.chat.reasoning.content
+│     │        ├─ key=tool-call [ToolCallTree]
+│     │        │  └─ tool.call.toolview
+│     │        │     └─ key=read_image [ReadImageRow / ToolRow]
+│     │        │        └─ tool.call.images [MessageImages]
+│     │        ├─ key=command-input [GoalCommandInputView]
+│     │        │  └─ calls Factory: conversation.user.text
+│     │        ├─ key=command [CommandNodeView]
+│     │        │  └─ conversation.chat.commandview
+│     │        └─ key=turn-tail [TurnTailNodeView]
+│     │           ├─ conversation.chat.turnTail
+│     │           └─ conversation.chat.assistant-actions
+│     └─ id=trajectory [TrajectoryView / TrajectoryTable]
+│        └─ conversation.trajectory.images [MessageImages]
+├─ conversation.composer
+│  ├─ conversation.approval.detail
+│  └─ conversation.plan-review.actions
+├─ conversation.composer.bar [InputBar]
+│  ├─ conversation.input.attachments
+│  ├─ conversation.input.permission
+│  ├─ conversation.input.plan
+│  ├─ conversation.input.model
+│  ├─ conversation.input.overlay
+│  ├─ conversation.composer.dock
+│  ├─ conversation.input.left
+│  └─ conversation.input.right
+├─ conversation.input.dock
+│  └─ id=queue [QueueDock]
+│     └─ calls Factory: conversation.user.text
+├─ conversation.hero.brand.mark
+├─ conversation.hero.workspace
+│  └─ conversation.hero.workspace.directoryFlow
+└─ conversation.hero.agentPreset
+
+Factory: conversation.chat.user.content [UserContent]
+├─ conversation.chat.user.images [MessageImages]
+└─ calls Factory: conversation.user.text
+
+Factory: conversation.user.text [UserText]
+└─ conversation.user.text.node [keyed, inline]
+
+Factory: conversation.images.content [MessageImagesContent / ImageGallery]
+Factory: conversation.chat.reasoning.content [ReasoningContent / MarkdownText]
 ```
 
-The generated Client inspect catalog is the exhaustive contract for each key: cardinality, scope, owner props, standard props, current occupants, declaration owner, and replacement risk. A running dynamic package can query the live tree and an exact key with `cordis_inspect what:"client"`; the source catalog is generated from `SlotMap` declarations and `slots.register()` call sites by `pnpm run gen-client-catalog`.
+All four image Slots default to `MessageImages`, which calls `conversation.images.content` with the caller's image references and authorized loader. User and output image replacements are independent. The `conversation.user.text` Factory is shared by user content, Queue, and Goal; its `inline: true` keyed Slot renders span anchors and inline error placeholders rather than block wrappers.
+
+The generated [Client inspect catalog](../../packages/extensions/cordis-client-runner/src/client/slot-catalog.ts) covers all shell branches and is the exhaustive contract for each key: cardinality, scope, owner props, standard props, current occupants, declaration owner, and replacement risk. A running dynamic package can query the live tree and an exact key with `cordis_inspect what:"client"`; the source catalog is generated from `SlotMap` declarations and `slots.register()` call sites by `pnpm run gen-client-catalog`.
 
 ## Extension rules
 

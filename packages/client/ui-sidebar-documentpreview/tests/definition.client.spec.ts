@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
+import { parseFileAddress, sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { SidebarRightTabRegistry } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tab-registry.ts'
 import { TEXTPREVIEW_ID, TEXTPREVIEW_KIND, basenameOf, textDefinition } from '../src/client/definition.ts'
 
@@ -32,7 +32,7 @@ describe('textDefinition', () => {
     const definition = textDefinition()
     expect(definition.id).toBe(TEXTPREVIEW_ID)
     expect(definition.kind).toBe(TEXTPREVIEW_KIND)
-    expect(definition.patterns).toEqual(['dsh-resource://file/**'])
+    expect(definition.patterns).toEqual(['dsh-resource://file/[\\s\\S]+'])
     expect(definition.priority).toBe('fallback')
     expect(definition.title('dsh-resource://file/session/s-1/work/README.md')).toBe('README.md')
     // Reads require an addressed Session, even when the file path is absolute.
@@ -67,6 +67,51 @@ describe('text type in the registry', () => {
   })
 
   it.each([
+    '../AGENTS.md',
+    '../../AGENTS.md',
+    'dir/../AGENTS.md',
+    'dir/./AGENTS.md',
+    '/workspace/../AGENTS.md',
+    'C:/workspace/../AGENTS.md',
+    '//host/share/workspace/../AGENTS.md',
+    '',
+  ])('claims unresolved Session paths without rewriting their identity: %s', (path) => {
+    const tabs = registry()
+    const address = sessionFileAddress('s-1', path)
+    expect(tabs.claim(address)).toEqual({ kind: TEXTPREVIEW_KIND, contentId: address, title: basenameOf(address) })
+    expect(tabs.claim(address).contentId).toBe(address)
+    expect(parseFileAddress(address)).toEqual({ scope: 'session', sessionId: 's-1', path })
+  })
+
+  it.each([
+    ['./AGENTS.md', './AGENTS.md'],
+    ['%2e%2E/AGENTS.md', '../AGENTS.md'],
+    ['dir/%2E/AGENTS.md', 'dir/./AGENTS.md'],
+    ['%252e%252e/AGENTS.md', '%2e%2e/AGENTS.md'],
+    ['../a%20b%23c%3F.txt?ignored=1#section', '../a b#c?.txt'],
+  ])('claims an authored address while decoding its path once: %s', (encoded, path) => {
+    const tabs = registry()
+    const address = `dsh-resource://file/session/s%2F1/${encoded}`
+    expect(tabs.claim(address).contentId).toBe(address)
+    expect(parseFileAddress(address)).toEqual({ scope: 'session', sessionId: 's/1', path })
+  })
+
+  it.each([
+    'dsh-resource://file/session',
+    'dsh-resource://file/session//../a.md',
+    'dsh-resource://file/session/s-1',
+    'dsh-resource://file/session/%/../a.md',
+    'dsh-resource://file/session/s-1/../%ZZ.md',
+    'DSH-RESOURCE://file/session/s-1/../a.md',
+    'dsh-resource://File/session/s-1/../a.md',
+  ])('keeps the Session parser veto after matching a file prefix: %s', (address) => {
+    const tabs = registry()
+    expect(tabs.candidates(address)).toEqual([])
+    expect(() => tabs.claim(address)).toThrow('no registered tab type claims')
+    expect(() => tabs.claim(address, TEXTPREVIEW_KIND)).toThrow(`tab type "${TEXTPREVIEW_KIND}" refuses`)
+  })
+
+  it.each([
     'dsh-resource://file/shared/team/notes.md',
     'dsh-resource://file/absolute/home/me/notes.md',
     'dsh-resource://file/absolute/C:/w/notes.md',
@@ -84,6 +129,38 @@ describe('text type in the registry', () => {
     expect(tabs.claim('dsh-resource://file/session/s-1/w/logo.md').kind).toBe(TEXTPREVIEW_KIND)
     // Still listed for the picture: a caller naming the kind may open it as text.
     expect(tabs.candidates('dsh-resource://file/session/s-1/w/logo.png').map(type => type.kind)).toEqual(['image', TEXTPREVIEW_KIND])
+  })
+
+  it.each(['builtin', 'extension'] as const)('yields parent paths to the %s band and honors its veto', (priority) => {
+    const tabs = registry()
+    const address = sessionFileAddress('s-1', '../AGENTS.md')
+    const release = tabs.register({
+      id: 'test/markdown', kind: 'markdown', patterns: ['*.md'], priority, title: () => 'Markdown',
+    })
+    expect(tabs.candidates(address).map(type => type.kind)).toEqual(['markdown', TEXTPREVIEW_KIND])
+    expect(tabs.claim(address)).toEqual({ kind: 'markdown', contentId: address, title: 'Markdown' })
+    release()
+    tabs.register({
+      id: 'test/markdown', kind: 'markdown', patterns: ['*.md'], priority, canOpen: () => false, title: () => 'Markdown',
+    })
+    expect(tabs.claim(address).kind).toBe(TEXTPREVIEW_KIND)
+  })
+
+  it('ranks the file declaration by its literal length within the fallback band', () => {
+    const tabs = registry()
+    tabs.register({
+      id: 'test/shorter', kind: 'shorter', patterns: ['dsh-resource://file/**/*.*'], priority: 'fallback', title: () => 'Shorter',
+    })
+    const releaseLonger = tabs.register({
+      id: 'test/longer', kind: 'longer', patterns: ['dsh-resource://file/session/**/*.md'], priority: 'fallback', title: () => 'Longer',
+    })
+    tabs.register({ ...textDefinition(), id: 'test/tied', kind: 'tied' })
+    const address = sessionFileAddress('s-1', 'AGENTS.md')
+    // Specificity uses the literal pattern length, not the size of its accepted address set.
+    expect(tabs.candidates(address).map(type => type.kind)).toEqual(['longer', TEXTPREVIEW_KIND, 'tied', 'shorter'])
+    expect(tabs.claim(address).kind).toBe('longer')
+    releaseLonger()
+    expect(tabs.claim(address).kind).toBe(TEXTPREVIEW_KIND)
   })
 
   it('does not claim addresses of other schemes', () => {

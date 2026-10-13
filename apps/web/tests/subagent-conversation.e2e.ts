@@ -567,7 +567,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       Math.round(clickAreaBox!.x - menuBox!.x),
       Math.round(menuBox!.x + menuBox!.width - clickAreaBox!.x - clickAreaBox!.width),
     // The outer menu padding insets the scrollable tree rows.
-    ]).toEqual([3, 3])
+    ]).toEqual([4, 4])
     await compareOrRefreshGolden(
       BRANCHLESS_EXPECTED,
       await captureStableAria(page, '[role="tree"][aria-label="Subagent sessions"]', scaffold.workspaceCwd),

@@ -1,8 +1,9 @@
-/** Validate source locale metadata, Node resource exports, and package publication selections. */
+/** Validate source locale metadata, official SVG artwork, Node resource exports, and publication selections. */
 
 import { globSync, readFileSync, realpathSync } from 'node:fs'
 import { basename, dirname, join, matchesGlob, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { JSDOM } from 'jsdom'
 import { readPluginMeta, resolvePluginResource } from '../packages/boot/app-boot/src/package-meta.ts'
 
 interface Manifest {
@@ -72,7 +73,46 @@ function published(file: string, files: string[]): boolean {
     && !files.some(pattern => pattern.startsWith('!') && covered(pattern.slice(1)))
 }
 
-function packageProblems(manifestPath: string): string[] {
+/** Structural artwork conventions only; not an SVG sanitizer or a rendered-pixel check. */
+function svgArtworkProblems(icon: string, parser: DOMParser): string[] {
+  const prefix = 'data:image/svg+xml;base64,'
+  if (!icon.startsWith(prefix)) return []
+  const document = parser.parseFromString(Buffer.from(icon.slice(prefix.length), 'base64').toString('utf8'), 'image/svg+xml')
+  if (document.querySelector('parsererror') !== null) return ['SVG icon must contain well-formed XML']
+  const svg = document.documentElement
+  if (svg.localName !== 'svg' || svg.namespaceURI !== 'http://www.w3.org/2000/svg') {
+    return ['SVG icon must have an svg root in the SVG namespace']
+  }
+  const problems: string[] = []
+  if (svg.getAttribute('viewBox') !== '0 0 36 36' || svg.getAttribute('width') !== '36' || svg.getAttribute('height') !== '36') {
+    problems.push('SVG icon must use width="36" height="36" viewBox="0 0 36 36"')
+  }
+  if (svg.querySelector('path, rect, circle, ellipse, line, polyline, polygon') === null) {
+    problems.push('SVG icon must contain geometry')
+  }
+  if (svg.querySelector('script, style, image, foreignObject, text, animate, animateTransform, animateMotion, set') !== null) {
+    problems.push('SVG icon must use self-contained geometry without scripts, styles, images, foreignObject, text, or animation')
+  }
+  const elements = [svg, ...svg.querySelectorAll('*')]
+  const ids = elements.flatMap(element => element.hasAttribute('id') ? [element.id] : [])
+  const uniqueIds = new Set(ids)
+  if (uniqueIds.size !== ids.length) problems.push('SVG icon must use unique ids')
+  for (const element of elements) {
+    for (const attribute of element.attributes) {
+      if (/^on/iu.test(attribute.name)) problems.push(`SVG icon must not use event handler ${attribute.name}`)
+      const references = [...attribute.value.matchAll(/url\(([^)]+)\)/gu)].map(match => (match[1] ?? '').replace(/['"]/gu, '').trim())
+      if (attribute.localName === 'href') references.push(attribute.value)
+      for (const reference of references) {
+        if (!reference.startsWith('#') || !uniqueIds.has(reference.slice(1))) {
+          problems.push(`SVG icon reference ${reference} must name a local id`)
+        }
+      }
+    }
+  }
+  return problems
+}
+
+function packageProblems(manifestPath: string, parser: DOMParser): string[] {
   const problems: string[] = []
   const dir = realpathSync(dirname(manifestPath))
   const pkg = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest
@@ -152,6 +192,9 @@ function packageProblems(manifestPath: string): string[] {
         : displayManifest !== undefined && typeof iconDocument?.icon === 'string'
           ? resolve(dirname(displayManifest), iconDocument.icon)
           : lookup(`${specifier}/icon`)
+      if (pkg.name.startsWith('@deepseek-ai/dsh-') && meta?.icon !== undefined) {
+        problems.push(...svgArtworkProblems(meta.icon, parser).map(problem => `${iconTarget ?? specifier}: ${problem}`))
+      }
       for (const target of [displayManifest, iconTarget]) {
         if (target === undefined) continue
         const file = relative(dir, target).replaceAll('\\', '/')
@@ -209,18 +252,26 @@ function packageProblems(manifestPath: string): string[] {
     })) continue
     problems.push(`${manifestPath}: exports must expose ${document.file} as a plugin locale resource with an en.json discovery baseline`)
   }
-  return problems.concat(children.flatMap(child => packageProblems(join(dir, child.file))))
+  return problems.concat(children.flatMap(child => packageProblems(join(dir, child.file), parser)))
 }
 
 /**
  * Check workspace and named nested package metadata without evaluating plugin entries or reading built output.
+ * Selected SVG icons in @deepseek-ai/dsh-* packages follow official artwork conventions.
+ * Other packages and supported raster icons keep their metadata and publication checks.
  * @param root - repository or fixture root.
- * @returns diagnostics for an empty package corpus, invalid metadata, inaccessible resources, or omitted publication files.
+ * @returns diagnostics for an empty package corpus, invalid metadata or SVG artwork, inaccessible resources, or omitted publication files.
  */
 export function packageMetaProblems(root: string): string[] {
   const manifests = globSync('packages/*/*/package.json', { cwd: root }).map(path => path.replaceAll('\\', '/'))
   if (manifests.length === 0) return [`${root}: no workspace package manifests found`]
-  return manifests.flatMap(path => packageProblems(join(root, path)))
+  const { window } = new JSDOM()
+  try {
+    const parser = new window.DOMParser()
+    return manifests.flatMap(path => packageProblems(join(root, path), parser))
+  } finally {
+    window.close()
+  }
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -229,6 +280,6 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
     console.error(problems.join('\n'))
     process.exitCode = 1
   } else {
-    console.log('verify-package-meta: plugin locale metadata, resource exports, and publication files are valid.')
+    console.log('verify-package-meta: plugin locale metadata, SVG artwork, resource exports, and publication files are valid.')
   }
 }

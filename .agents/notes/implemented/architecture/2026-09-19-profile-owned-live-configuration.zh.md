@@ -24,6 +24,6 @@ Cordis config patch 替换完整 entry config。编辑会保留普通字段、�
 
 ## 后果
 
-本决定只替代 [配置来源所有权](2026-08-04-configuration-source-ownership.zh.md) 中的非秘密 settings 层；其中的环境限制和凭据优先级仍适用。[Volatile 引用](2026-09-18-volatile-config-references.zh.md) 负责引用生命周期和普通更新行为。
+本决定只替代 [配置来源所有权](2026-08-04-configuration-source-ownership.zh.md) 中的非秘密 settings 层；其中的环境限制仍适用，其凭据优先级已由[存储凭据优先级](2026-10-09-stored-credential-precedence.zh.md)替代。[Volatile 引用](2026-09-18-volatile-config-references.zh.md) 负责引用生命周期和普通更新行为。
 
 真实 profile 测试覆盖多实例、持久化重启、非法编辑、过期修订、高优先级层拒绝、秘密脱敏及配置表达式。浏览器测试通过完整应用执行表单写入和重置，并检查实时编辑前后的运行时引用身份。

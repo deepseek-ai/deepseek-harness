@@ -33,3 +33,10 @@ it('resolves the local carrier once while preserving an explicit remote script c
   }
   expect(resolveLaunch()).toEqual({ kind: 'node-script', executable: process.execPath })
 })
+
+it('requires a script launch for persistent processes and selects their bootstrap', () => {
+  expect(() => bootstrapArgs(noMapping, { kind: 'embedded', executable: '/remote/helper' }, 2048, true))
+    .toThrow('requires a node-script launch')
+  expect(bootstrapArgs(noMapping, { kind: 'node-script', executable: '/remote/node', bootstrapPath: '/remote/persistent-process.js' }, 2048, true))
+    .toEqual(['/remote/persistent-process.js', '2048'])
+})

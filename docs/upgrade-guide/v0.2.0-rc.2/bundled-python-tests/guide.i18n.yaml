@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.0-rc.2/bundled-python-tests/guide.md
+/:
+  en: 985656162a55b14a
+  zh: c32bda15938879e5
+/numpy-and-pandas-upstream-tests-require-a-separate-environment:
+  en: ec0ae29022f8ce8c
+  zh: f5e49682b842544d
+/numpy-and-pandas-upstream-tests-require-a-separate-environment/change:
+  en: 41410ee875be7975
+  zh: b052e7b3c8fb096b
+/numpy-and-pandas-upstream-tests-require-a-separate-environment/migration:
+  en: 00c4b10f8df805e7
+  zh: 06ef0fbda56c9acf

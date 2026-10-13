@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-fs-ssh",
   "description": "Filesystem provider over the shared POSIX SSH helper",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "^4.4.3"
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

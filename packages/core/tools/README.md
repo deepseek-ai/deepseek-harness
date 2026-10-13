@@ -65,7 +65,7 @@ The unified schema DSL supports `string`, `number`, `integer`, `boolean`, `null`
 
 ### Configure the presentation mode
 
-The `mode` config decides what the model sees: `native` (every visible schema) or `ptc` (only `run_code` plus a generated SDK).
+The `mode` config decides what the model sees: `native` (every visible schema) or `ptc` (only `run_code` plus a generated SDK). The runtime supplies evaluation syntax, output syntax and state-retention guidance through `executionInstructions`; this package owns tool-call rules, SDK declarations and image-result attachment.
 
 ```yaml
 - name: '@deepseek-ai/dsh-tools'
@@ -133,7 +133,7 @@ New sub-calls use `<parent>:ptc:<n>` ids. Consumers treat these ids as opaque an
 
 Successful image-bearing subcall results become deferred user-message context with `source.kind` set to `ptc-mode`. Other additional contexts retain their producing tool's attribution.
 
-`run_code` accepts `timeoutMs` when the mounted runtime supports an override; its schema reports the configured default and maximum, and the runtime's usage instructions. The Node default is 120,000 ms with a 600,000 ms cap, including nested tool and approval waits. A wider `sandbox_permissions` mode requires a non-empty `justification` and approval before the program starts. The schema asks the model to write that reason in the current user's language. The grant applies to that complete execution; standing Session policy and nested tools retain their own authority. Programs are never replayed automatically: inspect earlier effects before explicitly retrying a denied program.
+`run_code` accepts `timeoutMs` when the mounted runtime supports an override; its schema reports the configured default and maximum, and the runtime's usage instructions. The Node default is 120,000 ms with a 600,000 ms cap, including nested tool and approval waits. A wider `sandbox_permissions` mode requires a non-empty `justification` and approval before the program starts. The schema asks the model to write that reason in the current user's language. The grant applies to that complete execution; standing Session policy and nested tools retain their own authority. Programs are never replayed automatically: inspect earlier effects before explicitly retrying a denied program. Retained PTC environments follow the standing file policy. PTC observes committed Session mode changes and immediately cancels affected calls in both Node modes. Later PTC calls wait for their nested-tool cleanup before resolving the latest policy. The runtime owns process invalidation and cleanup; permission setters remain synchronous. One-time escalations omit the state owner and complete in a temporary environment; standing variables remain available to ordinary calls.
 
 <a id="extension-points"></a>
 ### Extension points
@@ -235,7 +235,7 @@ These limits define when the registry needs special care. They are current packa
 - **`timeoutMs` on a definition is declarative only** — the registry never enforces deadlines; enforcement requires the `@deepseek-ai/dsh-tool-call-timeout-policy` wrapper.
 - **PTC mode's SDK language follows the one loaded runtime, and a presentation is per agent rather than per tool** — `mode: ptc` rejects prompt assembly unless `ctx.ptcRuntime.language` has a registered SDK renderer; within one agent no tool can be native-only while another is ptc-only.
 - **PTC mode intermediate values are execution-local and unbounded by bytes** — they cannot be reconstructed from session replay and may exhaust process or worker memory; only the outer `run_code` output has the worker's configurable hard cap.
-- **`run_code` state is fresh per run** — a persistent REPL-style kernel is rejected for the MVP, because cross-call state would be invisible to the log.
+- **State depends on the runtime**: the default backend starts fresh; a REPL backend retains memory per live Agent. Agent disposal awaits release. Restart and execution failures can clear memory; model-visible guidance explains how to recreate missing variables. Programs and results remain in the Session log, without serializing live objects.
 
 `defineTool()`, registry schema projection, and system-prompt assembly preserve `deferLoading: true`. The marker requests deferred definition loading and does not imply a `tool-addition` record; the [LLM package](../../../packages/llm/llm/README.md#known-limitations-and-deferred-work) documents provider enforcement limits.
 

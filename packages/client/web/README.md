@@ -31,6 +31,8 @@ Static application pages install `__DSH_BOOT_READY__` before the entry runs. The
 
 The shell base styles apply automatic CJK/Latin spacing to ordinary content in supporting browsers. Semantic code and terminal, diff, read, and search output containers retain literal source spacing and column alignment; browsers without `text-autospace` support ignore both declarations.
 
+Web and Desktop mathematical rendering requires WOFF2 support. The [Web build](../../../apps/web/katex-fonts.ts) retains every KaTeX font face in WOFF2 and omits WOFF/TTF fallbacks; a face without WOFF2 rejects the build. Font glyphs, weights, styles, and layout rules are preserved.
+
 ### What boot looks like
 
 Boot runs in two stages: the module stage adopts the parser-loaded bootstrap batch, builds the module system from the Host-provided boot graph, and prefetches the `immediately` tier through the shared application-batch URL, which executes once. The plugin stage then activates every graph entry and waits for all of them before handing the marked boot DOM to the UI renderer, which hydrates it and switches to the complete UI.
@@ -39,9 +41,12 @@ Boot runs in two stages: the module stage adopts the parser-loaded bootstrap bat
 
 The boot page uses plain DOM and local CSS, so bundle and plugin-activation failures remain visible: it shows one spinner node whose CSS arc grows as entries activate, and reports per-entry status. The spinner and its animation phase persist until the full UI replaces the boot page. A plugin that fails import or activation is reported by name with the reason (missing service, import failure, or state) instead of a blank page. The console contains the original import error.
 
+<a id="the-shared-module-table"></a>
 ### The shared module table
 
-`PLATFORM_MODULES` (in `src/platform.ts`) names the shell-seeded shared modules — React, Cordis, and static UI libraries — and together with `PRELOADED_CLIENT_EXTERNALS` (the parser-preloaded runtime row) defines the implicit external baseline every dynamic bundle resolves against. `dsh.client.external` adds only exact non-baseline requests; see [shared modules and the module graph](../AGENTS.md#shared-modules-and-the-module-graph).
+`PLATFORM_MODULES` (in `src/platform.ts`) names the shell-seeded shared modules — React, Cordis, Zod (`zod`), TanStack Virtual (`@tanstack/react-virtual`), and static UI libraries — and together with `PRELOADED_CLIENT_EXTERNALS` (the parser-preloaded runtime row) defines the implicit external baseline every dynamic bundle resolves against. `dsh.client.external` adds only exact non-baseline requests; see [shared modules and the module graph](../AGENTS.md#shared-modules-and-the-module-graph).
+
+Built-in and installed browser plugins in the same page receive the same module instances. The shell supplies the dependency versions declared in this package's `package.json`; the module table does not negotiate versions per plugin. External plugins that use these modules must target a host that provides the required specifiers and APIs, and keep those imports external when building their client bundle. Inlined dependencies remain private to their bundle; Host code and Workers resolve their dependencies separately.
 
 ### Configuration
 

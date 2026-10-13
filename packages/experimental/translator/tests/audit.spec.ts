@@ -1,7 +1,8 @@
 /** Common paid requests and results survive Host restart without altering main conversation input. */
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { pluginRecordOf, SessionId, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
-import JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
+import type { JsonlHandleStorage } from '../../../session/session-persistence-jsonl/src/storage.ts'
 import { readFile } from 'node:fs/promises'
 import { setImmediate } from 'node:timers/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -39,8 +40,8 @@ function historicalEvents(): SessionEvent[] {
 describe('common paid translation persistence', () => {
   it.each(['caller cancellation', 'provider deadline'] as const)(
     'keeps a pending result ahead of an immediate retry after %s without billing again', async (interruption) => {
-      const b = await paidFixture(cleanups, { translator: { deepseekTimeoutMs: 60_000 } }), backend = b.ctx.sessionPersistence
-      if (!(backend instanceof JsonlPersistence)) throw new Error('Expected the real JSONL backend')
+      const b = await paidFixture(cleanups, { translator: { deepseekTimeoutMs: 60_000 } }), backend = b.ctx.sessionPersistence as SessionPersistence & Pick<JsonlHandleStorage, 'persistBatch'>
+      expect(typeof backend.persistBatch).toBe('function')
       const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
       cleanups.push(async () => { release.resolve(undefined) })
       const persist = backend.persistBatch.bind(backend)

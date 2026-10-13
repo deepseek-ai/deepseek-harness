@@ -1,6 +1,6 @@
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { mountLocalActivations, startTestActivation as start } from '../../subagent/tests/local-activation.ts'
-import { createUserMessage, type GenerateOptions } from '@deepseek-ai/dsh-llm'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
 import { Context, symbols, type EffectMeta } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -13,7 +13,6 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, maxTokensResponse, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as spawn from '../src/index.ts'
 import { STRUCTURED_OUTPUT_TOOL } from '@deepseek-ai/dsh-subagent'
-import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]
 
@@ -41,8 +40,6 @@ function text(blocks: readonly { type: string; text?: string }[]): string {
   return blocks.filter(b => b.type === 'text').map(b => b.text).join('')
 }
 
-
-
 /** Invoke the child lifecycle effect while its parent-owned setup is still unpublished. */
 function disposeChildLifecycle(parent: Agent): void {
   const lifecycle = [...parent.ctx.fiber._disposables]
@@ -52,14 +49,6 @@ function disposeChildLifecycle(parent: Agent): void {
     })
   if (lifecycle === undefined) throw new Error('child lifecycle effect not found')
   void lifecycle()
-}
-
-
-/** The system prompt a loop-built request carries as its leading system-role message ('' when none). */
-function systemPromptOf(request: GenerateOptions): string {
-  const head = request.messages[0]
-  if (head?.role !== 'system') return ''
-  return head.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
 }
 
 describe('dsh-subagent-spawn-in-process', () => {
@@ -278,10 +267,9 @@ describe('dsh-subagent-spawn-in-process', () => {
     const provider = ctx.subagents.getProvider('spawn')!
     expect(provider.capabilities).toEqual({
       agentOptions: true,
+      agentPreset: true,
       outputSchema: true,
       depthLimit: true,
-      toolFilter: true,
-      persona: true,
     })
   })
 
@@ -378,67 +366,6 @@ describe('dsh-subagent-spawn-in-process', () => {
     expect(unwrapped.name).toBe('subagent-spawn-in-process')
     expect(unwrapped.inject).toEqual(['subagents'])
     expect(typeof unwrapped.apply).toBe('function')
-  })
-
-  describe('persona and toolFilter (the scoped child world)', () => {
-    it('a per-child persona shadows the deployment persona in the child request only', async () => {
-      const { ctx, parent, adapter } = await setup([
-        textResponse('parent answer'),
-        textResponse('child answer'),
-      ])
-      parent.followup(createUserMessage({ content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' } }))
-      await parent.whenIdle()
-
-      const run = await start(ctx, 'spawn', {
-        prompt: [{ type: 'text', text: 'do X' }],
-        parent,
-        persona: 'You are the tersest test runner.',
-      })
-      await run.result
-      const childRequest = adapter.requests.at(-1)!
-      expect(systemPromptOf(childRequest)).toContain('You are the tersest test runner.')
-      // The parent's earlier request carried no such persona.
-      expect(systemPromptOf(adapter.requests[0]!)).not.toContain('tersest test runner')
-      await run.dispose()
-    })
-
-    it('toolFilter hides denied tools from the child prompt AND refuses their execution', async () => {
-      const { ctx, parent, adapter } = await setup([
-        // The child tries the denied tool anyway, then answers.
-        toolCallResponse('c1', 'forbidden_tool', {}),
-        textResponse('done'),
-      ])
-      ctx.tools.register(defineContentToolFixture({
-        name: 'forbidden_tool', description: 'global', parameters: {},
-        execute: () => Promise.resolve([{ type: 'text', text: 'ran' }]),
-      }))
-      const run = await start(ctx, 'spawn', {
-        prompt: [{ type: 'text', text: 'do X' }],
-        parent,
-        toolFilter: { deny: ['forbidden_tool'] },
-      })
-      const result = await run.result
-      expect(result.stopReason).toBe('completed')
-      // Not advertised…
-      const childRequest = adapter.requests[0]!
-      expect((childRequest.tools ?? []).map(t => t.name)).not.toContain('forbidden_tool')
-      // …and the attempted call executed as UNKNOWN_TOOL (visible in the log).
-      const child = run.localAgent
-      const toolResult = child.session.snapshotEvents().find(e => e.type === 'tool/result')!
-      expect(JSON.stringify(toolResult.data)).toContain('unknown tool')
-      await run.dispose()
-    })
-
-    it('an unknown toolFilter name fails the spawn loudly with no orphaned child', async () => {
-      const { ctx, parent } = await setup([])
-      const before = ctx.agents.list().length
-      await expect(start(ctx, 'spawn', {
-        prompt: [{ type: 'text', text: 'do X' }],
-        parent,
-        toolFilter: { deny: ['no_such_tool'] },
-      })).rejects.toThrow(/unknown global tool "no_such_tool"/)
-      expect(ctx.agents.list().length).toBe(before)
-    })
   })
 
   it('spawning from a DISPOSING parent fails loud with no orphaned child (INACTIVE_EFFECT teaching error)', async () => {

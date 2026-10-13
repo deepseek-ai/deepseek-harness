@@ -21,7 +21,7 @@
       - button "删除 Acme Gateway (acme-gateway)": 删除
       - text: Acme Gateway acme-gateway API 密钥
       - textbox "API 密钥":
-        - /placeholder: 输入 API 密钥，或留空使用环境认证
+        - /placeholder: 输入 API 密钥
       - group:
         - text: 自定义设置 显示名称
         - textbox "显示名称":

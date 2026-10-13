@@ -82,7 +82,7 @@ async function setup(content: JsonValue[], maxInlineTokens: number, mode: 'nativ
     inputSchema: { type: 'object' }, call: async () => ({ content }),
   }))
   const session = Session.create(SessionId('mixed-spill'))
-  const agent = { session, options: { provider: 'vision', model: 'vision' } } as Agent
+  const agent = { ctx, session, options: { provider: 'vision', model: 'vision' } } as Agent
   const execute = (name = 'inspect') => ctx.tools.execute({
     signal: new AbortController().signal, callId: ToolCallId('mixed-call'), name,
     arguments: name === 'run_code' ? { code: 'return await tools.inspect({})', description: 'Inspect a window' } : {}, agent,

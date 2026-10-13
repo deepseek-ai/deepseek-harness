@@ -54,14 +54,16 @@ async function bench(runtime: 'web' | 'desktop' = 'desktop', platform: ShortcutP
     startSession: vi.fn(), forkSession: vi.fn(async () => 'fork-child' as SessionId), archiveSession: vi.fn(async (_sessionId: SessionId) => {}),
   }
   const controls = createWorkspaceShortcutControls()
+  const reportForkFailure = vi.fn()
   const fiber = ctx.plugin((scoped) => {
-    installWorkspaceShortcuts(scoped, navigation, controls, (id) => { void navigation.archiveSession(id) })
+    installWorkspaceShortcuts(scoped, navigation, controls,
+      (id) => { void navigation.archiveSession(id) }, reportForkFailure)
   })
   await fiber.await()
   const select = (id: string) => { list.set({ ...list.getSnapshot(), byId: {
     [sid('a')]: row('a', id === 'a'), [sid('b')]: row('b', id === 'b'),
   } }) }
-  return { ctx, fiber, registry, commands, navigation, controls, list, directory, select, history, loadOlder, panelInfo }
+  return { ctx, fiber, registry, commands, navigation, controls, reportForkFailure, list, directory, select, history, loadOlder, panelInfo }
 }
 
 afterEach(() => { vi.restoreAllMocks() })
@@ -188,12 +190,11 @@ describe('workspace shortcut ownership', () => {
     ))
     const invoke = () => b.registry.dispatch(key('KeyF', { alt: true }), context, vi.fn())
     expect(invoke().status).toBe('handled')
-    await vi.waitFor(() => { expect(b.controls.state.getSnapshot().forkError).toMatchObject({ reason: 'unavailable' }) })
+    await vi.waitFor(() => { expect(b.reportForkFailure).toHaveBeenCalledExactlyOnceWith('unavailable') })
     expect(warning).not.toHaveBeenCalled()
-    b.controls.dismissForkError()
     b.navigation.forkSession.mockRejectedValueOnce(new Error('connection closed'))
     expect(invoke().status).toBe('handled')
-    await vi.waitFor(() => { expect(b.controls.state.getSnapshot().forkError).toMatchObject({ reason: 'failed' }) })
+    await vi.waitFor(() => { expect(b.reportForkFailure).toHaveBeenNthCalledWith(2, 'failed') })
     expect(warning).toHaveBeenCalledOnce()
     b.list.set({ ...b.list.getSnapshot(), byId: { [sid('a')]: { ...row('a', true), running: true } } })
     expect(invoke().status).toBe('handled')

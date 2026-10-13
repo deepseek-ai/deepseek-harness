@@ -18,6 +18,6 @@ export async function mountRuntime(ctx: Context, config: Config = {}, policy: { 
   if (!ctx.get('sandbox')) await ctx.plugin(Sandbox, {})
   if (!ctx.get('sessionProjections')) await ctx.plugin(SessionProjections)
   if (!ctx.get('sandboxPolicy')) await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access', ...policy })
-  await ctx.plugin(NodeRuntime, config)
-  return ctx.ptcRuntime as NodeRuntime
+  const fiber = await ctx.plugin(NodeRuntime, config)
+  return { runtime: ctx.ptcRuntime as NodeRuntime, fiber }
 }

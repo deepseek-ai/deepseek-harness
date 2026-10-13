@@ -10,15 +10,21 @@ import { zh } from '../src/client/locale.ts'
 
 const t = makeTranslate(zh, commonZh)
 
+/** Reject attachment loads in component fixtures without durable images. */
+export const unusedImageLoader: AssistantMarkdownProps['loadImage'] = async () => {
+  throw new Error('This component fixture has no durable image attachments')
+}
+
 function content(input: ReasoningContentInput) {
   // The component only reads these inputs; unused framework seats are exercised in assembly tests.
   return createElement(ReasoningContent, { ...input, t } as ComponentProps<typeof ReasoningContent>)
 }
 
 /** Render the production child component without emulating a registry or its dispatch. */
-export const renderReasoningSlot = (
-  (_key: 'conversation.chat.reasoning.body', input: ReasoningContentInput) => content(input)
-) as AssistantMarkdownProps['renderSlot']
+export const renderReasoningSlot: AssistantMarkdownProps['renderSlot'] = (key: string, input: object) => {
+  if (key !== 'conversation.chat.reasoning.body') throw new Error(`Unexpected reasoning Slot: ${key}`)
+  return content(input as ReasoningContentInput)
+}
 
 /** Supply the official component at the Factory call seam of a standalone component unit. */
 export const renderReasoningFactory: PropsRenderFactories['renderFactorySlot'] = (name, input) => {

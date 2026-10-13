@@ -505,7 +505,7 @@ it.each(['initializing', 'waiting-browser', 'exchanging'] as const)('shows %s an
   expect(operations.cancel).toHaveBeenCalledExactlyOnceWith('attempt')
 })
 
-it('opens the authorization link with the active Desktop palette and follows later switches', () => {
+it('opens the authorization link with the active application palette and follows later switches', () => {
   const authorizeUrl = 'https://platform.deepseek.com/dsh/authorize?state=example'
   const operations = operationsOf({ status: 'signed-out', attempt: { id: 'attempt' as SignInAttemptId, phase: 'waiting-browser', authorizeUrl } })
   const element = (theme: ThemeSnapshot) => <AccountSection {...({} as GlobalStandardProps)} {...operations}

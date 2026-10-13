@@ -1,9 +1,10 @@
-/** Host-backed work details and independent, in-memory collapse timing. */
+/** Independent work-details preferences backed by the same Host configuration form. */
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { CollapseTiming } from './presentation-policy.ts'
 import {
+  COLLAPSE_TIMING_FIELD, DEFAULT_COLLAPSE_TIMING,
   DEFAULT_TRANSCRIPT_VIEW_MODE, LEGACY_TRANSCRIPT_VIEW_MODE, LEGACY_EXPANDED_TRANSCRIPT_VIEW_MODE, TRANSCRIPT_VIEW_FIELD,
   type ChatSettings, type TranscriptViewMode,
 } from '../chat-settings.ts'
@@ -13,8 +14,8 @@ export class TranscriptViewPolicy {
   private readonly unsubscribe: () => void
   /** Reactive current mode, including the client default before Host settings arrive. */
   readonly mode: SnapshotStore<TranscriptViewMode>
-  /** Independent Client-lifetime choice; each new instance starts with completion-time folding. */
-  readonly collapseTiming: SnapshotStore<CollapseTiming> = createSnapshotStore<CollapseTiming>('completion')
+  /** Reactive collapse timing, defaulting to completion until Host settings arrive. */
+  readonly collapseTiming: SnapshotStore<CollapseTiming> = createSnapshotStore<CollapseTiming>(DEFAULT_COLLAPSE_TIMING)
 
   /**
    * @param host - durable Chat settings scope.
@@ -43,11 +44,13 @@ export class TranscriptViewPolicy {
   }
 
   /**
-   * Keep collapse timing in memory without writing Host or browser storage.
+   * Publish and persist collapse timing without changing the work-details mode.
    * @param timing - immediate completion folding or deferred folding at the next input.
    */
   setCollapseTiming(timing: CollapseTiming): void {
+    if (this.collapseTiming.getSnapshot() === timing) return
     this.collapseTiming.set(timing)
+    void this.host.set(COLLAPSE_TIMING_FIELD, timing)
   }
 
   /** Adopt the latest accepted Host section without writing it back. */
@@ -58,5 +61,7 @@ export class TranscriptViewPolicy {
     const mode = saved === LEGACY_TRANSCRIPT_VIEW_MODE || saved === LEGACY_EXPANDED_TRANSCRIPT_VIEW_MODE
       ? 'detailed' : saved ?? this.defaultMode
     if (this.mode.getSnapshot() !== mode) this.mode.set(mode)
+    const timing = section.collapseTiming ?? DEFAULT_COLLAPSE_TIMING
+    if (this.collapseTiming.getSnapshot() !== timing) this.collapseTiming.set(timing)
   }
 }

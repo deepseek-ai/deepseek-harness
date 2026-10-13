@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { zipSync } from 'fflate'
@@ -55,13 +55,29 @@ it('reports missing distribution metadata before trying to execute a stale nativ
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
+// Native Windows payloads require python.exe rather than POSIX interpreter aliases.
+it.skipIf(process.platform === 'win32')('rejects expanded interpreter aliases in the native payload smoke', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'primary-expanded-aliases-'))
+  try {
+    await writeFile(join(root, 'runtime.json'), JSON.stringify({ desktopVersion: '1', platform: process.platform, arch: process.arch,
+      python: '3.12.14', pythonPackages: { numpy: '2.3.5' } }))
+    await mkdir(join(root, 'dependencies/python/bin'), { recursive: true })
+    for (const name of ['python', 'python3', 'python3.12']) await writeFile(join(root, 'dependencies/python/bin', name), 'interpreter')
+    expect(() => { smokePrimaryRuntime(root) }).toThrow('Python commands must be relative aliases')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
 it('extracts a hash-verified cached library without a Python installer or network request', async () => {
   const root = await mkdtemp(join(tmpdir(), 'desktop-wheel-'))
   try {
     const hash = createHash('sha256').update(libraryWheel).digest('hex')
     const archive = join(root, hash)
     await writeFile(archive, libraryWheel)
+    const original = await stat(archive)
     expect(await downloadPrimaryRuntimeAsset('https://unused.invalid/library.whl', hash, root)).toBe(archive)
+    const reused = await stat(archive)
+    expect(reused.ino).toBe(original.ino)
+    expect(reused.mtimeMs).toBe(original.mtimeMs)
     await unpackPrimaryRuntimeWheel(archive, join(root, 'site-packages'))
     expect(await readFile(join(root, 'site-packages/sample.py'), 'utf8')).toBe('sample = 42\n')
     await writeFile(archive, 'corrupt archive')
@@ -121,8 +137,7 @@ it('copies complete Office resources outside the application archive and removes
   try {
     const source = join(root, 'package', 'assets')
     const destination = join(root, 'Contents', 'Resources', 'runtime', 'office-skills')
-    await mkdir(join(source, 'scripts'), { recursive: true })
-    await writeFile(join(source, 'scripts', 'check_office.py'), 'print("checker")\n')
+    await mkdir(source, { recursive: true })
     for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
       await mkdir(join(source, name))
       await writeFile(join(source, name, 'SKILL.md'), `# ${name}\n`)
@@ -133,7 +148,6 @@ it('copies complete Office resources outside the application archive and removes
     for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
       expect(await readFile(join(destination, name, 'SKILL.md'), 'utf8')).toBe(`# ${name}\n`)
     }
-    expect(await readFile(join(destination, 'scripts', 'check_office.py'), 'utf8')).toBe('print("checker")\n')
     await expect(readFile(join(destination, 'obsolete.py'))).rejects.toMatchObject({ code: 'ENOENT' })
   } finally { await rm(root, { recursive: true, force: true }) }
 })

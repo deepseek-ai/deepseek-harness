@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write apps/desktop/windows-signing/README.md
+/:
+  en: 5b2af461afadb867
+  zh: c7558c795a752944
+/windows-signing-and-runner-operations:
+  en: 65f1ac70a69830fd
+  zh: cd5825b41e9e30f4
+/windows-signing-and-runner-operations/summary:
+  en: 3eec637b807a2d4c
+  zh: e042992b9ea83345
+/windows-signing-and-runner-operations/table-of-contents:
+  en: 3a812cc5ad554fd3
+  zh: 0401b5764c155c0b
+/windows-signing-and-runner-operations/trust-and-isolation-limits:
+  en: 0c261f3948178d55
+  zh: 1086cd882468ad8f
+/windows-signing-and-runner-operations/machine-setup-and-runner-startup:
+  en: ba3de07cc9553056
+  zh: 887e652c40d57091
+/windows-signing-and-runner-operations/signing-configuration:
+  en: 4b5548818375eb9a
+  zh: 8c975adbb1dca9c8
+/windows-signing-and-runner-operations/signing-and-timestamp-completion:
+  en: e42565e00283e3f6
+  zh: 584a33f07b50fd5b
+/windows-signing-and-runner-operations/failure-records-and-operator-recovery:
+  en: 5401b605a2f3a44e
+  zh: fc1f6ee667bcd20d
+/windows-signing-and-runner-operations/signature-cache-and-concurrent-stages:
+  en: 24032af67e83a003
+  zh: 76894f57a9dfed52
+/windows-signing-and-runner-operations/verification-limits:
+  en: 94a471410c84a1c7
+  zh: 115228e4ca36581d
+/windows-signing-and-runner-operations/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

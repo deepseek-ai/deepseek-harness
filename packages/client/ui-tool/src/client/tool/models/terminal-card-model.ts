@@ -44,7 +44,7 @@ export interface TerminalCardModel {
    * The locale-neutral props {@link TerminalBlock} draws. The render site adds
    * `command` after resolving {@link copy} through its locale seat.
    */
-  card: Pick<TerminalBlockProps, 'cwd' | 'output' | 'exitCode' | 'signal' | 'running'>
+  card: Pick<TerminalBlockProps, 'cwd' | 'output' | 'exitCode' | 'signal' | 'running' | 'background'>
   /**
    * Verbatim Tool data or semantic `terminal_send` data. Product copy stays
    * unresolved until a render site supplies its locale seat.
@@ -55,7 +55,7 @@ export interface TerminalCardModel {
 }
 
 interface LocalizedTerminalCardModel {
-  readonly card: Pick<TerminalBlockProps, 'command' | 'cwd' | 'output' | 'exitCode' | 'signal' | 'running'>
+  readonly card: Pick<TerminalBlockProps, 'command' | 'cwd' | 'output' | 'exitCode' | 'signal' | 'running' | 'background'>
   readonly description: string | undefined
 }
 
@@ -288,8 +288,9 @@ function parseExitStatus(text: string): { output: string; exitCode?: number; sig
 /**
  * Derive terminal props for supported shell and terminal-send calls, including
  * nested PTC dispatch calls. Standard shell results parse their final status
- * marker; persistent shell results, spill previews, background calls, errors,
- * and malformed input use the generic path. {@link isSettledPersistentShellCall} lets that generic
+ * marker. Successful background shell launches retain only their command after
+ * settlement; persistent shell results, spill previews, background terminal sends,
+ * errors, and malformed input use the generic path. {@link isSettledPersistentShellCall} lets that generic
  * persistent result remain expandable without inventing one process status.
  * @param block - running or settled Tool block.
  * @param sessionCwd - original workspace root used only for old results without recorded cwd.
@@ -302,7 +303,7 @@ export function terminalCardModel(
   const parsed = parsedToolCall(block)
   if (parsed === null) return null
   const call = shellCall(parsed.name, parsed.args) ?? terminalSendCall(parsed.name, parsed.args)
-  if (call === null || call.background) return null
+  if (call === null || (call.kind === 'terminal-send' && call.background)) return null
 
   const copy: TerminalCardModel['copy'] = call.kind === 'shell'
     ? { kind: 'shell', command: call.command, description: call.description }
@@ -322,10 +323,14 @@ export function terminalCardModel(
         exitCode: undefined,
         signal: undefined,
         running: true,
+        ...(call.kind === 'shell' && call.background ? { background: call.background } : {}),
       },
     }
   }
   if (block.isError || (call.kind === 'shell' && call.persistent) || isSpilledShellCall(block)) return null
+  if (call.kind === 'shell' && call.background) {
+    return { copy, card: { cwd, running: false, background: call.background } }
+  }
   const output = singleResultText(block)
   if (output === undefined) return null
   const status = call.kind === 'terminal-send' ? { output } : parseExitStatus(output)

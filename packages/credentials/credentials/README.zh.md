@@ -54,8 +54,8 @@ declare const ctx: Context
 const ref = credentialRef('DEEPSEEK_API_KEY')          // POSIX shell identifier, branded
 const hit = await ctx.credentials.resolve(ref)         // { value, source } | undefined
 const info = await ctx.credentials.describe(ref)       // { configured, source?, writable } — never the value
-await ctx.credentials.set(ref, 'sk-…')                 // rejects while a read-only source shadows the ref
-await ctx.credentials.unset(ref)                       // no-op when absent; same shadowing rule
+await ctx.credentials.set(ref, 'sk-…')                 // the stored value outranks environment fallbacks
+await ctx.credentials.unset(ref)                       // no-op when absent; an environment fallback then applies again
 ```
 
 用 `set` 存储密钥、用 `unset` 移除、用 `describe` 检查状态、在操作需要时用 `resolve` 读取当前值。`describe` 报告密钥是否已设置、来自哪里、能否写入——它绝不返回值。
@@ -92,7 +92,7 @@ apiKeyEnv: DEEPSEEK_API_KEY
 
 ### 可能出错的地方
 
-- **启动环境提供的密钥无法被覆盖**——`DEEPSEEK_API_KEY=… dsh`（或 CI 机密、容器 `-e`）在本轮运行中优先，并被报告为只读；请先在启动 shell 中清除该变量，再存储其他值。
+- **存储的密钥优先于启动环境**——存在存储值时，`DEEPSEEK_API_KEY=… dsh`（或 CI 机密、容器 `-e`）不会生效；要使用导出的密钥，请 `unset` 存储的密钥。
 - **空值无法存储**——存储空字符串会被拒绝；请改为移除密钥。
 - **密钥值绝不会出现在配置界面或诊断信息中**——界面只显示密钥是否已设置、来自哪里、能否修改；值本身留在存储中。
 

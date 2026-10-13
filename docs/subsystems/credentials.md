@@ -15,6 +15,7 @@ A reference names one credential as a POSIX-style environment-variable name. The
 type CredentialRef = Branded<'CredentialRef'>
 ```
 
+<a id="resolution"></a>
 ## Resolution
 
 `resolve(ref)` returns the value with the provider-defined source layer that supplied it, or `undefined` while unconfigured. Consumers re-resolve at each operation and never cache across operations — that per-operation read is the hot-update mechanism.
@@ -31,7 +32,7 @@ interface ResolvedCredential {
 
 ## Description
 
-`describe(ref)` answers configuration surfaces without ever exposing a value: whether the reference resolves, from which layer, and whether `set` would currently succeed. The local provider reports a reference supplied by the live process environment as `writable: false` — a write would appear to succeed while resolution kept returning the shadowing value, so the seam rejects it and the UI can render the reference read-only up front.
+`describe(ref)` answers configuration surfaces without ever exposing a value: whether the reference resolves, from which layer, and whether `set` would currently succeed. The local provider ranks its managed file above the launch environment, so saving a value always creates the effective writable layer; removing it reveals the launch environment or `.env` fallback again.
 
 ```ts type-equiv
 /**
@@ -136,7 +137,7 @@ Source: [`packages/credentials/authorization/src/index.ts`](../../packages/crede
 
 Abstract credential service over two key spaces that answer two questions.
 
-A CredentialRef answers "what is behind this environment-variable name", layered over the process environment, the provider-managed store, and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.
+A CredentialRef answers "what is behind this environment-variable name": the provider-managed store first, then ambient fallbacks such as the process environment and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.
 
 A CredentialKey answers "what credential does this plugin hold for this id". Nothing can layer here — an authorization grant has no environment to be read from — so presence of the record is the whole fact, and modifyRecord is the only write path because a correct write depends on the current value (a token refresh is read-decide-replace under one lock).
 
@@ -160,10 +161,9 @@ abstract resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined>
 abstract describe(ref: CredentialRef): Promise<CredentialInfo>
 
 /**
- * Durably store one value in the provider-managed writable source. Rejects
- * while a read-only source shadows the reference — the write would appear
- * to succeed while resolution keeps returning the shadowing value — and
- * rejects an empty value (use {@link unset}).
+ * Durably store one value in the provider-managed writable source. The stored
+ * value takes precedence over ambient fallbacks, and empty values are
+ * rejected (use {@link unset}).
  * @param ref - the reference to store.
  * @param value - the non-empty secret value.
  */
@@ -171,8 +171,8 @@ abstract set(ref: CredentialRef, value: string): Promise<void>
 
 /**
  * Remove one reference from the provider-managed writable source; removing
- * an absent reference is a no-op. Rejects while a read-only source shadows
- * the reference, like {@link set}.
+ * an absent reference is a no-op. Ambient fallback layers may become
+ * effective again after removal.
  * @param ref - the reference to remove.
  */
 abstract unset(ref: CredentialRef): Promise<void>

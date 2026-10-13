@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-13-team-identity-runtime-context.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-13-team-identity-runtime-context.md
+/agent-note-team-identity-in-required-runtime-context:
+  en: 8c88759320ae8481
+  zh: 4068b18723907eb9
+/agent-note-team-identity-in-required-runtime-context/problem:
+  en: c9a81cb731ddf7b2
+  zh: 428c0e6f8937d7c5
+/agent-note-team-identity-in-required-runtime-context/decision:
+  en: 6c73479973c1e378
+  zh: 98677c77f77f8d81
+/agent-note-team-identity-in-required-runtime-context/alternatives-considered:
+  en: 774566ffbf9e9db8
+  zh: ea761d876af462f2
+/agent-note-team-identity-in-required-runtime-context/consequences:
+  en: 18d1aa67936f1227
+  zh: 7e06c1f51553ecdd

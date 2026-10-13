@@ -27,6 +27,8 @@ agent（智能体）可以通过该内置提供方加载官方「powered by dsh�
 
 启用插件即可让 `dsh-badge` skill 出现在会话 skill 目录中；随后模型可以像加载任何其他 skill 一样加载它，并遵循其指令添加「powered by dsh」徽章。
 
+在插件页面中，此组件显示为 **DSH**，并使用 DSH 标签图标。它提供的 skill 名称为 `dsh-badge`。
+
 ### 何时选择
 
 当用 DeepSeek Harness 生成的内容应携带官方署名徽章、且部署方希望该徽章 skill 对 agent 可用而无需存入本地 skill 目录时，选择此提供方。当徽章与部署无关时，请跳过。默认组合省略此插件；使用它需要安装包并显式插入活动行。

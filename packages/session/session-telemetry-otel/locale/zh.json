@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "反馈会话日志上传",
+    "description": "按反馈授权策略，通过 OpenTelemetry 上传相关会话日志。"
+  }
+}

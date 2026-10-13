@@ -39,12 +39,51 @@
               - id: deepseek-v4-flash
               - id: deepseek-v4-pro
 
-# Restrict inherited capabilities before the child assembles its first request.
+# The parent owns its file and web tools; the child selects a separate preset.
+- id: tool-fs
+  disabled: true
+
+- id: tool-fs-search
+  disabled: true
+
+- id: tool-web
+  disabled: true
+
+- id: tool-subagent-control
+  disabled: true
+
+- insert:
+    - id: agent-preset-registry
+      name: '@deepseek-ai/dsh-agent-preset-registry'
+      config:
+        default: parent
+    - id: preset-parent
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: parent
+        plugins:
+          - name: '@deepseek-ai/dsh-tool-fs'
+          - name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - name: '@deepseek-ai/dsh-tool-subagent-control'
+    - id: preset-child
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: child
+        plugins: []
+    - id: parent-agent-preset
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/parent-agent-preset.ts'
+
 - id: tool-subagent
   name: '@deepseek-ai/dsh-tool-subagent'
+  inject: [agentPresets]
   config:
     provider: spawn
     toolName: subagent
     maxDepth: 1
-    toolFilter:
-      deny: [send_message, write, edit, glob, grep, web_search, web_fetch]
+    agentPreset: child

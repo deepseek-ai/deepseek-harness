@@ -21,16 +21,6 @@ pre-commit:
       run: node_modules/.bin/tsx scripts/run-oxlint.ts --config .oxlintrc.staged.json --fix --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
 
-    # Regenerate rather than reject: a dependency edit that forgot the notices
-    # would otherwise fail the test lane long after the commit. The glob matches
-    # every input the generator reads, including the generator itself and the
-    # build-time pin source. Deleting a manifest cannot trigger this job —
-    # lefthook only inspects files present on disk — so that one case still
-    # falls through to the freshness assertion in the test lane.
-    - name: third-party notices (staged)
-      glob: '{package.json,*/package.json,*/*/package.json,*/*/*/package.json,*/*/*/*/package.json,pnpm-workspace.yaml,*/*/pnpm-workspace.yaml,pnpm-lock.yaml,vendor/README.md,python/*/pyproject.toml,scripts/primary-runtime/lock.json,scripts/gen-third-party-notices.ts,scripts/browser-bundled-externals.ts,scripts/build-exe-for-python-sdk.ts,tsconfig.base*.json,packages/*/*/src/**/*,packages/*/*/tsdown.config.ts,packages/client/tsdown.client.ts,apps/*/src/**/*,apps/*/vite.config.ts}'
-      run: node_modules/.bin/tsx scripts/gen-third-party-notices.ts && git add THIRD_PARTY_NOTICES.md
-
     - name: whitespace (staged)
       run: git diff --cached --check
 

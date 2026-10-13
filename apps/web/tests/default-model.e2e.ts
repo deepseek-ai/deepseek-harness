@@ -487,14 +487,13 @@ describe('web e2e: the composer model switch is the default for later sessions',
         baseURL: 'https://gateway.origin.example/v1', models: [{ id: START_MODEL, name: 'Origin Large' }] },
     } })
 
-    const seat = page.getByRole('button', { name: new RegExp(`^选择模型.*${ROUTE}/${MODEL}`) })
+    const seat = page.getByRole('button', { name: '请选择模型', exact: true })
     await seat.waitFor()
     expect(await box.isEnabled()).toBe(true)
     expect(scaffold.ctx.agentDefaultModel.currentSelection()).toMatchObject({ provider: ROUTE, model: MODEL })
     const aria = await captureStableAria(page, '[data-composer-card]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(fileURLToPath(new URL('./expected/default-model/unselected.expected.md', import.meta.url)), aria, webSnapshotMode())
     await seat.click()
-    await page.getByRole('menuitem', { name: /模型/ }).click()
     await page.getByRole('menuitemradio').first().click()
     await expect.poll(async () => box.isEnabled(), { timeout: 15_000 }).toBe(true)
     expect(tripwire.pageErrors).toEqual([])

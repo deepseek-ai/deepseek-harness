@@ -1,4 +1,28 @@
-/** Browser Conversation assemble core, React adapter, shell, and input plugin. */
+/** Browser Conversation assemble core, React adapter, shell, input, and text projection plugin. */
+export type {} from './user-text/session-reference-rule.ts'
+
+/** Declaration-merged node payloads; IDs also identify the corresponding keyed renderer. */
+export interface UserTextDataMap {
+  text: {
+    /** Exact original substring; display transforms never change source text or UTF-16 coordinates. */
+    readonly text: string
+    /** Optional display-only text; absence renders the original substring, while an empty string hides it. */
+    readonly display?: string
+  }
+}
+
+/** Caller-supplied JSON business facts and text-transform flags, never services or actions; absent flags are disabled. */
+export interface UserTextFacts {
+  /** Collapse whitespace runs in ordinary display text to one space. */
+  readonly collapseWhitespace: boolean
+  /** Remove display whitespace only at the document's outer edges, without crossing business nodes. */
+  readonly trimWhitespace: boolean
+}
+
+export type {
+  UserTextDocumentInput, UserTextEvaluator, UserTextId, UserTextNode, UserTextRule, UserTextTransformContext,
+} from './contract/user-text.ts'
+export type { UserTextRegistry } from './conversation/user-text-registry.ts'
 export { apply, Config, inject } from './apply.ts'
 export type { Config as ConversationConfig } from './apply.ts'
 export { UiConversation } from './conversation/assembly.ts'
@@ -67,7 +91,8 @@ export type {
   ConversationWidthControlsInputProps, ConversationWidthControlsProps,
   ConversationStore, ConvViewOwnerProps, ConvViewProps, EmptyWorkspaceOwnerProps,
   HeroAgentPresetOwnerProps, HeroBrandMarkOwnerProps, InputControlOwnerProps, InputZone,
-  MessageImageLoader, MessageImageSource, MessageImagesOwnerProps, RenderMessageImages, UseConversation,
+  MessageImageLabels, MessageImageLoader, MessageImageSource, MessageImagesContentInput, MessageImagesOwnerProps, UseConversation,
+  UserTextInput, UserTextInjected, UserTextNodeOwnerProps, UserTextNodeProps,
   UseConversationViews,
 } from './contract/slots.ts'
 export type {

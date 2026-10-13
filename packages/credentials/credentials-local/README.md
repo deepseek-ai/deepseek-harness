@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-credentials-local` keeps API keys and other secrets in a private file under your harness home. You can save credentials through the configuration UI or edit the file directly; changes reload automatically and saved values survive restarts. Credential lookup follows a fixed precedence: the launch environment wins, followed by the stored file, the project's `.env`, and the harness-home `.env`; a newly saved value immediately overrides older `.env` values. Only your OS user can read the file, but agent tool processes run as that same user, so this store cannot isolate secrets from the agent.
+`dsh-credentials-local` keeps API keys and other secrets in a private file under your harness home. You can save credentials through the configuration UI or edit the file directly; changes reload automatically and saved values survive restarts. Credential lookup follows a fixed precedence: the stored file wins, followed by the launch environment, the project's `.env`, and the harness-home `.env`; a newly saved value immediately overrides older environment values. Only your OS user can read the file, but agent tool processes run as that same user, so this store cannot isolate secrets from the agent.
 
 ## Table of Contents
 
@@ -72,12 +72,12 @@ Keys are resolved in one fixed order — the first place that has a value wins:
 
 | Place | Writable? | Wins over |
 |---|---|---|
-| The environment you launched in (`DEEPSEEK_API_KEY=… dsh`) | no | everything |
-| The stored file | yes (`set`/`unset`) | both `.env` files |
+| The stored file | yes (`set`/`unset`) | everything |
+| The environment you launched in (`DEEPSEEK_API_KEY=… dsh`) | not here | both `.env` files |
 | Your project's `.env` (`<invocation cwd>/.env`) | not here | your home `.env` |
 | Your home `.env` (`$DSH_HOME/.env`) | not here | nothing |
 
-The launching environment wins because a per-run override — `DEEPSEEK_API_KEY=… dsh`, a CI secret, a container `-e` — is this run's explicit intent; it cannot be edited from inside the product, so it is reported read-only and writes to it are refused. Everything else loses to the stored file, which is why a key you save takes effect immediately even when an older key sits in a `.env`; those two `.env` layers resolve when nothing is stored. The environment layer is the launcher's snapshot taken at launch ([environment snapshot](../../util/launch-environment/README.md)), so a variable exported after startup is not seen.
+The stored file wins because a credential explicitly saved through the product must take effect consistently for every provider ([decision](../../../.agents/notes/implemented/architecture/2026-10-09-stored-credential-precedence.md)). The launching environment — `DEEPSEEK_API_KEY=… dsh`, a CI secret, or a container `-e` — is the fallback when no stored value exists; a project `.env` then outranks the harness-home `.env`. A save always writes the winning layer, so `describe` reports `writable: true` for every reference, and its `source` names the place that currently supplies the value. The environment layer is the launcher's snapshot taken at launch ([environment snapshot](../../util/launch-environment/README.md)), so a variable exported after startup is not seen.
 
 ### The credential file
 
@@ -106,7 +106,7 @@ records:
     kind: api-key               # neither: the owner confirmed the ambient credential chain
 ```
 
-You can edit the file directly — the store reloads it automatically and picks up the change, including a key or record you delete. `refs` holds key values by environment-variable name; `records` holds per-plugin credentials by `<owner>/<id>`, each tagged `api-key` or `grant`, whose grant payload the store keeps verbatim because only its owner can interpret it. Comments and the formatting of untouched entries survive product writes; a comment directly above an entry is that entry's note and is removed with it. The file holds only credentials, so anything else is refused loudly rather than silently ignored: a non-mapping root, an unknown top-level key, a key that is not addressable in its space, a wrong-typed or empty value, an unknown record tag or field, duplicate keys, and malformed YAML all fail at startup, and on a live reload the last good content keeps serving with a warning.
+You can edit the file directly — the store reloads it automatically and picks up the change, including a key or record you delete. `refs` holds key values by environment-variable name; `records` holds per-plugin credentials by `<owner>/<id>`, each tagged `api-key` or `grant`, whose grant payload the store keeps verbatim because only its owner can interpret it. Comments and the formatting of untouched entries survive product writes; a comment directly above an entry is that entry's note and is removed with it. An unknown top-level key, such as a token another tool wrote, is kept on disk and ignored with a warning at startup and on each reload that changes the file, because only `refs` and `records` entries resolve. Inside the document anything else is refused loudly rather than silently ignored: a non-mapping root, a key that is not addressable in its space, a wrong-typed or empty value, an unknown record tag or field, duplicate keys, and malformed YAML all fail at startup, and on a live reload the last good content keeps serving with a warning.
 
 A key's value can be any text, multi-line values included — no quoting tricks needed. An empty value means "no key", which is why an empty string in the file is rejected: removing a key deletes it, it does not blank it. A `grant` payload must survive a JSON round trip, enforced on the way in and on the way out, so the store refuses a value it could not read back exactly as written. If the file on disk no longer parses, saving fails instead of overwriting content the product could not read.
 
@@ -116,7 +116,7 @@ Only your OS user can read the file: the product creates it with owner-only perm
 
 ### What can go wrong
 
-- **A key the launching environment supplies is read-only** — `DEEPSEEK_API_KEY=… dsh` wins for this run; saving or removing it is refused. Clear the variable in the launching shell first.
+- **A key the launching environment supplies is a fallback** — saving a value stores a higher-priority credential; removing it reveals the launch environment again. To make an exported key apply, delete its entry under `refs` in the file.
 - **An empty value cannot be saved** — storing an empty string is refused; remove the key instead.
 - **The store refuses to load a file it cannot trust** — a file any other user can read, malformed YAML, or an unreachable path fails at startup; on a live reload the last good content keeps serving with a warning.
 - **Changes made at the same time are both kept** — if you edit the file while the product writes, your change is folded in rather than overwritten.
@@ -133,8 +133,8 @@ This section explains the design decisions behind the provider and points at the
 
 ### Design philosophy
 
-- **One honest precedence.** The inherited environment wins because it is this run's explicit intent and cannot be edited from inside; everything below it loses to the managed store, so a stored key is never displaced by a stale `.env`.
-- **The document holds only credentials.** A versioned document with `refs` and `records` sections rather than a dotenv file: a store the harness owns and never materializes into the environment cannot also serve as the user's environment layer, which would shadow non-secret entries behind its precedence.
+- **One honest precedence.** The managed store wins for every provider; launch environment, project `.env`, and harness-home `.env` are deterministic fallbacks in that order.
+- **The document holds only credentials.** A foreign top-level key is tolerated but resolves nothing. A versioned document with `refs` and `records` sections rather than a dotenv file: a store the harness owns and never materializes into the environment cannot also serve as the user's environment layer, which would shadow non-secret entries behind its precedence.
 - **Writes patch, reloads replace.** Line edits preserve comments and untouched entries under the cross-process writer lock; reloads swap the parsed snapshot wholesale so a deleted entry never lingers in memory.
 - **Fail loud where trust is at stake.** Boot and reload reject a document that is unreadable, invalid, or readable beyond its owner; a live reload that fails keeps the last good snapshot and warns rather than taking the process down.
 
@@ -146,7 +146,7 @@ This section explains the design decisions behind the provider and points at the
 
 ### Resolution and write paths
 
-`resolve` and `describe` read the inherited environment snapshot, the parsed document snapshot, and the `.env` fallbacks in precedence order. `set`/`unset` queue onto one exclusive operation chain: entry checks reject early (disposed, empty value, environment-shadowed), and the queue re-judges them at run time before a read-modify-write under the writer lock commits and fires `credentials/reference-updated` exactly once.
+`resolve` and `describe` read the parsed document snapshot, the inherited environment snapshot, and the `.env` fallbacks in precedence order. `set`/`unset` queue onto one exclusive operation chain: entry checks reject early (disposed or empty value), and the queue performs a read-modify-write under the writer lock before firing `credentials/reference-updated` exactly once.
 
 `modifyRecord` runs on the same chain and lock: it re-reads the document, passes the record as it stands to the mutation, admits the result — a non-empty API key, a grant payload that survives a JSON round trip — renders the record wholesale, and commits, firing `credentials/record-updated` once. A composition the product CLI did not boot has only the inherited environment as its layer.
 

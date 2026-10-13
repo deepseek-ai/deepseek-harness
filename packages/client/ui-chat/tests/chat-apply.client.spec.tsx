@@ -30,6 +30,7 @@ import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings
 import { ActivityPill, UsagePill } from '../src/client/chat/StatsPills.tsx'
 import { createFlowMotion } from '../src/client/chat/flow-motion.ts'
 import { CHAT_FLOW_INJECT, CHAT_NODE_INJECT } from '../src/client/apply.ts'
+import { UserContent } from '../src/client/chat/UserContent.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface ConversationTurnDataMap {
@@ -101,6 +102,7 @@ describe('Chat apply wiring', () => {
     expect(entry).not.toHaveProperty('CHAT_FLOW_INJECT')
     expect(entry).not.toHaveProperty('CHAT_NODE_INJECT')
     expect(entry).not.toHaveProperty('ChatFlow')
+    expect(entry).not.toHaveProperty('UserContent')
   })
 
   it('registers the frame-wide quota notice host and keeps the failure row injection-free', async () => {
@@ -140,23 +142,37 @@ describe('Chat apply wiring', () => {
     await b.runtime.dispose()
   })
 
-  it('owns node and image rendering through the flow slot with the shared Chat store', async () => {
+  it('owns node dispatch in the shared flow and image Slots in their domain renderers', async () => {
     const b = await bench()
     onTestFinished(() => b.runtime.dispose())
+    b.runtime.renderRoot()
     expect(b.runtime.slots.spec('conversation.chat.flow')).toMatchObject({ kind: 'single', scope: 'session' })
     const view = b.runtime.slots.entries('conversation.view')[0]
     const flow = b.runtime.slots.entries('conversation.chat.flow')[0]
+    const assistant = b.runtime.slots.entries('conversation.chat.node').find(entry => entry.options.key === 'assistant-step')
+    const userContent = b.runtime.factoryOf('conversation.chat.user.content')
+    expect(userContent).toMatchObject({ scope: 'session', locale: 'chat', component: UserContent })
+    expect(userContent.children?.['conversation.chat.user.images']).toMatchObject({ kind: 'single', scope: 'session' })
+    expect(assistant?.children?.['conversation.chat.message.images']).toMatchObject({ kind: 'single', scope: 'session' })
+    expect(userContent.store).toBeUndefined()
+    expect(userContent.inject).toBeUndefined()
     expect(view?.children?.['conversation.chat.flow']).toBeDefined()
     expect(view?.children?.['conversation.chat.node']).toBeUndefined()
-    expect(view?.children?.['conversation.message.images']).toBeUndefined()
+    expect(view?.children?.['conversation.chat.message.images']).toBeUndefined()
+    expect(view?.children?.['conversation.chat.user.images']).toBeUndefined()
     expect(flow?.children?.['conversation.chat.node']).toBeDefined()
-    expect(flow?.children?.['conversation.message.images']).toBeDefined()
+    expect(flow?.children?.['conversation.chat.message.images']).toBeUndefined()
+    expect(flow?.children?.['conversation.chat.user.images']).toBeUndefined()
+    expect(userContent.children?.['conversation.chat.message.images']).toBeUndefined()
+    expect(assistant?.children?.['conversation.chat.user.images']).toBeUndefined()
     expect(flow?.store).toBeDefined()
     expect(flow?.store).toBe(view?.store)
     await b.chat.dispose()
     expect(b.runtime.slots.spec('conversation.chat.flow')).toBeUndefined()
     expect(b.runtime.slots.spec('conversation.chat.node')).toBeUndefined()
-    expect(b.runtime.slots.spec('conversation.message.images')).toBeUndefined()
+    expect(b.runtime.slots.spec('conversation.chat.message.images')).toBeUndefined()
+    expect(b.runtime.slots.spec('conversation.chat.user.images')).toBeUndefined()
+    expect(() => b.runtime.factoryOf('conversation.chat.user.content')).toThrow('no definition')
   })
 
   it('lets another registrant replace one composer stats pill by id', async () => {
@@ -200,7 +216,7 @@ describe('Chat apply wiring', () => {
     expect(face.hooks.transcriptView.getSnapshot()).toBe('compact')
   })
 
-  it('resets in-memory collapse timing when the Chat plugin remounts', async () => {
+  it('restores saved collapse timing when the Chat plugin remounts', async () => {
     const b = await bench()
     try {
       const row = b.runtime.slots.entries('settings.general.item')
@@ -211,8 +227,8 @@ describe('Chat apply wiring', () => {
       expect(hooks.collapseTiming.getSnapshot()).toBe('completion')
       setCollapseTiming('next-input')
       expect(hooks.collapseTiming.getSnapshot()).toBe('next-input')
-      expect(b.chatSettings.set).not.toHaveBeenCalled()
-      b.chatSettings.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed' }, revision: 1, writable: true })
+      expect(b.chatSettings.set).toHaveBeenCalledExactlyOnceWith('collapseTiming', 'next-input')
+      b.chatSettings.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed', collapseTiming: 'next-input' }, revision: 1, writable: true })
       expect(hooks.transcriptView.getSnapshot()).toBe('standard')
       expect(hooks.collapseTiming.getSnapshot()).toBe('next-input')
       expect(b.runtime.slots.entries('settings.general.item').map(entry => entry.options.id))
@@ -226,9 +242,9 @@ describe('Chat apply wiring', () => {
       const remounted = remountedRow.inject!()
       const remountedHooks = remounted.hooks as TranscriptViewRowInjected['hooks']
       expect(remountedHooks.collapseTiming).not.toBe(hooks.collapseTiming)
-      expect(remountedHooks.collapseTiming.getSnapshot()).toBe('completion')
+      expect(remountedHooks.collapseTiming.getSnapshot()).toBe('next-input')
       expect(remountedHooks.transcriptView.getSnapshot()).toBe('standard')
-      expect(b.chatSettings.set).not.toHaveBeenCalled()
+      expect(b.chatSettings.set).toHaveBeenCalledExactlyOnceWith('collapseTiming', 'next-input')
       expect(b.runtime.slots.entries('settings.general.item').map(entry => entry.options.id))
         .toEqual(['transcript-view', 'link-opening', 'composer-enter', 'performance-usage'])
     } finally {

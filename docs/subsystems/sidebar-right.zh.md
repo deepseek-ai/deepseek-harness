@@ -46,6 +46,8 @@ tab 身份是 `(kind, address)` 二元组：注册表的认领把地址原文用
 | `keepMounted` | 可选的懒保活：已访问正文跨隐藏、Session 切换与停靠切换保留，由所属 View 持有 Session reference。 |
 | `guide` | 可选的引导页入口框：`{ order, title(), description?(), icon? }`。点一框即把贡献它的类型作为页面打开；省略即不上引导页。 |
 
+完整地址模式匹配地址原文：picomatch 的 globstar（`**`）即使启用 `dot: true` 也排除独立的 `.` 和 `..` 段；该选项允许匹配 dotfile，不改变点段排除规则。地址由资源业务代码解析，文件读取仍受 Host 文件系统权限限制。
+
 路由是一次排序认领。`candidates(address)` 对模式命中且未被 `canOpen` 否决的类型排序：先按档，再按最长命中模式的长度，最后按注册顺序。`claim(address, kind?)` 取第一个候选，或直接用点名的 `kind`——跳过它的 glob，但 `canOpen` 仍生效——返回 `{ kind, contentId: address, title }`。没有任何类型认领的地址会抛错：这是接线错误，不是用户错误。
 
 同一个 `kind` 可同时携带一个 `builtin` 与一个 `extension` 注册。extension 在认领、`get(kind)`、`openTab(kind)` 与引导页上生效，席位按生效定义的 `id` 找 tab 的正文与标题，不涉及任何 slot 优先级；extension 注销后 builtin 恢复。kind 上的其它任何撞名以及任何重复的 `id` 都抛错。

@@ -62,7 +62,7 @@ Status: implemented
 
 **禁止环绕包装层替换信号。** 不予采纳，因为截止时间和嵌套操作作用域需要词法派生信号。捕获并融合调用方信号既保留组合能力，也不允许切断调用方取消。
 
-**让工具 promise 与取消竞速。** 不予采纳，因为这种方式会在副作用仍可能存活时报告完成，违反[dispose（资源释放）必须完全停稳的规则](../../../../docs/defensive-patterns.zh.md#dispose-must-reach-quiescence-not-just-request-it)。
+**让工具 promise 与取消竞速。** 不予采纳，因为这种方式会在副作用仍可能存活时报告完成，违反[dispose（资源释放）必须完全停稳的规则](../../../../docs/defensive-patterns/general.zh.md#dispose-must-reach-quiescence-not-just-request-it)。
 
 ## 后果
 

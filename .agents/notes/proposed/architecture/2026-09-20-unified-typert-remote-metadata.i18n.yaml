@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-09-20-unified-typert-remote-metadata.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-09-20-unified-typert-remote-metadata.md
+/agent-note-unified-typert-remote-metadata:
+  en: 463246d8c8732192
+  zh: cdb9f8ca8cfe4635
+/agent-note-unified-typert-remote-metadata/problem:
+  en: 3aa575e4c0778df1
+  zh: 5277fc49b040da50
+/agent-note-unified-typert-remote-metadata/technical-architecture:
+  en: eb12e56cdcc7c76b
+  zh: bebff68d354c1ba7
+/agent-note-unified-typert-remote-metadata/proposal:
+  en: f5dcecbcae90a898
+  zh: 923cf3a3074a3a2d
+/agent-note-unified-typert-remote-metadata/proposal/shared-generation-two-access-modes:
+  en: 733398b2346d7438
+  zh: d4e827b9dbd16d67
+/agent-note-unified-typert-remote-metadata/proposal/downstream-migration-targets:
+  en: 261dab3eb480a0c0
+  zh: 13c3226d316d8d5e
+/agent-note-unified-typert-remote-metadata/proposal/paired-usage-examples:
+  en: 7ef7dd38e2015801
+  zh: b97cd179bf828406
+/agent-note-unified-typert-remote-metadata/alternatives-considered:
+  en: 151b1f66af030bc5
+  zh: 44fea0898acfbdcb
+/agent-note-unified-typert-remote-metadata/acceptance-criteria:
+  en: d011ec1516706b20
+  zh: 945c6e3eba101368
+/agent-note-unified-typert-remote-metadata/risks:
+  en: a770478eac8f5fd1
+  zh: f24aa378f875f47f

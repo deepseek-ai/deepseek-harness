@@ -360,7 +360,7 @@ describe('task admission and package contracts', () => {
       '@modelcontextprotocol/sdk',
       '^1.31.0',
     )
-    expect(manifest.dependencies).toHaveProperty('zod', '^4.4.3')
+    expect(manifest.dependencies).toHaveProperty('zod', '4.4.3')
     expect(manifest.dependencies).not.toHaveProperty('@deepseek-ai/dsh-subagent-codex')
 
     const sdkRoot = dirname(fileURLToPath(
@@ -447,10 +447,9 @@ describe('task admission and package contracts', () => {
     expect(ctx.subagents.getProvider('claude-code')).toMatchObject({
       name: 'claude-code',
       capabilities: {
+        agentPreset: false,
         outputSchema: false,
         depthLimit: false,
-        toolFilter: false,
-        persona: false,
       },
       inheritsParentContext: false,
     })

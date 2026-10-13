@@ -137,7 +137,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
 }
 
 describe('Chat inject API', () => {
-  it('projects independent Settings choices without saving timing to Host settings', async () => {
+  it('projects independent Settings choices and saves timing to Host settings', async () => {
     const b = await bench()
     try {
       const row = b.runtime.slots.entries('settings.general.item')
@@ -149,12 +149,12 @@ describe('Chat inject API', () => {
       expect(presentation.getSnapshot()).toMatchObject({ mode: 'detailed', collapseTiming: 'completion' })
       setCollapseTiming('next-input')
       expect(presentation.getSnapshot()).toMatchObject({ mode: 'detailed', collapseTiming: 'next-input' })
-      expect(b.chatSettings.set).not.toHaveBeenCalled()
-      b.chatSettings.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed' }, revision: 1, writable: true })
+      expect(b.chatSettings.set).toHaveBeenCalledWith('collapseTiming', 'next-input')
+      b.chatSettings.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed', collapseTiming: 'next-input' }, revision: 1, writable: true })
       expect(presentation.getSnapshot()).toMatchObject({ mode: 'standard', collapseTiming: 'next-input' })
       setCollapseTiming('completion')
       expect(presentation.getSnapshot()).toMatchObject({ mode: 'standard', collapseTiming: 'completion' })
-      expect(b.chatSettings.set).not.toHaveBeenCalled()
+      expect(b.chatSettings.set).toHaveBeenLastCalledWith('collapseTiming', 'completion')
       expect(b.session.prompt).not.toHaveBeenCalled()
       expect(b.session.cancel).not.toHaveBeenCalled()
     } finally {
@@ -368,7 +368,7 @@ describe('Chat inject API', () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null)
     try {
       const { injected } = b.chatViewApi(b.rootReference)
-      b.chatSettings.publish({ mode: 'memory', status: 'unavailable' })
+      b.chatSettings.publish({ status: 'unavailable' })
       b.chatSettings.set.mockResolvedValueOnce(false)
       b.linkPreference.setLinkOpening('new-tab')
       b.chatSettings.publish({ value: undefined })
@@ -387,20 +387,14 @@ describe('Chat inject API', () => {
     }
   })
 
-  it('routes sent skill previews through the viewed Session source and tolerates an absent provider', async () => {
+  it('leaves skill preview injection to the skill reference owner', async () => {
     const b = await bench()
-    const { injected } = b.chatViewApi(b.rootReference)
-    injected.openSkill('review')
-    const openReference = vi.fn(() => true)
-    const sessionOf = vi.fn(() => ({ openReference }))
-    b.runtime.ctx.provide('inputTriggers', { sessionOf } as never)
-    injected.openSkill('review')
-    expect(sessionOf).toHaveBeenCalledWith(b.runtime.sessions.scope(ROOT))
-    expect(openReference).toHaveBeenCalledWith('skill', { ref: '/review' })
-    vi.spyOn(b.runtime.sessions, 'scope').mockReturnValueOnce(undefined)
-    injected.openSkill('review')
-    expect(openReference).toHaveBeenCalledTimes(1)
-    await b.runtime.dispose()
+    try {
+      const { injected } = b.chatViewApi(b.rootReference)
+      expect(injected).not.toHaveProperty('openSkill')
+    } finally {
+      await b.runtime.dispose()
+    }
   })
 
   it('keeps a relative path under the Session without a cwd, and addresses a path outside the workspace absolutely', async () => {

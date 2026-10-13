@@ -87,6 +87,17 @@ export class ChatReading {
     this.commit(landing, true, this.viewport.latestTurn)
   }
 
+  /**
+   * Follow submitted input on the active fold's animation clock.
+   * @returns whether this input joined a closing batch instead of starting another scroll animation.
+   */
+  followInputFold(): boolean {
+    this.cancelPending()
+    return this.viewport.followInputFold(this.follow, (landing) => {
+      this.commit(landing, true, this.viewport.latestTurn)
+    })
+  }
+
   /** Stop a native follow animation where it is; the next sampled position decides follow intent. */
   interruptFollow(): void {
     this.viewport.interruptFollow(this.follow)

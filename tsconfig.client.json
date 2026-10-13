@@ -106,6 +106,7 @@
     { "path": "./packages/client/ui-commands" },
     { "path": "./packages/client/ui-skill" },
     { "path": "./packages/client/ui-reference" },
+    { "path": "./packages/client/ui-secret-mask" },
     { "path": "./packages/client/ui-subagent" },
     { "path": "./packages/experimental/client-ui-agent-team" },
     { "path": "./packages/client/ui-dockkit" },

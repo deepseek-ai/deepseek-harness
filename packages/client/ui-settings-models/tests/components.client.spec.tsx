@@ -14,6 +14,7 @@ import {
 } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/ModelsSection.tsx'
 import { ProviderEditor, pathOps } from '../src/client/ProviderEditor.tsx'
+import type { ProviderEditorProps } from '../src/client/ProviderEditor.tsx'
 import {
   DeepSeekModelsEditor, formatCapacity, modelDrafts, parseCapacity, validateDeepSeekModels,
 } from '../src/client/DeepSeekModelsEditor.tsx'
@@ -23,7 +24,7 @@ import { deriveKeyRef, ModelsSettingsStore } from '../src/client/store.ts'
 import { createModelsOperations } from '../src/client/operations.ts'
 import type { ModelsOperations } from '../src/client/operations.ts'
 import type { ProviderRow } from '../src/client/store.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { en } from '../src/client/locales.ts'
 import { settingsSchema } from './settings-schema.client.ts'
 
 afterEach(cleanup)
@@ -155,11 +156,6 @@ function wireNamespaces(): SettingsNamespaceView[] {
   ]
 }
 
-/** The account provider's settings namespace, under a composition's entry id. */
-function accountNamespace(ns = 'llm-deepseek-account'): SettingsNamespaceView {
-  return { ...wireNamespaces().find(view => view.ns === 'llm-deepseek-account')!, ns }
-}
-
 /** Credentials answers over the Remote carrier, which has no envelope. */
 function remoteOk<T>(value: T) {
   return { ok: true as const, value }
@@ -198,8 +194,15 @@ function scriptedFace(overrides: {
       ]))),
       listConfigurableProviders: vi.fn(() => Promise.resolve(remoteOk([
         { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [], active: true },
-        { provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'], active: true },
-        { provider: 'anthropic', displayName: 'anthropic', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'anthropic'], active: false },
+        {
+          provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'], active: true,
+          defaultBaseURL: 'https://api.openai.com/v1', nativeAuth: { env: ['OPENAI_API_KEY'], oauth: false },
+        },
+        {
+          provider: 'anthropic', displayName: 'anthropic', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'anthropic'], active: false,
+          defaultBaseURL: 'https://api.anthropic.com',
+          nativeAuth: { env: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'], oauth: true },
+        },
         { provider: 'zombie', displayName: 'zombie', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'zombie'], active: false },
         { provider: 'broken', displayName: 'broken', settingsNs: 'llm-pi-ai', settingsPath: ['nope', 'x'], active: false },
         { provider: 'plain', displayName: 'plain', settingsNs: 'llm-plain', settingsPath: ['profiles', 'plain'], active: false },
@@ -259,6 +262,32 @@ function operationsWith(face: object): ModelsOperations {
   const bound = createModelsOperations(ctxWith(face))
   operations.set(face, bound)
   return bound
+}
+
+/** The pi-ai namespace with one more route profile stored in the user layer. */
+function piAiNamespaceWith(provider: string, profile: { [key: string]: JsonValue }): SettingsNamespaceView {
+  const namespace = wireNamespaces().find(view => view.ns === 'llm-pi-ai')!
+  const providers = { ...(namespace.value as { providers: object }).providers, [provider]: profile }
+  return { ...namespace, value: { providers }, user: { providers } }
+}
+
+/** Render one pi-ai route's editor with the directory and credential facts the page already holds. */
+function renderPiAiEditor(
+  provider: string,
+  namespace: SettingsNamespaceView,
+  facts: Pick<ProviderEditorProps, 'defaultBaseURL' | 'nativeAuth' | 'credential'> = {},
+): void {
+  render(<ProviderEditor provider={provider} displayName={provider}
+    namespace={namespace} settingsPath={['providers', provider]} schema={settingsSchema}
+    operations={operationsWith(scriptedFace().face)} t={t} readOnly={false} onClose={vi.fn()} {...facts} />)
+}
+
+/** Hover the key label's help button and read its tooltip; null when the label has no button. */
+function authHelpText(): string | null {
+  const button = screen.queryByRole('button', { name: en.authHelp })
+  if (button === null) return null
+  fireEvent.mouseEnter(button)
+  return screen.getByRole('tooltip').textContent
 }
 
 /** One recorded child-slot dispatch: seat name, owner share, kind options. */
@@ -871,7 +900,7 @@ describe('ModelsSection', () => {
     const baseURL = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
     // The deepseek placeholder is pinned to the public endpoint, not the
     // effective value (which may reflect a launch-environment override).
-    expect(baseURL.placeholder).toBe('https://api.deepseek.com/anthropic')
+    expect(baseURL.placeholder).toBe('https://api.deepseek.com/anthropic (Default to use DEEPSEEK_BASE_URL)')
     fireEvent.change(baseURL, { target: { value: 'https://next2' } })
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
@@ -943,7 +972,7 @@ describe('ModelsSection', () => {
     />)
     fireEvent.click(screen.getByText(en.customized))
     expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder)
-      .toBe('https://api.deepseek.com/anthropic')
+      .toBe('https://api.deepseek.com/anthropic (Default to use DEEPSEEK_BASE_URL)')
     expect(screen.queryByLabelText(en.customApi)).toBeNull()
     expect(screen.getByText(en.deepSeekEndpointHint)).toBeTruthy()
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'sk-messages-test' } })
@@ -1355,7 +1384,7 @@ describe('ModelsSection', () => {
     />)
     fireEvent.click(screen.getByText(en.customized))
     const baseURL = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
-    expect(baseURL.placeholder).toBe('https://api.deepseek.com/anthropic')
+    expect(baseURL.placeholder).toBe('https://api.deepseek.com/anthropic (Default to use DEEPSEEK_BASE_URL)')
     fireEvent.change(baseURL, { target: { value: 'https://x' } })
     expect(baseURL.value).toBe('https://x')
     fireEvent.change(baseURL, { target: { value: '' } })
@@ -1384,14 +1413,15 @@ describe('ModelsSection', () => {
   it('edits a pi-ai profile with the curated fields only', async () => {
     const { mutate } = await mountSection()
     fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
-    // The configured credential shows as the stored placeholder.
+    // The field names the profile's reference; a stored value stays hidden.
     const editorKey = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
-    await waitFor(() => { expect(editorKey.placeholder).toBe(en.keyStored) })
+    expect(editorKey.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'OPENAI_API_KEY'))
     // pi-ai carries Base URL too: the stored override shows as the value and
-    // the effective profile endpoint as its placeholder source.
+    // the effective profile endpoint, ahead of the catalog's, as its placeholder.
     fireEvent.click(screen.getByText(en.customized))
     const url = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
     expect(url.value).toBe('https://proxy')
+    expect(url.placeholder).toBe('https://proxy')
     fireEvent.change(url, { target: { value: 'https://proxy/v2' } })
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
@@ -1410,12 +1440,12 @@ describe('ModelsSection', () => {
     const pick = await screen.findByLabelText<HTMLSelectElement>(en.provider)
     expect([...pick.options].map(option => option.value)).toEqual(['anthropic', 'broken', 'plain'])
     expect(pick.value).toBe('anthropic')
-    // A dormant profile has no endpoint anywhere: the pi-ai placeholder
-    // falls back to the provider-default wording.
+    // A dormant route shows its catalog endpoint and the first variable its
+    // provider reads; a typed key still stores under the derived reference.
     fireEvent.click(screen.getByText(en.customized))
-    expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toBe(en.baseUrlDefault)
+    expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toBe('https://api.anthropic.com')
     const addKey = screen.getByLabelText<HTMLInputElement>(en.keyInput)
-    expect(addKey.placeholder).toBe(en.keyPlaceholderNative)
+    expect(addKey.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'ANTHROPIC_AUTH_TOKEN'))
     fireEvent.change(addKey, { target: { value: 'sk-ant' } })
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
@@ -1525,7 +1555,7 @@ describe('ModelsSection', () => {
       renderSlot={() => null}
     />)
     const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
-    expect(key.placeholder).toBe(en.keyPlaceholder)
+    expect(key.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'DEEPSEEK_API_KEY'))
   })
 
   it('tells the user to reopen when another writer moved the namespace first', async () => {
@@ -1553,28 +1583,17 @@ describe('ModelsSection', () => {
     expect(screen.getByText(en.apply)).toBeTruthy()
   })
 
-  it('surfaces a shadowed credential write on the card', async () => {
+  it('surfaces a refused credential write on the card', async () => {
     await mountFirstRun({
-      set: vi.fn(() => Promise.resolve(remoteFail('credentials: DEEPSEEK_API_KEY is shadowed by the read-only environment'))),
+      set: vi.fn(() => Promise.resolve(remoteFail(
+        'credentials-local: invalid document at /home/user/.dsh/.credentials.yaml: BAD_INDENT at line 3, column 1',
+      ))),
     })
     const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
     fireEvent.change(key, { target: { value: 'sk-live' } })
     fireEvent.click(screen.getByText(en.apply))
-    await screen.findByText(/shadowed by the read-only environment/)
+    await screen.findByText(/invalid document at \/home\/user\/\.dsh\/\.credentials\.yaml/)
     expect(screen.queryByRole('status')).toBeNull()
-  })
-
-  it('locks the key input when the launch environment provides the credential', async () => {
-    const { face } = await mountSection()
-    face.credentials.describe.mockImplementation((refs: string[]) => Promise.resolve(remoteOk(
-      Object.fromEntries(refs.map(ref => [ref, {
-        configured: ref === 'OPENAI_API_KEY', source: 'env', writable: false,
-      }])),
-    )))
-    fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
-    const editorKey = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
-    await waitFor(() => { expect(editorKey.placeholder).toBe(en.keyEnvLocked) })
-    expect(editorKey.disabled).toBe(true)
   })
 
   it('keeps a failed credential describe silent and the input usable', async () => {
@@ -1582,7 +1601,7 @@ describe('ModelsSection', () => {
     face.credentials.describe.mockImplementation(() => Promise.resolve(remoteFail('down', 'gateway/internal')))
     fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
     const editorKey = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
-    expect(editorKey.placeholder).toBe(en.keyPlaceholderNative)
+    expect(editorKey.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'OPENAI_API_KEY'))
     fireEvent.change(editorKey, { target: { value: 'sk-live' } })
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(set).toHaveBeenCalledTimes(1) })
@@ -2131,118 +2150,131 @@ describe('apiKeyFailure', () => {
   })
 })
 
-it.each([en, zh])('edits the account model catalog without credential or endpoint fields', async (copy) => {
-  const mutate = vi.fn(() => Promise.resolve(remoteOk(accountNamespace())))
-  const scripted = scriptedFace({ mutate })
-  const ops = operationsWith(scripted.face)
-  const describe = vi.spyOn(ops, 'describeCredential')
-  const namespace = accountNamespace()
-  const onClose = vi.fn()
-  render(<ProviderEditor provider="deepseek-account" displayName={copy.deepSeekAccount}
-    namespace={namespace} settingsPath={[]} schema={settingsSchema}
-    operations={ops} t={key => copy[key]} readOnly={false} onClose={onClose} />)
-  expect(screen.queryByLabelText(copy.keyInput)).toBeNull()
-  expect(screen.queryByLabelText(copy.baseUrl)).toBeNull()
-  expect(describe).not.toHaveBeenCalled()
-  expect(screen.getByDisplayValue('deepseek-v4-flash')).toBeTruthy()
-  expect(screen.queryByText(content => content.includes(copy.advancedHint))).toBeNull()
-  await expect(`${document.body.textContent}\n`)
-    .toMatchFileSnapshot(`./expected/deepseek-account-${copy === en ? 'en' : 'zh'}.txt`)
-  const set = vi.spyOn(ops, 'storeCredential')
-  fireEvent.change(screen.getAllByLabelText(new RegExp(copy.modelId))[0]!, { target: { value: 'deepseek-v4-mini' } })
-  fireEvent.click(screen.getByText(copy.apply))
-  await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
-  expect(mutate.mock.calls[0]).toEqual([
-    'llm-deepseek-account',
-    [{
-      op: 'set',
-      path: ['models'],
-      value: [
-        {
-          id: 'deepseek-v4-mini',
-          name: 'DeepSeek-V4-Flash',
-          description: 'Preserved hidden detail',
-          contextWindow: 1_000_000,
-        },
-        { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', contextWindow: 1_000_000 },
-      ],
-    }],
-    0,
-  ])
-  expect(set).not.toHaveBeenCalled()
+it.each([
+  ['file', 'keySourceFile'], ['env', 'keySourceEnv'],
+  ['project-env', 'keySourceProjectEnv'], ['user-env', 'keySourceUserEnv'],
+] as const)('shows the named credential source %s without reading its value', (source, key) => {
+  renderPiAiEditor('openai', piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' }), {
+    credential: { configured: true, source, writable: true },
+  })
+  expect(screen.getByText(en[key])).toBeTruthy()
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).value).toBe('')
 })
 
-it('keeps the DeepSeek editor for an account route under a renamed settings entry', async () => {
-  const namespace = accountNamespace('team-account-entry')
-  const mutate = vi.fn(() => Promise.resolve(remoteOk(namespace)))
-  const ops = operationsWith(scriptedFace({ mutate }).face)
-  const set = vi.spyOn(ops, 'storeCredential')
-  const onClose = vi.fn()
-  render(<ProviderEditor provider="deepseek-account" displayName={en.deepSeekAccount}
-    namespace={namespace} settingsPath={[]} schema={settingsSchema}
-    operations={ops} t={t} readOnly={false} onClose={onClose} />)
-  expect(screen.queryByText(content => content.includes(en.advancedHint))).toBeNull()
-  expect(screen.getByDisplayValue('deepseek-v4-flash')).toBeTruthy()
-  fireEvent.change(screen.getAllByLabelText(new RegExp(en.modelId))[0]!, { target: { value: 'deepseek-v4-mini' } })
-  fireEvent.click(screen.getByText(en.apply))
-  await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
-  expect(mutate).toHaveBeenCalledWith('team-account-entry', expect.any(Array), 0)
-  expect(set).not.toHaveBeenCalled()
+it.each([
+  ['unconfigured', { apiKeyEnv: 'OPENAI_API_KEY' }, { configured: false, source: 'env', writable: true }],
+  ['unknown source', { apiKeyEnv: 'OPENAI_API_KEY' }, { configured: true, source: 'oauth', writable: true }],
+  ['native authentication', {}, { configured: true, source: 'file', writable: true }],
+] as const)('does not guess a source for %s', (_label, profile, credential) => {
+  renderPiAiEditor('openai', piAiNamespaceWith('openai', profile), { credential })
+  expect(screen.queryByText(/^API key source:/)).toBeNull()
+  expect(document.body.textContent).not.toMatch(/oauth/i)
 })
 
-it('opens the account row from the section and saves to its own namespace', async () => {
-  const namespace = accountNamespace()
-  const mutate = vi.fn(() => Promise.resolve(remoteOk(namespace)))
-  const { controller, set } = await mountSection({ mutate })
-  const row = controller.store.getSnapshot().rows[0]!
-  await act(async () => { controller.store.update((state) => {
-    state.rows = [{
-      ...row,
-      accountAvailable: true,
-      entry: {
-        provider: 'deepseek-account', displayName: en.deepSeekAccount, settingsNs: namespace.ns, settingsPath: [], active: true,
-      },
-    }, ...state.rows]
-  }) })
-  fireEvent.click(screen.getByRole('button', {
-    name: providerCopy(en.editProvider, { provider: 'deepseek-account', displayName: en.deepSeekAccount }),
-  }))
-  expect(screen.getByDisplayValue('deepseek-v4-flash')).toBeTruthy()
-  fireEvent.change(screen.getAllByLabelText(new RegExp(en.modelId))[0]!, { target: { value: 'deepseek-v4-mini' } })
-  fireEvent.click(screen.getByText(en.apply))
-  await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
-  expect(mutate.mock.calls[0]).toEqual([
-    'llm-deepseek-account',
-    [{
-      op: 'set',
-      path: ['models'],
-      value: [
-        {
-          id: 'deepseek-v4-mini',
-          name: 'DeepSeek-V4-Flash',
-          description: 'Preserved hidden detail',
-          contextWindow: 1_000_000,
-        },
-        { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', contextWindow: 1_000_000 },
-      ],
-    }],
-    0,
-  ])
-  expect(set).not.toHaveBeenCalled()
+it('refreshes the open editor source from the page snapshot without an editor probe', async () => {
+  const { face, controller } = await mountSection()
+  const reads = face.credentials.describe.mock.calls.length
+  fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
+  expect(screen.getByText(en.keySourceFile)).toBeTruthy()
+  expect(face.credentials.describe).toHaveBeenCalledTimes(reads)
+  face.credentials.describe.mockImplementation(refs => Promise.resolve(remoteOk(
+    Object.fromEntries(refs.map(ref => [ref, { configured: true, source: 'env', writable: true }])),
+  )))
+  await act(() => controller.load())
+  expect(screen.getByText(en.keySourceEnv)).toBeTruthy()
+  expect(screen.queryByText(en.keySourceFile)).toBeNull()
+  expect(face.credentials.describe).toHaveBeenCalledTimes(reads + 1)
 })
 
-it('renders the localized account row and supports catalogs without capacity defaults', async () => {
+it('keeps an OAuth-only provider on its native authentication path', () => {
+  renderPiAiEditor('openai-codex', wireNamespaces().find(view => view.ns === 'llm-pi-ai')!, {
+    nativeAuth: { env: [], oauth: true },
+  })
+  expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+  expect(authHelpText()).toBeNull()
+  expect(document.body.textContent).not.toMatch(/oauth/i)
+})
+
+it.each([
+  ['anthropic', ['ANTHROPIC_API_KEY'], en.keyHelp.replace('{env}', 'ANTHROPIC_API_KEY')],
+  ['openai', ['OPENAI_API_KEY'], en.keyHelp.replace('{env}', 'OPENAI_API_KEY')],
+] as const)('opens authentication help for %s on click and dismisses it with Escape', (provider, env, text) => {
+  renderPiAiEditor(provider, piAiNamespaceWith(provider, {}), {
+    nativeAuth: { env: [...env], oauth: true },
+  })
+  const help = screen.getByLabelText(en.authHelp)
+  fireEvent.click(help)
+  const tooltip = screen.getByRole('tooltip')
+  expect(tooltip.textContent).toBe(text)
+  expect(help.getAttribute('aria-describedby')).toBe(tooltip.id)
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(screen.queryByRole('tooltip')).toBeNull()
+})
+
+it.each([
+  ['an OAuth-only provider', 'openai-codex', 'CODEX_TOKEN', { env: [], oauth: true }],
+  [
+    'a provider with catalog variables and an OAuth sign-in', 'anthropic', 'TEAM_ANTHROPIC_KEY',
+    { env: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'], oauth: true },
+  ],
+] as const)('names the profile reference of %s instead of its native authentication', (_label, provider, ref, nativeAuth) => {
+  renderPiAiEditor(provider, piAiNamespaceWith(provider, { apiKeyEnv: ref }), { nativeAuth })
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
+    .toBe(en.keyPlaceholderFallback.replace('{hint}', ref))
+  expect(authHelpText()).toBe(en.keyHelp.replace('{env}', ref))
+  expect(document.body.textContent).not.toMatch(/oauth/i)
+})
+
+it.each([
+  [
+    'with an OAuth sign-in', 'anthropic',
+    { env: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'], oauth: true },
+    'ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY',
+  ],
+  ['without an OAuth sign-in', 'minimax-cn', { env: ['MINIMAX_CN_API_KEY'], oauth: false }, 'MINIMAX_CN_API_KEY'],
+] as const)('lists method-neutral fallbacks for a catalog route %s', (_label, provider, nativeAuth, refs) => {
+  renderPiAiEditor(provider, piAiNamespaceWith(provider, {}), { nativeAuth })
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
+    .toBe(en.keyPlaceholderFallback.replace('{hint}', nativeAuth.env[0]))
+  expect(authHelpText()).toBe(en.keyHelp.replace('{env}', refs))
+  expect(document.body.textContent).not.toMatch(/oauth/i)
+})
+
+it('shows the next method-neutral fallback without modifying native authentication metadata', () => {
+  const nativeAuth = { env: ['ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'], oauth: true }
+  renderPiAiEditor('anthropic', piAiNamespaceWith('anthropic', {}), { nativeAuth })
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
+    .toBe(en.keyPlaceholderFallback.replace('{hint}', 'ANTHROPIC_API_KEY'))
+  expect(authHelpText()).toBe(en.keyHelp.replace('{env}', 'ANTHROPIC_API_KEY'))
+  expect(nativeAuth.env).toEqual(['ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'])
+  expect(document.body.textContent).not.toMatch(/oauth/i)
+})
+
+it('keeps a method-specific profile reference usable without displaying its name', () => {
+  renderPiAiEditor('anthropic', piAiNamespaceWith('anthropic', { apiKeyEnv: 'TEAM_OAUTH_TOKEN' }), {
+    nativeAuth: { env: ['ANTHROPIC_API_KEY'], oauth: true },
+  })
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder).toBe(en.keyPlaceholder)
+  expect(authHelpText()).toBeNull()
+  expect(document.body.textContent).not.toMatch(/oauth/i)
+})
+
+it('offers a plain key field to a route the adapter reports no authentication or endpoint for', () => {
+  renderPiAiEditor('zombie', wireNamespaces().find(view => view.ns === 'llm-pi-ai')!)
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder).toBe(en.keyPlaceholder)
+  expect(authHelpText()).toBeNull()
+  fireEvent.click(screen.getByText(en.customized))
+  expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toBe(en.baseUrlDefault)
+})
+
+it('renders the localized account row as signed in without an edit action', async () => {
   const scripted = scriptedFace({})
-  const { controller, view } = await mountFace(scripted)
+  const { controller } = await mountFace(scripted)
   const row = controller.store.getSnapshot().rows[0]!
   await act(async () => { controller.store.update((state) => {
     state.rows = [{ ...row, accountAvailable: true, entry: { ...row.entry, provider: 'deepseek-account' } }]
   }) })
-  expect(screen.getByText(en.deepSeekAccount)).toBeTruthy()
-  view.unmount()
-  const namespace = accountNamespace()
-  render(<ProviderEditor provider="deepseek-account" displayName={en.deepSeekAccount}
-    namespace={{ ...namespace, value: { models: [] }, base: { models: [] } }} settingsPath={[]} schema={settingsSchema}
-    operations={operationsWith(scripted.face)} t={t} readOnly={false} onClose={() => {}} />)
-  expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+  const item = screen.getByText(en.deepSeekAccount).closest('li')!
+  expect(within(item).getByText(en.accountSignedIn)).toBeTruthy()
+  expect(within(item).queryByText(en.edit)).toBeNull()
 })

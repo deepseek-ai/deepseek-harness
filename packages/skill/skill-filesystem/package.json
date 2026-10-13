@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-skill-filesystem",
   "description": "Local filesystem skill provider for the DeepSeek Harness",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -19,9 +19,11 @@
       "default": "./lib/index.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/types/**/*.d.ts"
   ],
@@ -33,7 +35,7 @@
     "@deepseek-ai/cordis": "workspace:~"
   },
   "dependencies": {
-    "chokidar": "^5.0.0",
+    "chokidar": "5.0.0",
     "@deepseek-ai/schemastery": "workspace:~",
     "yaml": "^2.4.2"
   },

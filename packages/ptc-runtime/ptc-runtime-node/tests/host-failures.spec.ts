@@ -1,5 +1,8 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate } from 'node:timers/promises'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
@@ -17,7 +20,7 @@ const NO_INITIAL_FRAME = Symbol('no initial frame')
 
 async function setup(config: Config = {}, mode: 'read-only' | 'danger-full-access' = 'danger-full-access') {
   const ctx = new Context()
-  const runtime = await mountRuntime(ctx, config, { mode, workspaceRoot: process.cwd() })
+  const { runtime } = await mountRuntime(ctx, config, { mode, workspaceRoot: process.cwd() })
   const control = new Duplex({
     read() {},
     write(chunk: Buffer, _encoding, callback) {
@@ -507,4 +510,48 @@ describe('Node runtime host failures', () => {
     expect(Object.fromEntries(Object.entries(spec?.env ?? {}).filter(([, value]) => value !== undefined)))
       .toEqual({ DSH_PTC_RUNTIME_NODE: '1', NODE_OPTIONS: '--max-old-space-size=512' })
   })
+})
+
+it('keeps failed per-call cleanup registered until process observation succeeds', async () => {
+  const h = await setup()
+  const session = h.ctx.sessions.create(SessionId('per-call-cleanup-retry'))
+  h.waitForExit.mockRejectedValue(new Error('range cannot be observed'))
+  h.onBoot(() => { h.emit({ type: 'done', value: encodePtcJsonWire(42) }) })
+  const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
+  expect(result.error?.kind).toBe('worker-exit')
+  setSandboxMode(session, 'read-only')
+  expect(h.ctx.sandboxPolicy.resolve({ session }).mode).toBe('read-only')
+  await expect(h.runtime.run(h.runtime.resolve({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) }))).rejects.toThrow('range cannot be observed')
+  h.waitForExit.mockResolvedValue(true)
+  await h.ctx.fiber.dispose()
+  expect(h.waitForExit.mock.calls.length).toBeGreaterThanOrEqual(3)
+})
+
+it('unregisters a Session resource when process spawn fails', async () => {
+  const h = await setup()
+  const session = h.ctx.sessions.create(SessionId('failed-session-spawn'))
+  h.spawn.mockImplementation(() => { throw new Error('spawn failed') })
+  const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) }, NO_INITIAL_FRAME)
+  expect(result.error?.message).toContain('spawn failed')
+  setSandboxMode(session, 'read-only')
+})
+
+it('preserves execution context for bindings delivered by an external control stream', async () => {
+  const h = await setup()
+  const session = h.ctx.sessions.create(SessionId('external-binding-context'))
+  const booted = Promise.withResolvers<undefined>()
+  h.receive((raw) => {
+    const message = raw as { type: string; ok?: boolean; value?: unknown }
+    if (message.type === 'boot') booted.resolve(undefined)
+    if (message.type === 'reply') h.emit({ type: 'done', value: message.value })
+  })
+  const context = new AsyncLocalStorage<string>()
+  const pending = context.run('binding context', () => h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }),
+    bindings: [{ global: 'tools', functions: { test: async () => context.getStore() ?? null } }],
+  }))
+  await booted.promise
+  h.emit(call(1))
+  const result = await pending
+  expect(result.value).toBe('binding context')
+  expect(h.ctx.sandboxPolicy.resolve({ session }).mode).toBe('danger-full-access')
 })

@@ -17,7 +17,7 @@ async function temporaryRoot(): Promise<string> {
 }
 
 describe('coverage file timing report', () => {
-  it('includes import and hook costs once without serializing coverage or test objects', async () => {
+  it('preserves duplicate file records and costs without serializing coverage or test objects', async () => {
     const root = await temporaryRoot()
     const reporter = new CoverageFileTimesReporter()
     reporter.onInit({ config: { root, outputFile: { fileTimes: 'times.json' } } })
@@ -38,10 +38,13 @@ describe('coverage file timing report', () => {
       // timing report must read only their paths and diagnostics.
       toJSON: () => { throw new Error('test module was serialized') },
     }
-    await reporter.onTestRunEnd([module])
+    await reporter.onTestRunEnd([module, module])
 
     const output = await readFile(join(root, 'times.json'), 'utf8')
-    expect(JSON.parse(output)).toEqual({ 'packages/a/tests/x.spec.ts': 315 })
+    expect(JSON.parse(output)).toEqual([
+      { file: 'packages/a/tests/x.spec.ts', duration: 315 },
+      { file: 'packages/a/tests/x.spec.ts', duration: 315 },
+    ])
     expect(output.endsWith('\n')).toBe(true)
     expect(output).not.toContain('coverageMap')
     expect(output).not.toContain('assertionResults')
@@ -52,7 +55,7 @@ describe('coverage file timing report', () => {
     const reporter = new CoverageFileTimesReporter()
     reporter.onInit({ config: { root, outputFile: { fileTimes: 'times.json' } } })
     await reporter.onTestRunEnd([])
-    expect(await readFile(join(root, 'times.json'), 'utf8')).toBe('{}\n')
+    expect(await readFile(join(root, 'times.json'), 'utf8')).toBe('[]\n')
   })
 
   const missingOutputs: ResolvedConfig['outputFile'][] = ['report.json', {}, { fileTimes: '' }]

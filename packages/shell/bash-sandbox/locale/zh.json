@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Bash 沙箱执行",
+    "description": "在当前沙箱权限范围内执行 Bash 命令。"
+  }
+}

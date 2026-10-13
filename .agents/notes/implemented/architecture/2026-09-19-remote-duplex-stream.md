@@ -8,41 +8,41 @@ English | [中文](2026-09-19-remote-duplex-stream.zh.md)
 
 ### Current state
 
-`dsh-api-gateway` multiplexes every Typert Remote stream over one WebSocket at the fixed path `/api/remote.mux` (`packages/api/gateway/src/stream-protocol.ts`). A Host method decorated with `@Remote({ mode: 'stream' })` that returns an `Iterable` or `AsyncIterable` becomes one Host-to-Client logical stream; the optional final `signal: AbortSignal` is the only reserved parameter, never enters the wire arguments, and is appended by the Gateway after the decoded business parameters (`packages/api/gateway/src/index.ts`). The generated method the Client receives returns a bare `AsyncIterable`.
+`dsh-api-gateway` multiplexes Typert Remote streams over one WebSocket at `/api/remote.mux`. A Host method declares both directions with `@Remote({ mode: 'stream' })` and `RemoteStream<Out, In>`; the generated Client method returns `RemoteStreamHandle<Out, In>`. Existing `Iterable` and `AsyncIterable` return types declare downlink-only methods. The optional final `signal: AbortSignal` is supplied by the Gateway and does not enter the wire arguments.
 
-There are only five wire frames:
+Both directions share one `streamId`:
 
 | Direction | Frame | Definition |
 | --- | --- | --- |
 | Client to Host | `{ type: 'open', streamId, endpoint, payload }` | `stream-protocol.ts` |
+| Client to Host | `{ type: 'item', streamId, value? }` | `stream-protocol.ts` |
+| Client to Host | `{ type: 'end', streamId }` | `stream-protocol.ts` |
 | Client to Host | `{ type: 'cancel', streamId }` | `stream-protocol.ts` |
 | Host to Client | `{ type: 'item', streamId, value? }` | `stream-protocol.ts` |
 | Host to Client | `{ type: 'error', streamId, error: { code, message, details } }` | `stream-protocol.ts` |
 | Host to Client | `{ type: 'end', streamId }` | `stream-protocol.ts` |
 
-The Client can send only open and cancel. The parser `parseRemoteStreamClientMessage` (`stream-protocol.ts`) throws on any other frame, and a Host connection that receives one closes the whole socket with 1008 (`stream-server.ts`). In short, the Gateway today supports only "a backend iterable sent to the frontend". Every feature that needs the frontend to send data to the backend continuously takes its own detour.
+The Client handle's `send()` supplies uplink items, `end()` half-closes the uplink, and `dispose()` cancels the logical stream. The Host reads decoded items through `this.ctx.invocation.uplink<In>()`; the invocation also carries the admitted Peer and cancellation signal.
 
-A Host method also has no notion of who initiated this call: `InvokeRemoteRequest = { namespace, method, args, signal }` (`packages/api/gateway/src/types.ts`) has no caller slot, `RemoteStreamOpener` has the signature `(endpoint, payload, signal)` (`stream-server.ts`), and the WebSocket checks the cookie once, at the handshake.
+The transport owns validation, cancellation, and its bounded inbox. Consumer protocols own input authority, acknowledgements, and recovery after disconnection.
 
-### Three unrelated uplink mechanisms
+### Uplink consumers
 
 | Feature | Uplink path | Location | Cost |
 | --- | --- | --- | --- |
-| Web terminal keystrokes | One unary RPC `terminal.write(agent, id, attachmentId, data)` per xterm `onData`; the Client serializes them through a promise chain and caps its own byte budget | `packages/api/terminal-controller/src/client/model.ts`; Host `src/index.ts` | One HTTP round trip and one authentication per keystroke; two carriers correlated by hand through `attachmentId`; `inputFull` when the budget is exhausted |
+| Web terminal input and resize | `terminal.attach` carries `TerminalInput` uplink items and `TerminalFrame` downlink items; the Client pipelines commands and releases its raw-input byte budget on `ack` | `packages/api/terminal-controller/src/client/model.ts`; Host `src/terminal.ts` | The current attachment owns input; `inputFull` when the Client budget is exhausted; input is never replayed after reconnection |
 | File upload | A `Blob` or `ReadableStream` goes to the native `POST /api/session/uploadFileBinary` outside the Remote layer, with `duplex: 'half'` | `packages/client/file-upload/src/client/runtime.ts`; route `src/index.ts` | Bypasses Typert descriptors; no type projection |
 | Answers to approvals and questions | The Host sends waterfall frames down the `$events` stream, the Client answers through a separate unary RPC `$events/result`, correlated by `clientId` plus `eventId` | `packages/api/gateway/src/client/remote-events.ts`; Host `index.ts` | A second correlation key; `index.ts` records the race this creates |
 
-These three mechanisms solve the same problem: the Client wants to write into a logical stream that is already open.
+These consumers need Client-to-Host data while a related operation remains active. Web terminals use the duplex stream; file upload and event answers retain their own transports.
 
-### Concrete costs
+### Consumer responsibilities
 
-- **Aligning two carriers.** The terminal uses `attachmentId` to correlate the `follow` stream with the `write` RPC and to decide who owns input. Approvals use `clientId` to correlate the `$events` stream with the `$events/result` RPC.
-- **No ordering guarantee.** A unary RPC travels over HTTP and is unordered relative to the WebSocket downlink; the terminal can preserve order only by serializing writes on the Client.
-- **Separate authentication and lookup per uplink.** Every `write(agent, id, attachmentId, data)` resolves `agent`, looks up the terminal, and validates the attachment.
-- **No EOF.** The Client cannot express "I am done writing"; a half-close needs yet another RPC.
-- **Cancellation does not cover both halves.** Cancelling the downlink stream does not cancel queued uplink writes, and vice versa.
-- **Backpressure implemented three times.** The downlink pulls the iterator at the pace of the socket write callback (`stream-server.ts`); the terminal uses a bounded follower that makes a slow consumer fail explicitly (`terminal-controller/src/stream.ts`); the uplink relies on the Client capping `maxInputBytes` itself.
-- **The documentation is already stale.** `docs/api-gateway.md:160` still says Remote handles one request and one result, a sentence that lags the stream mode the README records.
+- **Input authority.** A terminal retains its controlling attachment as a Host-local follower. Snapshot and state frames report each attachment's `writable` state; older attachments keep receiving output after control transfers.
+- **Ordering and acknowledgement.** Terminal writes and resizes share a consecutive command sequence and the terminal's operation queue. An `ack` reports provider acceptance or a control refusal; it never authorizes replay after disconnection.
+- **Independent lifetimes.** Cancelling `attach` stops its input and output delivery, drops unstarted commands, and joins an in-flight input operation. The PTY lifetime is owned separately by retention and explicit close.
+- **Coordinated byte limits.** The Gateway exposes its complete-frame inbox capacity and this stream's JSON envelope cost through `invocation.uplinkWindow`. The terminal publishes that window in its snapshot and uses provider acknowledgements to release in-flight capacity. Writes and resizes wait in a bounded Client queue when the window is full. `maxInputBytes` limits raw UTF-8 input; `maxBufferedBytes` separately limits the complete encoded input retained by the Client and output retained by each follower.
+- **Remaining separate carriers.** Approval answers still correlate `$events` with the `$events/result` RPC through `clientId` and `eventId`. Moving this protocol onto the duplex stream remains deferred.
 
 ### Relation to background jobs
 
@@ -66,7 +66,7 @@ Every Remote stream accepts a Client uplink. The method's return type `RemoteStr
                  Client                                             Host
    ─────────────────────────────────              ───────────────────────────────────────────
    const s = remote.job.attach(req, signal)
-        │  open { streamId, endpoint, payload } ───────▶  opener(endpoint, payload, uplink, peer, control)
+        │  open { streamId, endpoint, payload } ───────▶  opener(endpoint, payload, uplink, peer, control, window)
         │                                                     │ prepareInvocation
         │  s.send(v1) → item { streamId, v1 }    ───────▶  inbox.push(v1)   │ invocation = { request, service, peer, signal, uplink() }
         │  s.send(v2) → item { streamId, v2 }    ───────▶  inbox.push(v2)   │ receiverContext.extend({ invocation }).get(service)
@@ -139,6 +139,7 @@ export interface RemoteInvocation {
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket closure, uplink failure. */
   readonly signal: AbortSignal
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /**
    * The uplink items of this call. Can be taken once; the second call throws. With an uplink codec
    * in the descriptor each item is decoded to In; without one, items are delivered as unknown with
@@ -379,6 +380,7 @@ export type RemoteStreamOpener = (
   uplink: AsyncIterable<unknown>,
   peer: PeerScope,
   control: AbortController,
+  window: RemoteUplinkWindow,
 ) => Promise<AsyncIterable<unknown>>
 
 // index.ts Config addition
@@ -574,10 +576,11 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 - **Bought**: one stream with two directions, so interactive scenarios such as terminal keystrokes, approval answers, and background-job stdin no longer each build their own "one stream plus one unary"; a Host method knows its caller; the uplink and downlink types are declared in one place, the return type; uplink items come from the browser and are validated strictly per item at the Host, while downlink items are Host-produced typed values that pass straight through; the generated output and wire frames of existing `AsyncIterable<Out>` methods and unary methods are completely unchanged.
 - **`this.ctx.invocation` is `undefined` outside a Remote call**, so a method that reads it must handle the optional; a service method invoked only directly in process correctly reads `undefined`.
+- **Web terminals use `attach`** for screen output and input commands, with provider acknowledgements and per-attachment writable state; their Client retains the current generation's handle and never replays input.
 - **The inbox limit applies to every stream**: a method that does not read its uplink fails as a whole when it receives many uplink frames. This is a deliberate explicit failure, recorded in the README.
 - **The operator is the only Peer**, and `admit` is the only admission point; the first consumer that needs a second Peer must add opening, association, and events in `dsh-client-connection`.
 - **No cross-direction ordering guarantee between uplink and downlink**; a protocol that needs request-response pairing carries its own sequence numbers.
-- **Upper-layer protocols do not yet expose `send`**: consumers of `$stream`, snapshot, and journal use only the downlink today; the object they receive is already the handle.
+- **Upper-layer supervisors expose only the downlink**: `$stream`, snapshot and journal do not expose `send`; a domain that writes uplink retains its generated physical handle for that generation.
 - **The worker tunnel behaves differently from the WebSocket carrier**: no inbox limit, and items after `end` are dropped, because page to worker is a same-origin trusted boundary.
 
 ## Testing
@@ -595,10 +598,8 @@ Retention cases in `gateway-stream.host.spec.ts` and `gateway.client.spec.ts` co
 ## Deferred
 
 - `$stream` / snapshot / journal expose the handle's `send` to upper-layer protocols.
-- Web terminal: one `attach` stream replaces `follow` plus `write` plus `resize`, and `attachmentId` retires.
 - Duplex `$events`: waterfall answers become uplink items on the same `streamId`, and `$events/result` and `clientId` retire.
 - Credit frames: wait for a consumer that needs sustained high-volume uplink; the inbox limit is the initial credit.
-- The `streamInboxBytes` default of 262144 is far more than keyboard and stdin need; if the first consumer is terminal paste, it may be aligned with the `maxInputBytes` of `terminal-controller`.
 - A Host-initiated half-close frame (the Host stops reading the uplink but keeps writing the downlink): no consumer; not added.
 - `uplink()` on unary methods: it can read items that arrive while the method runs, semantically valid but of doubtful use; allowed, noted in the README.
 
@@ -606,4 +607,4 @@ Retention cases in `gateway-stream.host.spec.ts` and `gateway.client.spec.ts` co
 
 - [Remote event delivery](../../../../packages/api/remotes/README.md): the unary `$events/result` answer path; the duplex `$events` item under Deferred partially supersedes it once it lands.
 - [Session history and event transport](2026-08-18-session-history-and-event-transport.md): the `$stream()` supervisor and the journal / snapshot protocols above it, which this note leaves unchanged.
-- [Web sidebar terminal](../feature/2026-09-09-web-sidebar-terminal.md): the unary terminal `write` and `attachmentId`; the `attach` stream under Deferred replaces it once it lands.
+- [Web sidebar terminal](../feature/2026-09-09-web-sidebar-terminal.md): the `attach` stream carries input commands, provider acknowledgements and per-attachment writable state; reconnect never replays input.

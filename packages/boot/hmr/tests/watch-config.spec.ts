@@ -10,10 +10,13 @@ import { watchConfig } from '../src/watch-config.ts'
 import Hmr from '../src/index.ts'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
+import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { FSWatcher, type ChokidarOptions } from 'chokidar'
 
-const configWatch = vi.hoisted(() => ({ create: undefined as ((options?: ChokidarOptions) => FSWatcher) | undefined }))
+const configWatch = vi.hoisted(() => ({
+  create: undefined as ((paths: string | string[], options?: ChokidarOptions) => FSWatcher) | undefined,
+}))
 vi.mock('node:fs', async (importOriginal) => {
   const native = await importOriginal<typeof import('node:fs')>()
   return { ...native, realpathSync: vi.fn(native.realpathSync) }
@@ -25,7 +28,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 vi.mock('chokidar', async (importOriginal) => {
   const native = await importOriginal<typeof import('chokidar')>()
   return { ...native, watch: (paths: string | string[], options?: ChokidarOptions) =>
-    configWatch.create === undefined ? native.watch(paths, options) : configWatch.create(options) }
+    configWatch.create === undefined ? native.watch(paths, options) : configWatch.create(paths, options) }
 })
 
 /** Every per-test tree root, removed once the booted watcher has been disposed. */
@@ -78,6 +81,42 @@ async function eventually(test: () => boolean, message: string, budget: number):
 describe('HMR exact config paths', () => {
   afterEach(() => {
     for (const root of hmrRoots.splice(0)) rmSync(root, { recursive: true, force: true })
+  })
+
+  it.for([false, true])('excludes siblings while observing config replacement through an alias (missing parents: %s)', async (missingParents, test) => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-hmr-config-scope-'))
+    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    const target = join(root, 'target')
+    const dir = join(root, 'alias')
+    mkdirSync(target)
+    symlinkSync(target, dir, process.platform === 'win32' ? 'junction' : 'dir')
+    const filename = join(dir, ...(missingParents ? ['later', 'nested'] : []), 'package.json')
+    writeFileSync(join(dir, 'package.json.lock'), 'held')
+    mkdirSync(join(dir, 'unrelated'))
+    writeFileSync(join(dir, 'unrelated', 'config.yml'), 'ignored')
+    if (!missingParents) writeFileSync(filename, 'initial')
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    let watcher!: FSWatcher
+    const previousFactory = configWatch.create
+    onTestFinished(() => { configWatch.create = previousFactory })
+    configWatch.create = (paths, options) => {
+      watcher = new FSWatcher(options)
+      return watcher.add(paths)
+    }
+    const observed: string[] = []
+    await watchConfig(ctx, filename, {}, () => { observed.push(readFileSync(filename, 'utf8')) })
+    const watchedEntries = () => Object.values(watcher.getWatched()).flat()
+    expect(watchedEntries()).not.toContain('package.json.lock')
+    expect(watchedEntries()).not.toContain('unrelated')
+    ensureNativeWatchLive(dir)
+    await writeFileAtomic(filename, 'created', { mode: 0o600 })
+    await eventually(() => observed.includes('created'), 'created config was not observed', test.task.timeout)
+    await writeFileAtomic(filename, 'replaced', { mode: 0o600 })
+    await eventually(() => observed.includes('replaced'), 'replaced config was not observed', test.task.timeout)
+    expect(watchedEntries()).toContain('package.json')
+    expect(watchedEntries()).not.toContain('package.json.lock')
+    expect(watchedEntries()).not.toContain('unrelated')
   })
 
   it.each(['relative', 'absolute'])('observes %s module roots through a filesystem alias', { timeout: 30_000 }, async (rootKind) => {
@@ -252,7 +291,7 @@ describe('HMR exact config paths', () => {
     let watcher!: FSWatcher
     const previousFactory = configWatch.create
     onTestFinished(() => { configWatch.create = previousFactory })
-    configWatch.create = (options) => {
+    configWatch.create = (_paths, options) => {
       watcher = new FSWatcher(options)
       // Use Chokidar's real normalization with deterministic event delivery.
       Reflect.set(watcher, '_readyEmitted', true)

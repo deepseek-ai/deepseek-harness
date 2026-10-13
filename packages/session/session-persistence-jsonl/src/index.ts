@@ -6,7 +6,7 @@
  * @module @deepseek-ai/dsh-session-persistence-jsonl
  */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, type Fiber } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import {
   createSessionFormatCatalogWithChildren,
@@ -243,24 +243,18 @@ function waitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<
 }
 
 /**
- * The JSONL persistence backend. Load as a plugin; it registers as
- * `ctx.sessionPersistence`. Sessions materialize lazily: a created session is
+ * The JSONL backend registered as `ctx.sessionPersistence` by the plugin.
+ * Sessions materialize lazily: a created session is
  * visible to this process immediately, reaches disk on its first append or
  * flush, and never existed if the process crashes before that.
  */
 class JsonlSessionPersistence extends SessionPersistence {
-  static Config: z<Config> = z.object({
-    root: z.string().required(),
-    compression: JsonlCompressionSchema,
-  })
-
   /** Backend label for diagnostics and effects; shadows `Service.name` without changing the service key. */
   override readonly name = 'session-persistence-jsonl'
 
   private root: string
   private compression: JsonlCompression
   private rootEncodingCheck: Promise<void> | undefined
-  private readonly tracker = new JsonlBackendTracker(this.name)
   private readonly generationFormat: Omit<JsonlGenerationFormatAdapter, 'createRestore'>
   /**
    * Bounded LRU of parsed, validated stored logs keyed by session id and
@@ -273,7 +267,7 @@ class JsonlSessionPersistence extends SessionPersistence {
   /** One joinable decode/migration operation per selected historical Session file revision. */
   private readonly migrationPreparations = new Map<SessionId, MigrationPreparation>()
 
-  constructor(ctx: Context, public config: Config) {
+  constructor(ctx: Context, public config: Config, private readonly tracker: JsonlBackendTracker) {
     super(ctx)
     /* v8 ignore next 5 -- generated catalog and Session source share one build-time version owner. */
     if (sessionFormatCatalog.currentVersion !== SESSION_FORMAT_VERSION) {
@@ -294,7 +288,6 @@ class JsonlSessionPersistence extends SessionPersistence {
         error instanceof SessionFormatUnsupportedMigrationError,
     }
     this.assertUsableRoot()
-    this.tracker.install(ctx)
   }
 
   /**
@@ -1726,10 +1719,36 @@ class JsonlSessionPersistence extends SessionPersistence {
   /* v8 ignore stop */
 }
 
-/**
- * One open channel onto a JSONL-stored session: the shared storage-handle
- * scaffolding over this backend's file primitives. Reads re-scan the artifact
- * under the stable-read loop.
- */
+/** JSONL persistence plugin label. */
+export const name = 'session-persistence-jsonl'
 
-export default JsonlSessionPersistence
+/** Loader schema for the backend's root and physical encoding. */
+export const Config: z<Config> = z.object({
+  root: z.string().required(),
+  compression: JsonlCompressionSchema,
+})
+
+/**
+ * Mount persistence with live routing and handles retained through the
+ * consumer unloads triggered by removing this provider. Consumers must own
+ * cleanup in their injecting scope; concurrent root disposal is not ordered.
+ * @param ctx - the owning plugin context.
+ * @param config - the storage root and physical encoding.
+ * @returns resolves when the service is ready.
+ */
+export async function apply(ctx: Context, config: Config): Promise<void> {
+  let service!: Fiber
+  // Keep this generator synchronous so thenable disposers are registered as functions, not awaited.
+  ctx.effect(function* () {
+    const tracker = new JsonlBackendTracker(name)
+    yield tracker.install(ctx)
+    service = ctx.plugin({
+      name: 'session-persistence-jsonl-service',
+      apply(serviceCtx: Context) {
+        new JsonlSessionPersistence(serviceCtx, config, tracker)
+      },
+    })
+    yield service.dispose
+  }, 'session-persistence-jsonl resources')
+  await service.await()
+}

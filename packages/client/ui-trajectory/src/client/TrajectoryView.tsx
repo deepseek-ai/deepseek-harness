@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
-  AssistantBlock, AssistantMessageNode, ConvViewProps, MessageImageLoader, RenderMessageImages,
+  AssistantBlock, AssistantMessageNode, ConvViewProps, MessageImageLoader,
   ToolCallBlock,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
@@ -133,14 +133,10 @@ export function TrajectoryView({
   useSession, useTrajectory, useDuration, loadOlder, loadImage, setActualDuration,
   viewRequest, completeViewRequest, renderSlot, t, jsonStringWrapping,
 }: ConvViewProps
-  & PropsRenderSlots<'conversation.trajectory.images'>
+  & Pick<PropsRenderSlots<'conversation.trajectory.images'>, 'renderSlot'>
   & InjectFace<TrajectoryViewInjected>
   & PropsLocale<'trajectory'>) {
   const [collapsedTurns, setCollapsedTurns] = useState<ReadonlySet<number>>(EMPTY_TURN_IDS)
-  const renderImages = useCallback<RenderMessageImages>(
-    owner => renderSlot('conversation.trajectory.images', { ...owner, loadImage }),
-    [loadImage, renderSlot],
-  )
   const [collapsedAssistants, setCollapsedAssistants] =
     useState<ReadonlySet<string>>(EMPTY_RECORD_IDS)
   const [timelineSelection, setTimelineSelection] = useState<TrajectoryTimeRange | null>(null)
@@ -554,7 +550,8 @@ export function TrajectoryView({
             ...jsonStringWrapping,
             label: t('record.wrapLines'),
           }}
-          renderImages={renderImages}
+          renderSlot={renderSlot}
+          loadImage={loadImage}
           requestNumbers={requestNumbers}
           turns={timelineTurns}
           streamingCells={streamingCells}

@@ -4,6 +4,8 @@
 
 本文是 Typert API Gateway 的当前状态参考。它描述业务服务如何声明一元与流式 Remote 方法、构建如何生成 Host 与 Client 约定，以及调用如何复用 Connection 的 RPC 与 `/api` 路由。会话事件、增量数据和其他流协议不属于本文范围；它们可以使用同一个 Connection，但不使用 Remote 方法描述符。
 
+<a id="programming-model"></a>
+
 ## 编程模型
 
 业务服务通过 `@Remote` 或 `@RemoteScope` 选择对 Client 开放的方法。未标记的方法不会进入生成的 Client 类型或运行时贡献，也不能通过 `ctx.remote` 调用。
@@ -96,7 +98,7 @@ API Gateway 包同时拥有 Host dispatcher 与 Client Remote endpoint 两个对
 
 ## 严格生成流水线
 
-根构建依次执行 `build:lib:host`、`build:lib:client` 与 `build:web`。Host lib 阶段先运行 `tsc -b tsconfig.host.json`，再运行 `tsdown --env.DSH_BUILD_FACE host`；Typert generator 由正常 Host Project Reference 图编译，并在这次 tsdown 中以 Host aggregate 为唯一 `ts.Program` 种子运行。Client lib 阶段随后运行 `tsc -b tsconfig.client.json` 与 `tsdown --env.DSH_BUILD_FACE client`，使用刚生成的 Remote Client 声明和运行时贡献，但不再次启动 Typert。
+根构建依次编译并打包 Host face、Client face，再构建 Web 壳层（[步骤顺序](development.zh.md#typescript-project-layout)）。Host 阶段先编译 Host 包 reference，再运行 `tsdown --env.DSH_BUILD_FACE host`；Typert generator 由正常 Host Project Reference 图编译，并在这次 tsdown 中以 Host aggregate 为唯一 `ts.Program` 种子运行。Client 阶段随后编译 Client 包 reference 并运行 `tsdown --env.DSH_BUILD_FACE client`，使用刚生成的 Remote Client 声明和运行时贡献，但不再次启动 Typert。
 
 两次 tsdown 都匹配 `vendor/*`、`packages/*/*` 与 `apps/cli`，Host 阶段另外匹配 `apps/desktop-host`（[构建顺序](development.zh.md#typescript-project-layout)），且都只打包 `lib/types` 中由对应 tsc 阶段发射的 JavaScript。根配置不扫描 Client 产物、不按包名分类，也不向 tsdown 传维护式 filter；各包的本地配置根据 `DSH_BUILD_FACE` 返回当前阶段的入口。普通 Client 插件在 Client 阶段一起生成 Node loader 入口与 browser bundle。
 
@@ -154,7 +156,9 @@ pnpm run dev:web
 pnpm run build:lib
 ```
 
-运行中的 Client watcher 会在重新打包时消费这些生成文件。若已单独运行 `pnpm run build:lib:host` 刷新 Host 约定，也可再运行 `pnpm run build:lib:client` 完成 Client 侧；干净工作树不能跳过 Host 阶段。仅重新编译前端源码不能从 Host decorator 推导新类型。`pnpm run typecheck` 会执行 Host lib 阶段后再运行 Client tsc，CI 与发布构建也使用同一顺序。
+运行中的 Client watcher 会在重新打包时消费这些生成文件。若已单独运行 `pnpm run build:lib:host` 刷新 Host 约定，也可再运行 `pnpm run build:lib:client` 完成 Client 侧；干净工作树不能跳过 Host 阶段。仅重新编译前端源码不能从 Host decorator 推导新类型。`pnpm run typecheck` 先以不打包的 Typert 生成刷新 Host 约定，再运行 Client tsc；CI 的构建 lane 与发布构建则在 Client tsc 之前的 Host bundle 阶段生成它。
+
+<a id="boundaries"></a>
 
 ## 边界
 
@@ -163,3 +167,9 @@ Remote 处理单请求单结果的一元方法调用，以及项沿 Host → Cli
 API 各层按 `remotes → gateway → connection → webserver` 组织。BFF 与 Typert RPC 层位于 `packages/api`；Connection 与 WebServer 位于 `packages/client/connection` 和 `packages/host/webserver`。包含 `Uint8Array` 的一元结果（包括嵌套字段和数组条目）使用[二进制 Remote 传输](../.agents/notes/implemented/architecture/2026-09-17-workspace-file-binary-transfer.zh.md)。需要 RPC 信封之外响应的功能注册精确的 Connection Fetch 路由。
 
 lookup 策略按 key 配置，因此所有 `agent` 或 `session` 参数共享冷恢复行为。只接受 live 对象需要显式的逐参数或逐 endpoint 策略，而这种策略并不存在；不能通过业务方法内部猜测对象是否来自恢复。
+
+<a id="business-ownership"></a>
+
+### 业务所有权
+
+`packages/api` 负责传输、调用形态与会话生命周期；业务规则归独立的业务包，经注册面或投影数据接入本层。这里改动必须满足的要求——`@Remote` 的四条纪律、存量名只增不改、以及本层保留的边界——正家是[远程与 API 规则](defensive-patterns/remote-and-api.zh.md)，评审就在那里核对。

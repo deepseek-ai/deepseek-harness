@@ -6,7 +6,7 @@ import { createSessionFormatCatalogWithChildren } from '@deepseek-ai/dsh-session
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
 import { SessionFormatUnsupportedError, SessionPersistenceCorruptionError } from '@deepseek-ai/dsh-session-persistence'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

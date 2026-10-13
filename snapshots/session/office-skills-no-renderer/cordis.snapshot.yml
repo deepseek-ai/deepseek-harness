@@ -16,11 +16,13 @@
                 defaultReasoningEffort: high
 
 - insert:
-    - id: office-skills
+    - id: skill-office
       name: '@deepseek-ai/dsh-skill-office'
+      disabled: false
       config:
         assetRoot: !!js process.cwd() + '/office-skills'
-        cli: false
+        node: !!js process.cwd() + '/office-node'
+        cli: !!js process.cwd() + '/render-cli.cjs'
 
 - id: tool-bash
   disabled: true

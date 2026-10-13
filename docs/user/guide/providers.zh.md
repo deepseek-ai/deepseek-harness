@@ -16,7 +16,9 @@
 
 选择**添加模型提供商**。卡片默认打开在**第三方模型提供商**：选取 dsh 自带的提供商——列表显示的是提供商 id，例如 `anthropic`、`openai`、Kimi 对应的 `moonshotai`、GLM 对应的 `zai`——输入其 API 密钥并保存。已安装目录会提供端点、协议和模型列表。
 
-通过 OAuth 登录的提供商（例如 Codex）暂不支持。
+认证 **?** 说明已保存凭据的优先级，以及密钥字段所显示的环境后备。密钥留空会保留现有认证。没有原生密钥认证的提供商（例如 `openai-codex`）不显示密钥字段，除非 profile 显式指定了凭据引用。
+
+已有 profile 指定凭据引用时，**API 密钥来源**显示当前为该引用供值的层：已保存凭据、启动环境、`$cwd/.env` 或 `$DSH_HOME/.env`。未指定引用的原生认证不显示来源标签。
 
 ## 添加自定义模型 API
 
@@ -107,6 +109,21 @@ DeepSeek 将省略的 `inputModalities` 视为纯文本，并拒绝空列表。�
 在 pi-ai 配置中，除模型自身的 `input` 外，每个列表都至少要写一项模态；模型自身的空列表与省略它同义。未知模态在任何位置写入都会被拒绝。
 
 这两个字段都是对你端点的断言，而不是对它的检查。声明了端点并不提供的图片能力的模型不会在这里被拦下，改由提供商拒绝该请求。
+
+### DeepSeek 账号的模型
+
+已登录 DeepSeek 账号的模型列表来自账号服务，因此模型页不为它提供模型编辑器。要调整单个模型，在 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 中使用 `modelOverrides`；字段与 DeepSeek 的 `models` 条目相同，未设置的字段沿用列表中的值：
+
+```yaml
+- id: llm-deepseek-account
+  config:
+    modelOverrides:
+      deepseek-flash:
+        contextWindow: 524288
+        maxTokens: 131072
+```
+
+需要更新版 DeepSeek Harness 的模型会以 `CLIENT_UPGRADE_REQUIRED` 失败，并写明需要安装的版本。列表、兜底和门控规则见[账号提供方参考](../../../packages/llm/llm-deepseek-account/README.zh.md)。
 
 ### 推理等级
 

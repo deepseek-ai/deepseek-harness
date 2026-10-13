@@ -2,7 +2,7 @@
  * Resolve the version one build publishes, which is not always the version the
  * repository declares.
  *
- * Manual Windows CI uses UTC date, workflow run number and attempt as
+ * Manual Desktop CI uses UTC date, workflow run number and attempt as
  * `.YYYYMMDD.run.attempt`; these identify unpublished builds, not release sequences.
  *
  * A production release publishes the version in the manifests, aligned with the
@@ -10,7 +10,7 @@
  * sequence number, so one test feed can carry several builds of a single
  * product version: `0.1.6-alpha.1.20260916.1` from a prerelease base and
  * `0.1.6-test.20260916.1` from a stable one, as the release versions table in
- * `apps/desktop/README.md` gives them. Passing that version here keeps it out
+ * `apps/desktop/packaging/README.md#release-versions` gives them. Passing that version here keeps it out
  * of the manifests, so the tracked version stays the product's while the build
  * version reaches electron-builder, the update feed, and the upload validation
  * as one input.

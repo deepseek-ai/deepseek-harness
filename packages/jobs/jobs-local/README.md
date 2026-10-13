@@ -56,9 +56,15 @@ The limit counts the exact owner's `running` and `stopping` records; all unowned
 
 Jobs belong to their owner and backend, not to the producer tool, so producer or controller reloads do not stop them. When an agent that owns jobs is disposed, its jobs are cancelled, their producers awaited, and their snapshots removed; service disposal does the same for every remaining job. A cancellation that throws during teardown force-fails the record and warns that the work may be orphaned, so teardown never deadlocks.
 
+### Session timing records
+
+Owned jobs record registration and settlement in their original Session, independently of model output collection. SDK consumers receive the same events through `session.event`; the [jobs reference](../../../docs/subsystems/jobs.md#session-lifecycle-records) defines identities, timestamps, and producer settlement reports. Events already persisted remain available after process exit; live jobs and output rings are not resumed.
+
+Lifecycle facts are appended synchronously at the registration or settlement commit, before live hub subscribers and completion waiters react. Append failures warn without abandoning execution or blocking cleanup; consumers must retain incomplete histories as incomplete.
+
 ### What can go wrong
 
-Starting work fails without a controller that serves the owner — loading `dsh-tool-jobs` attaches one, and `start()` otherwise refuses with a message naming it. A producer cancel that returns without settling `done` stays indistinguishable from a slow stop and can stall teardown while holding one capacity slot. Every record disappears when the harness process exits.
+Starting work fails without a controller that serves the owner — loading `dsh-tool-jobs` attaches one, and `start()` otherwise refuses with a message naming it. A producer cancel that returns without settling `done` stays indistinguishable from a slow stop and can stall teardown while holding one capacity slot. Live registry records disappear when the harness process exits; persisted lifecycle events remain.
 
 -----
 
@@ -114,6 +120,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Registry contract](../jobs/README.md) — the abstract `ctx.jobs` service this package implements.
 - [Model-facing job controls](../tool-jobs/README.md) — the `job_output`, `job_list`, and `job_kill` tools and completion notices.
 - [Generic long-running tool runtime reference](../jobs/README.md) — the design behind the background-job runtime.
+- [Job lifecycle recording decision](../../../.agents/notes/implemented/bug-fix/2026-09-30-job-session-lifecycle.md) — durable timing, execution identity, and recording-failure behavior.
 - [job-registry seam Agent Note](../../../.agents/notes/archived/architecture/2026-07-26-job-registry-seam.md) — the owner-fenced registry contract and its rationale.
 
 -----
@@ -134,7 +141,8 @@ No direct invalidation; the named consumers own any request-prefix changes.
 
 These limits define when the registry is a poor fit. They are current package constraints, not a task backlog.
 
-- **Jobs are process-local** — records die with the harness process; durable or cross-restart execution needs a separate backend implementing the seam.
+- **Jobs are process-local** — live execution and output rings die with the harness process; durable or cross-restart execution needs a separate backend implementing the seam.
+- **Final settlement persistence is not guaranteed during teardown** — normal one-shot completion, signal shutdown, or hard exit can stop Session routing or close its writer before the final `job/settled` reaches storage. Consumers must retain the interval as incomplete when settlement is absent; cross-fiber shutdown ordering is outside this journal's contract.
 - **A silently ineffective cancel can stall teardown and hold capacity** — if `cancel` returns without settling `done`, the registry cannot distinguish it from a slow stop; the job keeps one bucket slot for the rest of the service lifetime, and only an explicit throw can be force-failed safely.
 
 <a id="dev-note"></a>

@@ -9,6 +9,13 @@ describe('snapshot manifest', () => {
     })
   })
 
+  it('accepts the standalone SDK-minimal profile', () => {
+    expect(parseSnapshotManifest('version: 1\nprofile: sdk-minimal\n')).toEqual({
+      version: 1,
+      profile: 'sdk-minimal',
+    })
+  })
+
   it('parses an explicitly retained Session generation and its migration coverage', () => {
     expect(parseSnapshotManifest([
       'version: 1',
@@ -161,7 +168,7 @@ describe('snapshot manifest', () => {
   it.each([
     ['', 'manifest must be a mapping'],
     ['version: 2\nprofile: acp\n', 'manifest.version must equal 1'],
-    ['version: 1\nprofile: private\n', 'manifest.profile must be headless, sdk, acp, or web'],
+    ['version: 1\nprofile: private\n', 'manifest.profile must be headless, sdk, sdk-minimal, acp, or web'],
     ['version: 1\nprofile: acp\nextra: true\n', 'manifest has unknown field(s): extra'],
     ['version: 1\nprofile: acp\ncomposition: Not_Safe\n', 'manifest.composition must be a lower-kebab-case name'],
     ['version: 1\nprofile: acp\nrecording: maybe\n', 'manifest.recording must be live or authored'],

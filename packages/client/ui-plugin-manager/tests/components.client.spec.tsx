@@ -2116,7 +2116,7 @@ it('dismisses activation guidance until the user enables the bundle again', () =
 it('supplies the accepted entry values and atomic mutation action to a custom plugin page', () => {
   const mutate = vi.fn(async () => true)
   const form: ConfigPageForm = {
-    state: { status: 'ready', value: { count: 2 }, base: {}, user: {}, revision: 7, writable: true, mode: 'host' }, mutate,
+    state: { status: 'ready', value: { count: 2 }, base: {}, user: {}, revision: 7, writable: true }, mutate,
   }
   renderTab({}, { items: [{ id: 'custom', label: 'Custom' }] }, {
     'plugins.item:custom': (view, _owner, supplied) => view === 'summary' ? 'Custom summary'

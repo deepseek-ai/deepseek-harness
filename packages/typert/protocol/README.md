@@ -48,6 +48,14 @@ A unary method can return `Uint8Array` directly or within nested objects, arrays
 
 A stream method (`@Remote({ mode: 'stream' })`) returns `Iterable`, `AsyncIterable`, or `RemoteStream<Out, In>`. `In` declares the items the Client may send back on the same logical stream; the method reads them through `this.ctx.invocation.uplink<In>()`, and the descriptor carries their codec. `RemoteInvocation` also names the receiving `service`, the calling `peer` (a `PeerScope` the connection layer admitted), and the carrier `signal`; `ctx.invocation` is `undefined` on a Context no Remote call derived: the first `bindTypertRemote()` binding in a tree, which every `TypertRemoteService` constructor makes, registers that accessor on the root. A generated Client stream method returns `RemoteStreamHandle<Out, In>`: the handle with `send`, `end`, and `dispose` beside the downlink iteration. Uplink items are validated one by one at the Host because they arrive from the browser; downlink items are values the Host method produced and pass through.
 
+`@Remote` options contain only `name` and `mode`; input policy belongs to the consumer, not a method annotation. `method.input(options?: TypertRemoteInputOptions)` returns a cached `TypertRemoteValue<Input>`, with `strict?: boolean` as its only option. `method.input()` and `{ strict: false }` retain ordinary Remote handling: declared objects accept and strip unknown fields. `{ strict: true }` rejects undeclared fields recursively, while explicit JSON values and dictionary keys stay open and dictionary values retain their declared validation. Both named-argument envelopes reject extra arguments. Select one view (`const input = method.input({ strict: true })`) for matching `input.create().parse(raw)` and `input.jsonSchema`; this does not change Host dispatch. The [generator](<../generator/README.md#ordinary-remote-metadata>) owns publication and the paired codecs.
+
+Ordinary `./remote` artifacts export `TYPERT_REMOTE` as a `TypertRemoteInfo`, extending the mountable `TypertRemoteContribution`. Its typed `methods[endpoint]` entries are the same direct descriptor objects found in `descriptors`, with derived `input(options?)` and `invoke(remote, input, signal?)`. Parameter documentation lives in `parameters[].description`; `result` is the single result codec, parser, and optional projection. Unary descriptors omit `mode`; streams use `'stream'`. Context-only receivers remain in `descriptors` and scoped declarations, not `methods`.
+
+`createTypertRemoteInfo(spec, z)` from the published pure `@deepseek-ai/dsh-typert-protocol/remote-info` entry returns a class instance, not a constructor. Construction retains only the static spec and the caller-supplied Zod runtime; the first `descriptors` or `methods` read builds and caches their shared index. Each input-policy view, its parser, and its optional JSON Schema projection are independently lazy and cached; `method.input().create()` requests the ordinary parser. The raw spec requires Zod factories, while consumer-facing `TypertSchema<T>` promises only `parse(value: unknown): T`. JSON Schema comes from generator projections, not runtime `z.toJSONSchema()`. The leaf has no runtime imports; generated artifacts supply Zod. Metadata and schema access never invokes the network; the root also re-exports the factory but imports Cordis.
+
+The invoker takes a caller-owned, mounted, unscoped Client Remote and resolves its namespace method at call time. It preserves the namespace receiver, optional positional holes, and signal, forwarding the same `Promise<RemoteResult<DecodedOutput>>` or complete `RemoteStreamHandle<Output, Uplink>` without an async wrapper. `DecodedOutput` defaults to the authored output; generation supplies `RemoteDecoded<Output>` only for byte-bearing unary methods, avoiding recursive remapping of ordinary JSON results; `result.create().parse()` retains the authored output type and does not normalize shared byte buffers. Documentation and parsing remain available when either input variant or the result lacks JSON Schema support; each variant's `jsonSchemaError` explains its absent projection. Registry readers use `isTypertRemoteMethod(descriptor)` from the same pure entry to narrow a base descriptor to these direct capabilities.
+
 ### Associating Host objects and Contexts with wire identities
 
 Complex Host objects cannot cross the wire directly. A business package declares the association through the merge-extensible `TypertLookupMap` and `TypertContextMap`. A Host Context adapter owns the stable wire declaration and resolves wire identities to live Contexts. A Client Context adapter maps in both directions because scoped calls originate from a Client Context and forwarded Host events resolve their explicit wire identity there. Host composition may override its synchronous or asynchronous resolver. A resolver that refuses on policy grounds throws `RemoteError` with its own code, which reaches the caller unchanged.
@@ -93,7 +101,9 @@ The package keeps strict reflection in the compiler: decorator initializers reta
 
 ### Protocol maps and descriptors
 
-The merge-extensible protocol maps keep static associations in the type system, while runtime providers register resolution with `ctx.typert`; the map names and shapes live in [`src/types.ts`](src/types.ts). `InvocationDescriptor` is the shared runtime form consumed by the registry, the Gateway, and the Client Remote, covering direct and Context receivers, JSON and lookup parameters, scope projections, the uplink codec, cancellation, and result codecs.
+The merge-extensible protocol maps keep static associations in the type system, while runtime providers register resolution with `ctx.typert`; the map names and shapes live in [`src/types.ts`](src/types.ts). `InvocationDescriptor` is the shared runtime form consumed by the registry, the Gateway, and the Client Remote, covering direct and Context receivers, JSON and lookup parameters, scope projections, the uplink codec, cancellation, result codecs, and documentation. Generated `TypertRemoteMethod` objects extend this descriptor directly.
+
+`RemoteInvocation.uplinkWindow` optionally describes the carrier's complete-frame inbox capacity and the UTF-8 envelope cost added to compact JSON items. Its absence means the carrier has no encoded-frame inbox limit; consumers still own their local buffering and acknowledgement policy.
 
 ### Wire identity grammar
 
@@ -106,6 +116,7 @@ Every namespace, method, lookup, and Context segment must satisfy `isTypertRemot
 | [`src/index.ts`](src/index.ts) | Decorators, Gateway bindings, `remoteMethods`, segment validation |
 | [`src/json-value.ts`](src/json-value.ts) | `isRemoteJsonValue` and `isRemoteUplinkItem`, the lossless JSON checks every carrier shares |
 | [`src/remote-error.ts`](src/remote-error.ts) | `RemoteError` and the structural `remoteErrorOf` recognizer |
+| [`src/remote-info.ts`](src/remote-info.ts) | Pure lazy info factory and direct-method type guard |
 | [`src/types.ts`](src/types.ts) | Protocol maps, `RemoteErrorDetailsMap`, `RemoteResult`, `RemoteStream`, `RemoteStreamHandle`, `PeerScope`, `RemoteInvocation`, `InvocationDescriptor`, codecs, provider contracts, registry interfaces, `TypertClientRemote` |
 
 </details>
@@ -141,7 +152,7 @@ No direct effect; the declared contracts reach a request only when an assembly p
 
 These limits define what the declarations can represent; they are current package constraints, not a task backlog.
 
-- **Decorator markers are minimal** — markers contain only the method name and the direct or Context invocation mode; parameter, result, lookup, and schema reflection require the Typert build pipeline.
+- **Decorator markers are minimal** — markers contain the method name, optional export alias and stream mode, and direct or Context receiver selection; parameter, result, lookup, schema, and documentation metadata require the Typert build pipeline.
 - **Remote signatures are restricted** — decorators accept only public, non-static instance methods with string names, and source-mode execution cannot represent overloaded, destructured, defaulted, or rest-parameter signatures.
 
 <a id="dev-note"></a>

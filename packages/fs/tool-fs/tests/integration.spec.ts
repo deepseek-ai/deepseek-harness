@@ -71,6 +71,21 @@ describe('default deployment (with dsh-fs-observation-policy)', () => {
   })
 
   describe('write → disk', () => {
+    it('without read, creates and edits a new file while protecting unobserved existing files', async () => {
+      await fiber.dispose()
+      fiber = await ctx.plugin(ToolFs, { read: false })
+      await writeFile(join(dir, 'existing.txt'), 'original')
+      expect((await call('write', { file_path: 'new.txt', content: 'created' })).isError).toBe(false)
+      expect((await call('edit', { file_path: 'new.txt', old_string: 'created', new_string: 'edited' })).isError).toBe(false)
+      expect(await readFile(join(dir, 'new.txt'), 'utf8')).toBe('edited')
+      expect(await call('write', { file_path: 'existing.txt', content: 'overwrite' }))
+        .toMatchObject({ isError: true, error: { info: { code: 'FS_NOT_OBSERVED' } } })
+      expect(await call('edit', { file_path: 'existing.txt', old_string: 'original', new_string: 'overwrite' }))
+        .toMatchObject({ isError: true, error: { info: { code: 'FS_NOT_OBSERVED' } } })
+      expect(await readFile(join(dir, 'existing.txt'), 'utf8')).toBe('original')
+      expect(ctx.tools.get('read')).toBeUndefined()
+    })
+
     it('creates a file with exactly the requested bytes', async () => {
       const result = await call('write', { file_path: 'new.txt', content: 'line one\nline two\n' })
       expect(result.isError).toBe(false)

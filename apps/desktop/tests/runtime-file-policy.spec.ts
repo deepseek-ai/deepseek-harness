@@ -27,6 +27,8 @@ it('omits development artifacts while preserving executable modules, assets and 
     'node-pty/prebuilds/win32-x64/conpty.pdb',
     '@koromix/koffi-win32-x64/win32_x64/koffi.lib',
     '@mixmark-io/domino/test/entities.html',
+    '@mixmark-io/domino/.yarn/plugins/@yarnpkg/plugin-version.cjs',
+    '@mixmark-io/domino/.yarn/versions/release.yml',
     '@deepseek-ai/libreoffice-kit-wasm/assets/soffice.data',
     '@deepseek-ai/libreoffice-kit-darwin-arm64/bin/libreoffice-kit',
     '.modules.yaml', '.pnpm-workspace-state-v1.json', '.bin/tool', '.pnpm/cache',
@@ -45,6 +47,8 @@ it('omits development artifacts while preserving executable modules, assets and 
     'node-pty/third_party/conpty/win10-x64/OpenConsole.exe',
     '@koromix/koffi-win32-x64/win32_x64/koffi.node',
     '@mixmark-io/domino/lib/HTMLParser.js', '@mixmark-io/domino/lib/EntityParser.js',
+    '@mixmark-io/domino/LICENSE', '@mixmark-io/domino/package.json',
+    'example/.yarn/runtime.cjs', '@mixmark-io/domino/.yarn-data.json',
     '@img/sharp-win32-x64/lib/libvips-42.dll',
     '@deepseek-ai/libreoffice-kit-win32-x64/bin/libreoffice-kit.exe',
     '@deepseek-ai/libreoffice-kit-win32-x64/sources/core-source.json',
@@ -73,6 +77,8 @@ it('omits development artifacts while preserving executable modules, assets and 
 
 it('applies package-specific rules inside scoped and nested dependency containers', () => {
   expect(desktopRuntimeFileExclusion('outer/node_modules/@mixmark-io/domino/test/data.html', windows, 'win32-x64')).toBeDefined()
+  expect(desktopRuntimeFileExclusion('outer/node_modules/@mixmark-io/domino/.yarn/plugin.cjs', windows, 'win32-x64')).toBeDefined()
+  expect(desktopRuntimeFileExclusion('@mixmark-io/domino/.yarn', windows, 'win32-x64')).toBeDefined()
   expect(desktopRuntimeFileExclusion('outer\\node_modules\\node-pty\\prebuilds\\win32-arm64\\conpty.node', windows, 'win32-x64')).toBeDefined()
   expect(desktopRuntimeFileExclusion('outer/node_modules/unrelated/test/data.html', windows, 'win32-x64')).toBeUndefined()
   expect(desktopRuntimeFileExclusion('outer/fs-ext/build/Release/fs_ext.lib', windows, 'win32-x64')).toBeUndefined()
@@ -83,6 +89,62 @@ it('retains native prebuilds for the selected macOS architecture', () => {
   expect(desktopRuntimeFileExclusion('node-pty/prebuilds/darwin-arm64/pty.node', mac, 'darwin-arm64')).toBeUndefined()
   expect(desktopRuntimeFileExclusion('node-pty/prebuilds/darwin-x64/pty.node', mac, 'darwin-arm64')).toBeDefined()
   expect(desktopRuntimeFileExclusion('node-pty/prebuilds/win32-x64/conpty.node', mac, 'darwin-arm64')).toBeDefined()
+})
+
+it.each([
+  ['darwin', 'arm64'], ['darwin', 'x64'],
+  ['linux', 'arm64'], ['linux', 'x64'],
+  ['win32', 'arm64'], ['win32', 'x64'],
+] as const)('copies ConPTY sources only for Windows targets (%s/%s)', (platform, arch) => {
+  const root = mkdtempSync(join(tmpdir(), 'desktop-conpty-policy-'))
+  try {
+    const source = join(root, 'source')
+    const output = join(root, 'output')
+    const prefixes = ['', '@example/outer/node_modules/']
+    const conpty = ['arm64', 'x64'].flatMap(cpu => ['conpty.dll', 'OpenConsole.exe'].map(
+      file => `node-pty/third_party/conpty/1.25.260303002/win10-${cpu}/${file}`,
+    ))
+    const native = platform === 'win32'
+      ? ['conpty.node', 'conpty_console_list.node', 'conpty/conpty.dll', 'conpty/OpenConsole.exe']
+      : ['pty.node', 'spawn-helper']
+    const retained = [
+      ...native.map(file => `node-pty/prebuilds/${platform}-${arch}/${file}`),
+      ...native.map(file => `node-pty/build/Release/${file}`),
+      'node-pty/lib/index.js', 'node-pty/LICENSE',
+      'node-pty/third_party/conpty-notes/README.md', 'node-pty/third_party/conpty.dll',
+      'other/third_party/conpty/conpty.dll',
+    ]
+    for (const prefix of prefixes) {
+      for (const path of [...conpty, ...retained]) {
+        mkdirSync(join(source, prefix, path, '..'), { recursive: true })
+        writeFileSync(join(source, prefix, path), `payload:${prefix}${path}`)
+      }
+    }
+    cpSync(source, output, {
+      recursive: true, dereference: true,
+      filter: (path) => {
+        const entry = relative(source, path)
+        return desktopRuntimeFileExclusion(
+          platform === 'win32' ? entry.replaceAll('/', '\\') : entry,
+          { platform, arch }, `${platform}-${arch}`,
+        ) === undefined
+      },
+    })
+    for (const prefix of prefixes) {
+      expect(existsSync(join(output, prefix, 'node-pty/third_party/conpty'))).toBe(platform === 'win32')
+      for (const path of conpty) {
+        expect(existsSync(join(output, prefix, path)), `${prefix}${path}`).toBe(platform === 'win32')
+      }
+      for (const path of [...retained, ...(platform === 'win32' ? conpty : [])]) {
+        expect(readFileSync(join(output, prefix, path), 'utf8')).toBe(`payload:${prefix}${path}`)
+      }
+      for (const path of conpty) {
+        expect(readFileSync(join(source, prefix, path), 'utf8')).toBe(`payload:${prefix}${path}`)
+      }
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 it.each([

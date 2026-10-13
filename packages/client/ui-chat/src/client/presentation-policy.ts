@@ -1,19 +1,14 @@
-/** Chat presentation derived from Host-backed detail and in-memory collapse timing. */
+/** Chat presentation derived from Host-backed detail and collapse timing. */
 
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { TranscriptViewMode } from '../chat-settings.ts'
-
-/** Available points when a completed Turn returns to its historical presentation. */
-export const COLLAPSE_TIMINGS = ['completion', 'next-input'] as const
-
-/** When a completed Turn returns to its historical presentation. */
-export type CollapseTiming = typeof COLLAPSE_TIMINGS[number]
+import type { CollapseTiming, TranscriptViewMode } from '../chat-settings.ts'
+export { COLLAPSE_TIMINGS, type CollapseTiming } from '../chat-settings.ts'
 
 /** Presentation capabilities that one work-details mode enables. */
 export interface ChatPresentationPolicy {
-  /** Mode this policy was derived from; for diagnostics, never for branching in renderers. */
+  /** Preference identity for layout resets and diagnostics; renderers select the capabilities below. */
   readonly mode: TranscriptViewMode
-  /** Browser-local experiment; completion retains the default immediate folding and scrolling. */
+  /** Saved collapse timing; completion retains the default immediate folding and scrolling. */
   readonly collapseTiming: CollapseTiming
   /** Whether a normally completed Turn folds its process rows behind the whole-Turn control. */
   readonly foldCompletedTurns: boolean
@@ -73,7 +68,7 @@ const TIMING_POLICIES = {
 /**
  * Resolve a stable policy for one detail mode and collapse timing.
  * @param mode - persisted work-details mode.
- * @param collapseTiming - in-memory timing; defaults to immediate completion folding.
+ * @param collapseTiming - persisted timing; defaults to immediate completion folding.
  * @returns the same policy object for the same pair of choices.
  */
 export function presentationPolicyFor(
@@ -84,9 +79,9 @@ export function presentationPolicyFor(
 }
 
 /**
- * Combine Host-backed detail and in-memory timing without owning subscriptions.
+ * Combine Host-backed detail and persisted timing without owning subscriptions.
  * @param mode - live work-details mode.
- * @param collapseTiming - live, in-memory collapse timing.
+ * @param collapseTiming - live Host-backed collapse timing.
  * @returns observable policy whose subscriptions follow both preferences.
  */
 export function derivePresentationPolicy(

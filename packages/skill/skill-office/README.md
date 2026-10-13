@@ -1,5 +1,5 @@
 ---
-description: "Bundled Word, PowerPoint, and Excel instructions for deployments providing Office file authoring and structural checks."
+description: "Progressive Office authoring and CLI operation skills for document workflows."
 kind: "package-reference"
 ---
 
@@ -9,11 +9,12 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Agents can load Word, PowerPoint, and Excel workflows that use the bundled Python environment by default and respect explicit user or AGENTS.md environment choices. The skills cover creation, focused edits, structural checks, and file delivery. When supplied by the environment, the LibreOffice Kit CLI directly renders selected pages or worksheet ranges, converts requested PDFs, and recalculates workbooks into new files. Visual QA requires image input support, reuses unchanged-source previews, and ends when applicable checks pass; ordinary delivery does not require installing a renderer.
+The catalog lists the Office router and six authoring or operation skills. Full instructions load on demand. Authoring skills use the selected Python libraries; operation skills supply the configured Node and LibreOffice Kit CLI paths. SDK and Desktop mount the skill provider and dependency query separately.
 
 ## Table of Contents
 
 - [Use this package](#use-this-package)
+  - [Progressive loading](#progressive-loading)
 - [Understand the implementation](#understand-the-implementation)
 - [Further Exploration](#further-exploration)
 - [Model Experience](#model-experience)
@@ -25,29 +26,56 @@ Agents can load Word, PowerPoint, and Excel workflows that use the bundled Pytho
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this provider beside the skill registry and `dsh-tool-skill` to expose `office-docx`, `office-pptx`, and `office-xlsx` in the session catalog. The provider supplies instructions and scripts; the deployment supplies its interpreters, authoring libraries, execution tools, and file delivery tool.
-
-### Minimal configuration
+Mount the skill provider beside the skill registry and `dsh-tool-skill`. The provider supplies skill instructions; operation skills append absolute interpreter and CLI paths when loaded.
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'
+
 ```
 
 | Field | Default | Meaning |
 |---|---|---|
-| `assetRoot` | Packaged `assets/` | Absolute resource directory containing the three skill folders and shared `scripts/`; deployments can place it outside an application archive. |
-| `node` | Current standalone Node process | Absolute Node executable; Electron and SDK executables must supply a standalone Node. |
-| `cli` | Installed kit’s `lib/cli.js` | Absolute CLI entry; `false` explicitly disables the CLI. |
+| `assetRoot` | Carrier resources or packaged `assets/` | Absolute directory containing the seven skill folders. |
+| `node` | Host Node.js | Standalone Node executable for operation skills; packaged carriers supply it explicitly. |
+| `cli` | Installed Kit CLI | Absolute CLI entry; `false` disables operation execution. |
 
-Relative paths, missing resources, and skill files without a YAML frontmatter description reject activation. Disposing the plugin removes its candidates. Project and user skill precedence remains owned by the skill registry.
+Invalid skill assets reject registration. Authoring instructions do not resolve renderer paths; loading operation instructions validates existing interpreter and CLI files without preparing engines. Bash or PowerShell owns approvals, sandboxing, cancellation, and output management. Resources and execution tools must refer to the same host.
 
-Loaded skills append an `Installed LibreOffice Kit` section with absolute `libreofficeKit.node` and `libreofficeKit.cli` paths. Agents use the bundled binaries unless the user explicitly opts out, passing the CLI as Node’s first argument without relying on the working directory or searching PATH. A bundled CLI failure is reported rather than replaced with a system executable. Activation checks both paths are files. npm deployments use their installed kit by default; Desktop supplies standalone Node and the complete unpacked Office dependencies; the Python SDK supplies standalone Node and its adjacent Office directory. Custom Python-only deployments must set `cli: false` or supply standalone Node.
+<a id="progressive-loading"></a>
+### Progressive loading
 
-### Structural checks
+The model chooses skills from the task; the host does not inject complete instructions based on file extensions. All seven skills are listed and loadable by name through `skill` or explicit user invocation. Requested appearance changes, including spreadsheet cell fills and text alignment, require rendering even without an explicit visual-check request; an explicit request to skip rendering takes precedence. Pure operations can enter the corresponding skill directly.
 
-The shared Python checker reads DOCX, PPTX, or XLSX without modifying the source. It recognizes Transitional and Strict OOXML namespaces, validates ZIP/XML and internal package relationships, reports document structure, and optionally checks required text or slide/sheet count. DOCX text assertions cover the main body, section-referenced headers and footers, and body-referenced footnotes and endnotes; comments, glossary text, and unreferenced parts or notes do not satisfy them. It uses only the Python standard library. Invalid packages, corrupt or encrypted ZIP members, and report-file write failures produce a JSON failure report on stdout. A passing report does not establish appearance, feature preservation, or calculated formula results.
+```mermaid
+flowchart TD
+    A["Initial catalog: seven Office summaries"]
+    A -->|Non-Office task| N["Continue without loading Office instructions"]
+    A -->|Office task| B["skill(office): task routing"]
 
-Excel data and formula tasks skip visual inspection; formatting, layout, chart appearance, printing, or known display problems require checking relevant regions. Basic styling does not itself trigger inspection, and formula recalculation and requested exports remain independent operations. Blank or transparent previews do not pass visual inspection. A failed preview ends visual checking without diagnostic workbooks, PDF conversion, or unrequested print-setting changes; the usable workbook is delivered with the inspection limitation.
+    B -->|Create or edit| C["skill(office-docx / office-pptx / office-xlsx)"]
+    C --> D["Author and validate content, structure and data"]
+    D -->|No additional operation needed| F["Deliver"]
+
+    B -->|Images, visual inspection, or appearance changes| R["skill(office-render)"]
+    D -->|Images, visual inspection, or appearance changes| R
+    R --> RC["Shell: render into a private workspace temporary directory"]
+    RC -->|Usable preview| V["Inspect requested images"]
+    V --> F
+    RC -->|Failed or blank preview| L["Report content checks and unfinished visual inspection separately"]
+    L --> F
+
+    B -->|Formula recalculation| X["skill(office-recalculate)"]
+    D -->|Formula recalculation| X
+    X --> XC["Shell: CLI recalculate and verify values"]
+    XC --> F
+
+    B -->|PDF export| P["skill(office-export-pdf)"]
+    D -->|PDF export| P
+    P --> PC["Shell: CLI convert"]
+    PC --> F
+```
+
+New files and content, data, or formula edits do not require rendering solely because they include incidental basic formatting. Preview images use a private, randomly named temporary directory inside the workspace and are removed after inspection. Loaded instructions remain in session history after an operation finishes. The diagram describes ordinary presets across supported clients; it does not change the shell-only definition of minimal or sdk-minimal.
 
 -----
 
@@ -57,12 +85,15 @@ Excel data and formula tasks skip visual inspection; formatting, layout, chart a
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The provider registers three bundled candidates and reads their descriptions from the shipped YAML frontmatter at activation. Loaded instruction bodies exclude that metadata. Each loaded skill exposes its own filesystem directory, so the execution tool can resolve the shared checker without relying on the task working directory. Configurable external resources support carriers whose application archive is not readable by Python.
+The provider reads descriptions at registration and bodies on demand. Registry precedence, scope, and invocation permissions apply to every skill. Each loaded skill includes its resource directory for relative references. Disposal unregisters all candidates.
+
+The provider registers no tools or activation projection. Loaded skill results remain logged through the generic skill loader. In PTC programs, print or return the full `tools.skill(...)` result so its instructions reach the model. Resume and fork use existing session history and tool declaration reconciliation. Interpreter and CLI paths are resolved only when an operation skill is loaded.
 
 | File | Responsibility |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Provider registration and configured resource paths. |
-| [`assets/`](assets/) | Three workflows and the read-only OOXML checker. |
+| [`src/index.ts`](src/index.ts) | Resource registration and unchanged skill bodies. |
+
+| [`assets/`](assets/) | Router and six subskills. |
 
 </details>
 
@@ -72,7 +103,7 @@ The provider registers three bundled candidates and reads their descriptions fro
 ## Further Exploration
 
 - [Skill registry](../skill/README.md) — discovery and precedence.
-- [Skill tool](../tool-skill/README.md) — model-visible catalogs and bodies.
+- [Skill tool](../tool-skill/README.md) — model catalogs and loaded bodies.
 - [File delivery](../../deliverables/tool-present/README.md) — current source-path delivery.
 
 -----
@@ -80,19 +111,19 @@ The provider registers three bundled candidates and reads their descriptions fro
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through `dsh-tool-skill`, which renders the catalog entries and selected instruction body.
+Indirectly, through `dsh-tool-skill`, which renders the initial Office summary and returns routing or selected subskill instructions from `skill(name)`.
 
 #### KV Cache effect
 
-Mounting the provider adds three catalog entries; loading a skill adds its body at the existing skill-tool insertion point. The provider does not add separate prompt sections.
+Skill results append to history without changing tool declarations, and loaded text or images remain after an operation finishes. Character estimates use `ceil(characters / 4)`: the summary is at most 50 tokens and the router body at most 200; authoring bodies are at least 35% smaller than the combined authoring and operation guides. Skill wrappers, the generic catalog, shell declarations, and `load_workspace_dependencies` are separate costs, and these estimates are not server usage.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The provider depends on LibreOffice Kit but does not install Python or authoring libraries. The checker requires Python 3.9 or later.
-- Structural checks do not judge pagination, clipping, fonts, chart appearance, or Excel recalculation.
-- The checker accepts DOCX, PPTX, and XLSX only; legacy, encrypted, and macro-enabled formats require an appropriate separate workflow.
+- The provider does not install authoring libraries.
+- LibreOffice output can differ from native Office applications.
+- Legacy, encrypted, and macro-enabled files need an appropriate separate workflow.
 
 <a id="dev-note"></a>
 ### Dev Note

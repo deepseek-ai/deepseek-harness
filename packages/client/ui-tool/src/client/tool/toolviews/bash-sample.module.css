@@ -16,6 +16,7 @@
   --dsl-terminal-font: var(--dsw-font-markdown-code-block-small);
   --dsl-terminal-line-height: 18px;
   --dsl-terminal-output-max-height: 224px;
+  --dsl-terminal-command-whitespace: pre-wrap;
   margin: 4px 0 4px 4px;
   border: 0.5px solid var(--dsw-alias-border-l1);
 }
@@ -78,6 +79,7 @@
 }
 
 .commandInput {
+  --dsl-command-whitespace: pre-wrap;
   color: var(--dsw-alias-label-secondary);
 }
 

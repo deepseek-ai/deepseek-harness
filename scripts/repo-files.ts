@@ -1,6 +1,6 @@
 /** Shared repository file discovery and line-oriented reference scanning. */
 
-import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, realpathSync, statSync, type Dirent } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 
 /** One authored path plus its canonical target for symlink deduplication. */
@@ -9,6 +9,14 @@ export interface RepoFile {
   abs: string
   /** Absolute canonical path used only for deduplication. */
   real: string
+}
+
+/** One walker match before canonicalization. */
+interface GlobMatch {
+  /** Repository-relative slash path. */
+  path: string
+  /** False only for a regular file reached through real directories alone. */
+  viaSymlink: boolean
 }
 
 /** A rejected line-oriented repository reference. */
@@ -89,10 +97,19 @@ function assertSupportedSegment(segment: string): void {
  * Pattern segments support `*`, `?`, and literals that contain none of
  * `[]{}()!+@\`; other node-glob syntax, including a trailing `**`, `..`, and
  * empty segments, is rejected loudly up front, while a `.` segment is folded
- * away exactly as node glob normalizes it. Returns repository-relative slash
- * paths, sorted.
+ * away exactly as node glob normalizes it. Directory listings come from
+ * `listDirectory`, which callers share across patterns so each directory is
+ * read once. A directory for which `skipDirectory` returns true is never
+ * entered. Returns repository-relative slash paths, sorted, each marked
+ * `viaSymlink` unless it names a regular file reached only through real
+ * directories.
  */
-function expandGlob(root: string, pattern: string): string[] {
+function expandGlob(
+  root: string,
+  pattern: string,
+  listDirectory: (dirAbs: string) => readonly Dirent[],
+  skipDirectory: (relativeDirectory: string) => boolean,
+): GlobMatch[] {
   const segments: string[] = []
   for (const segment of pattern.split('/')) {
     if (segment === '.') {
@@ -127,32 +144,34 @@ function expandGlob(root: string, pattern: string): string[] {
   if (segments[segments.length - 1] === '**') {
     throw new TypeError(`repo-files walker does not model a trailing ** segment in pattern: ${pattern}`)
   }
-  const out: string[] = []
+  const out: GlobMatch[] = []
 
-  const visit = (dirAbs: string, dirRel: string, index: number): void => {
+  const visit = (dirAbs: string, dirRel: string, index: number, viaSymlink: boolean): void => {
     if (index >= segments.length) return
     if (segments[index] !== '**') {
-      visitSegment(dirAbs, dirRel, index)
+      visitSegment(dirAbs, dirRel, index, viaSymlink)
       return
     }
     // `**` consumes zero directories here and one directory per recursion.
-    visitSegment(dirAbs, dirRel, index + 1)
-    for (const entry of readdirSync(dirAbs, { withFileTypes: true })) {
+    visitSegment(dirAbs, dirRel, index + 1, viaSymlink)
+    for (const entry of listDirectory(dirAbs)) {
       if (entry.name.startsWith('.') || !entry.isDirectory()) continue
-      visit(join(dirAbs, entry.name), dirRel === '.' ? entry.name : `${dirRel}/${entry.name}`, index)
+      const childRel = dirRel === '.' ? entry.name : `${dirRel}/${entry.name}`
+      if (skipDirectory(childRel)) continue
+      visit(join(dirAbs, entry.name), childRel, index, viaSymlink)
     }
   }
 
-  const visitSegment = (dirAbs: string, dirRel: string, index: number): void => {
+  const visitSegment = (dirAbs: string, dirRel: string, index: number, viaSymlink: boolean): void => {
     if (index >= segments.length) return
     const segment = segments[index]
     if (segment === undefined) return
     if (segment === '**') {
-      visit(dirAbs, dirRel, index)
+      visit(dirAbs, dirRel, index, viaSymlink)
       return
     }
     const last = index === segments.length - 1
-    for (const entry of readdirSync(dirAbs, { withFileTypes: true })) {
+    for (const entry of listDirectory(dirAbs)) {
       if (!segmentMatches(segment, entry.name)) continue
       const childAbs = join(dirAbs, entry.name)
       const childRel = dirRel === '.' ? entry.name : `${dirRel}/${entry.name}`
@@ -160,11 +179,13 @@ function expandGlob(root: string, pattern: string): string[] {
         // Files and symlinks match; a broken or cyclic symlink then fails
         // loudly in the caller's realpathSync exactly as node glob did,
         // rather than silently shrinking the scanned corpus.
-        if (entry.isFile() || entry.isSymbolicLink()) out.push(childRel)
+        if (entry.isFile() || entry.isSymbolicLink()) {
+          out.push({ path: childRel, viaSymlink: viaSymlink || !entry.isFile() })
+        }
         continue
       }
       if (entry.isDirectory()) {
-        visitSegment(childAbs, childRel, index + 1)
+        if (!skipDirectory(childRel)) visitSegment(childAbs, childRel, index + 1, viaSymlink)
         continue
       }
       // A literal non-final segment resolves through stat like node glob's,
@@ -179,13 +200,13 @@ function expandGlob(root: string, pattern: string): string[] {
         // glob silently returns no match for it.
         continue
       }
-      if (!target.isDirectory()) continue
-      visitSegment(childAbs, childRel, index + 1)
+      if (!target.isDirectory() || skipDirectory(childRel)) continue
+      visitSegment(childAbs, childRel, index + 1, true)
     }
   }
 
-  visit(root, '.', 0)
-  return out.sort()
+  visit(root, '.', 0, false)
+  return out.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
 }
 
 /** Whether a pattern segment contains `*` or `?` and is therefore wildcard. */
@@ -195,23 +216,40 @@ function hasWildcard(segment: string): boolean {
 
 /**
  * Expand repository-relative globs and deduplicate symlinked files.
+ * Each directory is listed at most once per call, shared across patterns.
+ * A regular file reached only through real directories canonicalizes to
+ * `realpathSync(root)` joined with its relative path; every other match goes
+ * through `realpathSync`, so a broken or cyclic symlink still throws.
  * @param root - absolute repository root.
  * @param patterns - repository-relative glob patterns, processed in order.
  * @param isExcluded - optional predicate over each matched relative path.
+ * @param skipDirectory - optional predicate over each repository-relative directory before the walker
+ *   lists it; return true only when `isExcluded` holds for every path below that directory.
  * @returns matched files in stable first-seen order.
  */
 export function uniqueRepoFiles(
   root: string,
   patterns: readonly string[],
   isExcluded: (relativePath: string) => boolean = () => false,
+  skipDirectory: (relativeDirectory: string) => boolean = () => false,
 ): RepoFile[] {
+  const listings = new Map<string, readonly Dirent[]>()
+  const listDirectory = (dirAbs: string): readonly Dirent[] => {
+    let entries = listings.get(dirAbs)
+    if (entries === undefined) {
+      entries = readdirSync(dirAbs, { withFileTypes: true })
+      listings.set(dirAbs, entries)
+    }
+    return entries
+  }
+  let realRoot: string | undefined
   const seen = new Set<string>()
   const files: RepoFile[] = []
   for (const pattern of patterns) {
-    for (const repoPath of expandGlob(root, pattern)) {
+    for (const { path: repoPath, viaSymlink } of expandGlob(root, pattern, listDirectory, skipDirectory)) {
       if (isExcluded(repoPath)) continue
       const abs = resolve(root, repoPath)
-      const real = realpathSync(abs)
+      const real = viaSymlink ? realpathSync(abs) : join(realRoot ??= realpathSync(root), repoPath)
       if (seen.has(real)) continue
       seen.add(real)
       files.push({ abs, real })

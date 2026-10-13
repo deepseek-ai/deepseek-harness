@@ -14,6 +14,7 @@ import ts from 'typescript'
 import { markdownFences } from './markdown.ts'
 import { partitionPairedMarkdownDerivatives } from './paired-markdown-derivatives.ts'
 import { isArchivedAgentNotePath } from './repo-files.ts'
+import { mayContainEquivFence } from './type-equiv-prefilter.ts'
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -90,7 +91,9 @@ function blockSymbol(code: string): string | null {
 /** Extract every source-equivalence block from one Markdown file. */
 function extractEquivBlocks(docRel: string): EquivBlock[] {
   const blocks: EquivBlock[] = []
-  for (const fence of markdownFences(readFileSync(resolve(root, docRel), 'utf8'))) {
+  const source = readFileSync(resolve(root, docRel), 'utf8')
+  if (!mayContainEquivFence(source)) return blocks
+  for (const fence of markdownFences(source)) {
     if (fence.info === 'ts type-equiv public-api') {
       throw new Error(`verify-type-equiv: ${docRel}:${fence.line} — use the concise \`ts public-api\` fence`)
     }
@@ -113,6 +116,26 @@ function extractEquivBlocks(docRel: string): EquivBlock[] {
   return blocks
 }
 
+/** One manifest source file's text and its parse. */
+interface ParsedSource {
+  text: string
+  sourceFile: ts.SourceFile
+}
+
+/** Parsed manifest sources by absolute path; declaration extraction only reads them. */
+const parsedSources = new Map<string, ParsedSource>()
+
+/** Read and parse one manifest source file at most once per run. */
+function parsedSource(sourceRel: string): ParsedSource {
+  const abs = resolve(root, sourceRel)
+  const cached = parsedSources.get(abs)
+  if (cached !== undefined) return cached
+  const text = readFileSync(abs, 'utf8')
+  const parsed = { text, sourceFile: ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, /* setParentNodes */ true) }
+  parsedSources.set(abs, parsed)
+  return parsed
+}
+
 /**
  * The declaration text of `symbol` in `sourceRel`, with `export` stripped, or
  * null when the symbol is not declared there. Uses the TS parser so it spans
@@ -120,9 +143,7 @@ function extractEquivBlocks(docRel: string): EquivBlock[] {
  * uniformly while including declaration and member JSDoc.
  */
 function sourceDeclaration(sourceRel: string, symbol: string): string | null {
-  const abs = resolve(root, sourceRel)
-  const text = readFileSync(abs, 'utf8')
-  const sf = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, /* setParentNodes */ true)
+  const { text, sourceFile: sf } = parsedSource(sourceRel)
   for (const stmt of sf.statements) {
     const named =
       ts.isInterfaceDeclaration(stmt) || ts.isTypeAliasDeclaration(stmt)
@@ -148,9 +169,7 @@ interface InterfacePart {
 
 /** Find one top-level interface declaration in a source file. */
 function sourceInterface(sourceRel: string, symbol: string): InterfacePart | null {
-  const abs = resolve(root, sourceRel)
-  const text = readFileSync(abs, 'utf8')
-  const sourceFile = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, /* setParentNodes */ true)
+  const { text, sourceFile } = parsedSource(sourceRel)
   const declaration = sourceFile.statements.find((statement): statement is ts.InterfaceDeclaration =>
     ts.isInterfaceDeclaration(statement) && statement.name.text === symbol,
   )
@@ -159,9 +178,7 @@ function sourceInterface(sourceRel: string, symbol: string): InterfacePart | nul
 
 /** Find one interface declaration inside an explicit string-literal module augmentation. */
 function augmentedInterface(sourceRel: string, moduleName: string, symbol: string): InterfacePart | null {
-  const abs = resolve(root, sourceRel)
-  const text = readFileSync(abs, 'utf8')
-  const sourceFile = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, /* setParentNodes */ true)
+  const { text, sourceFile } = parsedSource(sourceRel)
   for (const statement of sourceFile.statements) {
     if (!ts.isModuleDeclaration(statement) || !ts.isStringLiteral(statement.name)
       || statement.name.text !== moduleName || !statement.body || !ts.isModuleBlock(statement.body)) continue
@@ -241,9 +258,7 @@ function bodylessMember(text: string, sf: ts.SourceFile, member: ts.ClassElement
  * retained so the projection is the source-owned public contract.
  */
 function sourcePublicApi(sourceRel: string, symbol: string): string | null {
-  const abs = resolve(root, sourceRel)
-  const text = readFileSync(abs, 'utf8')
-  const sf = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, /* setParentNodes */ true)
+  const { text, sourceFile: sf } = parsedSource(sourceRel)
   for (const stmt of sf.statements) {
     if (!ts.isClassDeclaration(stmt) || stmt.name?.text !== symbol) continue
     const classDoc = sourceJSDoc(text, stmt)

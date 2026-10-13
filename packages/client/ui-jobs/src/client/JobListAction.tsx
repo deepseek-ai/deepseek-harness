@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom'
 import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  IconChevronDownOutlineRegular, IconStopFillRegular, StateDot, TerminalBlock, useAnchoredPosition, useDismissOnOutsidePointer,
+  IconChevronDownOutlineRegular, IconStopFillRegular, MenuSurface, StateDot, TerminalBlock,
+  useAnchoredPosition, useDismissOnOutsidePointer,
   type StateDotState, type TerminalBlockLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -349,7 +350,7 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
   const [killPhase, setKillPhase] = useState<{ key: string; state: Exclude<KillState, 'idle'> } | undefined>(undefined)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const menuRef = useRef<HTMLUListElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const rows = useMemo(() => ordered(jobs), [jobs])
   const liveRows = useMemo(() => rows.filter(isLive), [rows])
@@ -537,36 +538,33 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
       </button>
       {open
         ? createPortal(
-          <ul
-            ref={menuRef}
-            className={css.menu}
-            style={menuPosition ?? MEASURE_STYLE}
-            aria-label={t('list.aria')}
-          >
-            {liveRows.length > 0
-              ? <li className={css.sectionHeader} aria-hidden="true">{t('section.live')}</li>
-              : null}
-            {liveRows.map(item)}
-            {settledRows.length > 0
-              ? (
-                <li className={css.sectionHeader}>
-                  <button
-                    type="button"
-                    className={css.sectionToggle}
-                    aria-expanded={settledExpanded}
-                    onClick={() => { setSettledOpen(!settledExpanded) }}
-                  >
-                    <IconChevronDownOutlineRegular size={12} className={settledExpanded ? `${css.sectionChevron} ${css.sectionChevronOpen}` : css.sectionChevron} />
-                    {t('section.settledCount', { count: settledRows.length })}
-                  </button>
-                  <button type="button" className={css.sectionClear} onClick={clearSettled}>
-                    {t('section.clear')}
-                  </button>
-                </li>
-              )
-              : null}
-            {settledExpanded ? settledRows.map(item) : null}
-          </ul>,
+          <MenuSurface ref={menuRef} className={css.menu} style={menuPosition ?? MEASURE_STYLE}>
+            <ul className={css.menuBody} aria-label={t('list.aria')}>
+              {liveRows.length > 0
+                ? <li className={css.sectionHeader} aria-hidden="true">{t('section.live')}</li>
+                : null}
+              {liveRows.map(item)}
+              {settledRows.length > 0
+                ? (
+                  <li className={css.sectionHeader}>
+                    <button
+                      type="button"
+                      className={css.sectionToggle}
+                      aria-expanded={settledExpanded}
+                      onClick={() => { setSettledOpen(!settledExpanded) }}
+                    >
+                      <IconChevronDownOutlineRegular size={12} className={settledExpanded ? `${css.sectionChevron} ${css.sectionChevronOpen}` : css.sectionChevron} />
+                      {t('section.settledCount', { count: settledRows.length })}
+                    </button>
+                    <button type="button" className={css.sectionClear} onClick={clearSettled}>
+                      {t('section.clear')}
+                    </button>
+                  </li>
+                )
+                : null}
+              {settledExpanded ? settledRows.map(item) : null}
+            </ul>
+          </MenuSurface>,
           document.body,
         )
         : null}

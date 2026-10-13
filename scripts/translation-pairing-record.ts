@@ -7,8 +7,13 @@
 
 import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
-import type { Nodes } from 'mdast'
-import { normalizeTranslationMarkdownLinks, type TranslationLinkContext } from './translation-links.ts'
+import type { Nodes, RootContent } from 'mdast'
+import {
+  normalizeTranslationMarkdownLinkEdits,
+  type TranslationLinkContext,
+  type TranslationLinkDestinationEdit,
+  type TranslationLinkNormalization,
+} from './translation-links.ts'
 import { generatedRegions, parseTranslationMarkdown } from './translation-pairing.ts'
 
 /** The three repository-relative paths that form one bilingual pair. */
@@ -58,9 +63,85 @@ interface Section {
   blocks: string[]
 }
 
+/** One top-level Markdown node, located in the text that {@link sections} slices. */
+export interface TopLevelBlock {
+  node: RootContent
+  start: number | undefined
+  end: number | undefined
+  line: number
+}
+
 function headingText(node: Nodes): string {
   if ('value' in node && (node.type === 'text' || node.type === 'inlineCode')) return node.value
   return 'children' in node ? node.children.map(headingText).join('') : ''
+}
+
+function topLevelBlocks(tree: Nodes): TopLevelBlock[] {
+  if (tree.type !== 'root') throw new Error('Markdown parser returned a non-root tree')
+  return tree.children.map(node => ({
+    node,
+    start: node.position?.start.offset,
+    end: node.position?.end.offset,
+    line: node.position?.start.line ?? 0,
+  }))
+}
+
+/** Characters that read only as destination text in every raw or angle-bracket destination slot. */
+const PARSE_NEUTRAL_DESTINATION = /^[A-Za-z0-9._/:#%-]+$/
+
+/**
+ * Whether one edit replaces a complete, title-free destination that starts on its opener's line,
+ * where both the authored and the replacement text match {@link PARSE_NEUTRAL_DESTINATION}.
+ */
+function isParseNeutralEdit(markdown: string, edit: TranslationLinkDestinationEdit): boolean {
+  const authored = markdown.slice(edit.start, edit.end)
+  const nodeStart = edit.node.position?.start.offset
+  const nodeEnd = edit.node.position?.end.offset
+  if (nodeStart === undefined || nodeEnd === undefined || edit.node.url !== authored) return false
+  if (!PARSE_NEUTRAL_DESTINATION.test(authored) || !PARSE_NEUTRAL_DESTINATION.test(edit.value)) return false
+  const before = markdown.slice(nodeStart, edit.start)
+  const after = markdown.slice(edit.end, nodeEnd)
+  const angle = before.endsWith('<')
+  return edit.node.type === 'link'
+    ? /\]\([ \t]*<?$/.test(before) && (angle ? /^>[ \t]*\)$/ : /^[ \t]*\)$/).test(after)
+    : /\]:[ \t]*<?$/.test(before) && (angle ? /^>[ \t]*$/ : /^[ \t]*$/).test(after)
+}
+
+/**
+ * Locate the authored tree's top-level nodes in normalized text without reparsing it.
+ *
+ * An accepted edit only exchanges letters, digits, and `._/:#%-` for others of
+ * the same set inside one destination that neither starts a line nor carries a
+ * title. Those characters cannot end the destination, start or end a code span,
+ * HTML, autolink, autolink literal, emphasis, table cell, title, escape, or
+ * character reference, or change how a line starts, so the normalized text
+ * parses to the same nodes with offsets moved by the preceding edits.
+ *
+ * @param markdown - Exact authored text that `tree` parses.
+ * @param tree - GFM parse of `markdown`.
+ * @param edits - Normalization edits of `markdown` in ascending source order.
+ * @returns The moved blocks, or `undefined` when an edit is not provably parse-neutral or lies outside every top-level node.
+ */
+export function normalizedTopLevelBlocks(
+  markdown: string,
+  tree: Nodes,
+  edits: readonly TranslationLinkDestinationEdit[],
+): TopLevelBlock[] | undefined {
+  if (!edits.every(edit => isParseNeutralEdit(markdown, edit))) return undefined
+  let next = 0
+  let shift = 0
+  const moved: TopLevelBlock[] = []
+  for (const block of topLevelBlocks(tree)) {
+    if (block.start === undefined || block.end === undefined) return undefined
+    const start = block.start + shift
+    for (let edit = edits[next]; edit !== undefined && edit.start < block.end; edit = edits[next]) {
+      if (edit.start < block.start || edit.end > block.end) return undefined
+      shift += edit.value.length - (edit.end - edit.start)
+      next += 1
+    }
+    moved.push({ ...block, start, end: block.end + shift })
+  }
+  return next === edits.length ? moved : undefined
 }
 
 /**
@@ -68,19 +149,24 @@ function headingText(node: Nodes): string {
  * Fenced code blocks and generated regions, which the pairing gate requires to
  * be identical on both sides, are left out of each section's blocks.
  */
-function sections(markdown: string, tree: Nodes = parseTranslationMarkdown(markdown)): Section[] {
+function sections(markdown: string, blocks: readonly TopLevelBlock[]): Section[] {
   const frontmatter = /^---\n[\s\S]*?\n---(?:\n|$)/.exec(markdown)?.[0].length ?? 0
   const result: Section[] = [{ blocks: frontmatter > 0 ? [markdown.slice(0, frontmatter)] : [] }]
   const regionLines = generatedRegions(markdown).map(region => [region.begin + 1, region.end + 1] as const)
-  if (tree.type !== 'root') throw new Error('Markdown parser returned a non-root tree')
-  for (const node of tree.children) {
-    if ((node.position?.start.offset ?? 0) < frontmatter) continue
+  for (const { node, start, end, line } of blocks) {
+    if ((start ?? 0) < frontmatter) continue
     if (node.type === 'heading') result.push({ heading: node, blocks: [] })
-    const line = node.position?.start.line ?? 0
-    if (node.type === 'code' || regionLines.some(([begin, end]) => line >= begin && line <= end)) continue
-    result.at(-1)?.blocks.push(markdown.slice(node.position?.start.offset, node.position?.end.offset))
+    if (node.type === 'code' || regionLines.some(([begin, regionEnd]) => line >= begin && line <= regionEnd)) continue
+    result.at(-1)?.blocks.push(markdown.slice(start, end))
   }
   return result
+}
+
+/** Sections of one normalized side, reusing its authored parse whenever normalization provably keeps the node layout. */
+function sideSections(markdown: string, normalized: TranslationLinkNormalization, tree: Nodes | undefined): Section[] {
+  if (tree !== undefined && normalized.content === markdown) return sections(markdown, topLevelBlocks(tree))
+  const moved = tree === undefined ? undefined : normalizedTopLevelBlocks(markdown, tree, normalized.edits)
+  return sections(normalized.content, moved ?? topLevelBlocks(parseTranslationMarkdown(normalized.content)))
 }
 
 function slug(text: string): string {
@@ -105,7 +191,8 @@ function sectionHash(blocks: string[]): string {
  * @param en - English document text.
  * @param zh - Chinese document text.
  * @param context - Link-resolution inputs for both sides.
- * @param trees - Optional GFM parses of the exact English and Chinese inputs; normalized text is parsed separately when it changes.
+ * @param trees - Optional GFM parses of the exact English and Chinese inputs; changed normalized text
+ *   is parsed again only when {@link normalizedTopLevelBlocks} cannot place its nodes.
  * @returns Entries in document order.
  * @throws Error when the two sides have different heading counts or malformed generated regions.
  */
@@ -116,10 +203,10 @@ export function computeTranslationPairingRecord(
   context: TranslationPairingRecordContext,
   trees?: { readonly en: Nodes; readonly zh: Nodes },
 ): TranslationPairingRecord {
-  const normalizedEn = normalizeTranslationMarkdownLinks(en, { ...context, sourcePath: paths.source }, [], trees?.en)
-  const normalizedZh = normalizeTranslationMarkdownLinks(zh, { ...context, sourcePath: paths.zh }, [], trees?.zh)
-  const enSections = sections(normalizedEn, normalizedEn === en ? trees?.en : undefined)
-  const zhSections = sections(normalizedZh, normalizedZh === zh ? trees?.zh : undefined)
+  const normalizedEn = normalizeTranslationMarkdownLinkEdits(en, { ...context, sourcePath: paths.source }, [], trees?.en)
+  const normalizedZh = normalizeTranslationMarkdownLinkEdits(zh, { ...context, sourcePath: paths.zh }, [], trees?.zh)
+  const enSections = sideSections(en, normalizedEn, trees?.en)
+  const zhSections = sideSections(zh, normalizedZh, trees?.zh)
   if (enSections.length !== zhSections.length) {
     throw new Error(`${paths.source} has ${enSections.length - 1} heading(s) but ${paths.zh} has ${zhSections.length - 1}`)
   }

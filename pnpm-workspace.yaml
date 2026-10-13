@@ -64,8 +64,8 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/libreoffice-kit-wasm@0.1.5'
   # Fresh pi-ai releases carry the model catalog updates that are the whole
   # point of bumping it; waiting out the release age would defeat that.
-  - '@earendil-works/pi-ai@1.0.2'
-  - '@earendil-works/pi-telemetry@1.0.2'
+  - '@earendil-works/pi-ai@1.1.0'
+  - '@earendil-works/pi-telemetry@1.1.0'
   # This addon release recognizes the Electron 44.7.0 Node/V8 fingerprint used by Desktop.
   - node-addon-native-custom-loader@0.1.9
   - node-addon-require-builtin-darwin-arm64@0.1.9
@@ -106,10 +106,11 @@ minimumReleaseAgeExclude:
   # Desktop packaging requires this Electron fingerprint with node-addon-require-builtin 0.1.9.
   - electron@44.7.0
 patchedDependencies:
-  '@earendil-works/pi-ai@1.0.2': patches/@earendil-works__pi-ai@1.0.2.patch
+  '@earendil-works/pi-ai@1.1.0': patches/@earendil-works__pi-ai@1.1.0.patch
   '@electron/osx-sign@1.3.3': patches/@electron__osx-sign@1.3.3.patch
   '@fortune-sheet/core@1.0.4': patches/@fortune-sheet__core@1.0.4.patch
   '@fortune-sheet/react@1.0.4': patches/@fortune-sheet__react@1.0.4.patch
   '@yao-pkg/pkg@6.21.0': patches/@yao-pkg__pkg@6.21.0.patch
+  app-builder-lib@26.17.0: patches/app-builder-lib@26.17.0.patch
   exceljs@4.4.0: patches/exceljs@4.4.0.patch
   node-pty@1.2.0-beta.15: patches/node-pty@1.2.0-beta.15.patch

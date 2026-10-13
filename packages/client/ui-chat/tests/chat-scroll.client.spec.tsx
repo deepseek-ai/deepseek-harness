@@ -26,7 +26,7 @@ function ScrollHarness({ input, onMotion }: {
   const state = useChatScroll(input)
   useLayoutEffect(() => { onMotion(state.motion) }, [onMotion, state.motion])
   return <>
-    <div ref={state.listRef} data-testid="scrollport">
+    <div ref={state.listRef} data-testid="scrollport" data-initialized={state.initialized}>
       <div ref={state.columnRef} data-testid="column" data-chat-flow="" />
       <div data-chat-turn-spacer="" />
     </div>
@@ -34,7 +34,7 @@ function ScrollHarness({ input, onMotion }: {
   </>
 }
 
-function mountScroll(deferCompletedTurns = true) {
+function mountScroll(deferCompletedTurns = true, initial: Partial<ChatScrollInput> = {}) {
   let input: ChatScrollInput = {
     ready: true,
     order: [],
@@ -45,12 +45,14 @@ function mountScroll(deferCompletedTurns = true) {
     submissionId: null,
     running: false,
     deferCompletedTurns,
+    transcriptView: 'verbose',
     loadedTurns: [],
     hasMore: false,
     loadingOlder: false,
     loadOlder: vi.fn(),
     loadThrough: vi.fn(async () => {}),
     chatScroll: { read: () => null, save: vi.fn() },
+    ...initial,
   }
   const callbacks: { motion?: FlowMotionRows; resize?: () => void } = {}
   class Observer implements ResizeObserver {
@@ -98,7 +100,243 @@ function mountScroll(deferCompletedTurns = true) {
   }
 }
 
+const visibleFoldCases = [
+  { name: 'E/E', earlier: 2400, steps: 1000, body: 400, viewport: 800, top: 800, input: 80, target: 2080, room: 0 },
+  { name: 'E/T', earlier: 600, steps: 1000, body: 100, viewport: 800, top: 200, input: 80, target: 200, room: 220 },
+  { name: 'E/B', earlier: 500, steps: 200, body: 400, viewport: 800, top: 200, input: 80, target: 200, room: 20 },
+  { name: 'T/T', earlier: 500, steps: 2000, body: 100, viewport: 800, top: 900, input: 80, target: 500, room: 620 },
+  { name: 'T/B', earlier: 500, steps: 1200, body: 400, viewport: 800, top: 1200, input: 80, target: 500, room: 320 },
+  { name: 'B/B', earlier: 2400, steps: 1600, body: 1000, viewport: 800, top: 4200, input: 80, target: 2680, room: 0 },
+  { name: 'short content', earlier: 100, steps: 300, body: 100, viewport: 800, top: 0, input: 80, target: 0, room: 0 },
+  { name: 'larger input', earlier: 2000, steps: 300, body: 600, viewport: 800, top: 2100, input: 400, target: 2200, room: 0 },
+  { name: 'body fills viewport', earlier: 900, steps: 300, body: 800, viewport: 800, top: 1200, input: 40, target: 940, room: 0 },
+  { name: 'steps fill viewport', earlier: 900, steps: 800, body: 0, viewport: 800, top: 900, input: 0, target: 900, room: 800 },
+  { name: 'input fills visible steps', earlier: 900, steps: 300, body: 500, viewport: 800, top: 900, input: 300, target: 900, room: 0 },
+  { name: 'no steps', earlier: 900, steps: 0, body: 500, viewport: 800, top: 600, input: 40, target: 640, room: 0 },
+  { name: 'input taller than viewport', earlier: 900, steps: 1200, body: 100, viewport: 800, top: 1400, input: 1200, target: 1400, room: 0 },
+  { name: 'small viewport', earlier: 200, steps: 900, body: 100, viewport: 300, top: 900, input: 30, target: 200, room: 170 },
+] as const
+
+function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolean) {
+  let inputHeight = 0
+  let submission = 0
+  let top: number = test.top
+  let motion: FlowMotionRows | undefined
+  const onMotion = (value: FlowMotionRows): void => { motion = value }
+  let input: ChatScrollInput = {
+    ready: false, order: [], firstSeq: null, lastKey: null, lastIsUser: false,
+    steeringId: null, submissionId: null, running: false, deferCompletedTurns: true,
+    transcriptView: 'detailed', loadedTurns: [], hasMore: false, loadingOlder: false,
+    loadOlder: vi.fn(), loadThrough: vi.fn(async () => {}), chatScroll: { read: () => null, save: vi.fn() },
+  }
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: reduced })))
+  const view = render(<ScrollHarness input={input} onMotion={onMotion} />)
+  const scroller = within(view.container).getByTestId('scrollport')
+  const column = within(view.container).getByTestId('column')
+  const spacer = scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')!
+  const row = document.createElement('div')
+  const glyph = document.createElement('span')
+  glyph.textContent = 'step text'
+  row.append(glyph)
+  column.append(row)
+  const rowHeight = () => row.hidden ? 0 : (row.style.transition !== '' && row.style.transition !== 'none') || row.style.height === ''
+    ? test.steps : Number.parseFloat(row.style.height)
+  const room = () => Number.parseFloat(spacer.style.height) || 0
+  const contentHeight = () => test.earlier + rowHeight() + test.body + inputHeight
+  const floor = () => Math.max(0, contentHeight() + room() - test.viewport)
+  const scrollTo = vi.fn((options: ScrollToOptions) => {
+    scroller.scrollTop = options.top ?? scroller.scrollTop
+  })
+  Object.defineProperties(scroller, {
+    clientHeight: { get: () => test.viewport },
+    scrollHeight: { get: () => Math.max(test.viewport, contentHeight() + room()) },
+    scrollTop: {
+      get: () => { top = Math.max(0, Math.min(top, floor())); return top },
+      set: (value: number) => { top = Math.max(0, Math.min(value, floor())) },
+    },
+    scrollTo: { value: scrollTo },
+    getBoundingClientRect: { value: () => ({ top: 0, bottom: test.viewport, height: test.viewport }) },
+  })
+  Object.defineProperties(row, {
+    offsetHeight: { get: rowHeight },
+    getBoundingClientRect: { value: () => ({ top: test.earlier - top, bottom: test.earlier - top + rowHeight(), height: rowHeight() }) },
+  })
+  Object.defineProperties(column, {
+    offsetHeight: { get: contentHeight },
+    getBoundingClientRect: { value: () => ({ top: -top, bottom: contentHeight() - top, height: contentHeight() }) },
+  })
+  input = { ...input, ready: true }
+  view.rerender(<ScrollHarness input={input} onMotion={onMotion} />)
+  top = test.top
+  scrollTo.mockClear()
+  return {
+    scroller, row, room, scrollTo,
+    reopenAll(verbose = false) {
+      act(() => { motion?.cancelMotion(row) })
+      row.hidden = false
+      if (verbose) {
+        input = { ...input, transcriptView: 'verbose' }
+        view.rerender(<ScrollHarness input={input} onMotion={onMotion} />)
+      }
+    },
+    growDuringFold(height: number, newSubmission: boolean) {
+      inputHeight += height
+      input = newSubmission
+        ? { ...input, submissionId: 'second-distinct-input' }
+        : { ...input, order: ['new-stream-content'], running: true }
+      view.rerender(<ScrollHarness input={input} onMotion={onMotion} />)
+    },
+    cancelReading() {
+      fireEvent.wheel(scroller, { deltaY: -20 })
+      scroller.scrollTop -= 20
+      fireEvent.scroll(scroller)
+      return scroller.scrollTop
+    },
+    updateInput() {
+      input = { ...input, submissionId: null, lastKey: 'durable-input', lastIsUser: true }
+      view.rerender(<ScrollHarness input={input} onMotion={onMotion} />)
+    },
+    bodyTop: () => test.earlier + rowHeight() - top,
+    submit() {
+      inputHeight += test.input
+      row.hidden = false
+      submission++
+      act(() => {
+        motion?.collapse(row, () => { row.hidden = true })
+      })
+      input = { ...input, submissionId: `visible-fold-input-${submission}` }
+      view.rerender(<ScrollHarness input={input} onMotion={onMotion} />)
+    },
+  }
+}
+
+describe.each([false, true])('visible input-fold matrix (reduced=%s)', (reduced) => {
+  it.each(visibleFoldCases)('$name lands with only the required visible room', async (test) => {
+    const h = mountVisibleFold(test, reduced)
+    const positions = [h.bodyTop()]
+    h.submit()
+    await act(async () => { await Promise.resolve() })
+    for (let frame = 0; frame < 24; frame++) {
+      act(() => { vi.advanceTimersByTime(16) })
+      positions.push(h.bodyTop())
+    }
+    expect(h.scroller.scrollTop).toBeCloseTo(test.target, 5)
+    expect(h.room()).toBeCloseTo(test.room, 5)
+    if (test.steps > 0) expect(h.scrollTo.mock.calls.some(([options]) => options.behavior === 'smooth')).toBe(false)
+    for (let i = 1; i < positions.length; i++) expect(positions[i]!).toBeLessThanOrEqual(positions[i - 1]! + 0.01)
+    const end = h.bodyTop()
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(h.bodyTop()).toBe(end)
+  })
+})
+
+it('consumes a prior legal fold deficit instead of accumulating whole steps on the next input', async () => {
+  const test = visibleFoldCases.find(test => test.name === 'T/B')!
+  const h = mountVisibleFold(test, false)
+  h.submit()
+  await act(async () => { await Promise.resolve() })
+  act(() => { vi.advanceTimersByTime(400) })
+  expect(h.room()).toBe(320)
+  h.submit()
+  await act(async () => { await Promise.resolve() })
+  act(() => { vi.advanceTimersByTime(400) })
+  expect(h.scroller.scrollTop).toBe(500)
+  expect(h.room()).toBe(240)
+  expect(h.scrollTo).not.toHaveBeenCalled()
+})
+
+it('retains the reader position without clamping after an input fold is interrupted', async () => {
+  const test = visibleFoldCases.find(test => test.name === 'B/B')!
+  const h = mountVisibleFold(test, false)
+  h.submit()
+  await act(async () => { await Promise.resolve() })
+  act(() => { vi.advanceTimersByTime(112) })
+  const readingTop = h.cancelReading()
+  act(() => { vi.advanceTimersByTime(400) })
+  expect(h.scroller.scrollTop).toBe(readingTop)
+  expect(h.scrollTo.mock.calls.some(([options]) => options.behavior === 'smooth')).toBe(false)
+})
+
+it.each([false, true])('stops obsolete viewport writes when every closing row reopens (verbose=%s)', async (verbose) => {
+  const test = visibleFoldCases.find(test => test.name === 'T/B')!
+  const h = mountVisibleFold(test, false)
+  h.submit()
+  await act(async () => { await Promise.resolve() })
+  act(() => { vi.advanceTimersByTime(112) })
+  h.reopenAll(verbose)
+  await act(async () => { await Promise.resolve() })
+  const position = h.scroller.scrollTop
+  act(() => { vi.advanceTimersByTime(400) })
+  expect(h.room()).toBe(0)
+  expect(h.scroller.scrollTop).toBe(position)
+  expect(h.row.hidden).toBe(false)
+  expect(h.row.style.height).toBe('')
+  expect(h.scroller.querySelector('[data-input-fold]')).toBeNull()
+  expect(h.scrollTo.mock.calls.some(([options]) => options.behavior === 'smooth')).toBe(false)
+})
+
+it.each([false, true])('absorbs new height before the active fold finishes (new submission=%s)', async (newSubmission) => {
+  const test = visibleFoldCases.find(test => test.name === 'B/B')!
+  const h = mountVisibleFold(test, false)
+  h.submit()
+  await act(async () => { await Promise.resolve() })
+  act(() => { vi.advanceTimersByTime(112) })
+  h.growDuringFold(320, newSubmission)
+  await act(async () => { await Promise.resolve() })
+  const positions = [h.bodyTop()]
+  for (let frame = 0; frame < 12; frame++) {
+    act(() => { vi.advanceTimersByTime(16) })
+    positions.push(h.bodyTop())
+  }
+  expect(h.scroller.scrollTop).toBe(test.target + 320)
+  expect(h.room()).toBe(0)
+  for (let i = 1; i < positions.length; i++) expect(positions[i]!).toBeLessThanOrEqual(positions[i - 1]! + 0.01)
+  const settled = h.scroller.scrollTop
+  act(() => { vi.advanceTimersByTime(500) })
+  expect(h.scroller.scrollTop).toBe(settled)
+  expect(h.scrollTo.mock.calls.some(([options]) => options.behavior === 'smooth')).toBe(false)
+})
+
+it('keeps one active fold when the local echo becomes its durable input', async () => {
+  const test = visibleFoldCases.find(test => test.name === 'B/B')!
+  const h = mountVisibleFold(test, false)
+  h.submit()
+  await act(async () => { await Promise.resolve() })
+  act(() => { vi.advanceTimersByTime(96) })
+  const halfway = h.bodyTop()
+  h.updateInput()
+  await act(async () => { await Promise.resolve() })
+  act(() => { vi.advanceTimersByTime(400) })
+  expect(h.scroller.scrollTop).toBe(test.target)
+  expect(h.room()).toBe(0)
+  expect(h.bodyTop()).toBeLessThanOrEqual(halfway)
+  expect(h.scrollTo.mock.calls.some(([options]) => options.behavior === 'smooth')).toBe(false)
+})
+
 describe('Chat scroll collapse timing', () => {
+  it.each(['resize', 'scroll', 'history', 'input', 'preference'] as const)(
+    'waits for initial history before initializing a running view after %s', (change) => {
+      const h = mountScroll(true, { ready: false, running: true })
+      expect(h.scroller.dataset.initialized).toBe('false')
+      if (change === 'resize') h.resize()
+      else if (change === 'scroll') fireEvent.scroll(h.scroller)
+      else if (change === 'history') h.update({ order: ['history'], lastKey: 'history' })
+      else if (change === 'input') h.update({ submissionId: 'pending-input' })
+      else h.update({ transcriptView: 'standard' })
+      expect(h.scroller.dataset.initialized).toBe('false')
+      expect(h.scroller.scrollTop).toBe(0)
+      expect(h.scrollTo).not.toHaveBeenCalled()
+
+      h.update({ ready: true })
+      expect(h.scroller.dataset.initialized).toBe('true')
+      expect(h.scroller.scrollTop).toBe(600)
+      expect(h.scrollTo).not.toHaveBeenCalled()
+      h.grow(1_200)
+      h.resize()
+      expect(h.scroller.scrollTop).toBe(800)
+    },
+  )
+
   it('does not defer one viewport\'s submitted input behind another viewport\'s fold', () => {
     const first = mountScroll()
     const second = mountScroll()
@@ -123,51 +361,90 @@ describe('Chat scroll collapse timing', () => {
     }
   })
 
-  it('coalesces submitted inputs into one follow after the last row closes', () => {
+  it('coalesces submitted inputs into one frame-owned fold', async () => {
     const h = mountScroll()
     h.startFold()
     h.update({ submissionId: 'first' })
     h.update({ submissionId: 'second' })
     expect(h.scrollTo).not.toHaveBeenCalled()
     expect(h.scroller.scrollTop).toBe(0)
-    h.finishFold()
-    expect(h.scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 600, behavior: 'smooth' })
+    await act(async () => { await Promise.resolve() })
+    act(() => { vi.advanceTimersByTime(400) })
+    expect(h.scrollTo).not.toHaveBeenCalled()
+    expect(h.scroller.scrollTop).toBe(520)
     expect(h.scroller.style.overflowAnchor).toBe('')
   })
 
-  it('keeps excess collapse as bottom room without reversing the scrollport', async () => {
-    const h = mountScroll()
-    h.scroller.scrollTop = 600
-    h.startFold()
+  it('keeps only the visible deficit when submitted input is smaller than the fold', async () => {
+    const test = visibleFoldCases.find(test => test.name === 'T/B')!
+    const h = mountVisibleFold(test, false)
+    h.submit()
     await act(async () => { await Promise.resolve() })
-    h.grow(1_060)
-    h.update({ submissionId: 'new-input' })
-    h.grow(1_020)
-    act(() => { vi.advanceTimersByTime(20) })
-    expect(h.scroller.scrollTop).toBe(600)
-    h.grow(980)
-    act(() => { vi.advanceTimersByTime(20) })
-    expect(h.scroller.scrollTop).toBe(600)
-    fireEvent.scroll(h.scroller)
-    expect(h.scroller.scrollTop).toBe(600)
-    h.finishFold()
-    expect(h.scroller.scrollTop).toBe(600)
+    act(() => { vi.advanceTimersByTime(400) })
+    expect(h.scroller.scrollTop).toBe(500)
+    expect(h.room()).toBe(320)
     expect(h.scrollTo).not.toHaveBeenCalled()
-    expect(h.scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')?.style.height).toBe('20px')
   })
 
-  it('follows only the distance left after a smaller fold', async () => {
+  it.each([false, true])('clears mode-change bottom space after the fold (reader interrupts=%s)', async (interrupt) => {
     const h = mountScroll()
-    h.scroller.scrollTop = 600
+    h.resize()
+    h.startFold()
+    h.update({ transcriptView: 'standard' })
+    await act(async () => { await Promise.resolve() })
+    const spacer = h.scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')!
+    expect(spacer.style.height).toBe('80px')
+    h.grow(920)
+    if (interrupt) {
+      fireEvent.wheel(h.scroller, { deltaY: -100 })
+      h.scroller.scrollTop = 400
+      fireEvent.scroll(h.scroller)
+    }
+    h.finishFold()
+    expect(spacer.style.height).toBe('')
+    expect(h.scroller.scrollHeight).toBe(920)
+    expect(h.scroller.scrollTop).toBe(interrupt ? 400 : 520)
+    expect(h.row.hidden).toBe(true)
+    h.resize()
+    expect(spacer.style.height).toBe('')
+  })
+
+  it('clears a previous fold reservation on an idle mode change', async () => {
+    const h = mountScroll()
+    h.resize()
     h.startFold()
     await act(async () => { await Promise.resolve() })
-    h.grow(1_200)
-    h.update({ submissionId: 'new-input' })
-    h.grow(1_120)
-    act(() => { vi.advanceTimersByTime(20) })
-    expect(h.scroller.scrollTop).toBe(600)
+    h.grow(920)
     h.finishFold()
-    expect(h.scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 720, behavior: 'smooth' })
+    h.resize()
+    expect(h.scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')!.style.height).toBe('80px')
+    h.update({ transcriptView: 'standard' })
+    expect(h.scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')!.style.height).toBe('')
+    expect(h.scroller.scrollTop).toBe(520)
+  })
+
+  it('keeps the latest mode reset when preferences change before a fold finishes', async () => {
+    const h = mountScroll()
+    h.resize()
+    h.startFold()
+    h.update({ transcriptView: 'standard' })
+    await act(async () => { await Promise.resolve() })
+    h.update({ transcriptView: 'detailed' })
+    h.grow(920)
+    h.finishFold()
+    expect(h.scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')!.style.height).toBe('')
+    expect(h.scroller.scrollTop).toBe(520)
+  })
+
+  it('combines the remaining input distance with the smaller fold', async () => {
+    const test = visibleFoldCases.find(test => test.name === 'larger input')!
+    const h = mountVisibleFold(test, false)
+    h.submit()
+    await act(async () => { await Promise.resolve() })
+    act(() => { vi.advanceTimersByTime(400) })
+    expect(h.scroller.scrollTop).toBe(2200)
+    expect(h.room()).toBe(0)
+    expect(h.scrollTo).not.toHaveBeenCalled()
   })
 
   it.each(['wheel', 'touchstart', 'pointerdown', 'keydown'] as const)(
@@ -200,7 +477,9 @@ describe('Chat scroll collapse timing', () => {
     h.update({ order: ['streaming-change'], running: true })
     if (newInput) h.update({ submissionId: 'second' })
     h.finishFold()
-    if (newInput) expect(h.scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 600, behavior: 'smooth' })
+    await act(async () => { await Promise.resolve() })
+    act(() => { vi.advanceTimersByTime(400) })
+    if (newInput) expect(h.scroller.scrollTop).toBe(520)
     else {
       expect(h.scrollTo).not.toHaveBeenCalled()
       expect(h.scroller.scrollTop).toBe(420)

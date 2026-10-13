@@ -16,7 +16,7 @@ interface CssPlugin {
 
 function cssPlugin(name: 'dsh-css-modules-inline' | 'dsh-css-global-inline' | 'dsh-css-text-inline'): CssPlugin {
   const configs = clientBundle(
-    '@deepseek-ai/dsh-client-test',
+    join(import.meta.dirname, '../packages/client/ui-sidebar'),
     ['lib/types/index.js'],
   )({ env: { DSH_BUILD_FACE: 'client' } })
   const client = configs.find(config => config.platform === 'browser')

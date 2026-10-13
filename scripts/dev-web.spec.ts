@@ -167,7 +167,7 @@ it('discovers client-preset packages the shell links, excluding loader-delivered
       await writeFile(join(root, dir, 'package.json'), JSON.stringify(manifest))
       await writeFile(join(root, dir, 'tsdown.config.ts'), config)
     }
-    const clientPreset = "import { clientLibrary } from '../tsdown.client.ts'\nexport default clientLibrary('x', [])\n"
+    const clientPreset = "import { clientLibrary } from '../tsdown.client.ts'\nexport default clientLibrary(import.meta.dirname, [])\n"
 
     // Linked by the compile shell: client preset, no loader-delivered half.
     await write('packages/client/linked', {}, clientPreset)

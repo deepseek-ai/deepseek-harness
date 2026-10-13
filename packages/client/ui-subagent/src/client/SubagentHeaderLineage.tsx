@@ -751,7 +751,7 @@ export type SubagentCatalogActionProps =
 
 /**
  * Session-header catalog action for root sessions: the descendant count and
- * its dropdown at the start of the header actions band. Child sessions render nothing
+ * its dropdown after the preset label in the header actions band. Child sessions render nothing
  * here — their breadcrumb switcher in the lineage slot owns the same
  * navigation.
  * @param props - Session standard props plus the catalog actions and translator.

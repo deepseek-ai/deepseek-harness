@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-08-persistent-ptc-sandbox.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-08-persistent-ptc-sandbox.md
+/agent-note-retained-ptc-processes-follow-file-policy:
+  en: ef07a82c85e490e1
+  zh: b1662d1970d2b83b
+/agent-note-retained-ptc-processes-follow-file-policy/problem:
+  en: b8cb574032d4e6e4
+  zh: 6a1a25dec5f96086
+/agent-note-retained-ptc-processes-follow-file-policy/decision:
+  en: 5109a4bb5be39867
+  zh: 2dcc602aba9eae61
+/agent-note-retained-ptc-processes-follow-file-policy/alternatives-considered:
+  en: 10bebc7f982cf7f4
+  zh: 9247a2ba57921a11
+/agent-note-retained-ptc-processes-follow-file-policy/consequences:
+  en: b3ddf273158d3754
+  zh: 916356f4074b3622

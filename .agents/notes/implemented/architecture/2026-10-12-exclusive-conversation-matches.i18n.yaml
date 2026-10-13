@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-12-exclusive-conversation-matches.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-12-exclusive-conversation-matches.md
+/agent-note-exclusive-conversation-matches:
+  en: 6f78605cc85cf7f2
+  zh: f73e26bb3f9d1896
+/agent-note-exclusive-conversation-matches/problem:
+  en: 38ed7541d4cb7019
+  zh: 98ed08f8c0c7c5ba
+/agent-note-exclusive-conversation-matches/decision:
+  en: f2bfa3d0cc6b429a
+  zh: c1dd501c79086d71
+/agent-note-exclusive-conversation-matches/alternatives-considered:
+  en: efd209a2c0e97381
+  zh: 8b6f10ff4de49449
+/agent-note-exclusive-conversation-matches/consequences:
+  en: 414ae7349bd4cc03
+  zh: 9861b3e72bdfc548
+/agent-note-exclusive-conversation-matches/testing:
+  en: a88ed18065da4d28
+  zh: 5bf4448a8b1f4763

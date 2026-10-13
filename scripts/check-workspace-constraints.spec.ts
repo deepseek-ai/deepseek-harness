@@ -421,6 +421,17 @@ it('requires the local speech worker and locked runtime in the published payload
   }
 })
 
+it('requires both Node execution bootstraps in the published payload', () => {
+  const dir = 'packages/ptc-runtime/ptc-runtime-node'
+  const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+  expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+  for (const omitted of ['lib/process.js', 'lib/persistent-process.js']) {
+    const files = expectedDshPackageFiles(manifest).filter(file => file !== omitted)
+    expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files } }))
+      .toEqual([expect.stringContaining('package.json files must be')])
+  }
+})
+
 it('requires the Inspector Worker, Client chunks, and mirrored DevTools resources in the published payload', () => {
   const dir = 'packages/experimental/inspector'
   const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']

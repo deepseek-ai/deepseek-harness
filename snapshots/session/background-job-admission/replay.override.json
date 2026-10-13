@@ -23,8 +23,8 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "tool-call" },
-      { "type": "tool-call-delta", "index": 0, "id": "bounded-task-kill", "name": "job_kill", "argumentsDelta": "{\"job_id\":\"bash-1\",\"reason\":\"free the bounded task slot\"}" },
-      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "bounded-task-kill", "name": "job_kill", "arguments": "{\"job_id\":\"bash-1\",\"reason\":\"free the bounded task slot\"}" } },
+      { "type": "tool-call-delta", "index": 0, "id": "bounded-task-kill", "name": "job_kill", "argumentsDelta": "{\"job_id\":\"{{fromRequest:(bash-[0-9a-f]{16})}}\",\"reason\":\"free the bounded task slot\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "bounded-task-kill", "name": "job_kill", "arguments": "{\"job_id\":\"{{fromRequest:(bash-[0-9a-f]{16})}}\",\"reason\":\"free the bounded task slot\"}" } },
       { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
       { "type": "finish", "reason": { "kind": "tool-calls" } }
     ]

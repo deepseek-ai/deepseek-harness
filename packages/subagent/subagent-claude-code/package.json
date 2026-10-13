@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-subagent-claude-code",
   "description": "One-shot Claude Code subagent provider over the official Agent SDK",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -50,7 +50,7 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "@modelcontextprotocol/sdk": "^1.31.0",
-    "zod": "^4.4.3",
+    "zod": "4.4.3",
     "@deepseek-ai/dsh-tool-subagent": "workspace:*"
   },
   "devDependencies": {

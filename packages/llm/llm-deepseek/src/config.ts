@@ -65,17 +65,26 @@ export function plainOptions(config: Config): Options {
   return Object.fromEntries(Object.entries(config).map(([key, value]) => [key, isVolatile(value) ? value.get() : value]))
 }
 
-const catalogModel: z<DeepSeekCatalogModel> = z.object({
-  id: z.string().required(),
+/**
+ * Schemas of the catalog-entry fields other than `id` and `inputModalities`,
+ * whose requiredness and defaults differ between a `models` entry and a
+ * provider's per-model overrides.
+ */
+export const catalogModelFields = {
   name: z.string(),
   description: z.string(),
   contextWindow: z.number().step(1).min(1),
   maxTokens: z.number().step(1).min(1),
-  inputModalities: z.array(z.union(MODEL_MODALITIES)).min(1).default(['text']),
   imagePixelBudget: z.union([z.number().step(1).min(1), 'low']),
   imageMaxBytes: z.number().step(1).min(1),
   systemPromptUpdate: z.const('in-history'),
   toolUpdate: z.union(['in-history', 'addition-only'] as const),
+}
+
+const catalogModel: z<DeepSeekCatalogModel> = z.object({
+  id: z.string().required(),
+  ...catalogModelFields,
+  inputModalities: z.array(z.union(MODEL_MODALITIES)).min(1).default(['text']),
 })
 
 /** Shared schema fields for Messages protocol options. */
@@ -199,7 +208,8 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
  * the product CLI. Every layer may supply an endpoint: the product trusts the
  * project it is launched in, so a checkout can point its own agent at the
  * gateway that checkout is meant to use.
- * @returns validated protocol settings.
+ * @returns validated protocol settings; `models` holds one resolved entry per
+ * input model in input order, or the built-in catalog when `models` is absent.
  */
 export function resolveAdapterOptions(config: Options, environment?: LaunchEnvironmentSnapshot): ResolvedDeepSeekOptions {
   // Settings updates can reach this resolver without schema validation.

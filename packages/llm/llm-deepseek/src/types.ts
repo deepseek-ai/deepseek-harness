@@ -103,6 +103,14 @@ export interface DeepSeekAdapterOptions<Connection extends DeepSeekConnectionOpt
   discoverModels?: (provider: string) => Promise<LlmModelInfo[]>
   /** Current validated connection facts; called once per operation. */
   options: () => Connection
+  /**
+   * Resolve the connection for one exact-model lookup or prepared call, for
+   * example after a provider-owned catalog load; must settle promptly after
+   * `signal` aborts. Omission uses {@link options}.
+   */
+  connect?: (signal?: AbortSignal) => Promise<Connection>
+  /** Refuse a model before any network I/O by throwing an `LlmError`; omission admits every model. */
+  admit?: (connection: Connection, model: string) => void
   /** Resolve authentication from this request's connection snapshot; never re-read the endpoint. */
   resolveAuth: (connection: Connection) => Promise<DeepSeekRequestAuth>
   /** Resolve the harness-home anonymous id shared with telemetry and feedback. */

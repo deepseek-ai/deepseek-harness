@@ -305,11 +305,12 @@ describe('typert-protocol Remote declarations', () => {
     expect(() => Remote('bad name')).toThrow('export name')
     expect(() => Remote('.')).toThrow('export name')
     expect(() => Remote('..')).toThrow('export name')
-    expect(() => Remote({ mode: 'unary' } as unknown as { mode: 'stream' })).toThrow('exactly mode')
-    expect(() => Remote({ mode: 'stream', extra: true } as unknown as { mode: 'stream' })).toThrow('exactly mode')
+    expect(() => Remote({ mode: 'unary' } as unknown as { mode: 'stream' })).toThrow('Remote options require')
+    expect(() => Remote({ mode: 'stream', extra: true } as unknown as { mode: 'stream' })).toThrow('Remote options require')
     const bogusMode: string = 'duplex'
     expect(() => Remote({ mode: bogusMode } as { mode: 'stream' }))
-      .toThrow('Remote options must contain exactly mode: "stream"')
+      .toThrow('Remote options require name or mode: "stream"')
+    expect(() => Remote({})).toThrow('Remote options require')
     expect(() => RemoteScope('' as 'metaFixture')).toThrow('Scope key')
     expect(() => RemoteScope('metaFixture', 'bad/name')).toThrow('export name')
 
@@ -320,6 +321,23 @@ describe('typert-protocol Remote declarations', () => {
     ]) {
       expect(() => { Remote(method, context) })
         .toThrow('public instance method')
+    }
+  })
+
+  it('retains transport identity and mode for renamed streams', async () => {
+    const ctx = new Context()
+    class ItemsService extends TypertRemoteService {
+      constructor(owner: Context) { super(owner, 'itemsFixture') }
+
+      @Remote({ name: 'items', mode: 'stream' })
+      async *read(): AsyncIterable<string> { yield 'first' }
+    }
+    try {
+      expect(remoteMethods(new ItemsService(ctx))).toEqual([{
+        method: 'read', exportName: 'items', mode: 'stream', invocation: { kind: 'direct' },
+      }])
+    } finally {
+      await ctx.fiber.dispose()
     }
   })
 

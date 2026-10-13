@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-ptc-runtime` to run one model-written program against host-provided asynchronous functions through a configured backend. A request returns a lossless-JSON value, ordered per-channel logs, or a structured error; program failures resolve in the result, while rejected promises indicate caller misuse. Each run is isolated from prior runs, and the runtime has no knowledge of tools or sessions. Choose an execution backend separately; its language and isolation descriptors identify the required source language and execution substrate but do not themselves promise a security boundary.
+Use `dsh-ptc-runtime` to execute model programs against host-provided asynchronous functions. Requests return lossless JSON, captured logs, or structured failures; rejected promises indicate caller misuse. Providers isolate distinct state owners and declare whether source is an async function body or REPL statements. A provider may retain memory for an explicit owner until release; it never restores that memory from a Session. Language and isolation descriptors identify syntax and execution substrate, not security guarantees.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Choose this package when you compose a deployment that executes model-written pr
 
 ### Run a program
 
-Give the runtime a program and binding namespaces, then call `resolve(request)` followed by `run(spec)`. Resolution validates optional cwd, timeout and sandbox policy against the provider's capabilities and fills deployment defaults. The program runs as an async function body, so top-level `await` and `return` work; a lossless-JSON completion becomes `result.value`, captured text becomes `result.logs`, and program failures become `result.error`. Each output channel preserves its own order, while cross-channel interleaving is backend-dependent.
+Call `resolve(request)` followed by `run(spec)` with a program and binding namespaces. Resolution validates cwd, timeout and sandbox choices and applies provider defaults. `programFormat` selects an async function body with top-level `await` and `return`, or REPL statements with top-level declarations, `await`, and a final expression. Lossless-JSON completion becomes `result.value`, text becomes `result.logs`, and failures become `result.error`.
 
 ```text
 const spec = ctx.ptcRuntime.resolve({
@@ -43,6 +43,8 @@ const result = await ctx.ptcRuntime.run(spec)
 ### Choose a backend
 
 Backends expose `language` and `isolation` as diagnostic descriptors; neither grants authority or proves confinement. [`dsh-ptc-runtime-node`](../ptc-runtime-node/README.md) executes erasable TypeScript in a fresh managed Node process under the resolved sandbox policy. The private [`dsh-experimental-ptc-runtime-python`](../../experimental/ptc-runtime-python/README.md) provider executes Python in a fresh CPython subprocess without file confinement. `sandboxMode` advertises a provider's deployment file-policy mode, or is absent when that capability is unsupported.
+
+For the optional [Node in-memory mode](../ptc-runtime-node/README.md#persistent-repl), pass the same `stateOwner` object across runs and await `release(owner)` at the owner's end. Different object identities never share an environment; omitted owners use a temporary environment. Stateless providers ignore ownership. Calls for one retained owner must not overlap.
 
 ### Name your bindings portably
 
@@ -125,7 +127,7 @@ No direct invalidation; the named consumer owns any request-prefix changes.
 These limits define what the seam cannot do; they are current package constraints, not a task backlog.
 
 - **`run()` is one-shot** — `logs` arrive only on the resolved `PtcRunResult`; the seam exposes no streaming-log or progress API for a live program's output.
-- **No state survives between runs** — every request runs against a fresh world; a persistent REPL-style kernel is deferred until a backend brings its own logging story.
+- **Retained memory is disposable**: providers may keep state for an explicit owner; restart, release, and provider-specific failures discard it. Programs, binding calls and results remain logged by consumers; live objects are neither serialized nor replayed.
 - **Providers have different confinement capabilities** — the shipped Node provider enforces a resolved file policy, while the private experimental Python provider rejects an explicit policy. No container provider is supplied.
 - **No uniform binding byte cap applies across providers** — each provider owns its transport limits; a binding can still allocate memory before its result reaches those limits.
 
@@ -137,9 +139,9 @@ These limits define what the seam cannot do; they are current package constraint
 
 This Dev Note is working context for maintainers: undecided directions and open questions. It is explicitly non-authoritative — shipped behavior and limits live in the sections above and the package code.
 
-#### Future: persistent kernel backend
+#### Retained state
 
-A REPL-style kernel that keeps state across `run_code` calls remains undecided; it would need its own logging story, because the no-state-between-runs contract is what keeps every request reconstructable from the session log alone.
+Retained state has no disk checkpoint or restoration protocol. Consumers must tolerate its loss and retain only model-visible programs and outcomes in the Session log.
 
 #### Future: container backend
 

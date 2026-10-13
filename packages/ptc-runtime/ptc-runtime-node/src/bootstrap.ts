@@ -107,7 +107,7 @@ const CONSOLE_LEVELS = ['log', 'info', 'warn', 'error', 'debug'] as const
  * @param logs - the buffer every rendered line is pushed into.
  * @returns the five-method console object handed to the program.
  */
-export function makeConsoleShim(logs: LogBuffer): Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void> {
+export function makeConsoleShim(logs: Pick<LogBuffer, 'push'>): Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void> {
   const render = (args: unknown[]): string =>
     args.map(arg => typeof arg === 'string' ? arg : inspect(arg, INSPECT_OPTIONS)).join(' ')
   const shim = Object.create(null) as Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void>
@@ -129,7 +129,7 @@ export function makeConsoleShim(logs: LogBuffer): Record<(typeof CONSOLE_LEVELS)
  * @returns the restore function (the in-process tests un-patch; the real
  *   child never needs to).
  */
-export function captureStreamWrites(logs: LogBuffer, stream: PatchableStream): () => void {
+export function captureStreamWrites(logs: Pick<LogBuffer, 'push'>, stream: PatchableStream): () => void {
   // The slot's VALUE is stored for restore and reassigned — never invoked
   // detached, so the unbound-method concern does not apply.
   // oxlint-disable-next-line typescript/unbound-method
@@ -240,7 +240,7 @@ export type BindingErrorConstructor = new (memberName: string, message: string) 
  * @param descriptor - program-global class name and member-name property.
  * @returns the constructor injected into the program and used for rejections.
  */
-function makeBindingErrorClass(
+export function makeBindingErrorClass(
   descriptor: { name: string; memberNameProperty: string },
 ): BindingErrorConstructor {
   return class BindingCallError extends CapturedError {
@@ -307,7 +307,7 @@ export function wireReplies(port: BootstrapPort, pending: Map<number, PendingCal
  * @param port - the port binding calls are posted to.
  * @param pending - the id-keyed map each posted call parks its handles in.
  * @param nextId - the shared mutable id counter (program-issued correlation ids).
- * @param errorClasses - per-namespace constructors shared with program globals.
+ * @param errorClasses - Namespace constructors shared with program globals, resolved for each invocation.
  * @returns one namespace object per declaration, in declaration order.
  */
 export function makeNamespaces(
@@ -315,15 +315,15 @@ export function makeNamespaces(
   port: BootstrapPort,
   pending: Map<number, PendingCall>,
   nextId: { value: number },
-  errorClasses: Map<string, BindingErrorConstructor> = makeBindingErrorClasses(data),
+  errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'> = makeBindingErrorClasses(data),
 ): Record<string, unknown>[] {
   return data.namespaces.map(({ global, names }) => {
-    const errorClass = errorClasses.get(global)
     const namespace = Object.create(null) as Record<string, unknown>
     for (const name of names) {
       Object.defineProperty(namespace, name, {
         enumerable: true,
         value: (args: unknown): Promise<unknown> => {
+          const errorClass = errorClasses.get(global)
           let detached: ReturnType<typeof snapshotPtcJsonValue>
           try {
             detached = snapshotPtcJsonValue(args)
@@ -334,7 +334,7 @@ export function makeNamespaces(
             return Promise.reject(bindingFailure(errorClass, name, 'binding arguments must be lossless JSON'))
           }
           return new Promise((resolve, reject) => {
-            const id = nextId.value++
+            const id = nextId.value
             pending.set(id, {
               resolve,
               reject: (error) => {
@@ -343,9 +343,10 @@ export function makeNamespaces(
             })
             try {
               port.postMessage({ type: 'call', id, global, name, args: encodePtcJsonWire(detached) })
+              nextId.value += 1
             } catch (error: unknown) {
               pending.delete(id)
-              const message = `binding arguments must be structured-cloneable: ${error instanceof CapturedError ? error.message : String(error)}`
+              const message = `binding call could not be sent: ${error instanceof CapturedError ? error.message : String(error)}`
               reject(bindingFailure(errorClass, name, message))
             }
           })

@@ -1,6 +1,6 @@
 /** Model-facing query for a bundled Python, Node.js, and pnpm payload, in place or installed under the Harness home. */
 
-import { cp, lstat, mkdir, mkdtemp, readFile, rename, rm, stat } from 'node:fs/promises'
+import { cp, lstat, mkdir, mkdtemp, readFile, readlink, rename, rm, stat, symlink } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -133,6 +133,48 @@ export async function readPrimaryRuntime(root: string): Promise<PrimaryRuntimeMa
 }
 
 /**
+ * Identify POSIX interpreter aliases that can survive payload relocation.
+ * @param root - Payload directory.
+ * @param manifest - Validated payload metadata.
+ * @returns Relative alias paths mapped to their sibling interpreter filename; regular command files are omitted.
+ * @throws When an interpreter alias does not point directly to the versioned regular file.
+ */
+export async function primaryRuntimePythonAliases(root: string, manifest: PrimaryRuntimeManifest): Promise<ReadonlyMap<string, string>> {
+  const aliases = new Map<string, string>()
+  if (manifest.platform === 'win32') return aliases
+  const interpreter = `python${manifest.python.split('.').slice(0, 2).join('.')}`
+  for (const name of ['python', 'python3']) {
+    const path = `dependencies/python/bin/${name}`
+    let entry
+    try { entry = await lstat(join(root, path)) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      throw error
+    }
+    if (!entry.isSymbolicLink()) continue
+    if (await readlink(join(root, path)) !== interpreter
+      || !(await lstat(join(root, 'dependencies/python/bin', interpreter))).isFile()) {
+      throw new Error(`primary runtime: invalid Python alias ${path}`)
+    }
+    aliases.set(path, interpreter)
+  }
+  return aliases
+}
+
+/**
+ * Copy a payload, retaining only validated Python interpreter aliases as relative links.
+ * @param source - Payload directory; all other links are materialized.
+ * @param destination - Empty destination owned by the caller.
+ * @param manifest - Validated source metadata.
+ * @returns Resolves after every copied file and interpreter alias is available independently of the source.
+ */
+export async function copyPrimaryRuntime(source: string, destination: string, manifest: PrimaryRuntimeManifest): Promise<void> {
+  const aliases = await primaryRuntimePythonAliases(source, manifest)
+  const excluded = new Set([...aliases.keys()].map(path => join(source, path)))
+  await cp(source, destination, { recursive: true, dereference: true, filter: path => !excluded.has(path) })
+  for (const [path, target] of aliases) await symlink(target, join(destination, path))
+}
+
+/**
  * Resolve platform-specific interpreter and library locations without changing the environment.
  * @param root - Absolute payload or installation directory.
  * @param manifest - Validated runtime metadata.
@@ -190,7 +232,9 @@ async function compatibleManifest(source: string): Promise<PrimaryRuntimeManifes
  * @returns Paths into the payload itself.
  */
 export async function resolvePrimaryRuntime(source: string): Promise<WorkspaceDependencies> {
-  const paths = workspaceDependencyPaths(source, await compatibleManifest(source))
+  const manifest = await compatibleManifest(source)
+  await primaryRuntimePythonAliases(source, manifest)
+  const paths = workspaceDependencyPaths(source, manifest)
   await validatePayloadEntries(paths)
   return paths
 }
@@ -209,13 +253,14 @@ export async function installPrimaryRuntime(source: string, root: string): Promi
   const rootExists = await exists(root)
   if (!rootExists && previousExists) await rename(previous, root)
   if (await exists(join(root, 'runtime.json')) && JSON.stringify(await readPrimaryRuntime(root)) === JSON.stringify(manifest)) {
+    await primaryRuntimePythonAliases(root, manifest)
     const paths = workspaceDependencyPaths(root, manifest)
     await validatePayloadEntries(paths)
     return paths
   }
   const staging = await mkdtemp(join(dirname(root), '.primary-runtime-'))
   try {
-    await cp(source, staging, { recursive: true, dereference: true })
+    await copyPrimaryRuntime(source, staging, manifest)
     const paths = workspaceDependencyPaths(staging, manifest)
     await validatePayloadEntries(paths)
     await rm(previous, { recursive: true, force: true })

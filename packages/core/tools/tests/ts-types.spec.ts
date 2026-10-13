@@ -146,7 +146,7 @@ describe('renderToolsSdk', () => {
     expect(text).toContain('[K in ToolName]: (args: ToolArgsMap[K]) => Promise<ToolOutputMap[K]>;')
     expect(text).toContain('/** Run a shell command. */')
     // The fixed instruction lines the model relies on.
-    expect(text).toContain('erasable syntax only')
+    expect(text).toContain('and `code`, the program to execute')
     expect(text).toContain('rejects with `ToolCallError`')
     expect(text).toContain('MAY overlap under `Promise.all`')
     expect(text).toContain('lossless JSON')
@@ -163,7 +163,7 @@ describe('renderToolsSdk', () => {
     const text = renderToolsSdk([bash])
     expect(text).toContain('A declaration does not make its name a directly callable tool')
     expect(text).toContain('only names supplied as separate tool schemas may be called directly')
-    expect(text).toContain('`run_code({ description: "Show current directory", code: "return await tools.bash({ description: \'Show current directory\', command: \'pwd\' })" })`')
+    expect(text).toContain('`run_code({ description: "Show current directory", code: "console.log(await tools.bash({ description: \'Show current directory\', command: \'pwd\' }))" })`')
     expect(text).toContain('Program-only SDK bindings:')
     expect(text).not.toContain('The available tools:')
   })
@@ -212,6 +212,14 @@ describe('renderToolsSdk', () => {
       properties: { command: { type: 'string', const: 'pwd', enum: ['pwd'] } },
     })
     expect(renderToolsSdk([constrained])).toContain('tools.bash({ command: \'pwd\' })')
+  })
+
+  it('uses an output example accepted by both Node execution modes', () => {
+    const text = renderToolsSdk([bash])
+    expect(text).toContain('console.log(await tools.bash(')
+    expect(text).not.toContain('return await tools.bash')
+    expect(text).not.toContain('body of an async TypeScript function')
+    expect(text).not.toContain('TypeScript REPL statements')
   })
 
   it('is deterministic: same tool set, byte-identical text regardless of input order', () => {

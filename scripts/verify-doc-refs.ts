@@ -18,6 +18,9 @@ const PATTERNS = ['packages/**/*.ts']
 const isExcluded = (p: string): boolean =>
   p.includes('/lib/') || p.endsWith('.d.ts') || p.startsWith('vendor/')
 
+/** A non-first `lib` segment puts `/lib/` in every path below the directory, so the walker skips it. */
+const isExcludedDirectory = (dir: string): boolean => dir.split('/').slice(1).includes('lib')
+
 /** Root-relative Markdown path token, excluding trailing prose. */
 const DOC_REF = /(?:\bdocs|\.agents\/notes)\/[A-Za-z0-9._/-]+\.md/g
 
@@ -26,7 +29,7 @@ function findViolations(absPath: string): Violation[] {
   return findReferenceViolations(root, absPath, DOC_REF, ref => ref, ref => !existsSync(resolve(root, ref)))
 }
 
-const files = uniqueRepoFiles(root, PATTERNS, isExcluded)
+const files = uniqueRepoFiles(root, PATTERNS, isExcluded, isExcludedDirectory)
 const all = files.flatMap(file => findViolations(file.abs))
 const checked = files.length
 

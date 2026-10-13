@@ -180,11 +180,16 @@ function renderedText(node: Nodes): string {
   return ''
 }
 
-/** Return every parsed Markdown heading with its rendered text and source line. */
-export function markdownHeadingLines(source: string): MarkdownHeadingLine[] {
+/**
+ * Return every parsed Markdown heading with its rendered text and source line.
+ * @param source - Markdown source whose headings are returned.
+ * @param tree - the {@link parseMarkdown} result for exactly `source`, when the caller already has it.
+ * @returns headings in document order.
+ */
+export function markdownHeadingLines(source: string, tree: Nodes = parseMarkdown(source)): MarkdownHeadingLine[] {
   const rawLines = source.split('\n')
   const headings: MarkdownHeadingLine[] = []
-  visitMarkdown(parseMarkdown(source), (node) => {
+  visitMarkdown(tree, (node) => {
     if (node.type !== 'heading' || node.position === undefined) return
     headings.push({
       depth: node.depth,
@@ -200,9 +205,9 @@ type ColumnRange = readonly [start: number, end: number]
 type OffsetRange = readonly [start: number, end: number]
 
 /** Source-column ranges occupied by parsed HTML comments, keyed by source line. */
-function htmlCommentRanges(source: string, rawLines: readonly string[]): Map<number, ColumnRange[]> {
+function htmlCommentRanges(tree: Nodes, rawLines: readonly string[]): Map<number, ColumnRange[]> {
   const comments: OffsetRange[] = []
-  visitMarkdown(parseMarkdown(source), (node) => {
+  visitMarkdown(tree, (node) => {
     if (node.type !== 'html' || node.position?.start.offset === undefined) return
     let cursor = 0
     while (true) {
@@ -250,13 +255,14 @@ function hasRenderedTextOutsideComments(raw: string, ranges: readonly ColumnRang
 /**
  * Return source lines outside code blocks and HTML comments.
  * @param source - Markdown source whose prose should be retained verbatim.
+ * @param tree - the {@link parseMarkdown} result for exactly `source`, when the caller already has it.
  * @returns unfenced lines with their original 1-based locations.
  */
-export function markdownProseLines(source: string): MarkdownProseLine[] {
+export function markdownProseLines(source: string, tree: Nodes = parseMarkdown(source)): MarkdownProseLine[] {
   const rawLines = source.split('\n')
-  const comments = htmlCommentRanges(source, rawLines)
+  const comments = htmlCommentRanges(tree, rawLines)
   const fenced = new Set<number>()
-  visitMarkdown(parseMarkdown(source), (node) => {
+  visitMarkdown(tree, (node) => {
     if (node.type !== 'code' || node.position === undefined) return
     for (let line = node.position.start.line; line <= node.position.end.line; line += 1) fenced.add(line)
   })

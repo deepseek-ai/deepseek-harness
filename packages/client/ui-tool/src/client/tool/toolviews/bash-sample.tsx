@@ -57,9 +57,8 @@ export const BashRow = memo(function BashRow({ toolName, block, sessionId, useSe
   const status = stateStatus(state, t)
   const { expanded, toggle: toggleExpand } = useDisclosure()
   const background = isBackgroundShellCall(block)
-  // Background launches expose their acknowledgement without assigning the
-  // job an exit status. Failures, persistent results, and spill previews also
-  // keep the generic input/output presentation.
+  // Failed or interrupted background launches retain raw input/output, as do
+  // other execution failures, persistent results, and spill previews.
   const genericBody = terminal === null
     && (model.state === 'error' || isSettledPersistentShellCall(block) || isSpilledShellCall(block) || background)
     && (model.bodyRaw !== null || model.output !== null)

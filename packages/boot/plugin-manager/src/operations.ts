@@ -280,6 +280,7 @@ function bundleComponentManifests(manifest: ProfileManifest, dir: string, anchor
  * @param options Output, activation and cancellation policy.
  * @returns Exit status, whether the silence bound stopped the run, and the diagnostic path.
  * A compatibility denial returns exit code 1. Service output is bounded; CLI output uses inherited descriptors.
+ * The diagnostic file is closed on return or rejection, including preparation and spawn failures.
  */
 export async function runProfilePnpm(
   context: PackageOperationContext, args: readonly string[], options: PackageOperationOptions,
@@ -291,7 +292,7 @@ export async function runProfilePnpm(
   await mkdir(logRoot, { recursive: true, mode: 0o700 })
   const logDir = await mkdtemp(join(logRoot, 'operation-'))
   const logPath = join(logDir, 'pnpm.log')
-  const log = await open(logPath, 'wx', 0o600)
+  await using log = await open(logPath, 'wx', 0o600)
   if (active !== undefined) {
     await log.write(active)
     await log.close()
@@ -348,7 +349,7 @@ export async function runProfilePnpm(
       }
     } catch (error) { void error; continue }
   }
-  if (preflight.length > 0) return rejected(preflight, 'nothing was installed')
+  if (preflight.length > 0) return await rejected(preflight, 'nothing was installed')
   const cancellation = new AbortController()
   // A service run captures output, so execa terminates the tree it leads when the
   // run is killed: a lifecycle script outlives the pnpm process that started it.

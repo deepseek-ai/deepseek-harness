@@ -20,10 +20,13 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { InputTriggerService } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { RemoteError, TestRemote, TestSessions } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionFixture } from '@deepseek-ai/dsh-client-test-runtime'
+import type { InjectParams } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ClientSessionContext, InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { apply, inject } from '../src/client/index.ts'
 import { SkillRow as SkillToolRow } from '../src/client/SkillRow.tsx'
+import { SkillReference, type SkillReferenceInjected } from '../src/client/SkillReference.tsx'
+import { UserTextRegistry } from '../../ui-conversation/src/client/conversation/user-text-registry.ts'
 
 type SkillRow = { name: string; description: string; whenToUse?: string; path?: string; modelInvocable?: boolean }
 type ListResult =
@@ -40,9 +43,14 @@ interface PresentationCapture {
 /** Provide the presentation registries and capture the plugin's registrations. */
 function providePresentation(ctx: Context): PresentationCapture {
   const slots = new SlotRegistry(ctx)
+  const userText = new UserTextRegistry(ctx)
+  ctx.provide('uiConversation', { userText } as never)
   slots.register({
     name: 'root',
-    children: { 'tool.call.toolview': { kind: 'keyed', scope: 'session' } },
+    children: {
+      'tool.call.toolview': { kind: 'keyed', scope: 'session' },
+      'conversation.user.text.node': { kind: 'keyed', scope: 'session', inline: true },
+    },
   } as never, () => null)
   const capture: PresentationCapture = {
     slots,
@@ -80,11 +88,11 @@ async function bench(list: ListFn, addressed?: SessionId, opening: Pick<SessionF
       : sid(id))
   }
   const remote = new TestRemote(ctx, { skills: { list } })
-  providePresentation(ctx)
+  const presentation = providePresentation(ctx)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   onTestFinished(async () => { await fiber.dispose() })
   await fiber.await()
-  return { ctx, source: captured!, remote, fiber, openResource, sessions }
+  return { ctx, source: captured!, remote, fiber, openResource, sessions, presentation }
 }
 
 const CATALOG: SkillRow[] = [
@@ -114,11 +122,12 @@ const req = (query: string, signal?: AbortSignal) =>
 
 describe('apply', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['inputTriggers', 'sessions', 'slots', 'locale', 'remote', 'remote.skills', 'sidebarRight'])
+    expect(inject).toEqual(['inputTriggers', 'sessions', 'slots', 'locale', 'remote', 'remote.skills', 'sidebarRight', 'uiConversation'])
   })
 
   it('registers the dedicated skill row and its locale dictionaries', async () => {
     const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
     ctx.provide('sidebarRight', { openResource: vi.fn() })
     ctx.provide('inputTriggers', { registerSource: () => () => {} })
     ctx.provide('sessions', { subagentAddress: () => undefined })
@@ -157,6 +166,7 @@ describe('apply', () => {
 
   it('registers the "/" skill source; disposal frees the name (HMR safety)', async () => {
     const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
     ctx.provide('sidebarRight', { openResource: vi.fn() })
     // InputTriggerService itself injects 'sessions'; the stub unblocks its fiber.
     ctx.provide('sessions', {})
@@ -459,6 +469,31 @@ describe('reference preview', () => {
     { name: 'review', description: 'Review', path: '/skills/review/SKILL.md' },
     { name: 'virtual', description: 'Virtual' },
   ]
+
+  it('routes sent skill previews through the reference entry’s own Session and ignores an absent scope', async () => {
+    const b = await bench(listOk(rows))
+    const entry = b.presentation.slots.entries('conversation.user.text.node').find(row => row.options.key === 'skill')
+    expect(entry?.component).toBe(SkillReference)
+    if (entry?.inject === undefined) throw new Error('Skill reference injector was not registered')
+    const injectReference = entry.inject as (
+      ...params: InjectParams<'conversation.user.text.node', undefined>
+    ) => Pick<SkillReferenceInjected, 'openSkill'>
+    const openReference = vi.spyOn(b.source, 'openReference')
+    const first = injectReference(sid('first'))
+    const second = injectReference(sid('second'))
+    first.openSkill('review')
+    await b.source.candidates(proj('first'), req(''))
+    expect(openReference).toHaveBeenLastCalledWith(proj('first'), { ref: '/review' })
+    expect(b.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/first//skills/review/SKILL.md')
+    second.openSkill('review')
+    await b.source.candidates(proj('second'), req(''))
+    expect(openReference).toHaveBeenLastCalledWith(proj('second'), { ref: '/review' })
+    expect(b.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/second//skills/review/SKILL.md')
+    vi.spyOn(b.sessions, 'scope').mockReturnValueOnce(undefined)
+    first.openSkill('review')
+    expect(openReference).toHaveBeenCalledTimes(2)
+    expect(b.openResource).toHaveBeenCalledTimes(2)
+  })
 
   it('finishes the first click after a shared warm fetch and reloads after reconnect', async () => {
     const gate = Promise.withResolvers<ListResult>()

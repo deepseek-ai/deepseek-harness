@@ -75,13 +75,15 @@ describe('web e2e: settings modal and General preferences', () => {
       if (await dialog.isVisible()) await page.keyboard.press('Escape')
       await dialog.waitFor({ state: 'hidden' })
     })
-    const trigger = page.getByRole('button', { name: '设置', exact: true })
-    expect(await trigger.getAttribute('aria-haspopup')).toBe('dialog')
+    const trigger = page.getByRole('button', { name: '账号菜单', exact: true })
+    expect(await trigger.getAttribute('aria-haspopup')).toBe('menu')
     expect(await trigger.getAttribute('aria-expanded')).toBe('false')
     await trigger.click()
+    expect(await trigger.getAttribute('aria-expanded')).toBe('true')
+    await page.getByRole('menuitem', { name: '设置', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.waitFor({ timeout: 10_000 })
-    expect(await trigger.getAttribute('aria-expanded')).toBe('true')
+    expect(await trigger.getAttribute('aria-expanded')).toBe('false')
     // General is active by default; Permission, Language and Appearance are functional.
     expect(await dialog.getByRole('button', { name: '通用设置' }).getAttribute('aria-current')).toBe('true')
     await dialog.getByRole('button', { name: '工作区内修改' }).waitFor({ timeout: 10_000 })
@@ -163,8 +165,8 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(await enabledRows.count()).toBeGreaterThan(0)
     expect(await enabledRows.getByText('已启用', { exact: true }).count()).toBe(0)
     expect(await dialog.locator('[data-plugin-scope="global"] [role="img"][aria-label="运行中"]').count()).toBe(0)
-    expect(await dialog.locator('[data-plugin-count]').getAttribute('data-plugin-count'))
-      .toBe(String(expectedPluginCount))
+    expect(await dialog.getByText('由 Agent 预设按会话组成', { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText('系统与所有会话共用', { exact: true }).count()).toBe(1)
     expect(await dialog.getByRole('button', { name: '内置插件', exact: true }).getAttribute('aria-current')).toBe('true')
     // One contribution shows as the page itself, without a tab row.
     expect(await dialog.getByRole('tab').count()).toBe(0)
@@ -182,17 +184,11 @@ describe('web e2e: settings modal and General preferences', () => {
     ] as const
     for (const [entryId, status] of instanceRows) {
       const row = dialog.locator(`[data-plugin-scope="preset"] [data-plugin-entry="${entryId}"]`)
-      // An id that repeats the title adds nothing, so its card shows no chip and its name omits it.
-      const repeatsTitle = entryId === 'tool-subagent'
-      const name = repeatsTitle ? `tool-subagent, ${status}` : `tool-subagent, ${entryId}, ${status}`
+      const name = `子智能体委派工具, ${entryId}, ${status}`
       const trigger = row.getByRole('button', { name, exact: true })
       await trigger.waitFor({ timeout: 10_000 })
       expect(await trigger.getAttribute('aria-expanded')).toBe('false')
       const identity = row.locator('code')
-      if (repeatsTitle) {
-        expect(await identity.count()).toBe(0)
-        continue
-      }
       expect(await identity.textContent()).toBe(entryId)
       expect(await identity.getAttribute('title')).toBe(entryId)
     }
@@ -204,7 +200,7 @@ describe('web e2e: settings modal and General preferences', () => {
     )
     await compareOrRefreshGolden(PLUGIN_INSTANCES_EXPECTED, instancesSnapshot, MODE)
     await dialog.getByRole('button', {
-      name: 'tool-subagent, tool-subagent-fork, 已启用',
+      name: '子智能体委派工具, tool-subagent-fork, 已启用',
       exact: true,
     }).click()
     expect(await dialog.locator('[data-plugin-entry="tool-subagent-fork"] button')
@@ -797,7 +793,7 @@ describe('web e2e: settings modal and General preferences', () => {
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
-    const enTrigger = page.getByRole('button', { name: 'Settings' })
+    const enTrigger = page.getByRole('button', { name: 'Account menu' })
     await enTrigger.waitFor({ timeout: 10_000 })
 
     // A Chinese browser on another port still receives the explicit English
@@ -943,7 +939,7 @@ describe('web e2e: settings modal and General preferences', () => {
   })
 })
 
-describe('web e2e: browser-local collapse timing preference', () => {
+describe('web e2e: Host-backed collapse timing preference', () => {
   let scaffold: WebScaffold
   let browser: Browser
   const uiWait = { timeout: 10_000 }
@@ -974,11 +970,12 @@ describe('web e2e: browser-local collapse timing preference', () => {
       title: 'When to Collapse Work Details', completion: 'On completion', nextInput: 'On next message',
       description: 'Choose when to automatically collapse work details',
     },
-  ] as const)('keeps $locale collapse timing on $theme only for the current Client', async (copy) => {
+  ] as const)('persists $locale collapse timing on $theme across Clients', async (copy) => {
     const contextOptions = {
       viewport: { width: 1680, height: 1000 }, locale: copy.browserLocale,
       colorScheme: copy.theme, timezoneId: 'Asia/Shanghai',
     }
+    await scaffold.ctx.settings.update('ui-chat', { collapseTiming: 'completion' })
     const context = await browser.newContext(contextOptions)
     onTestFinished(() => context.close())
     const page = await context.newPage()
@@ -1076,19 +1073,23 @@ describe('web e2e: browser-local collapse timing preference', () => {
     await menu.waitFor({ state: 'hidden' })
     await page.setViewportSize({ width: 1680, height: 1000 })
     await timing.getByRole('button', { name: copy.nextInput, exact: true }).waitFor()
-    expect(await readPersistence()).toEqual(before)
+    await expect.poll(() => scaffold.ctx.settings.describe().find(row => row.ns === 'ui-chat')?.value, uiWait)
+      .toMatchObject({ transcriptView: 'detailed', collapseTiming: 'next-input' })
+    const saved = await readPersistence()
+    expect(saved.host).not.toBe(before.host)
+    expect(saved.storage).toEqual(before.storage)
     await dialog.getByRole('button', { name: copy.close, exact: true }).click()
     await openSettings(page, copy.locale)
     await timing.getByRole('button', { name: copy.nextInput, exact: true }).waitFor()
-    expect(await readPersistence()).toEqual(before)
+    expect(await readPersistence()).toEqual(saved)
     await dialog.getByRole('button', { name: copy.close, exact: true }).click()
 
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     await openSettings(page, copy.locale)
-    await timing.getByRole('button', { name: copy.completion, exact: true }).waitFor()
+    await timing.getByRole('button', { name: copy.nextInput, exact: true }).waitFor()
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
-    expect(await readPersistence()).toEqual(before)
+    expect(await readPersistence()).toEqual(saved)
     if (screenshotDir !== undefined) {
       await page.screenshot({ path: join(screenshotDir, 'reloaded.png'), fullPage: true })
     }
@@ -1100,10 +1101,10 @@ describe('web e2e: browser-local collapse timing preference', () => {
     await openSettings(sharedPage, copy.locale)
     const sharedTiming = sharedPage.getByRole('dialog', { name: copy.settings, exact: true })
       .getByText(copy.title, { exact: true }).locator('../..')
-    await sharedTiming.getByRole('button', { name: copy.completion, exact: true }).waitFor()
+    await sharedTiming.getByRole('button', { name: copy.nextInput, exact: true }).waitFor()
     const sharedPersistence = await readPersistence(sharedPage)
-    expect(sharedPersistence.host).toBe(before.host)
-    expect(sharedPersistence.settings).toEqual(before.settings)
+    expect(sharedPersistence.host).toBe(saved.host)
+    expect(sharedPersistence.settings).toEqual(saved.settings)
     expect(sharedPersistence.storage.local).toEqual(before.storage.local)
     if (screenshotDir !== undefined) {
       await sharedPage.screenshot({ path: join(screenshotDir, 'shared-tab.png'), fullPage: true })
@@ -1119,22 +1120,24 @@ describe('web e2e: browser-local collapse timing preference', () => {
     await openSettings(isolatedPage, copy.locale)
     const isolatedTiming = isolatedPage.getByRole('dialog', { name: copy.settings, exact: true })
       .getByText(copy.title, { exact: true }).locator('../..')
-    await isolatedTiming.getByRole('button', { name: copy.completion, exact: true }).waitFor()
+    await isolatedTiming.getByRole('button', { name: copy.nextInput, exact: true }).waitFor()
     const isolatedPersistence = await readPersistence(isolatedPage)
-    expect(isolatedPersistence.host).toBe(before.host)
-    expect(isolatedPersistence.settings).toEqual(before.settings)
+    expect(isolatedPersistence.host).toBe(saved.host)
+    expect(isolatedPersistence.settings).toEqual(saved.settings)
     if (screenshotDir !== undefined) {
       await isolatedPage.screenshot({ path: join(screenshotDir, 'isolated-context.png'), fullPage: true })
     }
 
-    expect(await readPersistence()).toEqual(before)
-    await timing.getByRole('button', { name: copy.completion, exact: true }).click()
-    await page.getByRole('menuitem', { name: copy.nextInput, exact: true }).click()
+    expect(await readPersistence()).toEqual(saved)
     await timing.getByRole('button', { name: copy.nextInput, exact: true }).click()
     await page.getByRole('menuitem', { name: copy.completion, exact: true }).click()
     await timing.getByRole('button', { name: copy.completion, exact: true }).waitFor()
-    expect(await readPersistence()).toEqual(before)
-    expect(settingsWrites).toEqual([])
+    await expect.poll(() => scaffold.ctx.settings.describe().find(row => row.ns === 'ui-chat')?.value, uiWait)
+      .toMatchObject({ transcriptView: 'detailed', collapseTiming: 'completion' })
+    expect((await readPersistence()).storage).toEqual(before.storage)
+    await sharedTiming.getByRole('button', { name: copy.completion, exact: true }).waitFor()
+    await isolatedTiming.getByRole('button', { name: copy.completion, exact: true }).waitFor()
+    expect(settingsWrites.length).toBeGreaterThan(0)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     expect(sharedTripwire.pageErrors).toEqual([])

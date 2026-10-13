@@ -12,12 +12,12 @@ export interface TranscriptViewRowInjected {
   hooks: {
     /** Persisted work-details preference bound as useTranscriptView. */
     transcriptView: SnapshotStore<TranscriptViewMode>
-    /** Browser-local timing bound as useCollapseTiming. */
+    /** Persisted collapse timing bound as useCollapseTiming. */
     collapseTiming: SnapshotStore<CollapseTiming>
   }
   /** Change the work-details presentation. */
   setTranscriptView: (mode: TranscriptViewMode) => void
-  /** Retain collapse timing for this Client lifetime without changing Host settings. */
+  /** Persist collapse timing independently of the work-details mode. */
   setCollapseTiming: (timing: CollapseTiming) => void
 }
 
@@ -40,7 +40,7 @@ const COLLAPSE_LABELS = {
 } as const satisfies Record<CollapseTiming, ChatKey>
 
 /**
- * Render work-details and browser-local collapse-timing selectors.
+ * Render the independent, Host-backed work-details and collapse-timing selectors.
  * @param props - composed Settings slot props.
  * @returns the preference row.
  */

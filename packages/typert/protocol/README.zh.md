@@ -48,6 +48,14 @@ export class GoalService extends TypertRemoteService {
 
 流方法（`@Remote({ mode: 'stream' })`）返回 `Iterable`、`AsyncIterable` 或 `RemoteStream<Out, In>`。`In` 声明 Client 可以在同一条逻辑流上回送的项；方法通过 `this.ctx.invocation.uplink<In>()` 读取它们，描述符携带其 codec。`RemoteInvocation` 还给出接收服务 `service`、发起调用的 `peer`（连接层接纳的一个 `PeerScope`）与载体 `signal`；非 Remote 调用派生的 Context 上 `ctx.invocation` 为 `undefined`：树中第一个 `bindTypertRemote()` 绑定（每个 `TypertRemoteService` 构造函数都会建立一个）在根上注册该 accessor。生成的 Client 流方法返回 `RemoteStreamHandle<Out, In>`：在下行迭代之外提供 `send`、`end` 与 `dispose` 的句柄。上行项在 Host 逐项校验，因为它们来自浏览器；下行项是 Host 方法产出的值，原样透传。
 
+`@Remote` 选项仅包含 `name` 和 `mode`；输入策略由消费方选择，而非方法注解。`method.input(options?: TypertRemoteInputOptions)` 返回缓存的 `TypertRemoteValue<Input>`，唯一选项是 `strict?: boolean`。`method.input()` 与 `{ strict: false }` 保留普通 Remote 处理方式：已声明对象接受并剥离未知字段。`{ strict: true }` 递归拒绝未声明字段，而显式 JSON 值和字典键保持开放，字典值仍按声明校验。两种具名参数封装都拒绝额外参数。选择一个视图（`const input = method.input({ strict: true })`），即可通过 `input.create().parse(raw)` 与 `input.jsonSchema` 取得匹配的解析和投影；这不会改变 Host 分发。[生成器](<../generator/README.zh.md#ordinary-remote-metadata>)负责发布及配套 codec。
+
+普通 `./remote` 产物将 `TYPERT_REMOTE` 导出为 `TypertRemoteInfo`，它扩展可挂载的 `TypertRemoteContribution`。类型化的 `methods[endpoint]` 条目就是 `descriptors` 中同一个直接方法描述符对象，并带有派生的 `input(options?)` 和 `invoke(remote, input, signal?)`。参数文档位于 `parameters[].description`；`result` 是唯一的结果 codec、解析器和可选投影。一元描述符省略 `mode`；流使用 `'stream'`。仅使用 Context 接收器的方法保留在 `descriptors` 和作用域声明中，不进入 `methods`。
+
+已发布的纯入口 `@deepseek-ai/dsh-typert-protocol/remote-info` 提供 `createTypertRemoteInfo(spec, z)`，返回类实例而非构造函数。构造时只保留静态 spec 和调用方传入的 Zod 运行时；首次读取 `descriptors` 或 `methods` 时才构建并缓存两者共享的索引。每种输入策略的视图、解析器及可选 JSON Schema 投影都独立惰性求值并缓存；`method.input().create()` 请求普通解析器。原始 spec 要求 Zod factory，而面向消费方的 `TypertSchema<T>` 仅保证 `parse(value: unknown): T`。JSON Schema 来自生成器投影，而非运行时 `z.toJSONSchema()`。纯叶入口没有运行时导入；Zod 由生成产物提供。读取元数据和 schema 绝不发起网络调用；根入口也重新导出该 factory，但会导入 Cordis。
+
+调用器接收调用方拥有、已挂载且无作用域的 Client Remote，并在调用时解析其命名空间方法。它保留命名空间接收者、可选位置参数空位和 signal，不使用 async 包装，直接转发同一个 `Promise<RemoteResult<DecodedOutput>>` 或完整 `RemoteStreamHandle<Output, Uplink>`。`DecodedOutput` 默认采用原始输出类型；生成器仅为含字节的一元方法指定 `RemoteDecoded<Output>`，避免递归重映射普通 JSON 结果；`result.create().parse()` 保留原始输出类型，不会规范化共享字节缓冲区。任一输入变体或结果不支持 JSON Schema 时，文档与解析能力仍然保留；各变体的 `jsonSchemaError` 说明其投影缺失的原因。Registry 读取方使用同一纯入口提供的 `isTypertRemoteMethod(descriptor)`，将基础描述符收窄为这些直接调用能力。
+
 ### 把 Host 对象与 Context 关联到 wire identity
 
 复杂的 Host 对象不能直接跨 wire 传输。业务包通过可合并扩展的 `TypertLookupMap` 与 `TypertContextMap` 声明关联。Host Context 适配器拥有稳定 wire 声明，并把 wire identity 解析为活跃 Context。Client Context 适配器需要双向映射，因为作用域调用从 Client Context 发起，而转发的 Host 事件要在 Client 侧解析其显式 wire identity。Host 组合可以覆盖其同步或异步解析器。因策略原因拒绝解析的解析器会抛出带有自身错误码的 `RemoteError`，该码原样到达调用方。
@@ -93,7 +101,9 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 
 ### 协议映射与描述符
 
-可合并扩展的协议映射在类型系统中保留静态关联，运行时提供方则向 `ctx.typert` 注册解析；映射的名称与形状见 [`src/types.ts`](src/types.ts)。`InvocationDescriptor` 是注册表、Gateway 与 Client Remote 共同消费的共享运行时形式，涵盖直接与 Context 接收者、JSON 与查找参数、作用域投影、上行编解码器、取消与结果编解码器。
+可合并扩展的协议映射在类型系统中保留静态关联，运行时提供方则向 `ctx.typert` 注册解析；映射的名称与形状见 [`src/types.ts`](src/types.ts)。`InvocationDescriptor` 是注册表、Gateway 与 Client Remote 共同消费的共享运行时形式，涵盖直接与 Context 接收者、JSON 与查找参数、作用域投影、上行编解码器、取消、结果编解码器与文档。生成的 `TypertRemoteMethod` 对象直接扩展该描述符。
+
+`RemoteInvocation.uplinkWindow` 可选地描述载体完整帧 inbox 的容量，以及紧凑 JSON 项之外的 UTF-8 封装开销。字段缺省表示载体没有编码帧 inbox 限额；消费者仍负责本地缓存与确认策略。
 
 ### Wire 标识文法
 
@@ -106,6 +116,7 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 | [`src/index.ts`](src/index.ts) | 装饰器、Gateway 绑定、`remoteMethods`、段校验 |
 | [`src/json-value.ts`](src/json-value.ts) | 各载体共享的无损 JSON 校验 `isRemoteJsonValue` 与 `isRemoteUplinkItem` |
 | [`src/remote-error.ts`](src/remote-error.ts) | `RemoteError` 与结构式识别函数 `remoteErrorOf` |
+| [`src/remote-info.ts`](src/remote-info.ts) | 纯惰性 info factory 与直接方法类型守卫 |
 | [`src/types.ts`](src/types.ts) | 协议映射、`RemoteErrorDetailsMap`、`RemoteResult`、`RemoteStream`、`RemoteStreamHandle`、`PeerScope`、`RemoteInvocation`、`InvocationDescriptor`、编解码器、提供方约定、注册表接口、`TypertClientRemote` |
 
 </details>
@@ -141,7 +152,7 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 
 这些限制说明声明能表示什么；它们是当前包约束，不是任务积压。
 
-- **装饰器标记是最小化的**——标记只包含方法名与直接调用或 Context 调用模式；参数、结果、查找与 schema 反射需要 Typert 构建流水线。
+- **装饰器标记是最小化的**——标记包含方法名、可选的导出别名与流模式，以及直接或 Context 接收器选择；参数、结果、查找、schema 与文档元数据需要 Typert 构建流水线。
 - **Remote 签名受限**——装饰器只接受具有字符串名称的公开、非静态实例方法，源码模式执行无法表示重载、解构、默认参数或剩余参数签名。
 
 <a id="dev-note"></a>

@@ -4,7 +4,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
+import type { PeerScope, RemoteUplinkWindow } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteEventHostInfo } from './stream-protocol.ts'
 
 /** One Remote method request after a carrier has decoded its envelope. */
@@ -20,6 +20,8 @@ export interface InvokeRemoteRequest {
    * `invocation.uplink()`; absent means an immediately ended iterable.
    */
   readonly uplink?: AsyncIterable<unknown>
+  /** Carrier-provided frame capacity; absent for carriers without an encoded-frame inbox limit. */
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /** Peer the call speaks for; absent means an in-process carrier, answered as the operator. */
   readonly peer?: PeerScope
   /** Carrier or direct-caller cancellation injected only into cancellation-aware methods. */

@@ -3,7 +3,7 @@ import type { ModuleLoaderV2 } from '@deepseek-ai/cordis-plugin-loader'
 import { boot } from '@deepseek-ai/dsh-app-boot'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionSeq, type Session, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
-import JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SqliteSessionQuery from '@deepseek-ai/dsh-session-query-sqlite'
 import * as Official from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import * as Account from '@deepseek-ai/dsh-llm-deepseek-account'
@@ -49,6 +49,7 @@ export function sse(events: Record<string, unknown>[]): string {
 export interface FixtureOptions {
   translator?: Partial<Config>
   officialModels?: { id: string; name: string }[]
+  /** Entries of the account `GET /models` listing. */
   accountModels?: { id: string; name: string }[]
   officialName?: string
   withCredentials?: boolean
@@ -82,6 +83,12 @@ export async function paidFixture(cleanups: Array<() => Promise<void>>, options:
   let auditId = SessionId('paid-translation')
   const server = createServer((request, response) => {
     const work = (async () => {
+      if (request.method === 'GET' && request.url === '/models') {
+        const listed = options.accountModels ?? [{ id: 'deepseek-flash', name: 'Another arbitrary Flash version' }]
+        response.writeHead(200, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ object: 'list', data: listed.map(model => ({ ...model, api_capabilities: { anthropic_messages: {} } })) }))
+        return
+      }
       const chunks: Buffer[] = []
       for await (const chunk of request) {
         if (!(chunk instanceof Buffer)) throw new Error('Expected HTTP body bytes')
@@ -125,9 +132,7 @@ export async function paidFixture(cleanups: Array<() => Promise<void>>, options:
     { id: 'official-custom-id', name: options.officialName ?? '@deepseek-ai/dsh-llm-deepseek-api-key', disabled: !withNativeOwners, config: {
       baseURL, apiKeyEnv: 'PAID_TRANSLATION_FIXTURE_KEY', models: options.officialModels ?? [{ id: 'deepseek-flash', name: 'Flash version-independent name' }],
     } },
-    { id: 'account-custom-id', name: '@deepseek-ai/dsh-llm-deepseek-account', disabled: !withNativeOwners, config: {
-      baseURL, models: options.accountModels ?? [{ id: 'deepseek-flash', name: 'Another arbitrary Flash version' }],
-    } },
+    { id: 'account-custom-id', name: '@deepseek-ai/dsh-llm-deepseek-account', disabled: !withNativeOwners, config: { baseURL } },
     { id: 'translator', name: '@deepseek-ai/dsh-experimental-translator', config: translator },
     ...options.withSessionQuery === true ? [
       { id: 'query', name: '@deepseek-ai/dsh-session-query-sqlite', config: { path: join(root, 'query.sqlite'), openAt: 'never' } },

@@ -40,27 +40,31 @@ interface TypertLookupDefinition {
 
 An `InvocationDescriptor` is local reflection, not a wire message. Host and consumer builds generate corresponding descriptors; the request sends only the endpoint and named `args`. Strict codecs carry generated schema factories, while SRC codecs enforce JSON-safe inputs without structural type recovery. Unary result codecs can supply `encode()` for byte-containing subtrees and `decode()` for recursive native-byte validation; Client declarations narrow every `Uint8Array` to `ArrayBuffer` backing. Pure JSON results need neither byte detection nor Client decoding. Cancellation is an out-of-band carrier signal injected after business parameters and never enters `args`.
 
+`createTypertRemoteInfo` returns a lazy class instance implementing `TypertRemoteInfo`, which extends the mountable `TypertRemoteContribution`. Its `methods` index aliases the direct objects in `descriptors`: each `TypertRemoteMethod` adds named `input(options?)` and `invoke`, retains documentation on the method and its parameters, and uses `result` as its only output codec. Unary `mode` is absent; stream `mode` is `'stream'`. Context-only receivers remain in descriptors and scoped declarations. Registry queries return base descriptors; `isTypertRemoteMethod` narrows generated direct capabilities without recovering endpoint-specific generics.
+
+`TypertSchema` guarantees parsing, not arbitrary Zod operations, although the raw factory spec requires Zod factories. Missing documentation or an unsupported optional JSON Schema projection does not invalidate an ordinary method. The info index and each input-policy view, parser, and derived projection are independently lazy and cached; no metadata or schema access invokes the network. The [protocol reference](<../../packages/typert/protocol/README.md>) defines these APIs, and the [generator reference](<../../packages/typert/generator/README.md#ordinary-remote-metadata>) defines their separate Host `./typert`, consumer `./remote`, and Client `./client/typert` artifacts.
+
+`TypertRemoteSpec` holds a package and endpoint-keyed `TypertRemoteMethodSpec` values. Each ordered `TypertRemoteParameterSpec` contains normal `codec` and `strictCodec` factories from the same checker-resolved type model; the runtime derives identities, wire-name defaults, and named-call views. `TypertRemoteInputOptions` has only `strict?: boolean`; `method.input(options?)` selects a cached `TypertRemoteValue<T>` with matching parsing and optional documentation/projection, without changing Host dispatch or `result`. `RemoteDecoded<T>` describes carrier-reconstructed unary results without narrowing arbitrary parser outputs.
+
 ```ts type-equiv
 /** Codec attached to one invocation parameter or result. */
-type TypertCodec =
-  | {
+type TypertCodec<Value = unknown> =
+  | TypertRemoteValue<Value> & {
     readonly mode: 'strict'
     readonly typeSymbol: string
-    /** Materialize and return the process-realm schema on first boundary use. */
-    readonly create: () => TypertSchema
     /**
      * Decode a unary result whose fields require type-specific handling.
      * @param value - result reconstructed by the RPC carrier.
      * @returns the validated result, retaining native byte views.
      */
-    readonly decode?: (value: unknown) => unknown
+    readonly decode?: ((value: unknown) => unknown) | undefined
     /**
      * Project typed binary fields into RPC result attachments.
      * @param value - native unary result.
      * @param writeBytes - records a byte view at its result-relative path and returns its JSON placeholder.
      * @returns JSON metadata with untouched JSON subtrees retained.
      */
-    readonly encode?: (value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown
+    readonly encode?: ((value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown) | undefined
   }
   | {
     readonly mode: 'src-json'
@@ -72,6 +76,8 @@ type TypertCodec =
 interface InvocationParameterDescriptor {
   /** Source-level parameter name. */
   readonly name: string
+  /** Source parameter documentation, independent of JSON Schema support. */
+  readonly description?: string
   /** Required key in the wire `args` object. */
   readonly wire: string
   /** Whether the value is JSON or requires a registered Host lookup. */
@@ -135,6 +141,8 @@ interface InvocationDescriptor {
   }
   /** Codec for the unary result or each yielded stream item. */
   readonly result: TypertCodec
+  /** Source-owned method documentation; ordinary methods need not have JSDoc. */
+  readonly description?: string
   /** Source declaration used only for diagnostics. */
   readonly sourceLocation?: InvocationSourceLocation
 }
@@ -208,6 +216,16 @@ interface PeerScope {
 ```
 
 ```ts type-equiv
+/** Carrier capacity for buffered uplink frames of one logical stream. */
+interface RemoteUplinkWindow {
+  /** Maximum complete encoded frame bytes waiting for the Host consumer. */
+  readonly maxBytes: number
+  /** UTF-8 envelope bytes added to a compact JSON item with a present value field. */
+  readonly frameOverheadBytes: number
+}
+```
+
+```ts type-equiv
 /**
  * The context of one Remote call, reachable inside the receiving method as
  * `this.ctx.invocation`. The Gateway derives the receiver from a Context that
@@ -225,6 +243,8 @@ interface RemoteInvocation {
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket close, or an uplink failure. */
   readonly signal: AbortSignal
+  /** Carrier frame capacity; absent when the carrier imposes no encoded-frame inbox limit. */
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /**
    * The Client's uplink items for this call. Available once; a second call
    * throws. With an uplink codec on the descriptor every item is decoded to
@@ -279,6 +299,8 @@ interface InvokeRemoteRequest {
    * `invocation.uplink()`; absent means an immediately ended iterable.
    */
   readonly uplink?: AsyncIterable<unknown>
+  /** Carrier-provided frame capacity; absent for carriers without an encoded-frame inbox limit. */
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /** Peer the call speaks for; absent means an in-process carrier, answered as the operator. */
   readonly peer?: PeerScope
   /** Carrier or direct-caller cancellation injected only into cancellation-aware methods. */
@@ -349,6 +371,8 @@ interface TypertGateway {
 ## Consumer Remote
 
 `ctx.remote` exposes only namespaces contributed by imported `/remote` artifacts. `$mount()` installs generated descriptors and concrete methods as one fiber-owned operation. Each namespace is a traced `remote.<namespace>` Cordis child Service whose lifetime spans its mounted methods; no JavaScript Proxy or Host business Service type enters the consumer.
+
+Metadata ownership is separate from connection ownership; the [registry reference](<../../packages/typert/registry/README.md>) covers offline registration and mount lifetimes.
 
 ```ts type-equiv
 /** Client Remote capability implemented by the Gateway and consumed by Remote assemblies. */

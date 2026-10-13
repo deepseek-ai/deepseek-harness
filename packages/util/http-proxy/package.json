@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-http-proxy",
   "description": "Process-wide outbound HTTP proxy policy for DeepSeek Harness: resolve it from the launch environment and install it as undici's global dispatcher",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -30,7 +30,7 @@
     "@deepseek-ai/cordis": "workspace:~"
   },
   "dependencies": {
-    "undici": "^8.10.2"
+    "undici": "8.11.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

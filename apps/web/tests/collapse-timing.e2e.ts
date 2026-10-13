@@ -61,7 +61,7 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.getByRole('button', { name: 'Settings', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Account menu', exact: true }).waitFor()
   })
 
   afterAll(async () => {

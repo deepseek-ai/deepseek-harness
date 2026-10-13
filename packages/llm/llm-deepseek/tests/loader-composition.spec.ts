@@ -125,6 +125,27 @@ async function loadComposition(
 
 
 describe('llm-deepseek real dynamic composition', () => {
+  it('updates the model catalog when the stored API key is removed or added', async () => {
+    vi.stubEnv('DEEPSEEK_API_KEY', '')
+    const { ctx } = await loadComposition({ withDynamic: true, baseURL: 'https://api.deepseek.com/anthropic' })
+    const credentials = ctx.get('credentials')!
+    const models = await ctx.llm.listModels('deepseek-official')
+    expect(models).not.toHaveLength(0)
+
+    await credentials.unset(KEY_REF)
+    expect(await ctx.llm.listModels('deepseek-official')).toEqual([])
+    expect(ctx.llm.listConfigurableProviders().map(row => row.provider)).toContain('deepseek-official')
+
+    await credentials.set(KEY_REF, 'stored-by-ui')
+    expect(await ctx.llm.listModels('deepseek-official')).toEqual(models)
+
+    const failure = new Error('credential lookup failed')
+    const resolve = vi.spyOn(credentials, 'resolve').mockRejectedValue(failure)
+    try {
+      await expect(ctx.llm.listModels('deepseek-official')).rejects.toBe(failure)
+    } finally { resolve.mockRestore() }
+  })
+
   it('keeps package inventory on when the Loader composition disables session upload', async () => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
@@ -219,8 +240,8 @@ describe('llm-deepseek real dynamic composition', () => {
     // Restart over the same harness home.
     const restarted = await loadComposition({ withDynamic: true, baseURL: second.url, reuseRoot: home })
     const credentials = restarted.ctx.get('credentials')!
-    // The stored key is still the provider's own writable file entry — not a
-    // read-only launch override, which is what hoisting it would have made it.
+    // The stored key is still the provider's own file entry — not a
+    // launch-environment value, which is what hoisting it would have made it.
     expect(await credentials.resolve(KEY_REF)).toEqual({ value: 'stored-by-ui', source: 'file' })
     expect(await credentials.describe(KEY_REF)).toEqual({ configured: true, source: 'file', writable: true })
     // Rotation still works after the restart, and the next request uses it.

@@ -35,6 +35,7 @@ The adapter accepts the LLM service's [request-only user inputs](../llm/README.m
 
 Choose this adapter for DeepSeek's official API or a Messages-compatible gateway through `baseURL`. Choose `dsh-llm-pi-ai` when the same composition also routes other providers or hand-declared gateways through pi-ai's catalogs; the two adapters can be mounted together because their route names do not collide. Registering any other adapter for `deepseek-official` fails with `DUPLICATE_ADAPTER`.
 
+<a id="minimal-configuration"></a>
 ### Minimal configuration
 
 ```yaml
@@ -117,7 +118,7 @@ Successful Files responses must contain valid JSON. JSON decoding failures from 
 
 Non-2xx responses fail with stable codes: `AUTH` (401/403), `QUOTA`, `RATE_LIMIT`, `CONTEXT_WINDOW_EXCEEDED`, `INVALID_REQUEST`, `SERVER`, and `HTTP_<status>` otherwise; pre-response transport failures throw `TRANSPORT`, caller aborts throw `ABORTED`, and stream-idle expiry throws `TIMEOUT`. A request-extension field collision, or a rejected preparation from a directly supplied `prepareExtensions`, fails with `REQUEST_EXTENSION` and appends the cause chain to the message; a post-2xx acceptance failure is logged and the response still streams. A normalized-image rejection names every plausible attachment and its durable position when the provider does not identify a file id. Stale-file rejection removes every named mapping (or every mapping used by the attempt) in one upload-index update and permits one replacement model request. Protocol violations throw `STREAM_CLOSED` or `MALFORMED_RESPONSE`, and a terminal `stop` with no content blocks becomes `EMPTY_RESPONSE`, which the default retry policy retries. A request on the official route without an API key fails with `MISSING_CREDENTIAL`, and a malformed credential fails with `INVALID_CREDENTIAL` naming the reference to fix — never any part of the key.
 
-Provider plugins own catalog availability; only the account route requires a stored grant for discovery. Their catalogs are configured independently; the transport supplies shared default model metadata and capability resolution.
+Provider plugins own catalog availability: the API-key route serves its configured `models` while its API key resolves, and the account route serves its account listing while signed in (see the [account provider](../llm-deepseek-account/README.md)). The transport supplies the bundled catalog, the catalog-entry field schemas, and capability resolution. A provider may also supply `connect(signal)`, which resolves the connection for exact-model lookups and prepared calls after provider-owned work such as a catalog load, and `admit(connection, model)`, which refuses a model before network I/O.
 
 -----
 

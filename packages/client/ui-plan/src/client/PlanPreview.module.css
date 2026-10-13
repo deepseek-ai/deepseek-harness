@@ -12,7 +12,7 @@
   padding: 8px 10px;
   margin: 0;
   border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-xl);
+  border-radius: var(--dsw-radius-lg);
   background: var(--plan-card-fill);
   color: var(--dsw-alias-label-primary);
   font: inherit;
@@ -23,7 +23,8 @@
 :global(body[data-ds-dark-theme]) .card { --plan-card-fill: var(--dsw-static-neutral-850); --plan-card-hover: var(--dsw-static-neutral-800); }
 .card:hover { background: var(--plan-card-hover); }
 .card:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 3px; }
-.cardIcon { box-sizing: border-box; flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-md); background: var(--plan-card-fill); }
+.cardIcon { box-sizing: border-box; flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 10px; background: color-mix(in srgb, var(--dsw-static-neutral-00) 50%, transparent); }
+:global(body[data-ds-dark-theme]) .cardIcon { background: color-mix(in srgb, var(--dsw-static-neutral-00) 5%, transparent); }
 .cardDetails { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
 .cardTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 20px; }
 .cardDescription { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 16px; }

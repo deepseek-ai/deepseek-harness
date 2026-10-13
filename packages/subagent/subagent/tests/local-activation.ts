@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { type ContinuableCreateSpec, type SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import { onTestFinished } from 'vitest'
 
@@ -51,7 +51,9 @@ export function startPreparedActivation(request: SubagentStartRequest, prepared:
   const provider = `prepared-${randomUUID()}`
   const unregister = ctx.get('subagents')!.registerProvider({
     name: provider,
-    capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: true },
+    capabilities: {
+      agentOptions: true, agentPreset: prepared.seed === undefined, outputSchema: true, depthLimit: true,
+    },
     inheritsParentContext: prepared.seed !== undefined,
     prepareContinuable: () => Promise.resolve(prepared),
   })

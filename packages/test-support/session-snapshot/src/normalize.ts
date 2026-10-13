@@ -48,6 +48,7 @@ const FILE_URI_PATH_PREFIX_RE = /(?:^|[^a-z0-9+.-])file:\/\/\/?$/i
 
 /** A UUID v4 string, the shape `randomUUID()` produces for session ids. */
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+const SHORT_JOB_ID_RE = /-[0-9a-f]{16}$/i
 // Separator runs also match JSON-escaped Windows paths; extraction preserves their exact serialized spelling.
 const LOCAL_SPILL_PATH_RE = new RegExp(
   String.raw`\{\{cwd\}\}[\\/]+\.spill[\\/]+session-[0-9a-f]{12}[\\/]+[0-9a-f]{12}-([A-Za-z0-9._~-]+?)`
@@ -354,8 +355,35 @@ export function normalizeSessionLog(
   const cwdPathMode = options.cwdPathMode ?? 'canonical'
   const identityMode = options.identityMode ?? 'legacy'
   const lines = rawLog.split('\n').filter(line => line.trim().length > 0)
-  const records = lines.map((line) => {
-    const record = JSON.parse(line) as Record<string, unknown>
+  const parsed = lines.map(line => JSON.parse(line) as Record<string, unknown>)
+  const jobTokens = new Map<string, string>()
+  const reservedTokens = new Set(rawLog.match(/\{\{id:[1-9]\d*\}\}/g) ?? [])
+  let nextJobToken = 1
+  if (identityMode === 'legacy') {
+    for (const record of parsed) {
+      if ((record.type !== 'job/registered' && record.type !== 'job/settled')
+        || record.data === null || typeof record.data !== 'object') continue
+      const id = (record.data as Record<string, unknown>).jobId
+      if (typeof id !== 'string' || (id.search(UUID_RE) < 0 && !SHORT_JOB_ID_RE.test(id)) || jobTokens.has(id)) continue
+      let token: string
+      do { token = `{{id:${nextJobToken++}}}` } while (reservedTokens.has(token))
+      jobTokens.set(id, token)
+    }
+  }
+  const replaceJobs = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      let output = value
+      for (const [id, token] of jobTokens) output = output.split(id).join(token)
+      return output
+    }
+    if (Array.isArray(value)) return value.map(replaceJobs)
+    if (value !== null && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, replaceJobs(item)]))
+    }
+    return value
+  }
+  const records = parsed.map((raw) => {
+    const record = jobTokens.size === 0 ? raw : replaceJobs(raw) as Record<string, unknown>
     if (record.type === 'session') {
       if ('createdAt' in record) record.createdAt = 0
     } else if (isPackedFixtureRow(record)) {
@@ -385,6 +413,12 @@ export function normalizeSessionLog(
       if ('durationMs' in data) data.durationMs = 0
     }
     normalizeFeedbackClocks(record)
+    if ((record.type === 'job/registered' || record.type === 'job/settled')
+      && record.data !== null && typeof record.data === 'object') {
+      const data = record.data as Record<string, unknown>
+      if ('startedAt' in data) data.startedAt = 0
+      if ('finishedAt' in data) data.finishedAt = 0
+    }
     if (record.type === 'goal/change' && record.data !== null && typeof record.data === 'object') {
       const data = record.data as Record<string, unknown>
       if ('createdAt' in data) data.createdAt = 0

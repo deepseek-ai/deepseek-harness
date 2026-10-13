@@ -14,10 +14,13 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ShortcutCommandId, ShortcutFixedCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { UiConversation } from './conversation/assembly.ts'
+import { UserText, PlainUserText, SessionReference } from './user-text/UserText.tsx'
+import { sessionReferenceRule } from './user-text/session-reference-rule.ts'
+import { collapseWhitespaceRule, trimWhitespaceRule } from './user-text/whitespace-rules.ts'
 import type { ViewTab } from './contract/views.ts'
 import type {
   ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,
-  ConversationSessionInjected, DraftFileUploads,
+  ConversationSessionInjected, DraftFileUploads, UserTextInjected,
 } from './contract/slots.ts'
 import type { InputNotice } from './contract/input.ts'
 import type { ReferenceInsert } from './contract/draft-editor.ts'
@@ -156,6 +159,30 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const maxConcurrentFileUploads = config.maxConcurrentFileUploads as number
   const workspaceNavigation = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation
   const uiConversation = new UiConversation(ctx, sessions)
+  uiConversation.userText.register(sessionReferenceRule)
+  uiConversation.userText.register(collapseWhitespaceRule)
+  uiConversation.userText.register(trimWhitespaceRule)
+  slots.registerFactory({
+    name: 'conversation.user.text',
+    scope: 'session',
+    children: {
+      'conversation.user.text.node': { kind: 'keyed', scope: 'session', inline: true },
+    },
+    inject: (): UserTextInjected => ({
+      hooks: {
+        userTextRevision: {
+          getSnapshot: () => uiConversation.userText.getSnapshot(),
+          subscribe: listener => uiConversation.userText.subscribe(listener),
+        },
+      },
+      createUserTextEvaluator: () => uiConversation.userText.createEvaluator(),
+      reportTransformFailure: (error) => { console.error('[ui-conversation] user-text transformation failed:', error) },
+    }),
+  }, UserText)
+  slots.inject('conversation.user.text.node', function* () {
+    yield slots.register({ name: 'conversation.user.text.node', key: 'text', priority: 100 }, PlainUserText)
+    yield slots.register({ name: 'conversation.user.text.node', key: 'session', priority: 100 }, SessionReference)
+  })
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-conversation: dictionaries')
   const t = ctx.locale.bind(NS)

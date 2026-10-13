@@ -106,7 +106,7 @@ The service is built on one separation and three commitments:
 - **Explicit authority.** Every service method takes the exact live calling `Agent`; only the Lead spawns, reassigns, or interrupts.
 - **Bounds that fail loud.** Every limit is a validated deployment value, and exhaustion reports a typed error instead of reusing an id or name.
 
-The [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-05-agent-teams.md) owns the identity, mailbox, task, and shared-checkout decisions.
+The [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-05-agent-teams.md) owns the roster, mailbox, task, and shared-checkout decisions. The [runtime-context identity decision](../../../.agents/notes/implemented/architecture/2026-10-13-team-identity-runtime-context.md) owns model-facing identity.
 
 ### Source map
 
@@ -162,7 +162,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Agent Teams subsystem](../../../docs/subsystems/agent-team.md) — durable Team types and the `ctx.agentTeams` service API.
 - [tool-agent-team package](../tool-agent-team/README.md) — the tools that let the model create, message, and coordinate teammates.
-- [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-05-agent-teams.md) — identity, mailbox, task, and shared-checkout decisions.
+- [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-05-agent-teams.md) — roster, mailbox, task, and shared-checkout decisions.
 - [Experimental package reference](../AGENTS.md) — placement, publication, and dependency isolation.
 
 -----

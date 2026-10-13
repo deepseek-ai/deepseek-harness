@@ -82,6 +82,7 @@ describe('product icon set', () => {
       [primitives.PermissionIconReadOnlyRegular, primitives.PermissionIconReadOnlyMedium],
       [primitives.PermissionIconWorkspaceWriteRegular, primitives.PermissionIconWorkspaceWriteMedium],
       [primitives.PermissionIconFullAccessRegular, primitives.PermissionIconFullAccessMedium],
+      [primitives.PermissionIconAutoReviewRegular, primitives.PermissionIconAutoReviewMedium],
     ] as const
     for (const [Regular, Medium] of pairs) {
       const regular = render(<Regular />)

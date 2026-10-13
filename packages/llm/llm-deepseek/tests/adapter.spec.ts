@@ -392,6 +392,27 @@ describe('Cordis provider composition', () => {
     })
   })
 
+  it('serves the account listing through the Loader composition and refuses models this build cannot serve', async () => {
+    const { ctx, http } = await boot(undefined, { data: [
+      {
+        id: 'deepseek-flash', name: 'DeepSeek-V4.1-Flash', context_window: 1_048_576, max_output_tokens: 100_000,
+        input_modalities: ['text', 'image'], output_modalities: ['text'],
+        api_capabilities: { anthropic_messages: { system_prompt_update: 'in-history' } },
+      },
+      {
+        id: 'deepseek-v5', name: 'DeepSeek-V5', api_capabilities: { anthropic_messages: {} },
+        client_requirements: { 'deepseek-harness': { min_version: '99.0.0' } },
+      },
+    ] })
+    ctx.provide('deepseekAccount', { resolveToken: async (_url: string): Promise<string | undefined> => 'fixture-token',
+      rejectToken: async (_token: string): Promise<void> => {} } as DeepSeekAccount)
+    expect((await ctx.llm.listModels('deepseek-account')).map(model => [model.id, model.name])).toEqual([['deepseek-flash', 'DeepSeek-V4.1-Flash']])
+    await expect(ctx.llm.prepareCall({ provider: 'deepseek-account', model: 'deepseek-v5' }))
+      .rejects.toMatchObject({ code: 'CLIENT_UPGRADE_REQUIRED' })
+    await assemble(ctx.llm.stream(options({ provider: 'deepseek-account', model: 'deepseek-flash' })), 'deepseek-flash')
+    expect(http.requests.map(request => [request.path, request.body.max_tokens])).toEqual([['/anthropic/v1/messages', 100_000]])
+  })
+
   it('does not remove account credentials for HTTP 403', async () => {
     const { ctx } = await boot((response) => {
       response.writeHead(403)

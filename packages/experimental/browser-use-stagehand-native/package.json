@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-browser-use-stagehand-native",
   "description": "Experimental Stagehand browser tools with separately configured native models",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -44,7 +44,7 @@
     "@deepseek-ai/dsh-mcp-client": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "^4.4.3",
+    "zod": "4.4.3",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@puppeteer/browsers": "3.2.2"
   },

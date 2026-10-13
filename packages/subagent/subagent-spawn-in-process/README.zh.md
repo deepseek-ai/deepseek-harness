@@ -53,6 +53,8 @@ kind: "package-reference"
 
 一次工具调用创建后台子 agent 并立即返回子会话 ID。子级在自己的会话中工作，父级通过完成通知收到其最终答案。子级也可以通过 `send_message` 发送消息。被拒绝的启动不会留下已发布的子 agent；工作流等程序调用方可以直接等待 activation 的结果。
 
+显式 `agentPreset` 独立选择当前注册的 preset；省略时加入父方的活跃代际。只有 spawn 支持此选择。persona 与工具放在 [preset 定义](../../preset/agent-preset-registry/README.zh.md)中。冷恢复遵守共享的[子级组装规则](../subagent/README.zh.md#restoring-child-composition)。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -65,7 +67,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-本后端注册提供方并准备全新子会话。`dsh-subagent` 拥有 activation 的深度检查、子 agent 创建、工具和 persona 设置、结构化输出、结果收集及资源释放；发布前的调用方信号取消创建，发布后的句柄通过 `dispose()` 取消并等待完全停稳。
+本后端注册提供方并准备全新子会话。`dsh-subagent` 拥有 activation 的深度检查、子 agent 创建、preset 组装、结构化输出、结果收集及资源释放；发布前的调用方信号取消创建，发布后的句柄通过 `dispose()` 取消并等待完全停稳。
 
 ### 源码地图
 
@@ -79,7 +81,7 @@ kind: "package-reference"
 
 ### 所有权与作用域
 
-子 agent 获得全新的扁平注册作用域：父级工具限制与权限绝不会被导入，工具所施加的过滤属于组合而非父级派生授权。后端声明包括 `agentOptions` 在内的全部五项启动时能力，因为它控制子 agent 的创建窗口，可以逐一强制执行。
+子级在继承或独立选择的 preset 之下拥有自身注册作用域，不导入父方的 Agent 局部工具限制。后端在其他启动时能力之外声明 `agentPreset` 和 `agentOptions`，由 subagent manager 在创建子级时应用。
 
 </details>
 
@@ -104,15 +106,15 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-全新子 agent 逐字接收任务内容，作为新空对话中的唯一用户消息，默认使用父级提供方、模型、推理强度、输出 token 上限与工作目录。配置的 persona 会在子 agent 作用域中遮蔽全局提示词文本；工具过滤器会从其 schema、可执行工具查找与 PTC mode SDK 绑定中移除指定的全局工具，但保留独立注册的指导内容。不包含任何父级对话消息；过滤属于组合，而非继承的权限授予。
+全新子 agent 逐字接收任务内容，作为新空对话中的唯一用户消息，默认使用父级提供方、模型、推理强度、输出 token 上限与工作目录。继承或选定的 preset 提供工具和提示词片段。不包含任何父级对话消息。
 
 #### Token 影响
 
-子 agent 会为全新的独立上下文与历史消耗 token，不复制任何父级历史 token。persona 会改变该子 agent 反复使用的提示词成本；工具过滤器会改变其 schema 或生成 SDK 的成本。
+子 agent 会为全新的独立上下文与历史消耗 token，不复制任何父级历史 token。preset 的提示词和工具决定重复提示词、schema 和生成 SDK 的成本。
 
 #### KV Cache 影响
 
-子 agent 的请求缓存与父级相互独立。子 agent 历史仅追加；persona、工具过滤、生成 SDK、提供方或模型变化会建立不同的子 agent 前缀。
+子 agent 的请求缓存与父级相互独立。子 agent 历史仅追加；preset、生成 SDK、提供方或模型变化会建立不同的子 agent 前缀。
 
 ### 父级工具结果（间接）
 
@@ -135,7 +137,7 @@ kind: "package-reference"
 
 这些限制说明何时选择该后端是错误的；它们是当前包约束。
 
-- **全新表示不含父级 transcript（文本记录）**——子 agent 继承 cwd、谱系、提供方、模型、推理强度、输出 token 上限及显式配置的 persona/工具限制，但不继承父级的任何对话；需要已完成轮次上下文时，请使用 fork 后端。
+- **全新表示不含父级 transcript（文本记录）**——子 agent 继承 cwd、谱系、提供方、模型、推理强度及输出 token 上限，但不继承父级的任何对话；需要已完成轮次上下文时，请使用 fork 后端。
 
 <a id="dev-note"></a>
 ### 开发备注

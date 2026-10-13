@@ -86,7 +86,7 @@ export class AgentPresetSectionController {
     while (this.pendingSave !== undefined) await this.pendingSave
     if (!shouldReset()) return
     const settings = this.ctx.configForms.get(AGENT_PRESET_SETTINGS_NS).getSnapshot()
-    if (settings.mode !== 'host' || settings.status !== 'ready' || !settings.writable || settings.revision === undefined) return
+    if (settings.status !== 'ready' || !settings.writable || settings.revision === undefined) return
     await this.load()
     if (!shouldReset() || this.store.getSnapshot().status !== 'ready') return
     const rows = this.store.getSnapshot().rows

@@ -59,6 +59,8 @@ composer 携带图片或通用文件提交时，只有声明了 `input.attachmen
 
 每次命令目录拉取都要求客户端已持有该会话，并等待首次历史打开成功后才发送 `commands.list`。临时的 `commandCatalog` 引用持续持有会话，直到拉取结束。未被持有的会话或打开失败会直接拒绝，不发送 RPC，因此后台目录刷新不会重新打开已关闭的会话。
 
+弹出选择面板使用[标准菜单的内缩与菜单项圆角](../../../docs/ui-radius.zh.md#nested-hover)。
+
 </details>
 
 -----

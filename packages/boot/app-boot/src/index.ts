@@ -31,7 +31,6 @@ export { ON_DEMAND_BUNDLES, OFFICIAL_ON_DEMAND_CATALOG, type OfficialBundleCatal
 export { generateConfigSchema, type ConfigSchemaDump, type NativeConfigSchema } from './config-schema/index.ts'
 export { createConfigProjector, LOADER_EXPRESSION_SCHEMA, type ConfigProjection } from './config-schema/projector.ts'
 export { isNativeConfigSchema } from './config-schema/native.ts'
-import type {} from '@deepseek-ai/dsh-system-prompt'
 
 export {
   readProfilePlugins, reconcileProfilePlugins, writeProfileBundles,
@@ -1038,32 +1037,4 @@ export async function boot(
   } finally {
     await diagnostics.fiber.dispose()
   }
-}
-
-/** Prompt-section name for the harness-source location line an app bin adds after boot. */
-export const HARNESS_SOURCE_SECTION = 'harness:source'
-
-/**
- * Add a global prompt section naming the on-disk harness source checkout while
- * explicitly distinguishing it from the task workspace and current working
- * directory. The self-referential `dsh-tool-cordis` toolset reads and edits this
- * checkout. Call once on the settled boot context ({@link boot}); the section
- * uses the shared first-party placement after reusable instructions
- * and before the Web surface and persona suffix. A booted tree with no
- * `systemPrompt` service has no prompt to augment, so this is then a no-op
- * that returns `undefined`. The section is
- * registered against the `systemPrompt` service's fiber, so a dev HMR reload of
- * that plugin drops it until the next boot.
- * @param ctx - the settled boot context whose global system prompt to augment.
- * @param sourceRoot - the absolute path to the harness checkout root.
- * @returns the section disposer, or `undefined` when no `systemPrompt` service is mounted.
- */
-export function addHarnessSourceSection(ctx: Context, sourceRoot: string): (() => void) | undefined {
-  const systemPrompt = ctx.get('systemPrompt')
-  if (systemPrompt === undefined) return undefined
-  return systemPrompt.section({
-    name: HARNESS_SOURCE_SECTION,
-    order: systemPrompt.getSectionOrder('HARNESS_SOURCE'),
-    text: `The DeepSeek Harness implementation checkout is at ${sourceRoot}. The checkout location and current working directory are separate values and may differ; never infer the working directory from this path. Use pwd to determine the current working directory. Use this checkout only to inspect or extend DSH itself.`,
-  })
 }

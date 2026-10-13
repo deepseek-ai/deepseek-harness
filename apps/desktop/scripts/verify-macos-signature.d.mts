@@ -80,3 +80,10 @@ export function verifyMacOSSignatureAfterSign(
   context: MacOSAfterSignContext,
   expected: MacOSSigningEnvironment,
 ): void
+
+/**
+ * Verify a disk image's code signature and Developer ID without requiring a notarization ticket.
+ * @param diskImagePath Path to the packaged `.dmg` file.
+ * @param expected Public signing identity.
+ */
+export function verifyMacOSDiskImageSignature(diskImagePath: string, expected: MacOSSigningEnvironment): void

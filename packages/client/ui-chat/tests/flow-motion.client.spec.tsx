@@ -210,6 +210,22 @@ describe('flow motion', () => {
     expect(reserve).toHaveBeenCalledExactlyOnceWith(200)
   })
 
+  it('does not rewrite a reopened row after its input-fold ownership is cancelled', async () => {
+    vi.useFakeTimers()
+    const row = rowWithHeight(180)
+    const done = vi.fn()
+    motion.collapse(row, done)
+    motion.followInput({ begin: vi.fn(), frame: () => -20, finish: vi.fn() })
+    await Promise.resolve()
+    vi.advanceTimersByTime(96)
+    motion.cancelMotion(row)
+    expectCleared(row)
+    vi.advanceTimersByTime(400)
+    expectCleared(row)
+    expect(row.style.translate).toBe('')
+    expect(done).not.toHaveBeenCalled()
+  })
+
   it('clears pending reservations and idle work with its owner', async () => {
     const row = rowWithHeight(80)
     const idle = vi.fn()
@@ -307,13 +323,14 @@ describe.each([
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it.each([false, true])('hides immediately without motion when reduced motion is %s', (reduced) => {
+  it.each([false, true])('hides before the next paint when reduced motion is %s', async (reduced) => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: reduced })))
     const onReveal = vi.fn()
     const view = render(<div data-chat-motion={reduced ? '' : undefined}><Component motion={motion} hidden={false} onReveal={onReveal} /></div>)
     const row = view.getByTestId('motion-row')
     Object.defineProperty(row, 'offsetHeight', { value: 80 })
     view.rerender(<div data-chat-motion={reduced ? '' : undefined}><Component motion={motion} hidden onReveal={onReveal} /></div>)
+    await act(async () => { await Promise.resolve() })
     expect(row.getAttribute('hidden')).toBe(hiddenValue)
     expectCleared(row)
     expect(motion.foldActive()).toBe(false)

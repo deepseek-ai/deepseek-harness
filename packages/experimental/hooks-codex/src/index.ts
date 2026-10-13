@@ -106,7 +106,7 @@ export function apply(ctx: Context, config: Config): void {
 
   // SessionStart is the one emit-shaped (detached) point Codex has: track its
   // run chains so disposal aborts a still-running hook process and drains the
-  // continuation (docs/defensive-patterns.md: dispose must reach quiescence).
+  // continuation (docs/defensive-patterns/general.md: dispose must reach quiescence).
   const detached = createDetachedRuns()
   ctx.effect(() => () => detached.drain(), 'hooks-codex: drain detached hook runs')
 

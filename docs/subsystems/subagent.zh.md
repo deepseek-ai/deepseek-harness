@@ -19,10 +19,10 @@
  */
 interface SubagentCapabilities {
   readonly agentOptions: boolean
+  /** Supports selecting a preset independently of the parent's composition. */
+  readonly agentPreset: boolean
   readonly outputSchema: boolean
   readonly depthLimit: boolean
-  readonly toolFilter: boolean
-  readonly persona: boolean
 }
 ```
 
@@ -70,6 +70,12 @@ interface SubagentActivation {
 interface SubagentStartRequest {
   /** Initial child directory; relative paths resolve against the parent's current directory. Omitted inherits that directory at start. */
   readonly cwd?: string
+  /**
+   * Independent preset id; omission joins the parent's current generation.
+   * Requires a provider with `capabilities.agentPreset` that does not inherit
+   * parent context.
+   */
+  readonly agentPreset?: string
   /** Optional short display label persisted with a session-backed child. */
   readonly label?: string
   /** Content delivered as the child's user message. */
@@ -108,22 +114,6 @@ interface SubagentStartRequest {
    * start otherwise.
    */
   readonly maxDepth?: number
-  /**
-   * Optional child tool scoping. Requires {@link SubagentCapabilities.toolFilter};
-   * rejected at start otherwise. In-process backends apply it as a scoped
-   * `tools.restrict()` in the child's creation window: the named tools vanish
-   * from the child's prompt AND refuse to execute (one visibility), with loud
-   * unknown-name validation.
-   */
-  readonly toolFilter?: ToolRestriction
-  /**
-   * Optional per-child persona. Requires {@link SubagentCapabilities.persona};
-   * rejected at start otherwise. In-process backends register it as a scoped
-   * `deployment:persona-prefix` section on the child, SHADOWING the deployment's
-   * persona for this child alone — same template semantics as the deployment
-   * persona (strict `{{…}}` interpolation against the registered variables).
-   */
-  readonly persona?: string
 }
 ```
 
@@ -136,6 +126,8 @@ interface ResolvedSubagentStartRequest extends SubagentStartRequest {
 ```
 
 ## 本地子代理与 activation
+
+只有 spawn 支持独立的 `agentPreset`；省略选择与 fork 都继承父方的活跃组装。[子级 preset 规则](../../packages/subagent/subagent/README.zh.md#restoring-child-composition)定义显式选择、事件顺序和历史恢复行为。
 
 本地子代理拥有持久 Session，最多有一个在线 activation。Manager 预留身份和容量，通过后端准备子代理，并管理输入准入、冷恢复以及先子后父的释放顺序。activation 结果在资源释放和完成通知之后结算。释放操作单独报告清理失败，不会覆盖已捕获的结果。结构化结果提交会关闭该 activation 的输入；之后的冷恢复不会继承输出 schema。
 

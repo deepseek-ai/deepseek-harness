@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-user-questions",
   "description": "Abstract user-questions seam (ctx.userQuestions) for asking the human during agent runs",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -31,9 +31,11 @@
     "./remote": {
       "types": "./lib/typert.remote-client.d.ts",
       "default": "./lib/typert.remote-client.js"
-    }
+    },
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
@@ -64,7 +66,7 @@
     "@deepseek-ai/dsh-tools": "workspace:*"
   },
   "dependencies": {
-    "zod": "^4.4.3",
+    "zod": "4.4.3",
     "@deepseek-ai/schemastery": "workspace:~"
   }
 }

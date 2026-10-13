@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { anchorCache, documentAnchors, findViolations, githubSlug, markdownLinkSourcePaths } from './verify-md-links.ts'
+import { documentAnchors, findViolations, githubSlug, markdownLinkCache, markdownLinkSourcePaths } from './verify-md-links.ts'
 
 const roots: string[] = []
 afterEach(() => {
@@ -27,7 +27,7 @@ function layout(files: Record<string, string>): string {
 }
 
 function violationsIn(root: string, rel: string): { url: string; reason: string }[] {
-  return findViolations(join(root, rel), anchorCache(), root).map(({ url, reason }) => ({ url, reason }))
+  return findViolations(join(root, rel), markdownLinkCache(), root).map(({ url, reason }) => ({ url, reason }))
 }
 
 describe('Markdown source discovery', () => {
@@ -37,7 +37,7 @@ describe('Markdown source discovery', () => {
       'packages/README.zh.md': '[removed group](removed/README.zh.md)\n',
     })
     const sources = markdownLinkSourcePaths(root)
-    const violations = sources.flatMap(file => findViolations(join(root, file), anchorCache(), root))
+    const violations = sources.flatMap(file => findViolations(join(root, file), markdownLinkCache(), root))
     expect(violations.map(({ file, reason }) => ({ file, reason })).sort((a, b) => a.file.localeCompare(b.file)))
       .toEqual([
         { file: join('packages', 'README.md'), reason: 'target' },
@@ -53,7 +53,7 @@ describe('Markdown source discovery', () => {
       '.agents/notes/archived/process/frozen.md': '[historical](missing.md)\n',
     })
     const sources = markdownLinkSourcePaths(root)
-    const violations = sources.flatMap(file => findViolations(join(root, file), anchorCache(), root))
+    const violations = sources.flatMap(file => findViolations(join(root, file), markdownLinkCache(), root))
     expect(violations.map(({ file }) => file).sort()).toEqual([
       join('packages', 'AGENTS.md'),
       join('packages', 'core', 'README.md'),

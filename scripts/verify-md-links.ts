@@ -120,12 +120,13 @@ export function githubSlug(heading: string): string {
  * `Repeat` yields `repeat`, `repeat-1`, `repeat-2`. Matching is exact —
  * element ids are case-sensitive.
  * @param source - the document's full Markdown text.
+ * @param tree - the GFM parse of exactly `source`, when the caller already has it.
  * @returns the set of valid fragments for links into this document.
  */
-export function documentAnchors(source: string): Set<string> {
+export function documentAnchors(source: string, tree: Nodes = parseMarkdown(source)): Set<string> {
   const anchors = new Set<string>()
   const occurrences = new Map<string, number>()
-  for (const heading of markdownHeadingLines(source)) {
+  for (const heading of markdownHeadingLines(source, tree)) {
     const base = githubSlug(heading.text)
     let result = base
     let bump = occurrences.get(base) ?? 0
@@ -136,7 +137,7 @@ export function documentAnchors(source: string): Set<string> {
     occurrences.set(base, bump)
     anchors.add(result)
   }
-  visitMarkdown(parseMarkdown(source), (node: Nodes): void => {
+  visitMarkdown(tree, (node: Nodes): void => {
     if (node.type !== 'html') return
     const html = node.value.replace(/<!--[\s\S]*?-->/g, '')
     for (const match of html.matchAll(/<a id="([^"]+)"/g)) anchors.add(match[1] ?? '')
@@ -144,19 +145,57 @@ export function documentAnchors(source: string): Set<string> {
   return anchors
 }
 
+/** One Markdown file's link inputs and exposed anchors, collected from a single parse. */
+export interface MarkdownLinkDocument {
+  /** Link, image, and definition destinations with their 1-based start lines, in document order. */
+  destinations: { url: string; line: number }[]
+  /** Fragments that links into this document may name. */
+  anchors: Set<string>
+}
+
+/** Per-run reads, parses, and target probes shared by every scanned source and link target. */
+export interface MarkdownLinkCache {
+  /** Read and parse one Markdown file at most once per run. */
+  document: (absPath: string) => MarkdownLinkDocument
+  /** Whether a resolved link target exists, probed at most once per path. */
+  exists: (absPath: string) => boolean
+}
+
+function markdownLinkDocument(source: string): MarkdownLinkDocument {
+  const tree = parseMarkdown(source)
+  const destinations: MarkdownLinkDocument['destinations'] = []
+  visitMarkdown(tree, (node: Nodes): void => {
+    if ((node.type === 'link' || node.type === 'image' || node.type === 'definition') && 'url' in node) {
+      destinations.push({ url: node.url, line: node.position?.start.line ?? 0 })
+    }
+  })
+  return { destinations, anchors: documentAnchors(source, tree) }
+}
+
 /**
- * Lazily collect and cache the anchor set of any existing Markdown file —
- * shared across all scanned sources so a target parses once.
- * @returns the memoized absolute-path → anchor-set lookup.
+ * Create the memoized file reads and existence probes for one checker run.
+ * A file that is both a scanned source and a fragment target parses once; the
+ * repository is assumed not to change while the run lasts.
+ * @returns the cache to pass to every {@link findViolations} call of the run.
  */
-export function anchorCache(): (absPath: string) => Set<string> {
-  const cache = new Map<string, Set<string>>()
-  return (absPath) => {
-    const hit = cache.get(absPath)
-    if (hit) return hit
-    const anchors = documentAnchors(readFileSync(absPath, 'utf8'))
-    cache.set(absPath, anchors)
-    return anchors
+export function markdownLinkCache(): MarkdownLinkCache {
+  const documents = new Map<string, MarkdownLinkDocument>()
+  const existence = new Map<string, boolean>()
+  return {
+    document: (absPath) => {
+      const hit = documents.get(absPath)
+      if (hit) return hit
+      const document = markdownLinkDocument(readFileSync(absPath, 'utf8'))
+      documents.set(absPath, document)
+      return document
+    },
+    exists: (absPath) => {
+      const hit = existence.get(absPath)
+      if (hit !== undefined) return hit
+      const exists = existsSync(absPath)
+      existence.set(absPath, exists)
+      return exists
+    },
   }
 }
 
@@ -167,48 +206,39 @@ export function anchorCache(): (absPath: string) => Set<string> {
  * `<a id>` there. Fragments onto non-Markdown targets (`file.ts#L10`) carry
  * renderer-owned semantics and are not judged.
  * @param absPath - absolute path of the Markdown source to scan.
- * @param anchorsOf - anchor lookup shared across files for cross-link checks.
+ * @param cache - parses and target probes shared across files for cross-link checks.
  * @param scanRoot - repository root violations are reported relative to.
  * @returns one entry per broken link, in document order.
  */
 export function findViolations(
   absPath: string,
-  anchorsOf: (abs: string) => Set<string>,
+  cache: MarkdownLinkCache = markdownLinkCache(),
   scanRoot: string = root,
 ): Violation[] {
   const file = relative(scanRoot, absPath)
   const dir = dirname(absPath)
-  const source = readFileSync(absPath, 'utf8')
-  const tree = parseMarkdown(source)
   const out: Violation[] = []
-
-  const check = (url: string, node: Nodes): void => {
-    if (isExternal(url)) return
+  for (const { url, line } of cache.document(absPath).destinations) {
+    if (isExternal(url)) continue
     const target = pathPart(url)
     const resolved = target === '' ? absPath : resolve(dir, target)
-    if (!existsSync(resolved)) {
-      out.push({ file, line: node.position?.start.line ?? 0, url, reason: 'target' })
-      return
+    if (!cache.exists(resolved)) {
+      out.push({ file, line, url, reason: 'target' })
+      continue
     }
     const fragment = fragmentPart(url)
-    if (fragment === null || !resolved.endsWith('.md')) return
-    if (!anchorsOf(resolved).has(fragment)) {
-      out.push({ file, line: node.position?.start.line ?? 0, url, reason: 'anchor' })
+    if (fragment === null || !resolved.endsWith('.md')) continue
+    if (!cache.document(resolved).anchors.has(fragment)) {
+      out.push({ file, line, url, reason: 'anchor' })
     }
   }
-
-  visitMarkdown(tree, (node: Nodes): void => {
-    if ((node.type === 'link' || node.type === 'image' || node.type === 'definition') && 'url' in node) {
-      check(node.url, node)
-    }
-  })
   return out
 }
 
 if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
   const files = markdownLinkSourcePaths(root)
-  const anchorsOf = anchorCache()
-  const all = files.flatMap(file => findViolations(resolve(root, file), anchorsOf))
+  const cache = markdownLinkCache()
+  const all = files.flatMap(file => findViolations(resolve(root, file), cache))
   const checked = files.length
 
   if (all.length === 0) {

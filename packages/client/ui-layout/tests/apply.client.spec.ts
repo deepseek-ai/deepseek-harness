@@ -56,11 +56,8 @@ async function bench() {
   await owner.await()
   if (ctx === undefined) throw new Error('the fixture owner did not activate')
   const slotsFiber = ctx.plugin(SlotRegistry)
-  // Theme registers its Appearance settings row and requires the connection
-  // seam for persistence; model this bench as a remote, memory-only browser.
   ctx.provide('locale', new LocaleRuntime(ctx))
   await ctx.plugin(ShortcutsService).await()
-  ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
   // ui-theme's Appearance row binds a durable scope through these two.
   ctx.provide('remote', { $on: () => () => {} } as never)
   ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)

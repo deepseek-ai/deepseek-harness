@@ -1,10 +1,12 @@
 /** Plugin metadata checks use private source-only packages and real resource exports. */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { packageMetaProblems } from './verify-package-meta.ts'
+
+const validSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><defs><linearGradient id="ink"><stop stop-color="#69B9FF" /></linearGradient></defs><path d="M8 8H28V28H8Z" fill="url(#ink)" /></svg>'
 
 let root: string
 let dir: string
@@ -26,7 +28,7 @@ function json(path: string, contents: unknown): void {
 
 function manifest(fields: object = {}): void {
   json('package.json', {
-    name: '@test/plugin',
+    name: '@deepseek-ai/dsh-test-plugin',
     description: 'Package description',
     type: 'module',
     exports: { '.': './lib/index.js', './package.json': './package.json', './locale/*.json': './locale/*.json' },
@@ -46,14 +48,89 @@ it('does not require locale resources for exported package name and description'
 
 it.each(['legacy.svg', './legacy.svg'])('accepts a manifest-only icon %s', (icon) => {
   manifest({ icon, files: ['legacy.svg'] })
-  file('legacy.svg', 'legacy')
+  file('legacy.svg', validSvg)
   expect(packageMetaProblems(root)).toEqual([])
+})
+
+it.each(['manifest', 'export'])('accepts SVG geometry and local references selected by %s', (selection) => {
+  manifest({
+    ...selection === 'manifest' ? { icon: './icon.svg' } : {},
+    exports: { './package.json': './package.json', './icon': './icon.svg' }, files: ['icon.svg'],
+  })
+  file('icon.svg', validSvg.replace('<path ', '<use href="#outline"/><path id="outline" '))
+  expect(packageMetaProblems(root)).toEqual([])
+})
+
+it.each([
+  ['malformed XML', validSvg.replace('</svg>', ''), 'well-formed XML'],
+  ['wrong root', validSvg.replaceAll('svg', 'g'), 'svg root'],
+  ['wrong namespace', validSvg.replace('http://www.w3.org/2000/svg', 'urn:other'), 'SVG namespace'],
+  ['toolbar canvas', validSvg.replace('0 0 36 36', '0 0 16 16'), 'viewBox="0 0 36 36"'],
+  ['toolbar width', validSvg.replace('width="36"', 'width="16"'), 'width="36"'],
+  ['toolbar height', validSvg.replace('height="36"', 'height="16"'), 'height="36"'],
+  ['missing definition', validSvg.replace('url(#ink)', 'url(#missing)'), 'must name a local id'],
+  ['external definition', validSvg.replace('url(#ink)', 'url(https://example.test/ink.svg#ink)'), 'must name a local id'],
+  ['external href', validSvg.replace('<path ', '<path href="https://example.test/icon.svg" '), 'must name a local id'],
+  ['missing href target', validSvg.replace('<path ', '<path href="#missing" '), 'must name a local id'],
+  ['duplicate ids', validSvg.replace('<path ', '<path id="ink" '), 'unique ids'],
+  ['event handler', validSvg.replace('<path ', '<path onload="run()" '), 'event handler onload'],
+  ['empty artwork', validSvg.replace(/<path[^>]+\/>/u, ''), 'must contain geometry'],
+  ...['script', 'style', 'image', 'foreignObject', 'text', 'animate', 'animateTransform', 'animateMotion', 'set']
+    .map(tag => [tag, validSvg.replace('</svg>', `<${tag} /></svg>`), 'self-contained geometry']),
+])('rejects SVG %s through metadata verification', (_name, source, diagnostic) => {
+  manifest({ icon: './icon.svg', files: ['icon.svg'] })
+  file('icon.svg', source)
+  const problems = packageMetaProblems(root)
+  expect(problems).toHaveLength(1)
+  expect(problems[0]).toContain(`${join(dir, 'icon.svg')}:`)
+  expect(problems[0]).toContain(diagnostic)
+})
+
+it('validates the selected ./icon SVG fallback without a manifest icon', () => {
+  manifest({ exports: { './package.json': './package.json', './icon': './icon.svg' }, files: ['icon.svg'] })
+  file('icon.svg', validSvg.replace('width="36"', 'width="16"'))
+  expect(packageMetaProblems(root)).toEqual([`${realpathSync(join(dir, 'icon.svg'))}: SVG icon must use width="36" height="36" viewBox="0 0 36 36"`])
+})
+
+it('validates the manifest icon instead of the lower-priority SVG export', () => {
+  manifest({ icon: './icon.svg', exports: { './package.json': './package.json', './icon': './fallback.svg' }, files: ['icon.svg', 'fallback.svg'] })
+  file('icon.svg', validSvg)
+  file('fallback.svg', 'not XML')
+  expect(packageMetaProblems(root)).toEqual([])
+})
+
+it.each(['png', 'jpg', 'jpeg', 'webp'].flatMap(extension => ['manifest', 'export'].map(selection => ({ extension, selection }))))(
+  'keeps $extension bytes opaque for $selection icons', ({ extension, selection }) => {
+    manifest({
+      ...selection === 'manifest' ? { icon: `./icon.${extension}` } : {},
+      exports: { './package.json': './package.json', './icon': `./icon.${extension}` }, files: [`icon.${extension}`],
+    })
+    file(`icon.${extension}`, 'opaque raster bytes')
+    expect(packageMetaProblems(root)).toEqual([])
+  },
+)
+
+it.each(['@local/demo', '@deepseek-ai/other'])('keeps nonofficial %s SVGs outside official artwork conventions', (name) => {
+  manifest({ name, icon: './icon.svg', files: ['icon.svg'] })
+  file('icon.svg', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"/>')
+  expect(packageMetaProblems(root)).toEqual([])
+})
+
+it('checks official artwork in named nested packages', () => {
+  manifest({ exports: { '.': './entry.js' }, files: ['nested'] })
+  json('nested/package.json', {
+    name: '@deepseek-ai/dsh-nested', exports: { './icon': './icon.svg' }, files: ['icon.svg'],
+  })
+  file('nested/icon.svg', validSvg.replace('width="36"', 'width="16"'))
+  expect(packageMetaProblems(root)).toEqual([
+    `${realpathSync(join(dir, 'nested/icon.svg'))}: SVG icon must use width="36" height="36" viewBox="0 0 36 36"`,
+  ])
 })
 
 it('reads the manifest image and still rejects an unresolvable lower-priority export', () => {
   manifest({ icon: './legacy.svg', files: ['legacy.svg'],
     exports: { './package.json': './package.json', './icon': '../invalid.svg' } })
-  file('legacy.svg', 'legacy')
+  file('legacy.svg', validSvg)
   expect(packageMetaProblems(root)).toEqual([`${join(dir, 'package.json')}: exports["./icon"] must resolve to a file`])
 })
 
@@ -62,7 +139,7 @@ it.each([['display'], ['display/manifest.json'], ['display/logo.svg']])
   manifest({ files,
     exports: { './package.json': './display/manifest.json' } })
   json('display/manifest.json', { icon: './logo.svg' })
-  file('display/logo.svg', 'legacy')
+  file('display/logo.svg', validSvg)
   const problems = packageMetaProblems(root).join('\n')
   if (files.includes('display')) expect(problems).toBe('')
   else expect(problems).toContain(`files must include ${files.includes('display/manifest.json') ? 'display/logo.svg' : 'display/manifest.json'}`)
@@ -71,15 +148,15 @@ it.each([['display'], ['display/manifest.json'], ['display/logo.svg']])
 it('requires the root manifest icon declaration to remain accessible', () => {
   manifest({ icon: './legacy.svg', files: ['legacy.svg'],
     exports: { './icon': './legacy.svg' } })
-  file('legacy.svg', 'legacy')
+  file('legacy.svg', validSvg)
   expect(packageMetaProblems(root).join('\n')).toContain('exports must expose its icon declaration')
 })
 
 it.each([null, false, '', './missing.svg'])('diagnoses legacy icon %j despite a valid fallback export', (icon) => {
   manifest({ icon, files: ['fallback.svg'],
     exports: { './package.json': './package.json', './icon': './fallback.svg' } })
-  file('fallback.svg', 'fallback')
-  expect(packageMetaProblems(root).join('\n')).toContain('Plugin metadata for @test/plugin:')
+  file('fallback.svg', validSvg)
+  expect(packageMetaProblems(root).join('\n')).toContain('Plugin metadata for @deepseek-ai/dsh-test-plugin:')
 })
 
 it.each([undefined, ['art'], ['art/*.webp'], ['./art/icon.webp']])('accepts an exported icon without other resources: %j', (files) => {
@@ -96,7 +173,7 @@ it.each([['lib'], ['art', '!art/icon.webp']])('rejects an exported icon omitted 
 
 it.each([false, 1, '', './icon.gif', '/tmp/icon.svg', './missing.png', '../outside.svg'])('validates exported icon targets: %j', (icon) => {
   manifest({ exports: { './icon': icon } })
-  expect(packageMetaProblems(root).join('\n')).toMatch(/Plugin metadata for @test\/plugin:|exports\["\.\/icon"\] must resolve to a file/u)
+  expect(packageMetaProblems(root).join('\n')).toMatch(/Plugin metadata for @deepseek-ai\/dsh-test-plugin:|exports\["\.\/icon"\] must resolve to a file/u)
 })
 
 it.each([['assets'], ['lib']])('checks publication of the Node-selected conditional icon: %j', (...files) => {
@@ -116,8 +193,8 @@ it('ignores package.json exported at a subpath plugin address', () => {
 it.each([['search.svg'], ['lib']])('reads and publishes a subpath icon export: %j', (...files) => {
   manifest({ icon: './root.svg', exports: { './package.json': './package.json', './search': './search.js', './search/icon': './search.svg' },
     files: ['root.svg', ...files] })
-  file('root.svg', 'root')
-  file('search.svg', 'search')
+  file('root.svg', validSvg)
+  file('search.svg', validSvg)
   const problems = packageMetaProblems(root)
   if (files.includes('search.svg')) expect(problems).toEqual([])
   else expect(problems).toEqual([`${join(dir, 'package.json')}: files must include search.svg`])
@@ -165,8 +242,8 @@ it.each([
     files: ['locale', 'icon.svg'], ...fields,
   })
   json('examples/nested/locale/en.json', { meta: { title } })
-  file('examples/nested/icon.svg', '<svg/>')
-  file('examples/nested/fallback.svg', '<svg/>')
+  file('examples/nested/icon.svg', validSvg)
+  file('examples/nested/fallback.svg', validSvg)
   const problems = packageMetaProblems(root)
   if (expected === undefined) expect(problems).toEqual([])
   else expect(problems.join('\n')).toContain(expected)
@@ -255,7 +332,7 @@ it('does not read built locale JSON while checking a source icon declaration', (
     icon: './icon.svg', files: ['icon.svg'],
     exports: { './package.json': './package.json', './locale/en.json': './lib/locale/en.json' },
   })
-  file('icon.svg', '<svg/>')
+  file('icon.svg', validSvg)
   file('lib/locale/en.json', '{')
   json('locale/en.json', { meta: { title: 'Plugin' } })
   const problems = packageMetaProblems(root).join('\n')
@@ -270,7 +347,7 @@ it.each(['lib', 'tests'])('rejects an icon declaration when its only locale is e
   })
   file(`${directory}/locale/en.json`, '{}')
   const problems = packageMetaProblems(root).join('\n')
-  expect(problems).toContain('@test/plugin: icon metadata requires locale resources to resolve to source JSON')
+  expect(problems).toContain('@deepseek-ai/dsh-test-plugin: icon metadata requires locale resources to resolve to source JSON')
   expect(problems).not.toContain('Plugin metadata for')
 })
 
@@ -594,7 +671,7 @@ it('reports metadata failures from more than one workspace package', () => {
   json('locale/en.json', { meta: { title: 'Second' } })
   json('locale/zh.json', { meta: { description: '' } })
   const problems = packageMetaProblems(root).join('\n')
-  expect(problems).toContain('@test/plugin')
+  expect(problems).toContain('@deepseek-ai/dsh-test-plugin')
   expect(problems).toContain('@test/second')
 })
 
@@ -603,6 +680,6 @@ it.each([[], ['locale']])('rejects a display manifest in build output without re
   if (locales.length > 0) json('locale/en.json', { meta: { title: 'Plugin' } })
   file('lib/display.json', '{')
   const problems = packageMetaProblems(root).join('\n')
-  expect(problems).toContain('@test/plugin/package.json: display manifest must resolve to source JSON')
+  expect(problems).toContain('@deepseek-ai/dsh-test-plugin/package.json: display manifest must resolve to source JSON')
   expect(problems).not.toContain('Plugin metadata for')
 })

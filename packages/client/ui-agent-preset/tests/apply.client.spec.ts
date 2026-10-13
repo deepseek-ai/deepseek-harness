@@ -72,7 +72,6 @@ async function bench(options: {
   describeGate?: Promise<undefined>
   presets?: AgentPresetRow[]
   developerToolsEnabled?: boolean
-  memory?: boolean
 } = {}) {
   const ctx = new Context()
   // The host's answer, mutable so a spec can move the default the way the
@@ -138,7 +137,6 @@ async function bench(options: {
 
   }
   const remote = new TestRemote(ctx, { settings })
-  if (options.memory === true) remote.$host = { home: undefined, isLoopback: false }
   // The roster and the switch are the AgentPresets Remote namespace; the
   // shared double carries no generated namespaces, so this spec stages its
   // own. Registered twice on purpose: the nested key satisfies the plugin's
@@ -174,9 +172,9 @@ async function bench(options: {
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
   if (options.describeGate === undefined) {
     await vi.waitFor(() => {
-      expect(ctx.configForms.developerTools.enabled.getSnapshot()).toBe(options.memory === true ? true : developerToolsEnabled)
+      expect(ctx.configForms.developerTools.enabled.getSnapshot()).toBe(developerToolsEnabled)
     })
-    if (options.memory !== true) await vi.waitFor(() => { expect(ctx.configForms.get('ui-settings').getSnapshot().status).toBe('ready') })
+    await vi.waitFor(() => { expect(ctx.configForms.get('ui-settings').getSnapshot().status).toBe('ready') })
   }
   /** Publish a new Developer tools choice the way the settings mirror does. */
   const setDeveloperTools = async (enabled: boolean): Promise<void> => {
@@ -214,7 +212,7 @@ function declareConversation(slots: SlotRegistry): () => void {
 
 /** A Workspace UI double recording new-session starts. */
 function uiWorkspaceDouble() {
-  const starts: unknown[] = []
+  const starts: { workspaceId: unknown; options: unknown }[] = []
   return {
     starts,
     startSession: (workspaceId?: unknown, options?: unknown) => { starts.push({ workspaceId, options }) },
@@ -933,7 +931,6 @@ describe('ui-agent-preset apply', () => {
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     expect(b.calls.filter(call => call.startsWith('settings:'))).toEqual([])
     await b.setDeveloperTools(false)
-    expect(b.ctx.configForms.get('agent-preset-registry').getSnapshot()).toMatchObject({ status: 'ready', mode: 'host', writable: true, revision: 0 })
     await vi.waitFor(() => { expect(b.calls.filter(call => call.startsWith('settings:'))).toEqual(['settings:{"selectedDefault":"standard"}']) })
     await b.ctx.fiber.dispose()
   })
@@ -1030,36 +1027,6 @@ describe('ui-agent-preset apply', () => {
     await b.ctx.fiber.dispose()
   })
 
-  it.each(['ptc', 'minimal'])('clears a browser-local staged %s choice without rewriting the Host default', async (preset) => {
-    const b = await bench({ memory: true, presets: [
-      ...ROSTER_MOVED.value.presets, { id: 'ptc', isDefault: false },
-    ] })
-    declareRoot(b.slots)
-    declareConversation(b.slots)
-    b.ctx.provide('conversation', {} as never)
-    const state: { current?: string; byId: Record<string, { id: string; blank: boolean }> } = {
-      byId: { s1: { id: 's1', blank: true } },
-    }
-    const sessions = sessionsDouble(b.ctx, state)
-    b.ctx.provide('sessions', sessions as never)
-    b.ctx.provide('uiWorkspace', uiWorkspaceDouble() as never)
-    await b.ctx.plugin({ inject: [...inject], apply }).await()
-    const injectSeat = b.slots.entries('conversation.hero.agentPreset')[0]!
-      .inject as (sessionId?: SessionId) => AgentPresetSeatInjected & Record<string, unknown>
-    const chip = injectSeat()
-    await chip.load()
-    await chip.select(preset)
-    await b.ctx.configForms.developerTools.setEnabled(false)
-    const section = (b.slots.entries('settings.section')[0]!.inject as () => AgentPresetSectionInjected & Record<string, unknown>)()
-    await section.load()
-    expect(section.hooks.agentPresetSection.getSnapshot().rows.find(row => row.isDefault)?.id).toBe('minimal')
-    expect(b.calls.filter(call => call.startsWith('settings:'))).toEqual([])
-    state.current = 's1'
-    await injectSeat(SessionId('s1')).load()
-    sessions.notify()
-    expect(b.calls.filter(call => call.startsWith('select:'))).toEqual([])
-    await b.ctx.fiber.dispose()
-  })
 
   it('loads the header label from the shared roster store', async () => {
     const { ctx, slots } = await bench()
@@ -1099,7 +1066,7 @@ describe('ui-agent-preset apply', () => {
     // new-session flow began.
     expect(section.startCreatorDraft).toBeDefined()
     expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('cordis')
-    expect(uiWorkspace.starts).toHaveLength(1)
+    expect(uiWorkspace.starts).toEqual([{ workspaceId: undefined, options: { clearPreviousDraft: false, agentPreset: 'cordis' } }])
 
     // A cross-screen stage carries the introduce cue; the chip acknowledges
     // it once, and a repeat acknowledgement leaves the snapshot untouched.
@@ -1112,15 +1079,16 @@ describe('ui-agent-preset apply', () => {
     conversation()
   })
 
-  it('applies the creator preset to an existing blank main Session', async () => {
+  it('lets the new-session flow compose the creator preset on a blank main Session', async () => {
     const { ctx, slots, calls } = await bench()
     declareRoot(slots)
     const conversation = declareConversation(slots)
     ctx.provide('conversation', {} as never)
-    const sessions = sessionsDouble(ctx, {
+    const state = {
       current: 's1',
       byId: { s1: { id: 's1', blank: true, projectionValues: { agentPreset: 'standard' } } },
-    })
+    }
+    const sessions = sessionsDouble(ctx, state)
     ctx.provide('sessions', sessions as never)
     const uiWorkspace = uiWorkspaceDouble()
     ctx.provide('uiWorkspace', uiWorkspace as never)
@@ -1133,10 +1101,13 @@ describe('ui-agent-preset apply', () => {
     await seat.load()
     await section.load()
     section.startCreatorDraft?.()
+    expect(uiWorkspace.starts).toEqual([{ workspaceId: undefined, options: { clearPreviousDraft: false, agentPreset: 'cordis' } }])
 
-    await vi.waitFor(() => { expect(calls).toContain('select:cordis') })
-    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('cordis')
-    expect(uiWorkspace.starts).toEqual([{ workspaceId: undefined, options: { clearPreviousDraft: false } }])
+    // The Host composes the reused Session; the chip only follows its projection.
+    state.byId.s1 = { id: 's1', blank: true, projectionValues: { agentPreset: 'cordis' } }
+    sessions.notify()
+    await vi.waitFor(() => { expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('cordis') })
+    expect(calls).not.toContain('select:cordis')
     conversation()
   })
 

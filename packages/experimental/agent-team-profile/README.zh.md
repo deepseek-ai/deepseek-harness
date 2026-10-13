@@ -95,7 +95,7 @@ Team 策略与 schema 由 [`@deepseek-ai/dsh-experimental-tool-agent-team`](../t
 
 #### KV Cache 影响
 
-只要 bundle patch、Team identity 与配置的工具 schema 不变，本 bundle 的 composition 就保持前缀稳定。
+只要 bundle patch 与配置的工具 schema 不变，共享 system prompt 和工具 schema 就保持前缀稳定。Team 身份通过 runtime-context 快照追加；[Team 工具](../tool-agent-team/README.zh.md#model-experience)定义快照复用方式。
 
 ## 已知限制与延期工作
 

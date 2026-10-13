@@ -197,14 +197,11 @@
 
     # Web glue owned by this bundle: resolves the built frontend dist (an
     # assembly fact of dsh-web-app, never user config), mounts the
-    # frontend-static fallback owner, registers the web-surface prompt
-    # section and the bash runtime variable, prints the URL line, and opens the
-    # canonical URL after the full Loader tree settles and the required-
-    # entry audit passes. Invocation-only values come from the webStartup
-    # provider; the advertised application URL is this row's `publicUrl`,
-    # otherwise the bind-address URL. A complete agent-preset persona
-    # suppresses the prompt section for that agent while retaining the
-    # host-owned shell variable.
+    # frontend-static fallback owner, registers the bash runtime variable,
+    # prints the URL line, and opens the canonical URL after the full Loader
+    # tree settles and the required-entry audit passes. Invocation-only values
+    # come from the webStartup provider; the advertised application URL is
+    # this row's `publicUrl`, otherwise the bind-address URL.
     - id: web-runtime
       name: '@deepseek-ai/dsh-web-app'
       inject: [webStartup]
@@ -213,6 +210,14 @@
         printUrl: true
         publicUrl: !!js ctx.webStartup.publicUrl
         surfaceContext: true
+
+    # Model context for an agent that inspects or extends the harness serving
+    # this GUI: value-free prompt sections plus the current checkout and GUI
+    # URL as optional runtime context. A complete agent-preset persona replaces
+    # the sections, and a persona that suppresses optional runtime context
+    # also drops the two value lines.
+    - id: harness-dev-context
+      name: '@deepseek-ai/dsh-harness-dev-context'
 
     # The client-plugin reload chain, always mounted: it is idle until a
     # rebuild watcher (pnpm run dev:web) actually rewrites client bundles. It
@@ -386,6 +391,10 @@
     - id: ui-reference
       name: '@deepseek-ai/dsh-client-ui-reference'
 
+    # Display masking for recognized credentials in sent user text; remove
+    # this entry to draw credentials as written.
+    - id: ui-secret-mask
+      name: '@deepseek-ai/dsh-client-ui-secret-mask'
 
     # Background jobs: the session-header roster with on-demand streaming
     # record panels over the session job-output service.

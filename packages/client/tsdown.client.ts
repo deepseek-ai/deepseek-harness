@@ -11,7 +11,7 @@
  * inputs, including origins recorded by chained source maps.
  */
 import { readFile, stat, utimes } from 'node:fs/promises'
-import { existsSync, globSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire, isBuiltin } from 'node:module'
 import { basename, dirname, isAbsolute, relative, resolve as resolvePath, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -100,22 +100,25 @@ function browserSourcePath(source: string, sourcemapPath: string): string {
  * the package without lib/index.js and the host Loader cannot import its node
  * half. The Client build consumes `lib/types` and chains those tsc maps, with
  * original source content, into the standalone plugin map.
- * @param id - plugin id (package name), stamped into the __ModuleLoader__.load
- * handoff and onto the injected style tags.
+ * @param packageDir - the package's own directory, normally the config's
+ * `import.meta.dirname`. Its `package.json` name is the plugin id stamped into
+ * the __ModuleLoader__.load handoff and onto the injected style tags.
  * @param libEntry - node-half entries.
  * @param options - phase placement, lib overrides, companion Node configs, and optional per-file Client banner.
  * @returns ENV-selected tsdown config for the current build face.
+ * @throws {Error} when `<packageDir>/package.json` is unreadable or declares no name.
  */
 export function clientBundle(
-  id: string,
+  packageDir: string,
   libEntry: readonly string[],
   options: ClientBundleOptions = {},
 ): BuildFaceConfig {
-  const lib = clientLibraryConfig(id, libEntry, options.lib)
+  const manifest = readPackageManifest(packageDir)
+  const lib = clientLibraryConfig(manifest, libEntry, options.lib)
   return ({ env }) => {
     const face = buildFace(env?.DSH_BUILD_FACE)
     const clientEntry = face === undefined ? 'src/client/index.ts' : 'lib/types/client/index.js'
-    const client = clientConfig(id, clientEntry, options.clientBanner)
+    const client = clientConfig(manifest, clientEntry, options.clientBanner)
     const node = [lib, ...(options.companions ?? [])]
     if (face === 'host') return options.hostPhase === true ? node : [SKIP_WORKSPACE_BUILD]
     if (face === 'client') {
@@ -147,13 +150,16 @@ export function clientBundle(
  * 4. stylesheets ship with the package: a relative `.css` import survives as a
  *    relative external and the sheet is emitted under `lib/` at its
  *    `src`-relative path, so vite stays the only owner of class hashing.
- * @param id - package name, used in tsdown diagnostics.
+ * @param packageDir - the package's own directory, normally the config's
+ * `import.meta.dirname`; its `package.json` name is used in tsdown diagnostics.
  * @param libEntry - emitted JavaScript entries consumed from `lib/types`, one
  * bundle each: a multi-entry build would emit a hash-named shared chunk that
  * the exact `files` list cannot publish.
  * @returns ENV-selected tsdown config for the Client build face.
+ * @throws {Error} when `<packageDir>/package.json` is unreadable or declares no name.
  */
-export function staticLinked(id: string, libEntry: readonly string[]): BuildFaceConfig {
+export function staticLinked(packageDir: string, libEntry: readonly string[]): BuildFaceConfig {
+  const id = readPackageManifest(packageDir).name
   // Each entry names its own output file, so two entries with the same basename
   // would overwrite one artifact instead of emitting two.
   const names = new Set(libEntry.map(entry => basename(entry, '.js')))
@@ -177,12 +183,14 @@ export function isStaticLinkedConfig(configs: readonly UserConfig[]): boolean {
 
 /**
  * Build a Client-only Node library during the Client pass.
- * @param id - Package name used in tsdown diagnostics.
+ * @param packageDir - The package's own directory, normally the config's
+ * `import.meta.dirname`; its `package.json` name is used in tsdown diagnostics.
  * @param libEntry - Emitted JavaScript entries consumed from `lib/types`.
  * @returns ENV-selected tsdown config for the Client build face.
+ * @throws {Error} when `<packageDir>/package.json` is unreadable or declares no name.
  */
-export function clientLibrary(id: string, libEntry: readonly string[]): BuildFaceConfig {
-  const lib = clientLibraryConfig(id, libEntry)
+export function clientLibrary(packageDir: string, libEntry: readonly string[]): BuildFaceConfig {
+  const lib = clientLibraryConfig(readPackageManifest(packageDir), libEntry)
   return clientOnly([lib])
 }
 
@@ -218,14 +226,15 @@ function buildFace(value: unknown): BuildFace {
 }
 
 function clientLibraryConfig(
-  id: string,
+  manifest: PackageManifest,
   libEntry: readonly string[],
   overrides: UserConfig = {},
 ): UserConfig {
+  let externals: readonly RegExp[] | undefined
   const isProductionDependency = (specifier: string): boolean =>
-    matchesSpecifier(productionExternals(id), specifier)
+    matchesSpecifier(externals ??= productionExternals(manifest), specifier)
   return {
-    name: id,
+    name: manifest.name,
     entry: [...libEntry],
     outDir: 'lib',
     format: ['esm'],
@@ -330,9 +339,10 @@ function stylesheetAsset(source: string, importer: string): { readonly file: str
   return { file, fileName: file.slice(boundary + SOURCE_MARKER.length).split(sep).join('/') }
 }
 
-/** The manifest fields the build faces read to state their own module edges. */
-interface WorkspaceManifest {
-  readonly name?: string
+/** The manifest fields the build faces read to name the package and state its own module edges. */
+interface PackageManifest {
+  /** Package name: the tsdown config name, the Client loader id, and the diagnostic subject. */
+  readonly name: string
   /** Sections a real install materializes on disk next to the built package. */
   readonly dependencies?: Record<string, string>
   readonly peerDependencies?: Record<string, string>
@@ -340,52 +350,44 @@ interface WorkspaceManifest {
   readonly dsh?: { readonly client?: { readonly external?: unknown } }
 }
 
-const manifestCache = new Map<string, WorkspaceManifest>()
-const productionExternalCache = new Map<string, readonly RegExp[]>()
-const clientExternalCache = new Map<string, ReadonlySet<string>>()
-
 /**
- * Read one workspace package's manifest. Located by package name rather than by
- * cwd, because tsdown evaluates every package config with the repository root as
- * `process.cwd()` during a workspace build. Callers read it on the first
- * resolveId of a build, not while a config is built, so selecting a build face
- * never touches a manifest.
- * @param id - package name, as spelled at the preset call site.
+ * Read the manifest of the package whose config calls a preset. The caller
+ * passes its directory because tsdown evaluates every package config with the
+ * repository root as `process.cwd()` during a workspace build.
+ * @param packageDir - the package's own directory.
  * @returns the parsed manifest.
- * @throws {Error} when no workspace package declares that name.
+ * @throws {Error} when `package.json` is unreadable, is not JSON, or declares no string name.
  */
-function workspaceManifest(id: string): WorkspaceManifest {
-  const cached = manifestCache.get(id)
-  if (cached !== undefined) return cached
-  for (const manifestPath of globSync('packages/*/*/package.json', { cwd: REPOSITORY_ROOT })) {
-    const manifest = JSON.parse(
-      readFileSync(resolvePath(REPOSITORY_ROOT, manifestPath), 'utf8'),
-    ) as WorkspaceManifest
-    if (manifest.name !== id) continue
-    manifestCache.set(id, manifest)
-    return manifest
+function readPackageManifest(packageDir: string): PackageManifest {
+  const manifestPath = resolvePath(packageDir, 'package.json')
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  } catch (error) {
+    throw new Error(
+      `tsdown: cannot read ${manifestPath}; pass the package directory (the import.meta.dirname of its tsdown.config.ts)`,
+      { cause: error },
+    )
   }
-  throw new Error(`tsdown: no packages/*/*/package.json declares the name ${id}`)
+  if (typeof parsed !== 'object' || parsed === null || !('name' in parsed) || typeof parsed.name !== 'string') {
+    throw new Error(`tsdown: ${manifestPath} declares no string package name`)
+  }
+  return parsed as PackageManifest
 }
 
 /**
  * External patterns for one package's Node half: its own production sections,
  * subpaths included.
- * @param id - package name, as spelled at the preset call site.
+ * @param manifest - the package's own manifest.
  * @returns one `^name(/|$)` pattern per production dependency, name-sorted.
  */
-function productionExternals(id: string): readonly RegExp[] {
-  const cached = productionExternalCache.get(id)
-  if (cached !== undefined) return cached
-  const manifest = workspaceManifest(id)
+function productionExternals(manifest: PackageManifest): readonly RegExp[] {
   const names = new Set([
     ...Object.keys(manifest.dependencies ?? {}),
     ...Object.keys(manifest.peerDependencies ?? {}),
     ...Object.keys(manifest.optionalDependencies ?? {}),
   ])
-  const patterns = [...names].sort().map(name => new RegExp(`^${escapeSpecifier(name)}(/|$)`))
-  productionExternalCache.set(id, patterns)
-  return patterns
+  return [...names].sort().map(name => new RegExp(`^${escapeSpecifier(name)}(/|$)`))
 }
 
 /**
@@ -408,19 +410,15 @@ export function requestedExternals(
  * Module-table specifiers one package requests. The shell baseline is implicit
  * for every dynamic bundle; `dsh.client.external` only adds package-specific
  * dynamic rows or subpaths.
- * @param id - package name, as spelled at the preset call site.
+ * @param manifest - the package's own manifest, whose `dsh.client` declaration adds requests.
  * @returns the baseline plus the package's explicit requests.
  */
-function clientExternals(id: string): ReadonlySet<string> {
-  const cached = clientExternalCache.get(id)
-  if (cached !== undefined) return cached
-  const externals = new Set([
+function clientExternals(manifest: PackageManifest): ReadonlySet<string> {
+  return new Set([
     ...PLATFORM_MODULES,
     ...PRELOADED_CLIENT_EXTERNALS,
-    ...requestedExternals(id, workspaceManifest(id).dsh?.client ?? {}),
+    ...requestedExternals(manifest.name, manifest.dsh?.client ?? {}),
   ])
-  clientExternalCache.set(id, externals)
-  return externals
 }
 
 /** Escape a package name for literal use inside a RegExp source. */
@@ -469,8 +467,10 @@ function asyncChunkRequirePlugin(): TsdownPlugin {
   }
 }
 
-function clientConfig(id: string, entry: string, clientBanner?: (fileName: string) => string | undefined): UserConfig {
-  const isRequested = (specifier: string): boolean => clientExternals(id).has(specifier)
+function clientConfig(manifest: PackageManifest, entry: string, clientBanner?: (fileName: string) => string | undefined): UserConfig {
+  const id = manifest.name
+  let requested: ReadonlySet<string> | undefined
+  const isRequested = (specifier: string): boolean => (requested ??= clientExternals(manifest)).has(specifier)
   const isolation = clientInputIsolation(id)
   return {
     name: `${id}/client`,
@@ -490,7 +490,7 @@ function clientConfig(id: string, entry: string, clientBanner?: (fileName: strin
     deps: {
       neverBundle: isRequested,
       // Anything NOT requested from the loader module table must inline
-      // (wire/type layers, zod, clsx — every non-shared dep). A require() the
+      // (wire/type layers, clsx — every non-shared dep). A require() the
       // table cannot answer is a guaranteed runtime throw, so the rule is the
       // package's own request list: requested specifiers stay imports,
       // everything else is bundled.

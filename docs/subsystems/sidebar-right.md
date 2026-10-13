@@ -46,6 +46,8 @@ Tab identity is the pair `(kind, address)`: the registry's claim uses the addres
 | `keepMounted` | Optional lazy retention of visited bodies across hiding, Session switches and docking; the owning View holds the Session reference. |
 | `guide` | Optional entry boxes for the guide page: `{ order, title(), description?(), icon? }`. Picking a box opens the contributing type as a page; omit to stay off the page. |
 
+Whole-address patterns match the raw address: picomatch globstar (`**`) excludes standalone `.` and `..` segments even with `dot: true`, which includes dotfiles but does not change that exclusion. Resource-specific code parses addresses; the Host enforces file-read permissions.
+
 Routing is a ranked claim. `candidates(address)` ranks the types whose patterns match and whose `canOpen` does not veto: by band, then by the length of the longest matched pattern, then by registration order. `claim(address, kind?)` picks the first candidate, or the named `kind` outright — its globs are skipped, its `canOpen` still applies — and returns `{ kind, contentId: address, title }`. An address no type claims throws: it is a wiring mistake, not a user error.
 
 One `kind` may carry one `builtin` and one `extension` registration at the same time. The extension is the one in force for claims, `get(kind)`, `openTab(kind)`, and the guide page, and the seat finds a tab's body and title under the definition in force's `id`, so no slot priority is involved; when the extension unregisters, the builtin resumes. Every other collision on a kind, and every duplicate `id`, throws.

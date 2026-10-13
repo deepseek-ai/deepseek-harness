@@ -18,14 +18,20 @@
   en: 949dec3bb987644a
   zh: 0ed333a6067465dc
 /deepseek-ai-dsh-typert-generator/use-this-package/publishing-typert-artifacts-from-a-package:
-  en: b8720f6ac186a8e8
-  zh: 3e04a4c1bebc2cf4
+  en: c7078becc8f12609
+  zh: 4b8838b559ecb677
+/deepseek-ai-dsh-typert-generator/use-this-package/ordinary-remote-metadata:
+  en: 6bb456bb03fc6617
+  zh: 029407c373b8e6a6
 /deepseek-ai-dsh-typert-generator/use-this-package/analyzing-a-workspace-statically:
-  en: 4ea0e4977cefa39d
-  zh: 41bdb6047bc79524
+  en: 8227097859169cdf
+  zh: 249790ed62e8558a
 /deepseek-ai-dsh-typert-generator/use-this-package/running-generation-inside-a-tsdown-build:
-  en: cc3f7d23739380f6
-  zh: 864d15088f581271
+  en: ebcb4850a5620d93
+  zh: 55f6f54265830f28
+/deepseek-ai-dsh-typert-generator/use-this-package/generating-without-a-bundler:
+  en: e1afb26aea87fe46
+  zh: ed3cdfde78d87825
 /deepseek-ai-dsh-typert-generator/understand-the-implementation:
   en: b90762df7a978580
   zh: 123ab225a2b5df2a
@@ -33,8 +39,8 @@
   en: 0a515742229bf442
   zh: dfd2c5eddd943af9
 /deepseek-ai-dsh-typert-generator/understand-the-implementation/source-map:
-  en: 783dec50106bcabb
-  zh: 2627f55ce69a1a2c
+  en: 89d9205446b496a6
+  zh: d7bcae876c1905ec
 /deepseek-ai-dsh-typert-generator/understand-the-implementation/analysis-and-faces:
   en: a844aafcafbc27b6
   zh: 8efe7d472361bbc2
@@ -54,8 +60,8 @@
   en: 09310605f7d136d4
   zh: 3535ec7eba83b90f
 /deepseek-ai-dsh-typert-generator/known-limitations-and-deferred-work:
-  en: f3b1002133fe8736
-  zh: e8d5fecd10db5e3a
+  en: fdc6707a82ceb4c3
+  zh: 91fb8cab9fcf56bc
 /deepseek-ai-dsh-typert-generator/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

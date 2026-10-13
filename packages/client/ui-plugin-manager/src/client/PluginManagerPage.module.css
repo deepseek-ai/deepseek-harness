@@ -22,6 +22,7 @@
 
 .pageHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
@@ -37,6 +38,11 @@
    top strip drags without a frame band. */
 :global([data-platform='darwin']) .pageHead {
   padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+}
+
+.pageHeading {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .pageTitle {
@@ -66,10 +72,11 @@
 
 .toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex: none;
   align-items: center;
   justify-content: flex-end;
   gap: 16px;
+  white-space: nowrap;
 }
 
 .addMenu {

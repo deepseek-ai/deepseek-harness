@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+`session/resume` 在初始化后接受持久化的 `{ sessionId }`，待其 Agent 就绪后返回 `{}`。它通过 `agents.resume()` 加载历史、修复最后一个被中断的轮次，并保留存储的起始目录和当前有效目录，同时应用初始化时选定的模型路由。它不发送新输入。会话缺失、不可读、不兼容或被占用时，请求失败且不创建替代会话。对正在恢复的标识发送提示词时，会等待恢复完成；shutdown 会等待进行中的恢复并释放其 Agent。历史事件保留在日志中，不会作为新通知重新发送。
+
 `session/working-directory/get` 接收 `{ sessionId }`；`session/working-directory/set` 接收 `{ sessionId, path }`。两者均返回 `{ cwd }`，并可创建未知 Session，而不启动模型轮次。读取通过工作目录服务恢复缺失目录；修改保留起始目录元数据与权限，并通过已记录的用户上下文告知模型。
 
 当运行时必须服务 SDK 客户端时挂载本插件：把它加入组合了 agent 服务的 `cordis.yml`，启动运行时，客户端即可通过 stdio 连接。常用路径是显式的——插件需要 `agents` 服务；其余每个能力都来自外围插件树。

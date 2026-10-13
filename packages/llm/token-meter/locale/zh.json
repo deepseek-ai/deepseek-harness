@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Token 计量",
+    "description": "估算模型上下文的 Token 用量，供压缩等功能判断预算。"
+  }
+}

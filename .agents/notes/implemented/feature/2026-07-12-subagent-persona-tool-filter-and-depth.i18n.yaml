@@ -9,29 +9,29 @@
   en: 311bc04b9c36ab53
   zh: 0c52e6493e9350a5
 /agent-note-configure-subagent-persona-tool-visibility-and-depth/decision:
-  en: 79b3fcfaaaaccf9e
-  zh: 0287bfb41c7b9707
+  en: 45111f900708aaf9
+  zh: e75bed4951516963
 /agent-note-configure-subagent-persona-tool-visibility-and-depth/decision/persona-is-a-scoped-shadow:
-  en: 8b299c99d26aa5c3
-  zh: 6956efbd236cef8e
+  en: f9ee31a1fdcdd38f
+  zh: c9d05721cef80659
 /agent-note-configure-subagent-persona-tool-visibility-and-depth/decision/tool-filtering-is-one-live-global-view-rule:
   en: a9fe46283ea28722
   zh: 7b7d1be7c070b893
 /agent-note-configure-subagent-persona-tool-visibility-and-depth/decision/depth-is-an-absolute-tree-cap:
-  en: 9145bec4e3f7eb5b
-  zh: 986276925cb064d9
+  en: c1d92ec60342c8b7
+  zh: 063c9eaba331312b
 /agent-note-configure-subagent-persona-tool-visibility-and-depth/decision/capability-gating-keeps-providers-honest:
-  en: 5334afafefdb0f59
-  zh: 7e96c9a08bbc3d1a
+  en: 1669c3372b728fc8
+  zh: 349ee461c9307811
 /agent-note-configure-subagent-persona-tool-visibility-and-depth/decision/unpublished-setup-makes-the-first-request-correct:
-  en: 3c988dfff07c8da3
-  zh: 8ce2fbcc438e7dd8
+  en: 32b0648b901c49ad
+  zh: b72f29a8be987479
 /agent-note-configure-subagent-persona-tool-visibility-and-depth/visibility-is-not-authority:
   en: d0db5310a87ff8e4
   zh: 4b9f502238cd4bae
 /agent-note-configure-subagent-persona-tool-visibility-and-depth/alternatives-considered:
-  en: 78ae41331d8fcc3e
-  zh: a93ee10b3e30c267
+  en: cf5006aa2b345a37
+  zh: f26a9a1ab9a83a46
 /agent-note-configure-subagent-persona-tool-visibility-and-depth/consequences:
-  en: d5f05d63b7a01dd8
-  zh: f0be1e88b06d8cc9
+  en: 58a53e46a6ce8307
+  zh: 6e552d8b6ff4b186

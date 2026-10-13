@@ -13,6 +13,7 @@ import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { createPortal } from 'react-dom'
 import { $getRoot, $isTextNode } from 'lexical'
 import {
   bindSnapshotSelector, conversationSnapshot as conversationFixture, makeTranslate, RemoteError,
@@ -283,6 +284,86 @@ function writeDraft(shell: SessionInputShell, text: string): void {
 }
 
 describe('composer focus handoff', () => {
+  it.each(['hero', 'composer'] as const)('focuses the %s editor when its card background is pressed', (variant) => {
+    const { view, shell, textarea } = bench({ variant })
+    writeDraft(shell, 'draft text')
+    textarea.blur()
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+    const card = view.container.querySelector('[data-composer-card]')!
+
+    expect(fireEvent.mouseDown(card, { button: 0 })).toBe(false)
+    expect(document.activeElement).toBe(textarea)
+    expect(lexicalFocus).toHaveBeenCalled()
+  })
+
+  it('leaves editor selection, scrollport gestures, controls and canceled presses to their owners', () => {
+    const { view, shell, textarea } = bench({
+      modelEntry: <button><span>Model</span></button>,
+      leftItems: <span onMouseDown={(event) => { event.preventDefault() }}>Canceled</span>,
+    })
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+    const scrollport = view.container.querySelector('[data-input-scroll]')!
+    const card = view.container.querySelector('[data-composer-card]')!
+
+    expect(fireEvent.mouseDown(textarea, { button: 0 })).toBe(true)
+    expect(fireEvent.mouseDown(scrollport, { button: 0 })).toBe(true)
+    expect(fireEvent.mouseDown(view.getByText('Model'), { button: 0 })).toBe(true)
+    expect(fireEvent.mouseDown(view.getByText('Canceled'), { button: 0 })).toBe(false)
+    expect(fireEvent.mouseDown(card, { button: 2 })).toBe(true)
+    expect(lexicalFocus).not.toHaveBeenCalled()
+  })
+
+  it('leaves embedded overlay options, status text and scrollbars with the focused search field', () => {
+    const { view, shell } = bench({
+      overlay: <div>
+        <input aria-label="Filter models" />
+        <div role="listbox"><div role="option" aria-selected={false}>Model option</div></div>
+        <div>Loading models</div>
+      </div>,
+    })
+    const search = view.getByRole('textbox', { name: 'Filter models' })
+    act(() => { search.focus() })
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+
+    for (const target of [
+      view.getByRole('option'), view.getByRole('listbox'), view.getByText('Loading models'),
+      view.container.querySelector('[data-composer-overlay]')!,
+    ]) {
+      expect(fireEvent.mouseDown(target, { button: 0 })).toBe(true)
+      expect(document.activeElement).toBe(search)
+    }
+    expect(lexicalFocus).not.toHaveBeenCalled()
+  })
+
+  it('keeps a focused editor\'s native caret without restoring an older Lexical selection', () => {
+    const { view, shell, textarea } = bench()
+    act(() => { shell.focus() })
+    expect(document.activeElement).toBe(textarea)
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+
+    expect(fireEvent.mouseDown(view.container.querySelector('[data-composer-card]')!, { button: 0 })).toBe(false)
+    expect(document.activeElement).toBe(textarea)
+    expect(lexicalFocus).not.toHaveBeenCalled()
+  })
+
+  it('leaves portaled menu background presses outside the card alone', () => {
+    const { view, shell } = bench({ modelEntry: createPortal(<div>Menu background</div>, document.body) })
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+
+    expect(fireEvent.mouseDown(view.getByText('Menu background'), { button: 0 })).toBe(true)
+    expect(lexicalFocus).not.toHaveBeenCalled()
+  })
+
+  it.each([{ inert: true }, { disabled: true }, { blocked: { reason: 'unavailable' } }])(
+    'does not focus an unavailable composer: %j', (options) => {
+      const { view, shell } = bench(options)
+      const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+
+      expect(fireEvent.mouseDown(view.container.querySelector('[data-composer-card]')!, { button: 0 })).toBe(true)
+      expect(lexicalFocus).not.toHaveBeenCalled()
+    },
+  )
+
   it('focus() returns the keyboard to the editor through Lexical, not a bare DOM focus', () => {
     const { shell, textarea } = bench()
     writeDraft(shell, 'draft text')

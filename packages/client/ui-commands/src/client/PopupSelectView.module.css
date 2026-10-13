@@ -9,7 +9,7 @@
   right: 0;
   box-sizing: border-box;
   z-index: 100;
-  padding: 3px;
+  padding: 4px;
   display: flex;
   flex-direction: column;
   min-width: min(220px, 100%);

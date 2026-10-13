@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-ssh-helper-runtime",
   "description": "Private executable carrier for the POSIX SSH helper and managed workers",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "private": true,
   "type": "module",
   "main": "lib/index.js",

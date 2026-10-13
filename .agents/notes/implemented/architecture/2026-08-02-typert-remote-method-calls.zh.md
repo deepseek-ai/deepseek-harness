@@ -28,7 +28,7 @@ Remote 消费端投影同时包含 `.d.ts`、`.d.ts.map` 和 `.js`。`.d.ts` 只
 
 | 组件 | Cordis 服务 | 职责 |
 |---|---|---|
-| `@deepseek-ai/dsh-typert-protocol` | 只声明 `ctx.typert` 的最小协议 | `TypertRemoteService`、decorator、binding 回退、descriptor、lookup/Context 和 Remote map；不依赖 compiler、Zod、Connection 或 Browser |
+| `@deepseek-ai/dsh-typert-protocol` | 只声明 `ctx.typert` 的最小协议 | `TypertRemoteService`、decorator、binding 回退、descriptor、lookup/Context、Remote map 和基于 Zod 的惰性 info 组装；不依赖 compiler、Connection 或 Browser |
 | Typert registry | `ctx.typert` | 分开保存当前环境 reflection、导入的 Remote contribution、lookup provider 和 Context provider |
 | Typert generator/loader | 无新增业务服务 | 从 Host/Client Program 生成三类 `lib` 产物，并把当前环境产物注册到 `ctx.typert` |
 | API Gateway 的 Host face | `ctx.typertGateway` | 关联 Host definition 与活 Service，解码参数、解析 receiver、调用方法，并将一元结果投影为载体无关的字段与附件 |
@@ -81,15 +81,17 @@ export class ScopedGoalService extends TypertRemoteService {
 
 同一个 endpoint 只能选择一种调用模式。需要显式 `Agent` 参数的流程使用 `@Remote`；需要切换到 Agent Context 再解析 scoped receiver 的流程使用 `@RemoteScope('agent')`，两者不会由 Typert 根据方法体或参数缺失自动猜测。
 
-业务包只依赖轻量的 `@deepseek-ai/dsh-typert-protocol`。它提供 `TypertRemoteService`，以及 decorator、binding 回退、lookup、Remote Scope 和 descriptor 的声明协议，不依赖 TypeScript compiler、Zod、HTTP 或 Client runtime。
+业务包只依赖 `@deepseek-ai/dsh-typert-protocol`。它提供 `TypertRemoteService`，以及 decorator、binding 回退、lookup、Remote Scope 和 descriptor 的声明协议，不依赖 TypeScript compiler、HTTP 或 Client runtime。其纯 `./remote-info` 入口使用 Zod 组装惰性具名输入 schema，不导入 Cordis；根入口在提供依赖 Cordis 的声明之余，也重新导出该能力。
 
 支持协作式取消的方法会把 `signal: AbortSignal` 声明为最后一个 Host 参数。这个保留参数不是业务值、lookup 或 JSON 字段。生成的消费方方法将其暴露为最后一个可选参数，因此普通调用保持不变，而拥有取消控制权的调用方可以传入 signal。
 
 ## Decorator 与显式 Gateway facet
 
-Decorator 只表达“该方法参与 Remote 约定”，不负责运行时类型反射，也不向 Service constructor 注入隐藏 symbol。`@Remote('create')` 和 `@RemoteScope('agent', 'create')` 的参数是外部方法名；被装饰成员既可以是业务方法本身，也可以是 `remoteExportCreate` 这样的适配器。未给别名时才使用成员名作为外部方法名。继承 `TypertRemoteService` 是 Service 加入 Gateway 的常规显式声明；其 public readonly `typertGateway` 字段使运行时实例上的绑定保持可见。
+Decorator 表达 Remote 参与、可选导出名称和流式投递；`@Remote` 选项仅包含 `name` 和 `mode`。它不负责运行时类型反射，也不向 Service constructor 注入隐藏 symbol。`@Remote('create')` 和 `@RemoteScope('agent', 'create')` 的参数是外部方法名；被装饰成员既可以是业务方法本身，也可以是 `remoteExportCreate` 这样的适配器。未给别名时才使用成员名作为外部方法名。继承 `TypertRemoteService` 是 Service 加入 Gateway 的常规显式声明；其 public readonly `typertRemote` 字段使运行时实例上的绑定保持可见。
 
 SRC 模式下，decorator 把方法名和调用模式记录在 Service prototype 上的带版本描述符中。描述符使用稳定的字符串属性名，因此 `remoteMethods()` 可以读取 `dsh-typert-protocol` 另一个已安装副本生成的标记；它不会向 Service 实例、constructor 或方法函数写入任何内容。
+
+普通产物从每个端点唯一的静态方法 spec 构造惰性 Remote info 实例。其直接 `TypertRemoteMethod` 对象保留描述符字段，并增加具名 `input(options?)` 和 `invoke`。消费方通过 `input({ strict: true })` 选择配套的严格解析与投影；`input()` 保留普通处理。Host 参数 codec 与唯一的普通 `result` codec 保持不变。既有 Registry 查询保留这些对象，`TYPERT_REMOTE.methods` 则提供精确静态类型。严格源码启动预构建并加载普通 Typert 产物；fallback 无法恢复被擦除的 schema。[统一元数据 note](../../proposed/architecture/2026-09-20-unified-typert-remote-metadata.zh.md)记录该交付机制及尚未完成的消费方适配。
 
 LIB 的严格方法发现、类型解析和 descriptor 生成由 Typert compiler 完成。它接受 `TypertRemoteService` 直接 `super()` 调用中的字面量 service key，或显式 binding 回退；生成过程不改写业务源码，也不注入隐藏注册元数据。
 
@@ -215,7 +217,7 @@ Host lib build
 → Vite 构建 Web
 ```
 
-现有顶层 `build` 仍表现为先 `build:lib`、再 `build:web`，但 `build:lib` 内部必须先完成 Host 与 Remote artifact，再启动 Client TypeScript 编译。一次干净构建不能依赖上次残留的 `.d.ts`。
+顶层 `build` 运行 `scripts/build.ts` 中的步骤图，先完成 Host bundle 与 Remote artifact，再启动 Client TypeScript 编译。`build:lib` 仍是 `build:bench` 使用的完整串行 lib 构建，其 Host 部分 `build:lib:host` 供 vendor 发布 workflow 使用。`typecheck` 与 Host 编译并行，经 `scripts/generate-typert.ts` 写出 Remote artifact，再启动 Client TypeScript 编译。一次干净构建不能依赖上次残留的 `.d.ts`。
 
 即使主要输入是源文件，需要通过编译器解析消费方 surface 的仓库门禁也有相同的前置条件。公共 `typecheck`、`lint` 和 `doc-typecheck` 命令会先执行 Host 约定 pass。门禁调度器仅可在显式的 Typert 约定依赖或完整构建依赖完成后使用对应的 `*:contracts-ready` 变体，使并行 lane 既不会读取缺失的声明，也不会针对同一输出并发运行多个生成器。
 
@@ -349,9 +351,9 @@ Web 本身依赖 `lib/client.js` 等构建产物，因此启动 Web 前要求完
 
 ## SRC 与 LIB 运行模式
 
-SRC 面向本地源码启动。`@Remote` 和 `@RemoteScope()` 创建的带版本 prototype 描述符给出方法名和调用模式，运行时从 JavaScript 函数签名读取顺序参数名，并结合已注册 lookup/Context provider 生成弱 descriptor。
+SRC 面向本地源码启动。对于没有已注册严格定义的方法，`@Remote` 和 `@RemoteScope()` 创建的带版本 prototype 描述符给出方法名和调用模式，运行时从 JavaScript 函数签名读取顺序参数名，并结合已注册 lookup/Context provider 生成弱 descriptor。
 
-例如 `@Remote('create') remoteExportCreate(agent, request, signal)` 解析为外部方法 `create`、实现成员 `remoteExportCreate`、两个顶层业务参数和一个取消注入点；lookup 注册把 `agent` 改写为 wire 字段 `agentId`，`request` 按同名 JSON 参数传递，最后一个 `signal` 则留在 payload 之外。SRC 不启动 `ts.Program`，不使用 preload、loader hook、源码生成或模块改写，也不检查普通 JSON 对象的内部结构。
+例如 `@Remote('create') remoteExportCreate(agent, request, signal)` 解析为外部方法 `create`、实现成员 `remoteExportCreate`、两个顶层业务参数和一个取消注入点；lookup 注册把 `agent` 改写为 wire 字段 `agentId`，`request` 按同名 JSON 参数传递，最后一个 `signal` 则留在 payload 之外。保守回退不启动 `ts.Program`，不使用 preload、loader hook、源码生成或模块改写，也不检查普通 JSON 对象的内部结构。
 
 SRC 无法明确解析的签名会在首次调用解析其 descriptor 时失败；Service 挂载只记录 decorator 标记，不检查 JavaScript 签名。SRC 不会猜测对象解构、默认参数造成的歧义、rest 参数、嵌套 lookup 或复杂类型。
 
@@ -474,7 +476,7 @@ Connection 提供共享 channel interceptor 与当前 HTTP carrier 映射。WebS
 
 **让 decorator 在运行时完成严格反射。** JavaScript decorator 无法恢复擦除后的 TypeScript 类型、公共符号身份和完整 Zod codec；向 constructor 注入 compiler 私有 symbol 又会隐藏业务类的真实依赖，因此严格信息由 Typert compiler 生成。
 
-**SRC 启动时使用 preload、loader hook 或完整 `ts.Program`。** 这能复用 LIB 分析，但增加所有源码启动入口的要求。SRC 只需要可用的弱 descriptor，因此采用 decorator 标记、函数参数名和显式 provider；严格检查留给 LIB 约定 pass。
+**SRC 启动时使用 preload、loader hook 或完整 `ts.Program`。** 这能复用 LIB 分析，但增加所有源码启动入口的要求。源码启动可加载普通预构建产物或使用保守标记，而无需加载 TypeScript Program。
 
 **手写 Client interface。** 手写接口不能保证只包含 Remote 标记的方法，也会与 Host 签名、lookup ID 和 Zod schema 漂移，因此 Client 类型从 Host Program 自动投影。
 

@@ -52,7 +52,7 @@ async function mountRuntime(ctx: Context, config: NodeRuntimeConfig = {}): Promi
 function observedAgent(ctx: Context, id: string, observe: (type: string, data: unknown) => void) {
   const session = ctx.sessions.create(SessionId(id), { meta: { cwd: process.cwd() } })
   ctx.on('session/event', (owner, event) => { if (owner === session) observe(event.type, event.data) })
-  return { session }
+  return { ctx, session }
 }
 
 const testToolSignal = new AbortController().signal

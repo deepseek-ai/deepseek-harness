@@ -127,6 +127,7 @@
 | event log | 事件日志 | | | |
 | event stream | 事件流 | | | |
 | event-sourced | 事件溯源 | | | 沿用 DDD 社区通行译法 |
+| exchange | 交互段 | | 回合、交换 | Chat 中从真人输入开启的轮次起、到下一个这样的轮次为止的连续轮次；见术语表 |
 | Executive summary | 摘要 | | | 事故复盘标题用语 |
 | executor | 执行器 | | | |
 | expected output | 预期输出 | | 金标 | 指 snapshot 比较产物；翻译语料的人工校准样例不在此列 |

@@ -40,27 +40,31 @@ interface TypertLookupDefinition {
 
 `InvocationDescriptor` 是本地反射信息，不是 wire message。Host 与消费方构建会生成彼此对应的 descriptor；请求只发送 endpoint 与具名 `args`。strict codec 携带生成的 schema factory，SRC codec 则在不恢复结构类型的前提下强制要求输入为 JSON 安全值。一元结果 codec 可提供 `encode()` 处理含字节的子树，并通过 `decode()` 递归校验原生字节；Client 声明将每个 `Uint8Array` 限定为以 `ArrayBuffer` 为底层缓冲区。纯 JSON 结果无需字节识别或 Client 解码。取消通过带外 carrier signal 表达：它在业务参数之后注入，绝不进入 `args`。
 
+`createTypertRemoteInfo` 返回实现 `TypertRemoteInfo` 的惰性类实例，后者扩展可挂载的 `TypertRemoteContribution`。其 `methods` 索引引用 `descriptors` 中的直接方法对象：每个 `TypertRemoteMethod` 增加具名 `input(options?)` 和 `invoke`，在方法及参数上保留文档，并以 `result` 作为唯一输出 codec。一元 `mode` 缺省；流式 `mode` 为 `'stream'`。仅使用 Context 接收器的方法保留在描述符和作用域声明中。Registry 查询返回基础描述符；`isTypertRemoteMethod` 收窄生成的直接调用能力，但不会恢复各端点的精确泛型。
+
+`TypertSchema` 保证解析能力，不保证任意 Zod 操作，尽管原始 factory spec 要求 Zod factory。缺少文档或不支持可选的 JSON Schema 投影，不会使普通方法失效。info 索引与每种输入策略的视图、解析器和派生投影都独立惰性求值并缓存；读取元数据或 schema 绝不发起网络调用。[协议参考](<../../packages/typert/protocol/README.zh.md>)定义这些 API，[生成器参考](<../../packages/typert/generator/README.zh.md#ordinary-remote-metadata>)定义它们彼此分离的 Host `./typert`、消费方 `./remote` 和 Client `./client/typert` 产物。
+
+`TypertRemoteSpec` 保存包名与按端点键控的 `TypertRemoteMethodSpec`。每个有序 `TypertRemoteParameterSpec` 条目都包含从同一 checker 解析后类型模型生成的普通 `codec` 和 `strictCodec` factory；运行时派生标识、默认 wire 名称和具名调用视图。`TypertRemoteInputOptions` 仅包含 `strict?: boolean`；`method.input(options?)` 选择缓存的 `TypertRemoteValue<T>`，提供匹配的解析及可选文档/投影，而不改变 Host 分发或 `result`。`RemoteDecoded<T>` 则描述 carrier 重建的一元结果，不会收窄任意解析器输出。
+
 ```ts type-equiv
 /** Codec attached to one invocation parameter or result. */
-type TypertCodec =
-  | {
+type TypertCodec<Value = unknown> =
+  | TypertRemoteValue<Value> & {
     readonly mode: 'strict'
     readonly typeSymbol: string
-    /** Materialize and return the process-realm schema on first boundary use. */
-    readonly create: () => TypertSchema
     /**
      * Decode a unary result whose fields require type-specific handling.
      * @param value - result reconstructed by the RPC carrier.
      * @returns the validated result, retaining native byte views.
      */
-    readonly decode?: (value: unknown) => unknown
+    readonly decode?: ((value: unknown) => unknown) | undefined
     /**
      * Project typed binary fields into RPC result attachments.
      * @param value - native unary result.
      * @param writeBytes - records a byte view at its result-relative path and returns its JSON placeholder.
      * @returns JSON metadata with untouched JSON subtrees retained.
      */
-    readonly encode?: (value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown
+    readonly encode?: ((value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown) | undefined
   }
   | {
     readonly mode: 'src-json'
@@ -72,6 +76,8 @@ type TypertCodec =
 interface InvocationParameterDescriptor {
   /** Source-level parameter name. */
   readonly name: string
+  /** Source parameter documentation, independent of JSON Schema support. */
+  readonly description?: string
   /** Required key in the wire `args` object. */
   readonly wire: string
   /** Whether the value is JSON or requires a registered Host lookup. */
@@ -135,6 +141,8 @@ interface InvocationDescriptor {
   }
   /** Codec for the unary result or each yielded stream item. */
   readonly result: TypertCodec
+  /** Source-owned method documentation; ordinary methods need not have JSDoc. */
+  readonly description?: string
   /** Source declaration used only for diagnostics. */
   readonly sourceLocation?: InvocationSourceLocation
 }
@@ -208,6 +216,16 @@ interface PeerScope {
 ```
 
 ```ts type-equiv
+/** Carrier capacity for buffered uplink frames of one logical stream. */
+interface RemoteUplinkWindow {
+  /** Maximum complete encoded frame bytes waiting for the Host consumer. */
+  readonly maxBytes: number
+  /** UTF-8 envelope bytes added to a compact JSON item with a present value field. */
+  readonly frameOverheadBytes: number
+}
+```
+
+```ts type-equiv
 /**
  * The context of one Remote call, reachable inside the receiving method as
  * `this.ctx.invocation`. The Gateway derives the receiver from a Context that
@@ -225,6 +243,8 @@ interface RemoteInvocation {
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket close, or an uplink failure. */
   readonly signal: AbortSignal
+  /** Carrier frame capacity; absent when the carrier imposes no encoded-frame inbox limit. */
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /**
    * The Client's uplink items for this call. Available once; a second call
    * throws. With an uplink codec on the descriptor every item is decoded to
@@ -279,6 +299,8 @@ interface InvokeRemoteRequest {
    * `invocation.uplink()`; absent means an immediately ended iterable.
    */
   readonly uplink?: AsyncIterable<unknown>
+  /** Carrier-provided frame capacity; absent for carriers without an encoded-frame inbox limit. */
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /** Peer the call speaks for; absent means an in-process carrier, answered as the operator. */
   readonly peer?: PeerScope
   /** Carrier or direct-caller cancellation injected only into cancellation-aware methods. */
@@ -349,6 +371,8 @@ interface TypertGateway {
 ## 消费方 Remote
 
 `ctx.remote` 只暴露由已导入 `/remote` 产物贡献的 namespace。`$mount()` 会把生成的 descriptor 与具体方法作为一项由 fiber 持有的操作统一注册。每个 namespace 都是可追踪的 `remote.<namespace>` Cordis 子服务，其生命周期覆盖已挂载的方法；JavaScript Proxy 与 Host 业务服务类型都不会进入消费方。
+
+元数据所有权与连接所有权相互独立；[注册表参考](<../../packages/typert/registry/README.zh.md>)说明离线注册与挂载生命周期。
 
 ```ts type-equiv
 /** Client Remote capability implemented by the Gateway and consumed by Remote assemblies. */

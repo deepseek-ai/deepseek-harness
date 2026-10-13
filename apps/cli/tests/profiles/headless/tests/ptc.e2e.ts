@@ -212,7 +212,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
       });
       return started.jobId;
     `))
-    expect(jobId).toBe('bash-1')
+    expect(jobId).toMatch(/^bash-[0-9a-f]{16}$/)
 
     const polled = completion(await runCode(ctx, `
       return await tools.job_output({ job_id: ${JSON.stringify(jobId)}, wait: true, timeout_ms: 5000 });
@@ -257,7 +257,8 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
       }),
     ])
     const job = ctx.jobs.list()[0]
-    expect(job).toMatchObject({ id: 'bash-1', status: 'running' })
+    expect(job).toMatchObject({ status: 'running' })
+    expect(job?.id).toMatch(/^bash-[0-9a-f]{16}$/)
     afterPublication.abort('outer-call-cancelled')
     expect((await running).isError).toBe(true)
     expect(ctx.jobs.list()[0]).toMatchObject({ id: job!.id, status: 'running' })
@@ -293,9 +294,9 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
     await ctx.plugin(CordisInspectProviders)
     await ctx.plugin(ToolCordis)
     const agent = {
+      ctx,
       id: SessionId('ptc-cordis'),
       session: ctx.sessions.create(SessionId('ptc-cordis'), { meta: { cwd: process.cwd() } }),
-      ctx,
     } as Agent
 
     const value = completion(await runCode(ctx, `

@@ -8,8 +8,7 @@ import type { SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
 export interface ConfigFormSnapshot<T> {
   /**
    * `loading` until the first accepted section, `ready` while one stands, and
-   * `unavailable` when the namespace is not exposed to this client or the
-   * connection keeps preferences process-local (memory mode).
+   * `unavailable` when the namespace is not exposed to this client.
    */
   status: 'loading' | 'ready' | 'unavailable'
   /** Last accepted schema-resolved section; undefined before the first acceptance. */
@@ -27,10 +26,8 @@ export interface ConfigFormSnapshot<T> {
   user: unknown
   /** Namespace revision fencing the next write; undefined before the first Host view. */
   revision: number | undefined
-  /** Whether the Host document accepts writes; memory mode never does. */
+  /** Whether the Host document accepts writes. */
   writable: boolean
-  /** `host` syncs with the Host document; `memory` keeps a remote browser process-local. */
-  mode: 'host' | 'memory'
 }
 
 /**
@@ -47,7 +44,7 @@ export interface ConfigForm<T> {
   subscribe(listener: () => void): () => void
   /**
    * Queue one atomic namespace mutation. All operations share one revision
-   * fence, Host validation, persistence decision, and recovery read. Supplying
+   * fence, Host validation, and recovery read. Supplying
    * `expectedRevision` preserves an earlier read as the fence instead of using
    * the latest queued or mirrored revision.
    * @param ops - ordered field operations copied when queued.

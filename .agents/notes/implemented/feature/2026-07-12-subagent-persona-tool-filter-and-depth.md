@@ -12,7 +12,7 @@ These controls affect the child's first model request and therefore cannot be in
 
 ## Decision
 
-Subagent starts have three independent composition controls: `persona`, `toolFilter`, and `maxDepth`. A provider advertises support for each control, the service rejects unsupported requests before starting a run, and an in-process provider installs the requested composition while the child is still unpublished.
+This note retains the depth policy and the persona/tool-filter semantics needed to restore historical child descriptors. New children use [preset-owned composition](../simplification/2026-10-09-preset-owned-subagent-composition.md); new requests do not accept persona or tool filters. Historical overrides are applied while a resumed child is unpublished.
 
 The controls answer different questions:
 
@@ -22,15 +22,17 @@ The controls answer different questions:
 | `toolFilter` | Which deployment-global tools enter this child's visible tool view? | A scoped restriction filters globals before child-local tools are added |
 | `maxDepth` | How deep may this delegation tree grow? | A start whose child depth exceeds the absolute cap is rejected |
 
-`dsh-tool-subagent` exposes the controls as plugin configuration and copies them into each request it creates. Direct `SubagentRuntime` callers may choose them per request. The provider capability descriptor remains the source of truth for whether a backend can honor each field.
+`dsh-tool-subagent` and direct `SubagentRuntime` callers expose `maxDepth`. Its provider capability determines whether a backend can enforce the cap. Persona and tool-filter values come only from historical descriptors during cold resume.
 
 ### Persona is a scoped shadow
 
-The persona control changes one child without changing deployment-wide prompt assembly. During unpublished setup, an in-process provider registers a child-scoped section named `deployment:persona-prefix`; ordinary most-specific-wins resolution replaces the global section only in that child's assemblies.
+A historical persona changes one resumed child without changing deployment-wide prompt assembly. During unpublished setup, the manager registers a child-scoped section named `deployment:persona-prefix`; ordinary most-specific-wins resolution replaces the inherited section only in that child’s assemblies.
 
-The value has the same strict template semantics as the deployment persona. Omitting it inherits the deployment section through the global layer; an explicit empty string shadows the global persona with an empty section. Parent and sibling personas never enter the child's flat scope.
+The value has the same strict template semantics as the deployment persona. Omitting it preserves the composed persona; an explicit empty string shadows that persona with an empty section.
 
 This uses the normal system-prompt registration mechanism rather than a second persona channel. The first prompt therefore sees the same named contribution that later prompts and prompt-inspection tools see.
+
+<a id="tool-filtering-is-one-live-global-view-rule"></a>
 
 ### Tool filtering is one live global-view rule
 
@@ -53,19 +55,19 @@ The depth limit bounds recursive delegation independently of tool visibility. A 
 
 The effective parent depth is the greater of durable `SessionHeader.delegationDepth` and runtime `AgentOptions.subagentDepth`. An in-process child records its derived depth in the session header, and resume restores that header, so a restart cannot lower the recursion count.
 
-Every public entry validates the domain rather than relying on one model-facing configuration path. Negative values, fractions, negative zero, non-finite values, unsafe integers, malformed stored parent depth, and derived overflow all reject. A direct `SubagentStartRequest` may omit the cap to leave depth unbounded; loader-resolved `dsh-tool-subagent` configuration instead defaults to `3`, accepts a numeric override, and uses explicit `'provider-managed'` to omit the cap for an out-of-process provider whose deployment owns its recursion budget. Three is a small finite default that still permits a root plus three descendant generations, and the [base profile](../../../../packages/bundle/base/cordis.patch.yml) uses that general policy. A numeric tool cap fails at provider mount when the provider lacks `depthLimit`.
+Every public entry validates the domain rather than relying on one model-facing configuration path. Negative values, fractions, negative zero, non-finite values, unsafe integers, malformed stored parent depth, and derived overflow all reject. A direct `SubagentStartRequest` may omit the cap to leave depth unbounded; `dsh-tool-subagent` instead reads the live Host depth setting (initially `1`), accepts a numeric override, and uses explicit `'provider-managed'` to omit the cap for an out-of-process provider whose deployment owns its recursion budget. The [base profile](../../../../packages/bundle/base/cordis.patch.yml) uses the Host setting. A numeric tool cap fails at provider mount when the provider lacks `depthLimit`.
 
-A deployment can combine depth and filtering, but the numeric cap does not synthesize a filter. The delegation tool stays visible at the cap because authorization may depend on runtime state; every attempted start checks the calling agent's current durable and runtime depth, and a rejected start returns an errored tool result without publishing a child. A deployment may separately deny delegation tools in children when its visibility policy is static. Neither choice changes the provider's conversation-history behavior.
+The numeric cap does not synthesize a filter. The delegation tool stays visible at the cap because authorization may depend on runtime state; every attempted start checks the calling agent’s current durable and runtime depth, and a rejected start returns an errored tool result without publishing a child. A preset can omit delegation tool plugins independently of the depth policy. At the cap, the tool contributes an optional runtime-context notice telling the model to work directly. `includeRuntimeContext: false` suppresses this advisory notice; the runtime depth guard remains active. When enabled, the notice reads the live cap and durable depth at request time to keep resumed and reconfigured agents informed without changing their system prompt or tool schemas; unchanged context is not repeatedly appended.
 
 ### Capability gating keeps providers honest
 
-Capabilities separate a requested feature from a provider implementation. `SubagentCapabilities` advertises `persona`, `toolFilter`, and `depthLimit`; `SubagentRuntime.start()` checks every present request field against those flags before calling the provider.
+Capabilities separate a requested feature from a provider implementation. `SubagentCapabilities.depthLimit` advertises depth enforcement; `SubagentRuntime.startActivation()` checks a requested cap before calling the provider.
 
 This lets spawn and fork providers share the in-process implementation while external providers advertise only what they can enforce. A request never degrades silently: selecting an unsupported control produces `UNSUPPORTED_CAPABILITY`, and no run or lifecycle event exists.
 
 ### Unpublished setup makes the first request correct
 
-All child-local composition is complete before the child becomes observable. The in-process provider supplies one setup callback to agent creation; that callback installs persona, tool restriction, and structured-output contributions in the child's scope. Only after setup succeeds does creation publish the session and agent and allow the driver to start.
+All child-local composition is complete before the child becomes observable. The manager supplies a setup callback to agent creation that composes the preset, restores historical persona and tool restrictions on cold resume, and installs structured output. Only after setup succeeds does creation publish the session and agent and allow the driver to start.
 
 A setup failure rolls back the private child. No observer can acquire a child whose first prompt used the deployment persona or unfiltered tool set and whose later prompts use the requested configuration.
 
@@ -79,7 +81,7 @@ A security design would need a separate authority representation, propagation ru
 
 ## Alternatives considered
 
-**Create one provider per persona or tool set.** This multiplies providers that share the same transport and lifecycle implementation, makes dynamic deployment configuration awkward, and still needs a recursion mechanism. Providers remain about execution transport; requests carry per-child composition.
+**Create one provider per persona or tool set.** This multiplies providers that share the same transport and lifecycle implementation and still needs a recursion mechanism. Providers remain about execution transport; presets own new child composition, while descriptors retain historical overrides.
 
 **Copy the parent's complete tool view.** Registration scope is flat by design, and lifetime ownership does not imply visibility inheritance. Copying a resolved view would also freeze dynamic global registrations and conflate composition with authority without defining either contract fully.
 
@@ -91,6 +93,6 @@ A security design would need a separate authority representation, propagation ru
 
 ## Consequences
 
-Contributors can configure child role, visible global tools, and recursion without defining new providers. Capability checks fail before ownership starts, unpublished setup makes the first request consistent, and one tool resolver prevents presentation/execution drift.
+Historical child composition survives cold resume without defining new providers. Capability checks fail before ownership starts, unpublished setup makes the first request consistent, and one tool resolver prevents presentation/execution drift.
 
 The cost is that deployments must understand live allow/deny behavior and the distinction between visibility and authority. A model may call a visible delegation tool after the current depth policy forbids another child and receive an error. Provider authors must advertise each supported control accurately, and in-process providers must install every requested contribution before publication. The controls deliberately do not solve security confinement or parent-to-child non-escalation.

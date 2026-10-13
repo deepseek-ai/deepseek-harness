@@ -36,7 +36,7 @@ kind: "package-reference"
     port: 3000
 ```
 
-`host` 接受本机某个接口的一个具体 IPv4 或 IPv6 字面量——例如容器自身来自 `hostname -i` 的 Pod 地址。回环字面量（127/8 内的任意地址、`::1`，或二者的 mapped 形式）把服务器留在本机；其他任何字面量都会在该地址所属网络上提供 HTTP，除非设置 `tls`，否则为明文。未指定地址——包括 Linux 视为 IPv4 any 的 IPv4-mapped 形式——会在加载时被拒绝，而不是一次性打开每个网络接口的端口。`port` 为 0 时请求 OS 分配端口；之后用 `ctx.webServer.port` 读取正在监听的端口，导出的 `isLoopbackHost(host)` 与 `isWildcardHost(host)` 按解析后的地址值分类，因此 mapped 或带 zone 的写法会按其指名的地址分类。点分四段式的 IPv6 尾部表示该地址自身的低 32 位，与 `listen` 的读法完全一致：`::0.0.0.1` 是回环 `::1`，而 `::127.0.0.1` 是非回环的 `::7f00:1`；`normalizeBindAddress(host)` 返回该地址的文本——真正 mapped 的 `::ffff:127.0.0.1` 为 `127.0.0.1`，`::0.0.0.1` 与 `::1%lo` 为 `::1`——可直接用作 URL host。
+`host` 接受本机某个接口的一个具体 IPv4 或 IPv6 字面量——例如容器自身来自 `hostname -i` 的 Pod 地址。回环字面量（127/8 内的任意地址、`::1`，或二者的 mapped 形式）把服务器留在本机；其他任何字面量都会在该地址所属网络上提供 HTTP，除非设置 `tls`，否则为明文。未指定地址——包括 Linux 视为 IPv4 any 的 IPv4-mapped 形式——会在加载时被拒绝，而不是一次性打开每个网络接口的端口。`port` 为 0 时请求 OS 分配端口；之后用 `ctx.webServer.port` 读取正在监听的端口，导出的 `isLoopbackHost(host)` 与 `isWildcardHost(host)` 按解析后的地址值分类，因此 mapped 或带 zone 的写法会按其指名的地址分类。点分四段式的 IPv6 尾部表示该地址自身的低 32 位，与 `listen` 的读法完全一致：`::0.0.0.1` 是回环 `::1`，而 `::127.0.0.1` 是非回环的 `::7f00:1`；`normalizeBindAddress(host)` 返回该地址的文本——真正 mapped 的 `::ffff:127.0.0.1` 为 `127.0.0.1`，`::0.0.0.1` 与 `::1%lo` 为 `::1`——可直接用作 URL host。`bindUrlHost(host)` 把该文本写成 URL host（IPv6 加方括号），对 URL 无法携带的非回环带 zone 地址返回 `undefined`；`ctx.webServer.getOrigin()` 把它与协议、监听端口组合成本机客户端访问的根 URL，在端口绑定之前或没有 URL 形式时抛错。
 
 设置 `compression: 'gzip'` 可以包装符合条件的 socket-backed 响应，而不改变 route API。客户端必须接受 gzip，且媒体类型必须可压缩或为 `multipart/form-data`；已知长度小于 `compressionThresholdBytes` 的响应保持未压缩，未知长度的流则立即符合条件。已有编码、`Cache-Control: no-transform`、range 响应、SSE（Server-Sent Events）、ZIP 与已打包的 `.gz` Worker image 均保持不变。随附 Web bundle 使用 level 1 与 1024 字节阈值；其他组合默认不压缩。
 
@@ -80,7 +80,7 @@ index 启动输入分两层。`collectIndexInjections()` 收集一张全新的�
 
 ### 设计理念
 
-本包是一个不带任何 harness 词汇的普通路由注册表：`WebServer` 继承 Cordis `Service`，持有三张路由表、回退 slot、原始 index 转换列表，以及 `webserver/index-inject` 事件，index 渲染器经其收集行。index 渲染每次响应组合两层：`renderIndex` 先把包含提示性 `script-preload` 行的全新注入表渲染进正文，再按注册顺序应用原始转换；`applyIndexTaps` 只运行转换。upgrade handler 拥有协议握手与连接内容；webserver 只交付原始 socket 与 request。`host`、`port` 与 `protocol` getter 暴露其他插件据以自适应的组合期事实（例如 directory-picker 选择器），而显式的 `tls: null` 会归一为未设置监听，使 `protocol` 只有一个来源。
+本包是一个不带任何 harness 词汇的普通路由注册表：`WebServer` 继承 Cordis `Service`，持有三张路由表、回退 slot、原始 index 转换列表，以及 `webserver/index-inject` 事件，index 渲染器经其收集行。index 渲染每次响应组合两层：`renderIndex` 先把包含提示性 `script-preload` 行的全新注入表渲染进正文，再按注册顺序应用原始转换；`applyIndexTaps` 只运行转换。upgrade handler 拥有协议握手与连接内容；webserver 只交付原始 socket 与 request。`host`、`port`、`protocol` getter 与 `getOrigin()` 暴露其他插件据以自适应的组合期事实（例如 directory-picker 选择器），而显式的 `tls: null` 会归一为未设置监听，使 `protocol` 只有一个来源。
 
 ### 匹配与生命周期
 

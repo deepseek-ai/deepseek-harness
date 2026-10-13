@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { Rolldown, type UserConfig } from 'tsdown'
 import { clientBundle } from '../tsdown.client.ts'
 
-const bundle = clientBundle('@deepseek-ai/dsh-client-ui-sidebar-documentpreview', ['lib/types/index.js'], {
+const bundle = clientBundle(import.meta.dirname, ['lib/types/index.js'], {
   clientBanner: fileName => fileName.endsWith('client.pdf.js') ? pdfLicenseBanner()
     : fileName.endsWith('client.excel.js') ? excelLicenseBanner() : undefined,
 })

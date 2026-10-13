@@ -93,7 +93,9 @@ describe('request-level dynamic profiles', () => {
     expect(ctx.llm.listProviders()).toEqual([{ id: 'openrouter', name: 'openrouter' }])
     expect(ctx.llm.listConfigurableProviders()).toContainEqual({
       provider: 'openrouter', displayName: 'openrouter', settingsNs: 'llm-pi-ai',
-      settingsPath: ['providers', 'openrouter'], declared: false, error: failure,
+      settingsPath: ['providers', 'openrouter'], declared: false,
+      defaultBaseURL: 'https://openrouter.ai/api/v1', nativeAuth: { env: ['OPENROUTER_API_KEY'], oauth: true },
+      error: failure,
     })
     expect((await ctx.llm.listModels('openrouter')).map(model => model.id)).toEqual([known.id])
     const bad = await assemble(ctx, { provider: 'openrouter', model: '111', messages: [] })
@@ -154,7 +156,8 @@ describe('request-level dynamic profiles', () => {
 
     expect(ctx.llm.listProviders()).toEqual([])
     // Dormant ≠ invisible: every installed catalog provider is configurable
-    // before any route exists, each addressed inside the providers dict.
+    // before any route exists, each addressed inside the providers dict and
+    // described by the endpoint and environment variables it uses unconfigured.
     const directory = ctx.llm.listConfigurableProviders()
     expect(directory.length).toBeGreaterThan(30)
     expect(directory).toContainEqual({
@@ -163,6 +166,8 @@ describe('request-level dynamic profiles', () => {
       settingsNs: 'llm-pi-ai',
       settingsPath: ['providers', 'openai'],
       declared: false,
+      defaultBaseURL: 'https://api.openai.com/v1',
+      nativeAuth: { env: ['OPENAI_API_KEY'], oauth: true },
     })
     await configurations.get(ctx)!.update({
       providers: { deepseek: { apiKeyEnv: 'PI_DYNAMIC_KEY', baseURL: server.url } },

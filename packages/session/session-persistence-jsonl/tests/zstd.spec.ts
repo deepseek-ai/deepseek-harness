@@ -8,7 +8,7 @@ import { performance } from 'node:perf_hooks'
 import { SessionSeq, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import {
   generationLogPath, logPath, scanLog, sessionDir, toHeaderLine, type JsonlCompression,
 } from '../src/format.ts'
@@ -467,10 +467,8 @@ describe('JsonlSessionPersistence: default Zstandard encoding', () => {
     const root = await freshRoot()
     const ctx = new Context()
     contexts.push(ctx)
-    let backend!: JsonlSessionPersistence
-    await ctx.plugin((inner: Context) => {
-      backend = new JsonlSessionPersistence(inner, { root })
-    })
+    await ctx.plugin((inner: Context) => JsonlSessionPersistence.apply(inner, { root }))
+    const backend = ctx.sessionPersistence
     const header = meta('direct-default')
     const path = logPath(root, header.cwd, header.id, 'zstd')
 

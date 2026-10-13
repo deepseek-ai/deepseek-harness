@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "持久 PowerShell 工具",
+    "description": "让 AI 在保留状态的 PowerShell 会话中连续执行命令。"
+  }
+}

@@ -1,0 +1,8 @@
+version: 1
+scenario: minimal-image-compaction
+profile: sdk-minimal
+composition: sdk-minimal-image-compaction
+recording: authored
+header:
+  class: sdk-minimal-image-compaction
+  pin: true

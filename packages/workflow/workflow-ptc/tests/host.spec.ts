@@ -1,3 +1,4 @@
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -18,6 +19,8 @@ type HostBindings = Record<string, PtcBindingFunction>
 class ControlledRuntime extends PtcRuntime {
   language = 'typescript'
   readonly isolation = 'process'
+  policyMode: 'read-only' | undefined = 'read-only'
+  override get sandboxMode(): 'read-only' | undefined { return this.policyMode }
   execute: (spec: PtcRunSpec) => Promise<PtcRunResult> = () => Promise.resolve(completed)
 
   resolve(request: PtcRunRequest): PtcRunSpec {
@@ -38,7 +41,7 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
   await ctx.plugin(SubagentRuntime)
   ctx.subagents.registerProvider({
     name: 'stub',
-    capabilities: { agentOptions: true, outputSchema: true, depthLimit: false, toolFilter: false, persona: false },
+    capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: false },
     inheritsParentContext: false,
     start: async () => ({
       id: SessionId('host-child'),
@@ -59,6 +62,37 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
 }
 
 describe('workflow host callback validation', () => {
+  it('runs an unconfined provider under full access without forwarding a sandbox policy', async () => {
+    const { runtime, parent, start } = await setup(async (_bindings, spec) => {
+      expect(spec.sandboxPolicy).toBeUndefined()
+      return completed
+    })
+    runtime.policyMode = undefined
+    setSandboxMode(parent.session, 'danger-full-access')
+    const handle = start()
+    try {
+      expect(await handle.result).toEqual({ value: null, stopReason: 'completed', agentsStarted: 0 })
+    } finally { await handle.dispose() }
+  })
+
+  it('settles a failed directory lookup when the runtime cannot confine execution', async () => {
+    const { ctx, runtime, start } = await setup()
+    runtime.policyMode = undefined
+    const ensureDirectory = vi.spyOn(ctx.workingDirectory, 'ensure').mockRejectedValue(new Error('selected directory is unavailable'))
+    const execute = vi.spyOn(runtime, 'run')
+    const run = start()
+    try {
+      const result = await run.result
+      expect(result.stopReason).toBe('error')
+      expect(result.error).toContain('selected directory is unavailable')
+      expect(execute).not.toHaveBeenCalled()
+    } finally {
+      await run.dispose()
+      ensureDirectory.mockRestore()
+      execute.mockRestore()
+    }
+  })
+
   it('retains its selected directory for the process and later children when the parent moves', async () => {
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -131,17 +165,21 @@ describe('workflow host callback validation', () => {
     } finally { await handle.dispose() }
   })
 
-  it('carries Session authority and an explicit unlimited deadline to the runtime', async () => {
-    const { ctx, parent, start } = await setup(async (bindings, spec) => {
+  it.each([true, false])('carries Session cwd and an unlimited deadline with confinement capability %s', async (confined) => {
+    const { ctx, runtime, parent, start } = await setup(async (bindings, spec) => {
       expect(spec.timeoutMs).toBeNull()
       expect(spec.cwd).toBe(parent.session.header.cwd)
-      expect(spec.sandboxPolicy).toEqual(ctx.sandboxPolicy.resolve({ session: parent.session }))
+      expect(spec.sandboxPolicy).toEqual(confined ? ctx.sandboxPolicy.resolve({ session: parent.session }) : undefined)
       expect(await bindings.begin!({})).toMatchObject({ body: 'return null', meta: { name: 'host-test' } })
       return completed
     })
+    runtime.policyMode = confined ? 'read-only' : undefined
     const handle = start()
-    try { expect((await handle.result).stopReason).toBe('completed') }
-    finally { await handle.dispose() }
+    try {
+      const result = await handle.result
+      expect(result.stopReason, result.error).toBe(confined ? 'completed' : 'error')
+      if (!confined) expect(result.error).toContain('cannot enforce the read-only file policy')
+    } finally { await handle.dispose() }
   })
 })
 

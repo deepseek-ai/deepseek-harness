@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-shortcuts",
   "description": "Application keyboard command registry and physical-key routing",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -27,7 +27,8 @@
     "./protocol": {
       "types": "./lib/types/protocol.d.ts",
       "default": "./lib/protocol.js"
-    }
+    },
+    "./locale/*.json": "./locale/*.json"
   },
   "dsh": {
     "client": {
@@ -55,6 +56,7 @@
     "@deepseek-ai/dsh-host-webserver": "workspace:*"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/client.js",
     "lib/protocol.js",

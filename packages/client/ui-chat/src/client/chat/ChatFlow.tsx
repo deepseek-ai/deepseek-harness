@@ -1,6 +1,5 @@
 /** Ordered Chat rows, local echoes, and running status share the flow slot's parent. */
-import { memo, useCallback } from 'react'
-import type { RenderMessageImages } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { memo } from 'react'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { ChatFlowSlotProps } from '../contract/slots.ts'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
@@ -13,8 +12,8 @@ import { RunningStatus } from './RunningStatus.tsx'
 export const ChatFlow = memo(function ChatFlow({
   entries, pendingInputs, lastInputTurn, deferCollapse,
   useSession, useChat, useChatNode, useChatNodeBottom, useChatNodeProcess, useChatGroup, usePresentation,
-  useStore, actions, renderSlot, t, useGroupAction, useGroupHeaderAction,
-  cwd, openFile, openSkill, inspectCall, forkAt, loadImage, fileMentions,
+  useStore, actions, renderSlot, renderFactorySlot, t, useGroupAction, useGroupHeaderAction,
+  cwd, openFile, inspectCall, forkAt, loadImage, fileMentions,
 }: ChatFlowSlotProps) {
   const nodeStore = useChat(snapshot => snapshot.nodes)
   const running = useSession(snapshot => snapshot.running)
@@ -25,14 +24,10 @@ export const ChatFlow = memo(function ChatFlow({
       ? location.turn.status === 'open' ? location.turn.start?.time : undefined
       : undefined
   })
-  const renderMessageImages = useCallback<RenderMessageImages>(
-    owner => renderSlot('conversation.message.images', { ...owner, loadImage }),
-    [loadImage, renderSlot],
-  )
   const seatProps = {
     nodeStore, useChatNode, useChatNodeBottom, useChatNodeProcess, usePresentation,
     useStore, actions, renderSlot, t, useGroupAction, deferCollapse,
-    cwd, openFile, openSkill, inspectCall, forkAt, loadImage, renderMessageImages, fileMentions,
+    cwd, openFile, inspectCall, forkAt, loadImage, fileMentions,
   }
   const rows = entries.map((entry) => {
     switch (entry.kind) {
@@ -48,10 +43,10 @@ export const ChatFlow = memo(function ChatFlow({
   })
   const pendingRows = pendingInputs.map(item => 'requestId' in item ? (
     <PendingSubmissionBubble key={item.requestId} submission={item}
-      renderMessageImages={renderMessageImages} t={t} />
+      loadImage={loadImage} renderFactorySlot={renderFactorySlot} t={t} />
   ) : (
     <PendingSteeringBubble key={item.id} content={item.content}
-      renderMessageImages={renderMessageImages} t={t} />
+      loadImage={loadImage} renderFactorySlot={renderFactorySlot} t={t} />
   ))
   const tail = entries.at(-1)
   const node = tail?.kind === 'node' ? nodeStore.get(tail.key) : undefined

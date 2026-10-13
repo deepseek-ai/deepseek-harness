@@ -10,7 +10,7 @@ dsh --profile web --public-url https://app.example/ui/ --trusted-host app.exampl
 
 ## What `--public-url` advertises
 
-`--public-url` accepts an `http://` or `https://` root with an optional mount prefix and normalizes it to end in `/`. It supplies the printed and opened startup URL, `DSH_WEB_URL`, and the web-surface orientation. The webserver keeps serving origin-root routes and never learns the mount. The `publicUrl` config field publishes the same advertisement.
+`--public-url` accepts an `http://` or `https://` root with an optional mount prefix and normalizes it to end in `/`. It supplies the printed and opened startup URL, `DSH_WEB_URL`, and the Web GUI URL in the agent's runtime context. The webserver keeps serving origin-root routes and never learns the mount. The `publicUrl` config field publishes the same advertisement.
 
 ## What the proxy must do
 

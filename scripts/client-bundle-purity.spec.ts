@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { build, type TsdownBundle, type UserConfig } from 'tsdown'
+import { build, type Rolldown, type TsdownBundle, type UserConfig } from 'tsdown'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { clientBundle, requestedExternals, staticLinked } from '../packages/client/tsdown.client.ts'
 
@@ -35,18 +35,48 @@ interface InputIsolationPlugin {
     }>) => void
 }
 
+function packageDir(packagePath: string): string {
+  return fileURLToPath(new URL(`../packages/${packagePath}`, import.meta.url))
+}
+
 /** A representative dynamic bundle using the shared client baseline. */
 const REQUESTING_PACKAGE = '@deepseek-ai/dsh-client-ui-conversation'
+const REQUESTING_PACKAGE_DIR = packageDir('client/ui-conversation')
 
-function clientConfigs(id = REQUESTING_PACKAGE) {
-  return clientBundle(id, ['lib/types/index.js'])(
+function clientConfigs(dir = REQUESTING_PACKAGE_DIR) {
+  return clientBundle(dir, ['lib/types/index.js'])(
     { env: { DSH_BUILD_FACE: 'client' } },
   ).filter(config => config.platform === 'browser')
 }
 
 describe('client bundle build faces', () => {
+  it('names both configs and the loader registration after the package directory manifest', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-client-manifest-'))
+    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-client-fixture' }))
+    const configs = clientBundle(root, ['lib/types/index.js'])({ env: { DSH_BUILD_FACE: 'client' } })
+    expect(configs.map(config => config.name)).toEqual([
+      '@deepseek-ai/dsh-client-fixture', '@deepseek-ai/dsh-client-fixture/client',
+    ])
+    const outputOptions = configs[1]?.outputOptions
+    if (typeof outputOptions !== 'object' || typeof outputOptions.banner !== 'function') {
+      throw new Error('client banner missing')
+    }
+    expect(outputOptions.banner({ isEntry: true, fileName: 'client.js' } as Rolldown.RenderedChunk))
+      .toBe('window.__ModuleLoader__.load({ id: "@deepseek-ai/dsh-client-fixture", factory: (require) => {')
+  })
+
+  it('rejects a package directory without a named manifest', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-client-manifest-'))
+    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    expect(() => clientBundle(root, ['lib/types/index.js']))
+      .toThrow(/cannot read .*package\.json; pass the package directory/)
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true }))
+    expect(() => staticLinked(root, ['lib/types/index.js'])).toThrow(/declares no string package name/)
+  })
+
   it('watches source in development and consumes emitted JavaScript in the Client build', () => {
-    const bundle = clientBundle('@deepseek-ai/dsh-client-test', ['lib/types/index.js'])
+    const bundle = clientBundle(REQUESTING_PACKAGE_DIR, ['lib/types/index.js'])
     const development = bundle({ env: {} }).find(config => config.platform === 'browser')
     const artifact = bundle({ env: { DSH_BUILD_FACE: 'client' } })
       .find(config => config.platform === 'browser')
@@ -88,8 +118,8 @@ function clientSourceMapPath(packagePath: string): string {
   return fileURLToPath(new URL(`../packages/${packagePath}/lib/client.js.map`, import.meta.url))
 }
 
-function purityResolveId(id = REQUESTING_PACKAGE): ResolveId {
-  const configs = clientConfigs(id)
+function purityResolveId(dir = REQUESTING_PACKAGE_DIR): ResolveId {
+  const configs = clientConfigs(dir)
   const plugins = (configs[0] as { plugins: { name: string; resolveId?: unknown }[] }).plugins
   const gate = plugins.find(p => p.name === 'dsh-client-bundle-purity')
   if (gate?.resolveId === undefined) throw new Error('purity plugin missing from client config')
@@ -173,26 +203,29 @@ describe('client bundle purity gate', () => {
   })
 
   it('admits package-specific requests only for the declaring bundle', () => {
-    const requesting = purityResolveId('@deepseek-ai/dsh-api-session-controller')
+    const requesting = purityResolveId(packageDir('api/session-controller'))
     expect(requesting('@deepseek-ai/dsh-api-gateway/client')).toBeNull()
     expect(() => resolveId('@deepseek-ai/dsh-api-gateway/client')).toThrow(/purity/)
   })
 
   it('externalizes the baseline independently of each package manifest', () => {
     const requesting = clientConfigs()[0]?.deps as { neverBundle: (specifier: string) => boolean }
-    const plain = clientConfigs('@deepseek-ai/dsh-client-connection')[0]?.deps as {
+    const plain = clientConfigs(packageDir('client/connection'))[0]?.deps as {
       neverBundle: (specifier: string) => boolean
     }
 
-    expect(requesting.neverBundle('react')).toBe(true)
-    expect(requesting.neverBundle('zod')).toBe(false)
-    expect(plain.neverBundle('react')).toBe(true)
-    expect(plain.neverBundle('@deepseek-ai/dsh-client-store')).toBe(true)
+    for (const bundle of [requesting, plain]) {
+      for (const specifier of ['react', 'zod', '@tanstack/react-virtual', '@deepseek-ai/dsh-client-store']) {
+        expect(bundle.neverBundle(specifier)).toBe(true)
+      }
+      expect(bundle.neverBundle('zod/v3')).toBe(false)
+    }
   })
 })
 
 describe('client bundle experimental input isolation', () => {
   const experimental = '@deepseek-ai/dsh-experimental-client-ui-agent-team'
+  const experimentalDir = packageDir('experimental/client-ui-agent-team')
 
   function fixture() {
     const root = mkdtempSync(join(tmpdir(), 'dsh-client-inputs-'))
@@ -207,10 +240,10 @@ describe('client bundle experimental input isolation', () => {
     return { root, owner, entry, prototype }
   }
 
-  function config(kind: 'static' | 'dynamic', id = REQUESTING_PACKAGE): UserConfig {
+  function config(kind: 'static' | 'dynamic', dir = REQUESTING_PACKAGE_DIR): UserConfig {
     const configs = kind === 'static'
-      ? staticLinked(id, ['lib/types/client/index.js'])({ env: { DSH_BUILD_FACE: 'client' } })
-      : clientConfigs(id)
+      ? staticLinked(dir, ['lib/types/client/index.js'])({ env: { DSH_BUILD_FACE: 'client' } })
+      : clientConfigs(dir)
     const browser = configs.find(config => config.platform === 'browser')
     if (browser === undefined) throw new Error('client config missing')
     return browser
@@ -275,7 +308,7 @@ describe('client bundle experimental input isolation', () => {
     writeFileSync(join(root, 'prototype/package.json'), JSON.stringify({ name, type: 'module' }))
     writeFileSync(entry, `export { marker } from ${JSON.stringify(importPath(entry, prototype))}\n`)
     await expect(bundle(owner, config(kind))).rejects.toThrow(/client bundle isolation.*experimental/)
-    await expect(bundle(owner, config(kind, name))).resolves.toContain('experimental sentinel')
+    await expect(bundle(owner, config(kind, packageDir('experimental/tool-terminal')))).resolves.toContain('experimental sentinel')
   })
 
   it('proves the static library otherwise hides the experimental input in its emitted JavaScript', async () => {
@@ -297,7 +330,7 @@ describe('client bundle experimental input isolation', () => {
     const { owner, entry, prototype } = fixture()
     writeFileSync(entry, `export { marker } from ${JSON.stringify(importPath(entry, prototype))}\n`)
 
-    await expect(bundle(owner, config(kind, experimental))).resolves.toContain('experimental sentinel')
+    await expect(bundle(owner, config(kind, experimentalDir))).resolves.toContain('experimental sentinel')
   })
 
   it('rejects experimental ownership preserved only by an emitted compiler source map', async () => {
@@ -419,7 +452,7 @@ describe('client bundle debug artifacts', () => {
   })
 
   it('maps first-party sources to their repository package paths', () => {
-    const configs = clientConfigs('@deepseek-ai/dsh-client-ui-goal')
+    const configs = clientConfigs(packageDir('client/ui-goal'))
     const outputOptions = configs[0]?.outputOptions
     if (typeof outputOptions !== 'object' || outputOptions === null) throw new Error('client output options missing')
     const transform = outputOptions.sourcemapPathTransform
@@ -432,7 +465,7 @@ describe('client bundle debug artifacts', () => {
   })
 
   it('maps dual-face host sources to the host package group', () => {
-    const configs = clientConfigs('@deepseek-ai/dsh-host-directory-picker-native')
+    const configs = clientConfigs(packageDir('host/directory-picker-native'))
     const outputOptions = configs[0]?.outputOptions
     if (typeof outputOptions !== 'object' || outputOptions === null) throw new Error('client output options missing')
     const transform = outputOptions.sourcemapPathTransform
@@ -443,7 +476,7 @@ describe('client bundle debug artifacts', () => {
   })
 
   it('maps inlined workspace sources to packages and leaves dependencies outside it unchanged', () => {
-    const configs = clientConfigs('@deepseek-ai/dsh-client-connection')
+    const configs = clientConfigs(packageDir('client/connection'))
     const outputOptions = configs[0]?.outputOptions
     if (typeof outputOptions !== 'object' || outputOptions === null) throw new Error('client output options missing')
     const transform = outputOptions.sourcemapPathTransform

@@ -1,4 +1,4 @@
-/** `reference` namespace dictionaries for the unified `@` source. */
+/** `reference` dictionaries for the unified `@` source and inline file navigation. */
 
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 
@@ -18,6 +18,10 @@ export const zh = {
   'section.sessions': '对话',
   'candidate.noCwd': '（无工作目录）',
   'crumb.root': '工作区',
+  'fileOpen.title': '无法打开文件',
+  'fileOpen.failed': '无法打开“{path}”，请重试或关闭此提示',
+  'fileOpen.close': '关闭',
+  'fileOpen.retry': '重试',
   'time.now': '刚刚',
   'time.minutes': '{n}分钟',
   'time.hours': '{n}小时',
@@ -31,7 +35,7 @@ export type ReferenceKey = keyof typeof zh
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** The unified `@` reference menu's copy. */
+    /** Reference menu and per-file navigation feedback. */
     reference: ReferenceKey
   }
 }
@@ -43,6 +47,10 @@ export const en = {
   'section.sessions': 'Sessions',
   'candidate.noCwd': '(no cwd)',
   'crumb.root': 'Workspace',
+  'fileOpen.title': 'Couldn’t open file',
+  'fileOpen.failed': 'Couldn’t open “{path}”. Try again or close this message.',
+  'fileOpen.close': 'Close',
+  'fileOpen.retry': 'Retry',
   'time.now': 'now',
   'time.minutes': '{n}min',
   'time.hours': '{n}h',

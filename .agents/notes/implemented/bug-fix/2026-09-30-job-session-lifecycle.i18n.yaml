@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-30-job-session-lifecycle.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-30-job-session-lifecycle.md
+/agent-note-persist-owned-job-lifecycle-facts:
+  en: 79d83b765acf6e24
+  zh: afe6ea9af6d96d10
+/agent-note-persist-owned-job-lifecycle-facts/problem:
+  en: b3d0591cc559e466
+  zh: aa4c385e84f7eaa1
+/agent-note-persist-owned-job-lifecycle-facts/decision:
+  en: c982a59cbe5202d3
+  zh: 9315962d2e4b8f0a
+/agent-note-persist-owned-job-lifecycle-facts/alternatives-considered:
+  en: 140cf7152a35bb27
+  zh: 001aa96687836914
+/agent-note-persist-owned-job-lifecycle-facts/consequences:
+  en: 3761af53744aa0c7
+  zh: 876cb056c248c43c

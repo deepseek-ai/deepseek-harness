@@ -10,6 +10,7 @@ import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/
 import {
   Button, IconChevronDownOutlineRegular, MarkdownDelegateProvider, Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { isAtOrOutside } from '../contract/group-tree.ts'
 import type { ChatFlowHookContext, ChatViewSlotProps, OpenFileOptions } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { TurnNavigator } from './TurnNavigator.tsx'
@@ -37,13 +38,12 @@ function observedInputs(
   let lastInputTurn: number | undefined
   for (const key of order) {
     const node = nodes.get(key)
-    if (node === undefined || (node.kind !== 'user' && node.kind !== 'steering' && node.kind !== 'turn-trigger')) continue
+    if (node === undefined || !isAtOrOutside(node, 'input')) continue
     if (node.location.kind === 'turn' || node.location.kind === 'step') lastInputTurn = node.location.turn.turn
-    if (node.kind === 'turn-trigger') continue
-    const source = (node.data as { readonly source?: unknown }).source as
-      | { readonly kind?: unknown; readonly rpcId?: unknown }
-      | undefined
-    if (source?.kind === 'user' && typeof source.rpcId === 'string') observed.add(source.rpcId)
+    const data: unknown = node.data
+    const source = typeof data === 'object' && data !== null && 'source' in data ? data.source : undefined
+    if (typeof source === 'object' && source !== null && 'kind' in source && source.kind === 'user'
+      && 'rpcId' in source && typeof source.rpcId === 'string') observed.add(source.rpcId)
   }
   return { rpcIds: observed, lastInputTurn }
 }
@@ -59,7 +59,7 @@ const MOTION_TAIL_MS = 800
  */
 export function ChatView({
   useSession, useChat, useConversation, useSessions, renderSlot,
-  sessionId, openFile, openSkill, openExternalLink, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, fileMentions,
+  sessionId, openFile, openExternalLink, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, fileMentions,
   usePresentation, useProjection, t,
 }: ChatViewSlotProps) {
   const order = useChat(s => s.order)
@@ -68,6 +68,7 @@ export function ChatView({
     ?? order.map(key => ({ kind: 'node', key: key as NodeKey })), [groupedEntries, order])
   const nodeStore = useChat(s => s.nodes)
   const deferCompletedTurns = usePresentation(policy => policy.collapseTiming === 'next-input')
+  const transcriptView = usePresentation(policy => policy.mode)
   // The rail's items are accumulated in the Chat snapshot, so this selector is
   // both the data and its change signal: the array identity moves only when a
   // Turn enters, leaves, or changes its preview.
@@ -189,6 +190,7 @@ export function ChatView({
     steeringId,
     submissionId: visibleSubmissions.at(-1)?.requestId ?? null,
     loadedTurns: turnNavigationItems,
+    transcriptView,
   })
   const flowContext = useMemo<ChatFlowHookContext>(() => ({ motion: scroll.motion }), [scroll.motion])
 
@@ -221,17 +223,17 @@ export function ChatView({
                 </button>
               </div>
             )}
-            <MarkdownDelegateProvider openExternalLink={openExternalLink} openFile={requestOpenFile} fileImages={fileImages}>
+            <MarkdownDelegateProvider openFile={requestOpenFile} openExternalLink={openExternalLink} fileImages={fileImages}>
               {renderSlot('conversation.chat.flow', {
                 entries, pendingInputs, lastInputTurn, deferCollapse,
-                cwd, openFile: requestOpenFile, openSkill, inspectCall, forkAt, loadImage, fileMentions,
+                cwd, openFile: requestOpenFile, inspectCall, forkAt, loadImage, fileMentions,
               }, { hookContext: flowContext })}
             </MarkdownDelegateProvider>
             {/* No pending placeholders: questions (ui-user-questions) and approvals
                 (ApprovalPanel) both take over the composer, so a flow card would
                 double-render the same wait. */}
           </div>
-          {/* Room added when rows above the reader close, given back only as content grows (use-chat-viewport). */}
+          {/* Fold room is reclaimed by viewport scroll, content-growth, and display-mode policies. */}
           <div className={css.turnSpacer} data-chat-turn-spacer aria-hidden="true" />
         </div>
       </div>

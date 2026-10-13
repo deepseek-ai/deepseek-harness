@@ -6,17 +6,21 @@
  * runtime imports that pkg cannot discover statically.
  */
 
+import { createHash } from 'node:crypto'
+import { build as bundle } from 'tsdown'
 import { spawn } from 'node:child_process'
 import { pnpmInvocation, restoreLegacyHoists } from './executable-packaging.ts'
 import { existsSync, statSync } from 'node:fs'
-import { chmod, copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { chmod, copyFile, cp, glob, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
+import { pathToFileURL } from 'node:url'
 import { resolveLinuxNodePtyAddon, resolveWindowsNodePtyAddons } from './executable-native-pty.ts'
-import { copyOfficeSidecar, OFFICE_ASSET_IGNORES } from './build-exe-for-python-sdk-office.ts'
+import { officeSidecarArchives, runtimeNpmArchive, OFFICE_ASSET_IGNORES } from './build-exe-for-python-sdk-office.ts'
+import { syncPythonRuntimeProduct } from './build-exe-for-python-sdk-resources.ts'
 import { deduplicateStagedWorkspacePackages, materializeStagedLinks } from './build-exe-for-python-sdk-staging.ts'
-import { preparePrimaryRuntime, smokePrimaryRuntime, type PrimaryRuntimeTarget } from './primary-runtime/prepare.ts'
+import { prepareOfficeSkillAssets } from './primary-runtime/prepare.ts'
+import primaryLock from './primary-runtime/lock.json' with { type: 'json' }
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -45,6 +49,7 @@ const DEPLOY_ONLY_DOCS = ['README.md', 'README.zh.md', 'README.i18n.yaml']
  */
 const ASSET_GLOBS = [
   'package.json',
+  '*.mjs',
   'node_modules/**/*.js',
   'node_modules/**/*.cjs',
   'node_modules/**/*.mjs',
@@ -160,8 +165,8 @@ class BuildCli {
     readonly targets: readonly Target[],
     /** Skip the package build; lib/ artifacts must already exist. */
     readonly skipBuild: boolean,
-    /** Emit package and Web artifacts without repository test and script typechecks. */
-    readonly artifactsOnly: boolean,
+    /** Build through `pnpm run build:artifacts`, which omits the aggregate test and script typechecks. */
+    readonly buildArtifacts: boolean,
     /** Print every command and config patch instead of executing. */
     readonly dryRun: boolean,
   ) {}
@@ -185,8 +190,8 @@ class BuildCli {
       console.log(BuildCli.usage())
       process.exit(0)
     }
-    if (values['skip-build'] && values['artifacts-only']) {
-      throw new Error('build-exe-for-python-sdk: --skip-build and --artifacts-only cannot be combined.')
+    if (values['skip-build'] && values['build-artifacts']) {
+      throw new Error('build-exe-for-python-sdk: --skip-build and --build-artifacts cannot be combined.')
     }
     const targets = values.targets === undefined
       ? [Target.host()]
@@ -200,7 +205,7 @@ class BuildCli {
       }
       seen.add(key)
     }
-    return new BuildCli(targets, values['skip-build'], values['artifacts-only'], values['dry-run'])
+    return new BuildCli(targets, values['skip-build'], values['build-artifacts'], values['dry-run'])
   }
 
   private static parseRaw(argv: string[]) {
@@ -209,7 +214,7 @@ class BuildCli {
       options: {
         'targets': { type: 'string' },
         'skip-build': { type: 'boolean', default: false },
-        'artifacts-only': { type: 'boolean', default: false },
+        'build-artifacts': { type: 'boolean', default: false },
         'dry-run': { type: 'boolean', default: false },
         'help': { type: 'boolean', default: false },
       },
@@ -223,7 +228,7 @@ class BuildCli {
       '  --targets=<t1,t2,...>  pkg targets, e.g. node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-macos-x64,node24-win-x64.',
       '                         Default: the host platform only (on node24).',
       '  --skip-build           skip `pnpm run build` (lib/ artifacts must already exist).',
-      '  --artifacts-only       omit repository test and script typechecks from the artifact build.',
+      '  --build-artifacts      run `pnpm run build:artifacts` instead, omitting the aggregate test and script typechecks.',
       '  --dry-run              print every command and config patch without executing.',
       '  --help                 print this help.',
       '',
@@ -267,7 +272,7 @@ class SingleExeBuild {
       console.log('build-exe-for-python-sdk: skipping pnpm run build (--skip-build)')
       return
     }
-    const args = this.cli.artifactsOnly ? ['run', 'build', '--artifacts-only'] : ['run', 'build']
+    const args = this.cli.buildArtifacts ? ['run', 'build:artifacts'] : ['run', 'build']
     await this.runPnpm('build', args)
   }
 
@@ -301,6 +306,9 @@ class SingleExeBuild {
       for (const name of DEPLOY_ONLY_DOCS) console.log(`build-exe-for-python-sdk: [dry-run] rm -f ${join(this.staging, name)}`)
     } else {
       await Promise.all(DEPLOY_ONLY_DOCS.map(name => rm(join(this.staging, name), { force: true })))
+      for await (const file of glob('node_modules/**/{README*.md,CHANGELOG*.md,HISTORY*.md,*.map,*.d.ts,*.d.mts,*.d.cts}', {
+        cwd: this.staging, exclude: ['node_modules/**/assets/**'],
+      })) await rm(join(this.staging, file), { force: true })
     }
   }
 
@@ -331,7 +339,14 @@ class SingleExeBuild {
 
   /** Add the executable entry and pkg assets to the staged manifest. */
   async injectPkgConfig(): Promise<void> {
-    const patch = { bin: ENTRY_BIN, pkg: { assets: ASSET_GLOBS, ignore: OFFICE_ASSET_IGNORES } }
+    const sourceModules = join(root, 'node_modules').replaceAll('\\', '/')
+    const patch = { bin: ENTRY_BIN, pkg: { assets: ASSET_GLOBS, ignore: [
+      ...OFFICE_ASSET_IGNORES,
+      `${sourceModules}/**`, `${sourceModules}/.pnpm/**`,
+      ...['packages', 'apps', 'vendor', 'native', 'scripts'].map(directory => `${join(root, directory).replaceAll('\\', '/')}/**`),
+      `${root.replaceAll('\\', '/')}/tsconfig*.json`,
+      '**/*.map', '**/*.d.ts', '**/*.d.mts', '**/*.d.cts',
+    ] } }
     const manifestPath = join(this.staging, 'package.json')
     if (this.cli.dryRun) {
       console.log(`build-exe-for-python-sdk: [dry-run] patch ${manifestPath} with ${JSON.stringify(patch)}`)
@@ -343,8 +358,28 @@ class SingleExeBuild {
     if (!existsSync(join(this.staging, ENTRY_BIN))) {
       throw new Error(`build-exe-for-python-sdk: staged bootstrap ${join(this.staging, ENTRY_BIN)} is missing.`)
     }
+    const helpers = [
+      { name: 'primary-runtime', source: 'scripts/primary-runtime/prepare.ts', exports: 'downloadNodeRuntime, preparePrimaryRuntime' },
+      { name: 'office-sidecar', source: 'scripts/build-exe-for-python-sdk-office.ts', exports: 'downloadOfficeSidecar' },
+    ]
+    const entries: Record<string, string> = {}
+    for (const helper of helpers) {
+      const entry = join(this.staging, `.${helper.name}-entry.ts`)
+      entries[helper.name] = entry
+      await writeFile(entry, `export { ${helper.exports} } from ${JSON.stringify(join(root, helper.source).replaceAll('\\', '/'))}\n`)
+    }
+    try {
+      await bundle({ config: false, tsconfig: false, inputOptions: { tsconfig: false }, target: 'es2024', entry: entries,
+        outDir: this.staging, clean: false, format: 'esm', platform: 'node', dts: false,
+        deps: { neverBundle: [/^@deepseek-ai\//u], alwaysBundle: [/.*/u] }, shims: true, outExtensions: () => ({ js: '.mjs' }),
+        define: { 'import.meta.main': 'false' } })
+    } finally {
+      for (const entry of Object.values(entries)) await rm(entry, { force: true })
+    }
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
     await writeFile(manifestPath, `${JSON.stringify({ ...manifest, ...patch }, null, 2)}\n`)
+    await this.run('resource helper imports', process.execPath, ['--input-type=module', '--eval',
+      ['primary-runtime.mjs', 'office-sidecar.mjs'].map(file => `await import(${JSON.stringify(pathToFileURL(join(this.staging, file)).href)})`).join('\n')])
     console.log(`build-exe-for-python-sdk: injected pkg config into ${manifestPath}`)
   }
 
@@ -357,6 +392,7 @@ class SingleExeBuild {
     const productBase = join(this.outDir, `${OUTPUT_BASENAME}-${target.platform}-${target.arch}`)
     const product = target.platform === 'win' ? `${productBase}.exe` : productBase
     await this.prepareNativePty(target)
+    const platform = target.platform === 'macos' ? 'darwin' : target.platform === 'win' ? 'win32' : target.platform
     if (!this.cli.dryRun) await mkdir(this.outDir, { recursive: true })
     await this.runPnpm(`pkg ${target.spec}`, [
       'exec',
@@ -371,26 +407,22 @@ class SingleExeBuild {
     if (!this.cli.dryRun && !existsSync(product)) {
       throw new Error(`build-exe-for-python-sdk: product ${product} is missing after the pkg run; inspect ${this.outDir}.`)
     }
-    const office = `${productBase}-office`
-    if (this.cli.dryRun) {
-      console.log(`build-exe-for-python-sdk: [dry-run] copy Office dependency closure from ${this.staging} to ${office}`)
-    } else {
-      const platform = target.platform === 'macos' ? 'darwin' : target.platform === 'win' ? 'win32' : target.platform
-      const packages = await copyOfficeSidecar(this.staging, office, { platform, arch: target.arch })
-      console.log(`build-exe-for-python-sdk: copied ${packages.length} Office packages to ${office}`)
-    }
     const ripgrep = await this.copyRipgrepSidecar(target, product)
     const resources = join(this.outDir, `${target.platform}-${target.arch}`)
-    const runtimeTarget = `${target.platform === 'macos' ? 'mac' : target.platform}-${target.arch}` as PrimaryRuntimeTarget
     if (this.cli.dryRun) {
-      console.log(`build-exe-for-python-sdk: [dry-run] prepare Python and Office skills for ${runtimeTarget} in ${resources}`)
+      console.log(`build-exe-for-python-sdk: [dry-run] lock optional resource downloads and copy Office skills to ${resources}`)
     } else {
-      const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { version: string }
-      await preparePrimaryRuntime({ target: runtimeTarget, output: resources,
-        cache: join(tmpdir(), 'dsh-primary-runtime-downloads'), version })
-      smokePrimaryRuntime(join(resources, 'primary-runtime'))
+      await rm(resources, { recursive: true, force: true })
+      await mkdir(resources, { recursive: true })
+      const { version, packageManager } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { version: string; packageManager: string }
+      const office = await officeSidecarArchives(this.staging, { platform, arch: target.arch })
+      const pnpm = await runtimeNpmArchive('pnpm', packageManager.replace('pnpm@', ''))
+      const inputs = { version, target: `${target.platform === 'macos' ? 'mac' : target.platform}-${target.arch}`, office, pnpm }
+      const identity = createHash('sha256').update(JSON.stringify({ ...inputs, primaryLock })).digest('hex')
+      await writeFile(join(resources, 'downloads.json'), JSON.stringify({ ...inputs, identity }, undefined, 2) + '\n')
+      await prepareOfficeSkillAssets(join(this.staging, 'node_modules/@deepseek-ai/dsh-skill-office/assets'), join(resources, 'office-skills'))
     }
-    if (target.platform !== 'macos') return [product, ripgrep, office, resources]
+    if (target.platform !== 'macos') return [product, ripgrep, resources]
     const spawnHelper = `${product}-spawn-helper`
     const source = join(this.staging, 'node_modules', 'node-pty', 'prebuilds', `darwin-${target.arch}`, 'spawn-helper')
     if (this.cli.dryRun) {
@@ -399,7 +431,7 @@ class SingleExeBuild {
       await copyFile(source, spawnHelper)
       await chmod(spawnHelper, 0o755)
     }
-    return [product, ripgrep, spawnHelper, office, resources]
+    return [product, ripgrep, spawnHelper, resources]
   }
 
   /** Copy the target ripgrep binary beside the executable so Node can spawn it outside pkg's virtual filesystem. */
@@ -446,6 +478,17 @@ class SingleExeBuild {
       'node_modules',
       'node-pty',
     )
+    const platform = target.platform === 'macos' ? 'darwin' : target.platform === 'win' ? 'win32' : target.platform
+    const selected = `${platform}-${target.arch}`
+    const prebuilds = join(this.staging, 'node_modules/node-pty/prebuilds')
+    if (this.cli.dryRun) console.log(`build-exe-for-python-sdk: [dry-run] keep only node-pty prebuilds ${selected}`)
+    else {
+      const source = join(packageDirectory, 'prebuilds', selected)
+      if (existsSync(source)) await cp(source, join(prebuilds, selected), { recursive: true })
+      for (const entry of await readdir(prebuilds, { withFileTypes: true })) {
+        if (entry.isDirectory() && entry.name !== selected) await rm(join(prebuilds, entry.name), { recursive: true, force: true })
+      }
+    }
     if (target.platform === 'win') {
       if (target.arch !== 'x64') {
         throw new Error('build-exe-for-python-sdk: Windows supports x64 only.')
@@ -514,11 +557,7 @@ class SingleExeBuild {
     await mkdir(destDir, { recursive: true })
     for (const path of products) {
       const destination = join(destDir, basename(path))
-      if (statSync(path).isDirectory()) {
-        await rm(destination, { recursive: true, force: true })
-        await cp(path, destination, { recursive: true })
-      } else await copyFile(path, destination)
-      await chmod(destination, statSync(path).mode & 0o777)
+      await syncPythonRuntimeProduct(path, destination)
       console.log(`build-exe-for-python-sdk: synced ${destination}`)
     }
   }

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用 `dsh-ptc-runtime`，可通过已配置的后端，针对宿主提供的异步函数运行一段模型编写的程序。请求返回无损 JSON 值、通道内有序的日志或结构化错误；程序失败在结果中 resolve，而 Promise reject 表示调用方误用。每次运行都与先前运行隔离，且运行时不了解工具或会话。执行后端需另行选择；其语言与隔离描述符标明所需的源语言和执行基底，但这些描述符本身不承诺安全边界。
+使用 `dsh-ptc-runtime` 执行调用宿主异步函数的模型程序。请求返回无损 JSON、捕获日志或结构化失败；Promise 拒绝表示调用方误用。提供方隔离不同状态所有者，并声明源码是异步函数体还是 REPL 语句。提供方可以为显式所有者保留内存，直到释放，但不会从 Session 恢复这些内存。语言与隔离描述符标识语法和执行基底，不提供安全保证。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 运行一个程序
 
-向运行时提供程序与绑定命名空间，然后依次调用 `resolve(request)` 和 `run(spec)`。解析根据提供方能力验证可选 cwd、timeout 与沙箱策略，并填入部署默认值。程序作为异步函数体运行，支持顶层 `await` 与 `return`；无损 JSON 完成值成为 `result.value`，捕获文本成为 `result.logs`，程序失败成为 `result.error`。每个输出通道保持自身顺序，跨通道交错由后端决定。
+传入程序和绑定命名空间，依次调用 `resolve(request)` 和 `run(spec)`。解析阶段验证 cwd、超时与沙盒选项，并应用提供方默认值。`programFormat` 选择支持顶层 `await`、`return` 的异步函数体，或支持顶层声明、`await` 和末尾表达式的 REPL 语句。无损 JSON 完成值进入 `result.value`，文本进入 `result.logs`，失败进入 `result.error`。
 
 ```text
 const spec = ctx.ptcRuntime.resolve({
@@ -43,6 +43,8 @@ const result = await ctx.ptcRuntime.run(spec)
 ### 选择后端
 
 后端以 `language` 与 `isolation` 提供诊断描述符；两者都不授予权限或证明约束。[`dsh-ptc-runtime-node`](../ptc-runtime-node/README.zh.md) 在全新的受管 Node 进程中按已解析沙箱策略执行可擦除 TypeScript。私有的 [`dsh-experimental-ptc-runtime-python`](../../experimental/ptc-runtime-python/README.zh.md) 提供方在全新 CPython 子进程中执行 Python，不提供文件约束。`sandboxMode` 声明提供方的部署文件策略模式；不支持该能力时则缺省。
+
+使用可选的[Node 内存保留模式](../ptc-runtime-node/README.zh.md#persistent-repl)时，跨调用传入同一个 `stateOwner` 对象，并在所有者结束时等待 `release(owner)`。不同对象不会共享环境；省略所有者时使用临时环境。无状态提供方忽略所有权。同一保留环境的调用不能重叠。
 
 ### 可移植地命名绑定
 
@@ -125,7 +127,7 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配标识�
 这些限制说明 seam 不能做什么；它们是当前包约束，不是任务积压。
 
 - **`run()` 是一次性的**——`logs` 只有在 `PtcRunResult` resolve 后才能获得；seam 不提供正在运行的程序所产生输出的流式日志或进度接口。
-- **运行之间不保留状态**——每次请求都在全新环境中运行；持久 REPL 风格内核在某个后端带来自己的日志方案之前保持延期。
+- **保留内存可以丢失**：提供方可以为显式所有者保留状态；重启、释放以及提供方指定的失败会清除状态。程序、绑定调用和结果仍由消费者记录；运行中的对象不会被序列化或回放。
 - **提供方的约束能力不同**——已发布 Node 提供方强制执行已解析文件策略，私有实验性 Python 提供方拒绝显式策略。不提供容器提供方。
 - **提供方之间没有统一的绑定字节上限**——各提供方负责自己的传输限制；绑定仍可能在结果到达这些限制前分配内存。
 
@@ -137,9 +139,9 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配标识�
 
 本开发备注是维护者的工作上下文：尚未决定的方向与开放问题。它明确不具权威性——已交付的行为与限制以上文和包代码为准。
 
-#### 未来：持久内核后端
+#### 保留状态
 
-跨 `run_code` 调用保留状态的 REPL 风格内核仍未决定；它需要自己的日志方案，因为「运行之间不保留状态」的约定正是让每次请求仅凭会话日志即可重建的原因。
+保留状态没有磁盘检查点或恢复协议。消费者必须容忍状态丢失，并在 Session 日志中记录模型可见的程序与结果。
 
 #### 未来：容器后端
 

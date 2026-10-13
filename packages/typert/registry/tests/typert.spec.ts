@@ -13,6 +13,7 @@ import type {
   TypertLookup,
   TypertRemoteContribution,
 } from '@deepseek-ai/dsh-typert-protocol'
+import { createTypertRemoteInfo, isTypertRemoteMethod } from '@deepseek-ai/dsh-typert-protocol/remote-info'
 import { apply as applyClientRegistry, inject as clientRegistryInject } from '../src/client/index.ts'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -99,6 +100,45 @@ function scopedInvocation(): InvocationDescriptor {
 }
 
 describe('TypertRegistry', () => {
+  it('indexes the same generated method objects and withdraws them with their owner', async () => {
+    const ctx = await makeCtx()
+    const codec = { mode: 'strict' as const, typeSymbol: '@fixture/types#Text', create: () => z.string(), jsonSchema: { type: 'string' } }
+    const info = createTypertRemoteInfo({ package: '@fixture/remote', methods: {
+      'goals/create': {
+        service: 'goals', invocation: { kind: 'direct' }, description: 'Create a goal.',
+        parameters: [{ name: 'request', source: 'json', codec, strictCodec: codec }], result: codec,
+      },
+    } }, z)
+    const descriptor = info.methods['goals/create']!
+    expect(info.descriptors[0]).toBe(descriptor)
+    try {
+      const owner = ctx.plugin({
+        inject: ['typert'],
+        apply(ctx) {
+          ctx.typert.register({ ...toolsContribution(), invocations: info.descriptors })
+          ctx.typert.remotes.register(info)
+        },
+      })
+      await owner
+      for (const registry of [ctx.typert.local, ctx.typert.remotes]) {
+        const method = registry.get('goals/create')
+        expect(method).toBe(descriptor)
+        expect(registry.list()[0]).toBe(descriptor)
+        if (method === undefined || !isTypertRemoteMethod(method)) throw new Error('Generated method is missing')
+        expect(method.input().create().parse({ request: 'goal' })).toEqual({ request: 'goal' })
+        expect(method.result).toBe(codec)
+      }
+      await owner.dispose()
+      for (const registry of [ctx.typert.local, ctx.typert.remotes]) {
+        expect(registry.get('goals/create')).toBeUndefined()
+        expect(registry.list()).toEqual([])
+      }
+      expect(ctx.typert.local.hasSeen('goals/create')).toBe(true)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('retains generated result decoders until the contribution is disposed', async () => {
     const ctx = await makeCtx()
     const decode = (value: unknown) => value

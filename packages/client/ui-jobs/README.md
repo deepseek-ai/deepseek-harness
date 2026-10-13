@@ -45,13 +45,15 @@ Expanding an observable row opens that job's output observation stream from `ctx
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-One slot entry in the header actions band (after the preset label) renders the trigger and popover; the popover portals to the document body, so the clipping header column and the right sidebar cannot cut it off, and is placed from its anchor and clamped inside the viewport. All data arrives through `ctx.jobs` — the component holds no transport state. The roster follows the mount: one `useEffect` keeps the session's `job.list` stream open while the control lives. Observation follows visibility: another `useEffect` opens the stream for the expanded row's job and closes it on collapse, unmount, or popover close.
+One slot entry in the header actions band (after the preset label) renders the trigger; its popover uses a body-mounted `MenuSurface` with fixed positioning so dock panels and clipping ancestors cannot cover it. The shared anchoring hook tracks scrolling, resizing, and panel-size changes. All data arrives through `ctx.jobs` — the component holds no transport state. The roster follows the mount: one `useEffect` keeps the session's `job.list` stream open while the control lives. Observation follows visibility: another `useEffect` opens the stream for the expanded row's job and closes it on collapse, unmount, or popover close.
 
 | File | Role |
 |---|---|
 | [`src/client/JobListAction.tsx`](src/client/JobListAction.tsx) | The job list: sections, durations, panels |
 | [`src/client/index.ts`](src/client/index.ts) | Slot registration and the dictionaries |
 | [`src/client/locales.ts`](src/client/locales.ts) | The `job` namespace copy (zh source of truth) |
+
+Background-job rows follow the [standard menu edge geometry](../../../docs/ui-radius.md#nested-hover); controls inside a filled running row retain compact corners.
 
 </details>
 

@@ -30,7 +30,7 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
   const scaffold = await launchWebScaffold({ extraInstallAnchors: [join(FIXTURE, 'package.json')] })
   onTestFinished(() => scaffold.close())
   const workspace = await scaffold.ctx.workspaceRegistry.create(scaffold.workspaceCwd)
-  const sessionId = await seedSession(scaffold, await readFile(SESSION_SEED, 'utf8'), 'session-menu-actions-web-e2e')
+  const sessionId = await seedSession(scaffold, await readFile(SESSION_SEED, 'utf8'), 'session-c4421b66-252e-44c0-80ed-6e320abeba25')
   await workspace.attachSession(sessionId)
   await scaffold.ctx.sessionController.rename({ sessionId, title: SESSION_TITLE })
   const entryId = await scaffold.ctx.loader.create({ name: '@fixture/live-client' })
@@ -71,13 +71,18 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     await row.hover()
     await trigger.click()
     await menu.waitFor()
-    const remainingNames = ['Pin session', 'Rename', 'Fork session', 'Archive session']
+    const remainingNames = ['Pin session', 'Rename', 'Fork session', 'Archive session', 'Copy Session ID']
     const remainingItems = menu.getByRole('menuitem')
     expect(await remainingItems.count()).toBe(remainingNames.length)
     for (const [index, name] of remainingNames.entries()) {
       expect(await remainingItems.nth(index).and(menu.getByRole('menuitem', { name, exact: true })).count()).toBe(1)
     }
     expect(await menu.getByRole('separator').count()).toBe(0)
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    await menu.getByRole('menuitem', { name: 'Copy Session ID', exact: true }).click()
+    await expect.poll(() => menu.count()).toBe(0)
+    await page.getByRole('alert').filter({ hasText: 'Session ID copied' }).waitFor()
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(sessionId)
     expect(console.pageErrors).toEqual([])
     await assertFixtureInventory(EXPECTED, [
       'bootstrap-rebuild.expected.md', 'enabled.expected.md', 'recovered.expected.md',

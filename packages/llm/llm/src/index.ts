@@ -504,7 +504,7 @@ export class LlmRuntime extends TypertRemoteService {
           || detached.some(seen => seen.provider === entry.provider)) {
           throw new LlmError(`configurable provider "${entry.provider}" is already declared`, 'DUPLICATE_DIRECTORY')
         }
-        detached.push({ ...entry, settingsPath: [...entry.settingsPath] })
+        detached.push(detachDirectoryEntry(entry))
       }
       for (const entry of held) this.directory.delete(entry.provider)
       for (const entry of detached) this.directory.set(entry.provider, entry)
@@ -541,7 +541,7 @@ export class LlmRuntime extends TypertRemoteService {
    */
   @Remote
   listConfigurableProviders(): LlmConfigurableProvider[] {
-    return [...this.directory.values()].map(entry => ({ ...entry, settingsPath: [...entry.settingsPath] }))
+    return [...this.directory.values()].map(detachDirectoryEntry)
   }
 
   /**
@@ -1165,6 +1165,16 @@ function adapterFailureChunk(error: unknown, signal?: AbortSignal): StreamChunk 
     reason: signal?.aborted || failure.code === 'ABORTED'
       ? { kind: 'aborted', failure }
       : { kind: 'error', failure },
+  }
+}
+
+/** Copy a directory entry, including its arrays, so neither side can mutate the other's copy. */
+function detachDirectoryEntry(entry: LlmConfigurableProvider): LlmConfigurableProvider {
+  const { nativeAuth } = entry
+  return {
+    ...entry,
+    settingsPath: [...entry.settingsPath],
+    ...(nativeAuth === undefined ? {} : { nativeAuth: { ...nativeAuth, env: [...nativeAuth.env] } }),
   }
 }
 

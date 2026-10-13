@@ -2,10 +2,14 @@
 
 import { createServer, type Server } from 'node:http'
 import { createContext, runInContext } from 'node:vm'
-import WebSocket, { type RawData } from 'ws'
+import WebSocket, { WebSocketServer, type RawData } from 'ws'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startInspector, type InspectorHandle } from '../src/host/bridge/controller.ts'
 import { InspectorClientFixture } from './fixtures/client-source.host.ts'
+import { COVERAGE_TEST_TIMEOUT_ENV, coverageTestTimeoutOptions } from '../../../../scripts/coverage-partitions.ts'
+
+// A fixture request must retain the test lane's deadline under instrumented CI load.
+const CDP_CALL_TIMEOUT_MS = coverageTestTimeoutOptions(process.env[COVERAGE_TEST_TIMEOUT_ENV]).testTimeout ?? 5_000
 
 interface CdpMessage {
   readonly id?: number
@@ -17,14 +21,20 @@ interface CdpMessage {
 
 class TestCdpClient {
   private nextId = 0
-  private readonly pending = new Map<number, (message: CdpMessage) => void>()
+  private readonly pending = new Map<number, {
+    respond(message: CdpMessage): void
+    disconnect(): void
+  }>()
   readonly events: CdpMessage[] = []
 
   private constructor(private readonly socket: WebSocket) {
     socket.on('message', (data) => {
       const message = JSON.parse(rawText(data)) as CdpMessage
-      if (message.id !== undefined) this.pending.get(message.id)?.(message)
+      if (message.id !== undefined) this.pending.get(message.id)?.respond(message)
       else this.events.push(message)
+    })
+    socket.on('close', () => {
+      for (const request of this.pending.values()) request.disconnect()
     })
   }
 
@@ -43,11 +53,18 @@ class TestCdpClient {
       const timer = setTimeout(() => {
         this.pending.delete(id)
         reject(new Error(`CDP call timed out: ${method}`))
-      }, 5_000)
-      this.pending.set(id, (message) => {
-        clearTimeout(timer)
-        this.pending.delete(id)
-        resolve(message)
+      }, CDP_CALL_TIMEOUT_MS)
+      this.pending.set(id, {
+        respond: (message) => {
+          clearTimeout(timer)
+          this.pending.delete(id)
+          resolve(message)
+        },
+        disconnect: () => {
+          clearTimeout(timer)
+          this.pending.delete(id)
+          reject(new Error('CDP connection closed'))
+        },
       })
       this.socket.send(JSON.stringify({ id, method, params }))
     })
@@ -79,6 +96,28 @@ describe('experimental Inspector real Worker', () => {
     inspector = undefined
     if (server !== undefined) await new Promise<void>((resolve) => { server!.close(() => { resolve() }) })
     server = undefined
+  })
+
+  it('settles pending fixture calls when their WebSocket closes', async () => {
+    server = createServer()
+    const transport = new WebSocketServer({ server })
+    try {
+      const received = new Promise<void>((resolve) => {
+        transport.once('connection', (socket) => { socket.once('message', () => { resolve() }) })
+      })
+      await new Promise<void>((resolve) => { server!.listen(0, '127.0.0.1', resolve) })
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('test server has no TCP address')
+      cdp = await TestCdpClient.connect(`ws://127.0.0.1:${String(address.port)}`)
+      const pending = cdp.call('Fixture.pending')
+      const disconnected = expect(pending).rejects.toThrow('CDP connection closed')
+      await received
+      await cdp.close()
+      await disconnected
+    } finally {
+      await cdp?.close()
+      await new Promise<void>((resolve) => { transport.close(() => { resolve() }) })
+    }
   })
 
   it('limits an embedded connection to its Client while direct connections retain every Client', async (test) => {

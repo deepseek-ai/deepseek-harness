@@ -23,7 +23,7 @@ description: "Windows 已安装应用更新的人工清单，覆盖下载失败�
 
 在已安装依赖的仓库根目录中，用两个递增的派生测试版本创建批次。这只写入已忽略的本地清单，不构建、签名、上传、安装或读取凭据。
 
-示例以 `0.1.6-alpha.1` 为基础版本。创建新物料前，按[发布版本规则](../../README.zh.md#release-versions)替换为实际基础版本、北京时间日期和未使用的序号。
+示例以 `0.1.6-alpha.1` 为基础版本。创建新物料前，按[发布版本规则](../../packaging/README.zh.md#release-versions)替换为实际基础版本、北京时间日期和未使用的序号。
 
 ```powershell
 node --import tsx apps/desktop/scripts/prepare-installed-update.ts init 0.1.6-alpha.1.20260916.1 0.1.6-alpha.1.20260916.2
@@ -44,7 +44,7 @@ node --import tsx apps/desktop/scripts/prepare-installed-update.ts application "
 
 `application` 命令将已构建的主程序/预加载模块、界面文件和准备好的启动入口复制到 `application/files`，并在 `application/result.json` 中记录 SHA-256。它不复制应用根目录的 `.env.windows`，也不冻结 `node_modules` 与构建工具。[验收打包配置](../../scripts/installed-update-builder.ts)校验该清单与选定的独立运行时，选用共享冻结文件和隔离包元数据，并保留常规安装器与签名钩子。其测试替换签名器，并通过固定版本构建器的配置校验；测试不生成安装器。另行授权的受监督构建仍须记录依赖/工具输入，并验证最终包内容及签名。
 
-[打包入口](../../scripts/package-installed-update.ts)默认只检查。保留的签名保护锁会在读取凭据前使其拒绝；入口绝不清除此锁。没有保护锁时，检查会加载 `.env.windows`、校验准备输入，不启动子进程。共享构建器要求[测试发布配置](../../README.zh.md#upload-updates)中有效的 `DOWNLOAD_TEST_RELEASE_ID`；资格验收仍使用清单中独立的 `qualification/<id>` 路径发布。在仓库根目录使用一个准确版本执行：
+[打包入口](../../scripts/package-installed-update.ts)默认只检查。保留的签名保护锁会在读取凭据前使其拒绝；入口绝不清除此锁。没有保护锁时，检查会加载 `.env.windows`、校验准备输入，不启动子进程。共享构建器要求[测试发布配置](../../publishing/README.zh.md#upload-updates)中有效的 `DOWNLOAD_TEST_RELEASE_ID`；资格验收仍使用清单中独立的 `qualification/<id>` 路径发布。在仓库根目录使用一个准确版本执行：
 
 ```powershell
 node --import tsx apps/desktop/scripts/package-installed-update.ts "<run.json>" 0.1.6-alpha.1.20260916.1 --check
@@ -52,7 +52,7 @@ node --import tsx apps/desktop/scripts/package-installed-update.ts "<run.json>" 
 
 实际打包仍未验证，必须另行获得硬件恢复授权并有操作者在场。`--execute` 模式要求终端和包含版本、批次 ID 的准确确认，没有管道批准选项。它再次检查保护锁，并独占创建该版本的 `packaging` 目录。受监督子进程只构建该版本、禁用发布、移除无关凭据，失败或达到 15 分钟整体期限时停止。该期限不限制单次 CSP 内部认证尝试。记录保留源码/工具哈希、脱敏输出、事件和产物文件哈希；已有尝试或输出拒绝复用。`builderCompleted` 与监督程序成功结果不证明包验证、验签或安装成功；独立完成这些检查前，`packageVerification` 保持 `pending`。
 
-操作者开始前，提供两个已验证安装包、生成的元数据与 blockmap、打包和签名记录、准确的安装后可执行文件路径与固定 test feed URL。两个安装包必须使用相同的测试身份、隔离数据目录，并在每次启动时设置同一个安装目录外的绝对路径 `DSH_DESKTOP_UPDATE_JOURNAL_DIR`，包括安装器触发的重启。仅在首次启动终端中设置变量是不够的。[Windows 签名规则](../../README.zh.md#windows-ev-signing)仍适用；清单绝不解除签名保护锁。
+操作者开始前，提供两个已验证安装包、生成的元数据与 blockmap、打包和签名记录、准确的安装后可执行文件路径与固定 test feed URL。两个安装包必须使用相同的测试身份、隔离数据目录，并在每次启动时设置同一个安装目录外的绝对路径 `DSH_DESKTOP_UPDATE_JOURNAL_DIR`，包括安装器触发的重启。仅在首次启动终端中设置变量是不够的。[Windows 签名规则](../../windows-signing/README.zh.md#windows-ev-signing)仍适用；清单绝不解除签名保护锁。
 
 Windows [只读签名检查器](../../scripts/installed-update-signature.mjs)使用真实 updater 验签，发布者来自可信公钥证书，随后要求 Authenticode 与时间戳属性有效且 SHA-512 未变。验签子进程不继承签名/上传秘密或 PowerShell 模块路径覆盖。检查器绝不加载 `.env.windows`、签名文件或执行被检查的可执行文件。本地已观察到签名探针通过、未签名安装包被拒绝；这些结果不能证明任一准备版本、包身份或安装行为已验收。
 

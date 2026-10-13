@@ -22,7 +22,7 @@ The required result is one raw Session journal and one Client presentation owner
 
 ## Decision
 
-The visual-equivalence requirements below exclude the separately approved [nested terminal-card fix](../../../../packages/client/ui-tool/README.md) and [recorded tool details](../../../../packages/client/ui-tool/README.md); all other presentation and ownership constraints remain.
+The visual-equivalence requirements below exclude the separately approved [nested terminal-card fix](../../../../packages/client/ui-tool/README.md), [recorded tool details](../../../../packages/client/ui-tool/README.md), and [background Shell command display](../bug-fix/2026-10-10-background-shell-command-display.md); all other presentation and ownership constraints remain.
 
 The Session Remote journal sends only raw, validated, persistable Session events. `session.page` and `session.follow` do not parse tool arguments, query the Tools registry, restore a presenter scope, execute `presentCall` or `presentResult`, or construct or clone any tool view.
 
@@ -51,7 +51,7 @@ The Host `ToolDefinition.presentCall`, `ToolDefinition.presentResult`, `ToolCall
 | Retained | the Session log format, Remote journal lifecycle, and Conversation identity/topology |
 | Retained | the existing keyed slot, Generic fallback, and Chat, Details, and Trajectory structure |
 | Forbidden | a new Client presenter service, parallel registry, or wire renderer id |
-| Forbidden | new cards, visual redesign, interaction redesign, or PTC dispatch rich-card enhancements except the [nested terminal-card exception](../../../../packages/client/ui-tool/README.md) and [recorded tool details](../../../../packages/client/ui-tool/README.md) |
+| Forbidden | new cards, visual redesign, interaction redesign, or PTC dispatch rich-card enhancements except the [nested terminal-card exception](../../../../packages/client/ui-tool/README.md), [recorded tool details](../../../../packages/client/ui-tool/README.md), and [background Shell command display](../bug-fix/2026-10-10-background-shell-command-display.md) |
 | Forbidden | compatibility dual-writing, version negotiation, or retention of the old `view` field |
 
 ## Terminology
@@ -294,15 +294,16 @@ Unknown tools continue to use `GenericToolCard` with the name, raw arguments, re
 
 The title, kind, rawInput, content, and locations from Generic Host `presentCall` do not currently drive an ordinary Web row. Generic `presentResult.content` also does not drive Web output, so the Client need not copy these unconsumed values.
 
+<a id="terminal-card"></a>
 ### Terminal card
 
-The Client terminal model derives existing `TerminalBlock` props from the tool name, call arguments, result content, error, and Session cwd, independently of `parentCallId`.
+The Client terminal model derives existing `TerminalBlock` props from the tool name, call arguments, result content, error, and Session cwd, independently of `parentCallId`. [Background Shell command display](../bug-fix/2026-10-10-background-shell-command-display.md) governs explicit background `bash`/`pwsh` launches; the remaining ownership and fallback rules below stay in force.
 
 | Input | Preserved result |
 |---|---|
 | running standard `bash`/`pwsh` foreground call | terminal prompt, description, cwd, and running state |
 | successful standard foreground call | terminal output, exit code/signal, and settled state presentation |
-| `run_in_background:true` | Generic row and raw result |
+| explicit background standard `bash`/`pwsh` | original `background` flag with call `running` at Start; acknowledgement clears `running` and retains a static command without output or job status |
 | tool execution error | Generic IN/OUT and error summary |
 | running persistent `bash`/`pwsh` | terminal prompt |
 | settled persistent `bash`/`pwsh` | Generic flattened result, with no new exit card |
@@ -310,7 +311,7 @@ The Client terminal model derives existing `TerminalBlock` props from the tool n
 | background/error `terminal_send` | Generic result |
 | PTC dispatch child | same terminal eligibility and fallback rules as a root call |
 
-Standard shell results parse trailing `[exit code: N]` and `[killed by signal: X]` markers. A final recognized spill-policy notice selects Generic output instead: expandable in shell rows and raw in Details, because the exit marker may be displaced or omitted. A parsed marker is removed from the terminal body; timeout, sandbox denial, and markers without a pill remain in the body.
+Foreground standard shell results parse trailing `[exit code: N]` and `[killed by signal: X]` markers; explicit background launch acknowledgements do not enter output or exit-status parsing. A final recognized spill-policy notice selects Generic output instead: expandable in shell rows and raw in Details, because the exit marker may be displaced or omitted. A parsed marker is removed from the terminal body; timeout, sandbox denial, and markers without a pill remain in the body.
 
 Call `description` remains above the card and overrides the collapsed summary. Workdir continues handling absolute, relative, and missing values. Relative paths resolve against the Session cwd while preserving normalization for `.`, `..`, drive letters, and UNC roots.
 
@@ -318,7 +319,7 @@ For `terminal_send`, non-empty input and the session id remain verbatim tool dat
 
 Standard and persistent providers sharing the same tool name are a special compatibility point. The Client uses currently valid argument and result features to preserve their delivered differences. Input that cannot be identified unambiguously uses a Generic settled result rather than gaining new presentation.
 
-`TerminalBlock` ANSI handling, cursor replay, wide characters, line limits, expansion, copying, and assistive text remain unchanged.
+Outside the explicit background command-only presentation, `TerminalBlock` ANSI handling, cursor replay, wide characters, line limits, expansion, copying, and assistive text remain unchanged.
 
 ### Diff card
 
@@ -412,7 +413,7 @@ The scenario does not import Host tool packages to compute page presentation and
 | orphan result | callId title and Generic output |
 | interrupted call | warning/stopped state |
 | foreground bash/pwsh | current terminal prompt, body, cwd, and state |
-| background/error bash/pwsh | current Generic IN/OUT |
+| explicit background bash/pwsh | terminal Start and static command-only acknowledgement; launch errors retain Generic IN/OUT |
 | persistent shell | current running terminal and settled Generic form |
 | terminal_send | current foreground terminal and background/error Generic form |
 | write/edit | current intended/applied diff and error fallback |

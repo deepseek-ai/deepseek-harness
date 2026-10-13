@@ -4,6 +4,7 @@ import type {
 import type {
   ChatNode, ChatNodeDataMap, ChatNodeKind,
 } from '../contract/chat-nodes.ts'
+import type { ChatGroupTree } from '../contract/group-tree.ts'
 
 /**
  * Relative positions in one durable event's seq neighborhood: interrupted
@@ -29,12 +30,23 @@ export function contextLocation(context: ConversationNodeContext): ConversationL
 }
 
 /**
+ * Read the Turn and Step a Location resolves to.
+ * @param location - engine-owned Location.
+ * @returns resolved coordinates; Session-level and unresolved Locations have none.
+ */
+export function locationCoordinates(location: ConversationLocation): { turn?: number; step?: number } {
+  if (location.kind === 'step') return { turn: location.turn.turn, step: location.step.step }
+  if (location.kind === 'turn') return { turn: location.turn.turn }
+  return {}
+}
+
+/**
  * Build one final Chat target Node with the engine-owned stable key.
  * @param context - assembled business Context.
  * @param kind - Chat renderer dispatch key.
  * @param anchorSeq - sortable render position.
  * @param data - renderer-owned payload.
- * @param options - optional Location and visibility overrides.
+ * @param options - optional Location, visibility, and group-tree overrides.
  * @returns final Chat view Node.
  */
 export function chatNode<Kind extends ChatNodeKind>(
@@ -45,6 +57,7 @@ export function chatNode<Kind extends ChatNodeKind>(
   options: {
     readonly location?: ConversationLocation
     readonly visibility?: 'visible' | 'hidden'
+    readonly groupTree?: ChatGroupTree | undefined
   } = {},
 ): ChatNode<Kind> {
   return {
@@ -55,6 +68,7 @@ export function chatNode<Kind extends ChatNodeKind>(
     anchorSeq,
     location: options.location ?? contextLocation(context),
     visibility: options.visibility ?? 'visible',
+    groupTree: options.groupTree,
     data,
   }
 }

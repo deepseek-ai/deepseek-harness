@@ -22,11 +22,11 @@ Lead 必须等待所需工作后才能给出最终答案。进程 teardown 仍�
 
 ## Profile delegation
 
-[Team profile](../../../../packages/experimental/agent-team-profile/README.zh.md) 禁用 `subagent`、`subagent_fork` 以及名称重叠的全局控件。模型直接委派使用支持 fresh 或 fork 上下文的 `spawn_teammate`，使这些子代理进入持久 roster。Workflow 仍通过 base profile 的 fresh `spawn` 提供方执行脚本编排；经模型工具创建的 workflow 子代理不会继承 teammate 的对话身份。Subagent 服务和提供方仍是共享基础设施。普通 Session fork 保留历史，不纠正身份。提供方所拥有的子代理工具可见性仍是[已记录的限制](../../../../packages/experimental/tool-agent-team/README.zh.md#known-limitations-and-deferred-work)。
+[Team profile](../../../../packages/experimental/agent-team-profile/README.zh.md) 禁用 `subagent`、`subagent_fork` 以及名称重叠的全局控件。模型直接委派使用支持 fresh 或 fork 上下文的 `spawn_teammate`，使这些子代理进入持久 roster。Workflow 仍通过 base profile 的 fresh `spawn` 提供方执行脚本编排；经模型工具创建的 workflow 子代理不会继承 teammate 的对话身份。Subagent 服务和提供方仍是共享基础设施。普通 Session fork 保留历史；[当前身份处理](../architecture/2026-10-13-team-identity-runtime-context.zh.md)提供 fork 自己的角色。
 
 ## Team identity
 
-工具 `spawn_teammate` 在初始任务前加上 user-role `<system-reminder>`，声明 `You are teammate "<name>".`。身份和任务进入同一条持久化收件箱消息。共享 system 策略和全部工具 schema 在成员间保持一致；执行时检查角色权限。Team 工具根据调用者确定 Team，并接受成员名字，因此模型不需要 Team id。身份随普通历史经历冷恢复和压缩；插件不检查提醒是否保留，也不添加替代消息。fork 继承已记录文本，不补发 Lead 身份修正。把身份放进 system prompt 会在继承历史之前改变前缀；把它留在初始任务中既保留此前缀，也无需每步维护身份提醒。已有的 system 内嵌身份可能需要一次提示词协调；保留的事件格式代际保持不变。
+共享 system 策略和全部工具 schema 在成员间保持一致；执行时检查角色权限。Team 工具根据调用者确定 Team，并接受成员名字，因此模型不需要 Team id。[必需 runtime-context 身份](../architecture/2026-10-13-team-identity-runtime-context.zh.md)负责身份注入、保留与 fork 处理。
 
 ## Provisioning and recovery
 

@@ -56,6 +56,7 @@ class FeedService extends TypertRemoteService {
   readonly signals: AbortSignal[] = []
   readonly peeked: unknown[] = []
   readonly peers: PeerScope[] = []
+  readonly windows: RemoteInvocation['uplinkWindow'][] = []
   leftover: AsyncIterator<string> | undefined
   source: Iterable<string> = []
   returns = 0
@@ -130,6 +131,7 @@ class FeedService extends TypertRemoteService {
     this.signals.push(signal)
     const invocation = this.invocation()
     this.peers.push(invocation.peer)
+    this.windows.push(invocation.uplinkWindow)
     try {
       for await (const item of invocation.uplink<string>()) yield `${prefix}${item}`
     } finally {
@@ -747,6 +749,37 @@ describe('Typert Remote streams', () => {
     await expect(collect(await ctx.typertGateway.stream({
       namespace: 'feed', method: 'srcEcho', args: { prefix: 's:' }, uplink: toAsync<unknown>(['a', 2]),
     }))).resolves.toEqual(['s:a', 's:2'])
+  })
+
+  it('passes carrier capacity to the invocation and leaves unlimited carriers without a window', async () => {
+    const { ctx, service } = await setup(false)
+    const window = { maxBytes: 512, frameOverheadBytes: 40 }
+    for (const uplinkWindow of [undefined, window]) {
+      await expect(collect(await ctx.typertGateway.stream({
+        namespace: 'feed', method: 'echo', args: { prefix: '' }, uplink: toAsync(['a']), uplinkWindow,
+      }))).resolves.toEqual(['a'])
+    }
+    expect(service.windows).toEqual([undefined, window])
+  })
+
+  it('reports configured frame capacity and the encoded envelope size for the current stream id', async () => {
+    const { ctx, service } = await setup(true, { streamInboxBytes: 512 })
+    const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, { headers: { cookie: browserCookie(ctx) } })
+    await once(socket, 'open')
+    try {
+      const streamId = '界"window'
+      sendOpen(socket, streamId, 'feed/echo', { prefix: '' })
+      socket.send(JSON.stringify({ type: 'end', streamId }))
+      await vi.waitFor(() => { expect(service.windows).toHaveLength(1) })
+      const value = 'line\n界'
+      const complete = JSON.stringify({ type: 'item', streamId, value })
+      expect(service.windows[0]).toEqual({
+        maxBytes: 512, frameOverheadBytes: Buffer.byteLength(complete, 'utf8') - Buffer.byteLength(JSON.stringify(value), 'utf8'),
+      })
+    } finally {
+      socket.close()
+      await once(socket, 'close')
+    }
   })
 
   it('echoes uplink frames over the WebSocket carrier and fails misused uplinks per stream', async () => {

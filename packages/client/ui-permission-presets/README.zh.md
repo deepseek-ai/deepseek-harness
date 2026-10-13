@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-为当前 Web 会话或未来会话选择权限预设。通用设置行只更改之后创建会话所用的默认值；composer 与 `/permission` 选择器切换当前会话。默认 Web 提供仅可查看、工作区内修改与完全权限。显式加载实验 Auto integration 后，当前会话选择器会增加带 `EXP` 标记的 Auto review。通过可见选项选择完全权限或 Auto 时，需要分别确认对应风险；完整的 `/permission <preset>` 命令直接执行。宿主通过 Session 投影确认每次变更。
+为当前 Web 会话或未来会话选择权限预设。通用设置行只更改之后创建会话所用的默认值；composer 与 `/permission` 选择器切换当前会话。默认 Web 提供仅可查看、工作区内修改与完全权限。显式加载实验 Auto integration 后，当前会话选择器会增加带 `EXP` 标记的自动审查。通过可见选项选择完全权限或 Auto 时，需要分别确认对应风险；完整的 `/permission <preset>` 命令直接执行。宿主通过 Session 投影确认每次变更。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 选择器
 
-选中即提交 `/permission <preset>` 命令行。带参形式（直接键入 `/permission <preset>`）仍直接切换；装饰只替换裸调用。内置标签在英文界面中是 `Read Only`、`Workspace Write`、`Full access` 和 `Auto review`，在中文界面中是「仅可查看」「工作区内修改」「完全权限」和 `Auto review`。显式 host 标签保持原样，未知 kebab-case 名称渲染为 Title Case；`auto` 带有 `EXP` badge，并在可见选择时要求实验风险确认。`custom` 只是显示状态，绝非目标。
+选中即提交 `/permission <preset>` 命令行。带参形式（直接键入 `/permission <preset>`）仍直接切换；装饰只替换裸调用。内置标签在英文界面中是 `Read Only`、`Workspace Write`、`Full access` 和 `Auto review`，在中文界面中是「仅可查看」「工作区内修改」「完全权限」和「自动审查」。显式 host 标签保持原样，未知 kebab-case 名称渲染为 Title Case；`auto` 在菜单选项中带有 `EXP` 标记，并在可见选择时要求实验风险确认。选中后的 composer 控件显示模式，不展示该标记。`custom` 只是显示状态，绝非目标。
 
 实时目录撤销某个预设时，composer 关闭对应的待确认对话框，并用 Session 的当前值替代已不可用的乐观选择。每次目录失效（无 payload 的通知或连接代际变更）会关闭已打开的 slash 选择器或其确认对话框，不消费草稿；而发布某个 picker 正在等待的读取结果时，该 picker 保持打开并保留失败与重试状态；重新打开时读取当前目录。已经提交的命令在响应结束前继续保持忙碌状态。
 
@@ -45,7 +45,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-General Settings 行经 `ctx.configForms` 读取显式暴露的 `permission` Settings 描述符，并携带描述符 revision 写入一条 `settings.mutate` 路径操作；其 observable 经 slot 系统的 `hooks` compartment 传递，因此 React 钩子绑定归渲染器，推送失效通知会重新获取描述符。该值只在之后创建会话时读取。当前会话界面是挂在宿主 `/permission` 命令上的 popupSelect 装饰（`ctx.commandUi.decorate`）：宿主命令保留斜杠菜单行、带参形式与持久生命周期记账，装饰只把裸调用替换为选择器。一个进程级目录会在首次 Remote 读取前订阅无 payload 的目录通知，并且只发布当前连接代际中最新的完整成功结果。胜出的读取失败或连接 reset 会清空旧快照：composer seat 因此隐藏，直到后续既有触发重试，而 slash 选择器保持可用并在弹窗内显示失败与重试；旧连接代际与 dispose 后才返回的结果会被忽略。它的公共 observable 是 `{ value }` 与 `invalidations`（每次目录通知或连接代际变更打一个点）；失败仅供命令式加载内部使用。slash popup 与 composer seat 共用这份目录，而 Session `permissions` 投影只提供 `currentValue`。Full access 与 Auto review 各自携带本地化确认文案；Auto 还携带由共享 popup 外壳渲染的 badge。
+General Settings 行经 `ctx.configForms` 读取显式暴露的 `permission` Settings 描述符，并携带描述符 revision 写入一条 `settings.mutate` 路径操作；其 observable 经 slot 系统的 `hooks` compartment 传递，因此 React 钩子绑定归渲染器，推送失效通知会重新获取描述符。该值只在之后创建会话时读取。当前会话界面是挂在宿主 `/permission` 命令上的 popupSelect 装饰（`ctx.commandUi.decorate`）：宿主命令保留斜杠菜单行、带参形式与持久生命周期记账，装饰只把裸调用替换为选择器。一个进程级目录会在首次 Remote 读取前订阅无 payload 的目录通知，并且只发布当前连接代际中最新的完整成功结果。胜出的读取失败或连接 reset 会清空旧快照：composer seat 因此隐藏，直到后续既有触发重试，而 slash 选择器保持可用并在弹窗内显示失败与重试；旧连接代际与 dispose 后才返回的结果会被忽略。它的公共 observable 是 `{ value }` 与 `invalidations`（每次目录通知或连接代际变更打一个点）；失败仅供命令式加载内部使用。slash popup 与 composer seat 共用这份目录，而 Session `permissions` 投影只提供 `currentValue`。完全权限与自动审查各自携带本地化确认文案；Auto 还携带由共享 popup 外壳渲染的 badge。
 
 </details>
 
@@ -80,7 +80,7 @@ General Settings 行经 `ctx.configForms` 读取显式暴露的 `permission` Set
 这些限制界定了当前权限界面。它们是当前包约束，不是通用策略对比或任务积压。
 
 - **设置行仅限 Web**——非 Web 客户端仍可经 `/permission` 切换当前会话，但不会获得这项浏览器贡献。
-- **Auto review 仅限当前会话**——General Settings 行有意省略它，且只有通过可见选择器选择时才显示实验确认；显式键入 `/permission auto` 已经构成明确同意。
+- **自动审查仅限当前会话**——General Settings 行有意省略它，且只有通过可见选择器选择时才显示实验确认；显式键入 `/permission auto` 已经构成明确同意。
 - **预设描述来自宿主**——本地化的内置标签旁边可能显示另一种语言编写的描述。
 
 <a id="dev-note"></a>

@@ -1194,6 +1194,17 @@ describe('remaining branches', () => {
     expect(await manager.create()).toMatchObject({ ok: false })
   })
 
+  it('create forwards the requested Agent preset and catalogs the identity the Host returns', async ({ mock, remote }) => {
+    remote.session.create.mockResolvedValue(ok({ sessionId: S2, agentPreset: 'minimal' }))
+    const manager = makeManager(mock, remote)
+
+    const result = await manager.create({ workspaceId: 'w1' as never, sessionId: S1, agentPreset: 'minimal' })
+
+    expect(remote.session.create).toHaveBeenCalledExactlyOnceWith({ workspaceId: 'w1', sessionId: S1, agentPreset: 'minimal' })
+    expect(result).toMatchObject({ ok: true, value: { sessionId: S2 } })
+    expect(manager.getListSnapshot().items.map(item => item.sessionId)).toEqual([S2])
+  })
+
   it.for(['create', 'fork'] as const)('preserves pushed running state when a %s response arrives later', async (operation, { mock, remote }) => {
     const response = Promise.withResolvers<Awaited<ReturnType<typeof remote.session.create>>>()
     remote.session[operation].mockImplementation(() => response.promise)

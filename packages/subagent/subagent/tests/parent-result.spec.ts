@@ -12,7 +12,7 @@ import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent
 import SubagentRuntime from '../src/index.ts'
 import { mountLocalActivations } from './local-activation.ts'
 
-it.each(['absent', 'filtered', 'unused'] as const)('returns the closing answer when send_message is %s', async (availability) => {
+it.each(['absent', 'unused'] as const)('returns the closing answer when send_message is %s', async (availability) => {
   const ctx = new Context()
   await mountLocalActivations(ctx)
   await mountAgentLoopTestDependencies(ctx)
@@ -28,7 +28,6 @@ it.each(['absent', 'filtered', 'unused'] as const)('returns the closing answer w
     provider: 'spawn', label: 'Compute the answer', delivery: 'parent', signal: new AbortController().signal,
     request: {
       parent, prompt: [{ type: 'text', text: 'Find the answer.' }],
-      ...availability === 'filtered' ? { toolFilter: { deny: ['send_message'] } } : {},
     },
   })
   try {

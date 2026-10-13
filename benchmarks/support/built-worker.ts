@@ -18,6 +18,8 @@ export interface BuiltBenchmarkWorkerOptions {
   readonly timeoutMs: number
   readonly exposeGc?: boolean
   readonly heapLimitMb?: number
+  /** Fixed semi-space size, so an allocation interval smaller than it runs without a scavenge. */
+  readonly semiSpaceMb?: number
 }
 
 /**
@@ -40,6 +42,9 @@ export function runBuiltBenchmarkWorker<Report>(
       ...options.heapLimitMb === undefined
         ? []
         : [`--max-old-space-size=${String(options.heapLimitMb)}`],
+      ...options.semiSpaceMb === undefined
+        ? []
+        : [`--min-semi-space-size=${String(options.semiSpaceMb)}`, `--max-semi-space-size=${String(options.semiSpaceMb)}`],
       options.worker,
       ...options.args ?? [],
     ], {

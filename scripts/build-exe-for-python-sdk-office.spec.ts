@@ -1,8 +1,12 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { copyOfficeSidecar } from './build-exe-for-python-sdk-office.ts'
+import { createHash } from 'node:crypto'
+import { c as tar } from 'tar'
+import { downloadOfficeSidecar, runtimeNpmArchive } from './build-exe-for-python-sdk-office.ts'
+
+import { officePackageDirectories } from './libreoffice-packages.mjs'
 
 const temporaryDirectories: string[] = []
 
@@ -24,33 +28,8 @@ async function fixture() {
   return { root, staging, destination, packageAt }
 }
 
-it('copies package-owned data, licenses, helper permissions, and nested dependencies', async () => {
-  const { staging, destination, packageAt } = await fixture()
-  const entry = await packageAt('@deepseek-ai/libreoffice-kit', { optionalDependencies: { '@deepseek-ai/libreoffice-kit-wasm': '0.0.1' }, dependencies: { decoder: '1' } })
-  const engine = await packageAt('@deepseek-ai/libreoffice-kit-wasm')
-  const decoder = await packageAt('decoder', { dependencies: { codec: '1' } }, entry)
-  await packageAt('codec', {}, decoder)
-  await packageAt('codec', { version: '2.0.0' })
-  const assets = ['assets/soffice.data', 'prebuilds.json', 'licenses/LICENSE', 'bin/helper']
-  for (const name of assets) {
-    const path = join(engine, name)
-    await mkdir(dirname(path), { recursive: true })
-    await writeFile(path, name)
-  }
-  await chmod(join(engine, 'bin/helper'), 0o755)
-
-  const packages = await copyOfficeSidecar(staging, destination, { platform: 'linux', arch: 'x64' })
-
-  expect(packages).toHaveLength(4)
-  expect(await readFile(join(destination, 'node_modules/@deepseek-ai/libreoffice-kit-wasm/assets/soffice.data'), 'utf8')).toBe('assets/soffice.data')
-  expect(await readFile(join(destination, 'node_modules/@deepseek-ai/libreoffice-kit-wasm/licenses/LICENSE'), 'utf8')).toBe('licenses/LICENSE')
-  expect(await readFile(join(destination, 'node_modules/@deepseek-ai/libreoffice-kit/node_modules/decoder/node_modules/codec/package.json'), 'utf8')).toContain('codec')
-  await expect(stat(join(destination, 'node_modules/codec'))).rejects.toMatchObject({ code: 'ENOENT' })
-  if (process.platform !== 'win32') expect((await stat(join(destination, 'node_modules/@deepseek-ai/libreoffice-kit-wasm/bin/helper'))).mode & 0o111).toBe(0o111)
-})
-
-it('copies installed target optionals and leaves other platforms and absent optionals out', async () => {
-  const { staging, destination, packageAt } = await fixture()
+it('locates installed target optionals and leaves other platforms and absent optionals out', async () => {
+  const { staging, packageAt } = await fixture()
   await packageAt('@deepseek-ai/libreoffice-kit', {
     optionalDependencies: { native: '1', foreign: '1', absent: '1' },
   })
@@ -58,84 +37,112 @@ it('copies installed target optionals and leaves other platforms and absent opti
   await packageAt('native', { os: ['linux'], cpu: ['x64'] })
   await packageAt('foreign', { os: ['darwin'], cpu: ['arm64'] })
 
-  const packages = await copyOfficeSidecar(staging, destination, { platform: 'linux', arch: 'x64' })
+  const packages = await officePackageDirectories(staging, { platform: 'linux', arch: 'x64' })
 
-  expect(packages.map(path => path.replaceAll('\\', '/'))).toEqual([
+  expect(packages.map(path => path.slice(staging.length + 1).replaceAll('\\', '/'))).toEqual([
     'node_modules/@deepseek-ai/libreoffice-kit',
     'node_modules/@deepseek-ai/libreoffice-kit-wasm',
     'node_modules/native',
   ])
 })
 
-it('rejects a missing required dependency before producing a sidecar', async () => {
-  const { staging, destination, packageAt } = await fixture()
+it('rejects a missing required dependency in the deployed closure', async () => {
+  const { staging, packageAt } = await fixture()
   await packageAt('@deepseek-ai/libreoffice-kit', { dependencies: { 'dsh-missing-office-fixture': '1' } })
 
-  await expect(copyOfficeSidecar(staging, destination, { platform: 'linux', arch: 'x64' }))
+  await expect(officePackageDirectories(staging, { platform: 'linux', arch: 'x64' }))
     .rejects.toThrow('dsh-missing-office-fixture required by @deepseek-ai/libreoffice-kit is missing')
-  await expect(stat(destination)).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
 it('rejects an incomplete installed optional instead of omitting it', async () => {
-  const { staging, destination, packageAt } = await fixture()
+  const { staging, packageAt } = await fixture()
   await packageAt('@deepseek-ai/libreoffice-kit', { optionalDependencies: { broken: '1' } })
   await mkdir(join(staging, 'node_modules/broken'), { recursive: true })
 
-  await expect(copyOfficeSidecar(staging, destination, { platform: 'linux', arch: 'x64' }))
+  await expect(officePackageDirectories(staging, { platform: 'linux', arch: 'x64' }))
     .rejects.toMatchObject({ code: 'ENOENT' })
 })
 
 it('rejects an ancestor dependency outside the deployed closure', async () => {
-  const { root, staging, destination, packageAt } = await fixture()
+  const { root, staging, packageAt } = await fixture()
   await packageAt('@deepseek-ai/libreoffice-kit', { dependencies: { 'ancestor-office-fixture': '1' } })
   await packageAt('ancestor-office-fixture', {}, root)
 
-  await expect(copyOfficeSidecar(staging, destination, { platform: 'linux', arch: 'x64' }))
+  await expect(officePackageDirectories(staging, { platform: 'linux', arch: 'x64' }))
     .rejects.toThrow('outside the deployed closure')
 })
 
-it('requires the declared WASM engine inside the deployed closure', async () => {
-  const { root, staging, destination, packageAt } = await fixture()
-  await packageAt('@deepseek-ai/libreoffice-kit', { optionalDependencies: { '@deepseek-ai/libreoffice-kit-wasm': '0.0.1' } })
+it.each([true, false])('requires a staged WASM engine when declared=%s even when an ancestor has one', async (declared) => {
+  const { root, staging, packageAt } = await fixture()
+  await packageAt('@deepseek-ai/libreoffice-kit', declared ? { optionalDependencies: { '@deepseek-ai/libreoffice-kit-wasm': '0.0.1' } } : {})
   await packageAt('@deepseek-ai/libreoffice-kit-wasm', {}, root)
-  await expect(copyOfficeSidecar(staging, destination, { platform: 'linux', arch: 'x64' }))
+  await expect(officePackageDirectories(staging, { platform: 'linux', arch: 'x64' }))
     .rejects.toThrow('Office engine @deepseek-ai/libreoffice-kit-wasm required for linux/x64 is missing.')
-  await expect(stat(destination)).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
 it.each([
   ['darwin', 'arm64', 'darwin-arm64'], ['darwin', 'x64', 'darwin-x64'],
   ['win32', 'arm64', 'win32-arm64'], ['win32', 'x64', 'win32-x64'],
   ['linux', 'x64', 'linux-x64'], ['linux', 'arm64', 'wasm'], ['freebsd', 'x64', 'wasm'],
-])('copies only the %s/%s engine even when other engines are staged', async (platform, arch, selected) => {
-  const { staging, destination, packageAt } = await fixture()
+])('locates only the %s/%s engine even when other engines are staged', async (platform, arch, selected) => {
+  const { staging, packageAt } = await fixture()
   const targets = ['darwin-arm64', 'darwin-x64', 'win32-arm64', 'win32-x64', 'linux-x64', 'wasm']
   const names = targets.map(target => `@deepseek-ai/libreoffice-kit-${target}`)
   await packageAt('@deepseek-ai/libreoffice-kit', { optionalDependencies: Object.fromEntries(names.map(name => [name, '0.0.1'])) })
   for (const name of names) await packageAt(name)
   const expected = `@deepseek-ai/libreoffice-kit-${selected}`
-  const packages = await copyOfficeSidecar(staging, destination, { platform, arch })
-  expect(packages.map(path => path.replaceAll('\\', '/'))).toEqual([
+  const packages = await officePackageDirectories(staging, { platform, arch })
+  expect(packages.map(path => path.slice(staging.length + 1).replaceAll('\\', '/'))).toEqual([
     'node_modules/@deepseek-ai/libreoffice-kit', `node_modules/${expected}`,
   ])
 })
 
 it.each(['darwin', 'win32', 'linux'])('%s requires its native package even when WASM is staged', async (platform) => {
-  const { staging, destination, packageAt } = await fixture()
+  const { staging, packageAt } = await fixture()
   await packageAt('@deepseek-ai/libreoffice-kit', { optionalDependencies: {
     '@deepseek-ai/libreoffice-kit-wasm': '0.0.1', [`@deepseek-ai/libreoffice-kit-${platform}-arm64`]: '0.0.1',
   } })
   await packageAt('@deepseek-ai/libreoffice-kit-wasm')
-  await expect(copyOfficeSidecar(staging, destination, { platform, arch: 'arm64' }))
+  await expect(officePackageDirectories(staging, { platform, arch: 'arm64' }))
     .rejects.toThrow(`Office engine @deepseek-ai/libreoffice-kit-${platform}-arm64 required for ${platform}/arm64 is missing.`)
-  await expect(stat(destination)).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
-it('requires a staged Linux WASM engine even when an ancestor has one', async () => {
-  const { root, staging, destination, packageAt } = await fixture()
-  await packageAt('@deepseek-ai/libreoffice-kit')
-  await packageAt('@deepseek-ai/libreoffice-kit-wasm', {}, root)
-  await expect(copyOfficeSidecar(staging, destination, { platform: 'linux', arch: 'x64' }))
-    .rejects.toThrow('Office engine @deepseek-ai/libreoffice-kit-wasm required for linux/x64 is missing.')
-  await expect(stat(destination)).rejects.toMatchObject({ code: 'ENOENT' })
+it('downloads pinned npm packages into the sidecar without resolving or executing package scripts', async () => {
+  const { root, destination } = await fixture()
+  const source = join(root, 'package')
+  await mkdir(source)
+  await writeFile(join(source, 'package.json'), JSON.stringify({ name: 'fixture', version: '1.0.0', scripts: { install: 'must-not-run' } }))
+  await writeFile(join(source, 'worker.js'), 'worker')
+  const archive = join(root, 'package.tgz')
+  await tar({ file: archive, cwd: root, gzip: true }, ['package'])
+  const bytes = await readFile(archive)
+  const checksum = createHash('sha512').update(bytes).digest()
+  const cache = join(root, 'archives')
+  await mkdir(cache)
+  await writeFile(join(cache, checksum.toString('hex')), bytes)
+  const artifact = { name: 'fixture', version: '1.0.0', directory: 'node_modules/fixture',
+    url: 'https://unused.invalid/fixture.tgz', integrity: `sha512-${checksum.toString('base64')}` }
+  await downloadOfficeSidecar([artifact], destination, cache)
+  expect(await readFile(join(destination, 'node_modules/fixture/worker.js'), 'utf8')).toBe('worker')
+  await expect(downloadOfficeSidecar([{ ...artifact, directory: 'node_modules/../../outside' }], destination, cache))
+    .rejects.toThrow('invalid package directory')
+  await expect(downloadOfficeSidecar([{ ...artifact, version: '2.0.0' }], destination, cache))
+    .rejects.toThrow('package identity mismatch')
+  await writeFile(join(cache, checksum.toString('hex')), 'corrupted archive')
+  await expect(downloadOfficeSidecar([artifact], destination, cache)).rejects.toThrow('checksum mismatch')
+})
+
+
+it('takes npm integrity from the workspace lock without querying registry metadata', async () => {
+  const { root } = await fixture()
+  const lockfile = join(root, 'pnpm-lock.yaml')
+  const integrity = `sha512-${Buffer.alloc(64, 7).toString('base64')}`
+  await writeFile(lockfile, JSON.stringify({ packages: { '@scope/fixture@1.2.3': { resolution: { integrity } } } }))
+  expect(await runtimeNpmArchive('@scope/fixture', '1.2.3', lockfile)).toEqual({
+    name: '@scope/fixture', version: '1.2.3', integrity,
+    url: 'https://registry.npmjs.org/@scope/fixture/-/fixture-1.2.3.tgz',
+  })
+  await expect(runtimeNpmArchive('@scope/fixture', '1.2.4', lockfile)).rejects.toThrow('missing SHA-512 integrity')
+  await writeFile(lockfile, JSON.stringify({ packages: { '@scope/fixture@1.2.3': { resolution: { integrity: 'sha256-invalid' } } } }))
+  await expect(runtimeNpmArchive('@scope/fixture', '1.2.3', lockfile)).rejects.toThrow('missing SHA-512 integrity')
 })

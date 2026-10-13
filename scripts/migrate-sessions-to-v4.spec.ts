@@ -334,11 +334,20 @@ describe('one-time V4 migration command', () => {
     const backendUrl = pathToFileURL(join(repository, 'packages/session/session-persistence-jsonl/src/index.ts')).href
     const generationUrl = pathToFileURL(join(repository, 'packages/session/session-persistence-jsonl/src/generation.ts')).href
     await writeFile(entrypoint, `
-      const { default: Backend } = await import(${JSON.stringify(backendUrl)});
+      const Backend = await import(${JSON.stringify(backendUrl)});
+      const { Context } = await import(${JSON.stringify(pathToFileURL(join(repository, 'vendor/cordis/src/index.ts')).href)});
       const { JsonlGenerationSourceChangedError } = await import(${JSON.stringify(generationUrl)});
-      const open = Backend.prototype.open;
+      const ctx = new Context();
+      let prototype;
+      try {
+        await ctx.plugin(Backend, { root: ${JSON.stringify(temporaryRoot())} });
+        prototype = Object.getPrototypeOf(ctx.sessionPersistence);
+      } finally {
+        await ctx.fiber.dispose();
+      }
+      const open = prototype.open;
       let changed = false;
-      Backend.prototype.open = async function(id, access, options) {
+      prototype.open = async function(id, access, options) {
         if (id === 'a-parent' && access === 'write' && !changed) {
           changed = true;
           throw new JsonlGenerationSourceChangedError(${JSON.stringify(child.path)});

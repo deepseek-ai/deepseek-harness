@@ -180,7 +180,7 @@ Options:
   --port <port>                  listen port; pass 0 to let the OS pick a free
                                  one
   --public-url <url>             advertise this HTTP(S) root in the printed,
-                                 opened, web-surface, and DSH_WEB_URL forms;
+                                 opened, runtime-context, and DSH_WEB_URL forms;
                                  grants no trust
   --trusted-host <authority...>  extra authority the /api browser-trust fence
                                  accepts (host or host:port; repeatable)

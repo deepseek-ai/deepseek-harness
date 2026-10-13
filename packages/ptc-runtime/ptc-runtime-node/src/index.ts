@@ -1,49 +1,31 @@
-/** Confined Node programs with host-owned bindings, output limits, and managed process cleanup. */
+/** Node PTC execution with configurable per-call processes or retained in-memory REPL state. */
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcBindingNamespace, PtcJsonValue, PtcRunFailure, PtcRunRequest, PtcRunResult, PtcRunSandbox, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
-import { MAX_TIMER_DELAY_MS, clampTimeout } from '@deepseek-ai/dsh-timeout'
+import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import { SandboxUnavailableError, classifyRunnerFailure, isRunnerSpawnFailure } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-fs'
-import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
-import { validateBindings } from './bindings.ts'
+import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
 import { bootstrapArgs, resolveLaunch } from './launch.ts'
-import type { LaunchConfig } from './launch.ts'
+import { NodeConfig, validateConfig } from './config.ts'
+import { PolicyProcesses } from './policy-processes.ts'
+import { InMemoryExecution } from './persistent.ts'
+import type { Config, ResolvedConfig } from './config.ts'
+export type { Config } from './config.ts'
 export type { LaunchConfig } from './launch.ts'
 import { OutputLedger } from './output-ledger.ts'
-import { drainOutput } from './output-stream.ts'
+import { terminateProcess } from './output-stream.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
-import { decodePtcJsonWire, encodePtcJsonWire } from './json-wire.ts'
+import { decodePtcJsonWire } from './json-wire.ts'
 import type { ProgramBootData } from './protocol.ts'
 
-/** Deployment-varying runtime bounds and launch choices. */
-export interface Config {
-  /** Worker invocation in the subprocess world; omitted selects the local carrier. */
-  launch?: LaunchConfig
-  /** Default elapsed deadline, including nested tool and approval waits. */
-  timeoutMs?: number
-  /** Maximum numeric elapsed budget accepted by resolve. */
-  maxTimeoutMs?: number
-  /** Combined serialized logs, completion and diagnostic byte cap. */
-  maxOutputBytes?: number
-  /** V8 old-generation heap limit in MiB; native allocations are excluded. */
-  maxOldGenerationSizeMb?: number
-  /** Maximum control frame, outstanding argument and queued control-output bytes. */
-  maxMessageBytes?: number
-  /** Maximum simultaneous host binding calls accepted from a program. */
-  maxPendingCalls?: number
-  /** Managed process termination and output-drain grace in milliseconds. */
-  graceMs?: number
-}
-
-type ResolvedConfig = Required<Config>
 interface LiveRun { controller: AbortController; finished: Promise<void> }
 const STRIP_PREFIX = 'async function __dsh_program__() {\n'
 const STRIP_SUFFIX = '\n}'
@@ -51,26 +33,19 @@ const STRIP_SUFFIX = '\n}'
 function messageOf(error: unknown): string { return error instanceof Error ? error.message : String(error) }
 function record(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 
-/** Node provider; direct file effects use the same sandbox service as Bash. */
+/** Node execution under file policy, with optional owner-scoped retained memory. */
 export class NodePtcRuntime extends PtcRuntime {
   static inject = ['fs', 'subprocess', 'sandbox', 'sandboxPolicy']
-  static Config: z<Config> = z.object({
-    timeoutMs: z.number().default(120_000),
-    maxTimeoutMs: z.number().default(600_000),
-    maxOutputBytes: z.number().default(67_108_864),
-    maxOldGenerationSizeMb: z.number().default(512),
-    maxMessageBytes: z.number().default(134_217_728),
-    maxPendingCalls: z.number().default(128),
-    graceMs: z.number().default(3_000),
-    launch: z.union([
-      z.object({ kind: z.const('node-script').required(), executable: z.string().required(), bootstrapPath: z.string() }),
-      z.object({ kind: z.const('embedded').required(), executable: z.string().required() }),
-    ]),
-  })
+  static Config = NodeConfig
   readonly language = 'typescript'
   readonly isolation = 'process'
+  private readonly inMemory?: InMemoryExecution
+  private readonly processes: PolicyProcesses
+
+  override get programFormat(): 'function-body' | 'repl' { return this.inMemory ? 'repl' : 'function-body' }
   override get executionInstructions(): string {
-    return 'Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.'
+    if (this.inMemory) return this.inMemory.executionInstructions
+    return 'The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Emit output with console.log(...) or return a lossless JSON value. Only printed values and the returned value become program output. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.'
   }
   private readonly config: ResolvedConfig
   private readonly live = new Set<LiveRun>()
@@ -79,16 +54,11 @@ export class NodePtcRuntime extends PtcRuntime {
   constructor(ctx: Context, config: Config) {
     super(ctx)
     this.config = { ...config, launch: resolveLaunch(config.launch) } as ResolvedConfig
-    for (const [key, value] of Object.entries(this.config)) {
-      if (typeof value === 'number' && (!Number.isFinite(value) || value <= 0)) throw new Error(`ptc-runtime-node: ${key} must be positive and finite`)
+    validateConfig(this.config)
+    this.processes = new PolicyProcesses(ctx)
+    if (this.config.executionMode === 'persistent-in-memory') {
+      this.inMemory = new InMemoryExecution(ctx, this.config, this.processes)
     }
-    for (const key of ['timeoutMs', 'maxTimeoutMs', 'graceMs'] as const) {
-      if (this.config[key] > MAX_TIMER_DELAY_MS) throw new Error(`ptc-runtime-node: ${key} exceeds the supported timer range`)
-    }
-    if (!Number.isSafeInteger(this.config.maxOutputBytes) || this.config.maxOutputBytes < 4) throw new Error('ptc-runtime-node: maxOutputBytes must be an integer of at least 4')
-    if (!Number.isSafeInteger(this.config.maxMessageBytes) || this.config.maxMessageBytes > 0xffff_ffff) throw new Error('ptc-runtime-node: maxMessageBytes must fit an unsigned 32-bit frame length')
-    if (!Number.isSafeInteger(this.config.maxPendingCalls)) throw new Error('ptc-runtime-node: maxPendingCalls must be an integer')
-    if (!Number.isSafeInteger(this.config.maxOldGenerationSizeMb)) throw new Error('ptc-runtime-node: maxOldGenerationSizeMb must be an integer')
     ctx.effect(() => async () => {
       this.disposed = true
       const active = [...this.live]
@@ -97,18 +67,23 @@ export class NodePtcRuntime extends PtcRuntime {
     }, 'Node ptc-runtime cleanup')
   }
 
-  override get sandboxMode(): SandboxMode { return this.ctx.sandboxPolicy.defaultMode }
+  override get sandboxMode(): SandboxMode | undefined { return this.ctx.sandboxPolicy.defaultMode }
+
+  override release(owner: object): Promise<void> {
+    return this.inMemory ? this.inMemory.release(owner) : super.release(owner)
+  }
 
   override get timeout(): { defaultMs: number; maxMs: number } {
     return { defaultMs: Math.min(this.config.timeoutMs, this.config.maxTimeoutMs), maxMs: this.config.maxTimeoutMs }
   }
 
   /**
-   * Resolve an execution under explicit or deployment policy.
+   * Resolve directory, deadline and file policy for the selected execution mode.
    * @param request - Program, bindings, optional cwd/deadline, and resolved authority.
    * @returns Complete execution inputs with a capped numeric budget or an explicit null deadline.
    */
   resolve(request: PtcRunRequest): PtcRunSpec {
+    if (this.inMemory) return this.inMemory.resolve(request)
     if (this.disposed) throw new Error('ptc-runtime-node: resolve after disposal')
     const sandboxPolicy = request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
     const cwd = request.cwd ?? sandboxPolicy.workspaceRoot
@@ -122,22 +97,33 @@ export class NodePtcRuntime extends PtcRuntime {
   }
 
   /**
-   * Run a resolved program in a fresh managed and confined Node process.
-   * @param spec - Inputs returned by resolve; missing authority is caller misuse.
-   * @returns Output and file-confinement facts after managed cleanup.
+   * Run a resolved program under the configured execution mode.
+   * Session mode changes cancel admitted calls before process launch as well as active programs.
+   * @param spec - Inputs returned by resolve for the configured mode.
+   * @returns Logs, JSON completion or failure; retained processes remain until release or invalidation.
    */
   async run(spec: PtcRunSpec): Promise<PtcRunResult> {
     if (this.disposed) throw new Error('ptc-runtime-node: run after disposal')
-    if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
-    if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('ptc-runtime-node: run requires resolved cwd and timeout')
-    const bindings = validateBindings(spec)
     const controller = new AbortController()
     const completion = Promise.withResolvers<void>()
+    const unregister = spec.sandboxPolicy === undefined ? undefined : this.processes.register(spec.sandboxPolicy, async () => {
+      controller.abort(new Error('sandbox mode changed'))
+      await completion.promise
+    })
     const live = { controller, finished: completion.promise }
     this.live.add(live)
     try {
+      await this.processes.wait(spec.sandboxPolicy?.sessionId)
+      if (this.inMemory) {
+        const signal = spec.signal === undefined ? controller.signal : AbortSignal.any([spec.signal, controller.signal])
+        return await this.inMemory.run({ ...spec, signal })
+      }
+      if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
+      if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('ptc-runtime-node: run requires resolved cwd and timeout')
+      const bindings = validateBindings(spec)
       return await this.execute(spec, spec.sandboxPolicy, bindings, controller)
     } finally {
+      unregister?.()
       this.live.delete(live)
       completion.resolve()
     }
@@ -149,6 +135,7 @@ export class NodePtcRuntime extends PtcRuntime {
     bindings: Map<string, PtcBindingNamespace>,
     controller: AbortController,
   ): Promise<PtcRunResult> {
+    const replyBinding = AsyncLocalStorage.bind(replyToBinding)
     const output = new OutputLedger(this.config.maxOutputBytes)
     const logs: string[] = []
     const sandbox: PtcRunSandbox = { mode: policy.mode, denied: false }
@@ -165,6 +152,16 @@ export class NodePtcRuntime extends PtcRuntime {
     let parsing = true
     const wallTimer = spec.timeoutMs === null ? undefined
       : setTimeout(() => { timedOut = true; controller.abort('execution deadline reached') }, spec.timeoutMs)
+    let stopping: Promise<boolean> | undefined
+    const stop = (): Promise<boolean> => {
+      if (stopping !== undefined) return stopping
+      const cleanup = handle === undefined ? Promise.resolve(true) : terminateProcess(handle, this.config.graceMs)
+      stopping = cleanup.then((drained) => { unregister(); return drained }, (error: unknown) => {
+        stopping = undefined
+        throw error
+      })
+      return stopping
+    }
     const finish = (failure?: PtcRunFailure, value?: PtcJsonValue): void => {
       if (settled) return
       settled = true
@@ -172,23 +169,13 @@ export class NodePtcRuntime extends PtcRuntime {
       signal.removeEventListener('abort', onAbort)
       channel?.close()
       void (async () => {
-        if (handle !== undefined) {
-          try {
-            handle.terminate()
-            await Promise.all([handle.done.catch(() => {}), handle.waitForExit()])
-            const drained = await Promise.all([
-              drainOutput(handle.stdout, this.config.graceMs),
-              drainOutput(handle.stderr, this.config.graceMs),
-            ])
-            if (drained.includes(false) && failure === undefined) {
-              failure = { kind: 'worker-exit', message: 'Node process output did not close cleanly' }
-            }
-          } catch (error: unknown) {
-            failure = { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(error)}` }
-          } finally {
-            handle.stdout?.destroy()
-            handle.stderr?.destroy()
+        try {
+          const drained = await stop()
+          if (!drained && failure === undefined) {
+            failure = { kind: 'worker-exit', message: 'Node process output did not close cleanly' }
           }
+        } catch (error: unknown) {
+          failure = { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(error)}` }
         }
         const outcome = outputOverflow ? overflowResult ?? output.limit(logs)
           : failure === undefined ? output.success(logs, value) : output.failure(logs, failure)
@@ -200,6 +187,10 @@ export class NodePtcRuntime extends PtcRuntime {
         ? { kind: 'timeout', message: `execution deadline reached (${spec.timeoutMs}ms)` }
         : { kind: 'abort', message: messageOf(signal.reason) })
     }
+    const unregister = this.processes.register(policy, async () => {
+      controller.abort(new Error('sandbox mode changed'))
+      await stop()
+    })
     signal.addEventListener('abort', onAbort, { once: true })
     if (signal.aborted) onAbort()
     try {
@@ -324,17 +315,10 @@ export class NodePtcRuntime extends PtcRuntime {
             if (++pending > this.config.maxPendingCalls || (pendingBytes += bytes) > this.config.maxMessageBytes) { protocolFailure('pending binding calls exceed configured limits'); return }
             const id = raw.id
             void (async () => {
-              let reply: unknown
-              try {
-                const value = snapshotJsonValue(await fn(args))
-                if (value === undefined) throw new Error('binding resolution must be lossless JSON')
-                reply = { type: 'reply', id, ok: true, value: encodePtcJsonWire(value) }
-              } catch (error: unknown) {
-                reply = { type: 'reply', id, ok: false, message: messageOf(error) }
-              } finally {
+              const reply = await replyBinding(id, fn, args).finally(() => {
                 pending -= 1
                 pendingBytes -= bytes
-              }
+              })
               if (!settled) await transport.send(reply)
             })().catch((error: unknown) => { protocolFailure(messageOf(error)) })
             return

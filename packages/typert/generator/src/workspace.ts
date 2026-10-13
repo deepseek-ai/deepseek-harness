@@ -3,8 +3,8 @@
  * @module @deepseek-ai/dsh-typert-generator/workspace
  */
 
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { TypertAnalysisError, WorkspaceAnalyzer, WorkspaceCaches } from './analyzer.ts'
 import type { DiscoveredTypertPackage } from './analyzer.ts'
 import { FaceModelEmitter } from './emitter.ts'
@@ -26,6 +26,13 @@ export interface WorkspaceTypertGeneratorOptions {
    * merges) run regardless.
    */
   readonly checkDiagnostics?: boolean
+  /**
+   * Fail when an analyzed face program loads a file from a workspace
+   * package's `lib/` directory or cannot resolve an import of a workspace
+   * package (default false); see
+   * `WorkspaceAnalyzerOptions.rejectBuildOutputs`.
+   */
+  readonly rejectBuildOutputs?: boolean
 }
 
 /** Discover, analyze, and emit package reflection from independent faces. */
@@ -47,35 +54,42 @@ export class WorkspaceTypertGenerator {
    * Find public package faces that contribute Cordis services/events or
    * explicitly tagged Typert roots.
    * @param faces - optional independent program faces to inspect.
+   * @param includeManifest - optional `package.json` predicate; a rejected package's sources and project config are not read.
    * @returns discovered packages in stable package-name order.
    */
-  discover(faces?: readonly TypertFace[]): DiscoveredTypertPackage[] {
+  discover(
+    faces?: readonly TypertFace[],
+    includeManifest?: (manifest: Readonly<Record<string, unknown>>) => boolean,
+  ): DiscoveredTypertPackage[] {
     return new WorkspaceAnalyzer({
       root: this.root,
       caches: this.caches,
       ...(faces === undefined ? {} : { faces }),
-    }).discoverPackages()
+    }).discoverPackages(includeManifest)
   }
 
   /**
    * Generate all discovered contributors, or an explicit package subset.
-   * @param packages - optional exact package names for a focused pass.
+   * @param packages - optional exact package names to emit; every pass includes the same face-wide declaration merges.
    * @param faces - optional independent program faces to analyze.
    * @returns one artifact per package face.
    */
   generate(packages?: readonly string[], faces?: readonly TypertFace[]): WorkspaceEmitResult[] {
-    const selected = packages ?? this.discover(faces).map(candidate => candidate.package)
+    const contributors = this.discover(faces).map(candidate => candidate.package)
+    const selected = new Set(packages ?? contributors)
     const workspace = new WorkspaceAnalyzer({
       root: this.root,
-      packages: selected,
+      packages: contributors,
       caches: this.caches,
       ...(faces === undefined ? {} : { faces }),
       ...(this.options.checkDiagnostics === undefined ? {} : { checkDiagnostics: this.options.checkDiagnostics }),
+      ...(this.options.rejectBuildOutputs === undefined ? {} : { rejectBuildOutputs: this.options.rejectBuildOutputs }),
     }).analyze()
     const artifacts: WorkspaceEmitResult[] = []
     for (const face of workspace.faces) {
       const emitter = new FaceModelEmitter(face)
       for (const packageModel of face.packages) {
+        if (!selected.has(packageModel.name)) continue
         const artifact = {
           ...emitter.emit(packageModel.name),
           packageRoot: packageModel.root,
@@ -85,6 +99,18 @@ export class WorkspaceTypertGenerator {
       }
     }
     return artifacts
+  }
+
+  /**
+   * Generate every explicit contributor: a package whose manifest declares a
+   * Typert artifact export and whose public graph has a Typert surface.
+   * @param faces - optional independent program faces to analyze.
+   * @returns one artifact per contributor face.
+   */
+  generateContributors(faces?: readonly TypertFace[]): WorkspaceEmitResult[] {
+    const packages = this.discover(faces, manifest => hasTypertExport(manifest.exports))
+      .map(candidate => candidate.package)
+    return packages.length === 0 ? [] : this.generate(packages, faces)
   }
 
   private validateExport(artifact: WorkspaceEmitResult): void {
@@ -146,6 +172,38 @@ export class WorkspaceTypertGenerator {
       }
     }
   }
+}
+
+/**
+ * Find the workspace root that Typert generation runs against: the nearest
+ * directory at or above `start` that holds both `tsconfig.host.json` and
+ * `packages/`. The analyzer registers projects under `<root>/packages`, so a
+ * package's own `tsconfig.host.json` face leaf does not qualify.
+ * @param start - directory to search from, such as a bundle output or a working directory.
+ * @returns the absolute workspace root.
+ * @throws If no ancestor of `start` qualifies.
+ */
+export function findWorkspaceRoot(start: string): string {
+  let current = resolve(start)
+  while (!existsSync(join(current, 'tsconfig.host.json')) || !existsSync(join(current, 'packages'))) {
+    const parent = dirname(current)
+    if (parent === current) throw new Error(`typert-generator: cannot find workspace root above ${start}`)
+    current = parent
+  }
+  return current
+}
+
+/**
+ * Whether a `package.json#exports` field declares a Typert artifact subpath
+ * (`./typert`, `./client/typert`, or `./remote`).
+ * @param exportsField - the manifest's `exports` value.
+ * @returns true when the package opts in to Typert publication.
+ */
+export function hasTypertExport(exportsField: unknown): boolean {
+  if (exportsField === null || typeof exportsField !== 'object' || Array.isArray(exportsField)) return false
+  return Object.hasOwn(exportsField, './typert')
+    || Object.hasOwn(exportsField, './client/typert')
+    || Object.hasOwn(exportsField, './remote')
 }
 
 function sameExport(actual: unknown, expected: { types: string; default: string }): boolean {

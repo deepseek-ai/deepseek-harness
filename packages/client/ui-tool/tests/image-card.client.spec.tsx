@@ -9,7 +9,7 @@
 // The image card differs from every other card in one load-bearing way: its bytes
 // are a session-authorized attachment, so the row cannot draw them itself. It
 // renders through the tool-owned `tool.call.images` slot, and an empty slot must
-// still leave the media type and dimensions visible.
+// still leave the path and image size visible.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
@@ -113,11 +113,9 @@ const loadImage: MessageImageLoader = vi.fn(() => Promise.reject(new Error('not 
 describe('imageCardModel', () => {
   it('derives the card from settled image metadata and its raw envelope', () => {
     expect(imageCardModel(settled())).toEqual({
-      label: 'shots/card.png',
+      path: 'shots/card.png',
       images: [{ attachment: sampleImage }],
-      // The fallback line is the result's own envelope, not the row's flattened
-      // output (which would stringify the image block).
-      text: ENVELOPE,
+      extraText: null,
     })
   })
 
@@ -128,16 +126,9 @@ describe('imageCardModel', () => {
     expect(attachment).not.toHaveProperty('name')
   })
 
-  it('relativizes a workspace-rooted path label, and leaves others as authored', () => {
-    expect(imageCardModel(settled({ meta: imageMeta({ path: '/w/app/shots/card.png' }) }), '/w/app')?.label)
-      .toBe('shots/card.png')
-    expect(imageCardModel(settled({ meta: imageMeta({ path: '/srv/other.png' }) }), '/w/app')?.label)
-      .toBe('/srv/other.png')
-  })
-
-  it('abbreviates a leftover POSIX home path label', () => {
-    expect(imageCardModel(settled({ meta: imageMeta({ path: '/Users/u/card.png' }) }), '/tmp/ws', '/Users/u')?.label)
-      .toBe('~/card.png')
+  it('keeps the recorded path unshortened', () => {
+    expect(imageCardModel(settled({ meta: imageMeta({ path: 'G:\\breeze\\shots\\card.png' }) }))?.path)
+      .toBe('G:\\breeze\\shots\\card.png')
   })
 
   it('accepts any non-empty attachment id, because the shape is provider-owned', () => {
@@ -163,7 +154,7 @@ describe('imageCardModel', () => {
         { type: 'image', attachment: appended },
       ],
     } as never))
-    expect(model?.text).toBe(`${ENVELOPE}\nanalysis: the card area is empty`)
+    expect(model?.extraText).toBe('analysis: the card area is empty')
     expect(model?.images).toEqual([{ attachment: sampleImage }, { attachment: appended }])
   })
 
@@ -205,7 +196,7 @@ describe('imageCardModel', () => {
     // Metadata arrives unvalidated on replay, so an obsolete or hand-edited log
     // must never crash the tool message. A ROOT call whose meta does not match
     // declines to the generic card — malformed tool data must not render a
-    // card labeled with the author-typed path. Only a nested call (which
+    // card showing the author-typed path. Only a nested call (which
     // persists no meta by design) falls back to its own file_path argument.
     for (const meta of [undefined, null, 'meta', [{ path: 'a.png' }], {}, { path: '' }, { path: 7 }]) {
       expect(() => imageCardModel(settled({ meta }))).not.toThrow()
@@ -213,7 +204,7 @@ describe('imageCardModel', () => {
     }
     const nested = imageCardModel(settled({ parentCallId: 'parent', meta: undefined }))
     expect(nested).not.toBeNull()
-    expect(nested?.label).toBe('shots/card.png')
+    expect(nested?.path).toBe('shots/card.png')
   })
 
   it('declines a malformed attachment reference in the content', () => {
@@ -257,14 +248,14 @@ describe('imageCardModel', () => {
     expect(imageCardModel(settled({ isError: true }))).toBeNull()
     // A nested call (a read_image dispatched from inside run_code) settles as a
     // ToolResultNode too and renders the card; it persists no presentationMeta,
-    // so the label falls back to the call's file_path argument.
+    // so the path falls back to the call's file_path argument.
     const nested = imageCardModel(settled({ parentCallId: 'parent', meta: undefined }))
     expect(nested).not.toBeNull()
-    expect(nested?.label).toBe('shots/card.png')
+    expect(nested?.path).toBe('shots/card.png')
     expect(nested?.images).toHaveLength(1)
     // Persisted meta still wins over the argument when a nested call has one.
     const withMeta = imageCardModel(settled({ parentCallId: 'parent', meta: { path: 'shots/persisted.png' } }))
-    expect(withMeta?.label).toBe('shots/persisted.png')
+    expect(withMeta?.path).toBe('shots/persisted.png')
   })
 
   it('declines a call head that is not read_image', () => {
@@ -332,7 +323,30 @@ describe('ReadImageRow keyed toolview', () => {
     const text = view.container.textContent ?? ''
     expect(text).not.toContain('"attachmentId"')
     expect(text).not.toContain('"type": "image"')
-    expect(text).toContain('image/png image, 1496x260 px')
+    expect(text).not.toContain('<path>')
+    expect(text).not.toContain('image/png image')
+  })
+
+  it('shows the full path once, then the image size, under the picture', () => {
+    const view = render(<ReadImageRow {...rowProps(settled({ meta: imageMeta({ path: '/w/app/shots/card.png' }) }), stubRenderSlot())} />)
+    toggleRow(view)
+    const lines = [...view.container.querySelectorAll('[class*="imageMeta"] > div')].map(line => line.textContent)
+    expect(lines).toEqual(['/w/app/shots/card.png', '1496x260px，24588 字节'])
+  })
+
+  it('names the original size of a downscaled image', () => {
+    const downscaled = { ...sampleImage, originalDimensions: { width: 2992, height: 520 } }
+    const view = render(<ReadImageRow {...rowProps(settled({ content: withImage(downscaled) } as never), stubRenderSlot())} />)
+    toggleRow(view)
+    expect(view.container.textContent).toContain('1496x260px（由 2992x520px 缩小），24588 字节')
+  })
+
+  it('keeps appended non-envelope text under the picture', () => {
+    const view = render(<ReadImageRow {...rowProps(settled({
+      content: [...settled().content, { type: 'text', text: 'analysis: empty card' }],
+    } as never), stubRenderSlot())} />)
+    toggleRow(view)
+    expect(view.container.textContent).toContain('analysis: empty card')
   })
 
   it('keeps the result text readable when the attachment slot renders nothing', () => {
@@ -343,7 +357,7 @@ describe('ReadImageRow keyed toolview', () => {
     toggleRow(view)
     expect(emptySlot).toHaveBeenCalled()
     expect(view.container.querySelector('[data-images]')).toBeNull()
-    expect(view.container.textContent).toContain('image/png image, 1496x260 px')
+    expect(view.container.textContent).toContain('1496x260px，24588 字节')
   })
 
   it('degrades to the text body when neither the slot nor the loader is supplied', () => {

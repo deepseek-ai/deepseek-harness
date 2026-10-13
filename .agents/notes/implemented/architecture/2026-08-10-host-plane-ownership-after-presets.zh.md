@@ -38,6 +38,6 @@ Status: implemented
 
 ## 后果
 
-context meter 成为逐会话的事实，而不再是挂载历史的函数。代价是 preset 不能再选择不做 token 记账；随附的 preset 没有一个这么做，`minimal` 现在也写明它放弃的是自动压缩而非记账。
+context meter 是独立于挂载历史的逐会话事实。Preset 使用宿主 meter 进行 token 记账，并选择自己的压缩后端；`minimal` 同时支持自动压缩和用户 `/compact` 命令。
 
 生产入口必须显式组装 Agent；仅安装注册表不会自动绑定。未加入的 Agent 不会获得工具、提示词段落或 skill，也不会报告错误。

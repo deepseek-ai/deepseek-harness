@@ -22,7 +22,7 @@ Host presenter 与 Client keyed renderer 分担展示会形成对同一事件的
 
 ## Decision
 
-下述展示对等要求不包含已独立批准的[嵌套 terminal 卡片修复](../../../../packages/client/ui-tool/README.zh.md)和[记录结果的工具详情](../../../../packages/client/ui-tool/README.zh.md)；其他展示与所有权约束全部保留。
+下述展示对等要求不包含已独立批准的[嵌套 terminal 卡片修复](../../../../packages/client/ui-tool/README.zh.md)、[记录结果的工具详情](../../../../packages/client/ui-tool/README.zh.md)和[后台 Shell 命令展示](../bug-fix/2026-10-10-background-shell-command-display.zh.md)；其他展示与所有权约束全部保留。
 
 Session Remote journal 只下发原始、已验证、可持久化的 Session event。`session.page` 和 `session.follow` 不解析工具参数，不查询 Tools registry，不恢复 presenter scope，不执行 `presentCall`／`presentResult`，也不构造或克隆任何 tool view。
 
@@ -51,7 +51,7 @@ Host 的 `ToolDefinition.presentCall`、`ToolDefinition.presentResult`、`ToolCa
 | 保留 | Session 日志格式、Remote journal 生命周期与 Conversation identity/topology |
 | 保留 | 现有 keyed slot、Generic fallback、Chat、Details 与 Trajectory 结构 |
 | 禁止 | 新 Client presenter service、平行 registry 或 wire renderer id |
-| 禁止 | 新卡片、视觉改版、交互改版或 PTC dispatch rich-card 增强，[嵌套 terminal 卡片例外](../../../../packages/client/ui-tool/README.zh.md)和[记录结果的工具详情](../../../../packages/client/ui-tool/README.zh.md)除外 |
+| 禁止 | 新卡片、视觉改版、交互改版或 PTC dispatch rich-card 增强，[嵌套 terminal 卡片例外](../../../../packages/client/ui-tool/README.zh.md)、[记录结果的工具详情](../../../../packages/client/ui-tool/README.zh.md)和[后台 Shell 命令展示](../bug-fix/2026-10-10-background-shell-command-display.zh.md)除外 |
 | 禁止 | 为兼容保留双写、版本协商或旧 `view` 字段 |
 
 ## 术语
@@ -294,15 +294,16 @@ Chat 与 Details 通过纯 helper 复用同一 block 的解析。未来缓存必
 
 Generic Host `presentCall` 的 title、kind、rawInput、content 与 locations 当前并不驱动普通 Web 行；Generic `presentResult.content` 也不驱动 Web 输出，因此无需把这些未消费值复制到 Client。
 
+<a id="terminal-card"></a>
 ### Terminal 卡片
 
-Client terminal model 从工具名称、调用参数、结果 content、error 与 Session cwd 派生现有 `TerminalBlock` props，不依赖 `parentCallId`。
+Client terminal model 从工具名称、调用参数、结果 content、error 与 Session cwd 派生现有 `TerminalBlock` props，不依赖 `parentCallId`。[后台 Shell 命令展示](../bug-fix/2026-10-10-background-shell-command-display.zh.md)拥有主动后台 `bash`／`pwsh` 启动的展示决定；下述其余所有权和 fallback 规则继续有效。
 
 | 输入 | 保持的结果 |
 |---|---|
 | 标准 `bash`／`pwsh` 前台 running | terminal prompt、description、cwd、running 状态 |
 | 标准前台 success | terminal output、exit code/signal 与结算状态呈现 |
-| `run_in_background:true` | Generic 行与原始结果 |
+| 标准 `bash`／`pwsh` 主动后台调用 | Start 使用原 `background` 标志和调用 `running`；回执清除 `running` 后保留静态命令，不显示输出或任务状态 |
 | 工具执行 error | Generic IN／OUT 与错误摘要 |
 | persistent `bash`／`pwsh` running | terminal prompt |
 | persistent `bash`／`pwsh` settled | Generic flattened result，不新增 exit card |
@@ -310,7 +311,7 @@ Client terminal model 从工具名称、调用参数、结果 content、error �
 | `terminal_send` background/error | Generic 结果 |
 | PTC dispatch child | 与根调用相同的 terminal 适用规则与 fallback 规则 |
 
-标准 shell 结果解析末尾 `[exit code: N]` 与 `[killed by signal: X]`。末尾已识别的 spill 策略提示会改用 Generic 输出：在 shell 行中可展开，在 Details 中显示原文，因为退出标记可能被移位或省略。已解析的 marker 从 terminal 正文移除；timeout、sandbox denial 与没有 pill 的 marker 留在正文。
+标准前台 shell 结果解析末尾 `[exit code: N]` 与 `[killed by signal: X]`；主动后台启动回执不进入输出或退出状态解析。末尾已识别的 spill 策略提示会改用 Generic 输出：在 shell 行中可展开，在 Details 中显示原文，因为退出标记可能被移位或省略。已解析的 marker 从 terminal 正文移除；timeout、sandbox denial 与没有 pill 的 marker 留在正文。
 
 调用 `description` 继续显示在 card 上方并覆盖折叠摘要。workdir 继续按绝对、相对和缺失三种情况处理；相对路径基于 Session cwd，且保留 `.`、`..`、盘符与 UNC root 的归一化。
 
@@ -318,7 +319,7 @@ Client terminal model 从工具名称、调用参数、结果 content、error �
 
 同名普通与 persistent provider 是特殊兼容点。Client 使用当前有效参数与结果特征保留已交付差异；不足以无歧义识别的输入选择 Generic settled 结果，不增加新表现。
 
-TerminalBlock 的 ANSI、光标重放、宽字符、行数上限、展开、复制与辅助技术文本完全不变。
+除主动后台的仅命令展示外，TerminalBlock 的 ANSI、光标重放、宽字符、行数上限、展开、复制与辅助技术文本保持不变。
 
 ### Diff 卡片
 
@@ -412,7 +413,7 @@ Deliverables Definition 按 callId 观察 root `tool/call` 与成功 `tool/resul
 | orphan result | callId 标题与 Generic output |
 | interrupted call | warning/stopped 状态 |
 | bash/pwsh 前台 | 当前 terminal prompt、正文、cwd 与状态 |
-| bash/pwsh background/error | 当前 Generic IN／OUT |
+| bash/pwsh 主动后台调用 | terminal Start 与静态仅命令回执展示；启动错误保留 Generic IN／OUT |
 | persistent shell | 当前 running terminal、settled Generic |
 | terminal_send | 当前前台 terminal、后台/error Generic |
 | write/edit | 当前 intended/applied diff 与 error fallback |

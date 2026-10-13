@@ -9,14 +9,14 @@
   en: 70a969dce3283824
   zh: 18c61bf840a6518a
 /agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem/current-state:
-  en: 8fb06638898de59e
-  zh: 79ed0cfe79e40be1
-/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem/three-unrelated-uplink-mechanisms:
-  en: 386be7b691ab63e7
-  zh: 935e0db22ae1cf5d
-/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem/concrete-costs:
-  en: f374976b43645d15
-  zh: 26b2c7aaafa41fba
+  en: 2de84c3fc0a3552e
+  zh: da9cd565588bf2dd
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem/uplink-consumers:
+  en: 403103ef08958529
+  zh: 2813d9d38c2c55b7
+/agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem/consumer-responsibilities:
+  en: 28f8a3112d6ec5fe
+  zh: c70d68233e3f6b7f
 /agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/problem/relation-to-background-jobs:
   en: 5e67475010d52ddb
   zh: ce23aad2d4aa0d67
@@ -129,14 +129,14 @@
   en: 04e72789417d6e3a
   zh: b57c5cc68dff45a5
 /agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/consequences:
-  en: 07524e0c2dc22ad5
-  zh: 5bf4f27160d78b43
+  en: 35326fed46e31d74
+  zh: 6f47baa645a1e370
 /agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/testing:
   en: 5c8188930b9d4fdb
   zh: 1d94e6563cedde13
 /agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/deferred:
-  en: 3b99a327464edc3e
-  zh: dcffdc75369925dc
+  en: 8368c592f30af97f
+  zh: 2ff89acb7b3ed477
 /agent-note-remote-duplex-stream-one-kind-of-stream-an-uplink-channel-and-an-invocation-context/related:
-  en: 85d77fb246564024
-  zh: 8b400818a91a3e3a
+  en: 475d212ae1f9c1c9
+  zh: 21fe6c6cdb900a6b

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-spill-policy",
   "description": "Token-budgeted tool-result retention with recoverable text and image paths",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -23,9 +23,11 @@
       "default": "./lib/types/notice.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
@@ -68,7 +70,7 @@
     "@deepseek-ai/dsh-ptc-runtime": "workspace:*",
     "@deepseek-ai/dsh-attachment-local": "workspace:*",
     "@deepseek-ai/dsh-tool-fs": "workspace:*",
-    "sharp": "^0.35.5",
+    "sharp": "0.35.5",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*"
   }
 }

@@ -2,7 +2,9 @@
 import { describe, expect, it } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
+import type { ConversationViewNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { messageDefinition } from '../../ui-chat/src/client/conversation-nodes/message.ts'
+import { ConversationNodeAssembler } from '../../ui-conversation/src/client/conversation/assembler.ts'
 import { en } from '../src/client/locales.ts'
 import type { QuestionReplyData } from '../src/client/question-reply.ts'
 import { questionReplyDefinition, replyAnswerValues, replyClipboardText, replyPairsOf } from '../src/client/question-reply.ts'
@@ -106,16 +108,33 @@ describe('replyClipboardText', () => {
 
 describe('questionReplyDefinition', () => {
   it('claims only appended user messages carrying the reply source', () => {
-    expect(questionReplyDefinition.match(message(replySource('answered'), answered))).toEqual({ id: 'msg-1', role: 'start' })
+    expect(questionReplyDefinition.match(message(replySource('answered'), answered)))
+      .toEqual({ id: 'msg-1', role: 'start', exclusive: true })
     expect(questionReplyDefinition.match(message({ kind: 'user' }, answered))).toBeNull()
     expect(questionReplyDefinition.match(message({ kind: 'plugin', plugin: 'user-questions' }, answered))).toBeNull()
     expect(questionReplyDefinition.match(message(replySource('answered'), answered, null))).toBeNull()
   })
 
-  it('shares the message id with the generic projection', () => {
+  it('claims the message the generic projection also matches, so Chat holds one Node for it', () => {
     const event = message(replySource('answered'), answered)
     expect(messageDefinition.match(event)).toEqual({ id: 'msg-1', role: 'start' })
-    expect(questionReplyDefinition.match(event)).toEqual(messageDefinition.match(event))
+    let chat: readonly ConversationViewNode[] = []
+    const definitions = [messageDefinition, questionReplyDefinition]
+    const assembler = new ConversationNodeAssembler(
+      { entries: () => definitions, fallbackEntry: () => undefined },
+      { entries: () => [{
+        target: 'chat',
+        create: () => ({
+          empty: chat,
+          replace: ({ nodes }) => (chat = nodes),
+          apply: ({ upserts }) => (chat = [...chat, ...upserts]),
+        }),
+      }] },
+    )
+    assembler.activateTarget('chat')
+    assembler.replaceWindow([{ type: 'event', event }], false)
+    assembler.flush()
+    expect(chat.map(node => node.kind)).toEqual(['question-reply'])
   })
 
   it('projects the outcome from the source and the pairs from the text into its own node', () => {

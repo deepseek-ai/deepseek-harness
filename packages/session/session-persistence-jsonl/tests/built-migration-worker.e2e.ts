@@ -18,7 +18,7 @@ describe.skipIf(!built)('built migration verifier (plain node)', () => {
       import { Worker } from 'node:worker_threads'
       import { Context } from '@deepseek-ai/cordis'
       import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
-      import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+      import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 
       const terminate = Worker.prototype.terminate
       let terminations = 0

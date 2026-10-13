@@ -95,7 +95,7 @@ The bundle adds the Team policy and tool schemas described by `@deepseek-ai/dsh-
 
 #### KV Cache effect
 
-The bundle's composition is prefix-stable while its patch, Team identity, and configured tool schemas remain unchanged.
+The shared system prompt and tool schemas remain prefix-stable while the bundle patch and configured tool schemas remain unchanged. Team identity is appended through runtime-context snapshots; [Team tools](../tool-agent-team/README.md#model-experience) define snapshot reuse.
 
 ## Known Limitations and Deferred Work
 

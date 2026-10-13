@@ -1,0 +1,11 @@
+version: 1
+scenario: subagent-agent-preset
+profile: headless
+composition: subagent-agent-preset
+recording: authored
+header:
+  class: subagent-agent-preset
+  pin: true
+  systemPromptSource: text-turn
+  childSystemPrompts: [1]
+  childToolSchemas: [1]

@@ -46,7 +46,7 @@ DSH 授权通过 x-dsh-auth-token 请求头鉴权 Platform、推理和 Files 请
 
 开发环境认证通过配置的平台来源上的显式 Host 请求头 requestHeaders 完成。提供者拒绝重定向和保留请求头覆盖，防止开发环境 Cookie 替换账号授权或跟随浏览器跳转地址。特定环境的认证协议不属于账号提供者。
 
-内置账号界面仅用于 Desktop：preload 桥接启用账号入口、设置和登录引导。普通 Web 保留 API Key 引导及标准设置入口，不订阅账号状态或显示登录。Host 协议在 auth_init 中接受 login_source（desktop 或 web）；内置界面发送 desktop。后端接受 localhost 回调。DSH 保留浏览器提供的 localhost 主机名和端口，不做 DNS 解析或 IP 字面量转换。
+内置账号界面在 Desktop 和普通 Web 中都挂载账号入口、设置和登录引导。Host 在 auth_init 中发送 login_source（desktop 或 web），以便 Platform 选择完成页体验；存在 Desktop preload 桥接时界面发送 desktop，否则发送 web。Web 登录失败时关闭授权标签页，原标签页通过 Host 状态获知结果；不使用 Web UI 返回 URL。后端接受 localhost 回调。DSH 保留浏览器提供的 localhost 主机名和端口，不做 DNS 解析或 IP 字面量转换。
 
 macOS 开发启动器为 `dsh://open` 注册独立、经临时签名的应用包。该应用包保留工作区入口和开发路径，使 Launch Services 能够冷启动；凭证不会被复制，也不修改包管理器安装的 Electron 应用。协议注册指向最近启动的开发版或打包版应用。
 

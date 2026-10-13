@@ -92,7 +92,7 @@ describe.skipIf(MODE === 'record')('web e2e: cold Auto-review denial', () => {
 
     const access = page.locator('button[aria-label^="Access mode"]').first()
     await expect.poll(() => access.getAttribute('aria-label'), { timeout: 10_000 })
-      .toBe('Access mode, current: Auto review EXP')
+      .toBe('Access mode, current: Auto review')
 
     await captureAutoReviewState(page, 'deny-collapsed')
     const collapsed = (await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd))

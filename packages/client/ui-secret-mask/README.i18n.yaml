@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-secret-mask/README.md
+/:
+  en: 1dc6c25906eed342
+  zh: 6d2502e37189d576
+/deepseek-ai-dsh-client-ui-secret-mask:
+  en: f26ae7ca26826032
+  zh: b74b0e6322c0b56c
+/deepseek-ai-dsh-client-ui-secret-mask/summary:
+  en: 2a509a8ec34675b3
+  zh: e0afbb185bde0c57
+/deepseek-ai-dsh-client-ui-secret-mask/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-secret-mask/use-this-package:
+  en: b0381650c2b15970
+  zh: a30982f630ea71f1
+/deepseek-ai-dsh-client-ui-secret-mask/use-this-package/what-is-masked:
+  en: 445a9c788955600d
+  zh: b36ebee0735f5c48
+/deepseek-ai-dsh-client-ui-secret-mask/understand-the-implementation:
+  en: 6d51c32ed0187492
+  zh: 43cf79bbe45ee90b
+/deepseek-ai-dsh-client-ui-secret-mask/further-exploration:
+  en: 7549b5b4c03132f4
+  zh: 50516120cf5d0c25
+/deepseek-ai-dsh-client-ui-secret-mask/model-experience:
+  en: 9a362b8fa90e0d5a
+  zh: 65c22dcf8f352782
+/deepseek-ai-dsh-client-ui-secret-mask/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: c2241315dc0c89c9
+/deepseek-ai-dsh-client-ui-secret-mask/known-limitations-and-deferred-work:
+  en: 14c6e5817a106972
+  zh: 13082b68474b5a6f
+/deepseek-ai-dsh-client-ui-secret-mask/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

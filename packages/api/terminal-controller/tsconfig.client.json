@@ -35,6 +35,9 @@
     },
     {
       "path": "../../util/crypto"
+    },
+    {
+      "path": "../../util/deque"
     }
   ]
 }

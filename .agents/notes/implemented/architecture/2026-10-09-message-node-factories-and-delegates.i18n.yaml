@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-09-message-node-factories-and-delegates.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-09-message-node-factories-and-delegates.md
+/agent-note-domain-image-slots-and-a-shared-gallery-factory:
+  en: bce6358fb4211261
+  zh: bfebd3bbdb1affb1
+/agent-note-domain-image-slots-and-a-shared-gallery-factory/problem:
+  en: ec6ffd7f737a1f56
+  zh: 5e368f87ce52e28c
+/agent-note-domain-image-slots-and-a-shared-gallery-factory/decision:
+  en: b807777fd48560eb
+  zh: e7b1625bd4448ce1
+/agent-note-domain-image-slots-and-a-shared-gallery-factory/alternatives-considered:
+  en: db14fd6d0e2ce78b
+  zh: c29a19cde692a1dd
+/agent-note-domain-image-slots-and-a-shared-gallery-factory/verification:
+  en: d82e036edb981e7c
+  zh: 5a05e9a2e6489d21
+/agent-note-domain-image-slots-and-a-shared-gallery-factory/consequences:
+  en: ac387ffb5a316920
+  zh: ab584aaafe554278

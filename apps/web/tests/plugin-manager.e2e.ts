@@ -96,6 +96,141 @@ describe('web e2e: plugin manager', () => {
     return readFile(join(scaffold.harnessHome, ...segments), 'utf8').catch(() => '')
   }
 
+  it('keeps plugin header actions on one line as the available width changes', async () => {
+    const facts: string[] = []
+    // A dedicated scaffold keeps the measured header deterministic: an install
+    // task left by an earlier test swaps the toolbar's add control for the
+    // view-installation button, which moves the wrap threshold.
+    const headerScaffold = await launchWebScaffold()
+    try {
+      // Pin the extremes; at intermediate widths, the rendered font and locale
+      // determine whether the two intrinsic items fit beside each other.
+      const PINNED_PLACEMENT: Record<number, 'beside' | 'below'> = { 1680: 'beside', 1024: 'beside', 390: 'below', 430: 'below' }
+      for (const language of ['en', 'zh'] as const) {
+        const context = await browser.newContext({
+          viewport: { width: 1680, height: 1000 }, locale: language === 'en' ? 'en-US' : ZH_BROWSER_LOCALE,
+          reducedMotion: 'reduce',
+        })
+        try {
+          const probe = await context.newPage()
+          const consoleWatch = watchConsole(probe)
+          await probe.goto(headerScaffold.authenticatedUrl, { waitUntil: 'load' })
+          const title = language === 'en' ? 'Plugins' : '插件'
+          await probe.getByRole('button', { name: title, exact: true }).click()
+          const panel = probe.locator('[data-plugin-panel]')
+          const header = panel.locator(':scope > header')
+          await header.getByRole('heading', { name: title, exact: true }).waitFor()
+          await probe.evaluate(() => document.fonts.ready)
+          const add = header.getByRole('button', { name: language === 'en' ? 'Add plugin' : '添加插件', exact: true })
+          await expect.poll(() => add.isEnabled()).toBe(true)
+          await add.focus()
+          const measure = () => header.evaluate((element) => {
+            const heading = element.firstElementChild!
+            const actions = element.lastElementChild!
+            const headingRect = heading.getBoundingClientRect()
+            const actionRect = actions.getBoundingClientRect()
+            const headerRect = element.getBoundingClientRect()
+            const intrinsicHeading = heading.cloneNode(true) as HTMLElement
+            Object.assign(intrinsicHeading.style, {
+              position: 'absolute', width: 'max-content', maxWidth: 'none', visibility: 'hidden', pointerEvents: 'none',
+            })
+            element.append(intrinsicHeading)
+            let intrinsicHeadingWidth: number
+            try {
+              intrinsicHeadingWidth = intrinsicHeading.getBoundingClientRect().width
+            } finally {
+              intrinsicHeading.remove()
+            }
+            const headerStyle = getComputedStyle(element)
+            const contentWidth = headerRect.width - Number.parseFloat(headerStyle.paddingLeft) - Number.parseFloat(headerStyle.paddingRight)
+            const fitsBeside = intrinsicHeadingWidth + actionRect.width + Number.parseFloat(headerStyle.columnGap) <= contentWidth + 1
+            const subtitle = heading.querySelector('h1 + div > span')!
+            const range = document.createRange()
+            range.selectNodeContents(subtitle)
+            const lastText = Array.from(range.getClientRects()).at(-1)!
+            const info = heading.querySelector('button')!.getBoundingClientRect()
+            const buttons = Array.from(actions.querySelectorAll('button'))
+            const singleLine = buttons.every((button) => {
+              const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT)
+              const tops: number[] = []
+              while (walker.nextNode()) {
+                if (!walker.currentNode.textContent?.trim()) continue
+                range.selectNodeContents(walker.currentNode)
+                for (const rect of range.getClientRects()) tops.push(rect.top)
+              }
+              return tops.length === 0 || Math.max(...tops) - Math.min(...tops) < 1
+            })
+            return {
+              singleLine, fitsBeside,
+              diagnostic: { flexWrap: headerStyle.flexWrap, headingMaxWidth: getComputedStyle(heading).maxWidth,
+                introDisplay: getComputedStyle(heading.querySelector('h1 + div')!).display,
+                intrinsicHeadingWidth, headingWidth: headingRect.width, actionsWidth: actionRect.width,
+                contentWidth, gap: Number.parseFloat(headerStyle.columnGap),
+                subtitleRight: lastText.right, infoLeft: info.left,
+              },
+              placement: actionRect.left >= headingRect.right - 1
+                ? 'beside' as const
+                : actionRect.top >= headingRect.bottom - 1 ? 'below' as const : 'overlapping' as const,
+              contained: actionRect.left >= headerRect.left - 1 && actionRect.right <= headerRect.right + 1,
+              infoFollowsText: info.left >= lastText.right && info.left - lastText.right <= 5
+                && info.top < lastText.bottom && info.bottom > lastText.top,
+              focused: buttons.includes(document.activeElement as HTMLButtonElement),
+            }
+          })
+          const validLayout = (layout: Awaited<ReturnType<typeof measure>>) =>
+            layout.singleLine && layout.contained && layout.infoFollowsText && layout.focused
+            && layout.placement === (layout.fitsBeside ? 'beside' : 'below')
+          for (const width of [1680, 768, 520, 440, 390, 430, 1024]) {
+            await probe.setViewportSize({ width, height: 1000 })
+            await expect.poll(async () => {
+              const layout = await measure()
+              return validLayout(layout) ? true : layout
+            }, { message: `${language} ${width}px plugin header geometry` }).toBe(true)
+            const { placement } = await measure()
+            const pinned = PINNED_PLACEMENT[width]
+            if (pinned !== undefined) expect(placement).toBe(pinned)
+            facts.push(`${language} ${width}px: actions ${pinned === undefined ? 'beside or below (according to intrinsic fit)' : placement} the heading, single-line; contained; information follows subtitle; focus retained`)
+          }
+          await probe.setViewportSize({ width: 390, height: 1000 })
+          const previousWrap = await header.evaluate((element) => {
+            const style = element.style
+            const previous = { value: style.getPropertyValue('flex-wrap'), priority: style.getPropertyPriority('flex-wrap') }
+            style.setProperty('flex-wrap', 'nowrap')
+            return previous
+          })
+          try {
+            const noWrap = await measure()
+            expect(noWrap.fitsBeside).toBe(false)
+            expect(noWrap.placement).not.toBe('below')
+            expect(validLayout(noWrap)).toBe(false)
+          } finally {
+            await header.evaluate((element, previous) => {
+              if (previous.value === '') element.style.removeProperty('flex-wrap')
+              else element.style.setProperty('flex-wrap', previous.value, previous.priority)
+            }, previousWrap)
+          }
+          await expect.poll(async () => validLayout(await measure())).toBe(true)
+          const menuTrigger = header.getByRole('button', { name: language === 'en' ? 'Choose how to add a plugin' : '选择添加插件方式' })
+          await menuTrigger.click()
+          await probe.getByRole('menu').waitFor()
+          await probe.keyboard.press('Escape')
+          await expect.poll(() => probe.getByRole('menu').count()).toBe(0)
+          expect(await menuTrigger.evaluate(element => element === document.activeElement)).toBe(true)
+          expect(consoleWatch.pageErrors).toEqual([])
+        } finally {
+          await context.close()
+        }
+      }
+      await compareOrRefreshGolden(
+        join(SNAPSHOT_DIR, 'header-responsive.expected.md'),
+        `# Plugin header responsive layout\n\n${facts.join('\n')}\n\nA forced no-wrap layout at 390px fails the same measured layout check in both locales; restoring wrap passes.\nAdd menu dismisses on Escape and returns focus in both locales.`,
+        MODE,
+      )
+    } finally {
+      await headerScaffold.close()
+    }
+  })
+
   it('aligns the first-read skeleton with the loaded plugin cards', async () => {
     const facts: string[] = []
     let aria = ''
@@ -932,7 +1067,7 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
-      'ime-enter.expected.md',
+      'ime-enter.expected.md', 'header-responsive.expected.md',
     ])
   })
 })

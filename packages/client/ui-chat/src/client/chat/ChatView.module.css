@@ -101,6 +101,11 @@
   transition: margin-top 160ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.column[data-input-fold] > :not([data-chat-motion]),
+.column[data-input-fold] > :global([data-slot="conversation.chat.flow"]) > :not([data-chat-motion]) {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .column[data-chat-motion] > :not([data-chat-motion]),
   .column[data-chat-motion] > :global([data-slot="conversation.chat.flow"]) > :not([data-chat-motion]) {

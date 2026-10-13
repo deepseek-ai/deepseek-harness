@@ -45,13 +45,15 @@ kind: "package-reference"
 <details>
 <summary>实现内幕——点击展开</summary>
 
-头部操作带里的一个 slot 条目（preset 标签之后）渲染触发器与弹出层；弹出层挂载到 document body，因此不会被裁剪的头部列或右侧边栏截断，并按锚点定位、限制在视口内。所有数据经 `ctx.jobs` 到达——组件不持有任何传输状态。名册跟随挂载：一个 `useEffect` 在控件存活期间保持会话的 `job.list` 流打开。观测跟随可见性：另一个 `useEffect` 为展开行的 job 打开流，并在收起、卸载或弹出层关闭时关闭它。
+头部操作带里的一个 slot 条目（preset 标签之后）渲染触发器；弹出层通过挂载到 body 的 `MenuSurface` 固定定位，避免被停靠面板遮挡或被祖先容器裁剪。共享锚点 hook 跟踪滚动、窗口尺寸及面板尺寸变化。所有数据经 `ctx.jobs` 到达——组件不持有任何传输状态。名册跟随挂载：一个 `useEffect` 在控件存活期间保持会话的 `job.list` 流打开。观测跟随可见性：另一个 `useEffect` 为展开行的 job 打开流，并在收起、卸载或弹出层关闭时关闭它。
 
 | 文件 | 角色 |
 |---|---|
 | [`src/client/JobListAction.tsx`](src/client/JobListAction.tsx) | 任务列表：分组、时长、面板 |
 | [`src/client/index.ts`](src/client/index.ts) | slot 注册与词典 |
 | [`src/client/locales.ts`](src/client/locales.ts) | `job` 命名空间文案（zh 为事实源） |
+
+后台任务行遵循[标准菜单边缘几何](../../../docs/ui-radius.zh.md#nested-hover)；带底色运行行内的控件保留紧凑圆角。
 
 </details>
 

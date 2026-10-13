@@ -109,9 +109,7 @@ describe('ui-settings-general shell', () => {
     off()
   })
 
-  it('shows Account first in Desktop while signed in and removes it on sign-out', async ({ start }) => {
-    vi.stubGlobal('dshDesktop', {})
-    onTestFinished(() => { vi.unstubAllGlobals() })
+  it('shows Account first only while signed in and removes it on sign-out', async ({ start }) => {
     const c = await start()
     const { sections } = injectedOf(c).hooks
     await c.mock.streams.opened('account/watch', 1)

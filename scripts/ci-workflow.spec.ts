@@ -88,11 +88,11 @@ describe('CI workflow', () => {
     const scripts = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { scripts: Record<string, string> }
     expect(scripts.scripts['build:lib:host']).toContain('tsc -b tsconfig.host.json')
     expect(scripts.scripts['build:lib:client']).toContain('tsc -b tsconfig.client.json')
-    expect(scripts.scripts.typecheck).toBe('npm run build:lib:host && npm run typecheck:contracts-ready')
+    expect(scripts.scripts.typecheck).toBe('tsx scripts/build.ts --scope typecheck')
   })
 
   it('selects artifact builds only for PR release and API rehearsals', () => {
-    const official = "${{ github.event_name == 'pull_request' && 'pnpm run build --artifacts-only --profile official' || 'pnpm run build:official' }}"
+    const official = "${{ github.event_name == 'pull_request' && 'pnpm run build:artifacts --profile official' || 'pnpm run build:official' }}"
     const vendor = "${{ github.event_name == 'pull_request' && 'pnpm exec tsx scripts/compile-referenced-projects.ts host-libraries' || 'pnpm run build:lib:host' }}"
     for (const [file, jobName, expected] of [
       ['release.yml', 'pack', official],
@@ -102,7 +102,7 @@ describe('CI workflow', () => {
       const job = workflowJob(loadWorkflow('.github/workflows/' + file), jobName)
       if (!Array.isArray(job.steps)) throw new TypeError(`${jobName} must define steps`)
       const step = job.steps.filter(isRecord).find(candidate => typeof candidate.run === 'string'
-        && (candidate.run.includes('--artifacts-only') || candidate.run.includes('host-libraries')))
+        && (candidate.run.includes('build:artifacts') || candidate.run.includes('host-libraries')))
       expect(step?.run).toBe(expected)
       for (const event of ['pull_request', 'push', 'workflow_dispatch']) {
         const expression = expected.slice('${{ '.length, -' }}'.length)
@@ -110,7 +110,7 @@ describe('CI workflow', () => {
         expect(selected).toBe(event === 'pull_request'
           ? file === 'release-vendor.yml'
             ? 'pnpm exec tsx scripts/compile-referenced-projects.ts host-libraries'
-            : 'pnpm run build --artifacts-only --profile official'
+            : 'pnpm run build:artifacts --profile official'
           : file === 'release-vendor.yml' ? 'pnpm run build:lib:host' : 'pnpm run build:official')
       }
     }
@@ -121,20 +121,20 @@ describe('CI workflow', () => {
     if (!Array.isArray(job.steps)) throw new TypeError('Python runtime builder must define steps')
     const steps = job.steps.filter(isRecord)
     const execute = steps.find(step => step.name === 'Build single-exe')
-    expect(steps.some(step => step.run === 'pnpm run build --artifacts-only')).toBe(false)
+    expect(steps.some(step => step.run === 'pnpm run build:artifacts')).toBe(false)
     expect(execute).toMatchObject({
       env: { DSH_BUILD_CLIENT_PROFILE: 'official' },
     })
     if (typeof execute?.run !== 'string') throw new TypeError('Python executable builder must define a command')
     const expression = [...execute.run.matchAll(/\$\{\{ ([^{}]+) \}\}/g)]
       .map(match => match[1]).find(value => value?.startsWith('inputs.ci'))
-    expect(expression).toBe("inputs.ci && github.event_name == 'pull_request' && '--artifacts-only' || ''")
+    expect(expression).toBe("inputs.ci && github.event_name == 'pull_request' && '--build-artifacts' || ''")
     if (expression === undefined) throw new TypeError('Python executable builder must select its build mode')
     for (const ci of [false, true]) {
       for (const event of ['pull_request', 'push', 'workflow_dispatch']) {
         const context = { inputs: { ci }, github: { event_name: event } }
         const selected: unknown = runInNewContext(expression, context, { timeout: 1000 })
-        expect(selected).toBe(ci && event === 'pull_request' ? '--artifacts-only' : '')
+        expect(selected).toBe(ci && event === 'pull_request' ? '--build-artifacts' : '')
       }
     }
   })
@@ -929,19 +929,19 @@ describe('Runtime and LLM e2e Blacksmith routing', () => {
   it('keeps native release and dispatch builders hosted while routing x64 CI by platform', () => {
     const workflow = loadWorkflow('.github/workflows/build-exe-for-python-sdk.yml')
     const build = workflowJob(workflow, 'build')
-    for (const [target, runner, variable, blacksmith] of [
-      ['node24-linux-x64', 'ubuntu-latest', 'DSH_CI_FAILOVER_LINUX', 'blacksmith-2vcpu-ubuntu-2404'],
-      ['node24-win-x64', 'windows-2025', 'DSH_CI_FAILOVER_WINDOWS', 'blacksmith-2vcpu-windows-2025'],
-      ['node24-linux-arm64', 'ubuntu-24.04-arm', 'DSH_CI_FAILOVER_LINUX', 'ubuntu-24.04-arm'],
-      ['node24-macos-arm64', 'macos-latest', 'DSH_CI_FAILOVER_LINUX', 'macos-latest'],
-      ['node24-macos-x64', 'macos-15-intel', 'DSH_CI_FAILOVER_LINUX', 'macos-15-intel'],
+    for (const [target, runner, variable, blacksmith, releaseRunner] of [
+      ['node24-linux-x64', 'ubuntu-latest', 'DSH_CI_FAILOVER_LINUX', 'blacksmith-2vcpu-ubuntu-2404', 'ubuntu-latest'],
+      ['node24-win-x64', 'windows-2025', 'DSH_CI_FAILOVER_WINDOWS', 'blacksmith-2vcpu-windows-2025', 'windows-2025'],
+      ['node24-linux-arm64', 'ubuntu-24.04-arm', 'DSH_CI_FAILOVER_LINUX', 'ubuntu-24.04-arm', 'ubuntu-24.04-arm'],
+      ['node24-macos-arm64', 'macos-latest', 'DSH_CI_FAILOVER_LINUX', 'macos-latest', 'macos-15-xlarge'],
+      ['node24-macos-x64', 'macos-15-intel', 'DSH_CI_FAILOVER_LINUX', 'macos-15-intel', 'macos-15-large'],
     ] as const) {
       for (const ci of [false, true]) {
         for (const release of [false, true]) {
           for (const mode of ['', 'selfhosted', 'unexpected', 'blacksmith']) {
             const vars = { DSH_CI_FAILOVER_LINUX: 'blacksmith', DSH_CI_FAILOVER_WINDOWS: 'blacksmith', [variable]: mode }
             expect(evaluateRunsOn(build['runs-on'], { inputs: { ci, release }, vars, matrix: { target, runner } }), `${target} ci=${ci} release=${release} mode=${mode}`)
-              .toBe(ci && !release && mode === 'blacksmith' ? blacksmith : runner)
+              .toBe(release ? releaseRunner : ci && mode === 'blacksmith' ? blacksmith : runner)
           }
         }
       }

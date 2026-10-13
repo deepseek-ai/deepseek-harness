@@ -9,8 +9,8 @@
   en: cced8c691b58657a
   zh: 3da9cdf76a1a07ff
 /deepseek-ai-dsh-ptc-runtime/summary:
-  en: d5a1f0be39931018
-  zh: 3584bd577f654a38
+  en: b04917e62d63c7ff
+  zh: 12cb9f38cbf8ee3f
 /deepseek-ai-dsh-ptc-runtime/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,11 +18,11 @@
   en: 7e5ebf7420c13af4
   zh: 9ad1e056e794ca4a
 /deepseek-ai-dsh-ptc-runtime/use-this-package/run-a-program:
-  en: 6f97019cebc2f417
-  zh: c56f18a690dbe814
+  en: c856760ebc15d59e
+  zh: dc093083b29794e0
 /deepseek-ai-dsh-ptc-runtime/use-this-package/choose-a-backend:
-  en: f2dd49b11ef5e888
-  zh: f2be82b0cae2d8e4
+  en: fc0d515f0c3664f3
+  zh: 0a1b646b5cf92232
 /deepseek-ai-dsh-ptc-runtime/use-this-package/name-your-bindings-portably:
   en: 4e46c1672701b8df
   zh: 0353c5855c9ff6be
@@ -57,14 +57,14 @@
   en: 40294c1c31b74824
   zh: 081cebc2e2650f03
 /deepseek-ai-dsh-ptc-runtime/known-limitations-and-deferred-work:
-  en: 7f30f78c5d427667
-  zh: 99d21160016deea2
+  en: e20364d073f78c60
+  zh: 6cac5c46ff91b3ca
 /deepseek-ai-dsh-ptc-runtime/known-limitations-and-deferred-work/dev-note:
   en: d56846da29ad869c
   zh: 0397151a7e29b8ba
-/deepseek-ai-dsh-ptc-runtime/known-limitations-and-deferred-work/dev-note/future-persistent-kernel-backend:
-  en: cfefaae6ed9705d5
-  zh: 3cca5b1bd92445b0
+/deepseek-ai-dsh-ptc-runtime/known-limitations-and-deferred-work/dev-note/retained-state:
+  en: cd86d95f288b86dc
+  zh: 2157b7a97eb62667
 /deepseek-ai-dsh-ptc-runtime/known-limitations-and-deferred-work/dev-note/future-container-backend:
   en: 2b94202842f0556c
   zh: 5aa0311fa621a018

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "会话日志上传设置",
+    "description": "设置是否随 DeepSeek 官方模型 API 请求上传会话日志。"
+  }
+}

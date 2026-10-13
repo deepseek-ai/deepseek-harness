@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-typert-loader",
   "description": "Loader integration for generated Typert package contributions",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -19,9 +19,11 @@
       "default": "./lib/index.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/types/**/*.d.ts"
   ],
@@ -38,7 +40,9 @@
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-typert-registry": "workspace:*",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "zod": "^4.4.3"
+    "typescript": "^6.0.3",
+    "zod": "4.4.3"
   }
 }

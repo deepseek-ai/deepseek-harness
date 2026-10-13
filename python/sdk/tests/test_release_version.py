@@ -145,14 +145,14 @@ def test_stage_runtime_copies_platform_payload(
         spawn_helper.write_bytes(b"helper")
         spawn_helper.chmod(0o755)
         expected[spawn_helper.name] = b"helper"
-    office = executable.parent / build_python_release.office_sidecar_name(executable.name)
+    office = executable.parent / f"{executable.name.removesuffix('.exe')}-office"
     office_asset = office / "node_modules" / "@deepseek-ai" / "libreoffice-kit-wasm" / "assets" / "soffice.data"
     office_asset.parent.mkdir(parents=True)
     office_asset.write_bytes(b"office data")
     resources = executable.with_name(executable.name.removeprefix("deepseek-harness-sdk-runtime-").removesuffix(".exe"))
-    resource = resources / "office-skills/scripts/check_office.py"
+    resource = resources / "office-skills/office-docx/SKILL.md"
     resource.parent.mkdir(parents=True)
-    resource.write_text("checker")
+    resource.write_text("# Word documents\n")
     destination = tmp_path / "staging"
 
     build_python_release.stage_runtime(destination, "1.2.3", executable, executable.name)
@@ -163,8 +163,8 @@ def test_stage_runtime_copies_platform_payload(
         for path in runtime_dir.glob("deepseek-harness-sdk-runtime-*")
         if path.is_file()
     } == expected
-    assert (runtime_dir / office.name / office_asset.relative_to(office)).read_bytes() == b"office data"
-    assert (runtime_dir / resources.name / resource.relative_to(resources)).read_text() == "checker"
+    assert not (runtime_dir / office.name).exists()
+    assert (runtime_dir / resources.name / resource.relative_to(resources)).read_text() == "# Word documents\n"
     pyproject = (destination / "pyproject.toml").read_text()
     assert 'license = "MIT"' in pyproject
     assert 'license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]' in pyproject
@@ -191,43 +191,9 @@ def test_stage_runtime_rejects_a_noncanonical_executable_name(tmp_path: Path) ->
         )
 
 
-@pytest.mark.parametrize("platform_tag,selected", [
-    ("manylinux_2_28_x86_64", "wasm"), ("macosx_14_0_arm64", "darwin-arm64"),
-    ("macosx_14_0_x86_64", "darwin-x64"), ("win_amd64", "win32-x64"),
-    ("manylinux_2_28_x86_64", "linux-x64"), ("macosx_14_0_arm64", "wasm"),
-])
-@pytest.mark.parametrize("invalid", [None, "asset", "missing-engine", "foreign-engine", "helper-mode"])
-def test_office_wheel_requires_only_target_engine(
-    tmp_path: Path, platform_tag: str, selected: str, invalid: str | None,
-) -> None:
-    root = "runtime-office/node_modules"
-    wheel = tmp_path / "office.zip"
-    native = selected != "wasm"
-    if invalid == "helper-mode" and (not native or platform_tag == "win_amd64"):
-        pytest.skip("executable mode applies to POSIX native helpers")
-    engine = ({"kind": "native", "executable": "bin/helper"} if native else
-              {"kind": "wasm", "loader": "loader.cjs", "wasm": "engine.wasm", "data": "engine.data", "metadata": "fonts.json"})
-    with zipfile.ZipFile(wheel, "w") as archive:
-        archive.writestr(f"{root}/@deepseek-ai/libreoffice-kit/package.json", json.dumps({
-            "optionalDependencies": {f"@deepseek-ai/libreoffice-kit-{selected}": "0.0.1"},
-        }))
-        base = f"{root}/@deepseek-ai/libreoffice-kit-{selected}"
-        if invalid != "missing-engine":
-            archive.writestr(f"{base}/prebuilds.json", json.dumps({"engine": engine}))
-        for field in (("executable",) if native else ("loader", "wasm", "data", "metadata")):
-            if invalid == "asset" and field == ("executable" if native else "data"):
-                continue
-            asset = zipfile.ZipInfo(f"{base}/{engine[field]}")
-            asset.external_attr = (0o644 if invalid == "helper-mode" else 0o755) << 16
-            archive.writestr(asset, b"payload")
-        if invalid == "foreign-engine":
-            foreign = "wasm" if native else "darwin-arm64"
-            archive.writestr(f"{root}/@deepseek-ai/libreoffice-kit-{foreign}/prebuilds.json", "{}")
-    with zipfile.ZipFile(wheel) as archive:
-        if invalid is None:
-            build_python_release.verify_office_payload(archive, root, platform_tag)
-        else:
-            message = {"asset": "asset is missing", "missing-engine": "dependency is missing",
-                       "foreign-engine": "Unexpected Office engine", "helper-mode": "executable bit"}[invalid]
-            with pytest.raises(RuntimeError, match=message):
-                build_python_release.verify_office_payload(archive, root, platform_tag)
+def test_wheel_verification_rejects_oversized_artifacts(tmp_path: Path) -> None:
+    wheel = tmp_path / "oversized.whl"
+    with wheel.open("wb") as output:
+        output.truncate(100_000_001)
+    with pytest.raises(RuntimeError, match="PyPI single-file limit"):
+        build_python_release.verify_wheel(wheel, "runtime", "1.2.3", ("win_amd64", "runtime.exe"))

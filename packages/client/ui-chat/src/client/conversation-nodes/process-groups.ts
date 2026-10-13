@@ -8,9 +8,9 @@ import type { ChatConversationViewNode, ChatNode } from '../contract/chat-nodes.
 import type { ProcessActivitySummary, ProcessGroupData } from '../contract/process-groups.ts'
 import { hasAssistantReplyContent } from '../contract/assistant-content.ts'
 import { isVisibleChatNode } from '../contract/chat-visibility.ts'
+import { isAtOrOutside } from '../contract/group-tree.ts'
 import { processActivity } from './process-activity.ts'
 
-const INDEPENDENT = new Set(['user', 'steering', 'turn-trigger', 'model-retry', 'turn-error', 'turn-max-tokens', 'turn-tail'])
 type ProcessInput = ConversationGroupInput<ChatConversationViewNode>
 
 function turnOf(node: ChatNode): number | undefined {
@@ -44,6 +44,7 @@ function structureChanged(previous: ChatNode | undefined, current: ChatNode): bo
   return previous === undefined || previous.kind !== current.kind
     || turnOf(previous) !== turnOf(current)
     || isVisibleChatNode(previous) !== isVisibleChatNode(current)
+    || previous.groupTree !== current.groupTree
     || reasoning(previous) !== reasoning(current) || reply(previous) !== reply(current)
 }
 
@@ -51,15 +52,6 @@ function readNode(input: ProcessInput, key: NodeKey): ChatNode {
   const node = input.readNode(key) as ChatNode | undefined
   if (node === undefined) throw new Error(`Chat grouping input is missing Node ${key}`)
   return node
-}
-
-function questionReplyIds(input: ProcessInput, keys: readonly NodeKey[]): ReadonlySet<string> {
-  const ids = new Set<string>()
-  for (const key of keys) {
-    const node: ChatConversationViewNode = readNode(input, key)
-    if (node.kind === 'question-reply') ids.add(node.id)
-  }
-  return ids
 }
 
 /** One group's members and cached summary, refreshed together when its content changes. */
@@ -152,23 +144,17 @@ class TurnGroups {
     }
     let previous: NodeKey | undefined
     let followed = false
-    const keys = input.readTurn(this.turn)
-    const replies = questionReplyIds(input, keys)
-    for (const key of keys) {
+    for (const key of input.readTurn(this.turn)) {
       const position = readPosition(input, key)
       if (previous !== undefined && position.previous !== previous) flush(true)
       previous = key
       followed = position.next !== undefined
       const node = readNode(input, key)
-      // Both Definitions retain the same message id; only its question presentation renders.
-      if (node.kind === 'turn-trigger' && replies.has(node.id)) continue
-      if (INDEPENDENT.has(node.kind)) {
+      if (isAtOrOutside(node, 'process')) {
         flush(true)
         emit(key, { kind: 'node', key })
-      } else if (node.kind === 'turn-process') {
-        // A coalesced opening reply can sort before the control that folds its group.
-        emit(pending[0]?.key ?? key, { kind: 'node', key })
       } else if (node.kind === 'assistant-step') {
+        // One Node, two rows: reasoning joins the step run, a reply stands outside it.
         if (reasoning(node)) pending.push({ kind: 'node', key, groupPart: 'reasoning' })
         if (reply(node)) {
           flush(true)
@@ -291,14 +277,9 @@ export class ProcessState {
   }
 
   private rootEntries(input: ProcessInput): RenderEntry[] {
-    const unscoped = input.order.filter(key => readPosition(input, key).turn === undefined)
-    const replies = questionReplyIds(input, unscoped)
     return input.order.flatMap<RenderEntry>((key) => {
       const turn = readPosition(input, key).turn
-      if (turn === undefined) {
-        const node = readNode(input, key)
-        return node.kind === 'turn-trigger' && replies.has(node.id) ? [] : [{ kind: 'node', key }]
-      }
+      if (turn === undefined) return [{ kind: 'node', key }]
       const groups = this.turns.get(turn)
       if (groups === undefined) throw new Error(`Chat grouping order is missing Turn ${turn}`)
       return groups.references(key)

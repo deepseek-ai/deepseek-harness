@@ -165,17 +165,17 @@ function withNodeVersion<T>(version: string, action: () => T): T {
 
 describe('CI worker allocation', () => {
   it.each([1, 2, 4, 8, 16, 64])('shares a %i CPU coverage budget without multiplying pools', (cpus) => {
-    const env = ciWorkerEnvironment('ci-coverage', {}, cpus)
+    const env = ciWorkerEnvironment('ci-coverage', { CI: 'true' }, cpus)
     const exempt = Math.max(1, Math.floor(cpus / 3))
     const instrumented = Number(env.DSH_COVERAGE_PARTITIONS ?? 1)
     expect(Number(env.DSH_COVERAGE_MAX_WORKERS)).toBe(cpus)
     expect(instrumented + exempt).toBe(Math.max(2, cpus))
-    expect(defaultConcurrency('ci-coverage', 3, cpus).workers).toBe(Math.min(3, cpus))
+    expect(defaultConcurrency('ci-coverage', 3, cpus, { CI: 'true' }).workers).toBe(Math.min(3, cpus))
     if (cpus <= 2) expect(env.DSH_COVERAGE_PARTITIONS).toBeUndefined()
   })
 
   it('bounds overlapping readers and lets the isolated browser pool use the runner', () => {
-    const env = ciWorkerEnvironment('ci-consumers', {}, 16)
+    const env = ciWorkerEnvironment('ci-consumers', { CI: 'true' }, 16)
     expect(env).toMatchObject({
       DSH_OXLINT_THREADS: '8',
       DSH_PUBLINT_CONCURRENCY: '8',
@@ -183,6 +183,20 @@ describe('CI worker allocation', () => {
       DSH_SNAPSHOT_MAX_CONCURRENCY: '8',
       DSH_WEB_SNAPSHOT_WORKERS: '16',
     })
+  })
+
+  it('caps local defaults below the CPU count Node reports', () => {
+    expect(ciWorkerEnvironment('ci-coverage', {}, 256)).toMatchObject({
+      DSH_OXLINT_THREADS: '6',
+      DSH_COVERAGE_MAX_WORKERS: '48',
+      DSH_COVERAGE_PARTITIONS: '32',
+      DSH_WEB_SNAPSHOT_WORKERS: '12',
+    })
+    expect(defaultConcurrency('ci-static', 60, 256, {})).toEqual({
+      workers: 12,
+      source: '12 local default worker(s) of 256 CPU(s)',
+    })
+    expect(defaultConcurrency('ci-static', 60, 8, {}).workers).toBe(8)
   })
 
   it('preserves serial reference overrides on large hosts', () => {
@@ -362,12 +376,16 @@ describe('gate graph validation', () => {
     ])
   })
 
-  it('caps the local hygiene aggregate at four workers', () => {
+  it('caps the local hygiene aggregate at eight workers', () => {
     const ids = withPnpmEntrypoint(() => gatesForMode('hygiene').map(subject => subject.id))
 
-    expect(defaultConcurrency('hygiene', ids.length, 8)).toEqual({
-      workers: 4,
-      source: '8 available CPU(s), hygiene cap 4',
+    expect(defaultConcurrency('hygiene', ids.length, 16, { CI: 'true' })).toEqual({
+      workers: 8,
+      source: '16 available CPU(s), hygiene cap 8',
+    })
+    expect(defaultConcurrency('doc-sync', 43, 256, {})).toEqual({
+      workers: 8,
+      source: '12 local default worker(s) of 256 CPU(s), doc-sync cap 8',
     })
   })
 
@@ -785,8 +803,8 @@ describe('Typert contract preparation', () => {
       withPnpmEntrypoint(() => gatesForMode('ci-primary')))
 
     expect(subject.find(item => item.id === 'typert-contracts')).toMatchObject({
-      displayCommand: 'pnpm run build:lib:host',
-      args: ['/private/pnpm.cjs', 'run', 'build:lib:host'],
+      displayCommand: 'pnpm exec tsx scripts/compile-referenced-projects.ts host-contracts',
+      args: ['/private/pnpm.cjs', 'exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'host-contracts'],
     })
     for (const [id, script] of [
       ['typecheck', 'typecheck:contracts-ready'],
@@ -865,9 +883,9 @@ describe('Node compatibility graph', () => {
       withEnv('DSH_NODE_COMPAT_SKIP_TYPECHECK', skipTypecheck, () =>
         withPnpmEntrypoint(() => gatesForMode('node-compat'))))
 
-    expect(subject.filter(item => item.displayCommand === 'pnpm run build --artifacts-only')).toHaveLength(1)
+    expect(subject.filter(item => item.displayCommand === 'pnpm run build:artifacts')).toHaveLength(1)
     expect(subject.find(item => item.id === 'build')?.args).toEqual([
-      '/private/pnpm.cjs', 'run', 'build', '--artifacts-only',
+      '/private/pnpm.cjs', 'run', 'build:artifacts',
     ])
     expect(subject.map(item => item.id)).not.toContain('build:web')
     expect(subject.find(item => item.id === 'cli-lazy-search-startup-smoke')).toMatchObject({
@@ -911,7 +929,7 @@ describe('Node 24 lane ownership', () => {
   it('owns the build and orders its artifact consumers', () => {
     const subject = withPnpmEntrypoint(() => gatesForMode('ci-consumers'))
 
-    expect(defaultConcurrency('ci-consumers', subject.length, 4)).toEqual({
+    expect(defaultConcurrency('ci-consumers', subject.length, 4, { CI: 'true' })).toEqual({
       workers: 4,
       source: '4 available CPU(s)',
     })

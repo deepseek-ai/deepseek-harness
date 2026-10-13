@@ -59,6 +59,8 @@ Each catalog fetch requires an existing retained Client Session and waits for it
 
 The `/client` exports are the plugin body (`apply`/`inject`) only; the source object is internal to the registration effect. The tool row registers the `skill` wire name in ui-tool's keyed `tool.call.toolview` slot.
 
+For sent text, the plugin registers a UserText matcher that returns one next original-text candidate using caller-confirmed `skillNames` and owns the `skill` entry in `conversation.user.text.node`. The renderer receives `openSkill` from its own Session-bound injection and delegates to this source’s preview operation, not to Chat owner props. Non-interactive previews remain labels. [UserText](../ui-conversation/README.md#sent-user-text) owns evaluation and node dispatch.
+
 </details>
 
 -----

@@ -23,10 +23,10 @@ interface ChokidarFixture {
 
 const CHOKIDAR_FIXTURES: readonly ChokidarFixture[] = [
   {
-    label: 'Chokidar 4 from credentials',
+    label: 'Chokidar 5 from credentials',
     consumerManifest: 'packages/credentials/credentials-local/package.json',
-    chokidarFiles: ['package.json', 'esm/package.json', 'esm/index.js', 'esm/handler.js'],
-    readdirpFiles: ['package.json', 'esm/package.json', 'esm/index.js'],
+    chokidarFiles: ['package.json', 'index.js', 'handler.js'],
+    readdirpFiles: ['package.json', 'index.js'],
   },
   {
     label: 'Chokidar 5 from skill-filesystem',

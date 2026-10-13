@@ -27,6 +27,8 @@ Agents can load the official "powered by dsh" badge skill from this bundled prov
 
 Enable the plugin to make the `dsh-badge` skill available in the session skill catalog; the model can then load it like any other skill and follow its instructions for adding a "powered by dsh" badge.
 
+In Plugins, this component is named **DSH** and uses the DSH tag icon. Its skill is named `dsh-badge`.
+
 ### When to choose it
 
 Choose this provider when content produced with DeepSeek Harness should carry official attribution badges, and the deployment wants the badge skill available to agents without storing it in a local skill directory. Skip it when the badge is irrelevant to the deployment. The default composition omits the plugin; installation and an explicit active row are required.

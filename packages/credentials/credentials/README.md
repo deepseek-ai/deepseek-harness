@@ -54,8 +54,8 @@ declare const ctx: Context
 const ref = credentialRef('DEEPSEEK_API_KEY')          // POSIX shell identifier, branded
 const hit = await ctx.credentials.resolve(ref)         // { value, source } | undefined
 const info = await ctx.credentials.describe(ref)       // { configured, source?, writable } — never the value
-await ctx.credentials.set(ref, 'sk-…')                 // rejects while a read-only source shadows the ref
-await ctx.credentials.unset(ref)                       // no-op when absent; same shadowing rule
+await ctx.credentials.set(ref, 'sk-…')                 // the stored value outranks environment fallbacks
+await ctx.credentials.unset(ref)                       // no-op when absent; an environment fallback then applies again
 ```
 
 Store a key with `set`, remove it with `unset`, check its status with `describe`, and read the current value with `resolve` when an operation needs it. `describe` reports whether the key is set, where it comes from, and whether you can write to it — it never returns the value.
@@ -92,7 +92,7 @@ Requests that need the key use its current stored value, so rotating the key tak
 
 ### What can go wrong
 
-- **A key the launching environment supplies cannot be overwritten** — `DEEPSEEK_API_KEY=… dsh` (or a CI secret, a container `-e`) wins for this run and is reported read-only; clear the variable in the launching shell before storing a different value.
+- **A stored key outranks the launching environment** — while a value is stored, `DEEPSEEK_API_KEY=… dsh` (or a CI secret, a container `-e`) does not apply; `unset` the stored key to use the exported one.
 - **An empty value cannot be stored** — storing an empty string is refused; remove the key instead.
 - **Key values never appear in configuration UIs or diagnostics** — the UI shows whether a key is set, where it comes from, and whether you can change it; the value itself stays in the store.
 

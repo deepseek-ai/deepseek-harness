@@ -23,7 +23,10 @@ declare module '@deepseek-ai/dsh-session/types' {
      * The session's agent preset was chosen after creation, while the session
      * was still blank. Log-only: it records the composition later turns ran
      * under, so a resumed or forked session rebuilds the same one instead of
-     * the header's creation-time value.
+     * the header's creation-time value. In a child Session, an occurrence
+     * before its first own `subagent/descriptor` marks an independent spawn
+     * selection that cold resume restores instead of joining the parent's
+     * composition (`dsh-subagent` README, "Restoring child composition").
      */
     'agent-preset/selected': { agentPreset: string }
   }

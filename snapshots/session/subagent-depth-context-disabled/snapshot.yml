@@ -1,0 +1,7 @@
+version: 1
+scenario: subagent-depth-context-disabled
+profile: headless
+composition: default
+recording: authored
+header:
+  class: default

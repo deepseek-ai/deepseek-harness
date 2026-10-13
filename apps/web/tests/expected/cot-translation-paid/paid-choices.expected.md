@@ -2,7 +2,7 @@
 - button "卸载 思考过程机器翻译" [disabled]: 卸载
 - switch "启用 思考过程机器翻译" [checked]
 - heading "思考过程机器翻译" [level=3]
-- text: v0.2.1-alpha.1 实验性
+- text: v0.2.1-alpha.2 实验性
 - paragraph:
   - code: "@deepseek-ai/dsh-experimental-cot-translation-bundle"
 - paragraph: 机器翻译展开的思考内容；原文会发送给所选服务
@@ -39,4 +39,4 @@
 - term: 代码来源
 - definition: 内置
 - term: 当前版本
-- definition: 0.2.1-alpha.1
+- definition: 0.2.1-alpha.2

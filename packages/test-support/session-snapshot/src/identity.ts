@@ -1,6 +1,7 @@
 /** Relationship-preserving identity redaction for committed session snapshots. */
 
 const UUID_FRAGMENT_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+const SHORT_JOB_ID_RE = /-[0-9a-f]{16}$/i
 const LEGACY_TOKEN_RE = /^\{\{(?:sessionId|messageId)\}\}$/
 const CANONICAL_TOKEN_RE = /^\{\{(session|message|approval|workflow|command|rpc|retry|id):([1-9]\d*)\}\}$/
 const ID_KEY_RE = /(?:^id$|Id$|Ids$)/
@@ -35,7 +36,8 @@ function messageId(value: unknown): string | undefined {
 }
 
 function redactedCandidate(value: string): boolean {
-  return UUID_FRAGMENT_RE.test(value) || LEGACY_TOKEN_RE.test(value) || CANONICAL_TOKEN_RE.test(value)
+  return UUID_FRAGMENT_RE.test(value) || SHORT_JOB_ID_RE.test(value)
+    || LEGACY_TOKEN_RE.test(value) || CANONICAL_TOKEN_RE.test(value)
 }
 
 /**

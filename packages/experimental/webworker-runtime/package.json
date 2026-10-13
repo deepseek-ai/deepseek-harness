@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-webworker-runtime",
   "description": "Browser-only harness runtime: in-memory VFS, module transform and loader, postMessage tunnel, and the dedicated Web Worker assembly, with the Node-compatibility layer that lets the host tree run unchanged",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -64,7 +64,7 @@
     "@deepseek-ai/node-addon-system": "workspace:~",
     "@types/picomatch": "^4.0.3",
     "@types/readable-stream": "^4.0.24",
-    "chokidar": "^5.0.0"
+    "chokidar": "5.0.0"
   },
   "files": [
     "lib/index.js",

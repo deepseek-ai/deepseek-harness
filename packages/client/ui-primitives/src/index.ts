@@ -33,6 +33,7 @@ export { useAnchoredPosition } from './useAnchoredPosition.ts'
 export type { AnchoredPositionOptions } from './useAnchoredPosition.ts'
 export { useDismissOnOutsidePointer } from './useDismissOnOutsidePointer.ts'
 export { HoverCard } from './HoverCard.tsx'
+export { HoverCardGroup } from './HoverCardGroup.tsx'
 export { ShortcutKeys } from './ShortcutKeys.tsx'
 export { observeComposition } from './keyboard-composition.ts'
 export { focusWithoutRing } from './focus.ts'
@@ -46,6 +47,7 @@ export { FishLogo, FISH_LOGO_PATH, FISH_LOGO_VIEWBOX } from './FishLogo.tsx'
 export { BrandWordmark } from './BrandWordmark.tsx'
 export type { BrandWordmarkProps } from './BrandWordmark.tsx'
 export {
+  PermissionIconAutoReviewMedium, PermissionIconAutoReviewRegular,
   PermissionIconFullAccessMedium, PermissionIconFullAccessRegular,
   PermissionIconReadOnlyMedium, PermissionIconReadOnlyRegular,
   PermissionIconWorkspaceWriteMedium, PermissionIconWorkspaceWriteRegular,
@@ -58,7 +60,7 @@ export { FileTypeIcon, classifyFileType, fileExtension } from './FileTypeIcon.ts
 export type {
   CodeFileType, FileType, FileTypeIconProps, FileTypeKind, FileTypeProjectContext,
 } from './FileTypeIcon.tsx'
-export { projectUserText, type UserTextReferences } from './user-text.tsx'
+export { UserTextRun, ReferenceChip, type UserTextRunProps, type ReferenceChipProps } from './user-text.tsx'
 export { Tooltip } from './Tooltip.tsx'
 export type { TooltipSide } from './Tooltip.tsx'
 export { pointerModality } from './input-modality.ts'

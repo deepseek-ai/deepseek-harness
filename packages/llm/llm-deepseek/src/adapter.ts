@@ -34,18 +34,25 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
   override async listModels(provider: string) {
     return this.dependencies.discoverModels?.(provider) ?? []
   }
-  override resolveModel(provider: string, model: string, _signal?: AbortSignal) {
-    return Promise.resolve(modelInfo(this.dependencies.options(), provider, model))
+  override async resolveModel(provider: string, model: string, signal?: AbortSignal) {
+    return modelInfo(await this.connection(signal), provider, model)
   }
   override imageRequestPricing(_provider: string, model: string) {
     return imagePricing(this.dependencies.options(), model, this.imageAccess)
   }
-  override prepareCall(provider: string, model: string, _signal?: AbortSignal): Promise<PreparedAdapterCall> {
-    const connection = this.dependencies.options()
-    return Promise.resolve({ model: modelInfo(connection, provider, model), stream: options => this.generate(options, connection) })
+  override async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall> {
+    const connection = await this.connection(signal)
+    this.dependencies.admit?.(connection, model)
+    return { model: modelInfo(connection, provider, model), stream: options => this.generate(options, connection) }
   }
   stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    return this.generate(options, this.dependencies.options())
+    const connection = this.dependencies.options()
+    this.dependencies.admit?.(connection, options.model)
+    return this.generate(options, connection)
+  }
+
+  private connection(signal: AbortSignal | undefined): Promise<C> {
+    return this.dependencies.connect?.(signal) ?? Promise.resolve(this.dependencies.options())
   }
 
   private async * generate(options: GenerateOptions, connection: C): AsyncGenerator<StreamChunk> {

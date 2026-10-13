@@ -7,10 +7,17 @@ description: Use when reviewing a pull request in the deepseek-harness repo — 
 
 **This skill is guidance, not a complete checklist.** Verify and fetch the PR's live base and exact head, then run `pnpm --silent run change-scope --base <verified-base-ref> --head <verified-head-ref>` before reading the diff and enough surrounding code to understand the design. The report identifies paths and dirty layers but does not replace semantic review. Re-establish the base and rerun it after a retarget or merge. Prioritize correctness, lifecycle, security, and broken required behavior over style; a short review with one substantiated blocker is better than a list of nits.
 
+**Read the requirements before judging the diff.** Map the changed paths to the artifacts below, open each owning page from [Sources of truth](#sources-of-truth), and only then read the diff against those requirements. Judging a diff against memory of the rules is how a violation passes review.
+
 ## Sources of truth
 
 - [AGENTS.md](../../../AGENTS.md) and [packages/AGENTS.md](../../../packages/AGENTS.md): standing repository and package authoring rules.
-- [docs/defensive-patterns.md](../../../docs/defensive-patterns.md): subprocess, callback, async-state, and disposal bug classes.
+- [docs/defensive-patterns/](../../../docs/defensive-patterns/README.md): the architecture requirements a change must satisfy and the habits behind them. Each page owns one artifact; read every page the diff touches:
+  - [general.md](../../../docs/defensive-patterns/general.md) — timing, async state, value representation, shared ownership, decentralization, refactors, migrations, performance evidence, disposal, callbacks, subprocesses.
+  - [package-surface.md](../../../docs/defensive-patterns/package-surface.md) — exports, package shape, build faces, dependency declarations, resolve hooks.
+  - [remote-and-api.md](../../../docs/defensive-patterns/remote-and-api.md) — remote services, `@Remote` methods, API dispatch, business ownership in `packages/api`.
+  - [client-components.md](../../../docs/defensive-patterns/client-components.md) — client components, slots, stores, hooks, effects, shared base packages.
+  - [conversation-and-session.md](../../../docs/defensive-patterns/conversation-and-session.md) — projection reads, Session retention, conversation nodes, renderers.
 - [docs/AGENTS.md](../../../docs/AGENTS.md): documentation placement and prose discipline.
 - [dsh-prose-standard](../dsh-prose-standard/SKILL.md): required coverage and editorial judgment for comments, docs, prompts, and visible strings.
 - [dsh-ci-test-reliability](../dsh-ci-test-reliability/SKILL.md): isolation and regression-proof rules for resource-owning, asynchronous, or flaky tests and fixtures.
@@ -33,7 +40,7 @@ description: Use when reviewing a pull request in the deepseek-harness repo — 
 
 - **Intent and interface contracts:** trace both sides of every changed interface. Confirm the implementation matches the PR and any Agent Note, including errors, cancellation, ownership, and disposal.
 - **Error handling:** apply [dsh-error-handling](../dsh-error-handling/SKILL.md) to changed failure paths, including their state guarantees and final user-visible reports. Reject catch-and-continue unless the state owner establishes that subsequent work's preconditions hold, including after recovery.
-- **Lifecycle and concurrency:** for async setup, callbacks, processes, or teardown, apply [defensive-patterns.md](../../../docs/defensive-patterns.md). Check races before publication, cancellation during awaits, independent error reporting, callback containment, ownership before reentry, complete detach cleanup, and quiescent disposal.
+- **Lifecycle and concurrency:** for async setup, callbacks, processes, or teardown, apply [defensive-patterns/general.md](../../../docs/defensive-patterns/general.md). Check races before publication, cancellation during awaits, independent error reporting, callback containment, ownership before reentry, complete detach cleanup, and quiescent disposal.
 - **Capability and consumer fit:** trace every current consumer, then flag consumer-specific behavior leaking into the interface under [the package rules](../../../packages/AGENTS.md). Flag the inverse too: a new public method on a generic service (registry, session, agent) whose only caller is one internal consumer is an unnecessary API expansion — require a private capability closure handed to that consumer at construction instead.
 - **Scope, ownership, and necessity:** map each abstraction, state machine, option, defensive copy, and compatibility path to its current contract, production consumer, and owning plugin or service. Challenge unrelated features and speculative generality, then test the PR against [the root rules](../../../AGENTS.md#conventions).
 - **Configuration and public choices:** ask what current-consumer evidence or prior art supports each default, public operation set, format, or imported external concept. Require an explicit choice or deferral when that evidence is absent.

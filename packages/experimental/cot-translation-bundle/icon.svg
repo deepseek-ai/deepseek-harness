@@ -1,5 +1,16 @@
-<svg width="36" height="36" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" stroke-width="1">
-<path d="M10.2854 5.71481C12.9673 8.39663 14.1182 11.5938 12.8562 12.8559C11.5942 14.1179 8.39706 12.9669 5.71518 10.2851C3.03333 7.60323 1.88236 4.40608 3.14441 3.14403C4.40644 1.882 7.6036 3.03297 10.2854 5.71481Z" stroke="#3F77D8" />
-<path d="M10.2854 10.2851C7.6036 12.9669 4.40644 14.1179 3.14441 12.8559C1.88236 11.5938 3.03333 8.39663 5.71518 5.71481C8.39706 3.03297 11.5942 1.882 12.8562 3.14403C14.1182 4.40608 12.9673 7.60323 10.2854 10.2851Z" stroke="#3F77D8" />
-<path d="M8.86291 8.0002C8.86291 8.47549 8.47762 8.86087 8.00224 8.86087C7.52694 8.86087 7.1416 8.47549 7.1416 8.0002C7.1416 7.52485 7.52694 7.13953 8.00224 7.13953C8.47762 7.13953 8.86291 7.52485 8.86291 8.0002Z" fill="#3F77D8" />
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="7" y="7" width="15" height="16" rx="2" fill="url(#translation-source)" fill-opacity="0.8" />
+  <path d="M10.5 18.5L14 11L17.5 18.5M12 15.5H16" transform="translate(14 14.75) scale(0.9) translate(-14 -14.75)" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round" />
+  <rect x="16" y="15" width="13" height="14" rx="2" fill="url(#translation-target)" />
+  <path d="M22.5 18V20M18.5 20H26.5M24.5 20C24 23 22 25 19 26M20.5 22C22 24 24 25 26 26" transform="translate(22.5 22) scale(0.9) translate(-22.5 -22)" stroke="#FFFFFF" stroke-width="1.4" stroke-linejoin="round" />
+  <defs>
+    <linearGradient id="translation-source" x1="14.5" y1="7" x2="14.5" y2="23" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#69B9FF" />
+      <stop offset="1" stop-color="#324DE2" />
+    </linearGradient>
+    <linearGradient id="translation-target" x1="22.5" y1="15" x2="22.5" y2="29" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6AECB6" />
+      <stop offset="1" stop-color="#37A6B1" />
+    </linearGradient>
+  </defs>
 </svg>

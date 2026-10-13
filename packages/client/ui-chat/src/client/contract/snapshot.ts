@@ -35,7 +35,10 @@ export interface ChatNodeStore {
   get(key: string): ChatConversationViewNode | undefined
   /** @param key - stable Conversation Context key. @returns its identity-stable observable source. */
   source(key: string): ChatNodeSource
-  /** @param key - Chat Node identity. @returns whether the visible Node belongs to the last Turn in the loaded timeline. */
+  /**
+   * @param key - Chat Node identity.
+   * @returns whether the visible Node belongs to the latest loaded exchange (see `ChatConversationViewNode.groupTree`).
+   */
   bottomSource(key: string): ObservableSnapshot<boolean>
   /**
    * Observe one Turn's data for a single Node kind, including hidden Nodes, in anchor order.

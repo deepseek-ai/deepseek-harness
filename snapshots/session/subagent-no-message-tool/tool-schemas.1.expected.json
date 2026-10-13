@@ -90,22 +90,6 @@
       }
     },
     {
-      "name": "interrupt_agent",
-      "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local direct child's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "agent_id": {
-            "type": "string",
-            "description": "The id of an agent created under you: your direct child or a deeper descendant."
-          }
-        },
-        "required": [
-          "agent_id"
-        ]
-      }
-    },
-    {
       "name": "job_kill",
       "description": "Request cancellation of a running background job.",
       "parameters": {
@@ -172,46 +156,6 @@
             ]
           }
         }
-      }
-    },
-    {
-      "name": "read",
-      "description": "Read a UTF-8 text file and return line-numbered content.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "file_path": {
-            "type": "string",
-            "description": "Path to read, resolved by the filesystem backend."
-          },
-          "offset": {
-            "type": "number",
-            "description": "1-based first line to return. Defaults to 1."
-          },
-          "limit": {
-            "type": "number",
-            "description": "Maximum number of lines to return. Defaults to 2000."
-          }
-        },
-        "required": [
-          "file_path"
-        ]
-      }
-    },
-    {
-      "name": "read_image",
-      "description": "Read a PNG/JPEG/WebP/GIF file and return the image itself. Large images are downscaled automatically; do not install image libraries or create thumbnails to inspect an image.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "file_path": {
-            "type": "string",
-            "description": "Path to the image file, resolved by the filesystem backend."
-          }
-        },
-        "required": [
-          "file_path"
-        ]
       }
     },
     {

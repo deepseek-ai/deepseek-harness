@@ -21,7 +21,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import HttpServer, { isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
+import HttpServer, { bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
 import { materializeTlsFixture, type TlsFixture } from './tls-fixture.ts'
 
 /** One-shot barrier for disposal overlapping a pending PEM read. */
@@ -144,18 +144,25 @@ function webserverFiber(context: Context) {
   return [...context.loader.entries()].find(entry => entry.options.name === '@deepseek-ai/dsh-host-webserver')?.fiber
 }
 
+/** The port a started listener bound; a test that reads it before `listen` fails here. */
+function boundPort(port: number | undefined): number {
+  if (port === undefined) throw new Error('webserver test: the listener has not bound a port')
+  return port
+}
+
 /** GET (by default) one path against the running server; returns status plus a body prefix. */
 async function request(
-  port: number,
+  port: number | undefined,
   path: string,
   init?: RequestInit,
 ): Promise<{ status: number; body: string; headers: Headers }> {
-  const response = await fetch(`http://127.0.0.1:${String(port)}${path}`, init)
+  const response = await fetch(`http://127.0.0.1:${String(boundPort(port))}${path}`, init)
   return { status: response.status, body: (await response.text()).slice(0, 80), headers: response.headers }
 }
 
 /** Open one raw upgrade request and return after the handler writes its response. */
-async function upgrade(port: number, path: string): Promise<ReturnType<typeof connect>> {
+async function upgrade(listenerPort: number | undefined, path: string): Promise<ReturnType<typeof connect>> {
+  const port = boundPort(listenerPort)
   const socket = connect(port, '127.0.0.1')
   await once(socket, 'connect')
   const response = once(socket, 'data')
@@ -177,7 +184,7 @@ async function upgrade(port: number, path: string): Promise<ReturnType<typeof co
  * it trusts nothing, so it only succeeds if the listener really speaks TLS.
  */
 function tlsRequest(
-  port: number,
+  port: number | undefined,
   path: string,
   ca?: string,
   agent?: Agent,
@@ -185,7 +192,7 @@ function tlsRequest(
   const { promise, resolve, reject } = Promise.withResolvers<{ status: number; body: string }>()
   const request = httpsRequest({
     host: '127.0.0.1',
-    port,
+    port: boundPort(port),
     path,
     ...(ca === undefined ? {} : { ca }),
     ...(agent === undefined ? {} : { agent }),
@@ -201,11 +208,11 @@ function tlsRequest(
 }
 
 /** Open one upgrade request over TLS and return after the handler answers 101. */
-function tlsUpgrade(port: number, path: string, ca: string): Promise<{ status: number; socket: Duplex }> {
+function tlsUpgrade(port: number | undefined, path: string, ca: string): Promise<{ status: number; socket: Duplex }> {
   const { promise, resolve, reject } = Promise.withResolvers<{ status: number; socket: Duplex }>()
   const request = httpsRequest({
     host: '127.0.0.1',
-    port,
+    port: boundPort(port),
     path,
     ca,
     headers: { Connection: 'Upgrade', Upgrade: 'dsh-test' },
@@ -278,6 +285,28 @@ describe('real Loader composition', () => {
     ]
     for (const [host, text] of rows) expect(normalizeBindAddress(host)).toBe(text)
     expect(() => normalizeBindAddress('localhost')).toThrow(/is not a concrete IPv4 or IPv6 address literal/)
+  })
+
+  it('writes bind addresses in their URL host form', () => {
+    const rows: [string, string | undefined][] = [
+      ['127.0.0.1', '127.0.0.1'],
+      ['::ffff:127.0.0.1%lo', '127.0.0.1'],
+      ['::1', '[::1]'],
+      ['::0.0.0.1%lo', '[::1]'],
+      ['10.1.2.3', '10.1.2.3'],
+      ['fd00::1', '[fd00::1]'],
+      // A zone selects an interface and no URL can carry it; only a loopback zone is redundant.
+      ['fe80::1%eth0', undefined],
+      ['::127.0.0.1%lo', undefined],
+    ]
+    for (const [host, text] of rows) expect(bindUrlHost(host)).toBe(text)
+  })
+
+  it('reports no origin before binding or for a bind address that no URL can express', () => {
+    expect(() => new HttpServer(new Context(), HttpServer.Config({ host: '127.0.0.1', port: 0 })).getOrigin())
+      .toThrow('webserver: origin read before the listener bound a port')
+    expect(() => new HttpServer(new Context(), HttpServer.Config({ host: 'fe80::1%eth0', port: 0 })).getOrigin())
+      .toThrow('webserver: bind address "fe80::1%eth0" carries an interface zone id, which no URL can express')
   })
 
 
@@ -465,7 +494,7 @@ describe('real Loader composition', () => {
         socket.destroy(new Error('test upgrade transport failure'))
       },
     })
-    const failedUpgrade = connect(port, '127.0.0.1')
+    const failedUpgrade = connect(boundPort(port), '127.0.0.1')
     failedUpgrade.on('error', () => { /* The server-side reset is the fixture outcome. */ })
     await once(failedUpgrade, 'connect')
     const failedUpgradeClosed = once(failedUpgrade, 'close')
@@ -554,6 +583,7 @@ describe('real Loader composition', () => {
     const loaded = await loadComposition(0, false, '127.0.0.1', tls)
     const server = loaded.webServer
     expect(server.protocol).toBe('https:')
+    expect(server.getOrigin()).toBe(`https://127.0.0.1:${String(server.port)}`)
     server.register({
       kind: 'exact',
       path: '/tls',
@@ -579,6 +609,7 @@ describe('real Loader composition', () => {
     const loaded = await loadComposition(0, false, '127.0.0.1', null)
     const server = loaded.webServer
     expect(server.protocol).toBe('http:')
+    expect(server.getOrigin()).toBe(`http://127.0.0.1:${String(server.port)}`)
     server.register({ kind: 'exact', path: '/plain', handler: (_req, res) => { res.writeHead(200); res.end('PLAIN') } })
     expect(await request(server.port, '/plain')).toMatchObject({ status: 200, body: 'PLAIN' })
     await expect(tlsRequest(server.port, '/plain')).rejects.toThrow()
@@ -686,7 +717,7 @@ describe('real Loader composition', () => {
       expect(await tlsRequest(server.port, '/probe', fixture.ca, agent)).toEqual({ status: 200, body: 'EXACT' })
       await idleReady
       // A TCP connection without a ClientHello is absent from closeAllConnections().
-      const handshaking = connect(server.port, '127.0.0.1')
+      const handshaking = connect(boundPort(server.port), '127.0.0.1')
       observeClient(handshaking)
       await once(handshaking, 'connect')
 

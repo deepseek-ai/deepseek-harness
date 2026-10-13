@@ -1,20 +1,19 @@
 /**
  * File-backed credentials provider over `$DSH_HOME/.credentials.yaml`, layered
- * against the environment by how much each layer is trusted:
+ * over the environment in this precedence order:
  *
  * ```text
- * inherited process environment      (read-only, wins)
- * > $DSH_HOME/.credentials.yaml      (provider-managed, writable)
- * > <invocation cwd>/.env            (read-only fallback)
- * > $DSH_HOME/.env                   (read-only fallback)
+ * $DSH_HOME/.credentials.yaml        (provider-managed, written by set/unset)
+ * > inherited process environment    (fallback; this provider never writes it)
+ * > <invocation cwd>/.env            (fallback; this provider never writes it)
+ * > $DSH_HOME/.env                   (fallback; this provider never writes it)
  * ```
  *
- * The inherited environment wins because `DEEPSEEK_API_KEY=… dsh`, a CI
- * secret, or a container `-e` is this run's explicit intent; it cannot be
- * edited from inside, so it must be *visibly* read-only rather than silently
- * shadow writes. Everything below it loses to the managed store, so a key the
- * Models page writes takes effect immediately even when an older key sits in
- * the user's `.env`.
+ * The managed store wins because a credential the user explicitly saved in
+ * the product must take effect consistently for every provider. The launch
+ * environment, CI secrets included, applies only while the file stores no
+ * value for the reference. See
+ * `.agents/notes/implemented/architecture/2026-10-09-stored-credential-precedence.md`.
  *
  * The invoking project may supply a key, because the product trusts the
  * project it is launched in. It ranks below the managed store, so a key stored
@@ -26,8 +25,9 @@
  * edits hot-publish through the seam, and each reload replaces the snapshot
  * wholesale so a deleted entry never lingers in memory.
  *
- * The document holds nothing but credentials, which is why it is a strict
- * `CredentialRef`-to-string mapping rather than a dotenv file: a store the
+ * The document holds credentials, which is why `refs` is a strict
+ * `CredentialRef`-to-string mapping rather than a dotenv file; a foreign
+ * top-level key another tool wrote is kept but resolves nothing: a store the
  * Harness owns and never materializes into the environment cannot also serve
  * as the user's environment layer; a store that doubled as the environment
  * layer would shadow non-secret entries behind its precedence, making them
@@ -166,24 +166,28 @@ function describeYamlError(error: YAMLError): string {
 /** The document layout this build reads and writes. */
 export const DOCUMENT_VERSION = 1
 
-/** One parsed credentials document: the two key spaces it stores, keyed as written. */
+/** One parsed credentials document: the two key spaces it stores, keyed as written, plus the top-level keys it does not read. */
 export interface CredentialsDocument {
   /** Reference entries, keyed by {@link CredentialRef}. */
   refs: Map<string, string>
   /** Stored records, keyed by {@link CredentialKey}. */
   records: Map<string, CredentialRecord>
+  /** Top-level keys this build does not read; they stay on disk and resolve nothing. */
+  ignoredKeys: string[]
 }
 
 /**
- * Parse one credentials document. Everything is rejected rather than skipped —
- * an unversioned root, an unknown top-level key, a key that is not addressable,
- * a wrong-typed value, an unknown record tag or field — because this file holds
- * nothing but credentials and a silently ignored entry reads as "the credential
- * I stored has no effect". Duplicate keys surface as parser errors. An empty
- * document is an empty store and needs no version.
+ * Parse one credentials document. Inside `refs` and `records` everything is
+ * rejected rather than skipped — a key that is not addressable, a wrong-typed
+ * value, an unknown record tag or field — because a silently ignored entry
+ * reads as "the credential I stored has no effect"; an unversioned root is
+ * rejected too. An unknown top-level key is returned in `ignoredKeys` for the
+ * caller to report, so a foreign entry another tool wrote does not stop boot.
+ * Duplicate keys surface as parser errors. An empty document is an empty store
+ * and needs no version.
  * @param text - the document's text.
  * @param filename - absolute path, quoted in errors.
- * @returns the parsed references and records.
+ * @returns the parsed references, records, and ignored top-level keys.
  */
 export function parseCredentialsDocument(text: string, filename: string): CredentialsDocument {
   // `prettyErrors` is on only for `linePos`; `error.message` is never used,
@@ -204,7 +208,7 @@ export function parseCredentialsDocument(text: string, filename: string): Creden
   const keys = Object.keys(fields)
   // An empty (or comment-only) document is the empty store and needs no
   // version: there is nothing in it a later layout could have meant.
-  if (keys.length === 0) return { refs: new Map(), records: new Map() }
+  if (keys.length === 0) return { refs: new Map(), records: new Map(), ignoredKeys: [] }
   if (!('version' in fields)) {
     throw new Error(
       `credentials-local: ${filename} uses the pre-release flat layout. Add \`version: ${DOCUMENT_VERSION}\``
@@ -218,12 +222,11 @@ export function parseCredentialsDocument(text: string, filename: string): Creden
       + ` this build reads version ${DOCUMENT_VERSION}`,
     )
   }
-  for (const key of keys) {
-    if (key !== 'version' && key !== 'refs' && key !== 'records') {
-      throw new Error(`credentials-local: unknown top-level key "${key}" in ${filename}`)
-    }
+  return {
+    refs: parseRefs(fields['refs'], filename),
+    records: parseRecords(fields['records'], filename),
+    ignoredKeys: keys.filter(key => key !== 'version' && key !== 'refs' && key !== 'records'),
   }
-  return { refs: parseRefs(fields['refs'], filename), records: parseRecords(fields['records'], filename) }
 }
 
 /**
@@ -424,8 +427,9 @@ function assertJsonValue(where: string, value: unknown, seen: Set<object>): void
  */
 function mutableDocument(text: string | undefined): Document {
   // `text` only ever caches content that parsed successfully, so this re-parse
-  // for the mutable comment-preserving tree cannot fail.
-  const document = text === undefined ? new Document({}) : parseDocument(text)
+  // for the mutable comment-preserving tree cannot fail. `intAsBigInt` keeps an
+  // integer beyond 2^53 in a foreign top-level entry exact when re-serialized.
+  const document = text === undefined ? new Document({}) : parseDocument(text, { intAsBigInt: true })
   // Stamped on every edit so a document this provider creates is readable by
   // the same parser that admitted the one it edits; an existing stamp is
   // rewritten to the identical value.
@@ -618,24 +622,21 @@ export class LocalCredentialProvider extends CredentialProvider {
   }
 
   override resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined> {
-    const inherited = this.inherited(ref)
-    if (inherited !== undefined) return Promise.resolve({ value: inherited, source: 'env' })
     const stored = this.values.get(ref)
     if (stored !== undefined) return Promise.resolve({ value: stored, source: 'file' })
+    const inherited = this.inherited(ref)
+    if (inherited !== undefined) return Promise.resolve({ value: inherited, source: 'env' })
     const fallback = this.dotenvFallback(ref)
     if (fallback !== undefined) return Promise.resolve({ value: fallback.value, source: fallback.source })
     return Promise.resolve(undefined)
   }
 
   override describe(ref: CredentialRef): Promise<CredentialInfo> {
-    // Only the inherited environment is unwritable: it is the one layer this
-    // process cannot edit. A user `.env` value is writable in the sense that
-    // matters — storing a key replaces it as the effective one.
-    if (this.inherited(ref) !== undefined) {
-      return Promise.resolve({ configured: true, source: 'env', writable: false })
-    }
     const stored = this.values.get(ref)
     if (stored !== undefined) return Promise.resolve({ configured: true, source: 'file', writable: true })
+    // Every reference is writable: a set writes the managed file, which
+    // outranks every fallback, and an unset exposes the fallback again.
+    if (this.inherited(ref) !== undefined) return Promise.resolve({ configured: true, source: 'env', writable: true })
     const fallback = this.dotenvFallback(ref)
     if (fallback !== undefined) return Promise.resolve({ configured: true, source: fallback.source, writable: true })
     return Promise.resolve({ configured: false, writable: true })
@@ -740,19 +741,16 @@ export class LocalCredentialProvider extends CredentialProvider {
     void this.enqueue(() => this.refresh())
   }
 
-  /** Queue one line edit; entry checks reject early, the queue re-judges them at run time. */
+  /** Queue one line edit; disposal is checked on entry and again when the queued edit runs. */
   private async write(ref: CredentialRef, value: string | undefined): Promise<void> {
     const verb = value === undefined ? 'unset' : 'set'
     if (this.isClosed()) {
       throw new Error(`credentials-local is disposed: cannot ${verb} "${ref}"`)
     }
-    this.assertUnshadowed(ref, verb)
     return this.enqueue(async () => {
       if (this.isClosed()) {
         throw new Error(`credentials-local was disposed before the queued "${ref}" ${verb} ran`)
       }
-      // Re-judged at run time: the environment may have changed while queued.
-      this.assertUnshadowed(ref, verb)
       // The writer lock's exclusive create needs the parent to exist; 0700
       // because the harness home holds user-private data.
       await mkdir(dirname(this.spec.filename), { recursive: true, mode: 0o700 })
@@ -778,20 +776,6 @@ export class LocalCredentialProvider extends CredentialProvider {
   }
 
   /**
-   * Reject a write the inherited environment would shadow into apparent
-   * no-effect. Only that layer can shadow a write: everything else this
-   * provider resolves ranks below the document being written.
-   */
-  private assertUnshadowed(ref: CredentialRef, verb: 'set' | 'unset'): void {
-    if (this.inherited(ref) !== undefined) {
-      throw new Error(
-        `credentials-local: "${ref}" is supplied read-only by the launching environment, so ${verb} would be`
-        + ' shadowed; unset it in the shell you start dsh from instead',
-      )
-    }
-  }
-
-  /**
    * Boot read: an absent file is an empty store; an invalid one fails the
    * plugin's activation, because a credentials document that exists but
    * cannot be trusted must never be treated as "no credentials stored". The
@@ -810,6 +794,7 @@ export class LocalCredentialProvider extends CredentialProvider {
     }
     if (renderFlatLayoutMigration(text) !== undefined) text = await this.migrateFlatDocument()
     const document = parseCredentialsDocument(text, this.spec.filename)
+    this.warnIgnoredKeys(document)
     this.values = document.refs
     this.records = document.records
     this.text = text
@@ -882,8 +867,9 @@ export class LocalCredentialProvider extends CredentialProvider {
     }
     if (text === this.text || this.isClosed()) return
     const next = text === undefined
-      ? { refs: new Map<string, string>(), records: new Map<string, CredentialRecord>() }
+      ? { refs: new Map<string, string>(), records: new Map<string, CredentialRecord>(), ignoredKeys: [] }
       : parseCredentialsDocument(text, this.spec.filename)
+    this.warnIgnoredKeys(next)
     const changedRefs = this.changedRefs(this.values, next.refs)
     const changedRecords = this.changedRecords(this.records, next.records)
     this.text = text
@@ -891,6 +877,16 @@ export class LocalCredentialProvider extends CredentialProvider {
     this.records = next.records
     for (const ref of changedRefs) this.notifyUpdated(ref)
     for (const key of changedRecords) this.notifyRecordUpdated(key)
+  }
+
+  /** Report top-level keys that resolve nothing; only key names are printed, never values. */
+  private warnIgnoredKeys(document: CredentialsDocument): void {
+    if (document.ignoredKeys.length === 0) return
+    this.ctx.logger.warn(
+      'credentials-local: ignoring unknown top-level keys %s in %s; only `refs` and `records` entries resolve',
+      document.ignoredKeys.map(key => JSON.stringify(key)).join(', '),
+      this.spec.filename,
+    )
   }
 
   /** Entries whose stored value changed; the parser has already proven every key addressable. */

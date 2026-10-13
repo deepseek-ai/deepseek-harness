@@ -1,4 +1,4 @@
-/** Desktop account settings registration and reconnecting Remote subscription. */
+/** Account settings registration and reconnecting Remote subscription. */
 import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type { TranscriptViewMode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { Context } from '@deepseek-ai/cordis'
@@ -14,6 +14,8 @@ import type { OnboardingChange } from './onboarding-contract.ts'
 import type { PlatformBridge } from './PlatformOverlay.tsx'
 import { ContactConfig, CONTACT_CONFIG_GLOBAL } from '../contact-config.ts'
 import { contactUrl } from './contact-url.ts'
+import { authorizeUrlWithTheme } from './authorize-url.ts'
+import { BrowserLogin } from './browser-login.ts'
 import { AccountOnboarding } from './AccountOnboarding.tsx'
 import { AccountPlatformHost, type AccountPlatformHostInjected } from './AccountPlatformHost.tsx'
 import { AccountMenu } from './AccountMenu.tsx'
@@ -39,14 +41,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by account settings. */
 export const inject = ['slots', 'locale', 'remote', 'remote.account', 'remote.session', 'theme', 'configForms']
-/** Register account UI only in the Desktop renderer. @param ctx - client plugin context. */
+/** Register account UI in Desktop and plain Web clients. @param ctx - client plugin context. */
 export function apply(ctx: Context): void {
-  if (!('dshDesktop' in globalThis)) return
+  const desktop = 'dshDesktop' in globalThis
   ctx.effect(() => ctx.locale.register('settings.account', { en, zh }), 'account: dictionaries')
   const t = ctx.locale.bind('settings.account')
   const page = globalThis as Partial<Record<typeof CONTACT_CONFIG_GLOBAL, unknown>>
   const config = ContactConfig(page[CONTACT_CONFIG_GLOBAL] ?? {})
   let snapshot: AccountSnapshot = { view: undefined, details: undefined, failed: false, loginVisible: false }
+  // Desktop main opens the authorization page natively; a plain browser opens it in a tab it owns.
+  const browser = new BrowserLogin(url => authorizeUrlWithTheme(url, ctx.theme.getTheme().active.colorScheme))
+  ctx.effect(() => () => { browser.dispose() }, 'account: pending browser window')
   const listeners = new Set<() => void>()
   const publish = (value: AccountSnapshot) => { snapshot = value; for (const listener of listeners) listener() }
   /** @returns the client identity for one account call, read at call time so it carries the language and zone in effect then. */
@@ -119,6 +124,7 @@ export function apply(ctx: Context): void {
       const { notice, ...previous } = snapshot
       publish({ ...previous, view: frame.value, details: undefined, failed: false,
         ...(frame.value.status === 'credential-stored' && notice ? { notice } : {}) })
+      browser.update(frame.value)
       frame.accept()
       if (frame.value.status === 'credential-stored') notices.begin()
       else notices.end()
@@ -176,7 +182,7 @@ export function apply(ctx: Context): void {
         dshDesktop?: { deviceInfo?: () => Promise<string> }
       }).dshDesktop?.deviceInfo
       if (readDeviceInfo === undefined) {
-        // A Desktop bridge without the optional reader reports the renderer user agent.
+        // A plain browser, or a Desktop bridge without the optional reader, reports the renderer user agent.
         openForm(navigator.userAgent)
         return
       }
@@ -208,11 +214,16 @@ export function apply(ctx: Context): void {
       const transport = (globalThis as typeof globalThis & {
         __DSH_TRANSPORT__?: { streamBaseUrl?: string }
       }).__DSH_TRANSPORT__
-      try {
+      const request = async () => {
         const result = await ctx.remote.account.startSignIn(client(),
-          transport?.streamBaseUrl !== undefined ? new URL(transport.streamBaseUrl).origin : window.location.origin,
-          'desktop')
+          desktop && transport?.streamBaseUrl !== undefined ? new URL(transport.streamBaseUrl).origin : window.location.origin,
+          desktop ? 'desktop' : 'web')
         if (!result.ok) throw new Error('account start failed')
+        return result.value
+      }
+      try {
+        if (desktop) await request()
+        else await browser.start(request, () => snapshot.view)
       } catch (error) {
         publish({ ...snapshot, loginFailed: true })
         throw error
@@ -230,7 +241,7 @@ export function apply(ctx: Context): void {
       throw result.error
     },
   }
-  if ('dshDesktop' in globalThis) {
+  if (desktop) {
     const controller = new DesktopOnboardingController(
       ctx.configForms.get<OnboardingSettings>(DESKTOP_ONBOARDING_NAMESPACE),
       ctx.configForms.get<{ transcriptView?: TranscriptViewMode | null; performanceUsage: 'compact' | 'detailed' }>('ui-chat'),

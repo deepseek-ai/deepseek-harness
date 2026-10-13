@@ -39,12 +39,13 @@ export interface WorkspaceEntityHost {
   table(): KvTable<WorkspaceId, WorkspaceRecord>
 
   /**
-   * Read a session's canonical directory from the registry's header index.
-   * @param id - Session whose indexed path is requested.
-   * @returns the canonical directory, or `undefined` when the header is
-   * missing or its cwd cannot identify an existing directory.
+   * Validate an already-accounted session, preserving ownership when its fully
+   * qualified cwd cannot resolve because a path component is missing.
+   * @param id - Session already present in this workspace's candidate account.
+   * @param path - Workspace's stored canonical directory.
+   * @returns whether the candidate remains a member.
    */
-  sessionPath(id: SessionId): string | undefined
+  candidateMatches(id: SessionId, path: string): boolean
 
   /**
    * Read one stored session header for attach validation.
@@ -99,7 +100,7 @@ export class WorkspaceEntity implements Workspace {
   }
 
   get sessionIds(): readonly SessionId[] {
-    return this.record.sessionIds.filter(id => this.host.sessionPath(id) === this.record.path)
+    return this.record.sessionIds.filter(id => this.host.candidateMatches(id, this.record.path))
   }
 
   async setTitle(title: string): Promise<void> {
@@ -190,7 +191,7 @@ export class WorkspaceEntity implements Workspace {
   /**
    * The single write path: run `fn` on the domain write chain via
    * `table.update`, stamping `updatedAt` and pruning candidates that no
-   * longer pass the id-plus-canonical-cwd membership check, then swap the
+   * longer pass the candidate membership check, then swap the
    * snapshot.
    *
    * `fn` sees the value current at its chain slot, so membership decisions
@@ -205,7 +206,7 @@ export class WorkspaceEntity implements Workspace {
       next = await this.host.table().update(this.id, (current) => {
         const changed = fn(current)
         const sessionIds = changed.sessionIds.filter(
-          id => this.host.sessionPath(id) === changed.path,
+          id => this.host.candidateMatches(id, changed.path),
         )
         if (changed === current && sessionIds.length === current.sessionIds.length) {
           throw unchangedSentinel

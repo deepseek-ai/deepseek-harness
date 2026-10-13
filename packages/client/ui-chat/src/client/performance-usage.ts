@@ -1,4 +1,4 @@
-/** Performance detail preference with process-local choices on memory-only settings scopes. */
+/** Performance detail preference, live immediately and reconciled with accepted Host settings. */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { DEFAULT_PERFORMANCE_USAGE, type ChatSettings, type PerformanceUsageMode } from '../chat-settings.ts'
@@ -9,7 +9,7 @@ export class PerformanceUsagePolicy {
   /** Current choice, reconciled with accepted Host settings when available. */
   readonly mode = createSnapshotStore<PerformanceUsageMode>(DEFAULT_PERFORMANCE_USAGE)
 
-  /** @param host - Chat settings scope, durable on loopback and memory-only elsewhere. */
+  /** @param host - Chat settings scope persisted through the Host. */
   constructor(private readonly host: ConfigForm<ChatSettings>) {
     const adopt = (): void => {
       const accepted = host.getSnapshot().value?.performanceUsage
@@ -23,7 +23,7 @@ export class PerformanceUsagePolicy {
   dispose(): void { this.unsubscribe() }
 
   /**
-   * Publish a choice immediately and persist it when the scope supports writes.
+   * Publish a choice immediately and queue its Host write.
    * @param mode - Statistics detail selected by the user.
    */
   setMode(mode: PerformanceUsageMode): void {

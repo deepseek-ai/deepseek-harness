@@ -27,6 +27,13 @@ import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
 import { processOutcome } from '../src/background.ts'
 import { renderJobRead, renderResult } from '../src/render.ts'
 
+/** Use the newest id returned by the real registry, including settled jobs. */
+function currentId(ctx: Context, owner?: Agent): string {
+  const id = ctx.jobs.list(owner?.id).at(-1)?.id
+  if (id === undefined) throw new Error('background job was not registered')
+  return id
+}
+
 /** Empty offset readers for fakes that never produce output. */
 const silentReader = { readFrom: (fromByte: number) => ({ text: '', nextOffset: fromByte, lossy: false }) }
 
@@ -539,8 +546,8 @@ describe('the background surface follows the job registry', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(backgroundAdvertised(ctx)).toBe(true)
     const started = await call(ctx, 'bash', { command: 'echo swapped', description: 'test command', run_in_background: true })
-    expect(text(started)).toBe('started background job bash-1')
-    await callUntilText(ctx, 'job_output', { job_id: 'bash-1' }, '[status: completed')
+    expect(text(started)).toBe(`started background job ${currentId(ctx)}`)
+    await callUntilText(ctx, 'job_output', { job_id: currentId(ctx) }, '[status: completed')
 
     // The registry leaves; the foreground-only variant returns in its place,
     // and the tool never disappears in between.
@@ -572,13 +579,13 @@ describe('background execution through the job runtime', () => {
     const started = await call(ctx, 'bash', { command: 'echo bg-ok', description: 'test command', run_in_background: true })
     expect(started.isError).toBe(false)
     if (started.isError) throw new Error('expected background bash success')
-    expect(started.value).toEqual({ kind: 'background', jobId: 'bash-1', cwd: process.cwd() })
-    expect(text(started)).toBe('started background job bash-1')
+    expect(started.value).toEqual({ kind: 'background', jobId: currentId(ctx), cwd: process.cwd() })
+    expect(text(started)).toBe(`started background job ${currentId(ctx)}`)
 
-    const read = await callUntilText(ctx, 'job_output', { job_id: 'bash-1' }, 'bg-ok')
+    const read = await callUntilText(ctx, 'job_output', { job_id: currentId(ctx) }, 'bg-ok')
     expect(text(read)).toContain('bg-ok')
     // A later read reports the terminal outcome in the generic status line.
-    const final = await callUntilText(ctx, 'job_output', { job_id: 'bash-1' }, '[status: completed, exit code: 0]')
+    const final = await callUntilText(ctx, 'job_output', { job_id: currentId(ctx) }, '[status: completed, exit code: 0]')
     expect(final.isError).toBe(false)
   })
 
@@ -586,11 +593,11 @@ describe('background execution through the job runtime', () => {
     const ctx = await setupWithJobs()
     await call(ctx, 'bash', { command: 'sleep 60', description: 'test command', run_in_background: true })
 
-    const killed = await call(ctx, 'job_kill', { job_id: 'bash-1' })
-    expect(text(killed)).toBe('requested cancellation of job bash-1')
+    const killed = await call(ctx, 'job_kill', { job_id: currentId(ctx) })
+    expect(text(killed)).toBe(`requested cancellation of job ${currentId(ctx)}`)
     // The cancel reached the process handle; the task settles as killed with
     // the signal detail mapped by processOutcome.
-    const final = await call(ctx, 'job_output', { job_id: 'bash-1', wait: true })
+    const final = await call(ctx, 'job_output', { job_id: currentId(ctx), wait: true })
     expect(text(final)).toContain('[status: killed, signal: SIGTERM]')
   })
 
@@ -598,7 +605,7 @@ describe('background execution through the job runtime', () => {
     const ctx = await setupWithJobs()
     await call(ctx, 'bash', { command: 'kill -TERM $$', description: 'test command', run_in_background: true })
 
-    const final = await call(ctx, 'job_output', { job_id: 'bash-1', wait: true })
+    const final = await call(ctx, 'job_output', { job_id: currentId(ctx), wait: true })
     expect(text(final)).toContain('[status: killed, signal: SIGTERM]')
   })
 
@@ -607,15 +614,15 @@ describe('background execution through the job runtime', () => {
     const ctx = await setupWithJobs()
     const agent = await registerFakeAgent(ctx, 'sess-owner')
     const started = await call(ctx, 'bash', { command: 'sleep 60', description: 'test command', run_in_background: true }, agent)
-    expect(text(started)).toBe('started background job bash-1')
+    expect(text(started)).toBe(`started background job ${currentId(ctx, agent)}`)
 
-    const anon = await call(ctx, 'job_output', { job_id: 'bash-1' })
+    const anon = await call(ctx, 'job_output', { job_id: currentId(ctx, agent) })
     expect(anon.isError).toBe(true)
     expect(text(anon)).toMatch(/belongs to another session/)
 
-    const killed = await call(ctx, 'job_kill', { job_id: 'bash-1' }, agent)
+    const killed = await call(ctx, 'job_kill', { job_id: currentId(ctx, agent) }, agent)
     expect(killed.isError).toBe(false)
-    await call(ctx, 'job_output', { job_id: 'bash-1', wait: true }, agent) // await settlement — no orphan
+    await call(ctx, 'job_output', { job_id: currentId(ctx, agent), wait: true }, agent) // await settlement — no orphan
   })
 
   it('fails loud when the job runtime is not loaded', async () => {
@@ -849,7 +856,7 @@ describe('sandbox escalation through the generic task producer', () => {
     // with the result, and the ordinal is never reused.
     expect(ctx.jobs.list(agent.id)).toEqual([])
     const background = await call(ctx, 'bash', { ...escalate, run_in_background: true }, agent)
-    expect(text(background)).toBe('started background job bash-2')
+    expect(text(background)).toBe(`started background job ${currentId(ctx, agent)}`)
     expect(bash.modes).toEqual(['workspace-write', 'workspace-write'])
   })
 
@@ -1463,7 +1470,7 @@ describe('the model-facing bash tool builds its request from named args only (no
     // The call really went down the background path (the recorder sees the real
     // request the consumer built, so the absent env/stdin below is a real
     // negative, not a recorder that drops everything).
-    expect(text(result)).toBe('started background job bash-1')
+    expect(text(result)).toBe(`started background job ${currentId(ctx)}`)
     expect(bash.requests).toHaveLength(1)
     const request = bash.requests[0]!
     expect(request.command).toBe('sleep 1')
@@ -1501,8 +1508,8 @@ describe('resolved launch directory metadata', () => {
       expect(resolving).toHaveBeenCalledOnce()
       expect(resolving).toHaveBeenCalledWith(expect.objectContaining({ workdir: workdir === undefined ? current : join(current, workdir) }))
       expect(launch).toHaveBeenCalledWith(expect.objectContaining({ workdir: directory }))
-      expect(text(result)).toBe(background ? 'started background job bash-1' : 'metadata-ok')
-      if (background) await call(ctx, 'job_output', { job_id: 'bash-1', wait: true }, owner)
+      expect(text(result)).toBe(background ? `started background job ${currentId(ctx, owner)}` : 'metadata-ok')
+      if (background) await call(ctx, 'job_output', { job_id: currentId(ctx, owner), wait: true }, owner)
     } finally {
       ensure.mockRestore()
       resolving.mockRestore()

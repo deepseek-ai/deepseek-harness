@@ -5,23 +5,48 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import { credentialKey, credentialRef } from '@deepseek-ai/dsh-credentials'
+import { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
 import { authContextFrom, credentialStoreFrom, recordKeyFor } from '../src/auth.ts'
+
+const home = vi.hoisted(() => ({ unavailable: false }))
+
+// libuv throws when HOME is unset and the process UID has no passwd entry.
+vi.mock('node:os', async (importOriginal) => {
+  const os = await importOriginal<typeof import('node:os')>()
+  return {
+    ...os,
+    homedir: () => {
+      if (home.unavailable) throw new Error('uv_os_homedir returned ENOENT')
+      return os.homedir()
+    },
+  }
+})
 
 const CODEX = recordKeyFor('openai-codex')
 
 const dirs: string[] = []
 
 /** A context whose credential records live in a throwaway `$DSH_HOME`. */
-async function stored(): Promise<Context> {
+async function stored(
+  layers?: Parameters<typeof createLaunchEnvironmentSnapshot>[0],
+  initialRefs?: Record<string, string>,
+): Promise<Context> {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-pi-auth-'))
   dirs.push(dir)
   const ctx = new Context()
-  await ctx.plugin(LocalCredentialProvider, { path: join(dir, '.credentials.yaml'), watch: false })
+  if (layers !== undefined) ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot(layers))
+  const path = join(dir, '.credentials.yaml')
+  if (initialRefs !== undefined) {
+    const refs = Object.entries(initialRefs).map(([name, value]) => `  ${name}: ${value}`).join('\n')
+    await writeFile(path, `version: 1\nrefs:\n${refs}\n`, { mode: 0o600 })
+  }
+  await ctx.plugin(LocalCredentialProvider, { path, watch: false })
   return ctx
 }
 
 afterEach(async () => {
   vi.unstubAllEnvs()
+  home.unavailable = false
   await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })))
 })
 
@@ -185,6 +210,16 @@ describe('pi-ai ambient auth context', () => {
     await expect(authContextFrom(ctx).env('PI_AUTH_SEAM')).resolves.toBe('from-seam')
   })
 
+  it('gives a stored credential priority over every launch layer', async () => {
+    const ctx = await stored([
+      { source: 'process', values: { OPENAI_API_KEY: 'from-launch' } },
+      { source: 'project-env', path: '/work/.env', values: { OPENAI_API_KEY: 'from-project' } },
+      { source: 'user-env', path: '/home/.dsh/.env', values: { OPENAI_API_KEY: 'from-home' } },
+    ], { OPENAI_API_KEY: 'from-credentials' })
+
+    await expect(authContextFrom(ctx).env('OPENAI_API_KEY')).resolves.toBe('from-credentials')
+  })
+
   it('falls back to the launch environment when nothing is stored', async () => {
     await expect(authContextFrom(await stored()).env('PI_AUTH_AMBIENT')).resolves.toBe('from-environment')
   })
@@ -209,5 +244,17 @@ describe('pi-ai ambient auth context', () => {
     await expect(context.fileExists('~/missing')).resolves.toBe(false)
     await expect(context.fileExists(join(dir, 'creds'))).resolves.toBe(true)
     await expect(context.fileExists('~')).resolves.toBe(true)
+  })
+
+  it('checks an absolute path without reading the home directory', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-pi-home-'))
+    dirs.push(dir)
+    await writeFile(join(dir, 'creds'), 'x')
+    const context = authContextFrom(await stored())
+    vi.stubEnv('HOME', undefined)
+    vi.stubEnv('USERPROFILE', undefined)
+    home.unavailable = true
+
+    await expect(context.fileExists(join(dir, 'creds'))).resolves.toBe(true)
   })
 })

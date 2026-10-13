@@ -11,8 +11,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import * as AppBoot from '@deepseek-ai/dsh-app-boot'
 import { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
+import { bindUrlHost, type WebServer } from '@deepseek-ai/dsh-host-webserver'
 import { apply, Config, internals } from '../src/index.ts'
 
 vi.mock('node:child_process', async importOriginal => ({
@@ -59,10 +58,11 @@ function stageDist(): string {
 
 /** Web carrier without a network listener. */
 function fakeHttpServer(host = '127.0.0.1'): { server: WebServer } {
-  const server: Pick<WebServer, 'host' | 'port' | 'protocol' | 'registerFallback' | 'renderIndex'> = {
+  const server: Pick<WebServer, 'host' | 'port' | 'protocol' | 'getOrigin' | 'registerFallback' | 'renderIndex'> = {
     host,
     port: 4567,
     protocol: 'http:',
+    getOrigin() { return `http://${bindUrlHost(host) ?? ''}:${String(this.port)}` },
     registerFallback: () => () => {},
     renderIndex: (html: string) => html,
   }
@@ -126,7 +126,6 @@ describe('web-app runtime glue', () => {
     const openBrowser = vi.fn(async (url: string) => { lifecycle.push(`open:${url}`) })
     internals.openBrowser = openBrowser
     apply(ctx, new Config({ openBrowser: true, printUrl: true, surfaceContext: true }))
-    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     await vi.waitFor(() => { expect(openBrowser).toHaveBeenCalled() })
 
     expect(log).toHaveBeenCalledWith('dsh web: http://127.0.0.1:4567/?token=test-token')
@@ -137,15 +136,9 @@ describe('web-app runtime glue', () => {
       'dsh web: opening the default browser; pass --no-open to disable',
       'open:http://127.0.0.1:4567/?token=test-token',
     ])
-    const assembly = await ctx.systemPrompt.assemble()
-    expect(assembly.sections.find(entry => entry.name === 'harness:source')?.text).toContain('DeepSeek Harness implementation checkout')
-    const section = assembly.sections.find(entry => entry.name === 'app:web-surface')
-    expect(section?.text).toContain('http://127.0.0.1:4567')
-    // The single update contract: the receiver is always on; no-refresh
-    // reloads additionally need the rebuild watcher.
-    expect(section?.text).toContain('pnpm run dev:web')
     const webRuntime = contributions.find(contribution => contribution.name === 'web-runtime')
     expect(webRuntime?.resolve()).toEqual({ DSH_WEB_URL: 'http://127.0.0.1:4567' })
+    expect(ctx.webApp.getAdvertisedUrl()).toBe('http://127.0.0.1:4567')
   })
 
   it('advertises and opens the configured public root behind a prefix-stripping proxy', async () => {
@@ -173,7 +166,6 @@ describe('web-app runtime glue', () => {
       surfaceContext: true,
       publicUrl: 'https://proxy.example:8443/web',
     }))
-    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     await vi.waitFor(() => { expect(openBrowser).toHaveBeenCalled() })
 
     expect(lifecycle).toEqual([
@@ -181,12 +173,10 @@ describe('web-app runtime glue', () => {
       'dsh web: opening the default browser; pass --no-open to disable',
       'open:https://proxy.example:8443/web/?token=test-token',
     ])
-    const assembly = await ctx.systemPrompt.assemble()
-    const section = assembly.sections.find(entry => entry.name === 'app:web-surface')
-    expect(section?.text).toContain('https://proxy.example:8443/web/')
-    expect(section?.text).not.toContain('127.0.0.1')
     const urlContribution = contributions.find(contribution => contribution.name === 'web-runtime')
     expect(urlContribution?.resolve()).toEqual({ DSH_WEB_URL: 'https://proxy.example:8443/web/' })
+    // The service advertises the row's effective publicUrl, whether it came from --public-url or a profile override.
+    expect(ctx.webApp.getAdvertisedUrl()).toBe('https://proxy.example:8443/web/')
   })
 
   it('publishes no readiness side effect when printing and browser opening are disabled', async () => {
@@ -198,17 +188,13 @@ describe('web-app runtime glue', () => {
     const openBrowser = vi.fn(async () => {})
     internals.openBrowser = openBrowser
     apply(ctx, new Config({ openBrowser: false, printUrl: false, surfaceContext: true }))
-    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(log).not.toHaveBeenCalled()
     expect(openBrowser).not.toHaveBeenCalled()
-    const assembly = await ctx.systemPrompt.assemble()
-    expect(assembly.sections.find(entry => entry.name === 'app:web-surface')?.text)
-      .toContain('rebuilding the affected Web artifacts')
     await ctx.fiber.dispose()
   })
 
-  it('skips the surface context when disabled (the one-shot layer): no prompt section, no bash variables', async () => {
+  it('skips the surface context when disabled (the one-shot layer): no bash variables', async () => {
     stageDist()
     const ctx = new Context()
     ctx.provide('webServer', fakeHttpServer().server)
@@ -221,11 +207,7 @@ describe('web-app runtime glue', () => {
       },
     } as never)
     apply(ctx, new Config({ openBrowser: false, printUrl: false, surfaceContext: false }))
-    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     await new Promise(resolve => setTimeout(resolve, 0))
-    const assembly = await ctx.systemPrompt.assemble()
-    expect(assembly.sections.some(entry => entry.name === 'app:web-surface')).toBe(false)
-    expect(assembly.sections.some(entry => entry.name === 'harness:source')).toBe(false)
     expect(contributions).toEqual([])
     await ctx.fiber.dispose()
   })
@@ -463,22 +445,6 @@ describe('web-app runtime glue', () => {
       expect(log).not.toHaveBeenCalled()
       expect(openBrowser).not.toHaveBeenCalled()
     }
-  })
-
-  it('fails loud when the prompt section resolves against a portless webserver', async () => {
-    stageDist()
-    const ctx = new Context()
-    // A webserver whose bound port is gone (torn down mid-request): the
-    // section must throw, never render a URL with an undefined port.
-    const { server } = fakeHttpServer()
-    Object.defineProperty(server, 'port', { get: () => undefined })
-    ctx.provide('webServer', server)
-    provideConnection(ctx)
-    apply(ctx, new Config({ openBrowser: false, printUrl: false, surfaceContext: true }))
-    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
-    await new Promise(resolve => setTimeout(resolve, 0))
-    await expect(ctx.systemPrompt.assemble()).rejects.toThrow('webServer service missing')
-    await ctx.fiber.dispose()
   })
 
   it('anchors the dist index on the frontend package manifest without requiring a built dist', () => {

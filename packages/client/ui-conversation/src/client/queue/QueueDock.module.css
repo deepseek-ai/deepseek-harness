@@ -199,14 +199,7 @@
   min-width: 0;
   font: var(--dsw-font-xs-13);
   font-family: Inter, var(--dsw-font-family);
-}
-
-.preview {
-  overflow: hidden;
   color: var(--dsw-alias-label-primary-dimmed);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  word-break: break-word;
 }
 
 .actions {
