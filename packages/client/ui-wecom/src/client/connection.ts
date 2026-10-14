@@ -12,7 +12,7 @@ export type WecomNotice = 'connected'
 export type ConnectionSnapshot = CliAccountSnapshot<WecomState, WecomNotice>
 
 export type ConnectionPresentation =
-  | { readonly phase: Exclude<CliAccountPhase, 'connecting'>; readonly failed: boolean }
+  | { readonly phase: Exclude<CliAccountPhase, 'connecting'>; readonly failed: WecomState['result'] }
   | { readonly phase: 'connecting'; readonly step: 'authorizing' | 'connecting'; readonly url: string | undefined; readonly cancellable: boolean }
 
 export interface ConnectionFace {
@@ -26,9 +26,9 @@ export interface ConnectionFace {
 }
 
 export function presentConnection({ view, stopped }: Pick<ConnectionSnapshot, 'view' | 'stopped'>): ConnectionPresentation {
-  if (stopped) return { phase: 'stopped', failed: false }
+  if (stopped) return { phase: 'stopped', failed: undefined }
   const operation = view?.operation
-  if (view === undefined || operation?.kind === 'check') return { phase: 'checking', failed: false }
+  if (view === undefined || operation?.kind === 'check') return { phase: 'checking', failed: undefined }
   if (operation !== undefined) {
     return {
       phase: 'connecting',
@@ -37,9 +37,9 @@ export function presentConnection({ view, stopped }: Pick<ConnectionSnapshot, 'v
       cancellable: operation.cancellable,
     }
   }
-  const failed = view.result?.outcome === 'failed'
+  const failed = view.result?.outcome === 'failed' ? view.result : undefined
   switch (view.account.state) {
-    case 'unchecked': return { phase: failed ? 'unavailable' : 'checking', failed }
+    case 'unchecked': return { phase: failed === undefined ? 'checking' : 'unavailable', failed }
     case 'unauthorized': return { phase: 'disconnected', failed }
     case 'authorized': return { phase: 'connected', failed }
     /* v8 ignore next -- closed account state union */

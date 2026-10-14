@@ -13,9 +13,8 @@ export function WecomConnectionSection(props: FaceProps): ReactNode {
   const { useWecomConnection, check, connect, cancel, openAuthorization, retry, t } = props
   const snapshot = useWecomConnection(value => value)
   const shown = presentConnection(snapshot)
-  const failed = 'failed' in shown && shown.failed ? snapshot.view?.result : undefined
   const actions: CliAccountAction[] = []
-  let status = t(`status.${shown.phase === 'connecting' ? 'checking' : shown.phase}`)
+  let status: string | undefined
   let detail: string | undefined
   switch (shown.phase) {
     case 'disconnected': actions.push({ label: t('action.connect'), onClick: connect, variant: 'primary' }); detail = t('detail.disconnected'); break
@@ -34,7 +33,7 @@ export function WecomConnectionSection(props: FaceProps): ReactNode {
   }
   return (
     <CliAccountSection t={t} packageName={WECOM_PACKAGE} phase={shown.phase} status={status} busy={snapshot.busy} linked={snapshot.linked}
-      actions={actions} detail={detail} failure={failed === undefined ? undefined : { text: t('failed'), command: failed.failure }} />
+      actions={actions} detail={detail} failure={'failed' in shown && shown.failed !== undefined ? { text: t('failed'), command: shown.failed.failure } : undefined} />
   )
 }
 
