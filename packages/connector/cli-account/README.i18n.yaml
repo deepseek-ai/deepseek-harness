@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/cli-account/README.md
+/:
+  en: f1b6c17f9fa7b637
+  zh: 6eba301a325ce100
+/deepseek-ai-dsh-cli-account:
+  en: 7215e7ca3e2ac287
+  zh: 0a5b3ec6f8b98b1b
+/deepseek-ai-dsh-cli-account/summary:
+  en: 738c946227339679
+  zh: f48528fa0905ba2b
+/deepseek-ai-dsh-cli-account/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 5b6bd00fce5371c3
+/deepseek-ai-dsh-cli-account/use-this-package:
+  en: bbff250eba0f1b89
+  zh: b20a47f82d8ab6e0
+/deepseek-ai-dsh-cli-account/use-this-package/when-to-use-it:
+  en: b5b78717ca4aeb20
+  zh: 757fb35dae4184d6
+/deepseek-ai-dsh-cli-account/use-this-package/entry-point:
+  en: f40fd96c890d5a34
+  zh: 0f9f0763268f8d95
+/deepseek-ai-dsh-cli-account/use-this-package/commands-links-and-failures:
+  en: cb589d16c253d06a
+  zh: e9704d3673019688
+/deepseek-ai-dsh-cli-account/use-this-package/shared-config:
+  en: 9a2ca1dc8d3824ce
+  zh: 93039bfade3d44fa
+/deepseek-ai-dsh-cli-account/understand-the-implementation:
+  en: 455303ac1b4a8d8b
+  zh: 61c36ecf972fa60e
+/deepseek-ai-dsh-cli-account/further-exploration:
+  en: 51a9a21640f56d70
+  zh: c18b3aba1e0fe4e6
+/deepseek-ai-dsh-cli-account/model-experience:
+  en: c0659f557b4fea60
+  zh: 8bc980285c3b6b0b
+/deepseek-ai-dsh-cli-account/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: 6e1c9a8fdde89577
+/deepseek-ai-dsh-cli-account/known-limitations-and-deferred-work:
+  en: a2b304c61d3c640b
+  zh: 8474233d8fc7609d
+/deepseek-ai-dsh-cli-account/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

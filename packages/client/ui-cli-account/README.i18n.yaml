@@ -1,0 +1,52 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-cli-account/README.md
+/:
+  en: b5df3dc6b6e5a8af
+  zh: 472be0060affe504
+/deepseek-ai-dsh-client-ui-cli-account:
+  en: 9459a591a9b82dd8
+  zh: cb4059b1ef791c5c
+/deepseek-ai-dsh-client-ui-cli-account/summary:
+  en: d6ef9f6b6b5df3ec
+  zh: bc214cb8c443cafd
+/deepseek-ai-dsh-client-ui-cli-account/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 5b6bd00fce5371c3
+/deepseek-ai-dsh-client-ui-cli-account/use-this-package:
+  en: 55c776d264ae8018
+  zh: 938fc1c98a178efe
+/deepseek-ai-dsh-client-ui-cli-account/use-this-package/when-to-choose-it:
+  en: c63cdee18f15d294
+  zh: ce6105e42a08add5
+/deepseek-ai-dsh-client-ui-cli-account/use-this-package/minimal-configuration:
+  en: 004e4de5db042003
+  zh: bc56e02a4bba37de
+/deepseek-ai-dsh-client-ui-cli-account/use-this-package/connection-mirror:
+  en: f622ce4b54e43f86
+  zh: a88aa2045cb67736
+/deepseek-ai-dsh-client-ui-cli-account/use-this-package/shared-dictionary-keys:
+  en: 150d9df6824f2636
+  zh: 9b6d68043b1bb730
+/deepseek-ai-dsh-client-ui-cli-account/use-this-package/components:
+  en: 0faf95b3a48c33c5
+  zh: 3d542ca37252456e
+/deepseek-ai-dsh-client-ui-cli-account/understand-the-implementation:
+  en: f256b57573162ed0
+  zh: 438cea1d1f15a02f
+/deepseek-ai-dsh-client-ui-cli-account/further-exploration:
+  en: c4b972c30c3991ab
+  zh: 4046eceff24fe493
+/deepseek-ai-dsh-client-ui-cli-account/model-experience:
+  en: 525d8f762d62abcd
+  zh: dfdbba035632096a
+/deepseek-ai-dsh-client-ui-cli-account/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: 6e1c9a8fdde89577
+/deepseek-ai-dsh-client-ui-cli-account/known-limitations-and-deferred-work:
+  en: 905a3455c610e12b
+  zh: 6e9127ba17b09885
+/deepseek-ai-dsh-client-ui-cli-account/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea
