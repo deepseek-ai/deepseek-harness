@@ -12,7 +12,7 @@ export interface CliAccountConfig {
 }
 
 /** Schema for {@link CliAccountConfig}; a plugin with no other fields uses it as its `Config`. */
-export const CliAccountConfig: z<CliAccountConfig> = z.object({
+export const CliAccountConfig: z<Partial<CliAccountConfig>, CliAccountConfig> = z.object({
   binDir: z.string().min(1),
   commandTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(30_000),
 })
