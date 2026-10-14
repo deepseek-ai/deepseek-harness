@@ -121,11 +121,11 @@ Tools named `mcp__tencent-docs__*` come from the Tencent Docs plugin. In user-fa
 
 #### 模型看到什么
 
-授权之后，模型会在 `### MCP server: tencent-docs` 之下看到腾讯文档的服务器说明；在默认的 `toolLoading: on-demand` 下，还会在[按需工具索引](../../mcp/mcp-resources/README.zh.md#model-experience)中看到腾讯文档工具的索引，加载的每个工具随后以 `mcp__tencent-docs__<tool>` 命名，带有腾讯文档提供的描述和输入 schema。设为 `eager` 时，所有工具从一开始就出现，详见 [MCP 客户端](../../mcp/mcp-client/README.zh.md#model-experience)。设为 `on-demand` 时，`load_mcp_tools` 只在腾讯文档连接后出现。插件加载期间（包括授权之前），[共用的资源工具](../../mcp/mcp-resources/README.zh.md#model-experience)及其服务器名提示词都会列出 `tencent-docs`。
+授权之后，模型会在 `### MCP server: tencent-docs` 之下看到腾讯文档的服务器说明；在默认的 `toolLoading: on-demand` 下，还会看到加载器 `mcp__tencent-docs__load_tools`，以及系统提示词中的[腾讯文档工具目录](../../mcp/mcp-client/README.zh.md#model-experience)，加载的每个工具随后以 `mcp__tencent-docs__<tool>` 命名，带有腾讯文档提供的描述和输入 schema。腾讯文档的许多工具名包含点号，例如 `doc.create_with_markdown`；目录按原样列出这些名称，加载后的名称把点号替换掉并加上哈希后缀，例如 `mcp__tencent-docs__doc_create_with_markdown_ff0986999909`，详见 [MCP 客户端](../../mcp/mcp-client/README.zh.md#model-experience)。设为 `eager` 时，所有工具从一开始就出现，详见 [MCP 客户端](../../mcp/mcp-client/README.zh.md#model-experience)。设为 `on-demand` 时，加载器和目录只在腾讯文档连接后出现。插件加载期间（包括授权之前），[共用的资源工具](../../mcp/mcp-resources/README.zh.md#model-experience)及其服务器名提示词都会列出 `tencent-docs`。
 
 #### Token 影响
 
-工具集与服务器说明由腾讯文档服务器定义，其大小可能在 DSH 不更新的情况下变化。设为 `on-demand` 时，已连接的腾讯文档的开销是服务器说明、加载工具、每个工具一条的索引，以及 agent 已加载的定义；设为 `eager` 时，全部定义在每次请求中重复出现。
+工具集与服务器说明由腾讯文档服务器定义，其大小可能在 DSH 不更新的情况下变化。设为 `on-demand` 时，已连接的腾讯文档的开销是约 3,000 字符的服务器说明、加载工具、225 个工具约 37,900 字符的目录，以及 agent 已加载的定义；设为 `eager` 时，全部 225 个定义在每次请求中重复出现。
 
 #### KV Cache 影响
 
