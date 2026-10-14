@@ -245,7 +245,9 @@
     "tests/window-drag-coverage.e2e.ts",
     "tests/complex-history.perf.ts",
     "tests/pwsh-terminal.e2e.ts",
-    "tests/workflow-run.e2e.ts"
+    "tests/workflow-run.e2e.ts",
+    "tests/tencent-docs-connection.e2e.ts",
+    "tests/tencent-docs-oauth-fixture.ts"
   ],
   "references": [
     { "path": "../../packages/experimental/auto-review" },
