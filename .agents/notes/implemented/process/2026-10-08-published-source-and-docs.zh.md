@@ -10,13 +10,13 @@ Status: implemented
 
 ## Decision
 
-每个发布成员都发布自己的 TypeScript 源码、能解析到该源码的声明映射，以及紧挨所描述 bundle 的 JavaScript map。`@deepseek-ai/dsh` 另发布仓库的 `docs/` 树，构建也会压缩产出的 bundle，但不混淆标识符。
+每个发布成员都发布自己的 TypeScript 源码、能解析到该源码的声明映射，以及紧挨所描述 bundle 的 JavaScript map。`@deepseek-ai/dsh` 另发布文档网站的页面集合外加升级指南，构建也会压缩产出的 bundle，但不混淆标识符。
 
 [`expectedDshPackageFiles`](../../../../scripts/check-workspace-constraints.ts) 列出 `lib/types/**/*.d.ts.map`、`lib/**/*.js.map` 与 `src`；带 Typert Remote 导航的包还会列出 `lib/typert.remote-client.d.ts.map`，其生成的声明通过 `sourceMappingURL` 引用该映射。没有任何载荷成员被禁止，发布清单由静态 manifest 检查精确持有。332 个发布成员中已有 315 个声明过 `./src/*`，该导出现在解析到这些文件，服务于编辑器导航与阅读；纯 Node 仍需 TypeScript loader 才能 import 它们。
 
 client 预设会压缩浏览器 bundle 的文本（`minify: { compress: false, mangle: false }`）。标识符保持原名，因此栈帧与已发布的 map 仍然指向原始代码。Node 侧入口不压缩：浏览器 worker 镜像只把 `yield*` 当作整条语句下沉，并按源码版式重写 `for await` 循环，压缩后的输入会同时破坏这两者。
 
-`@deepseek-ai/dsh` 通过 [`scripts/stage-dsh-docs.ts`](../../../../scripts/stage-dsh-docs.ts) 在自己的 `prepack` 生命周期里把仓库 `docs/` 树整体复制到 `apps/cli/docs`，并在 `postpack` 中再次删除这份副本。所有文件都会发布：已上站的页面、维护者文档、生成的 `docs/persistence-changes/` 记录、`docs/i18n/` 规范、`*.i18n.yaml` 一致性记录，以及被引用的图片。vendored 族保持上游 payload 不变（[发布序列](2026-08-10-npm-release-sequences.zh.md)）。
+`@deepseek-ai/dsh` 通过 [`scripts/stage-dsh-docs.ts`](../../../../scripts/stage-dsh-docs.ts) 在自己的 `prepack` 生命周期里把这一集合复制到 `apps/cli/docs`，并在 `postpack` 中再次删除这份副本。集合包含：网站清单中的 Markdown、`docs/upgrade-guide/` 下的全部文档，以及这些页面引用的非 Markdown 资产。生成的 `docs/persistence-changes/` 记录、`docs/i18n/` 规范与 `*.i18n.yaml` 一致性记录不发布。vendored 族保持上游 payload 不变（[发布序列](2026-08-10-npm-release-sequences.zh.md)）。
 
 桌面版与 Python 单文件可执行体不为这两项新增内容付出代价。桌面的[运行时文件策略](../../../../apps/desktop/scripts/runtime-file-policy.ts)会从 `@deepseek-ai/dsh*` 包中剔除 `src/`、`docs/` 与所有映射，同时保留部分第三方包 `main` 指向的 `src` 树；[`PUBLISHED_PAYLOAD_IGNORES`](../../../../scripts/build-exe-for-python-sdk.ts) 则把这些树排除出可执行体，因此其内容不再取决于检出中是否残留暂存的 `docs`。
 
@@ -26,7 +26,7 @@ client 预设会压缩浏览器 bundle 的文本（`minify: { compress: false, m
 
 **只发布映射，不发布 `src`。** 否决：`sources` 不存在的映射解析不到任何东西，而这正是 [Typert Remote 设计](../architecture/2026-08-02-typert-remote-method-calls.zh.md)所要求的导航。
 
-**只发布网站页面集合。** 否决：已安装的读者不是网站的读者——维护者文档、迁移记录与翻译规范正是插件作者离线拿不到的部分，而且目录页指向 `persistence-changes/` 的链接只有随记录一起发布才可解析。
+**整树发布，或只发布网站页面集合。** 两个极端都否决。整树会把已安装读者并不需要的维护者材料发出去——事故复盘、测试指南、Agent 指令与生成的迁移记录；而只发网站页面集合会漏掉升级指南，也就是已发布改动造成破坏时读者真正要查的文档。
 
 **连标识符一起混淆。** 否决：混淆会破坏已发布 map 本应提供的对应关系，并使未处理栈帧无法阅读。
 
@@ -34,8 +34,8 @@ client 预设会压缩浏览器 bundle 的文本（`minify: { compress: false, m
 
 ## Consequences
 
-`src` 在整个发布集上增加约 29 MB，声明映射增加约 10 MB，JavaScript map 增加约 49 MB，暂存的文档给 `@deepseek-ai/dsh` 增加 31 MB。压缩让浏览器 bundle 约减少三分之一——`ui-chat` 的 `lib/client.js` 从 591 kB 降到 420 kB——而 Node 侧入口在 worker 镜像接受压缩输入之前保持原体积。桌面应用与 Python 可执行体保持原有载荷。
+`src` 在整个发布集上增加约 29 MB，声明映射增加约 10 MB，JavaScript map 增加约 49 MB，暂存的文档以 269 个文件给 `@deepseek-ai/dsh` 增加 6.2 MB。压缩让浏览器 bundle 约减少三分之一——`ui-chat` 的 `lib/client.js` 从 591 kB 降到 420 kB——而 Node 侧入口在 worker 镜像接受压缩输入之前保持原体积。桌面应用与 Python 可执行体保持原有载荷。
 
-消费方编辑器现在可以从声明跳转到已安装的实现，插件作者无需检出即可读到该版本的文档。暂存副本保留仓库的相对链接，因此指向 `../packages/**` 的链接只在检出中可解析，而文档自身的交叉引用保持完整。`docs/` 只在 `prepack` 与 `postpack` 之间存在于工作树，`pnpm run clean` 会清掉被中断的打包留下的副本。
+消费方编辑器现在可以从声明跳转到已安装的实现，插件作者无需检出即可读到该版本的文档。暂存副本保留仓库的相对链接，因此指向 `../packages/**` 或指向被排除的 `persistence-changes/` 记录的链接只在检出中可解析。`docs/` 只在 `prepack` 与 `postpack` 之间存在于工作树，`pnpm run clean` 会清掉被中断的打包留下的副本。
 
 `pnpm run constraints` 会拒绝 `files` 中缺少 `src` 或任一声明映射的发布成员，因为该清单是精确匹配的。发布族的 tarball 校验要求 `@deepseek-ai/dsh` 必须带上文档与源码，因此跳过暂存钩子的打包会直接失败，而不是发出一个缺少它们的包。

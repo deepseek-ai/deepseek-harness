@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanStagedDshDocs, stageDshDocs } from './stage-dsh-docs.ts'
+import { cleanStagedDshDocs, publishedDocuments, stageDshDocs } from './stage-dsh-docs.ts'
 
 const roots: string[] = []
 
@@ -23,25 +23,35 @@ afterEach(() => {
 })
 
 describe('documentation staging', () => {
-  it('copies the complete documentation tree', async () => {
+  it('copies published pages, assets, and upgrade guides without the internal trees', async () => {
     const source = join(temporaryRoot(), 'docs')
     const destination = join(temporaryRoot(), 'cli', 'docs')
+    const published = new Set(['guide/index.md', 'guide/index.zh.md'])
     write(source, 'guide/index.md')
+    write(source, 'guide/index.zh.md')
     write(source, 'guide/index.i18n.yaml')
     write(source, 'images/diagram.png', 'png')
+    write(source, 'upgrade-guide/v0.1.0/change/guide.md')
+    write(source, 'upgrade-guide/v0.1.0/change/guide.zh.md')
+    write(source, 'upgrade-guide/v0.1.0/change/guide.i18n.yaml')
     write(source, 'postmortem/incident.md')
     write(source, 'AGENTS.md')
     write(source, 'persistence-changes/v1/changes.md')
-    write(source, 'persistence-changes/v1/record.json')
+    write(source, 'i18n/terminology.md')
 
-    await stageDshDocs(source, destination)
+    await stageDshDocs(source, destination, published)
 
     for (const copied of [
-      'guide/index.md', 'guide/index.i18n.yaml', 'images/diagram.png',
-      'postmortem/incident.md', 'AGENTS.md',
-      'persistence-changes/v1/changes.md', 'persistence-changes/v1/record.json',
+      'guide/index.md', 'guide/index.zh.md', 'images/diagram.png',
+      'upgrade-guide/v0.1.0/change/guide.md', 'upgrade-guide/v0.1.0/change/guide.zh.md',
     ]) {
       expect(existsSync(join(destination, copied)), copied).toBe(true)
+    }
+    for (const excluded of [
+      'guide/index.i18n.yaml', 'upgrade-guide/v0.1.0/change/guide.i18n.yaml',
+      'postmortem', 'AGENTS.md', 'persistence-changes', 'i18n',
+    ]) {
+      expect(existsSync(join(destination, excluded)), excluded).toBe(false)
     }
   })
 
@@ -51,7 +61,7 @@ describe('documentation staging', () => {
     write(source, 'kept.md')
     write(destination, 'removed.md')
 
-    await stageDshDocs(source, destination)
+    await stageDshDocs(source, destination, new Set(['kept.md']))
 
     expect(existsSync(join(destination, 'kept.md'))).toBe(true)
     expect(existsSync(join(destination, 'removed.md'))).toBe(false)
@@ -64,5 +74,15 @@ describe('documentation staging', () => {
     await cleanStagedDshDocs(destination)
 
     expect(existsSync(destination)).toBe(false)
+  })
+
+  it('publishes the website manifest pages and no internal document', () => {
+    const published = publishedDocuments()
+
+    expect(published.has('architecture.md')).toBe(true)
+    expect(published.has('architecture.zh.md')).toBe(true)
+    for (const excluded of ['AGENTS.md', 'testing.md', 'postmortem/README.md', 'persistence-changes/README.md', 'i18n/README.md']) {
+      expect(published.has(excluded)).toBe(false)
+    }
   })
 })

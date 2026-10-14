@@ -10,13 +10,13 @@ A published `@deepseek-ai/dsh-*` package carried declarations, bundled runtime, 
 
 ## Decision
 
-Every release member publishes its TypeScript source, the declaration maps that resolve into it, and the JavaScript maps beside the bundles they describe. `@deepseek-ai/dsh` publishes the repository `docs/` tree, and the build compresses emitted bundles without mangling identifiers.
+Every release member publishes its TypeScript source, the declaration maps that resolve into it, and the JavaScript maps beside the bundles they describe. `@deepseek-ai/dsh` publishes the documentation website's page set plus the upgrade guides, and the build compresses emitted bundles without mangling identifiers.
 
 [`expectedDshPackageFiles`](../../../../scripts/check-workspace-constraints.ts) lists `lib/types/**/*.d.ts.map`, `lib/**/*.js.map`, and `src`; a package with Typert Remote navigation also lists `lib/typert.remote-client.d.ts.map`, which its generated declaration references through `sourceMappingURL`. No payload member is forbidden, so the static manifest check owns the exact publication list. The `./src/*` export that 315 of the 332 release members declare resolves to those files, which serves editor navigation and reading; plain Node still cannot import them without a TypeScript loader.
 
 The client preset compresses the browser bundle's text (`minify: { compress: false, mangle: false }`). Identifiers keep their names, so a stack frame and the published map still name the original code. Node-side entries stay uncompressed: the browser worker image lowers `yield*` only as a whole statement and rewrites `for await` loops by their source layout, and compressed input breaks both.
 
-`@deepseek-ai/dsh` copies the repository `docs/` tree into `apps/cli/docs` from its `prepack` lifecycle through [`scripts/stage-dsh-docs.ts`](../../../../scripts/stage-dsh-docs.ts), and removes that copy again from `postpack`. Every file ships: the published pages, the maintainer documents, the generated `docs/persistence-changes/` records, the `docs/i18n/` guidelines, the `*.i18n.yaml` consistency records, and the referenced images. The vendored family keeps upstream's payload unchanged ([release sequences](2026-08-10-npm-release-sequences.md)).
+`@deepseek-ai/dsh` stages that set into `apps/cli/docs` from its `prepack` lifecycle through [`scripts/stage-dsh-docs.ts`](../../../../scripts/stage-dsh-docs.ts), and removes the copy again from `postpack`. The set is the website manifest's Markdown, every `docs/upgrade-guide/` document, and the non-Markdown assets those pages reference. The generated `docs/persistence-changes/` records, the `docs/i18n/` guidelines, and the `*.i18n.yaml` consistency records stay out. The vendored family keeps upstream's payload unchanged ([release sequences](2026-08-10-npm-release-sequences.md)).
 
 Desktop and the Python single-file executable pay nothing for either addition. [Desktop's runtime file policy](../../../../apps/desktop/scripts/runtime-file-policy.ts) omits `src/`, `docs/`, and every map from `@deepseek-ai/dsh*` packages while keeping third-party `src` trees that some of their `main` entries reach, and [`PUBLISHED_PAYLOAD_IGNORES`](../../../../scripts/build-exe-for-python-sdk.ts) excludes the same trees from the executable, so its contents no longer depend on a staged `docs` left in the checkout.
 
@@ -26,7 +26,7 @@ Desktop and the Python single-file executable pay nothing for either addition. [
 
 **Publish maps without `src`.** Rejected because a map whose `sources` are absent resolves nothing, which is exactly the navigation the [Typert Remote design](../architecture/2026-08-02-typert-remote-method-calls.md) requires.
 
-**Publish only the website's page set.** Rejected because an installed reader is not the website's reader: the maintainer documents, the migration records, and the translation guidelines are exactly what a plugin author cannot get offline, and a catalog page's link into `persistence-changes/` resolves only when those records ship with it.
+**Publish the whole `docs/` tree, or only the website's page set.** Both extremes were rejected. The whole tree publishes maintainer material an installed reader does not need — postmortems, testing guides, agent instructions, and the generated migration records — while the site's page set alone omits the upgrade guides, which are the documents an installed reader consults when a released change breaks something.
 
 **Mangle the bundles as well.** Rejected because mangled identifiers break the correspondence a published map exists to provide and make an unhandled stack frame unreadable.
 
@@ -34,8 +34,8 @@ Desktop and the Python single-file executable pay nothing for either addition. [
 
 ## Consequences
 
-`src` adds about 29 MB and declaration maps about 10 MB across the release set; JavaScript maps add about 49 MB, and the staged documentation adds 31 MB to `@deepseek-ai/dsh`. Compression removes about a third of a browser bundle — `ui-chat`'s `lib/client.js` falls from 591 kB to 420 kB — while node-side entries keep their size until the worker image lowering accepts compressed input. The Desktop application and the Python executable keep their previous payload.
+`src` adds about 29 MB and declaration maps about 10 MB across the release set; JavaScript maps add about 49 MB, and the staged documentation adds 6.2 MB across 269 files to `@deepseek-ai/dsh`. Compression removes about a third of a browser bundle — `ui-chat`'s `lib/client.js` falls from 591 kB to 420 kB — while node-side entries keep their size until the worker image lowering accepts compressed input. The Desktop application and the Python executable keep their previous payload.
 
-A consumer editor now follows a declaration to the installed implementation, and a plugin author reads that version's documentation without a checkout. The staged copy keeps the repository's relative links, so a link into `../packages/**` resolves only in a checkout while the documentation's own cross-references stay intact. `docs/` exists in the working tree only between `prepack` and `postpack`, and `pnpm run clean` removes a copy an interrupted pack left behind.
+A consumer editor now follows a declaration to the installed implementation, and a plugin author reads that version's documentation without a checkout. The staged copy keeps the repository's relative links, so a link into `../packages/**` or into the omitted `persistence-changes/` records resolves only in a checkout. `docs/` exists in the working tree only between `prepack` and `postpack`, and `pnpm run clean` removes a copy an interrupted pack left behind.
 
 `pnpm run constraints` rejects a member whose `files` omits `src` or a map, because the canonical list is exact. The release family's tarball check requires `@deepseek-ai/dsh` to carry documentation and source, so a pack run that skips the staging hook fails instead of publishing without them.
