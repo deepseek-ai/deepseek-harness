@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tencent-docs",
   "description": "Tencent Docs plugin: Tencent Docs' hosted MCP server, authorized through the shared MCP manager",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -59,7 +59,12 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-credentials": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-mcp-manager": "workspace:*",
+    "@deepseek-ai/dsh-mcp-resources": "workspace:*",
+    "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-client-locale": "workspace:*",
     "@deepseek-ai/dsh-client-ui-mcp-account": "workspace:*",

@@ -105,12 +105,18 @@ importers:
       '@deepseek-ai/dsh-mcp-client':
         specifier: workspace:*
         version: link:packages/mcp/mcp-client
+      '@deepseek-ai/dsh-mcp-manager':
+        specifier: workspace:*
+        version: link:packages/mcp/mcp-manager
       '@deepseek-ai/dsh-skill-office':
         specifier: workspace:*
         version: link:packages/skill/skill-office
       '@deepseek-ai/dsh-subagent-dsh-sdk':
         specifier: workspace:*
         version: link:packages/subagent/subagent-dsh-sdk
+      '@deepseek-ai/dsh-tencent-docs':
+        specifier: workspace:*
+        version: link:packages/connector/tencent-docs
       '@deepseek-ai/dsh-tool-executor-native':
         specifier: workspace:*
         version: link:packages/core/tool-executor-native
@@ -7410,6 +7416,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../core/agent
       '@deepseek-ai/dsh-client-locale':
         specifier: workspace:*
         version: link:../../client/locale
@@ -7419,9 +7428,21 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:*
         version: link:../../client/ui-slots
+      '@deepseek-ai/dsh-credentials':
+        specifier: workspace:*
+        version: link:../../credentials/credentials
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
       '@deepseek-ai/dsh-mcp-manager':
         specifier: workspace:*
         version: link:../../mcp/mcp-manager
+      '@deepseek-ai/dsh-mcp-resources':
+        specifier: workspace:*
+        version: link:../../mcp/mcp-resources
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../core/scope
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../core/system-prompt
