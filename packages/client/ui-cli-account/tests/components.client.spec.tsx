@@ -99,6 +99,8 @@ it('tags only the enabled bundle with a settled phase', () => {
   expect(screen.getByText('Tag connected')).toBeTruthy()
   rerender(badge({ kind: 'bundle', pkg: pkg(PACKAGE) }, 'unavailable'))
   expect(screen.getByText('Tag unavailable')).toBeTruthy()
+  rerender(badge({ kind: 'row', pkg: pkg(PACKAGE) }))
+  expect(screen.getByText('Tag connected')).toBeTruthy()
   const hidden: CliAccountBadgeSubject[] = [
     { kind: 'bundle', pkg: pkg(PACKAGE, false) },
     { kind: 'bundle', pkg: pkg('@acme/other') },

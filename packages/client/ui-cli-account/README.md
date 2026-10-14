@@ -48,7 +48,7 @@ The components read these keys through the plugin's translator, so every plugin 
 | Component | Behavior |
 |---|---|
 | `CliAccountSection` | Title, status, buttons, detail, extra rows, failure, and hint; the status defaults to the phase's `status.*` copy. Buttons are disabled while a page action is pending or the Host stream is down, except while stopped so retry can reopen it. A failure shows the plugin's guidance, then the classified command, exit code, and allowlisted details |
-| `CliAccountBadge` | The tag beside the title, only on the enabled bundle's own page and only once the phase settles |
+| `CliAccountBadge` | The tag beside the title, only on the enabled bundle's page or one of its row pages, and only once the phase settles |
 | `CliAccountActivation` | The prompt after the bundle is switched on, open while disconnected; it dismisses itself once the phase settles elsewhere |
 | `CliAccountConfirm` | A confirmation that closes before it confirms |
 | `CliAccountToast` | The latest notice, with a warning icon for `action-failed` |

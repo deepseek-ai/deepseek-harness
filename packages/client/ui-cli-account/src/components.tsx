@@ -113,10 +113,10 @@ export function CliAccountSection(props: CliAccountSectionProps): ReactNode {
   )
 }
 
-/** The Plugins page detail the tag sits on: an item page, or a bundle page with its package. */
+/** The Plugins page detail the tag sits on: an item page, or a bundle or row page with its package. */
 export type CliAccountBadgeSubject =
   | { readonly kind: 'item' }
-  | { readonly kind: 'bundle'; readonly pkg: { readonly name: string; readonly enabled: boolean } }
+  | { readonly kind: 'bundle' | 'row'; readonly pkg: { readonly name: string; readonly enabled: boolean } }
 
 /** The tag's subject and phase, with the plugin's translator. */
 export interface CliAccountBadgeProps {

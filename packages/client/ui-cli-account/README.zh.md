@@ -48,7 +48,7 @@ kind: "package-library"
 | 组件 | 行为 |
 |---|---|
 | `CliAccountSection` | 标题、状态、按钮、说明、附加行、失败和提示；状态默认取该阶段的 `status.*` 文案。页面操作未完成或 Host 流中断时按钮禁用，但在已停止时保持可用，以便重试重新打开流。失败时先显示插件的恢复建议，再显示分类后的命令、退出码和白名单字段 |
-| `CliAccountBadge` | 标题旁的标签，只在已启用插件包自己的页面上、并且阶段确定后显示 |
+| `CliAccountBadge` | 标题旁的标签，只在已启用插件包的页面或其某一行的页面上、并且阶段确定后显示 |
 | `CliAccountActivation` | 开启插件包后的引导，未连接时打开；阶段确定为其他状态后自行关闭 |
 | `CliAccountConfirm` | 先关闭再执行确认的确认框 |
 | `CliAccountToast` | 最新提示；`action-failed` 带警告图标 |
