@@ -80,8 +80,9 @@ describe('CliAccountRuntime', () => {
     expect(await settled(id)).toEqual({ account: { state: 'signed-in' }, result: { id, kind: 'check', outcome: 'succeeded' } })
   })
 
-  it('offers only trusted HTTPS authorization links and clears them on the next stage', async () => {
+  it('offers only trusted HTTPS authorization links, reports which it accepted, and clears them on the next stage', async () => {
     let login!: ScriptedProcess
+    const offers: boolean[] = []
     subprocess.respond = (process) => {
       if (process.spec.argv[1] === 'status') process.reply({ stdout: 'in' })
       else login = process
@@ -89,7 +90,7 @@ describe('CliAccountRuntime', () => {
     account.script = async (kind, control, signal, publish) => {
       if (kind === 'check') return checkScript(kind, control, signal, publish)
       control.stage('authorizing')
-      const result = await control.run('login', ['login'], signal, { awaitsUser: true, onLine: (_stream, line) => { control.offer(line) } })
+      const result = await control.run('login', ['login'], signal, { awaitsUser: true, onLine: (_stream, line) => { offers.push(control.offer(line)) } })
       if (result.exitCode !== 0) throw new Error('login failed')
       control.stage('checking')
       await checkScript(kind, control, signal, publish)
@@ -108,16 +109,18 @@ describe('CliAccountRuntime', () => {
 
     login.reply({})
     expect(await settled(id)).toEqual({ account: { state: 'signed-in' }, result: { id, kind: 'connect', outcome: 'succeeded' } })
+    expect(offers).toEqual([false, false, false, false, false, true, true])
   })
 
   it('cancels only the named operation in a cancellable phase, withdraws its link, and ignores later links', async () => {
     subprocess.respond = (process) => { process.write('stdout', 'https://example.com/device\n') }
+    let late: boolean | undefined
     account.script = async (_kind, control, signal) => {
       control.stage('authorizing')
       try {
         await control.run('login', ['login'], signal, { awaitsUser: true, onLine: (_stream, line) => { control.offer(line) } })
       } finally {
-        control.offer('https://example.com/late')
+        late = control.offer('https://example.com/late')
       }
     }
     const id = account.start('connect')
@@ -130,6 +133,7 @@ describe('CliAccountRuntime', () => {
     await cancelling
 
     expect(account.snapshot()).toEqual({ account: { state: 'unchecked' }, result: { id, kind: 'connect', outcome: 'cancelled' } })
+    expect(late).toBe(false)
     expect(subprocess.processes[0]?.terminated).toBe(true)
     expect(errors()).toEqual([])
   })

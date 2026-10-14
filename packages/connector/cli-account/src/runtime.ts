@@ -17,8 +17,9 @@ export interface CliOperationControl<Phase extends string, Command extends strin
   /**
    * Offer an authorization link to the page; an untrusted, malformed, or late link is ignored.
    * @param url - an HTTPS URL on one of the plugin's authorization hosts or their subdomains, without credentials.
+   * @returns whether the page now shows the link.
    */
-  offer(url: string): void
+  offer(url: string): boolean
   /**
    * Run one command and record its classification as the operation's failure if the operation then fails.
    * @param command - the plugin's identifier for the command.
@@ -227,7 +228,7 @@ export abstract class CliAccountRuntime<
     let failure: Failure | undefined
     const control: CliOperationControl<Phase, Failure['command']> = {
       stage: (phase) => { this.stage(operation, phase) },
-      offer: (url) => { this.offer(operation, url) },
+      offer: url => this.offer(operation, url),
       run: (command, args, signal, options) => this.run(operation, command, args, signal, options),
     }
     try {
@@ -265,13 +266,14 @@ export abstract class CliAccountRuntime<
     this.changed()
   }
 
-  private offer(operation: Operation<Kind, Phase, Failure>, value: string): void {
-    if (operation.controller.signal.aborted || !URL.canParse(value)) return
+  private offer(operation: Operation<Kind, Phase, Failure>, value: string): boolean {
+    if (operation.controller.signal.aborted || !URL.canParse(value)) return false
     const url = new URL(value)
     const trusted = url.protocol === 'https:' && url.username === '' && url.password === ''
       && this.options.authorizationHosts.some(host => url.hostname === host || url.hostname.endsWith(`.${host}`))
-    if (!trusted) return
+    if (!trusted) return false
     operation.authorizationUrl = url.href
     this.changed()
+    return true
   }
 }
