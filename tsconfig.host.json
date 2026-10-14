@@ -337,6 +337,7 @@
     { "path": "./packages/util/home-paths" },
     { "path": "./packages/client/ui-plugin-manager/tsconfig.host.json" },
     { "path": "./packages/client/ui-trajectory/tsconfig.host.json" },
+    { "path": "./packages/connector/cli-account" },
     { "path": "./packages/util/time" },
     { "path": "./packages/util/timeout" },
     { "path": "./packages/util/crypto" },
