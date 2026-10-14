@@ -13,6 +13,7 @@ export type CliAccountKey =
   | 'activation.title' | 'activation.body' | 'activation.later'
   | 'failure.details' | 'failure.exitCode'
   | `badge.${Exclude<CliAccountPhase, 'checking'>}`
+  | `status.${Exclude<CliAccountPhase, 'connecting'>}`
 
 const TONE: Record<CliAccountPhase, StateDotState> = {
   checking: 'ongoing', connecting: 'ongoing', connected: 'done', disconnected: 'idle', unavailable: 'warning', stopped: 'warning',
@@ -43,7 +44,7 @@ export interface CliAccountSectionProps {
   readonly t: Translate<CliAccountKey>
   readonly packageName: string
   readonly phase: CliAccountPhase
-  readonly status: string
+  readonly status?: string | undefined
   readonly busy: boolean
   readonly linked: boolean
   readonly actions: readonly CliAccountAction[]
@@ -76,7 +77,7 @@ export function CliAccountSection(props: CliAccountSectionProps): ReactNode {
       <h4 className={css.title}>{t('section.title')}</h4>
       <div className={css.status}>
         <StateDot state={TONE[phase]} />
-        <span className={css.label}>{status}</span>
+        <span className={css.label}>{status ?? t(`status.${phase === 'connecting' ? 'checking' : phase}`)}</span>
         <div className={css.actions}>{actions.map(button)}</div>
       </div>
       {detail === undefined ? null : <p className={css.detail}>{detail}</p>}
@@ -151,7 +152,7 @@ export function CliAccountConfirm({ t, open, title, body, confirm, onClose, onCo
 }
 
 export interface CliAccountToastProps<Notice extends string> {
-  readonly t: Translate<`notice.${CliAccountNotice<Notice>['kind']}`>
+  readonly t: Translate<`notice.${NoInfer<CliAccountNotice<Notice>['kind']>}`>
   readonly notice: CliAccountNotice<Notice> | undefined
   readonly onDone: () => void
 }
