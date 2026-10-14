@@ -38,7 +38,7 @@ Install the [Feishu plugin bundle](../../connector/feishu/README.md), which inse
 | Cannot confirm sign-in right now | **Retry** runs the connection again and keeps the existing setup and sign-in |
 | Feishu component not running | The Host's `feishu` row did not load; the section points to the component list for the reason, and **Retry** subscribes to the Host again |
 
-Leaving the page does not cancel a connection, which the Host owns. Each step opens its page from the user's own click, because browsers block a window that opens long after it. A failed app link points to the service log. If the Feishu page reported success, it also advises checking local configuration and credential access and choosing the existing app when linking again. Other failed steps or sign-outs keep the general failure notice. The section includes safe CLI diagnostic codes when available; a failed page action shows a toast, and so does a finished app link, sign-in, or sign-out. The section notes that the account is shared with the Feishu CLI in the computer's terminal.
+Leaving the page does not cancel a connection, which the Host owns. Each step opens its page from the user's own click, because browsers block a window that opens long after it. For a failed app link, the section advises checking local configuration and credential access and choosing the existing app when linking again if the Feishu page reported success. Other failed steps or sign-outs keep the general failure notice. The section includes safe CLI diagnostic codes when available; a failed page action shows a toast, and so does a finished app link, sign-in, or sign-out. The section notes that the account is shared with the Feishu CLI in the computer's terminal.
 
 -----
 
@@ -79,7 +79,6 @@ None; this package neither assembles nor sends a provider request.
 <a id="known-limitations-and-deferred-work"></a>
 
 - The page checks the account each time it subscribes and has no periodic check, so a sign-in or sign-out in the user's terminal appears after the page reopens.
-- Every failed operation shows the same retry message; the Host keeps the diagnostic.
 
 <a id="dev-note"></a>
 ### Dev Note
