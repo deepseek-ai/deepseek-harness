@@ -1,15 +1,16 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { CliCommandExecutor } from './executor.ts'
-import type { CliAccountView, CliOperation, CliOperationId, CliOperationResult } from './types.ts'
+import type { CliCommandExecutor, CliCommandResult, CliRunOptions } from './executor.ts'
+import type { CliAccountView, CliCommandFailure, CliOperation, CliOperationId, CliOperationResult } from './types.ts'
 
-export interface CliOperationControl<Phase extends string> {
+export interface CliOperationControl<Phase extends string, Command extends string> {
   stage(phase: Phase | 'checking'): void
   offer(url: string): void
+  run(command: Command, args: readonly string[], signal: AbortSignal, options?: CliRunOptions): Promise<CliCommandResult>
 }
 
-export interface CliAccountRuntimeOptions<Account, Kind extends string, Phase extends string> {
+export interface CliAccountRuntimeOptions<Account, Kind extends string, Phase extends string, Failure extends CliCommandFailure> {
   readonly name: string
   readonly cli: CliCommandExecutor
   readonly logger: Context['logger']
@@ -17,13 +18,19 @@ export interface CliAccountRuntimeOptions<Account, Kind extends string, Phase ex
   readonly check: Kind
   readonly cancellable: readonly Phase[]
   readonly authorizationHosts: readonly string[]
+  readonly classify: (command: Failure['command'], result: CliCommandResult) => Failure
 }
 
-class Operation<Kind extends string, Phase extends string> {
+export function exitFailure<Command extends string>(command: Command, result: CliCommandResult): CliCommandFailure<Command> {
+  return { command, exitCode: result.exitCode }
+}
+
+class Operation<Kind extends string, Phase extends string, Failure extends CliCommandFailure> {
   readonly id = brandString<CliOperationId>(randomUUID())
   readonly controller = new AbortController()
   phase: Phase | 'checking' | 'cancelling' = 'checking'
   authorizationUrl: string | undefined
+  failure: Failure | undefined
   done: Promise<void> = Promise.resolve()
 
   constructor(readonly kind: Kind, private readonly cancellable: ReadonlySet<string>) {}
@@ -38,29 +45,29 @@ class Operation<Kind extends string, Phase extends string> {
   }
 }
 
-export abstract class CliAccountRuntime<Account, Kind extends string, Phase extends string> {
-  protected readonly cli: CliCommandExecutor
+export abstract class CliAccountRuntime<
+  Account, Kind extends string, Phase extends string, Failure extends CliCommandFailure = CliCommandFailure,
+> {
   private account: Account
-  private active: Operation<Kind, Phase> | undefined
-  private result: CliOperationResult<Kind> | undefined
+  private active: Operation<Kind, Phase, Failure> | undefined
+  private result: CliOperationResult<Kind, Failure> | undefined
   private readonly cancellable: ReadonlySet<string>
   private readonly listeners = new Set<() => void>()
   private readonly lifetime = new AbortController()
 
-  constructor(private readonly options: CliAccountRuntimeOptions<Account, Kind, Phase>) {
-    this.cli = options.cli
+  constructor(private readonly options: CliAccountRuntimeOptions<Account, Kind, Phase, Failure>) {
     this.account = options.account
     this.cancellable = new Set(options.cancellable)
   }
 
-  protected abstract perform(kind: Kind, control: CliOperationControl<Phase>, signal: AbortSignal): Promise<void>
+  protected abstract perform(kind: Kind, control: CliOperationControl<Phase, Failure['command']>, signal: AbortSignal): Promise<void>
 
   protected publish(account: Account): void {
     this.account = account
     this.changed()
   }
 
-  snapshot(): CliAccountView<Account, Kind, Phase> {
+  snapshot(): CliAccountView<Account, Kind, Phase, Failure> {
     return {
       account: this.account,
       ...this.active === undefined ? {} : { operation: this.active.view() },
@@ -71,7 +78,7 @@ export abstract class CliAccountRuntime<Account, Kind extends string, Phase exte
   start(kind: Kind): CliOperationId {
     this.lifetime.signal.throwIfAborted()
     if (this.active !== undefined) throw new Error(`${this.options.name}: another account operation is in progress`)
-    const operation = new Operation<Kind, Phase>(kind, this.cancellable)
+    const operation = new Operation<Kind, Phase, Failure>(kind, this.cancellable)
     this.active = operation
     this.result = undefined
     operation.done = this.execute(operation)
@@ -90,7 +97,7 @@ export abstract class CliAccountRuntime<Account, Kind extends string, Phase exte
     await operation.done
   }
 
-  async *follow(signal: AbortSignal): AsyncIterable<CliAccountView<Account, Kind, Phase>> {
+  async *follow(signal: AbortSignal): AsyncIterable<CliAccountView<Account, Kind, Phase, Failure>> {
     this.refresh()
     const combined = AbortSignal.any([signal, this.lifetime.signal])
     let wake = Promise.withResolvers<void>()
@@ -121,7 +128,7 @@ export abstract class CliAccountRuntime<Account, Kind extends string, Phase exte
         await operation.done
       }
     } finally {
-      await this.cli.dispose()
+      await this.options.cli.dispose()
     }
   }
 
@@ -129,39 +136,57 @@ export abstract class CliAccountRuntime<Account, Kind extends string, Phase exte
     for (const notify of this.listeners) notify()
   }
 
-  private interrupt(operation: Operation<Kind, Phase>): void {
+  private interrupt(operation: Operation<Kind, Phase, Failure>): void {
     operation.controller.abort(new Error(`${this.options.name}: account operation cancelled`))
     operation.phase = 'cancelling'
     operation.authorizationUrl = undefined
     this.changed()
   }
 
-  private async execute(operation: Operation<Kind, Phase>): Promise<void> {
-    let outcome: CliOperationResult<Kind>['outcome'] = 'succeeded'
-    const control: CliOperationControl<Phase> = {
+  private async execute(operation: Operation<Kind, Phase, Failure>): Promise<void> {
+    let outcome: CliOperationResult<Kind, Failure>['outcome'] = 'succeeded'
+    let failure: Failure | undefined
+    const control: CliOperationControl<Phase, Failure['command']> = {
       stage: (phase) => { this.stage(operation, phase) },
       offer: (url) => { this.offer(operation, url) },
+      run: (command, args, signal, options) => this.run(operation, command, args, signal, options),
     }
     try {
       await this.perform(operation.kind, control, AbortSignal.any([operation.controller.signal, this.lifetime.signal]))
-    } catch (error) {
+    } catch (_error) {
+      // Exceptions and native output may contain credentials; report only the classified command fields.
       outcome = operation.controller.signal.aborted ? 'cancelled' : 'failed'
-      if (outcome === 'failed') this.options.logger.warn(`${this.options.name}: ${operation.kind} failed: ${String(error)}`)
+      if (outcome === 'failed') {
+        failure = operation.failure
+        this.options.logger.error(`${this.options.name}: account operation failed: %o`, {
+          id: operation.id, kind: operation.kind, phase: operation.phase, ...failure,
+        })
+      }
     } finally {
       this.active = undefined
-      this.result = { id: operation.id, kind: operation.kind, outcome }
+      this.result = { id: operation.id, kind: operation.kind, outcome, ...failure === undefined ? {} : { failure } }
       this.changed()
     }
   }
 
-  private stage(operation: Operation<Kind, Phase>, phase: Phase | 'checking'): void {
+  private async run(
+    operation: Operation<Kind, Phase, Failure>, command: Failure['command'], args: readonly string[],
+    signal: AbortSignal, options?: CliRunOptions,
+  ): Promise<CliCommandResult> {
+    operation.failure = this.options.classify(command, { exitCode: null, stdout: '', stderr: '' })
+    const result = await this.options.cli.run(args, signal, options)
+    operation.failure = this.options.classify(command, result)
+    return result
+  }
+
+  private stage(operation: Operation<Kind, Phase, Failure>, phase: Phase | 'checking'): void {
     operation.controller.signal.throwIfAborted()
     operation.phase = phase
     operation.authorizationUrl = undefined
     this.changed()
   }
 
-  private offer(operation: Operation<Kind, Phase>, value: string): void {
+  private offer(operation: Operation<Kind, Phase, Failure>, value: string): void {
     if (operation.controller.signal.aborted || !URL.canParse(value)) return
     const url = new URL(value)
     const trusted = url.protocol === 'https:' && url.username === '' && url.password === ''
