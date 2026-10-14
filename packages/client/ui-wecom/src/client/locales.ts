@@ -1,7 +1,10 @@
+/** Locale-owned copy for the WeCom plugin's authorization on the Plugins page. */
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 
+/** Dictionary namespace for every WeCom authorization surface. */
 export const NS = 'wecom'
 
+/** Chinese dictionary and key source. */
 export const zh = {
   'section.title': '企业微信授权',
   'status.checking': '正在检查授权',
@@ -37,8 +40,10 @@ export const zh = {
   close: '关闭',
 }
 
+/** Every key the WeCom authorization surfaces translate. */
 export type WecomKey = keyof typeof zh
 
+/** English dictionary. */
 export const en: Record<WecomKey, string> = {
   'section.title': 'WeCom authorization',
   'status.checking': 'Checking authorization',

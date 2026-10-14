@@ -1,3 +1,10 @@
+/**
+ * WeCom plugin, browser half: the authorization section on the WeCom bundle's
+ * page, the tag beside its title, guidance after the bundle is switched on, and
+ * notices. The Host's `wecom` Remote owns the operations; this half mounts that
+ * Remote itself because the on-demand package stays out of the shipped Remote
+ * assembly.
+ */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -9,6 +16,7 @@ import { WECOM_PACKAGE, createConnection } from './connection.ts'
 import { en, NS, zh } from './locales.ts'
 import { WecomConnectionActivation, WecomConnectionBadge, WecomConnectionSection, WecomConnectionToast } from './WecomConnection.tsx'
 
+/** Services the Remote mount and the slot registrations need. */
 export const inject = ['remote', 'slots', 'locale']
 
 function registerUi(ctx: Context): void {
@@ -29,6 +37,11 @@ function registerUi(ctx: Context): void {
   }, WecomConnectionToast))
 }
 
+/**
+ * Mount the WeCom Remote, then register the authorization surfaces for as long as the WeCom row is on.
+ * @param ctx - the browser plugin context.
+ * @returns a disposer that withdraws the surfaces, then the Remote.
+ */
 export async function apply(ctx: Context): Promise<() => Promise<void>> {
   const disposeRemote = await ctx.remote.$mount(wecomRemote)
   const ui = ctx.inject(['remote.wecom', 'slots', 'locale'], registerUi)
