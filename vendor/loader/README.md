@@ -59,3 +59,7 @@ Without Node module internals, Loader resolves bare specifiers, package imports 
 ## Update completion
 
 Entry updates await `loader/patch-context`, the Fiber update waterfall and disabled-entry disposal. Combined context/config changes refresh required bindings before restarting. Group and Include updates expose completion of their child updates; file persistence still follows Include’s debounced writer.
+
+## Tree mutation reports
+
+`EntryTree.commit(change)` receives each programmatic mutation synchronously after options and group membership change. A missing `legacy` means creation; missing `options` means removal. Updates carry both, with `from` naming the previous group after a move. Explicit Fiber saves report their simplified configuration. File-driven reconciliation, parent teardown and Loader removal do not produce spurious self-disable reports. In-memory trees implement a no-op; the existing Include writer persists the current tree. Entry ids cannot contain `:`, which separates nested tree paths.

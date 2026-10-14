@@ -41,3 +41,9 @@ Example `cordis.yml`:
 | `enableLogs` | Enables loader apply, reload, and unload logs. |
 
 Patches can insert entries or override fields on entries with a matching `id`.
+
+## Patch composition and persistence
+
+`applyEntryPatches(data, patches, warn)` uses the same upstream algorithm as mounting. It clones file entries even without patches and clones inserted entry lists before indexing them, so later patches can address inserted rows without mutating those input lists. `entryListSchema` exposes Include’s YAML dialect to configuration tools. Nested entry expressions remain literal until their owning Loader entry evaluates them.
+
+Tree mutations arrive through `commit(change)` and schedule the existing debounced writer. The imported journal helpers support patch ownership; runtime file reconciliation still uses `refresh()` and the existing write queue.
