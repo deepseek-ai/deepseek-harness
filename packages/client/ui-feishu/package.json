@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-feishu",
   "description": "Feishu plugin page: connect, check, and sign out of the Feishu account from the Plugins page",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -41,10 +41,7 @@
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-plugin-manager"
       ],
-      "platform": "web",
-      "external": [
-        "@deepseek-ai/dsh-client-ui-cli-account/client"
-      ]
+      "platform": "web"
     }
   },
   "scripts": {
@@ -71,7 +68,6 @@
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@testing-library/react": "^16.3.3",
-    "@types/react": "~18.3.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   }

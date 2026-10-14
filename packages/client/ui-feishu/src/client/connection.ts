@@ -1,7 +1,7 @@
 /** Browser mirror of the Host's Feishu account and the Plugins page's connection actions. */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
-import { CliAccountConnection, type CliAccountSnapshot } from '@deepseek-ai/dsh-client-ui-cli-account/client'
+import { CliAccountConnection, type CliAccountSnapshot } from '@deepseek-ai/dsh-client-ui-cli-account'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { FeishuAppId, FeishuState } from '@deepseek-ai/dsh-feishu-cli/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
