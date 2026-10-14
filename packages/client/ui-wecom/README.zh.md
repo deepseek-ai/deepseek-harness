@@ -49,7 +49,7 @@ kind: "package-reference"
 
 Host 半部 [`src/index.ts`](src/index.ts) 是空的 `apply`，只为让本包持有一行 Loader 条目，客户端模块系统据此提供浏览器半部。浏览器半部 [`src/client/index.ts`](src/client/index.ts) 用 `ctx.remote.$mount` 自行挂载 `wecom` Remote，因为随产品发布的 Remote 集合不包含按需安装的包；卸载 Remote 之前会先撤下自己的注册。
 
-[`src/client/connection.ts`](src/client/connection.ts) 为每个浏览器插件基于 `wecom` Remote 创建一个来自 [CLI 插件页组件](../ui-cli-account/README.zh.md)的 `CliAccountConnection`，只根据 Host 的视图推导页面状态。该连接只为本浏览器发起的操作打开链接，每个链接只打开一次，且只打开 HTTPS 链接。[`src/client/WecomConnection.tsx`](src/client/WecomConnection.tsx) 用企业微信的操作渲染共用的区块、标签、开启引导和提示；本包通过 `dsh.client.external` 请求共用模块，而不是把它打包进来。它以 `@deepseek-ai/dsh-wecom` 为 key 注册 `plugins.bundle.config` 作为区块，注册 `plugins.bundle.activation` 作为引导、`plugins.detail.badge` 作为标签，以及一个 `shell.overlay` 提示。页面文案，包括共用组件读取的键，位于本包的 `wecom` 词典。
+[`src/client/connection.ts`](src/client/connection.ts) 为每个浏览器插件基于 `wecom` Remote 创建一个来自 [CLI 插件页组件](../ui-cli-account/README.zh.md)的 `CliAccountConnection`，只根据 Host 的视图推导页面状态。该连接只为本浏览器发起的操作打开链接，每个链接只打开一次，且只打开 HTTPS 链接。[`src/client/WecomConnection.tsx`](src/client/WecomConnection.tsx) 用企业微信的操作渲染共用的区块、标签、开启引导和提示；Web 外壳以平台模块提供这个共用库，因此本包的 bundle 不包含它。它以 `@deepseek-ai/dsh-wecom` 为 key 注册 `plugins.bundle.config` 作为区块，注册 `plugins.bundle.activation` 作为引导、`plugins.detail.badge` 作为标签，以及一个 `shell.overlay` 提示。页面文案，包括共用组件读取的键，位于本包的 `wecom` 词典。
 
 </details>
 

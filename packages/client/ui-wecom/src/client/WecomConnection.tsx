@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react'
 import {
   CliAccountActivation, CliAccountBadge, CliAccountSection, CliAccountToast, type CliAccountAction,
-} from '@deepseek-ai/dsh-client-ui-cli-account/client'
+} from '@deepseek-ai/dsh-client-ui-cli-account'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { WECOM_PACKAGE, presentConnection, type ConnectionFace } from './connection.ts'

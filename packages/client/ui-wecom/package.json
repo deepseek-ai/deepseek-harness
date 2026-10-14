@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-wecom",
   "description": "WeCom plugin page: authorize and check WeCom from the Plugins page",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -41,10 +41,7 @@
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-plugin-manager"
       ],
-      "platform": "web",
-      "external": [
-        "@deepseek-ai/dsh-client-ui-cli-account/client"
-      ]
+      "platform": "web"
     }
   },
   "scripts": {

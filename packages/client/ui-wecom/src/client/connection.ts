@@ -1,7 +1,7 @@
 /** Browser mirror of the Host's WeCom authorization and the Plugins page's actions. */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
-import { CliAccountConnection, type CliAccountPhase, type CliAccountSnapshot } from '@deepseek-ai/dsh-client-ui-cli-account/client'
+import { CliAccountConnection, type CliAccountPhase, type CliAccountSnapshot } from '@deepseek-ai/dsh-client-ui-cli-account'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { WecomState } from '@deepseek-ai/dsh-wecom-cli/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
