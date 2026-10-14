@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import wecomRemote from '@deepseek-ai/dsh-wecom-cli/remote'
-import { WECOM_PACKAGE, WecomConnection } from './connection.ts'
+import { WECOM_PACKAGE, createConnection } from './connection.ts'
 import { en, NS, zh } from './locales.ts'
 import { WecomConnectionActivation, WecomConnectionBadge, WecomConnectionSection, WecomConnectionToast } from './WecomConnection.tsx'
 
@@ -13,9 +13,8 @@ export const inject = ['remote', 'slots', 'locale']
 
 function registerUi(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'wecom: dictionaries')
-  const connection = new WecomConnection(ctx)
+  const { connection, face } = createConnection(ctx)
   ctx.effect(() => async () => { await connection.dispose() }, 'wecom: connection')
-  const face = connection.face()
   ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
     name: 'plugins.bundle.config', key: WECOM_PACKAGE, locale: NS, inject: () => face,
   }, WecomConnectionSection))

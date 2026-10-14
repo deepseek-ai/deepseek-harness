@@ -1,26 +1,11 @@
-import type { Branded } from '@deepseek-ai/dsh-brand'
-
-export type WecomOperationId = Branded<'WecomOperationId'>
+import type { CliAccountView } from '@deepseek-ai/dsh-cli-account/types'
 
 export interface WecomAccountState {
   readonly state: 'unchecked' | 'unauthorized' | 'authorized'
 }
 
-export interface WecomOperationState {
-  readonly id: WecomOperationId
-  readonly kind: 'check' | 'connect'
-  readonly phase: 'checking' | 'authorizing' | 'verifying' | 'cancelling'
-  readonly authorizationUrl?: string
-}
+export type WecomOperationKind = 'check' | 'connect'
 
-export interface WecomOperationResult {
-  readonly id: WecomOperationId
-  readonly kind: WecomOperationState['kind']
-  readonly outcome: 'succeeded' | 'cancelled' | 'failed'
-}
+export type WecomPhase = 'authorizing'
 
-export interface WecomState {
-  readonly account: WecomAccountState
-  readonly operation?: WecomOperationState
-  readonly result?: WecomOperationResult
-}
+export type WecomState = CliAccountView<WecomAccountState, WecomOperationKind, WecomPhase>
