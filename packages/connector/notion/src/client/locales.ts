@@ -1,11 +1,12 @@
 /** Locale-owned copy for the Notion plugin's connection on the Plugins page. */
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type { McpAccountKey } from '@deepseek-ai/dsh-client-ui-mcp-account/client'
 
 /** Dictionary namespace for every Notion connection surface. */
 export const NS = 'notion'
 
-/** Chinese dictionary and key source. */
-export const zh = {
+/** Chinese dictionary. */
+export const zh: Record<McpAccountKey, string> = {
   'section.title': 'Notion 账号',
   'status.checking': '正在检查连接',
   'status.disconnected': '未连接',
@@ -49,11 +50,8 @@ export const zh = {
   close: '关闭',
 }
 
-/** Every key the Notion connection surfaces translate. */
-export type NotionKey = keyof typeof zh
-
 /** English dictionary. */
-export const en: Record<NotionKey, string> = {
+export const en: Record<McpAccountKey, string> = {
   'section.title': 'Notion account',
   'status.checking': 'Checking connection',
   'status.disconnected': 'Not connected',
@@ -100,6 +98,6 @@ export const en: Record<NotionKey, string> = {
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** Notion connection section, tag, guidance, and notices on the Plugins page. */
-    'notion': NotionKey
+    'notion': McpAccountKey
   }
 }

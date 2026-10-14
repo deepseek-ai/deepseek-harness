@@ -6,48 +6,20 @@
     "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
   },
   "include": [
-    "src/client",
-    "src/css-modules.d.ts"
+    "src/client"
   ],
   "references": [
     {
       "path": "../../../vendor/cordis"
     },
     {
-      "path": "../../api/gateway/tsconfig.client.json"
-    },
-    {
-      "path": "../../api/remotes/tsconfig.client.json"
-    },
-    {
       "path": "../../client/locale/tsconfig.client.json"
     },
     {
-      "path": "../../client/store"
-    },
-    {
-      "path": "../../client/ui-layout"
-    },
-    {
-      "path": "../../client/ui-plugin-manager/tsconfig.client.json"
-    },
-    {
-      "path": "../../client/ui-primitives"
-    },
-    {
-      "path": "../../client/ui-renderer"
+      "path": "../../client/ui-mcp-account"
     },
     {
       "path": "../../client/ui-slots"
-    },
-    {
-      "path": "../../mcp/mcp-client"
-    },
-    {
-      "path": "../../typert/protocol"
-    },
-    {
-      "path": "../../util/values"
     }
   ]
 }
