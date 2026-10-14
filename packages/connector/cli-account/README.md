@@ -86,7 +86,7 @@ The runtime owns the operation lifecycle and the plugin owns the meaning of each
 | [`src/executor.ts`](src/executor.ts) | Bounded command execution and process ownership |
 | [`src/runtime.ts`](src/runtime.ts) | One-at-a-time operations, cancellation, link filtering, failure classification, and the follow stream |
 | [`src/types.ts`](src/types.ts) | The generic Remote view types |
-| [`src/config.ts`](src/config.ts) | The shared config fields |
+| [`src/index.ts`](src/index.ts) | The entry module and the shared config fields |
 
 </details>
 

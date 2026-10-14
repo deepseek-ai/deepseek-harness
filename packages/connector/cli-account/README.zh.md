@@ -86,7 +86,7 @@ const account = new Account({
 | [`src/executor.ts`](src/executor.ts) | 有上限的命令执行与进程归属 |
 | [`src/runtime.ts`](src/runtime.ts) | 一次一个操作、取消、链接过滤、失败分类与订阅流 |
 | [`src/types.ts`](src/types.ts) | 泛型 Remote 视图类型 |
-| [`src/config.ts`](src/config.ts) | 共用配置字段 |
+| [`src/index.ts`](src/index.ts) | 入口模块与共用配置字段 |
 
 </details>
 

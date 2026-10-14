@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { CliAccountConfig } from '../src/config.ts'
+import { CliAccountConfig } from '../src/index.ts'
 
 it('defaults the command deadline and leaves the bin directory to the plugin', () => {
   expect(CliAccountConfig({})).toEqual({ commandTimeoutMs: 30_000 })
