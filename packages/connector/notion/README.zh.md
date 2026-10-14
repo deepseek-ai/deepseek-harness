@@ -75,7 +75,7 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 
 [`cordis.patch.yml`](cordis.patch.yml) 插入一行 id 为 `notion` 的条目，指向本包，因此本包既是 bundle，也是其唯一的一行；`config` 覆盖以该 id 为目标。Host 侧的 [`src/index.ts`](src/index.ts) 进行两项注册，二者都是插件 fiber 的 effect：`ctx.mcpServers.register('notion', …)` 以配置的 `url` 和 OAuth 凭据 key 添加一个 Streamable HTTP 条目，`ctx.systemPrompt.section()` 在 `MCP_SERVERS` 排序位置添加称呼指引。服务器名固定了 `mcp__notion__` 工具命名空间，凭据 key 固定了 grant 地址，因此重新加载或重新安装的插件会得到同样的工具和 grant。管理器在注册时校验条目；如果已配置或已注册的服务器占用了该名称或 key，插件会在添加指引之前加载失败。
 
-浏览器侧的 [`src/client/index.ts`](src/client/index.ts) 挂在 `notion` 行上，因此其注册只在该行开启时存在。每个浏览器插件有一个 `NotionConnection`，镜像管理器的 `watch` 流，只根据 `notion` 条目推导页面状态；它只保存流是否在送达、页面操作是否进行中以及最近一条提示。它注册以包名为 key 的 `plugins.bundle.config` 作为区块、`plugins.bundle.activation` 作为引导、`plugins.detail.badge` 作为标签，以及一个 `shell.overlay` toast。它只为本浏览器发起的尝试打开授权链接，且只打开使用 HTTPS 或回环 HTTP 的链接。
+浏览器侧的 [`src/client/index.ts`](src/client/index.ts) 挂在 `notion` 行上，因此其注册只在该行开启时存在。它注册 `notion` 文案，并调用 `ctx.mcpAccounts.register({ server: 'notion', packageName: '@deepseek-ai/dsh-notion', locale: 'notion' })`；随后由 [`ui-mcp-account`](../../client/ui-mcp-account/README.zh.md) 镜像 `notion` 条目，并提供上文所述的区块、引导、标签与 toast。
 
 </details>
 
@@ -89,7 +89,8 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 - [MCP 客户端](../../mcp/mcp-client/README.zh.md)——连接、工具命名、OAuth grant 刷新与脱敏。
 - [MCP 子系统](../../../docs/subsystems/mcp.zh.md)——各 MCP 包如何协同。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md)——安装与启用。
-- [插件页面](../../client/ui-plugin-manager/README.zh.md#use-this-package)——浏览器侧注册所用的 bundle 详情页 slot。
+- [MCP 账号界面](../../client/ui-mcp-account/README.zh.md)——浏览器侧注册的区块、标签、引导与提示。
+- [插件页面](../../client/ui-plugin-manager/README.zh.md#use-this-package)——这些界面所在的 bundle 详情页。
 
 -----
 
@@ -148,6 +149,6 @@ Notion 的服务器说明（设为 `eager` 时则是其工具）在连接成功�
 <details>
 <summary>维护者工作上下文——点击展开</summary>
 
-Host 侧单测让插件运行在 MCP 管理器和 mcp-client 的回环 OAuth 服务器夹具之上；客户端单测用模拟的管理器流驱动浏览器侧。`notion-plugin` 会话快照在没有已保存 grant 的情况下回放 Notion 行，因此它固定称呼指引，并验证没有请求到达服务器。
+Host 侧单测让插件运行在 MCP 管理器和 mcp-client 的回环 OAuth 服务器夹具之上；客户端单测检查浏览器侧注册文案与账号，并随该行一起移除两者。`notion-plugin` 会话快照在没有已保存 grant 的情况下回放 Notion 行，因此它固定称呼指引，并验证没有请求到达服务器。
 
 </details>

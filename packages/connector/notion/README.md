@@ -75,7 +75,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-no
 
 [`cordis.patch.yml`](cordis.patch.yml) inserts one row with id `notion` naming this package, so the package is both the bundle and its only row; `config` overrides target that id. The Host half, [`src/index.ts`](src/index.ts), makes two registrations, both effects of the plugin's fiber: `ctx.mcpServers.register('notion', …)` adds a Streamable HTTP entry with the configured `url` and OAuth credential key, and `ctx.systemPrompt.section()` adds the naming guidance at the `MCP_SERVERS` order. The server name fixes the `mcp__notion__` tool namespace, and the credential key fixes the grant address, so a reloaded or reinstalled plugin reaches the same tools and grant. The manager validates the entry when it is registered; a configured or registered server that already uses the name or key makes the plugin fail to load before the guidance is added.
 
-The browser half, [`src/client/index.ts`](src/client/index.ts), attaches to the `notion` row, so its registrations exist while that row is on. One `NotionConnection` per browser plugin mirrors the manager's `watch` stream and derives the page state from the `notion` entry alone; it keeps only whether the stream is delivering, whether a page action is pending, and the latest notice. It registers `plugins.bundle.config` keyed by the package name for the section, `plugins.bundle.activation` for the guidance, `plugins.detail.badge` for the tag, and a `shell.overlay` toast. It opens an authorization URL only for the attempt this browser started, and only when the URL uses HTTPS or loopback HTTP.
+The browser half, [`src/client/index.ts`](src/client/index.ts), attaches to the `notion` row, so its registrations exist while that row is on. It registers the `notion` dictionary and calls `ctx.mcpAccounts.register({ server: 'notion', packageName: '@deepseek-ai/dsh-notion', locale: 'notion' })`; [`ui-mcp-account`](../../client/ui-mcp-account/README.md) then mirrors the `notion` entry and contributes the section, guidance, tag, and toast described above.
 
 </details>
 
@@ -89,7 +89,8 @@ The browser half, [`src/client/index.ts`](src/client/index.ts), attaches to the 
 - [MCP client](../../mcp/mcp-client/README.md) — connection, tool naming, OAuth grant refresh, and redaction.
 - [MCP subsystem](../../../docs/subsystems/mcp.md) — how the MCP packages fit together.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation and enablement.
-- [Plugins page](../../client/ui-plugin-manager/README.md#use-this-package) — the bundle page slots the browser half registers into.
+- [MCP account surfaces](../../client/ui-mcp-account/README.md) — the section, tag, guidance, and notices the browser half registers.
+- [Plugins page](../../client/ui-plugin-manager/README.md#use-this-package) — the bundle page those surfaces occupy.
 
 -----
 
@@ -148,6 +149,6 @@ Notion's instructions (or, with `eager`, its tools) appear when the connection s
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-Host specs run the plugin against the MCP manager and the mcp-client loopback OAuth server fixture; client specs drive the browser half with a fake manager stream. The `notion-plugin` session snapshot replays the Notion row without a saved grant, so it pins the naming guidance and verifies that no request reaches the server.
+Host specs run the plugin against the MCP manager and the mcp-client loopback OAuth server fixture; a client spec checks that the browser half registers the dictionary and account and removes both with the row. The `notion-plugin` session snapshot replays the Notion row without a saved grant, so it pins the naming guidance and verifies that no request reaches the server.
 
 </details>

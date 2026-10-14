@@ -24,7 +24,7 @@ Each package in this group is one application plugin that a user installs into a
 
 | Package | Role | ctx key |
 |---|---|---|
-| [`notion/`](notion/README.md) | Registers Notion's hosted MCP server with OAuth through the shared MCP manager and adds the Notion plugin naming guidance | registers on `ctx.mcpServers` and `ctx.systemPrompt` |
+| [`notion/`](notion/README.md) | Registers Notion's hosted MCP server with OAuth through the shared MCP manager, adds the Notion plugin naming guidance, and shows its account on the plugin page | registers on `ctx.mcpServers`, `ctx.systemPrompt`, and `ctx.mcpAccounts` |
 
 -----
 
