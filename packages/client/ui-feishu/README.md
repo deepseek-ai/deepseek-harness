@@ -50,7 +50,7 @@ Leaving the page does not cancel a connection, which the Host owns. Each step op
 
 The Host half, [`src/index.ts`](src/index.ts), is an empty `apply`, present only so the package holds the Loader row the client module system serves the browser half for. The browser half, [`src/client/index.ts`](src/client/index.ts), mounts the `feishu` Remote itself with `ctx.remote.$mount`, because the shipped Remote assembly does not include on-demand packages, and withdraws its registrations before unmounting it.
 
-One `FeishuConnection` per browser plugin, in [`src/client/connection.ts`](src/client/connection.ts), mirrors the Remote's `follow` stream and derives the page state from the Host's view alone; it keeps only whether the stream is delivering, whether a page action is pending, the operation this browser started, and the latest notice. It registers `plugins.bundle.config` keyed by `@deepseek-ai/dsh-feishu` for the section, `plugins.bundle.activation` for the guidance, `plugins.detail.badge` for the tag, and a `shell.overlay` toast. It opens a link only for the operation this browser started, only once, and only over HTTPS. The page's copy lives in this package's `feishu` dictionary.
+[`src/client/connection.ts`](src/client/connection.ts) creates one `CliAccountConnection` from the [CLI plugin page pieces](../ui-cli-account/README.md) per browser plugin over the `feishu` Remote, and derives the page state from the Host's view alone. That connection opens a link only for the operation this browser started, only once, and only over HTTPS. [`src/client/FeishuConnection.tsx`](src/client/FeishuConnection.tsx) renders the shared section, tag, activation prompt, confirmations, and toast with the Feishu actions; the package requests the shared module through `dsh.client.external` instead of bundling it. It registers `plugins.bundle.config` keyed by `@deepseek-ai/dsh-feishu` for the section, `plugins.bundle.activation` for the guidance, `plugins.detail.badge` for the tag, and a `shell.overlay` toast. The page's copy, including the keys the shared pieces read, lives in this package's `feishu` dictionary.
 
 </details>
 
@@ -61,6 +61,7 @@ One `FeishuConnection` per browser plugin, in [`src/client/connection.ts`](src/c
 
 - [Feishu plugin](../../connector/feishu/README.md) — the bundle that inserts this row and the Host row.
 - [Feishu CLI and skills](../../connector/feishu-cli/README.md) — the Host row and the account operations this page drives.
+- [CLI plugin page pieces](../ui-cli-account/README.md) — the shared connection mirror and components this page renders.
 - [ui-plugin-manager](../ui-plugin-manager/README.md) — the Plugins page and the bundle slots the page registers into.
 
 -----

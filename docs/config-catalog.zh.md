@@ -1539,30 +1539,19 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-worktree -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-feishu-cli -->
 <a id="deepseek-aidsh-feishu-cli"></a>
 
 ## `@deepseek-ai/dsh-feishu-cli`
 
 - `inject`: `skills` · `subprocess` · `shellEnv`
+- `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts)
 - `source`: [`packages/connector/feishu-cli/src/index.ts:30`](../packages/connector/feishu-cli/src/index.ts)
 
 ```ts config-catalog
-/** CLI location and command limits. */
-export interface Config extends FeishuCliLimits {
-  /** Absolute directory containing `lark-cli`; defaults to the installed `@larksuite/cli` package. */
-  binDir?: string
-  /** Deadline for app setup or sign-in, which wait for the user in the browser. */
-  authorizationTimeoutMs: number
-}
-
-/** Deployment limits for one native command. */
-export interface FeishuCliLimits {
-  /** Deadline in milliseconds, including executable lookup. */
-  commandTimeoutMs: number
-  /** Maximum stdout bytes retained from one command. */
-  maxOutputBytes: number
-}
+/** Where lark-cli is and how long a command that does not wait for the user may run. */
+export type Config = CliAccountConfig
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-feishu-cli -->
 

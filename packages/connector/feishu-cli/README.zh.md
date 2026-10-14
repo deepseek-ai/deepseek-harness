@@ -47,7 +47,7 @@ kind: "package-reference"
 | `linkApp()` | 运行 `config init --new`，用用户新建或选择的应用替换 CLI 的默认配置，其中的登录和其他应用一并替换；不会登录 |
 | `signIn()` | 为已关联的应用运行 `auth login --json`，并确认登录的是同一个用户 |
 | `signOut()` | 运行 `auth logout --json`，同时退出用户自己终端里的登录，然后重新检查 |
-| `cancel(id)` | 取消该操作并等待其命令退出；已结束的 id 会被忽略 |
+| `cancel(id)` | 在应用配置或登录期间取消该操作并等待其命令退出；其他步骤和已结束的 id 会被忽略 |
 
 检查运行 `auth status --verify --json`。只有 CLI 报告用户可用且已被服务端核实时，账号才是 `connected`；用户缺失、未配置或需要刷新时为 `signed-out`；没有应用时为 `unconfigured`；其他情况为 `unverified`，例如核实时无法连到服务端。除 `unconfigured` 外，每种状态都带有已配置的 `appId`。`config init` 打印的链接和 `auth login` 报告的设备授权链接，只有是 `feishu.cn` 或 `larksuite.com` 上的 HTTPS 地址时才会提供。登录后仍有申请的权限未被授予时（`auth login` 以退出码 3 结束并把它们列为缺失），登录仍算成功；之后需要这些权限的命令会报告缺少哪些。结果分为成功、已取消和失败。失败时，Remote 结果和 Host 日志包含命令、观察到的退出码和已识别的 CLI 错误类别；原生消息、路径和授权数据均不保留。飞书网页显示成功不代表本地凭据已保存。运行 DSH 的进程需要能访问 CLI 配置和系统凭据存储；`DSH_HOME` 不会迁移这两者。
 
@@ -57,8 +57,8 @@ kind: "package-reference"
 |---|---|---|
 | `binDir` | 已安装 `@larksuite/cli` 包的 `bin` | 包含可执行 `lark-cli` 的绝对目录 |
 | `commandTimeoutMs` | `30000` | 单条 skill 命令、账号检查或退出登录的期限，包含可执行文件查找 |
-| `authorizationTimeoutMs` | `600000` | 应用配置或登录的期限，期间等待用户在浏览器中操作 |
-| `maxOutputBytes` | `1048576` | 单条命令保留的 stdout 字节上限 |
+
+应用配置和登录最多等待用户在浏览器中操作 10 分钟，每条命令最多保留 1 MiB 的 stdout；这两个上限由 [CLI 账号库](../cli-account/README.zh.md)固定。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-feishu-cli)是受支持字段的完整来源。
 
@@ -70,7 +70,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是注册为 `ctx.feishu` 的 Remote 服务。它要求 subprocess 运行时位于本 Host，检查 `binDir/lark-cli` 是否可执行，把 `binDir` 作为 `feishu` PATH 贡献注册到 [Shell 环境](../../shell/shell-env/README.zh.md)，并注册 skill 提供方。[`src/cli.ts`](src/cli.ts) 为 subprocess 运行时准备私有 PATH 环境，在其中解析 `lark-cli`，并用同一环境启动解析结果，使后端与 Shell 使用同一个可执行文件。每条命令通过管道读取 stdout 和 stderr，把每个完整行报告给可选的观察方，保留至多 `maxOutputBytes` 的 stdout 和最后 4 KiB 的 stderr，并等待其受管进程范围退出。[`src/account.ts`](src/account.ts) 持有账号操作，并从这些行中读取配置与登录链接。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`src/index.ts`](src/index.ts) 是注册为 `ctx.feishu` 的 Remote 服务。它要求 subprocess 运行时位于本 Host，检查 `binDir/lark-cli` 是否可执行，把 `binDir` 作为 `feishu` PATH 贡献注册到 [Shell 环境](../../shell/shell-env/README.zh.md)，并注册 skill 提供方。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli` 并解析其命令的 JSON 输出。[CLI 账号库](../cli-account/README.zh.md)在私有 PATH 上运行每条命令，使后端与 Shell 使用同一个可执行文件，并一次执行一个账号操作。[`src/account.ts`](src/account.ts) 在该运行时上实现飞书的命令，从命令输出行中读取配置与登录链接，并通过 [`src/diagnostic.ts`](src/diagnostic.ts) 对失败分类。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
 
 [`src/skills.ts`](src/skills.ts) 每次注册只运行一次 `lark-cli skills list --json`。目录读取失败时记录一次日志，并在插件重新加载前保持为空。每次加载运行 `skills read <name> --json`，去掉 frontmatter，把 DSH 指引放在厂商正文之前，把 CLI 的引用文件读取指引放在之后。引用文件内嵌在二进制中，因此 skill 的资源基址是 opaque 类型。
 
@@ -82,6 +82,7 @@ kind: "package-reference"
 ## 进一步探索
 
 - [Connector 包](../README.zh.md)——这个应用插件所属的分组。
+- [CLI 账号库](../cli-account/README.zh.md)——CLI 应用插件共用的命令执行与账号操作。
 - [Shell 环境](../../shell/shell-env/README.zh.md)——后端 subprocess 与 Shell 工具共用的私有 PATH 贡献。
 - [Skills](../../../docs/subsystems/skills.zh.md)——目录发布、加载与优先级。
 - [飞书插件](../feishu/README.zh.md)——插入本行与页面行的 bundle。

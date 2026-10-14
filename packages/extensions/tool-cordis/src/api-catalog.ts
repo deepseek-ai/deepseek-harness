@@ -1163,35 +1163,35 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Registers the CLI and skills, and owns the account operations the Plugins page drives.',
     methods: [
       {
-        signature: '@Remote check(): FeishuOperationId',
+        signature: '@Remote check(): CliOperationId',
         description: 'Check the account again without changing it.',
         parameters: [],
         returns: 'the operation identity.',
         throws: ['while another account operation runs.'],
       },
       {
-        signature: '@Remote linkApp(): FeishuOperationId',
+        signature: '@Remote linkApp(): CliOperationId',
         description: 'Link an app through the CLI\'s setup page, replacing a configured app and its sign-ins.',
         parameters: [],
         returns: 'the operation identity.',
         throws: ['while another account operation runs.'],
       },
       {
-        signature: '@Remote signIn(): FeishuOperationId',
+        signature: '@Remote signIn(): CliOperationId',
         description: 'Sign the linked app\'s user in through the CLI\'s authorization page.',
         parameters: [],
         returns: 'the operation identity.',
         throws: ['while another account operation runs.'],
       },
       {
-        signature: '@Remote signOut(): FeishuOperationId',
+        signature: '@Remote signOut(): CliOperationId',
         description: 'Sign the default account out, which also signs out the user\'s own terminal.',
         parameters: [],
         returns: 'the operation identity.',
         throws: ['while another account operation runs.'],
       },
       {
-        signature: '@Remote cancel(id: FeishuOperationId): Promise<void>',
+        signature: '@Remote cancel(id: CliOperationId): Promise<void>',
         description: 'Cancel one operation and wait for its command to exit.',
         parameters: [{ name: 'id', description: 'the operation to cancel; a finished one is ignored.' }],
         returns: 'after the operation settles.',
@@ -5672,6 +5672,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
   },
   {
+    name: 'CliOperation',
+    declaration: 'export interface CliOperation<Kind extends string, Phase extends string> {\n    readonly id: CliOperationId;\n    readonly kind: Kind;\n    readonly phase: Phase | \'checking\' | \'cancelling\';\n    readonly cancellable: boolean;\n    readonly authorizationUrl?: string;\n}',
+  },
+  {
+    name: 'CliOperationId',
+    declaration: 'export type CliOperationId = Branded<\'CliOperationId\'>;',
+  },
+  {
+    name: 'CliOperationResult',
+    declaration: 'export interface CliOperationResult<Kind extends string, Failure extends CliCommandFailure = CliCommandFailure> {\n    readonly id: CliOperationId;\n    readonly kind: Kind;\n    readonly outcome: \'succeeded\' | \'cancelled\' | \'failed\';\n    readonly failure?: Failure;\n}',
+  },
+  {
     name: 'CollectedOutput',
     declaration: 'export interface CollectedOutput {\n    text: string;\n    truncated: boolean;\n    spillPath?: string;\n}',
   },
@@ -6193,23 +6205,19 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'FeishuOperationFailure',
-    declaration: 'export interface FeishuOperationFailure {\n    readonly command: \'config-init\' | \'auth-status\' | \'auth-login\' | \'auth-logout\';\n    readonly exitCode: number | null;\n    readonly type?: \'validation\' | \'authentication\' | \'authorization\' | \'config\' | \'network\' | \'api\' | \'policy\' | \'internal\' | \'confirmation\';\n    readonly subtype?: \'sdk_error\' | \'storage\' | \'file_io\' | \'not_configured\' | \'invalid_config\' | \'invalid_client\';\n}',
+    declaration: 'export interface FeishuOperationFailure extends CliCommandFailure<\'config-init\' | \'auth-status\' | \'auth-login\' | \'auth-logout\'> {\n    readonly type?: \'validation\' | \'authentication\' | \'authorization\' | \'config\' | \'network\' | \'api\' | \'policy\' | \'internal\' | \'confirmation\';\n    readonly subtype?: \'sdk_error\' | \'storage\' | \'file_io\' | \'not_configured\' | \'invalid_config\' | \'invalid_client\';\n}',
   },
   {
-    name: 'FeishuOperationId',
-    declaration: 'export type FeishuOperationId = Branded<\'FeishuOperationId\'>;',
+    name: 'FeishuOperationKind',
+    declaration: 'export type FeishuOperationKind = \'check\' | \'link-app\' | \'sign-in\' | \'sign-out\';',
   },
   {
-    name: 'FeishuOperationResult',
-    declaration: 'export interface FeishuOperationResult {\n    readonly id: FeishuOperationId;\n    readonly kind: FeishuOperationState[\'kind\'];\n    readonly outcome: \'succeeded\' | \'cancelled\' | \'failed\';\n    readonly failure?: FeishuOperationFailure;\n}',
-  },
-  {
-    name: 'FeishuOperationState',
-    declaration: 'export interface FeishuOperationState {\n    readonly id: FeishuOperationId;\n    readonly kind: \'check\' | \'link-app\' | \'sign-in\' | \'sign-out\';\n    readonly phase: \'checking\' | \'configuring\' | \'authorizing\' | \'verifying\' | \'signing-out\' | \'cancelling\';\n    readonly authorizationUrl?: string;\n}',
+    name: 'FeishuPhase',
+    declaration: 'export type FeishuPhase = \'configuring\' | \'authorizing\' | \'verifying\' | \'signing-out\';',
   },
   {
     name: 'FeishuState',
-    declaration: 'export interface FeishuState {\n    readonly account: FeishuAccountState;\n    readonly operation?: FeishuOperationState;\n    readonly result?: FeishuOperationResult;\n}',
+    declaration: 'export type FeishuState = CliAccountView<FeishuAccountState, FeishuOperationKind, FeishuPhase, FeishuOperationFailure>;',
   },
   {
     name: 'FiberState',

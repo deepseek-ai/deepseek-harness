@@ -47,7 +47,7 @@ The `feishu` Remote serves the Plugins page. It runs at most one account operati
 | `linkApp()` | Runs `config init --new`, which replaces the CLI's default configuration, including its sign-ins and any other app, with the app the user creates or chooses; it does not sign in |
 | `signIn()` | Runs `auth login --json` for the linked app and checks that the same user is signed in |
 | `signOut()` | Runs `auth logout --json`, which also signs out the user's own terminal, then checks again |
-| `cancel(id)` | Cancels that operation and waits for its command to exit; a finished id is ignored |
+| `cancel(id)` | Cancels that operation during app setup or sign-in and waits for its command to exit; other steps and a finished id are ignored |
 
 A check runs `auth status --verify --json`. The account reads `connected` only when the CLI reports an available user that its server verified, `signed-out` when the user is missing, not configured, or needs a refresh, `unconfigured` when no app exists, and `unverified` otherwise, for example when verification cannot reach the server. Every state except `unconfigured` carries the configured `appId`. Each link that `config init` prints and each device-authorization link that `auth login` reports is offered only when it is an HTTPS address on `feishu.cn` or `larksuite.com`. A sign-in that leaves requested permissions ungranted (`auth login` exits with code 3 and lists them as missing) still succeeds; a command that later needs a missing permission reports it. Results report succeeded, cancelled, or failed. Failures include the command, observed exit code, and recognized CLI error categories in the Remote result and Host log; native messages, paths, and authorization data are omitted. A successful Feishu webpage does not confirm that local credentials were saved. The process running DSH needs access to the CLI configuration and system credential storage; `DSH_HOME` does not relocate either.
 
@@ -57,8 +57,8 @@ A check runs `auth status --verify --json`. The account reads `connected` only w
 |---|---|---|
 | `binDir` | the installed `@larksuite/cli` package's `bin` | Absolute directory containing an executable `lark-cli` |
 | `commandTimeoutMs` | `30000` | Deadline for one skill command, account check, or sign-out, including executable lookup |
-| `authorizationTimeoutMs` | `600000` | Deadline for app setup or sign-in, which wait for the user in the browser |
-| `maxOutputBytes` | `1048576` | Maximum stdout bytes retained from one command |
+
+App setup and sign-in wait up to 10 minutes for the user in the browser, and each command keeps at most 1 MiB of stdout; the [CLI account library](../cli-account/README.md) fixes both limits.
 
 The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-feishu-cli) is the exhaustive source of supported fields.
 
@@ -70,7 +70,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-fe
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.feishu`. It requires a Host subprocess runtime, checks that `binDir/lark-cli` is executable, registers `binDir` with [Shell environment](../../shell/shell-env/README.md) as the `feishu` PATH contribution, and registers the skill provider. [`src/cli.ts`](src/cli.ts) prepares the private PATH environment for the subprocess runtime, resolves `lark-cli` in it, and spawns the result with that environment, so the backend and the Shell use the same executable. Each command reads stdout and stderr through pipes, reports each complete line to an optional observer, keeps stdout up to `maxOutputBytes` and the last 4 KiB of stderr, and waits for its managed process range to exit. [`src/account.ts`](src/account.ts) owns the account operations and reads setup and sign-in links from those lines. Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.feishu`. It requires a Host subprocess runtime, checks that `binDir/lark-cli` is executable, registers `binDir` with [Shell environment](../../shell/shell-env/README.md) as the `feishu` PATH contribution, and registers the skill provider. [`src/cli.ts`](src/cli.ts) locates `lark-cli` and parses the JSON output of its commands. The [CLI account library](../cli-account/README.md) runs each command on the private PATH, so the backend and the Shell use the same executable, and runs one account operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the Feishu commands, reads setup and sign-in links from their output lines, and classifies failures through [`src/diagnostic.ts`](src/diagnostic.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
 [`src/skills.ts`](src/skills.ts) runs `lark-cli skills list --json` once per registration. A failed catalog is logged once and stays empty until the plugin reloads. Each load runs `skills read <name> --json`, removes the frontmatter, and places the DSH guidance before the vendor body and the CLI's reference-reading guidance after it. References are embedded in the binary, so the skill's resource base is opaque.
 
@@ -82,6 +82,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-fe
 ## Further Exploration
 
 - [Connector packages](../README.md) — the group this application plugin belongs to.
+- [CLI account library](../cli-account/README.md) — command execution and account operations shared by CLI app plugins.
 - [Shell environment](../../shell/shell-env/README.md) — private PATH contributions shared by backend subprocesses and Shell tools.
 - [Skills](../../../docs/subsystems/skills.md) — catalog publication, loading, and precedence.
 - [Feishu plugin](../feishu/README.md) — the bundle that inserts this row and the page row.

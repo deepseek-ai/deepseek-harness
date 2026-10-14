@@ -379,35 +379,35 @@ Registers the CLI and skills, and owns the account operations the Plugins page d
  * @returns the operation identity.
  * @throws while another account operation runs.
  */
-@Remote check(): FeishuOperationId
+@Remote check(): CliOperationId
 
 /**
  * Link an app through the CLI's setup page, replacing a configured app and its sign-ins.
  * @returns the operation identity.
  * @throws while another account operation runs.
  */
-@Remote linkApp(): FeishuOperationId
+@Remote linkApp(): CliOperationId
 
 /**
  * Sign the linked app's user in through the CLI's authorization page.
  * @returns the operation identity.
  * @throws while another account operation runs.
  */
-@Remote signIn(): FeishuOperationId
+@Remote signIn(): CliOperationId
 
 /**
  * Sign the default account out, which also signs out the user's own terminal.
  * @returns the operation identity.
  * @throws while another account operation runs.
  */
-@Remote signOut(): FeishuOperationId
+@Remote signOut(): CliOperationId
 
 /**
  * Cancel one operation and wait for its command to exit.
  * @param id - the operation to cancel; a finished one is ignored.
  * @returns after the operation settles.
  */
-@Remote cancel(id: FeishuOperationId): Promise<void>
+@Remote cancel(id: CliOperationId): Promise<void>
 
 /**
  * Follow the account and its operations independently of any page; each new subscriber starts a check when none runs.
