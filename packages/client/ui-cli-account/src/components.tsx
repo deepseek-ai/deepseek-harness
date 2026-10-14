@@ -34,12 +34,13 @@ export interface CliAccountSectionProps {
   readonly actions?: ReactNode
   readonly detail?: string | undefined
   readonly failure?: string | undefined
+  readonly diagnostic?: string | undefined
   readonly hint: string
   readonly children?: ReactNode
 }
 
 export function CliAccountSection(props: CliAccountSectionProps): ReactNode {
-  const { packageName, phase, title, status, actions, detail, failure, hint, children } = props
+  const { packageName, phase, title, status, actions, detail, failure, diagnostic, hint, children } = props
   return (
     <div className={css.section} data-cli-account={phase} data-cli-account-package={packageName}>
       <h4 className={css.title}>{title}</h4>
@@ -50,7 +51,7 @@ export function CliAccountSection(props: CliAccountSectionProps): ReactNode {
       </CliAccountRow>
       {detail === undefined ? null : <p className={css.detail}>{detail}</p>}
       {children}
-      {failure === undefined ? null : <p className={css.failure} role="alert">{failure}</p>}
+      {failure === undefined ? null : <p className={css.failure} role="alert">{failure}{diagnostic === undefined ? null : <> {diagnostic}</>}</p>}
       <p className={css.hint}>{hint}</p>
     </div>
   )
