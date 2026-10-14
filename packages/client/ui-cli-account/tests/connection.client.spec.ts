@@ -84,7 +84,7 @@ it('mirrors the Host view through the plugin stream', async () => {
   expect(b.options().ended(true).message).toBe('Fixture connection stream ended')
   await b.publish(OUT)
   expect(b.snapshot()).toMatchObject({ view: OUT, linked: true, stopped: false, busy: false })
-  b.options().carrierFailed?.(new Error('lost') as never)
+  b.options().carrierFailed?.(new Error('lost'))
   expect(b.snapshot().linked).toBe(false)
 })
 

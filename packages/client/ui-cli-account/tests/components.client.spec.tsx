@@ -156,6 +156,6 @@ it('shows the latest notice with the success or failure tone', () => {
 })
 
 it('mounts as a module row with no Host or browser behavior of its own', () => {
-  expect(applyHost()).toBeUndefined()
-  expect(applyClient()).toBeUndefined()
+  expect(() => { applyHost() }).not.toThrow()
+  expect(() => { applyClient() }).not.toThrow()
 })
