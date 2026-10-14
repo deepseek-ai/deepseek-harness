@@ -367,6 +367,44 @@ abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserI
 
 Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)
 
+<a id="ctxwecom--wecom"></a>
+
+### `ctx.wecom` — `Wecom`
+
+Registers the CLI and skills, and owns the authorization operations the Plugins page drives.
+
+```ts cordis-catalog
+/**
+ * Check the authorization again without changing it.
+ * @returns the operation identity.
+ * @throws while another operation runs.
+ */
+@Remote check(): CliOperationId
+
+/**
+ * Bind a bot through the CLI's QR-code page.
+ * @returns the operation identity.
+ * @throws while another operation runs.
+ */
+@Remote connect(): CliOperationId
+
+/**
+ * Cancel one operation while it waits for the QR-code scan, and wait for its command to exit.
+ * @param id - the operation to cancel; a finished one or another step is ignored.
+ * @returns after the operation settles, or at once when nothing is cancelled.
+ */
+@Remote cancel(id: CliOperationId): Promise<void>
+
+/**
+ * Follow the authorization and its operations independently of any page; each new subscriber starts a check when none runs.
+ * @param signal - the Client's observation lifetime.
+ * @returns the current view, then each changed view.
+ */
+@Remote({ mode: 'stream' }) async *follow(signal: AbortSignal): AsyncIterable<WecomState>
+```
+
+Source: [`packages/connector/wecom-cli/src/index.ts`](../../packages/connector/wecom-cli/src/index.ts)
+
 <a id="authorization-events"></a>
 
 ### `authorization/*` events

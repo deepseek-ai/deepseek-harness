@@ -382,6 +382,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Projects the user-settings seam onto the generated Remote namespace: the read is always redacted and every refusal is classified here, not on the seam Definition.',
   },
   {
+    key: 'wecom',
+    pkg: 'wecom-cli',
+    title: 'WeCom wecom-cli authorization Remote',
+    mode: 'service',
+    consumers: ['client-ui-wecom'],
+    note: 'Runs one Host-owned wecom-cli authorization check or QR-code connection at a time and streams the authorization view to the Plugins page.',
+  },
+  {
     key: 'workspaceFiles',
     pkg: 'api-workspace-files',
     title: 'Host workspace file Remote service',

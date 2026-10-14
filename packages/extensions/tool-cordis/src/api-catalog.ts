@@ -4249,6 +4249,39 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'wecom',
+    summary: 'Registers the CLI and skills, and owns the authorization operations the Plugins page drives.',
+    description: 'Registers the CLI and skills, and owns the authorization operations the Plugins page drives.',
+    methods: [
+      {
+        signature: '@Remote check(): CliOperationId',
+        description: 'Check the authorization again without changing it.',
+        parameters: [],
+        returns: 'the operation identity.',
+        throws: ['while another operation runs.'],
+      },
+      {
+        signature: '@Remote connect(): CliOperationId',
+        description: 'Bind a bot through the CLI\'s QR-code page.',
+        parameters: [],
+        returns: 'the operation identity.',
+        throws: ['while another operation runs.'],
+      },
+      {
+        signature: '@Remote cancel(id: CliOperationId): Promise<void>',
+        description: 'Cancel one operation while it waits for the QR-code scan, and wait for its command to exit.',
+        parameters: [{ name: 'id', description: 'the operation to cancel; a finished one or another step is ignored.' }],
+        returns: 'after the operation settles, or at once when nothing is cancelled.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<WecomState>',
+        description: 'Follow the authorization and its operations independently of any page; each new subscriber starts a check when none runs.',
+        parameters: [{ name: 'signal', description: 'the Client\'s observation lifetime.' }],
+        returns: 'the current view, then each changed view.',
+      },
+    ],
+  },
+  {
     key: 'workflowEngine',
     summary: 'Workflow Service Definition contract.',
     description: 'Workflow Service Definition contract. Invalid requests throw before publication; a live run is holder-owned, its result never rejects, and disposal waits for script and child cleanup. Lifecycle listener failures are contained, and `workflow/end` fires exactly once as the result settles.',
@@ -5623,6 +5656,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ClientArtifactBaseline',
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
+  },
+  {
+    name: 'CliOperation',
+    declaration: 'export interface CliOperation<Kind extends string, Phase extends string> {\n    readonly id: CliOperationId;\n    readonly kind: Kind;\n    readonly phase: Phase | \'checking\' | \'cancelling\';\n    readonly cancellable: boolean;\n    readonly authorizationUrl?: string;\n}',
+  },
+  {
+    name: 'CliOperationId',
+    declaration: 'export type CliOperationId = Branded<\'CliOperationId\'>;',
+  },
+  {
+    name: 'CliOperationResult',
+    declaration: 'export interface CliOperationResult<Kind extends string, Failure extends CliCommandFailure = CliCommandFailure> {\n    readonly id: CliOperationId;\n    readonly kind: Kind;\n    readonly outcome: \'succeeded\' | \'cancelled\' | \'failed\';\n    readonly failure?: Failure;\n}',
   },
   {
     name: 'CollectedOutput',
@@ -9659,6 +9704,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WebUpgradeRoute',
     declaration: 'export interface WebUpgradeRoute {\n    path: string;\n    handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void | Promise<void>;\n}',
+  },
+  {
+    name: 'WecomAccountState',
+    declaration: 'export interface WecomAccountState {\n    readonly state: \'unchecked\' | \'unauthorized\' | \'authorized\';\n}',
+  },
+  {
+    name: 'WecomOperationFailure',
+    declaration: 'export type WecomOperationFailure = CliCommandFailure<\'auth-init\' | \'auth-status\'>;',
+  },
+  {
+    name: 'WecomOperationKind',
+    declaration: 'export type WecomOperationKind = \'check\' | \'connect\';',
+  },
+  {
+    name: 'WecomPhase',
+    declaration: 'export type WecomPhase = \'authorizing\';',
+  },
+  {
+    name: 'WecomState',
+    declaration: 'export type WecomState = CliAccountView<WecomAccountState, WecomOperationKind, WecomPhase, WecomOperationFailure>;',
   },
   {
     name: 'WeeklyInput',

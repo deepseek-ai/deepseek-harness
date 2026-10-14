@@ -1,0 +1,140 @@
+---
+description: "Put the official wecom-cli on the private Shell PATH, load its skills, and run the authorization operations the Plugins page drives."
+kind: "package-reference"
+---
+
+# @deepseek-ai/dsh-wecom-cli
+
+English | [中文](README.zh.md)
+
+## Summary
+
+This package is the Host row of the [WeCom plugin](../wecom/README.md). It installs a pinned `@wecom/cli`, puts its `wecom-cli` executable on the private Shell PATH, and registers the official WeCom skills it ships. Its `wecom` Remote checks the CLI's authorization, binds a bot through the CLI's QR-code page, and cancels, for the [WeCom plugin page](../../client/ui-wecom/README.md). The CLI keeps the bot credentials in its default configuration, which the user's own terminal shares. Only macOS is supported.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Understand the implementation](#understand-the-implementation)
+- [Further Exploration](#further-exploration)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## Use this package
+
+### Add it to a profile
+
+Install the [WeCom plugin bundle](../wecom/README.md), which inserts this package as the `wecom` row. Until the executable exists, the plugin fails to load with an error that names the missing path or platform package.
+
+### What you get
+
+After the plugin loads, the official skills, such as `wecomcli-doc`, `wecomcli-message`, and `wecomcli-shared`, join the skill catalog. The agent loads one with the `skill` tool and runs `wecom-cli` commands through the ordinary Shell tools under the current sandbox and approval policy. When `wecom-cli auth show --status` reports no authorization, the agent asks the user to connect WeCom on the plugin page; it runs the CLI's own `auth init` only when the user asks to finish it in the conversation, with single-command approval because it writes outside the workspace.
+
+Turning the row off in Plugin Manager withdraws the skills and the private PATH entry for later Shell calls. The CLI authorization stays in place.
+
+<a id="account-operations"></a>
+### Authorization operations
+
+The `wecom` Remote serves the Plugins page. It runs at most one operation at a time, owned by the Host, so leaving the page does not cancel it.
+
+| Method | Effect |
+|---|---|
+| `follow(signal)` | Streams the authorization, the operation in progress, and the last result; each new follower starts a check when no operation runs |
+| `check()` | Checks the authorization again; returns the operation id |
+| `connect()` | Runs `auth init --noninteractive --no-browser`, waits for the user to scan the QR code, then checks that the CLI reports the bot authorized |
+| `cancel(id)` | Cancels that operation while it waits for the scan and waits for its command to exit; other steps and a finished id are ignored |
+
+A check runs `auth show --status`. The authorization reads `authorized` or `unauthorized` exactly as the CLI prints it; any other output or a nonzero exit fails the check and keeps the previous state. Each link that `auth init` prints alone on a stdout line is offered only when it is an HTTPS address on `work.weixin.qq.com`. Results report succeeded, cancelled, or failed. Failures include the command and the observed exit code in the Remote result and Host log; the CLI's output, which can carry the QR-code session, is omitted. `wecom-cli` has no command that revokes the authorization, so the plugin offers no disconnect. The process running DSH needs access to the CLI configuration; `DSH_HOME` does not relocate it.
+
+### Configure
+
+| Field | Default | Meaning |
+|---|---|---|
+| `binDir` | the installed `@wecom/cli-<platform>-<arch>` package's `bin` | Absolute directory containing an executable `wecom-cli` |
+| `commandTimeoutMs` | `30000` | Deadline for one authorization check, including executable lookup |
+
+QR-code authorization waits up to 10 minutes for the user, and each command keeps at most 1 MiB of stdout; the [CLI account library](../cli-account/README.md) fixes both limits.
+
+The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-wecom-cli) is the exhaustive source of supported fields.
+
+-----
+
+<a id="understand-the-implementation"></a>
+## Understand the implementation
+
+<details>
+<summary>Implementation internals — click to expand</summary>
+
+[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.wecom`. It requires a Host subprocess runtime, checks that `binDir/wecom-cli` is executable, registers `binDir` with [Shell environment](../../shell/shell-env/README.md) as the `wecom` PATH contribution, and mounts a [filesystem skill provider](../../skill/skill-filesystem/README.md) named `wecom` over this package's `skills/` directory, without the default roots or watching. [`src/directory.ts`](src/directory.ts) resolves the platform package that `@wecom/cli` installs as an optional dependency. The [CLI account library](../cli-account/README.md) runs each command on the private PATH, so the backend and the Shell use the same executable, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the WeCom commands and reads the QR-code link from the output lines of `auth init`. Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+
+[`skills/`](skills) is a copy of `skills/` from `WecomTeam/wecom-cli` at commit `4c74ff2`, because upstream publishes the skills only in that repository and not in the npm package. Only `wecomcli-shared/SKILL.md` differs: it uses the plugin's `wecom-cli` instead of installing one, and sends authorization to the plugin page. References are ordinary files in each skill's directory.
+
+</details>
+
+-----
+
+<a id="further-exploration"></a>
+## Further Exploration
+
+- [Connector packages](../README.md) — the group this application plugin belongs to.
+- [CLI account library](../cli-account/README.md) — command execution and account operations shared by CLI app plugins.
+- [Shell environment](../../shell/shell-env/README.md) — private PATH contributions shared by backend subprocesses and Shell tools.
+- [Skills](../../../docs/subsystems/skills.md) — catalog publication, loading, and precedence.
+- [WeCom plugin](../wecom/README.md) — the bundle that inserts this row and the page row.
+- [WeCom plugin page](../../client/ui-wecom/README.md) — the Plugins page that drives the authorization operations.
+
+-----
+
+<a id="model-experience"></a>
+## Model Experience
+
+### Skill catalog entries
+
+#### What the model sees
+
+Each of the 15 bundled skills appears in the skill catalog with its upstream name and Chinese description; the catalog owner shortens long descriptions. The `wecomcli-shared` description tells the agent to check authorization before the first `wecom-cli` command and to send the user to the WeCom plugin page when it is missing.
+
+#### Token effect
+
+The entries stay in context while the plugin is loaded. Their names and descriptions total about 3,700 characters.
+
+#### KV Cache effect
+
+The catalog is fixed for one plugin version. Loading or unloading the plugin changes the catalog, which is republished as a new message and leaves earlier context in place.
+
+### Loaded skill body
+
+#### What the model sees
+
+A `skill` tool result contains the skill's `SKILL.md` body, and its resource base is the skill's directory, so referenced files are read with the ordinary file tools. The `wecomcli-shared` body tells the agent to run the plugin's `wecom-cli` by name, to ask the user to connect on the plugin page before running `auth init --noninteractive` itself, and to run that command with single-command approval.
+
+#### Token effect
+
+Each load adds one body to the retained tool history. Reference files arrive as ordinary file-read output.
+
+#### KV Cache effect
+
+Loading appends a tool result and does not rewrite earlier context.
+
+## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
+
+- Only macOS is supported. Other platforms are unverified, and the Windows executable name `wecom-cli.exe` is not located.
+- The plugin requires a subprocess runtime on this Host and fails to load when the composition's subprocess runtime runs elsewhere, such as over SSH.
+- The plugin uses the CLI's default configuration. Authorizing from DSH affects the user's own terminal, and there is no DSH-private bot or bot picker. `wecom-cli` cannot revoke the authorization, so neither the page nor turning the plugin off removes it.
+- Connection reads the QR-code link from the plain-text output of `auth init --noninteractive --no-browser`; a CLI version that changes that output fails the connection with a retryable result.
+- The bundled skills follow upstream commit `4c74ff2`; updating them is a manual copy that must keep the `wecomcli-shared` changes.
+
+<a id="dev-note"></a>
+### Dev Note
+
+<details>
+<summary>Working context for maintainers — click to expand</summary>
+
+`.gitattributes` marks `skills/**` as vendored and exempts it from whitespace checks, so the copy keeps upstream whitespace. Specs and the `wecom-skills` session snapshot use stand-in executables through `binDir`.
+
+</details>

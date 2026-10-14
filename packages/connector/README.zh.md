@@ -26,6 +26,8 @@ kind: "package-group"
 |---|---|---|
 | [`cli-account/`](cli-account/README.zh.md) | 为 CLI 应用插件按绝对路径运行厂商 CLI，在运行时上下文中把这个路径告诉模型，并在 Host 上一次执行一个账号操作 | — |
 | [`upstream-skills/`](upstream-skills/README.zh.md) | 从厂商 GitHub 仓库的固定提交下载 CLI 应用插件入口技能索引的上游文件，校验并缓存，再在这些文件之上列出入口技能 | — |
+| [`wecom/`](wecom/README.zh.md) | 打包企业微信插件：`wecom-cli` Host 行及其插件页行 | — |
+| [`wecom-cli/`](wecom-cli/README.zh.md) | 把官方 `wecom-cli` 安装到私有 Shell PATH 上，注册其 skill，并执行插件页发起的授权操作 | `ctx.wecom`；注册到 `ctx.skills` 与 `ctx.shellEnv` |
 
 -----
 

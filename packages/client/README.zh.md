@@ -87,6 +87,7 @@ kind: "package-group"
 | [`ui-entry-customization/`](ui-entry-customization/README.zh.md) | 添加分区域的“更多”菜单，固定或收起插件入口，并开始创建插件的草稿 | — |
 | [`ui-plugin-market/`](ui-plugin-market/README.zh.md) | 为“插件”页面贡献“发现”标签页：浏览市场索引并安装其中的组合包 | — |
 | [`ui-settings-plugin-inventory/`](ui-settings-plugin-inventory/README.zh.md) | 向「插件」设置贡献只读的 Host Loader 清单标签页 | — |
+| [`ui-wecom/`](ui-wecom/README.zh.md) | 在插件页显示企业微信插件的授权区块、授权标签、开启引导和提示 | — |
 | [`ui-deliverables/`](ui-deliverables/README.zh.md) | 生成改动文件卡片及其对比 tab、交付文件卡片与可点击的最终响应文件引用 | — |
 | [`ui-message-feedback/`](ui-message-feedback/README.zh.md) | 提供消息赞踩，以及从赞踩、`/feedback` 或会话标题栏菜单打开的反馈弹窗 | `ctx.feedbackUi` |
 | [`ui-directory-picker-browse/`](ui-directory-picker-browse/README.zh.md) | 面向工作区目录流程的应用内目录浏览界面 | — |
