@@ -1,0 +1,8 @@
+version: 1
+scenario: tencent-docs-plugin
+profile: headless
+composition: tencent-docs-plugin
+recording: authored
+header:
+  class: tencent-docs-plugin
+  pin: true
