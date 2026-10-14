@@ -9,8 +9,10 @@ import { assertNever } from '@deepseek-ai/dsh-util-values'
 /** The npm package whose bundle page carries the connection section. */
 export const FEISHU_PACKAGE = '@deepseek-ai/dsh-feishu'
 
+/** Outcomes the page reports after an operation this browser started succeeds. */
 export type FeishuNotice = 'app-linked' | 'connected' | 'signed-out'
 
+/** The page's whole view: the Host's account view plus this browser's stream, pending action, and notice. */
 export type ConnectionSnapshot = CliAccountSnapshot<FeishuState, FeishuNotice>
 
 /** The step a connection or sign-out in progress shows. */
@@ -90,6 +92,11 @@ export function presentConnection(snapshot: Pick<ConnectionSnapshot, 'view' | 's
   }
 }
 
+/**
+ * Mirror the `feishu` Remote and bind the page's actions to it.
+ * @param ctx - the browser plugin context whose Remote the connection follows.
+ * @returns the connection to dispose with the plugin, and the face the slot entries inject.
+ */
 export function createConnection(ctx: Context): { connection: CliAccountConnection<FeishuState, FeishuNotice>; face: ConnectionFace } {
   const connection = new CliAccountConnection<FeishuState, FeishuNotice>(ctx, {
     name: 'Feishu connection',
