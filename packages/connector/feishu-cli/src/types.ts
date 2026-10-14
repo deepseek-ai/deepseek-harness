@@ -12,8 +12,10 @@ export type FeishuAccountState =
   | { readonly state: 'signed-out' | 'unverified'; readonly appId: FeishuAppId }
   | { readonly state: 'connected'; readonly appId: FeishuAppId; readonly userName?: string }
 
+/** The account operations the Plugins page starts. */
 export type FeishuOperationKind = 'check' | 'link-app' | 'sign-in' | 'sign-out'
 
+/** Feishu steps of an operation, besides the runtime's `checking` and `cancelling`. */
 export type FeishuPhase = 'configuring' | 'authorizing' | 'verifying' | 'signing-out'
 
 /** Safe account-command diagnostics; native messages, paths, and credentials are excluded. */
@@ -24,4 +26,5 @@ export interface FeishuOperationFailure extends CliCommandFailure<'config-init' 
   readonly subtype?: 'sdk_error' | 'storage' | 'file_io' | 'not_configured' | 'invalid_config' | 'invalid_client'
 }
 
+/** The complete Feishu view a Remote client replaces on every change. */
 export type FeishuState = CliAccountView<FeishuAccountState, FeishuOperationKind, FeishuPhase, FeishuOperationFailure>

@@ -1,10 +1,12 @@
 /** Host-owned check, connection, and sign-out of the CLI's default Feishu account. */
 
+import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import z from 'zod'
-import { CliAccountRuntime, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
+import { CliAccountRuntime, type CliCommandExecutor, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { parseJson } from './cli.ts'
+import { commandFailure } from './diagnostic.ts'
 import type { FeishuAccountState, FeishuAppId, FeishuOperationFailure, FeishuOperationKind, FeishuPhase } from './types.ts'
 
 const NotConfigured = z.object({ ok: z.literal(false), error: z.object({ subtype: z.literal('not_configured') }) })
@@ -27,6 +29,23 @@ interface Check { account: FeishuAccountState; openId?: string | undefined }
 
 /** Runs at most one account operation at a time; subscribers observe it without owning it. */
 export class FeishuAccount extends CliAccountRuntime<FeishuAccountState, FeishuOperationKind, FeishuPhase, FeishuOperationFailure> {
+  /**
+   * @param cli - the lark-cli executor the account runs commands with and disposes.
+   * @param logger - receives classified operation failures.
+   */
+  constructor(cli: CliCommandExecutor, logger: Context['logger']) {
+    super({
+      name: 'feishu',
+      cli,
+      logger,
+      account: { state: 'unchecked' },
+      check: 'check',
+      cancellable: ['configuring', 'authorizing'],
+      authorizationHosts: ['feishu.cn', 'larksuite.com'],
+      classify: commandFailure,
+    })
+  }
+
   protected async perform(kind: FeishuOperationKind, control: Control, signal: AbortSignal): Promise<void> {
     switch (kind) {
       case 'check':
@@ -57,9 +76,7 @@ export class FeishuAccount extends CliAccountRuntime<FeishuAccountState, FeishuO
       awaitsUser: true,
       onLine: (stream, line) => {
         const link = stream === 'stderr' && !offered ? CONFIG_LINK.exec(line) : null
-        if (link === null) return
-        offered = true
-        control.offer(link[1] as string)
+        if (link !== null) offered = control.offer(link[1] as string)
       },
     })
     if (setup.exitCode !== 0) throw new Error('feishu: config init failed')

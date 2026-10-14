@@ -14,7 +14,6 @@ import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import { FeishuAccount } from './account.ts'
 import { PROGRAM, resolveCliDirectory } from './cli.ts'
-import { commandFailure } from './diagnostic.ts'
 import { FeishuSkillProvider } from './skills.ts'
 import type { FeishuState } from './types.ts'
 
@@ -27,6 +26,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/** Where lark-cli is and how long a command that does not wait for the user may run. */
 export type Config = CliAccountConfig
 
 /** Registers the CLI and skills, and owns the account operations the Plugins page drives. */
@@ -38,7 +38,7 @@ export default class Feishu extends TypertRemoteService {
 
   /**
    * @param ctx - Context carrying the skill registry, subprocess runtime, and Shell environment.
-   * @param config - CLI location and command limits.
+   * @param config - CLI location and command deadline.
    * @throws when the subprocess runtime does not run on this Host or `lark-cli` is not executable.
    */
   constructor(ctx: Context, config: Config) {
@@ -48,16 +48,7 @@ export default class Feishu extends TypertRemoteService {
     }
     ctx.shellEnv.registerPath({ name: 'feishu', directories: [resolveCliDirectory(config.binDir)] })
     const cli = new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: config.commandTimeoutMs })
-    this.account = new FeishuAccount({
-      name: 'feishu',
-      cli,
-      logger: ctx.logger,
-      account: { state: 'unchecked' },
-      check: 'check',
-      cancellable: ['configuring', 'authorizing'],
-      authorizationHosts: ['feishu.cn', 'larksuite.com'],
-      classify: commandFailure,
-    })
+    this.account = new FeishuAccount(cli, ctx.logger)
     ctx.effect(() => () => this.account.dispose())
     ctx.skills.registerProvider(control => new FeishuSkillProvider(cli, control, ctx.logger))
   }

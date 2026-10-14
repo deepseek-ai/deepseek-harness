@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Feishu from '../src/index.ts'
 import { byArguments, CATALOG, createBinDir, DOC_SKILL, ScriptedSubprocess } from './harness.ts'
 
-const CONFIG = { commandTimeoutMs: 5_000, authorizationTimeoutMs: 5_000, maxOutputBytes: 1_048_576 }
+const CONFIG = { commandTimeoutMs: 5_000 }
 const LIST = 'skills list --json'
 const READ = 'skills read lark-doc --json'
 

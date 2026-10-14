@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { CliCommandExecutor } from '@deepseek-ai/dsh-cli-account'
 
+/** The executable name the plugin resolves on its private PATH. */
 export const PROGRAM = 'lark-cli'
 
 /**
@@ -43,6 +44,14 @@ export function parseJson(args: readonly string[], stdout: string): unknown {
   }
 }
 
+/**
+ * Run one command and parse its JSON stdout.
+ * @param cli - the plugin's lark-cli executor.
+ * @param args - native arguments without the executable.
+ * @param signal - the caller's lifetime.
+ * @returns unvalidated JSON for the caller to check.
+ * @throws when the command fails, exits nonzero, or prints invalid JSON.
+ */
 export async function runJson(cli: CliCommandExecutor, args: readonly string[], signal: AbortSignal): Promise<unknown> {
   const result = await cli.run(args, signal)
   if (result.exitCode !== 0) {
