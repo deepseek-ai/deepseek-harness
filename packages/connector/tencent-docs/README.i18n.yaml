@@ -1,0 +1,73 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/tencent-docs/README.md
+/:
+  en: f2aa025c1a83f5d1
+  zh: cd338274e8c0369d
+/deepseek-ai-dsh-tencent-docs:
+  en: ff0576142fce4834
+  zh: d023d707f178caca
+/deepseek-ai-dsh-tencent-docs/summary:
+  en: b91cc54f43618cda
+  zh: 99bc03902c3dba77
+/deepseek-ai-dsh-tencent-docs/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tencent-docs/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-tencent-docs/use-this-package/install-into-a-profile:
+  en: a93aa488bc5c54a6
+  zh: 30ac2c467966dd10
+/deepseek-ai-dsh-tencent-docs/use-this-package/authorize-and-sign-out:
+  en: cbe51f5cb255d342
+  zh: 4a3c553635088348
+/deepseek-ai-dsh-tencent-docs/use-this-package/turn-off-and-uninstall:
+  en: cdf842ac6315592d
+  zh: 4da861bf7b4b0103
+/deepseek-ai-dsh-tencent-docs/use-this-package/configure:
+  en: 78ac23e5b8c3b3b8
+  zh: c7647d4d295b09a1
+/deepseek-ai-dsh-tencent-docs/understand-the-implementation:
+  en: 3ac98d09b56ac8d1
+  zh: 64f833c592e1fbda
+/deepseek-ai-dsh-tencent-docs/further-exploration:
+  en: e49745a851cd5ca9
+  zh: 1b7b0f0d595d7ad7
+/deepseek-ai-dsh-tencent-docs/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tencent-docs/model-experience/naming-and-connection-guidance:
+  en: 01b6ec6d681e457b
+  zh: 7fe0d1c9d1037bd4
+/deepseek-ai-dsh-tencent-docs/model-experience/naming-and-connection-guidance/what-the-model-sees:
+  en: 88651686be8bfac8
+  zh: 565d22517eb75caa
+/deepseek-ai-dsh-tencent-docs/model-experience/naming-and-connection-guidance/what-the-model-sees/guidance-text:
+  en: 8f57292f6821da96
+  zh: b2d3bc7e5c9cbc05
+/deepseek-ai-dsh-tencent-docs/model-experience/naming-and-connection-guidance/token-effect:
+  en: 812c054e7afd6a52
+  zh: a0a37d2cd2720eaf
+/deepseek-ai-dsh-tencent-docs/model-experience/naming-and-connection-guidance/kv-cache-effect:
+  en: e9668826c9355444
+  zh: 66f609e3779fd510
+/deepseek-ai-dsh-tencent-docs/model-experience/tencent-docs-server-tools-and-instructions:
+  en: 9b36d4220cb15c69
+  zh: c4a42cf41e188a96
+/deepseek-ai-dsh-tencent-docs/model-experience/tencent-docs-server-tools-and-instructions/what-the-model-sees:
+  en: eaea4730c358d5c0
+  zh: c842a7b432589be6
+/deepseek-ai-dsh-tencent-docs/model-experience/tencent-docs-server-tools-and-instructions/token-effect:
+  en: 8626d47f5f3f7568
+  zh: 06637feeb3616bf4
+/deepseek-ai-dsh-tencent-docs/model-experience/tencent-docs-server-tools-and-instructions/kv-cache-effect:
+  en: 9312b232c399e82b
+  zh: 20b0e3ebcbee803a
+/deepseek-ai-dsh-tencent-docs/known-limitations-and-deferred-work:
+  en: 1247abbc5ca63d64
+  zh: e8ab350f9970bfe4
+/deepseek-ai-dsh-tencent-docs/known-limitations-and-deferred-work/dev-note:
+  en: cbdc1955cbaffe59
+  zh: e6f515c91503bc08

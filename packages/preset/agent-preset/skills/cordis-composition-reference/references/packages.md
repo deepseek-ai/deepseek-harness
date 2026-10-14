@@ -140,6 +140,12 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-computer-use` | no | Exclusive named computer-use provider registration |
 
+## connector
+
+| Package | Config | Description |
+|---|---|---|
+| `@deepseek-ai/dsh-tencent-docs` | yes | Tencent Docs plugin: Tencent Docs' hosted MCP server, authorized through the shared MCP manager |
+
 ## context
 
 | Package | Config | Description |
