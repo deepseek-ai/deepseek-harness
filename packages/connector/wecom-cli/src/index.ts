@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type z from '@deepseek-ai/schemastery'
-import { CliAccountConfig, CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
+import { CliAccountConfig, CliCommandExecutor, exitFailure, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-shell-env'
@@ -40,6 +40,7 @@ export default class Wecom extends TypertRemoteService {
       check: 'check',
       cancellable: ['authorizing'],
       authorizationHosts: ['work.weixin.qq.com'],
+      classify: exitFailure,
     })
     ctx.effect(() => () => this.account.dispose())
     ctx.plugin(SkillFilesystem, {

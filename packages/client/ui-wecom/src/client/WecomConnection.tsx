@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import {
-  CliAccountAction, CliAccountActivation, CliAccountBadge, CliAccountSection, CliAccountToast,
-} from '@deepseek-ai/dsh-client-ui-cli-account'
+  CliAccountAction, CliAccountActivation, CliAccountBadge, CliAccountSection, CliAccountToast, describeFailure,
+} from '@deepseek-ai/dsh-client-ui-cli-account/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { WECOM_PACKAGE, presentConnection, type ConnectionFace } from './connection.ts'
@@ -13,6 +13,8 @@ export function WecomConnectionSection(props: FaceProps): ReactNode {
   const { useWecomConnection, check, connect, cancel, openAuthorization, retry, t } = props
   const snapshot = useWecomConnection(value => value)
   const shown = presentConnection(snapshot)
+  const failed = 'failed' in shown && shown.failed ? snapshot.view?.result : undefined
+  const diagnostic = describeFailure(failed?.failure, code => t('failure.exitCode', { code }))
   const disabled = snapshot.busy || (!snapshot.linked && shown.phase !== 'stopped')
   const action = (label: WecomKey, onClick: () => void, variant?: 'primary' | 'ghost'): ReactNode =>
     <CliAccountAction key={label} label={t(label)} disabled={disabled} onClick={onClick} variant={variant} />
@@ -36,7 +38,8 @@ export function WecomConnectionSection(props: FaceProps): ReactNode {
   }
   return (
     <CliAccountSection packageName={WECOM_PACKAGE} phase={shown.phase} title={t('section.title')} status={status} actions={actions}
-      detail={detail} failure={'failed' in shown && shown.failed ? t('failed') : undefined} hint={t('hint')} />
+      detail={detail} failure={failed === undefined ? undefined : t('failed')}
+      diagnostic={diagnostic === undefined ? undefined : t('failure.details', { details: diagnostic })} hint={t('hint')} />
   )
 }
 
