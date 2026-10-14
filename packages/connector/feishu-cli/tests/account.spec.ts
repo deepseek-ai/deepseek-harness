@@ -25,12 +25,9 @@ let ctx: Context
 let subprocess: ScriptedSubprocess
 let binDir: string
 let script: Record<string, Script | CliReply[]>
-let warnings: unknown[][]
 
 beforeEach(async () => {
   ctx = new Context()
-  warnings = []
-  vi.spyOn(ctx.logger, 'warn').mockImplementation((...args: unknown[]) => { warnings.push(args) })
   await ctx.plugin(SkillRegistry)
   await ctx.plugin(ScriptedSubprocess)
   await ctx.plugin(ShellEnv)
@@ -48,10 +45,10 @@ beforeEach(async () => {
 afterEach(async () => {
   await ctx.fiber.dispose()
   await rm(binDir, { recursive: true, force: true })
-  vi.restoreAllMocks()
 })
 
 const commands = () => subprocess.processes.map(process => process.spec.argv.slice(1).join(' '))
+const errors = (): unknown[] => ctx.logger.buffer.filter(message => message.type === 'error').map((message): unknown => message.args)
 
 describe('FeishuAccount', () => {
   let account: FeishuAccount
@@ -105,7 +102,7 @@ describe('FeishuAccount', () => {
 
     expect(await settled(id)).toEqual({ account: { state: 'signed-out', appId: APP }, result: { id, kind: 'link-app', outcome: 'succeeded' } })
     expect(commands()).toEqual(['config init --new', STATUS])
-    expect(warnings).toEqual([])
+    expect(errors()).toEqual([])
   })
 
   it('reports safe setup diagnostics to the page and Host without retrying or exposing native output', async () => {
@@ -120,11 +117,11 @@ describe('FeishuAccount', () => {
     expect(result).toMatchObject({ account: { state: 'unconfigured' }, result: {
       outcome: 'failed', failure: { command: 'config-init', exitCode: 5, type: 'internal', subtype: 'sdk_error' },
     } })
-    expect(warnings).toEqual([['feishu: account operation failed: %j', {
+    expect(errors()).toEqual([['feishu: account operation failed: %o', {
       id: result.result?.id, kind: 'link-app', phase: 'configuring',
       command: 'config-init', exitCode: 5, type: 'internal', subtype: 'sdk_error',
     }]])
-    expect(JSON.stringify({ result, warnings })).not.toContain(sensitive)
+    expect(JSON.stringify({ result, errors: errors() })).not.toContain(sensitive)
     expect(commands()).toEqual([STATUS, 'config init --new'])
   })
 
@@ -141,14 +138,14 @@ describe('FeishuAccount', () => {
     subprocess.lookup = () => Promise.reject(new Error('private-exception-token'))
     const result = await settled(account.start('check'))
     expect(result).toMatchObject({ result: { outcome: 'failed', failure: { command: 'auth-status', exitCode: null } } })
-    expect(JSON.stringify({ result, warnings })).not.toContain('private-exception-token')
+    expect(JSON.stringify({ result, errors: errors() })).not.toContain('private-exception-token')
   })
 
   it('retains the observed exit code when the command response is invalid', async () => {
     script[STATUS] = [{ stdout: 'invalid-json-secret' }]
     const result = await settled(account.start('check'))
     expect(result).toMatchObject({ result: { outcome: 'failed', failure: { command: 'auth-status', exitCode: 0 } } })
-    expect(JSON.stringify({ result, warnings })).not.toContain('invalid-json-secret')
+    expect(JSON.stringify({ result, errors: errors() })).not.toContain('invalid-json-secret')
   })
 
   it('signs in through the authorization page and accepts a sign-in that leaves permissions ungranted', async () => {
@@ -201,7 +198,7 @@ describe('FeishuAccount', () => {
     process.release()
     await cancelling
     expect(account.snapshot()).toEqual({ account: { state: 'unchecked' }, result: { id, kind: 'sign-in', outcome: 'cancelled' } })
-    expect(warnings).toEqual([])
+    expect(errors()).toEqual([])
   })
 
   it('runs one operation at a time and refreshes only when idle', async () => {

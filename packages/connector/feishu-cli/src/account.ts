@@ -138,7 +138,7 @@ export class FeishuAccount {
       outcome = operation.controller.signal.aborted ? 'cancelled' : 'failed'
       if (outcome === 'failed') {
         failure = operation.failure
-        this.logger.warn('feishu: account operation failed: %j', {
+        this.logger.error('feishu: account operation failed: %o', {
           id: operation.id, kind: operation.kind, phase: operation.phase, ...failure,
         })
       }
