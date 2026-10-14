@@ -1,3 +1,5 @@
+/** Bounded execution of one CLI program on the private Shell PATH, with subprocess lifetime ownership. */
+
 import { homedir } from 'node:os'
 import type { Readable } from 'node:stream'
 import type { ShellEnvRegistry } from '@deepseek-ai/dsh-shell-env'
@@ -10,24 +12,34 @@ const AUTHORIZATION_TIMEOUT_MS = 600_000
 const TERMINATE_GRACE_MS = 2_000
 const TIMEOUT_CODE = 'CLI_ACCOUNT_TIMEOUT'
 
+/** The program a plugin runs and its deadline for commands that do not wait for the user. */
 export interface CliCommandExecutorOptions {
+  /** Executable name looked up on the private Shell PATH. */
   readonly program: string
+  /** Deadline in milliseconds, including executable lookup. */
   readonly commandTimeoutMs: number
 }
 
+/** One command that ran to exit; a nonzero exit is the caller's to interpret. */
 export interface CliCommandResult {
   readonly exitCode: number | null
+  /** At most 1 MiB of stdout. */
   readonly stdout: string
+  /** The last 4 KiB of stderr. */
   readonly stderr: string
 }
 
+/** How long one command may run and who observes its output. */
 export interface CliRunOptions {
+  /** Whether the command waits for the user in a browser; it then gets a fixed 10-minute deadline instead of the command deadline. */
   readonly awaitsUser?: boolean
+  /** Receives each complete output line, without its line terminator, as the command writes it. */
   readonly onLine?: (stream: 'stdout' | 'stderr', line: string) => void
 }
 
 interface StreamText { text: string; overflowed: boolean }
 
+/** Drain one pipe, report complete lines, and keep the head up to `maxBytes` or, for a tail, the last `maxBytes`. */
 async function readStream(
   stream: Readable | undefined, name: 'stdout' | 'stderr', maxBytes: number, keep: 'head' | 'tail',
   onLine: CliRunOptions['onLine'],
@@ -53,6 +65,7 @@ async function readStream(
   return result
 }
 
+/** Runs one plugin's CLI program and owns each command until its process exits. */
 export class CliCommandExecutor {
   private readonly lifetime = new AbortController()
   private readonly running = new Set<Promise<CliCommandResult>>()
@@ -63,6 +76,15 @@ export class CliCommandExecutor {
     private readonly options: CliCommandExecutorOptions,
   ) {}
 
+  /**
+   * Run one command to process exit and return its output whatever the exit code.
+   * @param args - native arguments without the executable.
+   * @param signal - caller cancellation; an abort rejects with its reason after the process exits.
+   * @param options - the deadline choice and an observer for output lines.
+   * @returns the exit code, the stdout head, and the stderr tail.
+   * @throws after disposal; otherwise, with a message naming the command, when the deadline elapses,
+   *   the process ends by a signal, or stdout exceeds 1 MiB.
+   */
   async run(args: readonly string[], signal: AbortSignal, options: CliRunOptions = {}): Promise<CliCommandResult> {
     this.lifetime.signal.throwIfAborted()
     const task = this.execute(args, signal, options)
@@ -74,11 +96,20 @@ export class CliCommandExecutor {
     }
   }
 
+  /**
+   * Abort owned commands, wait for their processes to exit, and refuse later commands.
+   * @returns settles once every owned command has settled.
+   */
   async dispose(): Promise<void> {
     this.lifetime.abort(new Error(`${this.options.program}: plugin disposed`))
     await Promise.allSettled([...this.running])
   }
 
+  /**
+   * Name a command for diagnostics.
+   * @param args - native arguments without the executable.
+   * @returns the program and its arguments joined by spaces.
+   */
   commandLine(args: readonly string[]): string {
     return [this.options.program, ...args].join(' ')
   }
