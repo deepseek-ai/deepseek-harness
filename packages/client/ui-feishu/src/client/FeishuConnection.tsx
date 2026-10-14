@@ -33,6 +33,14 @@ export function FeishuConnectionSection(props: FaceProps): ReactNode {
   const snapshot = useFeishuConnection(value => value)
   const [confirming, setConfirming] = useState<'sign-out' | 'replace-app' | undefined>(undefined)
   const shown = presentConnection(snapshot)
+  const failed = 'failed' in shown && shown.failed ? snapshot.feishu?.result : undefined
+  const failure = failed?.failure
+  const diagnostic = failure === undefined ? undefined : [
+    failure.command,
+    ...failure.exitCode === null ? [] : [t('failure.exitCode', { code: String(failure.exitCode) })],
+    ...failure.type === undefined ? [] : [failure.type],
+    ...failure.subtype === undefined ? [] : [failure.subtype],
+  ].join(' · ')
   // Reopening a stopped stream is the one action that does not need the Host stream.
   const disabled = snapshot.busy || (!snapshot.linked && shown.phase !== 'stopped')
   const action = (label: FeishuKey, onClick: () => void, variant: 'primary' | 'outline' | 'ghost' = 'outline'): ReactNode =>
@@ -76,7 +84,10 @@ export function FeishuConnectionSection(props: FaceProps): ReactNode {
           <div className={css.actions}>{action('action.replaceApp', () => { setConfirming('replace-app') }, 'ghost')}</div>
         </div>
         : null}
-      {'failed' in shown && shown.failed ? <p className={css.failure} role="alert">{t('failed')}</p> : null}
+      {failed === undefined ? null : <p className={css.failure} role="alert">
+        {t(failed.kind === 'link-app' ? 'failed.linkApp' : 'failed')}
+        {diagnostic === undefined ? null : <> {t('failure.details', { details: diagnostic })}</>}
+      </p>}
       <p className={css.hint}>{t('hint')}</p>
       <Modal open={confirming === 'sign-out'} title={t('signOut.title')} closeLabel={t('close')} onClose={() => { setConfirming(undefined) }}
         footer={<>

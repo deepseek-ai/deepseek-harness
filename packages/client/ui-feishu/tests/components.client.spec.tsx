@@ -7,7 +7,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { PluginPackageRef, PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ConnectionSnapshot } from '../src/client/connection.ts'
-import { zh } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 import {
   FeishuConnectionActivation, FeishuConnectionBadge, FeishuConnectionSection, FeishuConnectionToast,
 } from '../src/client/FeishuConnection.tsx'
@@ -18,13 +18,13 @@ afterEach(cleanup)
 const OP = 'op' as FeishuOperationId
 const APP = 'cli_a' as FeishuAppId
 
-function fixture(feishu?: FeishuState) {
+function fixture(feishu?: FeishuState, copy: typeof zh = zh) {
   const state = createSnapshotStore<ConnectionSnapshot>({ feishu, linked: true, stopped: false, busy: false, notice: undefined })
   const face = {
     useFeishuConnection: bindSnapshotSelector(state),
     check: vi.fn(), linkApp: vi.fn(), signIn: vi.fn(), cancel: vi.fn(), signOut: vi.fn(),
     openAuthorization: vi.fn(), retry: vi.fn(), dismissNotice: vi.fn(),
-    t: makeTranslate(zh),
+    t: makeTranslate(copy),
   }
   return { face, set: (change: Partial<ConnectionSnapshot>) => { act(() => { state.set({ ...state.getSnapshot(), ...change }) }) } }
 }
@@ -72,6 +72,36 @@ it('offers the next step for each state', () => {
   b.set({ feishu: undefined })
   expect(screen.getByText(zh['status.checking'])).toBeTruthy()
   expect(screen.queryAllByRole('button')).toHaveLength(0)
+})
+
+it.each([['zh', zh], ['en', en]] as const)('reports app-link recovery and safe diagnostics in %s', async (locale, copy) => {
+  const b = fixture({
+    account: { state: 'unconfigured' },
+    result: {
+      id: OP, kind: 'link-app', outcome: 'failed',
+      failure: { command: 'config-init', exitCode: 1, type: 'internal', subtype: 'sdk_error' },
+    },
+  }, copy)
+  render(<FeishuConnectionSection {...b.face} />)
+  expect(button(copy['action.linkApp'])).toBeTruthy()
+  await expect(`${screen.getByRole('alert').textContent}\n`).toMatchFileSnapshot(`./expected/link-app-failed-${locale}.txt`)
+
+  b.set({ feishu: { account: { state: 'signed-out', appId: APP }, result: {
+    id: OP, kind: 'link-app', outcome: 'failed', failure: { command: 'auth-status', exitCode: null },
+  } } })
+  expect(button(copy['action.signIn'])).toBeTruthy()
+  expect(screen.getByRole('alert').textContent).toBe(`${copy['failed.linkApp']} ${copy['failure.details'].replace('{details}', 'auth-status')}`)
+
+  b.set({ feishu: { account: { state: 'unconfigured' }, result: { id: OP, kind: 'link-app', outcome: 'failed' } } })
+  expect(screen.getByRole('alert').textContent).toBe(copy['failed.linkApp'])
+  b.set({ feishu: { account: { state: 'unconfigured' }, result: { id: OP, kind: 'link-app', outcome: 'cancelled' } } })
+  expect(screen.queryByRole('alert')).toBeNull()
+})
+
+it.each(['sign-in', 'sign-out', 'check'] as const)('keeps the generic notice for a failed %s', (kind) => {
+  const b = fixture({ account: { state: 'signed-out', appId: APP }, result: { id: OP, kind, outcome: 'failed' } })
+  render(<FeishuConnectionSection {...b.face} />)
+  expect(screen.getByRole('alert').textContent).toBe(zh.failed)
 })
 
 it('explains a stopped Host component and retries even while the stream is offline', () => {

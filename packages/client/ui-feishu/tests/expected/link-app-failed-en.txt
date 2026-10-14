@@ -1,0 +1,1 @@
+Feishu app linking did not finish; review the server logs. If the Feishu page reported success, check DSH access to local configuration and system credentials, then choose the existing app when linking again. Diagnostic: config-init · Exit code 1 · internal · sdk_error

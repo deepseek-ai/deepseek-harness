@@ -61,7 +61,7 @@ export default class Feishu extends TypertRemoteService {
     const directory = resolveCliDirectory(config.binDir)
     ctx.shellEnv.registerPath({ name: 'feishu', directories: [directory] })
     const cli = new FeishuCli(ctx.subprocess, ctx.shellEnv, config)
-    this.account = new FeishuAccount(cli, config, () => { for (const notify of this.listeners) notify() })
+    this.account = new FeishuAccount(cli, config, () => { for (const notify of this.listeners) notify() }, ctx.logger)
     ctx.effect(() => async () => {
       this.lifetime.abort()
       try {

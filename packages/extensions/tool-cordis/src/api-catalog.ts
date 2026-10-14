@@ -6192,12 +6192,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type FeishuAppId = Branded<\'FeishuAppId\'>;',
   },
   {
+    name: 'FeishuOperationFailure',
+    declaration: 'export interface FeishuOperationFailure {\n    readonly command: \'config-init\' | \'auth-status\' | \'auth-login\' | \'auth-logout\';\n    readonly exitCode: number | null;\n    readonly type?: \'validation\' | \'authentication\' | \'authorization\' | \'config\' | \'network\' | \'api\' | \'policy\' | \'internal\' | \'confirmation\';\n    readonly subtype?: \'sdk_error\' | \'storage\' | \'file_io\' | \'not_configured\' | \'invalid_config\' | \'invalid_client\';\n}',
+  },
+  {
     name: 'FeishuOperationId',
     declaration: 'export type FeishuOperationId = Branded<\'FeishuOperationId\'>;',
   },
   {
     name: 'FeishuOperationResult',
-    declaration: 'export interface FeishuOperationResult {\n    readonly id: FeishuOperationId;\n    readonly kind: FeishuOperationState[\'kind\'];\n    readonly outcome: \'succeeded\' | \'cancelled\' | \'failed\';\n}',
+    declaration: 'export interface FeishuOperationResult {\n    readonly id: FeishuOperationId;\n    readonly kind: FeishuOperationState[\'kind\'];\n    readonly outcome: \'succeeded\' | \'cancelled\' | \'failed\';\n    readonly failure?: FeishuOperationFailure;\n}',
   },
   {
     name: 'FeishuOperationState',

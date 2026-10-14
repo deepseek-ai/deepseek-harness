@@ -1,9 +1,6 @@
-// Web e2e scenario: connecting the Feishu plugin from its page on the Plugins
-// page. A stand-in lark-cli plays the CLI's app setup and device sign-in; each
-// step starts from its own click, the browser opens that step's Feishu page,
-// the stand-in finishes once its page is visited, the section reaches
-// connected, and sign-out returns it to disconnected. Zero model calls.
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+// Feishu setup failures and recovery through the real Host/Remote/browser composition.
+// A stand-in CLI waits for each authorization page visit and keeps account state on disk.
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,6 +12,7 @@ import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 
 const FEISHU_DIR = fileURLToPath(new URL('../../../packages/connector/feishu', import.meta.url))
 const SETUP_URL = 'https://open.feishu.cn/page/cli?e2e=1'
+const SETUP_RETRY_URL = `${SETUP_URL}&retry=1`
 const SIGN_IN_URL = 'https://accounts.feishu.cn/oauth/device?e2e=1'
 
 // The stand-in keeps its account in state.json beside itself; app setup and
@@ -44,8 +42,17 @@ switch (process.argv.slice(2).join(' ')) {
     else line({ appId: 'cli_e2e', identities: { user: { status: 'ready', available: true, verified: true, userName: '测试用户', openId: 'ou_e2e' } } })
     break
   case 'config init --new':
-    process.stderr.write('Open this link to create an app:\\n  ${SETUP_URL}\\n')
-    visited('setup-visited', () => { state.app = true; save() })
+    process.stderr.write('Open this link to create an app:\\n  ' + (existsSync(join(dir, 'setup-fails')) ? '${SETUP_URL}' : '${SETUP_RETRY_URL}') + '\\n')
+    visited('setup-visited', () => {
+      if (existsSync(join(dir, 'setup-fails'))) {
+        process.stderr.write('OK: App configured!\\n' + JSON.stringify({ ok: false, error: {
+          type: 'internal', subtype: 'sdk_error',
+          message: 'keychain Set failed: /private/user/appsecret.enc.tmp: operation not permitted; token=fixture-secret',
+          hint: 'https://open.feishu.cn/page/cli?user_code=fixture-code',
+        } }, null, 2) + '\\n')
+        process.exitCode = 5
+      } else { state.app = true; save() }
+    })
     break
   case 'auth login --json':
     line({ event: 'device_authorization', verification_uri_complete: '${SIGN_IN_URL}' })
@@ -79,7 +86,7 @@ describe.skipIf(process.platform === 'win32')('web e2e: Feishu plugin connection
     })
     browser = await chromium.launch()
     context = await browser.newContext({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
-    for (const [url, marker] of [[SETUP_URL, 'setup-visited'], [SIGN_IN_URL, 'sign-in-visited']] as const) {
+    for (const [url, marker] of [[SETUP_URL, 'setup-visited'], [SETUP_RETRY_URL, 'setup-visited'], [SIGN_IN_URL, 'sign-in-visited']] as const) {
       await context.route(url, async (route) => {
         await writeFile(join(binDir, marker), '')
         await route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Feishu</title><p>Feishu stand-in page</p>' })
@@ -97,7 +104,7 @@ describe.skipIf(process.platform === 'win32')('web e2e: Feishu plugin connection
     if (binDir !== undefined) await rm(binDir, { recursive: true, force: true })
   })
 
-  it('links an app, then signs in from a second click, and signs out after confirmation', async () => {
+  it('reports failed local setup, then links an existing app, signs in, and signs out', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-feishu-connection'))
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
     const panel = page.locator('[data-plugin-panel]')
@@ -108,12 +115,24 @@ describe.skipIf(process.platform === 'win32')('web e2e: Feishu plugin connection
 
     const opened: Page[] = []
     context.on('page', (popup) => { opened.push(popup) })
+    await writeFile(join(binDir, 'setup-fails'), '')
+    await section.getByRole('button', { name: '关联飞书应用', exact: true }).click()
+    await section.getByRole('alert').waitFor({ timeout: 20_000 })
+    expect(await section.getAttribute('data-feishu-connection')).toBe('disconnected')
+    expect(await section.getByRole('alert').innerText()).toContain('internal · sdk_error')
+    expect(await section.getByRole('alert').innerText()).toContain('已有应用')
+    expect(await section.innerText()).not.toContain('fixture-secret')
+    expect(await section.innerText()).not.toContain('fixture-code')
+    expect(await section.innerText()).not.toContain('/private/user')
+    await expect(readFile(join(binDir, 'state.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    await rm(join(binDir, 'setup-fails'))
+    await rm(join(binDir, 'setup-visited'))
     await section.getByRole('button', { name: '关联飞书应用', exact: true }).click()
     await page.getByText('飞书应用已关联，下一步登录飞书账号', { exact: true }).waitFor({ timeout: 20_000 })
-    expect(opened.map(popup => popup.url())).toEqual([SETUP_URL])
+    expect(opened.map(popup => popup.url())).toEqual([SETUP_URL, SETUP_RETRY_URL])
     await section.getByRole('button', { name: '登录飞书账号', exact: true }).click()
     await expect.poll(() => section.getAttribute('data-feishu-connection'), { timeout: 20_000 }).toBe('connected')
-    expect(opened.map(popup => popup.url())).toEqual([SETUP_URL, SIGN_IN_URL])
+    expect(opened.map(popup => popup.url())).toEqual([SETUP_URL, SETUP_RETRY_URL, SIGN_IN_URL])
     await section.getByText('已登录为 测试用户。可以在对话中直接请 Agent 使用飞书。', { exact: true }).waitFor({ timeout: 10_000 })
     await page.getByText('飞书已连接', { exact: true }).waitFor({ timeout: 10_000 })
 

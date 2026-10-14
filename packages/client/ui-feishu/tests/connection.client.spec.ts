@@ -170,6 +170,23 @@ it('starts before the first view and reports no notice for a failed sign-in', as
   expect(b.snapshot().notice).toBeUndefined()
 })
 
+it('retains the Host app-link failure details without reporting success', async () => {
+  const b = fixture()
+  b.face.linkApp()
+  await settle(b)
+  const failed: FeishuState = {
+    account: { state: 'unconfigured' },
+    result: {
+      id: OP, kind: 'link-app', outcome: 'failed',
+      failure: { command: 'config-init', exitCode: 1, type: 'internal', subtype: 'sdk_error' },
+    },
+  }
+  await b.publish(failed)
+  expect(b.snapshot().feishu).toEqual(failed)
+  expect(b.snapshot().notice).toBeUndefined()
+  expect(presentConnection(b.snapshot())).toEqual({ phase: 'disconnected', next: 'link-app', failed: true })
+})
+
 it('cancels only a cancellable operation and reports a finished sign-out', async () => {
   const b = fixture()
   await b.publish({ account: { state: 'connected', appId: APP } })

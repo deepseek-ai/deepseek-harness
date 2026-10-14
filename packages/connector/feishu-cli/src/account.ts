@@ -1,11 +1,13 @@
 /** Host-owned check, connection, and sign-out of the CLI's default Feishu account. */
 
 import { randomUUID } from 'node:crypto'
+import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import z from 'zod'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { parseJson, type FeishuCli } from './cli.ts'
-import type { FeishuAccountState, FeishuAppId, FeishuOperationId, FeishuOperationResult, FeishuOperationState, FeishuState } from './types.ts'
+import { parseJson, type FeishuCli, type FeishuCommandResult, type FeishuRunOptions } from './cli.ts'
+import { commandFailure } from './diagnostic.ts'
+import type { FeishuAccountState, FeishuAppId, FeishuOperationFailure, FeishuOperationId, FeishuOperationResult, FeishuOperationState, FeishuState } from './types.ts'
 
 const NotConfigured = z.object({ ok: z.literal(false), error: z.object({ subtype: z.literal('not_configured') }) })
 const User = z.object({
@@ -36,6 +38,7 @@ class Operation {
   readonly controller = new AbortController()
   phase: FeishuOperationState['phase'] = 'checking'
   authorizationUrl: string | undefined
+  failure: FeishuOperationFailure | undefined
   done: Promise<void> = Promise.resolve()
 
   constructor(readonly kind: FeishuOperationState['kind']) {}
@@ -57,6 +60,7 @@ export class FeishuAccount {
     private readonly cli: FeishuCli,
     private readonly limits: FeishuAccountLimits,
     private readonly changed: () => void,
+    private readonly logger: Context['logger'],
   ) {}
 
   /**
@@ -126,14 +130,21 @@ export class FeishuAccount {
 
   private async execute(operation: Operation): Promise<void> {
     let outcome: FeishuOperationResult['outcome'] = 'succeeded'
+    let failure: FeishuOperationFailure | undefined
     try {
       await this.perform(operation, AbortSignal.any([operation.controller.signal, this.lifetime.signal]))
-    } catch {
-      // Native diagnostics stay on the Host; the view reports one retryable outcome.
+    } catch (_error) {
+      // Exceptions and native output may contain credentials; report only the command's safe fields.
       outcome = operation.controller.signal.aborted ? 'cancelled' : 'failed'
+      if (outcome === 'failed') {
+        failure = operation.failure
+        this.logger.warn('feishu: account operation failed: %j', {
+          id: operation.id, kind: operation.kind, phase: operation.phase, ...failure,
+        })
+      }
     } finally {
       this.active = undefined
-      this.result = { id: operation.id, kind: operation.kind, outcome }
+      this.result = { id: operation.id, kind: operation.kind, outcome, ...failure === undefined ? {} : { failure } }
       this.changed()
     }
   }
@@ -141,15 +152,15 @@ export class FeishuAccount {
   private async perform(operation: Operation, signal: AbortSignal): Promise<void> {
     switch (operation.kind) {
       case 'check':
-        await this.check(signal)
+        await this.check(operation, signal)
         return
       case 'link-app': return this.linkApp(operation, signal)
       case 'sign-in': return this.signIn(operation, signal)
       case 'sign-out': {
         this.stage(operation, 'signing-out')
-        const result = await this.cli.run(['auth', 'logout', '--json'], signal, { timeoutMs: this.limits.commandTimeoutMs })
+        const result = await this.run(operation, 'auth-logout', ['auth', 'logout', '--json'], signal, { timeoutMs: this.limits.commandTimeoutMs })
         if (result.exitCode !== 0) throw new Error('feishu: auth logout failed')
-        await this.check(signal)
+        await this.check(operation, signal)
         return
       }
       /* v8 ignore next -- closed operation kind union */
@@ -163,7 +174,7 @@ export class FeishuAccount {
    */
   private async linkApp(operation: Operation, signal: AbortSignal): Promise<void> {
     this.stage(operation, 'configuring')
-    const setup = await this.cli.run(['config', 'init', '--new'], signal, {
+    const setup = await this.run(operation, 'config-init', ['config', 'init', '--new'], signal, {
       timeoutMs: this.limits.authorizationTimeoutMs,
       onLine: (stream, line) => {
         const link = stream === 'stderr' && operation.authorizationUrl === undefined ? CONFIG_LINK.exec(line) : null
@@ -172,14 +183,14 @@ export class FeishuAccount {
     })
     if (setup.exitCode !== 0) throw new Error('feishu: config init failed')
     this.stage(operation, 'checking')
-    if ((await this.check(signal)).account.state === 'unconfigured') throw new Error('feishu: config init left no app')
+    if ((await this.check(operation, signal)).account.state === 'unconfigured') throw new Error('feishu: config init left no app')
   }
 
   /** Sign the configured app's user in, then confirm the CLI's default account is that user. */
   private async signIn(operation: Operation, signal: AbortSignal): Promise<void> {
     this.stage(operation, 'authorizing')
     let complete: z.infer<typeof LoginComplete> | undefined
-    const login = await this.cli.run(['auth', 'login', '--json'], signal, {
+    const login = await this.run(operation, 'auth-login', ['auth', 'login', '--json'], signal, {
       timeoutMs: this.limits.authorizationTimeoutMs,
       onLine: (stream, line) => {
         if (stream !== 'stdout' || !line.startsWith('{')) return
@@ -195,14 +206,14 @@ export class FeishuAccount {
       throw new Error('feishu: auth login did not complete')
     }
     this.stage(operation, 'verifying')
-    const found = await this.check(signal)
+    const found = await this.check(operation, signal)
     if (found.account.state !== 'connected' || found.openId !== complete.user_open_id) throw new Error('feishu: sign-in did not verify')
   }
 
   /** Read the default account, publish what it shows, and return it with the signed-in user's id. */
-  private async check(signal: AbortSignal): Promise<Check> {
+  private async check(operation: Operation, signal: AbortSignal): Promise<Check> {
     const args = ['auth', 'status', '--verify', '--json']
-    const result = await this.cli.run(args, signal, { timeoutMs: this.limits.commandTimeoutMs })
+    const result = await this.run(operation, 'auth-status', args, signal, { timeoutMs: this.limits.commandTimeoutMs })
     if (result.exitCode !== 0) {
       if (!NotConfigured.safeParse(parseJson(args, result.stderr)).success) throw new Error('feishu: auth status failed')
       return { account: this.publish({ state: 'unconfigured' }) }
@@ -214,6 +225,17 @@ export class FeishuAccount {
       ? { state: 'connected', appId, ...user.userName === undefined ? {} : { userName: user.userName } }
       : { state: SIGNED_OUT.has(user.status) ? 'signed-out' : 'unverified', appId }
     return { account: this.publish(account), openId: user.openId }
+  }
+
+  /** Retain only safe command facts, including when execution or response validation fails. */
+  private async run(
+    operation: Operation, command: FeishuOperationFailure['command'], args: readonly string[],
+    signal: AbortSignal, options: FeishuRunOptions,
+  ): Promise<FeishuCommandResult> {
+    operation.failure = { command, exitCode: null }
+    const result = await this.cli.run(args, signal, options)
+    operation.failure = commandFailure(command, result)
+    return result
   }
 
   private publish(account: FeishuAccountState): FeishuAccountState {

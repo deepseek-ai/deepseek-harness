@@ -25,9 +25,12 @@ let ctx: Context
 let subprocess: ScriptedSubprocess
 let binDir: string
 let script: Record<string, Script | CliReply[]>
+let warnings: unknown[][]
 
 beforeEach(async () => {
   ctx = new Context()
+  warnings = []
+  vi.spyOn(ctx.logger, 'warn').mockImplementation((...args: unknown[]) => { warnings.push(args) })
   await ctx.plugin(SkillRegistry)
   await ctx.plugin(ScriptedSubprocess)
   await ctx.plugin(ShellEnv)
@@ -45,6 +48,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await ctx.fiber.dispose()
   await rm(binDir, { recursive: true, force: true })
+  vi.restoreAllMocks()
 })
 
 const commands = () => subprocess.processes.map(process => process.spec.argv.slice(1).join(' '))
@@ -56,7 +60,7 @@ describe('FeishuAccount', () => {
   beforeEach(() => {
     ctx.shellEnv.registerPath({ name: 'feishu', directories: [binDir] })
     changes = 0
-    account = new FeishuAccount(new FeishuCli(ctx.subprocess, ctx.shellEnv, LIMITS), LIMITS, () => { changes++ })
+    account = new FeishuAccount(new FeishuCli(ctx.subprocess, ctx.shellEnv, LIMITS), LIMITS, () => { changes++ }, ctx.logger)
   })
 
   const settled = async (id: FeishuOperationId): Promise<FeishuState> => {
@@ -101,6 +105,50 @@ describe('FeishuAccount', () => {
 
     expect(await settled(id)).toEqual({ account: { state: 'signed-out', appId: APP }, result: { id, kind: 'link-app', outcome: 'succeeded' } })
     expect(commands()).toEqual(['config init --new', STATUS])
+    expect(warnings).toEqual([])
+  })
+
+  it('reports safe setup diagnostics to the page and Host without retrying or exposing native output', async () => {
+    script[STATUS] = [NOT_CONFIGURED]
+    await settled(account.start('check'))
+    const sensitive = 'secret-in-native-output'
+    script['config init --new'] = [{ exitCode: 5, stdout: sensitive, stderr: `QR\nhttps://open.feishu.cn/?user_code=${sensitive}\nApp created\n${JSON.stringify({
+      ok: false, error: { type: 'internal', subtype: 'sdk_error', message: sensitive, hint: sensitive },
+    }, null, 2)}\n` }]
+
+    const result = await settled(account.start('link-app'))
+    expect(result).toMatchObject({ account: { state: 'unconfigured' }, result: {
+      outcome: 'failed', failure: { command: 'config-init', exitCode: 5, type: 'internal', subtype: 'sdk_error' },
+    } })
+    expect(warnings).toEqual([['feishu: account operation failed: %j', {
+      id: result.result?.id, kind: 'link-app', phase: 'configuring',
+      command: 'config-init', exitCode: 5, type: 'internal', subtype: 'sdk_error',
+    }]])
+    expect(JSON.stringify({ result, warnings })).not.toContain(sensitive)
+    expect(commands()).toEqual([STATUS, 'config init --new'])
+  })
+
+  it('attributes a post-setup check failure to auth status', async () => {
+    script['config init --new'] = [{}]
+    script[STATUS] = [{ exitCode: 5, stderr: '{"ok":false,"error":{"type":"internal","subtype":"storage"}}' }]
+
+    expect(await settled(account.start('link-app'))).toMatchObject({ result: {
+      outcome: 'failed', failure: { command: 'auth-status', exitCode: 5, type: 'internal', subtype: 'storage' },
+    } })
+  })
+
+  it('reports an attempted command without forwarding an execution exception', async () => {
+    subprocess.lookup = () => Promise.reject(new Error('private-exception-token'))
+    const result = await settled(account.start('check'))
+    expect(result).toMatchObject({ result: { outcome: 'failed', failure: { command: 'auth-status', exitCode: null } } })
+    expect(JSON.stringify({ result, warnings })).not.toContain('private-exception-token')
+  })
+
+  it('retains the observed exit code when the command response is invalid', async () => {
+    script[STATUS] = [{ stdout: 'invalid-json-secret' }]
+    const result = await settled(account.start('check'))
+    expect(result).toMatchObject({ result: { outcome: 'failed', failure: { command: 'auth-status', exitCode: 0 } } })
+    expect(JSON.stringify({ result, warnings })).not.toContain('invalid-json-secret')
   })
 
   it('signs in through the authorization page and accepts a sign-in that leaves permissions ungranted', async () => {
@@ -153,6 +201,7 @@ describe('FeishuAccount', () => {
     process.release()
     await cancelling
     expect(account.snapshot()).toEqual({ account: { state: 'unchecked' }, result: { id, kind: 'sign-in', outcome: 'cancelled' } })
+    expect(warnings).toEqual([])
   })
 
   it('runs one operation at a time and refreshes only when idle', async () => {
