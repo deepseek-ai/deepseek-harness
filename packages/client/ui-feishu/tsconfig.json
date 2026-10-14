@@ -30,9 +30,6 @@
       "path": "../ui-plugin-manager/tsconfig.client.json"
     },
     {
-      "path": "../ui-primitives"
-    },
-    {
       "path": "../ui-renderer"
     },
     {
@@ -46,6 +43,12 @@
     },
     {
       "path": "../../util/values"
+    },
+    {
+      "path": "../ui-cli-account"
+    },
+    {
+      "path": "../../connector/cli-account"
     }
   ]
 }

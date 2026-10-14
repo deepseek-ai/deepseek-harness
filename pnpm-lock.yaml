@@ -4500,6 +4500,9 @@ importers:
       '@deepseek-ai/dsh-client-test-runtime':
         specifier: workspace:*
         version: link:../../test-support/client-runtime
+      '@deepseek-ai/dsh-client-ui-cli-account':
+        specifier: workspace:*
+        version: link:../ui-cli-account
       '@deepseek-ai/dsh-client-ui-layout':
         specifier: workspace:*
         version: link:../ui-layout
@@ -7306,9 +7309,9 @@ importers:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
         version: link:../../util/brand
-      '@deepseek-ai/dsh-timeout':
+      '@deepseek-ai/dsh-cli-account':
         specifier: workspace:*
-        version: link:../../util/timeout
+        version: link:../cli-account
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values

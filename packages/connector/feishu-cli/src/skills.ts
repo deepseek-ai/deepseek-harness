@@ -4,7 +4,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from 'zod'
 import { BUNDLED_SKILL_RANK, isSkillName } from '@deepseek-ai/dsh-skill'
 import type { SkillCandidate, SkillDefinition, SkillLookupOptions, SkillProvider, SkillProviderControl } from '@deepseek-ai/dsh-skill'
-import type { FeishuCli } from './cli.ts'
+import type { CliCommandExecutor } from '@deepseek-ai/dsh-cli-account'
+import { runJson } from './cli.ts'
 
 const Catalog = z.object({
   ok: z.literal(true),
@@ -27,7 +28,7 @@ export class FeishuSkillProvider implements SkillProvider {
   private catalog: Promise<SkillCandidate[]> | undefined
 
   constructor(
-    private readonly cli: FeishuCli,
+    private readonly cli: CliCommandExecutor,
     private readonly control: SkillProviderControl,
     private readonly logger: Context['logger'],
   ) {}
@@ -42,7 +43,7 @@ export class FeishuSkillProvider implements SkillProvider {
 
   async get(candidate: SkillCandidate, options: SkillLookupOptions): Promise<SkillDefinition> {
     const signal = options.signal === undefined ? this.control.signal : AbortSignal.any([options.signal, this.control.signal])
-    const parsed = Skill.safeParse(await this.cli.json(['skills', 'read', candidate.name, '--json'], signal))
+    const parsed = Skill.safeParse(await runJson(this.cli, ['skills', 'read', candidate.name, '--json'], signal))
     const skill = parsed.data
     const frontmatter = skill === undefined ? null : FRONTMATTER.exec(skill.content)
     if (skill === undefined || skill.skill !== candidate.name || skill.path !== 'SKILL.md' || frontmatter === null) {
@@ -54,7 +55,7 @@ export class FeishuSkillProvider implements SkillProvider {
   }
 
   private async load(): Promise<SkillCandidate[]> {
-    const catalog = Catalog.safeParse(await this.cli.json(['skills', 'list', '--json'], this.control.signal))
+    const catalog = Catalog.safeParse(await runJson(this.cli, ['skills', 'list', '--json'], this.control.signal))
     if (!catalog.success) throw new Error('lark-cli skills list --json returned an unexpected catalog', { cause: catalog.error })
     return catalog.data.skills.map(skill => ({
       ...skill,

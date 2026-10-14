@@ -6,16 +6,17 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
-import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import type z from '@deepseek-ai/schemastery'
+import { CliAccountConfig, CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import { FeishuAccount } from './account.ts'
-import { FeishuCli, resolveCliDirectory, type FeishuCliLimits } from './cli.ts'
+import { PROGRAM, resolveCliDirectory } from './cli.ts'
+import { commandFailure } from './diagnostic.ts'
 import { FeishuSkillProvider } from './skills.ts'
-import type { FeishuOperationId, FeishuState } from './types.ts'
+import type { FeishuState } from './types.ts'
 
 export type * from './types.ts'
 
@@ -26,27 +27,14 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** CLI location and command limits. */
-export interface Config extends FeishuCliLimits {
-  /** Absolute directory containing `lark-cli`; defaults to the installed `@larksuite/cli` package. */
-  binDir?: string
-  /** Deadline for app setup or sign-in, which wait for the user in the browser. */
-  authorizationTimeoutMs: number
-}
+export type Config = CliAccountConfig
 
 /** Registers the CLI and skills, and owns the account operations the Plugins page drives. */
 export default class Feishu extends TypertRemoteService {
   static inject = ['skills', 'subprocess', 'shellEnv']
-  static Config: z<Config> = z.object({
-    binDir: z.string().min(1),
-    commandTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(30_000),
-    authorizationTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(600_000),
-    maxOutputBytes: z.number().min(1).step(1).default(1_048_576),
-  })
+  static Config: z<Config> = CliAccountConfig
 
   private readonly account: FeishuAccount
-  private readonly listeners = new Set<() => void>()
-  private readonly lifetime = new AbortController()
 
   /**
    * @param ctx - Context carrying the skill registry, subprocess runtime, and Shell environment.
@@ -58,18 +46,19 @@ export default class Feishu extends TypertRemoteService {
     if (!ctx.subprocess.runsOnHost) {
       throw new Error('feishu: lark-cli and its default account are local to this Host; mount a Host subprocess runtime')
     }
-    const directory = resolveCliDirectory(config.binDir)
-    ctx.shellEnv.registerPath({ name: 'feishu', directories: [directory] })
-    const cli = new FeishuCli(ctx.subprocess, ctx.shellEnv, config)
-    this.account = new FeishuAccount(cli, config, () => { for (const notify of this.listeners) notify() }, ctx.logger)
-    ctx.effect(() => async () => {
-      this.lifetime.abort()
-      try {
-        await this.account.dispose()
-      } finally {
-        await cli.dispose()
-      }
+    ctx.shellEnv.registerPath({ name: 'feishu', directories: [resolveCliDirectory(config.binDir)] })
+    const cli = new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: config.commandTimeoutMs })
+    this.account = new FeishuAccount({
+      name: 'feishu',
+      cli,
+      logger: ctx.logger,
+      account: { state: 'unchecked' },
+      check: 'check',
+      cancellable: ['configuring', 'authorizing'],
+      authorizationHosts: ['feishu.cn', 'larksuite.com'],
+      classify: commandFailure,
     })
+    ctx.effect(() => () => this.account.dispose())
     ctx.skills.registerProvider(control => new FeishuSkillProvider(cli, control, ctx.logger))
   }
 
@@ -79,7 +68,7 @@ export default class Feishu extends TypertRemoteService {
    * @throws while another account operation runs.
    */
   @Remote
-  check(): FeishuOperationId {
+  check(): CliOperationId {
     return this.account.start('check')
   }
 
@@ -89,7 +78,7 @@ export default class Feishu extends TypertRemoteService {
    * @throws while another account operation runs.
    */
   @Remote
-  linkApp(): FeishuOperationId {
+  linkApp(): CliOperationId {
     return this.account.start('link-app')
   }
 
@@ -99,7 +88,7 @@ export default class Feishu extends TypertRemoteService {
    * @throws while another account operation runs.
    */
   @Remote
-  signIn(): FeishuOperationId {
+  signIn(): CliOperationId {
     return this.account.start('sign-in')
   }
 
@@ -109,7 +98,7 @@ export default class Feishu extends TypertRemoteService {
    * @throws while another account operation runs.
    */
   @Remote
-  signOut(): FeishuOperationId {
+  signOut(): CliOperationId {
     return this.account.start('sign-out')
   }
 
@@ -119,7 +108,7 @@ export default class Feishu extends TypertRemoteService {
    * @returns after the operation settles.
    */
   @Remote
-  cancel(id: FeishuOperationId): Promise<void> {
+  cancel(id: CliOperationId): Promise<void> {
     return this.account.cancel(id)
   }
 
@@ -130,24 +119,6 @@ export default class Feishu extends TypertRemoteService {
    */
   @Remote({ mode: 'stream' })
   async *follow(signal: AbortSignal): AsyncIterable<FeishuState> {
-    this.account.refresh()
-    const combined = AbortSignal.any([signal, this.lifetime.signal])
-    let wake = Promise.withResolvers<void>()
-    let changed = true
-    const notify = (): void => { changed = true; wake.resolve() }
-    this.listeners.add(notify)
-    combined.addEventListener('abort', notify, { once: true })
-    try {
-      for (;;) {
-        if (!changed) await wake.promise
-        if (combined.aborted) break
-        wake = Promise.withResolvers<void>()
-        changed = false
-        yield this.account.snapshot()
-      }
-    } finally {
-      this.listeners.delete(notify)
-      combined.removeEventListener('abort', notify)
-    }
+    yield* this.account.follow(signal)
   }
 }

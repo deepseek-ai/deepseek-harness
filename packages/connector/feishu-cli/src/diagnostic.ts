@@ -1,7 +1,7 @@
 /** Closed account-command diagnostics projected from the CLI's final stderr JSON envelope. */
 
 import z from 'zod'
-import type { FeishuCommandResult } from './cli.ts'
+import type { CliCommandResult } from '@deepseek-ai/dsh-cli-account'
 import type { FeishuOperationFailure } from './types.ts'
 
 const ErrorType = z.enum(['validation', 'authentication', 'authorization', 'config', 'network', 'api', 'policy', 'internal', 'confirmation'])
@@ -21,7 +21,7 @@ const Envelope = z.object({
  * @param result - its observed exit code and captured output.
  * @returns fixed command identity, exit code, and optional allowlisted classifications.
  */
-export function commandFailure(command: FeishuOperationFailure['command'], result: FeishuCommandResult): FeishuOperationFailure {
+export function commandFailure(command: FeishuOperationFailure['command'], result: CliCommandResult): FeishuOperationFailure {
   const failure: FeishuOperationFailure = { command, exitCode: result.exitCode }
   const start = result.stderr.lastIndexOf('\n{')
   let value: unknown

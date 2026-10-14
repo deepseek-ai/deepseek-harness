@@ -18,9 +18,6 @@
       "path": "../../util/brand"
     },
     {
-      "path": "../../util/timeout"
-    },
-    {
       "path": "../../util/values"
     },
     {
@@ -34,6 +31,9 @@
     },
     {
       "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../cli-account"
     }
   ]
 }
