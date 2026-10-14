@@ -261,6 +261,7 @@ describe('native Flash translation', () => {
 
   it.each(['withdrawn', 'catalog', 'credential'])('rejects a native route %s during async preparation before audit or dispatch', async (change) => {
     const b = await paidFixture(cleanups), entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
+    cleanups.push(async () => { release.resolve(undefined) })
     const original = b.ctx.llm.prepareCall.bind(b.ctx.llm)
     vi.spyOn(b.ctx.llm, 'prepareCall').mockImplementationOnce(async (config, signal) => {
       const call = await original(config, signal)
@@ -273,6 +274,7 @@ describe('native Flash translation', () => {
     let withdrawal: Promise<void> | undefined
     if (change === 'withdrawn') {
       withdrawal = owner.fiber!.dispose()
+      await rejected
     } else if (change === 'catalog') {
       const config = owner.fiber!.effectiveConfig as ReturnType<typeof OfficialConfig>
       config.models = OfficialConfig({ models: [{ id: 'deepseek-v4-flash' }] }).models

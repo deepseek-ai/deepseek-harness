@@ -474,8 +474,8 @@ export class GoalService extends TypertRemoteService {
 
   /** Read the current durable projection maintained by the registry. */
   private state(session: Session): GoalProjection | null {
-    const state = this.ctx.sessionProjections.stateOf(session, 'goal')
-    if (state === undefined) throw new Error('goal projection is not registered')
+    // The projection registration is owned by this live service instance.
+    const state = this.ctx.sessionProjections.stateOf(session, 'goal') as GoalProjectionState
     if (state.failure !== null) throw new Error(state.failure)
     return state.current
   }

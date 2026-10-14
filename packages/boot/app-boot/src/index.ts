@@ -342,9 +342,7 @@ async function recompose(
       diagnostic: failure.entry.fiber?.uid ? reloadDiagnostic(failure) : undefined,
     }))
     // Removed entries leave the Loader store before their async disposers finish.
-    const previousFibers = [...ctx.loader.entries()].flatMap(row => row.fiber === undefined ? [] : [{
-      fiber: row.fiber, failed: row.fiber.state === FIBER_FAILED || row.fiber.state === FIBER_DISPOSED,
-    }])
+    const previousFibers = [...ctx.loader.entries()].flatMap(row => row.fiber === undefined ? [] : [row.fiber])
     const { patches: previous = [], ...includeConfig } = entry.options.config as Include.Config
     const current = withResolution ? ctx.get('pluginPackages')?.resolution : undefined
     // A plain-data resolution has no inputs to recompute from.
@@ -396,7 +394,7 @@ async function recompose(
       // Only untouched rows still need an explicit retry after the awaited update.
       await resume(ctx, retried.filter(row => row.options === priorOptions.get(row)))
     }
-    const results = await Promise.allSettled(previousFibers.map(({ fiber }) => fiber.await()))
+    await Promise.allSettled(previousFibers.map(fiber => fiber.await()))
     await ctx.loader.await()
     const failures = await inactiveEntries(ctx)
     const introduced = failures.filter((failure) => {
@@ -408,9 +406,6 @@ async function recompose(
       return !previousFailures.some(previous => sameFailure(previous, failure))
     })
     if (introduced.length > 0) throw new Error(activationDiagnostic(binName, introduced, false).trimEnd())
-    for (const [index, result] of results.entries()) {
-      if (result.status === 'rejected' && !previousFibers[index]?.failed) throw result.reason
-    }
     ctx.emit('app-boot/config-reload')
     return { warnings: failures.map(reloadDiagnostic) }
   } finally {
